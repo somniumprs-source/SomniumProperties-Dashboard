@@ -19,6 +19,7 @@ const DB = {
   investidores:    process.env.NOTION_DB_INVESTIDORES,
   pipelineImoveis: process.env.NOTION_DB_PIPELINE_IMOVEIS,
   empreiteiros:    process.env.NOTION_DB_EMPREITEIROS,
+  consultores:     process.env.NOTION_DB_CONSULTORES,
   projetos:        process.env.NOTION_DB_PROJETOS,           // Projetos (linked to Pipeline Imóveis)
   pipeline:        process.env.NOTION_DB_PIPELINE,
   clientes:        process.env.NOTION_DB_CLIENTES,
@@ -292,6 +293,24 @@ function mapEmpreiteiro(p) {
   }
 }
 
+function mapConsultor(p) {
+  const pr = p.properties
+  return {
+    id:              p.id,
+    nome:            title(pr['Nome']),
+    status:          sel(pr['Status']),
+    tipo:            sel(pr['Tipo']),
+    classificacao:   sel(pr['Classificação']),
+    zonas:           multisel(pr['Zona de Atuação']),
+    telefone:        phone(pr['Telefone']),
+    email:           email(pr['Email']),
+    dataInicio:      dt(pr['Data de Início']),
+    metaMensalLeads: num(pr['Meta Mensal Leads']),
+    comissao:        num(pr['Comissão %']),
+    notas:           text(pr['Notas']),
+  }
+}
+
 // ── Cache 30s ─────────────────────────────────────────────────────
 const cache = new Map()
 async function cached(key, ttlMs, fn) {
@@ -306,7 +325,8 @@ const getNegócios    = () => cached('neg',  30000, async () => (await queryAll(
 const getDespesas    = () => cached('des',  30000, async () => (await queryAll(DB.despesas)).map(mapDespesa))
 const getImóveis     = () => cached('imo',  30000, async () => (await queryAll(DB.pipelineImoveis)).map(mapImovel))
 const getInvestidores= () => cached('inv',  30000, async () => (await queryAll(DB.investidores)).map(mapInvestidor))
-const getEmpreiteiros= () => cached('emp',  30000, async () => (await queryAll(DB.empreiteiros)).map(mapEmpreiteiro))
+const getEmpreiteiros  = () => cached('emp',  30000, async () => (await queryAll(DB.empreiteiros)).map(mapEmpreiteiro))
+const getConsultores   = () => cached('cons', 30000, async () => DB.consultores ? (await queryAll(DB.consultores)).map(mapConsultor) : [])
 const getProjetos    = () => cached('proj', 30000, async () => DB.projetos ? (await queryAll(DB.projetos)).map(mapProjeto) : [])
 const getPipeline    = () => cached('pip',  30000, async () => (await queryAll(DB.pipeline)).map(mapPipeline))
 const getClientes    = () => cached('cli',  30000, async () => (await queryAll(DB.clientes)).map(mapCliente))
@@ -598,6 +618,94 @@ app.get('/api/comercial/empreiteiros', async (req, res) => {
     res.json({ empreiteiros })
   } catch (err) {
     console.error('[comercial/empreiteiros]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/comercial/consultores', async (_req, res) => {
+  try {
+    const [imoveis, consultoresNotion] = await Promise.all([getImóveis(), getConsultores()])
+    const now = new Date()
+    const year = now.getFullYear(), month = now.getMonth() + 1
+    const prevMonth = month === 1 ? 12 : month - 1
+    const prevYear  = month === 1 ? year - 1 : year
+
+    const ESTADOS_NEG = new Set(['Descartado','Nao interessa','Não interessa','Cancelado'])
+    const ESTADOS_AV  = new Set(['Visita Marcada','Follow UP','Estudo de VVR','Enviar proposta ao investidor',
+      'Wholesaling','Negócio em Curso','CAEP','Fix and Flip','Em negociação','Contrato fechado'])
+
+    // Pipeline metrics grouped by consultant name
+    const byNome = {}
+    for (const im of imoveis) {
+      const nome = im.nomeConsultor?.trim() || null
+      if (!nome) continue
+      if (!byNome[nome]) byNome[nome] = []
+      byNome[nome].push(im)
+    }
+
+    function calcMetrics(nome, leads) {
+      const total       = leads.length
+      const descartados = leads.filter(i => ESTADOS_NEG.has(i.estado)).length
+      const ativos      = total - descartados
+      const avancados   = leads.filter(i => ESTADOS_AV.has(i.estado)).length
+      const taxaDescarte  = total > 0 ? round2(descartados / total * 100) : 0
+      const taxaConversao = total > 0 ? round2(avancados   / total * 100) : 0
+
+      const valorPipeline = leads
+        .filter(i => !ESTADOS_NEG.has(i.estado))
+        .reduce((s, i) => s + (i.valorProposta || i.askPrice || 0), 0)
+
+      const rois = leads.filter(i => i.roi > 0).map(i => i.roi)
+      const roiMedio = rois.length ? round2(rois.reduce((a, b) => a + b, 0) / rois.length) : null
+
+      const temposResposta = leads.map(i => daysBetween(i.dataAdicionado, i.dataChamada)).filter(v => v != null && v >= 0 && v < 365)
+      const tempoRespostaMedio = temposResposta.length ? round2(temposResposta.reduce((a, b) => a + b, 0) / temposResposta.length) : null
+
+      const temposNeg = leads.map(i => daysBetween(i.dataChamada, i.dataProposta)).filter(v => v != null && v >= 0 && v < 365)
+      const tempoNegociacaoMedio = temposNeg.length ? round2(temposNeg.reduce((a, b) => a + b, 0) / temposNeg.length) : null
+
+      const leadsEsteMes     = leads.filter(i => isMonth(i.dataAdicionado, year, month)).length
+      const leadsMesAnterior = leads.filter(i => isMonth(i.dataAdicionado, prevYear, prevMonth)).length
+
+      const datas = leads.map(i => i.dataAdicionado).filter(Boolean).sort().reverse()
+      const ultimoLead  = datas[0] ?? null
+      const diasSemLead = ultimoLead ? Math.floor((now - new Date(ultimoLead)) / 86400000) : null
+
+      const funil = [
+        { fase: 'Lead adicionado',  count: total },
+        { fase: '1ª Chamada',       count: leads.filter(i => i.dataChamada).length },
+        { fase: 'Visita',           count: leads.filter(i => i.dataVisita).length },
+        { fase: 'Proposta enviada', count: leads.filter(i => i.dataProposta).length },
+        { fase: 'Proposta aceite',  count: leads.filter(i => i.dataPropostaAceite).length },
+      ]
+
+      return { nome, total, ativos, descartados, avancados, taxaDescarte, taxaConversao,
+        valorPipeline: round2(valorPipeline), roiMedio, tempoRespostaMedio, tempoNegociacaoMedio,
+        leadsEsteMes, leadsMesAnterior, ultimoLead, diasSemLead, funil }
+    }
+
+    // Merge: Notion consultores + pipeline metrics
+    const consultores = consultoresNotion.map(c => {
+      const leads = byNome[c.nome] ?? []
+      const metrics = calcMetrics(c.nome, leads)
+      // % cumprimento de meta mensal
+      const cumpreMeta = c.metaMensalLeads > 0
+        ? round2(metrics.leadsEsteMes / c.metaMensalLeads * 100) : null
+      return { ...c, ...metrics, cumpreMeta }
+    })
+
+    // Consultores no pipeline que não estão na lista Notion
+    for (const [nome, leads] of Object.entries(byNome)) {
+      if (!consultoresNotion.find(c => c.nome === nome)) {
+        consultores.push({ ...calcMetrics(nome, leads), status: null, tipo: null,
+          classificacao: null, zonas: [], metaMensalLeads: 0, comissao: 0, cumpreMeta: null })
+      }
+    }
+
+    consultores.sort((a, b) => b.total - a.total)
+    res.json({ consultores, total: consultores.length })
+  } catch (err) {
+    console.error('[comercial/consultores]', err.message)
     res.status(500).json({ error: err.message })
   }
 })
