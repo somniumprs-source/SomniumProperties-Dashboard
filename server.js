@@ -296,18 +296,24 @@ function mapEmpreiteiro(p) {
 function mapConsultor(p) {
   const pr = p.properties
   return {
-    id:              p.id,
-    nome:            title(pr['Nome']),
-    status:          sel(pr['Status']),
-    tipo:            sel(pr['Tipo']),
-    classificacao:   sel(pr['Classificação']),
-    zonas:           multisel(pr['Zona de Atuação']),
-    telefone:        phone(pr['Telefone']),
-    email:           email(pr['Email']),
-    dataInicio:      dt(pr['Data de Início']),
-    metaMensalLeads: num(pr['Meta Mensal Leads']),
-    comissao:        num(pr['Comissão %']),
-    notas:           text(pr['Notas']),
+    id:                  p.id,
+    nome:                title(pr['Nome']),
+    estatuto:            statusProp(pr['Estatuto']),
+    tipo:                sel(pr['Tipo']),
+    classificacao:       sel(pr['Classificação']),
+    imobiliaria:         multisel(pr['Imobiliária']),
+    zonas:               multisel(pr['Zona de Atuação']),
+    contacto:            text(pr['Contacto']),
+    email:               email(pr['Email']),
+    equipaRemax:         text(pr['Equipa REMAX']),
+    dataInicio:          dt(pr['Data de Início']),
+    dataFollowUp:        dt(pr['Data Follow up']),
+    dataProximoFollowUp: dt(pr['Data Proximo follow up']),
+    motivoFollowUp:      text(pr['Motivo de Follow Up']),
+    imoveisEnviados:     num(pr['Imoveis enviado publicados']),
+    imoveisOffMarket:    num(pr['Imoveis Off/Market ']),
+    metaMensalLeads:     num(pr['Meta Mensal Leads']),
+    comissao:            num(pr['Comissão %']),
   }
 }
 

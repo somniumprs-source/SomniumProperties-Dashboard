@@ -310,76 +310,93 @@ export function Comercial() {
         )}
 
         {/* ── CONSULTORES ───────────────────────────────────── */}
-        {tab === 'consultores' && (
-          <>
-            {/* KPI summary */}
-            {(() => {
-              const cons = consData ?? []
-              const ativos = cons.filter(c => c.nome !== 'Sem consultor' && c.leadsEsteMes > 0)
-              const totalLeads = cons.reduce((s, c) => s + c.total, 0)
-              const totalAtivos = cons.reduce((s, c) => s + c.ativos, 0)
-              const avgResposta = (() => {
-                const vals = cons.map(c => c.tempoRespostaMedio).filter(v => v != null)
-                return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null
-              })()
-              const inativos = cons.filter(c => c.nome !== 'Sem consultor' && c.diasSemLead != null && c.diasSemLead > 30).length
-              return (
-                <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-                  <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-                    <p className="text-xs text-gray-400 uppercase tracking-wide">Total Consultores</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{cons.filter(c => c.nome !== 'Sem consultor').length}</p>
-                    <p className="text-xs text-gray-400">{ativos.length} ativos este mês</p>
-                  </div>
-                  <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-                    <p className="text-xs text-gray-400 uppercase tracking-wide">Total Leads</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{totalLeads}</p>
-                    <p className="text-xs text-gray-400">{totalAtivos} ativos no pipeline</p>
-                  </div>
-                  <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-                    <p className="text-xs text-gray-400 uppercase tracking-wide">Tempo Médio Resposta</p>
-                    <p className="text-2xl font-bold text-indigo-600 mt-1">{avgResposta != null ? `${avgResposta}d` : '—'}</p>
-                    <p className="text-xs text-gray-400">adicionado → 1ª chamada</p>
-                  </div>
-                  <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-                    <p className="text-xs text-gray-400 uppercase tracking-wide">Consultores Inativos</p>
-                    <p className={`text-2xl font-bold mt-1 ${inativos > 0 ? 'text-red-500' : 'text-green-600'}`}>{inativos}</p>
-                    <p className="text-xs text-gray-400">sem lead há +30 dias</p>
-                  </div>
-                </div>
-              )
-            })()}
+        {tab === 'consultores' && (() => {
+          const cons = consData ?? []
+          const comLeads = cons.filter(c => c.total > 0)
+          const followUpHoje = cons.filter(c => c.dataProximoFollowUp && new Date(c.dataProximoFollowUp) <= new Date())
+          const abertosParc = cons.filter(c => c.estatuto === 'Aberto Parcerias').length
+          const avgResposta = (() => {
+            const vals = comLeads.map(c => c.tempoRespostaMedio).filter(v => v != null)
+            return vals.length ? Math.round(vals.reduce((a,b) => a+b,0)/vals.length) : null
+          })()
 
-            {/* Ranking table */}
+          const ESTATUTO_COLOR = {
+            'Aberto Parcerias': 'bg-green-100 text-green-700',
+            'Follow up':        'bg-blue-100 text-blue-700',
+            'Cold Call':        'bg-gray-100 text-gray-500',
+            'Em Parceria':      'bg-indigo-100 text-indigo-700',
+            'Inativo':          'bg-red-100 text-red-500',
+          }
+
+          return (
+          <>
+            {/* KPI cards */}
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                <p className="text-xs text-gray-400 uppercase tracking-wide">Total na Lista</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{cons.length}</p>
+                <p className="text-xs text-gray-400">{abertosParc} abertos a parcerias</p>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                <p className="text-xs text-gray-400 uppercase tracking-wide">Follow-up Pendente</p>
+                <p className={`text-2xl font-bold mt-1 ${followUpHoje.length > 0 ? 'text-amber-500' : 'text-green-600'}`}>{followUpHoje.length}</p>
+                <p className="text-xs text-gray-400">data de follow-up atingida</p>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                <p className="text-xs text-gray-400 uppercase tracking-wide">Com Leads no Pipeline</p>
+                <p className="text-2xl font-bold text-indigo-600 mt-1">{comLeads.length}</p>
+                <p className="text-xs text-gray-400">{cons.reduce((s,c) => s+c.total,0)} leads totais</p>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                <p className="text-xs text-gray-400 uppercase tracking-wide">Tempo Médio Resposta</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{avgResposta != null ? `${avgResposta}d` : '—'}</p>
+                <p className="text-xs text-gray-400">adicionado → 1ª chamada</p>
+              </div>
+            </div>
+
+            {/* Follow-up pendente alert */}
+            {followUpHoje.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <p className="text-sm font-semibold text-amber-700 mb-2">Follow-up pendente hoje ({followUpHoje.length})</p>
+                <div className="flex flex-wrap gap-2">
+                  {followUpHoje.map(c => (
+                    <span key={c.nome} className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full">
+                      {c.nome} · {c.dataProximoFollowUp ? new Date(c.dataProximoFollowUp).toLocaleDateString('pt-PT',{day:'2-digit',month:'short'}) : ''}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Tabela principal */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-gray-700">Ranking de Consultores</h2>
-                <span className="text-xs text-gray-400">Ordenado por total de leads</span>
+                <h2 className="text-sm font-semibold text-gray-700">Lista de Consultores</h2>
+                <span className="text-xs text-gray-400">Clica numa linha para ver detalhe</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50">
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">#</th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Consultor</th>
-                      <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Total</th>
-                      <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Ativos</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Estatuto</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Imobiliária</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Leads</th>
                       <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Este mês</th>
                       <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">% Descarte</th>
-                      <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">% Avanço</th>
                       <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Resposta</th>
                       <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Valor Pipeline</th>
-                      <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Último Lead</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Próx. Follow-up</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(consData ?? []).map((c, i) => {
-                      const inativo = c.diasSemLead != null && c.diasSemLead > 30
+                    {cons.map((c) => {
+                      const followUpAtrasado = c.dataProximoFollowUp && new Date(c.dataProximoFollowUp) <= new Date()
                       return (
-                        <tr key={c.nome}
+                        <tr key={c.id ?? c.nome}
                           onClick={() => setSelectedCons(selectedCons?.nome === c.nome ? null : c)}
                           className={`border-b border-gray-50 cursor-pointer transition-colors
                             ${selectedCons?.nome === c.nome ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}>
-                          <td className="px-4 py-3 text-gray-400 font-mono text-xs">{i + 1}</td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
                               <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0">
@@ -387,136 +404,159 @@ export function Comercial() {
                               </div>
                               <div>
                                 <p className="font-medium text-gray-900 text-sm">{c.nome}</p>
-                                {inativo && <p className="text-xs text-red-400">inativo há {c.diasSemLead}d</p>}
+                                {c.contacto && <p className="text-xs text-gray-400">{c.contacto}</p>}
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-right font-semibold text-gray-900">{c.total}</td>
-                          <td className="px-4 py-3 text-right text-gray-700">{c.ativos}</td>
+                          <td className="px-4 py-3">
+                            {c.estatuto ? (
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ESTATUTO_COLOR[c.estatuto] ?? 'bg-gray-100 text-gray-500'}`}>
+                                {c.estatuto}
+                              </span>
+                            ) : <span className="text-gray-300">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-gray-500">{c.imobiliaria?.join(', ') || '—'}</td>
+                          <td className="px-4 py-3 text-right font-semibold text-gray-900">{c.total > 0 ? c.total : <span className="text-gray-300">0</span>}</td>
                           <td className="px-4 py-3 text-right">
-                            <span className={`font-medium ${c.leadsEsteMes > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                            <span className={`font-medium text-sm ${c.leadsEsteMes > 0 ? 'text-green-600' : 'text-gray-300'}`}>
                               {c.leadsEsteMes}
                             </span>
-                            {c.leadsMesAnterior > 0 && (
-                              <span className="text-xs text-gray-400 ml-1">
-                                ({c.leadsMesAnterior > c.leadsEsteMes ? '↓' : c.leadsMesAnterior < c.leadsEsteMes ? '↑' : '='}{c.leadsMesAnterior})
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {c.total > 0 ? (
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                c.taxaDescarte > 60 ? 'bg-red-100 text-red-600' :
+                                c.taxaDescarte > 40 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                                {c.taxaDescarte.toFixed(0)}%
                               </span>
-                            )}
+                            ) : <span className="text-gray-300">—</span>}
                           </td>
-                          <td className="px-4 py-3 text-right">
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                              c.taxaDescarte > 60 ? 'bg-red-100 text-red-600' :
-                              c.taxaDescarte > 40 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
-                              {c.taxaDescarte.toFixed(0)}%
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                              c.taxaConversao >= 20 ? 'bg-green-100 text-green-700' :
-                              c.taxaConversao >= 10 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`}>
-                              {c.taxaConversao.toFixed(0)}%
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-right text-gray-600 text-xs">
+                          <td className="px-4 py-3 text-right text-xs text-gray-600">
                             {c.tempoRespostaMedio != null ? `${c.tempoRespostaMedio}d` : '—'}
                           </td>
-                          <td className="px-4 py-3 text-right text-gray-700 text-xs font-mono">
+                          <td className="px-4 py-3 text-right text-xs font-mono text-gray-700">
                             {c.valorPipeline > 0 ? EUR(c.valorPipeline) : '—'}
                           </td>
-                          <td className="px-4 py-3 text-right text-gray-400 text-xs">
-                            {c.ultimoLead ? new Date(c.ultimoLead).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' }) : '—'}
+                          <td className="px-4 py-3 text-right text-xs">
+                            {c.dataProximoFollowUp ? (
+                              <span className={followUpAtrasado ? 'text-amber-600 font-semibold' : 'text-gray-400'}>
+                                {new Date(c.dataProximoFollowUp).toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})}
+                              </span>
+                            ) : <span className="text-gray-300">—</span>}
                           </td>
                         </tr>
                       )
                     })}
                   </tbody>
                 </table>
-                {!(consData?.length) && <div className="py-10 text-center text-gray-400 text-sm">Sem dados</div>}
+                {!cons.length && <div className="py-10 text-center text-gray-400 text-sm">Sem dados</div>}
               </div>
             </div>
 
             {/* Detalhe consultor selecionado */}
             {selectedCons && (
               <div className="bg-white rounded-xl border border-indigo-200 shadow-sm p-5">
-                <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-bold">
                       {selectedCons.nome.charAt(0).toUpperCase()}
                     </div>
                     <div>
                       <h3 className="font-semibold text-gray-900">{selectedCons.nome}</h3>
-                      <p className="text-xs text-gray-400">{selectedCons.total} leads totais · ROI médio: {selectedCons.roiMedio != null ? `${selectedCons.roiMedio}%` : '—'}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {selectedCons.estatuto && (
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${ESTATUTO_COLOR[selectedCons.estatuto] ?? 'bg-gray-100 text-gray-500'}`}>
+                            {selectedCons.estatuto}
+                          </span>
+                        )}
+                        {selectedCons.imobiliaria?.length > 0 && (
+                          <span className="text-xs text-gray-400">{selectedCons.imobiliaria.join(', ')}</span>
+                        )}
+                        {selectedCons.contacto && (
+                          <span className="text-xs text-gray-400">{selectedCons.contacto}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <button onClick={() => setSelectedCons(null)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
                 </div>
 
-                <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+                <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs text-gray-400">Leads no pipeline</p>
+                    <p className="text-xl font-bold text-gray-900">{selectedCons.total}</p>
+                    <p className="text-xs text-gray-400">{selectedCons.ativos} ativos · {selectedCons.descartados} descartados</p>
+                  </div>
                   <div className="bg-gray-50 rounded-lg p-3">
                     <p className="text-xs text-gray-400">Tempo resposta médio</p>
                     <p className="text-xl font-bold text-indigo-600">{selectedCons.tempoRespostaMedio != null ? `${selectedCons.tempoRespostaMedio}d` : '—'}</p>
                     <p className="text-xs text-gray-400">adicionado → chamada</p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-400">Tempo negociação médio</p>
+                    <p className="text-xs text-gray-400">Tempo negociação</p>
                     <p className="text-xl font-bold text-gray-900">{selectedCons.tempoNegociacaoMedio != null ? `${selectedCons.tempoNegociacaoMedio}d` : '—'}</p>
                     <p className="text-xs text-gray-400">chamada → proposta</p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-400">Leads este mês</p>
-                    <p className="text-xl font-bold text-green-600">{selectedCons.leadsEsteMes}</p>
-                    <p className="text-xs text-gray-400">mês ant.: {selectedCons.leadsMesAnterior}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-400">Valor pipeline gerado</p>
+                    <p className="text-xs text-gray-400">Valor pipeline</p>
                     <p className="text-xl font-bold text-gray-900">{selectedCons.valorPipeline > 0 ? EUR(selectedCons.valorPipeline) : '—'}</p>
                     <p className="text-xs text-gray-400">leads ativos</p>
                   </div>
                 </div>
 
-                {/* Funil individual */}
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Funil de Progressão</h4>
-                <div className="flex flex-col gap-2">
-                  {selectedCons.funil.map((f, idx, arr) => {
-                    const pct = arr[0].count > 0 ? Math.round(f.count / arr[0].count * 100) : 0
-                    const colors = ['#94a3b8','#7dd3fc','#60a5fa','#818cf8','#6366f1']
-                    return (
-                      <div key={f.fase} className="flex items-center gap-3">
-                        <span className="text-xs text-gray-500 w-36 text-right shrink-0">{f.fase}</span>
-                        <div className="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden">
-                          <div className="h-full rounded-full flex items-center px-3 transition-all"
-                            style={{ width: `${Math.max(pct, 4)}%`, backgroundColor: colors[idx] }}>
-                            {f.count > 0 && <span className="text-white text-xs font-semibold">{f.count}</span>}
+                {selectedCons.total > 0 && (
+                  <>
+                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Funil de Progressão</h4>
+                    <div className="flex flex-col gap-2">
+                      {selectedCons.funil.map((f, idx, arr) => {
+                        const pct = arr[0].count > 0 ? Math.round(f.count / arr[0].count * 100) : 0
+                        const colors = ['#94a3b8','#7dd3fc','#60a5fa','#818cf8','#6366f1']
+                        return (
+                          <div key={f.fase} className="flex items-center gap-3">
+                            <span className="text-xs text-gray-500 w-36 text-right shrink-0">{f.fase}</span>
+                            <div className="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden">
+                              <div className="h-full rounded-full flex items-center px-3 transition-all"
+                                style={{ width: `${Math.max(pct,4)}%`, backgroundColor: colors[idx] }}>
+                                {f.count > 0 && <span className="text-white text-xs font-semibold">{f.count}</span>}
+                              </div>
+                            </div>
+                            <span className="text-xs text-gray-400 w-10 text-right">{pct}%</span>
                           </div>
-                        </div>
-                        <span className="text-xs text-gray-400 w-10 text-right">{pct}%</span>
-                      </div>
-                    )
-                  })}
-                </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {selectedCons.motivoFollowUp && (
+                  <p className="mt-4 text-xs text-gray-500 bg-gray-50 rounded-lg p-3">
+                    <span className="font-semibold text-gray-600">Motivo follow-up: </span>{selectedCons.motivoFollowUp}
+                  </p>
+                )}
               </div>
             )}
 
-            {/* Gráfico comparativo */}
-            {(consData ?? []).filter(c => c.nome !== 'Sem consultor').length > 0 && (
+            {/* Gráfico — só consultores com leads */}
+            {comLeads.length > 0 && (
               <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-gray-700 mb-4">Comparativo — Leads por Consultor</h2>
+                <h2 className="text-sm font-semibold text-gray-700 mb-4">Comparativo — Consultores com Leads</h2>
                 <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={(consData ?? []).filter(c => c.nome !== 'Sem consultor')} margin={{ top: 0, right: 10, left: 0, bottom: 40 }}>
+                  <BarChart data={comLeads} margin={{ top: 0, right: 10, left: 0, bottom: 40 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="nome" tick={{ fontSize: 11 }} angle={-30} textAnchor="end" interval={0} />
+                    <XAxis dataKey="nome" tick={{ fontSize: 10 }} angle={-30} textAnchor="end" interval={0} />
                     <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                     <Tooltip formatter={(v, n) => [v, n === 'total' ? 'Total' : n === 'ativos' ? 'Ativos' : 'Este mês']} />
                     <Legend />
-                    <Bar dataKey="total"       name="Total"      fill="#6366f1" radius={[3,3,0,0]} />
-                    <Bar dataKey="ativos"      name="Ativos"     fill="#10b981" radius={[3,3,0,0]} />
+                    <Bar dataKey="total"        name="Total"     fill="#6366f1" radius={[3,3,0,0]} />
+                    <Bar dataKey="ativos"       name="Ativos"    fill="#10b981" radius={[3,3,0,0]} />
                     <Bar dataKey="leadsEsteMes" name="Este mês"  fill="#f59e0b" radius={[3,3,0,0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             )}
           </>
-        )}
+          )
+        })()}
 
         {/* ── INVESTIDORES ──────────────────────────────────── */}
         {tab === 'investidores' && (
