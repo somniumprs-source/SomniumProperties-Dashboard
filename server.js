@@ -90,6 +90,7 @@ function mapNegocio(p) {
     pagamentoEmFalta: pr['Pagamento em falta']?.checkbox ?? false,
     investidor:       pr['Investidor']?.relation?.map(r => r.id) ?? [],
     imovel:           pr['Imóvel']?.relation?.map(r => r.id) ?? [],
+    consultorIds:     pr['Consultor']?.relation?.map(r => r.id) ?? [],
     notas:            text(pr['Notas']),
   }
 }
@@ -628,9 +629,21 @@ app.get('/api/comercial/empreiteiros', async (req, res) => {
   }
 })
 
+// Cache de nomes de consultores por page ID (resolve relações da Faturação)
+const consultorNameCache = new Map()
+async function resolveConsultorName(pageId) {
+  if (consultorNameCache.has(pageId)) return consultorNameCache.get(pageId)
+  try {
+    const p = await notion.pages.retrieve({ page_id: pageId })
+    const nome = Object.values(p.properties).find(v => v.type === 'title')?.title?.map(t => t.plain_text).join('') ?? null
+    consultorNameCache.set(pageId, nome)
+    return nome
+  } catch { return null }
+}
+
 app.get('/api/comercial/consultores', async (_req, res) => {
   try {
-    const [imoveis, consultoresNotion] = await Promise.all([getImóveis(), getConsultores()])
+    const [imoveis, consultoresNotion, negocios] = await Promise.all([getImóveis(), getConsultores(), getNegócios()])
     const now = new Date()
     const year = now.getFullYear(), month = now.getMonth() + 1
     const prevMonth = month === 1 ? 12 : month - 1
@@ -690,21 +703,60 @@ app.get('/api/comercial/consultores', async (_req, res) => {
         leadsEsteMes, leadsMesAnterior, ultimoLead, diasSemLead, funil }
     }
 
-    // Merge: Notion consultores + pipeline metrics
+    // Resolve consultant names from Faturação relations (batch, cached)
+    const allConsultorIds = [...new Set(negocios.flatMap(n => n.consultorIds))]
+    const idToNome = {}
+    await Promise.all(allConsultorIds.map(async id => {
+      idToNome[id] = await resolveConsultorName(id)
+    }))
+
+    // KPIs de faturação por consultor
+    const fatByConsultor = {}
+    for (const neg of negocios) {
+      for (const cid of neg.consultorIds) {
+        const nome = idToNome[cid]
+        if (!nome) continue
+        if (!fatByConsultor[nome]) fatByConsultor[nome] = []
+        fatByConsultor[nome].push(neg)
+      }
+    }
+
+    function calcFatMetrics(nome) {
+      const negs = fatByConsultor[nome] ?? []
+      const vendidos = negs.filter(n => n.fase === 'Vendido' || n.dataVenda)
+      const lucroTotal = round2(vendidos.reduce((s, n) => s + (n.lucroReal || n.lucroEstimado || 0), 0))
+      const dealsEsteMes = negs.filter(n => isMonth(n.dataVenda ?? n.data, year, month)).length
+      const taxaConversaoFat = negs.length > 0 ? round2(vendidos.length / negs.length * 100) : null
+      return { dealsTotal: negs.length, dealsVendidos: vendidos.length, dealsEsteMes, lucroTotal, taxaConversaoFat }
+    }
+
+    // Merge: Notion consultores + pipeline metrics + faturação KPIs
     const consultores = consultoresNotion.map(c => {
       const leads = byNome[c.nome] ?? []
       const metrics = calcMetrics(c.nome, leads)
-      // % cumprimento de meta mensal
+      const fat = calcFatMetrics(c.nome)
       const cumpreMeta = c.metaMensalLeads > 0
         ? round2(metrics.leadsEsteMes / c.metaMensalLeads * 100) : null
-      return { ...c, ...metrics, cumpreMeta }
+      return { ...c, ...metrics, ...fat, cumpreMeta }
     })
 
     // Consultores no pipeline que não estão na lista Notion
     for (const [nome, leads] of Object.entries(byNome)) {
       if (!consultoresNotion.find(c => c.nome === nome)) {
-        consultores.push({ ...calcMetrics(nome, leads), status: null, tipo: null,
-          classificacao: null, zonas: [], metaMensalLeads: 0, comissao: 0, cumpreMeta: null })
+        consultores.push({ ...calcMetrics(nome, leads), ...calcFatMetrics(nome),
+          status: null, tipo: null, classificacao: null, zonas: [],
+          metaMensalLeads: 0, comissao: 0, cumpreMeta: null })
+      }
+    }
+    // Consultores só com faturação (sem pipeline leads nem na lista Notion)
+    for (const nome of Object.keys(fatByConsultor)) {
+      if (!consultores.find(c => c.nome === nome)) {
+        consultores.push({ nome, total: 0, ativos: 0, descartados: 0, avancados: 0,
+          taxaDescarte: 0, taxaConversao: 0, valorPipeline: 0, roiMedio: null,
+          tempoRespostaMedio: null, tempoNegociacaoMedio: null, leadsEsteMes: 0,
+          leadsMesAnterior: 0, ultimoLead: null, diasSemLead: null,
+          funil: [], cumpreMeta: null, status: null, tipo: null, classificacao: null,
+          zonas: [], metaMensalLeads: 0, comissao: 0, ...calcFatMetrics(nome) })
       }
     }
 
