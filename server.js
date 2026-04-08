@@ -703,38 +703,33 @@ app.get('/api/comercial/consultores', async (_req, res) => {
         leadsEsteMes, leadsMesAnterior, ultimoLead, diasSemLead, funil }
     }
 
-    // Resolve consultant names from Faturação relations (batch, cached)
-    const allConsultorIds = [...new Set(negocios.flatMap(n => n.consultorIds))]
-    const idToNome = {}
-    await Promise.all(allConsultorIds.map(async id => {
-      idToNome[id] = await resolveConsultorName(id)
-    }))
-
-    // KPIs de faturação por consultor
-    const fatByConsultor = {}
+    // KPIs de faturação por consultor — indexado por page ID (relação directa)
+    const fatById = {}
     for (const neg of negocios) {
       for (const cid of neg.consultorIds) {
-        const nome = idToNome[cid]
-        if (!nome) continue
-        if (!fatByConsultor[nome]) fatByConsultor[nome] = []
-        fatByConsultor[nome].push(neg)
+        if (!fatById[cid]) fatById[cid] = []
+        fatById[cid].push(neg)
       }
     }
 
-    function calcFatMetrics(nome) {
-      const negs = fatByConsultor[nome] ?? []
+    function calcFatMetrics(consultorId) {
+      const negs = fatById[consultorId] ?? []
       const vendidos = negs.filter(n => n.fase === 'Vendido' || n.dataVenda)
-      const lucroTotal = round2(vendidos.reduce((s, n) => s + (n.lucroReal || n.lucroEstimado || 0), 0))
-      const dealsEsteMes = negs.filter(n => isMonth(n.dataVenda ?? n.data, year, month)).length
+      const emCurso  = negs.filter(n => n.fase !== 'Vendido' && !n.dataVenda)
+      const lucroRealizado  = round2(vendidos.reduce((s, n) => s + (n.lucroReal || 0), 0))
+      const lucroPotencial  = round2(emCurso.reduce((s, n) => s + (n.lucroEstimado || 0), 0))
+      const lucroTotal      = round2(negs.reduce((s, n) => s + (n.lucroReal || n.lucroEstimado || 0), 0))
+      const dealsEsteMes    = negs.filter(n => isMonth(n.dataVenda ?? n.data, year, month)).length
       const taxaConversaoFat = negs.length > 0 ? round2(vendidos.length / negs.length * 100) : null
-      return { dealsTotal: negs.length, dealsVendidos: vendidos.length, dealsEsteMes, lucroTotal, taxaConversaoFat }
+      return { dealsTotal: negs.length, dealsVendidos: vendidos.length, dealsEmCurso: emCurso.length,
+        dealsEsteMes, lucroRealizado, lucroPotencial, lucroTotal, taxaConversaoFat }
     }
 
-    // Merge: Notion consultores + pipeline metrics + faturação KPIs
+    // Merge: Notion consultores + pipeline metrics + faturação KPIs (por ID)
     const consultores = consultoresNotion.map(c => {
       const leads = byNome[c.nome] ?? []
       const metrics = calcMetrics(c.nome, leads)
-      const fat = calcFatMetrics(c.nome)
+      const fat = calcFatMetrics(c.id)
       const cumpreMeta = c.metaMensalLeads > 0
         ? round2(metrics.leadsEsteMes / c.metaMensalLeads * 100) : null
       return { ...c, ...metrics, ...fat, cumpreMeta }
@@ -743,20 +738,10 @@ app.get('/api/comercial/consultores', async (_req, res) => {
     // Consultores no pipeline que não estão na lista Notion
     for (const [nome, leads] of Object.entries(byNome)) {
       if (!consultoresNotion.find(c => c.nome === nome)) {
-        consultores.push({ ...calcMetrics(nome, leads), ...calcFatMetrics(nome),
+        consultores.push({ ...calcMetrics(nome, leads),
+          dealsTotal: 0, dealsVendidos: 0, dealsEsteMes: 0, lucroTotal: 0, taxaConversaoFat: null,
           status: null, tipo: null, classificacao: null, zonas: [],
           metaMensalLeads: 0, comissao: 0, cumpreMeta: null })
-      }
-    }
-    // Consultores só com faturação (sem pipeline leads nem na lista Notion)
-    for (const nome of Object.keys(fatByConsultor)) {
-      if (!consultores.find(c => c.nome === nome)) {
-        consultores.push({ nome, total: 0, ativos: 0, descartados: 0, avancados: 0,
-          taxaDescarte: 0, taxaConversao: 0, valorPipeline: 0, roiMedio: null,
-          tempoRespostaMedio: null, tempoNegociacaoMedio: null, leadsEsteMes: 0,
-          leadsMesAnterior: 0, ultimoLead: null, diasSemLead: null,
-          funil: [], cumpreMeta: null, status: null, tipo: null, classificacao: null,
-          zonas: [], metaMensalLeads: 0, comissao: 0, ...calcFatMetrics(nome) })
       }
     }
 

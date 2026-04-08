@@ -440,14 +440,19 @@ export function Comercial() {
                             {c.valorPipeline > 0 ? EUR(c.valorPipeline) : '—'}
                           </td>
                           <td className="px-4 py-3 text-right text-xs text-gray-700">
-                            {c.dealsVendidos > 0 ? (
-                              <span className="font-semibold text-green-600">{c.dealsVendidos}</span>
-                            ) : <span className="text-gray-300">0</span>}
-                            {c.dealsEsteMes > 0 && <span className="text-gray-400 ml-1">(+{c.dealsEsteMes})</span>}
+                            {c.dealsTotal > 0 ? (
+                              <span>
+                                {c.dealsVendidos > 0 && <span className="font-semibold text-green-600">{c.dealsVendidos}✓ </span>}
+                                {c.dealsEmCurso > 0 && <span className="text-indigo-500">{c.dealsEmCurso}↗</span>}
+                                {c.dealsTotal === 0 && <span className="text-gray-300">0</span>}
+                              </span>
+                            ) : <span className="text-gray-300">—</span>}
                           </td>
                           <td className="px-4 py-3 text-right text-xs font-mono">
-                            {c.lucroTotal > 0 ? (
-                              <span className="text-green-600 font-semibold">{EUR(c.lucroTotal)}</span>
+                            {c.lucroRealizado > 0 ? (
+                              <span className="text-green-600 font-semibold">{EUR(c.lucroRealizado)}</span>
+                            ) : c.lucroPotencial > 0 ? (
+                              <span className="text-indigo-400">{EUR(c.lucroPotencial)}*</span>
                             ) : <span className="text-gray-300">—</span>}
                           </td>
                           <td className="px-4 py-3 text-right text-xs">
@@ -516,15 +521,22 @@ export function Comercial() {
                     <p className="text-xs text-gray-400">leads ativos</p>
                   </div>
                   <div className="bg-green-50 rounded-lg p-3 border border-green-100">
-                    <p className="text-xs text-gray-400">Deals fechados</p>
-                    <p className="text-xl font-bold text-green-600">{selectedCons.dealsVendidos ?? 0}</p>
-                    <p className="text-xs text-gray-400">{selectedCons.dealsEsteMes > 0 ? `+${selectedCons.dealsEsteMes} este mês` : 'nenhum este mês'}</p>
+                    <p className="text-xs text-gray-400">Deals na faturação</p>
+                    <p className="text-xl font-bold text-green-600">{selectedCons.dealsTotal ?? 0}</p>
+                    <p className="text-xs text-gray-400">{selectedCons.dealsVendidos ?? 0} vendidos · {selectedCons.dealsEmCurso ?? 0} em curso</p>
                   </div>
                   <div className="bg-green-50 rounded-lg p-3 border border-green-100">
-                    <p className="text-xs text-gray-400">Lucro gerado</p>
-                    <p className="text-xl font-bold text-green-600">{selectedCons.lucroTotal > 0 ? EUR(selectedCons.lucroTotal) : '—'}</p>
+                    <p className="text-xs text-gray-400">Lucro realizado</p>
+                    <p className="text-xl font-bold text-green-600">{selectedCons.lucroRealizado > 0 ? EUR(selectedCons.lucroRealizado) : '—'}</p>
                     <p className="text-xs text-gray-400">negócios vendidos</p>
                   </div>
+                  {selectedCons.lucroPotencial > 0 && (
+                    <div className="bg-indigo-50 rounded-lg p-3 border border-indigo-100">
+                      <p className="text-xs text-gray-400">Lucro potencial</p>
+                      <p className="text-xl font-bold text-indigo-600">{EUR(selectedCons.lucroPotencial)}</p>
+                      <p className="text-xs text-gray-400">negócios em curso</p>
+                    </div>
+                  )}
                   {selectedCons.taxaConversaoFat != null && (
                     <div className="bg-gray-50 rounded-lg p-3">
                       <p className="text-xs text-gray-400">Taxa conversão (fat.)</p>
