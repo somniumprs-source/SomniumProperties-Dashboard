@@ -92,6 +92,9 @@ function mapNegocio(p) {
     imovel:           pr['Imóvel']?.relation?.map(r => r.id) ?? [],
     consultorIds:     pr['Consultor']?.relation?.map(r => r.id) ?? [],
     notas:            text(pr['Notas']),
+    quotaSomnium:     formula(pr['Quota Somnium €']),
+    capitalTotal:     num(pr['Capital Total €']),
+    nInvestidores:    num(pr['Nº Investidores']),
   }
 }
 
@@ -274,7 +277,13 @@ function mapInvestidor(p) {
     diasSemContacto:         formula(pr['Dias sem contacto']) ?? null,
     proximaAcao:             text(pr['Proxima Acao']),
     tipoInvestidor:          multisel(pr['Tipo de Investidor']),
-    perfilRisco:             sel(pr['Perfil de Risco']),
+    perfilRisco:              sel(pr['Perfil de Risco']),
+    roiInvestidor:            num(pr['ROI Investidor %']),
+    roiAnualizadoInvestidor:  num(pr['ROI Anualizado Investidor %']),
+    motivoNaoAprovacao:       text(pr['Motivo Não Aprovação']),
+    motivoInatividade:        text(pr['Motivo Inatividade']),
+    dataApresentacaoNegocio:  dt(pr['Data Apresentação Negócio']),
+    dataAprovacaoNegocio:     dt(pr['Data Aprovação Negócio']),
   }
 }
 
@@ -315,6 +324,9 @@ function mapConsultor(p) {
     imoveisOffMarket:    num(pr['Imoveis Off/Market ']),
     metaMensalLeads:     num(pr['Meta Mensal Leads']),
     comissao:            num(pr['Comissão %']),
+    dataPrimeiraCall:    dt(pr['Data Primeira Call']),
+    lucroGerado:         num(pr['Lucro Gerado €']),
+    motivoDescontinuacao: text(pr['Motivo Descontinuação']),
   }
 }
 
@@ -800,6 +812,240 @@ app.get('/api/comercial/historico', async (req, res) => {
     res.json({ meses, tipologias })
   } catch (err) {
     console.error('[comercial/historico]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ════════════════════════════════════════════════════════════════
+// COMERCIAL — Métricas Temporais (KPI Framework completo)
+// ════════════════════════════════════════════════════════════════
+app.get('/api/comercial/metricas-temporais', async (req, res) => {
+  try {
+    const [imoveis, investidores, consultoresRaw, negocios] = await Promise.all([
+      getImóveis().catch(() => []),
+      getInvestidores(),
+      getConsultores().catch(() => []),
+      getNegócios(),
+    ])
+
+    const now   = new Date()
+    const year  = now.getFullYear()
+    const month = now.getMonth() + 1
+
+    // ── Períodos ─────────────────────────────────────────────
+    const wDay = now.getDay()
+    const weekStart = new Date(now); weekStart.setDate(now.getDate() - (wDay === 0 ? 6 : wDay - 1)); weekStart.setHours(0,0,0,0)
+    const weekEnd   = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6); weekEnd.setHours(23,59,59,999)
+
+    const monthStart   = new Date(year, month - 1, 1)
+    const monthEnd     = new Date(year, month, 0, 23, 59, 59, 999)
+
+    const q            = Math.ceil(month / 3)
+    const quarterStart = new Date(year, (q - 1) * 3, 1)
+    const quarterEnd   = new Date(year, q * 3, 0, 23, 59, 59, 999)
+
+    const semStart = month <= 6 ? new Date(year, 0, 1)  : new Date(year, 6, 1)
+    const semEnd   = month <= 6 ? new Date(year, 5, 30, 23,59,59,999) : new Date(year, 11, 31, 23,59,59,999)
+
+    const yearStart = new Date(year, 0, 1)
+    const yearEnd   = new Date(year, 11, 31, 23, 59, 59, 999)
+
+    function inP(dateStr, start, end) {
+      if (!dateStr) return false
+      const d = new Date(dateStr)
+      return d >= start && d <= end
+    }
+
+    function avgDays(arr) {
+      const valid = arr.filter(v => v != null && v >= 0 && v < 365)
+      return valid.length ? round2(valid.reduce((a,b) => a+b,0) / valid.length) : null
+    }
+
+    // ── Volume de atividades por período ─────────────────────
+    function volImoveis(s, e) {
+      return {
+        adicionados: imoveis.filter(i => inP(i.dataAdicionado, s, e)).length,
+        chamadas:    imoveis.filter(i => inP(i.dataChamada, s, e)).length,
+        visitas:     imoveis.filter(i => inP(i.dataVisita, s, e)).length,
+        estudos:     imoveis.filter(i => inP(i.dataEstudoMercado, s, e)).length,
+        propostas:   imoveis.filter(i => inP(i.dataProposta, s, e)).length,
+        propostasAceites: imoveis.filter(i => inP(i.dataPropostaAceite, s, e)).length,
+        negocios:    negocios.filter(n => inP(n.dataVenda, s, e) || inP(n.dataCompra, s, e)).length,
+      }
+    }
+    const emFollowUp = imoveis.filter(i => i.estado === 'Follow UP').length
+
+    // ── Funil de conversão por coorte (data adicionado) ──────
+    function funilCoorte(s, e) {
+      const coorte = imoveis.filter(i => inP(i.dataAdicionado, s, e))
+      const n = coorte.length
+      return {
+        adicionados:      n,
+        comChamada:       coorte.filter(i => i.dataChamada).length,
+        comVisita:        coorte.filter(i => i.dataVisita).length,
+        comEstudo:        coorte.filter(i => i.dataEstudoMercado).length,
+        comProposta:      coorte.filter(i => i.dataProposta).length,
+        comPropostaAceite:coorte.filter(i => i.dataPropostaAceite).length,
+        taxaChamada:      n > 0 ? round2(coorte.filter(i => i.dataChamada).length / n * 100) : null,
+        taxaVisita:       n > 0 ? round2(coorte.filter(i => i.dataVisita).length / n * 100) : null,
+        taxaProposta:     n > 0 ? round2(coorte.filter(i => i.dataProposta).length / n * 100) : null,
+      }
+    }
+
+    // ── Ciclos médios Imóveis (todos os históricos) ───────────
+    const ESTADOS_NEG_SET = new Set(['Descartado','Nao interessa','Não interessa','Cancelado'])
+    const cicloImoveis = {
+      leadAChamada:    avgDays(imoveis.map(i => daysBetween(i.dataAdicionado, i.dataChamada))),
+      chamadaAVisita:  avgDays(imoveis.map(i => daysBetween(i.dataChamada, i.dataVisita))),
+      visitaAEstudo:   avgDays(imoveis.map(i => daysBetween(i.dataVisita, i.dataEstudoMercado))),
+      estudoAProposta: avgDays(imoveis.map(i => daysBetween(i.dataEstudoMercado, i.dataProposta))),
+      propostaAFecho:  avgDays(imoveis.map(i => daysBetween(i.dataProposta, i.dataPropostaAceite))),
+    }
+
+    // ── Motivos de descarte ────────────────────────────────────
+    const motivosDescarte = {}
+    const descartados = imoveis.filter(i => ESTADOS_NEG_SET.has(i.estado))
+    for (const i of descartados) {
+      const m = i.motivoDescarte ?? 'Não registado'
+      motivosDescarte[m] = (motivosDescarte[m] ?? 0) + 1
+    }
+    const motivosDescarteList = Object.entries(motivosDescarte)
+      .map(([motivo, count]) => ({ motivo, count }))
+      .sort((a,b) => b.count - a.count)
+
+    // Descarte por origem
+    const descarteOrigem = {}
+    for (const i of imoveis) {
+      const o = i.origem ?? 'Outro'
+      if (!descarteOrigem[o]) descarteOrigem[o] = { total: 0, descartados: 0 }
+      descarteOrigem[o].total++
+      if (ESTADOS_NEG_SET.has(i.estado)) descarteOrigem[o].descartados++
+    }
+    const descarteOrigemList = Object.entries(descarteOrigem)
+      .map(([origem, v]) => ({ origem, total: v.total, descartados: v.descartados, taxaDescarte: round2(v.descartados / v.total * 100) }))
+      .sort((a,b) => b.total - a.total)
+
+    // ── Investidores ──────────────────────────────────────────
+    const INV_PARCERIA = new Set(['Investidor em parceria','Em Parceria','Investidor Ativo'])
+    const emParceria   = investidores.filter(i => INV_PARCERIA.has(i.status))
+
+    const invSemContacto60 = investidores
+      .filter(i => i.diasSemContacto != null && i.diasSemContacto > 60)
+      .map(i => ({ nome: i.nome, dias: i.diasSemContacto, status: i.status }))
+
+    // LTV por investidor (montante investido + lucro real dos negócios com este investidor)
+    const ltvInvestidores = investidores.map(i => {
+      const negsInv  = negocios.filter(n => n.investidor.includes(i.id))
+      const lucroRealizado = round2(negsInv.filter(n => n.fase === 'Vendido').reduce((s,n) => s + n.lucroReal, 0))
+      const quotaSomnium   = round2(negsInv.filter(n => n.fase === 'Vendido').reduce((s,n) => s + (n.quotaSomnium || n.lucroReal * 0.267), 0))
+      return { nome: i.nome, status: i.status, montante: i.montanteInvestido, lucroRealizado, quotaSomnium, numeroNegocios: i.numeroNegocios }
+    }).filter(i => i.montante > 0 || i.lucroRealizado > 0).sort((a,b) => b.lucroRealizado - a.lucroRealizado || b.montante - a.montante)
+
+    const capitalMobilizado = round2(investidores.reduce((s,i) => s + i.montanteInvestido, 0))
+    const reinvestiram      = emParceria.filter(i => i.numeroNegocios > 1).length
+
+    const cicloInvestidor = {
+      contactoAReuniao:     avgDays(investidores.map(i => daysBetween(i.dataPrimeiroContacto, i.dataReuniao))),
+      reuniaoACapital:      avgDays(investidores.map(i => daysBetween(i.dataReuniao, i.dataCapitalTransferido))),
+      totalContactoACapital:avgDays(investidores.map(i => daysBetween(i.dataPrimeiroContacto, i.dataCapitalTransferido))),
+    }
+
+    // ── Consultores ────────────────────────────────────────────
+    const CONS_ATIVOS_STATUS = new Set(['Aberto Parcerias','Em Parceria','Follow up','Follow Up'])
+    const consAtivos = consultoresRaw.filter(c => CONS_ATIVOS_STATUS.has(c.estatuto))
+    const consInativos = consultoresRaw.filter(c => c.estatuto === 'Inativo').length
+    const consFollowUpAtrasado = consultoresRaw.filter(c =>
+      c.dataProximoFollowUp && new Date(c.dataProximoFollowUp) < now && CONS_ATIVOS_STATUS.has(c.estatuto)
+    ).length
+    const consSemContacto30 = consultoresRaw.filter(c => {
+      if (!CONS_ATIVOS_STATUS.has(c.estatuto)) return false
+      if (!c.dataFollowUp && !c.dataProximoFollowUp) return true
+      const ultima = c.dataProximoFollowUp ?? c.dataFollowUp
+      const dias = (now - new Date(ultima)) / 86400000
+      return dias > 30
+    }).length
+
+    const ltvConsultores = consultoresRaw
+      .filter(c => c.lucroTotal > 0)
+      .map(c => ({ nome: c.nome, ltv: c.lucroTotal, negocios: c.dealsTotal, lucroRealizado: c.lucroRealizado }))
+      .sort((a,b) => b.ltv - a.ltv)
+      .slice(0, 10)
+
+    const cicloConsultor = {
+      inicioA1Call: avgDays(consultoresRaw.filter(c => c.dataInicio && c.dataPrimeiraCall).map(c => daysBetween(c.dataInicio, c.dataPrimeiraCall))),
+      call1ANegocio: avgDays(consultoresRaw.filter(c => c.dataPrimeiraCall).map(c => {
+        const primeiroLead = imoveis.filter(i => i.nomeConsultor?.trim() === c.nome && i.dataAdicionado).map(i => i.dataAdicionado).sort()[0]
+        return daysBetween(c.dataPrimeiraCall, primeiroLead)
+      })),
+    }
+
+    // ── Receita por modelo ─────────────────────────────────────
+    function receitaModelo(s, e) {
+      const neg = negocios.filter(n => inP(n.dataVenda, s, e) && n.fase === 'Vendido')
+      const wh  = neg.filter(n => n.categoria === 'Wholesalling')
+      const caep= neg.filter(n => n.categoria === 'CAEP')
+      return {
+        totalNeg:     neg.length,
+        lucroWhTotal: round2(wh.reduce((s,n) => s + n.lucroReal, 0)),
+        lucroWhMedio: wh.length > 0 ? round2(wh.reduce((s,n) => s + n.lucroReal, 0) / wh.length) : null,
+        lucroCAEPTotal: round2(caep.reduce((s,n) => s + n.lucroReal, 0)),
+        quotaSomniumCAEP: round2(caep.reduce((s,n) => s + (n.quotaSomnium || n.lucroReal * 0.267), 0)),
+        negWH:  wh.length,
+        negCAEP: caep.length,
+      }
+    }
+
+    res.json({
+      updatedAt: new Date().toISOString(),
+      periodos: {
+        semana: { de: weekStart.toISOString().slice(0,10), ate: weekEnd.toISOString().slice(0,10) },
+        mes:    { de: monthStart.toISOString().slice(0,10), ate: monthEnd.toISOString().slice(0,10) },
+        trimestre: `Q${q} ${year}`,
+        semestre: month <= 6 ? `S1 ${year}` : `S2 ${year}`,
+        ano: year,
+      },
+      imoveis: {
+        volume: {
+          semanal:    { ...volImoveis(weekStart, weekEnd),   emFollowUp },
+          mensal:     { ...volImoveis(monthStart, monthEnd), emFollowUp },
+          trimestral: { ...volImoveis(quarterStart, quarterEnd), emFollowUp },
+          semestral:  { ...volImoveis(semStart, semEnd),     emFollowUp },
+          anual:      { ...volImoveis(yearStart, yearEnd),   emFollowUp },
+        },
+        funil: {
+          mensal:     funilCoorte(monthStart, monthEnd),
+          trimestral: funilCoorte(quarterStart, quarterEnd),
+          semestral:  funilCoorte(semStart, semEnd),
+          anual:      funilCoorte(yearStart, yearEnd),
+          total:      funilCoorte(new Date('2020-01-01'), yearEnd),
+        },
+        ciclo: cicloImoveis,
+        motivosDescarte: motivosDescarteList,
+        descarteOrigem:  descarteOrigemList,
+      },
+      investidores: {
+        alertas:         { semContacto60d: invSemContacto60 },
+        ltv:             ltvInvestidores,
+        capitalMobilizado,
+        emParceria:      emParceria.length,
+        reinvestiram,
+        ciclo:           cicloInvestidor,
+      },
+      consultores: {
+        alertas: { followUpAtrasado: consFollowUpAtrasado, inativos: consInativos, semContacto30d: consSemContacto30 },
+        ltv:     ltvConsultores,
+        ciclo:   cicloConsultor,
+        totalAtivos: consAtivos.length,
+      },
+      receita: {
+        mensal:     receitaModelo(monthStart, monthEnd),
+        trimestral: receitaModelo(quarterStart, quarterEnd),
+        semestral:  receitaModelo(semStart, semEnd),
+        anual:      receitaModelo(yearStart, yearEnd),
+      },
+    })
+  } catch (err) {
+    console.error('[metricas-temporais]', err.message)
     res.status(500).json({ error: err.message })
   }
 })
