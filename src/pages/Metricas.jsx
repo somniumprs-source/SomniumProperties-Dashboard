@@ -1,11 +1,7 @@
 import { useState, useEffect } from 'react'
-import {
-  BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-} from 'recharts'
 import { Header } from '../components/layout/Header.jsx'
 
-const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
+const EUR = v => v == null ? '—' : new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v)
 const PCT = v => v == null ? '—' : `${Number(v).toFixed(1)}%`
 const DAYS = v => v == null ? '—' : `${Number(v).toFixed(0)}d`
 const NUM = v => v == null ? '—' : String(v)
