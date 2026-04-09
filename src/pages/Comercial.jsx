@@ -87,6 +87,7 @@ export function Comercial() {
   const [consData, setConsData]         = useState(null)
   const [selectedCons, setSelectedCons] = useState(null)
   const [metricasData, setMetricasData] = useState(null)
+  const [kpiPeriod, setKpiPeriod]       = useState('semanal')
   const [loading, setLoading]           = useState(true)
   const [error, setError]               = useState(null)
 
@@ -703,181 +704,215 @@ export function Comercial() {
           const inv  = m.investidores     ?? {}
           const cons = m.consultores      ?? {}
 
-          function badge(val, meta, lower = false) {
-            if (val == null) return 'bg-gray-100 text-gray-400'
-            const r = lower ? meta / val : val / meta
-            return r >= 0.9 ? 'bg-green-100 text-green-700' : r >= 0.7 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600'
+          function badge(val, meta) {
+            if (val == null || meta == null) return 'bg-gray-100 text-gray-400'
+            const r = val / meta
+            return r >= 0.9 ? 'bg-green-100 text-green-700' : r >= 0.6 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600'
+          }
+          function badgeLow(val, meta) {
+            if (val == null || meta == null) return 'bg-gray-100 text-gray-400'
+            return val <= meta ? 'bg-green-100 text-green-700' : val <= meta * 1.3 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600'
           }
           function cycleColor(days, target) {
             if (days == null) return 'text-gray-400'
             return days <= target ? 'text-green-600 font-semibold' : days <= target * 1.3 ? 'text-amber-600' : 'text-red-600 font-semibold'
           }
-          function funnelPct(n, d) {
-            if (!d || d === 0) return null
-            return Math.round(n / d * 10) / 10
-          }
 
           const periodos = m.periodos ?? {}
+          const KPI_PERIODS = ['semanal','mensal','trimestral','semestral','anual']
+          const KPI_PERIOD_LABELS = { semanal:'Semanal', mensal:'Mensal', trimestral:'Trimestral', semestral:'Semestral', anual:'Anual' }
+
+          const periodKey = kpiPeriod
+          const v   = vol[periodKey]   ?? {}
+          const f   = funil[periodKey === 'semanal' ? 'mensal' : periodKey] ?? {}
+          const r   = rec[periodKey === 'semanal' ? 'mensal' : periodKey]   ?? {}
+
+          // Metas por período
+          const METAS_VOL = {
+            semanal:    { adicionados: 10, chamadas: 8, visitas: 2, estudos: null, propostas: null },
+            mensal:     { adicionados: 40, chamadas: 32, visitas: 8, estudos: 1, propostas: 1 },
+            trimestral: { adicionados: 120, chamadas: 96, visitas: 24, estudos: 3, propostas: 3 },
+            semestral:  { adicionados: 240, chamadas: 192, visitas: 48, estudos: 6, propostas: 6 },
+            anual:      { adicionados: 480, chamadas: 384, visitas: 96, estudos: 12, propostas: 12 },
+          }
+          const metas = METAS_VOL[periodKey] ?? {}
 
           return (
             <>
-              {/* ─ Período info ─ */}
-              <div className="flex flex-wrap gap-2 text-xs text-gray-400">
-                <span className="bg-gray-100 px-2 py-1 rounded">Semana: {periodos.semana?.de} → {periodos.semana?.ate}</span>
-                <span className="bg-gray-100 px-2 py-1 rounded">Trimestre: {periodos.trimestre}</span>
-                <span className="bg-gray-100 px-2 py-1 rounded">Semestre: {periodos.semestre}</span>
-                <span className="bg-gray-100 px-2 py-1 rounded">Ano: {periodos.ano}</span>
+              {/* ─ Sub-tab bar de período ─ */}
+              <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+                {KPI_PERIODS.map(p => (
+                  <button key={p} onClick={() => setKpiPeriod(p)}
+                    className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all
+                      ${kpiPeriod === p ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                    {KPI_PERIOD_LABELS[p]}
+                  </button>
+                ))}
               </div>
 
-              {/* ─ 1. Volume de Atividades ─ */}
+              {/* ─ Referência do período ─ */}
+              <div className="text-xs text-gray-400">
+                {periodKey === 'semanal'    && `Semana: ${periodos.semana?.de} → ${periodos.semana?.ate}`}
+                {periodKey === 'mensal'     && `Mês: ${periodos.mes?.de?.slice(0,7)}`}
+                {periodKey === 'trimestral' && `Trimestre: ${periodos.trimestre}`}
+                {periodKey === 'semestral'  && `Semestre: ${periodos.semestre}`}
+                {periodKey === 'anual'      && `Ano: ${periodos.ano}`}
+              </div>
+
+              {/* ─ Alertas urgentes (sempre visíveis no semanal, resumo nos outros) ─ */}
+              {(cons.alertas?.followUpAtrasado > 0 || inv.alertas?.semContacto60d?.length > 0) && (
+                <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+                  <div className={`rounded-xl p-4 border ${cons.alertas?.followUpAtrasado > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-100'}`}>
+                    <p className="text-xs text-gray-500">Follow-up consultores atrasado</p>
+                    <p className={`text-2xl font-bold ${cons.alertas?.followUpAtrasado > 0 ? 'text-amber-600' : 'text-green-600'}`}>{cons.alertas?.followUpAtrasado ?? 0}</p>
+                    <p className="text-xs text-gray-400">meta: 0</p>
+                  </div>
+                  <div className={`rounded-xl p-4 border ${cons.alertas?.semContacto30d > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-100'}`}>
+                    <p className="text-xs text-gray-500">Consultores sem contacto &gt;30d</p>
+                    <p className={`text-2xl font-bold ${cons.alertas?.semContacto30d > 0 ? 'text-red-600' : 'text-green-600'}`}>{cons.alertas?.semContacto30d ?? 0}</p>
+                    <p className="text-xs text-gray-400">{cons.totalAtivos} ativos</p>
+                  </div>
+                  <div className={`rounded-xl p-4 border ${inv.alertas?.semContacto60d?.length > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-100'}`}>
+                    <p className="text-xs text-gray-500">Investidores sem contacto &gt;60d</p>
+                    <p className={`text-2xl font-bold ${inv.alertas?.semContacto60d?.length > 0 ? 'text-red-600' : 'text-green-600'}`}>{inv.alertas?.semContacto60d?.length ?? 0}</p>
+                    <p className="text-xs text-gray-400">meta: 0</p>
+                  </div>
+                  <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
+                    <p className="text-xs text-gray-500">Capital mobilizado</p>
+                    <p className="text-2xl font-bold text-indigo-600">{EUR(inv.capitalMobilizado)}</p>
+                    <p className="text-xs text-gray-400">{inv.emParceria} em parceria</p>
+                  </div>
+                </div>
+              )}
+
+              {/* ─ 2.4 Volume de Atividades ─ */}
               <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                 <h2 className="text-sm font-semibold text-gray-700 mb-4">2.4 Volume de Atividades — Imóveis</h2>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wide">
-                        <th className="text-left py-2 px-3">Atividade</th>
-                        <th className="text-right py-2 px-3">Semana</th>
-                        <th className="text-right py-2 px-3">Meta/sem</th>
-                        <th className="text-right py-2 px-3">Mês</th>
-                        <th className="text-right py-2 px-3">Trim.</th>
-                        <th className="text-right py-2 px-3">Sem.</th>
-                        <th className="text-right py-2 px-3">Ano</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[
-                        { label: 'Imóveis adicionados', key: 'adicionados', meta: 10 },
-                        { label: 'Chamadas realizadas', key: 'chamadas',    meta: 8  },
-                        { label: 'Visitas realizadas',  key: 'visitas',     meta: 2  },
-                        { label: 'Estudos de mercado',  key: 'estudos',     meta: 0.25 },
-                        { label: 'Propostas enviadas',  key: 'propostas',   meta: 0.25 },
-                      ].map(({ label, key, meta }) => (
-                        <tr key={key} className="border-b border-gray-50 hover:bg-gray-50">
-                          <td className="py-2 px-3 text-gray-700">{label}</td>
-                          <td className="py-2 px-3 text-right">
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${badge(vol.semanal?.[key], meta)}`}>
-                              {vol.semanal?.[key] ?? '—'}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 text-right text-xs text-gray-400">≥{meta}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs text-gray-700">{vol.mensal?.[key] ?? '—'}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs text-gray-500">{vol.trimestral?.[key] ?? '—'}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs text-gray-500">{vol.semestral?.[key] ?? '—'}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs text-gray-500">{vol.anual?.[key] ?? '—'}</td>
-                        </tr>
-                      ))}
-                      <tr className="border-b border-gray-50 bg-indigo-50">
-                        <td className="py-2 px-3 text-indigo-700 font-medium">Em Follow UP (agora)</td>
-                        <td colSpan={2} className="py-2 px-3 text-right">
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${badge(vol.semanal?.emFollowUp, 5)}`}>
-                            {vol.semanal?.emFollowUp ?? '—'}
-                          </span>
-                        </td>
-                        <td className="py-2 px-3 text-right text-xs text-gray-400">≥5</td>
-                        <td colSpan={3}></td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* ─ 2. Funil de Conversão ─ */}
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-gray-700 mb-4">1.2 Funil de Conversão — por coorte de adição</h2>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wide">
-                        <th className="text-left py-2 px-3">Etapa</th>
-                        <th className="text-right py-2 px-3">Mês</th>
-                        <th className="text-right py-2 px-3">%</th>
-                        <th className="text-right py-2 px-3">Trimestre</th>
-                        <th className="text-right py-2 px-3">%</th>
-                        <th className="text-right py-2 px-3">Semestre</th>
-                        <th className="text-right py-2 px-3">%</th>
-                        <th className="text-right py-2 px-3">Ano</th>
-                        <th className="text-right py-2 px-3">%</th>
-                        <th className="text-right py-2 px-3">Total</th>
-                        <th className="text-right py-2 px-3">%</th>
-                        <th className="text-left py-2 px-3">Meta</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[
-                        { label: 'Adicionados',        key: 'adicionados',       metaTxt: '—'    },
-                        { label: '→ Com Chamada',       key: 'comChamada',        meta: 80, metaTxt: '≥80%' },
-                        { label: '→ Com Visita',        key: 'comVisita',         meta: 35, metaTxt: '≥35%' },
-                        { label: '→ Com Estudo VVR',    key: 'comEstudo',         metaTxt: 'inf.' },
-                        { label: '→ Proposta Enviada',  key: 'comProposta',       meta: 50, metaTxt: '≥50%' },
-                        { label: '→ Proposta Aceite',   key: 'comPropostaAceite', meta: 35, metaTxt: '≥35%' },
-                      ].map(({ label, key, meta, metaTxt }) => {
-                        const pcts = ['mensal','trimestral','semestral','anual','total'].map(p => {
-                          const f   = funil[p] ?? {}
-                          const val = f[key] ?? 0
-                          const base= f.adicionados ?? 0
-                          const pct = key === 'adicionados' ? null : funnelPct(val, base)
-                          return { val, pct }
-                        })
-                        return (
-                          <tr key={key} className={`border-b border-gray-50 hover:bg-gray-50 ${key === 'adicionados' ? 'font-semibold' : ''}`}>
-                            <td className="py-2 px-3 text-gray-700">{label}</td>
-                            {pcts.map((p, i) => (
-                              <>
-                                <td key={`v${i}`} className="py-2 px-3 text-right font-mono text-xs text-gray-700">{p.val > 0 ? p.val : '—'}</td>
-                                <td key={`p${i}`} className="py-2 px-3 text-right text-xs">
-                                  {p.pct != null ? (
-                                    <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${badge(p.pct, meta ?? p.pct)}`}>
-                                      {p.pct}%
-                                    </span>
-                                  ) : '—'}
-                                </td>
-                              </>
-                            ))}
-                            <td className="py-2 px-3 text-xs text-gray-400">{metaTxt}</td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* ─ 3. Ciclo médio entre fases ─ */}
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-gray-700 mb-4">2.2 Ciclo Médio entre Fases — Imóveis</h2>
-                <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
                   {[
-                    { label: 'Lead → Chamada',    key: 'leadAChamada',    meta: 1,  metaTxt: '≤1 dia'  },
-                    { label: 'Chamada → Visita',  key: 'chamadaAVisita',  meta: 7,  metaTxt: '≤7 dias' },
-                    { label: 'Visita → Estudo',   key: 'visitaAEstudo',   meta: 14, metaTxt: '≤14 dias'},
-                    { label: 'Estudo → Proposta', key: 'estudoAProposta', meta: 7,  metaTxt: '≤7 dias' },
-                    { label: 'Proposta → Fecho',  key: 'propostaAFecho',  meta: 30, metaTxt: '≤30 dias'},
-                  ].map(({ label, key, meta, metaTxt }) => (
-                    <div key={key} className="bg-gray-50 rounded-lg p-4 flex flex-col gap-1">
-                      <p className="text-xs text-gray-400">{label}</p>
-                      <p className={`text-2xl font-bold ${cycleColor(ciclo[key], meta)}`}>
-                        {ciclo[key] != null ? `${ciclo[key]}d` : '—'}
-                      </p>
-                      <p className="text-xs text-gray-400">meta: {metaTxt}</p>
-                    </div>
-                  ))}
+                    { label: 'Imóveis adicionados', key: 'adicionados', icon: '🏠' },
+                    { label: 'Chamadas realizadas', key: 'chamadas',    icon: '📞' },
+                    { label: 'Visitas realizadas',  key: 'visitas',     icon: '🚗' },
+                    { label: 'Estudos de mercado',  key: 'estudos',     icon: '📊' },
+                    { label: 'Propostas enviadas',  key: 'propostas',   icon: '📄' },
+                    { label: 'Em Follow UP (agora)',key: 'emFollowUp',  icon: '🔄', noMeta: true },
+                  ].map(({ label, key, icon, noMeta }) => {
+                    const val  = v[key] ?? 0
+                    const meta = metas[key]
+                    return (
+                      <div key={key} className={`rounded-xl p-4 border ${!noMeta && meta ? badge(val, meta).replace('text-','border-').replace('bg-','').split(' ')[0] : ''} bg-gray-50 border-gray-100`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-gray-400">{icon} {label}</span>
+                          {!noMeta && meta && <span className="text-xs text-gray-300">meta ≥{meta}</span>}
+                        </div>
+                        <div className="flex items-end gap-2">
+                          <span className={`text-3xl font-bold ${!noMeta && meta ? (badge(val, meta).includes('green') ? 'text-green-600' : badge(val, meta).includes('amber') ? 'text-amber-600' : 'text-red-600') : 'text-gray-800'}`}>
+                            {val}
+                          </span>
+                          {!noMeta && meta && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full mb-1 font-medium ${badge(val, meta)}`}>
+                              {val >= meta ? '✓' : `${Math.round(val/meta*100)}%`}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
 
-              {/* ─ 4. Motivos de descarte ─ */}
-              {(m.imoveis?.motivosDescarte?.length ?? 0) > 0 && (
+              {/* ─ 1.2 Funil de Conversão (não no semanal) ─ */}
+              {periodKey !== 'semanal' && (
+                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                  <h2 className="text-sm font-semibold text-gray-700 mb-4">1.2 Funil de Conversão — coorte {KPI_PERIOD_LABELS[periodKey].toLowerCase()}</h2>
+                  <div className="flex flex-col gap-2">
+                    {[
+                      { label: 'Adicionados',         key: 'adicionados',       meta: null },
+                      { label: '→ Com Chamada',        key: 'comChamada',        meta: 80   },
+                      { label: '→ Com Visita',         key: 'comVisita',         meta: 35   },
+                      { label: '→ Com Estudo VVR',     key: 'comEstudo',         meta: null },
+                      { label: '→ Proposta Enviada',   key: 'comProposta',       meta: 50   },
+                      { label: '→ Proposta Aceite',    key: 'comPropostaAceite', meta: 35   },
+                    ].map(({ label, key, meta }) => {
+                      const val  = f[key] ?? 0
+                      const base = f.adicionados ?? 1
+                      const pct  = key === 'adicionados' ? 100 : Math.round(val / base * 100)
+                      const pctDirect = key === 'adicionados' ? null : (f[`tax${key.charAt(0).toUpperCase()+key.slice(1)}`] ?? pct)
+                      return (
+                        <div key={key} className="flex items-center gap-3">
+                          <span className="text-xs text-gray-500 w-44 text-right shrink-0">{label}</span>
+                          <div className="flex-1 bg-gray-100 rounded-full h-7 overflow-hidden">
+                            <div className="h-full rounded-full flex items-center px-3 transition-all"
+                              style={{ width: `${Math.max(pct, 4)}%`, backgroundColor: key === 'adicionados' ? '#6366f1' : meta && pct >= meta ? '#16a34a' : meta && pct >= meta * 0.7 ? '#d97706' : '#dc2626' }}>
+                              {val > 0 && <span className="text-white text-xs font-semibold">{val}</span>}
+                            </div>
+                          </div>
+                          <span className="text-xs font-mono w-12 text-right text-gray-600">{key !== 'adicionados' ? `${pct}%` : ''}</span>
+                          {meta && <span className="text-xs text-gray-300 w-12">≥{meta}%</span>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ─ 2.2 Ciclos médios (semanal e mensal) ─ */}
+              {(periodKey === 'semanal' || periodKey === 'mensal') && (
+                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                  <h2 className="text-sm font-semibold text-gray-700 mb-4">2.2 Ciclo Médio entre Fases — histórico acumulado</h2>
+                  <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
+                    {[
+                      { label: 'Lead → Chamada',    key: 'leadAChamada',    meta: 1  },
+                      { label: 'Chamada → Visita',  key: 'chamadaAVisita',  meta: 7  },
+                      { label: 'Visita → Estudo',   key: 'visitaAEstudo',   meta: 14 },
+                      { label: 'Estudo → Proposta', key: 'estudoAProposta', meta: 7  },
+                      { label: 'Proposta → Fecho',  key: 'propostaAFecho',  meta: 30 },
+                    ].map(({ label, key, meta }) => (
+                      <div key={key} className="bg-gray-50 rounded-xl p-4 flex flex-col gap-1">
+                        <p className="text-xs text-gray-400 leading-tight">{label}</p>
+                        <p className={`text-2xl font-bold ${cycleColor(ciclo[key], meta)}`}>
+                          {ciclo[key] != null ? `${ciclo[key]}d` : '—'}
+                        </p>
+                        <p className="text-xs text-gray-300">meta ≤{meta}d</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {(periodKey === 'mensal' || periodKey === 'semanal') && (
+                    <>
+                      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-5 mb-3">Ciclo Investidor</h3>
+                      <div className="grid grid-cols-3 gap-3">
+                        {[
+                          { label: '1º Contacto → Reunião', val: inv.ciclo?.contactoAReuniao,     meta: 14 },
+                          { label: 'Reunião → Capital',     val: inv.ciclo?.reuniaoACapital,       meta: 60 },
+                          { label: 'Total até Capital',     val: inv.ciclo?.totalContactoACapital, meta: 90 },
+                        ].map(({ label, val, meta }) => (
+                          <div key={label} className="bg-gray-50 rounded-xl p-3 text-center">
+                            <p className="text-xs text-gray-400 leading-tight">{label}</p>
+                            <p className={`text-xl font-bold mt-1 ${cycleColor(val, meta)}`}>{val != null ? `${val}d` : '—'}</p>
+                            <p className="text-xs text-gray-300">≤{meta}d</p>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* ─ 2.3 Motivos de descarte (mensal+) ─ */}
+              {periodKey !== 'semanal' && (m.imoveis?.motivosDescarte?.length ?? 0) > 0 && (
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                   <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                    <h2 className="text-sm font-semibold text-gray-700 mb-4">2.3 Motivos de Descarte</h2>
+                    <h2 className="text-sm font-semibold text-gray-700 mb-4">2.3 Motivos de Descarte — acumulado</h2>
                     <div className="flex flex-col gap-2">
-                      {(m.imoveis?.motivosDescarte ?? []).map(({ motivo, count }, idx, arr) => {
-                        const pct = Math.round(count / arr.reduce((s,x)=>s+x.count,0) * 100)
+                      {(m.imoveis?.motivosDescarte ?? []).map(({ motivo, count }, _i, arr) => {
+                        const total = arr.reduce((s,x) => s+x.count, 0)
+                        const pct   = Math.round(count / total * 100)
                         return (
                           <div key={motivo} className="flex items-center gap-3">
-                            <span className="text-xs text-gray-500 w-40 text-right shrink-0 truncate">{motivo}</span>
+                            <span className="text-xs text-gray-500 w-44 text-right shrink-0 truncate">{motivo}</span>
                             <div className="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden">
-                              <div className="h-full rounded-full bg-red-300 flex items-center px-2" style={{ width: `${Math.max(pct,5)}%` }}>
+                              <div className="h-full rounded-full bg-red-300 flex items-center px-2" style={{ width: `${Math.max(pct,4)}%` }}>
                                 <span className="text-xs text-white font-semibold">{count}</span>
                               </div>
                             </div>
@@ -887,133 +922,70 @@ export function Comercial() {
                       })}
                     </div>
                   </div>
-
                   <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                     <h2 className="text-sm font-semibold text-gray-700 mb-4">Descarte por Origem</h2>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wide">
-                            <th className="text-left py-2 px-3">Origem</th>
-                            <th className="text-right py-2 px-3">Total</th>
-                            <th className="text-right py-2 px-3">Descartados</th>
-                            <th className="text-right py-2 px-3">Taxa</th>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wide">
+                          <th className="text-left py-2 px-3">Origem</th>
+                          <th className="text-right py-2 px-3">Total</th>
+                          <th className="text-right py-2 px-3">Descartados</th>
+                          <th className="text-right py-2 px-3">Taxa</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(m.imoveis?.descarteOrigem ?? []).map(({ origem, total, descartados, taxaDescarte }) => (
+                          <tr key={origem} className="border-b border-gray-50 hover:bg-gray-50">
+                            <td className="py-2 px-3 text-gray-700 text-xs">{origem}</td>
+                            <td className="py-2 px-3 text-right font-mono text-xs">{total}</td>
+                            <td className="py-2 px-3 text-right font-mono text-xs">{descartados}</td>
+                            <td className="py-2 px-3 text-right">
+                              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${taxaDescarte > 60 ? 'bg-red-100 text-red-600' : taxaDescarte > 40 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+                                {taxaDescarte}%
+                              </span>
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {(m.imoveis?.descarteOrigem ?? []).map(({ origem, total, descartados, taxaDescarte }) => (
-                            <tr key={origem} className="border-b border-gray-50 hover:bg-gray-50">
-                              <td className="py-2 px-3 text-gray-700">{origem}</td>
-                              <td className="py-2 px-3 text-right font-mono text-xs">{total}</td>
-                              <td className="py-2 px-3 text-right font-mono text-xs">{descartados}</td>
-                              <td className="py-2 px-3 text-right">
-                                <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${taxaDescarte > 60 ? 'bg-red-100 text-red-600' : taxaDescarte > 40 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
-                                  {taxaDescarte}%
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
 
-              {/* ─ 5. Receita por modelo ─ */}
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-gray-700 mb-4">1.1 Receita por Modelo de Negócio</h2>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wide">
-                        <th className="text-left py-2 px-3">Métrica</th>
-                        <th className="text-right py-2 px-3">Mês</th>
-                        <th className="text-right py-2 px-3">Trimestre</th>
-                        <th className="text-right py-2 px-3">Semestre</th>
-                        <th className="text-right py-2 px-3">Ano</th>
-                        <th className="text-left py-2 px-3">Meta anual</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[
-                        { label: 'Negócios Wholesaling', key: 'negWH',          fmt: v => v,         meta: 6,      metaTxt: '6/ano',         suffix: '' },
-                        { label: 'Lucro Wholesaling',    key: 'lucroWhTotal',    fmt: EUR,            meta: 50000,  metaTxt: '≥50k/ano',      suffix: '' },
-                        { label: 'Ticket Médio Wh.',     key: 'lucroWhMedio',    fmt: v => v ? EUR(v) : '—', meta: 8333, metaTxt: '≥8.333€', suffix: '' },
-                        { label: 'Negócios CAEP',        key: 'negCAEP',         fmt: v => v,         meta: 2,      metaTxt: '2/ano',         suffix: '' },
-                        { label: 'Quota Somnium CAEP',   key: 'quotaSomniumCAEP',fmt: EUR,            meta: 50000,  metaTxt: '≥50k/ano',      suffix: '' },
-                      ].map(({ label, key, fmt, meta, metaTxt }) => {
-                        const vals = ['mensal','trimestral','semestral','anual'].map(p => rec[p]?.[key] ?? 0)
-                        return (
-                          <tr key={key} className="border-b border-gray-50 hover:bg-gray-50">
-                            <td className="py-2 px-3 text-gray-700">{label}</td>
-                            {vals.map((v, i) => (
-                              <td key={i} className="py-2 px-3 text-right font-mono text-xs">
-                                <span className={i === 3 ? `font-semibold ${badge(v, meta)}` : 'text-gray-600'}>
-                                  {i === 3 ? (
-                                    <span className={`px-2 py-0.5 rounded-full text-xs ${badge(v, meta)}`}>{fmt(v)}</span>
-                                  ) : fmt(v)}
-                                </span>
-                              </td>
-                            ))}
-                            <td className="py-2 px-3 text-xs text-gray-400">{metaTxt}</td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* ─ 6. Investidores ─ */}
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              {/* ─ 1.1 Receita por modelo (mensal+) ─ */}
+              {periodKey !== 'semanal' && (
                 <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                  <h2 className="text-sm font-semibold text-gray-700 mb-4">3.3 Alertas — Investidores</h2>
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className={`rounded-lg p-3 ${inv.alertas?.semContacto60d?.length > 0 ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-100'}`}>
-                      <p className="text-xs text-gray-500">Sem contacto &gt;60 dias</p>
-                      <p className={`text-2xl font-bold ${inv.alertas?.semContacto60d?.length > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {inv.alertas?.semContacto60d?.length ?? 0}
-                      </p>
-                      <p className="text-xs text-gray-400">meta: 0</p>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">Capital mobilizado</p>
-                      <p className="text-2xl font-bold text-indigo-600">{EUR(inv.capitalMobilizado)}</p>
-                      <p className="text-xs text-gray-400">{inv.emParceria} em parceria · {inv.reinvestiram} reinvestiram</p>
-                    </div>
-                  </div>
-                  {(inv.alertas?.semContacto60d?.length ?? 0) > 0 && (
-                    <div className="bg-red-50 border border-red-100 rounded-lg p-3">
-                      <p className="text-xs font-semibold text-red-700 mb-1">Investidores sem contacto</p>
-                      {inv.alertas.semContacto60d.map(i => (
-                        <div key={i.nome} className="text-xs text-red-600 flex justify-between">
-                          <span>{i.nome}</span><span>{i.dias}d · {i.status}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-4 mb-2">2.2 Ciclo Investidor</h3>
-                  <div className="grid grid-cols-3 gap-2">
+                  <h2 className="text-sm font-semibold text-gray-700 mb-4">1.1 Receita por Modelo — {KPI_PERIOD_LABELS[periodKey]}</h2>
+                  <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
                     {[
-                      { label: '1º Cont. → Reunião', val: inv.ciclo?.contactoAReuniao, meta: 14 },
-                      { label: 'Reunião → Capital',  val: inv.ciclo?.reuniaoACapital,  meta: 60 },
-                      { label: 'Total Cont.→Capital',val: inv.ciclo?.totalContactoACapital, meta: 90 },
-                    ].map(({ label, val, meta }) => (
-                      <div key={label} className="bg-gray-50 rounded-lg p-2 text-center">
-                        <p className="text-xs text-gray-400 leading-tight">{label}</p>
-                        <p className={`text-lg font-bold mt-0.5 ${cycleColor(val, meta)}`}>{val != null ? `${val}d` : '—'}</p>
-                        <p className="text-xs text-gray-400">≤{meta}d</p>
+                      { label: 'Negócios Wholesaling', val: r.negWH,           fmt: v => v,    meta: { mensal:0.5, trimestral:1.5, semestral:3, anual:6 }[periodKey]   },
+                      { label: 'Lucro Wholesaling',    val: r.lucroWhTotal,     fmt: EUR,       meta: { mensal:4167, trimestral:12500, semestral:25000, anual:50000 }[periodKey] },
+                      { label: 'Negócios CAEP',        val: r.negCAEP,          fmt: v => v,    meta: { mensal:0.17, trimestral:0.5, semestral:1, anual:2 }[periodKey] },
+                      { label: 'Quota Somnium CAEP',   val: r.quotaSomniumCAEP, fmt: EUR,       meta: { mensal:4167, trimestral:12500, semestral:25000, anual:50000 }[periodKey] },
+                    ].map(({ label, val, fmt, meta }) => (
+                      <div key={label} className="bg-gray-50 rounded-xl p-4">
+                        <p className="text-xs text-gray-400">{label}</p>
+                        <p className={`text-2xl font-bold mt-1 ${meta ? (badge(val, meta).includes('green') ? 'text-green-600' : badge(val, meta).includes('amber') ? 'text-amber-600' : 'text-red-500') : 'text-gray-800'}`}>
+                          {fmt(val ?? 0)}
+                        </p>
+                        {meta && <p className="text-xs text-gray-300 mt-0.5">meta ≥{fmt(meta)}</p>}
                       </div>
                     ))}
                   </div>
+                  {r.lucroWhMedio > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-6 text-xs text-gray-500">
+                      <span>Ticket médio Wholesaling: <strong className="text-gray-800">{EUR(r.lucroWhMedio)}</strong> <span className="text-gray-300">(meta ≥8.333€)</span></span>
+                    </div>
+                  )}
                 </div>
+              )}
 
-                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                  <h2 className="text-sm font-semibold text-gray-700 mb-4">3.1 LTV — Investidores</h2>
-                  {inv.ltv?.length > 0 ? (
-                    <div className="overflow-x-auto">
+              {/* ─ 3.1 LTV (semestral e anual) ─ */}
+              {(periodKey === 'semestral' || periodKey === 'anual') && (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                  <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                    <h2 className="text-sm font-semibold text-gray-700 mb-4">3.1 LTV — Investidores</h2>
+                    {inv.ltv?.length > 0 ? (
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wide">
@@ -1038,55 +1010,11 @@ export function Comercial() {
                           ))}
                         </tbody>
                       </table>
-                    </div>
-                  ) : <EmptyState />}
-                </div>
-              </div>
-
-              {/* ─ 7. Consultores ─ */}
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                  <h2 className="text-sm font-semibold text-gray-700 mb-4">3.3 Alertas — Consultores</h2>
-                  <div className="grid grid-cols-3 gap-3 mb-4">
-                    <div className={`rounded-lg p-3 ${cons.alertas?.followUpAtrasado > 0 ? 'bg-amber-50 border border-amber-200' : 'bg-green-50 border border-green-100'}`}>
-                      <p className="text-xs text-gray-500">Follow-up atrasado</p>
-                      <p className={`text-2xl font-bold ${cons.alertas?.followUpAtrasado > 0 ? 'text-amber-600' : 'text-green-600'}`}>
-                        {cons.alertas?.followUpAtrasado ?? 0}
-                      </p>
-                    </div>
-                    <div className={`rounded-lg p-3 ${cons.alertas?.semContacto30d > 0 ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-100'}`}>
-                      <p className="text-xs text-gray-500">Sem contacto &gt;30d</p>
-                      <p className={`text-2xl font-bold ${cons.alertas?.semContacto30d > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {cons.alertas?.semContacto30d ?? 0}
-                      </p>
-                      <p className="text-xs text-gray-400">meta: 0</p>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">Inativos</p>
-                      <p className="text-2xl font-bold text-gray-600">{cons.alertas?.inativos ?? 0}</p>
-                      <p className="text-xs text-gray-400">{cons.totalAtivos} ativos</p>
-                    </div>
+                    ) : <EmptyState />}
                   </div>
-
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">2.2 Ciclo Consultor</h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { label: 'Início → 1ª Call',        val: cons.ciclo?.inicioA1Call,   meta: 7  },
-                      { label: '1ª Call → 1º negócio',    val: cons.ciclo?.call1ANegocio,  meta: 30 },
-                    ].map(({ label, val, meta }) => (
-                      <div key={label} className="bg-gray-50 rounded-lg p-3">
-                        <p className="text-xs text-gray-400">{label}</p>
-                        <p className={`text-xl font-bold mt-0.5 ${cycleColor(val, meta)}`}>{val != null ? `${val}d` : '—'}</p>
-                        <p className="text-xs text-gray-400">meta: ≤{meta}d</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                  <h2 className="text-sm font-semibold text-gray-700 mb-4">3.1 LTV — Top Consultores</h2>
-                  {cons.ltv?.length > 0 ? (
-                    <div className="overflow-x-auto">
+                  <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                    <h2 className="text-sm font-semibold text-gray-700 mb-4">3.1 LTV — Top Consultores</h2>
+                    {cons.ltv?.length > 0 ? (
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wide">
@@ -1098,24 +1026,21 @@ export function Comercial() {
                         <tbody>
                           {cons.ltv.map((c, idx) => (
                             <tr key={c.nome} className="border-b border-gray-50 hover:bg-gray-50">
-                              <td className="py-1.5 px-2 flex items-center gap-2">
-                                <span className="text-xs text-gray-400 w-4">{idx+1}</span>
-                                <span className="text-xs font-medium text-gray-800">{c.nome}</span>
+                              <td className="py-1.5 px-2 text-xs font-medium text-gray-800 flex items-center gap-1">
+                                <span className="text-gray-300">{idx+1}</span> {c.nome}
                               </td>
                               <td className="py-1.5 px-2 text-right font-mono text-xs">
-                                <span className={c.ltv > 8000 ? 'text-green-600 font-semibold' : 'text-indigo-500'}>
-                                  {EUR(c.ltv)}
-                                </span>
+                                <span className={c.ltv > 8000 ? 'text-green-600 font-semibold' : 'text-indigo-500'}>{EUR(c.ltv)}</span>
                               </td>
                               <td className="py-1.5 px-2 text-right text-xs text-gray-500">{c.negocios}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                    </div>
-                  ) : <EmptyState />}
+                    ) : <EmptyState />}
+                  </div>
                 </div>
-              </div>
+              )}
             </>
           )
         })()}

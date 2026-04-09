@@ -5,7 +5,7 @@ const nav = [
   { to: '/',           label: 'Dashboard',  Icon: LayoutDashboard, end: true },
   { to: '/financeiro', label: 'Financeiro', Icon: TrendingUp },
   { to: '/comercial',  label: 'Comercial',  Icon: Users },
-  { to: '/metricas',   label: 'Métricas',   Icon: BarChart2 },
+  { to: '/metricas',   label: 'KPI',        Icon: BarChart2 },
   { to: '/marketing',  label: 'Marketing',  Icon: Megaphone },
   { to: '/operacoes',  label: 'Operações',  Icon: HardHat },
 ]
