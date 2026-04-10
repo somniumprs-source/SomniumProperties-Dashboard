@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { TrendingUp, Users, Megaphone, HardHat } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { DepartmentSection } from '../components/dashboard/DepartmentSection.jsx'
@@ -22,8 +23,16 @@ function formatEur(val) {
   return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(val)
 }
 
+const PULSE_COLOR = { excelente: '#22c55e', bom: '#C9A84C', 'atenção': '#f59e0b', 'crítico': '#ef4444' }
+const PULSE_BG = { excelente: 'rgba(34,197,94,0.1)', bom: 'rgba(201,168,76,0.1)', 'atenção': 'rgba(245,158,11,0.1)', 'crítico': 'rgba(239,68,68,0.1)' }
+
 export function Dashboard() {
   const { kpis, loading, error, refresh } = useKPIs()
+  const [pulse, setPulse] = useState(null)
+
+  useEffect(() => {
+    fetch('/api/weekly-pulse').then(r => r.json()).then(setPulse).catch(() => {})
+  }, [])
 
   const updatedAt = kpis?.updatedAt
     ? new Date(kpis.updatedAt).toLocaleString('pt-PT')
@@ -100,13 +109,11 @@ export function Dashboard() {
           </div>
         )}
 
-        {/* Banner */}
+        {/* Banner + Weekly Pulse */}
         <div className="rounded-2xl px-7 py-6 flex items-center justify-between overflow-hidden relative"
           style={{ backgroundColor: '#0d0d0d', boxShadow: '0 2px 12px rgba(0,0,0,0.12)', border: '1px solid #1a1a1a' }}>
-          {/* Gold line top */}
           <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-2xl"
             style={{ background: 'linear-gradient(90deg, #C9A84C, #E8D08A, #C9A84C)' }} />
-
           <div className="relative z-10">
             <p className="text-xs font-semibold uppercase tracking-widest mb-1.5" style={{ color: '#C9A84C' }}>
               Dashboard Empresarial
@@ -114,10 +121,14 @@ export function Dashboard() {
             <h2 className="text-white text-xl font-bold tracking-tight">Visão Geral do Negócio</h2>
             <p className="text-sm mt-1" style={{ color: '#666' }}>Todos os departamentos em tempo real</p>
           </div>
-
           <div className="hidden xl:flex items-center gap-8 relative z-10">
+            {pulse && (
+              <div className="text-center">
+                <p className="text-3xl font-bold" style={{ color: PULSE_COLOR[pulse.status] ?? '#C9A84C' }}>{pulse.score}</p>
+                <p className="text-xs mt-0.5 uppercase font-semibold" style={{ color: PULSE_COLOR[pulse.status] ?? '#555' }}>{pulse.status}</p>
+              </div>
+            )}
             {[
-              { label: 'Departamentos', value: '4' },
               { label: 'Estado', value: loading ? '...' : 'Online' },
             ].map(item => (
               <div key={item.label} className="text-center">
@@ -126,12 +137,43 @@ export function Dashboard() {
               </div>
             ))}
           </div>
-
-          {/* Logo watermark */}
           <div className="absolute right-6 top-1/2 -translate-y-1/2 opacity-5 pointer-events-none">
             <img src="/logo.png" alt="" className="h-16 w-auto" />
           </div>
         </div>
+
+        {/* Weekly Pulse Detail */}
+        {pulse && (
+          <div className="rounded-xl p-5 border" style={{ backgroundColor: PULSE_BG[pulse.status], borderColor: PULSE_COLOR[pulse.status] + '33' }}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-700">Pulso Semanal ({pulse.semana.de} a {pulse.semana.ate})</h3>
+              <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ backgroundColor: PULSE_COLOR[pulse.status] + '22', color: PULSE_COLOR[pulse.status] }}>
+                {pulse.score}/100
+              </span>
+            </div>
+            <div className="grid grid-cols-2 xl:grid-cols-5 gap-3 text-center">
+              {[
+                { label: 'Imóveis Novos', value: pulse.atividades.imoveisAdicionados, good: true },
+                { label: 'Chamadas', value: pulse.atividades.chamadasFeitas, good: true },
+                { label: 'Visitas', value: pulse.atividades.visitasFeitas, good: true },
+                { label: 'Propostas', value: pulse.atividades.propostasEnviadas, good: true },
+                { label: 'Deals', value: pulse.atividades.dealsFechados, good: true },
+              ].map(item => (
+                <div key={item.label} className="bg-white rounded-lg p-2 shadow-sm">
+                  <p className="text-lg font-bold text-gray-900">{item.value}</p>
+                  <p className="text-xs text-gray-500">{item.label}</p>
+                </div>
+              ))}
+            </div>
+            {(pulse.alertas.imoveisParados > 0 || pulse.alertas.investSemContacto > 0 || pulse.alertas.consFollowUpAtrasado > 0) && (
+              <div className="mt-3 flex gap-4 text-xs">
+                {pulse.alertas.imoveisParados > 0 && <span className="text-red-600">{pulse.alertas.imoveisParados} imóveis parados</span>}
+                {pulse.alertas.investSemContacto > 0 && <span className="text-orange-600">{pulse.alertas.investSemContacto} investidores sem contacto</span>}
+                {pulse.alertas.consFollowUpAtrasado > 0 && <span className="text-yellow-700">{pulse.alertas.consFollowUpAtrasado} follow-ups atrasados</span>}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Sections */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">

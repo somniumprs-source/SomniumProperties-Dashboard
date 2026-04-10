@@ -349,8 +349,8 @@ const getConsultores   = () => cached('cons', 30000, async () => DB.consultores 
 const getProjetos    = () => cached('proj', 30000, async () => DB.projetos ? (await queryAll(DB.projetos)).map(mapProjeto) : [])
 const getPipeline    = () => cached('pip',  30000, async () => (await queryAll(DB.pipeline)).map(mapPipeline))
 const getClientes    = () => cached('cli',  30000, async () => (await queryAll(DB.clientes)).map(mapCliente))
-const getCampanhas   = () => cached('camp', 30000, async () => (await queryAll(DB.campanhas)).map(mapCampanha))
-const getObras       = () => cached('obr',  30000, async () => (await queryAll(DB.obras)).map(mapObra))
+const getCampanhas   = () => cached('camp', 30000, async () => { try { return (await queryAll(DB.campanhas)).map(mapCampanha) } catch { return [] } })
+const getObras       = () => cached('obr',  30000, async () => { try { return (await queryAll(DB.obras)).map(mapObra) } catch { return [] } })
 
 // ════════════════════════════════════════════════════════════════
 // FINANCEIRO — Wholesaling Imobiliário
@@ -1218,12 +1218,13 @@ app.get('/api/operacoes/historico', async (req, res) => {
 app.get('/api/kpis', async (req, res) => {
   try {
     const base = 'http://localhost:3001'
+    const safe = url => fetch(url).then(r => r.json()).catch(() => ({}))
     const [financeiro, comercial, marketing, operacoes, cashflow] = await Promise.all([
-      fetch(`${base}/api/kpis/financeiro`).then(r => r.json()),
-      fetch(`${base}/api/kpis/comercial`).then(r => r.json()),
-      fetch(`${base}/api/kpis/marketing`).then(r => r.json()),
-      fetch(`${base}/api/kpis/operacoes`).then(r => r.json()),
-      fetch(`${base}/api/financeiro/cashflow`).then(r => r.json()),
+      safe(`${base}/api/kpis/financeiro`),
+      safe(`${base}/api/kpis/comercial`),
+      safe(`${base}/api/kpis/marketing`),
+      safe(`${base}/api/kpis/operacoes`),
+      safe(`${base}/api/financeiro/cashflow`),
     ])
     res.json({ financeiro: { ...financeiro, cashflow }, comercial, marketing, operacoes, updatedAt: new Date().toISOString() })
   } catch (err) {
@@ -1232,6 +1233,284 @@ app.get('/api/kpis', async (req, res) => {
 })
 
 app.post('/api/cache/clear', (_req, res) => { cache.clear(); res.json({ ok: true }) })
+
+// ════════════════════════════════════════════════════════════════
+// WEEKLY PULSE — Saúde semanal do negócio
+// ════════════════════════════════════════════════════════════════
+app.get('/api/weekly-pulse', async (req, res) => {
+  try {
+    const [imoveis, investidores, consultoresRaw, negocios, despesas] = await Promise.all([
+      getImóveis().catch(() => []),
+      getInvestidores(),
+      getConsultores().catch(() => []),
+      getNegócios(),
+      getDespesas(),
+    ])
+    const now = new Date()
+    const wDay = now.getDay()
+    const weekStart = new Date(now); weekStart.setDate(now.getDate() - (wDay === 0 ? 6 : wDay - 1)); weekStart.setHours(0,0,0,0)
+
+    function inWeek(dateStr) {
+      if (!dateStr) return false
+      return new Date(dateStr) >= weekStart && new Date(dateStr) <= now
+    }
+
+    // Atividades da semana
+    const imoveisAdicionados = imoveis.filter(i => inWeek(i.dataAdicionado)).length
+    const chamadasFeitas = imoveis.filter(i => inWeek(i.dataChamada)).length
+    const visitasFeitas = imoveis.filter(i => inWeek(i.dataVisita)).length
+    const propostasEnviadas = imoveis.filter(i => inWeek(i.dataProposta)).length
+    const dealsFechados = negocios.filter(n => inWeek(n.dataVenda) || inWeek(n.dataCompra)).length
+
+    // Alertas críticos
+    const ESTADOS_NEG = new Set(['Descartado','Nao interessa','Não interessa','Cancelado'])
+    const imoveisParados = imoveis.filter(i => {
+      if (ESTADOS_NEG.has(i.estado) || ['Vendido','Wholesaling','Negócio em Curso'].includes(i.estado)) return false
+      const ultima = i.dataPropostaAceite ?? i.dataProposta ?? i.dataEstudoMercado ?? i.dataVisita ?? i.dataChamada ?? i.dataAdicionado
+      if (!ultima) return false
+      return (now - new Date(ultima)) / 86400000 > 7
+    }).length
+
+    const investSemContacto = investidores.filter(i => {
+      const dias = i.diasSemContacto ?? (() => {
+        const u = i.dataUltimoContacto ?? i.dataReuniao ?? i.dataPrimeiroContacto
+        return u ? Math.floor((now - new Date(u)) / 86400000) : null
+      })()
+      return dias != null && dias > 14
+    }).length
+
+    const CONS_ATIVOS = new Set(['Aberto Parcerias','Em Parceria','Follow up','Follow Up','Acesso imoveis Off market'])
+    const consFollowUpAtrasado = consultoresRaw.filter(c =>
+      CONS_ATIVOS.has(c.estatuto) && c.dataProximoFollowUp && new Date(c.dataProximoFollowUp) < now
+    ).length
+
+    // Cash
+    const burnRate = round2(despesas.filter(d => d.timing === 'Mensalmente').reduce((s,d) => s + d.custoMensal, 0))
+    const lucroPendente = round2(negocios.filter(n => n.pagamentoEmFalta).reduce((s,n) => s + n.lucroEstimado, 0))
+    const runway = burnRate > 0 ? round2(lucroPendente / burnRate) : null
+
+    // Pulse score (0-100)
+    let score = 50 // base
+    score += Math.min(imoveisAdicionados * 5, 15) // até +15 por imóveis novos
+    score += Math.min(chamadasFeitas * 3, 10)     // até +10 por chamadas
+    score += Math.min(visitasFeitas * 5, 10)      // até +10 por visitas
+    score += dealsFechados * 15                    // +15 por deal
+    score -= Math.min(imoveisParados * 2, 15)     // até -15 por parados
+    score -= Math.min(investSemContacto * 1, 10)  // até -10 por inativos
+    score -= Math.min(consFollowUpAtrasado * 1, 10) // até -10 por follow-ups
+    score = Math.max(0, Math.min(100, score))
+
+    const status = score >= 75 ? 'excelente' : score >= 50 ? 'bom' : score >= 30 ? 'atenção' : 'crítico'
+
+    res.json({
+      semana: { de: weekStart.toISOString().slice(0,10), ate: now.toISOString().slice(0,10) },
+      score, status,
+      atividades: { imoveisAdicionados, chamadasFeitas, visitasFeitas, propostasEnviadas, dealsFechados },
+      alertas: { imoveisParados, investSemContacto, consFollowUpAtrasado },
+      financeiro: { burnRate, lucroPendente, runway },
+    })
+  } catch (err) {
+    console.error('[weekly-pulse]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ════════════════════════════════════════════════════════════════
+// CASH FLOW PROJETADO — Projeção mensal
+// ════════════════════════════════════════════════════════════════
+app.get('/api/financeiro/projecao', async (req, res) => {
+  try {
+    const [negocios, despesas] = await Promise.all([getNegócios(), getDespesas()])
+    const now = new Date()
+
+    const burnRate = round2(despesas.filter(d => d.timing === 'Mensalmente').reduce((s,d) => s + d.custoMensal, 0))
+    const despesasAnuais = despesas.filter(d => d.timing === 'Anual')
+
+    // Projeção: próximos 12 meses
+    const meses = []
+    let saldoAcumulado = 0
+
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
+      const ano = d.getFullYear()
+      const month = d.getMonth() + 1
+      const label = `${MES_ABREV[d.getMonth()]} ${String(ano).slice(2)}`
+
+      // Entradas previstas (negócios com data estimada neste mês)
+      const entradas = negocios.filter(n => {
+        const data = n.dataEstimada ?? n.dataVenda
+        if (!data) return false
+        const dt = new Date(data)
+        return dt.getFullYear() === ano && dt.getMonth() + 1 === month && n.pagamentoEmFalta
+      })
+      const totalEntradas = round2(entradas.reduce((s,n) => s + n.lucroEstimado, 0))
+
+      // Saídas: burn rate + despesas anuais que caem neste mês
+      let totalSaidas = burnRate
+      for (const da of despesasAnuais) {
+        if (da.data) {
+          const dda = new Date(da.data)
+          if (dda.getMonth() + 1 === month) totalSaidas += da.custoAnual || da.custoMensal || 0
+        }
+      }
+      totalSaidas = round2(totalSaidas)
+
+      const liquido = round2(totalEntradas - totalSaidas)
+      saldoAcumulado = round2(saldoAcumulado + liquido)
+
+      meses.push({ label, entradas: totalEntradas, saidas: totalSaidas, liquido, saldoAcumulado, deals: entradas.length })
+    }
+
+    // Break-even: quantos deals para cobrir despesas anuais
+    const despesasAnuaisTotal = round2(burnRate * 12 + despesasAnuais.reduce((s,d) => s + (d.custoAnual || 0), 0))
+    const lucroMedioDeal = negocios.length > 0 ? round2(negocios.reduce((s,n) => s + n.lucroEstimado, 0) / negocios.length) : 0
+    const dealsParaBreakEven = lucroMedioDeal > 0 ? Math.ceil(despesasAnuaisTotal / lucroMedioDeal) : null
+
+    // P&L simplificado
+    const receitaTotal = round2(negocios.reduce((s,n) => s + n.lucroReal, 0))
+    const receitaEstimada = round2(negocios.reduce((s,n) => s + n.lucroEstimado, 0))
+    const despesasTotalAno = despesasAnuaisTotal
+    const resultadoLiquido = round2(receitaTotal - (burnRate * (now.getMonth() + 1)))
+    const resultadoEstimado = round2(receitaEstimada - despesasTotalAno)
+
+    res.json({
+      projecao: meses,
+      burnRate,
+      breakEven: { despesasAnuais: despesasAnuaisTotal, lucroMedioDeal, dealsNecessarios: dealsParaBreakEven },
+      pl: {
+        receitaReal: receitaTotal,
+        receitaEstimada,
+        despesasAteAgora: round2(burnRate * (now.getMonth() + 1)),
+        despesasAnuaisTotal,
+        resultadoLiquido,
+        resultadoEstimado,
+        mesesDecorridos: now.getMonth() + 1,
+      },
+    })
+  } catch (err) {
+    console.error('[financeiro/projecao]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ════════════════════════════════════════════════════════════════
+// OPS SCORECARD — Substitui Operações legacy
+// ════════════════════════════════════════════════════════════════
+app.get('/api/ops-scorecard', async (req, res) => {
+  try {
+    const [imoveis, consultoresRaw, negocios, investidores] = await Promise.all([
+      getImóveis().catch(() => []),
+      getConsultores().catch(() => []),
+      getNegócios(),
+      getInvestidores(),
+    ])
+    const now = new Date()
+    const CONS_ATIVOS = new Set(['Aberto Parcerias','Em Parceria','Follow up','Follow Up','Acesso imoveis Off market','Consultores em Parceria'])
+    const ESTADOS_NEG = new Set(['Descartado','Nao interessa','Não interessa','Cancelado'])
+
+    // Consultores ativos
+    const consAtivos = consultoresRaw.filter(c => CONS_ATIVOS.has(c.estatuto))
+    const consParceria = consultoresRaw.filter(c => c.estatuto === 'Consultores em Parceria' || c.estatuto === 'Em Parceria')
+    const taxaAtivacao = consultoresRaw.length > 0 ? round2(consAtivos.length / consultoresRaw.length * 100) : 0
+
+    // Pipeline velocity
+    const imoveisAtivos = imoveis.filter(i => !ESTADOS_NEG.has(i.estado))
+    const tempoMedioFase = (() => {
+      const tempos = imoveisAtivos.map(i => {
+        const ultima = i.dataPropostaAceite ?? i.dataProposta ?? i.dataEstudoMercado ?? i.dataVisita ?? i.dataChamada ?? i.dataAdicionado
+        if (!ultima) return null
+        return Math.floor((now - new Date(ultima)) / 86400000)
+      }).filter(v => v != null)
+      return tempos.length > 0 ? round2(tempos.reduce((s,v) => s+v,0) / tempos.length) : null
+    })()
+
+    // Ranking consultores (top 10 por leads)
+    const byNome = {}
+    for (const im of imoveis) {
+      const nome = im.nomeConsultor?.trim()
+      if (!nome) continue
+      if (!byNome[nome]) byNome[nome] = { total: 0, ativos: 0, descartados: 0, avancados: 0, visitas: 0 }
+      byNome[nome].total++
+      if (ESTADOS_NEG.has(im.estado)) byNome[nome].descartados++
+      else byNome[nome].ativos++
+      if (im.dataVisita) byNome[nome].visitas++
+      if (['Wholesaling','Negócio em Curso','Estudo de VVR','Enviar proposta ao investidor'].includes(im.estado)) byNome[nome].avancados++
+    }
+
+    const rankingConsultores = Object.entries(byNome)
+      .map(([nome, v]) => ({
+        nome, ...v,
+        taxaConversao: v.total > 0 ? round2(v.avancados / v.total * 100) : 0,
+        consultor: consultoresRaw.find(c => c.nome === nome),
+      }))
+      .sort((a,b) => b.total - a.total)
+      .slice(0, 15)
+
+    // Pipeline por zona
+    const porZona = {}
+    for (const im of imoveis) {
+      const zona = im.zonas?.[0] ?? im.zona ?? 'Sem zona'
+      if (!porZona[zona]) porZona[zona] = { total: 0, ativos: 0, valor: 0 }
+      porZona[zona].total++
+      if (!ESTADOS_NEG.has(im.estado)) {
+        porZona[zona].ativos++
+        porZona[zona].valor += im.askPrice || 0
+      }
+    }
+    const zonas = Object.entries(porZona)
+      .map(([zona, v]) => ({ zona, ...v, valor: round2(v.valor) }))
+      .sort((a,b) => b.ativos - a.ativos)
+
+    // Tempo médio por fase do pipeline
+    const faseTimings = {}
+    const FUNIL = ['dataChamada','dataVisita','dataEstudoMercado','dataProposta','dataPropostaAceite']
+    const FUNIL_LABELS = ['Lead → Chamada','Chamada → Visita','Visita → Estudo','Estudo → Proposta','Proposta → Aceite']
+    const FUNIL_FROM = ['dataAdicionado','dataChamada','dataVisita','dataEstudoMercado','dataProposta']
+    for (let idx = 0; idx < FUNIL.length; idx++) {
+      const dias = imoveis.map(i => {
+        const from = i[FUNIL_FROM[idx]]
+        const to = i[FUNIL[idx]]
+        if (!from || !to) return null
+        const d = (new Date(to) - new Date(from)) / 86400000
+        return d >= 0 && d < 365 ? d : null
+      }).filter(v => v != null)
+      faseTimings[FUNIL_LABELS[idx]] = dias.length > 0 ? round2(dias.reduce((s,v)=>s+v,0)/dias.length) : null
+    }
+
+    // Investidores: funil de conversão
+    const invTotal = investidores.length
+    const invReuniao = investidores.filter(i => i.dataReuniao).length
+    const invClassificado = investidores.filter(i => i.classificacao?.length > 0).length
+    const invParceria = investidores.filter(i => ['Investidor em parceria','Em Parceria'].includes(i.status)).length
+    const invTaxaConversao = invTotal > 0 ? round2(invParceria / invTotal * 100) : 0
+
+    res.json({
+      updatedAt: new Date().toISOString(),
+      consultores: {
+        total: consultoresRaw.length,
+        ativos: consAtivos.length,
+        emParceria: consParceria.length,
+        taxaAtivacao,
+      },
+      pipeline: {
+        imoveisAtivos: imoveisAtivos.length,
+        imoveisTotal: imoveis.length,
+        tempoMedioFase,
+        faseTimings,
+      },
+      investidores: {
+        total: invTotal, comReuniao: invReuniao, classificados: invClassificado,
+        emParceria: invParceria, taxaConversao: invTaxaConversao,
+      },
+      negocios: { total: negocios.length, fechados: negocios.filter(n => n.fase === 'Vendido').length },
+      rankingConsultores,
+      zonas,
+    })
+  } catch (err) {
+    console.error('[ops-scorecard]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
 
 // ════════════════════════════════════════════════════════════════
 // MÉTRICAS — Framework completo Wholesaling / Fix & Flip
@@ -1568,6 +1847,541 @@ app.get('/api/metricas', async (req, res) => {
     })
   } catch (err) {
     console.error('[metricas]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ════════════════════════════════════════════════════════════════
+// ALERTAS — Centro de atenção do CEO
+// ════════════════════════════════════════════════════════════════
+app.get('/api/alertas', async (req, res) => {
+  try {
+    const [imoveis, investidores, consultoresRaw, negocios] = await Promise.all([
+      getImóveis().catch(() => []),
+      getInvestidores(),
+      getConsultores().catch(() => []),
+      getNegócios(),
+    ])
+    const now = new Date()
+    const alerts = []
+
+    // ── Investidores sem contacto >7 dias ──
+    for (const inv of investidores) {
+      const diasSem = inv.diasSemContacto ?? (() => {
+        const ultima = inv.dataUltimoContacto ?? inv.dataReuniao ?? inv.dataPrimeiroContacto
+        if (!ultima) return null
+        return Math.floor((now - new Date(ultima)) / 86400000)
+      })()
+      if (diasSem != null && diasSem > 7 && !['Investidor em parceria', 'Em Parceria'].includes(inv.status)) {
+        alerts.push({
+          tipo: 'inatividade_investidor',
+          severidade: diasSem > 30 ? 'critico' : diasSem > 14 ? 'aviso' : 'info',
+          entidade: inv.nome,
+          mensagem: `${diasSem} dias sem contacto`,
+          status: inv.status,
+          id: inv.id,
+        })
+      }
+    }
+
+    // ── Consultores com follow-up atrasado ──
+    const CONS_ATIVOS = new Set(['Aberto Parcerias', 'Em Parceria', 'Follow up', 'Follow Up', 'Acesso imoveis Off market'])
+    for (const c of consultoresRaw) {
+      if (!CONS_ATIVOS.has(c.estatuto)) continue
+      if (c.dataProximoFollowUp && new Date(c.dataProximoFollowUp) < now) {
+        const diasAtraso = Math.floor((now - new Date(c.dataProximoFollowUp)) / 86400000)
+        alerts.push({
+          tipo: 'followup_consultor',
+          severidade: diasAtraso > 14 ? 'critico' : diasAtraso > 7 ? 'aviso' : 'info',
+          entidade: c.nome,
+          mensagem: `Follow-up atrasado ${diasAtraso} dias`,
+          status: c.estatuto,
+          id: c.id,
+        })
+      }
+    }
+
+    // ── Imóveis parados na mesma fase >5 dias ──
+    const ESTADOS_NEG = new Set(['Descartado', 'Nao interessa', 'Não interessa', 'Cancelado'])
+    const ESTADOS_FINAIS = new Set([...ESTADOS_NEG, 'Vendido', 'Wholesaling', 'Negócio em Curso'])
+    for (const im of imoveis) {
+      if (ESTADOS_FINAIS.has(im.estado)) continue
+      const ultimaData = im.dataPropostaAceite ?? im.dataProposta ?? im.dataEstudoMercado ?? im.dataVisita ?? im.dataChamada ?? im.dataAdicionado
+      if (!ultimaData) continue
+      const diasParado = Math.floor((now - new Date(ultimaData)) / 86400000)
+      if (diasParado > 5) {
+        alerts.push({
+          tipo: 'imovel_parado',
+          severidade: diasParado > 15 ? 'critico' : diasParado > 7 ? 'aviso' : 'info',
+          entidade: im.nome,
+          mensagem: `${diasParado} dias na fase "${im.estado}"`,
+          estado: im.estado,
+          id: im.id,
+        })
+      }
+    }
+
+    // ── Campos obrigatórios em falta ──
+    const camposEmFalta = []
+
+    for (const im of imoveis) {
+      const missing = []
+      if (!im.dataAdicionado) missing.push('Data Adicionado')
+      if (!im.origem) missing.push('Origem')
+      if (!im.zona && im.zonas?.length === 0) missing.push('Zona')
+      if (!im.tipologia) missing.push('Tipologia')
+      if (ESTADOS_NEG.has(im.estado) && !im.motivoDescarte) missing.push('Motivo Descarte')
+      if (['Wholesaling', 'Negócio em Curso'].includes(im.estado) && !im.modeloNegocio) missing.push('Modelo de Negócio')
+      if (missing.length > 0) camposEmFalta.push({ db: 'Imóveis', nome: im.nome, campos: missing, id: im.id })
+    }
+
+    for (const inv of investidores) {
+      const missing = []
+      if (!inv.dataPrimeiroContacto) missing.push('Data Primeiro Contacto')
+      if (!inv.origem) missing.push('Origem')
+      if (inv.classificacao.length === 0 && ['Investidor classificado', 'Investidor em parceria', 'Em Parceria'].includes(inv.status)) missing.push('Classificação')
+      if (['Investidor em parceria', 'Em Parceria'].includes(inv.status) && inv.montanteInvestido === 0) missing.push('Montante Investido')
+      if (missing.length > 0) camposEmFalta.push({ db: 'Investidores', nome: inv.nome, campos: missing, id: inv.id })
+    }
+
+    for (const c of consultoresRaw) {
+      const missing = []
+      if (!c.contacto) missing.push('Contacto')
+      if (c.imobiliaria.length === 0) missing.push('Imobiliária')
+      if (CONS_ATIVOS.has(c.estatuto) && !c.dataFollowUp && !c.dataProximoFollowUp) missing.push('Data Follow Up')
+      if (missing.length > 0) camposEmFalta.push({ db: 'Consultores', nome: c.nome, campos: missing, id: c.id })
+    }
+
+    for (const neg of negocios) {
+      const missing = []
+      if (!neg.categoria) missing.push('Categoria')
+      if (!neg.fase) missing.push('Fase')
+      if (neg.lucroEstimado === 0) missing.push('Lucro Estimado')
+      if (neg.fase === 'Vendido' && neg.lucroReal === 0) missing.push('Lucro Real')
+      if (neg.fase === 'Vendido' && !neg.dataVenda) missing.push('Data de Venda')
+      if (missing.length > 0) camposEmFalta.push({ db: 'Faturação', nome: neg.movimento, campos: missing, id: neg.id })
+    }
+
+    // Sort by severity
+    const SEV_ORDER = { critico: 0, aviso: 1, info: 2 }
+    alerts.sort((a, b) => (SEV_ORDER[a.severidade] ?? 3) - (SEV_ORDER[b.severidade] ?? 3))
+
+    res.json({
+      updatedAt: new Date().toISOString(),
+      alertas: alerts,
+      camposEmFalta,
+      resumo: {
+        total: alerts.length,
+        criticos: alerts.filter(a => a.severidade === 'critico').length,
+        avisos: alerts.filter(a => a.severidade === 'aviso').length,
+        info: alerts.filter(a => a.severidade === 'info').length,
+        camposIncompletos: camposEmFalta.length,
+      },
+    })
+  } catch (err) {
+    console.error('[alertas]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ════════════════════════════════════════════════════════════════
+// DATA HEALTH — Relatório de higiene de dados
+// ════════════════════════════════════════════════════════════════
+app.get('/api/data-health', async (req, res) => {
+  try {
+    const [imoveis, investidores, consultoresRaw, negocios, despesas] = await Promise.all([
+      getImóveis().catch(() => []),
+      getInvestidores(),
+      getConsultores().catch(() => []),
+      getNegócios(),
+      getDespesas(),
+    ])
+
+    function pctFilled(arr, accessor) {
+      if (arr.length === 0) return 0
+      const filled = arr.filter(item => {
+        const v = accessor(item)
+        return v !== null && v !== undefined && v !== '' && v !== 0 && !(Array.isArray(v) && v.length === 0)
+      }).length
+      return round2(filled / arr.length * 100)
+    }
+
+    const health = {
+      imoveis: {
+        total: imoveis.length,
+        campos: {
+          'Nome':              pctFilled(imoveis, i => i.nome),
+          'Ask Price':         pctFilled(imoveis, i => i.askPrice),
+          'Estado':            pctFilled(imoveis, i => i.estado),
+          'Data Adicionado':   pctFilled(imoveis, i => i.dataAdicionado),
+          'Origem':            pctFilled(imoveis, i => i.origem),
+          'Zona':              pctFilled(imoveis, i => i.zonas?.length > 0 ? i.zonas : null),
+          'Tipologia':         pctFilled(imoveis, i => i.tipologia),
+          'Data Chamada':      pctFilled(imoveis, i => i.dataChamada),
+          'Data Visita':       pctFilled(imoveis, i => i.dataVisita),
+          'Data Estudo':       pctFilled(imoveis, i => i.dataEstudoMercado),
+          'Data Proposta':     pctFilled(imoveis, i => i.dataProposta),
+          'Modelo Negócio':    pctFilled(imoveis, i => i.modeloNegocio),
+          'ROI':               pctFilled(imoveis, i => i.roi),
+          'Motivo Descarte':   pctFilled(imoveis.filter(i => new Set(['Descartado','Nao interessa','Não interessa']).has(i.estado)), i => i.motivoDescarte),
+        },
+      },
+      investidores: {
+        total: investidores.length,
+        campos: {
+          'Nome':               pctFilled(investidores, i => i.nome),
+          'Status':             pctFilled(investidores, i => i.status),
+          'Origem':             pctFilled(investidores, i => i.origem),
+          'Data 1º Contacto':   pctFilled(investidores, i => i.dataPrimeiroContacto),
+          'Data Reunião':       pctFilled(investidores, i => i.dataReuniao),
+          'Data Último Contacto': pctFilled(investidores, i => i.dataUltimoContacto),
+          'Classificação':      pctFilled(investidores, i => i.classificacao?.length > 0 ? i.classificacao : null),
+          'Capital Mínimo':     pctFilled(investidores, i => i.capitalMin),
+          'Capital Máximo':     pctFilled(investidores, i => i.capitalMax),
+          'Montante Investido': pctFilled(investidores, i => i.montanteInvestido),
+          'NDA Assinado':       pctFilled(investidores, i => i.ndaAssinado ? 'sim' : null),
+          'Estratégia':         pctFilled(investidores, i => i.estrategia?.length > 0 ? i.estrategia : null),
+          'Tipo Investidor':    pctFilled(investidores, i => i.tipoInvestidor?.length > 0 ? i.tipoInvestidor : null),
+          'ROI Investidor %':   pctFilled(investidores, i => i.roiInvestidor),
+        },
+      },
+      consultores: {
+        total: consultoresRaw.length,
+        campos: {
+          'Nome':               pctFilled(consultoresRaw, c => c.nome),
+          'Estatuto':           pctFilled(consultoresRaw, c => c.estatuto),
+          'Contacto':           pctFilled(consultoresRaw, c => c.contacto),
+          'Imobiliária':        pctFilled(consultoresRaw, c => c.imobiliaria?.length > 0 ? c.imobiliaria : null),
+          'Email':              pctFilled(consultoresRaw, c => c.email),
+          'Zona Atuação':       pctFilled(consultoresRaw, c => c.zonas?.length > 0 ? c.zonas : null),
+          'Data Follow Up':     pctFilled(consultoresRaw, c => c.dataFollowUp),
+          'Imóveis Enviados':   pctFilled(consultoresRaw, c => c.imoveisEnviados),
+          'Imóveis Off/Market': pctFilled(consultoresRaw, c => c.imoveisOffMarket),
+          'Data 1ª Call':       pctFilled(consultoresRaw, c => c.dataPrimeiraCall),
+          'Classificação':      pctFilled(consultoresRaw, c => c.classificacao),
+        },
+      },
+      faturacao: {
+        total: negocios.length,
+        campos: {
+          'Movimento':       pctFilled(negocios, n => n.movimento),
+          'Categoria':       pctFilled(negocios, n => n.categoria),
+          'Fase':            pctFilled(negocios, n => n.fase),
+          'Lucro Estimado':  pctFilled(negocios, n => n.lucroEstimado),
+          'Lucro Real':      pctFilled(negocios, n => n.lucroReal),
+          'Data':            pctFilled(negocios, n => n.data),
+          'Data Compra':     pctFilled(negocios, n => n.dataCompra),
+          'Data Venda':      pctFilled(negocios, n => n.dataVenda),
+          'Capital Total':   pctFilled(negocios, n => n.capitalTotal),
+          'Nº Investidores': pctFilled(negocios, n => n.nInvestidores),
+        },
+      },
+      despesas: {
+        total: despesas.length,
+        campos: {
+          'Movimento':       pctFilled(despesas, d => d.movimento),
+          'Categoria':       pctFilled(despesas, d => d.categoria),
+          'Timing':          pctFilled(despesas, d => d.timing),
+          'Custo Mensal':    pctFilled(despesas, d => d.custoMensal),
+          'Data':            pctFilled(despesas, d => d.data),
+        },
+      },
+    }
+
+    // Score global: média das médias de cada DB
+    for (const db of Object.values(health)) {
+      const vals = Object.values(db.campos)
+      db.scoreMedio = vals.length > 0 ? round2(vals.reduce((s, v) => s + v, 0) / vals.length) : 0
+    }
+
+    const scoreGlobal = round2(Object.values(health).reduce((s, db) => s + db.scoreMedio, 0) / Object.keys(health).length)
+
+    res.json({ updatedAt: new Date().toISOString(), scoreGlobal, databases: health })
+  } catch (err) {
+    console.error('[data-health]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ════════════════════════════════════════════════════════════════
+// AUTOMAÇÕES — Scoring, Auto-dates, ROI, Pipeline→Faturação
+// ════════════════════════════════════════════════════════════════
+
+// ── Scoring automático de investidores ──
+app.post('/api/automation/score-investidores', async (req, res) => {
+  try {
+    const investidores = await getInvestidores()
+    const updated = []
+
+    for (const inv of investidores) {
+      let score = 0
+      // Capital definido (+20)
+      if (inv.capitalMin > 0 || inv.capitalMax > 0) score += 20
+      // Reunião realizada (+20)
+      if (inv.dataReuniao) score += 20
+      // NDA assinado (+15)
+      if (inv.ndaAssinado) score += 15
+      // Estratégia definida (+10)
+      if (inv.estrategia?.length > 0) score += 10
+      // Tipo definido (+10)
+      if (inv.tipoInvestidor?.length > 0) score += 10
+      // Email (+5)
+      if (inv.nome) score += 5 // tem contacto
+      // Contacto (+5)
+      if (inv.dataPrimeiroContacto) score += 5
+      // Classificação automática
+      let classificacao
+      if (score >= 80) classificacao = 'A'
+      else if (score >= 60) classificacao = 'B'
+      else if (score >= 35) classificacao = 'C'
+      else classificacao = 'D'
+
+      const currentScore = inv.pontuacao
+      const currentClass = inv.classificacao?.[0]
+      if (currentScore !== score || currentClass !== classificacao) {
+        try {
+          await notion.pages.update({
+            page_id: inv.id,
+            properties: {
+              'Pontuação Classificação': { number: score },
+              'Classificação': { multi_select: [{ name: classificacao }] },
+            },
+          })
+          updated.push({ nome: inv.nome, score, classificacao, anterior: { score: currentScore, class: currentClass } })
+        } catch (e) {
+          console.error(`[score-inv] Erro ao atualizar ${inv.nome}:`, e.message)
+        }
+      }
+    }
+
+    cache.delete('inv') // Invalidate cache
+    res.json({ ok: true, atualizados: updated.length, detalhes: updated })
+  } catch (err) {
+    console.error('[score-investidores]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── Scoring automático de consultores ──
+app.post('/api/automation/score-consultores', async (req, res) => {
+  try {
+    const [consultoresRaw, imoveis] = await Promise.all([getConsultores().catch(() => []), getImóveis().catch(() => [])])
+    const updated = []
+
+    for (const c of consultoresRaw) {
+      let score = 0
+      const leads = imoveis.filter(i => i.nomeConsultor?.trim() === c.nome)
+      // Leads enviados (+3 por lead, max 30)
+      score += Math.min(leads.length * 3, 30)
+      // Off-market (+10 por imóvel, max 30)
+      score += Math.min((c.imoveisOffMarket || 0) * 10, 30)
+      // Follow-up em dia (+15)
+      if (c.dataProximoFollowUp && new Date(c.dataProximoFollowUp) >= new Date()) score += 15
+      // Email disponível (+5)
+      if (c.email) score += 5
+      // Imobiliária definida (+5)
+      if (c.imobiliaria?.length > 0) score += 5
+      // Zonas definidas (+5)
+      if (c.zonas?.length > 0) score += 5
+      // Tem imóveis enviados (+10)
+      if (c.imoveisEnviados > 0) score += 10
+
+      let classificacao
+      if (score >= 70) classificacao = 'A'
+      else if (score >= 45) classificacao = 'B'
+      else if (score >= 20) classificacao = 'C'
+      else classificacao = 'D'
+
+      const currentClass = c.classificacao
+      if (currentClass !== classificacao) {
+        try {
+          await notion.pages.update({
+            page_id: c.id,
+            properties: {
+              'Classificação': { select: { name: classificacao } },
+            },
+          })
+          updated.push({ nome: c.nome, score, classificacao, anterior: currentClass })
+        } catch (e) {
+          console.error(`[score-cons] Erro ao atualizar ${c.nome}:`, e.message)
+        }
+      }
+    }
+
+    cache.delete('cons')
+    res.json({ ok: true, atualizados: updated.length, detalhes: updated })
+  } catch (err) {
+    console.error('[score-consultores]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── Cálculo automático de ROI em imóveis ──
+app.post('/api/automation/calc-roi', async (req, res) => {
+  try {
+    const imoveis = await getImóveis()
+    const updated = []
+
+    for (const im of imoveis) {
+      if (im.askPrice <= 0) continue
+      const custoTotal = im.askPrice + (im.custoObra || 0)
+      if (custoTotal <= 0) continue
+
+      let roi = null, roiAnualizado = null
+      if (im.valorVendaRemodelado > 0) {
+        // ROI = (VVR - custo total) / custo total * 100
+        roi = round2((im.valorVendaRemodelado - custoTotal) / custoTotal * 100)
+      } else if (im.valorProposta > 0 && im.valorProposta < im.askPrice) {
+        // Wholesaling: spread / ask price * 100
+        roi = round2((im.askPrice - im.valorProposta) / im.askPrice * 100)
+      }
+
+      if (roi === null) continue
+
+      // ROI anualizado: assume 6 meses por deal se não há datas
+      const meses = daysBetween(im.dataAdicionado, im.dataPropostaAceite)
+        ? daysBetween(im.dataAdicionado, im.dataPropostaAceite) / 30
+        : 6
+      roiAnualizado = meses > 0 ? round2(roi * (12 / meses)) : roi
+
+      const needsUpdate = Math.abs((im.roi || 0) - roi) > 0.1 || Math.abs((im.roiAnualizado || 0) - roiAnualizado) > 0.1
+      if (needsUpdate) {
+        try {
+          await notion.pages.update({
+            page_id: im.id,
+            properties: {
+              'ROI': { number: roi },
+              'ROI Anualizado': { number: roiAnualizado },
+            },
+          })
+          updated.push({ nome: im.nome, roi, roiAnualizado })
+        } catch (e) {
+          console.error(`[calc-roi] Erro ao atualizar ${im.nome}:`, e.message)
+        }
+      }
+    }
+
+    cache.delete('imo')
+    res.json({ ok: true, atualizados: updated.length, detalhes: updated })
+  } catch (err) {
+    console.error('[calc-roi]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── Auto-preenchimento de datas ──
+app.post('/api/automation/auto-dates', async (req, res) => {
+  try {
+    const today = new Date().toISOString().slice(0, 10)
+    const [investidores, consultoresRaw] = await Promise.all([getInvestidores(), getConsultores().catch(() => [])])
+    const updated = []
+
+    // Investidores: preencher Data de Último Contacto baseado em status avançado
+    const INV_AVANCADOS = new Set(['Follow Up', 'Investidor classificado', 'Investidor em parceria', 'Em Parceria', 'Call marcada', 'Call Marcada'])
+    for (const inv of investidores) {
+      const props = {}
+      // Se tem reunião marcada mas não tem Data Reunião → não preencher (precisa ser data real)
+      // Se o status avançou mas Data de Último Contacto é vazio → preencher com hoje
+      if (!inv.dataUltimoContacto && INV_AVANCADOS.has(inv.status)) {
+        props['Data de Último Contacto'] = { date: { start: today } }
+      }
+      if (Object.keys(props).length > 0) {
+        try {
+          await notion.pages.update({ page_id: inv.id, properties: props })
+          updated.push({ db: 'Investidores', nome: inv.nome, campos: Object.keys(props) })
+        } catch (e) {
+          console.error(`[auto-dates] Erro investidor ${inv.nome}:`, e.message)
+        }
+      }
+    }
+
+    // Consultores: preencher Data Primeira Call se tem follow-up mas não tem 1ª call
+    for (const c of consultoresRaw) {
+      const props = {}
+      if (!c.dataPrimeiraCall && c.dataFollowUp) {
+        props['Data Primeira Call'] = { date: { start: c.dataFollowUp } }
+      }
+      if (Object.keys(props).length > 0) {
+        try {
+          await notion.pages.update({ page_id: c.id, properties: props })
+          updated.push({ db: 'Consultores', nome: c.nome, campos: Object.keys(props) })
+        } catch (e) {
+          console.error(`[auto-dates] Erro consultor ${c.nome}:`, e.message)
+        }
+      }
+    }
+
+    cache.delete('inv')
+    cache.delete('cons')
+    res.json({ ok: true, atualizados: updated.length, detalhes: updated })
+  } catch (err) {
+    console.error('[auto-dates]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── Pipeline imóveis → Faturação ──
+app.post('/api/automation/pipeline-to-faturacao', async (req, res) => {
+  try {
+    const [imoveis, negocios] = await Promise.all([getImóveis(), getNegócios()])
+    const created = []
+
+    // Imóveis em Wholesaling ou Negócio em Curso que não têm entrada na Faturação
+    const imoveisComNegocio = new Set(negocios.flatMap(n => n.imovel))
+    const candidatos = imoveis.filter(im =>
+      ['Wholesaling', 'Negócio em Curso'].includes(im.estado) &&
+      !imoveisComNegocio.has(im.id)
+    )
+
+    for (const im of candidatos) {
+      try {
+        const modelo = im.modeloNegocio ?? 'Wholesalling'
+        const categoria = modelo.includes('Fix') ? 'Fix and Flip' : modelo.includes('CAEP') ? 'CAEP' : 'Wholesalling'
+
+        await notion.pages.create({
+          parent: { database_id: DB.negócios },
+          properties: {
+            'Movimento': { title: [{ text: { content: im.nome } }] },
+            'Categoria': { select: { name: categoria } },
+            'Fase': { select: { name: 'Fase de obras' } },
+            'Lucro estimado': { number: im.askPrice > 0 && im.valorProposta > 0 ? im.askPrice - im.valorProposta : 0 },
+            'Data': { date: { start: new Date().toISOString().slice(0, 10) } },
+            'Imóvel': { relation: [{ id: im.id }] },
+          },
+        })
+        created.push({ nome: im.nome, categoria })
+      } catch (e) {
+        console.error(`[pipeline-to-fat] Erro ao criar ${im.nome}:`, e.message)
+      }
+    }
+
+    cache.delete('neg')
+    res.json({ ok: true, criados: created.length, detalhes: created })
+  } catch (err) {
+    console.error('[pipeline-to-faturacao]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── Correr todas as automações de uma vez ──
+app.post('/api/automation/run-all', async (req, res) => {
+  try {
+    const base = 'http://localhost:3001'
+    const results = {}
+
+    const endpoints = ['auto-dates', 'score-investidores', 'score-consultores', 'calc-roi', 'pipeline-to-faturacao']
+    for (const ep of endpoints) {
+      try {
+        const r = await fetch(`${base}/api/automation/${ep}`, { method: 'POST' })
+        results[ep] = await r.json()
+      } catch (e) {
+        results[ep] = { error: e.message }
+      }
+    }
+
+    res.json({ ok: true, results })
+  } catch (err) {
+    console.error('[run-all]', err.message)
     res.status(500).json({ error: err.message })
   }
 })

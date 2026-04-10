@@ -6,6 +6,7 @@ import { Comercial } from './pages/Comercial.jsx'
 import { Marketing } from './pages/Marketing.jsx'
 import { Operacoes } from './pages/Operacoes.jsx'
 import { Metricas } from './pages/Metricas.jsx'
+import { Alertas } from './pages/Alertas.jsx'
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="/metricas" element={<Metricas />} />
           <Route path="/marketing" element={<Marketing />} />
           <Route path="/operacoes" element={<Operacoes />} />
+          <Route path="/alertas" element={<Alertas />} />
         </Route>
       </Routes>
     </BrowserRouter>

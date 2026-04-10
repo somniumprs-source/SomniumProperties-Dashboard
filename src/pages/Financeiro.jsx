@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
-  BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, ComposedChart, Area,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts'
 import { Header } from '../components/layout/Header.jsx'
 import { KPICard } from '../components/dashboard/KPICard.jsx'
@@ -28,12 +28,13 @@ const TIMING_COLOR = {
   'Único':       'bg-gray-100 text-gray-600',
 }
 
-const TABS = ['Resumo', 'Negócios', 'Despesas', 'Cashflow']
+const TABS = ['Resumo', 'Negócios', 'Despesas', 'Cashflow', 'P&L']
 
 export function Financeiro() {
   const [kpis,     setKpis]     = useState(null)
   const [despesas, setDespesas] = useState(null)
   const [cashflow, setCashflow] = useState(null)
+  const [projecao, setProjecao] = useState(null)
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState(null)
   const [tab,      setTab]      = useState('Resumo')
@@ -41,15 +42,16 @@ export function Financeiro() {
   async function load() {
     setLoading(true); setError(null)
     try {
-      const [kr, dr, cr] = await Promise.all([
+      const [kr, dr, cr, pr] = await Promise.all([
         fetch('/api/kpis/financeiro'),
         fetch('/api/financeiro/despesas'),
         fetch('/api/financeiro/cashflow'),
+        fetch('/api/financeiro/projecao'),
       ])
       if (!kr.ok || !dr.ok || !cr.ok) throw new Error('Erro no servidor')
-      const [k, d, c] = await Promise.all([kr.json(), dr.json(), cr.json()])
+      const [k, d, c, p] = await Promise.all([kr.json(), dr.json(), cr.json(), pr.ok ? pr.json() : null])
       if (k.error) throw new Error(k.error)
-      setKpis(k); setDespesas(d); setCashflow(c)
+      setKpis(k); setDespesas(d); setCashflow(c); setProjecao(p)
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
@@ -438,6 +440,109 @@ export function Financeiro() {
               </div>
             )}
           </>
+        )}
+
+        {/* ══════════════════ P&L ══════════════════ */}
+        {tab === 'P&L' && projecao && (
+          <>
+            {/* P&L Cards */}
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Receita Estimada</span>
+                <span className="text-2xl font-bold text-indigo-600">{EUR(projecao.pl.receitaEstimada)}</span>
+                <span className="text-xs text-gray-400 block mt-1">Pipeline total</span>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Receita Real</span>
+                <span className={`text-2xl font-bold ${projecao.pl.receitaReal > 0 ? 'text-green-600' : 'text-gray-400'}`}>{EUR(projecao.pl.receitaReal)}</span>
+                <span className="text-xs text-gray-400 block mt-1">Já recebido</span>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Despesas ({projecao.pl.mesesDecorridos} meses)</span>
+                <span className="text-2xl font-bold text-red-500">{EUR(projecao.pl.despesasAteAgora)}</span>
+                <span className="text-xs text-gray-400 block mt-1">Burn rate acumulado</span>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Resultado Líquido</span>
+                <span className={`text-2xl font-bold ${projecao.pl.resultadoLiquido >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {EUR(projecao.pl.resultadoLiquido)}
+                </span>
+                <span className="text-xs text-gray-400 block mt-1">Receita real − despesas</span>
+              </div>
+            </div>
+
+            {/* Break-even */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <h2 className="text-sm font-semibold text-gray-700 mb-3">Break-Even Analysis</h2>
+              <div className="grid grid-cols-3 gap-6">
+                <div>
+                  <p className="text-xs text-gray-400 uppercase">Despesas Anuais</p>
+                  <p className="text-xl font-bold text-red-500 mt-1">{EUR(projecao.breakEven.despesasAnuais)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 uppercase">Lucro Médio / Deal</p>
+                  <p className="text-xl font-bold text-indigo-600 mt-1">{EUR(projecao.breakEven.lucroMedioDeal)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 uppercase">Deals para Break-Even</p>
+                  <p className="text-xl font-bold text-gray-900 mt-1">{projecao.breakEven.dealsNecessarios ?? '—'}</p>
+                  <p className="text-xs text-gray-400">por ano para cobrir despesas</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Projeção Cash Flow */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <h2 className="text-sm font-semibold text-gray-700 mb-4">Cash Flow Projetado — próximos 12 meses</h2>
+              <ResponsiveContainer width="100%" height={280}>
+                <ComposedChart data={projecao.projecao}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
+                  <Tooltip formatter={v => EUR(v)} />
+                  <Legend />
+                  <Bar dataKey="entradas" name="Entradas €" fill="#22c55e" radius={[3,3,0,0]} />
+                  <Bar dataKey="saidas" name="Saídas €" fill="#ef4444" radius={[3,3,0,0]} />
+                  <Line type="monotone" dataKey="saldoAcumulado" name="Saldo Acum. €" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />
+                  <ReferenceLine y={0} stroke="#e5e7eb" />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Tabela projeção */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <h2 className="text-sm font-semibold text-gray-700 mb-3">Detalhe Mensal</h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
+                      <th className="text-left py-1.5 px-2">Mês</th>
+                      <th className="text-right py-1.5 px-2">Deals</th>
+                      <th className="text-right py-1.5 px-2">Entradas</th>
+                      <th className="text-right py-1.5 px-2">Saídas</th>
+                      <th className="text-right py-1.5 px-2">Líquido</th>
+                      <th className="text-right py-1.5 px-2">Acumulado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {projecao.projecao.map(m => (
+                      <tr key={m.label} className="border-b border-gray-50 hover:bg-gray-50">
+                        <td className="py-1.5 px-2 font-medium text-gray-700">{m.label}</td>
+                        <td className="py-1.5 px-2 text-right text-gray-500">{m.deals || '—'}</td>
+                        <td className="py-1.5 px-2 text-right font-mono text-green-600">{m.entradas > 0 ? EUR(m.entradas) : '—'}</td>
+                        <td className="py-1.5 px-2 text-right font-mono text-red-500">{EUR(m.saidas)}</td>
+                        <td className={`py-1.5 px-2 text-right font-mono font-semibold ${m.liquido >= 0 ? 'text-green-600' : 'text-red-600'}`}>{EUR(m.liquido)}</td>
+                        <td className={`py-1.5 px-2 text-right font-mono ${m.saldoAcumulado >= 0 ? 'text-indigo-600' : 'text-red-600'}`}>{EUR(m.saldoAcumulado)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+        {tab === 'P&L' && !projecao && !loading && (
+          <div className="text-center text-gray-400 py-12 text-sm">Sem dados de projeção disponíveis</div>
         )}
       </div>
     </>
