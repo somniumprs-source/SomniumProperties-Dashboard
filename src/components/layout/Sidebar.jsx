@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, TrendingUp, Users, Megaphone, HardHat, BarChart2 } from 'lucide-react'
+import { LayoutDashboard, TrendingUp, Users, Megaphone, HardHat, BarChart2, Bell } from 'lucide-react'
 
 const nav = [
   { to: '/',           label: 'Dashboard',  Icon: LayoutDashboard, end: true },
   { to: '/financeiro', label: 'Financeiro', Icon: TrendingUp },
   { to: '/comercial',  label: 'Comercial',  Icon: Users },
   { to: '/metricas',   label: 'KPI',        Icon: BarChart2 },
+  { to: '/alertas',    label: 'Alertas',    Icon: Bell },
   { to: '/marketing',  label: 'Marketing',  Icon: Megaphone },
   { to: '/operacoes',  label: 'Operações',  Icon: HardHat },
 ]

@@ -7,8 +7,11 @@ export const PAGES = {
 }
 
 export const DATABASES = {
-  faturacao:  import.meta.env.VITE_NOTION_DB_FATURACAO,
-  custos:     import.meta.env.VITE_NOTION_DB_CUSTOS,
+  faturacao:       import.meta.env.VITE_NOTION_DB_FATURACAO,
+  despesas:        import.meta.env.VITE_NOTION_DB_DESPESAS,
+  pipelineImoveis: import.meta.env.VITE_NOTION_DB_PIPELINE_IMOVEIS,
+  investidores:    import.meta.env.VITE_NOTION_DB_INVESTIDORES,
+  // Legacy (inacessíveis — mantidos para referência)
   pipeline:   import.meta.env.VITE_NOTION_DB_PIPELINE,
   clientes:   import.meta.env.VITE_NOTION_DB_CLIENTES,
   campanhas:  import.meta.env.VITE_NOTION_DB_CAMPANHAS,
@@ -26,8 +29,14 @@ export function getNodeConfig() {
       operacoes:  process.env.NOTION_PAGE_OPERACOES,
     },
     databases: {
-      faturacao:  process.env.NOTION_DB_FATURACAO,
-      custos:     process.env.NOTION_DB_CUSTOS,
+      faturacao:       process.env.NOTION_DB_FATURACAO,
+      despesas:        process.env.NOTION_DB_DESPESAS,
+      pipelineImoveis: process.env.NOTION_DB_PIPELINE_IMOVEIS,
+      investidores:    process.env.NOTION_DB_INVESTIDORES,
+      empreiteiros:    process.env.NOTION_DB_EMPREITEIROS,
+      consultores:     process.env.NOTION_DB_CONSULTORES,
+      projetos:        process.env.NOTION_DB_PROJETOS,
+      // Legacy
       pipeline:   process.env.NOTION_DB_PIPELINE,
       clientes:   process.env.NOTION_DB_CLIENTES,
       campanhas:  process.env.NOTION_DB_CAMPANHAS,
