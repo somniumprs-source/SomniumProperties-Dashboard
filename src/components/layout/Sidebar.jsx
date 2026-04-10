@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import { LayoutDashboard, TrendingUp, Users, Megaphone, HardHat, BarChart2, Bell, Database } from 'lucide-react'
 
 const nav = [
@@ -7,21 +8,34 @@ const nav = [
   { to: '/financeiro', label: 'Financeiro', Icon: TrendingUp },
   { to: '/comercial',  label: 'Comercial',  Icon: Users },
   { to: '/metricas',   label: 'KPI',        Icon: BarChart2 },
-  { to: '/alertas',    label: 'Alertas',    Icon: Bell },
+  { to: '/alertas',    label: 'Alertas',    Icon: Bell, badge: true },
   { to: '/marketing',  label: 'Marketing',  Icon: Megaphone },
   { to: '/operacoes',  label: 'Operações',  Icon: HardHat },
 ]
 
 export function Sidebar() {
+  const [alertCount, setAlertCount] = useState(0)
+
+  useEffect(() => {
+    fetch('/api/alertas')
+      .then(r => r.json())
+      .then(d => setAlertCount(d.resumo?.criticos ?? 0))
+      .catch(() => {})
+    const interval = setInterval(() => {
+      fetch('/api/alertas').then(r => r.json()).then(d => setAlertCount(d.resumo?.criticos ?? 0)).catch(() => {})
+    }, 60000)
+    return () => clearInterval(interval)
+  }, [])
+
   return (
     <aside className="w-60 min-h-screen flex flex-col shrink-0" style={{ backgroundColor: '#0d0d0d' }}>
 
-      {/* Logo — sem padding, fundo da imagem funde com a sidebar */}
+      {/* Logo */}
       <div className="w-full" style={{ backgroundColor: '#0d0d0d' }}>
         <img src="/logo.png" alt="Somnium Properties" className="w-full object-cover" style={{ height: '110px', objectPosition: 'center' }} />
       </div>
 
-      {/* Separador dourado fino */}
+      {/* Separador dourado */}
       <div className="mx-4 h-px" style={{ background: 'linear-gradient(90deg, transparent, #C9A84C55, transparent)' }} />
 
       {/* Nav label */}
@@ -29,7 +43,7 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex flex-col gap-0.5 px-3 flex-1">
-        {nav.map(({ to, label, Icon, end }) => (
+        {nav.map(({ to, label, Icon, end, badge }) => (
           <NavLink
             key={to}
             to={to}
@@ -50,6 +64,11 @@ export function Sidebar() {
                 <Icon className="w-4 h-4 shrink-0 transition-colors"
                   style={{ color: isActive ? '#C9A84C' : undefined }} />
                 {label}
+                {badge && alertCount > 0 && (
+                  <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {alertCount > 9 ? '9+' : alertCount}
+                  </span>
+                )}
               </>
             )}
           </NavLink>
