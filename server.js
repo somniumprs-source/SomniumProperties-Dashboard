@@ -2398,12 +2398,14 @@ app.post('/api/automation/run-all', async (req, res) => {
   }
 })
 
-// Em produção serve o frontend compilado
+// Em produção serve o frontend compilado (DEPOIS de todas as APIs)
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, 'dist')))
-  app.get('/{*splat}', (_req, res) =>
+  app.get('/{*splat}', (req, res, next) => {
+    // Não interceptar rotas /api
+    if (req.path.startsWith('/api')) return next()
     res.sendFile(path.join(__dirname, 'dist', 'index.html'))
-  )
+  })
 }
 
 // ── Auto-migrate on startup if DB is empty ──
