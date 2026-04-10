@@ -11,9 +11,15 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
-// ── CRM API (SQLite) ─────────────────────────────────────────
-import crmRoutes from './src/db/routes.js'
-app.use('/api/crm', crmRoutes)
+// ── CRM API (SQLite) — carrega condicionalmente ──────────────
+try {
+  const { default: crmRoutes } = await import('./src/db/routes.js')
+  app.use('/api/crm', crmRoutes)
+  console.log('[crm] API CRM montada em /api/crm')
+} catch (e) {
+  console.warn('[crm] SQLite não disponível — CRM API desativada:', e.message)
+  app.use('/api/crm', (_req, res) => res.status(503).json({ error: 'CRM não disponível neste ambiente' }))
+}
 
 const notion = new Client({ auth: process.env.NOTION_API_KEY })
 
@@ -2398,12 +2404,11 @@ if (process.env.NODE_ENV === 'production') {
   )
 }
 
-// ── Auto-migrate on startup if DB is empty (for Render deploys) ──
-import dbInstance from './src/db/schema.js'
-import { syncAllFromNotion } from './src/db/sync.js'
-
+// ── Auto-migrate on startup if DB is empty ──
 async function autoMigrate() {
   try {
+    const { default: dbInstance } = await import('./src/db/schema.js')
+    const { syncAllFromNotion } = await import('./src/db/sync.js')
     const count = dbInstance.prepare('SELECT COUNT(*) as c FROM imoveis').get().c
     if (count === 0) {
       console.log('[startup] DB vazia — a migrar do Notion...')
@@ -2414,7 +2419,7 @@ async function autoMigrate() {
       console.log(`[startup] DB OK — ${count} imóveis + mais`)
     }
   } catch (e) {
-    console.error('[startup] Erro na migração:', e.message)
+    console.warn('[startup] SQLite não disponível — CRM só via Notion:', e.message)
   }
 }
 
