@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Header } from '../components/layout/Header.jsx'
+import { KanbanBoard } from '../components/crm/KanbanBoard.jsx'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 
@@ -38,6 +39,7 @@ export function CRM() {
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState(null) // null = list view, object = edit/create
   const [stats, setStats] = useState(null)
+  const [view, setView] = useState('table') // 'table' | 'kanban'
 
   const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores', 'Negócios': 'negocios', 'Despesas': 'despesas' }[tab]
 
@@ -55,6 +57,70 @@ export function CRM() {
 
   useEffect(() => { load() }, [load])
   useEffect(() => { fetch('/api/crm/stats').then(r => r.json()).then(setStats).catch(() => {}) }, [])
+
+  // Kanban config por tab
+  const KANBAN_CONFIG = {
+    'Imóveis': {
+      columns: ['Adicionado','Pendentes','Em Análise','Visita Marcada','Follow UP','Estudo de VVR','Enviar proposta ao investidor','Wholesaling','Negócio em Curso','Nao interessa'],
+      groupField: 'estado',
+      renderCard: (item) => (
+        <div>
+          <p className="text-sm font-semibold text-gray-800 truncate">{item.nome}</p>
+          <p className="text-xs text-gray-500 mt-1">{item.zona ?? '—'} · {item.tipologia ?? '—'}</p>
+          {item.ask_price > 0 && <p className="text-xs font-mono text-indigo-600 mt-1">{EUR(item.ask_price)}</p>}
+          {item.roi > 0 && <p className="text-xs text-green-600">ROI: {item.roi}%</p>}
+          {item.nome_consultor && <p className="text-xs text-gray-400 mt-1">{item.nome_consultor}</p>}
+        </div>
+      ),
+    },
+    'Investidores': {
+      columns: ['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor classificado','Investidor em parceria'],
+      groupField: 'status',
+      renderCard: (item) => (
+        <div>
+          <div className="flex items-center gap-2">
+            <ClassBadge cls={item.classificacao} />
+            <p className="text-sm font-semibold text-gray-800 truncate">{item.nome}</p>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">{item.origem ?? '—'}</p>
+          {item.capital_max > 0 && <p className="text-xs font-mono text-indigo-600 mt-1">até {EUR(item.capital_max)}</p>}
+          {item.telemovel && <p className="text-xs text-gray-400 mt-1">{item.telemovel}</p>}
+        </div>
+      ),
+    },
+    'Consultores': {
+      columns: ['Cold Call','Follow up','Aberto Parcerias','Acesso imoveis Off market','Consultores em Parceria'],
+      groupField: 'estatuto',
+      renderCard: (item) => {
+        const imobs = (() => { try { return JSON.parse(item.imobiliaria || '[]').join(', ') } catch { return '' } })()
+        return (
+          <div>
+            <div className="flex items-center gap-2">
+              <ClassBadge cls={item.classificacao} />
+              <p className="text-sm font-semibold text-gray-800 truncate">{item.nome}</p>
+            </div>
+            {imobs && <p className="text-xs text-gray-500 mt-1">{imobs}</p>}
+            {item.contacto && <p className="text-xs text-gray-400 mt-1">{item.contacto}</p>}
+            {item.imoveis_enviados > 0 && <p className="text-xs text-indigo-600 mt-1">{item.imoveis_enviados} leads</p>}
+          </div>
+        )
+      },
+    },
+  }
+
+  const kanbanConfig = KANBAN_CONFIG[tab]
+  const hasKanban = !!kanbanConfig
+
+  async function handleMove(id, newColumn) {
+    if (!kanbanConfig) return
+    const field = kanbanConfig.groupField
+    await fetch(`/api/crm/${endpoint}/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [field]: newColumn }),
+    })
+    load()
+  }
 
   async function handleSave(item) {
     const isNew = !item.id
@@ -105,6 +171,18 @@ export function CRM() {
             value={search} onChange={e => setSearch(e.target.value)}
             className="flex-1 px-4 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
           />
+          {hasKanban && (
+            <div className="flex bg-gray-100 rounded-lg p-0.5">
+              <button onClick={() => setView('table')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'table' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
+                Tabela
+              </button>
+              <button onClick={() => setView('kanban')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'kanban' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
+                Kanban
+              </button>
+            </div>
+          )}
           <button onClick={() => setEditing({})} className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors">
             + Novo
           </button>
@@ -118,8 +196,19 @@ export function CRM() {
           <FormPanel tab={tab} item={editing} onSave={handleSave} onCancel={() => setEditing(null)} />
         )}
 
-        {/* Table */}
-        {editing === null && (
+        {/* Kanban View */}
+        {editing === null && view === 'kanban' && kanbanConfig && (
+          <KanbanBoard
+            columns={kanbanConfig.columns}
+            items={data}
+            groupField={kanbanConfig.groupField}
+            renderCard={kanbanConfig.renderCard}
+            onMove={handleMove}
+          />
+        )}
+
+        {/* Table View */}
+        {editing === null && (view === 'table' || !hasKanban) && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               {tab === 'Imóveis' && <ImoveisTable data={data} onEdit={setEditing} onDelete={handleDelete} />}
