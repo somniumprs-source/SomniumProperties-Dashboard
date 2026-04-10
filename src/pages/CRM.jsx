@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Header } from '../components/layout/Header.jsx'
 import { KanbanBoard } from '../components/crm/KanbanBoard.jsx'
+import { DetailPanel } from '../components/crm/DetailPanel.jsx'
+import { Filters } from '../components/crm/Filters.jsx'
+import { TabKPIs } from '../components/crm/TabKPIs.jsx'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 
@@ -38,25 +41,35 @@ export function CRM() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState(null) // null = list view, object = edit/create
+  const [detail, setDetail] = useState(null) // null = no detail, id = show detail panel
   const [stats, setStats] = useState(null)
   const [view, setView] = useState('table') // 'table' | 'kanban'
+  const [filters, setFilters] = useState({})
+  const [alertCount, setAlertCount] = useState(0)
 
   const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores', 'Negócios': 'negocios', 'Despesas': 'despesas' }[tab]
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const url = search ? `/api/crm/${endpoint}?search=${encodeURIComponent(search)}` : `/api/crm/${endpoint}?limit=200`
-      const r = await fetch(url)
-      const d = await r.json()
-      setData(d.data ?? [])
-      setTotal(d.total ?? d.data?.length ?? 0)
+      if (search) {
+        const r = await fetch(`/api/crm/${endpoint}?search=${encodeURIComponent(search)}`)
+        const d = await r.json()
+        setData(d.data ?? []); setTotal(d.data?.length ?? 0)
+      } else {
+        const params = new URLSearchParams({ limit: '200' })
+        for (const [k, v] of Object.entries(filters)) { if (v) params.set(k, v) }
+        const r = await fetch(`/api/crm/${endpoint}?${params}`)
+        const d = await r.json()
+        setData(d.data ?? []); setTotal(d.total ?? 0)
+      }
     } catch {}
     setLoading(false)
-  }, [endpoint, search])
+  }, [endpoint, search, filters])
 
   useEffect(() => { load() }, [load])
   useEffect(() => { fetch('/api/crm/stats').then(r => r.json()).then(setStats).catch(() => {}) }, [])
+  useEffect(() => { fetch('/api/alertas').then(r => r.json()).then(d => setAlertCount(d.resumo?.total ?? 0)).catch(() => {}) }, [])
 
   // Kanban config por tab
   const KANBAN_CONFIG = {
@@ -114,11 +127,18 @@ export function CRM() {
   async function handleMove(id, newColumn) {
     if (!kanbanConfig) return
     const field = kanbanConfig.groupField
+    const item = data.find(i => i.id === id)
     await fetch(`/api/crm/${endpoint}/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ [field]: newColumn }),
     })
+    // Auto-task on phase change
+    fetch('/api/crm/auto-task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entity: endpoint, entityId: id, entityName: item?.nome ?? item?.movimento ?? '', newPhase: newColumn }),
+    }).catch(() => {})
     load()
   }
 
@@ -163,6 +183,17 @@ export function CRM() {
               }`}>{t}</button>
           ))}
         </div>
+
+        {/* KPIs integrados */}
+        <TabKPIs tab={tab} />
+
+        {/* Filtros dinâmicos */}
+        <Filters tab={tab} filters={filters} onChange={f => { setFilters(f); setSearch('') }} />
+
+        {/* Detail Panel */}
+        {detail && ['Imóveis', 'Investidores', 'Consultores'].includes(tab) && (
+          <DetailPanel type={tab} id={detail} onClose={() => setDetail(null)} />
+        )}
 
         {/* Search + Actions */}
         <div className="flex gap-3 items-center">
@@ -211,9 +242,9 @@ export function CRM() {
         {editing === null && (view === 'table' || !hasKanban) && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              {tab === 'Imóveis' && <ImoveisTable data={data} onEdit={setEditing} onDelete={handleDelete} />}
-              {tab === 'Investidores' && <InvestidoresTable data={data} onEdit={setEditing} onDelete={handleDelete} />}
-              {tab === 'Consultores' && <ConsultoresTable data={data} onEdit={setEditing} onDelete={handleDelete} />}
+              {tab === 'Imóveis' && <ImoveisTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
+              {tab === 'Investidores' && <InvestidoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
+              {tab === 'Consultores' && <ConsultoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
               {tab === 'Negócios' && <NegociosTable data={data} onEdit={setEditing} onDelete={handleDelete} />}
               {tab === 'Despesas' && <DespesasTable data={data} onEdit={setEditing} onDelete={handleDelete} />}
             </div>
@@ -229,16 +260,17 @@ export function CRM() {
 
 // ── Tables ────────────────────────────────────────────────────
 
-function ActionButtons({ item, onEdit, onDelete }) {
+function ActionButtons({ item, onEdit, onDelete, onView }) {
   return (
     <div className="flex gap-1">
+      {onView && <button onClick={() => onView(item.id)} className="px-2 py-1 text-xs bg-gray-50 text-gray-600 rounded hover:bg-gray-100">Ver</button>}
       <button onClick={() => onEdit(item)} className="px-2 py-1 text-xs bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100">Editar</button>
       <button onClick={() => onDelete(item.id)} className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Apagar</button>
     </div>
   )
 }
 
-function ImoveisTable({ data, onEdit, onDelete }) {
+function ImoveisTable({ data, onEdit, onDelete, onView }) {
   return (
     <table className="min-w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
@@ -257,7 +289,7 @@ function ImoveisTable({ data, onEdit, onDelete }) {
             <td className="py-2 px-3 text-right font-mono">{r.roi > 0 ? `${r.roi}%` : '—'}</td>
             <td className="py-2 px-3 text-gray-500">{r.origem ?? '—'}</td>
             <td className="py-2 px-3 text-gray-400">{r.data_adicionado ?? '—'}</td>
-            <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} /></td>
+            <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
           </tr>
         ))}
         {!data.length && <tr><td colSpan={8} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
@@ -266,7 +298,7 @@ function ImoveisTable({ data, onEdit, onDelete }) {
   )
 }
 
-function InvestidoresTable({ data, onEdit, onDelete }) {
+function InvestidoresTable({ data, onEdit, onDelete, onView }) {
   return (
     <table className="min-w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
@@ -284,7 +316,7 @@ function InvestidoresTable({ data, onEdit, onDelete }) {
             <td className="py-2 px-3 text-gray-500">{r.origem ?? '—'}</td>
             <td className="py-2 px-3 text-gray-500">{r.telemovel ?? r.email ?? '—'}</td>
             <td className="py-2 px-3 text-gray-400">{r.data_primeiro_contacto ?? '—'}</td>
-            <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} /></td>
+            <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
           </tr>
         ))}
         {!data.length && <tr><td colSpan={7} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
@@ -293,7 +325,7 @@ function InvestidoresTable({ data, onEdit, onDelete }) {
   )
 }
 
-function ConsultoresTable({ data, onEdit, onDelete }) {
+function ConsultoresTable({ data, onEdit, onDelete, onView }) {
   return (
     <table className="min-w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
@@ -313,7 +345,7 @@ function ConsultoresTable({ data, onEdit, onDelete }) {
               <td className="py-2 px-3 text-gray-500">{imobs}</td>
               <td className="py-2 px-3 text-gray-500">{r.contacto ?? '—'}</td>
               <td className="py-2 px-3 text-right font-mono">{r.imoveis_enviados || '—'}</td>
-              <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} /></td>
+              <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
             </tr>
           )
         })}

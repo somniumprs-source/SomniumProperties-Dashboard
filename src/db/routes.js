@@ -82,6 +82,139 @@ router.post('/sync/:table', async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// ── Ficha de detalhe com relações ──────────────────────────────
+router.get('/imoveis/:id/full', async (req, res) => {
+  try {
+    const { rows: [imovel] } = await pool.query('SELECT * FROM imoveis WHERE id = $1', [req.params.id])
+    if (!imovel) return res.status(404).json({ error: 'Não encontrado' })
+    // Negócios ligados a este imóvel
+    const { rows: negocios } = await pool.query('SELECT * FROM negocios WHERE imovel_id = $1', [imovel.id])
+    // Consultor (por nome)
+    const { rows: consultores } = imovel.nome_consultor
+      ? await pool.query('SELECT id, nome, estatuto, classificacao, contacto, email FROM consultores WHERE nome ILIKE $1', [`%${imovel.nome_consultor}%`])
+      : { rows: [] }
+    // Tarefas
+    const { rows: tarefas } = await pool.query("SELECT * FROM tarefas WHERE tarefa ILIKE $1 ORDER BY created_at DESC", [`%${imovel.nome}%`])
+    // Audit log (timeline)
+    const { rows: timeline } = await pool.query("SELECT * FROM audit_log WHERE registo_id = $1 ORDER BY created_at DESC LIMIT 20", [imovel.id])
+    res.json({ ...imovel, negocios, consultores, tarefas, timeline })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/investidores/:id/full', async (req, res) => {
+  try {
+    const { rows: [inv] } = await pool.query('SELECT * FROM investidores WHERE id = $1', [req.params.id])
+    if (!inv) return res.status(404).json({ error: 'Não encontrado' })
+    // Negócios onde este investidor aparece
+    const { rows: negocios } = await pool.query("SELECT * FROM negocios WHERE investidor_ids LIKE $1", [`%${inv.notion_id ?? inv.id}%`])
+    // Tarefas relacionadas
+    const { rows: tarefas } = await pool.query("SELECT * FROM tarefas WHERE tarefa ILIKE $1 ORDER BY created_at DESC", [`%${inv.nome}%`])
+    const { rows: timeline } = await pool.query("SELECT * FROM audit_log WHERE registo_id = $1 ORDER BY created_at DESC LIMIT 20", [inv.id])
+    res.json({ ...inv, negocios, tarefas, timeline })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/consultores/:id/full', async (req, res) => {
+  try {
+    const { rows: [cons] } = await pool.query('SELECT * FROM consultores WHERE id = $1', [req.params.id])
+    if (!cons) return res.status(404).json({ error: 'Não encontrado' })
+    // Imóveis deste consultor
+    const { rows: imoveis } = await pool.query("SELECT id, nome, estado, ask_price, zona FROM imoveis WHERE nome_consultor ILIKE $1", [`%${cons.nome}%`])
+    // Negócios
+    const { rows: negocios } = await pool.query("SELECT * FROM negocios WHERE consultor_ids LIKE $1", [`%${cons.notion_id ?? cons.id}%`])
+    const { rows: tarefas } = await pool.query("SELECT * FROM tarefas WHERE tarefa ILIKE $1 ORDER BY created_at DESC", [`%${cons.nome}%`])
+    const { rows: timeline } = await pool.query("SELECT * FROM audit_log WHERE registo_id = $1 ORDER BY created_at DESC LIMIT 20", [cons.id])
+    res.json({ ...cons, imoveis, negocios, tarefas, timeline })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── KPIs rápidos por tab ──────────────────────────────────────
+router.get('/kpis/:tab', async (req, res) => {
+  try {
+    const tab = req.params.tab
+    if (tab === 'imoveis') {
+      const { rows } = await pool.query(`
+        SELECT estado, COUNT(*) as count, COALESCE(SUM(ask_price),0) as valor
+        FROM imoveis GROUP BY estado ORDER BY count DESC
+      `)
+      const { rows: [totals] } = await pool.query(`SELECT COUNT(*) as total, COALESCE(AVG(NULLIF(roi,0)),0) as roi_medio FROM imoveis`)
+      res.json({ byEstado: rows, total: parseInt(totals.total), roiMedio: parseFloat(totals.roi_medio).toFixed(1) })
+    } else if (tab === 'investidores') {
+      const { rows } = await pool.query(`SELECT status, COUNT(*) as count FROM investidores GROUP BY status ORDER BY count DESC`)
+      const { rows: [totals] } = await pool.query(`
+        SELECT COUNT(*) as total,
+          COUNT(CASE WHEN classificacao IN ('A','B') THEN 1 END) as ab,
+          COALESCE(SUM(capital_max),0) as capital
+        FROM investidores
+      `)
+      res.json({ byStatus: rows, total: parseInt(totals.total), classAB: parseInt(totals.ab), capitalTotal: parseFloat(totals.capital) })
+    } else if (tab === 'consultores') {
+      const { rows } = await pool.query(`SELECT estatuto, COUNT(*) as count FROM consultores GROUP BY estatuto ORDER BY count DESC`)
+      const { rows: [totals] } = await pool.query(`SELECT COUNT(*) as total FROM consultores`)
+      res.json({ byEstatuto: rows, total: parseInt(totals.total) })
+    } else if (tab === 'negocios') {
+      const { rows: [totals] } = await pool.query(`
+        SELECT COUNT(*) as total, COALESCE(SUM(lucro_estimado),0) as lucro_est,
+          COALESCE(SUM(lucro_real),0) as lucro_real,
+          COUNT(CASE WHEN fase = 'Vendido' THEN 1 END) as vendidos
+        FROM negocios
+      `)
+      res.json(totals)
+    } else if (tab === 'despesas') {
+      const { rows: [totals] } = await pool.query(`
+        SELECT COUNT(*) as total,
+          COALESCE(SUM(CASE WHEN timing = 'Mensalmente' THEN custo_mensal ELSE 0 END),0) as burn_rate,
+          COALESCE(SUM(custo_anual),0) as total_anual
+        FROM despesas
+      `)
+      res.json(totals)
+    } else {
+      res.status(404).json({ error: 'Tab not found' })
+    }
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Tarefas automáticas por mudança de fase ───────────────────
+router.post('/auto-task', async (req, res) => {
+  try {
+    const { entity, entityId, entityName, newPhase } = req.body
+    const TASK_MAP = {
+      imoveis: {
+        'Em Análise':       'Estudar mercado e comparáveis para {name}',
+        'Visita Marcada':   'Preparar visita ao imóvel {name}',
+        'Follow UP':        'Follow-up do imóvel {name}',
+        'Estudo de VVR':    'Elaborar estudo de VVR para {name}',
+        'Enviar proposta ao investidor': 'Preparar proposta para investidor — {name}',
+        'Wholesaling':      'Formalizar contrato de wholesaling — {name}',
+        'Negócio em Curso': 'Acompanhar negócio em curso — {name}',
+      },
+      investidores: {
+        'Marcar call':             'Marcar call com investidor {name}',
+        'Call marcada':            'Preparar apresentação para {name}',
+        'Follow Up':               'Follow-up com investidor {name}',
+        'Investidor classificado': 'Enviar proposta de negócio a {name}',
+        'Investidor em parceria':  'Preparar onboarding de {name}',
+      },
+      consultores: {
+        'Follow up':          'Follow-up com consultor {name}',
+        'Aberto Parcerias':   'Formalizar parceria com {name}',
+      },
+    }
+    const templates = TASK_MAP[entity] ?? {}
+    const template = templates[newPhase]
+    if (!template) return res.json({ ok: true, created: false, reason: 'No task for this phase' })
+
+    const tarefa = template.replace('{name}', entityName)
+    const id = (await import('crypto')).randomUUID()
+    const now = new Date().toISOString()
+    await pool.query(
+      'INSERT INTO tarefas (id, tarefa, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)',
+      [id, tarefa, 'A fazer', now, now]
+    )
+    res.json({ ok: true, created: true, tarefa, id })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 // ── Audit log ─────────────────────────────────────────────────
 router.get('/audit', async (req, res) => {
   try {
