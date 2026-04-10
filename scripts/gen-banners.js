@@ -48,6 +48,35 @@ const depts = [
     emoji:    '&#x1F393;',
     pageId:   '9a7cd819-ad5f-4e19-949a-1d42605f2892',
   },
+  // ── Sub-páginas Comercial ──
+  {
+    file:     'banner_pipeline.png',
+    name:     'PIPELINE IMÓVEIS',
+    subtitle: 'Análise · Propostas · Negócios',
+    emoji:    '&#x1F3E0;',
+    pageId:   '30dc6d45-a01f-8076-9046-c445c69e847a',
+  },
+  {
+    file:     'banner_investidores.png',
+    name:     'INVESTIDORES',
+    subtitle: 'Captação · Classificação · Parcerias',
+    emoji:    '&#x1F4B0;',
+    pageId:   '30dc6d45-a01f-80d9-89b4-eec235058798',
+  },
+  {
+    file:     'banner_consultores.png',
+    name:     'CONSULTORES',
+    subtitle: 'Rede de Parceiros Imobiliários',
+    emoji:    '&#x1F91D;',
+    pageId:   '30dc6d45-a01f-805e-b94a-e9301b0e151c',
+  },
+  {
+    file:     'banner_parceiros.png',
+    name:     'PARCEIROS',
+    subtitle: 'Potenciais Parceiros &amp; Networking',
+    emoji:    '&#x1F517;',
+    pageId:   '30dc6d45-a01f-8018-b30c-f969a92053cd',
+  },
 ]
 
 // ── SVG template ───────────────────────────────────────────────────────────

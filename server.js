@@ -11,6 +11,10 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
+// ── CRM API (SQLite) ─────────────────────────────────────────
+import crmRoutes from './src/db/routes.js'
+app.use('/api/crm', crmRoutes)
+
 const notion = new Client({ auth: process.env.NOTION_API_KEY })
 
 const DB = {
@@ -2394,5 +2398,27 @@ if (process.env.NODE_ENV === 'production') {
   )
 }
 
+// ── Auto-migrate on startup if DB is empty (for Render deploys) ──
+import dbInstance from './src/db/schema.js'
+import { syncAllFromNotion } from './src/db/sync.js'
+
+async function autoMigrate() {
+  try {
+    const count = dbInstance.prepare('SELECT COUNT(*) as c FROM imoveis').get().c
+    if (count === 0) {
+      console.log('[startup] DB vazia — a migrar do Notion...')
+      const results = await syncAllFromNotion()
+      const total = Object.values(results).reduce((s, r) => s + (r.total ?? 0), 0)
+      console.log(`[startup] Migração completa: ${total} registos`)
+    } else {
+      console.log(`[startup] DB OK — ${count} imóveis + mais`)
+    }
+  } catch (e) {
+    console.error('[startup] Erro na migração:', e.message)
+  }
+}
+
 const PORT = process.env.PORT ?? 3001
-app.listen(PORT, () => console.log(`[server] a correr na porta ${PORT}`))
+autoMigrate().then(() => {
+  app.listen(PORT, () => console.log(`[server] a correr na porta ${PORT}`))
+})
