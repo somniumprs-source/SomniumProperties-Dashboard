@@ -1,35 +1,30 @@
 import { NavLink } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { LayoutDashboard, TrendingUp, Users, Megaphone, HardHat, BarChart2, Bell, Database } from 'lucide-react'
+import { LayoutDashboard, TrendingUp, Database, Bell, Menu, X } from 'lucide-react'
 
 const nav = [
   { to: '/',           label: 'Dashboard',  Icon: LayoutDashboard, end: true },
   { to: '/crm',        label: 'CRM',        Icon: Database },
   { to: '/financeiro', label: 'Financeiro', Icon: TrendingUp },
-  { to: '/comercial',  label: 'Comercial',  Icon: Users },
-  { to: '/metricas',   label: 'KPI',        Icon: BarChart2 },
   { to: '/alertas',    label: 'Alertas',    Icon: Bell, badge: true },
-  { to: '/marketing',  label: 'Marketing',  Icon: Megaphone },
-  { to: '/operacoes',  label: 'Operações',  Icon: HardHat },
 ]
 
 export function Sidebar() {
   const [alertCount, setAlertCount] = useState(0)
+  const [open, setOpen] = useState(false)
 
   useEffect(() => {
-    fetch('/api/alertas')
-      .then(r => r.json())
-      .then(d => setAlertCount(d.resumo?.criticos ?? 0))
-      .catch(() => {})
-    const interval = setInterval(() => {
-      fetch('/api/alertas').then(r => r.json()).then(d => setAlertCount(d.resumo?.criticos ?? 0)).catch(() => {})
-    }, 60000)
+    const load = () => fetch('/api/alertas').then(r => r.json()).then(d => setAlertCount(d.resumo?.criticos ?? 0)).catch(() => {})
+    load()
+    const interval = setInterval(load, 60000)
     return () => clearInterval(interval)
   }, [])
 
-  return (
-    <aside className="w-60 min-h-screen flex flex-col shrink-0" style={{ backgroundColor: '#0d0d0d' }}>
+  // Close mobile sidebar on navigation
+  const handleNav = () => setOpen(false)
 
+  const sidebarContent = (
+    <>
       {/* Logo */}
       <div className="w-full" style={{ backgroundColor: '#0d0d0d' }}>
         <img src="/logo.png" alt="Somnium Properties" className="w-full object-cover" style={{ height: '110px', objectPosition: 'center' }} />
@@ -48,6 +43,7 @@ export function Sidebar() {
             key={to}
             to={to}
             end={end}
+            onClick={handleNav}
             className={({ isActive }) =>
               `group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
                 isActive ? 'active-nav' : 'text-neutral-500 hover:text-white'
@@ -82,6 +78,39 @@ export function Sidebar() {
           <p className="text-[11px]" style={{ color: '#444' }}>Sistema online</p>
         </div>
       </div>
-    </aside>
+    </>
+  )
+
+  return (
+    <>
+      {/* Mobile hamburger */}
+      <button
+        onClick={() => setOpen(!open)}
+        className="fixed top-3 left-3 z-50 md:hidden p-2 rounded-lg"
+        style={{ backgroundColor: '#0d0d0d', border: '1px solid #1a1a1a' }}
+      >
+        {open ? <X className="w-5 h-5 text-white" /> : <Menu className="w-5 h-5" style={{ color: '#C9A84C' }} />}
+      </button>
+
+      {/* Mobile overlay */}
+      {open && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden" onClick={() => setOpen(false)} />
+      )}
+
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex w-56 min-h-screen flex-col shrink-0" style={{ backgroundColor: '#0d0d0d' }}>
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile sidebar */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-56 flex flex-col transform transition-transform duration-200 md:hidden ${
+          open ? 'translate-x-0' : '-translate-x-full'
+        }`}
+        style={{ backgroundColor: '#0d0d0d' }}
+      >
+        {sidebarContent}
+      </aside>
+    </>
   )
 }

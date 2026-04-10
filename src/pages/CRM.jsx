@@ -1,30 +1,16 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Header } from '../components/layout/Header.jsx'
 import { KanbanBoard } from '../components/crm/KanbanBoard.jsx'
 import { DetailPanel } from '../components/crm/DetailPanel.jsx'
 import { Filters } from '../components/crm/Filters.jsx'
 import { TabKPIs } from '../components/crm/TabKPIs.jsx'
-
-const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
+import { useToast } from '../components/ui/Toast.jsx'
+import { EUR, cleanLabel, IMOVEL_ESTADO_COLOR, INV_STATUS_COLOR, CONS_ESTATUTO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
 
 const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Negócios', 'Despesas']
 
-const ESTADO_COLOR = {
-  'Wholesaling': 'bg-green-100 text-green-700', 'Negócio em Curso': 'bg-green-100 text-green-700',
-  'Enviar proposta ao investidor': 'bg-blue-100 text-blue-700', 'Estudo de VVR': 'bg-blue-100 text-blue-700',
-  'Follow UP': 'bg-yellow-100 text-yellow-700', 'Visita Marcada': 'bg-yellow-100 text-yellow-700',
-  'Pendentes': 'bg-gray-100 text-gray-600', 'Adicionado': 'bg-gray-100 text-gray-600', 'Em Análise': 'bg-gray-100 text-gray-600',
-  'Descartado': 'bg-red-100 text-red-700', 'Nao interessa': 'bg-red-100 text-red-700',
-}
-const STATUS_COLOR = {
-  'Potencial Investidor': 'bg-gray-100 text-gray-600', 'Marcar call': 'bg-yellow-100 text-yellow-700',
-  'Call marcada': 'bg-blue-100 text-blue-700', 'Follow Up': 'bg-yellow-100 text-yellow-700',
-  'Investidor classificado': 'bg-indigo-100 text-indigo-700', 'Investidor em parceria': 'bg-green-100 text-green-700',
-}
-const CLASS_COLOR = { A: 'bg-green-500', B: 'bg-blue-500', C: 'bg-yellow-500', D: 'bg-red-500' }
-
 function Badge({ text, colorMap }) {
-  const clean = text?.replace(/^\d+-/, '') ?? ''
+  const clean = cleanLabel(text)
   const cls = colorMap?.[clean] ?? colorMap?.[text] ?? 'bg-gray-100 text-gray-600'
   return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{clean || '—'}</span>
 }
@@ -47,6 +33,8 @@ export function CRM() {
   const [filters, setFilters] = useState({})
   const [alertCount, setAlertCount] = useState(0)
 
+  const toast = useToast()
+  const searchTimer = useRef(null)
   const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores', 'Negócios': 'negocios', 'Despesas': 'despesas' }[tab]
 
   const load = useCallback(async () => {
@@ -143,18 +131,41 @@ export function CRM() {
   }
 
   async function handleSave(item) {
-    const isNew = !item.id
-    const url = isNew ? `/api/crm/${endpoint}` : `/api/crm/${endpoint}/${item.id}`
-    const method = isNew ? 'POST' : 'PUT'
-    await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) })
-    setEditing(null)
-    load()
+    // Validação básica
+    const nameField = tab === 'Negócios' ? 'movimento' : tab === 'Despesas' ? 'movimento' : 'nome'
+    if (!item[nameField]?.trim()) {
+      toast('Preenche o nome/título', 'error')
+      return
+    }
+    try {
+      const isNew = !item.id
+      const url = isNew ? `/api/crm/${endpoint}` : `/api/crm/${endpoint}/${item.id}`
+      const method = isNew ? 'POST' : 'PUT'
+      const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) })
+      if (!r.ok) throw new Error('Erro ao guardar')
+      toast(isNew ? 'Registo criado' : 'Registo atualizado', 'success')
+      setEditing(null)
+      load()
+    } catch (e) {
+      toast(e.message, 'error')
+    }
   }
 
   async function handleDelete(id) {
     if (!confirm('Tens a certeza que queres apagar este registo?')) return
-    await fetch(`/api/crm/${endpoint}/${id}`, { method: 'DELETE' })
-    load()
+    try {
+      await fetch(`/api/crm/${endpoint}/${id}`, { method: 'DELETE' })
+      toast('Registo apagado', 'success')
+      load()
+    } catch (e) {
+      toast('Erro ao apagar', 'error')
+    }
+  }
+
+  function handleSearch(value) {
+    setSearch(value)
+    clearTimeout(searchTimer.current)
+    searchTimer.current = setTimeout(() => load(), 300) // debounce 300ms
   }
 
   return (
@@ -199,7 +210,7 @@ export function CRM() {
         <div className="flex gap-3 items-center">
           <input
             type="text" placeholder={`Pesquisar ${tab.toLowerCase()}...`}
-            value={search} onChange={e => setSearch(e.target.value)}
+            value={search} onChange={e => handleSearch(e.target.value)}
             className="flex-1 px-4 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
           />
           {hasKanban && (
@@ -227,8 +238,16 @@ export function CRM() {
           <FormPanel tab={tab} item={editing} onSave={handleSave} onCancel={() => setEditing(null)} />
         )}
 
+        {/* Loading */}
+        {loading && editing === null && (
+          <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+            <div className="animate-spin w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full mx-auto" />
+            <p className="text-sm text-gray-400 mt-3">A carregar...</p>
+          </div>
+        )}
+
         {/* Kanban View */}
-        {editing === null && view === 'kanban' && kanbanConfig && (
+        {!loading && editing === null && view === 'kanban' && kanbanConfig && (
           <KanbanBoard
             columns={kanbanConfig.columns}
             items={data}
@@ -239,7 +258,7 @@ export function CRM() {
         )}
 
         {/* Table View */}
-        {editing === null && (view === 'table' || !hasKanban) && (
+        {!loading && editing === null && (view === 'table' || !hasKanban) && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               {tab === 'Imóveis' && <ImoveisTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
@@ -283,7 +302,7 @@ function ImoveisTable({ data, onEdit, onDelete, onView }) {
         {data.map(r => (
           <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
             <td className="py-2 px-3 font-medium text-gray-800">{r.nome}</td>
-            <td className="py-2 px-3"><Badge text={r.estado} colorMap={ESTADO_COLOR} /></td>
+            <td className="py-2 px-3"><Badge text={r.estado} colorMap={IMOVEL_ESTADO_COLOR} /></td>
             <td className="py-2 px-3 text-gray-500">{r.zona ?? '—'}</td>
             <td className="py-2 px-3 text-right font-mono">{r.ask_price > 0 ? EUR(r.ask_price) : '—'}</td>
             <td className="py-2 px-3 text-right font-mono">{r.roi > 0 ? `${r.roi}%` : '—'}</td>
@@ -312,7 +331,7 @@ function InvestidoresTable({ data, onEdit, onDelete, onView }) {
           <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
             <td className="py-2 px-3 font-medium text-gray-800">{r.nome}</td>
             <td className="py-2 px-3 text-center"><ClassBadge cls={r.classificacao} /></td>
-            <td className="py-2 px-3"><Badge text={r.status} colorMap={STATUS_COLOR} /></td>
+            <td className="py-2 px-3"><Badge text={r.status} colorMap={INV_STATUS_COLOR} /></td>
             <td className="py-2 px-3 text-gray-500">{r.origem ?? '—'}</td>
             <td className="py-2 px-3 text-gray-500">{r.telemovel ?? r.email ?? '—'}</td>
             <td className="py-2 px-3 text-gray-400">{r.data_primeiro_contacto ?? '—'}</td>
@@ -341,7 +360,7 @@ function ConsultoresTable({ data, onEdit, onDelete, onView }) {
             <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
               <td className="py-2 px-3 font-medium text-gray-800">{r.nome}</td>
               <td className="py-2 px-3 text-center"><ClassBadge cls={r.classificacao} /></td>
-              <td className="py-2 px-3"><Badge text={r.estatuto} colorMap={{ 'Cold Call': 'bg-gray-100 text-gray-600', 'Follow up': 'bg-blue-100 text-blue-700', 'Aberto Parcerias': 'bg-yellow-100 text-yellow-700', 'Consultores em Parceria': 'bg-green-100 text-green-700' }} /></td>
+              <td className="py-2 px-3"><Badge text={r.estatuto} colorMap={CONS_ESTATUTO_COLOR} /></td>
               <td className="py-2 px-3 text-gray-500">{imobs}</td>
               <td className="py-2 px-3 text-gray-500">{r.contacto ?? '—'}</td>
               <td className="py-2 px-3 text-right font-mono">{r.imoveis_enviados || '—'}</td>
@@ -368,8 +387,8 @@ function NegociosTable({ data, onEdit, onDelete }) {
         {data.map(r => (
           <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
             <td className="py-2 px-3 font-medium text-gray-800">{r.movimento}</td>
-            <td className="py-2 px-3"><Badge text={r.categoria} colorMap={{ 'Wholesalling': 'bg-indigo-100 text-indigo-700', 'CAEP': 'bg-yellow-100 text-yellow-700', 'Mediação Imobiliária': 'bg-green-100 text-green-700', 'Fix and Flip': 'bg-red-100 text-red-700' }} /></td>
-            <td className="py-2 px-3"><Badge text={r.fase} colorMap={{ 'Fase de obras': 'bg-blue-100 text-blue-700', 'Fase de venda': 'bg-yellow-100 text-yellow-700', 'Vendido': 'bg-green-100 text-green-700' }} /></td>
+            <td className="py-2 px-3"><Badge text={r.categoria} colorMap={NEG_CAT_COLOR} /></td>
+            <td className="py-2 px-3"><Badge text={r.fase} colorMap={NEG_FASE_COLOR} /></td>
             <td className="py-2 px-3 text-right font-mono text-indigo-600">{EUR(r.lucro_estimado)}</td>
             <td className="py-2 px-3 text-right font-mono text-green-600">{r.lucro_real > 0 ? EUR(r.lucro_real) : '—'}</td>
             <td className="py-2 px-3 text-gray-400">{r.data ?? '—'}</td>
@@ -396,7 +415,7 @@ function DespesasTable({ data, onEdit, onDelete }) {
           <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
             <td className="py-2 px-3 font-medium text-gray-800">{r.movimento}</td>
             <td className="py-2 px-3 text-gray-500">{r.categoria ?? '—'}</td>
-            <td className="py-2 px-3"><Badge text={r.timing} colorMap={{ 'Mensalmente': 'bg-blue-100 text-blue-700', 'Anual': 'bg-purple-100 text-purple-700', 'Único': 'bg-gray-100 text-gray-600' }} /></td>
+            <td className="py-2 px-3"><Badge text={r.timing} colorMap={DESP_TIMING_COLOR} /></td>
             <td className="py-2 px-3 text-right font-mono text-red-500">{r.custo_mensal > 0 ? EUR(r.custo_mensal) : '—'}</td>
             <td className="py-2 px-3 text-right font-mono">{r.custo_anual > 0 ? EUR(r.custo_anual) : '—'}</td>
             <td className="py-2 px-3 text-gray-400">{r.data ?? '—'}</td>
