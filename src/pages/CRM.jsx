@@ -254,6 +254,10 @@ export function CRM() {
             groupField={kanbanConfig.groupField}
             renderCard={kanbanConfig.renderCard}
             onMove={handleMove}
+            onCardClick={(id) => {
+              const item = data.find(i => i.id === id)
+              if (item) setEditing(item)
+            }}
           />
         )}
 
@@ -283,9 +287,17 @@ function ActionButtons({ item, onEdit, onDelete, onView }) {
   return (
     <div className="flex gap-1">
       {onView && <button onClick={() => onView(item.id)} className="px-2 py-1 text-xs bg-gray-50 text-gray-600 rounded hover:bg-gray-100">Ver</button>}
-      <button onClick={() => onEdit(item)} className="px-2 py-1 text-xs bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100">Editar</button>
+      <button onClick={() => onEdit(item)} className="px-2 py-1 text-xs bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100">Abrir</button>
       <button onClick={() => onDelete(item.id)} className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Apagar</button>
     </div>
+  )
+}
+
+function ClickableName({ name, item, onEdit }) {
+  return (
+    <button onClick={() => onEdit(item)} className="text-left font-medium text-gray-800 hover:text-indigo-600 hover:underline transition-colors">
+      {name}
+    </button>
   )
 }
 
@@ -301,7 +313,7 @@ function ImoveisTable({ data, onEdit, onDelete, onView }) {
       <tbody>
         {data.map(r => (
           <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
-            <td className="py-2 px-3 font-medium text-gray-800">{r.nome}</td>
+            <td className="py-2 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
             <td className="py-2 px-3"><Badge text={r.estado} colorMap={IMOVEL_ESTADO_COLOR} /></td>
             <td className="py-2 px-3 text-gray-500">{r.zona ?? '—'}</td>
             <td className="py-2 px-3 text-right font-mono">{r.ask_price > 0 ? EUR(r.ask_price) : '—'}</td>
@@ -329,7 +341,7 @@ function InvestidoresTable({ data, onEdit, onDelete, onView }) {
       <tbody>
         {data.map(r => (
           <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
-            <td className="py-2 px-3 font-medium text-gray-800">{r.nome}</td>
+            <td className="py-2 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
             <td className="py-2 px-3 text-center"><ClassBadge cls={r.classificacao} /></td>
             <td className="py-2 px-3"><Badge text={r.status} colorMap={INV_STATUS_COLOR} /></td>
             <td className="py-2 px-3 text-gray-500">{r.origem ?? '—'}</td>
@@ -358,7 +370,7 @@ function ConsultoresTable({ data, onEdit, onDelete, onView }) {
           const imobs = (() => { try { return JSON.parse(r.imobiliaria || '[]').join(', ') } catch { return '—' } })()
           return (
             <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
-              <td className="py-2 px-3 font-medium text-gray-800">{r.nome}</td>
+              <td className="py-2 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
               <td className="py-2 px-3 text-center"><ClassBadge cls={r.classificacao} /></td>
               <td className="py-2 px-3"><Badge text={r.estatuto} colorMap={CONS_ESTATUTO_COLOR} /></td>
               <td className="py-2 px-3 text-gray-500">{imobs}</td>
@@ -386,7 +398,7 @@ function NegociosTable({ data, onEdit, onDelete }) {
       <tbody>
         {data.map(r => (
           <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
-            <td className="py-2 px-3 font-medium text-gray-800">{r.movimento}</td>
+            <td className="py-2 px-3"><ClickableName name={r.movimento} item={r} onEdit={onEdit} /></td>
             <td className="py-2 px-3"><Badge text={r.categoria} colorMap={NEG_CAT_COLOR} /></td>
             <td className="py-2 px-3"><Badge text={r.fase} colorMap={NEG_FASE_COLOR} /></td>
             <td className="py-2 px-3 text-right font-mono text-indigo-600">{EUR(r.lucro_estimado)}</td>
@@ -413,7 +425,7 @@ function DespesasTable({ data, onEdit, onDelete }) {
       <tbody>
         {data.map(r => (
           <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
-            <td className="py-2 px-3 font-medium text-gray-800">{r.movimento}</td>
+            <td className="py-2 px-3"><ClickableName name={r.movimento} item={r} onEdit={onEdit} /></td>
             <td className="py-2 px-3 text-gray-500">{r.categoria ?? '—'}</td>
             <td className="py-2 px-3"><Badge text={r.timing} colorMap={DESP_TIMING_COLOR} /></td>
             <td className="py-2 px-3 text-right font-mono text-red-500">{r.custo_mensal > 0 ? EUR(r.custo_mensal) : '—'}</td>

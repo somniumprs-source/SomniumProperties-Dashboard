@@ -45,8 +45,9 @@ const DEFAULT_COLORS = { bg: 'bg-gray-50', border: 'border-gray-200', header: 'b
  * @param {string} props.groupField - campo que define a coluna (ex: 'estado', 'status')
  * @param {Function} props.renderCard - render function para cada card
  * @param {Function} props.onMove - callback quando um item é movido (id, newColumn)
+ * @param {Function} props.onCardClick - callback quando um card é clicado (id)
  */
-export function KanbanBoard({ columns, items, groupField, renderCard, onMove }) {
+export function KanbanBoard({ columns, items, groupField, renderCard, onMove, onCardClick }) {
   const [dragging, setDragging] = useState(null)
   const [dragOver, setDragOver] = useState(null)
 
@@ -117,8 +118,9 @@ export function KanbanBoard({ columns, items, groupField, renderCard, onMove }) 
                   draggable
                   onDragStart={e => handleDragStart(e, item)}
                   onDragEnd={handleDragEnd}
-                  className={`bg-white rounded-lg border border-gray-200 p-3 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow ${
-                    dragging === item.id ? 'opacity-50' : ''
+                  onClick={() => onCardClick?.(item.id)}
+                  className={`bg-white rounded-lg border border-gray-200 p-3 shadow-sm cursor-pointer hover:shadow-md hover:border-indigo-300 transition-all ${
+                    dragging === item.id ? 'opacity-50 cursor-grabbing' : ''
                   }`}
                 >
                   {renderCard(item)}
