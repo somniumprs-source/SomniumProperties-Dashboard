@@ -111,3 +111,21 @@ export const DESP_CATEGORIAS = [
 export function cleanLabel(text) {
   return (text ?? '').replace(/^\d+-/, '').trim()
 }
+
+// ── Formatar data ISO → DD/MM/YYYY ──────────────────────────
+export function fmtDate(iso) {
+  if (!iso) return '—'
+  const [y, m, d] = iso.slice(0, 10).split('-')
+  return `${d}/${m}/${y}`
+}
+
+// ── Formatar data relativa ("há 3 dias") ─────────────────────
+export function fmtDateRelative(iso) {
+  if (!iso) return '—'
+  const diff = Math.floor((Date.now() - new Date(iso)) / 86400000)
+  if (diff === 0) return 'Hoje'
+  if (diff === 1) return 'Ontem'
+  if (diff < 7) return `Há ${diff} dias`
+  if (diff < 30) return `Há ${Math.floor(diff / 7)} sem.`
+  return fmtDate(iso)
+}
