@@ -499,7 +499,7 @@ const FIELD_DEFS = {
     { key: 'zonas', label: 'Zonas', type: 'multiselect', options: FREGUESIAS },
     { key: 'origem', label: 'Origem', type: 'select', options: ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro'] },
     { key: 'modelo_negocio', label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix & Flip','CAEP','Mediação'] },
-    { key: 'nome_consultor', label: 'Consultor', type: 'text' },
+    { key: 'nome_consultor', label: 'Consultor', type: 'relation_name', endpoint: '/api/crm/lookup/consultores', display: r => `${r.nome} (${r.estatuto ?? '—'})` },
     { key: 'link', label: 'Link do Imóvel', type: 'url' },
     { key: 'motivo_descarte', label: 'Motivo Descarte', type: 'select', options: ['Preço elevado','Produto final não vendável','Sem interesse do investidor','Zona fraca','ROI insuficiente','Já vendido','Outro'] },
     { key: 'data_adicionado', label: 'Data Adicionado', type: 'date' },
@@ -591,7 +591,7 @@ function FormPanel({ tab, item, onSave, onCancel }) {
 
   // Load relation lookups
   useEffect(() => {
-    fields.filter(f => f.type === 'relation').forEach(f => {
+    fields.filter(f => f.type === 'relation' || f.type === 'relation_name').forEach(f => {
       fetch(f.endpoint).then(r => r.json()).then(data => {
         setLookups(prev => ({ ...prev, [f.key]: data }))
       }).catch(() => {})
@@ -622,6 +622,11 @@ function FormPanel({ tab, item, onSave, onCancel }) {
               <select value={form[f.key] ?? ''} onChange={e => handleChange(f.key, e.target.value)} className={inputClass}>
                 <option value="">— Selecionar —</option>
                 {(lookups[f.key] ?? []).map(r => <option key={r.id} value={r.id}>{f.display(r)}</option>)}
+              </select>
+            ) : f.type === 'relation_name' ? (
+              <select value={form[f.key] ?? ''} onChange={e => handleChange(f.key, e.target.value)} className={inputClass}>
+                <option value="">— Selecionar —</option>
+                {(lookups[f.key] ?? []).map(r => <option key={r.id} value={r.nome}>{f.display(r)}</option>)}
               </select>
             ) : f.type === 'textarea' ? (
               <textarea value={form[f.key] ?? ''} onChange={e => handleChange(f.key, e.target.value)} rows={3} className={inputClass} />
