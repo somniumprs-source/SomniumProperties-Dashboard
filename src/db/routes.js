@@ -215,6 +215,26 @@ router.post('/auto-task', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// ── Relation lookups (para dropdowns nos formulários) ─────────
+router.get('/lookup/imoveis', async (req, res) => {
+  try {
+    const { rows } = await pool.query("SELECT id, nome, estado FROM imoveis ORDER BY nome")
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+router.get('/lookup/investidores', async (req, res) => {
+  try {
+    const { rows } = await pool.query("SELECT id, nome, status FROM investidores ORDER BY nome")
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+router.get('/lookup/consultores', async (req, res) => {
+  try {
+    const { rows } = await pool.query("SELECT id, nome, estatuto FROM consultores ORDER BY nome")
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 // ── Audit log ─────────────────────────────────────────────────
 router.get('/audit', async (req, res) => {
   try {
