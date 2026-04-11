@@ -342,27 +342,24 @@ function mapConsultor(p) {
   }
 }
 
-// ── Cache 30s ─────────────────────────────────────────────────────
-const cache = new Map()
-async function cached(key, ttlMs, fn) {
-  const hit = cache.get(key)
-  if (hit && Date.now() - hit.ts < ttlMs) return hit.data
-  const data = await fn()
-  cache.set(key, { data, ts: Date.now() })
-  return data
-}
+// ── Data source: PostgreSQL (Supabase) ────────────────────────────
+// Importa queries que lêem da DB local em vez do Notion
+import {
+  getNegócios, getDespesas, getImóveis, getInvestidores, getConsultores,
+  round2 as round2PG,
+} from './src/db/queries.js'
 
-const getNegócios    = () => cached('neg',  30000, async () => (await queryAll(DB.negócios)).map(mapNegocio))
-const getDespesas    = () => cached('des',  30000, async () => (await queryAll(DB.despesas)).map(mapDespesa))
-const getImóveis     = () => cached('imo',  30000, async () => (await queryAll(DB.pipelineImoveis)).map(mapImovel))
-const getInvestidores= () => cached('inv',  30000, async () => (await queryAll(DB.investidores)).map(mapInvestidor))
-const getEmpreiteiros  = () => cached('emp',  30000, async () => (await queryAll(DB.empreiteiros)).map(mapEmpreiteiro))
-const getConsultores   = () => cached('cons', 30000, async () => DB.consultores ? (await queryAll(DB.consultores)).map(mapConsultor) : [])
-const getProjetos    = () => cached('proj', 30000, async () => DB.projetos ? (await queryAll(DB.projetos)).map(mapProjeto) : [])
-const getPipeline    = () => cached('pip',  30000, async () => (await queryAll(DB.pipeline)).map(mapPipeline))
-const getClientes    = () => cached('cli',  30000, async () => (await queryAll(DB.clientes)).map(mapCliente))
-const getCampanhas   = () => cached('camp', 30000, async () => { try { return (await queryAll(DB.campanhas)).map(mapCampanha) } catch { return [] } })
-const getObras       = () => cached('obr',  30000, async () => { try { return (await queryAll(DB.obras)).map(mapObra) } catch { return [] } })
+// Legacy getters (retornam vazio — DBs inacessíveis)
+const getEmpreiteiros = async () => []
+const getProjetos     = async () => []
+const getPipeline     = async () => []
+const getClientes     = async () => []
+const getCampanhas    = async () => []
+const getObras        = async () => []
+
+// Cache para endpoints que fazem queries pesadas
+const cache = new Map()
+app.post('/api/cache/clear', (_req, res) => { cache.clear(); res.json({ ok: true }) })
 
 // ════════════════════════════════════════════════════════════════
 // FINANCEIRO — Wholesaling Imobiliário
@@ -1243,8 +1240,6 @@ app.get('/api/kpis', async (req, res) => {
     res.status(500).json({ error: err.message })
   }
 })
-
-app.post('/api/cache/clear', (_req, res) => { cache.clear(); res.json({ ok: true }) })
 
 // ════════════════════════════════════════════════════════════════
 // WEEKLY PULSE — Saúde semanal do negócio
