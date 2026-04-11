@@ -443,39 +443,47 @@ function DespesasTable({ data, onEdit, onDelete }) {
 
 // ── Form Panel ────────────────────────────────────────────────
 
-// Freguesias do concelho de Coimbra + concelhos limítrofes
+// Freguesias dos concelhos de Coimbra, Condeixa-a-Nova e Mealhada
 const FREGUESIAS = [
-  // Coimbra (freguesias)
-  'Almedina', 'Antanhol', 'Antuzede e Vil de Matos', 'Assafarge e Antanhol',
-  'Botão', 'Brasfemes', 'Castelo Viegas', 'Ceira',
-  'Cernache', 'Eiras e São Paulo de Frades', 'Eiras',
-  'Lamarosa', 'Ribeira de Frades', 'Santa Clara',
-  'Santa Cruz', 'Santo António dos Olivais', 'São João do Campo',
-  'São Martinho de Árvore', 'São Martinho do Bispo',
-  'São Silvestre', 'Sé Nova', 'Souselas e Botão',
-  'Taveiro', 'Torres do Mondego', 'Trouxemil e Torre de Vilela',
-  'Vil de Matos', 'Pereiros',
-  // Condeixa-a-Nova
-  'Condeixa-a-Nova', 'Condeixa-a-Velha', 'Ega', 'Sebal',
-  'Belide', 'Anobra', 'Furadouro', 'Zambujal',
-  // Miranda do Corvo
-  'Miranda do Corvo', 'Lamas', 'Semide', 'Vila Nova',
-  // Montemor-o-Velho
-  'Montemor-o-Velho', 'Carapinheira', 'Tentúgal', 'Pereira',
-  // Penacova
-  'Penacova', 'Lorvão', 'São Pedro de Alva',
-  // Cantanhede
-  'Cantanhede', 'Ançã', 'Murtede', 'Pocariça',
-  // Mealhada
-  'Mealhada', 'Luso', 'Pampilhosa',
-  // Figueira da Foz
-  'Figueira da Foz', 'Buarcos', 'Tavarede',
-  // Leiria
-  'Leiria', 'Marrazes', 'Pousos', 'Barosa',
-  // Aveiro
-  'Aveiro', 'Ílhavo', 'Gafanha da Nazaré',
-  // Viseu / Outros
-  'Viseu', 'Guarda', 'Castelo Branco',
+  // Coimbra (18 freguesias)
+  'Almedina (Coimbra)',
+  'Assafarge e Antanhol (Coimbra)',
+  'Brasfemes (Coimbra)',
+  'Castelo Viegas (Coimbra)',
+  'Ceira (Coimbra)',
+  'Cernache (Coimbra)',
+  'Eiras e São Paulo de Frades (Coimbra)',
+  'Lamarosa (Coimbra)',
+  'Ribeira de Frades (Coimbra)',
+  'Santa Clara e Castelo Viegas (Coimbra)',
+  'Santa Cruz (Coimbra)',
+  'Santo António dos Olivais (Coimbra)',
+  'São João do Campo (Coimbra)',
+  'São Martinho de Árvore e Lamarosa (Coimbra)',
+  'São Martinho do Bispo (Coimbra)',
+  'São Silvestre (Coimbra)',
+  'Sé Nova, Santa Cruz, Almedina e São Bartolomeu (Coimbra)',
+  'Souselas e Botão (Coimbra)',
+  'Taveiro, Ameal e Arzila (Coimbra)',
+  'Torres do Mondego (Coimbra)',
+  'Trouxemil e Torre de Vilela (Coimbra)',
+  'Vil de Matos (Coimbra)',
+  // Condeixa-a-Nova (7 freguesias)
+  'Anobra (Condeixa)',
+  'Belide (Condeixa)',
+  'Condeixa-a-Nova e Condeixa-a-Velha (Condeixa)',
+  'Ega (Condeixa)',
+  'Furadouro (Condeixa)',
+  'Sebal e Belide (Condeixa)',
+  'Vila Seca e Bem da Fé (Condeixa)',
+  'Zambujal (Condeixa)',
+  // Mealhada (6 freguesias)
+  'Barcouço (Mealhada)',
+  'Casal Comba (Mealhada)',
+  'Luso (Mealhada)',
+  'Mealhada, Ventosa do Bairro e Antes (Mealhada)',
+  'Pampilhosa (Mealhada)',
+  'Vacariça (Mealhada)',
 ].sort()
 
 const FIELD_DEFS = {
