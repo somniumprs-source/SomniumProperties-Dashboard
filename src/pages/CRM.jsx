@@ -443,37 +443,33 @@ function DespesasTable({ data, onEdit, onDelete }) {
 
 // ── Form Panel ────────────────────────────────────────────────
 
-// Freguesias dos concelhos de Coimbra, Condeixa-a-Nova e Mealhada
+// Freguesias do concelho de Coimbra + zonas centrais Condeixa e Mealhada
 const FREGUESIAS = [
-  // Coimbra (18 freguesias)
-  'Almedina (Coimbra)',
-  'Assafarge e Antanhol (Coimbra)',
-  'Brasfemes (Coimbra)',
-  'Castelo Viegas (Coimbra)',
-  'Ceira (Coimbra)',
-  'Cernache (Coimbra)',
-  'Eiras e São Paulo de Frades (Coimbra)',
-  'Lamarosa (Coimbra)',
-  'Ribeira de Frades (Coimbra)',
-  'Santa Clara e Castelo Viegas (Coimbra)',
-  'Santa Cruz (Coimbra)',
-  'Santo António dos Olivais (Coimbra)',
-  'São João do Campo (Coimbra)',
-  'São Martinho de Árvore e Lamarosa (Coimbra)',
-  'São Martinho do Bispo (Coimbra)',
-  'São Silvestre (Coimbra)',
-  'Sé Nova, Santa Cruz, Almedina e São Bartolomeu (Coimbra)',
-  'Souselas e Botão (Coimbra)',
-  'Taveiro, Ameal e Arzila (Coimbra)',
-  'Torres do Mondego (Coimbra)',
-  'Trouxemil e Torre de Vilela (Coimbra)',
-  'Vil de Matos (Coimbra)',
-  // Condeixa-a-Nova (centro)
-  'Condeixa-a-Nova (Condeixa)',
-  'Condeixa-a-Velha (Condeixa)',
+  // Concelho de Coimbra (18 freguesias oficiais pós-2013)
+  'Assafarge e Antanhol',
+  'Brasfemes',
+  'Ceira',
+  'Cernache',
+  'Eiras e São Paulo de Frades',
+  'Ribeira de Frades',
+  'Santa Clara e Castelo Viegas',
+  'Santo António dos Olivais',
+  'São João do Campo',
+  'São Martinho de Árvore e Lamarosa',
+  'São Martinho do Bispo',
+  'São Silvestre',
+  'Sé Nova, Santa Cruz, Almedina e São Bartolomeu',
+  'Souselas e Botão',
+  'Taveiro, Ameal e Arzila',
+  'Torres do Mondego',
+  'Trouxemil e Torre de Vilela',
+  'Vil de Matos',
+  // Condeixa (centro)
+  'Condeixa-a-Nova',
+  'Condeixa-a-Velha',
   // Mealhada (centro)
-  'Mealhada (Mealhada)',
-  'Pampilhosa (Mealhada)',
+  'Mealhada',
+  'Pampilhosa',
 ].sort()
 
 const FIELD_DEFS = {
@@ -489,7 +485,7 @@ const FIELD_DEFS = {
     { key: 'zonas', label: 'Zonas', type: 'multiselect', options: FREGUESIAS },
     { key: 'origem', label: 'Origem', type: 'select', options: ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro'] },
     { key: 'modelo_negocio', label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix & Flip','CAEP','Mediação'] },
-    { key: 'nome_consultor', label: 'Consultor', type: 'relation_name', endpoint: '/api/crm/lookup/consultores', display: r => `${r.nome} (${r.estatuto ?? '—'})` },
+    { key: 'nome_consultor', label: 'Consultor', type: 'relation_name_or_new', endpoint: '/api/crm/lookup/consultores', display: r => `${r.nome} (${r.estatuto ?? '—'})`, createEndpoint: '/api/crm/consultores' },
     { key: 'link', label: 'Link do Imóvel', type: 'url' },
     { key: 'motivo_descarte', label: 'Motivo Descarte', type: 'select', options: ['Preço elevado','Produto final não vendável','Sem interesse do investidor','Zona fraca','ROI insuficiente','Já vendido','Outro'] },
     { key: 'data_adicionado', label: 'Data Adicionado', type: 'date' },
@@ -573,6 +569,52 @@ const FIELD_DEFS = {
   ],
 }
 
+function RelationOrNew({ value, options, display, createEndpoint, onChange, onCreated }) {
+  const [mode, setMode] = useState('select') // 'select' | 'new'
+  const [newName, setNewName] = useState('')
+  const [creating, setCreating] = useState(false)
+  const inputClass = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+
+  async function handleCreate() {
+    if (!newName.trim()) return
+    setCreating(true)
+    try {
+      await fetch(createEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: newName.trim(), estatuto: 'Cold Call' }),
+      })
+      onChange(newName.trim())
+      onCreated()
+      setMode('select')
+      setNewName('')
+    } catch {}
+    setCreating(false)
+  }
+
+  if (mode === 'new') {
+    return (
+      <div className="flex gap-2">
+        <input type="text" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome do novo consultor" className={inputClass} />
+        <button onClick={handleCreate} disabled={creating} className="px-3 py-2 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 shrink-0">
+          {creating ? '...' : 'Criar'}
+        </button>
+        <button onClick={() => setMode('select')} className="px-3 py-2 bg-gray-100 text-gray-600 text-xs rounded-lg shrink-0">Cancelar</button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex gap-2">
+      <select value={value} onChange={e => onChange(e.target.value)} className={inputClass}>
+        <option value="">— Selecionar —</option>
+        {options.map(r => <option key={r.id} value={r.nome}>{display(r)}</option>)}
+      </select>
+      <button onClick={() => setMode('new')} className="px-3 py-2 bg-indigo-100 text-indigo-600 text-xs font-medium rounded-lg hover:bg-indigo-200 shrink-0">+ Novo</button>
+    </div>
+  )
+}
+
 function FormPanel({ tab, item, onSave, onCancel }) {
   const fields = FIELD_DEFS[tab] ?? []
   const [form, setForm] = useState({ ...item })
@@ -581,7 +623,7 @@ function FormPanel({ tab, item, onSave, onCancel }) {
 
   // Load relation lookups
   useEffect(() => {
-    fields.filter(f => f.type === 'relation' || f.type === 'relation_name').forEach(f => {
+    fields.filter(f => ['relation', 'relation_name', 'relation_name_or_new'].includes(f.type)).forEach(f => {
       fetch(f.endpoint).then(r => r.json()).then(data => {
         setLookups(prev => ({ ...prev, [f.key]: data }))
       }).catch(() => {})
@@ -618,6 +660,17 @@ function FormPanel({ tab, item, onSave, onCancel }) {
                 <option value="">— Selecionar —</option>
                 {(lookups[f.key] ?? []).map(r => <option key={r.id} value={r.nome}>{f.display(r)}</option>)}
               </select>
+            ) : f.type === 'relation_name_or_new' ? (
+              <RelationOrNew
+                value={form[f.key] ?? ''}
+                options={lookups[f.key] ?? []}
+                display={f.display}
+                createEndpoint={f.createEndpoint}
+                onChange={v => handleChange(f.key, v)}
+                onCreated={() => {
+                  fetch(f.endpoint).then(r => r.json()).then(data => setLookups(prev => ({ ...prev, [f.key]: data }))).catch(() => {})
+                }}
+              />
             ) : f.type === 'textarea' ? (
               <textarea value={form[f.key] ?? ''} onChange={e => handleChange(f.key, e.target.value)} rows={3} className={inputClass} />
             ) : f.type === 'checkbox' ? (
