@@ -443,6 +443,41 @@ function DespesasTable({ data, onEdit, onDelete }) {
 
 // ── Form Panel ────────────────────────────────────────────────
 
+// Freguesias do concelho de Coimbra + concelhos limítrofes
+const FREGUESIAS = [
+  // Coimbra (freguesias)
+  'Almedina', 'Antanhol', 'Antuzede e Vil de Matos', 'Assafarge e Antanhol',
+  'Botão', 'Brasfemes', 'Castelo Viegas', 'Ceira',
+  'Cernache', 'Eiras e São Paulo de Frades', 'Eiras',
+  'Lamarosa', 'Ribeira de Frades', 'Santa Clara',
+  'Santa Cruz', 'Santo António dos Olivais', 'São João do Campo',
+  'São Martinho de Árvore', 'São Martinho do Bispo',
+  'São Silvestre', 'Sé Nova', 'Souselas e Botão',
+  'Taveiro', 'Torres do Mondego', 'Trouxemil e Torre de Vilela',
+  'Vil de Matos', 'Pereiros',
+  // Condeixa-a-Nova
+  'Condeixa-a-Nova', 'Condeixa-a-Velha', 'Ega', 'Sebal',
+  'Belide', 'Anobra', 'Furadouro', 'Zambujal',
+  // Miranda do Corvo
+  'Miranda do Corvo', 'Lamas', 'Semide', 'Vila Nova',
+  // Montemor-o-Velho
+  'Montemor-o-Velho', 'Carapinheira', 'Tentúgal', 'Pereira',
+  // Penacova
+  'Penacova', 'Lorvão', 'São Pedro de Alva',
+  // Cantanhede
+  'Cantanhede', 'Ançã', 'Murtede', 'Pocariça',
+  // Mealhada
+  'Mealhada', 'Luso', 'Pampilhosa',
+  // Figueira da Foz
+  'Figueira da Foz', 'Buarcos', 'Tavarede',
+  // Leiria
+  'Leiria', 'Marrazes', 'Pousos', 'Barosa',
+  // Aveiro
+  'Aveiro', 'Ílhavo', 'Gafanha da Nazaré',
+  // Viseu / Outros
+  'Viseu', 'Guarda', 'Castelo Branco',
+].sort()
+
 const FIELD_DEFS = {
   'Imóveis': [
     { key: 'nome', label: 'Nome do Imóvel', type: 'text', required: true },
@@ -453,7 +488,7 @@ const FIELD_DEFS = {
     { key: 'custo_estimado_obra', label: 'Custo Estimado Obra (€)', type: 'number' },
     { key: 'valor_venda_remodelado', label: 'Valor Venda Remodelado (€)', type: 'number' },
     { key: 'zona', label: 'Zona Principal', type: 'text' },
-    { key: 'zonas', label: 'Zonas', type: 'multiselect', options: ['Coimbra','Santa Clara','São Martinho do Bispo','Cernache','Condeixa','Pereiros','Eiras','Taveiro','Santo António dos Olivais'] },
+    { key: 'zonas', label: 'Zonas', type: 'multiselect', options: FREGUESIAS },
     { key: 'origem', label: 'Origem', type: 'select', options: ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro'] },
     { key: 'modelo_negocio', label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix & Flip','CAEP','Mediação'] },
     { key: 'nome_consultor', label: 'Consultor', type: 'text' },
@@ -500,7 +535,7 @@ const FIELD_DEFS = {
     { key: 'contacto', label: 'Contacto (telefone)', type: 'tel' },
     { key: 'email', label: 'Email', type: 'email' },
     { key: 'imobiliaria', label: 'Imobiliária', type: 'multiselect', options: ['Remax','ERA','KW','Century21','Coldwell Banker','IAD','Listoo','Impactus','Decisões e Soluções','RE/MAX','Outra'] },
-    { key: 'zonas', label: 'Zonas de Atuação', type: 'multiselect', options: ['Coimbra','Santa Clara','São Martinho do Bispo','Cernache','Condeixa','Pereiros','Eiras','Taveiro','Santo António dos Olivais','Leiria','Aveiro'] },
+    { key: 'zonas', label: 'Zonas de Atuação', type: 'multiselect', options: FREGUESIAS },
     { key: 'data_inicio', label: 'Data Início Parceria', type: 'date' },
     { key: 'data_follow_up', label: 'Data Follow Up', type: 'date' },
     { key: 'data_proximo_follow_up', label: 'Data Próximo Follow Up', type: 'date' },
