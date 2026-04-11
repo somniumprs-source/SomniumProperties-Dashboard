@@ -41,7 +41,8 @@ function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at 
     async create(data) {
       const id = randomUUID()
       const now = new Date().toISOString()
-      const entries = Object.entries(data).filter(([, v]) => v !== undefined)
+      const SYSTEM_FIELDS = new Set(['id', 'created_at', 'updated_at', 'synced_at', 'notion_id'])
+      const entries = Object.entries(data).filter(([k, v]) => v !== undefined && !SYSTEM_FIELDS.has(k))
       const cols = ['id', ...entries.map(([k]) => k), 'created_at', 'updated_at']
       const vals = cols.map((_, i) => `$${i + 1}`)
       const params = [id, ...entries.map(([, v]) => v), now, now]
@@ -54,7 +55,8 @@ function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at 
       const { rows: existing } = await pool.query(`SELECT * FROM ${table} WHERE id = $1`, [id])
       if (!existing[0]) return null
       const now = new Date().toISOString()
-      const entries = Object.entries(data).filter(([, v]) => v !== undefined)
+      const SYSTEM_FIELDS = new Set(['id', 'created_at', 'updated_at', 'synced_at', 'notion_id'])
+      const entries = Object.entries(data).filter(([k, v]) => v !== undefined && !SYSTEM_FIELDS.has(k))
       const sets = entries.map(([k], i) => `${k} = $${i + 1}`)
       sets.push(`updated_at = $${entries.length + 1}`)
       const params = [...entries.map(([, v]) => v), now, id]
