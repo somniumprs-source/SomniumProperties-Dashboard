@@ -6,9 +6,9 @@ import { Filters } from '../components/crm/Filters.jsx'
 import { TabKPIs } from '../components/crm/TabKPIs.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { MultiSelect } from '../components/ui/MultiSelect.jsx'
-import { EUR, cleanLabel, IMOVEL_ESTADO_COLOR, INV_STATUS_COLOR, CONS_ESTATUTO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
+import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS_COLOR, CONS_ESTATUTO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
 
-const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Negócios', 'Despesas']
+const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Negócios', 'Despesas', 'Tarefas']
 
 function Badge({ text, colorMap }) {
   const clean = cleanLabel(text)
@@ -36,7 +36,7 @@ export function CRM() {
 
   const toast = useToast()
   const searchTimer = useRef(null)
-  const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores', 'Negócios': 'negocios', 'Despesas': 'despesas' }[tab]
+  const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores', 'Negócios': 'negocios', 'Despesas': 'despesas', 'Tarefas': 'tarefas' }[tab]
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -271,6 +271,7 @@ export function CRM() {
               {tab === 'Consultores' && <ConsultoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
               {tab === 'Negócios' && <NegociosTable data={data} onEdit={setEditing} onDelete={handleDelete} />}
               {tab === 'Despesas' && <DespesasTable data={data} onEdit={setEditing} onDelete={handleDelete} />}
+              {tab === 'Tarefas' && <TarefasTable data={data} onEdit={setEditing} onDelete={handleDelete} />}
             </div>
             <div className="px-4 py-2 bg-gray-50 text-xs text-gray-400 border-t">
               {total} registos {search && `(pesquisa: "${search}")`}
@@ -320,7 +321,7 @@ function ImoveisTable({ data, onEdit, onDelete, onView }) {
             <td className="py-2 px-3 text-right font-mono">{r.ask_price > 0 ? EUR(r.ask_price) : '—'}</td>
             <td className="py-2 px-3 text-right font-mono">{r.roi > 0 ? `${r.roi}%` : '—'}</td>
             <td className="py-2 px-3 text-gray-500">{r.origem ?? '—'}</td>
-            <td className="py-2 px-3 text-gray-400">{r.data_adicionado ?? '—'}</td>
+            <td className="py-2 px-3 text-gray-400">{fmtDate(r.data_adicionado)}</td>
             <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
           </tr>
         ))}
@@ -336,6 +337,7 @@ function InvestidoresTable({ data, onEdit, onDelete, onView }) {
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
         <th className="text-left py-2 px-3">Nome</th><th className="py-2 px-3">Class.</th>
         <th className="text-left py-2 px-3">Status</th><th className="text-left py-2 px-3">Origem</th>
+        <th className="text-right py-2 px-3">Capital Max</th><th className="py-2 px-3">NDA</th>
         <th className="text-left py-2 px-3">Contacto</th><th className="text-left py-2 px-3">1º Contacto</th>
         <th className="py-2 px-3"></th>
       </tr></thead>
@@ -346,12 +348,14 @@ function InvestidoresTable({ data, onEdit, onDelete, onView }) {
             <td className="py-2 px-3 text-center"><ClassBadge cls={r.classificacao} /></td>
             <td className="py-2 px-3"><Badge text={r.status} colorMap={INV_STATUS_COLOR} /></td>
             <td className="py-2 px-3 text-gray-500">{r.origem ?? '—'}</td>
-            <td className="py-2 px-3 text-gray-500">{r.telemovel ?? r.email ?? '—'}</td>
-            <td className="py-2 px-3 text-gray-400">{r.data_primeiro_contacto ?? '—'}</td>
+            <td className="py-2 px-3 text-right font-mono">{r.capital_max > 0 ? EUR(r.capital_max) : '—'}</td>
+            <td className="py-2 px-3 text-center">{r.nda_assinado ? '✓' : '—'}</td>
+            <td className="py-2 px-3 text-gray-500">{r.telemovel ? <a href={`tel:${r.telemovel}`} className="text-green-600 hover:underline">{r.telemovel}</a> : r.email ? <a href={`mailto:${r.email}`} className="text-blue-600 hover:underline">{r.email}</a> : '—'}</td>
+            <td className="py-2 px-3 text-gray-400">{fmtDate(r.data_primeiro_contacto)}</td>
             <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
           </tr>
         ))}
-        {!data.length && <tr><td colSpan={7} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
+        {!data.length && <tr><td colSpan={9} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
       </tbody>
     </table>
   )
@@ -404,7 +408,7 @@ function NegociosTable({ data, onEdit, onDelete }) {
             <td className="py-2 px-3"><Badge text={r.fase} colorMap={NEG_FASE_COLOR} /></td>
             <td className="py-2 px-3 text-right font-mono text-indigo-600">{EUR(r.lucro_estimado)}</td>
             <td className="py-2 px-3 text-right font-mono text-green-600">{r.lucro_real > 0 ? EUR(r.lucro_real) : '—'}</td>
-            <td className="py-2 px-3 text-gray-400">{r.data ?? '—'}</td>
+            <td className="py-2 px-3 text-gray-400">{fmtDate(r.data)}</td>
             <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} /></td>
           </tr>
         ))}
@@ -431,11 +435,38 @@ function DespesasTable({ data, onEdit, onDelete }) {
             <td className="py-2 px-3"><Badge text={r.timing} colorMap={DESP_TIMING_COLOR} /></td>
             <td className="py-2 px-3 text-right font-mono text-red-500">{r.custo_mensal > 0 ? EUR(r.custo_mensal) : '—'}</td>
             <td className="py-2 px-3 text-right font-mono">{r.custo_anual > 0 ? EUR(r.custo_anual) : '—'}</td>
-            <td className="py-2 px-3 text-gray-400">{r.data ?? '—'}</td>
+            <td className="py-2 px-3 text-gray-400">{fmtDate(r.data)}</td>
             <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} /></td>
           </tr>
         ))}
         {!data.length && <tr><td colSpan={7} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
+      </tbody>
+    </table>
+  )
+}
+
+const TAREFA_STATUS_COLOR = { 'A fazer': 'bg-gray-100 text-gray-600', 'Em andamento': 'bg-blue-100 text-blue-700', 'Atrasada': 'bg-red-100 text-red-700', 'Concluida': 'bg-green-100 text-green-700' }
+
+function TarefasTable({ data, onEdit, onDelete }) {
+  return (
+    <table className="min-w-full text-xs">
+      <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
+        <th className="text-left py-2 px-3">Tarefa</th><th className="text-left py-2 px-3">Status</th>
+        <th className="text-left py-2 px-3">Início</th><th className="text-left py-2 px-3">Fim</th>
+        <th className="text-left py-2 px-3">Funcionário</th><th className="py-2 px-3"></th>
+      </tr></thead>
+      <tbody>
+        {data.map(r => (
+          <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
+            <td className="py-2 px-3"><ClickableName name={r.tarefa} item={r} onEdit={onEdit} /></td>
+            <td className="py-2 px-3"><Badge text={r.status} colorMap={TAREFA_STATUS_COLOR} /></td>
+            <td className="py-2 px-3 text-gray-400">{fmtDate(r.inicio)}</td>
+            <td className="py-2 px-3 text-gray-400">{fmtDate(r.fim)}</td>
+            <td className="py-2 px-3 text-gray-500">{r.funcionario ?? '—'}</td>
+            <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} /></td>
+          </tr>
+        ))}
+        {!data.length && <tr><td colSpan={6} className="py-8 text-center text-gray-400">Sem tarefas</td></tr>}
       </tbody>
     </table>
   )
@@ -566,6 +597,13 @@ const FIELD_DEFS = {
     { key: 'custo_anual', label: 'Custo Anual (€)', type: 'number' },
     { key: 'data', label: 'Data', type: 'date' },
     { key: 'notas', label: 'Notas', type: 'textarea' },
+  ],
+  'Tarefas': [
+    { key: 'tarefa', label: 'Tarefa', type: 'text', required: true },
+    { key: 'status', label: 'Status', type: 'select', options: ['A fazer', 'Em andamento', 'Atrasada', 'Concluida'] },
+    { key: 'inicio', label: 'Data Início', type: 'date' },
+    { key: 'fim', label: 'Data Fim', type: 'date' },
+    { key: 'funcionario', label: 'Funcionário', type: 'text' },
   ],
 }
 

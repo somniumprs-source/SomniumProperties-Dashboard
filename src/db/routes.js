@@ -235,6 +235,102 @@ router.get('/lookup/consultores', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// ── Automações PostgreSQL ──────────────────────────────────────
+router.post('/automation/score-investidores', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM investidores')
+    const updated = []
+    for (const inv of rows) {
+      let score = 0
+      if (inv.capital_min > 0 || inv.capital_max > 0) score += 20
+      if (inv.data_reuniao) score += 20
+      if (inv.nda_assinado) score += 15
+      const estrategia = inv.estrategia ? JSON.parse(inv.estrategia) : []
+      if (estrategia.length > 0) score += 10
+      const tipo = inv.tipo_investidor ? JSON.parse(inv.tipo_investidor) : []
+      if (tipo.length > 0) score += 10
+      if (inv.telemovel || inv.email) score += 5
+      if (inv.data_primeiro_contacto) score += 5
+
+      const classificacao = score >= 80 ? 'A' : score >= 60 ? 'B' : score >= 35 ? 'C' : 'D'
+      if (inv.pontuacao !== score || inv.classificacao !== classificacao) {
+        await pool.query('UPDATE investidores SET pontuacao = $1, classificacao = $2, updated_at = $3 WHERE id = $4',
+          [score, classificacao, new Date().toISOString(), inv.id])
+        updated.push({ nome: inv.nome, score, classificacao })
+      }
+    }
+    res.json({ ok: true, atualizados: updated.length, detalhes: updated })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/automation/score-consultores', async (req, res) => {
+  try {
+    const { rows: consultores } = await pool.query('SELECT * FROM consultores')
+    const { rows: imoveis } = await pool.query('SELECT nome_consultor FROM imoveis')
+    const updated = []
+    for (const c of consultores) {
+      let score = 0
+      const leads = imoveis.filter(i => i.nome_consultor?.trim() === c.nome).length
+      score += Math.min(leads * 3, 30)
+      score += Math.min((c.imoveis_off_market || 0) * 10, 30)
+      if (c.data_proximo_follow_up && new Date(c.data_proximo_follow_up) >= new Date()) score += 15
+      if (c.email) score += 5
+      const imobs = c.imobiliaria ? JSON.parse(c.imobiliaria) : []
+      if (imobs.length > 0) score += 5
+      const zonas = c.zonas ? JSON.parse(c.zonas) : []
+      if (zonas.length > 0) score += 5
+      if (c.imoveis_enviados > 0) score += 10
+
+      const classificacao = score >= 70 ? 'A' : score >= 45 ? 'B' : score >= 20 ? 'C' : 'D'
+      if (c.classificacao !== classificacao) {
+        await pool.query('UPDATE consultores SET classificacao = $1, updated_at = $2 WHERE id = $3',
+          [classificacao, new Date().toISOString(), c.id])
+        updated.push({ nome: c.nome, score, classificacao })
+      }
+    }
+    res.json({ ok: true, atualizados: updated.length, detalhes: updated })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/automation/calc-roi', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM imoveis WHERE ask_price > 0')
+    const updated = []
+    for (const im of rows) {
+      const custoTotal = im.ask_price + (im.custo_estimado_obra || 0)
+      if (custoTotal <= 0) continue
+      let roi = null
+      if (im.valor_venda_remodelado > 0) {
+        roi = Math.round((im.valor_venda_remodelado - custoTotal) / custoTotal * 10000) / 100
+      } else if (im.valor_proposta > 0 && im.valor_proposta < im.ask_price) {
+        roi = Math.round((im.ask_price - im.valor_proposta) / im.ask_price * 10000) / 100
+      }
+      if (roi === null) continue
+      const roiAnualizado = Math.round(roi * 2 * 100) / 100
+      if (Math.abs((im.roi || 0) - roi) > 0.1) {
+        await pool.query('UPDATE imoveis SET roi = $1, roi_anualizado = $2, updated_at = $3 WHERE id = $4',
+          [roi, roiAnualizado, new Date().toISOString(), im.id])
+        updated.push({ nome: im.nome, roi, roiAnualizado })
+      }
+    }
+    res.json({ ok: true, atualizados: updated.length, detalhes: updated })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/automation/run-all', async (req, res) => {
+  try {
+    const base = `http://localhost:${process.env.PORT ?? 3001}`
+    const results = {}
+    for (const ep of ['score-investidores', 'score-consultores', 'calc-roi']) {
+      try {
+        const r = await fetch(`${base}/api/crm/automation/${ep}`, { method: 'POST' })
+        results[ep] = await r.json()
+      } catch (e) { results[ep] = { error: e.message } }
+    }
+    res.json({ ok: true, results })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 // ── Audit log ─────────────────────────────────────────────────
 router.get('/audit', async (req, res) => {
   try {

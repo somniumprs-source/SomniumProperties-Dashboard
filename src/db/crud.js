@@ -4,6 +4,22 @@
 import pool from './pg.js'
 import { randomUUID } from 'crypto'
 
+// ── Auto-calc ROI ────────────────────────────────────────────
+function autoCalcROI(data) {
+  const askPrice = parseFloat(data.ask_price) || 0
+  const custoObra = parseFloat(data.custo_estimado_obra) || 0
+  const vvr = parseFloat(data.valor_venda_remodelado) || 0
+  const valorProposta = parseFloat(data.valor_proposta) || 0
+  const custoTotal = askPrice + custoObra
+
+  if (custoTotal > 0 && vvr > 0) {
+    data.roi = Math.round((vvr - custoTotal) / custoTotal * 10000) / 100
+    data.roi_anualizado = Math.round(data.roi * (12 / 6) * 100) / 100 // assume 6 meses
+  } else if (askPrice > 0 && valorProposta > 0 && valorProposta < askPrice) {
+    data.roi = Math.round((askPrice - valorProposta) / askPrice * 10000) / 100
+  }
+}
+
 // ── Audit log ────────────────────────────────────────────────
 async function auditLog(tabela, registoId, acao, dadosAnteriores, dadosNovos) {
   await pool.query(
@@ -41,7 +57,18 @@ function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at 
     async create(data) {
       const id = randomUUID()
       const now = new Date().toISOString()
+      const today = now.slice(0, 10)
       const SYSTEM_FIELDS = new Set(['id', 'created_at', 'updated_at', 'synced_at', 'notion_id'])
+
+      // Auto-fill dates on create
+      if (table === 'imoveis' && !data.data_adicionado) data.data_adicionado = today
+      if (table === 'investidores' && !data.data_primeiro_contacto) data.data_primeiro_contacto = today
+      if (table === 'consultores' && !data.data_inicio) data.data_inicio = today
+      if (table === 'negocios' && !data.data) data.data = today
+
+      // Auto-calc ROI for imóveis
+      if (table === 'imoveis') autoCalcROI(data)
+
       const entries = Object.entries(data).filter(([k, v]) => v !== undefined && !SYSTEM_FIELDS.has(k))
       const cols = ['id', ...entries.map(([k]) => k), 'created_at', 'updated_at']
       const vals = cols.map((_, i) => `$${i + 1}`)
@@ -56,6 +83,15 @@ function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at 
       if (!existing[0]) return null
       const now = new Date().toISOString()
       const SYSTEM_FIELDS = new Set(['id', 'created_at', 'updated_at', 'synced_at', 'notion_id'])
+
+      // Auto-calc ROI for imóveis on update
+      if (table === 'imoveis') {
+        const merged = { ...existing[0], ...data }
+        autoCalcROI(merged)
+        if (merged.roi !== existing[0].roi) data.roi = merged.roi
+        if (merged.roi_anualizado !== existing[0].roi_anualizado) data.roi_anualizado = merged.roi_anualizado
+      }
+
       const entries = Object.entries(data).filter(([k, v]) => v !== undefined && !SYSTEM_FIELDS.has(k))
       const sets = entries.map(([k], i) => `${k} = $${i + 1}`)
       sets.push(`updated_at = $${entries.length + 1}`)
