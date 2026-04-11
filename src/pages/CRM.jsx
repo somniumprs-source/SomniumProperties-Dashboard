@@ -5,6 +5,7 @@ import { DetailPanel } from '../components/crm/DetailPanel.jsx'
 import { Filters } from '../components/crm/Filters.jsx'
 import { TabKPIs } from '../components/crm/TabKPIs.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
+import { MultiSelect } from '../components/ui/MultiSelect.jsx'
 import { EUR, cleanLabel, IMOVEL_ESTADO_COLOR, INV_STATUS_COLOR, CONS_ESTATUTO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
 
 const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Negócios', 'Despesas']
@@ -451,15 +452,20 @@ const FIELD_DEFS = {
     { key: 'valor_proposta', label: 'Valor Proposta (€)', type: 'number' },
     { key: 'custo_estimado_obra', label: 'Custo Estimado Obra (€)', type: 'number' },
     { key: 'valor_venda_remodelado', label: 'Valor Venda Remodelado (€)', type: 'number' },
-    { key: 'zona', label: 'Zona', type: 'text' },
-    { key: 'origem', label: 'Origem', type: 'select', options: ['Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro'] },
+    { key: 'zona', label: 'Zona Principal', type: 'text' },
+    { key: 'zonas', label: 'Zonas', type: 'multiselect', options: ['Coimbra','Santa Clara','São Martinho do Bispo','Cernache','Condeixa','Pereiros','Eiras','Taveiro','Santo António dos Olivais'] },
+    { key: 'origem', label: 'Origem', type: 'select', options: ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro'] },
     { key: 'modelo_negocio', label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix & Flip','CAEP','Mediação'] },
     { key: 'nome_consultor', label: 'Consultor', type: 'text' },
-    { key: 'link', label: 'Link', type: 'text' },
+    { key: 'link', label: 'Link do Imóvel', type: 'url' },
+    { key: 'motivo_descarte', label: 'Motivo Descarte', type: 'select', options: ['Preço elevado','Produto final não vendável','Sem interesse do investidor','Zona fraca','ROI insuficiente','Já vendido','Outro'] },
     { key: 'data_adicionado', label: 'Data Adicionado', type: 'date' },
     { key: 'data_chamada', label: 'Data Chamada', type: 'date' },
     { key: 'data_visita', label: 'Data Visita', type: 'date' },
+    { key: 'data_estudo_mercado', label: 'Data Estudo Mercado', type: 'date' },
     { key: 'data_proposta', label: 'Data Proposta', type: 'date' },
+    { key: 'data_proposta_aceite', label: 'Data Proposta Aceite', type: 'date' },
+    { key: 'data_follow_up', label: 'Data Follow Up', type: 'date' },
     { key: 'notas', label: 'Notas', type: 'textarea' },
   ],
   'Investidores': [
@@ -467,42 +473,60 @@ const FIELD_DEFS = {
     { key: 'status', label: 'Status', type: 'select', options: ['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor classificado','Investidor em parceria'] },
     { key: 'classificacao', label: 'Classificação', type: 'select', options: ['A','B','C','D'] },
     { key: 'origem', label: 'Origem', type: 'select', options: ['Skool','Grupos Whatsapp','Referenciação','LinkedIn','Outro'] },
-    { key: 'telemovel', label: 'Telemóvel', type: 'text' },
+    { key: 'telemovel', label: 'Telemóvel', type: 'tel' },
     { key: 'email', label: 'Email', type: 'email' },
     { key: 'capital_min', label: 'Capital Mínimo (€)', type: 'number' },
     { key: 'capital_max', label: 'Capital Máximo (€)', type: 'number' },
+    { key: 'montante_investido', label: 'Montante Investido (€)', type: 'number' },
     { key: 'nda_assinado', label: 'NDA Assinado', type: 'checkbox' },
+    { key: 'estrategia', label: 'Estratégia de Investimento', type: 'multiselect', options: ['Wholesaling','CAEP','Fix & Flip','Mediação','Capital Passivo','Construção'] },
+    { key: 'tipo_investidor', label: 'Tipo de Investidor', type: 'multiselect', options: ['Ativo','Passivo','Institucional','Particular'] },
+    { key: 'perfil_risco', label: 'Perfil de Risco', type: 'select', options: ['Conservador','Moderado','Agressivo'] },
     { key: 'data_primeiro_contacto', label: 'Data 1º Contacto', type: 'date' },
     { key: 'data_reuniao', label: 'Data Reunião', type: 'date' },
+    { key: 'data_ultimo_contacto', label: 'Data Último Contacto', type: 'date' },
+    { key: 'data_capital_transferido', label: 'Data Capital Transferido', type: 'date' },
     { key: 'data_follow_up', label: 'Data Follow Up', type: 'date' },
+    { key: 'data_proxima_acao', label: 'Data Próxima Ação', type: 'date' },
     { key: 'proxima_acao', label: 'Próxima Ação', type: 'text' },
+    { key: 'motivo_nao_aprovacao', label: 'Motivo Não Aprovação', type: 'text' },
+    { key: 'motivo_inatividade', label: 'Motivo Inatividade', type: 'text' },
     { key: 'notas', label: 'Notas', type: 'textarea' },
   ],
   'Consultores': [
     { key: 'nome', label: 'Nome', type: 'text', required: true },
     { key: 'estatuto', label: 'Estatuto', type: 'select', options: ['Cold Call','Follow up','Aberto Parcerias','Acesso imoveis Off market','Consultores em Parceria'] },
     { key: 'classificacao', label: 'Classificação', type: 'select', options: ['A','B','C','D'] },
-    { key: 'contacto', label: 'Contacto', type: 'text' },
+    { key: 'contacto', label: 'Contacto (telefone)', type: 'tel' },
     { key: 'email', label: 'Email', type: 'email' },
+    { key: 'imobiliaria', label: 'Imobiliária', type: 'multiselect', options: ['Remax','ERA','KW','Century21','Coldwell Banker','IAD','Listoo','Impactus','Decisões e Soluções','RE/MAX','Outra'] },
+    { key: 'zonas', label: 'Zonas de Atuação', type: 'multiselect', options: ['Coimbra','Santa Clara','São Martinho do Bispo','Cernache','Condeixa','Pereiros','Eiras','Taveiro','Santo António dos Olivais','Leiria','Aveiro'] },
+    { key: 'data_inicio', label: 'Data Início Parceria', type: 'date' },
     { key: 'data_follow_up', label: 'Data Follow Up', type: 'date' },
     { key: 'data_proximo_follow_up', label: 'Data Próximo Follow Up', type: 'date' },
     { key: 'motivo_follow_up', label: 'Motivo Follow Up', type: 'text' },
     { key: 'imoveis_enviados', label: 'Imóveis Enviados', type: 'number' },
     { key: 'imoveis_off_market', label: 'Imóveis Off-Market', type: 'number' },
+    { key: 'meta_mensal_leads', label: 'Meta Mensal Leads', type: 'number' },
     { key: 'comissao', label: 'Comissão %', type: 'number' },
+    { key: 'motivo_descontinuacao', label: 'Motivo Descontinuação', type: 'text' },
     { key: 'notas', label: 'Notas', type: 'textarea' },
   ],
   'Negócios': [
     { key: 'movimento', label: 'Nome do Negócio', type: 'text', required: true },
     { key: 'categoria', label: 'Categoria', type: 'select', options: ['Wholesalling','CAEP','Mediação Imobiliária','Fix and Flip'] },
     { key: 'fase', label: 'Fase', type: 'select', options: ['Fase de obras','Fase de venda','Vendido'] },
+    { key: 'imovel_id', label: 'Imóvel', type: 'relation', endpoint: '/api/crm/lookup/imoveis', display: r => `${r.nome} (${r.estado})` },
     { key: 'lucro_estimado', label: 'Lucro Estimado (€)', type: 'number' },
     { key: 'lucro_real', label: 'Lucro Real (€)', type: 'number' },
+    { key: 'custo_real_obra', label: 'Custo Real Obra (€)', type: 'number' },
+    { key: 'capital_total', label: 'Capital Total (€)', type: 'number' },
+    { key: 'n_investidores', label: 'Nº Investidores', type: 'number' },
+    { key: 'pagamento_em_falta', label: 'Pagamento em Falta', type: 'checkbox' },
     { key: 'data', label: 'Data', type: 'date' },
     { key: 'data_compra', label: 'Data Compra', type: 'date' },
     { key: 'data_estimada_venda', label: 'Data Estimada Venda', type: 'date' },
     { key: 'data_venda', label: 'Data Venda', type: 'date' },
-    { key: 'pagamento_em_falta', label: 'Pagamento em Falta', type: 'checkbox' },
     { key: 'notas', label: 'Notas', type: 'textarea' },
   ],
   'Despesas': [
@@ -519,11 +543,23 @@ const FIELD_DEFS = {
 function FormPanel({ tab, item, onSave, onCancel }) {
   const fields = FIELD_DEFS[tab] ?? []
   const [form, setForm] = useState({ ...item })
+  const [lookups, setLookups] = useState({})
   const isNew = !item.id
+
+  // Load relation lookups
+  useEffect(() => {
+    fields.filter(f => f.type === 'relation').forEach(f => {
+      fetch(f.endpoint).then(r => r.json()).then(data => {
+        setLookups(prev => ({ ...prev, [f.key]: data }))
+      }).catch(() => {})
+    })
+  }, [tab])
 
   function handleChange(key, value) {
     setForm(prev => ({ ...prev, [key]: value }))
   }
+
+  const inputClass = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
@@ -533,20 +569,39 @@ function FormPanel({ tab, item, onSave, onCancel }) {
           <div key={f.key} className={f.type === 'textarea' ? 'md:col-span-2 xl:col-span-3' : ''}>
             <label className="block text-xs text-gray-500 mb-1">{f.label}{f.required && ' *'}</label>
             {f.type === 'select' ? (
-              <select value={form[f.key] ?? ''} onChange={e => handleChange(f.key, e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+              <select value={form[f.key] ?? ''} onChange={e => handleChange(f.key, e.target.value)} className={inputClass}>
                 <option value="">—</option>
                 {f.options.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
+            ) : f.type === 'multiselect' ? (
+              <MultiSelect value={form[f.key]} options={f.options} onChange={v => handleChange(f.key, v)} placeholder={`Selecionar ${f.label.toLowerCase()}...`} />
+            ) : f.type === 'relation' ? (
+              <select value={form[f.key] ?? ''} onChange={e => handleChange(f.key, e.target.value)} className={inputClass}>
+                <option value="">— Selecionar —</option>
+                {(lookups[f.key] ?? []).map(r => <option key={r.id} value={r.id}>{f.display(r)}</option>)}
+              </select>
             ) : f.type === 'textarea' ? (
-              <textarea value={form[f.key] ?? ''} onChange={e => handleChange(f.key, e.target.value)} rows={3}
-                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+              <textarea value={form[f.key] ?? ''} onChange={e => handleChange(f.key, e.target.value)} rows={3} className={inputClass} />
             ) : f.type === 'checkbox' ? (
               <input type="checkbox" checked={!!form[f.key]} onChange={e => handleChange(f.key, e.target.checked ? 1 : 0)}
                 className="w-5 h-5 rounded border-gray-300 text-indigo-600" />
+            ) : f.type === 'url' ? (
+              <div className="flex gap-2">
+                <input type="url" value={form[f.key] ?? ''} onChange={e => handleChange(f.key, e.target.value)} className={inputClass} placeholder="https://..." />
+                {form[f.key] && <a href={form[f.key]} target="_blank" rel="noopener noreferrer" className="px-3 py-2 bg-gray-100 rounded-lg text-xs text-indigo-600 hover:bg-gray-200 shrink-0">Abrir</a>}
+              </div>
+            ) : f.type === 'tel' ? (
+              <div className="flex gap-2">
+                <input type="tel" value={form[f.key] ?? ''} onChange={e => handleChange(f.key, e.target.value)} className={inputClass} />
+                {form[f.key] && <a href={`tel:${form[f.key]}`} className="px-3 py-2 bg-green-50 rounded-lg text-xs text-green-600 hover:bg-green-100 shrink-0">Ligar</a>}
+              </div>
+            ) : f.type === 'email' ? (
+              <div className="flex gap-2">
+                <input type="email" value={form[f.key] ?? ''} onChange={e => handleChange(f.key, e.target.value)} className={inputClass} />
+                {form[f.key] && <a href={`mailto:${form[f.key]}`} className="px-3 py-2 bg-blue-50 rounded-lg text-xs text-blue-600 hover:bg-blue-100 shrink-0">Email</a>}
+              </div>
             ) : (
-              <input type={f.type} value={form[f.key] ?? ''} onChange={e => handleChange(f.key, f.type === 'number' ? +e.target.value : e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+              <input type={f.type} value={form[f.key] ?? ''} onChange={e => handleChange(f.key, f.type === 'number' ? +e.target.value : e.target.value)} className={inputClass} />
             )}
           </div>
         ))}
