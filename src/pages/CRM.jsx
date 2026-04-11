@@ -468,22 +468,12 @@ const FREGUESIAS = [
   'Torres do Mondego (Coimbra)',
   'Trouxemil e Torre de Vilela (Coimbra)',
   'Vil de Matos (Coimbra)',
-  // Condeixa-a-Nova (7 freguesias)
-  'Anobra (Condeixa)',
-  'Belide (Condeixa)',
-  'Condeixa-a-Nova e Condeixa-a-Velha (Condeixa)',
-  'Ega (Condeixa)',
-  'Furadouro (Condeixa)',
-  'Sebal e Belide (Condeixa)',
-  'Vila Seca e Bem da Fé (Condeixa)',
-  'Zambujal (Condeixa)',
-  // Mealhada (6 freguesias)
-  'Barcouço (Mealhada)',
-  'Casal Comba (Mealhada)',
-  'Luso (Mealhada)',
-  'Mealhada, Ventosa do Bairro e Antes (Mealhada)',
+  // Condeixa-a-Nova (centro)
+  'Condeixa-a-Nova (Condeixa)',
+  'Condeixa-a-Velha (Condeixa)',
+  // Mealhada (centro)
+  'Mealhada (Mealhada)',
   'Pampilhosa (Mealhada)',
-  'Vacariça (Mealhada)',
 ].sort()
 
 const FIELD_DEFS = {
