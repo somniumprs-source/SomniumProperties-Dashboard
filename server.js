@@ -11,6 +11,27 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
+// ── Auth middleware (Supabase JWT) ────────────────────────────
+import { createClient } from '@supabase/supabase-js'
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.supabase.co'
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
+const supabaseAdmin = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null
+
+app.use('/api', async (req, res, next) => {
+  // Se não há service key configurada, deixar passar (dev mode)
+  if (!supabaseAdmin) return next()
+  const token = req.headers.authorization?.replace('Bearer ', '')
+  if (!token) return res.status(401).json({ error: 'Autenticação necessária' })
+  try {
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
+    if (error || !user) return res.status(401).json({ error: 'Sessão inválida' })
+    req.user = user
+    next()
+  } catch {
+    res.status(401).json({ error: 'Sessão inválida' })
+  }
+})
+
 // ── CRM API (PostgreSQL/Supabase) ────────────────────────────
 try {
   const { initSchema } = await import('./src/db/pg.js')

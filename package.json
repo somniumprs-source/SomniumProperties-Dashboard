@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@notionhq/client": "^2.2.15",
+    "@supabase/supabase-js": "^2.103.0",
     "better-sqlite3": "^12.8.0",
     "clsx": "^2.1.0",
     "concurrently": "^9.2.1",
