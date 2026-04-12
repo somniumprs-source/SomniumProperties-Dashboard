@@ -2871,7 +2871,8 @@ app.get('/api/tarefas', async (req, res) => {
 app.post('/api/tarefas', async (req, res) => {
   try {
     const pgPool = (await import('./src/db/pg.js')).default
-    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, enviar_calendar } = req.body
+    const { pushTarefaToGCal } = await import('./src/db/calendarSync.js')
+    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas } = req.body
     if (!tarefa) return res.status(400).json({ error: 'tarefa é obrigatória' })
     const id = (await import('crypto')).randomUUID()
     const now = new Date().toISOString()
@@ -2882,17 +2883,10 @@ app.post('/api/tarefas', async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [id, tarefa, status || 'A fazer', categoria || null, inicio || null, fim || null, funcionario || null, horas, now, now]
     )
-    // Opcionalmente criar evento no Google Calendar
-    if (enviar_calendar && gcal && inicio) {
-      try {
-        const event = {
-          summary: tarefa,
-          description: `Funcionário: ${funcionario || 'N/A'}`,
-          start: { dateTime: inicio, timeZone: 'Europe/Lisbon' },
-          end: { dateTime: fim || new Date(new Date(inicio).getTime() + horas * 3600000).toISOString(), timeZone: 'Europe/Lisbon' },
-        }
-        await gcal.events.insert({ calendarId: GCAL_ID, resource: event })
-      } catch (calErr) { console.error('[gcal] auto-create:', calErr.message) }
+    // Sync automático com Google Calendar
+    if (inicio) {
+      pushTarefaToGCal(gcal, GCAL_ID, { id, tarefa, status: status || 'A fazer', inicio, fim, funcionario, tempo_horas: horas })
+        .catch(e => console.error('[gcal-sync] auto-push:', e.message))
     }
     res.status(201).json({ id, tarefa, status: status || 'A fazer', inicio, fim, funcionario, tempo_horas: horas })
   } catch (e) { res.status(500).json({ error: e.message }) }
@@ -2901,6 +2895,7 @@ app.post('/api/tarefas', async (req, res) => {
 app.put('/api/tarefas/:id', async (req, res) => {
   try {
     const pgPool = (await import('./src/db/pg.js')).default
+    const { updateGCalEvent, pushTarefaToGCal } = await import('./src/db/calendarSync.js')
     const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas } = req.body
     const now = new Date().toISOString()
     const horas = tempo_horas || (inicio && fim
@@ -2919,6 +2914,15 @@ app.put('/api/tarefas/:id', async (req, res) => {
       `UPDATE tarefas SET ${sets.join(', ')} WHERE id = $${params.length}`, params
     )
     if (!rowCount) return res.status(404).json({ error: 'Não encontrada' })
+    // Sync com GCal
+    const { rows: [updated] } = await pgPool.query('SELECT * FROM tarefas WHERE id = $1', [req.params.id])
+    if (updated) {
+      if (updated.gcal_event_id) {
+        updateGCalEvent(gcal, GCAL_ID, updated).catch(e => console.error('[gcal-sync]', e.message))
+      } else if (updated.inicio) {
+        pushTarefaToGCal(gcal, GCAL_ID, updated).catch(e => console.error('[gcal-sync]', e.message))
+      }
+    }
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -2926,11 +2930,60 @@ app.put('/api/tarefas/:id', async (req, res) => {
 app.delete('/api/tarefas/:id', async (req, res) => {
   try {
     const pgPool = (await import('./src/db/pg.js')).default
+    const { deleteGCalEvent } = await import('./src/db/calendarSync.js')
+    // Buscar gcal_event_id antes de apagar
+    const { rows: [tarefa] } = await pgPool.query('SELECT gcal_event_id FROM tarefas WHERE id = $1', [req.params.id])
     const { rowCount } = await pgPool.query('DELETE FROM tarefas WHERE id = $1', [req.params.id])
     if (!rowCount) return res.status(404).json({ error: 'Não encontrada' })
+    // Apagar evento do GCal
+    if (tarefa?.gcal_event_id) {
+      deleteGCalEvent(gcal, GCAL_ID, tarefa.gcal_event_id).catch(e => console.error('[gcal-sync]', e.message))
+    }
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
+
+// ════════════════════════════════════════════════════════════════
+// SYNC BIDIRECIONAL TAREFAS ↔ GOOGLE CALENDAR
+// ════════════════════════════════════════════════════════════════
+
+// Sync manual completo (push + pull)
+app.post('/api/calendar/sync', async (req, res) => {
+  try {
+    const { fullSync } = await import('./src/db/calendarSync.js')
+    const result = await fullSync(gcal, GCAL_ID, { days: parseInt(req.query.days) || 30 })
+    res.json({ ok: true, ...result })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Pull only (GCal → tarefas)
+app.post('/api/calendar/pull', async (req, res) => {
+  try {
+    const { pullGCalToTarefas } = await import('./src/db/calendarSync.js')
+    const result = await pullGCalToTarefas(gcal, GCAL_ID, { days: parseInt(req.query.days) || 30 })
+    res.json({ ok: true, ...result })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Auto-sync periódico (a cada 15 minutos)
+if (gcal) {
+  const GCAL_SYNC_INTERVAL = 15 * 60 * 1000 // 15 minutos
+  async function autoSyncCalendar() {
+    try {
+      const { fullSync } = await import('./src/db/calendarSync.js')
+      const result = await fullSync(gcal, GCAL_ID, { days: 14 })
+      if (result.push.synced > 0 || result.pull.created > 0 || result.pull.updated > 0) {
+        console.log(`[gcal-sync] Auto-sync: push=${result.push.synced} pull=${result.pull.created}+${result.pull.updated}`)
+      }
+    } catch (e) {
+      console.error('[gcal-sync] Auto-sync erro:', e.message)
+    }
+  }
+  // Primeiro sync 30s após arranque
+  setTimeout(autoSyncCalendar, 30000)
+  setInterval(autoSyncCalendar, GCAL_SYNC_INTERVAL)
+  console.log('[gcal-sync] Auto-sync ativo (a cada 15 min)')
+}
 
 // ════════════════════════════════════════════════════════════════
 // OKRs — Objectivos e Key Results editáveis
