@@ -3296,12 +3296,13 @@ app.get('/api/time-tracking', async (req, res) => {
       'Follow Up Consultores': /follow.*up.*consult/i,
       'Follow Up Investidores': /follow.*up.*invest|contacto.*invest/i,
       'Reunião Investidores': /reuni[ãa]o.*invest|call.*invest/i,
-      'Reunião Interna': /reuni[ãa]o.*(semanal|lu[ií]s|parceria)/i,
+      'Reunião de Equipa Somnium': /reuni[ãa]o.*(semanal|lu[ií]s|parceria|equipa)/i,
       'Visita': /visita/i,
       'Proposta': /proposta/i,
+      'Apresentação de Negócios': /apresenta[çc][ãa]o|revis[ãa]o.*apresenta/i,
       'SOP / Formação': /sop|forma[çc][ãa]o/i,
       'Planeamento': /planeamento|an[aá]lise.*semanal|defini[çc][ãa]o|contabiliza/i,
-      'Dashboard / Tech': /dashboard|claude.*code|notion|crm|tech|otimiza[çc][ãa]o.*notion/i,
+      'Implementação com IA': /dashboard|claude.*code|notion|crm|tech|otimiza[çc][ãa]o.*notion|implementa[çc][ãa]o.*claude/i,
       'Análise de Negócio': /an[aá]lise.*neg[oó]cio|analise.*potencial/i,
       'Contacto Consultores': /contacto.*consult|cold.*call.*consult/i,
     }
@@ -3366,7 +3367,7 @@ app.get('/api/time-tracking', async (req, res) => {
     const horasRelacional = round2((porCategoria['Follow Up Consultores']?.horas ?? 0) + (porCategoria['Follow Up Investidores']?.horas ?? 0) +
       (porCategoria['Reunião Investidores']?.horas ?? 0))
     const horasGestao = round2((porCategoria['Planeamento']?.horas ?? 0) + (porCategoria['SOP / Formação']?.horas ?? 0) +
-      (porCategoria['Dashboard / Tech']?.horas ?? 0) + (porCategoria['Reunião Interna']?.horas ?? 0))
+      (porCategoria['Implementação com IA']?.horas ?? 0) + (porCategoria['Reunião de Equipa Somnium']?.horas ?? 0))
 
     // Status das tarefas
     const statusTarefas = { aFazer: 0, emAndamento: 0, concluida: 0, atrasada: 0 }
