@@ -27,7 +27,7 @@ export function Login() {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
-          <img src="/logo-transparent.png" alt="Somnium Properties" className="mx-auto mb-4" style={{ height: 200 }} />
+          <img src="/logo-transparent.png" alt="Somnium Properties" className="mx-auto mb-4" style={{ height: 110 }} />
           <div className="h-px mx-auto w-32" style={{ background: `linear-gradient(90deg, transparent, ${GOLD}55, transparent)` }} />
         </div>
 
