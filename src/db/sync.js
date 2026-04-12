@@ -15,6 +15,7 @@ const NOTION_DBS = {
   negocios:     process.env.NOTION_DB_FATURACAO,
   despesas:     process.env.NOTION_DB_DESPESAS,
   consultores:  process.env.NOTION_DB_CONSULTORES,
+  tarefas:      process.env.NOTION_DB_TAREFAS,
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -154,6 +155,19 @@ const MAPPERS = {
       timing, notas: text(pr['Notas']),
     }
   },
+  tarefas: (p) => {
+    const pr = p.properties
+    const funcs = (pr['Funcionário']?.multi_select ?? []).map(s => s.name)
+    return {
+      tarefa: title(pr['Tarefa']),
+      status: statusP(pr['Status']) ?? 'A fazer',
+      inicio: dt(pr['Início da tarefa']),
+      fim: dt(pr['Fim da tarefa']),
+      funcionario: funcs.join(', ') || null,
+      tempo_horas: formula(pr['Tempo (Hora)']) ?? 0,
+      grupo_id: (pr['Grupo de Tarefas']?.relation ?? [])[0]?.id ?? null,
+    }
+  },
 }
 
 export async function syncFromNotion(table) {
@@ -180,7 +194,7 @@ export async function syncFromNotion(table) {
 
 export async function syncAllFromNotion() {
   const results = {}
-  for (const t of ['imoveis', 'investidores', 'consultores', 'negocios', 'despesas']) {
+  for (const t of ['imoveis', 'investidores', 'consultores', 'negocios', 'despesas', 'tarefas']) {
     results[t] = await syncFromNotion(t)
   }
   return results

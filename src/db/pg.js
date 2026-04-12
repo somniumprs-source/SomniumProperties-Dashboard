@@ -172,8 +172,11 @@ export async function initSchema() {
         inicio TEXT,
         fim TEXT,
         funcionario TEXT,
+        tempo_horas REAL DEFAULT 0,
+        grupo_id TEXT,
         created_at TEXT DEFAULT (NOW()::TEXT),
-        updated_at TEXT DEFAULT (NOW()::TEXT)
+        updated_at TEXT DEFAULT (NOW()::TEXT),
+        synced_at TEXT
       );
 
       CREATE TABLE IF NOT EXISTS audit_log (

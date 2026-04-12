@@ -132,4 +132,13 @@ export async function getConsultores() {
   return rows.map(mapConsultor)
 }
 
+export async function getTarefas() {
+  const { rows } = await pool.query('SELECT * FROM tarefas ORDER BY inicio DESC')
+  return rows.map(r => ({
+    id: r.id, tarefa: r.tarefa, status: r.status,
+    inicio: r.inicio, fim: r.fim, funcionario: r.funcionario,
+    tempoHoras: r.tempo_horas || 0, grupoId: r.grupo_id,
+  }))
+}
+
 export { round2 }

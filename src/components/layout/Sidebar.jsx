@@ -1,11 +1,13 @@
 import { NavLink } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { LayoutDashboard, TrendingUp, Database, Bell, Menu, X } from 'lucide-react'
+import { LayoutDashboard, TrendingUp, Users, Database, Bell, Clock, Menu, X } from 'lucide-react'
 
 const nav = [
   { to: '/',           label: 'Dashboard',  Icon: LayoutDashboard, end: true },
   { to: '/crm',        label: 'CRM',        Icon: Database },
+  { to: '/comercial',  label: 'Comercial',  Icon: Users },
   { to: '/financeiro', label: 'Financeiro', Icon: TrendingUp },
+  { to: '/operacoes',  label: 'Operacoes',  Icon: Clock },
   { to: '/alertas',    label: 'Alertas',    Icon: Bell, badge: true },
 ]
 
