@@ -303,11 +303,12 @@ export function Operacoes() {
   // Separar tarefas
   const ativas = tarefas.filter(t => t.status !== 'Concluída')
   const concluidas = tarefas.filter(t => t.status === 'Concluída')
-  const semanaAtivas = ativas.filter(isThisWeek)
+  const semanaTodas = tarefas.filter(isThisWeek) // inclui concluídas da semana
+  const concluidasPassadas = concluidas.filter(t => !isThisWeek(t)) // só arquivo de semanas anteriores
 
-  const filteredTarefas = taskFilter === 'semana' ? semanaAtivas
+  const filteredTarefas = taskFilter === 'semana' ? semanaTodas
     : taskFilter === 'pendentes' ? ativas
-    : taskFilter === 'arquivo' ? concluidas
+    : taskFilter === 'arquivo' ? concluidasPassadas
     : tarefas
 
   async function bulkDelete() {
@@ -409,9 +410,9 @@ export function Operacoes() {
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex gap-2 flex-wrap">
                   {[
-                    { id: 'semana', label: `Esta semana (${semanaAtivas.length})` },
+                    { id: 'semana', label: `Esta semana (${semanaTodas.length})` },
                     { id: 'pendentes', label: `Todas pendentes (${ativas.length})` },
-                    { id: 'arquivo', label: `Arquivo (${concluidas.length})` },
+                    { id: 'arquivo', label: `Arquivo (${concluidasPassadas.length})` },
                   ].map(f => (
                     <button key={f.id} onClick={() => { setTaskFilter(f.id); setSelectedIds(new Set()) }}
                       className={`px-3 py-1.5 text-xs font-medium rounded-lg border ${taskFilter === f.id ? 'border-yellow-300 bg-yellow-50 text-yellow-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
@@ -463,11 +464,11 @@ export function Operacoes() {
               />
             )}
 
-            {/* Board View — só mostra A fazer / Em andamento / Atrasada (concluidas escondem) */}
+            {/* Board View */}
             {viewMode === 'board' && taskFilter !== 'arquivo' && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {['A fazer', 'Em andamento', 'Atrasada'].map(status => {
-                  const pool = (taskFilter === 'semana' ? semanaAtivas : ativas).filter(t => t.status === status)
+              <div className={`grid grid-cols-1 gap-4 ${taskFilter === 'semana' ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
+                {(taskFilter === 'semana' ? ['A fazer', 'Em andamento', 'Atrasada', 'Concluída'] : ['A fazer', 'Em andamento', 'Atrasada']).map(status => {
+                  const pool = (taskFilter === 'semana' ? semanaTodas : ativas).filter(t => t.status === status)
                   const totalH = pool.reduce((s, t) => s + (t.tempo_horas || 0), 0)
                   return (
                     <div key={status} className="flex flex-col">
