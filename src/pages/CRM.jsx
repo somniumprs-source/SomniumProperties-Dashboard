@@ -108,6 +108,30 @@ export function CRM() {
         )
       },
     },
+    'Negócios': {
+      columns: ['Fase de obras','Fase de venda','Vendido'],
+      groupField: 'fase',
+      renderCard: (item) => (
+        <div>
+          <p className="text-sm font-semibold text-gray-800 truncate">{item.movimento}</p>
+          <p className="text-xs text-gray-500 mt-1">{item.categoria ?? '—'}</p>
+          {item.lucro_estimado > 0 && <p className="text-xs font-mono text-indigo-600 mt-1">Est. {EUR(item.lucro_estimado)}</p>}
+          {item.lucro_real > 0 && <p className="text-xs font-mono text-green-600">Real {EUR(item.lucro_real)}</p>}
+        </div>
+      ),
+    },
+    'Empreiteiros': {
+      columns: ['Qualificado','Em avaliação','Rejeitado','Inativo'],
+      groupField: 'estado',
+      renderCard: (item) => (
+        <div>
+          <p className="text-sm font-semibold text-gray-800 truncate">{item.nome}</p>
+          {item.empresa && <p className="text-xs text-gray-500 mt-1">{item.empresa}</p>}
+          {item.score > 0 && <p className="text-xs font-mono text-indigo-600 mt-1">Score: {item.score}</p>}
+          {item.custo_medio_m2 > 0 && <p className="text-xs text-gray-400 mt-1">{EUR(item.custo_medio_m2)}/m²</p>}
+        </div>
+      ),
+    },
   }
 
   const kanbanConfig = KANBAN_CONFIG[tab]
