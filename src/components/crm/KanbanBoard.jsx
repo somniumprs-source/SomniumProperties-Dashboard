@@ -45,6 +45,15 @@ const COLUMN_COLORS = {
   'Aberto Parcerias':       { bg: 'bg-blue-50',    border: 'border-blue-200',   header: 'bg-blue-100 text-blue-700' },
   'Acesso imoveis Off market': { bg: 'bg-purple-50', border: 'border-purple-200', header: 'bg-purple-100 text-purple-700' },
   'Consultores em Parceria': { bg: 'bg-green-50',  border: 'border-green-200',  header: 'bg-green-100 text-green-700' },
+  // Negócios — Fases
+  'Fase de obras':    { bg: 'bg-orange-50',  border: 'border-orange-200', header: 'bg-orange-100 text-orange-700' },
+  'Fase de venda':    { bg: 'bg-blue-50',    border: 'border-blue-200',   header: 'bg-blue-100 text-blue-700' },
+  'Vendido':          { bg: 'bg-green-50',   border: 'border-green-200',  header: 'bg-green-100 text-green-700' },
+  // Empreiteiros
+  'Qualificado':      { bg: 'bg-green-50',   border: 'border-green-200',  header: 'bg-green-100 text-green-700' },
+  'Em avaliação':     { bg: 'bg-yellow-50',  border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-700' },
+  'Rejeitado':        { bg: 'bg-red-50',     border: 'border-red-200',    header: 'bg-red-100 text-red-700' },
+  'Inativo':          { bg: 'bg-gray-50',    border: 'border-gray-200',   header: 'bg-gray-100 text-gray-700' },
 }
 
 const DEFAULT_COLORS = { bg: 'bg-gray-50', border: 'border-gray-200', header: 'bg-gray-100 text-gray-700' }
