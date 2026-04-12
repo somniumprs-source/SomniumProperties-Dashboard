@@ -29,9 +29,11 @@ const PULSE_BG = { excelente: 'rgba(34,197,94,0.1)', bom: 'rgba(201,168,76,0.1)'
 export function Dashboard() {
   const { kpis, loading, error, refresh } = useKPIs()
   const [pulse, setPulse] = useState(null)
+  const [metricas, setMetricas] = useState(null)
 
   useEffect(() => {
     fetch('/api/weekly-pulse').then(r => r.json()).then(setPulse).catch(() => {})
+    fetch('/api/metricas').then(r => r.json()).then(setMetricas).catch(() => {})
   }, [])
 
   const updatedAt = kpis?.updatedAt
@@ -174,6 +176,54 @@ export function Dashboard() {
             )}
           </div>
         )}
+
+        {/* Leading Indicators — Weekly Activity Score */}
+        {metricas?.avancado?.weeklyActivity && (() => {
+          const wa = metricas.avancado.weeklyActivity
+          const LABELS = {
+            imoveisAdicionados: 'Imoveis adicionados',
+            chamadasFeitas: 'Chamadas feitas',
+            visitasRealizadas: 'Visitas realizadas',
+            followUpsInvestidores: 'Follow-ups investidores',
+            followUpsConsultores: 'Follow-ups consultores',
+            reunioesInvestidores: 'Reunioes investidores',
+          }
+          return (
+            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700">Leading Indicators — Esta Semana</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">As metricas que preveem receita futura</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-2xl font-bold ${wa.score >= 70 ? 'text-green-600' : wa.score >= 40 ? 'text-yellow-600' : 'text-red-500'}`}>
+                    {wa.score}%
+                  </span>
+                  <span className="text-xs text-gray-400">Activity Score</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
+                {Object.entries(wa).filter(([k]) => k !== 'score').map(([key, v]) => {
+                  const pct = v.meta > 0 ? Math.min(100, Math.round(v.valor / v.meta * 100)) : 0
+                  return (
+                    <div key={key} className="flex flex-col gap-1.5">
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-xs text-gray-500">{LABELS[key] || key}</span>
+                        <span className={`text-sm font-bold ${pct >= 100 ? 'text-green-600' : pct >= 50 ? 'text-yellow-600' : 'text-red-500'}`}>
+                          {v.valor}/{v.meta}
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-2">
+                        <div className={`h-2 rounded-full transition-all ${pct >= 100 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-400' : 'bg-red-400'}`}
+                          style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Sections */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">

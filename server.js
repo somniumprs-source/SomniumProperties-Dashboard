@@ -345,7 +345,7 @@ function mapConsultor(p) {
 // ── Data source: PostgreSQL (Supabase) ────────────────────────────
 // Importa queries que lêem da DB local em vez do Notion
 import {
-  getNegócios, getDespesas, getImóveis, getInvestidores, getConsultores,
+  getNegócios, getDespesas, getImóveis, getInvestidores, getConsultores, getTarefas,
   round2 as round2PG,
 } from './src/db/queries.js'
 
@@ -1534,13 +1534,16 @@ function avg(arr) {
 
 app.get('/api/metricas', async (req, res) => {
   try {
-    const [imoveis, negocios, investidores] = await Promise.all([
+    const [imoveis, negocios, investidores, consultoresRaw, despesas] = await Promise.all([
       getImóveis().catch(() => []),
       getNegócios(),
       getInvestidores(),
+      getConsultores().catch(() => []),
+      getDespesas().catch(() => []),
     ])
 
     const { ano, month } = getMesAtual()
+    const now = new Date()
 
     // Normalização: suporta nomes antigos e novos do Notion em simultâneo
     const ESTADOS_NEGATIVOS_SET = new Set([
@@ -1761,6 +1764,862 @@ app.get('/api/metricas', async (req, res) => {
     // Deals simultâneos em execução
     const dealsSilmultaneos = negocios.filter(n => n.fase !== 'Vendido').length
 
+    // ════════════════════════════════════════════════════════════
+    // TRACKER KPIs — Framework completo (secções 1.1 a 3.3)
+    // ════════════════════════════════════════════════════════════
+
+    // Helper: filtra por período
+    const isQuarter = (dateStr, y, q) => {
+      if (!dateStr) return false
+      const d = new Date(dateStr)
+      return d.getFullYear() === y && Math.ceil((d.getMonth() + 1) / 3) === q
+    }
+    const isSemester = (dateStr, y, s) => {
+      if (!dateStr) return false
+      const d = new Date(dateStr)
+      return d.getFullYear() === y && (s === 1 ? d.getMonth() < 6 : d.getMonth() >= 6)
+    }
+    const currentQuarter = Math.ceil(month / 3)
+    const currentSemester = month <= 6 ? 1 : 2
+    const isThisWeek = (dateStr) => {
+      if (!dateStr) return false
+      const d = new Date(dateStr)
+      const diffDays = Math.floor((now - d) / 86400000)
+      return diffDays >= 0 && diffDays < 7
+    }
+
+    // ── 1.1 RECEITA / FATURAÇÃO ─────────────────────────────────
+
+    // Wholesaling deals
+    const negWH = negocios.filter(n => n.categoria === 'Wholesalling')
+    const negWHFechados = negWH.filter(n => n.fase === 'Vendido')
+    const negWHAno = negWH.filter(n => isYear(n.dataVenda || n.data, ano))
+    const negWHFechadosAno = negWHFechados.filter(n => isYear(n.dataVenda, ano))
+    const whReceitaAnual = round2(negWHFechadosAno.reduce((s,n) => s + (n.lucroReal || n.lucroEstimado), 0))
+    const whReceitaTrimestral = round2(negWHFechados
+      .filter(n => isQuarter(n.dataVenda, ano, currentQuarter))
+      .reduce((s,n) => s + (n.lucroReal || n.lucroEstimado), 0))
+    const whReceitaSemestral = round2(negWHFechados
+      .filter(n => isSemester(n.dataVenda, ano, currentSemester))
+      .reduce((s,n) => s + (n.lucroReal || n.lucroEstimado), 0))
+    const whLucros = negWHFechados.filter(n => n.lucroReal > 0 || n.lucroEstimado > 0).map(n => n.lucroReal || n.lucroEstimado)
+    const whFaturacaoMedia = avg(whLucros)
+    const whFaturacaoMinima = whLucros.length > 0 ? Math.min(...whLucros) : null
+    const whPctAcimaMedia = whLucros.length > 0 && whFaturacaoMedia
+      ? round2(whLucros.filter(v => v >= whFaturacaoMedia).length / whLucros.length * 100) : null
+
+    // CAEP deals
+    const negCAEP = negocios.filter(n => n.categoria === 'CAEP')
+    const negCAEPFechados = negCAEP.filter(n => n.fase === 'Vendido')
+    const negCAEPAno = negCAEPFechados.filter(n => isYear(n.dataVenda, ano))
+    const caepQuotaSomnium = negCAEP.map(n => n.quotaSomnium || round2((n.lucroReal || n.lucroEstimado) * 0.267))
+    const caepQuotaTotal = round2(caepQuotaSomnium.reduce((s,v) => s + v, 0))
+    const caepQuotaMedia = avg(caepQuotaSomnium.filter(v => v > 0))
+    const caepFaturacaoAnual = round2(negCAEPAno.reduce((s,n) => s + (n.quotaSomnium || (n.lucroReal || n.lucroEstimado) * 0.267), 0))
+    const caepFaturacaoMedia = avg(negCAEPFechados.map(n => n.quotaSomnium || (n.lucroReal || n.lucroEstimado) * 0.267).filter(v => v > 0))
+    // Desvio prazo: data real vs estimada
+    const caepDesviosPrazo = negCAEP
+      .filter(n => n.dataVenda && n.dataEstimada)
+      .map(n => ({ movimento: n.movimento, desvio: daysBetween(n.dataEstimada, n.dataVenda) }))
+    // Lucro estimado vs real
+    const caepEstVsReal = negCAEPFechados
+      .filter(n => n.lucroEstimado > 0)
+      .map(n => ({ movimento: n.movimento, estimado: n.lucroEstimado, real: n.lucroReal, desvio: n.lucroReal > 0 ? round2((n.lucroReal - n.lucroEstimado) / n.lucroEstimado * 100) : null }))
+
+    const trackerReceita = {
+      wholesaling: {
+        receitaAnual: whReceitaAnual, receitaTrimestral: whReceitaTrimestral,
+        receitaSemestral: whReceitaSemestral,
+        faturacaoMedia: whFaturacaoMedia, faturacaoMinima: whFaturacaoMinima,
+        pctAcimaMedia: whPctAcimaMedia,
+        acumuladoVsMeta: round2(whReceitaAnual / 50000 * 100),
+        metaAnual: 50000, metaTrimestral: 12500, metaSemestral: 25000,
+        nDeals: negWH.length, nFechados: negWHFechados.length,
+      },
+      caep: {
+        quotaSomniumTotal: caepQuotaTotal, quotaMediaPorNegocio: caepQuotaMedia,
+        faturacaoAnual: caepFaturacaoAnual, faturacaoMedia: caepFaturacaoMedia,
+        acumuladoVsMeta: round2(caepFaturacaoAnual / 50000 * 100),
+        metaAnual: 50000,
+        desviosPrazo: caepDesviosPrazo, lucroEstVsReal: caepEstVsReal,
+        nDeals: negCAEP.length, nFechados: negCAEPFechados.length,
+      },
+    }
+
+    // ── 1.2 TAXA DE CONVERSÃO ───────────────────────────────────
+
+    // Imóveis — funil detalhado
+    const imComChamada = imoveis.filter(i => !!i.dataChamada).length
+    const imComVisita = imoveis.filter(i => !!i.dataVisita).length
+    const imComProposta = imoveis.filter(i => !!i.dataProposta).length
+    const imComFecho = contratosAssinados  // negocios.length
+    const convImAddToChamada = leadsGerados > 0 ? round2(imComChamada / leadsGerados * 100) : null
+    const convImChamadaToVisita = imComChamada > 0 ? round2(imComVisita / imComChamada * 100) : null
+    const convImVisitaToProposta = imComVisita > 0 ? round2(imComProposta / imComVisita * 100) : null
+    const convImPropostaToFecho = imComProposta > 0 ? round2(imComFecho / imComProposta * 100) : null
+    const convImGlobal = leadsGerados > 0 ? round2(imComFecho / leadsGerados * 100) : null
+    // Mix WH/CAEP
+    const mixWH = negocios.length > 0 ? round2(negWH.length / negocios.length * 100) : null
+    const mixCAEP = negocios.length > 0 ? round2(negCAEP.length / negocios.length * 100) : null
+
+    // Investidores — funil detalhado
+    const invComReuniao = investidores.filter(i => !!i.dataReuniao).length
+    const invClassificados = investidores.filter(i => i.classificacao.length > 0).length
+    const invComInvestimento = investidores.filter(i => i.montanteInvestido > 0).length
+    const convInvContactToReuniao = total > 0 ? round2(invComReuniao / total * 100) : null
+    const convInvReuniaoToClassif = invComReuniao > 0 ? round2(invClassificados / invComReuniao * 100) : null
+    const convInvClassifTo1st = invClassificados > 0 ? round2(invComInvestimento / invClassificados * 100) : null
+    const convInvGlobal = total > 0 ? round2(emParceria.length / total * 100) : null
+
+    // Consultores — funil detalhado
+    const CONS_EM_PARCERIA = new Set(['Consultores em Parceria', 'Acesso imoveis Off market'])
+    const CONS_ATIVOS_SET = new Set(['Aberto Parcerias', 'Follow up', 'Follow Up', 'Acesso imoveis Off market', 'Consultores em Parceria'])
+    const consComCall = consultoresRaw.filter(c => !!c.dataPrimeiraCall).length
+    const consAtivos = consultoresRaw.filter(c => CONS_ATIVOS_SET.has(c.estatuto)).length
+    const consEmParceria = consultoresRaw.filter(c => CONS_EM_PARCERIA.has(c.estatuto)).length
+    const consComNegocio = consultoresRaw.filter(c => c.lucroGerado > 0 || c.imoveisEnviados > 0).length
+    // Consultores que trouxeram negócios que fecharam
+    const consComNegocioFechado = consultoresRaw.filter(c => c.lucroGerado > 0).length
+    const convConsContactToCall = consultoresRaw.length > 0 ? round2(consComCall / consultoresRaw.length * 100) : null
+    const convConsCallToAtivo = consComCall > 0 ? round2(consAtivos / consComCall * 100) : null
+    const convConsAtivoToNegocio = consAtivos > 0 ? round2(consComNegocio / consAtivos * 100) : null
+    const convConsGlobal = consultoresRaw.length > 0 ? round2(consComNegocioFechado / consultoresRaw.length * 100) : null
+
+    const trackerConversao = {
+      imoveis: {
+        addToChamada: convImAddToChamada, metaAddToChamada: 80,
+        chamadaToVisita: convImChamadaToVisita, metaChamadaToVisita: 35,
+        visitaToProposta: convImVisitaToProposta, metaVisitaToProposta: 50,
+        propostaToFecho: convImPropostaToFecho, metaPropostaToFecho: 35,
+        global: convImGlobal, metaGlobal: 6,
+        mixWH, mixCAEP,
+        totais: { leads: leadsGerados, chamadas: imComChamada, visitas: imComVisita, propostas: imComProposta, fechos: imComFecho },
+      },
+      investidores: {
+        contactToReuniao: convInvContactToReuniao, metaContactToReuniao: 40,
+        reuniaoToClassificado: convInvReuniaoToClassif, metaReuniaoToClassificado: 50,
+        classificadoTo1st: convInvClassifTo1st, metaClassificadoTo1st: 30,
+        global: convInvGlobal, metaGlobal: 15,
+        totais: { contactos: total, reunioes: invComReuniao, classificados: invClassificados, investidores: invComInvestimento, emParceria: emParceria.length },
+      },
+      consultores: {
+        contactToCall: convConsContactToCall, metaContactToCall: 70,
+        callToAtivo: convConsCallToAtivo, metaCallToAtivo: 30,
+        ativoToNegocio: convConsAtivoToNegocio, metaAtivoToNegocio: 50,
+        global: convConsGlobal, metaGlobal: 5,
+        totais: { contactos: consultoresRaw.length, calls: consComCall, ativos: consAtivos, comNegocio: consComNegocio, comFecho: consComNegocioFechado },
+      },
+    }
+
+    // ── 1.3 TICKET MÉDIO ────────────────────────────────────────
+
+    // Wholesaling
+    const whLucroMedio = avg(negWHFechados.filter(n => n.lucroReal > 0).map(n => n.lucroReal)) || whFaturacaoMedia
+    const whLucroMinimo = negWHFechados.filter(n => n.lucroReal > 0).length > 0
+      ? Math.min(...negWHFechados.filter(n => n.lucroReal > 0).map(n => n.lucroReal)) : whFaturacaoMinima
+
+    // CAEP
+    const caepCapitalMedioPorNegocio = avg(negCAEP.filter(n => n.capitalTotal > 0).map(n => n.capitalTotal))
+    const caepCapitalMedioPorInvestidor = (() => {
+      const caps = negCAEP.filter(n => n.capitalTotal > 0 && n.nInvestidores > 0)
+      return avg(caps.map(n => n.capitalTotal / n.nInvestidores))
+    })()
+    const caepNMedioInvestidores = avg(negCAEP.filter(n => n.nInvestidores > 0).map(n => n.nInvestidores))
+    const caepLucroSobreCapital = (() => {
+      const caps = negCAEP.filter(n => n.capitalTotal > 0)
+      const lucro = caps.reduce((s,n) => s + (n.quotaSomnium || (n.lucroReal || n.lucroEstimado) * 0.267), 0)
+      const capital = caps.reduce((s,n) => s + n.capitalTotal, 0)
+      return capital > 0 ? round2(lucro / capital * 100) : null
+    })()
+    const caepLucroPorMes = (() => {
+      const deals = negCAEP.filter(n => n.dataCompra && n.dataVenda)
+      return avg(deals.map(n => {
+        const meses = daysBetween(n.dataCompra, n.dataVenda) / 30
+        const quota = n.quotaSomnium || (n.lucroReal || n.lucroEstimado) * 0.267
+        return meses > 0 ? round2(quota / meses) : null
+      }).filter(v => v != null))
+    })()
+    const caepRoiInvestidor = avg(investidores.filter(i => i.roiInvestidor > 0).map(i => i.roiInvestidor))
+
+    // Consultores
+    const consAskPriceMedio = avg(imoveis.filter(i => i.nomeConsultor && i.askPrice > 0).map(i => i.askPrice))
+    const consLucroMedioGerado = avg(consultoresRaw.filter(c => c.lucroGerado > 0).map(c => c.lucroGerado))
+    const pctNegociosViaConsultor = negocios.length > 0
+      ? round2(negocios.filter(n => n.consultorIds.length > 0).length / negocios.length * 100) : null
+    const rankingConsultores = consultoresRaw
+      .filter(c => c.lucroGerado > 0)
+      .map(c => ({ nome: c.nome, lucroGerado: c.lucroGerado, classificacao: c.classificacao }))
+      .sort((a,b) => b.lucroGerado - a.lucroGerado)
+
+    const trackerTicketMedio = {
+      wholesaling: {
+        lucroMedio: whLucroMedio, metaLucroMedio: 8333,
+        lucroMinimo: whLucroMinimo, metaLucroMinimo: 5000, metaAlvo: 10000,
+        pctAcimaMedia: whPctAcimaMedia,
+      },
+      caep: {
+        capitalMedioPorNegocio: caepCapitalMedioPorNegocio,
+        capitalMedioPorInvestidor: caepCapitalMedioPorInvestidor,
+        nMedioInvestidores: caepNMedioInvestidores,
+        lucroSomniumSobreCapital: caepLucroSobreCapital, metaLucroSobreCapital: 8,
+        lucroSomniumPorMes: caepLucroPorMes, metaLucroPorMes: 2500,
+        roiInvestidor: caepRoiInvestidor, metaRoiInvestidor: 20,
+      },
+      consultores: {
+        askPriceMedio: consAskPriceMedio,
+        lucroMedioGerado: consLucroMedioGerado, metaLucroMedio: 8000,
+        pctNegociosViaConsultor, metaPctViaConsultor: 40,
+        rankingValor: rankingConsultores.slice(0, 10),
+      },
+    }
+
+    // ── 1.4 MARGEM DE LUCRO ────────────────────────────────────
+
+    const margensPorNegocio = negocios.map(n => {
+      // Encontrar imóvel relacionado para ask price
+      const imovelRel = imoveis.find(i => n.imovel.includes(i.id))
+      const askPrice = imovelRel?.askPrice || 0
+      const custoTotal = askPrice + (n.custoRealObra || imovelRel?.custoObra || 0)
+      const margemBruta = askPrice > 0 ? round2((n.lucroEstimado || 0) / askPrice * 100) : null
+      const margemLiquida = margemBruta != null ? round2(margemBruta * 0.79) : null // ~21% IRC
+      const desvioObra = n.custoRealObra > 0 && imovelRel?.custoObra > 0
+        ? round2((n.custoRealObra - imovelRel.custoObra) / imovelRel.custoObra * 100) : null
+      return { movimento: n.movimento, categoria: n.categoria, margemBruta, margemLiquida, desvioObra }
+    })
+
+    const trackerMargem = {
+      wholesaling: {
+        margemBrutaMedia: avg(margensPorNegocio.filter(m => m.categoria === 'Wholesalling' && m.margemBruta != null).map(m => m.margemBruta)),
+        margemLiquidaMedia: avg(margensPorNegocio.filter(m => m.categoria === 'Wholesalling' && m.margemLiquida != null).map(m => m.margemLiquida)),
+        desvioObraMedia: avg(margensPorNegocio.filter(m => m.categoria === 'Wholesalling' && m.desvioObra != null).map(m => m.desvioObra)),
+      },
+      caep: {
+        roiMedio: avg(negCAEP.filter(n => n.capitalTotal > 0).map(n => {
+          const lucro = n.lucroReal || n.lucroEstimado
+          return lucro > 0 ? round2(lucro / n.capitalTotal * 100) : null
+        }).filter(v => v != null)),
+        margemSomniumPct: 26.7,
+        desvioObraMedia: avg(margensPorNegocio.filter(m => m.categoria === 'CAEP' && m.desvioObra != null).map(m => m.desvioObra)),
+      },
+      porNegocio: margensPorNegocio.filter(m => m.margemBruta != null),
+    }
+
+    // ── 2.1 CAC (Custo de Aquisição) ─────────────────────────────
+
+    const CUSTO_HORA = 15
+    const CUSTOS_FIXOS_MENSAIS = 360.40
+    const burnRateMensal = round2(despesas.filter(d => d.timing === 'Mensalmente').reduce((s,d) => s + d.custoMensal, 0)) || CUSTOS_FIXOS_MENSAIS
+    // Meses desde início (usar data mais antiga de qualquer registo)
+    const datasIniciais = [
+      ...imoveis.map(i => i.dataAdicionado).filter(Boolean),
+      ...investidores.map(i => i.dataPrimeiroContacto).filter(Boolean),
+      ...consultoresRaw.map(c => c.dataInicio || c.dataPrimeiraCall).filter(Boolean),
+    ].map(d => new Date(d)).sort((a,b) => a - b)
+    const dataInicio = datasIniciais.length > 0 ? datasIniciais[0] : new Date(ano, 0, 1)
+    const mesesOperacao = Math.max(1, Math.ceil((now - dataInicio) / (30.44 * 86400000)))
+    const custoTotalOperacao = round2(burnRateMensal * mesesOperacao)
+
+    // Imóveis CAC
+    const cacPorNegocioFechado = imComFecho > 0 ? round2(custoTotalOperacao / imComFecho) : null
+    const custoPorImovelAdd = leadsGerados > 0 ? round2(custoTotalOperacao / leadsGerados) : null
+    const custoPorVisita = imComVisita > 0 ? round2(custoTotalOperacao / imComVisita) : null
+    const custoPorEstudo = imoveis.filter(i => !!i.dataEstudoMercado).length > 0
+      ? round2(custoTotalOperacao / imoveis.filter(i => !!i.dataEstudoMercado).length) : null
+    const chamadasPorVisita = imComVisita > 0 ? round2(imComChamada / imComVisita) : null
+    const visitasPorProposta = imComProposta > 0 ? round2(imComVisita / imComProposta) : null
+    const propostasPorNegocio = imComFecho > 0 ? round2(imComProposta / imComFecho) : null
+
+    // Investidores CAC
+    const custoPorInvestidorAtivo = emParceria.length > 0 ? round2(custoTotalOperacao * 0.3 / emParceria.length) : null
+    const tempoAte1stInvest = avg(investidores
+      .filter(i => i.dataPrimeiroContacto && i.dataCapitalTransferido)
+      .map(i => daysBetween(i.dataPrimeiroContacto, i.dataCapitalTransferido))
+      .filter(v => v != null && v > 0 && v < 730))
+
+    // Consultores CAC
+    const custoPorConsultorAtivo = consAtivos > 0 ? round2(custoTotalOperacao * 0.2 / consAtivos) : null
+    const consDescontinuados = consultoresRaw.filter(c => c.estatuto === 'Cold Call' || !CONS_ATIVOS_SET.has(c.estatuto)).length
+    const descontinuadosVsAtivos = consAtivos > 0 ? round2(consDescontinuados / consAtivos) : null
+
+    // Ferramentas / receita
+    const receitaTotal = round2(negocios.reduce((s,n) => s + (n.lucroReal || n.lucroEstimado), 0))
+    const ferramentasSobreReceita = receitaTotal > 0
+      ? round2(burnRateMensal * mesesOperacao / receitaTotal * 100) : null
+
+    const trackerCAC = {
+      constantes: { custoHora: CUSTO_HORA, custosFixosMensais: CUSTOS_FIXOS_MENSAIS, burnRateMensal, mesesOperacao, custoTotalOperacao },
+      imoveis: {
+        cacPorNegocio: cacPorNegocioFechado, metaCACNegocio: 600,
+        custoPorImovel: custoPorImovelAdd, metaCustoPorImovel: 45,
+        custoPorVisita, metaCustoPorVisita: 30,
+        custoPorEstudo, metaCustoPorEstudo: 100,
+        chamadasPorVisita, metaChamadasPorVisita: 3,
+        visitasPorProposta, metaVisitasPorProposta: 2,
+        propostasPorNegocio, metaPropostasPorNegocio: 3,
+      },
+      investidores: {
+        custoPorInvestidorAtivo, metaCusto: 150,
+        tempoAte1stInvest, metaTempo: 90,
+      },
+      consultores: {
+        custoPorConsultorAtivo, metaCusto: 50,
+        descontinuadosVsAtivos, metaRatio: 5,
+      },
+      ferramentas: {
+        ferramentasSobreReceita, metaPct: 5,
+      },
+    }
+
+    // ── 2.2 CICLO DE VENDAS ─────────────────────────────────────
+
+    // Imóveis — tempo entre fases
+    const cicloImLeadToChamada = avg(imoveis.map(i => daysBetween(i.dataAdicionado, i.dataChamada)).filter(v => v != null && v >= 0 && v < 365))
+    const cicloImChamadaToVisita = avg(imoveis.map(i => daysBetween(i.dataChamada, i.dataVisita)).filter(v => v != null && v >= 0 && v < 365))
+    const cicloImVisitaToEstudo = avg(imoveis.map(i => daysBetween(i.dataVisita, i.dataEstudoMercado)).filter(v => v != null && v >= 0 && v < 365))
+    const cicloImEstudoToProposta = avg(imoveis.map(i => daysBetween(i.dataEstudoMercado, i.dataProposta)).filter(v => v != null && v >= 0 && v < 365))
+    const cicloImPropostaToFecho = avg(imoveis.map(i => daysBetween(i.dataProposta, i.dataPropostaAceite)).filter(v => v != null && v >= 0 && v < 365))
+    const cicloImLeadToFecho = avg(imoveis
+      .filter(i => i.dataAdicionado && i.dataPropostaAceite)
+      .map(i => daysBetween(i.dataAdicionado, i.dataPropostaAceite))
+      .filter(v => v != null && v >= 0 && v < 730))
+
+    // Fase com maior demora
+    const fasesIm = [
+      { fase: 'Lead → Chamada', dias: cicloImLeadToChamada },
+      { fase: 'Chamada → Visita', dias: cicloImChamadaToVisita },
+      { fase: 'Visita → Estudo', dias: cicloImVisitaToEstudo },
+      { fase: 'Estudo → Proposta', dias: cicloImEstudoToProposta },
+      { fase: 'Proposta → Fecho', dias: cicloImPropostaToFecho },
+    ].filter(f => f.dias != null).sort((a,b) => b.dias - a.dias)
+    const faseMaiorDemora = fasesIm.length > 0 ? fasesIm[0] : null
+
+    // Investidores — tempo entre fases
+    const cicloInvContactoToReuniao = avg(investidores
+      .map(i => daysBetween(i.dataPrimeiroContacto, i.dataReuniao))
+      .filter(v => v != null && v >= 0 && v < 365))
+    const cicloInvNegocioToAprovacao = avg(investidores
+      .filter(i => i.dataApresentacaoNegocio && i.dataAprovacaoNegocio)
+      .map(i => daysBetween(i.dataApresentacaoNegocio, i.dataAprovacaoNegocio))
+      .filter(v => v != null && v >= 0 && v < 365))
+    const cicloInvContactoToCapital = tempoMedioCaptacao // já calculado
+
+    // Consultores — tempo entre fases
+    const cicloConsCallToNegocio = avg(consultoresRaw
+      .filter(c => c.dataPrimeiraCall && c.lucroGerado > 0)
+      .map(c => {
+        // Usar data follow up como proxy para 1º negócio
+        const dataRef = c.dataFollowUp || c.dataProximoFollowUp
+        return daysBetween(c.dataPrimeiraCall, dataRef)
+      })
+      .filter(v => v != null && v >= 0 && v < 365))
+    const cicloConsFollowUpMedio = avg(consultoresRaw
+      .filter(c => c.dataFollowUp && c.dataProximoFollowUp)
+      .map(c => daysBetween(c.dataFollowUp, c.dataProximoFollowUp))
+      .filter(v => v != null && v > 0 && v < 180))
+
+    const trackerCiclo = {
+      imoveis: {
+        leadToChamada: cicloImLeadToChamada, metaLeadToChamada: 1,
+        chamadaToVisita: cicloImChamadaToVisita, metaChamadaToVisita: 7,
+        visitaToEstudo: cicloImVisitaToEstudo, metaVisitaToEstudo: 14,
+        estudoToProposta: cicloImEstudoToProposta, metaEstudoToProposta: 7,
+        propostaToFecho: cicloImPropostaToFecho, metaPropostaToFecho: 30,
+        leadToFechoTotal: cicloImLeadToFecho, metaLeadToFecho: 60,
+        faseMaiorDemora,
+        fases: fasesIm,
+      },
+      investidores: {
+        contactoToReuniao: cicloInvContactoToReuniao, metaContactoToReuniao: 14,
+        negocioToAprovacao: cicloInvNegocioToAprovacao, metaNegocioToAprovacao: 14,
+        contactoToCapitalTotal: cicloInvContactoToCapital, metaContactoToCapital: 90,
+      },
+      consultores: {
+        callTo1stNegocio: cicloConsCallToNegocio, metaCallToNegocio: 30,
+        followUpMedio: cicloConsFollowUpMedio, metaFollowUp: 15,
+      },
+    }
+
+    // ── 2.3 MOTIVO DE PERDA ─────────────────────────────────────
+
+    // Imóveis — já temos motivosDescarte, expandir
+    const motivosPorPct = Object.entries(motivosDescarte).map(([motivo, count]) => ({
+      motivo, count, pct: imoveisDescartados.length > 0 ? round2(count / imoveisDescartados.length * 100) : 0,
+    })).sort((a,b) => b.count - a.count)
+
+    // Fase média de descarte
+    const FASES_ORDEM = ['Adicionado', 'Pendentes', 'Em Análise', 'Visita Marcada', 'Follow UP', 'Estudo de VVR', 'Enviar proposta ao investidor']
+    const faseDescarte = {}
+    for (const i of imoveisDescartados) {
+      // Última fase atingida baseada nas datas
+      let ultimaFase = 'Adicionado'
+      if (i.dataChamada) ultimaFase = 'Chamada'
+      if (i.dataVisita) ultimaFase = 'Visita'
+      if (i.dataEstudoMercado) ultimaFase = 'Estudo'
+      if (i.dataProposta) ultimaFase = 'Proposta'
+      faseDescarte[ultimaFase] = (faseDescarte[ultimaFase] ?? 0) + 1
+    }
+
+    // Investidores — motivos
+    const motivosNaoAprovacao = {}
+    const motivosInatividade = {}
+    for (const inv of investidores) {
+      if (inv.motivoNaoAprovacao) {
+        motivosNaoAprovacao[inv.motivoNaoAprovacao] = (motivosNaoAprovacao[inv.motivoNaoAprovacao] ?? 0) + 1
+      }
+      if (inv.motivoInatividade) {
+        motivosInatividade[inv.motivoInatividade] = (motivosInatividade[inv.motivoInatividade] ?? 0) + 1
+      }
+    }
+
+    // Consultores — motivos descontinuação
+    const motivosDescontinuacao = {}
+    const consDescontinuadosList = consultoresRaw.filter(c => c.motivoDescontinuacao)
+    for (const c of consDescontinuadosList) {
+      motivosDescontinuacao[c.motivoDescontinuacao] = (motivosDescontinuacao[c.motivoDescontinuacao] ?? 0) + 1
+    }
+    const tempoMedioAteDescontinuacao = avg(consultoresRaw
+      .filter(c => !CONS_ATIVOS_SET.has(c.estatuto) && c.dataPrimeiraCall)
+      .map(c => {
+        const dataFim = c.dataFollowUp || c.dataProximoFollowUp
+        return daysBetween(c.dataPrimeiraCall, dataFim)
+      })
+      .filter(v => v != null && v > 0 && v < 365))
+
+    const trackerMotivosPerda = {
+      imoveis: {
+        top3: motivosPorPct.slice(0, 3),
+        todosPorPct: motivosPorPct,
+        faseMediaDescarte: Object.entries(faseDescarte).map(([fase, count]) => ({ fase, count })).sort((a,b) => b.count - a.count),
+        taxaDescarte: leadsGerados > 0 ? round2(imoveisDescartados.length / leadsGerados * 100) : 0,
+      },
+      investidores: {
+        motivosNaoAprovacao: Object.entries(motivosNaoAprovacao).map(([motivo, count]) => ({ motivo, count })).sort((a,b) => b.count - a.count),
+        motivosInatividade: Object.entries(motivosInatividade).map(([motivo, count]) => ({ motivo, count })).sort((a,b) => b.count - a.count),
+      },
+      consultores: {
+        motivosDescontinuacao: Object.entries(motivosDescontinuacao).map(([motivo, count]) => ({ motivo, count })).sort((a,b) => b.count - a.count),
+        descontinuadosVsAtivos: descontinuadosVsAtivos,
+        tempoMedioAteDescontinuacao, metaTempo: 30,
+      },
+    }
+
+    // ── 2.4 VOLUME DE ATIVIDADES ─────────────────────────────────
+
+    // Semana atual e mês atual
+    const imAddSemana = imoveis.filter(i => isThisWeek(i.dataAdicionado)).length
+    const imAddMes = imoveisDoMes.length
+    const imChamadasSemana = imoveis.filter(i => isThisWeek(i.dataChamada)).length
+    const imChamadasMes = imoveis.filter(i => isMonth(i.dataChamada, ano, month)).length
+    const imVisitasSemana = imoveis.filter(i => isThisWeek(i.dataVisita)).length
+    const imVisitasMes = imoveis.filter(i => isMonth(i.dataVisita, ano, month)).length
+    const imEstudosMes = imoveis.filter(i => isMonth(i.dataEstudoMercado, ano, month)).length
+    const imPropostasMes = imoveis.filter(i => isMonth(i.dataProposta, ano, month)).length
+    const imFollowUpAtivos = imoveis.filter(i => i.estado === 'Follow UP').length
+
+    // Investidores volume
+    const invNovosContactadosSemana = investidores.filter(i => isThisWeek(i.dataPrimeiroContacto)).length
+    const invReunioesSemana = investidores.filter(i => isThisWeek(i.dataReuniao)).length
+    const invSemContacto30d = investidores.filter(i => {
+      const ult = i.dataUltimoContacto || i.dataReuniao || i.dataPrimeiroContacto
+      if (!ult) return true
+      return Math.floor((now - new Date(ult)) / 86400000) > 30
+    }).length
+
+    // Consultores volume
+    const consFollowUpsSemana = consultoresRaw.filter(c => isThisWeek(c.dataFollowUp)).length
+    const consSemContacto15d = consultoresRaw.filter(c => {
+      if (!CONS_ATIVOS_SET.has(c.estatuto)) return false
+      const ult = c.dataProximoFollowUp || c.dataFollowUp
+      if (!ult) return true
+      return Math.floor((now - new Date(ult)) / 86400000) > 15
+    }).length
+    const consAtivosFollowUpEmDia = consultoresRaw.filter(c => {
+      if (!CONS_ATIVOS_SET.has(c.estatuto)) return false
+      if (!c.dataProximoFollowUp) return false
+      return new Date(c.dataProximoFollowUp) >= now
+    }).length
+
+    const trackerVolume = {
+      imoveis: {
+        addSemana: imAddSemana, metaAddSemana: 10,
+        addMes: imAddMes,
+        chamadasSemana: imChamadasSemana, metaChamadasSemana: 8,
+        chamadasMes: imChamadasMes,
+        visitasSemana: imVisitasSemana, metaVisitasSemana: 2,
+        visitasMes: imVisitasMes,
+        estudosMes: imEstudosMes, metaEstudosMes: 1,
+        propostasMes: imPropostasMes, metaPropostasMes: 1,
+        followUpAtivos: imFollowUpAtivos, metaFollowUpAtivos: 5,
+      },
+      investidores: {
+        novosContactadosSemana: invNovosContactadosSemana, metaNovos: 3,
+        reunioesSemana: invReunioesSemana, metaReunioes: 2,
+        semContacto30d: invSemContacto30d, metaSemContacto: 0,
+      },
+      consultores: {
+        followUpsSemana: consFollowUpsSemana, metaFollowUps: 10,
+        semContacto15d: consSemContacto15d, metaSemContacto: 0,
+        ativosFollowUpEmDia: consAtivosFollowUpEmDia, metaAtivosEmDia: 5,
+      },
+    }
+
+    // ── 3.1 LTV ─────────────────────────────────────────────────
+
+    // Investidores LTV
+    const ltvInvestidores = investidores
+      .filter(i => i.montanteInvestido > 0)
+      .map(i => ({
+        nome: i.nome, ltv: i.montanteInvestido, negocios: i.numeroNegocios,
+        status: i.status, classificacao: i.classificacao,
+        roiInvestidor: i.roiInvestidor, roiAnualizado: i.roiAnualizadoInvestidor,
+      }))
+      .sort((a,b) => b.ltv - a.ltv)
+    const ltvAcumulado = round2(investidores.reduce((s,i) => s + i.montanteInvestido, 0))
+    const capitalMobilizado = ltvAcumulado
+
+    // Consultores LTV
+    const ltvConsultores = consultoresRaw
+      .filter(c => c.lucroGerado > 0)
+      .map(c => ({ nome: c.nome, ltv: c.lucroGerado, estatuto: c.estatuto, classificacao: c.classificacao }))
+      .sort((a,b) => b.ltv - a.ltv)
+
+    const trackerLTV = {
+      investidores: {
+        porInvestidor: ltvInvestidores, metaLTV: 25000,
+        ltvAcumulado, capitalMobilizado,
+      },
+      consultores: {
+        porConsultor: ltvConsultores, metaLTV: 8000,
+        top5: ltvConsultores.slice(0, 5),
+      },
+    }
+
+    // ── 3.2 TAXA DE RECOMPRA ─────────────────────────────────────
+
+    const invQueReinvestiram = investidores.filter(i => i.numeroNegocios > 1)
+    const nReinvestiram2026 = invQueReinvestiram.filter(i =>
+      isYear(i.dataCapitalTransferido, 2026) || isYear(i.dataAprovacaoNegocio, 2026)
+    ).length
+    const consCom2Negocios = consultoresRaw.filter(c => c.lucroGerado > 0 && c.imoveisEnviados >= 2)
+
+    const trackerRecompra = {
+      investidores: {
+        nReinvestiram: invQueReinvestiram.length,
+        nReinvestiram2026, metaReinvestiram: 1,
+      },
+      consultores: {
+        pctCom2Negocios: consultoresRaw.length > 0 ? round2(consCom2Negocios.length / consultoresRaw.length * 100) : null,
+        nCom2Negocios: consCom2Negocios.length, metaN: 2,
+      },
+    }
+
+    // ── 3.3 CHURN RATE ───────────────────────────────────────────
+
+    const invInativosSem60d = investidores.filter(i => {
+      if (ESTADOS_PARCERIA.has(i.status)) return false
+      const ult = i.dataUltimoContacto || i.dataReuniao || i.dataPrimeiroContacto
+      if (!ult) return false
+      return Math.floor((now - new Date(ult)) / 86400000) > 60
+    }).length
+
+    const invPerdidos = investidores.filter(i =>
+      i.motivoInatividade || i.motivoNaoAprovacao
+    ).length
+
+    const consPctDescontinuados = consultoresRaw.length > 0
+      ? round2(consDescontinuados / consultoresRaw.length * 100) : null
+    const consInativosMais30d = consultoresRaw.filter(c => {
+      if (!CONS_ATIVOS_SET.has(c.estatuto)) return false
+      const ult = c.dataProximoFollowUp || c.dataFollowUp
+      if (!ult) return true
+      return Math.floor((now - new Date(ult)) / 86400000) > 30
+    }).length
+
+    const trackerChurn = {
+      investidores: {
+        inativosSem60d: invInativosSem60d, metaInativos: 0,
+        perdidosPeriodo: invPerdidos,
+        motivoMaisFrequente: Object.entries(motivosInatividade).sort((a,b) => b[1] - a[1])[0]?.[0] || null,
+      },
+      consultores: {
+        pctDescontinuados: consPctDescontinuados, metaPct: 60,
+        inativosMais30d: consInativosMais30d, metaInativos: 0,
+        tempoMedioAteDescontinuacao, metaTempo: 30,
+        motivoMaisFrequente: Object.entries(motivosDescontinuacao).sort((a,b) => b[1] - a[1])[0]?.[0] || null,
+      },
+    }
+
+    // ════════════════════════════════════════════════════════════
+    // KPIs AVANÇADOS — Métricas em falta identificadas na análise
+    // ════════════════════════════════════════════════════════════
+
+    // ── Pipeline Velocity ──
+    // (N.º deals × ticket médio × win rate) / ciclo em dias
+    const ticketMedioGlobal = negocios.length > 0
+      ? round2(negocios.reduce((s,n) => s + (n.lucroEstimado || 0), 0) / negocios.length) : 0
+    const winRate = negocios.length > 0
+      ? round2(negocios.filter(n => n.fase === 'Vendido').length / negocios.length * 100) : 0
+    const cicloMedioDias = velocidadeCicloCompleto || cicloImLeadToFecho || 60
+    const pipelineVelocity = cicloMedioDias > 0 && negocios.length > 0
+      ? round2((negocios.length * ticketMedioGlobal * (winRate / 100)) / cicloMedioDias) : null
+
+    // ── Lead Response Time ──
+    // Tempo entre data adicionado e primeira acção (chamada, visita, estudo)
+    const leadResponseTimes = imoveis.map(i => {
+      if (!i.dataAdicionado) return null
+      const primeiraAccao = [i.dataChamada, i.dataVisita, i.dataEstudoMercado].filter(Boolean).sort()[0]
+      if (!primeiraAccao) return null
+      return daysBetween(i.dataAdicionado, primeiraAccao)
+    }).filter(v => v != null && v >= 0 && v < 365)
+    const leadResponseTimeMedio = avg(leadResponseTimes)
+    const leadResponseTimeSemana = avg(imoveis
+      .filter(i => isThisWeek(i.dataAdicionado))
+      .map(i => {
+        const primeiraAccao = [i.dataChamada, i.dataVisita].filter(Boolean).sort()[0]
+        return primeiraAccao ? daysBetween(i.dataAdicionado, primeiraAccao) : null
+      }).filter(v => v != null && v >= 0))
+    const leadsNaoContactados = imoveis.filter(i =>
+      i.dataAdicionado && !i.dataChamada && !i.dataVisita &&
+      !ESTADOS_NEGATIVOS_SET.has(i.estado)
+    ).length
+
+    // ── Deal Qualification Score ──
+    // Score automático: ROI estimado × liquidez da zona × spread
+    const dealScores = imoveisAtivos.map(i => {
+      let score = 0
+      // ROI: >20% = 30pts, >10% = 20pts, >0 = 10pts
+      if (i.roi > 20) score += 30; else if (i.roi > 10) score += 20; else if (i.roi > 0) score += 10
+      // Spread: ask > proposta indica margem
+      if (i.askPrice > 0 && i.valorProposta > 0) {
+        const spread = (i.askPrice - i.valorProposta) / i.askPrice * 100
+        if (spread > 15) score += 20; else if (spread > 5) score += 10
+      }
+      // Dados completos: cada campo +5pts
+      if (i.origem) score += 5
+      if (i.zonas?.length > 0) score += 5
+      if (i.modeloNegocio) score += 5
+      if (i.custoObra > 0) score += 5
+      if (i.valorVendaRemodelado > 0) score += 10
+      // Estado avançado
+      if (ESTADOS_AVANCADOS_SET.has(i.estado)) score += 10
+      return { nome: i.nome, estado: i.estado, score, roi: i.roi, modeloNegocio: i.modeloNegocio }
+    }).sort((a,b) => b.score - a.score)
+
+    // ── Win/Loss Ratio por Fonte ──
+    const winLossPorFonte = {}
+    for (const i of imoveis) {
+      const origem = i.origem ?? 'Outro'
+      if (!winLossPorFonte[origem]) winLossPorFonte[origem] = { total: 0, wins: 0, losses: 0, ativos: 0 }
+      winLossPorFonte[origem].total++
+      if (ESTADOS_NEGATIVOS_SET.has(i.estado)) winLossPorFonte[origem].losses++
+      else winLossPorFonte[origem].ativos++
+    }
+    // Associar wins via negócios com imóvel ligado
+    for (const n of negocios) {
+      const imovelRel = imoveis.find(i => n.imovel.includes(i.id))
+      if (imovelRel) {
+        const origem = imovelRel.origem ?? 'Outro'
+        if (winLossPorFonte[origem]) winLossPorFonte[origem].wins++
+      }
+    }
+    const winLossBySource = Object.entries(winLossPorFonte).map(([fonte, v]) => ({
+      fonte, total: v.total, wins: v.wins, losses: v.losses, ativos: v.ativos,
+      winRate: v.total > 0 ? round2(v.wins / v.total * 100) : 0,
+      lossRate: v.total > 0 ? round2(v.losses / v.total * 100) : 0,
+    })).sort((a,b) => b.winRate - a.winRate)
+
+    // ── Consultant Activation Rate (real — últimos 30 dias) ──
+    const consEnviaramUltimos30d = consultoresRaw.filter(c => {
+      // Consultor que teve actividade nos últimos 30 dias
+      const datas = [c.dataFollowUp, c.dataProximoFollowUp, c.dataPrimeiraCall].filter(Boolean)
+      return datas.some(d => daysBetween(d, now.toISOString().slice(0,10)) != null &&
+        Math.abs(daysBetween(d, now.toISOString().slice(0,10))) <= 30)
+    }).length
+    const consultantActivationRate = consultoresRaw.length > 0
+      ? round2(consEnviaramUltimos30d / consultoresRaw.length * 100) : null
+
+    // ── Follow-up Effectiveness ──
+    // % de investidores com follow-up que avançaram de fase
+    const invComFollowUp = investidores.filter(i => i.dataUltimoContacto).length
+    const invQueAvancaram = investidores.filter(i =>
+      i.dataUltimoContacto && ESTADOS_PROPOSTA_INV.has(i.status)
+    ).length
+    const followUpEffectivenessInv = invComFollowUp > 0
+      ? round2(invQueAvancaram / invComFollowUp * 100) : null
+
+    const consComFollowUp = consultoresRaw.filter(c => c.dataFollowUp).length
+    const consQueAvancaram = consultoresRaw.filter(c =>
+      c.dataFollowUp && CONS_EM_PARCERIA.has(c.estatuto)
+    ).length
+    const followUpEffectivenessCons = consComFollowUp > 0
+      ? round2(consQueAvancaram / consComFollowUp * 100) : null
+
+    // ── Zona / Geography Performance ──
+    const zonaPerformance = {}
+    for (const i of imoveis) {
+      const z = i.zonas?.[0] || i.zona || 'Sem zona'
+      if (!zonaPerformance[z]) zonaPerformance[z] = {
+        total: 0, ativos: 0, descartados: 0, comDeal: 0,
+        roiTotal: 0, roiCount: 0, askTotal: 0, cicloTotal: 0, cicloCount: 0,
+      }
+      zonaPerformance[z].total++
+      if (ESTADOS_NEGATIVOS_SET.has(i.estado)) zonaPerformance[z].descartados++
+      else zonaPerformance[z].ativos++
+      if (i.roi > 0) { zonaPerformance[z].roiTotal += i.roi; zonaPerformance[z].roiCount++ }
+      if (i.askPrice > 0) zonaPerformance[z].askTotal += i.askPrice
+      const ciclo = daysBetween(i.dataAdicionado, i.dataPropostaAceite || i.dataProposta)
+      if (ciclo && ciclo > 0 && ciclo < 365) { zonaPerformance[z].cicloTotal += ciclo; zonaPerformance[z].cicloCount++ }
+    }
+    // Associar deals por zona
+    for (const n of negocios) {
+      const imovelRel = imoveis.find(i => n.imovel.includes(i.id))
+      if (imovelRel) {
+        const z = imovelRel.zonas?.[0] || imovelRel.zona || 'Sem zona'
+        if (zonaPerformance[z]) zonaPerformance[z].comDeal++
+      }
+    }
+    const zonaStats = Object.entries(zonaPerformance).map(([zona, v]) => ({
+      zona, total: v.total, ativos: v.ativos, descartados: v.descartados, comDeal: v.comDeal,
+      roiMedio: v.roiCount > 0 ? round2(v.roiTotal / v.roiCount) : null,
+      askMedio: v.total > 0 ? round2(v.askTotal / v.total) : null,
+      cicloMedio: v.cicloCount > 0 ? round2(v.cicloTotal / v.cicloCount) : null,
+      winRate: v.total > 0 ? round2(v.comDeal / v.total * 100) : 0,
+      taxaDescarte: v.total > 0 ? round2(v.descartados / v.total * 100) : 0,
+    })).filter(z => z.total > 0).sort((a,b) => b.total - a.total)
+
+    // ── CAC por Cohort Mensal ──
+    const cacCohort = {}
+    for (const i of imoveis) {
+      if (!i.dataAdicionado) continue
+      const m = i.dataAdicionado.substring(0, 7)
+      if (!cacCohort[m]) cacCohort[m] = { leads: 0, chamadas: 0, visitas: 0, propostas: 0, fechos: 0 }
+      cacCohort[m].leads++
+      if (i.dataChamada) cacCohort[m].chamadas++
+      if (i.dataVisita) cacCohort[m].visitas++
+      if (i.dataProposta) cacCohort[m].propostas++
+    }
+    for (const n of negocios) {
+      const imovelRel = imoveis.find(i => n.imovel.includes(i.id))
+      if (imovelRel?.dataAdicionado) {
+        const m = imovelRel.dataAdicionado.substring(0, 7)
+        if (cacCohort[m]) cacCohort[m].fechos++
+      }
+    }
+    const cacPorCohort = Object.entries(cacCohort).map(([mes, v]) => ({
+      mes, ...v,
+      custoMes: burnRateMensal,
+      cacPorLead: v.leads > 0 ? round2(burnRateMensal / v.leads) : null,
+      cacPorDeal: v.fechos > 0 ? round2(burnRateMensal / v.fechos) : null,
+      taxaConversao: v.leads > 0 ? round2(v.fechos / v.leads * 100) : 0,
+    })).sort((a,b) => a.mes.localeCompare(b.mes))
+
+    // ── RE Financial Metrics ──
+    // Cash-on-Cash Return (retorno sobre capital próprio)
+    // IRR simplificado, Equity Multiple
+    const reFinancials = negocios.map(n => {
+      const imovelRel = imoveis.find(i => n.imovel.includes(i.id))
+      const capitalProprio = (imovelRel?.askPrice || 0) + (n.custoRealObra || imovelRel?.custoObra || 0) - (n.capitalTotal || 0)
+      const lucro = n.lucroReal || n.lucroEstimado || 0
+      const cashOnCash = capitalProprio > 0 ? round2(lucro / capitalProprio * 100) : null
+      // Holding em meses
+      const holdingDays = daysBetween(n.dataCompra || n.data, n.dataVenda || now.toISOString().slice(0,10))
+      const holdingMonths = holdingDays ? round2(holdingDays / 30.44) : null
+      // IRR simplificado (anualizado)
+      const irr = cashOnCash != null && holdingMonths && holdingMonths > 0
+        ? round2(Math.pow(1 + cashOnCash / 100, 12 / holdingMonths) * 100 - 100) : null
+      // Equity Multiple
+      const equityMultiple = capitalProprio > 0 ? round2((capitalProprio + lucro) / capitalProprio) : null
+      // DPI (Distributions to Paid-In) — para investidores
+      const dpi = n.capitalTotal > 0 && n.lucroReal > 0
+        ? round2(n.lucroReal / n.capitalTotal) : null
+      return {
+        movimento: n.movimento, categoria: n.categoria, fase: n.fase,
+        capitalProprio: round2(capitalProprio), capitalPassivo: n.capitalTotal,
+        lucro, cashOnCash, holdingMonths, irr, equityMultiple, dpi,
+      }
+    })
+
+    // ── Weekly Activity Score (Leading Indicators) ──
+    const weeklyActivity = {
+      imoveisAdicionados: { valor: imAddSemana, meta: 10 },
+      chamadasFeitas: { valor: imChamadasSemana, meta: 8 },
+      visitasRealizadas: { valor: imVisitasSemana, meta: 2 },
+      followUpsInvestidores: { valor: investidores.filter(i => isThisWeek(i.dataUltimoContacto)).length, meta: 5 },
+      followUpsConsultores: { valor: consFollowUpsSemana, meta: 10 },
+      reunioesInvestidores: { valor: invReunioesSemana, meta: 2 },
+    }
+    const weeklyScore = (() => {
+      const items = Object.values(weeklyActivity)
+      const totalPct = items.reduce((s, i) => s + Math.min(100, Math.round(i.valor / i.meta * 100)), 0)
+      return round2(totalPct / items.length)
+    })()
+
+    // ── OKRs Q2 2026 ──
+    const okrs = [
+      {
+        objectivo: 'Fechar o primeiro deal WH',
+        krs: [
+          { kr: '10 imóveis adicionados/semana × 4 semanas', valor: imAddSemana, meta: 10, unidade: '/sem', tipo: 'semanal' },
+          { kr: '4 visitas realizadas', valor: imComVisita, meta: 4, unidade: '', tipo: 'acumulado' },
+          { kr: '2 propostas enviadas', valor: imComProposta, meta: 2, unidade: '', tipo: 'acumulado' },
+          { kr: '1 contrato assinado', valor: contratosAssinados, meta: 1, unidade: '', tipo: 'acumulado' },
+        ],
+      },
+      {
+        objectivo: 'Captar primeiro capital passivo',
+        krs: [
+          { kr: 'Contactar 20 investidores sem contacto >30d', valor: Math.max(0, 20 - invSemContacto30d), meta: 20, unidade: '', tipo: 'acumulado' },
+          { kr: '3 reuniões com investidores A/B', valor: investidores.filter(i => i.classificacao.some(c => ['A','B'].includes(c)) && i.dataReuniao).length, meta: 3, unidade: '', tipo: 'acumulado' },
+          { kr: '1 NDA assinado', valor: investidores.filter(i => i.ndaAssinado).length, meta: 1, unidade: '', tipo: 'acumulado' },
+          { kr: '1 transferência de capital', valor: comCapital, meta: 1, unidade: '', tipo: 'acumulado' },
+        ],
+      },
+      {
+        objectivo: 'Activar rede de consultores',
+        krs: [
+          { kr: '10 follow-ups/semana × 4 semanas', valor: consFollowUpsSemana, meta: 10, unidade: '/sem', tipo: 'semanal' },
+          { kr: '5 consultores com follow-up em dia', valor: consAtivosFollowUpEmDia, meta: 5, unidade: '', tipo: 'acumulado' },
+          { kr: '2 imóveis via consultores/mês', valor: imoveis.filter(i => i.nomeConsultor && isMonth(i.dataAdicionado, ano, month)).length, meta: 2, unidade: '/mês', tipo: 'mensal' },
+          { kr: 'Data Primeira Call em consultores ativos', valor: consultoresRaw.filter(c => CONS_ATIVOS_SET.has(c.estatuto) && c.dataPrimeiraCall).length, meta: consAtivos, unidade: '', tipo: 'acumulado' },
+        ],
+      },
+      {
+        objectivo: 'Disciplina de dados ≥ 80%',
+        krs: [
+          { kr: '0 motivos descarte "Não registado"', valor: Math.max(0, (motivosDescarte['Não registado'] ?? 0)), meta: 0, unidade: '', tipo: 'zero', invertido: true },
+          { kr: '100% imóveis ativos com Modelo Negócio', valor: imoveisAtivos.filter(i => i.modeloNegocio).length, meta: imoveisAtivos.length, unidade: '', tipo: 'acumulado' },
+          { kr: '100% investidores A/B com Data Último Contacto', valor: investClassif.filter(i => i.dataUltimoContacto).length, meta: investClassif.length, unidade: '', tipo: 'acumulado' },
+        ],
+      },
+    ]
+    // Calculate OKR progress
+    for (const okr of okrs) {
+      let totalPct = 0
+      for (const kr of okr.krs) {
+        if (kr.invertido) {
+          kr.progresso = kr.valor === 0 ? 100 : 0
+        } else {
+          kr.progresso = kr.meta > 0 ? Math.min(100, round2(kr.valor / kr.meta * 100)) : 0
+        }
+        totalPct += kr.progresso
+      }
+      okr.progresso = round2(totalPct / okr.krs.length)
+    }
+
+    const trackerAvancado = {
+      pipelineVelocity: { valor: pipelineVelocity, ticketMedio: ticketMedioGlobal, winRate, cicloMedioDias },
+      leadResponseTime: { medio: leadResponseTimeMedio, semana: leadResponseTimeSemana, naoContactados: leadsNaoContactados, metaDias: 1 },
+      dealQualification: dealScores,
+      winLossBySource: winLossBySource,
+      consultantActivation: { taxa: consultantActivationRate, activosReais: consEnviaramUltimos30d, totalConsultores: consultoresRaw.length },
+      followUpEffectiveness: { investidores: followUpEffectivenessInv, consultores: followUpEffectivenessCons },
+      zonaPerformance: zonaStats,
+      cacCohort: cacPorCohort,
+      reFinancials,
+      weeklyActivity: { ...weeklyActivity, score: weeklyScore },
+      okrs,
+    }
+
     res.json({
       updatedAt: new Date().toISOString(),
 
@@ -1770,6 +2629,7 @@ app.get('/api/metricas', async (req, res) => {
         dealsFechadosMes:     dealsMes.length,
         capitalPassivoCaptado: capitalCaptado,
         velocidadeMediaCiclo: tempoMedioNegociacao,
+        weeklyScore,
       },
 
       // ── Pipeline 1 — Imóveis ──
@@ -1851,9 +2711,379 @@ app.get('/api/metricas', async (req, res) => {
         pipelineValue,
         capitalDisponivel,
       },
+
+      // ── Tracker KPIs (1.1 a 3.3) ──
+      tracker: {
+        receita:       trackerReceita,
+        conversao:     trackerConversao,
+        ticketMedio:   trackerTicketMedio,
+        margem:        trackerMargem,
+        cac:           trackerCAC,
+        ciclo:         trackerCiclo,
+        motivosPerda:  trackerMotivosPerda,
+        volume:        trackerVolume,
+        ltv:           trackerLTV,
+        recompra:      trackerRecompra,
+        churn:         trackerChurn,
+      },
+
+      // ── KPIs Avançados + OKRs ──
+      avancado: trackerAvancado,
     })
   } catch (err) {
     console.error('[metricas]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ════════════════════════════════════════════════════════════════
+// GOOGLE CALENDAR — Leitura e escrita de eventos
+// ════════════════════════════════════════════════════════════════
+let gcal = null
+try {
+  const { readFileSync } = await import('fs')
+  const credPath = path.join(__dirname, 'google-credentials.json')
+  const creds = JSON.parse(readFileSync(credPath, 'utf8'))
+  const { google } = await import('googleapis')
+  const gAuth = new google.auth.GoogleAuth({
+    credentials: creds,
+    scopes: [
+      'https://www.googleapis.com/auth/calendar.readonly',
+      'https://www.googleapis.com/auth/calendar.events',
+    ],
+  })
+  gcal = google.calendar({ version: 'v3', auth: gAuth })
+  console.log('[gcal] Google Calendar conectado')
+} catch (e) {
+  console.warn('[gcal] Google Calendar não disponível:', e.message)
+}
+
+const GCAL_ID = process.env.GOOGLE_CALENDAR_ID || 'somniumprs@gmail.com'
+
+// Ler eventos da semana (ou período custom)
+app.get('/api/calendar/events', async (req, res) => {
+  if (!gcal) return res.status(503).json({ error: 'Google Calendar não configurado' })
+  try {
+    const days = parseInt(req.query.days) || 7
+    const past = parseInt(req.query.past) || 0
+    const now = new Date()
+    const timeMin = new Date(now)
+    timeMin.setDate(timeMin.getDate() - past)
+    const timeMax = new Date(now)
+    timeMax.setDate(timeMax.getDate() + days)
+
+    const r = await gcal.events.list({
+      calendarId: GCAL_ID,
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 100,
+    })
+    const events = (r.data.items ?? []).map(e => ({
+      id: e.id,
+      titulo: e.summary || '(sem título)',
+      descricao: e.description || '',
+      inicio: e.start?.dateTime || e.start?.date,
+      fim: e.end?.dateTime || e.end?.date,
+      diaInteiro: !!e.start?.date && !e.start?.dateTime,
+      local: e.location || '',
+      link: e.htmlLink,
+    }))
+    res.json({ events, total: events.length })
+  } catch (e) {
+    console.error('[gcal] events:', e.message)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Criar evento no Google Calendar (a partir de uma tarefa)
+app.post('/api/calendar/events', async (req, res) => {
+  if (!gcal) return res.status(503).json({ error: 'Google Calendar não configurado' })
+  try {
+    const { titulo, descricao, inicio, fim, diaInteiro } = req.body
+    if (!titulo || !inicio) return res.status(400).json({ error: 'titulo e inicio são obrigatórios' })
+
+    const event = {
+      summary: titulo,
+      description: descricao || '',
+    }
+    if (diaInteiro) {
+      event.start = { date: inicio.slice(0, 10) }
+      event.end = { date: (fim || inicio).slice(0, 10) }
+    } else {
+      event.start = { dateTime: inicio, timeZone: 'Europe/Lisbon' }
+      event.end = { dateTime: fim || new Date(new Date(inicio).getTime() + 3600000).toISOString(), timeZone: 'Europe/Lisbon' }
+    }
+
+    const r = await gcal.events.insert({ calendarId: GCAL_ID, resource: event })
+    res.json({ ok: true, eventId: r.data.id, link: r.data.htmlLink })
+  } catch (e) {
+    console.error('[gcal] create:', e.message)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ════════════════════════════════════════════════════════════════
+// TAREFAS CRUD DIRECTO (independente do Notion)
+// ════════════════════════════════════════════════════════════════
+app.get('/api/tarefas', async (req, res) => {
+  try {
+    const pgPool = (await import('./src/db/pg.js')).default
+    const { limit = 100, status, funcionario } = req.query
+    let q = 'SELECT * FROM tarefas'
+    const params = []
+    const conds = []
+    if (status) { conds.push(`status = $${params.length + 1}`); params.push(status) }
+    if (funcionario) { conds.push(`funcionario ILIKE $${params.length + 1}`); params.push(`%${funcionario}%`) }
+    if (conds.length) q += ' WHERE ' + conds.join(' AND ')
+    q += ' ORDER BY inicio DESC NULLS LAST LIMIT $' + (params.length + 1)
+    params.push(+limit)
+    const { rows } = await pgPool.query(q, params)
+    res.json({ data: rows, total: rows.length })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+app.post('/api/tarefas', async (req, res) => {
+  try {
+    const pgPool = (await import('./src/db/pg.js')).default
+    const { tarefa, status, inicio, fim, funcionario, tempo_horas, enviar_calendar } = req.body
+    if (!tarefa) return res.status(400).json({ error: 'tarefa é obrigatória' })
+    const id = (await import('crypto')).randomUUID()
+    const now = new Date().toISOString()
+    const horas = tempo_horas || (inicio && fim
+      ? round2((new Date(fim) - new Date(inicio)) / 3600000) : 0)
+    await pgPool.query(
+      `INSERT INTO tarefas (id, tarefa, status, inicio, fim, funcionario, tempo_horas, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [id, tarefa, status || 'A fazer', inicio || null, fim || null, funcionario || null, horas, now, now]
+    )
+    // Opcionalmente criar evento no Google Calendar
+    if (enviar_calendar && gcal && inicio) {
+      try {
+        const event = {
+          summary: tarefa,
+          description: `Funcionário: ${funcionario || 'N/A'}`,
+          start: { dateTime: inicio, timeZone: 'Europe/Lisbon' },
+          end: { dateTime: fim || new Date(new Date(inicio).getTime() + horas * 3600000).toISOString(), timeZone: 'Europe/Lisbon' },
+        }
+        await gcal.events.insert({ calendarId: GCAL_ID, resource: event })
+      } catch (calErr) { console.error('[gcal] auto-create:', calErr.message) }
+    }
+    res.status(201).json({ id, tarefa, status: status || 'A fazer', inicio, fim, funcionario, tempo_horas: horas })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+app.put('/api/tarefas/:id', async (req, res) => {
+  try {
+    const pgPool = (await import('./src/db/pg.js')).default
+    const { tarefa, status, inicio, fim, funcionario, tempo_horas } = req.body
+    const now = new Date().toISOString()
+    const horas = tempo_horas || (inicio && fim
+      ? round2((new Date(fim) - new Date(inicio)) / 3600000) : undefined)
+    const sets = []; const params = []
+    if (tarefa !== undefined) { sets.push(`tarefa = $${params.length + 1}`); params.push(tarefa) }
+    if (status !== undefined) { sets.push(`status = $${params.length + 1}`); params.push(status) }
+    if (inicio !== undefined) { sets.push(`inicio = $${params.length + 1}`); params.push(inicio) }
+    if (fim !== undefined) { sets.push(`fim = $${params.length + 1}`); params.push(fim) }
+    if (funcionario !== undefined) { sets.push(`funcionario = $${params.length + 1}`); params.push(funcionario) }
+    if (horas !== undefined) { sets.push(`tempo_horas = $${params.length + 1}`); params.push(horas) }
+    sets.push(`updated_at = $${params.length + 1}`); params.push(now)
+    params.push(req.params.id)
+    const { rowCount } = await pgPool.query(
+      `UPDATE tarefas SET ${sets.join(', ')} WHERE id = $${params.length}`, params
+    )
+    if (!rowCount) return res.status(404).json({ error: 'Não encontrada' })
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+app.delete('/api/tarefas/:id', async (req, res) => {
+  try {
+    const pgPool = (await import('./src/db/pg.js')).default
+    const { rowCount } = await pgPool.query('DELETE FROM tarefas WHERE id = $1', [req.params.id])
+    if (!rowCount) return res.status(404).json({ error: 'Não encontrada' })
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ════════════════════════════════════════════════════════════════
+// TIME TRACKING — Operações & Horas
+// ════════════════════════════════════════════════════════════════
+app.get('/api/time-tracking', async (req, res) => {
+  try {
+    const [tarefas, negocios, despesas] = await Promise.all([
+      getTarefas(),
+      getNegócios(),
+      getDespesas().catch(() => []),
+    ])
+
+    const now = new Date()
+    const { ano, month } = getMesAtual()
+    const CUSTO_HORA = 15
+
+    // Filtrar outliers (>24h numa tarefa = erro de dados)
+    const tarefasValidas = tarefas.filter(t => t.tempoHoras > 0 && t.tempoHoras <= 24)
+    const totalHoras = round2(tarefasValidas.reduce((s, t) => s + t.tempoHoras, 0))
+    const totalTarefas = tarefasValidas.length
+
+    // ── Por funcionário ──
+    const porFuncionario = {}
+    for (const t of tarefasValidas) {
+      const f = t.funcionario || 'Não atribuído'
+      if (!porFuncionario[f]) porFuncionario[f] = { horas: 0, tarefas: 0, concluidas: 0 }
+      porFuncionario[f].horas += t.tempoHoras
+      porFuncionario[f].tarefas++
+      if (t.status === 'Concluída') porFuncionario[f].concluidas++
+    }
+    const funcionarios = Object.entries(porFuncionario).map(([nome, v]) => ({
+      nome, horas: round2(v.horas), tarefas: v.tarefas, concluidas: v.concluidas,
+      custoTotal: round2(v.horas * CUSTO_HORA),
+      taxaConclusao: v.tarefas > 0 ? round2(v.concluidas / v.tarefas * 100) : 0,
+    })).sort((a, b) => b.horas - a.horas)
+
+    // ── Por mês ──
+    const porMes = {}
+    for (const t of tarefasValidas) {
+      if (!t.inicio) continue
+      const m = t.inicio.substring(0, 7)
+      if (!porMes[m]) porMes[m] = { horas: 0, tarefas: 0, custoHoras: 0 }
+      porMes[m].horas += t.tempoHoras
+      porMes[m].tarefas++
+      porMes[m].custoHoras += t.tempoHoras * CUSTO_HORA
+    }
+    const meses = Object.entries(porMes)
+      .map(([mes, v]) => ({ mes, horas: round2(v.horas), tarefas: v.tarefas, custoHoras: round2(v.custoHoras) }))
+      .sort((a, b) => a.mes.localeCompare(b.mes))
+
+    // ── Por mês + funcionário ──
+    const porMesFunc = {}
+    for (const t of tarefasValidas) {
+      if (!t.inicio) continue
+      const m = t.inicio.substring(0, 7)
+      const f = t.funcionario || 'Não atribuído'
+      const key = `${m}|${f}`
+      if (!porMesFunc[key]) porMesFunc[key] = { mes: m, funcionario: f, horas: 0, tarefas: 0 }
+      porMesFunc[key].horas += t.tempoHoras
+      porMesFunc[key].tarefas++
+    }
+    const mesesFuncionario = Object.values(porMesFunc)
+      .map(v => ({ ...v, horas: round2(v.horas) }))
+      .sort((a, b) => a.mes.localeCompare(b.mes) || a.funcionario.localeCompare(b.funcionario))
+
+    // ── Por tipo de actividade (normalizado) ──
+    const CATEGORIAS = {
+      'Cold Call': /cold call/i,
+      'Pesquisa de Imóveis': /pesquisa.*im[oó]ve/i,
+      'Estudo de Mercado': /estudo.*mercado/i,
+      'Follow Up Consultores': /follow.*up.*consult/i,
+      'Follow Up Investidores': /follow.*up.*invest|contacto.*invest/i,
+      'Reunião Investidores': /reuni[ãa]o.*invest|call.*invest/i,
+      'Reunião Interna': /reuni[ãa]o.*(semanal|lu[ií]s|parceria)/i,
+      'Visita': /visita/i,
+      'Proposta': /proposta/i,
+      'SOP / Formação': /sop|forma[çc][ãa]o/i,
+      'Planeamento': /planeamento|an[aá]lise.*semanal|defini[çc][ãa]o|contabiliza/i,
+      'Dashboard / Tech': /dashboard|claude.*code|notion|crm|tech|otimiza[çc][ãa]o.*notion/i,
+      'Análise de Negócio': /an[aá]lise.*neg[oó]cio|analise.*potencial/i,
+      'Contacto Consultores': /contacto.*consult|cold.*call.*consult/i,
+    }
+    const porCategoria = {}
+    for (const t of tarefasValidas) {
+      let cat = 'Outros'
+      for (const [nome, regex] of Object.entries(CATEGORIAS)) {
+        if (regex.test(t.tarefa)) { cat = nome; break }
+      }
+      if (!porCategoria[cat]) porCategoria[cat] = { horas: 0, tarefas: 0 }
+      porCategoria[cat].horas += t.tempoHoras
+      porCategoria[cat].tarefas++
+    }
+    const categorias = Object.entries(porCategoria)
+      .map(([categoria, v]) => ({
+        categoria, horas: round2(v.horas), tarefas: v.tarefas,
+        pctHoras: totalHoras > 0 ? round2(v.horas / totalHoras * 100) : 0,
+        custoTotal: round2(v.horas * CUSTO_HORA),
+      }))
+      .sort((a, b) => b.horas - a.horas)
+
+    // ── Mês actual ──
+    const horasMesActual = round2(tarefasValidas
+      .filter(t => t.inicio && isMonth(t.inicio, ano, month))
+      .reduce((s, t) => s + t.tempoHoras, 0))
+    const tarefasMesActual = tarefasValidas.filter(t => t.inicio && isMonth(t.inicio, ano, month)).length
+
+    // ── Semana actual ──
+    const horasSemana = round2(tarefasValidas
+      .filter(t => {
+        if (!t.inicio) return false
+        const d = new Date(t.inicio)
+        return (now - d) / 86400000 < 7
+      })
+      .reduce((s, t) => s + t.tempoHoras, 0))
+
+    // ── KPIs derivados ──
+    // Revenue per hour
+    const receitaTotal = round2(negocios.reduce((s, n) => s + (n.lucroReal || n.lucroEstimado), 0))
+    const receitaRealizada = round2(negocios.filter(n => n.fase === 'Vendido').reduce((s, n) => s + n.lucroReal, 0))
+    const rph = totalHoras > 0 ? round2(receitaTotal / totalHoras) : null
+    const rphRealizado = totalHoras > 0 && receitaRealizada > 0 ? round2(receitaRealizada / totalHoras) : null
+
+    // Custo por hora (horas × 15€ + custos fixos rateados)
+    const burnRateMensal = round2(despesas.filter(d => d.timing === 'Mensalmente').reduce((s, d) => s + d.custoMensal, 0)) || 360.40
+    const custoHorasTotal = round2(totalHoras * CUSTO_HORA)
+    const mesesOp = meses.length || 1
+    const custoFixoTotal = round2(burnRateMensal * mesesOp)
+    const custoOperacaoTotal = round2(custoHorasTotal + custoFixoTotal)
+
+    // Horas por deal
+    const horasPorDeal = negocios.length > 0 ? round2(totalHoras / negocios.length) : null
+    const custoPorDeal = negocios.length > 0 ? round2(custoOperacaoTotal / negocios.length) : null
+
+    // Produtividade (horas concluídas / horas totais)
+    const horasConcluidas = round2(tarefasValidas.filter(t => t.status === 'Concluída').reduce((s, t) => s + t.tempoHoras, 0))
+    const taxaProdutividade = totalHoras > 0 ? round2(horasConcluidas / totalHoras * 100) : null
+
+    // Horas por tipo de actividade comercial (para CAC refinado)
+    const horasProspeccao = round2((porCategoria['Cold Call']?.horas ?? 0) + (porCategoria['Pesquisa de Imóveis']?.horas ?? 0) + (porCategoria['Contacto Consultores']?.horas ?? 0))
+    const horasAnalise = round2((porCategoria['Estudo de Mercado']?.horas ?? 0) + (porCategoria['Análise de Negócio']?.horas ?? 0))
+    const horasRelacional = round2((porCategoria['Follow Up Consultores']?.horas ?? 0) + (porCategoria['Follow Up Investidores']?.horas ?? 0) +
+      (porCategoria['Reunião Investidores']?.horas ?? 0))
+    const horasGestao = round2((porCategoria['Planeamento']?.horas ?? 0) + (porCategoria['SOP / Formação']?.horas ?? 0) +
+      (porCategoria['Dashboard / Tech']?.horas ?? 0) + (porCategoria['Reunião Interna']?.horas ?? 0))
+
+    // Status das tarefas
+    const statusTarefas = { aFazer: 0, emAndamento: 0, concluida: 0, atrasada: 0 }
+    for (const t of tarefas) {
+      if (t.status === 'Concluída') statusTarefas.concluida++
+      else if (t.status === 'Em andamento') statusTarefas.emAndamento++
+      else if (t.status === 'Atrasada') statusTarefas.atrasada++
+      else statusTarefas.aFazer++
+    }
+
+    res.json({
+      updatedAt: new Date().toISOString(),
+      resumo: {
+        totalHoras, totalTarefas, horasMesActual, tarefasMesActual, horasSemana,
+        custoHora: CUSTO_HORA, custoHorasTotal, custoFixoTotal, custoOperacaoTotal,
+        horasConcluidas, taxaProdutividade,
+        statusTarefas,
+      },
+      kpis: {
+        rph, rphRealizado, receitaTotal, receitaRealizada,
+        horasPorDeal, custoPorDeal,
+        horasProspeccao, horasAnalise, horasRelacional, horasGestao,
+        pctProspeccao: totalHoras > 0 ? round2(horasProspeccao / totalHoras * 100) : null,
+        pctAnalise: totalHoras > 0 ? round2(horasAnalise / totalHoras * 100) : null,
+        pctRelacional: totalHoras > 0 ? round2(horasRelacional / totalHoras * 100) : null,
+        pctGestao: totalHoras > 0 ? round2(horasGestao / totalHoras * 100) : null,
+      },
+      funcionarios,
+      meses,
+      mesesFuncionario,
+      categorias,
+    })
+  } catch (err) {
+    console.error('[time-tracking]', err.message)
     res.status(500).json({ error: err.message })
   }
 })
