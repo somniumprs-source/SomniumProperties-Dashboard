@@ -139,7 +139,7 @@ export function Dashboard() {
             ))}
           </div>
           <div className="absolute right-6 top-1/2 -translate-y-1/2 opacity-5 pointer-events-none">
-            <img src="/logo.png" alt="" className="h-16 w-auto" />
+            <img src="/logo-transparent.png" alt="" className="w-auto" style={{ height: 48 }} />
           </div>
         </div>
 
