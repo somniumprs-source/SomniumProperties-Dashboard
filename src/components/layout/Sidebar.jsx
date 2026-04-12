@@ -1,14 +1,14 @@
 import { NavLink } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { LayoutDashboard, TrendingUp, Users, Database, Bell, Clock, Menu, X, LogOut, ArrowLeftRight } from 'lucide-react'
+import { LayoutDashboard, TrendingUp, Database, Bell, Clock, BarChart3, Menu, X, LogOut, ArrowLeftRight } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 
 const nav = [
   { to: '/',           label: 'Dashboard',  Icon: LayoutDashboard, end: true },
   { to: '/crm',        label: 'CRM',        Icon: Database },
-  { to: '/comercial',  label: 'Comercial',  Icon: Users },
   { to: '/financeiro', label: 'Financeiro', Icon: TrendingUp },
   { to: '/operacoes',  label: 'Operações',  Icon: Clock },
+  { to: '/metricas',   label: 'Métricas',   Icon: BarChart3 },
   { to: '/alertas',    label: 'Alertas',    Icon: Bell, badge: true },
 ]
 
