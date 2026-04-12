@@ -2929,6 +2929,288 @@ app.delete('/api/tarefas/:id', async (req, res) => {
 })
 
 // ════════════════════════════════════════════════════════════════
+// OKRs — Objectivos e Key Results editáveis
+// ════════════════════════════════════════════════════════════════
+
+// Listar OKRs com KRs e progresso calculado
+app.get('/api/okrs', async (req, res) => {
+  try {
+    const pgPool = (await import('./src/db/pg.js')).default
+    const { trimestre } = req.query
+    let q = 'SELECT * FROM okrs'
+    const params = []
+    if (trimestre) { q += ' WHERE trimestre = $1'; params.push(trimestre) }
+    q += ' ORDER BY ordem, created_at'
+    const { rows: okrs } = await pgPool.query(q, params)
+
+    // Buscar KRs para cada OKR
+    for (const okr of okrs) {
+      const { rows: krs } = await pgPool.query('SELECT * FROM okr_krs WHERE okr_id = $1 ORDER BY ordem, created_at', [okr.id])
+
+      // Calcular progresso automático de cada KR
+      for (const kr of krs) {
+        kr.valor = await calcKRValue(kr, pgPool)
+        if (kr.invertido) {
+          kr.progresso = kr.valor === 0 ? 100 : Math.max(0, Math.round((1 - kr.valor / kr.meta) * 100))
+        } else {
+          kr.progresso = kr.meta > 0 ? Math.min(100, Math.round(kr.valor / kr.meta * 100)) : 0
+        }
+      }
+      okr.krs = krs
+      okr.progresso = krs.length > 0 ? Math.round(krs.reduce((s, kr) => s + kr.progresso, 0) / krs.length) : 0
+    }
+    res.json(okrs)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Calcular valor automático de um KR baseado na fonte
+async function calcKRValue(kr, pgPool) {
+  if (!kr.fonte) return 0
+  try {
+    const src = kr.fonte
+    // Fontes automáticas: queries SQL simples
+    if (src === 'imoveis_semana') {
+      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM imoveis WHERE data_adicionado >= NOW() - INTERVAL '7 days'")
+      return parseInt(rows[0].c)
+    }
+    if (src === 'imoveis_com_visita') {
+      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM imoveis WHERE data_visita IS NOT NULL")
+      return parseInt(rows[0].c)
+    }
+    if (src === 'imoveis_com_proposta') {
+      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM imoveis WHERE data_proposta IS NOT NULL")
+      return parseInt(rows[0].c)
+    }
+    if (src === 'negocios_total') {
+      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM negocios")
+      return parseInt(rows[0].c)
+    }
+    if (src === 'negocios_vendidos') {
+      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM negocios WHERE fase = 'Vendido'")
+      return parseInt(rows[0].c)
+    }
+    if (src === 'investidores_sem_contacto_30d') {
+      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM investidores WHERE data_ultimo_contacto IS NULL OR data_ultimo_contacto < NOW() - INTERVAL '30 days'")
+      return parseInt(rows[0].c)
+    }
+    if (src === 'investidores_ab_reuniao') {
+      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM investidores WHERE classificacao IN ('A','B') AND data_reuniao IS NOT NULL")
+      return parseInt(rows[0].c)
+    }
+    if (src === 'investidores_nda') {
+      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM investidores WHERE nda_assinado = 1")
+      return parseInt(rows[0].c)
+    }
+    if (src === 'investidores_capital') {
+      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM investidores WHERE montante_investido > 0")
+      return parseInt(rows[0].c)
+    }
+    if (src === 'consultores_followup_semana') {
+      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM consultores WHERE data_follow_up >= NOW() - INTERVAL '7 days'")
+      return parseInt(rows[0].c)
+    }
+    if (src === 'consultores_followup_em_dia') {
+      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM consultores WHERE data_proximo_follow_up >= NOW() AND estatuto IN ('Aberto Parcerias','Follow up','Acesso imoveis Off market','Consultores em Parceria')")
+      return parseInt(rows[0].c)
+    }
+    if (src === 'consultores_com_call') {
+      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM consultores WHERE data_primeira_call IS NOT NULL AND estatuto IN ('Aberto Parcerias','Follow up','Acesso imoveis Off market','Consultores em Parceria')")
+      return parseInt(rows[0].c)
+    }
+    if (src === 'consultores_ativos') {
+      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM consultores WHERE estatuto IN ('Aberto Parcerias','Follow up','Acesso imoveis Off market','Consultores em Parceria')")
+      return parseInt(rows[0].c)
+    }
+    if (src === 'imoveis_sem_modelo') {
+      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM imoveis WHERE (modelo_negocio IS NULL OR modelo_negocio = '') AND estado NOT IN ('Descartado','Nao interessa','Não interessa')")
+      return parseInt(rows[0].c)
+    }
+    if (src === 'imoveis_com_modelo') {
+      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM imoveis WHERE modelo_negocio IS NOT NULL AND modelo_negocio != '' AND estado NOT IN ('Descartado','Nao interessa','Não interessa')")
+      return parseInt(rows[0].c)
+    }
+    if (src === 'imoveis_ativos') {
+      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM imoveis WHERE estado NOT IN ('Descartado','Nao interessa','Não interessa')")
+      return parseInt(rows[0].c)
+    }
+    if (src === 'investidores_ab_contacto') {
+      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM investidores WHERE classificacao IN ('A','B') AND data_ultimo_contacto IS NOT NULL")
+      return parseInt(rows[0].c)
+    }
+    if (src === 'investidores_ab_total') {
+      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM investidores WHERE classificacao IN ('A','B')")
+      return parseInt(rows[0].c)
+    }
+    // Manual — retorna 0, o utilizador actualiza manualmente
+    return 0
+  } catch { return 0 }
+}
+
+// Criar OKR
+app.post('/api/okrs', async (req, res) => {
+  try {
+    const pgPool = (await import('./src/db/pg.js')).default
+    const { trimestre, objectivo, ordem, krs } = req.body
+    if (!trimestre || !objectivo) return res.status(400).json({ error: 'trimestre e objectivo são obrigatórios' })
+    const id = (await import('crypto')).randomUUID()
+    const now = new Date().toISOString()
+    await pgPool.query('INSERT INTO okrs (id, trimestre, objectivo, ordem, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6)',
+      [id, trimestre, objectivo, ordem || 0, now, now])
+
+    // Criar KRs se fornecidos
+    if (krs?.length) {
+      for (let i = 0; i < krs.length; i++) {
+        const kr = krs[i]
+        const krId = (await import('crypto')).randomUUID()
+        await pgPool.query(
+          'INSERT INTO okr_krs (id, okr_id, kr, meta, unidade, tipo, fonte, invertido, ordem, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+          [krId, id, kr.kr, kr.meta || 1, kr.unidade || '', kr.tipo || 'acumulado', kr.fonte || null, kr.invertido || false, i, now, now]
+        )
+      }
+    }
+    res.status(201).json({ id, trimestre, objectivo })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Actualizar OKR
+app.put('/api/okrs/:id', async (req, res) => {
+  try {
+    const pgPool = (await import('./src/db/pg.js')).default
+    const { objectivo, ordem } = req.body
+    const now = new Date().toISOString()
+    await pgPool.query('UPDATE okrs SET objectivo = COALESCE($1, objectivo), ordem = COALESCE($2, ordem), updated_at = $3 WHERE id = $4',
+      [objectivo, ordem, now, req.params.id])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Apagar OKR (cascade apaga KRs)
+app.delete('/api/okrs/:id', async (req, res) => {
+  try {
+    const pgPool = (await import('./src/db/pg.js')).default
+    await pgPool.query('DELETE FROM okrs WHERE id = $1', [req.params.id])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// CRUD para KRs individuais
+app.post('/api/okrs/:okrId/krs', async (req, res) => {
+  try {
+    const pgPool = (await import('./src/db/pg.js')).default
+    const { kr, meta, unidade, tipo, fonte, invertido, ordem } = req.body
+    const id = (await import('crypto')).randomUUID()
+    const now = new Date().toISOString()
+    await pgPool.query(
+      'INSERT INTO okr_krs (id, okr_id, kr, meta, unidade, tipo, fonte, invertido, ordem, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+      [id, req.params.okrId, kr, meta || 1, unidade || '', tipo || 'acumulado', fonte || null, invertido || false, ordem || 0, now, now]
+    )
+    res.status(201).json({ id })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+app.put('/api/okr-krs/:id', async (req, res) => {
+  try {
+    const pgPool = (await import('./src/db/pg.js')).default
+    const { kr, meta, unidade, tipo, fonte, invertido, ordem } = req.body
+    const sets = []; const params = []
+    if (kr !== undefined) { sets.push(`kr = $${params.length+1}`); params.push(kr) }
+    if (meta !== undefined) { sets.push(`meta = $${params.length+1}`); params.push(meta) }
+    if (unidade !== undefined) { sets.push(`unidade = $${params.length+1}`); params.push(unidade) }
+    if (tipo !== undefined) { sets.push(`tipo = $${params.length+1}`); params.push(tipo) }
+    if (fonte !== undefined) { sets.push(`fonte = $${params.length+1}`); params.push(fonte) }
+    if (invertido !== undefined) { sets.push(`invertido = $${params.length+1}`); params.push(invertido) }
+    if (ordem !== undefined) { sets.push(`ordem = $${params.length+1}`); params.push(ordem) }
+    sets.push(`updated_at = $${params.length+1}`); params.push(new Date().toISOString())
+    params.push(req.params.id)
+    await pgPool.query(`UPDATE okr_krs SET ${sets.join(',')} WHERE id = $${params.length}`, params)
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+app.delete('/api/okr-krs/:id', async (req, res) => {
+  try {
+    const pgPool = (await import('./src/db/pg.js')).default
+    await pgPool.query('DELETE FROM okr_krs WHERE id = $1', [req.params.id])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Fontes disponíveis para auto-cálculo de KRs
+app.get('/api/okrs/fontes', async (_req, res) => {
+  res.json([
+    { id: 'imoveis_semana', label: 'Imóveis adicionados esta semana' },
+    { id: 'imoveis_com_visita', label: 'Imóveis com visita realizada' },
+    { id: 'imoveis_com_proposta', label: 'Imóveis com proposta enviada' },
+    { id: 'imoveis_ativos', label: 'Total imóveis ativos' },
+    { id: 'imoveis_com_modelo', label: 'Imóveis com Modelo de Negócio preenchido' },
+    { id: 'imoveis_sem_modelo', label: 'Imóveis SEM Modelo de Negócio (invertido)' },
+    { id: 'negocios_total', label: 'Total negócios' },
+    { id: 'negocios_vendidos', label: 'Negócios vendidos' },
+    { id: 'investidores_sem_contacto_30d', label: 'Investidores sem contacto >30d (invertido)' },
+    { id: 'investidores_ab_reuniao', label: 'Investidores A/B com reunião' },
+    { id: 'investidores_nda', label: 'Investidores com NDA assinado' },
+    { id: 'investidores_capital', label: 'Investidores com capital transferido' },
+    { id: 'investidores_ab_contacto', label: 'Investidores A/B com contacto recente' },
+    { id: 'investidores_ab_total', label: 'Total investidores A/B' },
+    { id: 'consultores_followup_semana', label: 'Follow-ups consultores esta semana' },
+    { id: 'consultores_followup_em_dia', label: 'Consultores ativos com follow-up em dia' },
+    { id: 'consultores_com_call', label: 'Consultores ativos com Data Primeira Call' },
+    { id: 'consultores_ativos', label: 'Total consultores ativos' },
+    { id: null, label: '(Manual — introduzir valor à mão)' },
+  ])
+})
+
+// Seed OKRs Q2 2026 se tabela vazia
+app.post('/api/okrs/seed-q2', async (req, res) => {
+  try {
+    const pgPool = (await import('./src/db/pg.js')).default
+    const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM okrs WHERE trimestre = 'Q2 2026'")
+    if (parseInt(rows[0].c) > 0) return res.json({ ok: true, message: 'OKRs Q2 já existem' })
+
+    const crypto = await import('crypto')
+    const now = new Date().toISOString()
+    const okrsData = [
+      { obj: 'Fechar o primeiro deal WH', krs: [
+        { kr: '10 imóveis adicionados/semana × 4 semanas', meta: 10, unidade: '/sem', fonte: 'imoveis_semana' },
+        { kr: '4 visitas realizadas', meta: 4, fonte: 'imoveis_com_visita' },
+        { kr: '2 propostas enviadas', meta: 2, fonte: 'imoveis_com_proposta' },
+        { kr: '1 contrato assinado', meta: 1, fonte: 'negocios_total' },
+      ]},
+      { obj: 'Captar primeiro capital passivo', krs: [
+        { kr: '3 reuniões com investidores A/B', meta: 3, fonte: 'investidores_ab_reuniao' },
+        { kr: '1 NDA assinado', meta: 1, fonte: 'investidores_nda' },
+        { kr: '1 transferência de capital', meta: 1, fonte: 'investidores_capital' },
+      ]},
+      { obj: 'Activar rede de consultores', krs: [
+        { kr: '10 follow-ups/semana × 4 semanas', meta: 10, unidade: '/sem', fonte: 'consultores_followup_semana' },
+        { kr: '5 consultores com follow-up em dia', meta: 5, fonte: 'consultores_followup_em_dia' },
+        { kr: 'Data Primeira Call em consultores ativos', meta: 0, fonte: 'consultores_com_call' },
+      ]},
+      { obj: 'Disciplina de dados ≥ 80%', krs: [
+        { kr: '0 imóveis ativos sem Modelo Negócio', meta: 0, fonte: 'imoveis_sem_modelo', invertido: true },
+        { kr: '100% investidores A/B com contacto', meta: 0, fonte: 'investidores_ab_contacto' },
+      ]},
+    ]
+    for (let i = 0; i < okrsData.length; i++) {
+      const o = okrsData[i]
+      const okrId = crypto.randomUUID()
+      await pgPool.query('INSERT INTO okrs (id, trimestre, objectivo, ordem, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6)',
+        [okrId, 'Q2 2026', o.obj, i, now, now])
+      for (let j = 0; j < o.krs.length; j++) {
+        const kr = o.krs[j]
+        const krId = crypto.randomUUID()
+        // Para KRs de disciplina, meta = total do universo (calculado depois)
+        await pgPool.query(
+          'INSERT INTO okr_krs (id, okr_id, kr, meta, unidade, tipo, fonte, invertido, ordem, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+          [krId, okrId, kr.kr, kr.meta, kr.unidade || '', 'acumulado', kr.fonte, kr.invertido || false, j, now, now]
+        )
+      }
+    }
+    res.json({ ok: true, created: okrsData.length })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ════════════════════════════════════════════════════════════════
 // TIME TRACKING — Operações & Horas
 // ════════════════════════════════════════════════════════════════
 app.get('/api/time-tracking', async (req, res) => {
@@ -2948,20 +3230,29 @@ app.get('/api/time-tracking', async (req, res) => {
     const totalHoras = round2(tarefasValidas.reduce((s, t) => s + t.tempoHoras, 0))
     const totalTarefas = tarefasValidas.length
 
-    // ── Por funcionário ──
+    // ── Por funcionário (split: tarefas comuns contam para ambos) ──
+    const NOMES_EQUIPA = ['João Abreu', 'Alexandre Mendes']
     const porFuncionario = {}
+    for (const nome of NOMES_EQUIPA) porFuncionario[nome] = { horas: 0, tarefas: 0, concluidas: 0 }
     for (const t of tarefasValidas) {
-      const f = t.funcionario || 'Não atribuído'
-      if (!porFuncionario[f]) porFuncionario[f] = { horas: 0, tarefas: 0, concluidas: 0 }
-      porFuncionario[f].horas += t.tempoHoras
-      porFuncionario[f].tarefas++
-      if (t.status === 'Concluída') porFuncionario[f].concluidas++
+      const f = t.funcionario || ''
+      // Se contém ambos nomes (separados por vírgula), atribuir a cada um
+      const pessoas = NOMES_EQUIPA.filter(n => f.includes(n))
+      if (pessoas.length === 0) pessoas.push('Não atribuído')
+      for (const p of pessoas) {
+        if (!porFuncionario[p]) porFuncionario[p] = { horas: 0, tarefas: 0, concluidas: 0 }
+        porFuncionario[p].horas += t.tempoHoras  // horas completas para cada pessoa
+        porFuncionario[p].tarefas++
+        if (t.status === 'Concluída') porFuncionario[p].concluidas++
+      }
     }
-    const funcionarios = Object.entries(porFuncionario).map(([nome, v]) => ({
-      nome, horas: round2(v.horas), tarefas: v.tarefas, concluidas: v.concluidas,
-      custoTotal: round2(v.horas * CUSTO_HORA),
-      taxaConclusao: v.tarefas > 0 ? round2(v.concluidas / v.tarefas * 100) : 0,
-    })).sort((a, b) => b.horas - a.horas)
+    const funcionarios = Object.entries(porFuncionario)
+      .filter(([, v]) => v.tarefas > 0)
+      .map(([nome, v]) => ({
+        nome, horas: round2(v.horas), tarefas: v.tarefas, concluidas: v.concluidas,
+        custoTotal: round2(v.horas * CUSTO_HORA),
+        taxaConclusao: v.tarefas > 0 ? round2(v.concluidas / v.tarefas * 100) : 0,
+      })).sort((a, b) => b.horas - a.horas)
 
     // ── Por mês ──
     const porMes = {}
@@ -2977,18 +3268,23 @@ app.get('/api/time-tracking', async (req, res) => {
       .map(([mes, v]) => ({ mes, horas: round2(v.horas), tarefas: v.tarefas, custoHoras: round2(v.custoHoras) }))
       .sort((a, b) => a.mes.localeCompare(b.mes))
 
-    // ── Por mês + funcionário ──
+    // ── Por mês + funcionário (split tarefas comuns) ──
     const porMesFunc = {}
     for (const t of tarefasValidas) {
       if (!t.inicio) continue
       const m = t.inicio.substring(0, 7)
-      const f = t.funcionario || 'Não atribuído'
-      const key = `${m}|${f}`
-      if (!porMesFunc[key]) porMesFunc[key] = { mes: m, funcionario: f, horas: 0, tarefas: 0 }
-      porMesFunc[key].horas += t.tempoHoras
-      porMesFunc[key].tarefas++
+      const f = t.funcionario || ''
+      const pessoas = NOMES_EQUIPA.filter(n => f.includes(n))
+      if (pessoas.length === 0) pessoas.push('Não atribuído')
+      for (const p of pessoas) {
+        const key = `${m}|${p}`
+        if (!porMesFunc[key]) porMesFunc[key] = { mes: m, funcionario: p, horas: 0, tarefas: 0 }
+        porMesFunc[key].horas += t.tempoHoras
+        porMesFunc[key].tarefas++
+      }
     }
     const mesesFuncionario = Object.values(porMesFunc)
+      .filter(v => v.tarefas > 0)
       .map(v => ({ ...v, horas: round2(v.horas) }))
       .sort((a, b) => a.mes.localeCompare(b.mes) || a.funcionario.localeCompare(b.funcionario))
 
