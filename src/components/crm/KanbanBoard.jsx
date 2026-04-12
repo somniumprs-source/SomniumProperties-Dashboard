@@ -13,7 +13,7 @@ const COLUMN_COLORS = {
   'Enviar proposta ao investidor': { bg: 'bg-cyan-50', border: 'border-cyan-200', header: 'bg-cyan-100 text-cyan-700' },
   'Wholesaling':      { bg: 'bg-green-50',   border: 'border-green-200',  header: 'bg-green-100 text-green-700' },
   'Negócio em Curso': { bg: 'bg-emerald-50', border: 'border-emerald-200',header: 'bg-emerald-100 text-emerald-700' },
-  'Nao interessa':    { bg: 'bg-red-50',     border: 'border-red-200',    header: 'bg-red-100 text-red-700' },
+  'Não interessa':    { bg: 'bg-red-50',     border: 'border-red-200',    header: 'bg-red-100 text-red-700' },
   'Descartado':       { bg: 'bg-red-50',     border: 'border-red-200',    header: 'bg-red-100 text-red-700' },
   // Tarefas
   'A fazer':          { bg: 'bg-gray-50',    border: 'border-gray-200',   header: 'bg-gray-100 text-gray-700' },

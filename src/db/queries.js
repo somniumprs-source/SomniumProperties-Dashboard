@@ -34,7 +34,7 @@ function mapDespesa(r) {
 function mapImovel(r) {
   const zonas = r.zonas ? JSON.parse(r.zonas) : []
   return {
-    id: r.id, nome: r.nome, estado: (r.estado || '').replace(/^\d+-/, ''),
+    id: r.id, nome: r.nome, estado: (r.estado || '').replace(/^\d+-\s*/, '').replace('Nao interessa', 'Não interessa'),
     tipologia: r.tipologia, askPrice: r.ask_price || 0,
     valorProposta: r.valor_proposta || 0, custoObra: r.custo_estimado_obra || 0,
     areaUtil: r.area_util, areaBruta: r.area_bruta,
