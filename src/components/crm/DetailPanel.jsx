@@ -3,6 +3,7 @@
  * Mostra: campos editáveis + relações + timeline + tarefas.
  */
 import { useState, useEffect } from 'react'
+import { AnaliseTab } from '../analise/AnaliseTab.jsx'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 
@@ -12,12 +13,14 @@ const ACAO_COLOR = { INSERT: 'text-green-600', UPDATE: 'text-blue-600', DELETE: 
 export function DetailPanel({ type, id, onClose, onSave }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('detalhe')
 
   const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores' }[type]
 
   useEffect(() => {
     if (!id || !endpoint) return
     setLoading(true)
+    setActiveTab('detalhe')
     fetch(`/api/crm/${endpoint}/${id}/full`)
       .then(r => r.json())
       .then(setData)
@@ -38,6 +41,27 @@ export function DetailPanel({ type, id, onClose, onSave }) {
         </div>
         <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">&times;</button>
       </div>
+
+      {/* Tabs para Imóveis */}
+      {type === 'Imóveis' && (
+        <div className="px-6 pt-3 flex gap-1 border-b border-gray-100">
+          <button onClick={() => setActiveTab('detalhe')}
+            className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors ${activeTab === 'detalhe' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
+            Detalhe
+          </button>
+          <button onClick={() => setActiveTab('analise')}
+            className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors ${activeTab === 'analise' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
+            Análise Financeira
+          </button>
+        </div>
+      )}
+
+      {/* Análise Financeira tab */}
+      {type === 'Imóveis' && activeTab === 'analise' ? (
+        <div className="p-6">
+          <AnaliseTab imovelId={data.id} imovelNome={data.nome} />
+        </div>
+      ) : (
 
       <div className="p-6 grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Main info */}
@@ -176,6 +200,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
           </div>
         </div>
       </div>
+      )}
     </div>
   )
 }

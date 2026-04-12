@@ -95,9 +95,11 @@ router.get('/imoveis/:id/full', async (req, res) => {
       : { rows: [] }
     // Tarefas
     const { rows: tarefas } = await pool.query("SELECT * FROM tarefas WHERE tarefa ILIKE $1 ORDER BY created_at DESC", [`%${imovel.nome}%`])
+    // Análises de rentabilidade
+    const { rows: analises } = await pool.query('SELECT * FROM analises WHERE imovel_id = $1 ORDER BY activa DESC, updated_at DESC', [imovel.id])
     // Audit log (timeline)
     const { rows: timeline } = await pool.query("SELECT * FROM audit_log WHERE registo_id = $1 ORDER BY created_at DESC LIMIT 20", [imovel.id])
-    res.json({ ...imovel, negocios, consultores, tarefas, timeline })
+    res.json({ ...imovel, negocios, consultores, tarefas, analises, timeline })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
