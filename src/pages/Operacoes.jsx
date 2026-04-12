@@ -258,9 +258,9 @@ export function Operacoes() {
   }
 
   async function deleteTarefa(id) {
-    if (!confirm('Apagar esta tarefa?')) return
     try {
       await fetch(`/api/tarefas/${id}`, { method: 'DELETE' })
+      setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n })
       await loadAll()
     } catch (e) { setError(e.message) }
   }
@@ -405,34 +405,53 @@ export function Operacoes() {
         {tab === 'tarefas' && (
           <>
             {/* Toolbar */}
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div className="flex gap-2 flex-wrap">
-                {[
-                  { id: 'semana', label: `Esta semana (${semanaAtivas.length})` },
-                  { id: 'pendentes', label: `Todas pendentes (${ativas.length})` },
-                  { id: 'arquivo', label: `Arquivo (${concluidas.length})` },
-                ].map(f => (
-                  <button key={f.id} onClick={() => { setTaskFilter(f.id); setSelectedIds(new Set()) }}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border ${taskFilter === f.id ? 'border-yellow-300 bg-yellow-50 text-yellow-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
-                    {f.label}
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    { id: 'semana', label: `Esta semana (${semanaAtivas.length})` },
+                    { id: 'pendentes', label: `Todas pendentes (${ativas.length})` },
+                    { id: 'arquivo', label: `Arquivo (${concluidas.length})` },
+                  ].map(f => (
+                    <button key={f.id} onClick={() => { setTaskFilter(f.id); setSelectedIds(new Set()) }}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg border ${taskFilter === f.id ? 'border-yellow-300 bg-yellow-50 text-yellow-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setViewMode(v => v === 'list' ? 'board' : 'list')}
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">
+                    {viewMode === 'list' ? 'Board' : 'Lista'}
                   </button>
-                ))}
+                  <button onClick={() => { setShowForm(true); setEditingTask(null) }}
+                    className="px-4 py-2 text-sm font-medium rounded-lg text-white" style={{ backgroundColor: GOLD }}>
+                    + Nova Tarefa
+                  </button>
+                </div>
               </div>
-              <div className="flex gap-2">
+
+              {/* Barra de selecção — sempre visível */}
+              <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200">
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-500">
+                  <input type="checkbox"
+                    checked={selectedIds.size > 0 && selectedIds.size === filteredTarefas.length}
+                    onChange={selectAll}
+                    className="rounded border-gray-300" />
+                  {selectedIds.size > 0 ? `${selectedIds.size} selecionada(s)` : 'Selecionar todas'}
+                </label>
                 {selectedIds.size > 0 && (
                   <button onClick={bulkDelete}
-                    className="px-3 py-1.5 text-xs font-medium rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100">
-                    Apagar {selectedIds.size} selecionada(s)
+                    className="px-3 py-1 text-xs font-semibold rounded-lg border border-red-300 text-red-600 bg-red-50 hover:bg-red-100 transition-colors">
+                    Apagar {selectedIds.size} tarefa(s)
                   </button>
                 )}
-                <button onClick={() => setViewMode(v => v === 'list' ? 'board' : 'list')}
-                  className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">
-                  {viewMode === 'list' ? 'Board' : 'Lista'}
-                </button>
-                <button onClick={() => { setShowForm(true); setEditingTask(null) }}
-                  className="px-4 py-2 text-sm font-medium rounded-lg text-white" style={{ backgroundColor: GOLD }}>
-                  + Nova Tarefa
-                </button>
+                {selectedIds.size > 0 && (
+                  <button onClick={() => setSelectedIds(new Set())}
+                    className="px-3 py-1 text-xs rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100">
+                    Limpar selecção
+                  </button>
+                )}
               </div>
             </div>
 
@@ -458,11 +477,11 @@ export function Operacoes() {
                       </div>
                       <div className="flex flex-col gap-1.5 p-2 bg-gray-50 rounded-b-xl min-h-[200px] border border-t-0 border-gray-200">
                         {pool.map(t => (
-                          <div key={t.id} className={`bg-white rounded-lg p-3 shadow-sm border hover:border-gray-300 group ${selectedIds.has(t.id) ? 'border-yellow-400 bg-yellow-50' : 'border-gray-100'}`}>
-                            <div className="flex items-start gap-2">
+                          <div key={t.id} className={`bg-white rounded-lg p-3 shadow-sm border hover:border-gray-300 ${selectedIds.has(t.id) ? 'border-yellow-400 bg-yellow-50 ring-1 ring-yellow-200' : 'border-gray-100'}`}>
+                            <div className="flex items-start gap-2.5">
                               <input type="checkbox" checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)}
-                                className="mt-0.5 rounded border-gray-300 shrink-0" />
-                              <div className="flex-1 cursor-pointer" onClick={() => { setEditingTask(t); setShowForm(false) }}>
+                                className="mt-0.5 w-4 h-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-400 shrink-0 cursor-pointer" />
+                              <div className="flex-1 min-w-0 cursor-pointer" onClick={() => { setEditingTask(t); setShowForm(false) }}>
                                 <p className="text-sm text-gray-700 font-medium leading-tight">{t.tarefa}</p>
                                 <div className="flex items-center justify-between mt-2">
                                   <span className="text-[10px] text-gray-400">{t.funcionario?.split(',')[0] || '—'}</span>
@@ -475,8 +494,8 @@ export function Operacoes() {
                                   </div>
                                 </div>
                               </div>
-                              <button onClick={() => deleteTarefa(t.id)}
-                                className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity text-sm shrink-0">
+                              <button onClick={(e) => { e.stopPropagation(); deleteTarefa(t.id) }}
+                                className="text-gray-300 hover:text-red-500 hover:bg-red-50 rounded p-0.5 transition-colors text-sm shrink-0" title="Apagar">
                                 x
                               </button>
                             </div>
