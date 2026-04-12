@@ -226,11 +226,6 @@ export function CRM() {
         {/* Filtros dinâmicos */}
         <Filters tab={tab} filters={filters} onChange={f => { setFilters(f); setSearch('') }} />
 
-        {/* Detail Panel */}
-        {detail && ['Imóveis', 'Investidores', 'Consultores'].includes(tab) && (
-          <DetailPanel type={tab} id={detail} onClose={() => setDetail(null)} />
-        )}
-
         {/* Search + Actions */}
         <div className="flex gap-3 items-center">
           <input
@@ -271,42 +266,47 @@ export function CRM() {
           </div>
         )}
 
-        {/* Kanban View */}
-        {!loading && editing === null && view === 'kanban' && kanbanConfig && (
-          <KanbanBoard
-            columns={kanbanConfig.columns}
-            items={data}
-            groupField={kanbanConfig.groupField}
-            renderCard={kanbanConfig.renderCard}
-            onMove={handleMove}
-            onCardClick={(id) => {
-              if (['Imóveis', 'Investidores', 'Consultores'].includes(tab)) {
-                setDetail(id)
-              } else {
-                const item = data.find(i => i.id === id)
-                if (item) setEditing(item)
-              }
-            }}
-          />
-        )}
+        {/* Detail Panel — substitui Kanban/Tabela quando aberto */}
+        {detail && ['Imóveis', 'Investidores', 'Consultores'].includes(tab) ? (
+          <DetailPanel type={tab} id={detail} onClose={() => setDetail(null)} />
+        ) : (<>
+          {/* Kanban View */}
+          {!loading && editing === null && view === 'kanban' && kanbanConfig && (
+            <KanbanBoard
+              columns={kanbanConfig.columns}
+              items={data}
+              groupField={kanbanConfig.groupField}
+              renderCard={kanbanConfig.renderCard}
+              onMove={handleMove}
+              onCardClick={(id) => {
+                if (['Imóveis', 'Investidores', 'Consultores'].includes(tab)) {
+                  setDetail(id)
+                } else {
+                  const item = data.find(i => i.id === id)
+                  if (item) setEditing(item)
+                }
+              }}
+            />
+          )}
 
-        {/* Table View */}
-        {!loading && editing === null && (view === 'table' || !hasKanban) && (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              {tab === 'Imóveis' && <ImoveisTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
-              {tab === 'Investidores' && <InvestidoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
-              {tab === 'Consultores' && <ConsultoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
-              {tab === 'Negócios' && <NegociosTable data={data} onEdit={setEditing} onDelete={handleDelete} />}
-              {tab === 'Empreiteiros' && <GenericTable data={data} onEdit={setEditing} onDelete={handleDelete}
-                columns={['nome','empresa','estado','zona','especializacao','score','custo_medio_m2']}
-                labels={{ nome:'Nome', empresa:'Empresa', estado:'Estado', zona:'Zona', especializacao:'Especialização', score:'Score', custo_medio_m2:'Custo/m²' }} />}
+          {/* Table View */}
+          {!loading && editing === null && (view === 'table' || !hasKanban) && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                {tab === 'Imóveis' && <ImoveisTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
+                {tab === 'Investidores' && <InvestidoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
+                {tab === 'Consultores' && <ConsultoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
+                {tab === 'Negócios' && <NegociosTable data={data} onEdit={setEditing} onDelete={handleDelete} />}
+                {tab === 'Empreiteiros' && <GenericTable data={data} onEdit={setEditing} onDelete={handleDelete}
+                  columns={['nome','empresa','estado','zona','especializacao','score','custo_medio_m2']}
+                  labels={{ nome:'Nome', empresa:'Empresa', estado:'Estado', zona:'Zona', especializacao:'Especialização', score:'Score', custo_medio_m2:'Custo/m²' }} />}
+              </div>
+              <div className="px-4 py-2 bg-gray-50 text-xs text-gray-400 border-t">
+                {total} registos {search && `(pesquisa: "${search}")`}
+              </div>
             </div>
-            <div className="px-4 py-2 bg-gray-50 text-xs text-gray-400 border-t">
-              {total} registos {search && `(pesquisa: "${search}")`}
-            </div>
-          </div>
-        )}
+          )}
+        </>)}
       </div>
     </>
   )
