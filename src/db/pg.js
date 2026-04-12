@@ -167,6 +167,7 @@ export async function initSchema() {
       CREATE TABLE IF NOT EXISTS tarefas (
         id TEXT PRIMARY KEY,
         notion_id TEXT UNIQUE,
+        gcal_event_id TEXT,
         tarefa TEXT NOT NULL,
         status TEXT DEFAULT 'A fazer',
         categoria TEXT,
@@ -177,7 +178,8 @@ export async function initSchema() {
         grupo_id TEXT,
         created_at TEXT DEFAULT (NOW()::TEXT),
         updated_at TEXT DEFAULT (NOW()::TEXT),
-        synced_at TEXT
+        synced_at TEXT,
+        gcal_synced_at TEXT
       );
 
       CREATE TABLE IF NOT EXISTS audit_log (
@@ -312,6 +314,13 @@ export async function initSchema() {
         created_at TEXT DEFAULT (NOW()::TEXT),
         updated_at TEXT DEFAULT (NOW()::TEXT)
       );
+
+      -- Migration: adicionar campos GCal à tabela tarefas existente
+      DO $$ BEGIN
+        ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS gcal_event_id TEXT;
+        ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS gcal_synced_at TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
 
       CREATE INDEX IF NOT EXISTS idx_imoveis_estado ON imoveis(estado);
       CREATE INDEX IF NOT EXISTS idx_investidores_status ON investidores(status);
