@@ -3676,5 +3676,42 @@ async function autoMigrate() {
 
 const PORT = process.env.PORT ?? 3001
 autoMigrate().then(() => {
-  app.listen(PORT, () => console.log(`[server] a correr na porta ${PORT}`))
+  app.listen(PORT, () => {
+    console.log(`[server] a correr na porta ${PORT}`)
+
+    // Backup automático diário (corre 1x por dia às 3:00 AM)
+    function scheduleBackup() {
+      const now = new Date()
+      const next3am = new Date(now)
+      next3am.setHours(3, 0, 0, 0)
+      if (next3am <= now) next3am.setDate(next3am.getDate() + 1)
+      const ms = next3am - now
+      setTimeout(async () => {
+        try {
+          console.log('[backup] A correr backup automático diário...')
+          await fetch(`http://localhost:${PORT}/api/crm/backup/auto`, { method: 'POST' })
+          console.log('[backup] Backup diário concluído')
+        } catch (e) { console.error('[backup] Erro:', e.message) }
+        // Agendar o próximo
+        setInterval(async () => {
+          try {
+            await fetch(`http://localhost:${PORT}/api/crm/backup/auto`, { method: 'POST' })
+            console.log('[backup] Backup diário concluído')
+          } catch (e) { console.error('[backup] Erro:', e.message) }
+        }, 24 * 60 * 60 * 1000)
+      }, ms)
+      console.log(`[backup] Próximo backup em ${Math.round(ms / 3600000)}h (às 03:00)`)
+    }
+    scheduleBackup()
+
+    // Backup imediato ao iniciar (se nunca houve)
+    fetch(`http://localhost:${PORT}/api/crm/backup/list`)
+      .then(r => r.json())
+      .then(list => {
+        if (!list.length) {
+          console.log('[backup] Primeiro backup...')
+          fetch(`http://localhost:${PORT}/api/crm/backup/auto`, { method: 'POST' }).catch(() => {})
+        }
+      }).catch(() => {})
+  })
 })

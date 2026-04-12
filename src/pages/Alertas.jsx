@@ -32,20 +32,56 @@ export function Alertas() {
   const [error, setError]         = useState(null)
   const [running, setRunning]     = useState(null)
   const [runResult, setRunResult] = useState(null)
+  const [backups, setBackups]     = useState([])
+  const [auditLog, setAuditLog]   = useState([])
+  const [backupLoading, setBackupLoading] = useState(false)
 
   async function load() {
     setLoading(true); setError(null)
     try {
-      const [ar, hr] = await Promise.all([
+      const [ar, hr, bl, al] = await Promise.all([
         fetch('/api/alertas'),
         fetch('/api/data-health'),
+        fetch('/api/crm/backup/list').then(r => r.json()).catch(() => []),
+        fetch('/api/crm/audit?limit=30').then(r => r.json()).catch(() => []),
       ])
       if (!ar.ok || !hr.ok) throw new Error('Erro no servidor')
       const [a, h] = await Promise.all([ar.json(), hr.json()])
       if (a.error) throw new Error(a.error)
-      setAlertas(a); setHealth(h)
+      setAlertas(a); setHealth(h); setBackups(bl); setAuditLog(al)
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
+  }
+
+  async function createBackup() {
+    setBackupLoading(true)
+    try {
+      await fetch('/api/crm/backup/auto', { method: 'POST' })
+      await load()
+    } catch (e) { setError(e.message) }
+    finally { setBackupLoading(false) }
+  }
+
+  async function restoreBackup(id) {
+    if (!confirm('Restaurar este backup? O estado actual será guardado antes da restauração.')) return
+    setBackupLoading(true)
+    try {
+      const r = await fetch(`/api/crm/backup/restore/${id}`, { method: 'POST' })
+      const d = await r.json()
+      if (d.error) throw new Error(d.error)
+      alert(`Restaurado: ${d.restored} registos de ${d.fromBackup}`)
+      await load()
+    } catch (e) { setError(e.message) }
+    finally { setBackupLoading(false) }
+  }
+
+  async function undoAction(auditId) {
+    try {
+      const r = await fetch(`/api/crm/undo/${auditId}`, { method: 'POST' })
+      const d = await r.json()
+      if (d.error) throw new Error(d.error)
+      await load()
+    } catch (e) { setError(e.message) }
   }
 
   useEffect(() => { load() }, [])
@@ -228,6 +264,91 @@ export function Alertas() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* ── Backups ────────────────────────── */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-gray-700">Backups</h2>
+            <button onClick={createBackup} disabled={backupLoading}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg text-white disabled:opacity-50"
+              style={{ backgroundColor: '#C9A84C' }}>
+              {backupLoading ? 'A guardar...' : 'Criar Backup Agora'}
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mb-3">Backup automático diário às 03:00. Últimos 30 guardados. Cada restauro guarda o estado actual primeiro.</p>
+          {backups.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-xs">
+                <thead><tr className="border-b border-gray-100 text-gray-400 uppercase">
+                  <th className="text-left py-2 px-3">Data</th>
+                  <th className="text-right py-2 px-3">Registos</th>
+                  <th className="text-right py-2 px-3">Ações</th>
+                </tr></thead>
+                <tbody>
+                  {backups.map(b => (
+                    <tr key={b.id} className="border-b border-gray-50 hover:bg-gray-50">
+                      <td className="py-2 px-3 text-gray-700 font-mono">{new Date(b.created_at).toLocaleString('pt-PT')}</td>
+                      <td className="py-2 px-3 text-right font-mono">{b.total_registos}</td>
+                      <td className="py-2 px-3 text-right">
+                        <div className="flex gap-2 justify-end">
+                          <a href={`/api/crm/backup/${b.id}/download`} target="_blank" rel="noreferrer"
+                            className="text-xs text-indigo-600 hover:underline">Descarregar</a>
+                          <button onClick={() => restoreBackup(b.id)} className="text-xs text-orange-600 hover:underline">Restaurar</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : <p className="text-xs text-gray-400 text-center py-4">Sem backups — clica em "Criar Backup Agora"</p>}
+        </div>
+
+        {/* ── Histórico de Alterações ─────────── */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h2 className="text-sm font-semibold text-gray-700 mb-4">Histórico de Alterações (últimas 30)</h2>
+          {auditLog.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-xs">
+                <thead><tr className="border-b border-gray-100 text-gray-400 uppercase">
+                  <th className="text-left py-2 px-3">Data</th>
+                  <th className="text-left py-2 px-3">Tabela</th>
+                  <th className="text-left py-2 px-3">Ação</th>
+                  <th className="text-left py-2 px-3">Detalhe</th>
+                  <th className="text-right py-2 px-3">Desfazer</th>
+                </tr></thead>
+                <tbody>
+                  {auditLog.map(a => {
+                    const prev = a.dados_anteriores ? JSON.parse(a.dados_anteriores) : null
+                    const next = a.dados_novos ? JSON.parse(a.dados_novos) : null
+                    const nome = prev?.nome || prev?.movimento || prev?.tarefa || next?.nome || next?.movimento || next?.tarefa || '—'
+                    const canUndo = ['UPDATE', 'DELETE', 'INSERT'].includes(a.acao)
+                    return (
+                      <tr key={a.id} className="border-b border-gray-50 hover:bg-gray-50">
+                        <td className="py-2 px-3 text-gray-400 font-mono">{new Date(a.created_at).toLocaleString('pt-PT', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}</td>
+                        <td className="py-2 px-3"><span className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">{a.tabela}</span></td>
+                        <td className="py-2 px-3">
+                          <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                            a.acao === 'INSERT' ? 'bg-green-100 text-green-700' :
+                            a.acao === 'UPDATE' ? 'bg-blue-100 text-blue-700' :
+                            a.acao === 'DELETE' ? 'bg-red-100 text-red-700' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>{a.acao}</span>
+                        </td>
+                        <td className="py-2 px-3 text-gray-600 max-w-[200px] truncate">{nome}</td>
+                        <td className="py-2 px-3 text-right">
+                          {canUndo && (
+                            <button onClick={() => undoAction(a.id)} className="text-xs text-orange-600 hover:underline">Desfazer</button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : <p className="text-xs text-gray-400 text-center py-4">Sem alterações registadas</p>}
         </div>
       </div>
     </>

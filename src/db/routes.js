@@ -345,17 +345,74 @@ router.get('/audit', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// ── Undo (reverter alteração via audit log) ──────────────────
+router.post('/undo/:auditId', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM audit_log WHERE id = $1', [req.params.auditId])
+    if (!rows[0]) return res.status(404).json({ error: 'Entrada não encontrada' })
+    const entry = rows[0]
+    const tabela = entry.tabela
+    const registoId = entry.registo_id
+
+    if (entry.acao === 'UPDATE' && entry.dados_anteriores) {
+      // Reverter UPDATE: restaurar dados anteriores
+      const anterior = JSON.parse(entry.dados_anteriores)
+      const SKIP = new Set(['id', 'created_at', 'notion_id'])
+      const fields = Object.entries(anterior).filter(([k]) => !SKIP.has(k))
+      const sets = fields.map(([k], i) => `${k} = $${i + 1}`)
+      const params = [...fields.map(([, v]) => v), registoId]
+      await pool.query(`UPDATE ${tabela} SET ${sets.join(', ')} WHERE id = $${params.length}`, params)
+      // Log the undo
+      await pool.query(
+        'INSERT INTO audit_log (tabela, registo_id, acao, dados_anteriores, dados_novos) VALUES ($1, $2, $3, $4, $5)',
+        [tabela, registoId, 'UNDO', entry.dados_novos, entry.dados_anteriores]
+      )
+      res.json({ ok: true, action: 'restored', tabela, registoId })
+
+    } else if (entry.acao === 'DELETE' && entry.dados_anteriores) {
+      // Reverter DELETE: re-inserir o registo
+      const anterior = JSON.parse(entry.dados_anteriores)
+      const fields = Object.entries(anterior).filter(([, v]) => v !== undefined && v !== null)
+      const cols = fields.map(([k]) => k)
+      const vals = fields.map((_, i) => `$${i + 1}`)
+      const params = fields.map(([, v]) => v)
+      await pool.query(`INSERT INTO ${tabela} (${cols.join(', ')}) VALUES (${vals.join(', ')}) ON CONFLICT (id) DO NOTHING`, params)
+      await pool.query(
+        'INSERT INTO audit_log (tabela, registo_id, acao, dados_anteriores, dados_novos) VALUES ($1, $2, $3, $4, $5)',
+        [tabela, registoId, 'UNDO_DELETE', null, entry.dados_anteriores]
+      )
+      res.json({ ok: true, action: 'restored_deleted', tabela, registoId })
+
+    } else if (entry.acao === 'INSERT') {
+      // Reverter INSERT: apagar o registo criado
+      await pool.query(`DELETE FROM ${tabela} WHERE id = $1`, [registoId])
+      await pool.query(
+        'INSERT INTO audit_log (tabela, registo_id, acao, dados_anteriores, dados_novos) VALUES ($1, $2, $3, $4, $5)',
+        [tabela, registoId, 'UNDO_INSERT', entry.dados_novos, null]
+      )
+      res.json({ ok: true, action: 'deleted_created', tabela, registoId })
+
+    } else {
+      res.status(400).json({ error: 'Não é possível reverter esta ação' })
+    }
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 // ── Backup ────────────────────────────────────────────────────
+const BACKUP_TABLES = ['imoveis', 'investidores', 'consultores', 'negocios', 'despesas', 'tarefas']
+
 router.get('/backup', async (req, res) => {
   try {
     const backup = {}
-    const tables = ['imoveis', 'investidores', 'consultores', 'negocios', 'despesas', 'tarefas']
     let total = 0
-    for (const t of tables) {
+    for (const t of BACKUP_TABLES) {
       const { rows } = await pool.query(`SELECT * FROM ${t}`)
       backup[t] = rows
       total += rows.length
     }
+    // Incluir audit log
+    const { rows: audit } = await pool.query('SELECT * FROM audit_log ORDER BY created_at DESC LIMIT 500')
+    backup.audit_log = audit
     backup.exported_at = new Date().toISOString()
     backup.total = total
     if (req.query.download === 'true') {
@@ -363,6 +420,98 @@ router.get('/backup', async (req, res) => {
       res.setHeader('Content-Disposition', `attachment; filename=somnium-backup-${new Date().toISOString().slice(0,10)}.json`)
     }
     res.json(backup)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Backup automático — guarda snapshot na tabela backups
+router.post('/backup/auto', async (req, res) => {
+  try {
+    // Criar tabela de backups se não existir
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS backups (
+        id SERIAL PRIMARY KEY,
+        data JSONB NOT NULL,
+        total_registos INT DEFAULT 0,
+        created_at TEXT DEFAULT (NOW()::TEXT)
+      )
+    `)
+    const backup = {}
+    let total = 0
+    for (const t of BACKUP_TABLES) {
+      const { rows } = await pool.query(`SELECT * FROM ${t}`)
+      backup[t] = rows
+      total += rows.length
+    }
+    await pool.query(
+      'INSERT INTO backups (data, total_registos, created_at) VALUES ($1, $2, $3)',
+      [JSON.stringify(backup), total, new Date().toISOString()]
+    )
+    // Manter só os últimos 30 backups
+    await pool.query(`DELETE FROM backups WHERE id NOT IN (SELECT id FROM backups ORDER BY created_at DESC LIMIT 30)`)
+    res.json({ ok: true, total, timestamp: new Date().toISOString() })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Listar backups disponíveis
+router.get('/backup/list', async (req, res) => {
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS backups (id SERIAL PRIMARY KEY, data JSONB NOT NULL, total_registos INT DEFAULT 0, created_at TEXT DEFAULT (NOW()::TEXT))`)
+    const { rows } = await pool.query('SELECT id, total_registos, created_at FROM backups ORDER BY created_at DESC LIMIT 30')
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Restaurar backup específico
+router.post('/backup/restore/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM backups WHERE id = $1', [req.params.id])
+    if (!rows[0]) return res.status(404).json({ error: 'Backup não encontrado' })
+
+    // Primeiro fazer backup do estado actual (safety net)
+    const currentBackup = {}
+    let currentTotal = 0
+    for (const t of BACKUP_TABLES) {
+      const { rows: current } = await pool.query(`SELECT * FROM ${t}`)
+      currentBackup[t] = current
+      currentTotal += current.length
+    }
+    await pool.query(`CREATE TABLE IF NOT EXISTS backups (id SERIAL PRIMARY KEY, data JSONB NOT NULL, total_registos INT DEFAULT 0, created_at TEXT DEFAULT (NOW()::TEXT))`)
+    await pool.query(
+      'INSERT INTO backups (data, total_registos, created_at) VALUES ($1, $2, $3)',
+      [JSON.stringify(currentBackup), currentTotal, new Date().toISOString() + '_pre_restore']
+    )
+
+    // Restaurar
+    const backup = typeof rows[0].data === 'string' ? JSON.parse(rows[0].data) : rows[0].data
+    let restored = 0
+    for (const t of BACKUP_TABLES) {
+      if (!backup[t]?.length) continue
+      // Limpar tabela
+      await pool.query(`DELETE FROM ${t}`)
+      // Re-inserir registos
+      for (const row of backup[t]) {
+        const fields = Object.entries(row).filter(([, v]) => v !== undefined && v !== null)
+        const cols = fields.map(([k]) => k)
+        const vals = fields.map((_, i) => `$${i + 1}`)
+        await pool.query(`INSERT INTO ${t} (${cols.join(', ')}) VALUES (${vals.join(', ')}) ON CONFLICT (id) DO NOTHING`, fields.map(([, v]) => v))
+        restored++
+      }
+    }
+    res.json({ ok: true, restored, fromBackup: rows[0].created_at })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Descarregar backup específico como ficheiro
+router.get('/backup/:id/download', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM backups WHERE id = $1', [req.params.id])
+    if (!rows[0]) return res.status(404).json({ error: 'Backup não encontrado' })
+    const data = typeof rows[0].data === 'string' ? JSON.parse(rows[0].data) : rows[0].data
+    data.exported_at = rows[0].created_at
+    data.total = rows[0].total_registos
+    res.setHeader('Content-Type', 'application/json')
+    res.setHeader('Content-Disposition', `attachment; filename=somnium-backup-${rows[0].created_at.slice(0,10)}.json`)
+    res.json(data)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
