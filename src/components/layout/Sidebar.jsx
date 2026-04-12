@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { LayoutDashboard, TrendingUp, Users, Database, Bell, Clock, Menu, X } from 'lucide-react'
+import { LayoutDashboard, TrendingUp, Users, Database, Bell, Clock, Menu, X, LogOut, ArrowLeftRight } from 'lucide-react'
+import { useAuth } from '../../contexts/AuthContext.jsx'
 
 const nav = [
   { to: '/',           label: 'Dashboard',  Icon: LayoutDashboard, end: true },
@@ -12,6 +13,7 @@ const nav = [
 ]
 
 export function Sidebar() {
+  const { profile, signOut, selectProfile } = useAuth()
   const [alertCount, setAlertCount] = useState(0)
   const [open, setOpen] = useState(false)
 
@@ -73,11 +75,31 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* Footer */}
-      <div className="px-5 py-5" style={{ borderTop: '1px solid #1a1a1a' }}>
-        <div className="flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-          <p className="text-[11px]" style={{ color: '#444' }}>Sistema online</p>
+      {/* Profile + Footer */}
+      <div className="px-4 py-4 flex flex-col gap-3" style={{ borderTop: '1px solid #1a1a1a' }}>
+        {profile && (
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+              style={{ backgroundColor: profile.cor }}>
+              {profile.iniciais}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-white truncate">{profile.nome}</p>
+              <p className="text-[10px]" style={{ color: '#444' }}>Online</p>
+            </div>
+          </div>
+        )}
+        <div className="flex gap-2">
+          <button onClick={() => { selectProfile(null); localStorage.removeItem('somnium_profile') }}
+            className="flex items-center gap-1.5 text-[10px] px-2 py-1 rounded transition-colors hover:bg-white/5"
+            style={{ color: '#555' }} title="Trocar perfil">
+            <ArrowLeftRight className="w-3 h-3" /> Trocar
+          </button>
+          <button onClick={signOut}
+            className="flex items-center gap-1.5 text-[10px] px-2 py-1 rounded transition-colors hover:bg-white/5"
+            style={{ color: '#555' }} title="Sair">
+            <LogOut className="w-3 h-3" /> Sair
+          </button>
         </div>
       </div>
     </>

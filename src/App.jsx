@@ -6,23 +6,50 @@ import { Comercial } from './pages/Comercial.jsx'
 import { Alertas } from './pages/Alertas.jsx'
 import { CRM } from './pages/CRM.jsx'
 import { Operacoes } from './pages/Operacoes.jsx'
+import { Login } from './pages/Login.jsx'
+import { ProfileSelect } from './pages/ProfileSelect.jsx'
 import { ToastProvider } from './components/ui/Toast.jsx'
+import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
+
+function AppRoutes() {
+  const { isAuthenticated, hasProfile, loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#0d0d0d' }}>
+        <div className="flex flex-col items-center gap-3">
+          <img src="/logo.png" alt="Somnium" className="h-12 opacity-50" />
+          <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#C9A84C', borderTopColor: 'transparent' }} />
+        </div>
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) return <Login />
+  if (!hasProfile) return <ProfileSelect />
+
+  return (
+    <Routes>
+      <Route element={<Layout />}>
+        <Route index element={<Dashboard />} />
+        <Route path="/crm" element={<CRM />} />
+        <Route path="/comercial" element={<Comercial />} />
+        <Route path="/financeiro" element={<Financeiro />} />
+        <Route path="/operacoes" element={<Operacoes />} />
+        <Route path="/alertas" element={<Alertas />} />
+      </Route>
+    </Routes>
+  )
+}
 
 export default function App() {
   return (
-    <ToastProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route element={<Layout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="/crm" element={<CRM />} />
-            <Route path="/comercial" element={<Comercial />} />
-            <Route path="/financeiro" element={<Financeiro />} />
-            <Route path="/operacoes" element={<Operacoes />} />
-            <Route path="/alertas" element={<Alertas />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </ToastProvider>
+    <AuthProvider>
+      <ToastProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </ToastProvider>
+    </AuthProvider>
   )
 }
