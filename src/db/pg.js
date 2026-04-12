@@ -169,6 +169,7 @@ export async function initSchema() {
         notion_id TEXT UNIQUE,
         tarefa TEXT NOT NULL,
         status TEXT DEFAULT 'A fazer',
+        categoria TEXT,
         inicio TEXT,
         fim TEXT,
         funcionario TEXT,

@@ -2868,16 +2868,16 @@ app.get('/api/tarefas', async (req, res) => {
 app.post('/api/tarefas', async (req, res) => {
   try {
     const pgPool = (await import('./src/db/pg.js')).default
-    const { tarefa, status, inicio, fim, funcionario, tempo_horas, enviar_calendar } = req.body
+    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, enviar_calendar } = req.body
     if (!tarefa) return res.status(400).json({ error: 'tarefa é obrigatória' })
     const id = (await import('crypto')).randomUUID()
     const now = new Date().toISOString()
     const horas = tempo_horas || (inicio && fim
       ? round2((new Date(fim) - new Date(inicio)) / 3600000) : 0)
     await pgPool.query(
-      `INSERT INTO tarefas (id, tarefa, status, inicio, fim, funcionario, tempo_horas, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [id, tarefa, status || 'A fazer', inicio || null, fim || null, funcionario || null, horas, now, now]
+      `INSERT INTO tarefas (id, tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [id, tarefa, status || 'A fazer', categoria || null, inicio || null, fim || null, funcionario || null, horas, now, now]
     )
     // Opcionalmente criar evento no Google Calendar
     if (enviar_calendar && gcal && inicio) {
@@ -2898,13 +2898,14 @@ app.post('/api/tarefas', async (req, res) => {
 app.put('/api/tarefas/:id', async (req, res) => {
   try {
     const pgPool = (await import('./src/db/pg.js')).default
-    const { tarefa, status, inicio, fim, funcionario, tempo_horas } = req.body
+    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas } = req.body
     const now = new Date().toISOString()
     const horas = tempo_horas || (inicio && fim
       ? round2((new Date(fim) - new Date(inicio)) / 3600000) : undefined)
     const sets = []; const params = []
     if (tarefa !== undefined) { sets.push(`tarefa = $${params.length + 1}`); params.push(tarefa) }
     if (status !== undefined) { sets.push(`status = $${params.length + 1}`); params.push(status) }
+    if (categoria !== undefined) { sets.push(`categoria = $${params.length + 1}`); params.push(categoria) }
     if (inicio !== undefined) { sets.push(`inicio = $${params.length + 1}`); params.push(inicio) }
     if (fim !== undefined) { sets.push(`fim = $${params.length + 1}`); params.push(fim) }
     if (funcionario !== undefined) { sets.push(`funcionario = $${params.length + 1}`); params.push(funcionario) }
@@ -3308,9 +3309,13 @@ app.get('/api/time-tracking', async (req, res) => {
     }
     const porCategoria = {}
     for (const t of tarefasValidas) {
-      let cat = 'Outros'
-      for (const [nome, regex] of Object.entries(CATEGORIAS)) {
-        if (regex.test(t.tarefa)) { cat = nome; break }
+      // Usar categoria guardada na DB; fallback para regex se vazia
+      let cat = t.categoria || null
+      if (!cat) {
+        cat = 'Outros'
+        for (const [nome, regex] of Object.entries(CATEGORIAS)) {
+          if (regex.test(t.tarefa)) { cat = nome; break }
+        }
       }
       if (!porCategoria[cat]) porCategoria[cat] = { horas: 0, tarefas: 0 }
       porCategoria[cat].horas += t.tempoHoras
