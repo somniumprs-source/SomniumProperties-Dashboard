@@ -221,8 +221,10 @@ export function Operacoes() {
   const [error, setError] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [editingTask, setEditingTask] = useState(null)
-  const [taskFilter, setTaskFilter] = useState('all')
+  const [taskFilter, setTaskFilter] = useState('semana')
   const [viewMode, setViewMode] = useState('board')
+  const [showArchive, setShowArchive] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(new Set())
   const [syncing, setSyncing] = useState(false)
 
   const loadAll = useCallback(async () => {
@@ -283,7 +285,53 @@ export function Operacoes() {
 
   const r = data?.resumo
   const k = data?.kpis
-  const filteredTarefas = taskFilter === 'all' ? tarefas : tarefas.filter(t => t.status === taskFilter)
+
+  // Week boundaries (Mon-Sun)
+  const now = new Date()
+  const mondayThis = new Date(now)
+  mondayThis.setDate(now.getDate() - ((now.getDay() + 6) % 7))
+  mondayThis.setHours(0, 0, 0, 0)
+  const sundayThis = new Date(mondayThis)
+  sundayThis.setDate(mondayThis.getDate() + 7)
+
+  const isThisWeek = (t) => {
+    if (!t.inicio) return true // sem data = pendente, mostra sempre
+    const d = new Date(t.inicio)
+    return d >= mondayThis && d < sundayThis
+  }
+
+  // Separar tarefas
+  const ativas = tarefas.filter(t => t.status !== 'Concluída')
+  const concluidas = tarefas.filter(t => t.status === 'Concluída')
+  const semanaAtivas = ativas.filter(isThisWeek)
+
+  const filteredTarefas = taskFilter === 'semana' ? semanaAtivas
+    : taskFilter === 'pendentes' ? ativas
+    : taskFilter === 'arquivo' ? concluidas
+    : tarefas
+
+  async function bulkDelete() {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Apagar ${selectedIds.size} tarefa(s)?`)) return
+    try {
+      await Promise.all([...selectedIds].map(id => fetch(`/api/tarefas/${id}`, { method: 'DELETE' })))
+      setSelectedIds(new Set())
+      await loadAll()
+    } catch (e) { setError(e.message) }
+  }
+
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function selectAll() {
+    if (selectedIds.size === filteredTarefas.length) setSelectedIds(new Set())
+    else setSelectedIds(new Set(filteredTarefas.map(t => t.id)))
+  }
 
   return (
     <>
@@ -356,19 +404,30 @@ export function Operacoes() {
         {/* ══════════ TAREFAS ══════════ */}
         {tab === 'tarefas' && (
           <>
+            {/* Toolbar */}
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div className="flex gap-2 flex-wrap">
-                {['all', ...STATUS_OPTIONS].map(s => (
-                  <button key={s} onClick={() => setTaskFilter(s)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border ${taskFilter === s ? 'border-yellow-300 bg-yellow-50 text-yellow-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
-                    {s === 'all' ? `Todas (${tarefas.length})` : `${s} (${tarefas.filter(t => t.status === s).length})`}
+                {[
+                  { id: 'semana', label: `Esta semana (${semanaAtivas.length})` },
+                  { id: 'pendentes', label: `Todas pendentes (${ativas.length})` },
+                  { id: 'arquivo', label: `Arquivo (${concluidas.length})` },
+                ].map(f => (
+                  <button key={f.id} onClick={() => { setTaskFilter(f.id); setSelectedIds(new Set()) }}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border ${taskFilter === f.id ? 'border-yellow-300 bg-yellow-50 text-yellow-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                    {f.label}
                   </button>
                 ))}
               </div>
               <div className="flex gap-2">
+                {selectedIds.size > 0 && (
+                  <button onClick={bulkDelete}
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100">
+                    Apagar {selectedIds.size} selecionada(s)
+                  </button>
+                )}
                 <button onClick={() => setViewMode(v => v === 'list' ? 'board' : 'list')}
                   className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">
-                  {viewMode === 'list' ? 'Vista Board' : 'Vista Lista'}
+                  {viewMode === 'list' ? 'Board' : 'Lista'}
                 </button>
                 <button onClick={() => { setShowForm(true); setEditingTask(null) }}
                   className="px-4 py-2 text-sm font-medium rounded-lg text-white" style={{ backgroundColor: GOLD }}>
@@ -385,36 +444,45 @@ export function Operacoes() {
               />
             )}
 
-            {/* Board View (Kanban like Notion) */}
-            {viewMode === 'board' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                {STATUS_OPTIONS.map(status => {
-                  const tasks = tarefas.filter(t => t.status === status)
-                  const totalH = tasks.reduce((s, t) => s + (t.tempo_horas || 0), 0)
+            {/* Board View — só mostra A fazer / Em andamento / Atrasada (concluidas escondem) */}
+            {viewMode === 'board' && taskFilter !== 'arquivo' && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {['A fazer', 'Em andamento', 'Atrasada'].map(status => {
+                  const pool = (taskFilter === 'semana' ? semanaAtivas : ativas).filter(t => t.status === status)
+                  const totalH = pool.reduce((s, t) => s + (t.tempo_horas || 0), 0)
                   return (
                     <div key={status} className="flex flex-col">
                       <div className={`flex items-center justify-between px-3 py-2 rounded-t-xl ${STATUS_COLOR[status]}`}>
                         <span className="text-xs font-semibold uppercase">{status}</span>
-                        <span className="text-xs font-mono">{tasks.length} · {HRS(totalH)}</span>
+                        <span className="text-xs font-mono">{pool.length} · {HRS(totalH)}</span>
                       </div>
                       <div className="flex flex-col gap-1.5 p-2 bg-gray-50 rounded-b-xl min-h-[200px] border border-t-0 border-gray-200">
-                        {tasks.slice(0, 20).map(t => (
-                          <div key={t.id} className="bg-white rounded-lg p-3 shadow-sm border border-gray-100 hover:border-gray-300 cursor-pointer"
-                            onClick={() => { setEditingTask(t); setShowForm(false) }}>
-                            <p className="text-sm text-gray-700 font-medium leading-tight">{t.tarefa}</p>
-                            <div className="flex items-center justify-between mt-2">
-                              <span className="text-[10px] text-gray-400">{t.funcionario?.split(',')[0] || '—'}</span>
-                              <div className="flex items-center gap-2">
-                                {t.inicio && <span className="text-[10px] font-mono text-gray-400">
-                                  {new Date(t.inicio).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' })}
-                                  {t.inicio.includes('T') && ' ' + t.inicio.slice(11, 16)}
-                                </span>}
-                                {t.tempo_horas > 0 && <span className="text-[10px] font-mono font-bold text-indigo-600">{HRS(t.tempo_horas)}</span>}
+                        {pool.map(t => (
+                          <div key={t.id} className={`bg-white rounded-lg p-3 shadow-sm border hover:border-gray-300 group ${selectedIds.has(t.id) ? 'border-yellow-400 bg-yellow-50' : 'border-gray-100'}`}>
+                            <div className="flex items-start gap-2">
+                              <input type="checkbox" checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)}
+                                className="mt-0.5 rounded border-gray-300 shrink-0" />
+                              <div className="flex-1 cursor-pointer" onClick={() => { setEditingTask(t); setShowForm(false) }}>
+                                <p className="text-sm text-gray-700 font-medium leading-tight">{t.tarefa}</p>
+                                <div className="flex items-center justify-between mt-2">
+                                  <span className="text-[10px] text-gray-400">{t.funcionario?.split(',')[0] || '—'}</span>
+                                  <div className="flex items-center gap-2">
+                                    {t.inicio && <span className="text-[10px] font-mono text-gray-400">
+                                      {new Date(t.inicio).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' })}
+                                      {t.inicio?.includes('T') && ' ' + t.inicio.slice(11, 16)}
+                                    </span>}
+                                    {t.tempo_horas > 0 && <span className="text-[10px] font-mono font-bold text-indigo-600">{HRS(t.tempo_horas)}</span>}
+                                  </div>
+                                </div>
                               </div>
+                              <button onClick={() => deleteTarefa(t.id)}
+                                className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity text-sm shrink-0">
+                                x
+                              </button>
                             </div>
                           </div>
                         ))}
-                        {tasks.length === 0 && <p className="text-xs text-gray-300 text-center py-8">Sem tarefas</p>}
+                        {pool.length === 0 && <p className="text-xs text-gray-300 text-center py-8">Sem tarefas</p>}
                       </div>
                     </div>
                   )
@@ -422,26 +490,36 @@ export function Operacoes() {
               </div>
             )}
 
-            {/* List View */}
-            {viewMode === 'list' && (
+            {/* List View — para todos os filtros incluindo arquivo */}
+            {(viewMode === 'list' || taskFilter === 'arquivo') && (
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                {taskFilter === 'arquivo' && (
+                  <div className="px-4 py-3 bg-green-50 border-b border-green-100 text-xs text-green-700">
+                    Arquivo — tarefas concluidas. Seleciona e apaga as que ja nao precisas.
+                  </div>
+                )}
                 <table className="min-w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase bg-gray-50">
-                      <th className="text-left py-2.5 px-4">Tarefa</th>
+                      <th className="py-2.5 px-3 w-8"><input type="checkbox" onChange={selectAll} checked={selectedIds.size > 0 && selectedIds.size === filteredTarefas.length} className="rounded border-gray-300" /></th>
+                      <th className="text-left py-2.5 px-3">Tarefa</th>
                       <th className="text-left py-2.5 px-3 w-32">Status</th>
                       <th className="text-left py-2.5 px-3 w-36">Funcionario</th>
-                      <th className="text-left py-2.5 px-3 w-32">Inicio</th>
-                      <th className="text-left py-2.5 px-3 w-32">Fim</th>
+                      <th className="text-left py-2.5 px-3 w-28">Inicio</th>
+                      <th className="text-left py-2.5 px-3 w-28">Fim</th>
                       <th className="text-right py-2.5 px-3 w-16">Horas</th>
-                      <th className="text-right py-2.5 px-3 w-20">Acoes</th>
+                      <th className="text-right py-2.5 px-3 w-16"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredTarefas.slice(0, 80).map(t => (
-                      <tr key={t.id} className={`border-b border-gray-50 hover:bg-gray-50 ${t.status === 'Concluída' ? 'opacity-60' : ''}`}>
-                        <td className="py-2 px-4 text-gray-700 font-medium">
-                          <span className={t.status === 'Concluída' ? 'line-through' : ''}>{t.tarefa}</span>
+                    {filteredTarefas.slice(0, 100).map(t => (
+                      <tr key={t.id} className={`border-b border-gray-50 hover:bg-gray-50 ${selectedIds.has(t.id) ? 'bg-yellow-50' : ''} ${t.status === 'Concluída' ? 'opacity-60' : ''}`}>
+                        <td className="py-2 px-3"><input type="checkbox" checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)} className="rounded border-gray-300" /></td>
+                        <td className="py-2 px-3 text-gray-700 font-medium">
+                          <span className={`cursor-pointer hover:underline ${t.status === 'Concluída' ? 'line-through' : ''}`}
+                            onClick={() => { setEditingTask(t); setShowForm(false) }}>
+                            {t.tarefa}
+                          </span>
                         </td>
                         <td className="py-2 px-3">
                           <select value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
@@ -451,27 +529,26 @@ export function Operacoes() {
                         </td>
                         <td className="py-2 px-3 text-xs text-gray-500">{t.funcionario || '—'}</td>
                         <td className="py-2 px-3 text-xs font-mono text-gray-500">
-                          {t.inicio ? new Date(t.inicio).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) + (t.inicio.includes('T') ? ' ' + t.inicio.slice(11, 16) : '') : '—'}
+                          {t.inicio ? new Date(t.inicio).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) + (t.inicio?.includes('T') ? ' ' + t.inicio.slice(11, 16) : '') : '—'}
                         </td>
                         <td className="py-2 px-3 text-xs font-mono text-gray-500">
-                          {t.fim ? new Date(t.fim).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) + (t.fim.includes('T') ? ' ' + t.fim.slice(11, 16) : '') : '—'}
+                          {t.fim ? new Date(t.fim).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) + (t.fim?.includes('T') ? ' ' + t.fim.slice(11, 16) : '') : '—'}
                         </td>
                         <td className="py-2 px-3 text-right font-mono text-xs font-bold text-indigo-600">{t.tempo_horas > 0 ? HRS(t.tempo_horas) : '—'}</td>
                         <td className="py-2 px-3 text-right">
-                          <div className="flex gap-2 justify-end">
-                            <button onClick={() => { setEditingTask(t); setShowForm(false) }} className="text-xs text-indigo-600 hover:underline">Editar</button>
-                            <button onClick={() => deleteTarefa(t.id)} className="text-xs text-red-500 hover:underline">x</button>
-                          </div>
+                          <button onClick={() => deleteTarefa(t.id)} className="text-gray-300 hover:text-red-500 text-sm">x</button>
                         </td>
                       </tr>
                     ))}
                     {filteredTarefas.length === 0 && (
-                      <tr><td colSpan={7} className="py-8 text-center text-gray-400 text-xs">Sem tarefas — clica em "+ Nova Tarefa" para criar</td></tr>
+                      <tr><td colSpan={8} className="py-8 text-center text-gray-400 text-xs">
+                        {taskFilter === 'arquivo' ? 'Sem tarefas concluidas' : 'Sem tarefas — clica em "+ Nova Tarefa"'}
+                      </td></tr>
                     )}
                   </tbody>
                 </table>
                 <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex justify-between text-xs text-gray-400">
-                  <span>{filteredTarefas.length} tarefa(s){filteredTarefas.length > 80 ? ` (a mostrar 80)` : ''}</span>
+                  <span>{filteredTarefas.length} tarefa(s)</span>
                   <span>Total: {HRS(filteredTarefas.reduce((s, t) => s + (t.tempo_horas || 0), 0))}</span>
                 </div>
               </div>
