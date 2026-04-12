@@ -8,6 +8,14 @@ const HRS = v => v == null ? '—' : `${Number(v).toFixed(1)}h`
 const GOLD = '#C9A84C'
 const MES_LABEL = { '01':'Jan','02':'Fev','03':'Mar','04':'Abr','05':'Mai','06':'Jun','07':'Jul','08':'Ago','09':'Set','10':'Out','11':'Nov','12':'Dez' }
 const FUNCIONARIOS = ['João Abreu', 'Alexandre Mendes']
+const CATEGORIAS = [
+  'Cold Call', 'Pesquisa de Imóveis', 'Estudo de Mercado',
+  'Follow Up Consultores', 'Follow Up Investidores',
+  'Reunião Investidores', 'Reunião de Equipa Somnium',
+  'Visita', 'Proposta', 'Apresentação de Negócios',
+  'SOP / Formação', 'Planeamento', 'Implementação com IA',
+  'Análise de Negócio', 'Contacto Consultores', 'Outros',
+]
 const STATUS_OPTIONS = ['A fazer', 'Em andamento', 'Concluída', 'Atrasada']
 const STATUS_COLOR = { 'A fazer': 'bg-gray-100 text-gray-600', 'Em andamento': 'bg-blue-100 text-blue-700', 'Concluída': 'bg-green-100 text-green-700', 'Atrasada': 'bg-red-100 text-red-600' }
 
@@ -70,7 +78,7 @@ function calcHoras(inicio, fim) {
 }
 
 function TaskForm({ onSave, onCancel, initial }) {
-  const defaults = { tarefa: '', status: 'A fazer', inicio: '', fim: '', funcionario: FUNCIONARIOS[0], tempo_horas: '', enviar_calendar: false }
+  const defaults = { tarefa: '', status: 'A fazer', categoria: '', inicio: '', fim: '', funcionario: FUNCIONARIOS[0], tempo_horas: '', enviar_calendar: false }
   const [f, setF] = useState(() => {
     if (!initial) return defaults
     return {
@@ -95,11 +103,18 @@ function TaskForm({ onSave, onCancel, initial }) {
     <div className="bg-white rounded-xl border-2 border-yellow-200 p-5 shadow-md">
       <h3 className="text-sm font-semibold text-gray-700 mb-4">{initial ? 'Editar Tarefa' : 'Nova Tarefa'}</h3>
       <div className="grid grid-cols-1 xl:grid-cols-6 gap-4">
-        <div className="xl:col-span-4">
+        <div className="xl:col-span-3">
           <label className="text-xs text-gray-500 block mb-1">Tarefa *</label>
           <input value={f.tarefa} onChange={e => set('tarefa', e.target.value)} autoFocus
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-yellow-300 focus:border-yellow-400 outline-none"
-            placeholder="Ex: Cold Call, Estudo de Mercado, Reunião Investidor..." />
+            placeholder="Ex: Cold Call Investidor X, Visita M3..." />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Categoria</label>
+          <select value={f.categoria} onChange={e => set('categoria', e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+            <option value="">Selecionar...</option>
+            {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
         </div>
         <div>
           <label className="text-xs text-gray-500 block mb-1">Funcionário</label>
@@ -494,7 +509,8 @@ export function Operacoes() {
                                 className="mt-0.5 w-4 h-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-400 shrink-0 cursor-pointer" />
                               <div className="flex-1 min-w-0 cursor-pointer" onClick={() => { setEditingTask(t); setShowForm(false) }}>
                                 <p className="text-sm text-gray-700 font-medium leading-tight">{t.tarefa}</p>
-                                <div className="flex items-center justify-between mt-2">
+                                {t.categoria && <span className="text-[9px] px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded mt-1 inline-block">{t.categoria}</span>}
+                                <div className="flex items-center justify-between mt-1.5">
                                   <span className="text-[10px] text-gray-400">{t.funcionario?.split(',')[0] || '—'}</span>
                                   <div className="flex items-center gap-2">
                                     {t.inicio && <span className="text-[10px] font-mono text-gray-400">
@@ -533,7 +549,8 @@ export function Operacoes() {
                     <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase bg-gray-50">
                       <th className="py-2.5 px-3 w-8"><input type="checkbox" onChange={selectAll} checked={selectedIds.size > 0 && selectedIds.size === filteredTarefas.length} className="rounded border-gray-300" /></th>
                       <th className="text-left py-2.5 px-3">Tarefa</th>
-                      <th className="text-left py-2.5 px-3 w-32">Status</th>
+                      <th className="text-left py-2.5 px-3 w-32">Categoria</th>
+                      <th className="text-left py-2.5 px-3 w-28">Status</th>
                       <th className="text-left py-2.5 px-3 w-36">Funcionário</th>
                       <th className="text-left py-2.5 px-3 w-28">Início</th>
                       <th className="text-left py-2.5 px-3 w-28">Fim</th>
@@ -551,6 +568,7 @@ export function Operacoes() {
                             {t.tarefa}
                           </span>
                         </td>
+                        <td className="py-2 px-3 text-xs">{t.categoria ? <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded">{t.categoria}</span> : <span className="text-gray-300">—</span>}</td>
                         <td className="py-2 px-3">
                           <select value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
                             className={`px-2 py-0.5 rounded text-xs font-medium border-0 cursor-pointer ${STATUS_COLOR[t.status] || 'bg-gray-100'}`}>
@@ -571,7 +589,7 @@ export function Operacoes() {
                       </tr>
                     ))}
                     {filteredTarefas.length === 0 && (
-                      <tr><td colSpan={8} className="py-8 text-center text-gray-400 text-xs">
+                      <tr><td colSpan={9} className="py-8 text-center text-gray-400 text-xs">
                         {taskFilter === 'arquivo' ? 'Sem tarefas concluídas' : 'Sem tarefas — clica em "+ Nova Tarefa"'}
                       </td></tr>
                     )}

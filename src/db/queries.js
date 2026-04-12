@@ -135,7 +135,7 @@ export async function getConsultores() {
 export async function getTarefas() {
   const { rows } = await pool.query('SELECT * FROM tarefas ORDER BY inicio DESC')
   return rows.map(r => ({
-    id: r.id, tarefa: r.tarefa, status: r.status,
+    id: r.id, tarefa: r.tarefa, status: r.status, categoria: r.categoria,
     inicio: r.inicio, fim: r.fim, funcionario: r.funcionario,
     tempoHoras: r.tempo_horas || 0, grupoId: r.grupo_id,
   }))
