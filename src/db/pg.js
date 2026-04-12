@@ -196,6 +196,29 @@ export async function initSchema() {
         status TEXT DEFAULT 'ok'
       );
 
+      CREATE TABLE IF NOT EXISTS okrs (
+        id TEXT PRIMARY KEY,
+        trimestre TEXT NOT NULL,
+        objectivo TEXT NOT NULL,
+        ordem INT DEFAULT 0,
+        created_at TEXT DEFAULT (NOW()::TEXT),
+        updated_at TEXT DEFAULT (NOW()::TEXT)
+      );
+
+      CREATE TABLE IF NOT EXISTS okr_krs (
+        id TEXT PRIMARY KEY,
+        okr_id TEXT NOT NULL REFERENCES okrs(id) ON DELETE CASCADE,
+        kr TEXT NOT NULL,
+        meta REAL NOT NULL DEFAULT 1,
+        unidade TEXT DEFAULT '',
+        tipo TEXT DEFAULT 'acumulado',
+        fonte TEXT,
+        invertido BOOLEAN DEFAULT false,
+        ordem INT DEFAULT 0,
+        created_at TEXT DEFAULT (NOW()::TEXT),
+        updated_at TEXT DEFAULT (NOW()::TEXT)
+      );
+
       CREATE INDEX IF NOT EXISTS idx_imoveis_estado ON imoveis(estado);
       CREATE INDEX IF NOT EXISTS idx_investidores_status ON investidores(status);
       CREATE INDEX IF NOT EXISTS idx_consultores_estatuto ON consultores(estatuto);

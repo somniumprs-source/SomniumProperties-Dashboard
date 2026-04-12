@@ -10,19 +10,11 @@ const RATIO = v => v == null ? '—' : `${Number(v).toFixed(1)}:1`
 const GOLD = '#C9A84C'
 const TABS = [
   { id: 'resumo',       label: 'Visão Geral' },
-  { id: 'receita',      label: '1.1 Receita' },
-  { id: 'conversao',    label: '1.2 Conversão' },
-  { id: 'ticket',       label: '1.3 Ticket' },
-  { id: 'margem',       label: '1.4 Margem' },
-  { id: 'cac',          label: '2.1 CPA' },
-  { id: 'ciclo',        label: '2.2 Ciclo' },
-  { id: 'perda',        label: '2.3 Perda' },
-  { id: 'volume',       label: '2.4 Volume' },
-  { id: 'ltv',          label: '3.1 AUM' },
-  { id: 'recompra',     label: '3.2 Reinvest.' },
-  { id: 'churn',        label: '3.3 Inatividade' },
+  { id: 'receita',      label: 'Receita & Margens' },
+  { id: 'eficiencia',   label: 'Eficiência' },
+  { id: 'retencao',     label: 'Retenção' },
   { id: 'avancado',     label: 'Avançado' },
-  { id: 'okrs',         label: 'OKRs Q2' },
+  { id: 'okrs',         label: 'OKRs' },
 ]
 
 const FUNNEL_COLORS = ['#94a3b8', '#60a5fa', '#818cf8', '#f59e0b', '#22c55e']
@@ -175,17 +167,33 @@ function ProgressMeta({ label, value, meta, format = 'eur' }) {
 export function Metricas() {
   const [tab, setTab]       = useState('resumo')
   const [data, setData]     = useState(null)
+  const [okrs, setOkrs]     = useState([])
+  const [fontes, setFontes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]   = useState(null)
+  const [showOkrForm, setShowOkrForm] = useState(false)
+  const [editingOkr, setEditingOkr] = useState(null)
 
   async function load() {
     setLoading(true); setError(null)
     try {
-      const r = await fetch('/api/metricas')
+      const [r, okrRes, fontesRes] = await Promise.all([
+        fetch('/api/metricas'),
+        fetch('/api/okrs').then(r => r.json()).catch(() => []),
+        fetch('/api/okrs/fontes').then(r => r.json()).catch(() => []),
+      ])
       if (!r.ok) throw new Error('Erro no servidor')
       const d = await r.json()
       if (d.error) throw new Error(d.error)
       setData(d)
+      setOkrs(okrRes)
+      setFontes(fontesRes)
+      // Seed Q2 se vazio
+      if (!okrRes.length) {
+        await fetch('/api/okrs/seed-q2', { method: 'POST' })
+        const seeded = await fetch('/api/okrs').then(r => r.json()).catch(() => [])
+        setOkrs(seeded)
+      }
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
   }
@@ -363,7 +371,7 @@ export function Metricas() {
         })()}
 
         {/* ══════════ 1.2 CONVERSÃO ══════════ */}
-        {tab === 'conversao' && tk?.conversao && (() => {
+        {tab === 'receita' && tk?.conversao && (() => {
           const im = tk.conversao.imoveis
           const inv = tk.conversao.investidores
           const cons = tk.conversao.consultores
@@ -431,7 +439,7 @@ export function Metricas() {
         })()}
 
         {/* ══════════ 1.3 TICKET MÉDIO ══════════ */}
-        {tab === 'ticket' && tk?.ticketMedio && (() => {
+        {tab === 'receita' && tk?.ticketMedio && (() => {
           const wh = tk.ticketMedio.wholesaling
           const caep = tk.ticketMedio.caep
           const cons = tk.ticketMedio.consultores
@@ -494,7 +502,7 @@ export function Metricas() {
         })()}
 
         {/* ══════════ 1.4 MARGEM ══════════ */}
-        {tab === 'margem' && tk?.margem && (() => {
+        {tab === 'receita' && tk?.margem && (() => {
           const wh = tk.margem.wholesaling
           const caep = tk.margem.caep
           return (
@@ -551,7 +559,7 @@ export function Metricas() {
         })()}
 
         {/* ══════════ 2.1 CAC ══════════ */}
-        {tab === 'cac' && tk?.cac && (() => {
+        {tab === 'eficiencia' && tk?.cac && (() => {
           const c = tk.cac
           return (
             <>
@@ -598,7 +606,7 @@ export function Metricas() {
         })()}
 
         {/* ══════════ 2.2 CICLO DE VENDAS ══════════ */}
-        {tab === 'ciclo' && tk?.ciclo && (() => {
+        {tab === 'eficiencia' && tk?.ciclo && (() => {
           const im = tk.ciclo.imoveis
           const inv = tk.ciclo.investidores
           const cons = tk.ciclo.consultores
@@ -656,7 +664,7 @@ export function Metricas() {
         })()}
 
         {/* ══════════ 2.3 MOTIVOS DE PERDA ══════════ */}
-        {tab === 'perda' && tk?.motivosPerda && (() => {
+        {tab === 'eficiencia' && tk?.motivosPerda && (() => {
           const im = tk.motivosPerda.imoveis
           const inv = tk.motivosPerda.investidores
           const cons = tk.motivosPerda.consultores
@@ -703,7 +711,7 @@ export function Metricas() {
         })()}
 
         {/* ══════════ 2.4 VOLUME DE ATIVIDADES ══════════ */}
-        {tab === 'volume' && tk?.volume && (() => {
+        {tab === 'eficiencia' && tk?.volume && (() => {
           const im = tk.volume.imoveis
           const inv = tk.volume.investidores
           const cons = tk.volume.consultores
@@ -741,7 +749,7 @@ export function Metricas() {
         })()}
 
         {/* ══════════ 3.1 LTV ══════════ */}
-        {tab === 'ltv' && tk?.ltv && (() => {
+        {tab === 'retencao' && tk?.ltv && (() => {
           const inv = tk.ltv.investidores
           const cons = tk.ltv.consultores
           return (
@@ -820,7 +828,7 @@ export function Metricas() {
         })()}
 
         {/* ══════════ 3.2 RECOMPRA ══════════ */}
-        {tab === 'recompra' && tk?.recompra && (() => {
+        {tab === 'retencao' && tk?.recompra && (() => {
           const inv = tk.recompra.investidores
           const cons = tk.recompra.consultores
           return (
@@ -841,7 +849,7 @@ export function Metricas() {
         })()}
 
         {/* ══════════ 3.3 CHURN ══════════ */}
-        {tab === 'churn' && tk?.churn && (() => {
+        {tab === 'retencao' && tk?.churn && (() => {
           const inv = tk.churn.investidores
           const cons = tk.churn.consultores
           return (
@@ -1068,48 +1076,97 @@ export function Metricas() {
           )
         })()}
 
-        {/* ══════════ OKRs Q2 2026 ══════════ */}
-        {tab === 'okrs' && data?.avancado?.okrs && (() => {
-          const okrs = data.avancado.okrs
-          const wa = data.avancado.weeklyActivity
+        {/* ══════════ OKRs (editáveis) ══════════ */}
+        {tab === 'okrs' && (() => {
+          const wa = data?.avancado?.weeklyActivity
+          async function createOkr(form) {
+            await fetch('/api/okrs', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(form) })
+            setShowOkrForm(false); load()
+          }
+          async function deleteOkr(id) {
+            if (!confirm('Apagar este objectivo e todos os KRs?')) return
+            await fetch(`/api/okrs/${id}`, { method: 'DELETE' }); load()
+          }
+          async function deleteKr(id) {
+            await fetch(`/api/okr-krs/${id}`, { method: 'DELETE' }); load()
+          }
+          async function addKr(okrId) {
+            const kr = prompt('Descrição do Key Result:')
+            if (!kr) return
+            const meta = parseFloat(prompt('Meta (número):', '1') || '1')
+            await fetch(`/api/okrs/${okrId}/krs`, {
+              method: 'POST', headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({ kr, meta, fonte: null })
+            }); load()
+          }
           return (
             <>
               {/* Weekly Activity Score */}
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-gray-700">Weekly Activity Score</h3>
-                  <span className={`text-2xl font-bold ${wa.score >= 70 ? 'text-green-600' : wa.score >= 40 ? 'text-yellow-600' : 'text-red-500'}`}>
-                    {wa.score}%
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
-                  {Object.entries(wa).filter(([k]) => k !== 'score').map(([key, v]) => {
-                    const pct = v.meta > 0 ? Math.min(100, Math.round(v.valor / v.meta * 100)) : 0
-                    const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())
-                    return (
-                      <div key={key} className="flex flex-col gap-1">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-gray-500">{label}</span>
-                          <span className="font-semibold">{v.valor} / {v.meta}</span>
+              {wa && (
+                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-gray-700">Actividade Semanal</h3>
+                    <span className={`text-2xl font-bold ${wa.score >= 70 ? 'text-green-600' : wa.score >= 40 ? 'text-yellow-600' : 'text-red-500'}`}>
+                      {wa.score}%
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
+                    {Object.entries(wa).filter(([k]) => k !== 'score').map(([key, v]) => {
+                      const pct = v.meta > 0 ? Math.min(100, Math.round(v.valor / v.meta * 100)) : 0
+                      const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())
+                      return (
+                        <div key={key} className="flex flex-col gap-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-500">{label}</span>
+                            <span className="font-semibold">{v.valor} / {v.meta}</span>
+                          </div>
+                          <div className="w-full bg-gray-100 rounded-full h-2.5">
+                            <div className={`h-2.5 rounded-full ${pct >= 100 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-400' : 'bg-red-400'}`}
+                              style={{ width: `${pct}%` }} />
+                          </div>
                         </div>
-                        <div className="w-full bg-gray-100 rounded-full h-2.5">
-                          <div className={`h-2.5 rounded-full ${pct >= 100 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-400' : 'bg-red-400'}`}
-                            style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
+              )}
+
+              {/* OKRs Header */}
+              <div className="flex items-center justify-between">
+                <SectionTitle>OKRs</SectionTitle>
+                <button onClick={() => setShowOkrForm(true)}
+                  className="px-4 py-2 text-sm font-medium rounded-lg text-white" style={{ backgroundColor: GOLD }}>
+                  + Novo Objectivo
+                </button>
               </div>
 
-              {/* OKRs */}
-              <SectionTitle>OKRs Q2 2026</SectionTitle>
+              {/* Create OKR form */}
+              {showOkrForm && (
+                <div className="bg-white rounded-xl border-2 border-yellow-200 p-5 shadow-md">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Novo Objectivo</h3>
+                  <form onSubmit={e => { e.preventDefault(); const fd = new FormData(e.target); createOkr({ trimestre: fd.get('trimestre'), objectivo: fd.get('objectivo'), krs: [] }) }}>
+                    <div className="grid grid-cols-1 xl:grid-cols-4 gap-3">
+                      <input name="trimestre" defaultValue="Q2 2026" placeholder="Trimestre (ex: Q3 2026)" className="border border-gray-200 rounded-lg px-3 py-2 text-sm" required />
+                      <input name="objectivo" placeholder="Objectivo" className="xl:col-span-2 border border-gray-200 rounded-lg px-3 py-2 text-sm" autoFocus required />
+                      <div className="flex gap-2">
+                        <button type="submit" className="px-4 py-2 text-sm font-medium rounded-lg text-white flex-1" style={{ backgroundColor: GOLD }}>Criar</button>
+                        <button type="button" onClick={() => setShowOkrForm(false)} className="px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-500">Cancelar</button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* OKR Cards */}
               <div className="flex flex-col gap-5">
                 {okrs.map((okr, oi) => (
-                  <div key={oi} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                  <div key={okr.id} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm font-semibold text-gray-700">O{oi + 1}: {okr.objectivo}</h3>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs px-2 py-0.5 bg-gray-100 rounded text-gray-500">{okr.trimestre}</span>
+                        <h3 className="text-sm font-semibold text-gray-700">O{oi + 1}: {okr.objectivo}</h3>
+                      </div>
+                      <div className="flex items-center gap-3">
                         <div className="w-24 bg-gray-100 rounded-full h-3">
                           <div className={`h-3 rounded-full ${okr.progresso >= 75 ? 'bg-green-500' : okr.progresso >= 40 ? 'bg-yellow-400' : 'bg-red-400'}`}
                             style={{ width: `${okr.progresso}%` }} />
@@ -1117,33 +1174,35 @@ export function Metricas() {
                         <span className={`text-sm font-bold ${okr.progresso >= 75 ? 'text-green-600' : okr.progresso >= 40 ? 'text-yellow-600' : 'text-red-500'}`}>
                           {okr.progresso}%
                         </span>
+                        <button onClick={() => deleteOkr(okr.id)} className="text-xs text-gray-300 hover:text-red-500" title="Apagar">x</button>
                       </div>
                     </div>
                     <div className="flex flex-col gap-3">
-                      {okr.krs.map((kr, ki) => {
-                        const pct = kr.progresso
-                        return (
-                          <div key={ki} className="flex items-center gap-3">
-                            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
-                              pct >= 100 ? 'bg-green-100 text-green-700' : pct >= 50 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-600'
-                            }`}>{pct >= 100 ? '✓' : ki + 1}</span>
-                            <div className="flex-1">
-                              <div className="flex justify-between text-xs mb-1">
-                                <span className="text-gray-600">{kr.kr}</span>
-                                <span className="font-mono font-semibold">{kr.valor}{kr.unidade} / {kr.meta}{kr.unidade}</span>
-                              </div>
-                              <div className="w-full bg-gray-100 rounded-full h-2">
-                                <div className={`h-2 rounded-full transition-all ${
-                                  pct >= 100 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-400' : 'bg-red-400'
-                                }`} style={{ width: `${Math.min(100, pct)}%` }} />
-                              </div>
+                      {(okr.krs || []).map((kr, ki) => (
+                        <div key={kr.id} className="flex items-center gap-3">
+                          <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                            kr.progresso >= 100 ? 'bg-green-100 text-green-700' : kr.progresso >= 50 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-600'
+                          }`}>{kr.progresso >= 100 ? '✓' : ki + 1}</span>
+                          <div className="flex-1">
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-gray-600">{kr.kr}</span>
+                              <span className="font-mono font-semibold">{kr.valor ?? 0}{kr.unidade} / {kr.meta}{kr.unidade}</span>
                             </div>
+                            <div className="w-full bg-gray-100 rounded-full h-2">
+                              <div className={`h-2 rounded-full transition-all ${
+                                kr.progresso >= 100 ? 'bg-green-500' : kr.progresso >= 50 ? 'bg-yellow-400' : 'bg-red-400'
+                              }`} style={{ width: `${Math.min(100, kr.progresso)}%` }} />
+                            </div>
+                            {kr.fonte && <span className="text-[9px] text-gray-300">Auto: {kr.fonte}</span>}
                           </div>
-                        )
-                      })}
+                          <button onClick={() => deleteKr(kr.id)} className="text-xs text-gray-300 hover:text-red-500 shrink-0" title="Apagar KR">x</button>
+                        </div>
+                      ))}
                     </div>
+                    <button onClick={() => addKr(okr.id)} className="mt-3 text-xs text-indigo-500 hover:underline">+ Adicionar Key Result</button>
                   </div>
                 ))}
+                {okrs.length === 0 && <p className="text-xs text-gray-400 text-center py-8">Sem OKRs definidos — clica em "+ Novo Objectivo"</p>}
               </div>
             </>
           )
