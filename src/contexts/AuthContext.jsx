@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase.js'
+import { supabase, authEnabled } from '../lib/supabase.js'
 
 const AuthContext = createContext(null)
 
@@ -14,10 +14,21 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!authEnabled || !supabase) {
+      // Sem auth — acesso livre (dev mode)
+      setSession({ user: { email: 'dev' } })
+      const saved = localStorage.getItem('somnium_profile')
+      if (saved) {
+        const p = PROFILES.find(pr => pr.id === saved)
+        if (p) setProfile(p)
+      }
+      setLoading(false)
+      return
+    }
+
     // Verificar sessão existente
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
-      // Recuperar perfil do localStorage
       if (session) {
         const saved = localStorage.getItem('somnium_profile')
         if (saved) {
@@ -41,17 +52,24 @@ export function AuthProvider({ children }) {
   }, [])
 
   async function signIn(email, password) {
+    if (!supabase) throw new Error('Auth não configurado')
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
   }
 
   async function signOut() {
-    await supabase.auth.signOut()
+    if (supabase) await supabase.auth.signOut()
+    setSession(null)
     setProfile(null)
     localStorage.removeItem('somnium_profile')
   }
 
   function selectProfile(profileId) {
+    if (!profileId) {
+      setProfile(null)
+      localStorage.removeItem('somnium_profile')
+      return
+    }
     const p = PROFILES.find(pr => pr.id === profileId)
     if (p) {
       setProfile(p)
@@ -61,7 +79,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      session, profile, loading,
+      session, profile, loading, authEnabled,
       isAuthenticated: !!session,
       hasProfile: !!profile,
       profiles: PROFILES,
