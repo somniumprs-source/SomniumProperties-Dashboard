@@ -31,7 +31,7 @@ export function Sidebar() {
     <>
       {/* Logo */}
       <div className="w-full" style={{ backgroundColor: '#0d0d0d' }}>
-        <img src="/logo-transparent.png" alt="Somnium Properties" className="mx-auto" style={{ height: '70px', padding: '20px 16px' }} />
+        <img src="/logo-transparent.png" alt="Somnium Properties" className="mx-auto" style={{ height: '140px', padding: '20px 16px' }} />
       </div>
 
       {/* Separador dourado */}
