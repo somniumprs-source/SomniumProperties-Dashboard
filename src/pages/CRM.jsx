@@ -30,7 +30,7 @@ export function CRM() {
   const [editing, setEditing] = useState(null) // null = list view, object = edit/create
   const [detail, setDetail] = useState(null) // null = no detail, id = show detail panel
   const [stats, setStats] = useState(null)
-  const [view, setView] = useState('table') // 'table' | 'kanban'
+  const [view, setView] = useState('kanban') // 'kanban' | 'table'
   const [filters, setFilters] = useState({})
   const [alertCount, setAlertCount] = useState(0)
 
