@@ -280,8 +280,12 @@ export function CRM() {
             renderCard={kanbanConfig.renderCard}
             onMove={handleMove}
             onCardClick={(id) => {
-              const item = data.find(i => i.id === id)
-              if (item) setEditing(item)
+              if (['Imóveis', 'Investidores', 'Consultores'].includes(tab)) {
+                setDetail(id)
+              } else {
+                const item = data.find(i => i.id === id)
+                if (item) setEditing(item)
+              }
             }}
           />
         )}
