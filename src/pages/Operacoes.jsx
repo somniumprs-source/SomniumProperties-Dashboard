@@ -62,22 +62,50 @@ function HBar({ items, valueKey = 'horas', labelKey = 'label', colorFn }) {
   )
 }
 
-// ── Task Form ───────────────────────────────────────────────────
+// ── Task Form (matches Notion "Tarefas a fazer") ────────────────
+function calcHoras(inicio, fim) {
+  if (!inicio || !fim) return null
+  const ms = new Date(fim) - new Date(inicio)
+  return ms > 0 ? Math.round(ms / 3600000 * 100) / 100 : null
+}
+
 function TaskForm({ onSave, onCancel, initial }) {
-  const [f, setF] = useState(initial || { tarefa: '', status: 'A fazer', inicio: '', fim: '', funcionario: FUNCIONARIOS[0], enviar_calendar: false })
-  const set = (k, v) => setF(p => ({ ...p, [k]: v }))
+  const defaults = { tarefa: '', status: 'A fazer', inicio: '', fim: '', funcionario: FUNCIONARIOS[0], tempo_horas: '', enviar_calendar: false }
+  const [f, setF] = useState(() => {
+    if (!initial) return defaults
+    return {
+      ...defaults, ...initial,
+      inicio: initial.inicio?.slice(0, 16) || '',
+      fim: initial.fim?.slice(0, 16) || '',
+      tempo_horas: initial.tempo_horas || '',
+    }
+  })
+  const set = (k, v) => setF(p => {
+    const next = { ...p, [k]: v }
+    // Auto-calc horas when both dates set
+    if ((k === 'inicio' || k === 'fim') && next.inicio && next.fim) {
+      const h = calcHoras(next.inicio, next.fim)
+      if (h != null) next.tempo_horas = h
+    }
+    return next
+  })
+  const horasDisplay = f.tempo_horas || calcHoras(f.inicio, f.fim) || 0
+
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+    <div className="bg-white rounded-xl border-2 border-yellow-200 p-5 shadow-md">
       <h3 className="text-sm font-semibold text-gray-700 mb-4">{initial ? 'Editar Tarefa' : 'Nova Tarefa'}</h3>
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <div className="xl:col-span-2">
-          <label className="text-xs text-gray-500 block mb-1">Tarefa</label>
-          <input value={f.tarefa} onChange={e => set('tarefa', e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-yellow-300 focus:border-yellow-400 outline-none" placeholder="Descricao da tarefa..." />
+      <div className="grid grid-cols-1 xl:grid-cols-6 gap-4">
+        <div className="xl:col-span-4">
+          <label className="text-xs text-gray-500 block mb-1">Tarefa *</label>
+          <input value={f.tarefa} onChange={e => set('tarefa', e.target.value)} autoFocus
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-yellow-300 focus:border-yellow-400 outline-none"
+            placeholder="Ex: Cold Call, Estudo de Mercado, Reuniao Investidor..." />
         </div>
         <div>
           <label className="text-xs text-gray-500 block mb-1">Funcionario</label>
           <select value={f.funcionario} onChange={e => set('funcionario', e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
             {FUNCIONARIOS.map(fn => <option key={fn} value={fn}>{fn}</option>)}
+            <option value="João Abreu, Alexandre Mendes">Ambos</option>
           </select>
         </div>
         <div>
@@ -86,26 +114,45 @@ function TaskForm({ onSave, onCancel, initial }) {
             {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
-        <div>
-          <label className="text-xs text-gray-500 block mb-1">Inicio</label>
-          <input type="datetime-local" value={f.inicio?.slice(0, 16) || ''} onChange={e => set('inicio', e.target.value ? e.target.value + ':00' : '')} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+        <div className="xl:col-span-2">
+          <label className="text-xs text-gray-500 block mb-1">Inicio da tarefa</label>
+          <input type="datetime-local" value={f.inicio} onChange={e => set('inicio', e.target.value)}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div className="xl:col-span-2">
+          <label className="text-xs text-gray-500 block mb-1">Fim da tarefa</label>
+          <input type="datetime-local" value={f.fim} onChange={e => set('fim', e.target.value)}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
         </div>
         <div>
-          <label className="text-xs text-gray-500 block mb-1">Fim</label>
-          <input type="datetime-local" value={f.fim?.slice(0, 16) || ''} onChange={e => set('fim', e.target.value ? e.target.value + ':00' : '')} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+          <label className="text-xs text-gray-500 block mb-1">Horas (manual)</label>
+          <input type="number" step="0.25" min="0" max="24" value={f.tempo_horas} onChange={e => set('tempo_horas', e.target.value ? parseFloat(e.target.value) : '')}
+            placeholder={horasDisplay > 0 ? String(horasDisplay) : '0'}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
         </div>
-        <div className="xl:col-span-2 flex items-center gap-4">
-          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-            <input type="checkbox" checked={f.enviar_calendar} onChange={e => set('enviar_calendar', e.target.checked)} className="rounded" />
-            Enviar para Google Calendar
-          </label>
+        <div className="flex items-end pb-1">
+          <div className="bg-indigo-50 rounded-lg px-4 py-2 text-center w-full">
+            <span className="text-[10px] text-indigo-400 uppercase block">Tempo</span>
+            <span className="text-lg font-bold text-indigo-700">{HRS(horasDisplay)}</span>
+          </div>
         </div>
       </div>
-      <div className="flex gap-3 mt-4">
-        <button onClick={() => onSave(f)} className="px-4 py-2 text-sm font-medium rounded-lg text-white" style={{ backgroundColor: GOLD }}>
-          {initial ? 'Guardar' : 'Criar Tarefa'}
-        </button>
-        {onCancel && <button onClick={onCancel} className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Cancelar</button>}
+      <div className="flex items-center justify-between mt-4">
+        <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer">
+          <input type="checkbox" checked={f.enviar_calendar} onChange={e => set('enviar_calendar', e.target.checked)} className="rounded border-gray-300" />
+          Enviar para Google Calendar
+        </label>
+        <div className="flex gap-3">
+          {onCancel && <button onClick={onCancel} className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Cancelar</button>}
+          <button onClick={() => {
+            const payload = { ...f }
+            if (!payload.tempo_horas && payload.inicio && payload.fim) payload.tempo_horas = calcHoras(payload.inicio, payload.fim)
+            onSave(payload)
+          }} disabled={!f.tarefa.trim()}
+            className="px-5 py-2 text-sm font-medium rounded-lg text-white disabled:opacity-40" style={{ backgroundColor: GOLD }}>
+            {initial ? 'Guardar Alteracoes' : 'Criar Tarefa'}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -175,6 +222,7 @@ export function Operacoes() {
   const [showForm, setShowForm] = useState(false)
   const [editingTask, setEditingTask] = useState(null)
   const [taskFilter, setTaskFilter] = useState('all')
+  const [viewMode, setViewMode] = useState('board')
   const [syncing, setSyncing] = useState(false)
 
   const loadAll = useCallback(async () => {
@@ -308,19 +356,25 @@ export function Operacoes() {
         {/* ══════════ TAREFAS ══════════ */}
         {tab === 'tarefas' && (
           <>
-            <div className="flex items-center justify-between">
-              <div className="flex gap-2">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex gap-2 flex-wrap">
                 {['all', ...STATUS_OPTIONS].map(s => (
                   <button key={s} onClick={() => setTaskFilter(s)}
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg border ${taskFilter === s ? 'border-yellow-300 bg-yellow-50 text-yellow-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
-                    {s === 'all' ? 'Todas' : s}
+                    {s === 'all' ? `Todas (${tarefas.length})` : `${s} (${tarefas.filter(t => t.status === s).length})`}
                   </button>
                 ))}
               </div>
-              <button onClick={() => { setShowForm(true); setEditingTask(null) }}
-                className="px-4 py-2 text-sm font-medium rounded-lg text-white" style={{ backgroundColor: GOLD }}>
-                + Nova Tarefa
-              </button>
+              <div className="flex gap-2">
+                <button onClick={() => setViewMode(v => v === 'list' ? 'board' : 'list')}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">
+                  {viewMode === 'list' ? 'Vista Board' : 'Vista Lista'}
+                </button>
+                <button onClick={() => { setShowForm(true); setEditingTask(null) }}
+                  className="px-4 py-2 text-sm font-medium rounded-lg text-white" style={{ backgroundColor: GOLD }}>
+                  + Nova Tarefa
+                </button>
+              </div>
             </div>
 
             {(showForm || editingTask) && (
@@ -331,50 +385,97 @@ export function Operacoes() {
               />
             )}
 
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase bg-gray-50">
-                    <th className="text-left py-2.5 px-4">Tarefa</th>
-                    <th className="text-left py-2.5 px-3">Status</th>
-                    <th className="text-left py-2.5 px-3">Funcionario</th>
-                    <th className="text-right py-2.5 px-3">Inicio</th>
-                    <th className="text-right py-2.5 px-3">Horas</th>
-                    <th className="text-right py-2.5 px-3">Acoes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredTarefas.slice(0, 50).map(t => (
-                    <tr key={t.id} className="border-b border-gray-50 hover:bg-gray-50">
-                      <td className="py-2 px-4 text-gray-700 font-medium max-w-[300px] truncate">{t.tarefa}</td>
-                      <td className="py-2 px-3">
-                        <select value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
-                          className={`px-2 py-0.5 rounded text-xs font-medium border-0 cursor-pointer ${STATUS_COLOR[t.status] || 'bg-gray-100'}`}>
-                          {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                      </td>
-                      <td className="py-2 px-3 text-xs text-gray-500">{t.funcionario || '—'}</td>
-                      <td className="py-2 px-3 text-right text-xs font-mono text-gray-500">
-                        {t.inicio ? new Date(t.inicio).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) + ' ' + (t.inicio.slice(11, 16) || '') : '—'}
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono text-xs font-bold">{t.tempo_horas > 0 ? HRS(t.tempo_horas) : '—'}</td>
-                      <td className="py-2 px-3 text-right">
-                        <div className="flex gap-1 justify-end">
-                          <button onClick={() => { setEditingTask(t); setShowForm(false) }} className="text-xs text-indigo-600 hover:underline">Editar</button>
-                          <button onClick={() => deleteTarefa(t.id)} className="text-xs text-red-500 hover:underline">Apagar</button>
-                        </div>
-                      </td>
+            {/* Board View (Kanban like Notion) */}
+            {viewMode === 'board' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                {STATUS_OPTIONS.map(status => {
+                  const tasks = tarefas.filter(t => t.status === status)
+                  const totalH = tasks.reduce((s, t) => s + (t.tempo_horas || 0), 0)
+                  return (
+                    <div key={status} className="flex flex-col">
+                      <div className={`flex items-center justify-between px-3 py-2 rounded-t-xl ${STATUS_COLOR[status]}`}>
+                        <span className="text-xs font-semibold uppercase">{status}</span>
+                        <span className="text-xs font-mono">{tasks.length} · {HRS(totalH)}</span>
+                      </div>
+                      <div className="flex flex-col gap-1.5 p-2 bg-gray-50 rounded-b-xl min-h-[200px] border border-t-0 border-gray-200">
+                        {tasks.slice(0, 20).map(t => (
+                          <div key={t.id} className="bg-white rounded-lg p-3 shadow-sm border border-gray-100 hover:border-gray-300 cursor-pointer"
+                            onClick={() => { setEditingTask(t); setShowForm(false) }}>
+                            <p className="text-sm text-gray-700 font-medium leading-tight">{t.tarefa}</p>
+                            <div className="flex items-center justify-between mt-2">
+                              <span className="text-[10px] text-gray-400">{t.funcionario?.split(',')[0] || '—'}</span>
+                              <div className="flex items-center gap-2">
+                                {t.inicio && <span className="text-[10px] font-mono text-gray-400">
+                                  {new Date(t.inicio).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' })}
+                                  {t.inicio.includes('T') && ' ' + t.inicio.slice(11, 16)}
+                                </span>}
+                                {t.tempo_horas > 0 && <span className="text-[10px] font-mono font-bold text-indigo-600">{HRS(t.tempo_horas)}</span>}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {tasks.length === 0 && <p className="text-xs text-gray-300 text-center py-8">Sem tarefas</p>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* List View */}
+            {viewMode === 'list' && (
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase bg-gray-50">
+                      <th className="text-left py-2.5 px-4">Tarefa</th>
+                      <th className="text-left py-2.5 px-3 w-32">Status</th>
+                      <th className="text-left py-2.5 px-3 w-36">Funcionario</th>
+                      <th className="text-left py-2.5 px-3 w-32">Inicio</th>
+                      <th className="text-left py-2.5 px-3 w-32">Fim</th>
+                      <th className="text-right py-2.5 px-3 w-16">Horas</th>
+                      <th className="text-right py-2.5 px-3 w-20">Acoes</th>
                     </tr>
-                  ))}
-                  {filteredTarefas.length === 0 && (
-                    <tr><td colSpan={6} className="py-8 text-center text-gray-400 text-xs">Sem tarefas</td></tr>
-                  )}
-                </tbody>
-              </table>
-              {filteredTarefas.length > 50 && (
-                <p className="text-xs text-gray-400 text-center py-2">A mostrar 50 de {filteredTarefas.length}</p>
-              )}
-            </div>
+                  </thead>
+                  <tbody>
+                    {filteredTarefas.slice(0, 80).map(t => (
+                      <tr key={t.id} className={`border-b border-gray-50 hover:bg-gray-50 ${t.status === 'Concluída' ? 'opacity-60' : ''}`}>
+                        <td className="py-2 px-4 text-gray-700 font-medium">
+                          <span className={t.status === 'Concluída' ? 'line-through' : ''}>{t.tarefa}</span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <select value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
+                            className={`px-2 py-0.5 rounded text-xs font-medium border-0 cursor-pointer ${STATUS_COLOR[t.status] || 'bg-gray-100'}`}>
+                            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </td>
+                        <td className="py-2 px-3 text-xs text-gray-500">{t.funcionario || '—'}</td>
+                        <td className="py-2 px-3 text-xs font-mono text-gray-500">
+                          {t.inicio ? new Date(t.inicio).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) + (t.inicio.includes('T') ? ' ' + t.inicio.slice(11, 16) : '') : '—'}
+                        </td>
+                        <td className="py-2 px-3 text-xs font-mono text-gray-500">
+                          {t.fim ? new Date(t.fim).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) + (t.fim.includes('T') ? ' ' + t.fim.slice(11, 16) : '') : '—'}
+                        </td>
+                        <td className="py-2 px-3 text-right font-mono text-xs font-bold text-indigo-600">{t.tempo_horas > 0 ? HRS(t.tempo_horas) : '—'}</td>
+                        <td className="py-2 px-3 text-right">
+                          <div className="flex gap-2 justify-end">
+                            <button onClick={() => { setEditingTask(t); setShowForm(false) }} className="text-xs text-indigo-600 hover:underline">Editar</button>
+                            <button onClick={() => deleteTarefa(t.id)} className="text-xs text-red-500 hover:underline">x</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredTarefas.length === 0 && (
+                      <tr><td colSpan={7} className="py-8 text-center text-gray-400 text-xs">Sem tarefas — clica em "+ Nova Tarefa" para criar</td></tr>
+                    )}
+                  </tbody>
+                </table>
+                <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex justify-between text-xs text-gray-400">
+                  <span>{filteredTarefas.length} tarefa(s){filteredTarefas.length > 80 ? ` (a mostrar 80)` : ''}</span>
+                  <span>Total: {HRS(filteredTarefas.reduce((s, t) => s + (t.tempo_horas || 0), 0))}</span>
+                </div>
+              </div>
+            )}
           </>
         )}
 
