@@ -7,7 +7,7 @@ const nav = [
   { to: '/crm',        label: 'CRM',        Icon: Database },
   { to: '/comercial',  label: 'Comercial',  Icon: Users },
   { to: '/financeiro', label: 'Financeiro', Icon: TrendingUp },
-  { to: '/operacoes',  label: 'Operacoes',  Icon: Clock },
+  { to: '/operacoes',  label: 'Operações',  Icon: Clock },
   { to: '/alertas',    label: 'Alertas',    Icon: Bell, badge: true },
 ]
 

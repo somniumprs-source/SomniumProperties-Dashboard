@@ -12,13 +12,13 @@ const STATUS_OPTIONS = ['A fazer', 'Em andamento', 'Concluída', 'Atrasada']
 const STATUS_COLOR = { 'A fazer': 'bg-gray-100 text-gray-600', 'Em andamento': 'bg-blue-100 text-blue-700', 'Concluída': 'bg-green-100 text-green-700', 'Atrasada': 'bg-red-100 text-red-600' }
 
 const TABS = [
-  { id: 'resumo',     label: 'Visao Geral' },
+  { id: 'resumo',     label: 'Visão Geral' },
   { id: 'tarefas',    label: 'Tarefas' },
-  { id: 'calendario', label: 'Calendario' },
+  { id: 'calendario', label: 'Calendário' },
   { id: 'horas',      label: 'Horas & Custo' },
-  { id: 'categorias', label: 'Actividades' },
+  { id: 'categorias', label: 'Atividades' },
   { id: 'equipa',     label: 'Equipa' },
-  { id: 'eficiencia', label: 'Eficiencia' },
+  { id: 'eficiencia', label: 'Eficiência' },
 ]
 
 const CAT_COLORS = ['#6366f1','#f59e0b','#ef4444','#10b981','#8b5cf6','#ec4899','#14b8a6','#f97316','#06b6d4','#84cc16','#a855f7','#e11d48','#0ea5e9','#65a30d']
@@ -99,10 +99,10 @@ function TaskForm({ onSave, onCancel, initial }) {
           <label className="text-xs text-gray-500 block mb-1">Tarefa *</label>
           <input value={f.tarefa} onChange={e => set('tarefa', e.target.value)} autoFocus
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-yellow-300 focus:border-yellow-400 outline-none"
-            placeholder="Ex: Cold Call, Estudo de Mercado, Reuniao Investidor..." />
+            placeholder="Ex: Cold Call, Estudo de Mercado, Reunião Investidor..." />
         </div>
         <div>
-          <label className="text-xs text-gray-500 block mb-1">Funcionario</label>
+          <label className="text-xs text-gray-500 block mb-1">Funcionário</label>
           <select value={f.funcionario} onChange={e => set('funcionario', e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
             {FUNCIONARIOS.map(fn => <option key={fn} value={fn}>{fn}</option>)}
             <option value="João Abreu, Alexandre Mendes">Ambos</option>
@@ -115,7 +115,7 @@ function TaskForm({ onSave, onCancel, initial }) {
           </select>
         </div>
         <div className="xl:col-span-2">
-          <label className="text-xs text-gray-500 block mb-1">Inicio da tarefa</label>
+          <label className="text-xs text-gray-500 block mb-1">Início da tarefa</label>
           <input type="datetime-local" value={f.inicio} onChange={e => set('inicio', e.target.value)}
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
         </div>
@@ -150,7 +150,7 @@ function TaskForm({ onSave, onCancel, initial }) {
             onSave(payload)
           }} disabled={!f.tarefa.trim()}
             className="px-5 py-2 text-sm font-medium rounded-lg text-white disabled:opacity-40" style={{ backgroundColor: GOLD }}>
-            {initial ? 'Guardar Alteracoes' : 'Criar Tarefa'}
+            {initial ? 'Guardar Alterações' : 'Criar Tarefa'}
           </button>
         </div>
       </div>
@@ -302,13 +302,13 @@ export function Operacoes() {
 
   // Separar tarefas
   const ativas = tarefas.filter(t => t.status !== 'Concluída')
-  const concluidas = tarefas.filter(t => t.status === 'Concluída')
+  const concluídas = tarefas.filter(t => t.status === 'Concluída')
   const semanaTodas = tarefas.filter(isThisWeek) // inclui concluídas da semana
-  const concluidasPassadas = concluidas.filter(t => !isThisWeek(t)) // só arquivo de semanas anteriores
+  const concluídasPassadas = concluídas.filter(t => !isThisWeek(t)) // só arquivo de semanas anteriores
 
   const filteredTarefas = taskFilter === 'semana' ? semanaTodas
     : taskFilter === 'pendentes' ? ativas
-    : taskFilter === 'arquivo' ? concluidasPassadas
+    : taskFilter === 'arquivo' ? concluídasPassadas
     : tarefas
 
   async function bulkDelete() {
@@ -336,7 +336,7 @@ export function Operacoes() {
 
   return (
     <>
-      <Header title="Operacoes" subtitle="Tarefas · Calendario · Horas · Eficiencia" onRefresh={loadAll} loading={loading} />
+      <Header title="Operações" subtitle="Tarefas · Calendário · Horas · Eficiência" onRefresh={loadAll} loading={loading} />
 
       <div className="px-6 pt-4 border-b border-gray-200 bg-white sticky top-0 z-10">
         <div className="flex items-center gap-4">
@@ -365,7 +365,7 @@ export function Operacoes() {
               <M label="Total horas tracked" value={HRS(r.totalHoras)} sub={`${r.totalTarefas} tarefas`} highlight />
               <M label="Horas este mes" value={HRS(r.horasMesActual)} sub={`${r.tarefasMesActual} tarefas`} />
               <M label="Horas esta semana" value={HRS(r.horasSemana)} />
-              <M label="Taxa de conclusao" value={PCT(r.taxaProdutividade)} sub={`${HRS(r.horasConcluidas)} concluidas`} />
+              <M label="Taxa de conclusão" value={PCT(r.taxaProdutividade)} sub={`${HRS(r.horasConcluídas)} concluídas`} />
             </div>
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
               <M label="Revenue / hora (pipeline)" value={k?.rph != null ? EUR(k.rph) : '—'} sub={`Pipeline: ${EUR(k?.receitaTotal)}`} highlight />
@@ -378,17 +378,17 @@ export function Operacoes() {
               <div className="grid grid-cols-4 gap-4">
                 <div className="text-center"><span className="text-2xl font-bold text-gray-400">{r.statusTarefas.aFazer}</span><p className="text-xs text-gray-400 mt-1">A fazer</p></div>
                 <div className="text-center"><span className="text-2xl font-bold text-blue-500">{r.statusTarefas.emAndamento}</span><p className="text-xs text-gray-400 mt-1">Em andamento</p></div>
-                <div className="text-center"><span className="text-2xl font-bold text-green-600">{r.statusTarefas.concluida}</span><p className="text-xs text-gray-400 mt-1">Concluidas</p></div>
+                <div className="text-center"><span className="text-2xl font-bold text-green-600">{r.statusTarefas.concluida}</span><p className="text-xs text-gray-400 mt-1">Concluídas</p></div>
                 <div className="text-center"><span className="text-2xl font-bold text-red-500">{r.statusTarefas.atrasada}</span><p className="text-xs text-gray-400 mt-1">Atrasadas</p></div>
               </div>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
               <h3 className="text-sm font-semibold text-gray-700 mb-4">Distribuicao de Tempo</h3>
               <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-                <M label="Prospeccao" value={HRS(k?.horasProspeccao)} sub={k?.pctProspeccao != null ? `${PCT(k.pctProspeccao)} do total` : ''} />
+                <M label="Prospeção" value={HRS(k?.horasProspeção)} sub={k?.pctProspeção != null ? `${PCT(k.pctProspeção)} do total` : ''} />
                 <M label="Analise" value={HRS(k?.horasAnalise)} sub={k?.pctAnalise != null ? `${PCT(k.pctAnalise)} do total` : ''} />
                 <M label="Relacional" value={HRS(k?.horasRelacional)} sub={k?.pctRelacional != null ? `${PCT(k.pctRelacional)} do total` : ''} />
-                <M label="Gestao & Admin" value={HRS(k?.horasGestao)} sub={k?.pctGestao != null ? `${PCT(k.pctGestao)} do total` : ''} />
+                <M label="Gestão & Admin" value={HRS(k?.horasGestão)} sub={k?.pctGestão != null ? `${PCT(k.pctGestão)} do total` : ''} />
               </div>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
@@ -396,7 +396,7 @@ export function Operacoes() {
               <div className="grid grid-cols-3 gap-4">
                 <M label="Custo de horas (15EUR/h)" value={EUR(r.custoHorasTotal)} sub={`${HRS(r.totalHoras)} x 15EUR`} />
                 <M label="Custos fixos (ferramentas)" value={EUR(r.custoFixoTotal)} />
-                <M label="Custo total operacao" value={EUR(r.custoOperacaoTotal)} highlight />
+                <M label="Custo total operação" value={EUR(r.custoOperacaoTotal)} highlight />
               </div>
             </div>
           </>
@@ -412,7 +412,7 @@ export function Operacoes() {
                   {[
                     { id: 'semana', label: `Esta semana (${semanaTodas.length})` },
                     { id: 'pendentes', label: `Todas pendentes (${ativas.length})` },
-                    { id: 'arquivo', label: `Arquivo (${concluidasPassadas.length})` },
+                    { id: 'arquivo', label: `Arquivo (${concluídasPassadas.length})` },
                   ].map(f => (
                     <button key={f.id} onClick={() => { setTaskFilter(f.id); setSelectedIds(new Set()) }}
                       className={`px-3 py-1.5 text-xs font-medium rounded-lg border ${taskFilter === f.id ? 'border-yellow-300 bg-yellow-50 text-yellow-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
@@ -515,7 +515,7 @@ export function Operacoes() {
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 {taskFilter === 'arquivo' && (
                   <div className="px-4 py-3 bg-green-50 border-b border-green-100 text-xs text-green-700">
-                    Arquivo — tarefas concluidas. Seleciona e apaga as que ja nao precisas.
+                    Arquivo — tarefas concluídas. Seleciona e apaga as que já não precisas.
                   </div>
                 )}
                 <table className="min-w-full text-sm">
@@ -524,8 +524,8 @@ export function Operacoes() {
                       <th className="py-2.5 px-3 w-8"><input type="checkbox" onChange={selectAll} checked={selectedIds.size > 0 && selectedIds.size === filteredTarefas.length} className="rounded border-gray-300" /></th>
                       <th className="text-left py-2.5 px-3">Tarefa</th>
                       <th className="text-left py-2.5 px-3 w-32">Status</th>
-                      <th className="text-left py-2.5 px-3 w-36">Funcionario</th>
-                      <th className="text-left py-2.5 px-3 w-28">Inicio</th>
+                      <th className="text-left py-2.5 px-3 w-36">Funcionário</th>
+                      <th className="text-left py-2.5 px-3 w-28">Início</th>
                       <th className="text-left py-2.5 px-3 w-28">Fim</th>
                       <th className="text-right py-2.5 px-3 w-16">Horas</th>
                       <th className="text-right py-2.5 px-3 w-16"></th>
@@ -562,7 +562,7 @@ export function Operacoes() {
                     ))}
                     {filteredTarefas.length === 0 && (
                       <tr><td colSpan={8} className="py-8 text-center text-gray-400 text-xs">
-                        {taskFilter === 'arquivo' ? 'Sem tarefas concluidas' : 'Sem tarefas — clica em "+ Nova Tarefa"'}
+                        {taskFilter === 'arquivo' ? 'Sem tarefas concluídas' : 'Sem tarefas — clica em "+ Nova Tarefa"'}
                       </td></tr>
                     )}
                   </tbody>
@@ -584,7 +584,7 @@ export function Operacoes() {
 
             {calEvents.length > 0 && (
               <>
-                <SectionTitle>Proximos Eventos (Google Calendar)</SectionTitle>
+                <SectionTitle>Próximos Eventos (Google Calendar)</SectionTitle>
                 <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                   <div className="flex flex-col gap-2">
                     {calEvents.slice(0, 15).map((e, i) => (
@@ -668,7 +668,7 @@ export function Operacoes() {
         {/* ══════════ EQUIPA ══════════ */}
         {tab === 'equipa' && data?.funcionarios && (
           <>
-            <SectionTitle>Performance por Funcionario</SectionTitle>
+            <SectionTitle>Performance por Funcionário</SectionTitle>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
               {data.funcionarios.map(f => (
                 <div key={f.nome} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
@@ -678,18 +678,18 @@ export function Operacoes() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div><span className="text-[10px] text-gray-400 uppercase">Tarefas</span><p className="text-lg font-bold text-gray-800">{f.tarefas}</p></div>
-                    <div><span className="text-[10px] text-gray-400 uppercase">Concluidas</span><p className="text-lg font-bold text-green-600">{f.concluidas}</p></div>
+                    <div><span className="text-[10px] text-gray-400 uppercase">Concluídas</span><p className="text-lg font-bold text-green-600">{f.concluídas}</p></div>
                     <div><span className="text-[10px] text-gray-400 uppercase">Taxa Conclusao</span><p className="text-lg font-bold text-gray-800">{PCT(f.taxaConclusao)}</p></div>
                     <div><span className="text-[10px] text-gray-400 uppercase">Custo Total</span><p className="text-lg font-bold text-indigo-600">{EUR(f.custoTotal)}</p></div>
                   </div>
-                  {data.mesesFuncionario && (
+                  {data.mesesFuncionário && (
                     <div className="mt-4 pt-3 border-t border-gray-100">
                       <span className="text-[10px] text-gray-400 uppercase">Evolucao mensal</span>
                       <div className="flex gap-2 mt-2">
-                        {data.mesesFuncionario.filter(mf => mf.funcionario === f.nome).map(mf => (
+                        {data.mesesFuncionário.filter(mf => mf.funcionario === f.nome).map(mf => (
                           <div key={mf.mes} className="flex flex-col items-center">
                             <div className="w-10 bg-gray-100 rounded-t overflow-hidden flex flex-col-reverse" style={{ height: '60px' }}>
-                              <div className="bg-indigo-400 rounded-t transition-all" style={{ height: `${Math.max(4, Math.round(mf.horas / Math.max(...data.mesesFuncionario.filter(x => x.funcionario === f.nome).map(x => x.horas), 1) * 60))}px` }} />
+                              <div className="bg-indigo-400 rounded-t transition-all" style={{ height: `${Math.max(4, Math.round(mf.horas / Math.max(...data.mesesFuncionário.filter(x => x.funcionario === f.nome).map(x => x.horas), 1) * 60))}px` }} />
                             </div>
                             <span className="text-[9px] text-gray-400 mt-1">{MES_LABEL[mf.mes.slice(5)] || mf.mes.slice(5)}</span>
                             <span className="text-[9px] font-mono font-bold">{HRS(mf.horas)}</span>
@@ -714,19 +714,19 @@ export function Operacoes() {
               <M label="Receita pipeline" value={EUR(k.receitaTotal)} />
               <M label="Receita realizada" value={EUR(k.receitaRealizada)} />
             </div>
-            <SectionTitle>Alocacao de Tempo</SectionTitle>
+            <SectionTitle>Alocação de Tempo</SectionTitle>
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-              <M label="% em Prospeccao" value={PCT(k.pctProspeccao)} sub={HRS(k.horasProspeccao)} highlight={k.pctProspeccao >= 30} warn={k.pctProspeccao < 20} />
+              <M label="% em Prospeção" value={PCT(k.pctProspeção)} sub={HRS(k.horasProspeção)} highlight={k.pctProspeção >= 30} warn={k.pctProspeção < 20} />
               <M label="% em Analise" value={PCT(k.pctAnalise)} sub={HRS(k.horasAnalise)} />
               <M label="% em Relacional" value={PCT(k.pctRelacional)} sub={HRS(k.horasRelacional)} />
-              <M label="% em Gestao/Admin" value={PCT(k.pctGestao)} sub={HRS(k.horasGestao)} warn={k.pctGestao > 40} />
+              <M label="% em Gestão/Admin" value={PCT(k.pctGestão)} sub={HRS(k.horasGestão)} warn={k.pctGestão > 40} />
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-              <h3 className="text-sm font-semibold text-gray-700 mb-4">Diagnostico</h3>
+              <h3 className="text-sm font-semibold text-gray-700 mb-4">Diagnóstico</h3>
               <div className="flex flex-col gap-4">
                 <div className="p-4 bg-gray-50 rounded-xl">
-                  <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Alocacao</p>
-                  <p className="text-sm text-gray-700">{k.pctProspeccao >= 40 ? 'Forte em prospeccao — bom para fase de crescimento.' : k.pctProspeccao >= 20 ? 'Equilibrada.' : 'Pouco tempo em prospeccao — deveria ser >40%.'}</p>
+                  <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Alocação</p>
+                  <p className="text-sm text-gray-700">{k.pctProspeção >= 40 ? 'Forte em prospeção — bom para fase de crescimento.' : k.pctProspeção >= 20 ? 'Equilibrada.' : 'Pouco tempo em prospeção — deveria ser >40%.'}</p>
                 </div>
                 <div className="p-4 bg-gray-50 rounded-xl">
                   <p className="text-xs font-semibold text-gray-500 uppercase mb-1">RPH</p>

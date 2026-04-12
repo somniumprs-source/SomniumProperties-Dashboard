@@ -884,7 +884,7 @@ export function Metricas() {
               <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
                 <MvsMeta label="Response time medio" value={av.leadResponseTime?.medio} meta={av.leadResponseTime?.metaDias} format="days" invert />
                 <M label="Response time esta semana" value={DAYS(av.leadResponseTime?.semana)} sub="Media dos leads desta semana" />
-                <M label="Leads nao contactados" value={NUM(av.leadResponseTime?.naoContactados)}
+                <M label="Leads não contactados" value={NUM(av.leadResponseTime?.naoContactados)}
                   sub="Ativos sem chamada nem visita" warn={av.leadResponseTime?.naoContactados > 0} />
               </div>
 
@@ -894,7 +894,7 @@ export function Metricas() {
                   <table className="min-w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
-                        <th className="text-left py-2 px-3">Imovel</th>
+                        <th className="text-left py-2 px-3">Imóvel</th>
                         <th className="text-left py-2 px-3">Estado</th>
                         <th className="text-left py-2 px-3">Modelo</th>
                         <th className="text-right py-2 px-3">ROI</th>
@@ -918,7 +918,7 @@ export function Metricas() {
                     </tbody>
                   </table>
                 </div>
-              ) : <p className="text-xs text-gray-400 text-center py-4">Sem imoveis ativos</p>}
+              ) : <p className="text-xs text-gray-400 text-center py-4">Sem imóveis ativos</p>}
 
               <SectionTitle>Win/Loss por Fonte</SectionTitle>
               {av.winLossBySource?.length > 0 && (
@@ -1008,7 +1008,7 @@ export function Metricas() {
                         <th className="text-right py-2 px-3">Fechos</th>
                         <th className="text-right py-2 px-3">CPA/Lead</th>
                         <th className="text-right py-2 px-3">CPA/Deal</th>
-                        <th className="text-right py-2 px-3">Conversao</th>
+                        <th className="text-right py-2 px-3">Conversão</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1036,7 +1036,7 @@ export function Metricas() {
                     <table className="min-w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
-                          <th className="text-left py-2 px-3">Negocio</th>
+                          <th className="text-left py-2 px-3">Negócio</th>
                           <th className="text-left py-2 px-3">Cat.</th>
                           <th className="text-right py-2 px-3">Cap. Proprio</th>
                           <th className="text-right py-2 px-3">Cap. Passivo</th>

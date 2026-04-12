@@ -181,12 +181,12 @@ export function Dashboard() {
         {metricas?.avancado?.weeklyActivity && (() => {
           const wa = metricas.avancado.weeklyActivity
           const LABELS = {
-            imoveisAdicionados: 'Imoveis adicionados',
+            imoveisAdicionados: 'Imóveis adicionados',
             chamadasFeitas: 'Chamadas feitas',
             visitasRealizadas: 'Visitas realizadas',
             followUpsInvestidores: 'Follow-ups investidores',
             followUpsConsultores: 'Follow-ups consultores',
-            reunioesInvestidores: 'Reunioes investidores',
+            reunioesInvestidores: 'Reuniões investidores',
           }
           return (
             <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
