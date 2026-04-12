@@ -28,7 +28,6 @@ const ESTADO_COLOR = {
   'Adicionado':                     'bg-gray-100 text-gray-600',
   'Pendentes':                      'bg-gray-100 text-gray-600',
   'Descartado':                     'bg-red-100 text-red-500',
-  'Nao interessa':                  'bg-red-100 text-red-500',
   'Não interessa':                  'bg-red-100 text-red-500',
   'Em negociação':                  'bg-orange-100 text-orange-700',
 }

@@ -13,7 +13,7 @@ export function Filters({ tab, filters, onChange }) {
       {tab === 'Imóveis' && <>
         <select value={filters.estado ?? ''} onChange={e => set('estado', e.target.value)} className={selectClass}>
           <option value="">Todos os estados</option>
-          {['Adicionado','Pendentes','Em Análise','Visita Marcada','Follow UP','Estudo de VVR','Enviar proposta ao investidor','Wholesaling','Negócio em Curso','Nao interessa','Descartado'].map(o =>
+          {['Adicionado','Pendentes','Em Análise','Visita Marcada','Follow UP','Estudo de VVR','Enviar proposta ao investidor','Wholesaling','Negócio em Curso','Não interessa','Descartado'].map(o =>
             <option key={o} value={o}>{o}</option>
           )}
         </select>

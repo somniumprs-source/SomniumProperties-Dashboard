@@ -383,10 +383,10 @@ export function Operacoes() {
               </div>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-              <h3 className="text-sm font-semibold text-gray-700 mb-4">Distribuicao de Tempo</h3>
+              <h3 className="text-sm font-semibold text-gray-700 mb-4">Distribuição de Tempo</h3>
               <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
                 <M label="Prospeção" value={HRS(k?.horasProspeção)} sub={k?.pctProspeção != null ? `${PCT(k.pctProspeção)} do total` : ''} />
-                <M label="Analise" value={HRS(k?.horasAnalise)} sub={k?.pctAnalise != null ? `${PCT(k.pctAnalise)} do total` : ''} />
+                <M label="Análise" value={HRS(k?.horasAnálise)} sub={k?.pctAnálise != null ? `${PCT(k.pctAnálise)} do total` : ''} />
                 <M label="Relacional" value={HRS(k?.horasRelacional)} sub={k?.pctRelacional != null ? `${PCT(k.pctRelacional)} do total` : ''} />
                 <M label="Gestão & Admin" value={HRS(k?.horasGestão)} sub={k?.pctGestão != null ? `${PCT(k.pctGestão)} do total` : ''} />
               </div>
@@ -640,14 +640,14 @@ export function Operacoes() {
         {/* ══════════ ACTIVIDADES ══════════ */}
         {tab === 'categorias' && data?.categorias && (
           <>
-            <SectionTitle>Tempo por Tipo de Actividade</SectionTitle>
+            <SectionTitle>Tempo por Tipo de Atividade</SectionTitle>
             <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
               <HBar items={data.categorias.map(c => ({ label: c.categoria, horas: c.horas, tarefas: c.tarefas }))} labelKey="label" colorFn={(_, i) => CAT_COLORS[i % CAT_COLORS.length]} />
             </div>
             <SectionTitle>Detalhe</SectionTitle>
             <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
               <table className="min-w-full text-sm">
-                <thead><tr className="border-b border-gray-100 text-xs text-gray-400 uppercase"><th className="text-left py-2 px-3">Actividade</th><th className="text-right py-2 px-3">Horas</th><th className="text-right py-2 px-3">%</th><th className="text-right py-2 px-3">Tarefas</th><th className="text-right py-2 px-3">h/tarefa</th><th className="text-right py-2 px-3">Custo</th></tr></thead>
+                <thead><tr className="border-b border-gray-100 text-xs text-gray-400 uppercase"><th className="text-left py-2 px-3">Atividade</th><th className="text-right py-2 px-3">Horas</th><th className="text-right py-2 px-3">%</th><th className="text-right py-2 px-3">Tarefas</th><th className="text-right py-2 px-3">h/tarefa</th><th className="text-right py-2 px-3">Custo</th></tr></thead>
                 <tbody>
                   {data.categorias.map((c, i) => (
                     <tr key={c.categoria} className="border-b border-gray-50">
@@ -684,7 +684,7 @@ export function Operacoes() {
                   </div>
                   {data.mesesFuncionário && (
                     <div className="mt-4 pt-3 border-t border-gray-100">
-                      <span className="text-[10px] text-gray-400 uppercase">Evolucao mensal</span>
+                      <span className="text-[10px] text-gray-400 uppercase">Evolução mensal</span>
                       <div className="flex gap-2 mt-2">
                         {data.mesesFuncionário.filter(mf => mf.funcionario === f.nome).map(mf => (
                           <div key={mf.mes} className="flex flex-col items-center">
@@ -717,7 +717,7 @@ export function Operacoes() {
             <SectionTitle>Alocação de Tempo</SectionTitle>
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
               <M label="% em Prospeção" value={PCT(k.pctProspeção)} sub={HRS(k.horasProspeção)} highlight={k.pctProspeção >= 30} warn={k.pctProspeção < 20} />
-              <M label="% em Analise" value={PCT(k.pctAnalise)} sub={HRS(k.horasAnalise)} />
+              <M label="% em Análise" value={PCT(k.pctAnálise)} sub={HRS(k.horasAnálise)} />
               <M label="% em Relacional" value={PCT(k.pctRelacional)} sub={HRS(k.horasRelacional)} />
               <M label="% em Gestão/Admin" value={PCT(k.pctGestão)} sub={HRS(k.horasGestão)} warn={k.pctGestão > 40} />
             </div>
