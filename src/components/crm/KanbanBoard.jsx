@@ -90,13 +90,16 @@ export function KanbanBoard({ columns, items, groupField, renderCard, onMove, on
     setDragOver(null)
   }
 
-  // Group items by column
+  // Group items by column — normaliza prefixos numéricos e acentos
+  const normalize = s => (s ?? '').replace(/^\d+-\s*/, '').replace('Nao interessa', 'Não interessa').trim()
   const grouped = {}
   for (const col of columns) grouped[col] = []
   for (const item of items) {
-    const val = (item[groupField] ?? '').replace(/^\d+-/, '') // strip numeric prefix like "13-Wholesaling"
-    const col = columns.find(c => val === c || val.includes(c)) ?? columns[columns.length - 1]
-    if (grouped[col]) grouped[col].push(item)
+    const val = normalize(item[groupField])
+    const col = columns.find(c => val === c) ?? columns.find(c => val.includes(c)) ?? null
+    if (col && grouped[col]) grouped[col].push(item)
+    // Se não encontrou coluna, não esconder — pôr na última antes de "Não interessa"
+    else if (grouped[columns[columns.length - 1]]) grouped[columns[columns.length - 1]].push(item)
   }
 
   return (
