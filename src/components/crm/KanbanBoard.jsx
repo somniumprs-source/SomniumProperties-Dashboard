@@ -3,18 +3,30 @@ import { useState, useRef } from 'react'
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 
 const COLUMN_COLORS = {
-  // Pipeline Imóveis
-  'Adicionado':       { bg: 'bg-gray-50',    border: 'border-gray-200',   header: 'bg-gray-100 text-gray-700' },
-  'Pendentes':        { bg: 'bg-gray-50',    border: 'border-gray-200',   header: 'bg-gray-100 text-gray-700' },
-  'Em Análise':       { bg: 'bg-blue-50',    border: 'border-blue-200',   header: 'bg-blue-100 text-blue-700' },
-  'Visita Marcada':   { bg: 'bg-indigo-50',  border: 'border-indigo-200', header: 'bg-indigo-100 text-indigo-700' },
-  'Follow UP':        { bg: 'bg-yellow-50',  border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-700' },
-  'Estudo de VVR':    { bg: 'bg-purple-50',  border: 'border-purple-200', header: 'bg-purple-100 text-purple-700' },
-  'Enviar proposta ao investidor': { bg: 'bg-cyan-50', border: 'border-cyan-200', header: 'bg-cyan-100 text-cyan-700' },
-  'Wholesaling':      { bg: 'bg-green-50',   border: 'border-green-200',  header: 'bg-green-100 text-green-700' },
-  'Negócio em Curso': { bg: 'bg-emerald-50', border: 'border-emerald-200',header: 'bg-emerald-100 text-emerald-700' },
-  'Não interessa':    { bg: 'bg-red-50',     border: 'border-red-200',    header: 'bg-red-100 text-red-700' },
-  'Descartado':       { bg: 'bg-red-50',     border: 'border-red-200',    header: 'bg-red-100 text-red-700' },
+  // Pipeline Imóveis — Prospeção
+  'Adicionado':                     { bg: 'bg-gray-50',    border: 'border-gray-200',   header: 'bg-gray-100 text-gray-700' },
+  'Chamada Não Atendida':           { bg: 'bg-gray-50',    border: 'border-gray-200',   header: 'bg-gray-100 text-gray-700' },
+  'Pendentes':                      { bg: 'bg-gray-50',    border: 'border-gray-200',   header: 'bg-gray-100 text-gray-700' },
+  // Qualificação
+  'Necessidade de Visita':          { bg: 'bg-blue-50',    border: 'border-blue-200',   header: 'bg-blue-100 text-blue-700' },
+  'Visita Marcada':                 { bg: 'bg-indigo-50',  border: 'border-indigo-200', header: 'bg-indigo-100 text-indigo-700' },
+  // Análise
+  'Estudo de VVR':                  { bg: 'bg-purple-50',  border: 'border-purple-200', header: 'bg-purple-100 text-purple-700' },
+  // Negociação
+  'Criar Proposta ao Proprietário': { bg: 'bg-cyan-50',    border: 'border-cyan-200',   header: 'bg-cyan-100 text-cyan-700' },
+  'Enviar proposta ao Proprietário':{ bg: 'bg-cyan-50',    border: 'border-cyan-200',   header: 'bg-cyan-100 text-cyan-700' },
+  'Em negociação':                  { bg: 'bg-orange-50',  border: 'border-orange-200', header: 'bg-orange-100 text-orange-700' },
+  'Proposta aceite':                { bg: 'bg-amber-50',   border: 'border-amber-200',  header: 'bg-amber-100 text-amber-700' },
+  'Enviar proposta ao investidor':  { bg: 'bg-teal-50',    border: 'border-teal-200',   header: 'bg-teal-100 text-teal-700' },
+  'Follow Up após proposta':        { bg: 'bg-yellow-50',  border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-700' },
+  'Follow UP':                      { bg: 'bg-yellow-50',  border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-700' },
+  // Fecho
+  'Wholesaling':                    { bg: 'bg-green-50',   border: 'border-green-200',  header: 'bg-green-100 text-green-700' },
+  'CAEP':                           { bg: 'bg-green-50',   border: 'border-green-200',  header: 'bg-green-100 text-green-700' },
+  'Fix and Flip':                   { bg: 'bg-green-50',   border: 'border-green-200',  header: 'bg-green-100 text-green-700' },
+  // Saída
+  'Não interessa':                  { bg: 'bg-red-50',     border: 'border-red-200',    header: 'bg-red-100 text-red-700' },
+  'Descartado':                     { bg: 'bg-red-50',     border: 'border-red-200',    header: 'bg-red-100 text-red-700' },
   // Tarefas
   'A fazer':          { bg: 'bg-gray-50',    border: 'border-gray-200',   header: 'bg-gray-100 text-gray-700' },
   'Em andamento':     { bg: 'bg-blue-50',    border: 'border-blue-200',   header: 'bg-blue-100 text-blue-700' },

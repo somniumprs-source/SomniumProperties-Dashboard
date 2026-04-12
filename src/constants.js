@@ -26,17 +26,25 @@ export const IMOVEL_ESTADOS = [
 ]
 
 export const IMOVEL_ESTADO_COLOR = {
-  'Adicionado':       'bg-gray-100 text-gray-600',
-  'Pendentes':        'bg-gray-100 text-gray-600',
-  'Em Análise':       'bg-blue-100 text-blue-700',
-  'Visita Marcada':   'bg-indigo-100 text-indigo-700',
-  'Follow UP':        'bg-yellow-100 text-yellow-700',
-  'Estudo de VVR':    'bg-purple-100 text-purple-700',
-  'Enviar proposta ao investidor': 'bg-cyan-100 text-cyan-700',
-  'Wholesaling':      'bg-green-100 text-green-700',
-  'Negócio em Curso': 'bg-emerald-100 text-emerald-700',
-  'Nao interessa':    'bg-red-100 text-red-700',
-  'Descartado':       'bg-red-100 text-red-700',
+  'Adicionado':                     'bg-gray-100 text-gray-600',
+  'Chamada Não Atendida':           'bg-gray-100 text-gray-600',
+  'Pendentes':                      'bg-gray-100 text-gray-600',
+  'Necessidade de Visita':          'bg-blue-100 text-blue-700',
+  'Visita Marcada':                 'bg-indigo-100 text-indigo-700',
+  'Follow UP':                      'bg-yellow-100 text-yellow-700',
+  'Estudo de VVR':                  'bg-purple-100 text-purple-700',
+  'Criar Proposta ao Proprietário': 'bg-cyan-100 text-cyan-700',
+  'Enviar proposta ao Proprietário':'bg-cyan-100 text-cyan-700',
+  'Em negociação':                  'bg-orange-100 text-orange-700',
+  'Proposta aceite':                'bg-amber-100 text-amber-700',
+  'Enviar proposta ao investidor':  'bg-teal-100 text-teal-700',
+  'Follow Up após proposta':        'bg-yellow-100 text-yellow-700',
+  'Wholesaling':                    'bg-green-100 text-green-700',
+  'CAEP':                           'bg-green-100 text-green-700',
+  'Fix and Flip':                   'bg-green-100 text-green-700',
+  'Não interessa':                  'bg-red-100 text-red-700',
+  'Nao interessa':                  'bg-red-100 text-red-700',
+  'Descartado':                     'bg-red-100 text-red-700',
 }
 
 // ── Investidores — Status ────────────────────────────────────

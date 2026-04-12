@@ -63,7 +63,7 @@ export function CRM() {
   // Kanban config por tab
   const KANBAN_CONFIG = {
     'Imóveis': {
-      columns: ['Adicionado','Pendentes','Em Análise','Visita Marcada','Follow UP','Estudo de VVR','Enviar proposta ao investidor','Wholesaling','Negócio em Curso','Não interessa'],
+      columns: ['Adicionado','Chamada Não Atendida','Pendentes','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'],
       groupField: 'estado',
       renderCard: (item) => (
         <div>
@@ -477,7 +477,7 @@ const FREGUESIAS = [
 const FIELD_DEFS = {
   'Imóveis': [
     { key: 'nome', label: 'Nome do Imóvel', type: 'text', required: true },
-    { key: 'estado', label: 'Estado', type: 'select', options: ['Adicionado','Pendentes','Em Análise','Visita Marcada','Follow UP','Estudo de VVR','Enviar proposta ao investidor','Wholesaling','Negócio em Curso','Não interessa','Descartado'] },
+    { key: 'estado', label: 'Estado', type: 'select', options: ['Adicionado','Chamada Não Atendida','Pendentes','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'] },
     { key: 'tipologia', label: 'Tipologia', type: 'text' },
     { key: 'ask_price', label: 'Ask Price (€)', type: 'number' },
     { key: 'valor_proposta', label: 'Valor Proposta (€)', type: 'number' },
