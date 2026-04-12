@@ -18,7 +18,7 @@ function AppRoutes() {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#0d0d0d' }}>
         <div className="flex flex-col items-center gap-3">
-          <img src="/logo.png" alt="Somnium" className="h-12 opacity-50" />
+          <img src="/logo-transparent.png" alt="Somnium" className="opacity-50" style={{ height: 48 }} />
           <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#C9A84C', borderTopColor: 'transparent' }} />
         </div>
       </div>

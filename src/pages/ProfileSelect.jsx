@@ -10,7 +10,7 @@ export function ProfileSelect() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="Somnium Properties" className="h-16 mx-auto mb-4" />
+          <img src="/logo-transparent.png" alt="Somnium Properties" className="mx-auto mb-4" style={{ height: 110 }} />
           <div className="h-px mx-auto w-32" style={{ background: `linear-gradient(90deg, transparent, ${GOLD}55, transparent)` }} />
         </div>
 
