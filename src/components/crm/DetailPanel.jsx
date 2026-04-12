@@ -42,19 +42,20 @@ export function DetailPanel({ type, id, onClose, onSave }) {
         <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">&times;</button>
       </div>
 
-      {/* Tabs para Imóveis */}
-      {type === 'Imóveis' && (
-        <div className="px-6 pt-3 flex gap-1 border-b border-gray-100">
+      {/* Tabs — sempre visíveis para Imóveis, Investidores, Consultores */}
+      {type === 'Imóveis' ? (
+        <div className="px-6 pt-3 flex gap-1 border-b border-gray-100" style={{ backgroundColor: '#f8f5ee' }}>
           <button onClick={() => setActiveTab('detalhe')}
             className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors ${activeTab === 'detalhe' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
             Detalhe
           </button>
           <button onClick={() => setActiveTab('analise')}
-            className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors ${activeTab === 'analise' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
+            className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors ${activeTab === 'analise' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}
+            style={{ backgroundColor: activeTab === 'analise' ? undefined : '#C9A84C22', borderBottom: '2px solid #C9A84C' }}>
             Análise Financeira
           </button>
         </div>
-      )}
+      ) : null}
 
       {/* Análise Financeira tab */}
       {type === 'Imóveis' && activeTab === 'analise' ? (
