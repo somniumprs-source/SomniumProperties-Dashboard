@@ -220,11 +220,106 @@ export async function initSchema() {
         updated_at TEXT DEFAULT (NOW()::TEXT)
       );
 
+      CREATE TABLE IF NOT EXISTS analises (
+        id TEXT PRIMARY KEY,
+        imovel_id TEXT NOT NULL,
+        nome TEXT NOT NULL DEFAULT 'Cenário Base',
+        versao INTEGER DEFAULT 1,
+        activa BOOLEAN DEFAULT false,
+
+        -- A. Aquisição
+        compra REAL DEFAULT 0,
+        vpt REAL DEFAULT 0,
+        finalidade TEXT DEFAULT 'Empresa_isencao',
+        escritura REAL DEFAULT 700,
+        cpcv_compra REAL DEFAULT 0,
+        due_diligence REAL DEFAULT 0,
+        imt REAL DEFAULT 0,
+        imposto_selo REAL DEFAULT 0,
+        total_aquisicao REAL DEFAULT 0,
+
+        -- B. Financiamento
+        perc_financiamento REAL DEFAULT 0,
+        prazo_anos INTEGER DEFAULT 30,
+        tan REAL DEFAULT 0,
+        tipo_taxa TEXT DEFAULT 'Fixa',
+        comissoes_banco REAL DEFAULT 0,
+        hipoteca REAL DEFAULT 0,
+        valor_financiado REAL DEFAULT 0,
+        prestacao_mensal REAL DEFAULT 0,
+        is_financiamento REAL DEFAULT 0,
+        penalizacao_amort REAL DEFAULT 0,
+
+        -- C. Obra
+        modo_obra TEXT DEFAULT 'total',
+        obra REAL DEFAULT 0,
+        pmo_perc REAL DEFAULT 65,
+        aru BOOLEAN DEFAULT false,
+        ampliacao BOOLEAN DEFAULT false,
+        licenciamento REAL DEFAULT 0,
+        iva_obra REAL DEFAULT 0,
+        obra_com_iva REAL DEFAULT 0,
+
+        -- D. Detenção
+        meses INTEGER DEFAULT 6,
+        seguro_mensal REAL DEFAULT 0,
+        condominio_mensal REAL DEFAULT 0,
+        utilidades_mensal REAL DEFAULT 0,
+        n_tranches INTEGER DEFAULT 1,
+        custo_tranche REAL DEFAULT 0,
+        taxa_imi REAL DEFAULT 0.3,
+        ligacao_servicos REAL DEFAULT 0,
+        excedente_capital REAL DEFAULT 0,
+        imi_proporcional REAL DEFAULT 0,
+        total_detencao REAL DEFAULT 0,
+
+        -- E. Venda
+        vvr REAL DEFAULT 0,
+        comissao_perc REAL DEFAULT 2.5,
+        cpcv_venda REAL DEFAULT 0,
+        cert_energetico REAL DEFAULT 0,
+        home_staging REAL DEFAULT 0,
+        outros_venda REAL DEFAULT 0,
+        comissao_com_iva REAL DEFAULT 0,
+        total_venda REAL DEFAULT 0,
+
+        -- F. Fiscalidade
+        regime_fiscal TEXT DEFAULT 'Empresa',
+        derrama_perc REAL DEFAULT 1.5,
+        perc_dividendos REAL DEFAULT 100,
+        ano_aquisicao INTEGER,
+        englobamento BOOLEAN DEFAULT false,
+        taxa_irs_marginal REAL DEFAULT 0,
+        impostos REAL DEFAULT 0,
+        retencao_dividendos REAL DEFAULT 0,
+
+        -- G. Resultados
+        capital_necessario REAL DEFAULT 0,
+        lucro_bruto REAL DEFAULT 0,
+        lucro_liquido REAL DEFAULT 0,
+        retorno_total REAL DEFAULT 0,
+        retorno_anualizado REAL DEFAULT 0,
+        cash_on_cash REAL DEFAULT 0,
+        break_even REAL DEFAULT 0,
+
+        -- H. Comparáveis + CAEP + Stress (JSON)
+        comparaveis JSONB DEFAULT '[]',
+        caep JSONB,
+        stress_tests JSONB,
+
+        -- Meta
+        criado_por TEXT,
+        created_at TEXT DEFAULT (NOW()::TEXT),
+        updated_at TEXT DEFAULT (NOW()::TEXT)
+      );
+
       CREATE INDEX IF NOT EXISTS idx_imoveis_estado ON imoveis(estado);
       CREATE INDEX IF NOT EXISTS idx_investidores_status ON investidores(status);
       CREATE INDEX IF NOT EXISTS idx_consultores_estatuto ON consultores(estatuto);
       CREATE INDEX IF NOT EXISTS idx_negocios_fase ON negocios(fase);
       CREATE INDEX IF NOT EXISTS idx_audit_tabela ON audit_log(tabela, registo_id);
+      CREATE INDEX IF NOT EXISTS idx_analises_imovel ON analises(imovel_id);
+      CREATE INDEX IF NOT EXISTS idx_analises_activa ON analises(imovel_id, activa);
     `)
     console.log('[pg] Schema criado/verificado')
   } finally {

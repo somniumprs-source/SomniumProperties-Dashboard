@@ -38,7 +38,9 @@ try {
   await initSchema()
   const { default: crmRoutes } = await import('./src/db/routes.js')
   app.use('/api/crm', crmRoutes)
-  console.log('[crm] API CRM montada em /api/crm (PostgreSQL)')
+  const { default: analiseRoutes } = await import('./src/db/analiseRoutes.js')
+  app.use('/api/crm', analiseRoutes)
+  console.log('[crm] API CRM + Análises montada em /api/crm (PostgreSQL)')
 } catch (e) {
   console.warn('[crm] PostgreSQL não disponível — CRM API desativada:', e.message)
   app.use('/api/crm', (_req, res) => res.status(503).json({ error: 'CRM não disponível' }))
@@ -1249,14 +1251,15 @@ app.get('/api/kpis', async (req, res) => {
   try {
     const base = 'http://localhost:3001'
     const safe = url => fetch(url).then(r => r.json()).catch(() => ({}))
-    const [financeiro, comercial, marketing, operacoes, cashflow] = await Promise.all([
+    const [financeiro, comercial, marketing, operacoes, cashflow, analises] = await Promise.all([
       safe(`${base}/api/kpis/financeiro`),
       safe(`${base}/api/kpis/comercial`),
       safe(`${base}/api/kpis/marketing`),
       safe(`${base}/api/kpis/operacoes`),
       safe(`${base}/api/financeiro/cashflow`),
+      safe(`${base}/api/crm/analises-kpis`),
     ])
-    res.json({ financeiro: { ...financeiro, cashflow }, comercial, marketing, operacoes, updatedAt: new Date().toISOString() })
+    res.json({ financeiro: { ...financeiro, cashflow, analises }, comercial, marketing, operacoes, updatedAt: new Date().toISOString() })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -3520,6 +3523,61 @@ app.get('/api/alertas', async (req, res) => {
       if (neg.fase === 'Vendido' && neg.lucroReal === 0) missing.push('Lucro Real')
       if (neg.fase === 'Vendido' && !neg.dataVenda) missing.push('Data de Venda')
       if (missing.length > 0) camposEmFalta.push({ db: 'Faturação', nome: neg.movimento, campos: missing, id: neg.id })
+    }
+
+    // ── Alertas de análises de rentabilidade ──
+    try {
+      const { query: pgQuery } = await import('./src/db/pg.js')
+      const { rows: analisesActivas } = await pgQuery(`
+        SELECT a.*, i.nome as imovel_nome FROM analises a
+        JOIN imoveis i ON i.id = a.imovel_id
+        WHERE a.activa = true
+      `)
+      for (const an of analisesActivas) {
+        // Risco de prejuízo no pior cenário
+        const st = typeof an.stress_tests === 'string' ? JSON.parse(an.stress_tests || 'null') : an.stress_tests
+        if (st?.pior?.lucro_liquido < 0) {
+          alerts.push({
+            tipo: 'stress_prejuizo',
+            severidade: an.lucro_liquido < 0 ? 'critico' : 'aviso',
+            entidade: an.imovel_nome,
+            mensagem: `Pior cenário: ${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(st.pior.lucro_liquido)} de prejuízo`,
+            id: an.imovel_id,
+          })
+        }
+        // RA baixo
+        if (an.retorno_anualizado > 0 && an.retorno_anualizado < 8) {
+          alerts.push({
+            tipo: 'ra_baixo',
+            severidade: 'aviso',
+            entidade: an.imovel_nome,
+            mensagem: `Retorno anualizado de apenas ${an.retorno_anualizado}%`,
+            id: an.imovel_id,
+          })
+        }
+        // VPT > compra
+        if (an.vpt > an.compra && an.compra > 0) {
+          alerts.push({
+            tipo: 'vpt_superior',
+            severidade: 'info',
+            entidade: an.imovel_nome,
+            mensagem: 'VPT superior ao preço de compra — IMT calculado sobre VPT',
+            id: an.imovel_id,
+          })
+        }
+        // Isenção IMT a caducar (>10 meses e finalidade empresa c/ isenção)
+        if (an.finalidade === 'Empresa_isencao' && an.meses > 10) {
+          alerts.push({
+            tipo: 'imt_caducidade',
+            severidade: an.meses > 12 ? 'critico' : 'aviso',
+            entidade: an.imovel_nome,
+            mensagem: `Isenção IMT caduca aos 12 meses — prazo estimado: ${an.meses}m`,
+            id: an.imovel_id,
+          })
+        }
+      }
+    } catch (e) {
+      console.warn('[alertas] Erro ao verificar análises:', e.message)
     }
 
     // Sort by severity

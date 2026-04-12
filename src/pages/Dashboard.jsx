@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { TrendingUp, Database, Clock } from 'lucide-react'
+import { TrendingUp, Database, Clock, Calculator } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { DepartmentSection } from '../components/dashboard/DepartmentSection.jsx'
 import { useKPIs } from '../hooks/useKPIs.js'
@@ -42,6 +42,7 @@ export function Dashboard() {
 
   const finKpis = kpis?.financeiro
   const comKpis = kpis?.comercial
+  const anaKpis = finKpis?.analises
 
   const sections = [
     {
@@ -80,6 +81,18 @@ export function Dashboard() {
         { label: 'Runway (meses)',    value: finKpis?.runway != null ? `${Math.round(finKpis.runway)}` : '—', meta: '12', unit: '', status: finKpis?.runway > 12 ? 'green' : 'yellow', trend: 'neutral' },
       ],
     },
+    ...(anaKpis?.total > 0 ? [{
+      title: 'Análises de Rentabilidade',
+      icon: Calculator,
+      color: 'bg-yellow-600',
+      link: '/crm',
+      kpis: [
+        { label: 'Pipeline Lucro Líq.', value: formatEur(anaKpis.pipeline_lucro_liquido), meta: formatEur(100000), status: statusFromValue(anaKpis.pipeline_lucro_liquido, 100000), trend: 'neutral', unit: '' },
+        { label: 'Capital Necessário',  value: formatEur(anaKpis.pipeline_capital), meta: '—', status: 'yellow', trend: 'neutral', unit: '' },
+        { label: 'RA Médio',            value: `${anaKpis.media_retorno_anualizado}%`, meta: '15%', status: statusFromValue(anaKpis.media_retorno_anualizado, 15), trend: 'neutral', unit: '' },
+        { label: 'Imóveis c/ Risco',    value: anaKpis.imoveis_com_risco, meta: 0, status: anaKpis.imoveis_com_risco === 0 ? 'green' : 'red', trend: 'neutral', unit: '' },
+      ],
+    }] : []),
   ]
 
   return (

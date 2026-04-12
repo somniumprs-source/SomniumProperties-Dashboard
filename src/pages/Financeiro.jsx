@@ -35,6 +35,7 @@ export function Financeiro() {
   const [despesas, setDespesas] = useState(null)
   const [cashflow, setCashflow] = useState(null)
   const [projecao, setProjecao] = useState(null)
+  const [analises, setAnalises] = useState(null)
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState(null)
   const [tab,      setTab]      = useState('Resumo')
@@ -42,16 +43,17 @@ export function Financeiro() {
   async function load() {
     setLoading(true); setError(null)
     try {
-      const [kr, dr, cr, pr] = await Promise.all([
+      const [kr, dr, cr, pr, ar] = await Promise.all([
         fetch('/api/kpis/financeiro'),
         fetch('/api/financeiro/despesas'),
         fetch('/api/financeiro/cashflow'),
         fetch('/api/financeiro/projecao'),
+        fetch('/api/crm/analises-kpis'),
       ])
       if (!kr.ok || !dr.ok || !cr.ok) throw new Error('Erro no servidor')
-      const [k, d, c, p] = await Promise.all([kr.json(), dr.json(), cr.json(), pr.ok ? pr.json() : null])
+      const [k, d, c, p, a] = await Promise.all([kr.json(), dr.json(), cr.json(), pr.ok ? pr.json() : null, ar.ok ? ar.json() : null])
       if (k.error) throw new Error(k.error)
-      setKpis(k); setDespesas(d); setCashflow(c); setProjecao(p)
+      setKpis(k); setDespesas(d); setCashflow(c); setProjecao(p); setAnalises(a)
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
@@ -168,6 +170,55 @@ export function Financeiro() {
               <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                 <h2 className="text-sm font-semibold text-gray-700 mb-3">Pagamentos Pendentes</h2>
                 <NegociosTable rows={pendentes} />
+              </div>
+            )}
+
+            {/* Análises de Rentabilidade */}
+            {analises?.total > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                <h2 className="text-sm font-semibold text-gray-700 mb-4">Pipeline de Análises (calculadora integrada)</h2>
+                <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
+                  <div className="bg-green-50 rounded-lg p-3 text-center">
+                    <p className="text-xs text-gray-500">Lucro Líq. Pipeline</p>
+                    <p className="text-lg font-bold text-green-700">{EUR(analises.pipeline_lucro_liquido)}</p>
+                  </div>
+                  <div className="bg-blue-50 rounded-lg p-3 text-center">
+                    <p className="text-xs text-gray-500">Capital Necessário</p>
+                    <p className="text-lg font-bold text-blue-700">{EUR(analises.pipeline_capital)}</p>
+                  </div>
+                  <div className="bg-yellow-50 rounded-lg p-3 text-center">
+                    <p className="text-xs text-gray-500">RA Médio</p>
+                    <p className="text-lg font-bold text-yellow-700">{analises.media_retorno_anualizado}%</p>
+                  </div>
+                  <div className={`rounded-lg p-3 text-center ${analises.imoveis_com_risco > 0 ? 'bg-red-50' : 'bg-green-50'}`}>
+                    <p className="text-xs text-gray-500">Imóveis c/ Risco</p>
+                    <p className={`text-lg font-bold ${analises.imoveis_com_risco > 0 ? 'text-red-600' : 'text-green-700'}`}>{analises.imoveis_com_risco}</p>
+                  </div>
+                </div>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-gray-400 border-b">
+                      <th className="text-left py-1.5">Imóvel</th>
+                      <th className="text-right py-1.5">Compra</th>
+                      <th className="text-right py-1.5">VVR</th>
+                      <th className="text-right py-1.5">Capital</th>
+                      <th className="text-right py-1.5">Lucro Líq.</th>
+                      <th className="text-right py-1.5">RA</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analises.analises?.map(a => (
+                      <tr key={a.id} className="border-b border-gray-50 hover:bg-gray-50">
+                        <td className="py-1.5 font-medium text-gray-700">{a.imovel_nome}</td>
+                        <td className="py-1.5 text-right font-mono">{EUR(a.compra)}</td>
+                        <td className="py-1.5 text-right font-mono">{EUR(a.vvr)}</td>
+                        <td className="py-1.5 text-right font-mono">{EUR(a.capital_necessario)}</td>
+                        <td className={`py-1.5 text-right font-mono font-semibold ${a.lucro_liquido >= 0 ? 'text-green-700' : 'text-red-600'}`}>{EUR(a.lucro_liquido)}</td>
+                        <td className={`py-1.5 text-right font-mono ${a.retorno_anualizado >= 15 ? 'text-green-600' : a.retorno_anualizado >= 8 ? 'text-yellow-600' : 'text-red-600'}`}>{a.retorno_anualizado}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </>
