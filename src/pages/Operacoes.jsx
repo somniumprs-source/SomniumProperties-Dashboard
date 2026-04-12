@@ -222,6 +222,7 @@ export function Operacoes() {
   const [showForm, setShowForm] = useState(false)
   const [editingTask, setEditingTask] = useState(null)
   const [taskFilter, setTaskFilter] = useState('semana')
+  const [funcFilter, setFuncFilter] = useState('todos')
   const [viewMode, setViewMode] = useState('board')
   const [showArchive, setShowArchive] = useState(false)
   const [selectedIds, setSelectedIds] = useState(new Set())
@@ -306,10 +307,12 @@ export function Operacoes() {
   const semanaTodas = tarefas.filter(isThisWeek) // inclui concluídas da semana
   const concluídasPassadas = concluídas.filter(t => !isThisWeek(t)) // só arquivo de semanas anteriores
 
-  const filteredTarefas = taskFilter === 'semana' ? semanaTodas
+  const byTimeFilter = taskFilter === 'semana' ? semanaTodas
     : taskFilter === 'pendentes' ? ativas
     : taskFilter === 'arquivo' ? concluídasPassadas
     : tarefas
+  const filteredTarefas = funcFilter === 'todos' ? byTimeFilter
+    : byTimeFilter.filter(t => (t.funcionario || '').includes(funcFilter))
 
   async function bulkDelete() {
     if (selectedIds.size === 0) return
@@ -421,6 +424,13 @@ export function Operacoes() {
                   ))}
                 </div>
                 <div className="flex gap-2">
+                  {/* Filtro por funcionário */}
+                  {['todos', ...FUNCIONARIOS].map(f => (
+                    <button key={f} onClick={() => { setFuncFilter(f); setSelectedIds(new Set()) }}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg border ${funcFilter === f ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                      {f === 'todos' ? 'Todos' : f.split(' ')[0]}
+                    </button>
+                  ))}
                   <button onClick={() => setViewMode(v => v === 'list' ? 'board' : 'list')}
                     className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">
                     {viewMode === 'list' ? 'Board' : 'Lista'}
@@ -468,7 +478,7 @@ export function Operacoes() {
             {viewMode === 'board' && taskFilter !== 'arquivo' && (
               <div className={`grid grid-cols-1 gap-4 ${taskFilter === 'semana' ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
                 {(taskFilter === 'semana' ? ['A fazer', 'Em andamento', 'Atrasada', 'Concluída'] : ['A fazer', 'Em andamento', 'Atrasada']).map(status => {
-                  const pool = (taskFilter === 'semana' ? semanaTodas : ativas).filter(t => t.status === status)
+                  const pool = filteredTarefas.filter(t => t.status === status)
                   const totalH = pool.reduce((s, t) => s + (t.tempo_horas || 0), 0)
                   return (
                     <div key={status} className="flex flex-col">
