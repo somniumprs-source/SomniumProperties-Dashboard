@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { TrendingUp, Users, Megaphone, HardHat } from 'lucide-react'
+import { TrendingUp, Database, Clock } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { DepartmentSection } from '../components/dashboard/DepartmentSection.jsx'
 import { useKPIs } from '../hooks/useKPIs.js'
@@ -42,10 +42,20 @@ export function Dashboard() {
 
   const finKpis = kpis?.financeiro
   const comKpis = kpis?.comercial
-  const mktKpis = kpis?.marketing
-  const opsKpis = kpis?.operacoes
 
   const sections = [
+    {
+      title: 'CRM — Pipeline',
+      icon: Database,
+      color: 'bg-indigo-600',
+      link: '/crm',
+      kpis: [
+        { label: 'Imóveis Ativos',    value: comKpis?.imóveisAtivos ?? '—',       meta: 20,  status: comKpis ? statusFromValue(comKpis.imóveisAtivos, 20) : 'yellow',        trend: 'neutral', unit: '' },
+        { label: 'Investidores',      value: comKpis?.investidoresTotal ?? '—',    meta: 50,  status: comKpis ? statusFromValue(comKpis.investidoresTotal, 50) : 'yellow',    trend: 'neutral', unit: '' },
+        { label: 'Em Parceria',       value: comKpis?.investParceria ?? '—',       meta: 5,   status: comKpis ? statusFromValue(comKpis.investParceria, 5) : 'yellow',        trend: 'neutral', unit: '' },
+        { label: 'Capital Disponível',value: comKpis ? formatEur(comKpis.capitalDisponivel) : '—', meta: formatEur(500000), status: comKpis ? statusFromValue(comKpis.capitalDisponivel, 500000) : 'yellow', trend: 'neutral', unit: '' },
+      ],
+    },
     {
       title: 'Financeiro',
       icon: TrendingUp,
@@ -59,39 +69,15 @@ export function Dashboard() {
       ],
     },
     {
-      title: 'Comercial & Vendas',
-      icon: Users,
-      color: 'bg-indigo-600',
-      link: '/comercial',
-      kpis: [
-        { label: 'Investidores',      value: comKpis?.investidoresTotal ?? '—',    meta: 50,  status: comKpis ? statusFromValue(comKpis.investidoresTotal, 50) : 'yellow',    trend: 'neutral', unit: '' },
-        { label: 'Em Parceria',       value: comKpis?.investParceria ?? '—',       meta: 5,   status: comKpis ? statusFromValue(comKpis.investParceria, 5) : 'yellow',        trend: 'neutral', unit: '' },
-        { label: 'Classificados A/B', value: comKpis?.investClassificados ?? '—',  meta: 10,  status: comKpis ? statusFromValue(comKpis.investClassificados, 10) : 'yellow',  trend: 'neutral', unit: '' },
-        { label: 'Capital Disponível',value: comKpis ? formatEur(comKpis.capitalDisponivel) : '—', meta: formatEur(500000), status: comKpis ? statusFromValue(comKpis.capitalDisponivel, 500000) : 'yellow', trend: 'neutral', unit: '' },
-      ],
-    },
-    {
-      title: 'Marketing',
-      icon: Megaphone,
-      color: 'bg-violet-600',
-      link: '/marketing',
-      kpis: [
-        { label: 'Leads Gerados', value: mktKpis?.leadsGerados ?? '—', meta: 20, status: mktKpis ? statusFromValue(mktKpis.leadsGerados, 20) : 'yellow', trend: 'neutral', unit: '' },
-        { label: 'Custo p/ Lead', value: mktKpis ? formatEur(mktKpis.cpl) : '—', meta: formatEur(50), status: mktKpis ? statusFromValue(mktKpis.cpl, 50, false) : 'yellow', trend: 'neutral', unit: '' },
-        { label: 'Leads Qualif. (SQL)', value: mktKpis?.sql ?? '—', meta: 8, status: mktKpis ? statusFromValue(mktKpis.sql, 8) : 'yellow', trend: 'neutral', unit: '' },
-        { label: 'Taxa Qualificação', value: mktKpis ? `${mktKpis.taxaQualificacao}` : '—', meta: '40', unit: '%', status: mktKpis ? statusFromValue(mktKpis.taxaQualificacao, 40) : 'yellow', trend: 'neutral' },
-      ],
-    },
-    {
       title: 'Operações',
-      icon: HardHat,
+      icon: Clock,
       color: 'bg-orange-600',
       link: '/operacoes',
       kpis: [
-        { label: 'Obras Ativas', value: opsKpis?.obrasAtivas ?? '—', meta: 5, status: 'green', trend: 'neutral', unit: '' },
-        { label: 'Obras Concluídas', value: opsKpis?.obrasConcluidas ?? '—', meta: 2, status: opsKpis ? statusFromValue(opsKpis.obrasConcluidas, 2) : 'yellow', trend: 'neutral', unit: '' },
-        { label: 'No Prazo', value: opsKpis ? `${opsKpis.percentNoPrazo}` : '—', meta: '80', unit: '%', status: opsKpis ? statusFromValue(opsKpis.percentNoPrazo, 80) : 'yellow', trend: 'neutral' },
-        { label: 'Desvio Médio', value: opsKpis ? `${opsKpis.desvioMedio}` : '—', meta: '5', unit: '%', status: opsKpis ? statusFromValue(opsKpis.desvioMedio, 5, false) : 'yellow', trend: 'neutral' },
+        { label: 'Negócios Ativos',   value: finKpis?.negóciosAtivos ?? '—',      meta: 5,   status: finKpis ? statusFromValue(finKpis.negóciosAtivos, 5) : 'yellow',        trend: 'neutral', unit: '' },
+        { label: 'Classificados A/B', value: comKpis?.investClassificados ?? '—',  meta: 10,  status: comKpis ? statusFromValue(comKpis.investClassificados, 10) : 'yellow',  trend: 'neutral', unit: '' },
+        { label: 'Deals Fechados',    value: finKpis?.dealsFechados ?? '0',        meta: 6,   status: finKpis ? statusFromValue(finKpis.dealsFechados, 6) : 'yellow',         trend: 'neutral', unit: '' },
+        { label: 'Runway (meses)',    value: finKpis?.runway != null ? `${Math.round(finKpis.runway)}` : '—', meta: '12', unit: '', status: finKpis?.runway > 12 ? 'green' : 'yellow', trend: 'neutral' },
       ],
     },
   ]

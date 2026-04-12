@@ -1,11 +1,11 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from './components/layout/Layout.jsx'
 import { Dashboard } from './pages/Dashboard.jsx'
 import { Financeiro } from './pages/Financeiro.jsx'
-import { Comercial } from './pages/Comercial.jsx'
 import { Alertas } from './pages/Alertas.jsx'
 import { CRM } from './pages/CRM.jsx'
 import { Operacoes } from './pages/Operacoes.jsx'
+import { Metricas } from './pages/Metricas.jsx'
 import { Login } from './pages/Login.jsx'
 import { ProfileSelect } from './pages/ProfileSelect.jsx'
 import { ToastProvider } from './components/ui/Toast.jsx'
@@ -33,10 +33,13 @@ function AppRoutes() {
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
         <Route path="/crm" element={<CRM />} />
-        <Route path="/comercial" element={<Comercial />} />
         <Route path="/financeiro" element={<Financeiro />} />
         <Route path="/operacoes" element={<Operacoes />} />
+        <Route path="/metricas" element={<Metricas />} />
         <Route path="/alertas" element={<Alertas />} />
+        {/* Redirects de páginas removidas */}
+        <Route path="/comercial" element={<Navigate to="/crm" replace />} />
+        <Route path="/marketing" element={<Navigate to="/crm" replace />} />
       </Route>
     </Routes>
   )
