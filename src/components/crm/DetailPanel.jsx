@@ -35,18 +35,23 @@ export function DetailPanel({ type, id, onClose, onSave }) {
     setEditing(true)
   }
 
+  function loadData() {
+    return fetch(`/api/crm/${endpoint}/${id}/full`).then(r => r.json()).then(setData).catch(() => {})
+  }
+
   async function saveEdit() {
     setSaving(true)
     try {
+      // Limpar campos do form que são relações (não enviar ao PUT)
+      const { negocios, consultores, imoveis, tarefas, timeline, analises, ...cleanForm } = form
       const r = await fetch(`/api/crm/${endpoint}/${id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cleanForm),
       })
       if (!r.ok) throw new Error('Erro ao guardar')
-      const updated = await r.json()
-      setData(updated)
+      await loadData()
       setEditing(false)
       if (onSave) onSave()
-    } catch {}
+    } catch (e) { console.error('Erro ao guardar:', e) }
     setSaving(false)
   }
 
@@ -57,10 +62,8 @@ export function DetailPanel({ type, id, onClose, onSave }) {
     if (!id || !endpoint) return
     setLoading(true)
     setActiveTab('detalhe')
-    fetch(`/api/crm/${endpoint}/${id}/full`)
-      .then(r => r.json())
-      .then(setData)
-      .catch(() => {})
+    setEditing(false)
+    loadData()
       .finally(() => setLoading(false))
 
     // Carregar reuniões para investidores e consultores
