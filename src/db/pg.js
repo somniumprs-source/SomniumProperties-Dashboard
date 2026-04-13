@@ -158,6 +158,7 @@ export async function initSchema() {
         custo_mensal REAL DEFAULT 0,
         custo_anual REAL DEFAULT 0,
         timing TEXT,
+        documentos TEXT,
         notas TEXT,
         created_at TEXT DEFAULT (NOW()::TEXT),
         updated_at TEXT DEFAULT (NOW()::TEXT),
@@ -319,6 +320,12 @@ export async function initSchema() {
       DO $$ BEGIN
         ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS gcal_event_id TEXT;
         ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS gcal_synced_at TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
+      -- Migration: adicionar coluna documentos à tabela despesas
+      DO $$ BEGIN
+        ALTER TABLE despesas ADD COLUMN IF NOT EXISTS documentos TEXT;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 

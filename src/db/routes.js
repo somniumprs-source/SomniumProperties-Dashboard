@@ -2,9 +2,32 @@
  * API REST routes para o CRM (PostgreSQL).
  */
 import { Router } from 'express'
+import multer from 'multer'
+import path from 'path'
+import { fileURLToPath } from 'url'
+import { randomUUID } from 'crypto'
 import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, getDashboardStats } from './crud.js'
 import pool from './pg.js'
 import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const uploadsDir = path.resolve(__dirname, '../../public/uploads/despesas')
+
+const storage = multer.diskStorage({
+  destination: uploadsDir,
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname)
+    cb(null, `${randomUUID()}${ext}`)
+  },
+})
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = /\.(pdf|jpg|jpeg|png|webp|heic)$/i
+    cb(null, allowed.test(path.extname(file.originalname)))
+  },
+})
 
 const router = Router()
 
@@ -65,6 +88,41 @@ crudRoutes('/consultores', Consultores)
 crudRoutes('/negocios', Negocios)
 crudRoutes('/despesas', Despesas)
 crudRoutes('/tarefas', Tarefas)
+
+// ── Upload de documentos para despesas ───────────────────────
+router.post('/despesas/:id/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Ficheiro inválido (PDF, JPG, PNG até 10MB)' })
+    const { id } = req.params
+    const despesa = await Despesas.getById(id)
+    if (!despesa) return res.status(404).json({ error: 'Despesa não encontrada' })
+
+    const docs = despesa.documentos ? JSON.parse(despesa.documentos) : []
+    docs.push({
+      id: randomUUID(),
+      name: req.file.originalname,
+      path: `/uploads/despesas/${req.file.filename}`,
+      type: req.file.mimetype,
+      size: req.file.size,
+      uploaded_at: new Date().toISOString(),
+    })
+    await Despesas.update(id, { documentos: JSON.stringify(docs) })
+    res.json({ ok: true, documentos: docs })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/despesas/:id/upload/:docId', async (req, res) => {
+  try {
+    const { id, docId } = req.params
+    const despesa = await Despesas.getById(id)
+    if (!despesa) return res.status(404).json({ error: 'Despesa não encontrada' })
+
+    const docs = despesa.documentos ? JSON.parse(despesa.documentos) : []
+    const filtered = docs.filter(d => d.id !== docId)
+    await Despesas.update(id, { documentos: JSON.stringify(filtered) })
+    res.json({ ok: true, documentos: filtered })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
 
 router.get('/stats', async (req, res) => {
   try { res.json(await getDashboardStats()) }

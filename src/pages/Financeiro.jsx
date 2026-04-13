@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, ComposedChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts'
+import { Upload, X, FileText, Image, Trash2, Plus } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { KPICard } from '../components/dashboard/KPICard.jsx'
 
@@ -39,23 +40,62 @@ export function Financeiro() {
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState(null)
   const [tab,      setTab]      = useState('Resumo')
+  const [editingNeg, setEditingNeg] = useState(null)
+  const [editingDesp, setEditingDesp] = useState(null)
+  const [crmNegocios, setCrmNegocios] = useState([])
+  const [crmDespesas, setCrmDespesas] = useState([])
 
   async function load() {
     setLoading(true); setError(null)
     try {
-      const [kr, dr, cr, pr, ar] = await Promise.all([
+      const [kr, dr, cr, pr, ar, nr, dsr] = await Promise.all([
         fetch('/api/kpis/financeiro'),
         fetch('/api/financeiro/despesas'),
         fetch('/api/financeiro/cashflow'),
         fetch('/api/financeiro/projecao'),
         fetch('/api/crm/analises-kpis'),
+        fetch('/api/crm/negocios?limit=200'),
+        fetch('/api/crm/despesas?limit=200'),
       ])
       if (!kr.ok || !dr.ok || !cr.ok) throw new Error('Erro no servidor')
-      const [k, d, c, p, a] = await Promise.all([kr.json(), dr.json(), cr.json(), pr.ok ? pr.json() : null, ar.ok ? ar.json() : null])
+      const [k, d, c, p, a, n, ds] = await Promise.all([kr.json(), dr.json(), cr.json(), pr.ok ? pr.json() : null, ar.ok ? ar.json() : null, nr.json(), dsr.json()])
       if (k.error) throw new Error(k.error)
       setKpis(k); setDespesas(d); setCashflow(c); setProjecao(p); setAnalises(a)
+      setCrmNegocios(n.data ?? []); setCrmDespesas(ds.data ?? [])
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
+  }
+
+  async function saveNegocio(form) {
+    try {
+      const isNew = !form.id
+      const url = isNew ? '/api/crm/negocios' : `/api/crm/negocios/${form.id}`
+      const r = await fetch(url, { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+      if (!r.ok) throw new Error('Erro ao guardar')
+      setEditingNeg(null); load()
+    } catch (e) { setError(e.message) }
+  }
+
+  async function deleteNegocio(id) {
+    if (!confirm('Apagar este negócio?')) return
+    await fetch(`/api/crm/negocios/${id}`, { method: 'DELETE' })
+    load()
+  }
+
+  async function saveDespesa(form) {
+    try {
+      const isNew = !form.id
+      const url = isNew ? '/api/crm/despesas' : `/api/crm/despesas/${form.id}`
+      const r = await fetch(url, { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+      if (!r.ok) throw new Error('Erro ao guardar')
+      setEditingDesp(null); load()
+    } catch (e) { setError(e.message) }
+  }
+
+  async function deleteDespesa(id) {
+    if (!confirm('Apagar esta despesa?')) return
+    await fetch(`/api/crm/despesas/${id}`, { method: 'DELETE' })
+    load()
   }
 
   useEffect(() => { load() }, [])
@@ -227,13 +267,21 @@ export function Financeiro() {
         {/* ══════════════════ NEGÓCIOS ══════════════════ */}
         {tab === 'Negócios' && (
           <>
-            <div className="flex justify-end">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <button onClick={() => setEditingNeg({})} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors">
+                <Plus className="w-4 h-4" /> Novo Negócio
+              </button>
               <a href="https://www.notion.so/ecbb876ee01e4e65b8f561499d42a2b2" target="_blank" rel="noopener noreferrer"
                 className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:opacity-80"
                 style={{ backgroundColor: '#f5f5f5', color: '#666', border: '1px solid #e0e0e0' }}>
                 Abrir Faturação no Notion →
               </a>
             </div>
+
+            {editingNeg !== null && (
+              <NegocioForm item={editingNeg} onSave={saveNegocio} onCancel={() => setEditingNeg(null)} />
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
               {(kpis?.categorias ?? []).map(c => (
                 <div key={c.categoria} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
@@ -252,7 +300,7 @@ export function Financeiro() {
               {(!kpis?.categorias?.length) && <div className="col-span-4"><EmptyState /></div>}
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm">
               <h2 className="text-sm font-semibold text-gray-700 mb-3">Todos os Negócios</h2>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
@@ -264,20 +312,18 @@ export function Financeiro() {
                       <th className="text-right py-2 px-3">Lucro Est.</th>
                       <th className="text-right py-2 px-3">Lucro Real</th>
                       <th className="text-left py-2 px-3">Pagamento</th>
-                      <th className="text-left py-2 px-3">Data Prevista</th>
+                      <th className="py-2 px-3"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {negociosLista.map(n => (
                       <tr key={n.id} className="border-b border-gray-50 hover:bg-gray-50">
-                        <td className="py-2 px-3 font-medium text-gray-800">{n.movimento}</td>
-                        <td className="py-2 px-3">
-                          <CatBadge cat={n.categoria} />
+                        <td className="py-2 px-3 font-medium text-gray-800">
+                          <button onClick={() => setEditingNeg(crmNegocios.find(x => x.id === n.id) || n)} className="text-left hover:text-indigo-600 hover:underline">{n.movimento}</button>
                         </td>
+                        <td className="py-2 px-3"><CatBadge cat={n.categoria} /></td>
                         <td className="py-2 px-3">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${FASE_COLOR[n.fase] ?? 'bg-gray-100 text-gray-600'}`}>
-                            {n.fase ?? '—'}
-                          </span>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${FASE_COLOR[n.fase] ?? 'bg-gray-100 text-gray-600'}`}>{n.fase ?? '—'}</span>
                         </td>
                         <td className="py-2 px-3 text-right font-mono text-indigo-600 font-semibold">{EUR(n.lucroEstimado)}</td>
                         <td className="py-2 px-3 text-right font-mono text-green-600">
@@ -288,7 +334,12 @@ export function Financeiro() {
                             ? <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-medium">Pendente</span>
                             : <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Recebido</span>}
                         </td>
-                        <td className="py-2 px-3 text-gray-400 text-xs">{n.dataEstimada ?? n.dataVenda ?? '—'}</td>
+                        <td className="py-2 px-3">
+                          <div className="flex gap-1">
+                            <button onClick={() => setEditingNeg(crmNegocios.find(x => x.id === n.id) || n)} className="px-2 py-1 text-xs bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100">Editar</button>
+                            <button onClick={() => deleteNegocio(n.id)} className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Apagar</button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                     {!negociosLista.length && (
@@ -304,13 +355,20 @@ export function Financeiro() {
         {/* ══════════════════ DESPESAS ══════════════════ */}
         {tab === 'Despesas' && (
           <>
-            <div className="flex justify-end">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <button onClick={() => setEditingDesp({})} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-xl hover:bg-red-700 transition-colors">
+                <Plus className="w-4 h-4" /> Nova Despesa
+              </button>
               <a href="https://www.notion.so/ae764d5955004c1bb0fba7705bb6931c" target="_blank" rel="noopener noreferrer"
                 className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:opacity-80"
                 style={{ backgroundColor: '#f5f5f5', color: '#666', border: '1px solid #e0e0e0' }}>
                 Abrir Despesas no Notion →
               </a>
             </div>
+
+            {editingDesp !== null && (
+              <DespesaForm item={editingDesp} onSave={saveDespesa} onCancel={() => setEditingDesp(null)} onReload={load} />
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
               <KPICard label="Burn Rate / Mês"     value={EUR(despesas?.burnRate)}      meta="—" status="green"  trend="neutral" unit="" />
               <KPICard label="Burn Rate Anual"      value={EUR(despesas?.burnRateAnual)} meta="—" status="green"  trend="neutral" unit="" />
@@ -342,25 +400,35 @@ export function Financeiro() {
                       <th className="text-left py-1.5 px-2">Categoria</th>
                       <th className="text-right py-1.5 px-2">€/mês</th>
                       <th className="text-right py-1.5 px-2">€/ano</th>
+                      <th className="py-1.5 px-2"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {despRecorrentes.map(d => (
                       <tr key={d.id} className="border-b border-gray-50 hover:bg-gray-50">
-                        <td className="py-1.5 px-2 font-medium text-gray-700">{d.movimento}</td>
+                        <td className="py-1.5 px-2 font-medium text-gray-700">
+                          <button onClick={() => setEditingDesp(crmDespesas.find(x => x.id === d.id) || d)} className="text-left hover:text-indigo-600 hover:underline">{d.movimento}</button>
+                        </td>
                         <td className="py-1.5 px-2 text-gray-500">{d.categoria}</td>
                         <td className="py-1.5 px-2 text-right font-mono text-red-500">{EUR2(d.custoMensal)}</td>
                         <td className="py-1.5 px-2 text-right font-mono text-gray-600">{EUR(d.custoAnual)}</td>
+                        <td className="py-1.5 px-2">
+                          <div className="flex gap-1">
+                            <button onClick={() => setEditingDesp(crmDespesas.find(x => x.id === d.id) || d)} className="px-1.5 py-0.5 text-xs bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100">Editar</button>
+                            <button onClick={() => deleteDespesa(d.id)} className="px-1.5 py-0.5 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">x</button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                     {!despRecorrentes.length && (
-                      <tr><td colSpan={4} className="py-4 text-center text-gray-400">Sem despesas mensais</td></tr>
+                      <tr><td colSpan={5} className="py-4 text-center text-gray-400">Sem despesas mensais</td></tr>
                     )}
                     {despRecorrentes.length > 0 && (
                       <tr className="border-t-2 border-gray-200 font-semibold bg-gray-50">
                         <td colSpan={2} className="py-1.5 px-2 text-gray-700">TOTAL</td>
                         <td className="py-1.5 px-2 text-right font-mono text-red-600">{EUR2(despesas?.burnRate)}</td>
                         <td className="py-1.5 px-2 text-right font-mono text-gray-700">{EUR(despesas?.burnRateAnual)}</td>
+                        <td></td>
                       </tr>
                     )}
                   </tbody>
@@ -646,4 +714,223 @@ function NegociosTable({ rows, emptyMsg = 'Sem dados' }) {
 
 function EmptyState() {
   return <p className="text-xs text-gray-400 text-center py-10">Sem dados suficientes</p>
+}
+
+// ── Negócio Form ─────────────────────────────────────────────
+const NEG_CATEGORIAS = ['Wholesalling', 'CAEP', 'Mediação Imobiliária', 'Fix and Flip']
+const NEG_FASES = ['Fase de obras', 'Fase de venda', 'Vendido']
+
+function NegocioForm({ item, onSave, onCancel }) {
+  const isNew = !item.id
+  const [f, setF] = useState({
+    movimento: '', categoria: '', fase: '', lucro_estimado: '', lucro_real: '',
+    custo_real_obra: '', capital_total: '', n_investidores: '', pagamento_em_falta: 1,
+    data: '', data_compra: '', data_estimada_venda: '', data_venda: '', notas: '',
+    ...item,
+  })
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }))
+  const inputClass = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+
+  return (
+    <div className="bg-white rounded-xl border-2 border-indigo-200 p-4 sm:p-6 shadow-md">
+      <h3 className="text-sm font-semibold text-gray-700 mb-4">{isNew ? 'Novo Negócio' : 'Editar Negócio'}</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+        <div className="sm:col-span-2 xl:col-span-1">
+          <label className="text-xs text-gray-500 block mb-1">Nome do Negócio *</label>
+          <input value={f.movimento} onChange={e => set('movimento', e.target.value)} className={inputClass} placeholder="Ex: M3 Eiras" />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Categoria</label>
+          <select value={f.categoria} onChange={e => set('categoria', e.target.value)} className={inputClass}>
+            <option value="">—</option>
+            {NEG_CATEGORIAS.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Fase</label>
+          <select value={f.fase} onChange={e => set('fase', e.target.value)} className={inputClass}>
+            <option value="">—</option>
+            {NEG_FASES.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Lucro Estimado (€)</label>
+          <input type="number" value={f.lucro_estimado} onChange={e => set('lucro_estimado', +e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Lucro Real (€)</label>
+          <input type="number" value={f.lucro_real} onChange={e => set('lucro_real', +e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Custo Real Obra (€)</label>
+          <input type="number" value={f.custo_real_obra} onChange={e => set('custo_real_obra', +e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Capital Total (€)</label>
+          <input type="number" value={f.capital_total} onChange={e => set('capital_total', +e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Nº Investidores</label>
+          <input type="number" value={f.n_investidores} onChange={e => set('n_investidores', +e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Pagamento</label>
+          <select value={f.pagamento_em_falta} onChange={e => set('pagamento_em_falta', +e.target.value)} className={inputClass}>
+            <option value={1}>Pendente</option>
+            <option value={0}>Recebido</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Data</label>
+          <input type="date" value={f.data} onChange={e => set('data', e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Data Compra</label>
+          <input type="date" value={f.data_compra} onChange={e => set('data_compra', e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Data Estimada Venda</label>
+          <input type="date" value={f.data_estimada_venda} onChange={e => set('data_estimada_venda', e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Data Venda</label>
+          <input type="date" value={f.data_venda} onChange={e => set('data_venda', e.target.value)} className={inputClass} />
+        </div>
+        <div className="sm:col-span-2 xl:col-span-3">
+          <label className="text-xs text-gray-500 block mb-1">Notas</label>
+          <textarea value={f.notas ?? ''} onChange={e => set('notas', e.target.value)} rows={2} className={inputClass} />
+        </div>
+      </div>
+      <div className="flex gap-3 mt-4">
+        <button onClick={() => onSave(f)} disabled={!f.movimento?.trim()} className="px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 disabled:opacity-40">
+          {isNew ? 'Criar' : 'Guardar'}
+        </button>
+        <button onClick={onCancel} className="px-5 py-2 bg-gray-100 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-200">Cancelar</button>
+      </div>
+    </div>
+  )
+}
+
+// ── Despesa Form ─────────────────────────────────────────────
+const DESP_CATEGORIAS = ['Salários', 'Operação', 'Marketing', 'Ferramentas', 'Legal', 'Contabilidade', 'Escritório', 'Formação', 'Viatura', 'Seguros', 'Telecomunicações', 'Outro']
+const DESP_TIMING = ['Mensalmente', 'Anual', 'Único']
+
+function DespesaForm({ item, onSave, onCancel, onReload }) {
+  const isNew = !item.id
+  const [f, setF] = useState({
+    movimento: '', categoria: '', timing: 'Mensalmente', custo_mensal: '', custo_anual: '', data: '', notas: '',
+    ...item,
+  })
+  const [docs, setDocs] = useState(() => {
+    try { return item.documentos ? JSON.parse(item.documentos) : [] } catch { return [] }
+  })
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef(null)
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }))
+  const inputClass = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
+
+  async function handleUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file || !item.id) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const r = await fetch(`/api/crm/despesas/${item.id}/upload`, { method: 'POST', body: fd })
+      const d = await r.json()
+      if (d.error) throw new Error(d.error)
+      setDocs(d.documentos)
+    } catch (err) { alert('Erro ao enviar: ' + err.message) }
+    finally { setUploading(false); if (fileRef.current) fileRef.current.value = '' }
+  }
+
+  async function handleDeleteDoc(docId) {
+    try {
+      const r = await fetch(`/api/crm/despesas/${item.id}/upload/${docId}`, { method: 'DELETE' })
+      const d = await r.json()
+      if (d.error) throw new Error(d.error)
+      setDocs(d.documentos)
+    } catch (err) { alert('Erro: ' + err.message) }
+  }
+
+  return (
+    <div className="bg-white rounded-xl border-2 border-red-200 p-4 sm:p-6 shadow-md">
+      <h3 className="text-sm font-semibold text-gray-700 mb-4">{isNew ? 'Nova Despesa' : 'Editar Despesa'}</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+        <div className="sm:col-span-2 xl:col-span-1">
+          <label className="text-xs text-gray-500 block mb-1">Descrição *</label>
+          <input value={f.movimento} onChange={e => set('movimento', e.target.value)} className={inputClass} placeholder="Ex: ChatGPT Plus, Contabilista..." />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Categoria</label>
+          <select value={f.categoria} onChange={e => set('categoria', e.target.value)} className={inputClass}>
+            <option value="">—</option>
+            {DESP_CATEGORIAS.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Periodicidade</label>
+          <select value={f.timing} onChange={e => set('timing', e.target.value)} className={inputClass}>
+            {DESP_TIMING.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Custo Mensal (€)</label>
+          <input type="number" step="0.01" value={f.custo_mensal} onChange={e => set('custo_mensal', +e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Custo Anual (€)</label>
+          <input type="number" step="0.01" value={f.custo_anual} onChange={e => set('custo_anual', +e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Data</label>
+          <input type="date" value={f.data} onChange={e => set('data', e.target.value)} className={inputClass} />
+        </div>
+        <div className="sm:col-span-2 xl:col-span-3">
+          <label className="text-xs text-gray-500 block mb-1">Notas</label>
+          <textarea value={f.notas ?? ''} onChange={e => set('notas', e.target.value)} rows={2} className={inputClass} />
+        </div>
+      </div>
+
+      {/* Documentos / Faturas */}
+      {item.id && (
+        <div className="mt-5 pt-4 border-t border-gray-100">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Documentos / Faturas</h4>
+            <label className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors ${uploading ? 'bg-gray-100 text-gray-400' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}>
+              <Upload className="w-3.5 h-3.5" />
+              {uploading ? 'A enviar...' : 'Anexar ficheiro'}
+              <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic" onChange={handleUpload} disabled={uploading} className="hidden" />
+            </label>
+          </div>
+          {docs.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              {docs.map(doc => (
+                <div key={doc.id} className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">
+                  {doc.type?.startsWith('image') ? <Image className="w-4 h-4 text-blue-500 shrink-0" /> : <FileText className="w-4 h-4 text-red-500 shrink-0" />}
+                  <a href={doc.path} target="_blank" rel="noreferrer" className="flex-1 text-sm text-gray-700 hover:text-indigo-600 hover:underline truncate">{doc.name}</a>
+                  <span className="text-xs text-gray-400 shrink-0">{(doc.size / 1024).toFixed(0)} KB</span>
+                  <button onClick={() => handleDeleteDoc(doc.id)} className="text-gray-300 hover:text-red-500 transition-colors shrink-0">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 py-3 text-center">Sem documentos anexados. Clica em "Anexar ficheiro" para adicionar PDFs ou fotos de faturas.</p>
+          )}
+        </div>
+      )}
+      {isNew && (
+        <p className="mt-4 text-xs text-gray-400">Guarda a despesa primeiro para poderes anexar documentos.</p>
+      )}
+
+      <div className="flex gap-3 mt-4">
+        <button onClick={() => onSave(f)} disabled={!f.movimento?.trim()} className="px-5 py-2 bg-red-600 text-white text-sm font-medium rounded-xl hover:bg-red-700 disabled:opacity-40">
+          {isNew ? 'Criar' : 'Guardar'}
+        </button>
+        <button onClick={onCancel} className="px-5 py-2 bg-gray-100 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-200">Cancelar</button>
+      </div>
+    </div>
+  )
 }

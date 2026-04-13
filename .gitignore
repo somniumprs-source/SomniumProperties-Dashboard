@@ -5,3 +5,5 @@ google-credentials.json
 data/
 *.db
 backups/
+public/uploads/despesas/*
+!public/uploads/.gitkeep
