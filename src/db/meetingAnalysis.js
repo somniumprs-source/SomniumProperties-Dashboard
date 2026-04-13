@@ -124,27 +124,49 @@ function analyzeWithPatterns(reuniao, transcricao, resumo) {
   if (/empresa|institucional|fundo/i.test(text)) tipo_investidor.push('Institucional')
   else tipo_investidor.push('Particular')
 
-  // Sugestões baseadas em padrões
+  // Sugestões de melhoria — análise estruturada
   const sugestoes = []
   if (!/(quanto|capital|dinheiro|valor|investir|montante)/i.test(text))
-    sugestoes.push('Perguntar diretamente sobre o capital disponível para investimento — não foi abordado nesta reunião.')
+    sugestoes.push('Qualificação financeira: Na próxima reunião, abordar diretamente o capital disponível para investimento e o horizonte de retorno esperado.')
   if (!/(prazo|horizonte|quando|urgência|tempo)/i.test(text))
-    sugestoes.push('Definir o horizonte temporal do investidor — curto, médio ou longo prazo.')
+    sugestoes.push('Horizonte temporal: Definir se o investidor procura retorno a curto prazo (6-12 meses) ou está disponível para projetos de médio/longo prazo.')
   if (!/(risco|segur|garant)/i.test(text))
-    sugestoes.push('Explorar o perfil de risco do investidor — quão confortável está com incerteza.')
+    sugestoes.push('Apetite ao risco: Explorar a tolerância ao risco — se prefere modelos com Plano B garantido (arrendamento) ou aceita operações com maior retorno e maior risco.')
   if (!/(experiência|já investiu|outros investimentos)/i.test(text))
-    sugestoes.push('Perguntar sobre experiência prévia em investimento imobiliário.')
+    sugestoes.push('Experiência prévia: Questionar sobre investimentos anteriores em imobiliário ou noutras classes de ativos para calibrar a comunicação e as expectativas.')
   if (!/(próximo|follow|quando|marcar|agenda)/i.test(text))
-    sugestoes.push('Definir próximos passos concretos e data de follow-up no final da reunião.')
+    sugestoes.push('Compromisso de follow-up: Terminar sempre a reunião com data marcada para o próximo contacto e ação concreta atribuída a cada parte.')
   if (!/(obje[çc][ãa]|preocupa|receio|dúvida|mas )/i.test(text))
-    sugestoes.push('Explorar objeções e preocupações — essencial para avançar o processo.')
+    sugestoes.push('Gestão de objeções: Identificar proativamente receios e preocupações do investidor — é o caminho mais rápido para fechar ou desqualificar.')
+  if (!/(nda|contrato|formaliz|assin)/i.test(text))
+    sugestoes.push('Formalização: Abordar a assinatura de NDA e formalização da relação na fase adequada para transmitir profissionalismo.')
+  if (!/(concorr|compara|outr.*empresa|alternativ)/i.test(text))
+    sugestoes.push('Posicionamento competitivo: Perguntar se está a avaliar outras oportunidades de investimento para entender a urgência e diferenciar a proposta Somnium.')
   if (sugestoes.length === 0)
-    sugestoes.push('Reunião bem conduzida. Manter o follow-up dentro de 48h.')
+    sugestoes.push('Reunião bem estruturada e abrangente. Recomendação: manter follow-up dentro de 48 horas com resumo escrito dos pontos acordados.')
 
-  // Pontos-chave do resumo Fireflies
+  // Pontos-chave — limpar e filtrar
   const pontos_chave = []
-  if (reuniao.keywords) pontos_chave.push(...reuniao.keywords.split(',').map(k => k.trim()).filter(Boolean).slice(0, 5))
-  if (reuniao.action_items) pontos_chave.push(...reuniao.action_items.split('\n').filter(Boolean).slice(0, 3))
+  if (reuniao.keywords) {
+    pontos_chave.push(...reuniao.keywords.split(',').map(k => k.trim()).filter(k => k.length > 2 && !k.startsWith('**')).slice(0, 6))
+  }
+  // Action items limpos
+  const actionItems = (reuniao.action_items || '').split('\n')
+    .filter(a => a.length > 5 && !a.startsWith('**'))
+    .map(a => a.replace(/\(\d{2}:\d{2}\)/g, '').trim())
+    .slice(0, 5)
+
+  // Classificação mais inteligente
+  let score = 30
+  if (capital_max > 100000) score += 25
+  else if (capital_max > 30000) score += 15
+  if (estrategia.length > 0) score += 10
+  if (perfil_risco) score += 5
+  if (/(sim|interessado|quero|vamos|avanç)/i.test(text)) score += 15
+  if (/(não|sem interesse|agora não|talvez)/i.test(text)) score -= 10
+  score = Math.max(10, Math.min(95, score))
+
+  const classificacao = score >= 70 ? 'A' : score >= 50 ? 'B' : score >= 30 ? 'C' : 'D'
 
   return {
     investidor_dados: {
@@ -159,12 +181,12 @@ function analyzeWithPatterns(reuniao, transcricao, resumo) {
       profissao: null,
       localizacao: null,
     },
-    resumo_executivo: resumo || `Reunião com ${reuniao.titulo} em ${reuniao.data?.slice(0, 10)}. Duração: ${reuniao.duracao_min} minutos.`,
+    resumo_executivo: resumo || `Reunião com ${reuniao.titulo} realizada a ${new Date(reuniao.data).toLocaleDateString('pt-PT')} com duração de ${reuniao.duracao_min} minutos.`,
     pontos_chave,
-    proximos_passos: reuniao.action_items ? reuniao.action_items.split('\n').filter(Boolean) : ['Fazer follow-up dentro de 48h'],
-    sugestoes_melhoria: sugestoes,
-    classificacao_sugerida: capital_max > 100000 ? 'A' : capital_max > 30000 ? 'B' : 'C',
-    probabilidade_investimento: capital_max ? 50 : 30,
+    proximos_passos: actionItems.length > 0 ? actionItems : ['Enviar follow-up por email dentro de 48 horas com resumo da reunião'],
+    sugestoes_melhoria: sugestoes.slice(0, 5),
+    classificacao_sugerida: classificacao,
+    probabilidade_investimento: score,
     notas_adicionais: null,
   }
 }
