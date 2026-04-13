@@ -26,7 +26,7 @@ export function DepartmentSection({ title, icon: Icon, kpis, link }) {
       </div>
 
       {/* KPIs */}
-      <div className="p-4 grid grid-cols-2 gap-3">
+      <div className="p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
         {kpis.map((kpi, i) => (
           <KPICard key={i} {...kpi} />
         ))}

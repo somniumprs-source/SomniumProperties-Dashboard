@@ -56,7 +56,7 @@ function HBar({ items, valueKey = 'horas', labelKey = 'label', colorFn }) {
         const pct = Math.max(Math.round(val / max * 100), 3)
         return (
           <div key={item[labelKey] || idx} className="flex items-center gap-3">
-            <span className="text-xs text-gray-500 w-40 text-right shrink-0 leading-tight truncate">{item[labelKey]}</span>
+            <span className="text-xs text-gray-500 w-24 sm:w-40 text-right shrink-0 leading-tight truncate">{item[labelKey]}</span>
             <div className="flex-1 bg-gray-100 rounded-full h-7 overflow-hidden">
               <div className="h-full rounded-full flex items-center px-3 transition-all" style={{ width: `${pct}%`, backgroundColor: colorFn ? colorFn(item, idx) : '#6366f1' }}>
                 <span className="text-white text-xs font-bold whitespace-nowrap">{HRS(val)}</span>
@@ -102,8 +102,8 @@ function TaskForm({ onSave, onCancel, initial }) {
   return (
     <div className="bg-white rounded-xl border-2 border-yellow-200 p-5 shadow-md">
       <h3 className="text-sm font-semibold text-gray-700 mb-4">{initial ? 'Editar Tarefa' : 'Nova Tarefa'}</h3>
-      <div className="grid grid-cols-1 xl:grid-cols-6 gap-4">
-        <div className="xl:col-span-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3 sm:gap-4">
+        <div className="sm:col-span-2 xl:col-span-3">
           <label className="text-xs text-gray-500 block mb-1">Tarefa *</label>
           <input value={f.tarefa} onChange={e => set('tarefa', e.target.value)} autoFocus
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-yellow-300 focus:border-yellow-400 outline-none"
@@ -129,12 +129,12 @@ function TaskForm({ onSave, onCancel, initial }) {
             {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
-        <div className="xl:col-span-2">
+        <div className="sm:col-span-1 xl:col-span-2">
           <label className="text-xs text-gray-500 block mb-1">Início da tarefa</label>
           <input type="datetime-local" value={f.inicio} onChange={e => set('inicio', e.target.value)}
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
         </div>
-        <div className="xl:col-span-2">
+        <div className="sm:col-span-1 xl:col-span-2">
           <label className="text-xs text-gray-500 block mb-1">Fim da tarefa</label>
           <input type="datetime-local" value={f.fim} onChange={e => set('fim', e.target.value)}
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
@@ -152,7 +152,7 @@ function TaskForm({ onSave, onCancel, initial }) {
           </div>
         </div>
       </div>
-      <div className="flex items-center justify-between mt-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-4 gap-3">
         <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer">
           <input type="checkbox" checked={f.enviar_calendar} onChange={e => set('enviar_calendar', e.target.checked)} className="rounded border-gray-300" />
           Enviar para Google Calendar
@@ -193,15 +193,15 @@ function CalendarWeek({ events, tarefas }) {
   }
 
   return (
-    <div className="grid grid-cols-7 gap-2">
+    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
       {days.map((day, i) => {
         const { calEvents, taskEvents } = getEventsForDay(day)
         const isToday = day.toDateString() === now.toDateString()
         return (
-          <div key={i} className={`rounded-xl border p-3 min-h-[160px] ${isToday ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200 bg-white'}`}>
+          <div key={i} className={`rounded-xl border p-2 sm:p-3 min-h-[120px] sm:min-h-[160px] ${isToday ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200 bg-white'}`}>
             <div className="text-center mb-2">
               <p className="text-[10px] text-gray-400 uppercase">{dayNames[i]}</p>
-              <p className={`text-lg font-bold ${isToday ? 'text-yellow-700' : 'text-gray-700'}`}>{day.getDate()}</p>
+              <p className={`text-base sm:text-lg font-bold ${isToday ? 'text-yellow-700' : 'text-gray-700'}`}>{day.getDate()}</p>
             </div>
             <div className="flex flex-col gap-1">
               {calEvents.map((e, j) => (
@@ -356,9 +356,9 @@ export function Operacoes() {
     <>
       <Header title="Operações" subtitle="Tarefas · Calendário · Horas · Eficiência" onRefresh={loadAll} loading={loading} />
 
-      <div className="px-6 pt-4 border-b border-gray-200 bg-white sticky top-0 z-10">
-        <div className="flex items-center gap-4">
-          <div className="flex gap-1 overflow-x-auto pb-px flex-1">
+      <div className="px-4 sm:px-6 pt-4 border-b border-gray-200 bg-white sticky top-0 z-10">
+        <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex gap-0.5 sm:gap-1 overflow-x-auto pb-px flex-1">
             {TABS.map(t => (
               <button key={t.id} onClick={() => setTab(t.id)}
                 className={`px-3 py-2 text-xs font-medium rounded-t-lg whitespace-nowrap transition-colors ${tab === t.id ? 'text-yellow-700 border-b-2' : 'text-gray-500 hover:text-gray-700'}`}
@@ -373,19 +373,19 @@ export function Operacoes() {
         </div>
       </div>
 
-      <div className="p-6 flex flex-col gap-6">
+      <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
         {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>}
 
         {/* ══════════ VISAO GERAL ══════════ */}
         {tab === 'resumo' && r && (
           <>
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
               <M label="Total horas tracked" value={HRS(r.totalHoras)} sub={`${r.totalTarefas} tarefas`} highlight />
               <M label="Horas este mes" value={HRS(r.horasMesActual)} sub={`${r.tarefasMesActual} tarefas`} />
               <M label="Horas esta semana" value={HRS(r.horasSemana)} />
               <M label="Taxa de conclusão" value={PCT(r.taxaProdutividade)} sub={`${HRS(r.horasConcluídas)} concluídas`} />
             </div>
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
               <M label="Revenue / hora (pipeline)" value={k?.rph != null ? EUR(k.rph) : '—'} sub={`Pipeline: ${EUR(k?.receitaTotal)}`} highlight />
               <M label="Revenue / hora (realizado)" value={k?.rphRealizado != null ? EUR(k.rphRealizado) : '—'} warn={k?.rphRealizado === null} />
               <M label="Horas / deal" value={k?.horasPorDeal != null ? HRS(k.horasPorDeal) : '—'} />
@@ -393,7 +393,7 @@ export function Operacoes() {
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
               <h3 className="text-sm font-semibold text-gray-700 mb-4">Estado das Tarefas</h3>
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                 <div className="text-center"><span className="text-2xl font-bold text-gray-400">{r.statusTarefas.aFazer}</span><p className="text-xs text-gray-400 mt-1">A fazer</p></div>
                 <div className="text-center"><span className="text-2xl font-bold text-blue-500">{r.statusTarefas.emAndamento}</span><p className="text-xs text-gray-400 mt-1">Em andamento</p></div>
                 <div className="text-center"><span className="text-2xl font-bold text-green-600">{r.statusTarefas.concluida}</span><p className="text-xs text-gray-400 mt-1">Concluídas</p></div>
@@ -402,7 +402,7 @@ export function Operacoes() {
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
               <h3 className="text-sm font-semibold text-gray-700 mb-4">Distribuição de Tempo</h3>
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                 <M label="Prospeção" value={HRS(k?.horasProspeção)} sub={k?.pctProspeção != null ? `${PCT(k.pctProspeção)} do total` : ''} />
                 <M label="Análise" value={HRS(k?.horasAnálise)} sub={k?.pctAnálise != null ? `${PCT(k.pctAnálise)} do total` : ''} />
                 <M label="Relacional" value={HRS(k?.horasRelacional)} sub={k?.pctRelacional != null ? `${PCT(k.pctRelacional)} do total` : ''} />
@@ -411,7 +411,7 @@ export function Operacoes() {
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
               <h3 className="text-sm font-semibold text-gray-700 mb-4">Estrutura de Custos Real</h3>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <M label="Custo de horas (15EUR/h)" value={EUR(r.custoHorasTotal)} sub={`${HRS(r.totalHoras)} x 15EUR`} />
                 <M label="Custos fixos (ferramentas)" value={EUR(r.custoFixoTotal)} />
                 <M label="Custo total operação" value={EUR(r.custoOperacaoTotal)} highlight />
@@ -425,7 +425,7 @@ export function Operacoes() {
           <>
             {/* Toolbar */}
             <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex gap-2 flex-wrap">
                   {[
                     { id: 'semana', label: `Esta semana (${semanaTodas.length})` },
@@ -438,7 +438,7 @@ export function Operacoes() {
                     </button>
                   ))}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   {/* Filtro por funcionário */}
                   {['todos', ...FUNCIONARIOS].map(f => (
                     <button key={f} onClick={() => { setFuncFilter(f); setSelectedIds(new Set()) }}
@@ -697,7 +697,7 @@ export function Operacoes() {
         {tab === 'equipa' && data?.funcionarios && (
           <>
             <SectionTitle>Performance por Funcionário</SectionTitle>
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
               {data.funcionarios.map(f => (
                 <div key={f.nome} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                   <div className="flex items-center justify-between mb-4">
@@ -736,14 +736,14 @@ export function Operacoes() {
         {tab === 'eficiencia' && k && (
           <>
             <SectionTitle>Revenue per Hour (RPH)</SectionTitle>
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
               <M label="RPH (pipeline)" value={k.rph != null ? EUR(k.rph) : '—'} sub={`Pipeline: ${EUR(k.receitaTotal)}`} highlight />
               <M label="RPH (realizado)" value={k.rphRealizado != null ? EUR(k.rphRealizado) : '—'} warn={k.rphRealizado === null} />
               <M label="Receita pipeline" value={EUR(k.receitaTotal)} />
               <M label="Receita realizada" value={EUR(k.receitaRealizada)} />
             </div>
             <SectionTitle>Alocação de Tempo</SectionTitle>
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
               <M label="% em Prospeção" value={PCT(k.pctProspeção)} sub={HRS(k.horasProspeção)} highlight={k.pctProspeção >= 30} warn={k.pctProspeção < 20} />
               <M label="% em Análise" value={PCT(k.pctAnálise)} sub={HRS(k.horasAnálise)} />
               <M label="% em Relacional" value={PCT(k.pctRelacional)} sub={HRS(k.horasRelacional)} />

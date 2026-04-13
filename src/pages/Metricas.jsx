@@ -213,7 +213,7 @@ export function Metricas() {
         onRefresh={load} loading={loading} />
 
       {/* Tab bar */}
-      <div className="px-6 pt-4 border-b border-gray-200 bg-white sticky top-0 z-10">
+      <div className="px-4 sm:px-6 pt-4 border-b border-gray-200 bg-white sticky top-0 z-10">
         <div className="flex gap-1 overflow-x-auto pb-px">
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
@@ -229,13 +229,13 @@ export function Metricas() {
         </div>
       </div>
 
-      <div className="p-6 flex flex-col gap-6">
+      <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
         {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>}
 
         {/* ══════════ VISÃO GERAL ══════════ */}
         {tab === 'resumo' && (
           <>
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
               <M label="Receita prevista / mês" value={EUR(top?.receitaPrevistaMes)} sub="Lucro estimado negócios activos" highlight />
               <M label="Deals fechados no mês" value={NUM(top?.dealsFechadosMes)} sub={`de ${p2?.totalDeals ?? '—'} negócios totais`} />
               <M label="Capital passivo captado" value={EUR(top?.capitalPassivoCaptado)} sub={`${p3?.investidoresAtivos ?? '—'} investidores activos`} />
@@ -279,7 +279,7 @@ export function Metricas() {
             {/* Transversal */}
             <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
               <h3 className="text-sm font-semibold text-gray-700 mb-4">Métricas Transversais</h3>
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                 <M label="Deal Flow / Capital" value={tr?.ratioDealFlowCapital != null ? `${tr.ratioDealFlowCapital}×` : '—'}
                   sub="Pipeline value / capital disponível" warn={tr?.ratioDealFlowCapital != null && tr.ratioDealFlowCapital < 1} />
                 <M label="Ciclo completo médio" value={DAYS(tr?.velocidadeCicloCompleto)} sub="Lead adicionado → escritura" />
@@ -314,12 +314,12 @@ export function Metricas() {
           return (
             <>
               <SectionTitle>Wholesaling — Receita</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 <ProgressMeta label="Receita Anual vs Meta" value={wh.receitaAnual} meta={wh.metaAnual} />
                 <ProgressMeta label="Receita Trimestral vs Meta" value={wh.receitaTrimestral} meta={wh.metaTrimestral} />
                 <ProgressMeta label="Receita Semestral vs Meta" value={wh.receitaSemestral} meta={wh.metaSemestral} />
               </div>
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                 <MvsMeta label="Faturação média / deal" value={wh.faturacaoMedia} meta={8333} format="eur" sub="Meta ≥ 8.333€" />
                 <MvsMeta label="Faturação mínima" value={wh.faturacaoMinima} meta={5000} format="eur" sub="Meta ≥ 5.000€" />
                 <MvsMeta label="% deals acima da média" value={wh.pctAcimaMedia} meta={50} format="pct" />
@@ -327,10 +327,10 @@ export function Metricas() {
               </div>
 
               <SectionTitle>CAEP — Receita (Quota Somnium)</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 <ProgressMeta label="Faturação CAEP Anual vs Meta" value={caep.faturacaoAnual} meta={caep.metaAnual} />
               </div>
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                 <MvsMeta label="Quota Somnium média / deal" value={caep.quotaMediaPorNegocio} meta={20000} format="eur" sub="Mín 20k / Alvo 31k" />
                 <M label="Quota Somnium total" value={EUR(caep.quotaSomniumTotal)} />
                 <MvsMeta label="Faturação média CAEP" value={caep.faturacaoMedia} meta={25000} format="eur" />
@@ -387,7 +387,7 @@ export function Metricas() {
                   { label: `Fechos (${im.totais.fechos})`, value: im.totais.fechos },
                 ]} colors={FUNNEL_COLORS} />
               </div>
-              <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-3">
                 <MvsMeta label="Add → Chamada" value={im.addToChamada} meta={im.metaAddToChamada} format="pct" />
                 <MvsMeta label="Chamada → Visita" value={im.chamadaToVisita} meta={im.metaChamadaToVisita} format="pct" />
                 <MvsMeta label="Visita → Proposta" value={im.visitaToProposta} meta={im.metaVisitaToProposta} format="pct" />
@@ -411,7 +411,7 @@ export function Metricas() {
                   { label: `Em parceria (${inv.totais.emParceria})`, value: inv.totais.emParceria },
                 ]} colors={FUNNEL_COLORS} />
               </div>
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                 <MvsMeta label="Contacto → Reunião" value={inv.contactToReuniao} meta={inv.metaContactToReuniao} format="pct" />
                 <MvsMeta label="Reunião → Classificado" value={inv.reuniaoToClassificado} meta={inv.metaReuniaoToClassificado} format="pct" />
                 <MvsMeta label="Classificado → 1.º Invest." value={inv.classificadoTo1st} meta={inv.metaClassificadoTo1st} format="pct" />
@@ -428,7 +428,7 @@ export function Metricas() {
                   { label: `Com fecho (${cons.totais.comFecho})`, value: cons.totais.comFecho },
                 ]} colors={FUNNEL_COLORS} />
               </div>
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                 <MvsMeta label="Contacto → Call" value={cons.contactToCall} meta={cons.metaContactToCall} format="pct" />
                 <MvsMeta label="Call → Ativo" value={cons.callToAtivo} meta={cons.metaCallToAtivo} format="pct" />
                 <MvsMeta label="Ativo → Negócio" value={cons.ativoToNegocio} meta={cons.metaAtivoToNegocio} format="pct" />
@@ -446,26 +446,26 @@ export function Metricas() {
           return (
             <>
               <SectionTitle>Wholesaling — Ticket Médio</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                 <MvsMeta label="Lucro médio / deal" value={wh.lucroMedio} meta={wh.metaLucroMedio} format="eur" />
                 <MvsMeta label="Lucro mínimo" value={wh.lucroMinimo} meta={wh.metaLucroMinimo} format="eur" sub={`Alvo: ${EUR(wh.metaAlvo)}`} />
                 <MvsMeta label="% deals acima da média" value={wh.pctAcimaMedia} meta={50} format="pct" />
               </div>
 
               <SectionTitle>CAEP — Ticket Médio</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 <M label="Capital médio / negócio" value={EUR(caep.capitalMedioPorNegocio)} />
                 <M label="Capital médio / investidor" value={EUR(caep.capitalMedioPorInvestidor)} />
                 <M label="N.º médio investidores / negócio" value={caep.nMedioInvestidores != null ? caep.nMedioInvestidores.toFixed(1) : '—'} />
               </div>
-              <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 <MvsMeta label="Lucro Somnium / capital total" value={caep.lucroSomniumSobreCapital} meta={caep.metaLucroSobreCapital} format="pct" sub="Meta ≥ 8%" />
                 <MvsMeta label="Lucro Somnium / mês retenção" value={caep.lucroSomniumPorMes} meta={caep.metaLucroPorMes} format="eur" sub="Meta ≥ 2.500€/mês" />
                 <MvsMeta label="ROI do investidor" value={caep.roiInvestidor} meta={caep.metaRoiInvestidor} format="pct" sub="Meta ≥ 20%" />
               </div>
 
               <SectionTitle>Consultores — Valor Gerado</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                 <M label="Ask price médio (via consultor)" value={EUR(cons.askPriceMedio)} sub="Imóveis trazidos por consultores" />
                 <MvsMeta label="Lucro médio gerado / consultor" value={cons.lucroMedioGerado} meta={cons.metaLucroMedio} format="eur" />
                 <MvsMeta label="% negócios via consultores" value={cons.pctNegociosViaConsultor} meta={cons.metaPctViaConsultor} format="pct" />
@@ -508,7 +508,7 @@ export function Metricas() {
           return (
             <>
               <SectionTitle>Wholesaling — Margem</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 <M label="Margem bruta média" value={wh.margemBrutaMedia != null ? PCT(wh.margemBrutaMedia) : '—'} sub="Lucro estimado / Ask Price" />
                 <M label="Margem líquida média (após IRC)" value={wh.margemLiquidaMedia != null ? PCT(wh.margemLiquidaMedia) : '—'} sub="~21% IRC" />
                 <M label="Desvio orçamento obra médio" value={wh.desvioObraMedia != null ? `${wh.desvioObraMedia > 0 ? '+' : ''}${PCT(wh.desvioObraMedia)}` : '—'}
@@ -516,7 +516,7 @@ export function Metricas() {
               </div>
 
               <SectionTitle>CAEP — Margem</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 <M label="ROI médio do negócio" value={caep.roiMedio != null ? PCT(caep.roiMedio) : '—'} sub="Lucro / capital total investido" />
                 <M label="Margem Somnium" value={PCT(caep.margemSomniumPct)} sub="Fixo: 40% × 2/3 = 26,7%" highlight />
                 <M label="Desvio orçamento obra médio" value={caep.desvioObraMedia != null ? `${caep.desvioObraMedia > 0 ? '+' : ''}${PCT(caep.desvioObraMedia)}` : '—'}
@@ -564,7 +564,7 @@ export function Metricas() {
           return (
             <>
               <SectionTitle>Estrutura de Custos</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                 <M label="Custo / hora" value={EUR(c.constantes.custoHora)} sub="João e Alexandre" />
                 <M label="Custos fixos mensais" value={EUR(c.constantes.custosFixosMensais)} sub="Notion + Claude + Alfredo + Skool" />
                 <M label="Burn rate mensal real" value={EUR(c.constantes.burnRateMensal)} sub="Despesas recorrentes" />
@@ -572,13 +572,13 @@ export function Metricas() {
               </div>
 
               <SectionTitle>CAC — Imóveis</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                 <MvsMeta label="CAC / negócio fechado" value={c.imoveis.cacPorNegocio} meta={c.imoveis.metaCACNegocio} format="eur" invert />
                 <MvsMeta label="Custo / imóvel adicionado" value={c.imoveis.custoPorImovel} meta={c.imoveis.metaCustoPorImovel} format="eur" invert />
                 <MvsMeta label="Custo / visita" value={c.imoveis.custoPorVisita} meta={c.imoveis.metaCustoPorVisita} format="eur" invert />
                 <MvsMeta label="Custo / estudo mercado" value={c.imoveis.custoPorEstudo} meta={c.imoveis.metaCustoPorEstudo} format="eur" invert />
               </div>
-              <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 <MvsMeta label="Chamadas / visita" value={c.imoveis.chamadasPorVisita} meta={c.imoveis.metaChamadasPorVisita} format="num" invert />
                 <MvsMeta label="Visitas / proposta" value={c.imoveis.visitasPorProposta} meta={c.imoveis.metaVisitasPorProposta} format="num" invert />
                 <MvsMeta label="Propostas / negócio" value={c.imoveis.propostasPorNegocio} meta={c.imoveis.metaPropostasPorNegocio} format="num" invert />
@@ -613,7 +613,7 @@ export function Metricas() {
           return (
             <>
               <SectionTitle>Ciclo Imóveis — Tempo entre Fases</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 <MvsMeta label="Lead → Chamada" value={im.leadToChamada} meta={im.metaLeadToChamada} format="days" invert />
                 <MvsMeta label="Chamada → Visita" value={im.chamadaToVisita} meta={im.metaChamadaToVisita} format="days" invert />
                 <MvsMeta label="Visita → Estudo" value={im.visitaToEstudo} meta={im.metaVisitaToEstudo} format="days" invert />
@@ -634,7 +634,7 @@ export function Metricas() {
                   <div className="flex flex-col gap-2">
                     {im.fases.map(f => (
                       <div key={f.fase} className="flex items-center gap-3">
-                        <span className="text-xs text-gray-500 w-40 text-right shrink-0">{f.fase}</span>
+                        <span className="text-xs text-gray-500 w-24 sm:w-40 text-right shrink-0">{f.fase}</span>
                         <div className="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden">
                           <div className="h-full rounded-full bg-indigo-400 flex items-center px-3"
                             style={{ width: `${Math.max(5, Math.round(f.dias / (im.fases[0]?.dias || 1) * 100))}%` }}>
@@ -648,7 +648,7 @@ export function Metricas() {
               )}
 
               <SectionTitle>Ciclo Investidores</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 <MvsMeta label="Contacto → Reunião" value={inv.contactoToReuniao} meta={inv.metaContactoToReuniao} format="days" invert />
                 <MvsMeta label="Negócio → Aprovação" value={inv.negocioToAprovacao} meta={inv.metaNegocioToAprovacao} format="days" invert />
                 <MvsMeta label="Contacto → Capital (total)" value={inv.contactoToCapitalTotal} meta={inv.metaContactoToCapital} format="days" invert />
@@ -671,7 +671,7 @@ export function Metricas() {
           return (
             <>
               <SectionTitle>Imóveis — Motivos de Descarte</SectionTitle>
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
                 <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                   <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Top Motivos de Descarte</h3>
                   <MotivoList items={im.todosPorPct} emptyMsg="Preenche 'Motivo Descarte' nos imóveis descartados" />
@@ -684,7 +684,7 @@ export function Metricas() {
               <M label="Taxa de descarte global" value={PCT(im.taxaDescarte)} sub="Descartados / leads totais" />
 
               <SectionTitle>Investidores — Motivos</SectionTitle>
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
                 <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                   <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Motivos de Não Aprovação</h3>
                   <MotivoList items={inv.motivosNaoAprovacao} emptyMsg="Preenche 'Motivo Não Aprovação' nos investidores" />
@@ -696,7 +696,7 @@ export function Metricas() {
               </div>
 
               <SectionTitle>Consultores — Descontinuação</SectionTitle>
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
                 <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                   <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Motivos de Descontinuação</h3>
                   <MotivoList items={cons.motivosDescontinuacao} emptyMsg="Preenche 'Motivo Descontinuação' nos consultores" />
@@ -718,7 +718,7 @@ export function Metricas() {
           return (
             <>
               <SectionTitle>Volume — Imóveis</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                 <MvsMeta label="Adicionados / semana" value={im.addSemana} meta={im.metaAddSemana} format="num" sub={`${im.addMes} este mês`} />
                 <MvsMeta label="Chamadas / semana" value={im.chamadasSemana} meta={im.metaChamadasSemana} format="num" sub={`${im.chamadasMes} este mês`} />
                 <MvsMeta label="Visitas / semana" value={im.visitasSemana} meta={im.metaVisitasSemana} format="num" sub={`${im.visitasMes} este mês`} />
@@ -730,7 +730,7 @@ export function Metricas() {
               </div>
 
               <SectionTitle>Volume — Investidores</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 <MvsMeta label="Novos contactados / semana" value={inv.novosContactadosSemana} meta={inv.metaNovos} format="num" />
                 <MvsMeta label="Reuniões / semana" value={inv.reunioesSemana} meta={inv.metaReunioes} format="num" />
                 <MvsMeta label="Sem contacto > 30 dias" value={inv.semContacto30d} meta={inv.metaSemContacto} format="num" invert
@@ -738,7 +738,7 @@ export function Metricas() {
               </div>
 
               <SectionTitle>Volume — Consultores</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 <MvsMeta label="Follow-ups / semana" value={cons.followUpsSemana} meta={cons.metaFollowUps} format="num" />
                 <MvsMeta label="Sem contacto > 15 dias" value={cons.semContacto15d} meta={cons.metaSemContacto} format="num" invert
                   warn={cons.semContacto15d > 0} />
@@ -755,7 +755,7 @@ export function Metricas() {
           return (
             <>
               <SectionTitle>LTV — Investidores</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 <M label="LTV acumulado total" value={EUR(inv.ltvAcumulado)} highlight />
                 <M label="Capital total mobilizado" value={EUR(inv.capitalMobilizado)} />
                 <M label="Meta LTV / investidor" value={EUR(inv.metaLTV)} sub="≥ 25.000€ por investidor" />
@@ -834,7 +834,7 @@ export function Metricas() {
           return (
             <>
               <SectionTitle>Investidores — Recompra</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 <MvsMeta label="Investidores que reinvestiram" value={inv.nReinvestiram} meta={1} format="num" sub="Com > 1 negócio" />
                 <MvsMeta label="Reinvestiram em 2026" value={inv.nReinvestiram2026} meta={inv.metaReinvestiram} format="num" />
               </div>
@@ -855,7 +855,7 @@ export function Metricas() {
           return (
             <>
               <SectionTitle>Investidores — Churn</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 <MvsMeta label="Inativos sem contacto > 60d" value={inv.inativosSem60d} meta={inv.metaInativos} format="num" invert
                   warn={inv.inativosSem60d > 0} />
                 <M label="Perdidos no período" value={NUM(inv.perdidosPeriodo)} sub="Com motivo de inatividade ou não aprovação" warn={inv.perdidosPeriodo > 0} />
@@ -863,7 +863,7 @@ export function Metricas() {
               </div>
 
               <SectionTitle>Consultores — Churn</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                 <MvsMeta label="% descontinuados" value={cons.pctDescontinuados} meta={cons.metaPct} format="pct" invert />
                 <MvsMeta label="Inativos > 30 dias" value={cons.inativosMais30d} meta={cons.metaInativos} format="num" invert
                   warn={cons.inativosMais30d > 0} />
@@ -880,7 +880,7 @@ export function Metricas() {
           return (
             <>
               <SectionTitle>Pipeline Velocity</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                 <M label="Pipeline Velocity" value={av.pipelineVelocity?.valor != null ? `${EUR(av.pipelineVelocity.valor)}/dia` : '—'}
                   sub="(Deals × Ticket × Win Rate) / Ciclo" highlight />
                 <M label="Ticket medio" value={EUR(av.pipelineVelocity?.ticketMedio)} />
@@ -889,7 +889,7 @@ export function Metricas() {
               </div>
 
               <SectionTitle>Lead Response Time</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                 <MvsMeta label="Response time medio" value={av.leadResponseTime?.medio} meta={av.leadResponseTime?.metaDias} format="days" invert />
                 <M label="Response time esta semana" value={DAYS(av.leadResponseTime?.semana)} sub="Media dos leads desta semana" />
                 <M label="Leads não contactados" value={NUM(av.leadResponseTime?.naoContactados)}
@@ -959,7 +959,7 @@ export function Metricas() {
               )}
 
               <SectionTitle>Consultant Activation & Follow-up Effectiveness</SectionTitle>
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                 <M label="Activation rate real (30d)" value={av.consultantActivation?.taxa != null ? PCT(av.consultantActivation.taxa) : '—'}
                   sub={`${av.consultantActivation?.activosReais ?? 0} de ${av.consultantActivation?.totalConsultores ?? 0}`}
                   warn={av.consultantActivation?.taxa < 10} />

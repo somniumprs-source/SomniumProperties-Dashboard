@@ -21,7 +21,7 @@ export function KPICard({ label, value, meta, unit = '', status = 'yellow' }) {
         <StatusBadge status={status} />
       </div>
 
-      <span className="text-2xl font-bold tracking-tight" style={{ color: '#0d0d0d' }}>
+      <span className="text-xl sm:text-2xl font-bold tracking-tight" style={{ color: '#0d0d0d' }}>
         {value !== null && value !== undefined ? `${value}${unit}` : '—'}
       </span>
 
