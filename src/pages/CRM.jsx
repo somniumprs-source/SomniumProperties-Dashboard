@@ -278,7 +278,7 @@ export function CRM() {
 
         {/* Detail Panel — substitui Kanban/Tabela quando aberto */}
         {detail && ['Imóveis', 'Investidores', 'Consultores'].includes(tab) ? (
-          <DetailPanel type={tab} id={detail} onClose={() => setDetail(null)} />
+          <DetailPanel type={tab} id={detail} onClose={() => { setDetail(null); load() }} onSave={load} />
         ) : (<>
           {/* Kanban View */}
           {!loading && editing === null && view === 'kanban' && kanbanConfig && (
@@ -541,7 +541,7 @@ const FIELD_DEFS = {
     { key: 'nome', label: 'Nome', type: 'text', required: true },
     { key: 'status', label: 'Status', type: 'select', options: ['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor classificado','Investidor em parceria'] },
     { key: 'classificacao', label: 'Classificação', type: 'select', options: ['A','B','C','D'] },
-    { key: 'origem', label: 'Origem', type: 'select', options: ['Skool','Grupos Whatsapp','Referenciação','LinkedIn','Outro'] },
+    { key: 'origem', label: 'Origem', type: 'select', options: ['Skool','Grupos Whatsapp','Referenciação','LinkedIn','Google Forms','Outro'] },
     { key: 'telemovel', label: 'Telemóvel', type: 'tel' },
     { key: 'email', label: 'Email', type: 'email' },
     { key: 'capital_min', label: 'Capital Mínimo (€)', type: 'number' },

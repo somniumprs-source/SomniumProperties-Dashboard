@@ -192,7 +192,15 @@ export function DetailPanel({ type, id, onClose, onSave }) {
                 <EF label="Telemóvel" field="telemovel" form={form} set={setField} />
                 <EF label="Email" field="email" form={form} set={setField} />
                 <EF label="Perfil Risco" field="perfil_risco" form={form} set={setField} type="select" options={['Conservador','Moderado','Agressivo']} />
-                <EF label="NDA Assinado" field="nda_assinado" form={form} set={setField} type="select" options={[{v:1,l:'Sim'},{v:0,l:'Não'}]} />
+                <EF label="Montante Investido (€)" field="montante_investido" form={form} set={setField} type="number" />
+                <EF label="Próxima Ação Data" field="data_proxima_acao" form={form} set={setField} type="date" />
+                <EF label="Motivo Não Aprovação" field="motivo_nao_aprovacao" form={form} set={setField} />
+                <EF label="Motivo Inatividade" field="motivo_inatividade" form={form} set={setField} />
+                <div>
+                  <p className="text-xs text-gray-400 mb-1">NDA Assinado</p>
+                  <input type="checkbox" checked={!!form.nda_assinado} onChange={e => setField('nda_assinado', e.target.checked ? 1 : 0)}
+                    className="w-5 h-5 rounded border-gray-300 text-yellow-600" />
+                </div>
                 <EF label="1º Contacto" field="data_primeiro_contacto" form={form} set={setField} type="date" />
                 <EF label="Data Reunião" field="data_reuniao" form={form} set={setField} type="date" />
                 <EF label="Último Contacto" field="data_ultimo_contacto" form={form} set={setField} type="date" />
@@ -212,8 +220,12 @@ export function DetailPanel({ type, id, onClose, onSave }) {
                 <Field label="Capital Max" value={data.capital_max > 0 ? EUR(data.capital_max) : '—'} />
                 <Field label="Telemóvel" value={data.telemovel} />
                 <Field label="Email" value={data.email} />
+                <Field label="Perfil Risco" value={data.perfil_risco} />
+                <Field label="Tipo Investidor" value={(() => { try { return JSON.parse(data.tipo_investidor || '[]').join(', ') } catch { return data.tipo_investidor || '—' } })()} />
+                <Field label="Estratégia" value={(() => { try { return JSON.parse(data.estrategia || '[]').join(', ') } catch { return data.estrategia || '—' } })()} />
                 <Field label="NDA" value={data.nda_assinado ? 'Sim' : 'Não'} />
                 <Field label="1º Contacto" value={data.data_primeiro_contacto} />
+                <Field label="Último Contacto" value={data.data_ultimo_contacto} />
                 <Field label="Reunião" value={data.data_reuniao} />
                 <Field label="Próxima Ação" value={data.proxima_acao} />
               </>}
