@@ -3,6 +3,7 @@
  * Mostra: campos editáveis + relações + timeline + tarefas.
  */
 import { useState, useEffect } from 'react'
+import { FileDown } from 'lucide-react'
 import { AnaliseTab } from '../analise/AnaliseTab.jsx'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
@@ -39,7 +40,16 @@ export function DetailPanel({ type, id, onClose, onSave }) {
           <p className="text-xs uppercase tracking-widest" style={{ color: '#C9A84C' }}>{type}</p>
           <h2 className="text-lg font-bold text-white">{data.nome ?? data.movimento}</h2>
         </div>
-        <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">&times;</button>
+        <div className="flex items-center gap-2">
+          {type === 'Imóveis' && (
+            <a href={`/api/crm/imoveis/${id}/relatorio`} target="_blank" rel="noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
+              style={{ backgroundColor: '#1a1a1a', color: '#C9A84C', border: '1px solid #C9A84C33' }}>
+              <FileDown className="w-3.5 h-3.5" /> Relatório PDF
+            </a>
+          )}
+          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">&times;</button>
+        </div>
       </div>
 
       {/* Tabs */}

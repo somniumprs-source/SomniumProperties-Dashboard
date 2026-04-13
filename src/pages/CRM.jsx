@@ -168,7 +168,15 @@ export function CRM() {
       const method = isNew ? 'POST' : 'PUT'
       const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) })
       if (!r.ok) throw new Error('Erro ao guardar')
+      const saved = await r.json()
       toast(isNew ? 'Registo criado' : 'Registo atualizado', 'success')
+
+      // Auto-gerar relatório PDF ao criar imóvel
+      if (isNew && tab === 'Imóveis' && saved.id) {
+        window.open(`/api/crm/imoveis/${saved.id}/relatorio`, '_blank')
+        toast('Relatório PDF gerado automaticamente', 'success')
+      }
+
       setEditing(null)
       load()
     } catch (e) {
