@@ -52,7 +52,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
   // Tabs dinâmicos por tipo
   const tabs = [
     { key: 'detalhe', label: 'Detalhe', icon: '📋', show: true },
-    { key: 'reunioes', label: `Reuniões (${reunioes.length})`, icon: '📞', show: (type === 'Investidores' || type === 'Consultores') && reunioes.length > 0 },
+    { key: 'relatorios', label: `Relatórios (${reunioes.length})`, icon: '📄', show: (type === 'Investidores' || type === 'Consultores') },
     { key: 'analise', label: 'Análise Financeira', icon: '📊', show: type === 'Imóveis' },
   ].filter(t => t.show)
 
@@ -104,10 +104,10 @@ export function DetailPanel({ type, id, onClose, onSave }) {
           <AnaliseTab imovelId={data.id} imovelNome={data.nome} />
         </div>
 
-      /* Reuniões tab */
-      ) : activeTab === 'reunioes' ? (
+      /* Relatórios tab */
+      ) : activeTab === 'relatorios' ? (
         <div className="p-4 sm:p-6">
-          <ReunioesTab reunioes={reunioes} investidorNome={data.nome} />
+          <RelatoriosTab reunioes={reunioes} investidorNome={data.nome} />
         </div>
 
       ) : (
@@ -236,20 +236,18 @@ export function DetailPanel({ type, id, onClose, onSave }) {
           {/* Mini-resumo reuniões na sidebar */}
           {reunioes.length > 0 && activeTab === 'detalhe' && (
             <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Últimas Reuniões</p>
+              <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Relatórios de Reunião</p>
               <div className="space-y-1.5">
                 {reunioes.slice(0, 3).map(r => (
                   <div key={r.id} className="text-xs px-2 py-1.5 rounded bg-purple-50 text-purple-700 flex items-center gap-2">
-                    <Phone className="w-3 h-3 shrink-0" />
-                    <span className="truncate">{r.titulo}</span>
-                    <span className="text-purple-400 shrink-0">{r.data?.slice(0, 10)}</span>
+                    <FileText className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{r.titulo?.replace(/\s+e\s+alexandre\s+mendes/i, '')}</span>
+                    <span className="text-purple-400 shrink-0">{r.data?.slice(5, 10)}</span>
                   </div>
                 ))}
-                {reunioes.length > 3 && (
-                  <button onClick={() => setActiveTab('reunioes')} className="text-xs text-purple-500 hover:underline">
-                    Ver todas ({reunioes.length})
-                  </button>
-                )}
+                <button onClick={() => setActiveTab('relatorios')} className="text-xs font-medium px-2 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 w-full text-center">
+                  Ver todos os relatórios →
+                </button>
               </div>
             </div>
           )}
@@ -275,8 +273,8 @@ export function DetailPanel({ type, id, onClose, onSave }) {
   )
 }
 
-// ── Reuniões Tab ──────────────────────────────────────────────
-function ReunioesTab({ reunioes, investidorNome }) {
+// ── Relatórios Tab ────────────────────────────────────────────
+function RelatoriosTab({ reunioes, investidorNome }) {
   const [expanded, setExpanded] = useState(null)
   const [transcricao, setTranscricao] = useState({})
   const [analises, setAnalises] = useState({})
