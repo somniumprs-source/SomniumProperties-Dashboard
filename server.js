@@ -3049,6 +3049,29 @@ try {
   console.warn('[fireflies] Auto-sync não disponível:', e.message)
 }
 
+// ── Auto-sync Google Forms (a cada 15 min) ───────────────────
+try {
+  const { isConfigured: formsConfigured, syncForms } = await import('./src/db/formsSync.js')
+  if (formsConfigured()) {
+    const FORMS_SYNC_INTERVAL = 15 * 60 * 1000
+    async function autoSyncForms() {
+      try {
+        const result = await syncForms()
+        if (result.created > 0 || result.updated > 0) {
+          console.log(`[forms] Auto-sync: ${result.created} novos, ${result.updated} actualizados, ${result.skipped} inalterados`)
+        }
+      } catch (e) {
+        console.error('[forms] Auto-sync erro:', e.message)
+      }
+    }
+    setTimeout(autoSyncForms, 45000)
+    setInterval(autoSyncForms, FORMS_SYNC_INTERVAL)
+    console.log('[forms] Auto-sync Google Forms ativo (a cada 15 min)')
+  }
+} catch (e) {
+  console.warn('[forms] Auto-sync não disponível:', e.message)
+}
+
 // ════════════════════════════════════════════════════════════════
 // OKRs — Objectivos e Key Results editáveis
 // ════════════════════════════════════════════════════════════════
