@@ -349,6 +349,12 @@ export async function initSchema() {
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 
+      -- Migration: adicionar coluna analise_completa à tabela reunioes
+      DO $$ BEGIN
+        ALTER TABLE reunioes ADD COLUMN IF NOT EXISTS analise_completa TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
       CREATE INDEX IF NOT EXISTS idx_imoveis_estado ON imoveis(estado);
       CREATE INDEX IF NOT EXISTS idx_investidores_status ON investidores(status);
       CREATE INDEX IF NOT EXISTS idx_consultores_estatuto ON consultores(estatuto);
