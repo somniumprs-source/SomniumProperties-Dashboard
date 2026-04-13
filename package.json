@@ -17,6 +17,7 @@
     "lint": "eslint src --ext .js,.jsx"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.88.0",
     "@notionhq/client": "^2.2.15",
     "@supabase/supabase-js": "^2.103.0",
     "@vitejs/plugin-react": "^4.2.1",

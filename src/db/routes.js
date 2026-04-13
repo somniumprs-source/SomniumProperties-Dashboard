@@ -11,6 +11,8 @@ import pool from './pg.js'
 import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
+import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
+import { generateMeetingPDF } from './pdfMeetingReport.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.resolve(__dirname, '../../public/uploads/despesas')
@@ -187,10 +189,54 @@ router.get('/reunioes/:id/transcricao', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+router.get('/reunioes/:id/relatorio', async (req, res) => {
+  try {
+    const { rows: [reuniao] } = await pool.query('SELECT * FROM reunioes WHERE id = $1', [req.params.id])
+    if (!reuniao) return res.status(404).json({ error: 'Reunião não encontrada' })
+
+    const analise = await analyzeReuniao(req.params.id)
+
+    let investidor = null
+    if (reuniao.entidade_id && reuniao.entidade_tipo === 'investidores') {
+      const { rows: [inv] } = await pool.query('SELECT * FROM investidores WHERE id = $1', [reuniao.entidade_id])
+      investidor = inv
+    }
+
+    const nome = (reuniao.titulo || 'reuniao').replace(/[^a-zA-Z0-9À-ú ]/g, '').replace(/\s+/g, '_')
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `inline; filename="Relatorio_Reuniao_${nome}.pdf"`)
+
+    const doc = generateMeetingPDF(reuniao, analise, investidor)
+    doc.pipe(res)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+router.post('/reunioes/:id/analisar', async (req, res) => {
+  try {
+    const result = await autoFillInvestidor(req.params.id)
+    res.json(result)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 router.post('/fireflies/sync', async (req, res) => {
   try {
     if (!firefliesConfigured()) return res.status(503).json({ error: 'FIREFLIES_API_KEY não configurada' })
     const result = await syncFireflies()
+
+    // Auto-analisar e preencher investidores para reuniões novas
+    if (result.created > 0) {
+      const { rows: novas } = await pool.query(
+        "SELECT id FROM reunioes WHERE entidade_tipo = 'investidores' AND entidade_id IS NOT NULL ORDER BY created_at DESC LIMIT $1",
+        [result.created]
+      )
+      for (const r of novas) {
+        try { await autoFillInvestidor(r.id) } catch {}
+      }
+      result.analyzed = novas.length
+    }
+
     res.json(result)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
