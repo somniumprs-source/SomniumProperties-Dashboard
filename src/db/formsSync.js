@@ -67,20 +67,20 @@ export async function syncForms() {
     const experiencia = (row[13] || '').trim()
     const timestamp = (row[0] || '').trim()
 
-    // Verificar duplicados por nome OU email
-    const { rows: existingByName } = await pool.query(
-      "SELECT id, nome, email, telemovel, capital_min, capital_max, estrategia, tipo_investidor, notas FROM investidores WHERE LOWER(TRIM(nome)) = LOWER($1)",
-      [nome]
-    )
-    let existing = existingByName[0]
+    // Verificar duplicados por nome, email OU telefone
+    const normNome = nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+    const phoneLast9 = telemovel.replace(/[^\d]/g, '').slice(-9)
 
-    if (!existing && email) {
-      const { rows: existingByEmail } = await pool.query(
-        "SELECT id, nome, email, telemovel, capital_min, capital_max, estrategia, tipo_investidor, notas FROM investidores WHERE LOWER(TRIM(email)) = LOWER($1)",
-        [email]
-      )
-      existing = existingByEmail[0]
-    }
+    const { rows: candidates } = await pool.query(
+      `SELECT id, nome, email, telemovel, capital_min, capital_max, estrategia, tipo_investidor, notas FROM investidores
+       WHERE LOWER(TRIM(nome)) = LOWER($1)
+          OR LOWER(TRANSLATE(TRIM(nome), 'áàâãéèêíìîóòôõúùûçñ', 'aaaaeeeiiioooouuucn')) = $2
+          ${email ? "OR LOWER(TRIM(email)) = LOWER('" + email.replace(/'/g, "''") + "')" : ''}
+          ${phoneLast9.length === 9 ? "OR RIGHT(REGEXP_REPLACE(telemovel, '[^0-9]', '', 'g'), 9) = '" + phoneLast9 + "'" : ''}
+       LIMIT 1`,
+      [nome, normNome]
+    )
+    let existing = candidates[0]
 
     if (existing) {
       // Actualizar apenas campos vazios
