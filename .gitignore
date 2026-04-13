@@ -2,6 +2,8 @@ node_modules
 .env
 .DS_Store
 google-credentials.json
+google-oauth.json
+google-token.json
 data/
 *.db
 backups/

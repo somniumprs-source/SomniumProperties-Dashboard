@@ -2766,19 +2766,44 @@ app.get('/api/metricas', async (req, res) => {
 // ════════════════════════════════════════════════════════════════
 let gcal = null
 try {
-  const { readFileSync } = await import('fs')
-  const credPath = path.join(__dirname, 'google-credentials.json')
-  const creds = JSON.parse(readFileSync(credPath, 'utf8'))
+  const { readFileSync, existsSync } = await import('fs')
   const { google } = await import('googleapis')
-  const gAuth = new google.auth.GoogleAuth({
-    credentials: creds,
-    scopes: [
-      'https://www.googleapis.com/auth/calendar.readonly',
-      'https://www.googleapis.com/auth/calendar.events',
-    ],
-  })
-  gcal = google.calendar({ version: 'v3', auth: gAuth })
-  console.log('[gcal] Google Calendar conectado')
+
+  const serviceCredPath = path.join(__dirname, 'google-credentials.json')
+  const oauthCredPath = path.join(__dirname, 'google-oauth.json')
+  const tokenPath = path.join(__dirname, 'google-token.json')
+
+  if (existsSync(serviceCredPath)) {
+    // Service Account auth
+    const creds = JSON.parse(readFileSync(serviceCredPath, 'utf8'))
+    const gAuth = new google.auth.GoogleAuth({
+      credentials: creds,
+      scopes: [
+        'https://www.googleapis.com/auth/calendar.readonly',
+        'https://www.googleapis.com/auth/calendar.events',
+      ],
+    })
+    gcal = google.calendar({ version: 'v3', auth: gAuth })
+    console.log('[gcal] Google Calendar conectado (Service Account)')
+  } else if (existsSync(oauthCredPath) && existsSync(tokenPath)) {
+    // OAuth2 auth
+    const oauthCreds = JSON.parse(readFileSync(oauthCredPath, 'utf8'))
+    const { client_id, client_secret } = oauthCreds.installed || oauthCreds.web
+    const oauth2 = new google.auth.OAuth2(client_id, client_secret, 'http://localhost:3333')
+    const tokens = JSON.parse(readFileSync(tokenPath, 'utf8'))
+    oauth2.setCredentials(tokens)
+    // Auto-refresh tokens
+    oauth2.on('tokens', (newTokens) => {
+      const merged = { ...tokens, ...newTokens }
+      import('fs').then(fs => {
+        try { fs.writeFileSync(tokenPath, JSON.stringify(merged, null, 2)) } catch {}
+      })
+    })
+    gcal = google.calendar({ version: 'v3', auth: oauth2 })
+    console.log('[gcal] Google Calendar conectado (OAuth2)')
+  } else {
+    throw new Error('Falta google-credentials.json ou google-oauth.json + google-token.json — corre: node scripts/auth-google.js')
+  }
 } catch (e) {
   console.warn('[gcal] Google Calendar não disponível:', e.message)
 }
