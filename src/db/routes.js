@@ -12,6 +12,7 @@ import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
 import { syncForms, isConfigured as formsConfigured } from './formsSync.js'
+import { createImovelFolder, moveImovelFolder, isConfigured as driveConfigured } from './driveSync.js'
 import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
 import { generateMeetingPDF } from './pdfMeetingReport.js'
 
@@ -37,7 +38,7 @@ const upload = multer({
 const router = Router()
 
 // ── Generic CRUD route factory ────────────────────────────────
-function crudRoutes(path, crud) {
+function crudRoutes(path, crud, { onCreate, onUpdate } = {}) {
   router.get(path, async (req, res) => {
     try {
       const { limit = 100, offset = 0, sort, search, ...filter } = req.query
@@ -64,6 +65,7 @@ function crudRoutes(path, crud) {
       const item = await crud.create(req.body)
       const table = path.slice(1)
       syncToNotion(table, item.id).catch(e => console.error(`[sync] create ${table}:`, e.message))
+      if (onCreate) onCreate(item).catch(e => console.error(`[hook] create ${table}:`, e.message))
       res.status(201).json(item)
     } catch (e) { res.status(400).json({ error: e.message }) }
   })
@@ -74,6 +76,7 @@ function crudRoutes(path, crud) {
       if (!item) return res.status(404).json({ error: 'Não encontrado' })
       const table = path.slice(1)
       syncToNotion(table, req.params.id).catch(e => console.error(`[sync] update ${table}:`, e.message))
+      if (onUpdate) onUpdate(item, req.body).catch(e => console.error(`[hook] update ${table}:`, e.message))
       res.json(item)
     } catch (e) { res.status(400).json({ error: e.message }) }
   })
@@ -87,7 +90,18 @@ function crudRoutes(path, crud) {
   })
 }
 
-crudRoutes('/imoveis', Imoveis)
+crudRoutes('/imoveis', Imoveis, {
+  onCreate: async (item) => {
+    if (driveConfigured()) {
+      await createImovelFolder(item.id, item.nome || 'Sem nome', item.estado || 'Adicionado')
+    }
+  },
+  onUpdate: async (item, body) => {
+    if (driveConfigured() && body.estado) {
+      await moveImovelFolder(item.id, body.estado)
+    }
+  },
+})
 
 // ── Relatório PDF do imóvel ──────────────────────────────────
 router.get('/imoveis/:id/relatorio', async (req, res) => {
