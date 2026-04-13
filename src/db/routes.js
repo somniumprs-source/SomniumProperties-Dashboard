@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto'
 import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, getDashboardStats } from './crud.js'
 import pool from './pg.js'
 import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
+import { generateImovelPDF } from './pdfReport.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.resolve(__dirname, '../../public/uploads/despesas')
@@ -83,6 +84,29 @@ function crudRoutes(path, crud) {
 }
 
 crudRoutes('/imoveis', Imoveis)
+
+// ── Relatório PDF do imóvel ──────────────────────────────────
+router.get('/imoveis/:id/relatorio', async (req, res) => {
+  try {
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+
+    // Buscar análise ativa se existir
+    const { rows: [analise] } = await pool.query(
+      'SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1', [imovel.id]
+    ).catch(() => ({ rows: [] }))
+
+    const nome = (imovel.nome || 'imovel').replace(/[^a-zA-Z0-9À-ú ]/g, '').replace(/\s+/g, '_')
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `inline; filename="Relatorio_${nome}.pdf"`)
+
+    const doc = generateImovelPDF(imovel, analise || null)
+    doc.pipe(res)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 crudRoutes('/investidores', Investidores)
 crudRoutes('/consultores', Consultores)
 crudRoutes('/negocios', Negocios)
