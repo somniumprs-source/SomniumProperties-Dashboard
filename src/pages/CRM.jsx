@@ -196,11 +196,11 @@ export function CRM() {
   return (
     <>
       <Header title="CRM" subtitle="Gestão de dados — Base de dados local" onRefresh={load} loading={loading} />
-      <div className="p-6 flex flex-col gap-4">
+      <div className="p-4 sm:p-6 flex flex-col gap-3 sm:gap-4">
 
         {/* Stats banner */}
         {stats && (
-          <div className="grid grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3">
             {Object.entries(stats).map(([k, v]) => (
               <div key={k} className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm text-center">
                 <p className="text-lg font-bold text-gray-900">{v.total}</p>
@@ -211,10 +211,10 @@ export function CRM() {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b border-gray-200 bg-white sticky top-0 z-10 rounded-t-xl px-2 pt-2">
+        <div className="flex gap-0.5 sm:gap-1 border-b border-gray-200 bg-white sticky top-0 z-10 rounded-t-xl px-1 sm:px-2 pt-2 overflow-x-auto">
           {TABS.map(t => (
             <button key={t} onClick={() => { setTab(t); setSearch(''); setEditing(null) }}
-              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+              className={`px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap ${
                 tab === t ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600' : 'text-gray-500 hover:text-gray-700'
               }`}>{t}</button>
           ))}
@@ -227,30 +227,32 @@ export function CRM() {
         <Filters tab={tab} filters={filters} onChange={f => { setFilters(f); setSearch('') }} />
 
         {/* Search + Actions */}
-        <div className="flex gap-3 items-center">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center">
           <input
             type="text" placeholder={`Pesquisar ${tab.toLowerCase()}...`}
             value={search} onChange={e => handleSearch(e.target.value)}
-            className="flex-1 px-4 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            className="w-full sm:flex-1 px-3 sm:px-4 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
           />
-          {hasKanban && (
-            <div className="flex bg-gray-100 rounded-lg p-0.5">
-              <button onClick={() => setView('table')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'table' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
-                Tabela
-              </button>
-              <button onClick={() => setView('kanban')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'kanban' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
-                Kanban
-              </button>
-            </div>
-          )}
-          <button onClick={() => setEditing({})} className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors">
-            + Novo
-          </button>
-          <a href={`/api/crm/backup?download=true`} className="px-3 py-2 bg-gray-100 text-gray-600 text-xs font-medium rounded-xl hover:bg-gray-200 transition-colors">
-            Backup
-          </a>
+          <div className="flex gap-2 items-center">
+            {hasKanban && (
+              <div className="flex bg-gray-100 rounded-lg p-0.5">
+                <button onClick={() => setView('table')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'table' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
+                  Tabela
+                </button>
+                <button onClick={() => setView('kanban')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'kanban' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
+                  Kanban
+                </button>
+              </div>
+            )}
+            <button onClick={() => setEditing({})} className="px-3 sm:px-4 py-2 bg-indigo-600 text-white text-xs sm:text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors whitespace-nowrap">
+              + Novo
+            </button>
+            <a href={`/api/crm/backup?download=true`} className="hidden sm:block px-3 py-2 bg-gray-100 text-gray-600 text-xs font-medium rounded-xl hover:bg-gray-200 transition-colors">
+              Backup
+            </a>
+          </div>
         </div>
 
         {/* Edit/Create form */}

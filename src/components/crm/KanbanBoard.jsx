@@ -112,7 +112,7 @@ export function KanbanBoard({ columns, items, groupField, renderCard, onMove, on
   }
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-4" style={{ minHeight: '400px' }}>
+    <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0" style={{ minHeight: '350px' }}>
       {columns.map(col => {
         const colors = COLUMN_COLORS[col] ?? DEFAULT_COLORS
         const colItems = grouped[col] ?? []
@@ -121,7 +121,7 @@ export function KanbanBoard({ columns, items, groupField, renderCard, onMove, on
         return (
           <div
             key={col}
-            className={`flex-shrink-0 w-64 rounded-xl border ${colors.border} ${colors.bg} flex flex-col ${isDragTarget ? 'ring-2 ring-indigo-400' : ''}`}
+            className={`flex-shrink-0 w-56 sm:w-64 rounded-xl border ${colors.border} ${colors.bg} flex flex-col ${isDragTarget ? 'ring-2 ring-indigo-400' : ''}`}
             onDragOver={e => handleDragOver(e, col)}
             onDrop={e => handleDrop(e, col)}
             onDragLeave={() => setDragOver(null)}

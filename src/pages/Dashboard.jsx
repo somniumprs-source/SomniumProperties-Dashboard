@@ -103,7 +103,7 @@ export function Dashboard() {
         onRefresh={refresh}
         loading={loading}
       />
-      <div className="p-6 flex flex-col gap-6">
+      <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
         {error && (
           <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">
             Erro ao carregar KPIs: {error}
@@ -111,7 +111,7 @@ export function Dashboard() {
         )}
 
         {/* Banner + Weekly Pulse */}
-        <div className="rounded-2xl px-7 py-6 flex items-center justify-between overflow-hidden relative"
+        <div className="rounded-2xl px-4 sm:px-7 py-4 sm:py-6 flex flex-col sm:flex-row sm:items-center sm:justify-between overflow-hidden relative gap-4"
           style={{ backgroundColor: '#0d0d0d', boxShadow: '0 2px 12px rgba(0,0,0,0.12)', border: '1px solid #1a1a1a' }}>
           <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-2xl"
             style={{ background: 'linear-gradient(90deg, #C9A84C, #E8D08A, #C9A84C)' }} />
@@ -122,7 +122,7 @@ export function Dashboard() {
             <h2 className="text-white text-xl font-bold tracking-tight">Visão Geral do Negócio</h2>
             <p className="text-sm mt-1" style={{ color: '#666' }}>Todos os departamentos em tempo real</p>
           </div>
-          <div className="hidden xl:flex items-center gap-8 relative z-10">
+          <div className="hidden sm:flex items-center gap-4 sm:gap-8 relative z-10">
             {pulse && (
               <div className="text-center">
                 <p className="text-3xl font-bold" style={{ color: PULSE_COLOR[pulse.status] ?? '#C9A84C' }}>{pulse.score}</p>
@@ -152,7 +152,7 @@ export function Dashboard() {
                 {pulse.score}/100
               </span>
             </div>
-            <div className="grid grid-cols-2 xl:grid-cols-5 gap-3 text-center">
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-3 text-center">
               {[
                 { label: 'Imóveis Novos', value: pulse.atividades.imoveisAdicionados, good: true },
                 { label: 'Chamadas', value: pulse.atividades.chamadasFeitas, good: true },
@@ -201,7 +201,7 @@ export function Dashboard() {
                   <span className="text-xs text-gray-400">Activity Score</span>
                 </div>
               </div>
-              <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                 {Object.entries(wa).filter(([k]) => k !== 'score').map(([key, v]) => {
                   const pct = v.meta > 0 ? Math.min(100, Math.round(v.valor / v.meta * 100)) : 0
                   return (
@@ -225,7 +225,7 @@ export function Dashboard() {
         })()}
 
         {/* Sections */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
           {sections.map((s) => (
             <DepartmentSection key={s.title} {...s} />
           ))}

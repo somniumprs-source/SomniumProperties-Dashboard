@@ -82,10 +82,10 @@ export function Financeiro() {
         notionUrl="https://www.notion.so/333c6d45a01f81dc9cb4d12a999e28ed" />
 
       {/* Tabs */}
-      <div className="px-6 pt-4 flex gap-1 border-b border-gray-200 bg-white sticky top-0 z-10">
+      <div className="px-4 sm:px-6 pt-4 flex gap-0.5 sm:gap-1 border-b border-gray-200 bg-white sticky top-0 z-10 overflow-x-auto">
         {TABS.map(t => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+            className={`px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap ${
               tab === t
                 ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600'
                 : 'text-gray-500 hover:text-gray-700'
@@ -95,7 +95,7 @@ export function Financeiro() {
         ))}
       </div>
 
-      <div className="p-6 flex flex-col gap-6">
+      <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
         {error && (
           <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>
         )}
@@ -103,14 +103,14 @@ export function Financeiro() {
         {/* ══════════════════ RESUMO ══════════════════ */}
         {tab === 'Resumo' && (
           <>
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
               <KPICard label="Pipeline de Lucro"   value={EUR(kpis?.lucroEstimadoTotal)} meta="—" status="green"                                       trend="neutral" unit="" />
               <KPICard label="Lucro Real Recebido" value={EUR(kpis?.lucroRealTotal)}     meta="—" status={kpis?.lucroRealTotal > 0 ? 'green' : 'yellow'} trend="neutral" unit="" />
               <KPICard label="A Receber (pendente)" value={EUR(kpis?.lucroPendente)}     meta="—" status={kpis?.lucroPendente > 0 ? 'yellow' : 'green'} trend="neutral" unit="" />
               <KPICard label="Burn Rate / Mês"     value={EUR(kpis?.burnRate)}           meta="—" status="green"                                       trend="neutral" unit="" />
             </div>
 
-            <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
               <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex flex-col gap-1">
                 <span className="text-xs text-gray-400 uppercase tracking-wide">Runway</span>
                 <span className={`text-2xl font-bold ${runwayMeses == null ? 'text-gray-400' : runwayMeses >= 12 ? 'text-green-600' : 'text-yellow-600'}`}>
@@ -130,7 +130,7 @@ export function Financeiro() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                 <h2 className="text-sm font-semibold text-gray-700 mb-4">Lucro Estimado por Categoria</h2>
                 {categoriasPie.length > 0 ? (
@@ -234,7 +234,7 @@ export function Financeiro() {
                 Abrir Faturação no Notion →
               </a>
             </div>
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
               {(kpis?.categorias ?? []).map(c => (
                 <div key={c.categoria} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
                   <div className="flex items-center gap-2 mb-1">
@@ -311,13 +311,13 @@ export function Financeiro() {
                 Abrir Despesas no Notion →
               </a>
             </div>
-            <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
               <KPICard label="Burn Rate / Mês"     value={EUR(despesas?.burnRate)}      meta="—" status="green"  trend="neutral" unit="" />
               <KPICard label="Burn Rate Anual"      value={EUR(despesas?.burnRateAnual)} meta="—" status="green"  trend="neutral" unit="" />
               <KPICard label="Total Despesas (ano)" value={EUR(despesas?.totalAnual)}    meta="—" status="yellow" trend="neutral" unit="" />
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                 <h2 className="text-sm font-semibold text-gray-700 mb-4">Custo Anual por Categoria</h2>
                 {despCat.length > 0 ? (
@@ -407,7 +407,7 @@ export function Financeiro() {
         {/* ══════════════════ CASHFLOW ══════════════════ */}
         {tab === 'Cashflow' && (
           <>
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
               <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
                 <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">A Receber</span>
                 <span className="text-2xl font-bold text-yellow-600">{EUR(cashflow?.lucroPendente)}</span>
@@ -497,7 +497,7 @@ export function Financeiro() {
         {tab === 'P&L' && projecao && (
           <>
             {/* P&L Cards */}
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
               <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
                 <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Receita Estimada</span>
                 <span className="text-2xl font-bold text-indigo-600">{EUR(projecao.pl.receitaEstimada)}</span>
@@ -525,7 +525,7 @@ export function Financeiro() {
             {/* Break-even */}
             <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
               <h2 className="text-sm font-semibold text-gray-700 mb-3">Break-Even Analysis</h2>
-              <div className="grid grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
                 <div>
                   <p className="text-xs text-gray-400 uppercase">Despesas Anuais</p>
                   <p className="text-xl font-bold text-red-500 mt-1">{EUR(projecao.breakEven.despesasAnuais)}</p>

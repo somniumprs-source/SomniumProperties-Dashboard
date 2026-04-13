@@ -103,11 +103,11 @@ export function Alertas() {
   return (
     <>
       <Header title="Centro de Alertas" subtitle="Automações & Higiene de Dados" onRefresh={load} loading={loading} />
-      <div className="p-6 flex flex-col gap-6">
+      <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
         {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>}
 
         {/* Resumo */}
-        <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
           {[
             { label: 'Total Alertas', value: resumo.total ?? '—', color: 'text-gray-900' },
             { label: 'Cr\u00edticos', value: resumo.criticos ?? '—', color: 'text-red-600' },
@@ -125,7 +125,7 @@ export function Alertas() {
         {/* Automações */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <h2 className="text-sm font-semibold text-gray-700 mb-4">Automações</h2>
-          <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {[
               { key: 'run-all',              label: 'Correr Todas',             desc: 'Executa todas as automações de uma vez' },
               { key: 'score-investidores',   label: 'Scoring Investidores',     desc: 'Classifica A/B/C/D automaticamente' },
@@ -173,16 +173,20 @@ export function Alertas() {
           </h2>
           <div className="space-y-2 max-h-[500px] overflow-y-auto">
             {(alertas?.alertas ?? []).map((a, i) => (
-              <div key={i} className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${SEV_STYLE[a.severidade] ?? ''}`}>
-                <span className={`w-2 h-2 rounded-full shrink-0 ${SEV_DOT[a.severidade] ?? ''}`} />
-                <div className="flex-1 min-w-0">
-                  <span className="text-xs font-medium uppercase tracking-wide opacity-60">
-                    {TIPO_LABEL[a.tipo] ?? a.tipo}
-                  </span>
-                  <p className="font-semibold text-sm truncate">{a.entidade}</p>
+              <div key={i} className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 rounded-lg border ${SEV_STYLE[a.severidade] ?? ''}`}>
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${SEV_DOT[a.severidade] ?? ''}`} />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs font-medium uppercase tracking-wide opacity-60">
+                      {TIPO_LABEL[a.tipo] ?? a.tipo}
+                    </span>
+                    <p className="font-semibold text-sm truncate">{a.entidade}</p>
+                  </div>
                 </div>
-                <p className="text-xs shrink-0">{a.mensagem}</p>
-                {a.status && <span className="text-xs opacity-60 shrink-0">{a.status}</span>}
+                <div className="flex items-center gap-2 pl-4 sm:pl-0">
+                  <p className="text-xs">{a.mensagem}</p>
+                  {a.status && <span className="text-xs opacity-60 shrink-0">{a.status}</span>}
+                </div>
               </div>
             ))}
             {alertas?.alertas?.length === 0 && (
@@ -238,7 +242,7 @@ export function Alertas() {
               </span>
             )}
           </div>
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             {Object.entries(dbs).map(([dbName, db]) => (
               <div key={dbName}>
                 <div className="flex items-center justify-between mb-2">
@@ -248,7 +252,7 @@ export function Alertas() {
                 <div className="space-y-1.5">
                   {Object.entries(db.campos).map(([campo, pct]) => (
                     <div key={campo} className="flex items-center gap-3">
-                      <span className="text-xs text-gray-500 w-40 shrink-0 truncate">{campo}</span>
+                      <span className="text-xs text-gray-500 w-24 sm:w-40 shrink-0 truncate">{campo}</span>
                       <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                         <div className={`h-full rounded-full transition-all ${HEALTH_BAR(pct)}`} style={{ width: `${pct}%` }} />
                       </div>
