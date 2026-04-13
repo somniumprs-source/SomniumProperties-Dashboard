@@ -21,7 +21,8 @@ const supabaseAdmin = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE
 app.use('/api', async (req, res, next) => {
   // Se não há service key configurada, deixar passar (dev mode)
   if (!supabaseAdmin) return next()
-  const token = req.headers.authorization?.replace('Bearer ', '')
+  // Token via header Authorization OU via query string (para PDFs abertos em novo tab)
+  const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token
   if (!token) return res.status(401).json({ error: 'Autenticação necessária' })
   try {
     const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
