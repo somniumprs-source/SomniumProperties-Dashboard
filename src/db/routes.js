@@ -10,6 +10,7 @@ import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, getDas
 import pool from './pg.js'
 import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
 import { generateImovelPDF } from './pdfReport.js'
+import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.resolve(__dirname, '../../public/uploads/despesas')
@@ -151,6 +152,47 @@ router.delete('/despesas/:id/upload/:docId', async (req, res) => {
 router.get('/stats', async (req, res) => {
   try { res.json(await getDashboardStats()) }
   catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Fireflies (reuniões / transcrições) ──────────────────────
+router.get('/reunioes', async (req, res) => {
+  try {
+    const { entidade_tipo, entidade_id, limit = 50 } = req.query
+    let query = 'SELECT id, fireflies_id, titulo, data, duracao_min, participantes, resumo, keywords, action_items, entidade_tipo, entidade_id, organizador, created_at FROM reunioes'
+    const params = []
+    if (entidade_tipo && entidade_id) {
+      query += ' WHERE entidade_tipo = $1 AND entidade_id = $2'
+      params.push(entidade_tipo, entidade_id)
+    }
+    query += ` ORDER BY data DESC LIMIT $${params.length + 1}`
+    params.push(+limit)
+    const { rows } = await pool.query(query, params)
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/reunioes/:id', async (req, res) => {
+  try {
+    const { rows: [reuniao] } = await pool.query('SELECT * FROM reunioes WHERE id = $1', [req.params.id])
+    if (!reuniao) return res.status(404).json({ error: 'Reunião não encontrada' })
+    res.json(reuniao)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/reunioes/:id/transcricao', async (req, res) => {
+  try {
+    const { rows: [reuniao] } = await pool.query('SELECT titulo, transcricao FROM reunioes WHERE id = $1', [req.params.id])
+    if (!reuniao) return res.status(404).json({ error: 'Reunião não encontrada' })
+    res.json({ titulo: reuniao.titulo, transcricao: reuniao.transcricao })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/fireflies/sync', async (req, res) => {
+  try {
+    if (!firefliesConfigured()) return res.status(503).json({ error: 'FIREFLIES_API_KEY não configurada' })
+    const result = await syncFireflies()
+    res.json(result)
+  } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 // ── Sync Notion ↔ CRM ─────────────────────────────────────────

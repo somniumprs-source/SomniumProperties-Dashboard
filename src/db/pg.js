@@ -193,6 +193,26 @@ export async function initSchema() {
         created_at TEXT DEFAULT (NOW()::TEXT)
       );
 
+      CREATE TABLE IF NOT EXISTS reunioes (
+        id TEXT PRIMARY KEY,
+        fireflies_id TEXT UNIQUE,
+        titulo TEXT NOT NULL,
+        data TEXT NOT NULL,
+        duracao_min INTEGER DEFAULT 0,
+        participantes TEXT,
+        resumo TEXT,
+        keywords TEXT,
+        action_items TEXT,
+        transcricao TEXT,
+        entidade_tipo TEXT,
+        entidade_id TEXT,
+        organizador TEXT,
+        created_at TEXT DEFAULT (NOW()::TEXT),
+        updated_at TEXT DEFAULT (NOW()::TEXT)
+      );
+      CREATE INDEX IF NOT EXISTS idx_reunioes_entidade ON reunioes(entidade_tipo, entidade_id);
+      CREATE INDEX IF NOT EXISTS idx_reunioes_data ON reunioes(data DESC);
+
       CREATE TABLE IF NOT EXISTS sync_state (
         tabela TEXT PRIMARY KEY,
         last_sync TEXT,
