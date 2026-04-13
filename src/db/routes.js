@@ -11,6 +11,7 @@ import pool from './pg.js'
 import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
+import { syncForms, isConfigured as formsConfigured } from './formsSync.js'
 import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
 import { generateMeetingPDF } from './pdfMeetingReport.js'
 
@@ -257,6 +258,15 @@ router.post('/fireflies/sync', async (req, res) => {
       result.analyzed = novas.length
     }
 
+    res.json(result)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Google Forms → CRM ───────────────────────────────────────
+router.post('/forms/sync', async (req, res) => {
+  try {
+    if (!formsConfigured()) return res.status(503).json({ error: 'Google Forms não configurado' })
+    const result = await syncForms()
     res.json(result)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
