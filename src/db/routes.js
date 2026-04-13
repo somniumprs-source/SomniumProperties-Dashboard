@@ -221,10 +221,14 @@ router.get('/reunioes/:id/relatorio', async (req, res) => {
 
 router.put('/reunioes/:id', async (req, res) => {
   try {
-    const { analise_completa } = req.body
-    if (!analise_completa) return res.status(400).json({ error: 'analise_completa obrigatório' })
-    await pool.query('UPDATE reunioes SET analise_completa = $1, updated_at = $2 WHERE id = $3',
-      [analise_completa, new Date().toISOString(), req.params.id])
+    const { analise_completa, entidade_tipo, entidade_id } = req.body
+    const sets = ['updated_at = $1']
+    const params = [new Date().toISOString()]
+    if (analise_completa !== undefined) { params.push(analise_completa); sets.push(`analise_completa = $${params.length}`) }
+    if (entidade_tipo !== undefined) { params.push(entidade_tipo); sets.push(`entidade_tipo = $${params.length}`) }
+    if (entidade_id !== undefined) { params.push(entidade_id); sets.push(`entidade_id = $${params.length}`) }
+    params.push(req.params.id)
+    await pool.query(`UPDATE reunioes SET ${sets.join(', ')} WHERE id = $${params.length}`, params)
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
