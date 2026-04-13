@@ -95,7 +95,7 @@ export function generateMeetingPDF(reuniao, analise, investidor) {
   if (analise?.informacoes_reuniao?.contexto) {
     y = pageHeader(doc, 'INFORMAÇÕES DA REUNIÃO', y, cw, ml)
     doc.fontSize(10).fillColor(BODY).text(analise.informacoes_reuniao.contexto, ml, y, { width: cw, lineGap: 4 })
-    y = doc.y + 20
+    y = doc.y + 12
   }
 
   // 2. RESUMO EXECUTIVO
@@ -103,7 +103,7 @@ export function generateMeetingPDF(reuniao, analise, investidor) {
     y = cp(doc, y, 80)
     y = pageHeader(doc, 'RESUMO EXECUTIVO', y, cw, ml)
     doc.fontSize(10).fillColor(BODY).text(analise.resumo_executivo.replace(/\*\*/g, ''), ml, y, { width: cw, lineGap: 5 })
-    y = doc.y + 20
+    y = doc.y + 12
   }
 
   // 3. PERFIL DO INVESTIDOR
@@ -128,7 +128,7 @@ export function generateMeetingPDF(reuniao, analise, investidor) {
     doc.fontSize(9).fillColor(BODY).text(String(profileFields[i][1]), ml + 170, y + 4, { width: cw - 185, lineGap: 2 })
     y = Math.max(y + 30, doc.y + 4)
   }
-  y += 10
+  y += 5
 
   // Objeções
   if (perfil.objecoes?.length > 0) {
@@ -140,7 +140,7 @@ export function generateMeetingPDF(reuniao, analise, investidor) {
       doc.fontSize(9).fillColor(BODY).text(obj, ml + 16, y, { width: cw - 20, lineGap: 2 })
       y = doc.y + 6
     }
-    y += 10
+    y += 5
   }
 
   // 4. PONTOS-CHAVE
@@ -153,7 +153,7 @@ export function generateMeetingPDF(reuniao, analise, investidor) {
       doc.fontSize(9).fillColor(BODY).text(p, ml + 14, y, { width: cw - 20, lineGap: 2 })
       y = doc.y + 6
     }
-    y += 10
+    y += 5
   }
 
   // 5. OPORTUNIDADES APRESENTADAS
@@ -170,7 +170,7 @@ export function generateMeetingPDF(reuniao, analise, investidor) {
       if (meta) { doc.fontSize(8).fillColor(GOLD).text(meta, ml, y); y = doc.y + 3 }
       if (op.detalhes) { doc.fontSize(8).fillColor(MUTED).text(op.detalhes, ml, y, { width: cw, lineGap: 2 }); y = doc.y + 8 }
     }
-    y += 10
+    y += 5
   }
 
   // 6. MODELO DE PARCERIA
@@ -216,7 +216,7 @@ export function generateMeetingPDF(reuniao, analise, investidor) {
       doc.fontSize(9).fillColor(BODY).text(p, ml + 24, y + 2, { width: cw - 30, lineGap: 3 })
       y = Math.max(y + 20, doc.y + 6)
     })
-    y += 10
+    y += 5
   }
 
   // 10. SUGESTÕES DE MELHORIA
@@ -231,16 +231,8 @@ export function generateMeetingPDF(reuniao, analise, investidor) {
     }
   }
 
-  // CONTRACAPA
-  doc.addPage({ margins: { top: 0, bottom: 0, left: 0, right: 0 } })
-  doc.rect(0, 0, pw, doc.page.height).fill(BLACK)
-  doc.rect(0, 0, pw, 5).fill(GOLD)
-  try {
-    doc.image(readFileSync(LOGO_PATH), (pw - 140) / 2, doc.page.height / 2 - 60, { width: 140 })
-  } catch {}
-  doc.fontSize(8).fillColor('#444444').text('Documento confidencial. Proibida a reprodução sem autorização.', 0, doc.page.height / 2 + 40, { align: 'center' })
-  doc.fontSize(8).fillColor(MUTED).text('www.somniumproperties.pt', 0, doc.page.height / 2 + 58, { align: 'center' })
-  doc.rect(0, doc.page.height - 5, pw, 5).fill(GOLD)
+  // Footer final
+  doc.fontSize(7).fillColor(MUTED).text('Somnium Properties · Documento confidencial · www.somniumproperties.pt', ml, doc.page.height - 40, { width: cw, align: 'center' })
 
   doc.end()
   return doc
@@ -264,7 +256,7 @@ function sectionTitle(doc, title, y, cw, ml) {
 }
 
 function cp(doc, y, needed) {
-  if (y + needed > doc.page.height - 60) {
+  if (y > 60 && y + needed > doc.page.height - 60) {
     doc.addPage({ margins: { top: 50, bottom: 50, left: 55, right: 55 } })
     return 50
   }
