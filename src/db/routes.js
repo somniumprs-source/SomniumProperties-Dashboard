@@ -194,7 +194,13 @@ router.get('/reunioes/:id/relatorio', async (req, res) => {
     const { rows: [reuniao] } = await pool.query('SELECT * FROM reunioes WHERE id = $1', [req.params.id])
     if (!reuniao) return res.status(404).json({ error: 'Reunião não encontrada' })
 
-    const analise = await analyzeReuniao(req.params.id)
+    // Usar analise_completa guardada se existir, senão fallback para análise por padrões
+    let analise
+    if (reuniao.analise_completa) {
+      try { analise = JSON.parse(reuniao.analise_completa) } catch { analise = await analyzeReuniao(req.params.id) }
+    } else {
+      analise = await analyzeReuniao(req.params.id)
+    }
 
     let investidor = null
     if (reuniao.entidade_id && reuniao.entidade_tipo === 'investidores') {
@@ -211,6 +217,16 @@ router.get('/reunioes/:id/relatorio', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
+})
+
+router.put('/reunioes/:id', async (req, res) => {
+  try {
+    const { analise_completa } = req.body
+    if (!analise_completa) return res.status(400).json({ error: 'analise_completa obrigatório' })
+    await pool.query('UPDATE reunioes SET analise_completa = $1, updated_at = $2 WHERE id = $3',
+      [analise_completa, new Date().toISOString(), req.params.id])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 router.post('/reunioes/:id/analisar', async (req, res) => {
