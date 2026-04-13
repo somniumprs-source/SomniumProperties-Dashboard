@@ -3012,6 +3012,43 @@ if (gcal) {
   console.log('[gcal-sync] Auto-sync ativo (a cada 15 min)')
 }
 
+// ── Auto-sync Fireflies (a cada 15 min) ──────────────────────
+try {
+  const { isConfigured } = await import('./src/db/firefliesSync.js')
+  if (isConfigured()) {
+    const FF_SYNC_INTERVAL = 15 * 60 * 1000
+    async function autoSyncFireflies() {
+      try {
+        const { syncFireflies } = await import('./src/db/firefliesSync.js')
+        const { autoFillInvestidor } = await import('./src/db/meetingAnalysis.js')
+        const pgPool = (await import('./src/db/pg.js')).default
+
+        const result = await syncFireflies()
+        if (result.created > 0) {
+          console.log(`[fireflies] Auto-sync: ${result.created} novas reuniões importadas`)
+
+          // Auto-analisar e preencher investidores
+          const { rows: novas } = await pgPool.query(
+            "SELECT id FROM reunioes WHERE entidade_tipo = 'investidores' AND entidade_id IS NOT NULL AND analise_completa IS NULL ORDER BY created_at DESC LIMIT $1",
+            [result.created]
+          )
+          for (const r of novas) {
+            try { await autoFillInvestidor(r.id) } catch {}
+          }
+          if (novas.length > 0) console.log(`[fireflies] Auto-fill: ${novas.length} investidores actualizados`)
+        }
+      } catch (e) {
+        console.error('[fireflies] Auto-sync erro:', e.message)
+      }
+    }
+    setTimeout(autoSyncFireflies, 60000) // primeiro sync 1 min após arranque
+    setInterval(autoSyncFireflies, FF_SYNC_INTERVAL)
+    console.log('[fireflies] Auto-sync ativo (a cada 15 min)')
+  }
+} catch (e) {
+  console.warn('[fireflies] Auto-sync não disponível:', e.message)
+}
+
 // ════════════════════════════════════════════════════════════════
 // OKRs — Objectivos e Key Results editáveis
 // ════════════════════════════════════════════════════════════════
