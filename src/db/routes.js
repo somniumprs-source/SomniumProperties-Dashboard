@@ -12,7 +12,8 @@ import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
 import { syncForms, isConfigured as formsConfigured } from './formsSync.js'
-import { createImovelFolder, moveImovelFolder, isConfigured as driveConfigured } from './driveSync.js'
+import { createImovelFolder, moveImovelFolder, uploadDocToFolder, isConfigured as driveConfigured } from './driveSync.js'
+import { generateDoc, getDocsForEstado } from './pdfImovelDocs.js'
 import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
 import { generateMeetingPDF } from './pdfMeetingReport.js'
 
@@ -97,10 +98,47 @@ crudRoutes('/imoveis', Imoveis, {
     }
   },
   onUpdate: async (item, body) => {
-    if (driveConfigured() && body.estado) {
-      await moveImovelFolder(item.id, body.estado)
+    if (body.estado) {
+      // Mover pasta no Drive
+      if (driveConfigured()) {
+        await moveImovelFolder(item.id, body.estado)
+      }
+      // Gerar documentos da fase e upload ao Drive
+      const docs = getDocsForEstado(body.estado)
+      for (const tipo of docs) {
+        try {
+          let analise = null
+          try { const { rows: [a] } = await pool.query('SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1', [item.id]); analise = a } catch {}
+          const pdfDoc = generateDoc(tipo, item, analise)
+          if (pdfDoc && driveConfigured()) {
+            await uploadDocToFolder(item.id, pdfDoc, `${tipo}.pdf`)
+          }
+        } catch (e) { console.error(`[docs] Erro ${tipo}:`, e.message) }
+      }
     }
   },
+})
+
+// ── Documento PDF por fase do imóvel ─────────────────────────
+router.get('/imoveis/:id/documento/:tipo', async (req, res) => {
+  try {
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+
+    let analise = null
+    try {
+      const { rows: [a] } = await pool.query('SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1', [imovel.id])
+      analise = a
+    } catch {}
+
+    const doc = generateDoc(req.params.tipo, imovel, analise)
+    if (!doc) return res.status(400).json({ error: 'Tipo de documento inválido' })
+
+    const nome = (imovel.nome || 'doc').replace(/[^a-zA-Z0-9À-ú ]/g, '').replace(/\s+/g, '_')
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `inline; filename="${req.params.tipo}_${nome}.pdf"`)
+    doc.pipe(res)
+  } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 // ── Relatório PDF do imóvel ──────────────────────────────────

@@ -51,6 +51,70 @@ export function isConfigured() {
 }
 
 /**
+ * Upload de documento PDF para a pasta Documentos do imóvel no Drive.
+ */
+export async function uploadDocToFolder(imovelId, pdfStream, fileName) {
+  const drive = getDrive()
+  if (!drive) return null
+
+  try {
+    // Buscar drive_folder_id do imóvel
+    const { rows: [imovel] } = await pool.query('SELECT drive_folder_id, nome FROM imoveis WHERE id = $1', [imovelId])
+    if (!imovel?.drive_folder_id) return null
+
+    // Encontrar subpasta "Documentos"
+    const list = await drive.files.list({
+      q: `'${imovel.drive_folder_id}' in parents and name='Documentos' and mimeType='application/vnd.google-apps.folder'`,
+      fields: 'files(id)',
+      supportsAllDrives: true,
+    })
+    let docsFolder = list.data.files?.[0]?.id
+    if (!docsFolder) docsFolder = imovel.drive_folder_id // fallback: pasta raiz do imóvel
+
+    // Verificar se já existe ficheiro com mesmo nome e apagar
+    const existing = await drive.files.list({
+      q: `'${docsFolder}' in parents and name='${fileName}'`,
+      fields: 'files(id)',
+      supportsAllDrives: true,
+    })
+    for (const f of existing.data.files || []) {
+      await drive.files.delete({ fileId: f.id, supportsAllDrives: true }).catch(() => {})
+    }
+
+    // Recolher PDF stream para buffer
+    const { Readable } = await import('stream')
+    const chunks = []
+    await new Promise((resolve, reject) => {
+      pdfStream.on('data', c => chunks.push(c))
+      pdfStream.on('end', resolve)
+      pdfStream.on('error', reject)
+    })
+    const buffer = Buffer.concat(chunks)
+
+    // Upload
+    const file = await drive.files.create({
+      requestBody: {
+        name: fileName,
+        mimeType: 'application/pdf',
+        parents: [docsFolder],
+      },
+      media: {
+        mimeType: 'application/pdf',
+        body: Readable.from(buffer),
+      },
+      fields: 'id',
+      supportsAllDrives: true,
+    })
+
+    console.log(`[drive] Upload: ${fileName} → ${imovel.nome} (${file.data.id})`)
+    return file.data.id
+  } catch (e) {
+    console.error('[drive] Upload erro:', e.message)
+    return null
+  }
+}
+
+/**
  * Criar pasta do imóvel com subpastas no Drive.
  * Retorna o ID da pasta criada.
  */
