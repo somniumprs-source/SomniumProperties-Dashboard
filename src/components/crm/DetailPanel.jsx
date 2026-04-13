@@ -1,9 +1,9 @@
 /**
  * Painel de detalhe para Imóveis, Investidores, Consultores.
- * Mostra: campos editáveis + relações + timeline + tarefas.
+ * Mostra: campos editáveis + relações + timeline + tarefas + reuniões.
  */
 import { useState, useEffect } from 'react'
-import { FileDown } from 'lucide-react'
+import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText } from 'lucide-react'
 import { AnaliseTab } from '../analise/AnaliseTab.jsx'
 import { supabase } from '../../lib/supabase.js'
 
@@ -12,10 +12,18 @@ const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: '
 const ACAO_LABEL = { INSERT: 'Criado', UPDATE: 'Atualizado', DELETE: 'Apagado' }
 const ACAO_COLOR = { INSERT: 'text-green-600', UPDATE: 'text-blue-600', DELETE: 'text-red-600' }
 
+async function getToken() {
+  try {
+    const { data: { session } } = await supabase?.auth?.getSession() || { data: {} }
+    return session?.access_token || ''
+  } catch { return '' }
+}
+
 export function DetailPanel({ type, id, onClose, onSave }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('detalhe')
+  const [reunioes, setReunioes] = useState([])
 
   const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores' }[type]
 
@@ -28,24 +36,38 @@ export function DetailPanel({ type, id, onClose, onSave }) {
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false))
+
+    // Carregar reuniões para investidores e consultores
+    if (type === 'Investidores' || type === 'Consultores') {
+      fetch(`/api/crm/reunioes?entidade_tipo=${endpoint}&entidade_id=${id}`)
+        .then(r => r.json())
+        .then(setReunioes)
+        .catch(() => {})
+    }
   }, [id, endpoint])
 
   if (loading) return <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400">A carregar...</div>
   if (!data) return null
 
+  // Tabs dinâmicos por tipo
+  const tabs = [
+    { key: 'detalhe', label: 'Detalhe', icon: '📋', show: true },
+    { key: 'reunioes', label: `Reuniões (${reunioes.length})`, icon: '📞', show: (type === 'Investidores' || type === 'Consultores') && reunioes.length > 0 },
+    { key: 'analise', label: 'Análise Financeira', icon: '📊', show: type === 'Imóveis' },
+  ].filter(t => t.show)
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between" style={{ backgroundColor: '#0d0d0d' }}>
-        <div>
+      <div className="px-4 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between" style={{ backgroundColor: '#0d0d0d' }}>
+        <div className="min-w-0 flex-1">
           <p className="text-xs uppercase tracking-widest" style={{ color: '#C9A84C' }}>{type}</p>
-          <h2 className="text-lg font-bold text-white">{data.nome ?? data.movimento}</h2>
+          <h2 className="text-lg font-bold text-white truncate">{data.nome ?? data.movimento}</h2>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {type === 'Imóveis' && (
             <button onClick={async () => {
-              const { data: { session } } = await supabase.auth.getSession()
-              const token = session?.access_token || ''
+              const token = await getToken()
               window.open(`/api/crm/imoveis/${id}/relatorio?token=${token}`, '_blank')
             }}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer"
@@ -58,14 +80,11 @@ export function DetailPanel({ type, id, onClose, onSave }) {
       </div>
 
       {/* Tabs */}
-      {type === 'Imóveis' && (
-        <div className="flex border-b border-gray-200" style={{ backgroundColor: '#F5F4F0' }}>
-          {[
-            { key: 'detalhe', label: 'Detalhe', icon: '📋' },
-            { key: 'analise', label: 'Análise Financeira', icon: '📊' },
-          ].map(t => (
+      {tabs.length > 1 && (
+        <div className="flex border-b border-gray-200 overflow-x-auto" style={{ backgroundColor: '#F5F4F0' }}>
+          {tabs.map(t => (
             <button key={t.key} onClick={() => setActiveTab(t.key)}
-              className="relative px-5 py-3 text-sm font-medium transition-colors"
+              className="relative px-4 sm:px-5 py-3 text-sm font-medium transition-colors whitespace-nowrap"
               style={{
                 color: activeTab === t.key ? '#1A1A1A' : '#9ca3af',
                 backgroundColor: activeTab === t.key ? 'white' : 'transparent',
@@ -81,12 +100,19 @@ export function DetailPanel({ type, id, onClose, onSave }) {
 
       {/* Análise Financeira tab */}
       {type === 'Imóveis' && activeTab === 'analise' ? (
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <AnaliseTab imovelId={data.id} imovelNome={data.nome} />
         </div>
-      ) : (
 
-      <div className="p-6 grid grid-cols-1 xl:grid-cols-3 gap-6">
+      /* Reuniões tab */
+      ) : activeTab === 'reunioes' ? (
+        <div className="p-4 sm:p-6">
+          <ReunioesTab reunioes={reunioes} investidorNome={data.nome} />
+        </div>
+
+      ) : (
+      /* Detalhe tab */
+      <div className="p-4 sm:p-6 grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
         {/* Main info */}
         <div className="xl:col-span-2 space-y-6">
           {/* Key fields */}
@@ -137,7 +163,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
           {data.notas && (
             <div>
               <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Notas</p>
-              <p className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3">{data.notas}</p>
+              <p className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3 whitespace-pre-line">{data.notas}</p>
             </div>
           )}
 
@@ -207,6 +233,27 @@ export function DetailPanel({ type, id, onClose, onSave }) {
             ) : <p className="text-xs text-gray-300">Sem tarefas</p>}
           </div>
 
+          {/* Mini-resumo reuniões na sidebar */}
+          {reunioes.length > 0 && activeTab === 'detalhe' && (
+            <div>
+              <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Últimas Reuniões</p>
+              <div className="space-y-1.5">
+                {reunioes.slice(0, 3).map(r => (
+                  <div key={r.id} className="text-xs px-2 py-1.5 rounded bg-purple-50 text-purple-700 flex items-center gap-2">
+                    <Phone className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{r.titulo}</span>
+                    <span className="text-purple-400 shrink-0">{r.data?.slice(0, 10)}</span>
+                  </div>
+                ))}
+                {reunioes.length > 3 && (
+                  <button onClick={() => setActiveTab('reunioes')} className="text-xs text-purple-500 hover:underline">
+                    Ver todas ({reunioes.length})
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Timeline */}
           <div>
             <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Timeline</p>
@@ -228,11 +275,209 @@ export function DetailPanel({ type, id, onClose, onSave }) {
   )
 }
 
+// ── Reuniões Tab ──────────────────────────────────────────────
+function ReunioesTab({ reunioes, investidorNome }) {
+  const [expanded, setExpanded] = useState(null)
+  const [transcricao, setTranscricao] = useState({})
+  const [analises, setAnalises] = useState({})
+  const [analyzing, setAnalyzing] = useState(null)
+
+  async function loadTranscricao(id) {
+    if (transcricao[id]) return
+    const r = await fetch(`/api/crm/reunioes/${id}/transcricao`)
+    const d = await r.json()
+    setTranscricao(prev => ({ ...prev, [id]: d.transcricao }))
+  }
+
+  async function runAnalise(id) {
+    setAnalyzing(id)
+    try {
+      const r = await fetch(`/api/crm/reunioes/${id}/analisar`, { method: 'POST' })
+      const d = await r.json()
+      setAnalises(prev => ({ ...prev, [id]: d }))
+    } catch {}
+    setAnalyzing(null)
+  }
+
+  function toggleExpand(id) {
+    if (expanded === id) { setExpanded(null); return }
+    setExpanded(id)
+    loadTranscricao(id)
+    if (!analises[id]) runAnalise(id)
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-gray-700">Histórico de Reuniões</h3>
+        <span className="text-xs text-gray-400">{reunioes.length} reunião(ões)</span>
+      </div>
+
+      {reunioes.map(r => {
+        const isOpen = expanded === r.id
+        const ana = analises[r.id]
+        const dataStr = r.data ? new Date(r.data).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+
+        return (
+          <div key={r.id} className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
+            {/* Header da reunião */}
+            <button onClick={() => toggleExpand(r.id)}
+              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-100 transition-colors">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: '#0d0d0d' }}>
+                  <Phone className="w-4 h-4" style={{ color: '#C9A84C' }} />
+                </div>
+                <div className="text-left min-w-0">
+                  <p className="text-sm font-medium text-gray-800 truncate">{r.titulo}</p>
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <span>{dataStr}</span>
+                    {r.duracao_min > 0 && <><span>·</span><span>{r.duracao_min} min</span></>}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button onClick={async (e) => {
+                  e.stopPropagation()
+                  const token = await getToken()
+                  window.open(`/api/crm/reunioes/${r.id}/relatorio?token=${token}`, '_blank')
+                }}
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-white border border-gray-200 text-gray-600 hover:border-gray-300">
+                  <FileDown className="w-3 h-3" /> PDF
+                </button>
+                {isOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+              </div>
+            </button>
+
+            {/* Conteúdo expandido */}
+            {isOpen && (
+              <div className="px-4 pb-4 space-y-4 border-t border-gray-200">
+                {/* Resumo */}
+                {r.resumo && (
+                  <div className="mt-3">
+                    <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Resumo</p>
+                    <p className="text-sm text-gray-700 bg-white rounded-lg p-3 border border-gray-100">{r.resumo}</p>
+                  </div>
+                )}
+
+                {/* Keywords */}
+                {r.keywords && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {r.keywords.split(',').filter(Boolean).map((k, i) => (
+                      <span key={i} className="px-2 py-0.5 text-xs rounded-full bg-indigo-50 text-indigo-600">{k.trim()}</span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Análise AI */}
+                {analyzing === r.id && (
+                  <div className="text-center py-4">
+                    <div className="animate-spin w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full mx-auto" />
+                    <p className="text-xs text-gray-400 mt-2">A analisar reunião...</p>
+                  </div>
+                )}
+
+                {ana && !ana.error && (
+                  <>
+                    {/* Dados extraídos */}
+                    {ana.investidor_dados && (
+                      <div>
+                        <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Dados Extraídos do Investidor</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {ana.investidor_dados.capital_max && <MiniField label="Capital Max" value={`€ ${ana.investidor_dados.capital_max.toLocaleString('pt-PT')}`} />}
+                          {ana.investidor_dados.capital_min && <MiniField label="Capital Min" value={`€ ${ana.investidor_dados.capital_min.toLocaleString('pt-PT')}`} />}
+                          {ana.investidor_dados.perfil_risco && <MiniField label="Perfil Risco" value={ana.investidor_dados.perfil_risco} />}
+                          {ana.investidor_dados.estrategia && <MiniField label="Estratégia" value={Array.isArray(ana.investidor_dados.estrategia) ? ana.investidor_dados.estrategia.join(', ') : ana.investidor_dados.estrategia} />}
+                          {ana.classificacao_sugerida && <MiniField label="Classificação" value={ana.classificacao_sugerida} highlight />}
+                          {ana.probabilidade_investimento != null && <MiniField label="Probabilidade" value={`${ana.probabilidade_investimento}%`} />}
+                        </div>
+                        {ana.autoFilled && ana.fieldsUpdated?.length > 0 && (
+                          <p className="text-xs text-green-600 mt-2">✓ Campos preenchidos automaticamente: {ana.fieldsUpdated.join(', ')}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Sugestões de melhoria */}
+                    {ana.sugestoes_melhoria?.length > 0 && (
+                      <div>
+                        <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Sugestões de Melhoria</p>
+                        <div className="space-y-1.5">
+                          {ana.sugestoes_melhoria.map((s, i) => (
+                            <div key={i} className="flex gap-2 text-xs">
+                              <span className="text-yellow-500 shrink-0">💡</span>
+                              <span className="text-gray-600">{s}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Próximos passos */}
+                    {ana.proximos_passos?.length > 0 && (
+                      <div>
+                        <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Próximos Passos</p>
+                        <div className="space-y-1">
+                          {ana.proximos_passos.map((p, i) => (
+                            <div key={i} className="flex gap-2 text-xs">
+                              <span className="text-indigo-500 shrink-0 font-bold">{i + 1}.</span>
+                              <span className="text-gray-600">{p}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Transcrição */}
+                {transcricao[r.id] && (
+                  <details className="group">
+                    <summary className="text-xs text-gray-400 uppercase tracking-wide cursor-pointer hover:text-gray-600 flex items-center gap-1">
+                      <FileText className="w-3 h-3" /> Transcrição Completa
+                    </summary>
+                    <div className="mt-2 max-h-[400px] overflow-y-auto bg-white rounded-lg border border-gray-100 p-3 text-xs space-y-1">
+                      {transcricao[r.id].split('\n').filter(Boolean).map((line, i) => {
+                        const match = line.match(/^\[(.+?)\]:\s*(.+)/)
+                        if (match) {
+                          const isSomnium = /somnium|alexandre|jo[aã]o/i.test(match[1])
+                          return (
+                            <div key={i}>
+                              <span className={`font-semibold ${isSomnium ? 'text-indigo-600' : 'text-yellow-700'}`}>{match[1]}: </span>
+                              <span className="text-gray-600">{match[2]}</span>
+                            </div>
+                          )
+                        }
+                        return <div key={i} className="text-gray-500">{line}</div>
+                      })}
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {reunioes.length === 0 && (
+        <p className="text-center text-gray-400 text-sm py-8">Sem reuniões registadas para este contacto.</p>
+      )}
+    </div>
+  )
+}
+
 function Field({ label, value }) {
   return (
     <div>
       <p className="text-xs text-gray-400">{label}</p>
       <p className="text-sm font-medium text-gray-800 truncate">{value || '—'}</p>
+    </div>
+  )
+}
+
+function MiniField({ label, value, highlight }) {
+  return (
+    <div className={`px-2 py-1.5 rounded-lg ${highlight ? 'bg-yellow-50 border border-yellow-200' : 'bg-white border border-gray-100'}`}>
+      <p className="text-[10px] text-gray-400 uppercase">{label}</p>
+      <p className={`text-xs font-semibold ${highlight ? 'text-yellow-700' : 'text-gray-800'}`}>{value}</p>
     </div>
   )
 }
