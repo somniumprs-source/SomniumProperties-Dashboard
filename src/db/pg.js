@@ -343,6 +343,12 @@ export async function initSchema() {
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 
+      -- Migration: adicionar coluna drive_folder_id à tabela imoveis
+      DO $$ BEGIN
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS drive_folder_id TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
       -- Migration: adicionar coluna documentos à tabela despesas
       DO $$ BEGIN
         ALTER TABLE despesas ADD COLUMN IF NOT EXISTS documentos TEXT;
