@@ -2,8 +2,8 @@
  * Painel de detalhe para Imóveis, Investidores, Consultores.
  * Mostra: campos editáveis + relações + timeline + tarefas + reuniões.
  */
-import { useState, useEffect } from 'react'
-import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X } from 'lucide-react'
 import { AnaliseTab } from '../analise/AnaliseTab.jsx'
 import { supabase } from '../../lib/supabase.js'
 
@@ -24,8 +24,34 @@ export function DetailPanel({ type, id, onClose, onSave }) {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('detalhe')
   const [reunioes, setReunioes] = useState([])
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState({})
+  const [saving, setSaving] = useState(false)
 
   const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores' }[type]
+
+  function startEdit() {
+    setForm({ ...data })
+    setEditing(true)
+  }
+
+  async function saveEdit() {
+    setSaving(true)
+    try {
+      const r = await fetch(`/api/crm/${endpoint}/${id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+      })
+      if (!r.ok) throw new Error('Erro ao guardar')
+      const updated = await r.json()
+      setData(updated)
+      setEditing(false)
+      if (onSave) onSave()
+    } catch {}
+    setSaving(false)
+  }
+
+  function cancelEdit() { setEditing(false); setForm({}) }
+  function setField(k, v) { setForm(prev => ({ ...prev, [k]: v })) }
 
   useEffect(() => {
     if (!id || !endpoint) return
@@ -65,14 +91,34 @@ export function DetailPanel({ type, id, onClose, onSave }) {
           <h2 className="text-lg font-bold text-white truncate">{data.nome ?? data.movimento}</h2>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {type === 'Imóveis' && (
+          {editing ? (
+            <>
+              <button onClick={saveEdit} disabled={saving}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
+                style={{ backgroundColor: '#22c55e', color: '#fff' }}>
+                <Save className="w-3.5 h-3.5" /> {saving ? 'A guardar...' : 'Guardar'}
+              </button>
+              <button onClick={cancelEdit}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
+                style={{ backgroundColor: '#333', color: '#999' }}>
+                <X className="w-3.5 h-3.5" /> Cancelar
+              </button>
+            </>
+          ) : (
+            <button onClick={startEdit}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
+              style={{ backgroundColor: '#1a1a1a', color: '#C9A84C', border: '1px solid #C9A84C33' }}>
+              <Pencil className="w-3.5 h-3.5" /> Editar
+            </button>
+          )}
+          {type === 'Imóveis' && !editing && (
             <button onClick={async () => {
               const token = await getToken()
               window.open(`/api/crm/imoveis/${id}/relatorio?token=${token}`, '_blank')
             }}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer"
               style={{ backgroundColor: '#1a1a1a', color: '#C9A84C', border: '1px solid #C9A84C33' }}>
-              <FileDown className="w-3.5 h-3.5" /> Relatório PDF
+              <FileDown className="w-3.5 h-3.5" /> PDF
             </button>
           )}
           <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">&times;</button>
@@ -133,18 +179,41 @@ export function DetailPanel({ type, id, onClose, onSave }) {
               <Field label="Data Proposta" value={data.data_proposta} />
             </>}
             {type === 'Investidores' && <>
-              <Field label="Status" value={data.status} />
-              <Field label="Classificação" value={data.classificacao} />
-              <Field label="Pontuação" value={data.pontuacao} />
-              <Field label="Origem" value={data.origem} />
-              <Field label="Capital Min" value={data.capital_min > 0 ? EUR(data.capital_min) : '—'} />
-              <Field label="Capital Max" value={data.capital_max > 0 ? EUR(data.capital_max) : '—'} />
-              <Field label="Telemóvel" value={data.telemovel} />
-              <Field label="Email" value={data.email} />
-              <Field label="NDA" value={data.nda_assinado ? 'Sim' : 'Não'} />
-              <Field label="1º Contacto" value={data.data_primeiro_contacto} />
-              <Field label="Reunião" value={data.data_reuniao} />
-              <Field label="Próxima Ação" value={data.proxima_acao} />
+              {editing ? <>
+                <EF label="Nome" field="nome" form={form} set={setField} />
+                <EF label="Status" field="status" form={form} set={setField} type="select" options={['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor classificado','Investidor em parceria']} />
+                <EF label="Classificação" field="classificacao" form={form} set={setField} type="select" options={['A','B','C','D']} />
+                <EF label="Origem" field="origem" form={form} set={setField} type="select" options={['Skool','Grupos Whatsapp','Referenciação','LinkedIn','Google Forms','Outro']} />
+                <EF label="Capital Min (€)" field="capital_min" form={form} set={setField} type="number" />
+                <EF label="Capital Max (€)" field="capital_max" form={form} set={setField} type="number" />
+                <EF label="Telemóvel" field="telemovel" form={form} set={setField} />
+                <EF label="Email" field="email" form={form} set={setField} />
+                <EF label="Perfil Risco" field="perfil_risco" form={form} set={setField} type="select" options={['Conservador','Moderado','Agressivo']} />
+                <EF label="NDA Assinado" field="nda_assinado" form={form} set={setField} type="select" options={[{v:1,l:'Sim'},{v:0,l:'Não'}]} />
+                <EF label="1º Contacto" field="data_primeiro_contacto" form={form} set={setField} type="date" />
+                <EF label="Data Reunião" field="data_reuniao" form={form} set={setField} type="date" />
+                <EF label="Último Contacto" field="data_ultimo_contacto" form={form} set={setField} type="date" />
+                <EF label="Data Follow Up" field="data_follow_up" form={form} set={setField} type="date" />
+                <EF label="Próxima Ação" field="proxima_acao" form={form} set={setField} />
+                <div className="col-span-2 md:col-span-3">
+                  <label className="text-xs text-gray-400 block mb-1">Notas</label>
+                  <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={4}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                </div>
+              </> : <>
+                <Field label="Status" value={data.status} />
+                <Field label="Classificação" value={data.classificacao} />
+                <Field label="Pontuação" value={data.pontuacao} />
+                <Field label="Origem" value={data.origem} />
+                <Field label="Capital Min" value={data.capital_min > 0 ? EUR(data.capital_min) : '—'} />
+                <Field label="Capital Max" value={data.capital_max > 0 ? EUR(data.capital_max) : '—'} />
+                <Field label="Telemóvel" value={data.telemovel} />
+                <Field label="Email" value={data.email} />
+                <Field label="NDA" value={data.nda_assinado ? 'Sim' : 'Não'} />
+                <Field label="1º Contacto" value={data.data_primeiro_contacto} />
+                <Field label="Reunião" value={data.data_reuniao} />
+                <Field label="Próxima Ação" value={data.proxima_acao} />
+              </>}
             </>}
             {type === 'Consultores' && <>
               <Field label="Estatuto" value={data.estatuto} />
@@ -160,7 +229,14 @@ export function DetailPanel({ type, id, onClose, onSave }) {
             </>}
           </div>
 
-          {data.notas && (
+          {editing && type !== 'Investidores' && (
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">Notas</label>
+              <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={4}
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+            </div>
+          )}
+          {!editing && data.notas && (
             <div>
               <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Notas</p>
               <p className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3 whitespace-pre-line">{data.notas}</p>
@@ -467,6 +543,27 @@ function Field({ label, value }) {
     <div>
       <p className="text-xs text-gray-400">{label}</p>
       <p className="text-sm font-medium text-gray-800 truncate">{value || '—'}</p>
+    </div>
+  )
+}
+
+function EF({ label, field, form, set, type = 'text', options }) {
+  const inputClass = "w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
+  return (
+    <div>
+      <p className="text-xs text-gray-400 mb-1">{label}</p>
+      {type === 'select' ? (
+        <select value={form[field] ?? ''} onChange={e => set(field, e.target.value)} className={inputClass}>
+          <option value="">—</option>
+          {options.map(o => typeof o === 'object' ? <option key={o.v} value={o.v}>{o.l}</option> : <option key={o} value={o}>{o}</option>)}
+        </select>
+      ) : type === 'date' ? (
+        <input type="date" value={(form[field] || '').slice(0, 10)} onChange={e => set(field, e.target.value)} className={inputClass} />
+      ) : type === 'number' ? (
+        <input type="number" value={form[field] || ''} onChange={e => set(field, +e.target.value || null)} className={inputClass} />
+      ) : (
+        <input type="text" value={form[field] || ''} onChange={e => set(field, e.target.value)} className={inputClass} />
+      )}
     </div>
   )
 }
