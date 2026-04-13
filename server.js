@@ -10,6 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
 app.use(cors())
 app.use(express.json())
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')))
 
 // ── Auth middleware (Supabase JWT) ────────────────────────────
 import { createClient } from '@supabase/supabase-js'
