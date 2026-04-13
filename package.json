@@ -19,6 +19,8 @@
   "dependencies": {
     "@notionhq/client": "^2.2.15",
     "@supabase/supabase-js": "^2.103.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.18",
     "better-sqlite3": "^12.8.0",
     "clsx": "^2.1.0",
     "concurrently": "^9.2.1",
@@ -30,24 +32,22 @@
     "multer": "^2.1.1",
     "pdfkit": "^0.18.0",
     "pg": "^8.20.0",
+    "postcss": "^8.4.35",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.22.0",
     "recharts": "^2.12.2",
-    "sharp": "^0.34.5"
+    "sharp": "^0.34.5",
+    "tailwindcss": "^3.4.1",
+    "vite": "^5.1.6"
   },
   "devDependencies": {
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
-    "@vitejs/plugin-react": "^4.2.1",
-    "autoprefixer": "^10.4.18",
     "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.34.1",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
-    "postcss": "^8.4.35",
-    "prettier": "^3.2.5",
-    "tailwindcss": "^3.4.1",
-    "vite": "^5.1.6"
+    "prettier": "^3.2.5"
   }
 }
