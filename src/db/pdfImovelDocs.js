@@ -810,4 +810,284 @@ const GENERATORS = {
     b.input('Justificação do desvio', '', { tall: true })
     return b.end()
   },
+
+  // ── RELATÓRIO DE INVESTIMENTO ─────────────────────────────
+  relatorio_investimento: (im, an) => {
+    const b = new DocBuilder('Análise de Investimento', im.zona || '', im)
+    if (!an) { b.text('Sem análise financeira activa para este imóvel.'); return b.end() }
+
+    // Resumo executivo
+    b.header('RESUMO EXECUTIVO')
+    const ra = an.retorno_anualizado || 0
+    const veredicto = ra >= 15 ? 'Negócio atractivo' : ra >= 8 ? 'Analisar com cuidado' : 'Não recomendado'
+    b.highlight('Retorno Anualizado', `${ra}% — ${veredicto}`, ra >= 15 ? C.green : ra >= 8 ? C.gold : C.red)
+    b.row('Capital Necessário', EUR(an.capital_necessario), { alt: true })
+    b.row('Lucro Líquido', EUR(an.lucro_liquido)).row('ROI Total', PCT(an.retorno_total), { alt: true })
+    b.row('Cash-on-Cash', PCT(an.cash_on_cash)).row('Prazo', `${an.meses || 6} meses`, { alt: true })
+    b.space()
+
+    // Aquisição
+    b.header('CUSTOS DE AQUISIÇÃO')
+    b.row('Preço de Compra', EUR(an.compra), { alt: true }).row('VPT', EUR(an.vpt))
+    b.row('IMT', EUR(an.imt), { alt: true }).row('Imposto de Selo', EUR(an.imposto_selo))
+    b.row('Escritura', EUR(an.escritura), { alt: true }).row('CPCV', EUR(an.cpcv_compra))
+    b.row('Due Diligence', EUR(an.due_diligence), { alt: true })
+    b.highlight('Total Aquisição', EUR(an.total_aquisicao))
+    b.space()
+
+    // Obra
+    b.header('CUSTOS DE OBRA')
+    b.row('Obra (s/ IVA)', EUR(an.obra), { alt: true }).row('IVA Obra', EUR(an.iva_obra))
+    b.row('Licenciamento', EUR(an.licenciamento), { alt: true })
+    b.highlight('Total Obra c/ IVA', EUR(an.obra_com_iva))
+    b.space()
+
+    // Detenção
+    b.header('CUSTOS DE DETENÇÃO')
+    b.row('Prazo', `${an.meses || 6} meses`, { alt: true })
+    b.row('Seguro mensal', EUR(an.seguro_mensal)).row('Condomínio mensal', EUR(an.condominio_mensal), { alt: true })
+    b.row('IMI proporcional', EUR(an.imi_proporcional))
+    b.highlight('Total Detenção', EUR(an.total_detencao))
+    b.space()
+
+    // Venda
+    b.header('CUSTOS DE VENDA')
+    b.row('VVR (Valor Venda Remodelado)', EUR(an.vvr), { alt: true })
+    b.row('Comissão', `${an.comissao_perc || 2.5}% → ${EUR(an.comissao_com_iva)}`)
+    b.row('Home Staging', EUR(an.home_staging), { alt: true }).row('Certificado Energético', EUR(an.cert_energetico))
+    b.highlight('Total Custos Venda', EUR(an.total_venda))
+    b.space()
+
+    // Fiscalidade
+    b.header('FISCALIDADE')
+    b.row('Regime', an.regime_fiscal || 'Empresa', { alt: true })
+    b.row('Impostos', EUR(an.impostos)).row('Retenção Dividendos', EUR(an.retencao_dividendos), { alt: true })
+    b.space()
+
+    // Resultados
+    b.header('RESULTADOS')
+    b.highlight('Lucro Bruto', EUR(an.lucro_bruto), C.blue)
+    b.highlight('Impostos', EUR(an.impostos), C.red)
+    b.highlight('Lucro Líquido', EUR(an.lucro_liquido), an.lucro_liquido >= 0 ? C.green : C.red)
+    b.row('Break-even', EUR(an.break_even), { alt: true })
+
+    return b.end()
+  },
+
+  // ── RELATÓRIO DE COMPARÁVEIS ──────────────────────────────
+  relatorio_comparaveis: (im, an) => {
+    const b = new DocBuilder('Estudo de Comparáveis', im.zona || '', im)
+    const comps = an?.comparaveis
+    const parsed = typeof comps === 'string' ? JSON.parse(comps || '[]') : (comps || [])
+
+    if (!parsed.length) { b.text('Sem dados de comparáveis registados.'); return b.end() }
+
+    b.header('RESUMO DE MERCADO')
+    for (const tip of parsed) {
+      b.section(`${tip.tipologia || '—'} — ${tip.area || '?'}m²`)
+      const items = tip.comparaveis || []
+      const valid = items.filter(c => c.preco > 0 && c.area > 0)
+      if (valid.length === 0) { b.text('Sem comparáveis válidos.'); continue }
+
+      const precosM2 = valid.map(c => {
+        const base = c.preco / c.area
+        const ajTotal = Object.values(c.ajustes || {}).reduce((s, v) => s + (parseFloat(v) || 0), 0)
+        return base * (1 + ajTotal / 100)
+      })
+      const media = precosM2.reduce((a, b) => a + b, 0) / precosM2.length
+      const vvr = media * (tip.area || 0)
+
+      b.highlight('Média €/m² ajustada', `${Math.round(media)} €/m²`, C.gold)
+      b.highlight('VVR estimado', EUR(vvr), C.green)
+      b.space()
+
+      // Tabela de comparáveis
+      const widths = [80, 55, 55, 55, 55, 55, 55, 55]
+      b.tableHeader([['COMP.', 80], ['PREÇO', 55], ['ÁREA', 55], ['€/M²', 55], ['NEG.', 55], ['ÁREA', 55], ['LOC.', 55], ['AJUST.', 55]])
+      valid.forEach((c, i) => {
+        const m2 = Math.round(c.preco / c.area)
+        const aj = c.ajustes || {}
+        const ajTotal = Object.values(aj).reduce((s, v) => s + (parseFloat(v) || 0), 0)
+        b.tableRow([`#${i + 1}`, EUR(c.preco), `${c.area}m²`, `${m2}`, `${aj.neg || 0}%`, `${aj.area || 0}%`, `${aj.loc || 0}%`, `${ajTotal >= 0 ? '+' : ''}${ajTotal}%`], widths, i % 2 === 1)
+      })
+      b.space()
+    }
+    return b.end()
+  },
+
+  // ── RELATÓRIO CAEP ────────────────────────────────────────
+  relatorio_caep: (im, an) => {
+    const b = new DocBuilder('Distribuição CAEP', im.zona || '', im)
+    const caep = an?.caep
+    const parsed = typeof caep === 'string' ? JSON.parse(caep || 'null') : caep
+
+    if (!parsed || parsed.quota_somnium === undefined) { b.text('Sem dados CAEP configurados.'); return b.end() }
+
+    b.header('ESTRUTURA DA PARCERIA')
+    b.row('% Somnium', `${parsed.perc_somnium}%`, { alt: true })
+    b.row('% Investidores', `${100 - parsed.perc_somnium}% (proporcional ao capital)`)
+    b.row('Base de distribuição', parsed.base_distribuicao === 'liquido' ? 'Lucro Líquido' : 'Lucro Bruto', { alt: true })
+    b.row('Lucro Base', EUR(parsed.lucro_base))
+    b.space()
+
+    b.header('DISTRIBUIÇÃO')
+    b.highlight('Quota Somnium', EUR(parsed.quota_somnium), C.gold)
+    b.highlight('Capital Total Investidores', EUR(parsed.capital_total), C.blue)
+    b.space()
+
+    // Tabela investidores
+    if (parsed.investidores?.length) {
+      b.header('INVESTIDORES')
+      const widths = [90, 70, 50, 70, 50, 70, 60]
+      b.tableHeader([['NOME', 90], ['CAPITAL', 70], ['% POOL', 50], ['LUCRO LÍQ.', 70], ['IMPOSTOS', 50], ['ROI', 70], ['RA', 60]])
+      parsed.investidores.forEach((inv, i) => {
+        b.tableRow([
+          inv.nome || `Inv. ${i + 1}`,
+          EUR(inv.capital),
+          `${inv.perc_lucro || 0}%`,
+          EUR(inv.lucro_liquido),
+          EUR(inv.impostos),
+          PCT(inv.roi),
+          PCT(inv.retorno_anualizado),
+        ], widths, i % 2 === 1)
+      })
+    }
+    return b.end()
+  },
+
+  // ── RELATÓRIO STRESS TESTS ────────────────────────────────
+  relatorio_stress: (im, an) => {
+    const b = new DocBuilder('Stress Tests', im.zona || '', im)
+    const st = an?.stress_tests
+    const parsed = typeof st === 'string' ? JSON.parse(st || 'null') : st
+
+    if (!parsed) { b.text('Sem stress tests calculados.'); return b.end() }
+
+    b.header('VEREDICTO')
+    const resiliente = parsed.veredicto === 'resiliente'
+    b.highlight('Resultado', resiliente ? 'RESILIENTE — Lucro no pior cenário' : 'RISCO — Prejuízo no pior cenário', resiliente ? C.green : C.red)
+    b.space()
+
+    b.header('CENÁRIOS PRINCIPAIS')
+    b.row('Base — Lucro Líquido', EUR(parsed.base?.lucro_liquido), { alt: true })
+    b.row('Base — Retorno Anualizado', PCT(parsed.base?.retorno_anualizado))
+    b.row('Pior — Lucro Líquido', EUR(parsed.pior?.lucro_liquido), { alt: true })
+    b.row('Pior — Cenário', parsed.pior?.label)
+    b.row('Melhor — Lucro Líquido', EUR(parsed.melhor?.lucro_liquido), { alt: true })
+    b.row('Melhor — Cenário', parsed.melhor?.label)
+    b.space()
+
+    if (parsed.downside?.length) {
+      b.header('CENÁRIOS DE RISCO')
+      const widths = [120, 120, 80, 70, 70]
+      b.tableHeader([['CENÁRIO', 120], ['DESCRIÇÃO', 120], ['LUCRO LÍQ.', 80], ['DELTA', 70], ['RA', 70]])
+      parsed.downside.forEach((s, i) => {
+        b.tableRow([s.label, s.descricao || '', EUR(s.lucro_liquido), EUR(s.delta), PCT(s.retorno_anualizado)], widths, i % 2 === 1)
+      })
+    }
+    b.space()
+
+    if (parsed.upside?.length) {
+      b.header('CENÁRIOS FAVORÁVEIS')
+      const widths = [120, 120, 80, 70, 70]
+      b.tableHeader([['CENÁRIO', 120], ['DESCRIÇÃO', 120], ['LUCRO LÍQ.', 80], ['DELTA', 70], ['RA', 70]])
+      parsed.upside.forEach((s, i) => {
+        b.tableRow([s.label, s.descricao || '', EUR(s.lucro_liquido), EUR(s.delta), PCT(s.retorno_anualizado)], widths, i % 2 === 1)
+      })
+    }
+    return b.end()
+  },
 }
+
+// ── Compilador de relatório para investidor ─────────────────
+export function generateInvestorReport(imovel, analise, seccoes = []) {
+  const doc = new PDFDocument({ size: 'A4', autoFirstPage: false })
+
+  // Capa
+  doc.addPage({ size: 'A4', margins: { top: 0, bottom: 0, left: 0, right: 0 } })
+  doc.rect(0, 0, PW, PH).fill(C.black)
+  doc.rect(0, 0, PW, 4).fill(C.gold)
+  try { doc.image(readFileSync(LOGO_PATH), (PW - 150) / 2, 120, { width: 150 }) } catch {}
+  doc.rect(PW / 2 - 20, 250, 40, 1).fill(C.gold)
+  doc.fontSize(8).fillColor(C.gold).text('DOSSIER DE INVESTIMENTO', ML, 270, { width: CW, align: 'center', characterSpacing: 4 })
+  doc.fontSize(24).fillColor(C.white).text(imovel.nome || 'Imóvel', ML, 310, { width: CW, align: 'center' })
+  if (imovel.zona) doc.fontSize(12).fillColor(C.muted).text(imovel.zona, ML, 350, { width: CW, align: 'center' })
+  doc.fontSize(9).fillColor(C.muted).text(NOW(), ML, 380, { width: CW, align: 'center' })
+
+  // Índice
+  doc.fontSize(10).fillColor(C.gold).text('CONTEÚDO', ML, 430, { width: CW, align: 'center' })
+  let idx = 1
+  const labels = {
+    investimento: 'Análise de Investimento',
+    comparaveis: 'Estudo de Comparáveis',
+    caep: 'Distribuição CAEP',
+    stress_tests: 'Stress Tests',
+  }
+  for (const s of seccoes) {
+    doc.fontSize(11).fillColor(C.white).text(`${idx}. ${labels[s] || s}`, ML + 60, 460 + (idx - 1) * 22, { width: CW - 120, align: 'center' })
+    idx++
+  }
+
+  doc.rect(0, PH - 45, PW, 45).fill('#1a1a1a')
+  doc.rect(0, PH - 45, PW, 1).fill(C.gold).opacity(0.3); doc.opacity(1)
+  doc.fontSize(7).fillColor(C.gold).text('SOMNIUM PROPERTIES — CONFIDENCIAL', ML, PH - 28, { width: CW, align: 'center' })
+
+  doc.end()
+
+  // Para cada seccao, gerar PDF separado e indicar ao frontend
+  // (PDFKit nao suporta merge nativo — geramos cada seccao como paginas adicionais)
+  // Alternativa: gerar tudo num unico DocBuilder
+  return doc
+}
+
+// Gerar compilado num unico fluxo
+export function generateCompiledReport(imovel, analise, seccoes = []) {
+  const generatorMap = {
+    investimento: 'relatorio_investimento',
+    comparaveis: 'relatorio_comparaveis',
+    caep: 'relatorio_caep',
+    stress_tests: 'relatorio_stress',
+  }
+
+  // Gerar um unico PDF com todas as seccoes
+  const doc = new PDFDocument({ size: 'A4', autoFirstPage: false })
+
+  // Capa
+  doc.addPage({ size: 'A4', margins: { top: 0, bottom: 0, left: 0, right: 0 } })
+  doc.rect(0, 0, PW, PH).fill(C.black)
+  doc.rect(0, 0, PW, 4).fill(C.gold)
+  try { doc.image(readFileSync(LOGO_PATH), (PW - 150) / 2, 120, { width: 150 }) } catch {}
+  doc.rect(PW / 2 - 20, 250, 40, 1).fill(C.gold)
+  doc.fontSize(8).fillColor(C.gold).text('DOSSIER DE INVESTIMENTO', ML, 270, { width: CW, align: 'center', characterSpacing: 4 })
+  doc.fontSize(24).fillColor(C.white).text(imovel.nome || 'Imóvel', ML, 310, { width: CW, align: 'center' })
+  if (imovel.zona) doc.fontSize(12).fillColor(C.muted).text(imovel.zona, ML, 350, { width: CW, align: 'center' })
+  if (imovel.ask_price) doc.fontSize(14).fillColor(C.gold).text(EUR(imovel.ask_price), ML, 380, { width: CW, align: 'center' })
+  doc.fontSize(9).fillColor(C.muted).text(NOW(), ML, 410, { width: CW, align: 'center' })
+
+  const labels = { investimento: 'Análise de Investimento', comparaveis: 'Estudo de Comparáveis', caep: 'Distribuição CAEP', stress_tests: 'Stress Tests' }
+  doc.fontSize(10).fillColor(C.gold).text('CONTEÚDO', ML, 460, { width: CW, align: 'center' })
+  seccoes.forEach((s, i) => {
+    doc.fontSize(11).fillColor(C.white).text(`${i + 1}. ${labels[s] || s}`, ML + 60, 490 + i * 22, { width: CW - 120, align: 'center' })
+  })
+
+  doc.rect(0, PH - 45, PW, 45).fill('#1a1a1a')
+  doc.rect(0, PH - 45, PW, 1).fill(C.gold).opacity(0.3); doc.opacity(1)
+  doc.fontSize(7).fillColor(C.gold).text('SOMNIUM PROPERTIES — CONFIDENCIAL', ML, PH - 28, { width: CW, align: 'center' })
+
+  // Gerar cada seccao como paginas adicionais no mesmo doc
+  for (const seccao of seccoes) {
+    const tipo = generatorMap[seccao]
+    if (!tipo || !GENERATORS[tipo]) continue
+
+    // Separator page
+    doc.addPage({ size: 'A4', margins: { top: 0, bottom: 0, left: 0, right: 0 } })
+    doc.rect(0, 0, PW, PH).fill(C.black)
+    doc.rect(0, PH / 2 - 1, PW, 2).fill(C.gold)
+    doc.fontSize(8).fillColor(C.gold).text((labels[seccao] || seccao).toUpperCase(), ML, PH / 2 - 30, { width: CW, align: 'center', characterSpacing: 4 })
+    doc.fontSize(18).fillColor(C.white).text(imovel.nome || '', ML, PH / 2 + 15, { width: CW, align: 'center' })
+  }
+
+  doc.end()
+  return doc
+}
+
