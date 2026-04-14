@@ -23,6 +23,8 @@ app.use('/api', async (req, res, next) => {
   if (req.path.startsWith('/webhook/')) return next()
   // Cron jobs manuais e templates — acesso interno
   if (req.path.startsWith('/cron/') || req.path.startsWith('/template/') || req.path.startsWith('/relatorios') || req.path.startsWith('/reactivacao')) return next()
+  // PDFs e documentos — abrem em nova janela sem token
+  if (req.path.includes('/relatorio') || req.path.includes('/documento/')) return next()
   // Se não há service key configurada, deixar passar (dev mode)
   if (!supabaseAdmin) return next()
   // Token via header Authorization OU via query string (para PDFs abertos em novo tab)
