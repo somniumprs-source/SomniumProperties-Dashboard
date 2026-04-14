@@ -1082,13 +1082,13 @@ function NegocioForm({ item, onSave, onCancel }) {
   const isNew = !item.id
   // Normalizar: aceitar tanto snake_case (DB) como camelCase (API mapped)
   const initPag = item.pagamentos_faseados ?? item.pagamentosFaseados ?? '[]'
+  const pagStr = typeof initPag === 'string' ? initPag : JSON.stringify(initPag)
   const [f, setF] = useState({
     movimento: '', categoria: '', fase: '', lucro_estimado: '', lucro_real: '',
     custo_real_obra: '', capital_total: '', n_investidores: '', pagamento_em_falta: 1,
     data: '', data_compra: '', data_estimada_venda: '', data_venda: '', notas: '',
-    pagamentos_faseados: typeof initPag === 'string' ? initPag : JSON.stringify(initPag),
     ...item,
-    pagamentos_faseados: typeof initPag === 'string' ? initPag : JSON.stringify(initPag),
+    pagamentos_faseados: pagStr,
   })
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const inputClass = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
