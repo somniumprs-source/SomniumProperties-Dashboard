@@ -10,3 +10,4 @@ data/
 backups/
 public/uploads/despesas/*
 !public/uploads/.gitkeep
+.claude/settings.local.json
