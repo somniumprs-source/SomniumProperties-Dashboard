@@ -19,9 +19,11 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
 const supabaseAdmin = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null
 
 app.use('/api', async (req, res, next) => {
+  // CRM API — usa PostgreSQL directamente, sem auth Supabase
+  if (req.path.startsWith('/crm/')) return next()
   // Webhook Twilio — sem autenticação (Twilio não envia token Supabase)
   if (req.path.startsWith('/webhook/')) return next()
-  // Cron jobs manuais e templates — acesso interno
+  // Cron jobs, templates, relatórios, reactivação — acesso interno
   if (req.path.startsWith('/cron/') || req.path.startsWith('/template/') || req.path.startsWith('/relatorios') || req.path.startsWith('/reactivacao')) return next()
   // PDFs e documentos — abrem em nova janela sem token
   if (req.path.includes('/relatorio') || req.path.includes('/documento/')) return next()
