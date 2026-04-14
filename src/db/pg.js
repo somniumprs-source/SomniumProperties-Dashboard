@@ -378,6 +378,7 @@ export async function initSchema() {
       DO $$ BEGIN
         ALTER TABLE consultores ADD COLUMN IF NOT EXISTS canal_followup TEXT DEFAULT 'whatsapp_auto';
         ALTER TABLE consultores ADD COLUMN IF NOT EXISTS controlo_manual BOOLEAN DEFAULT false;
+        ALTER TABLE consultores ADD COLUMN IF NOT EXISTS reactivado BOOLEAN DEFAULT false;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 

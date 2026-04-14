@@ -22,7 +22,7 @@ app.use('/api', async (req, res, next) => {
   // Webhook Twilio — sem autenticação (Twilio não envia token Supabase)
   if (req.path.startsWith('/webhook/')) return next()
   // Cron jobs manuais e templates — acesso interno
-  if (req.path.startsWith('/cron/') || req.path.startsWith('/template/') || req.path.startsWith('/relatorios')) return next()
+  if (req.path.startsWith('/cron/') || req.path.startsWith('/template/') || req.path.startsWith('/relatorios') || req.path.startsWith('/reactivacao')) return next()
   // Se não há service key configurada, deixar passar (dev mode)
   if (!supabaseAdmin) return next()
   // Token via header Authorization OU via query string (para PDFs abertos em novo tab)
@@ -101,6 +101,72 @@ try {
     // Endpoint para obter template de reactivação
     app.get('/api/template/reactivacao/:nome', (req, res) => {
       res.json({ template: REACTIVATION_TEMPLATE(req.params.nome) })
+    })
+
+    // ── Reactivação em massa (20/dia) ─────────────────────────
+    app.post('/api/reactivacao/enviar', async (req, res) => {
+      try {
+        const { query: pgQuery } = await import('./src/db/pg.js')
+        const limite = req.body?.limite || 20
+        const { sendWhatsApp } = await import('./src/db/whatsappAgent.js')
+
+        // Buscar consultores com contacto que ainda nao foram reactivados
+        const { rows: consultores } = await pgQuery(
+          "SELECT id, nome, contacto FROM consultores WHERE reactivado = false AND contacto IS NOT NULL AND contacto != '' ORDER BY classificacao ASC, score_prioridade DESC LIMIT $1",
+          [limite]
+        )
+
+        if (consultores.length === 0) {
+          return res.json({ ok: true, enviados: 0, faltam: 0, mensagem: 'Todos os consultores já foram reactivados' })
+        }
+
+        const { randomUUID } = await import('crypto')
+        const enviados = []
+        const erros = []
+        const now = new Date().toISOString()
+
+        for (const c of consultores) {
+          try {
+            const msg = REACTIVATION_TEMPLATE(c.nome.split(' ')[0])
+            const result = await sendWhatsApp(c.contacto, msg)
+            if (result) {
+              // Marcar como reactivado
+              await pgQuery('UPDATE consultores SET reactivado = true, updated_at = $1 WHERE id = $2', [now, c.id])
+              // Registar no log de interacoes
+              await pgQuery(
+                'INSERT INTO consultor_interacoes (id, consultor_id, data_hora, canal, direcao, notas) VALUES ($1, $2, $3, $4, $5, $6)',
+                [randomUUID(), c.id, now, 'whatsapp', 'Enviado', `[REACTIVAÇÃO] ${msg}`]
+              )
+              enviados.push({ nome: c.nome, contacto: c.contacto })
+            } else {
+              erros.push({ nome: c.nome, contacto: c.contacto, erro: 'Envio falhou' })
+            }
+          } catch (e) {
+            erros.push({ nome: c.nome, contacto: c.contacto, erro: e.message })
+          }
+        }
+
+        // Contar quantos faltam
+        const { rows: [{ c: faltam }] } = await pgQuery("SELECT COUNT(*) as c FROM consultores WHERE reactivado = false AND contacto IS NOT NULL AND contacto != ''")
+
+        res.json({ ok: true, enviados: enviados.length, erros: erros.length, faltam: parseInt(faltam), detalhes: { enviados, erros } })
+      } catch (e) { res.status(500).json({ error: e.message }) }
+    })
+
+    app.get('/api/reactivacao/estado', async (req, res) => {
+      try {
+        const { query: pgQuery } = await import('./src/db/pg.js')
+        const { rows: [total] } = await pgQuery("SELECT COUNT(*) as c FROM consultores WHERE contacto IS NOT NULL AND contacto != ''")
+        const { rows: [reactivados] } = await pgQuery("SELECT COUNT(*) as c FROM consultores WHERE reactivado = true")
+        const { rows: [faltam] } = await pgQuery("SELECT COUNT(*) as c FROM consultores WHERE reactivado = false AND contacto IS NOT NULL AND contacto != ''")
+        const { rows: [ultimo] } = await pgQuery("SELECT data_hora FROM consultor_interacoes WHERE notas LIKE '%REACTIVAÇÃO%' ORDER BY data_hora DESC LIMIT 1")
+        res.json({
+          total: parseInt(total.c),
+          reactivados: parseInt(reactivados.c),
+          faltam: parseInt(faltam.c),
+          ultimo_envio: ultimo?.data_hora || null,
+        })
+      } catch (e) { res.status(500).json({ error: e.message }) }
     })
 
     // Endpoint para listar relatórios guardados

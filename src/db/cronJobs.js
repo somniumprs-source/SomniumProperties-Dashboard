@@ -19,12 +19,10 @@ const FOLLOWUP_RULES = {
 }
 
 // ── Template de reactivação ─────────────────────────────────
-const REACTIVATION_TEMPLATE = (nome) => `Olá ${nome}, sou o Alexandre da Somnium Properties — mudei de contacto, daí o número novo.
-Já tínhamos falado antes e continuo à procura de imóveis em zonas específicas.
-Procuramos imóveis com potencial de negociação — construção antiga ou que precisem de obras, onde haja margem no preço. Se o proprietário precisar de vender rápido ainda melhor.
-Zonas: Concelho de Coimbra, zona central de Condeixa-a-Nova e Ventosa do Bairro (Mealhada).
-Valor máximo de aquisição: 250.000€.
-Se cruzares com algo assim, fala connosco.`
+const REACTIVATION_TEMPLATE = (nome) => `Olá ${nome}, sou o Alexandre da Somnium Properties — mudei de contacto (antes era o 925 323 797), daí o número novo.
+Continuo à procura de imóveis com potencial de negociação — construção antiga ou que precisem de obras, onde haja margem no preço. Se o proprietário precisar de vender rápido, ainda melhor.
+Zonas: Concelho de Coimbra, zona central de Condeixa-a-Nova e Ventosa do Bairro (Mealhada). Valor máximo: 250.000€.
+Se cruzares com algo assim, fala comigo.`
 
 // ── JOB 1: Follow-up diário (08:00 Europe/Lisbon) ──────────
 async function runFollowUp() {
