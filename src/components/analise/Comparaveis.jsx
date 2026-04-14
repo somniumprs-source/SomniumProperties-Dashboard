@@ -13,7 +13,15 @@ export function Comparaveis({ analise, onUpdate }) {
 
   useEffect(() => {
     const raw = analise?.comparaveis
-    const parsed = typeof raw === 'string' ? JSON.parse(raw || '[]') : (raw || [])
+    let parsed = []
+    try {
+      parsed = typeof raw === 'string' ? JSON.parse(raw || '[]') : (raw || [])
+      if (!Array.isArray(parsed)) parsed = []
+      // Validate structure: each entry must have comparaveis array
+      parsed = parsed.filter(t => t && Array.isArray(t.comparaveis))
+    } catch {
+      parsed = []
+    }
     if (parsed.length > 0) {
       setTipologias(parsed)
       setTipCount(parsed.length)
@@ -121,33 +129,53 @@ export function Comparaveis({ analise, onUpdate }) {
 
             <div className="px-4 py-3 space-y-3">
               {tip.comparaveis.map((comp, cIdx) => (
-                <div key={cIdx} className="grid grid-cols-12 gap-2 items-center text-xs border-b border-gray-50 pb-2">
-                  <span className="col-span-1 text-gray-300 font-semibold">{cIdx + 1}</span>
-                  <div className="col-span-2">
-                    <label className="text-gray-400">Preço</label>
-                    <input type="number" value={comp.preco || ''} onChange={e => updateComp(tIdx, cIdx, 'preco', parseFloat(e.target.value) || 0)}
-                      className="w-full border rounded px-2 py-1 font-mono" />
+                <div key={cIdx} className="border-b border-gray-50 pb-2 space-y-1">
+                  <div className="grid grid-cols-12 gap-2 items-center text-xs">
+                    <span className="col-span-1 text-gray-300 font-semibold">
+                      {comp.link ? (
+                        <a href={comp.link} target="_blank" rel="noopener noreferrer"
+                          className="text-[#C9A84C] hover:underline cursor-pointer">{cIdx + 1}</a>
+                      ) : (cIdx + 1)}
+                    </span>
+                    <div className="col-span-2">
+                      <label className="text-gray-400">Preço</label>
+                      <input type="number" value={comp.preco || ''} onChange={e => updateComp(tIdx, cIdx, 'preco', parseFloat(e.target.value) || 0)}
+                        className="w-full border rounded px-2 py-1 font-mono" />
+                    </div>
+                    <div className="col-span-1">
+                      <label className="text-gray-400">Área</label>
+                      <input type="number" value={comp.area || ''} onChange={e => updateComp(tIdx, cIdx, 'area', parseFloat(e.target.value) || 0)}
+                        className="w-full border rounded px-2 py-1 font-mono" />
+                    </div>
+                    <div className="col-span-6 grid grid-cols-6 gap-1">
+                      {['neg', 'area', 'loc', 'idade', 'conserv', 'outros'].map(aj => (
+                        <div key={aj}>
+                          <label className="text-gray-300 capitalize">{aj}</label>
+                          <input type="number" step="1" value={comp.ajustes?.[aj] || ''}
+                            onChange={e => updateComp(tIdx, cIdx, `ajuste_${aj}`, parseFloat(e.target.value) || 0)}
+                            className="w-full border rounded px-1 py-1 font-mono text-center" />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-gray-400">€/m²</label>
+                      <p className="font-mono text-gray-600">
+                        {comp.preco > 0 && comp.area > 0 ? Math.round(comp.preco / comp.area) : '—'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="col-span-1">
-                    <label className="text-gray-400">Área</label>
-                    <input type="number" value={comp.area || ''} onChange={e => updateComp(tIdx, cIdx, 'area', parseFloat(e.target.value) || 0)}
-                      className="w-full border rounded px-2 py-1 font-mono" />
-                  </div>
-                  <div className="col-span-6 grid grid-cols-6 gap-1">
-                    {['neg', 'area', 'loc', 'idade', 'conserv', 'outros'].map(aj => (
-                      <div key={aj}>
-                        <label className="text-gray-300 capitalize">{aj}</label>
-                        <input type="number" step="1" value={comp.ajustes?.[aj] || ''}
-                          onChange={e => updateComp(tIdx, cIdx, `ajuste_${aj}`, parseFloat(e.target.value) || 0)}
-                          className="w-full border rounded px-1 py-1 font-mono text-center" />
-                      </div>
-                    ))}
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-gray-400">€/m²</label>
-                    <p className="font-mono text-gray-600">
-                      {comp.preco > 0 && comp.area > 0 ? Math.round(comp.preco / comp.area) : '—'}
-                    </p>
+                  <div className="grid grid-cols-12 gap-2 items-center text-xs">
+                    <span className="col-span-1" />
+                    <div className="col-span-7">
+                      <input type="url" value={comp.link || ''} placeholder="Link do anúncio"
+                        onChange={e => updateComp(tIdx, cIdx, 'link', e.target.value)}
+                        className="w-full border border-gray-100 rounded px-2 py-1 text-gray-500 placeholder-gray-300 truncate" />
+                    </div>
+                    <div className="col-span-4">
+                      <input type="text" value={comp.notas || ''} placeholder="Notas"
+                        onChange={e => updateComp(tIdx, cIdx, 'notas', e.target.value)}
+                        className="w-full border border-gray-100 rounded px-2 py-1 text-gray-500 placeholder-gray-300" />
+                    </div>
                   </div>
                 </div>
               ))}

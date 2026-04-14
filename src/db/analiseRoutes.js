@@ -315,16 +315,34 @@ async function propagarParaImovel(imovelId, calculados, inputs) {
       [vvr, obraComIva, roi, roiAnualizado, new Date().toISOString(), imovelId]
     )
 
-    // Actualizar negócios associados
-    const { rows: negocios } = await pool.query('SELECT id FROM negocios WHERE imovel_id = $1', [imovelId])
+    // Actualizar negócios associados (respeitando modelo de negócio)
+    const { rows: negocios } = await pool.query('SELECT id, categoria, comissao_pct FROM negocios WHERE imovel_id = $1', [imovelId])
+    const lucroBruto = calculados.lucro_bruto || 0
+    const now = new Date().toISOString()
+
     for (const neg of negocios) {
+      let lucroEstimado = 0
+
+      if (neg.categoria === 'Wholesalling') {
+        // Wholesaling: fee = % do lucro bruto F&F (default 10%)
+        const pct = neg.comissao_pct || 10
+        lucroEstimado = Math.round(lucroBruto * (pct / 100) * 100) / 100
+      } else if (neg.categoria === 'Mediação Imobiliária') {
+        // Mediação: comissão % sobre valor de venda
+        const pct = neg.comissao_pct || 2.5
+        lucroEstimado = Math.round(vvr * (pct / 100) * 100) / 100
+      } else if (neg.categoria === 'CAEP') {
+        // CAEP: 2/3 da quota activa (split definido no negócio)
+        const split = parseFloat(neg.comissao_pct) || 40
+        const quotaActiva = lucroBruto * (split / 100)
+        lucroEstimado = Math.round(quotaActiva * (2 / 3) * 100) / 100
+      } else {
+        lucroEstimado = calculados.lucro_liquido || 0
+      }
+
       await pool.query(
-        `UPDATE negocios SET
-          lucro_estimado = $1,
-          capital_total = $2,
-          updated_at = $3
-        WHERE id = $4`,
-        [calculados.lucro_liquido || 0, calculados.capital_necessario || 0, new Date().toISOString(), neg.id]
+        `UPDATE negocios SET lucro_estimado = $1, capital_total = 0, updated_at = $2 WHERE id = $3`,
+        [lucroEstimado, now, neg.id]
       )
     }
   } catch (e) {
