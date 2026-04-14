@@ -19,6 +19,10 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
 const supabaseAdmin = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null
 
 app.use('/api', async (req, res, next) => {
+  // Webhook Twilio — sem autenticação (Twilio não envia token Supabase)
+  if (req.path.startsWith('/webhook/')) return next()
+  // Cron jobs manuais e templates — acesso interno
+  if (req.path.startsWith('/cron/') || req.path.startsWith('/template/') || req.path.startsWith('/relatorios')) return next()
   // Se não há service key configurada, deixar passar (dev mode)
   if (!supabaseAdmin) return next()
   // Token via header Authorization OU via query string (para PDFs abertos em novo tab)
