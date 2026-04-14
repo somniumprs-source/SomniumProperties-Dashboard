@@ -20,6 +20,7 @@ function mapNegocio(r) {
     consultorIds: r.consultor_ids ? JSON.parse(r.consultor_ids) : [],
     notas: r.notas, quotaSomnium: r.quota_somnium || 0,
     capitalTotal: r.capital_total || 0, nInvestidores: r.n_investidores || 0,
+    pagamentosFaseados: (() => { try { return typeof r.pagamentos_faseados === 'string' ? JSON.parse(r.pagamentos_faseados) : (r.pagamentos_faseados || []) } catch { return [] } })(),
   }
 }
 

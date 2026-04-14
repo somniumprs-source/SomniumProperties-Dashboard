@@ -167,19 +167,50 @@ export function DetailPanel({ type, id, onClose, onSave }) {
           {/* Key fields */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {type === 'Imóveis' && <>
-              <Field label="Estado" value={data.estado?.replace(/^\d+-/, '')} />
-              <Field label="Ask Price" value={data.ask_price > 0 ? EUR(data.ask_price) : '—'} />
-              <Field label="Valor Proposta" value={data.valor_proposta > 0 ? EUR(data.valor_proposta) : '—'} />
-              <Field label="ROI" value={data.roi > 0 ? `${data.roi}%` : '—'} />
-              <Field label="Zona" value={data.zona} />
-              <Field label="Tipologia" value={data.tipologia} />
-              <Field label="Modelo" value={data.modelo_negocio} />
-              <Field label="Origem" value={data.origem} />
-              <Field label="Consultor" value={data.nome_consultor} />
-              <Field label="Data Adicionado" value={data.data_adicionado} />
-              <Field label="Data Chamada" value={data.data_chamada} />
-              <Field label="Data Visita" value={data.data_visita} />
-              <Field label="Data Proposta" value={data.data_proposta} />
+              {editing ? <>
+                <EF label="Nome" field="nome" form={form} set={setField} />
+                <EF label="Estado" field="estado" form={form} set={setField} type="select" options={['Adicionado','Chamada Não Atendida','Pendentes','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa']} />
+                <EF label="Ask Price (€)" field="ask_price" form={form} set={setField} type="number" />
+                <EF label="Valor Proposta (€)" field="valor_proposta" form={form} set={setField} type="number" />
+                <EF label="Tipologia" field="tipologia" form={form} set={setField} />
+                <EF label="Área Útil (m²)" field="area_util" form={form} set={setField} type="number" />
+                <EF label="Área Bruta (m²)" field="area_bruta" form={form} set={setField} type="number" />
+                <EF label="Zona" field="zona" form={form} set={setField} />
+                <EF label="Modelo de Negócio" field="modelo_negocio" form={form} set={setField} type="select" options={['Wholesaling','Fix & Flip','CAEP','Mediação']} />
+                <EF label="Origem" field="origem" form={form} set={setField} type="select" options={['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro']} />
+                <EF label="Consultor" field="nome_consultor" form={form} set={setField} />
+                <EF label="Link" field="link" form={form} set={setField} />
+                <EF label="Data Adicionado" field="data_adicionado" form={form} set={setField} type="date" />
+                <EF label="Data Chamada" field="data_chamada" form={form} set={setField} type="date" />
+                <EF label="Data Visita" field="data_visita" form={form} set={setField} type="date" />
+                <EF label="Data Estudo Mercado" field="data_estudo_mercado" form={form} set={setField} type="date" />
+                <EF label="Data Proposta" field="data_proposta" form={form} set={setField} type="date" />
+                <EF label="Data Proposta Aceite" field="data_proposta_aceite" form={form} set={setField} type="date" />
+                <EF label="Data Follow Up" field="data_follow_up" form={form} set={setField} type="date" />
+                <EF label="Data Aceite Investidor" field="data_aceite_investidor" form={form} set={setField} type="date" />
+                <div className="col-span-2 md:col-span-3">
+                  <label className="text-xs text-gray-400 block mb-1">Notas</label>
+                  <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={4}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                </div>
+              </> : <>
+                <Field label="Estado" value={data.estado?.replace(/^\d+-/, '')} />
+                <Field label="Ask Price" value={data.ask_price > 0 ? EUR(data.ask_price) : '—'} />
+                <Field label="Valor Proposta" value={data.valor_proposta > 0 ? EUR(data.valor_proposta) : '—'} />
+                <Field label="ROI" value={data.roi > 0 ? `${data.roi}%` : '—'} />
+                <Field label="Zona" value={data.zona} />
+                <Field label="Tipologia" value={data.tipologia} />
+                <Field label="Modelo" value={data.modelo_negocio} />
+                <Field label="Origem" value={data.origem} />
+                <Field label="Consultor" value={data.nome_consultor} />
+                <Field label="Link" value={data.link ? <a href={data.link} target="_blank" rel="noopener noreferrer" className="text-[#C9A84C] hover:underline truncate block">{data.link === 'OFF MARKET' ? 'OFF MARKET' : 'Ver anúncio'}</a> : '—'} />
+                <Field label="Área Útil" value={data.area_util > 0 ? `${data.area_util} m²` : '—'} />
+                <Field label="Área Bruta" value={data.area_bruta > 0 ? `${data.area_bruta} m²` : '—'} />
+                <Field label="Data Adicionado" value={data.data_adicionado} />
+                <Field label="Data Chamada" value={data.data_chamada} />
+                <Field label="Data Visita" value={data.data_visita} />
+                <Field label="Data Proposta" value={data.data_proposta} />
+              </>}
             </>}
             {type === 'Investidores' && <>
               {editing ? <>
@@ -244,7 +275,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
             </>}
           </div>
 
-          {editing && type !== 'Investidores' && (
+          {editing && type === 'Consultores' && (
             <div>
               <label className="text-xs text-gray-400 block mb-1">Notas</label>
               <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={4}
@@ -258,20 +289,44 @@ export function DetailPanel({ type, id, onClose, onSave }) {
             </div>
           )}
 
-          {/* Relações */}
+          {/* Relações — Negócios Associados (resumo) */}
           {data.negocios?.length > 0 && (
             <div>
               <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Negócios Associados</p>
               <div className="space-y-2">
-                {data.negocios.map(n => (
-                  <div key={n.id} className="flex items-center justify-between bg-indigo-50 rounded-lg px-3 py-2">
-                    <span className="text-sm font-medium text-indigo-800">{n.movimento}</span>
-                    <div className="flex gap-3 text-xs">
-                      <span className="text-indigo-600">{n.categoria}</span>
-                      <span className="font-mono">{EUR(n.lucro_estimado)}</span>
+                {data.negocios.map(n => {
+                  let pags = []
+                  try { pags = typeof n.pagamentos_faseados === 'string' ? JSON.parse(n.pagamentos_faseados || '[]') : (n.pagamentos_faseados || []) } catch {}
+                  const totalPags = pags.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
+                  const recebido = pags.filter(p => p.recebido).reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
+                  return (
+                    <div key={n.id} className="bg-indigo-50 rounded-lg px-3 py-2 border border-indigo-100">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-indigo-800">{n.movimento}</span>
+                        <div className="flex gap-3 text-xs items-center">
+                          <span className="text-indigo-600">{n.categoria}</span>
+                          <span className="font-mono font-semibold">{EUR(n.lucro_estimado)}</span>
+                        </div>
+                      </div>
+                      {pags.length > 0 && (
+                        <div className="mt-1.5 space-y-1">
+                          {pags.map((p, i) => {
+                            const atrasado = !p.recebido && p.data && new Date(p.data) < new Date()
+                            return (
+                              <div key={i} className={`flex items-center justify-between text-xs px-2 py-1 rounded ${
+                                p.recebido ? 'bg-green-50 text-green-700' : atrasado ? 'bg-red-50 text-red-700' : 'bg-white text-gray-600'
+                              }`}>
+                                <span>{p.recebido ? '✓' : atrasado ? '!' : '○'} {p.descricao || 'Pagamento'}</span>
+                                <span className="font-mono">{EUR(p.valor)} — {p.data || 'sem data'}</span>
+                              </div>
+                            )
+                          })}
+                          <p className="text-[10px] text-gray-400 mt-0.5">{EUR(recebido)} de {EUR(totalPags)} recebido — editar no Financeiro</p>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}

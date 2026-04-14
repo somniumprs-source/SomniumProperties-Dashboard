@@ -336,6 +336,12 @@ export async function initSchema() {
         updated_at TEXT DEFAULT (NOW()::TEXT)
       );
 
+      -- Migration: adicionar pagamentos faseados à tabela negocios
+      DO $$ BEGIN
+        ALTER TABLE negocios ADD COLUMN IF NOT EXISTS pagamentos_faseados JSONB DEFAULT '[]';
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
       -- Migration: adicionar campos GCal à tabela tarefas existente
       DO $$ BEGIN
         ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS gcal_event_id TEXT;

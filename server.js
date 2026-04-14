@@ -428,6 +428,54 @@ app.get('/api/kpis/financeiro', async (req, res) => {
       lucroEst: round2(negócios.filter(n => n.fase === f).reduce((s,n) => s + n.lucroEstimado, 0)),
     }))
 
+    // Alertas
+    const hoje = new Date()
+    const alertas = []
+
+    // Runway alert
+    if (runway !== null && runway < 3) alertas.push({ tipo: 'critico', msg: `Runway crítico: ${runway.toFixed(1)} meses`, icon: '🔴' })
+    else if (runway !== null && runway < 6) alertas.push({ tipo: 'aviso', msg: `Runway baixo: ${runway.toFixed(1)} meses`, icon: '🟡' })
+
+    // Tranches atrasadas
+    const tranchesAtrasadas = []
+    for (const n of negócios) {
+      for (const p of (n.pagamentosFaseados || [])) {
+        if (!p.recebido && p.data && new Date(p.data) < hoje) {
+          tranchesAtrasadas.push({ negocio: n.movimento, descricao: p.descricao, valor: parseFloat(p.valor) || 0, data: p.data, dias: Math.floor((hoje - new Date(p.data)) / 86400000) })
+        }
+      }
+    }
+    if (tranchesAtrasadas.length > 0) {
+      const totalAtrasado = round2(tranchesAtrasadas.reduce((s, t) => s + t.valor, 0))
+      alertas.push({ tipo: 'aviso', msg: `${tranchesAtrasadas.length} tranche(s) atrasada(s): ${totalAtrasado.toLocaleString('pt-PT')} €`, icon: '⏰' })
+    }
+
+    // Concentração de risco
+    const topDeal = negócios.reduce((max, n) => n.lucroEstimado > max.lucroEstimado ? n : max, { lucroEstimado: 0 })
+    const concentracao = lucroEstimadoTotal > 0 ? round2(topDeal.lucroEstimado / lucroEstimadoTotal * 100) : 0
+    if (concentracao > 60) alertas.push({ tipo: 'aviso', msg: `${concentracao}% do pipeline concentrado em "${topDeal.movimento}"`, icon: '⚠️' })
+
+    // YTD
+    const anoActual = hoje.getFullYear()
+    const ytdReal = round2(negócios.filter(n => n.dataVenda && new Date(n.dataVenda).getFullYear() === anoActual).reduce((s, n) => s + n.lucroReal, 0))
+    const ytdDespesas = round2(burnRate * (hoje.getMonth() + 1))
+    const ytdResultado = round2(ytdReal - ytdDespesas)
+
+    // Enrich negociosLista with relation names (defensive)
+    let negociosEnriquecidos = negócios
+    try {
+      const [imoveis, consultores, investidores] = await Promise.all([getImóveis(), getConsultores(), getInvestidores()])
+      const imovelMap = Object.fromEntries(imoveis.map(i => [i.id, i.nome]))
+      const consultorMap = Object.fromEntries(consultores.map(c => [c.id, c.nome]))
+      const investidorMap = Object.fromEntries(investidores.map(i => [i.id, i.nome]))
+      negociosEnriquecidos = negócios.map(n => ({
+        ...n,
+        imovelNome: n.imovel?.[0] ? (imovelMap[n.imovel[0]] || null) : null,
+        consultorNome: n.consultorIds?.[0] ? (consultorMap[n.consultorIds[0]] || null) : null,
+        investidorNome: n.investidor?.[0] ? (investidorMap[n.investidor[0]] || null) : null,
+      }))
+    } catch (e) { console.error('[financeiro] Enrich error:', e.message) }
+
     res.json({
       lucroEstimadoTotal, lucroRealTotal, lucroPendente,
       burnRate, despesasAnuaisTotal, runway,
@@ -435,7 +483,9 @@ app.get('/api/kpis/financeiro', async (req, res) => {
       negociosPendentes: pendentes.length,
       totalNegócios:     negócios.length,
       categorias, porFase,
-      negociosLista:     negócios,
+      negociosLista:     negociosEnriquecidos,
+      alertas, tranchesAtrasadas, concentracao,
+      ytd: { real: ytdReal, despesas: ytdDespesas, resultado: ytdResultado },
     })
   } catch (err) {
     console.error('[financeiro]', err.message)
@@ -504,8 +554,121 @@ app.get('/api/financeiro/cashflow', async (req, res) => {
 
 // ── dummy endpoints kept for /api/kpis aggregate compat ─────────
 app.get('/api/financeiro/pl',     async (_req, res) => res.json({}))
-app.get('/api/financeiro/aging',  async (_req, res) => res.json({ summary: [], buckets: {} }))
 app.get('/api/financeiro/budget', async (_req, res) => res.json({ linhas: [] }))
+
+// ── Aging de pagamentos faseados ─────────────────────────────────
+app.get('/api/financeiro/aging', async (_req, res) => {
+  try {
+    const negocios = await getNegócios()
+    const hoje = new Date()
+    const buckets = { overdue: [], b30: [], b60: [], b90: [], b90plus: [] }
+    for (const n of negocios) {
+      for (const p of (n.pagamentosFaseados || [])) {
+        if (p.recebido || !p.data) continue
+        const dt = new Date(p.data)
+        const dias = Math.floor((dt - hoje) / 86400000)
+        const item = { negocio: n.movimento, categoria: n.categoria, descricao: p.descricao, valor: parseFloat(p.valor) || 0, data: p.data, dias }
+        if (dias < 0) buckets.overdue.push(item)
+        else if (dias <= 30) buckets.b30.push(item)
+        else if (dias <= 60) buckets.b60.push(item)
+        else if (dias <= 90) buckets.b90.push(item)
+        else buckets.b90plus.push(item)
+      }
+    }
+    const summary = [
+      { label: 'Atrasado', count: buckets.overdue.length, total: round2(buckets.overdue.reduce((s, p) => s + p.valor, 0)), color: 'red' },
+      { label: '< 30 dias', count: buckets.b30.length, total: round2(buckets.b30.reduce((s, p) => s + p.valor, 0)), color: 'yellow' },
+      { label: '30-60 dias', count: buckets.b60.length, total: round2(buckets.b60.reduce((s, p) => s + p.valor, 0)), color: 'blue' },
+      { label: '60-90 dias', count: buckets.b90.length, total: round2(buckets.b90.reduce((s, p) => s + p.valor, 0)), color: 'indigo' },
+      { label: '> 90 dias', count: buckets.b90plus.length, total: round2(buckets.b90plus.reduce((s, p) => s + p.valor, 0)), color: 'gray' },
+    ]
+    res.json({ summary, buckets })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// ── Rentabilidade ────────────────────────────────────────────────
+app.get('/api/financeiro/rentabilidade', async (req, res) => {
+  try {
+    const [negocios, imoveis, consultores, investidores] = await Promise.all([
+      getNegócios(), getImóveis(), getConsultores(), getInvestidores()
+    ])
+
+    // Margem por modelo de negócio
+    const porModelo = {}
+    for (const n of negocios) {
+      const k = n.categoria || 'Outro'
+      if (!porModelo[k]) porModelo[k] = { count: 0, lucroEst: 0, lucroReal: 0 }
+      porModelo[k].count++
+      porModelo[k].lucroEst += n.lucroEstimado
+      porModelo[k].lucroReal += n.lucroReal
+    }
+    const modelos = Object.entries(porModelo).map(([modelo, v]) => ({
+      modelo, count: v.count,
+      lucroEst: round2(v.lucroEst), lucroReal: round2(v.lucroReal),
+      mediaEst: v.count > 0 ? round2(v.lucroEst / v.count) : 0,
+    })).sort((a, b) => b.lucroEst - a.lucroEst)
+
+    // Rentabilidade por consultor
+    const consultorMap = {}
+    for (const c of consultores) consultorMap[c.id] = c.nome
+    const porConsultor = {}
+    for (const n of negocios) {
+      for (const cid of (n.consultorIds || [])) {
+        const nome = consultorMap[cid] || 'Desconhecido'
+        if (!porConsultor[nome]) porConsultor[nome] = { count: 0, lucroEst: 0, lucroReal: 0 }
+        porConsultor[nome].count++
+        porConsultor[nome].lucroEst += n.lucroEstimado
+        porConsultor[nome].lucroReal += n.lucroReal
+      }
+    }
+    const consultoresRent = Object.entries(porConsultor).map(([nome, v]) => ({
+      nome, count: v.count,
+      lucroEst: round2(v.lucroEst), lucroReal: round2(v.lucroReal),
+      mediaEst: v.count > 0 ? round2(v.lucroEst / v.count) : 0,
+    })).sort((a, b) => b.lucroEst - a.lucroEst)
+
+    // ROI por investidor
+    const investidorMap = {}
+    for (const i of investidores) investidorMap[i.id] = i
+    const porInvestidor = {}
+    for (const n of negocios) {
+      for (const iid of (n.investidor || [])) {
+        const inv = investidorMap[iid]
+        const nome = inv?.nome || 'Desconhecido'
+        if (!porInvestidor[nome]) porInvestidor[nome] = { count: 0, lucroEst: 0, lucroReal: 0, capitalInvestido: inv?.montanteInvestido || 0 }
+        porInvestidor[nome].count++
+        porInvestidor[nome].lucroEst += n.lucroEstimado
+        porInvestidor[nome].lucroReal += n.lucroReal
+      }
+    }
+    const investidoresRent = Object.entries(porInvestidor).map(([nome, v]) => ({
+      nome, count: v.count,
+      lucroEst: round2(v.lucroEst), lucroReal: round2(v.lucroReal),
+      capitalInvestido: round2(v.capitalInvestido),
+    })).sort((a, b) => b.lucroEst - a.lucroEst)
+
+    // Ciclo médio (dias de data_adicionado → data_proposta_aceite)
+    const ciclos = imoveis
+      .filter(i => i.dataAdicionado && i.dataPropostaAceite)
+      .map(i => Math.floor((new Date(i.dataPropostaAceite) - new Date(i.dataAdicionado)) / 86400000))
+      .filter(d => d >= 0 && d < 365)
+    const cicloMedio = ciclos.length > 0 ? round2(ciclos.reduce((s, d) => s + d, 0) / ciclos.length) : null
+
+    // Concentração de risco
+    const totalPipeline = negocios.reduce((s, n) => s + n.lucroEstimado, 0)
+    const topDeal = negocios.reduce((max, n) => n.lucroEstimado > max.lucroEstimado ? n : max, { lucroEstimado: 0 })
+    const concentracao = totalPipeline > 0 ? round2(topDeal.lucroEstimado / totalPipeline * 100) : 0
+
+    res.json({
+      modelos, consultores: consultoresRent, investidores: investidoresRent,
+      cicloMedio, cicloCount: ciclos.length,
+      concentracao, topDeal: topDeal.movimento || null, totalPipeline: round2(totalPipeline),
+    })
+  } catch (err) {
+    console.error('[financeiro/rentabilidade]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
 
 app.get('/api/financeiro/historico', async (req, res) => {
   try {
@@ -1369,14 +1532,34 @@ app.get('/api/financeiro/projecao', async (req, res) => {
       const month = d.getMonth() + 1
       const label = `${MES_ABREV[d.getMonth()]} ${String(ano).slice(2)}`
 
-      // Entradas previstas (negócios com data estimada neste mês)
-      const entradas = negocios.filter(n => {
-        const data = n.dataEstimada ?? n.dataVenda
-        if (!data) return false
-        const dt = new Date(data)
-        return dt.getFullYear() === ano && dt.getMonth() + 1 === month && n.pagamentoEmFalta
-      })
-      const totalEntradas = round2(entradas.reduce((s,n) => s + n.lucroEstimado, 0))
+      // Entradas previstas: pagamentos faseados pendentes com data neste mês + negócios sem faseados
+      let totalEntradas = 0
+      let dealCount = 0
+      const negociosContados = new Set()
+
+      for (const n of negocios) {
+        if (!n.pagamentoEmFalta) continue
+        const pags = n.pagamentosFaseados || []
+        const pagsMes = pags.filter(p => {
+          if (p.recebido || !p.data) return false
+          const dt = new Date(p.data)
+          return dt.getFullYear() === ano && dt.getMonth() + 1 === month
+        })
+        if (pagsMes.length > 0) {
+          totalEntradas += pagsMes.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
+          if (!negociosContados.has(n.id)) { dealCount++; negociosContados.add(n.id) }
+        } else if (pags.length === 0) {
+          // Sem faseados — usar data estimada como antes
+          const data = n.dataEstimada ?? n.dataVenda
+          if (!data) continue
+          const dt = new Date(data)
+          if (dt.getFullYear() === ano && dt.getMonth() + 1 === month) {
+            totalEntradas += n.lucroEstimado
+            dealCount++
+          }
+        }
+      }
+      totalEntradas = round2(totalEntradas)
 
       // Saídas: burn rate + despesas anuais que caem neste mês
       let totalSaidas = burnRate
@@ -1391,7 +1574,7 @@ app.get('/api/financeiro/projecao', async (req, res) => {
       const liquido = round2(totalEntradas - totalSaidas)
       saldoAcumulado = round2(saldoAcumulado + liquido)
 
-      meses.push({ label, entradas: totalEntradas, saidas: totalSaidas, liquido, saldoAcumulado, deals: entradas.length })
+      meses.push({ label, entradas: totalEntradas, saidas: totalSaidas, liquido, saldoAcumulado, deals: dealCount })
     }
 
     // Break-even: quantos deals para cobrir despesas anuais

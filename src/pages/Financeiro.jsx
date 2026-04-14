@@ -3,12 +3,13 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, ComposedChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts'
-import { Upload, X, FileText, Image, Trash2, Plus } from 'lucide-react'
+import { Upload, X, FileText, Image, Trash2, Plus, Filter, ArrowUpDown } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { KPICard } from '../components/dashboard/KPICard.jsx'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const EUR2 = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0)
+const MES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 
 const CAT_COLORS = {
   'Wholesalling':         '#6366f1',
@@ -29,7 +30,7 @@ const TIMING_COLOR = {
   'Único':       'bg-gray-100 text-gray-600',
 }
 
-const TABS = ['Resumo', 'Negócios', 'Despesas', 'Cashflow', 'P&L']
+const TABS = ['Visão Geral', 'Negócios', 'Despesas', 'Tesouraria', 'P&L', 'Rentabilidade']
 
 export function Financeiro() {
   const [kpis,     setKpis]     = useState(null)
@@ -37,9 +38,11 @@ export function Financeiro() {
   const [cashflow, setCashflow] = useState(null)
   const [projecao, setProjecao] = useState(null)
   const [analises, setAnalises] = useState(null)
+  const [aging,    setAging]    = useState(null)
+  const [rent,     setRent]     = useState(null)
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState(null)
-  const [tab,      setTab]      = useState('Resumo')
+  const [tab,      setTab]      = useState('Visão Geral')
   const [editingNeg, setEditingNeg] = useState(null)
   const [editingDesp, setEditingDesp] = useState(null)
   const [crmNegocios, setCrmNegocios] = useState([])
@@ -48,7 +51,7 @@ export function Financeiro() {
   async function load() {
     setLoading(true); setError(null)
     try {
-      const [kr, dr, cr, pr, ar, nr, dsr] = await Promise.all([
+      const [kr, dr, cr, pr, ar, nr, dsr, agr, rr] = await Promise.all([
         fetch('/api/kpis/financeiro'),
         fetch('/api/financeiro/despesas'),
         fetch('/api/financeiro/cashflow'),
@@ -56,12 +59,18 @@ export function Financeiro() {
         fetch('/api/crm/analises-kpis'),
         fetch('/api/crm/negocios?limit=200'),
         fetch('/api/crm/despesas?limit=200'),
+        fetch('/api/financeiro/aging'),
+        fetch('/api/financeiro/rentabilidade'),
       ])
       if (!kr.ok || !dr.ok || !cr.ok) throw new Error('Erro no servidor')
-      const [k, d, c, p, a, n, ds] = await Promise.all([kr.json(), dr.json(), cr.json(), pr.ok ? pr.json() : null, ar.ok ? ar.json() : null, nr.json(), dsr.json()])
+      const [k, d, c, p, a, n, ds, ag, re] = await Promise.all([
+        kr.json(), dr.json(), cr.json(), pr.ok ? pr.json() : null, ar.ok ? ar.json() : null,
+        nr.json(), dsr.json(), agr.ok ? agr.json() : null, rr.ok ? rr.json() : null,
+      ])
       if (k.error) throw new Error(k.error)
       setKpis(k); setDespesas(d); setCashflow(c); setProjecao(p); setAnalises(a)
       setCrmNegocios(n.data ?? []); setCrmDespesas(ds.data ?? [])
+      setAging(ag); setRent(re)
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
@@ -115,6 +124,7 @@ export function Financeiro() {
   const runwayLabel  = runwayMeses == null ? '—'
     : runwayMeses >= 99 ? '∞'
     : `${runwayMeses.toFixed(1)} meses`
+  const runwayColor = runwayMeses == null ? 'text-gray-400' : runwayMeses >= 12 ? 'text-green-600' : runwayMeses >= 6 ? 'text-yellow-600' : runwayMeses >= 3 ? 'text-orange-600' : 'text-red-600'
 
   return (
     <>
@@ -140,9 +150,23 @@ export function Financeiro() {
           <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>
         )}
 
-        {/* ══════════════════ RESUMO ══════════════════ */}
-        {tab === 'Resumo' && (
+        {/* ══════════════════ VISÃO GERAL ══════════════════ */}
+        {tab === 'Visão Geral' && (
           <>
+            {/* Alertas */}
+            {(kpis?.alertas ?? []).length > 0 && (
+              <div className="space-y-2">
+                {kpis.alertas.map((a, i) => (
+                  <div key={i} className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium ${
+                    a.tipo === 'critico' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'
+                  }`}>
+                    <span className="text-lg">{a.icon}</span>
+                    <span>{a.msg}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
               <KPICard label="Pipeline de Lucro"   value={EUR(kpis?.lucroEstimadoTotal)} meta="—" status="green"                                       trend="neutral" unit="" />
               <KPICard label="Lucro Real Recebido" value={EUR(kpis?.lucroRealTotal)}     meta="—" status={kpis?.lucroRealTotal > 0 ? 'green' : 'yellow'} trend="neutral" unit="" />
@@ -150,13 +174,21 @@ export function Financeiro() {
               <KPICard label="Burn Rate / Mês"     value={EUR(kpis?.burnRate)}           meta="—" status="green"                                       trend="neutral" unit="" />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
               <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex flex-col gap-1">
                 <span className="text-xs text-gray-400 uppercase tracking-wide">Runway</span>
-                <span className={`text-2xl font-bold ${runwayMeses == null ? 'text-gray-400' : runwayMeses >= 12 ? 'text-green-600' : 'text-yellow-600'}`}>
-                  {runwayLabel}
+                <span className={`text-2xl font-bold ${runwayColor}`}>{runwayLabel}</span>
+                <div className="w-full bg-gray-100 rounded-full h-2 mt-1">
+                  <div className={`h-full rounded-full transition-all ${runwayMeses >= 12 ? 'bg-green-500' : runwayMeses >= 6 ? 'bg-yellow-500' : runwayMeses >= 3 ? 'bg-orange-500' : 'bg-red-500'}`}
+                    style={{ width: `${Math.min(100, ((runwayMeses || 0) / 24) * 100)}%` }} />
+                </div>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex flex-col gap-1">
+                <span className="text-xs text-gray-400 uppercase tracking-wide">YTD Resultado</span>
+                <span className={`text-2xl font-bold ${(kpis?.ytd?.resultado ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {EUR(kpis?.ytd?.resultado)}
                 </span>
-                <span className="text-xs text-gray-400">Pendente / burn rate mensal</span>
+                <span className="text-xs text-gray-400">Real {EUR(kpis?.ytd?.real)} − Desp. {EUR(kpis?.ytd?.despesas)}</span>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex flex-col gap-1">
                 <span className="text-xs text-gray-400 uppercase tracking-wide">Negócios Ativos</span>
@@ -164,11 +196,34 @@ export function Financeiro() {
                 <span className="text-xs text-gray-400">{kpis?.negociosPendentes ?? 0} com pagamento pendente</span>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex flex-col gap-1">
-                <span className="text-xs text-gray-400 uppercase tracking-wide">Despesas Anuais</span>
-                <span className="text-xl font-bold text-red-500">{EUR(kpis?.despesasAnuaisTotal)}</span>
-                <span className="text-xs text-gray-400">Subscriptions + one-time</span>
+                <span className="text-xs text-gray-400 uppercase tracking-wide">Concentração de Risco</span>
+                <span className={`text-2xl font-bold ${(kpis?.concentracao ?? 0) > 60 ? 'text-red-600' : (kpis?.concentracao ?? 0) > 40 ? 'text-yellow-600' : 'text-green-600'}`}>
+                  {kpis?.concentracao ?? 0}%
+                </span>
+                <span className="text-xs text-gray-400">Maior deal no pipeline</span>
               </div>
             </div>
+
+            {/* Tranches atrasadas */}
+            {(kpis?.tranchesAtrasadas ?? []).length > 0 && (
+              <div className="bg-red-50 rounded-xl border border-red-200 p-5 shadow-sm">
+                <h2 className="text-sm font-semibold text-red-700 mb-3">Tranches Atrasadas</h2>
+                <div className="space-y-2">
+                  {kpis.tranchesAtrasadas.map((t, i) => (
+                    <div key={i} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-red-100">
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">{t.negocio}</p>
+                        <p className="text-xs text-gray-500">{t.descricao || 'Pagamento'} — {t.dias} dias de atraso</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-mono font-semibold text-red-600">{EUR(t.valor)}</p>
+                        <p className="text-xs text-gray-400">{t.data}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
@@ -205,13 +260,6 @@ export function Financeiro() {
                 ) : <EmptyState />}
               </div>
             </div>
-
-            {pendentes.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-gray-700 mb-3">Pagamentos Pendentes</h2>
-                <NegociosTable rows={pendentes} />
-              </div>
-            )}
 
             {/* Análises de Rentabilidade */}
             {analises?.total > 0 && (
@@ -266,90 +314,11 @@ export function Financeiro() {
 
         {/* ══════════════════ NEGÓCIOS ══════════════════ */}
         {tab === 'Negócios' && (
-          <>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <button onClick={() => setEditingNeg({})} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors">
-                <Plus className="w-4 h-4" /> Novo Negócio
-              </button>
-              <a href="https://www.notion.so/ecbb876ee01e4e65b8f561499d42a2b2" target="_blank" rel="noopener noreferrer"
-                className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:opacity-80"
-                style={{ backgroundColor: '#f5f5f5', color: '#666', border: '1px solid #e0e0e0' }}>
-                Abrir Faturação no Notion →
-              </a>
-            </div>
-
-            {editingNeg !== null && (
-              <NegocioForm item={editingNeg} onSave={saveNegocio} onCancel={() => setEditingNeg(null)} />
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-              {(kpis?.categorias ?? []).map(c => (
-                <div key={c.categoria} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="w-3 h-3 rounded-full inline-block flex-shrink-0"
-                      style={{ background: CAT_COLORS[c.categoria] ?? '#6366f1' }} />
-                    <span className="text-xs text-gray-500 font-medium truncate">{c.categoria}</span>
-                  </div>
-                  <p className="text-xl font-bold text-gray-900">
-                    {c.count} <span className="text-sm font-normal text-gray-400">negócio{c.count !== 1 ? 's' : ''}</span>
-                  </p>
-                  <p className="text-sm text-indigo-600 font-mono">{EUR(c.lucroEst)} estimado</p>
-                  {c.lucroReal > 0 && <p className="text-xs text-green-600 font-mono">{EUR(c.lucroReal)} real</p>}
-                </div>
-              ))}
-              {(!kpis?.categorias?.length) && <div className="col-span-4"><EmptyState /></div>}
-            </div>
-
-            <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm">
-              <h2 className="text-sm font-semibold text-gray-700 mb-3">Todos os Negócios</h2>
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
-                      <th className="text-left py-2 px-3">Negócio</th>
-                      <th className="text-left py-2 px-3">Categoria</th>
-                      <th className="text-left py-2 px-3">Fase</th>
-                      <th className="text-right py-2 px-3">Lucro Est.</th>
-                      <th className="text-right py-2 px-3">Lucro Real</th>
-                      <th className="text-left py-2 px-3">Pagamento</th>
-                      <th className="py-2 px-3"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {negociosLista.map(n => (
-                      <tr key={n.id} className="border-b border-gray-50 hover:bg-gray-50">
-                        <td className="py-2 px-3 font-medium text-gray-800">
-                          <button onClick={() => setEditingNeg(crmNegocios.find(x => x.id === n.id) || n)} className="text-left hover:text-indigo-600 hover:underline">{n.movimento}</button>
-                        </td>
-                        <td className="py-2 px-3"><CatBadge cat={n.categoria} /></td>
-                        <td className="py-2 px-3">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${FASE_COLOR[n.fase] ?? 'bg-gray-100 text-gray-600'}`}>{n.fase ?? '—'}</span>
-                        </td>
-                        <td className="py-2 px-3 text-right font-mono text-indigo-600 font-semibold">{EUR(n.lucroEstimado)}</td>
-                        <td className="py-2 px-3 text-right font-mono text-green-600">
-                          {n.lucroReal > 0 ? EUR(n.lucroReal) : <span className="text-gray-300">—</span>}
-                        </td>
-                        <td className="py-2 px-3 text-xs">
-                          {n.pagamentoEmFalta
-                            ? <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-medium">Pendente</span>
-                            : <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Recebido</span>}
-                        </td>
-                        <td className="py-2 px-3">
-                          <div className="flex gap-1">
-                            <button onClick={() => setEditingNeg(crmNegocios.find(x => x.id === n.id) || n)} className="px-2 py-1 text-xs bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100">Editar</button>
-                            <button onClick={() => deleteNegocio(n.id)} className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Apagar</button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {!negociosLista.length && (
-                      <tr><td colSpan={7} className="py-8 text-center text-gray-400 text-xs">Sem negócios registados</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </>
+          <NegociosTab
+            kpis={kpis} negociosLista={negociosLista} crmNegocios={crmNegocios}
+            editingNeg={editingNeg} setEditingNeg={setEditingNeg}
+            saveNegocio={saveNegocio} deleteNegocio={deleteNegocio} load={load}
+          />
         )}
 
         {/* ══════════════════ DESPESAS ══════════════════ */}
@@ -359,11 +328,6 @@ export function Financeiro() {
               <button onClick={() => setEditingDesp({})} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-xl hover:bg-red-700 transition-colors">
                 <Plus className="w-4 h-4" /> Nova Despesa
               </button>
-              <a href="https://www.notion.so/ae764d5955004c1bb0fba7705bb6931c" target="_blank" rel="noopener noreferrer"
-                className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:opacity-80"
-                style={{ backgroundColor: '#f5f5f5', color: '#666', border: '1px solid #e0e0e0' }}>
-                Abrir Despesas no Notion →
-              </a>
             </div>
 
             {editingDesp !== null && (
@@ -373,6 +337,34 @@ export function Financeiro() {
               <KPICard label="Burn Rate / Mês"     value={EUR(despesas?.burnRate)}      meta="—" status="green"  trend="neutral" unit="" />
               <KPICard label="Burn Rate Anual"      value={EUR(despesas?.burnRateAnual)} meta="—" status="green"  trend="neutral" unit="" />
               <KPICard label="Total Despesas (ano)" value={EUR(despesas?.totalAnual)}    meta="—" status="yellow" trend="neutral" unit="" />
+            </div>
+
+            {/* Previsão mensal de despesas */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <h2 className="text-sm font-semibold text-gray-700 mb-4">Previsão Mensal de Despesas (próximos 12 meses)</h2>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={(() => {
+                  const now = new Date()
+                  const burnRate = despesas?.burnRate || 0
+                  const anuais = despesas?.anuais || []
+                  return Array.from({ length: 12 }, (_, i) => {
+                    const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
+                    const m = d.getMonth()
+                    let total = burnRate
+                    for (const da of anuais) {
+                      if (da.data) { const dd = new Date(da.data); if (dd.getMonth() === m) total += (da.custoAnual || da.custoMensal || 0) }
+                    }
+                    return { label: `${MES_ABREV[m]} ${String(d.getFullYear()).slice(2)}`, recorrente: burnRate, extra: Math.round((total - burnRate) * 100) / 100, total: Math.round(total * 100) / 100 }
+                  })
+                })()}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}€`} />
+                  <Tooltip formatter={v => EUR2(v)} />
+                  <Bar dataKey="recorrente" name="Recorrente" fill="#ef4444" stackId="a" radius={[0,0,0,0]} />
+                  <Bar dataKey="extra" name="Anual/Único" fill="#f59e0b" stackId="a" radius={[3,3,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
@@ -472,8 +464,8 @@ export function Financeiro() {
           </>
         )}
 
-        {/* ══════════════════ CASHFLOW ══════════════════ */}
-        {tab === 'Cashflow' && (
+        {/* ══════════════════ TESOURARIA ══════════════════ */}
+        {tab === 'Tesouraria' && (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
               <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
@@ -489,49 +481,111 @@ export function Financeiro() {
               <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
                 <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Burn Rate / Mês</span>
                 <span className="text-2xl font-bold text-red-500">{EUR(cashflow?.burnRate)}</span>
-                <span className="text-xs text-gray-400 block mt-1">Despesas recorrentes</span>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
                 <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Runway</span>
-                <span className={`text-2xl font-bold ${
-                  cashflow?.runway == null ? 'text-gray-400'
-                  : cashflow.runway >= 12  ? 'text-green-600'
-                  : cashflow.runway >= 3   ? 'text-yellow-600'
-                  :                          'text-red-600'
-                }`}>
-                  {runwayLabel}
-                </span>
-                <span className="text-xs text-gray-400 block mt-1">Meses cobertos pelos pendentes</span>
+                <span className={`text-2xl font-bold ${runwayColor}`}>{runwayLabel}</span>
               </div>
             </div>
 
-            {cashflow?.runway != null && cashflow.runway < 99 && (
+            {/* Aging de Pagamentos */}
+            {aging && aging.summary?.some(b => b.count > 0) && (
               <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-gray-700 mb-3">Cobertura de Runway</h2>
-                <div className="flex items-center gap-4">
-                  <div className="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${
-                        cashflow.runway >= 12 ? 'bg-green-500' : cashflow.runway >= 3 ? 'bg-yellow-500' : 'bg-red-500'
-                      }`}
-                      style={{ width: `${Math.min(100, (cashflow.runway / 24) * 100)}%` }}
-                    />
-                  </div>
-                  <span className="text-sm font-semibold text-gray-700 w-24 text-right">{runwayLabel}</span>
+                <h2 className="text-sm font-semibold text-gray-700 mb-4">Aging de Pagamentos</h2>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  {aging.summary.map((b, i) => (
+                    <div key={i} className={`rounded-lg p-3 text-center border ${
+                      b.color === 'red' ? 'bg-red-50 border-red-200' :
+                      b.color === 'yellow' ? 'bg-yellow-50 border-yellow-200' :
+                      b.color === 'blue' ? 'bg-blue-50 border-blue-200' :
+                      b.color === 'indigo' ? 'bg-indigo-50 border-indigo-200' :
+                      'bg-gray-50 border-gray-200'
+                    }`}>
+                      <p className="text-xs text-gray-500">{b.label}</p>
+                      <p className={`text-lg font-bold ${
+                        b.color === 'red' ? 'text-red-600' :
+                        b.color === 'yellow' ? 'text-yellow-600' :
+                        b.color === 'blue' ? 'text-blue-600' :
+                        b.color === 'indigo' ? 'text-indigo-600' :
+                        'text-gray-600'
+                      }`}>{b.count > 0 ? EUR(b.total) : '—'}</p>
+                      <p className="text-xs text-gray-400">{b.count} tranche{b.count !== 1 ? 's' : ''}</p>
+                    </div>
+                  ))}
                 </div>
-                <div className="mt-2 flex justify-between text-xs text-gray-400">
-                  <span>0</span><span>6 meses</span><span>12 meses</span><span>18 meses</span><span>24 meses</span>
-                </div>
-                <p className="text-xs text-gray-400 mt-3">
-                  Com {EUR(cashflow.lucroPendente)} pendentes e {EUR(cashflow.burnRate)}/mês de burn rate
-                </p>
               </div>
             )}
 
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-              <h2 className="text-sm font-semibold text-gray-700 mb-3">Pagamentos Pendentes (por ordem de data)</h2>
-              <NegociosTable rows={pendentes} emptyMsg="Sem pagamentos pendentes" />
-            </div>
+            {/* Pagamentos Faseados Timeline */}
+            {(() => {
+              const allPags = pendentes.flatMap(n =>
+                (n.pagamentosFaseados || []).map(p => ({ ...p, negocio: n.movimento, categoria: n.categoria }))
+              ).sort((a, b) => (a.data || '9999').localeCompare(b.data || '9999'))
+              const pagsPendentes = allPags.filter(p => !p.recebido)
+              const pagsRecebidos = allPags.filter(p => p.recebido)
+
+              if (allPags.length === 0) return (
+                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                  <h2 className="text-sm font-semibold text-gray-700 mb-3">Pagamentos Pendentes</h2>
+                  <NegociosTable rows={pendentes} emptyMsg="Sem pagamentos pendentes" />
+                </div>
+              )
+
+              return (
+                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                  <h2 className="text-sm font-semibold text-gray-700 mb-4">Timeline de Pagamentos</h2>
+                  {pagsPendentes.length > 0 && (
+                    <>
+                      <h3 className="text-xs text-gray-400 uppercase tracking-wide mb-2">Pendentes ({pagsPendentes.length})</h3>
+                      <div className="space-y-2 mb-5">
+                        {pagsPendentes.map((p, i) => {
+                          const atrasado = p.data && new Date(p.data) < new Date()
+                          return (
+                            <div key={i} className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${atrasado ? 'bg-red-50 border-red-100' : 'bg-yellow-50 border-yellow-100'}`}>
+                              <div className={`w-2 h-2 rounded-full shrink-0 ${atrasado ? 'bg-red-400' : 'bg-yellow-400'}`} />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-800 truncate">{p.negocio}</p>
+                                <p className="text-xs text-gray-500">{p.descricao || 'Pagamento'} {atrasado && <span className="text-red-600 font-medium">— ATRASADO</span>}</p>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className={`text-sm font-mono font-semibold ${atrasado ? 'text-red-700' : 'text-yellow-700'}`}>{EUR(p.valor)}</p>
+                                <p className="text-xs text-gray-400">{p.data || 'Sem data'}</p>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </>
+                  )}
+                  {pagsRecebidos.length > 0 && (
+                    <>
+                      <h3 className="text-xs text-gray-400 uppercase tracking-wide mb-2">Recebidos ({pagsRecebidos.length})</h3>
+                      <div className="space-y-2">
+                        {pagsRecebidos.map((p, i) => (
+                          <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-green-50 border border-green-100">
+                            <div className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-800 truncate">{p.negocio}</p>
+                              <p className="text-xs text-gray-500">{p.descricao || 'Pagamento'}</p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-sm font-mono font-semibold text-green-700">{EUR(p.valor)}</p>
+                              <p className="text-xs text-gray-400">{p.data || '—'}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  {pendentes.filter(n => !(n.pagamentosFaseados || []).length).length > 0 && (
+                    <>
+                      <h3 className="text-xs text-gray-400 uppercase tracking-wide mb-2 mt-5">Negócios sem tranches definidas</h3>
+                      <NegociosTable rows={pendentes.filter(n => !(n.pagamentosFaseados || []).length)} emptyMsg="" />
+                    </>
+                  )}
+                </div>
+              )
+            })()}
 
             {recebidos.length > 0 && (
               <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
@@ -564,7 +618,6 @@ export function Financeiro() {
         {/* ══════════════════ P&L ══════════════════ */}
         {tab === 'P&L' && projecao && (
           <>
-            {/* P&L Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
               <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
                 <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Receita Estimada</span>
@@ -579,20 +632,42 @@ export function Financeiro() {
               <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
                 <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Despesas ({projecao.pl.mesesDecorridos} meses)</span>
                 <span className="text-2xl font-bold text-red-500">{EUR(projecao.pl.despesasAteAgora)}</span>
-                <span className="text-xs text-gray-400 block mt-1">Burn rate acumulado</span>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
                 <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Resultado Líquido</span>
                 <span className={`text-2xl font-bold ${projecao.pl.resultadoLiquido >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {EUR(projecao.pl.resultadoLiquido)}
                 </span>
-                <span className="text-xs text-gray-400 block mt-1">Receita real − despesas</span>
+              </div>
+            </div>
+
+            {/* Margem Operacional */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <h2 className="text-sm font-semibold text-gray-700 mb-3">Margem Operacional</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <p className="text-xs text-gray-400 uppercase">Receita Pipeline</p>
+                  <p className="text-xl font-bold text-indigo-600 mt-1">{EUR(projecao.pl.receitaEstimada)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 uppercase">Despesas Anuais</p>
+                  <p className="text-xl font-bold text-red-500 mt-1">{EUR(projecao.breakEven.despesasAnuais)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 uppercase">Margem Operacional</p>
+                  {(() => {
+                    const margem = projecao.pl.receitaEstimada > 0
+                      ? Math.round((projecao.pl.receitaEstimada - projecao.breakEven.despesasAnuais) / projecao.pl.receitaEstimada * 100)
+                      : 0
+                    return <p className={`text-xl font-bold mt-1 ${margem >= 50 ? 'text-green-600' : margem >= 20 ? 'text-yellow-600' : 'text-red-600'}`}>{margem}%</p>
+                  })()}
+                </div>
               </div>
             </div>
 
             {/* Break-even */}
             <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-              <h2 className="text-sm font-semibold text-gray-700 mb-3">Break-Even Analysis</h2>
+              <h2 className="text-sm font-semibold text-gray-700 mb-3">Break-Even</h2>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
                 <div>
                   <p className="text-xs text-gray-400 uppercase">Despesas Anuais</p>
@@ -663,11 +738,292 @@ export function Financeiro() {
         {tab === 'P&L' && !projecao && !loading && (
           <div className="text-center text-gray-400 py-12 text-sm">Sem dados de projeção disponíveis</div>
         )}
+
+        {/* ══════════════════ RENTABILIDADE ══════════════════ */}
+        {tab === 'Rentabilidade' && (
+          <RentabilidadeTab rent={rent} />
+        )}
       </div>
     </>
   )
 }
 
+// ══════════════════════════════════════════════════════════════
+// NEGÓCIOS TAB (with filters and relation columns)
+// ══════════════════════════════════════════════════════════════
+function NegociosTab({ kpis, negociosLista, crmNegocios, editingNeg, setEditingNeg, saveNegocio, deleteNegocio }) {
+  const [filterCat, setFilterCat] = useState('')
+  const [filterFase, setFilterFase] = useState('')
+  const [sortKey, setSortKey] = useState('movimento')
+  const [sortDir, setSortDir] = useState('asc')
+
+  const toggleSort = (key) => {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('asc') }
+  }
+
+  const filtered = negociosLista
+    .filter(n => !filterCat || n.categoria === filterCat)
+    .filter(n => !filterFase || n.fase === filterFase)
+    .sort((a, b) => {
+      let va = a[sortKey] ?? '', vb = b[sortKey] ?? ''
+      if (typeof va === 'number') return sortDir === 'asc' ? va - vb : vb - va
+      return sortDir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va))
+    })
+
+  const SortHeader = ({ label, field, className = '' }) => (
+    <th className={`py-2 px-3 cursor-pointer hover:text-gray-600 select-none ${className}`} onClick={() => toggleSort(field)}>
+      <span className="inline-flex items-center gap-1">{label} {sortKey === field && <ArrowUpDown className="w-3 h-3" />}</span>
+    </th>
+  )
+
+  return (
+    <>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <button onClick={() => setEditingNeg({})} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors">
+          <Plus className="w-4 h-4" /> Novo Negócio
+        </button>
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-gray-400" />
+          <select value={filterCat} onChange={e => setFilterCat(e.target.value)} className="text-xs border rounded-lg px-2 py-1.5">
+            <option value="">Todas categorias</option>
+            {['Wholesalling','CAEP','Mediação Imobiliária','Fix and Flip'].map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={filterFase} onChange={e => setFilterFase(e.target.value)} className="text-xs border rounded-lg px-2 py-1.5">
+            <option value="">Todas fases</option>
+            {['Fase de obras','Fase de venda','Vendido'].map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {editingNeg !== null && (
+        <NegocioForm item={editingNeg} onSave={saveNegocio} onCancel={() => setEditingNeg(null)} />
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+        {(kpis?.categorias ?? []).map(c => (
+          <div key={c.categoria} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-3 h-3 rounded-full inline-block flex-shrink-0"
+                style={{ background: CAT_COLORS[c.categoria] ?? '#6366f1' }} />
+              <span className="text-xs text-gray-500 font-medium truncate">{c.categoria}</span>
+            </div>
+            <p className="text-xl font-bold text-gray-900">
+              {c.count} <span className="text-sm font-normal text-gray-400">negócio{c.count !== 1 ? 's' : ''}</span>
+            </p>
+            <p className="text-sm text-indigo-600 font-mono">{EUR(c.lucroEst)} estimado</p>
+            {c.lucroReal > 0 && <p className="text-xs text-green-600 font-mono">{EUR(c.lucroReal)} real</p>}
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm">
+        <h2 className="text-sm font-semibold text-gray-700 mb-3">
+          Todos os Negócios
+          <span className="text-xs text-gray-400 font-normal ml-2">({filtered.length}{filterCat || filterFase ? ` de ${negociosLista.length}` : ''})</span>
+        </h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
+                <SortHeader label="Negócio" field="movimento" className="text-left" />
+                <SortHeader label="Categoria" field="categoria" className="text-left" />
+                <th className="text-left py-2 px-3">Imóvel</th>
+                <th className="text-left py-2 px-3">Consultor</th>
+                <SortHeader label="Fase" field="fase" className="text-left" />
+                <SortHeader label="Comissão" field="comissaoPct" className="text-right" />
+                <SortHeader label="Lucro Est." field="lucroEstimado" className="text-right" />
+                <SortHeader label="Lucro Real" field="lucroReal" className="text-right" />
+                <th className="text-left py-2 px-3">Pagamento</th>
+                <th className="py-2 px-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(n => {
+                const pags = n.pagamentosFaseados || []
+                const temFaseados = pags.length > 0
+                const pagsRecebidos = pags.filter(p => p.recebido)
+                const totalFaseados = pags.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
+                const totalRecebido = pagsRecebidos.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
+                const crm = crmNegocios.find(x => x.id === n.id)
+                const comPct = crm?.comissao_pct
+                return (
+                <tr key={n.id} className="border-b border-gray-50 hover:bg-gray-50">
+                  <td className="py-2 px-3 font-medium text-gray-800">
+                    <button onClick={() => setEditingNeg(crm || n)} className="text-left hover:text-indigo-600 hover:underline">{n.movimento}</button>
+                  </td>
+                  <td className="py-2 px-3"><CatBadge cat={n.categoria} /></td>
+                  <td className="py-2 px-3 text-xs text-gray-500 max-w-[120px] truncate">{n.imovelNome || '—'}</td>
+                  <td className="py-2 px-3 text-xs text-gray-500 max-w-[100px] truncate">{n.consultorNome || '—'}</td>
+                  <td className="py-2 px-3">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${FASE_COLOR[n.fase] ?? 'bg-gray-100 text-gray-600'}`}>{n.fase ?? '—'}</span>
+                  </td>
+                  <td className="py-2 px-3 text-right text-xs font-mono text-gray-500">
+                    {comPct ? `${comPct}%` : '—'}
+                  </td>
+                  <td className="py-2 px-3 text-right font-mono text-indigo-600 font-semibold">{EUR(n.lucroEstimado)}</td>
+                  <td className="py-2 px-3 text-right font-mono text-green-600">
+                    {n.lucroReal > 0 ? EUR(n.lucroReal) : <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="py-2 px-3 text-xs">
+                    {temFaseados ? (
+                      <div>
+                        <span className={`px-2 py-0.5 rounded-full font-medium ${pagsRecebidos.length === pags.length ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                          {pagsRecebidos.length}/{pags.length} tranches
+                        </span>
+                        <p className="text-[10px] text-gray-400 mt-0.5 font-mono">{EUR(totalRecebido)} / {EUR(totalFaseados)}</p>
+                      </div>
+                    ) : n.pagamentoEmFalta
+                      ? <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-medium">Pendente</span>
+                      : <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Recebido</span>}
+                  </td>
+                  <td className="py-2 px-3">
+                    <div className="flex gap-1">
+                      <button onClick={() => setEditingNeg(crm || n)} className="px-2 py-1 text-xs bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100">Editar</button>
+                      <button onClick={() => deleteNegocio(n.id)} className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Apagar</button>
+                    </div>
+                  </td>
+                </tr>
+              )})}
+              {!filtered.length && (
+                <tr><td colSpan={10} className="py-8 text-center text-gray-400 text-xs">Sem negócios registados</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════
+// RENTABILIDADE TAB
+// ══════════════════════════════════════════════════════════════
+function RentabilidadeTab({ rent }) {
+  if (!rent) return <div className="text-center text-gray-400 py-12 text-sm">A carregar rentabilidade...</div>
+
+  return (
+    <>
+      {/* KPIs de topo */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+          <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Ciclo Médio</span>
+          <span className="text-2xl font-bold text-indigo-600">{rent.cicloMedio != null ? `${rent.cicloMedio} dias` : '—'}</span>
+          <span className="text-xs text-gray-400 block mt-1">Adicionado → Proposta aceite ({rent.cicloCount} imóveis)</span>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+          <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Pipeline Total</span>
+          <span className="text-2xl font-bold text-green-600">{EUR(rent.totalPipeline)}</span>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+          <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Concentração de Risco</span>
+          <span className={`text-2xl font-bold ${rent.concentracao > 60 ? 'text-red-600' : rent.concentracao > 40 ? 'text-yellow-600' : 'text-green-600'}`}>
+            {rent.concentracao}%
+          </span>
+          <span className="text-xs text-gray-400 block mt-1 truncate">{rent.topDeal || '—'}</span>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+          <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Modelos Ativos</span>
+          <span className="text-2xl font-bold text-gray-800">{rent.modelos?.length ?? 0}</span>
+        </div>
+      </div>
+
+      {/* Margem por Modelo */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <h2 className="text-sm font-semibold text-gray-700 mb-4">Margem por Modelo de Negócio</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
+          {(rent.modelos || []).map(m => (
+            <div key={m.modelo} className="rounded-lg p-4 border border-gray-100" style={{ borderLeftColor: CAT_COLORS[m.modelo] ?? '#6366f1', borderLeftWidth: '4px' }}>
+              <p className="text-xs text-gray-500 font-medium">{m.modelo}</p>
+              <p className="text-xl font-bold text-gray-800 mt-1">{EUR(m.lucroEst)}</p>
+              <div className="flex justify-between text-xs text-gray-400 mt-1">
+                <span>{m.count} deal{m.count !== 1 ? 's' : ''}</span>
+                <span>Média: {EUR(m.mediaEst)}</span>
+              </div>
+              {m.lucroReal > 0 && <p className="text-xs text-green-600 font-mono mt-1">Real: {EUR(m.lucroReal)}</p>}
+            </div>
+          ))}
+        </div>
+        {(rent.modelos || []).length > 0 && (
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={rent.modelos} margin={{ left: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+              <XAxis dataKey="modelo" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
+              <Tooltip formatter={v => EUR(v)} />
+              <Bar dataKey="lucroEst" name="Estimado" radius={[3,3,0,0]}>
+                {rent.modelos.map((m, i) => <Cell key={i} fill={CAT_COLORS[m.modelo] ?? CAT_COLORS_LIST[i % CAT_COLORS_LIST.length]} />)}
+              </Bar>
+              <Bar dataKey="lucroReal" name="Real" fill="#22c55e" radius={[3,3,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Rentabilidade por Consultor */}
+      {(rent.consultores || []).length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h2 className="text-sm font-semibold text-gray-700 mb-3">Rentabilidade por Consultor</h2>
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
+                <th className="text-left py-2 px-3">Consultor</th>
+                <th className="text-right py-2 px-3">Deals</th>
+                <th className="text-right py-2 px-3">Lucro Est.</th>
+                <th className="text-right py-2 px-3">Lucro Real</th>
+                <th className="text-right py-2 px-3">Média / Deal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rent.consultores.map(c => (
+                <tr key={c.nome} className="border-b border-gray-50 hover:bg-gray-50">
+                  <td className="py-2 px-3 font-medium text-gray-800">{c.nome}</td>
+                  <td className="py-2 px-3 text-right text-gray-500">{c.count}</td>
+                  <td className="py-2 px-3 text-right font-mono text-indigo-600 font-semibold">{EUR(c.lucroEst)}</td>
+                  <td className="py-2 px-3 text-right font-mono text-green-600">{c.lucroReal > 0 ? EUR(c.lucroReal) : '—'}</td>
+                  <td className="py-2 px-3 text-right font-mono text-gray-600">{EUR(c.mediaEst)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ROI por Investidor */}
+      {(rent.investidores || []).length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h2 className="text-sm font-semibold text-gray-700 mb-3">ROI por Investidor</h2>
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
+                <th className="text-left py-2 px-3">Investidor</th>
+                <th className="text-right py-2 px-3">Negócios</th>
+                <th className="text-right py-2 px-3">Lucro Est.</th>
+                <th className="text-right py-2 px-3">Lucro Real</th>
+                <th className="text-right py-2 px-3">Capital Investido</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rent.investidores.map(inv => (
+                <tr key={inv.nome} className="border-b border-gray-50 hover:bg-gray-50">
+                  <td className="py-2 px-3 font-medium text-gray-800">{inv.nome}</td>
+                  <td className="py-2 px-3 text-right text-gray-500">{inv.count}</td>
+                  <td className="py-2 px-3 text-right font-mono text-indigo-600 font-semibold">{EUR(inv.lucroEst)}</td>
+                  <td className="py-2 px-3 text-right font-mono text-green-600">{inv.lucroReal > 0 ? EUR(inv.lucroReal) : '—'}</td>
+                  <td className="py-2 px-3 text-right font-mono text-gray-600">{inv.capitalInvestido > 0 ? EUR(inv.capitalInvestido) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════
+// SHARED COMPONENTS
+// ══════════════════════════════════════════════════════════════
 function CatBadge({ cat }) {
   const color = CAT_COLORS[cat] ?? '#6366f1'
   return (
@@ -716,20 +1072,35 @@ function EmptyState() {
   return <p className="text-xs text-gray-400 text-center py-10">Sem dados suficientes</p>
 }
 
-// ── Negócio Form ─────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// FORMS
+// ══════════════════════════════════════════════════════════════
 const NEG_CATEGORIAS = ['Wholesalling', 'CAEP', 'Mediação Imobiliária', 'Fix and Flip']
 const NEG_FASES = ['Fase de obras', 'Fase de venda', 'Vendido']
 
 function NegocioForm({ item, onSave, onCancel }) {
   const isNew = !item.id
+  // Normalizar: aceitar tanto snake_case (DB) como camelCase (API mapped)
+  const initPag = item.pagamentos_faseados ?? item.pagamentosFaseados ?? '[]'
   const [f, setF] = useState({
     movimento: '', categoria: '', fase: '', lucro_estimado: '', lucro_real: '',
     custo_real_obra: '', capital_total: '', n_investidores: '', pagamento_em_falta: 1,
     data: '', data_compra: '', data_estimada_venda: '', data_venda: '', notas: '',
+    pagamentos_faseados: typeof initPag === 'string' ? initPag : JSON.stringify(initPag),
     ...item,
+    pagamentos_faseados: typeof initPag === 'string' ? initPag : JSON.stringify(initPag),
   })
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const inputClass = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+
+  const pagamentos = (() => { try { const raw = f.pagamentos_faseados; return typeof raw === 'string' ? JSON.parse(raw || '[]') : Array.isArray(raw) ? raw : [] } catch { return [] } })()
+  const setPagamentos = (pags) => set('pagamentos_faseados', JSON.stringify(pags))
+  const addPagamento = () => setPagamentos([...pagamentos, { descricao: '', valor: 0, data: '', recebido: false }])
+  const removePagamento = (i) => setPagamentos(pagamentos.filter((_, j) => j !== i))
+  const updatePagamento = (i, field, value) => setPagamentos(pagamentos.map((p, j) => j === i ? { ...p, [field]: value } : p))
+
+  const totalFaseados = pagamentos.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
+  const totalRecebido = pagamentos.filter(p => p.recebido).reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
 
   return (
     <div className="bg-white rounded-xl border-2 border-indigo-200 p-4 sm:p-6 shadow-md">
@@ -762,18 +1133,6 @@ function NegocioForm({ item, onSave, onCancel }) {
           <input type="number" value={f.lucro_real} onChange={e => set('lucro_real', +e.target.value)} className={inputClass} />
         </div>
         <div>
-          <label className="text-xs text-gray-500 block mb-1">Custo Real Obra (€)</label>
-          <input type="number" value={f.custo_real_obra} onChange={e => set('custo_real_obra', +e.target.value)} className={inputClass} />
-        </div>
-        <div>
-          <label className="text-xs text-gray-500 block mb-1">Capital Total (€)</label>
-          <input type="number" value={f.capital_total} onChange={e => set('capital_total', +e.target.value)} className={inputClass} />
-        </div>
-        <div>
-          <label className="text-xs text-gray-500 block mb-1">Nº Investidores</label>
-          <input type="number" value={f.n_investidores} onChange={e => set('n_investidores', +e.target.value)} className={inputClass} />
-        </div>
-        <div>
           <label className="text-xs text-gray-500 block mb-1">Pagamento</label>
           <select value={f.pagamento_em_falta} onChange={e => set('pagamento_em_falta', +e.target.value)} className={inputClass}>
             <option value={1}>Pendente</option>
@@ -801,6 +1160,62 @@ function NegocioForm({ item, onSave, onCancel }) {
           <textarea value={f.notas ?? ''} onChange={e => set('notas', e.target.value)} rows={2} className={inputClass} />
         </div>
       </div>
+
+      {/* Pagamentos Faseados */}
+      <div className="mt-5 pt-4 border-t border-gray-100">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Pagamentos Faseados</h4>
+            {pagamentos.length > 0 && (
+              <p className="text-xs text-gray-400 mt-0.5">
+                {EUR(totalRecebido)} recebido de {EUR(totalFaseados)} total
+              </p>
+            )}
+          </div>
+          <button onClick={addPagamento} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors">
+            <Plus className="w-3.5 h-3.5" /> Adicionar
+          </button>
+        </div>
+        {pagamentos.length > 0 ? (
+          <div className="space-y-2">
+            {pagamentos.map((p, i) => (
+              <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                <div className="col-span-4">
+                  <input value={p.descricao} placeholder="Ex: Sinal, 2ª tranche..."
+                    onChange={e => updatePagamento(i, 'descricao', e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                </div>
+                <div className="col-span-2">
+                  <input type="number" value={p.valor || ''} placeholder="€"
+                    onChange={e => updatePagamento(i, 'valor', parseFloat(e.target.value) || 0)}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                </div>
+                <div className="col-span-3">
+                  <input type="date" value={p.data || ''}
+                    onChange={e => updatePagamento(i, 'data', e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                </div>
+                <div className="col-span-2 flex items-center gap-1.5">
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input type="checkbox" checked={!!p.recebido}
+                      onChange={e => updatePagamento(i, 'recebido', e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-300" />
+                    <span className="text-xs text-gray-500 hidden sm:inline">{p.recebido ? 'Recebido' : 'Pendente'}</span>
+                  </label>
+                </div>
+                <div className="col-span-1 flex justify-end">
+                  <button onClick={() => removePagamento(i)} className="p-1 text-gray-300 hover:text-red-500 transition-colors">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400 py-2">Sem pagamentos faseados. Usa "Adicionar" para definir tranches com datas.</p>
+        )}
+      </div>
+
       <div className="flex gap-3 mt-4">
         <button onClick={() => onSave(f)} disabled={!f.movimento?.trim()} className="px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 disabled:opacity-40">
           {isNew ? 'Criar' : 'Guardar'}
@@ -812,7 +1227,7 @@ function NegocioForm({ item, onSave, onCancel }) {
 }
 
 // ── Despesa Form ─────────────────────────────────────────────
-const DESP_CATEGORIAS = ['Salários', 'Operação', 'Marketing', 'Ferramentas', 'Legal', 'Contabilidade', 'Escritório', 'Formação', 'Viatura', 'Seguros', 'Telecomunicações', 'Outro']
+const DESP_CATEGORIAS = ['Salários', 'Operação', 'Marketing', 'Ferramentas', 'Legal', 'Contabilidade', 'Escritório', 'Formação', 'Viatura', 'Seguros', 'Telecomunicações', 'Subscrição Skool', 'Material Somnium', 'Outro']
 const DESP_TIMING = ['Mensalmente', 'Anual', 'Único']
 
 function DespesaForm({ item, onSave, onCancel, onReload }) {
@@ -892,7 +1307,6 @@ function DespesaForm({ item, onSave, onCancel, onReload }) {
         </div>
       </div>
 
-      {/* Documentos / Faturas */}
       {item.id && (
         <div className="mt-5 pt-4 border-t border-gray-100">
           <div className="flex items-center justify-between mb-3">
@@ -917,7 +1331,7 @@ function DespesaForm({ item, onSave, onCancel, onReload }) {
               ))}
             </div>
           ) : (
-            <p className="text-xs text-gray-400 py-3 text-center">Sem documentos anexados. Clica em "Anexar ficheiro" para adicionar PDFs ou fotos de faturas.</p>
+            <p className="text-xs text-gray-400 py-3 text-center">Sem documentos anexados.</p>
           )}
         </div>
       )}
