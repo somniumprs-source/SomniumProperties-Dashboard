@@ -102,6 +102,12 @@ function mapConsultor(r) {
     lucroGerado: r.lucro_gerado || 0,
     motivoDescontinuacao: r.motivo_descontinuacao,
     notas: r.notas,
+    // Módulo gestão consultores
+    scorePrioridade: r.score_prioridade || 0,
+    taxaQualidade: r.taxa_qualidade || 0,
+    tempoMedioResposta: r.tempo_medio_resposta,
+    estadoAvaliacao: r.estado_avaliacao || 'Em avaliação',
+    createdAt: r.created_at,
   }
 }
 

@@ -1,11 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Header } from '../components/layout/Header.jsx'
-
-const EUR = v => v == null ? '—' : new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v)
-const PCT = v => v == null ? '—' : `${Number(v).toFixed(1)}%`
-const DAYS = v => v == null ? '—' : `${Number(v).toFixed(0)}d`
-const NUM = v => v == null ? '—' : String(v)
-const RATIO = v => v == null ? '—' : `${Number(v).toFixed(1)}:1`
+import { PageSkeleton } from '../components/ui/Skeleton.jsx'
+import { apiFetch } from '../lib/api.js'
+import { EUR, PCT, DAYS, NUM, RATIO } from '../constants.js'
 
 const GOLD = '#C9A84C'
 const TABS = [
@@ -178,9 +175,9 @@ export function Metricas() {
     setLoading(true); setError(null)
     try {
       const [r, okrRes, fontesRes] = await Promise.all([
-        fetch('/api/metricas'),
-        fetch('/api/okrs').then(r => r.json()).catch(() => []),
-        fetch('/api/okrs/fontes').then(r => r.json()).catch(() => []),
+        apiFetch('/api/metricas'),
+        apiFetch('/api/okrs').then(r => r.json()).catch(() => []),
+        apiFetch('/api/okrs/fontes').then(r => r.json()).catch(() => []),
       ])
       if (!r.ok) throw new Error('Erro no servidor')
       const d = await r.json()
@@ -190,8 +187,8 @@ export function Metricas() {
       setFontes(fontesRes)
       // Seed Q2 se vazio
       if (!okrRes.length) {
-        await fetch('/api/okrs/seed-q2', { method: 'POST' })
-        const seeded = await fetch('/api/okrs').then(r => r.json()).catch(() => [])
+        await apiFetch('/api/okrs/seed-q2', { method: 'POST' })
+        const seeded = await apiFetch('/api/okrs').then(r => r.json()).catch(() => [])
         setOkrs(seeded)
       }
     } catch (e) { setError(e.message) }
@@ -231,6 +228,8 @@ export function Metricas() {
 
       <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
         {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>}
+
+        {loading && !error && <PageSkeleton />}
 
         {/* ══════════ VISÃO GERAL ══════════ */}
         {tab === 'resumo' && (
@@ -341,7 +340,7 @@ export function Metricas() {
                 <>
                   <SectionTitle>CAEP — Estimado vs Real</SectionTitle>
                   <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
-                    <table className="min-w-full text-sm">
+                    <table className="min-w-[700px] w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
                           <th className="text-left py-2 px-3">Negócio</th>
@@ -474,7 +473,7 @@ export function Metricas() {
                 <>
                   <SectionTitle>Ranking de Valor por Consultor</SectionTitle>
                   <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
-                    <table className="min-w-full text-sm">
+                    <table className="min-w-[700px] w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
                           <th className="text-left py-2 px-3">#</th>
@@ -527,7 +526,7 @@ export function Metricas() {
                 <>
                   <SectionTitle>Margens por Negócio</SectionTitle>
                   <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
-                    <table className="min-w-full text-sm">
+                    <table className="min-w-[700px] w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
                           <th className="text-left py-2 px-3">Negócio</th>
@@ -762,7 +761,7 @@ export function Metricas() {
               </div>
               {inv.porInvestidor?.length > 0 && (
                 <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
-                  <table className="min-w-full text-sm">
+                  <table className="min-w-[700px] w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
                         <th className="text-left py-2 px-3">Investidor</th>
@@ -799,7 +798,7 @@ export function Metricas() {
               </div>
               {cons.top5?.length > 0 ? (
                 <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
-                  <table className="min-w-full text-sm">
+                  <table className="min-w-[700px] w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
                         <th className="text-left py-2 px-3">#</th>
@@ -899,7 +898,7 @@ export function Metricas() {
               <SectionTitle>Deal Qualification Score</SectionTitle>
               {av.dealQualification?.length > 0 ? (
                 <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
-                  <table className="min-w-full text-sm">
+                  <table className="min-w-[700px] w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
                         <th className="text-left py-2 px-3">Imóvel</th>
@@ -931,7 +930,7 @@ export function Metricas() {
               <SectionTitle>Win/Loss por Fonte</SectionTitle>
               {av.winLossBySource?.length > 0 && (
                 <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
-                  <table className="min-w-full text-sm">
+                  <table className="min-w-[700px] w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
                         <th className="text-left py-2 px-3">Fonte</th>
@@ -972,7 +971,7 @@ export function Metricas() {
               <SectionTitle>Performance por Zona</SectionTitle>
               {av.zonaPerformance?.length > 0 && (
                 <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
-                  <table className="min-w-full text-sm">
+                  <table className="min-w-[700px] w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
                         <th className="text-left py-2 px-3">Zona</th>
@@ -1006,7 +1005,7 @@ export function Metricas() {
               <SectionTitle>CPA por Cohort Mensal</SectionTitle>
               {av.cacCohort?.length > 0 && (
                 <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
-                  <table className="min-w-full text-sm">
+                  <table className="min-w-[700px] w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
                         <th className="text-left py-2 px-3">Cohort</th>
@@ -1041,7 +1040,7 @@ export function Metricas() {
                 <>
                   <SectionTitle>Metricas RE — Cash-on-Cash, IRR, Equity Multiple</SectionTitle>
                   <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
-                    <table className="min-w-full text-sm">
+                    <table className="min-w-[700px] w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
                           <th className="text-left py-2 px-3">Negócio</th>
@@ -1080,21 +1079,21 @@ export function Metricas() {
         {tab === 'okrs' && (() => {
           const wa = data?.avancado?.weeklyActivity
           async function createOkr(form) {
-            await fetch('/api/okrs', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(form) })
+            await apiFetch('/api/okrs', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(form) })
             setShowOkrForm(false); load()
           }
           async function deleteOkr(id) {
             if (!confirm('Apagar este objectivo e todos os KRs?')) return
-            await fetch(`/api/okrs/${id}`, { method: 'DELETE' }); load()
+            await apiFetch(`/api/okrs/${id}`, { method: 'DELETE' }); load()
           }
           async function deleteKr(id) {
-            await fetch(`/api/okr-krs/${id}`, { method: 'DELETE' }); load()
+            await apiFetch(`/api/okr-krs/${id}`, { method: 'DELETE' }); load()
           }
           async function addKr(okrId) {
             const kr = prompt('Descrição do Key Result:')
             if (!kr) return
             const meta = parseFloat(prompt('Meta (número):', '1') || '1')
-            await fetch(`/api/okrs/${okrId}/krs`, {
+            await apiFetch(`/api/okrs/${okrId}/krs`, {
               method: 'POST', headers: {'Content-Type':'application/json'},
               body: JSON.stringify({ kr, meta, fonte: null })
             }); load()

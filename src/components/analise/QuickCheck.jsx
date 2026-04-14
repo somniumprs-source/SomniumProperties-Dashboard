@@ -4,6 +4,7 @@
  */
 import { useState } from 'react'
 import { EUR, PCT } from '../../constants.js'
+import { apiFetch } from '../../lib/api.js'
 
 export function QuickCheck({ analise, onTransfer }) {
   const [form, setForm] = useState({
@@ -18,7 +19,7 @@ export function QuickCheck({ analise, onTransfer }) {
   const calcular = async () => {
     setLoading(true)
     try {
-      const r = await fetch('/api/crm/analises/quick-check', {
+      const r = await apiFetch('/api/crm/analises/quick-check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),

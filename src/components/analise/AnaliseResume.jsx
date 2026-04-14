@@ -1,9 +1,8 @@
 /**
  * Sidebar de resumo da análise — KPIs, lucro, retorno, avisos.
  */
+import { EUR, PCT } from '../../constants.js'
 
-const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
-const PCT = v => `${(v ?? 0).toFixed(1)}%`
 const GOLD = '#C9A84C'
 
 export function AnaliseResume({ analise }) {

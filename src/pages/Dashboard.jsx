@@ -3,25 +3,12 @@ import { TrendingUp, Database, Clock, Calculator } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { DepartmentSection } from '../components/dashboard/DepartmentSection.jsx'
 import { useKPIs } from '../hooks/useKPIs.js'
+import { KPISkeleton } from '../components/ui/Skeleton.jsx'
+import { apiFetch } from '../lib/api.js'
+import { EUR, statusColor } from '../constants.js'
 
-function statusFromValue(value, meta, higherIsBetter = true) {
-  if (value === null || value === undefined || meta === undefined) return 'yellow'
-  const ratio = value / meta
-  if (higherIsBetter) {
-    if (ratio >= 0.9) return 'green'
-    if (ratio >= 0.7) return 'yellow'
-    return 'red'
-  } else {
-    if (ratio <= 1.1) return 'green'
-    if (ratio <= 1.3) return 'yellow'
-    return 'red'
-  }
-}
-
-function formatEur(val) {
-  if (val === null || val === undefined) return '—'
-  return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(val)
-}
+const formatEur = EUR
+const statusFromValue = statusColor
 
 const PULSE_COLOR = { excelente: '#22c55e', bom: '#C9A84C', 'atenção': '#f59e0b', 'crítico': '#ef4444' }
 const PULSE_BG = { excelente: 'rgba(34,197,94,0.1)', bom: 'rgba(201,168,76,0.1)', 'atenção': 'rgba(245,158,11,0.1)', 'crítico': 'rgba(239,68,68,0.1)' }
@@ -32,8 +19,8 @@ export function Dashboard() {
   const [metricas, setMetricas] = useState(null)
 
   useEffect(() => {
-    fetch('/api/weekly-pulse').then(r => r.json()).then(setPulse).catch(() => {})
-    fetch('/api/metricas').then(r => r.json()).then(setMetricas).catch(() => {})
+    apiFetch('/api/weekly-pulse').then(r => r.json()).then(setPulse).catch(() => {})
+    apiFetch('/api/metricas').then(r => r.json()).then(setMetricas).catch(() => {})
   }, [])
 
   const updatedAt = kpis?.updatedAt
@@ -109,6 +96,8 @@ export function Dashboard() {
             Erro ao carregar KPIs: {error}
           </div>
         )}
+
+        {loading && !error && <KPISkeleton count={8} />}
 
         {/* Banner + Weekly Pulse */}
         <div className="rounded-2xl px-4 sm:px-7 py-4 sm:py-6 flex flex-col sm:flex-row sm:items-center sm:justify-between overflow-hidden relative gap-4"
@@ -225,11 +214,13 @@ export function Dashboard() {
         })()}
 
         {/* Sections */}
+        {!loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
           {sections.map((s) => (
             <DepartmentSection key={s.title} {...s} />
           ))}
         </div>
+        )}
       </div>
     </>
   )

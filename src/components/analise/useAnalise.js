@@ -3,6 +3,7 @@
  * Fetch, save (debounced), criar, duplicar, activar, apagar.
  */
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { apiFetch } from '../../lib/api.js'
 
 export function useAnalise(imovelId) {
   const [analises, setAnalises] = useState([])
@@ -16,7 +17,7 @@ export function useAnalise(imovelId) {
     if (!imovelId) return
     setLoading(true)
     try {
-      const r = await fetch(`/api/crm/imoveis/${imovelId}/analises`)
+      const r = await apiFetch(`/api/crm/imoveis/${imovelId}/analises`)
       const data = await r.json()
       setAnalises(data)
       // Seleccionar a activa, ou a primeira
@@ -40,7 +41,7 @@ export function useAnalise(imovelId) {
   // Criar nova análise
   const criar = useCallback(async (dados = {}) => {
     try {
-      const r = await fetch(`/api/crm/imoveis/${imovelId}/analises`, {
+      const r = await apiFetch(`/api/crm/imoveis/${imovelId}/analises`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dados),
@@ -62,7 +63,7 @@ export function useAnalise(imovelId) {
     setSaving(true)
     saveTimer.current = setTimeout(async () => {
       try {
-        const r = await fetch(`/api/crm/analises/${selected.id}`, {
+        const r = await apiFetch(`/api/crm/analises/${selected.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(campos),
@@ -82,7 +83,7 @@ export function useAnalise(imovelId) {
     if (!selected?.id) return null
     setSaving(true)
     try {
-      const r = await fetch(`/api/crm/analises/${selected.id}`, {
+      const r = await apiFetch(`/api/crm/analises/${selected.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(campos),
@@ -102,7 +103,7 @@ export function useAnalise(imovelId) {
   // Activar análise
   const activar = useCallback(async (analiseId) => {
     try {
-      const r = await fetch(`/api/crm/analises/${analiseId}/activar`, { method: 'POST' })
+      const r = await apiFetch(`/api/crm/analises/${analiseId}/activar`, { method: 'POST' })
       if (r.ok) await load()
     } catch {}
   }, [load])
@@ -110,7 +111,7 @@ export function useAnalise(imovelId) {
   // Duplicar análise
   const duplicar = useCallback(async (analiseId, nome) => {
     try {
-      const r = await fetch(`/api/crm/analises/${analiseId}/duplicar`, {
+      const r = await apiFetch(`/api/crm/analises/${analiseId}/duplicar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nome }),
@@ -128,7 +129,7 @@ export function useAnalise(imovelId) {
   // Apagar análise
   const apagar = useCallback(async (analiseId) => {
     try {
-      const r = await fetch(`/api/crm/analises/${analiseId}`, { method: 'DELETE' })
+      const r = await apiFetch(`/api/crm/analises/${analiseId}`, { method: 'DELETE' })
       if (r.ok) {
         await load()
         if (selected?.id === analiseId) setSelected(analises.find(a => a.id !== analiseId) || null)
