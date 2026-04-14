@@ -1,12 +1,12 @@
 import { useState, useRef } from 'react'
-
-const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
+import { EUR } from '../../constants.js'
 
 const COLUMN_COLORS = {
   // Pipeline Imóveis — Prospeção
   'Adicionado':                     { bg: 'bg-gray-50',    border: 'border-gray-200',   header: 'bg-gray-100 text-gray-700' },
   'Chamada Não Atendida':           { bg: 'bg-gray-50',    border: 'border-gray-200',   header: 'bg-gray-100 text-gray-700' },
   'Pendentes':                      { bg: 'bg-gray-50',    border: 'border-gray-200',   header: 'bg-gray-100 text-gray-700' },
+  'Pré-aprovação':                  { bg: 'bg-amber-50',   border: 'border-amber-200',  header: 'bg-amber-100 text-amber-700' },
   // Qualificação
   'Necessidade de Visita':          { bg: 'bg-blue-50',    border: 'border-blue-200',   header: 'bg-blue-100 text-blue-700' },
   'Visita Marcada':                 { bg: 'bg-indigo-50',  border: 'border-indigo-200', header: 'bg-indigo-100 text-indigo-700' },
@@ -68,7 +68,7 @@ const DEFAULT_COLORS = { bg: 'bg-gray-50', border: 'border-gray-200', header: 'b
  * @param {Function} props.onMove - callback quando um item é movido (id, newColumn)
  * @param {Function} props.onCardClick - callback quando um card é clicado (id)
  */
-export function KanbanBoard({ columns, items, groupField, renderCard, onMove, onCardClick }) {
+export function KanbanBoard({ columns, items, groupField, renderCard, onMove, onCardClick, onDelete }) {
   const [dragging, setDragging] = useState(null)
   const [dragOver, setDragOver] = useState(null)
 
@@ -143,10 +143,18 @@ export function KanbanBoard({ columns, items, groupField, renderCard, onMove, on
                   onDragStart={e => handleDragStart(e, item)}
                   onDragEnd={handleDragEnd}
                   onClick={() => onCardClick?.(item.id)}
-                  className={`bg-white rounded-lg border border-gray-200 p-3 shadow-sm cursor-pointer hover:shadow-md hover:border-indigo-300 transition-all ${
+                  className={`bg-white rounded-lg border border-gray-200 p-3 shadow-sm cursor-pointer hover:shadow-md hover:border-indigo-300 transition-all group/card relative ${
                     dragging === item.id ? 'opacity-50 cursor-grabbing' : ''
                   }`}
                 >
+                  {onDelete && (
+                    <button
+                      onClick={e => { e.stopPropagation(); onDelete(item.id, item.nome ?? item.movimento) }}
+                      className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-red-100 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center text-xs opacity-0 group-hover/card:opacity-100 transition-all"
+                      title="Apagar">
+                      ×
+                    </button>
+                  )}
                   {renderCard(item)}
                 </div>
               ))}

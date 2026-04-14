@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { apiFetch } from '../lib/api.js'
 
 export function useKPIs() {
   const [kpis, setKpis] = useState(null)
@@ -9,7 +10,7 @@ export function useKPIs() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/kpis')
+      const res = await apiFetch('/api/kpis')
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       if (data.error) throw new Error(data.error)

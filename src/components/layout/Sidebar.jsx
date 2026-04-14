@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { LayoutDashboard, TrendingUp, Database, Bell, Clock, BarChart3, Menu, X, LogOut, ArrowLeftRight } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext.jsx'
+import { apiFetch } from '../../lib/api.js'
 
 const nav = [
   { to: '/',           label: 'Dashboard',  Icon: LayoutDashboard, end: true },
@@ -18,7 +19,7 @@ export function Sidebar() {
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
-    const load = () => fetch('/api/alertas').then(r => r.json()).then(d => setAlertCount(d.resumo?.criticos ?? 0)).catch(() => {})
+    const load = () => apiFetch('/api/alertas').then(r => r.json()).then(d => setAlertCount(d.resumo?.criticos ?? 0)).catch(() => {})
     load()
     const interval = setInterval(load, 60000)
     return () => clearInterval(interval)
