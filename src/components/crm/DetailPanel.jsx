@@ -44,12 +44,56 @@ function DocumentosTab({ imovelId, estado, driveFolderId }) {
   const estadoClean = (estado || '').replace(/^\d+-\s*/, '').trim()
   const docsActuais = ESTADO_DOCS[estadoClean] || ['ficha_imovel']
   const todosDocs = Object.keys(DOC_LABELS)
+  const [selected, setSelected] = useState({ investimento: true, comparaveis: true, caep: true, stress_tests: true })
+
+  const INVESTOR_REPORTS = [
+    { key: 'investimento', label: 'Análise de Investimento', desc: 'Custos, rentabilidade, fiscalidade', tipo: 'relatorio_investimento' },
+    { key: 'comparaveis', label: 'Estudo de Comparáveis', desc: 'Preços de mercado e ajustes', tipo: 'relatorio_comparaveis' },
+    { key: 'caep', label: 'Distribuição CAEP', desc: 'Split Somnium/investidores', tipo: 'relatorio_caep' },
+    { key: 'stress_tests', label: 'Stress Tests', desc: 'Cenários de risco e favoráveis', tipo: 'relatorio_stress' },
+  ]
+
+  const selectedKeys = Object.entries(selected).filter(([, v]) => v).map(([k]) => k)
+  const compilarUrl = `/api/crm/imoveis/${imovelId}/relatorio-investidor?seccoes=${selectedKeys.join(',')}`
 
   return (
     <div className="space-y-6">
+      {/* Dossier para Investidor */}
+      <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-sm font-bold text-gray-800">Dossier para Investidor</h3>
+            <p className="text-xs text-gray-500">Selecciona as secções e compila um PDF profissional</p>
+          </div>
+          <a href={compilarUrl} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl text-white transition-colors"
+            style={{ backgroundColor: '#C9A84C' }}>
+            <FileDown className="w-4 h-4" /> Compilar Dossier
+          </a>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {INVESTOR_REPORTS.map(r => (
+            <div key={r.key} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-amber-200">
+              <input type="checkbox" checked={selected[r.key]}
+                onChange={e => setSelected(prev => ({ ...prev, [r.key]: e.target.checked }))}
+                className="w-4 h-4 rounded border-amber-300 text-amber-600 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-800">{r.label}</p>
+                <p className="text-xs text-gray-400">{r.desc}</p>
+              </div>
+              <a href={`/api/crm/imoveis/${imovelId}/documento/${r.tipo}`} target="_blank" rel="noopener noreferrer"
+                className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 shrink-0">
+                Abrir
+              </a>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Documentos da fase */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-gray-700">Documentos — {estadoClean || 'Sem estado'}</h3>
+          <h3 className="text-sm font-semibold text-gray-700">Documentos da Fase — {estadoClean || 'Sem estado'}</h3>
           {driveFolderId && (
             <a href={`https://drive.google.com/drive/folders/${driveFolderId}`} target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors">
@@ -60,26 +104,30 @@ function DocumentosTab({ imovelId, estado, driveFolderId }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {docsActuais.map(tipo => (
             <a key={tipo} href={`/api/crm/imoveis/${imovelId}/documento/${tipo}`} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200 hover:bg-amber-100 transition-colors cursor-pointer">
-              <FileDown className="w-5 h-5 text-amber-600" />
+              className="flex items-center gap-3 p-3 bg-green-50 rounded-lg border border-green-200 hover:bg-green-100 transition-colors cursor-pointer">
+              <FileDown className="w-5 h-5 text-green-600" />
               <div>
                 <p className="text-sm font-medium text-gray-800">{DOC_LABELS[tipo] || tipo}</p>
-                <p className="text-xs text-amber-600">Fase actual</p>
+                <p className="text-xs text-green-600">Fase actual</p>
               </div>
             </a>
           ))}
         </div>
       </div>
+
+      {/* Relatorio geral */}
       <div>
         <a href={`/api/crm/imoveis/${imovelId}/relatorio`} target="_blank" rel="noopener noreferrer"
           className="flex items-center gap-3 p-3 bg-indigo-50 rounded-lg border border-indigo-200 hover:bg-indigo-100 transition-colors cursor-pointer">
           <FileText className="w-5 h-5 text-indigo-600" />
           <div>
-            <p className="text-sm font-medium text-gray-800">Relatório PDF Completo</p>
-            <p className="text-xs text-indigo-600">Todos os dados e análise financeira</p>
+            <p className="text-sm font-medium text-gray-800">Relatório Geral PDF</p>
+            <p className="text-xs text-indigo-600">Ficha completa do imóvel</p>
           </div>
         </a>
       </div>
+
+      {/* Todos os docs */}
       <div>
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Todos os Documentos</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">

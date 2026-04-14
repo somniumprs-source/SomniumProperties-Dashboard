@@ -187,6 +187,25 @@ router.get('/imoveis/:id/relatorio', async (req, res) => {
   }
 })
 
+// ── Relatório compilado para investidor ──────────────────────
+router.get('/imoveis/:id/relatorio-investidor', async (req, res) => {
+  try {
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+    const { rows: [analise] } = await pool.query(
+      'SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1', [imovel.id]
+    ).catch(() => ({ rows: [] }))
+
+    const seccoes = (req.query.seccoes || 'investimento,comparaveis,caep,stress_tests').split(',').filter(Boolean)
+    const { generateCompiledReport } = await import('./pdfImovelDocs.js')
+    const nome = (imovel.nome || 'imovel').replace(/[^a-zA-Z0-9À-ú ]/g, '').replace(/\s+/g, '_')
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `inline; filename="Dossier_Investimento_${nome}.pdf"`)
+    const doc = generateCompiledReport(imovel, analise || null, seccoes)
+    doc.pipe(res)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 crudRoutes('/investidores', Investidores)
 
 // ── Endpoints específicos de consultores (ANTES do crudRoutes para evitar conflito com :id) ─
