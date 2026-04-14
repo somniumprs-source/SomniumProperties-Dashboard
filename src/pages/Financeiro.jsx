@@ -3,12 +3,13 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, ComposedChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts'
-import { Upload, X, FileText, Image, Trash2, Plus } from 'lucide-react'
+import { Upload, X, FileText, Image, Trash2, Plus, Briefcase, Receipt, Wallet } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
+import { PageSkeleton } from '../components/ui/Skeleton.jsx'
 import { KPICard } from '../components/dashboard/KPICard.jsx'
-
-const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
-const EUR2 = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0)
+import { apiFetch } from '../lib/api.js'
+import { EmptyState } from '../components/ui/EmptyState.jsx'
+import { EUR, EUR2 } from '../constants.js'
 
 const CAT_COLORS = {
   'Wholesalling':         '#6366f1',
@@ -49,13 +50,13 @@ export function Financeiro() {
     setLoading(true); setError(null)
     try {
       const [kr, dr, cr, pr, ar, nr, dsr] = await Promise.all([
-        fetch('/api/kpis/financeiro'),
-        fetch('/api/financeiro/despesas'),
-        fetch('/api/financeiro/cashflow'),
-        fetch('/api/financeiro/projecao'),
-        fetch('/api/crm/analises-kpis'),
-        fetch('/api/crm/negocios?limit=200'),
-        fetch('/api/crm/despesas?limit=200'),
+        apiFetch('/api/kpis/financeiro'),
+        apiFetch('/api/financeiro/despesas'),
+        apiFetch('/api/financeiro/cashflow'),
+        apiFetch('/api/financeiro/projecao'),
+        apiFetch('/api/crm/analises-kpis'),
+        apiFetch('/api/crm/negocios?limit=200'),
+        apiFetch('/api/crm/despesas?limit=200'),
       ])
       if (!kr.ok || !dr.ok || !cr.ok) throw new Error('Erro no servidor')
       const [k, d, c, p, a, n, ds] = await Promise.all([kr.json(), dr.json(), cr.json(), pr.ok ? pr.json() : null, ar.ok ? ar.json() : null, nr.json(), dsr.json()])
@@ -78,7 +79,7 @@ export function Financeiro() {
 
   async function deleteNegocio(id) {
     if (!confirm('Apagar este negócio?')) return
-    await fetch(`/api/crm/negocios/${id}`, { method: 'DELETE' })
+    await apiFetch(`/api/crm/negocios/${id}`, { method: 'DELETE' })
     load()
   }
 
@@ -94,7 +95,7 @@ export function Financeiro() {
 
   async function deleteDespesa(id) {
     if (!confirm('Apagar esta despesa?')) return
-    await fetch(`/api/crm/despesas/${id}`, { method: 'DELETE' })
+    await apiFetch(`/api/crm/despesas/${id}`, { method: 'DELETE' })
     load()
   }
 
@@ -139,6 +140,8 @@ export function Financeiro() {
         {error && (
           <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>
         )}
+
+        {loading && !error && <PageSkeleton />}
 
         {/* ══════════════════ RESUMO ══════════════════ */}
         {tab === 'Resumo' && (
@@ -185,7 +188,7 @@ export function Financeiro() {
                       <Tooltip formatter={v => EUR(v)} />
                     </PieChart>
                   </ResponsiveContainer>
-                ) : <EmptyState />}
+                ) : <EmptyState icon={Briefcase} title="Sem categorias" description="Nenhum negócio com lucro estimado." />}
               </div>
 
               <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
@@ -202,7 +205,7 @@ export function Financeiro() {
                       <Bar dataKey="lucroEst" name="Lucro Est. €" fill="#10b981" radius={[0,3,3,0]} />
                     </BarChart>
                   </ResponsiveContainer>
-                ) : <EmptyState />}
+                ) : <EmptyState icon={Briefcase} title="Sem negócios" description="Nenhum negócio por fase registado." />}
               </div>
             </div>
 
@@ -235,7 +238,8 @@ export function Financeiro() {
                     <p className={`text-lg font-bold ${analises.imoveis_com_risco > 0 ? 'text-red-600' : 'text-green-700'}`}>{analises.imoveis_com_risco}</p>
                   </div>
                 </div>
-                <table className="w-full text-xs">
+                <div className="overflow-x-auto">
+                <table className="min-w-[600px] w-full text-xs">
                   <thead>
                     <tr className="text-gray-400 border-b">
                       <th className="text-left py-1.5">Imóvel</th>
@@ -259,6 +263,7 @@ export function Financeiro() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
           </>
@@ -297,13 +302,13 @@ export function Financeiro() {
                   {c.lucroReal > 0 && <p className="text-xs text-green-600 font-mono">{EUR(c.lucroReal)} real</p>}
                 </div>
               ))}
-              {(!kpis?.categorias?.length) && <div className="col-span-4"><EmptyState /></div>}
+              {(!kpis?.categorias?.length) && <div className="col-span-4"><EmptyState icon={Briefcase} title="Sem categorias" description="Nenhuma categoria de negócio encontrada." /></div>}
             </div>
 
             <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm">
               <h2 className="text-sm font-semibold text-gray-700 mb-3">Todos os Negócios</h2>
               <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
+                <table className="min-w-[700px] w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
                       <th className="text-left py-2 px-3">Negócio</th>
@@ -388,12 +393,13 @@ export function Financeiro() {
                       <Bar dataKey="custoAnual" name="Custo Anual €" fill="#ef4444" radius={[0,3,3,0]} />
                     </BarChart>
                   </ResponsiveContainer>
-                ) : <EmptyState />}
+                ) : <EmptyState icon={Receipt} title="Sem despesas" description="Nenhuma despesa por categoria registada." />}
               </div>
 
               <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                 <h2 className="text-sm font-semibold text-gray-700 mb-3">Recorrentes (mensais)</h2>
-                <table className="min-w-full text-xs">
+                <div className="overflow-x-auto">
+                <table className="min-w-[600px] w-full text-xs">
                   <thead>
                     <tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
                       <th className="text-left py-1.5 px-2">Despesa</th>
@@ -433,6 +439,7 @@ export function Financeiro() {
                     )}
                   </tbody>
                 </table>
+                </div>
               </div>
             </div>
 
@@ -440,7 +447,7 @@ export function Financeiro() {
               <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                 <h2 className="text-sm font-semibold text-gray-700 mb-3">One-time & Anuais</h2>
                 <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
+                  <table className="min-w-[700px] w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
                         <th className="text-left py-2 px-3">Despesa</th>
@@ -536,7 +543,8 @@ export function Financeiro() {
             {recebidos.length > 0 && (
               <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                 <h2 className="text-sm font-semibold text-gray-700 mb-3">Pagamentos Recebidos</h2>
-                <table className="min-w-full text-sm">
+                <div className="overflow-x-auto">
+                <table className="min-w-[600px] w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
                       <th className="text-left py-2 px-3">Negócio</th>
@@ -556,6 +564,7 @@ export function Financeiro() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
           </>
@@ -632,7 +641,7 @@ export function Financeiro() {
             <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
               <h2 className="text-sm font-semibold text-gray-700 mb-3">Detalhe Mensal</h2>
               <div className="overflow-x-auto">
-                <table className="min-w-full text-xs">
+                <table className="min-w-[700px] w-full text-xs">
                   <thead>
                     <tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
                       <th className="text-left py-1.5 px-2">Mês</th>
@@ -661,7 +670,7 @@ export function Financeiro() {
           </>
         )}
         {tab === 'P&L' && !projecao && !loading && (
-          <div className="text-center text-gray-400 py-12 text-sm">Sem dados de projeção disponíveis</div>
+          <EmptyState icon={Wallet} title="Sem projeção" description="Sem dados de projeção disponíveis." />
         )}
       </div>
     </>
@@ -680,7 +689,8 @@ function CatBadge({ cat }) {
 
 function NegociosTable({ rows, emptyMsg = 'Sem dados' }) {
   return (
-    <table className="min-w-full text-sm">
+    <div className="overflow-x-auto">
+    <table className="min-w-[700px] w-full text-sm">
       <thead>
         <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
           <th className="text-left py-2 px-3">Negócio</th>
@@ -709,12 +719,10 @@ function NegociosTable({ rows, emptyMsg = 'Sem dados' }) {
         )}
       </tbody>
     </table>
+    </div>
   )
 }
 
-function EmptyState() {
-  return <p className="text-xs text-gray-400 text-center py-10">Sem dados suficientes</p>
-}
 
 // ── Negócio Form ─────────────────────────────────────────────
 const NEG_CATEGORIAS = ['Wholesalling', 'CAEP', 'Mediação Imobiliária', 'Fix and Flip']
@@ -836,7 +844,7 @@ function DespesaForm({ item, onSave, onCancel, onReload }) {
     try {
       const fd = new FormData()
       fd.append('file', file)
-      const r = await fetch(`/api/crm/despesas/${item.id}/upload`, { method: 'POST', body: fd })
+      const r = await apiFetch(`/api/crm/despesas/${item.id}/upload`, { method: 'POST', body: fd })
       const d = await r.json()
       if (d.error) throw new Error(d.error)
       setDocs(d.documentos)
@@ -846,7 +854,7 @@ function DespesaForm({ item, onSave, onCancel, onReload }) {
 
   async function handleDeleteDoc(docId) {
     try {
-      const r = await fetch(`/api/crm/despesas/${item.id}/upload/${docId}`, { method: 'DELETE' })
+      const r = await apiFetch(`/api/crm/despesas/${item.id}/upload/${docId}`, { method: 'DELETE' })
       const d = await r.json()
       if (d.error) throw new Error(d.error)
       setDocs(d.documentos)

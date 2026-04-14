@@ -1,35 +1,8 @@
 import { notion } from '../client.js'
 import { DATABASES } from '../../config/notion.js'
+import { extractText, extractSelect, extractNumber, extractTitle, extractDate, extractEmail, extractPhone } from '../helpers.js'
 
 const DB = DATABASES.clientes
-
-function extractText(prop) {
-  return prop?.rich_text?.map(r => r.plain_text).join('') ?? ''
-}
-
-function extractSelect(prop) {
-  return prop?.select?.name ?? null
-}
-
-function extractNumber(prop) {
-  return prop?.number ?? 0
-}
-
-function extractTitle(prop) {
-  return prop?.title?.map(r => r.plain_text).join('') ?? ''
-}
-
-function extractDate(prop) {
-  return prop?.date?.start ?? null
-}
-
-function extractEmail(prop) {
-  return prop?.email ?? null
-}
-
-function extractPhone(prop) {
-  return prop?.phone_number ?? null
-}
 
 function mapEntry(page) {
   const p = page.properties

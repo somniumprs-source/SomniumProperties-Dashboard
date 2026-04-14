@@ -3,11 +3,12 @@
  * Mostra: campos editáveis + relações + timeline + tarefas + reuniões.
  */
 import { useState, useEffect, useCallback } from 'react'
-import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X } from 'lucide-react'
+import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, Plus } from 'lucide-react'
 import { AnaliseTab } from '../analise/AnaliseTab.jsx'
+import { InteracoesTab } from './InteracoesTab.jsx'
 import { supabase } from '../../lib/supabase.js'
-
-const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
+import { apiFetch } from '../../lib/api.js'
+import { EUR } from '../../constants.js'
 
 const ACAO_LABEL = { INSERT: 'Criado', UPDATE: 'Atualizado', DELETE: 'Apagado' }
 const ACAO_COLOR = { INSERT: 'text-green-600', UPDATE: 'text-blue-600', DELETE: 'text-red-600' }
@@ -19,7 +20,7 @@ async function getToken() {
   } catch { return '' }
 }
 
-export function DetailPanel({ type, id, onClose, onSave }) {
+export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('detalhe')
@@ -27,6 +28,9 @@ export function DetailPanel({ type, id, onClose, onSave }) {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
+  const [showAddImovel, setShowAddImovel] = useState(false)
+  const [imovelForm, setImovelForm] = useState({ nome: '', tipo_oportunidade: 'Off-Market', link: '', tipologia: '', ask_price: '', zona: '' })
+  const [savingImovel, setSavingImovel] = useState(false)
 
   const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores' }[type]
 
@@ -36,7 +40,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
   }
 
   function loadData() {
-    return fetch(`/api/crm/${endpoint}/${id}/full`).then(r => r.json()).then(setData).catch(() => {})
+    return apiFetch(`/api/crm/${endpoint}/${id}/full`).then(r => r.json()).then(setData).catch(() => {})
   }
 
   async function saveEdit() {
@@ -44,7 +48,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
     try {
       // Limpar campos do form que são relações (não enviar ao PUT)
       const { negocios, consultores, imoveis, tarefas, timeline, analises, ...cleanForm } = form
-      const r = await fetch(`/api/crm/${endpoint}/${id}`, {
+      const r = await apiFetch(`/api/crm/${endpoint}/${id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cleanForm),
       })
       if (!r.ok) throw new Error('Erro ao guardar')
@@ -68,7 +72,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
 
     // Carregar reuniões para investidores e consultores
     if (type === 'Investidores' || type === 'Consultores') {
-      fetch(`/api/crm/reunioes?entidade_tipo=${endpoint}&entidade_id=${id}`)
+      apiFetch(`/api/crm/reunioes?entidade_tipo=${endpoint}&entidade_id=${id}`)
         .then(r => r.json())
         .then(setReunioes)
         .catch(() => {})
@@ -81,6 +85,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
   // Tabs dinâmicos por tipo
   const tabs = [
     { key: 'detalhe', label: 'Detalhe', icon: '📋', show: true },
+    { key: 'interacoes', label: `Interacções (${data?.interacoes?.length ?? 0})`, icon: '💬', show: type === 'Consultores' },
     { key: 'relatorios', label: `Relatórios (${reunioes.length})`, icon: '📄', show: (type === 'Investidores' || type === 'Consultores') },
     { key: 'analise', label: 'Análise Financeira', icon: '📊', show: type === 'Imóveis' },
   ].filter(t => t.show)
@@ -153,6 +158,12 @@ export function DetailPanel({ type, id, onClose, onSave }) {
           <AnaliseTab imovelId={data.id} imovelNome={data.nome} />
         </div>
 
+      /* Interacções tab */
+      ) : activeTab === 'interacoes' && type === 'Consultores' ? (
+        <div className="p-4 sm:p-6">
+          <InteracoesTab consultorId={data.id} onUpdate={loadData} />
+        </div>
+
       /* Relatórios tab */
       ) : activeTab === 'relatorios' ? (
         <div className="p-4 sm:p-6">
@@ -175,7 +186,17 @@ export function DetailPanel({ type, id, onClose, onSave }) {
               <Field label="Tipologia" value={data.tipologia} />
               <Field label="Modelo" value={data.modelo_negocio} />
               <Field label="Origem" value={data.origem} />
-              <Field label="Consultor" value={data.nome_consultor} />
+              {data.nome_consultor && data.consultores?.[0]?.id ? (
+                <div>
+                  <p className="text-xs text-gray-400 mb-0.5">Consultor</p>
+                  <button onClick={() => onNavigate && onNavigate('Consultores', data.consultores[0].id)}
+                    className="text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:underline transition-colors text-left">
+                    {data.nome_consultor}
+                  </button>
+                </div>
+              ) : (
+                <Field label="Consultor" value={data.nome_consultor} />
+              )}
               <Field label="Data Adicionado" value={data.data_adicionado} />
               <Field label="Data Chamada" value={data.data_chamada} />
               <Field label="Data Visita" value={data.data_visita} />
@@ -230,21 +251,74 @@ export function DetailPanel({ type, id, onClose, onSave }) {
                 <Field label="Próxima Ação" value={data.proxima_acao} />
               </>}
             </>}
-            {type === 'Consultores' && <>
-              <Field label="Estatuto" value={data.estatuto} />
-              <Field label="Classificação" value={data.classificacao} />
-              <Field label="Contacto" value={data.contacto} />
-              <Field label="Email" value={data.email} />
-              <Field label="Imobiliária" value={(() => { try { return JSON.parse(data.imobiliaria || '[]').join(', ') } catch { return '—' } })()} />
-              <Field label="Leads Enviados" value={data.imoveis_enviados} />
-              <Field label="Off-Market" value={data.imoveis_off_market} />
-              <Field label="Comissão" value={data.comissao > 0 ? `${data.comissao}%` : '—'} />
-              <Field label="Follow Up" value={data.data_follow_up} />
-              <Field label="Próx. Follow Up" value={data.data_proximo_follow_up} />
-            </>}
+            {type === 'Consultores' && (() => {
+              const tq = data._taxaQualidade ?? data.taxa_qualidade ?? 0
+              const sp = data.score_prioridade ?? 0
+              const tmr = data._tempoMedioResposta ?? data.tempo_medio_resposta
+              const tmrLabel = tmr != null ? (tmr < 1 ? `${Math.round(tmr * 60)}min` : tmr < 24 ? `${Math.round(tmr)}h` : `${Math.round(tmr / 24)}d`) : '—'
+              const totalIm = data._totalImoveis ?? data.imoveis_enviados ?? 0
+              const avancados = data._imoveisAvancados ?? 0
+              return <>
+                {/* KPI banner — sempre visivel */}
+                <div className="col-span-2 md:col-span-3 grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+                  <div className="bg-amber-50 rounded-xl p-3 text-center border border-amber-200">
+                    <p className="text-2xl font-bold" style={{ color: '#C9A84C' }}>{sp}</p>
+                    <p className="text-xs text-gray-500">Score Prioridade</p>
+                  </div>
+                  <div className="bg-green-50 rounded-xl p-3 text-center border border-green-200">
+                    <p className="text-2xl font-bold text-green-700">{tq}%</p>
+                    <p className="text-xs text-gray-500">Taxa Qualidade</p>
+                  </div>
+                  <div className="bg-indigo-50 rounded-xl p-3 text-center border border-indigo-200">
+                    <p className="text-2xl font-bold text-indigo-700">{totalIm}</p>
+                    <p className="text-xs text-gray-500">Imóveis ({avancados} avançados)</p>
+                  </div>
+                  <div className="bg-purple-50 rounded-xl p-3 text-center border border-purple-200">
+                    <p className="text-2xl font-bold text-purple-700">{tmrLabel}</p>
+                    <p className="text-xs text-gray-500">Tempo Resposta</p>
+                  </div>
+                </div>
+                {editing ? <>
+                  <EF label="Nome" field="nome" form={form} set={setField} />
+                  <EF label="Estatuto" field="estatuto" form={form} set={setField} type="select" options={['Cold Call','Follow up','Aberto Parcerias','Acesso imoveis Off market','Consultores em Parceria']} />
+                  <EF label="Estado Avaliação" field="estado_avaliacao" form={form} set={setField} type="select" options={['Em avaliação','Ativo','Inativo']} />
+                  <EF label="Classificação" field="classificacao" form={form} set={setField} type="select" options={['A','B','C','D']} />
+                  <EF label="Contacto (telefone)" field="contacto" form={form} set={setField} />
+                  <EF label="Email" field="email" form={form} set={setField} />
+                  <EF label="Equipa Remax" field="equipa_remax" form={form} set={setField} />
+                  <EF label="Imóveis Off-Market" field="imoveis_off_market" form={form} set={setField} type="number" />
+                  <EF label="Meta Mensal Leads" field="meta_mensal_leads" form={form} set={setField} type="number" />
+                  <EF label="Comissão %" field="comissao" form={form} set={setField} type="number" />
+                  <EF label="Data Início Parceria" field="data_inicio" form={form} set={setField} type="date" />
+                  <EF label="Data 1ª Call" field="data_primeira_call" form={form} set={setField} type="date" />
+                  <EF label="Data Follow Up" field="data_follow_up" form={form} set={setField} type="date" />
+                  <EF label="Data Próx. Follow Up" field="data_proximo_follow_up" form={form} set={setField} type="date" />
+                  <EF label="Motivo Follow Up" field="motivo_follow_up" form={form} set={setField} />
+                  <EF label="Motivo Descontinuação" field="motivo_descontinuacao" form={form} set={setField} />
+                  <div className="col-span-2 md:col-span-3">
+                    <label className="text-xs text-gray-400 block mb-1">Notas</label>
+                    <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={4}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                  </div>
+                </> : <>
+                  <Field label="Estatuto" value={data.estatuto} />
+                  <Field label="Estado Avaliação" value={data.estado_avaliacao || 'Em avaliação'} />
+                  <Field label="Classificação" value={data.classificacao || 'D'} />
+                  <Field label="Contacto" value={data.contacto} />
+                  <Field label="Email" value={data.email} />
+                  <Field label="Imobiliária" value={(() => { try { return JSON.parse(data.imobiliaria || '[]').join(', ') } catch { return '—' } })()} />
+                  <Field label="Off-Market" value={data.imoveis_off_market} />
+                  <Field label="Comissão" value={data.comissao > 0 ? `${data.comissao}%` : '—'} />
+                  <Field label="Data Início" value={data.data_inicio} />
+                  <Field label="1ª Call" value={data.data_primeira_call} />
+                  <Field label="Follow Up" value={data.data_follow_up} />
+                  <Field label="Próx. Follow Up" value={data.data_proximo_follow_up} />
+                </>}
+              </>
+            })()}
           </div>
 
-          {editing && type !== 'Investidores' && (
+          {editing && type !== 'Investidores' && type !== 'Consultores' && (
             <div>
               <label className="text-xs text-gray-400 block mb-1">Notas</label>
               <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={4}
@@ -281,29 +355,156 @@ export function DetailPanel({ type, id, onClose, onSave }) {
               <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Consultores</p>
               <div className="space-y-2">
                 {data.consultores.map(c => (
-                  <div key={c.id} className="flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2">
-                    <span className="text-sm font-medium text-blue-800">{c.nome}</span>
-                    <span className="text-xs text-blue-600">{c.estatuto} · {c.contacto}</span>
+                  <div key={c.id}
+                    onClick={() => onNavigate && onNavigate('Consultores', c.id)}
+                    className="flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2 cursor-pointer hover:bg-blue-100 transition-colors group">
+                    <span className="text-sm font-medium text-blue-800 hover:underline">{c.nome}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-blue-600">{c.estatuto} · {c.contacto}</span>
+                      <button onClick={async (e) => {
+                        e.stopPropagation()
+                        if (!confirm(`Apagar consultor "${c.nome}"?`)) return
+                        await apiFetch(`/api/crm/consultores/${c.id}`, { method: 'DELETE' })
+                        await loadData()
+                        if (onSave) onSave()
+                      }} className="opacity-0 group-hover:opacity-100 p-0.5 text-red-400 hover:text-red-600 transition-all" title="Apagar consultor">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {data.imoveis?.length > 0 && (
+          {(type === 'Consultores' || data.imoveis?.length > 0) && (
             <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Imóveis</p>
-              <div className="space-y-2">
-                {data.imoveis.map(i => (
-                  <div key={i.id} className="flex items-center justify-between bg-green-50 rounded-lg px-3 py-2">
-                    <span className="text-sm font-medium text-green-800">{i.nome}</span>
-                    <div className="flex gap-3 text-xs">
-                      <span className="text-green-600">{i.estado?.replace(/^\d+-/, '')}</span>
-                      <span className="font-mono">{EUR(i.ask_price)}</span>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-gray-400 uppercase tracking-wide">Imóveis ({data.imoveis?.length ?? 0})</p>
+                {type === 'Consultores' && (
+                  <button onClick={() => setShowAddImovel(!showAddImovel)}
+                    className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors">
+                    <Plus className="w-3.5 h-3.5" /> Adicionar Imóvel
+                  </button>
+                )}
+              </div>
+
+              {/* Formulário inline para adicionar imóvel */}
+              {showAddImovel && type === 'Consultores' && (
+                <div className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-200 mb-3">
+                  <p className="text-xs font-semibold text-gray-600">Novo imóvel de {data.nome}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Nome do Imóvel *</label>
+                      <input type="text" value={imovelForm.nome} onChange={e => setImovelForm(p => ({ ...p, nome: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" placeholder="Ex: T2 Rua da Alegria" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Tipo Oportunidade</label>
+                      <select value={imovelForm.tipo_oportunidade} onChange={e => setImovelForm(p => ({ ...p, tipo_oportunidade: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                        <option value="Off-Market">Off-Market</option>
+                        <option value="Portal">Portal</option>
+                      </select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs text-gray-500 mb-1">Link {imovelForm.tipo_oportunidade === 'Portal' ? '*' : '(opcional)'}</label>
+                      <input type="url" value={imovelForm.link} onChange={e => setImovelForm(p => ({ ...p, link: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" placeholder="https://..." />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Tipologia</label>
+                      <input type="text" value={imovelForm.tipologia} onChange={e => setImovelForm(p => ({ ...p, tipologia: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" placeholder="T2, T3, Moradia..." />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Ask Price (€)</label>
+                      <input type="number" value={imovelForm.ask_price} onChange={e => setImovelForm(p => ({ ...p, ask_price: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" placeholder="150000" />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs text-gray-500 mb-1">Zona</label>
+                      <input type="text" value={imovelForm.zona} onChange={e => setImovelForm(p => ({ ...p, zona: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" placeholder="Santo António dos Olivais" />
                     </div>
                   </div>
-                ))}
-              </div>
+                  <div className="flex gap-2">
+                    <button
+                      disabled={savingImovel || !imovelForm.nome.trim() || (imovelForm.tipo_oportunidade === 'Portal' && !imovelForm.link.trim())}
+                      onClick={async () => {
+                        setSavingImovel(true)
+                        try {
+                          await apiFetch('/api/crm/imoveis', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              nome: imovelForm.nome.trim(),
+                              nome_consultor: data.nome,
+                              origem: 'Consultor',
+                              tipo_oportunidade: imovelForm.tipo_oportunidade,
+                              link: imovelForm.link || null,
+                              tipologia: imovelForm.tipologia || null,
+                              ask_price: imovelForm.ask_price ? +imovelForm.ask_price : 0,
+                              zona: imovelForm.zona || null,
+                            }),
+                          })
+                          setImovelForm({ nome: '', tipo_oportunidade: 'Off-Market', link: '', tipologia: '', ask_price: '', zona: '' })
+                          setShowAddImovel(false)
+                          await loadData()
+                          if (onSave) onSave()
+                        } catch {}
+                        setSavingImovel(false)
+                      }}
+                      className="px-4 py-2 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                      {savingImovel ? 'A criar...' : 'Criar Imóvel'}
+                    </button>
+                    <button onClick={() => setShowAddImovel(false)} className="px-4 py-2 bg-gray-100 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-200">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {data.imoveis?.length > 0 && (
+                <div className="space-y-2">
+                  {data.imoveis.map(i => (
+                    <div key={i.id}
+                      onClick={() => onNavigate && onNavigate('Imóveis', i.id)}
+                      className="flex items-center justify-between bg-green-50 rounded-lg px-3 py-2 cursor-pointer hover:bg-green-100 transition-colors group">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {i.check_qualidade && (
+                          <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs text-white shrink-0 ${i.check_ouro ? 'bg-amber-500' : 'bg-green-500'}`}>
+                            {i.check_ouro ? '★' : '✓'}
+                          </span>
+                        )}
+                        <span className="text-sm font-medium text-green-800 truncate hover:underline">{i.nome}</span>
+                      </div>
+                      <div className="flex gap-2 text-xs items-center shrink-0">
+                        {i.tipo_oportunidade && (
+                          <span className={`px-1.5 py-0.5 rounded text-xs ${i.tipo_oportunidade === 'Off-Market' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {i.tipo_oportunidade}
+                          </span>
+                        )}
+                        {i.tipologia && <span className="text-gray-500">{i.tipologia}</span>}
+                        <span className="text-green-600">{i.estado?.replace(/^\d+-/, '')}</span>
+                        <span className="font-mono">{EUR(i.ask_price)}</span>
+                        <button onClick={async (e) => {
+                          e.stopPropagation()
+                          if (!confirm(`Apagar imóvel "${i.nome}"?`)) return
+                          await apiFetch(`/api/crm/imoveis/${i.id}`, { method: 'DELETE' })
+                          await loadData()
+                          if (onSave) onSave()
+                        }} className="opacity-0 group-hover:opacity-100 ml-1 p-0.5 text-red-400 hover:text-red-600 transition-all" title="Apagar imóvel">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {(!data.imoveis || data.imoveis.length === 0) && !showAddImovel && (
+                <p className="text-xs text-gray-300">Sem imóveis associados</p>
+              )}
             </div>
           )}
         </div>
@@ -373,7 +574,7 @@ function RelatoriosTab({ reunioes, investidorNome }) {
 
   async function loadTranscricao(id) {
     if (transcricao[id]) return
-    const r = await fetch(`/api/crm/reunioes/${id}/transcricao`)
+    const r = await apiFetch(`/api/crm/reunioes/${id}/transcricao`)
     const d = await r.json()
     setTranscricao(prev => ({ ...prev, [id]: d.transcricao }))
   }
@@ -381,7 +582,7 @@ function RelatoriosTab({ reunioes, investidorNome }) {
   async function runAnalise(id) {
     setAnalyzing(id)
     try {
-      const r = await fetch(`/api/crm/reunioes/${id}/analisar`, { method: 'POST' })
+      const r = await apiFetch(`/api/crm/reunioes/${id}/analisar`, { method: 'POST' })
       const d = await r.json()
       setAnalises(prev => ({ ...prev, [id]: d }))
     } catch {}

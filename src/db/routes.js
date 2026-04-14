@@ -6,7 +6,7 @@ import multer from 'multer'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { randomUUID } from 'crypto'
-import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, getDashboardStats } from './crud.js'
+import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, getDashboardStats } from './crud.js'
 import pool from './pg.js'
 import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
 import { generateImovelPDF } from './pdfReport.js'
@@ -38,12 +38,36 @@ const upload = multer({
 
 const router = Router()
 
+// ── Mapa de qualidade por estado do pipeline ─────────────────
+// 0% = enviado sem info | 25% = check qualidade (SOP §5.1)
+// 50% = visita/VVR concluído | 75% = negociação activa | 100% = proposta apresentada
+const ESTADO_QUALIDADE = {
+  'Adicionado': 0, 'Chamada Não Atendida': 0, 'Pendentes': 0,
+  'Não interessa': 0, 'Nao interessa': 0, 'Descartado': 0,
+  'Pré-aprovação': 0.25,
+  'Necessidade de Visita': 0.25, 'Follow UP': 0.25,
+  'Visita Marcada': 0.50, 'Estudo de VVR': 0.50,
+  'Em negociação': 0.75, 'Proposta aceite': 0.75, 'Enviar proposta ao investidor': 0.75, 'Follow Up após proposta': 0.75,
+  'Criar Proposta ao Proprietário': 1.0, 'Enviar proposta ao Proprietário': 1.0,
+  'Wholesaling': 1.0, 'CAEP': 1.0, 'Fix and Flip': 1.0, 'Negócio em Curso': 1.0,
+}
+// Classificação por score (limiares da fórmula oficial)
+const CLASSE_POR_SCORE = (score) => score >= 80 ? 'A' : score >= 60 ? 'B' : score >= 30 ? 'C' : 'D'
+const CLASSE_LABEL = { A: 'Parceiro', B: 'Activo', C: 'Em desenvolvimento', D: 'Novo' }
+function qualidadeImovel(estado) {
+  const clean = (estado || '').replace(/^\d+-\s*/, '').trim()
+  return ESTADO_QUALIDADE[clean] ?? 0
+}
+
 // ── Generic CRUD route factory ────────────────────────────────
 function crudRoutes(path, crud, { onCreate, onUpdate } = {}) {
   router.get(path, async (req, res) => {
     try {
       const { limit = 100, offset = 0, sort, search, ...filter } = req.query
-      if (search) return res.json({ data: await crud.search(search, +limit) })
+      if (search) {
+        const data = await crud.search(search, +limit)
+        return res.json({ data, total: data.length })
+      }
       res.json(await crud.list({ limit: +limit, offset: +offset, sort, filter }))
     } catch (e) { res.status(500).json({ error: e.message }) }
   })
@@ -164,10 +188,110 @@ router.get('/imoveis/:id/relatorio', async (req, res) => {
 })
 
 crudRoutes('/investidores', Investidores)
+
+// ── Endpoints específicos de consultores (ANTES do crudRoutes para evitar conflito com :id) ─
+
+// Find-or-create consultor (dedup por nome/contacto)
+router.post('/consultores/find-or-create', async (req, res) => {
+  try {
+    const { nome, imobiliaria, contacto } = req.body
+    if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' })
+
+    // 1. Match por contacto (telefone exacto)
+    if (contacto?.trim()) {
+      const { rows } = await pool.query(
+        'SELECT * FROM consultores WHERE contacto = $1 LIMIT 1', [contacto.trim()]
+      )
+      if (rows[0]) return res.json({ ...rows[0], _matched: 'contacto' })
+    }
+
+    // 2. Match por nome exacto (case-insensitive)
+    const { rows: byName } = await pool.query(
+      'SELECT * FROM consultores WHERE LOWER(nome) = LOWER($1) LIMIT 1', [nome.trim()]
+    )
+    if (byName[0]) return res.json({ ...byName[0], _matched: 'nome' })
+
+    // 3. Criar novo
+    const item = await Consultores.create({
+      nome: nome.trim(),
+      estatuto: 'Cold Call',
+      estado_avaliacao: 'Em avaliação',
+      imobiliaria: imobiliaria || null,
+      contacto: contacto || null,
+    })
+    res.status(201).json(item)
+  } catch (e) { res.status(400).json({ error: e.message }) }
+})
+
+// Lista enriquecida de consultores (com métricas e alertas inline)
+router.get('/consultores/enriched', async (req, res) => {
+  try {
+    const { rows: consultores } = await pool.query('SELECT * FROM consultores ORDER BY score_prioridade DESC NULLS LAST, updated_at DESC')
+    const { rows: imoveis } = await pool.query('SELECT nome_consultor, estado, check_qualidade, data_adicionado FROM imoveis WHERE nome_consultor IS NOT NULL')
+    const { rows: interacoes } = await pool.query('SELECT consultor_id, data_hora, direcao FROM consultor_interacoes ORDER BY data_hora DESC')
+
+    const now = Date.now()
+    const enriched = consultores.map(c => {
+      const meusImoveis = imoveis.filter(i => i.nome_consultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase())
+      const totalImoveis = meusImoveis.length
+      // Qualidade baseada no estado do pipeline
+      const imoveisAvancados = meusImoveis.filter(im => qualidadeImovel(im.estado) >= 0.75).length
+
+      const minhasInteracoes = interacoes.filter(i => i.consultor_id === c.id)
+      const ultimaInteracao = minhasInteracoes[0]?.data_hora
+      const diasSemContacto = ultimaInteracao ? Math.floor((now - new Date(ultimaInteracao)) / 86400000) : null
+      const temInteracoes = minhasInteracoes.length > 0
+
+      const ultimoImovel = [...meusImoveis].sort((a, b) => (b.data_adicionado || '').localeCompare(a.data_adicionado || ''))[0]
+      const dataUltimoImovel = ultimoImovel?.data_adicionado
+
+      const horasCriado = (now - new Date(c.created_at)) / 3600000
+      let alertStatus = null
+      // Verde: tem imóvel avançado (negociação+, wholesaling, etc.) nos últimos 30 dias
+      const avancadoRecente = meusImoveis.some(i =>
+        qualidadeImovel(i.estado) >= 0.75 && i.data_adicionado && (now - new Date(i.data_adicionado)) / 86400000 <= 30
+      )
+      if (avancadoRecente) {
+        alertStatus = 'green'
+      } else if (horasCriado > 48 && !temInteracoes) {
+        alertStatus = 'red'
+      } else if (diasSemContacto > 15) {
+        const imovelDepoisContacto = dataUltimoImovel && ultimaInteracao && new Date(dataUltimoImovel) > new Date(ultimaInteracao)
+        if (!imovelDepoisContacto) alertStatus = 'orange'
+      }
+
+      const imobs = (() => { try { return JSON.parse(c.imobiliaria || '[]') } catch { return [] } })()
+
+      return {
+        ...c,
+        _totalImoveis: totalImoveis,
+        _imoveisAvancados: imoveisAvancados,
+        _diasSemContacto: diasSemContacto,
+        _alertStatus: alertStatus,
+        _agencia: imobs.join(', ') || '—',
+      }
+    })
+
+    res.json({ data: enriched, total: enriched.length })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 crudRoutes('/consultores', Consultores)
 crudRoutes('/negocios', Negocios)
 crudRoutes('/despesas', Despesas)
 crudRoutes('/tarefas', Tarefas)
+crudRoutes('/consultor-interacoes', ConsultorInteracoes)
+
+// ── Interacções por consultor ────────────────────────────────
+router.get('/consultores/:id/interacoes', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM consultor_interacoes WHERE consultor_id = $1 ORDER BY data_hora DESC',
+      [req.params.id]
+    )
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
 
 // ── Upload de documentos para despesas ───────────────────────
 router.post('/despesas/:id/upload', upload.single('file'), async (req, res) => {
@@ -373,12 +497,33 @@ router.get('/consultores/:id/full', async (req, res) => {
     const { rows: [cons] } = await pool.query('SELECT * FROM consultores WHERE id = $1', [req.params.id])
     if (!cons) return res.status(404).json({ error: 'Não encontrado' })
     // Imóveis deste consultor
-    const { rows: imoveis } = await pool.query("SELECT id, nome, estado, ask_price, zona FROM imoveis WHERE nome_consultor ILIKE $1", [`%${cons.nome}%`])
+    const { rows: imoveis } = await pool.query("SELECT id, nome, estado, tipologia, ask_price, zona, tipo_oportunidade, check_qualidade, check_ouro, data_adicionado FROM imoveis WHERE nome_consultor ILIKE $1", [`%${cons.nome}%`])
     // Negócios
     const { rows: negocios } = await pool.query("SELECT * FROM negocios WHERE consultor_ids LIKE $1", [`%${cons.notion_id ?? cons.id}%`])
     const { rows: tarefas } = await pool.query("SELECT * FROM tarefas WHERE tarefa ILIKE $1 ORDER BY created_at DESC", [`%${cons.nome}%`])
     const { rows: timeline } = await pool.query("SELECT * FROM audit_log WHERE registo_id = $1 ORDER BY created_at DESC LIMIT 20", [cons.id])
-    res.json({ ...cons, imoveis, negocios, tarefas, timeline })
+    // Interacções
+    const { rows: interacoes } = await pool.query("SELECT * FROM consultor_interacoes WHERE consultor_id = $1 ORDER BY data_hora DESC", [cons.id])
+    // Métricas computadas — qualidade baseada no estado do pipeline
+    const totalImoveis = imoveis.length
+    const somaQualidade = imoveis.reduce((sum, im) => sum + qualidadeImovel(im.estado), 0)
+    const taxaQualidade = totalImoveis > 0 ? Math.round(somaQualidade / totalImoveis * 100) : 0
+    const imoveisAvancados = imoveis.filter(im => qualidadeImovel(im.estado) >= 0.75).length
+    // Tempo médio resposta (Enviado → Resposta)
+    let tempoMedio = null
+    const sortedInteracoes = [...interacoes].sort((a, b) => new Date(a.data_hora) - new Date(b.data_hora))
+    const tempos = []
+    for (let i = 0; i < sortedInteracoes.length; i++) {
+      if (sortedInteracoes[i].direcao === 'Enviado') {
+        const resposta = sortedInteracoes.slice(i + 1).find(x => x.direcao === 'Resposta')
+        if (resposta) {
+          const horas = (new Date(resposta.data_hora) - new Date(sortedInteracoes[i].data_hora)) / 3600000
+          if (horas >= 0) tempos.push(horas)
+        }
+      }
+    }
+    if (tempos.length > 0) tempoMedio = Math.round(tempos.reduce((a, b) => a + b, 0) / tempos.length * 10) / 10
+    res.json({ ...cons, imoveis, negocios, tarefas, timeline, interacoes, _totalImoveis: totalImoveis, _imoveisAvancados: imoveisAvancados, _taxaQualidade: taxaQualidade, _tempoMedioResposta: tempoMedio })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -520,11 +665,17 @@ router.post('/automation/score-investidores', async (req, res) => {
 router.post('/automation/score-consultores', async (req, res) => {
   try {
     const { rows: consultores } = await pool.query('SELECT * FROM consultores')
-    const { rows: imoveis } = await pool.query('SELECT nome_consultor FROM imoveis')
+    const { rows: imoveis } = await pool.query('SELECT nome_consultor, estado FROM imoveis WHERE nome_consultor IS NOT NULL')
     const updated = []
     for (const c of consultores) {
       let score = 0
-      const leads = imoveis.filter(i => i.nome_consultor?.trim() === c.nome).length
+      // Contagem real de imóveis associados (da lista de imóveis)
+      const meusImoveis = imoveis.filter(i => i.nome_consultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase())
+      const leads = meusImoveis.length
+      // Qualidade baseada no estado do pipeline
+      const imoveisAvancados = meusImoveis.filter(im => qualidadeImovel(im.estado) >= 0.75).length
+      const imoveisMedios = meusImoveis.filter(im => qualidadeImovel(im.estado) >= 0.5).length
+
       score += Math.min(leads * 3, 30)
       score += Math.min((c.imoveis_off_market || 0) * 10, 30)
       if (c.data_proximo_follow_up && new Date(c.data_proximo_follow_up) >= new Date()) score += 15
@@ -533,13 +684,19 @@ router.post('/automation/score-consultores', async (req, res) => {
       if (imobs.length > 0) score += 5
       const zonas = c.zonas ? JSON.parse(c.zonas) : []
       if (zonas.length > 0) score += 5
-      if (c.imoveis_enviados > 0) score += 10
+      if (leads > 0) score += 10
+      // Bónus por imóveis avançados no pipeline (negociação+, wholesaling, etc.)
+      score += Math.min(imoveisAvancados * 8, 20)
+      score += Math.min(imoveisMedios * 3, 10)
 
-      const classificacao = score >= 70 ? 'A' : score >= 45 ? 'B' : score >= 20 ? 'C' : 'D'
-      if (c.classificacao !== classificacao) {
-        await pool.query('UPDATE consultores SET classificacao = $1, updated_at = $2 WHERE id = $3',
-          [classificacao, new Date().toISOString(), c.id])
-        updated.push({ nome: c.nome, score, classificacao })
+      const classificacao = CLASSE_POR_SCORE(score)
+      const needsUpdate = c.classificacao !== classificacao || (c.imoveis_enviados || 0) !== leads
+      if (needsUpdate) {
+        await pool.query(
+          'UPDATE consultores SET classificacao = $1, imoveis_enviados = $2, updated_at = $3 WHERE id = $4',
+          [classificacao, leads, new Date().toISOString(), c.id]
+        )
+        updated.push({ nome: c.nome, score, classificacao, imoveisReais: leads, imoveisAvancados })
       }
     }
     res.json({ ok: true, atualizados: updated.length, detalhes: updated })
@@ -571,11 +728,213 @@ router.post('/automation/calc-roi', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+router.post('/automation/score-prioridade-consultores', async (req, res) => {
+  try {
+    const { rows: consultores } = await pool.query('SELECT * FROM consultores')
+    const { rows: imoveis } = await pool.query('SELECT nome_consultor, estado, check_qualidade, check_ouro FROM imoveis WHERE nome_consultor IS NOT NULL')
+    const { rows: interacoes } = await pool.query('SELECT consultor_id, data_hora, direcao FROM consultor_interacoes ORDER BY data_hora ASC')
+    const now = Date.now()
+
+    const leadCounts = consultores.map(c =>
+      imoveis.filter(i => i.nome_consultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase()).length
+    )
+    const maxLeads = Math.max(...leadCounts, 1)
+
+    const updated = []
+    const relatorio = { total: consultores.length, reclassificados: 0, semDados: 0, inativos: 0, distribuicao: { A: 0, B: 0, C: 0, D: 0 }, top5: [], mudancas: [], semDadosList: [] }
+
+    for (const c of consultores) {
+      const meusImoveis = imoveis.filter(i => i.nome_consultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase())
+      const totalImoveis = meusImoveis.length
+      const classeAnterior = c.classificacao
+
+      // Regra: inactivo 60+ dias → manter Inativo, sem classe
+      const diasSemUpdate = Math.floor((now - new Date(c.updated_at || c.created_at)) / 86400000)
+      const ultimaInteracao = interacoes.filter(i => i.consultor_id === c.id).sort((a, b) => new Date(b.data_hora) - new Date(a.data_hora))[0]
+      const diasSemActividade = ultimaInteracao
+        ? Math.floor((now - new Date(ultimaInteracao.data_hora)) / 86400000)
+        : diasSemUpdate
+      const isInativo = diasSemActividade >= 60 && totalImoveis === 0
+
+      if (isInativo) {
+        const needsUpdate = c.estado_avaliacao !== 'Inativo'
+        if (needsUpdate) {
+          await pool.query('UPDATE consultores SET estado_avaliacao = $1, score_prioridade = 0, classificacao = NULL, updated_at = $2 WHERE id = $3',
+            ['Inativo', new Date().toISOString(), c.id])
+        }
+        relatorio.inativos++
+        continue
+      }
+
+      // Consultor sem imóveis → D, score 0
+      if (totalImoveis === 0) {
+        const scorePrioridade = 0
+        const classificacao = 'D'
+        relatorio.distribuicao.D++
+        if (c.score_prioridade !== 0 || c.classificacao !== 'D') {
+          await pool.query('UPDATE consultores SET score_prioridade = 0, taxa_qualidade = 0, classificacao = $1, imoveis_enviados = 0, updated_at = $2 WHERE id = $3',
+            ['D', new Date().toISOString(), c.id])
+          if (classeAnterior && classeAnterior !== 'D') relatorio.mudancas.push({ nome: c.nome, de: classeAnterior, para: 'D', score: 0 })
+          relatorio.reclassificados++
+        }
+        relatorio.semDados++
+        relatorio.semDadosList.push({ nome: c.nome, motivo: 'Sem imóveis associados' })
+        continue
+      }
+
+      // Componente 1: Taxa de qualidade (50%)
+      const somaQualidade = meusImoveis.reduce((sum, im) => sum + qualidadeImovel(im.estado), 0)
+      const taxaQualidade = Math.round(somaQualidade / totalImoveis * 100)
+
+      // Componente 2: Volume normalizado (30%)
+      const volumeNorm = Math.min(Math.round(totalImoveis / maxLeads * 100), 100)
+
+      // Componente 3: Velocidade de resposta (20%)
+      const minhasInteracoes = interacoes.filter(i => i.consultor_id === c.id)
+      const tempos = []
+      for (let i = 0; i < minhasInteracoes.length; i++) {
+        if (minhasInteracoes[i].direcao === 'Enviado') {
+          const resp = minhasInteracoes.slice(i + 1).find(x => x.direcao === 'Resposta')
+          if (resp) {
+            const horas = (new Date(resp.data_hora) - new Date(minhasInteracoes[i].data_hora)) / 3600000
+            if (horas >= 0) tempos.push(horas)
+          }
+        }
+      }
+      const tempoMedio = tempos.length > 0 ? Math.round(tempos.reduce((a, b) => a + b, 0) / tempos.length * 10) / 10 : null
+      const speedScore = tempoMedio != null ? Math.max(0, Math.min(100, Math.round(100 - tempoMedio * 2))) : 50
+
+      // Score final
+      const scorePrioridade = Math.round(taxaQualidade * 0.5 + volumeNorm * 0.3 + speedScore * 0.2)
+      const classificacao = CLASSE_POR_SCORE(scorePrioridade)
+      relatorio.distribuicao[classificacao]++
+
+      const imoveisAvancados = meusImoveis.filter(im => qualidadeImovel(im.estado) >= 0.75).length
+
+      const changed = Math.abs((c.score_prioridade || 0) - scorePrioridade) > 0.5 ||
+                       Math.abs((c.taxa_qualidade || 0) - taxaQualidade) > 0.5 ||
+                       (c.tempo_medio_resposta || null) !== tempoMedio ||
+                       c.classificacao !== classificacao ||
+                       (c.imoveis_enviados || 0) !== totalImoveis
+
+      if (changed) {
+        await pool.query(
+          `UPDATE consultores SET score_prioridade = $1, taxa_qualidade = $2, tempo_medio_resposta = $3,
+           classificacao = $4, imoveis_enviados = $5, updated_at = $6 WHERE id = $7`,
+          [scorePrioridade, taxaQualidade, tempoMedio, classificacao, totalImoveis, new Date().toISOString(), c.id]
+        )
+        relatorio.reclassificados++
+        if (classeAnterior && classeAnterior !== classificacao) {
+          relatorio.mudancas.push({ nome: c.nome, de: classeAnterior, para: classificacao, score: scorePrioridade })
+        }
+      }
+
+      if (tempoMedio === null) {
+        relatorio.semDadosList.push({ nome: c.nome, motivo: 'Sem log de interacções (velocidade = 50 neutro)' })
+      }
+
+      updated.push({ nome: c.nome, scorePrioridade, taxaQualidade, tempoMedio, classificacao, classeAnterior, imoveisReais: totalImoveis, imoveisAvancados })
+    }
+
+    // Top 5
+    relatorio.top5 = updated.sort((a, b) => b.scorePrioridade - a.scorePrioridade).slice(0, 5).map(u => ({
+      nome: u.nome, score: u.scorePrioridade, classe: u.classificacao, imoveis: u.imoveisReais, qualidade: u.taxaQualidade
+    }))
+
+    res.json({ ok: true, atualizados: relatorio.reclassificados, relatorio, detalhes: updated })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Relatório semanal de consultores ─────────────────────────
+router.get('/relatorio/consultores', async (req, res) => {
+  try {
+    const { rows: consultores } = await pool.query('SELECT * FROM consultores ORDER BY score_prioridade DESC NULLS LAST')
+    const { rows: imoveis } = await pool.query('SELECT nome_consultor, estado, check_qualidade FROM imoveis WHERE nome_consultor IS NOT NULL')
+    const { rows: interacoes } = await pool.query('SELECT consultor_id, data_hora, direcao FROM consultor_interacoes')
+    const now = new Date()
+
+    const leadCounts = consultores.map(c =>
+      imoveis.filter(i => i.nome_consultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase()).length
+    )
+    const maxLeads = Math.max(...leadCounts, 1)
+
+    const report = {
+      gerado_em: now.toISOString(),
+      semana: `${now.toISOString().slice(0, 10)} (Semana ${Math.ceil((now.getDate()) / 7)})`,
+      total_consultores: consultores.length,
+      distribuicao: { A: 0, B: 0, C: 0, D: 0, Inativo: 0 },
+      top5: [],
+      consultores_detalhados: [],
+      alertas: { sem_contacto_48h: 0, inativos_15d: 0, inativos_60d: 0 },
+      metricas_globais: { media_score: 0, media_qualidade: 0, total_imoveis: imoveis.length, consultores_com_imoveis: 0, consultores_com_interacoes: 0 },
+    }
+
+    let somaScore = 0, somaQual = 0, comImoveis = 0
+
+    for (const c of consultores) {
+      const meusImoveis = imoveis.filter(i => i.nome_consultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase())
+      const totalIm = meusImoveis.length
+      const minhasInt = interacoes.filter(i => i.consultor_id === c.id)
+
+      const somaQ = meusImoveis.reduce((sum, im) => sum + qualidadeImovel(im.estado), 0)
+      const tq = totalIm > 0 ? Math.round(somaQ / totalIm * 100) : 0
+      const vol = Math.min(Math.round(totalIm / maxLeads * 100), 100)
+
+      const tempos = []
+      for (let i = 0; i < minhasInt.length; i++) {
+        if (minhasInt[i].direcao === 'Enviado') {
+          const resp = minhasInt.slice(i + 1).find(x => x.direcao === 'Resposta')
+          if (resp) { const h = (new Date(resp.data_hora) - new Date(minhasInt[i].data_hora)) / 3600000; if (h >= 0) tempos.push(h) }
+        }
+      }
+      const tmr = tempos.length > 0 ? Math.round(tempos.reduce((a, b) => a + b, 0) / tempos.length * 10) / 10 : null
+      const sp = tempos.length > 0 ? Math.max(0, Math.min(100, Math.round(100 - tmr * 2))) : 50
+
+      const score = totalIm > 0 ? Math.round(tq * 0.5 + vol * 0.3 + sp * 0.2) : 0
+      const classe = totalIm > 0 ? CLASSE_POR_SCORE(score) : 'D'
+
+      const diasCriado = Math.floor((now - new Date(c.created_at)) / 86400000)
+      const ultimaInt = minhasInt.sort((a, b) => new Date(b.data_hora) - new Date(a.data_hora))[0]
+      const diasSemContacto = ultimaInt ? Math.floor((now - new Date(ultimaInt.data_hora)) / 86400000) : null
+
+      report.distribuicao[classe]++
+      if (totalIm > 0) { comImoveis++; somaScore += score; somaQual += tq }
+      if (minhasInt.length > 0) report.metricas_globais.consultores_com_interacoes++
+      if (diasCriado > 2 && minhasInt.length === 0) report.alertas.sem_contacto_48h++
+      if (diasSemContacto > 15) report.alertas.inativos_15d++
+      if (diasSemContacto > 60 || (diasSemContacto === null && diasCriado > 60)) report.alertas.inativos_60d++
+
+      const imoveisDetalhe = meusImoveis.map(im => ({
+        nome: im.nome_consultor, estado: (im.estado || '').replace(/^\d+-\s*/, ''),
+        qualidade: Math.round(qualidadeImovel(im.estado) * 100)
+      }))
+
+      report.consultores_detalhados.push({
+        nome: c.nome, score, classe, classeLabel: CLASSE_LABEL[classe] || classe,
+        taxaQualidade: tq, volume: totalIm, tempoResposta: tmr,
+        estatuto: c.estatuto, agencia: (() => { try { return JSON.parse(c.imobiliaria || '[]').join(', ') } catch { return '' } })(),
+        contacto: c.contacto, email: c.email,
+        diasSemContacto, proximoFollowUp: c.data_proximo_follow_up,
+        imoveis: imoveisDetalhe, interacoes: minhasInt.length,
+      })
+    }
+
+    report.metricas_globais.consultores_com_imoveis = comImoveis
+    report.metricas_globais.media_score = comImoveis > 0 ? Math.round(somaScore / comImoveis) : 0
+    report.metricas_globais.media_qualidade = comImoveis > 0 ? Math.round(somaQual / comImoveis) : 0
+    report.top5 = report.consultores_detalhados.filter(c => c.score > 0).slice(0, 5).map(c => ({
+      nome: c.nome, score: c.score, classe: c.classe, imoveis: c.volume, qualidade: c.taxaQualidade
+    }))
+
+    res.json(report)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 router.post('/automation/run-all', async (req, res) => {
   try {
     const base = `http://localhost:${process.env.PORT ?? 3001}`
     const results = {}
-    for (const ep of ['score-investidores', 'score-consultores', 'calc-roi']) {
+    for (const ep of ['score-investidores', 'score-consultores', 'score-prioridade-consultores', 'calc-roi']) {
       try {
         const r = await fetch(`${base}/api/crm/automation/${ep}`, { method: 'POST' })
         results[ep] = await r.json()

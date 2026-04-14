@@ -3,7 +3,7 @@ import { StatusBadge } from './StatusBadge.jsx'
 export function KPITable({ rows }) {
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full text-sm">
+      <table className="min-w-[500px] w-full text-sm">
         <thead>
           <tr className="border-b border-gray-100">
             <th className="text-left py-2 px-3 text-gray-500 font-medium">KPI</th>

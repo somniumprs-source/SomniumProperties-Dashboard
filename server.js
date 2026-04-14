@@ -43,6 +43,96 @@ try {
   const { default: analiseRoutes } = await import('./src/db/analiseRoutes.js')
   app.use('/api/crm', analiseRoutes)
   console.log('[crm] API CRM + Análises montada em /api/crm (PostgreSQL)')
+
+  // ── WhatsApp Webhook (Twilio) ───────────────────────────────
+  try {
+    const { receiveWhatsAppMessage, isConfigured: waConfigured } = await import('./src/db/whatsappAgent.js')
+    const { runFollowUp, runRelatorioDiario, runRelatorioSemanal, REACTIVATION_TEMPLATE } = await import('./src/db/cronJobs.js')
+    const { startCronJobs } = await import('./src/db/cronJobs.js')
+
+    // Webhook POST /api/webhook/whatsapp (recepção Twilio)
+    app.post('/api/webhook/whatsapp', express.urlencoded({ extended: false }), (req, res) => {
+      // Responder 200 imediatamente ao Twilio
+      res.set('Content-Type', 'text/xml')
+      res.status(200).send('<Response><Message>Recebi, fico a ver 👍</Message></Response>')
+
+      const from = req.body.From || ''
+      const body = req.body.Body || ''
+      if (from && body) {
+        receiveWhatsAppMessage(from, body, true)
+      }
+    })
+
+    // Endpoint para retomar controlo do agente
+    app.post('/api/consultores/:id/retomar-agente', async (req, res) => {
+      try {
+        const { query: pgQuery } = await import('./src/db/pg.js')
+        await pgQuery('UPDATE consultores SET controlo_manual = false, updated_at = $1 WHERE id = $2',
+          [new Date().toISOString(), req.params.id])
+        res.json({ ok: true })
+      } catch (e) { res.status(500).json({ error: e.message }) }
+    })
+
+    // Endpoint para marcar handoff manual
+    app.post('/api/consultores/:id/handoff', async (req, res) => {
+      try {
+        const { query: pgQuery } = await import('./src/db/pg.js')
+        await pgQuery('UPDATE consultores SET controlo_manual = true, updated_at = $1 WHERE id = $2',
+          [new Date().toISOString(), req.params.id])
+        res.json({ ok: true })
+      } catch (e) { res.status(500).json({ error: e.message }) }
+    })
+
+    // Endpoints para execução manual de cron jobs
+    app.post('/api/cron/followup', async (_req, res) => {
+      try { await runFollowUp(); res.json({ ok: true }) } catch (e) { res.status(500).json({ error: e.message }) }
+    })
+    app.post('/api/cron/relatorio-diario', async (_req, res) => {
+      try { await runRelatorioDiario(); res.json({ ok: true }) } catch (e) { res.status(500).json({ error: e.message }) }
+    })
+    app.post('/api/cron/relatorio-semanal', async (_req, res) => {
+      try { await runRelatorioSemanal(); res.json({ ok: true }) } catch (e) { res.status(500).json({ error: e.message }) }
+    })
+
+    // Endpoint para obter template de reactivação
+    app.get('/api/template/reactivacao/:nome', (req, res) => {
+      res.json({ template: REACTIVATION_TEMPLATE(req.params.nome) })
+    })
+
+    // Endpoint para listar relatórios guardados
+    app.get('/api/relatorios', async (req, res) => {
+      try {
+        const { query: pgQuery } = await import('./src/db/pg.js')
+        const { tipo, limit = 20 } = req.query
+        let query = 'SELECT id, tipo, data, created_at FROM relatorios'
+        const params = []
+        if (tipo) { query += ' WHERE tipo = $1'; params.push(tipo) }
+        query += ` ORDER BY created_at DESC LIMIT $${params.length + 1}`
+        params.push(+limit)
+        const { rows } = await pgQuery(query, params)
+        res.json(rows)
+      } catch (e) { res.status(500).json({ error: e.message }) }
+    })
+    app.get('/api/relatorios/:id', async (req, res) => {
+      try {
+        const { query: pgQuery } = await import('./src/db/pg.js')
+        const { rows: [r] } = await pgQuery('SELECT * FROM relatorios WHERE id = $1', [req.params.id])
+        if (!r) return res.status(404).json({ error: 'Relatório não encontrado' })
+        res.json(r)
+      } catch (e) { res.status(500).json({ error: e.message }) }
+    })
+
+    // Iniciar cron jobs
+    startCronJobs()
+
+    if (waConfigured()) {
+      console.log('[whatsapp] Agente WhatsApp activo — webhook em /api/webhook/whatsapp')
+    } else {
+      console.log('[whatsapp] Twilio/Anthropic não configurado — webhook registado mas agente inactivo')
+    }
+  } catch (e) {
+    console.warn('[whatsapp] Módulo WhatsApp não disponível:', e.message)
+  }
 } catch (e) {
   console.warn('[crm] PostgreSQL não disponível — CRM API desativada:', e.message)
   app.use('/api/crm', (_req, res) => res.status(503).json({ error: 'CRM não disponível' }))
@@ -382,8 +472,9 @@ const getClientes     = async () => []
 const getCampanhas    = async () => []
 const getObras        = async () => []
 
-// Cache para endpoints que fazem queries pesadas
-const cache = new Map()
+// Cache com TTL para endpoints que fazem queries pesadas
+import { TTLCache } from './src/db/utils/ttlCache.js'
+const cache = new TTLCache(60000) // 60s default TTL
 app.post('/api/cache/clear', (_req, res) => { cache.clear(); res.json({ ok: true }) })
 
 // ════════════════════════════════════════════════════════════════
@@ -2813,7 +2904,7 @@ const GCAL_ID = process.env.GOOGLE_CALENDAR_ID || 'somniumprs@gmail.com'
 
 // Ler eventos da semana (ou período custom)
 app.get('/api/calendar/events', async (req, res) => {
-  if (!gcal) return res.status(503).json({ error: 'Google Calendar não configurado' })
+  if (!gcal) return res.json({ events: [], total: 0, gcal_ok: false })
   try {
     const days = parseInt(req.query.days) || 7
     const past = parseInt(req.query.past) || 0
@@ -3042,7 +3133,7 @@ try {
       }
     }
     setTimeout(autoSyncFireflies, 60000) // primeiro sync 1 min após arranque
-    setInterval(autoSyncFireflies, FF_SYNC_INTERVAL)
+    setInterval(autoSyncFireflies, FF_SYNC_INTERVAL + Math.random() * 30000) // jitter até 30s
     console.log('[fireflies] Auto-sync ativo (a cada 15 min)')
   }
 } catch (e) {
@@ -3064,8 +3155,8 @@ try {
         console.error('[forms] Auto-sync erro:', e.message)
       }
     }
-    setTimeout(autoSyncForms, 45000)
-    setInterval(autoSyncForms, FORMS_SYNC_INTERVAL)
+    setTimeout(autoSyncForms, 180000) // 3 min após arranque (staggered)
+    setInterval(autoSyncForms, FORMS_SYNC_INTERVAL + Math.random() * 30000) // jitter até 30s
     console.log('[forms] Auto-sync Google Forms ativo (a cada 15 min)')
   }
 } catch (e) {
@@ -3087,107 +3178,81 @@ app.get('/api/okrs', async (req, res) => {
     q += ' ORDER BY ordem, created_at'
     const { rows: okrs } = await pgPool.query(q, params)
 
-    // Buscar KRs para cada OKR
-    for (const okr of okrs) {
-      const { rows: krs } = await pgPool.query('SELECT * FROM okr_krs WHERE okr_id = $1 ORDER BY ordem, created_at', [okr.id])
+    if (okrs.length === 0) return res.json([])
 
-      // Calcular progresso automático de cada KR
-      for (const kr of krs) {
-        kr.valor = await calcKRValue(kr, pgPool)
-        if (kr.invertido) {
-          kr.progresso = kr.valor === 0 ? 100 : Math.max(0, Math.round((1 - kr.valor / kr.meta) * 100))
-        } else {
-          kr.progresso = kr.meta > 0 ? Math.min(100, Math.round(kr.valor / kr.meta * 100)) : 0
-        }
+    // Buscar TODOS os KRs de uma vez (fix N+1)
+    const okrIds = okrs.map(o => o.id)
+    const { rows: allKrs } = await pgPool.query(
+      'SELECT * FROM okr_krs WHERE okr_id = ANY($1) ORDER BY ordem, created_at',
+      [okrIds]
+    )
+
+    // Pre-calcular todas as fontes de uma vez
+    const fontes = [...new Set(allKrs.map(kr => kr.fonte).filter(Boolean))]
+    const fonteValues = await calcAllKRValues(fontes, pgPool)
+
+    // Agrupar KRs por OKR e calcular progresso
+    const krsByOkr = {}
+    for (const kr of allKrs) {
+      kr.valor = fonteValues[kr.fonte] ?? 0
+      if (kr.invertido) {
+        kr.progresso = kr.valor === 0 ? 100 : Math.max(0, Math.round((1 - kr.valor / kr.meta) * 100))
+      } else {
+        kr.progresso = kr.meta > 0 ? Math.min(100, Math.round(kr.valor / kr.meta * 100)) : 0
       }
-      okr.krs = krs
-      okr.progresso = krs.length > 0 ? Math.round(krs.reduce((s, kr) => s + kr.progresso, 0) / krs.length) : 0
+      if (!krsByOkr[kr.okr_id]) krsByOkr[kr.okr_id] = []
+      krsByOkr[kr.okr_id].push(kr)
+    }
+
+    for (const okr of okrs) {
+      okr.krs = krsByOkr[okr.id] || []
+      okr.progresso = okr.krs.length > 0 ? Math.round(okr.krs.reduce((s, kr) => s + kr.progresso, 0) / okr.krs.length) : 0
     }
     res.json(okrs)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// Calcular valor automático de um KR baseado na fonte
+// Mapa fonte → query SQL
+const KR_FONTE_QUERIES = {
+  imoveis_semana: "SELECT COUNT(*) as c FROM imoveis WHERE data_adicionado >= NOW() - INTERVAL '7 days'",
+  imoveis_com_visita: "SELECT COUNT(*) as c FROM imoveis WHERE data_visita IS NOT NULL",
+  imoveis_com_proposta: "SELECT COUNT(*) as c FROM imoveis WHERE data_proposta IS NOT NULL",
+  negocios_total: "SELECT COUNT(*) as c FROM negocios",
+  negocios_vendidos: "SELECT COUNT(*) as c FROM negocios WHERE fase = 'Vendido'",
+  investidores_sem_contacto_30d: "SELECT COUNT(*) as c FROM investidores WHERE data_ultimo_contacto IS NULL OR data_ultimo_contacto < NOW() - INTERVAL '30 days'",
+  investidores_ab_reuniao: "SELECT COUNT(*) as c FROM investidores WHERE classificacao IN ('A','B') AND data_reuniao IS NOT NULL",
+  investidores_nda: "SELECT COUNT(*) as c FROM investidores WHERE nda_assinado = 1",
+  investidores_capital: "SELECT COUNT(*) as c FROM investidores WHERE montante_investido > 0",
+  consultores_followup_semana: "SELECT COUNT(*) as c FROM consultores WHERE data_follow_up >= NOW() - INTERVAL '7 days'",
+  consultores_followup_em_dia: "SELECT COUNT(*) as c FROM consultores WHERE data_proximo_follow_up >= NOW() AND estatuto IN ('Aberto Parcerias','Follow up','Acesso imoveis Off market','Consultores em Parceria')",
+  consultores_com_call: "SELECT COUNT(*) as c FROM consultores WHERE data_primeira_call IS NOT NULL AND estatuto IN ('Aberto Parcerias','Follow up','Acesso imoveis Off market','Consultores em Parceria')",
+  consultores_ativos: "SELECT COUNT(*) as c FROM consultores WHERE estatuto IN ('Aberto Parcerias','Follow up','Acesso imoveis Off market','Consultores em Parceria')",
+  imoveis_sem_modelo: "SELECT COUNT(*) as c FROM imoveis WHERE (modelo_negocio IS NULL OR modelo_negocio = '') AND estado NOT IN ('Descartado','Nao interessa','Não interessa')",
+  imoveis_com_modelo: "SELECT COUNT(*) as c FROM imoveis WHERE modelo_negocio IS NOT NULL AND modelo_negocio != '' AND estado NOT IN ('Descartado','Nao interessa','Não interessa')",
+  imoveis_ativos: "SELECT COUNT(*) as c FROM imoveis WHERE estado NOT IN ('Descartado','Nao interessa','Não interessa')",
+  investidores_ab_contacto: "SELECT COUNT(*) as c FROM investidores WHERE classificacao IN ('A','B') AND data_ultimo_contacto IS NOT NULL",
+  investidores_ab_total: "SELECT COUNT(*) as c FROM investidores WHERE classificacao IN ('A','B')",
+}
+
+// Calcular TODOS os valores de KR em batch (uma query por fonte única)
+async function calcAllKRValues(fontes, pgPool) {
+  const results = {}
+  await Promise.all(fontes.map(async (fonte) => {
+    const sql = KR_FONTE_QUERIES[fonte]
+    if (!sql) { results[fonte] = 0; return }
+    try {
+      const { rows } = await pgPool.query(sql)
+      results[fonte] = parseInt(rows[0].c)
+    } catch { results[fonte] = 0 }
+  }))
+  return results
+}
+
+// Legacy single KR calc (kept for backward compat)
 async function calcKRValue(kr, pgPool) {
   if (!kr.fonte) return 0
-  try {
-    const src = kr.fonte
-    // Fontes automáticas: queries SQL simples
-    if (src === 'imoveis_semana') {
-      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM imoveis WHERE data_adicionado >= NOW() - INTERVAL '7 days'")
-      return parseInt(rows[0].c)
-    }
-    if (src === 'imoveis_com_visita') {
-      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM imoveis WHERE data_visita IS NOT NULL")
-      return parseInt(rows[0].c)
-    }
-    if (src === 'imoveis_com_proposta') {
-      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM imoveis WHERE data_proposta IS NOT NULL")
-      return parseInt(rows[0].c)
-    }
-    if (src === 'negocios_total') {
-      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM negocios")
-      return parseInt(rows[0].c)
-    }
-    if (src === 'negocios_vendidos') {
-      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM negocios WHERE fase = 'Vendido'")
-      return parseInt(rows[0].c)
-    }
-    if (src === 'investidores_sem_contacto_30d') {
-      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM investidores WHERE data_ultimo_contacto IS NULL OR data_ultimo_contacto < NOW() - INTERVAL '30 days'")
-      return parseInt(rows[0].c)
-    }
-    if (src === 'investidores_ab_reuniao') {
-      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM investidores WHERE classificacao IN ('A','B') AND data_reuniao IS NOT NULL")
-      return parseInt(rows[0].c)
-    }
-    if (src === 'investidores_nda') {
-      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM investidores WHERE nda_assinado = 1")
-      return parseInt(rows[0].c)
-    }
-    if (src === 'investidores_capital') {
-      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM investidores WHERE montante_investido > 0")
-      return parseInt(rows[0].c)
-    }
-    if (src === 'consultores_followup_semana') {
-      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM consultores WHERE data_follow_up >= NOW() - INTERVAL '7 days'")
-      return parseInt(rows[0].c)
-    }
-    if (src === 'consultores_followup_em_dia') {
-      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM consultores WHERE data_proximo_follow_up >= NOW() AND estatuto IN ('Aberto Parcerias','Follow up','Acesso imoveis Off market','Consultores em Parceria')")
-      return parseInt(rows[0].c)
-    }
-    if (src === 'consultores_com_call') {
-      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM consultores WHERE data_primeira_call IS NOT NULL AND estatuto IN ('Aberto Parcerias','Follow up','Acesso imoveis Off market','Consultores em Parceria')")
-      return parseInt(rows[0].c)
-    }
-    if (src === 'consultores_ativos') {
-      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM consultores WHERE estatuto IN ('Aberto Parcerias','Follow up','Acesso imoveis Off market','Consultores em Parceria')")
-      return parseInt(rows[0].c)
-    }
-    if (src === 'imoveis_sem_modelo') {
-      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM imoveis WHERE (modelo_negocio IS NULL OR modelo_negocio = '') AND estado NOT IN ('Descartado','Nao interessa','Não interessa')")
-      return parseInt(rows[0].c)
-    }
-    if (src === 'imoveis_com_modelo') {
-      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM imoveis WHERE modelo_negocio IS NOT NULL AND modelo_negocio != '' AND estado NOT IN ('Descartado','Nao interessa','Não interessa')")
-      return parseInt(rows[0].c)
-    }
-    if (src === 'imoveis_ativos') {
-      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM imoveis WHERE estado NOT IN ('Descartado','Nao interessa','Não interessa')")
-      return parseInt(rows[0].c)
-    }
-    if (src === 'investidores_ab_contacto') {
-      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM investidores WHERE classificacao IN ('A','B') AND data_ultimo_contacto IS NOT NULL")
-      return parseInt(rows[0].c)
-    }
-    if (src === 'investidores_ab_total') {
-      const { rows } = await pgPool.query("SELECT COUNT(*) as c FROM investidores WHERE classificacao IN ('A','B')")
-      return parseInt(rows[0].c)
-    }
-    // Manual — retorna 0, o utilizador actualiza manualmente
-    return 0
-  } catch { return 0 }
+  const values = await calcAllKRValues([kr.fonte], pgPool)
+  return values[kr.fonte] ?? 0
 }
 
 // Criar OKR
@@ -3602,6 +3667,63 @@ app.get('/api/alertas', async (req, res) => {
           id: c.id,
         })
       }
+    }
+
+    // ── Consultores: sem primeiro contacto >48h / inativo >15d ──
+    try {
+      const { query: pgQuery } = await import('./src/db/pg.js')
+      const { rows: pgConsultores } = await pgQuery('SELECT id, nome, estatuto, created_at FROM consultores')
+      const { rows: todasInteracoes } = await pgQuery('SELECT consultor_id, data_hora FROM consultor_interacoes')
+      const interacoesPorConsultor = {}
+      for (const i of todasInteracoes) {
+        if (!interacoesPorConsultor[i.consultor_id]) interacoesPorConsultor[i.consultor_id] = []
+        interacoesPorConsultor[i.consultor_id].push(i)
+      }
+
+      const ESTATUTOS_ATIVOS = ['Follow up', 'Aberto Parcerias', 'Acesso imoveis Off market', 'Consultores em Parceria']
+      for (const c of pgConsultores) {
+        const horasCriado = (now - new Date(c.created_at)) / 3600000
+        const interacoesCons = interacoesPorConsultor[c.id] || []
+
+        // VERMELHO: criado há >48h sem primeiro contacto registado (só consultores activos, não Cold Call)
+        if (horasCriado > 48 && interacoesCons.length === 0 && ESTATUTOS_ATIVOS.includes(c.estatuto)) {
+          alerts.push({
+            tipo: 'consultor_sem_contacto_48h',
+            severidade: 'critico',
+            entidade: c.nome,
+            mensagem: `Criado há ${Math.floor(horasCriado)}h sem contacto registado`,
+            status: c.estatuto,
+            id: c.id,
+          })
+        }
+
+        // LARANJA: último contacto há >15 dias sem imóvel recebido entretanto
+        if (interacoesCons.length > 0) {
+          const ultimaData = interacoesCons.reduce((max, i) => {
+            const d = new Date(i.data_hora)
+            return d > max ? d : max
+          }, new Date(0))
+          const diasSemContacto = Math.floor((now - ultimaData) / 86400000)
+          if (diasSemContacto > 15) {
+            const imoveisConsultor = imoveis.filter(im => im.nomeConsultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase())
+            const imovelRecente = imoveisConsultor.some(im =>
+              im.dataAdicionado && new Date(im.dataAdicionado) > ultimaData
+            )
+            if (!imovelRecente) {
+              alerts.push({
+                tipo: 'consultor_inativo_15d',
+                severidade: 'aviso',
+                entidade: c.nome,
+                mensagem: `${diasSemContacto} dias sem contacto`,
+                status: c.estatuto,
+                id: c.id,
+              })
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[alertas] Erro ao verificar interacções consultores:', e.message)
     }
 
     // ── Imóveis parados na mesma fase >5 dias ──

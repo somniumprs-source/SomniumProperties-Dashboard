@@ -13,7 +13,7 @@ export function Filters({ tab, filters, onChange }) {
       {tab === 'Imóveis' && <>
         <select value={filters.estado ?? ''} onChange={e => set('estado', e.target.value)} className={selectClass}>
           <option value="">Todos os estados</option>
-          {['Adicionado','Chamada Não Atendida','Pendentes','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'].map(o =>
+          {['Adicionado','Chamada Não Atendida','Pendentes','Pré-aprovação','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'].map(o =>
             <option key={o} value={o}>{o}</option>
           )}
         </select>
@@ -52,6 +52,12 @@ export function Filters({ tab, filters, onChange }) {
         <select value={filters.estatuto ?? ''} onChange={e => set('estatuto', e.target.value)} className={selectClass}>
           <option value="">Todos os estatutos</option>
           {['Cold Call','Follow up','Aberto Parcerias','Acesso imoveis Off market','Consultores em Parceria'].map(o =>
+            <option key={o} value={o}>{o}</option>
+          )}
+        </select>
+        <select value={filters.estado_avaliacao ?? ''} onChange={e => set('estado_avaliacao', e.target.value)} className={selectClass}>
+          <option value="">Todos os estados</option>
+          {['Em avaliação','Ativo','Inativo'].map(o =>
             <option key={o} value={o}>{o}</option>
           )}
         </select>

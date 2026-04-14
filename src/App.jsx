@@ -9,6 +9,7 @@ import { Metricas } from './pages/Metricas.jsx'
 import { Login } from './pages/Login.jsx'
 import { ProfileSelect } from './pages/ProfileSelect.jsx'
 import { ToastProvider } from './components/ui/Toast.jsx'
+import { ErrorBoundary } from './components/ui/ErrorBoundary.jsx'
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
 
 function AppRoutes() {
@@ -31,12 +32,12 @@ function AppRoutes() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<Dashboard />} />
-        <Route path="/crm" element={<CRM />} />
-        <Route path="/financeiro" element={<Financeiro />} />
-        <Route path="/operacoes" element={<Operacoes />} />
-        <Route path="/metricas" element={<Metricas />} />
-        <Route path="/alertas" element={<Alertas />} />
+        <Route index element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+        <Route path="/crm" element={<ErrorBoundary><CRM /></ErrorBoundary>} />
+        <Route path="/financeiro" element={<ErrorBoundary><Financeiro /></ErrorBoundary>} />
+        <Route path="/operacoes" element={<ErrorBoundary><Operacoes /></ErrorBoundary>} />
+        <Route path="/metricas" element={<ErrorBoundary><Metricas /></ErrorBoundary>} />
+        <Route path="/alertas" element={<ErrorBoundary><Alertas /></ErrorBoundary>} />
         {/* Redirects de páginas removidas */}
         <Route path="/comercial" element={<Navigate to="/crm" replace />} />
         <Route path="/marketing" element={<Navigate to="/crm" replace />} />

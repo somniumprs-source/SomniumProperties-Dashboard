@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Header } from '../components/layout/Header.jsx'
-
-const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
-const PCT = v => `${(v ?? 0).toFixed(1)}%`
+import { apiFetch } from '../lib/api.js'
+import { EUR, PCT } from '../constants.js'
 
 const SEV_STYLE = {
   critico: 'bg-red-100 text-red-700 border-red-200',
@@ -15,9 +14,15 @@ const SEV_DOT = {
   info:    'bg-blue-400',
 }
 const TIPO_LABEL = {
-  inatividade_investidor: 'Investidor inativo',
-  followup_consultor:     'Follow-up atrasado',
-  imovel_parado:          'Imóvel parado',
+  inatividade_investidor:    'Investidor inativo',
+  followup_consultor:        'Follow-up atrasado',
+  imovel_parado:             'Imóvel parado',
+  consultor_sem_contacto_48h:'Consultor sem 1º contacto',
+  consultor_inativo_15d:     'Consultor inativo',
+  stress_prejuizo:           'Risco de prejuízo',
+  ra_baixo:                  'Retorno baixo',
+  vpt_superior:              'VPT superior',
+  imt_caducidade:            'Isenção IMT a caducar',
 }
 
 const HEALTH_COLOR = pct =>
@@ -40,10 +45,10 @@ export function Alertas() {
     setLoading(true); setError(null)
     try {
       const [ar, hr, bl, al] = await Promise.all([
-        fetch('/api/alertas'),
-        fetch('/api/data-health'),
-        fetch('/api/crm/backup/list').then(r => r.json()).catch(() => []),
-        fetch('/api/crm/audit?limit=30').then(r => r.json()).catch(() => []),
+        apiFetch('/api/alertas'),
+        apiFetch('/api/data-health'),
+        apiFetch('/api/crm/backup/list').then(r => r.json()).catch(() => []),
+        apiFetch('/api/crm/audit?limit=30').then(r => r.json()).catch(() => []),
       ])
       if (!ar.ok || !hr.ok) throw new Error('Erro no servidor')
       const [a, h] = await Promise.all([ar.json(), hr.json()])
@@ -56,7 +61,7 @@ export function Alertas() {
   async function createBackup() {
     setBackupLoading(true)
     try {
-      await fetch('/api/crm/backup/auto', { method: 'POST' })
+      await apiFetch('/api/crm/backup/auto', { method: 'POST' })
       await load()
     } catch (e) { setError(e.message) }
     finally { setBackupLoading(false) }
@@ -66,7 +71,7 @@ export function Alertas() {
     if (!confirm('Restaurar este backup? O estado actual será guardado antes da restauração.')) return
     setBackupLoading(true)
     try {
-      const r = await fetch(`/api/crm/backup/restore/${id}`, { method: 'POST' })
+      const r = await apiFetch(`/api/crm/backup/restore/${id}`, { method: 'POST' })
       const d = await r.json()
       if (d.error) throw new Error(d.error)
       alert(`Restaurado: ${d.restored} registos de ${d.fromBackup}`)
@@ -77,7 +82,7 @@ export function Alertas() {
 
   async function undoAction(auditId) {
     try {
-      const r = await fetch(`/api/crm/undo/${auditId}`, { method: 'POST' })
+      const r = await apiFetch(`/api/crm/undo/${auditId}`, { method: 'POST' })
       const d = await r.json()
       if (d.error) throw new Error(d.error)
       await load()
@@ -89,7 +94,7 @@ export function Alertas() {
   async function runAutomation(name, label) {
     setRunning(name); setRunResult(null)
     try {
-      const r = await fetch(`/api/automation/${name}`, { method: 'POST' })
+      const r = await apiFetch(`/api/automation/${name}`, { method: 'POST' })
       const data = await r.json()
       setRunResult({ name: label, ...data })
       load() // Refresh data
@@ -130,6 +135,7 @@ export function Alertas() {
               { key: 'run-all',              label: 'Correr Todas',             desc: 'Executa todas as automações de uma vez' },
               { key: 'score-investidores',   label: 'Scoring Investidores',     desc: 'Classifica A/B/C/D automaticamente' },
               { key: 'score-consultores',    label: 'Scoring Consultores',      desc: 'Classifica A/B/C/D automaticamente' },
+              { key: 'score-prioridade-consultores', label: 'Score Prioridade',  desc: 'Calcula score 0-100 (qualidade + volume + velocidade)' },
               { key: 'calc-roi',             label: 'Calcular ROI',             desc: 'Atualiza ROI nos im\u00f3veis' },
               { key: 'auto-dates',           label: 'Auto-Datas',              desc: 'Preenche datas em falta' },
               { key: 'pipeline-to-faturacao', label: 'Pipeline \u2192 Fatura\u00e7\u00e3o', desc: 'Cria neg\u00f3cios de im\u00f3veis avan\u00e7ados' },
@@ -202,7 +208,7 @@ export function Alertas() {
               Campos Obrigatórios em Falta ({alertas.camposEmFalta.length})
             </h2>
             <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
+              <table className="min-w-[700px] w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
                     <th className="text-left py-2 px-3">Base de Dados</th>
@@ -283,7 +289,7 @@ export function Alertas() {
           <p className="text-xs text-gray-400 mb-3">Backup automático diário às 03:00. Últimos 30 guardados. Cada restauro guarda o estado actual primeiro.</p>
           {backups.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="min-w-full text-xs">
+              <table className="min-w-[600px] w-full text-xs">
                 <thead><tr className="border-b border-gray-100 text-gray-400 uppercase">
                   <th className="text-left py-2 px-3">Data</th>
                   <th className="text-right py-2 px-3">Registos</th>
@@ -314,7 +320,7 @@ export function Alertas() {
           <h2 className="text-sm font-semibold text-gray-700 mb-4">Histórico de Alterações (últimas 30)</h2>
           {auditLog.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="min-w-full text-xs">
+              <table className="min-w-[600px] w-full text-xs">
                 <thead><tr className="border-b border-gray-100 text-gray-400 uppercase">
                   <th className="text-left py-2 px-3">Data</th>
                   <th className="text-left py-2 px-3">Tabela</th>

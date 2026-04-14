@@ -2,15 +2,15 @@
  * KPIs integrados no topo de cada tab do CRM.
  */
 import { useState, useEffect } from 'react'
-
-const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
+import { apiFetch } from '../../lib/api.js'
+import { EUR } from '../../constants.js'
 
 export function TabKPIs({ tab }) {
   const [kpis, setKpis] = useState(null)
   const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores', 'Negócios': 'negocios', 'Despesas': 'despesas' }[tab]
 
   useEffect(() => {
-    fetch(`/api/crm/kpis/${endpoint}`).then(r => r.json()).then(setKpis).catch(() => {})
+    apiFetch(`/api/crm/kpis/${endpoint}`).then(r => r.json()).then(setKpis).catch(() => {})
   }, [endpoint])
 
   if (!kpis) return null
