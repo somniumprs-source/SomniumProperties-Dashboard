@@ -5,8 +5,12 @@ import { DetailPanel } from '../components/crm/DetailPanel.jsx'
 import { Filters } from '../components/crm/Filters.jsx'
 import { TabKPIs } from '../components/crm/TabKPIs.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
+import { KanbanSkeleton, TableSkeleton } from '../components/ui/Skeleton.jsx'
+import { EmptyState } from '../components/ui/EmptyState.jsx'
+import { Building2, Users, UserCheck, Briefcase, HardHat } from 'lucide-react'
 import { MultiSelect } from '../components/ui/MultiSelect.jsx'
-import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS_COLOR, CONS_ESTATUTO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
+import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS_COLOR, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
+import { apiFetch } from '../lib/api.js'
 
 const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Negócios', 'Empreiteiros']
 
@@ -19,6 +23,299 @@ function Badge({ text, colorMap }) {
 function ClassBadge({ cls }) {
   if (!cls) return <span className="text-xs text-gray-300">—</span>
   return <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white ${CLASS_COLOR[cls] ?? 'bg-gray-400'}`}>{cls}</span>
+}
+
+// ── Relatório Semanal de Consultores ─────────────────────────
+function RelatorioConsultores() {
+  const [report, setReport] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [reclassifying, setReclassifying] = useState(false)
+  const [reclassResult, setReclassResult] = useState(null)
+
+  useEffect(() => {
+    setLoading(true)
+    apiFetch('/api/crm/relatorio/consultores').then(r => r.json()).then(setReport).catch(() => {}).finally(() => setLoading(false))
+  }, [])
+
+  async function handleReclassificar() {
+    setReclassifying(true)
+    try {
+      const r = await apiFetch('/api/crm/automation/score-prioridade-consultores', { method: 'POST' })
+      const data = await r.json()
+      setReclassResult(data.relatorio || data)
+      // Recarregar relatório
+      const r2 = await apiFetch('/api/crm/relatorio/consultores')
+      setReport(await r2.json())
+    } catch {}
+    setReclassifying(false)
+  }
+
+  if (loading) return <div className="text-center py-12 text-gray-400">A gerar relatório...</div>
+  if (!report) return <div className="text-center py-12 text-gray-400">Erro ao carregar relatório</div>
+
+  const classeColor = { A: 'bg-green-100 text-green-700 border-green-200', B: 'bg-blue-100 text-blue-700 border-blue-200', C: 'bg-yellow-100 text-yellow-700 border-yellow-200', D: 'bg-gray-100 text-gray-600 border-gray-200' }
+  const classeLabel = { A: 'Parceiro', B: 'Activo', C: 'Em desenvolvimento', D: 'Novo' }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-gray-800">Relatório Semanal de Consultores</h2>
+          <p className="text-xs text-gray-400">{report.semana} — Gerado: {new Date(report.gerado_em).toLocaleString('pt-PT')}</p>
+        </div>
+        <button onClick={handleReclassificar} disabled={reclassifying}
+          className="px-4 py-2 text-xs font-medium rounded-xl transition-colors text-white disabled:opacity-50"
+          style={{ backgroundColor: '#C9A84C' }}>
+          {reclassifying ? 'A reclassificar...' : 'Reclassificar Agora'}
+        </button>
+      </div>
+
+      {/* Resultado da reclassificação */}
+      {reclassResult && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-2">
+          <p className="text-sm font-semibold text-green-800">Reclassificação concluída</p>
+          <p className="text-xs text-green-700">
+            {reclassResult.reclassificados ?? reclassResult.atualizados ?? 0} consultores actualizados
+          </p>
+          {reclassResult.mudancas?.length > 0 && (
+            <div className="mt-2">
+              <p className="text-xs font-medium text-green-700 mb-1">Mudanças de classe:</p>
+              {reclassResult.mudancas.map((m, i) => (
+                <p key={i} className="text-xs text-green-600">{m.nome}: {m.de} → {m.para} (score {m.score})</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* KPIs globais */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
+          <p className="text-2xl font-bold text-gray-800">{report.total_consultores}</p>
+          <p className="text-xs text-gray-500">Total Consultores</p>
+        </div>
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
+          <p className="text-2xl font-bold" style={{ color: '#C9A84C' }}>{report.metricas_globais.media_score}</p>
+          <p className="text-xs text-gray-500">Score Médio</p>
+        </div>
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
+          <p className="text-2xl font-bold text-green-600">{report.metricas_globais.media_qualidade}%</p>
+          <p className="text-xs text-gray-500">Qualidade Média</p>
+        </div>
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
+          <p className="text-2xl font-bold text-indigo-600">{report.metricas_globais.consultores_com_imoveis}</p>
+          <p className="text-xs text-gray-500">Com Imóveis</p>
+        </div>
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
+          <p className="text-2xl font-bold text-red-600">{report.alertas.sem_contacto_48h}</p>
+          <p className="text-xs text-gray-500">Sem 1o Contacto</p>
+        </div>
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
+          <p className="text-2xl font-bold text-orange-600">{report.alertas.inativos_60d}</p>
+          <p className="text-xs text-gray-500">Inactivos 60d+</p>
+        </div>
+      </div>
+
+      {/* Distribuição por classe */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Distribuição por Classe</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {['A', 'B', 'C', 'D'].map(cl => (
+            <div key={cl} className={`rounded-xl p-4 text-center border ${classeColor[cl]}`}>
+              <p className="text-3xl font-bold">{report.distribuicao[cl] || 0}</p>
+              <p className="text-xs font-medium mt-1">Classe {cl}</p>
+              <p className="text-xs opacity-70">{classeLabel[cl]}</p>
+            </div>
+          ))}
+        </div>
+        {/* Barra visual */}
+        <div className="flex rounded-full overflow-hidden h-3 mt-4">
+          {['A', 'B', 'C', 'D'].map(cl => {
+            const count = report.distribuicao[cl] || 0
+            const pct = report.total_consultores > 0 ? (count / report.total_consultores * 100) : 0
+            const colors = { A: 'bg-green-500', B: 'bg-blue-500', C: 'bg-yellow-500', D: 'bg-gray-300' }
+            return pct > 0 ? <div key={cl} className={colors[cl]} style={{ width: `${pct}%` }} title={`${cl}: ${count}`} /> : null
+          })}
+        </div>
+      </div>
+
+      {/* Top 5 */}
+      {report.top5?.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Top 5 Consultores</h3>
+          <div className="space-y-2">
+            {report.top5.map((c, i) => (
+              <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
+                <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                  style={{ backgroundColor: i === 0 ? '#C9A84C' : i === 1 ? '#9CA3AF' : i === 2 ? '#B87333' : '#E5E7EB', color: i > 2 ? '#6B7280' : '#fff' }}>
+                  {i + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800">{c.nome}</p>
+                </div>
+                <span className="text-sm font-mono font-bold" style={{ color: '#C9A84C' }}>{c.score}</span>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${classeColor[c.classe]}`}>{c.classe}</span>
+                <span className="text-xs text-gray-400">{c.imoveis} im. · {c.qualidade}% qual.</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tabela detalhada por classe */}
+      {['A', 'B', 'C', 'D'].map(cl => {
+        const grupo = report.consultores_detalhados.filter(c => c.classe === cl)
+        if (grupo.length === 0) return null
+        return (
+          <div key={cl} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className={`px-4 py-2 ${classeColor[cl]} flex items-center justify-between`}>
+              <span className="text-xs font-semibold uppercase">Classe {cl} — {classeLabel[cl]} ({grupo.length})</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead><tr className="border-b border-gray-100 text-gray-400">
+                  <th className="text-left py-2 px-3">Nome</th>
+                  <th className="text-left py-2 px-3">Agência</th>
+                  <th className="text-right py-2 px-3">Score</th>
+                  <th className="text-right py-2 px-3">Qualidade</th>
+                  <th className="text-right py-2 px-3">Imóveis</th>
+                  <th className="text-right py-2 px-3">Resp.</th>
+                  <th className="text-left py-2 px-3">Estatuto</th>
+                  <th className="text-left py-2 px-3">Contacto</th>
+                </tr></thead>
+                <tbody>
+                  {grupo.map(c => (
+                    <tr key={c.nome} className="border-b border-gray-50 hover:bg-gray-50">
+                      <td className="py-2 px-3 font-medium text-gray-800">{c.nome}</td>
+                      <td className="py-2 px-3 text-gray-500">{c.agencia || '—'}</td>
+                      <td className="py-2 px-3 text-right font-mono font-semibold" style={{ color: '#C9A84C' }}>{c.score}</td>
+                      <td className="py-2 px-3 text-right font-mono">{c.taxaQualidade}%</td>
+                      <td className="py-2 px-3 text-right font-mono">{c.volume}</td>
+                      <td className="py-2 px-3 text-right font-mono">{c.tempoResposta != null ? `${c.tempoResposta}h` : '—'}</td>
+                      <td className="py-2 px-3"><Badge text={c.estatuto} colorMap={CONS_ESTATUTO_COLOR} /></td>
+                      <td className="py-2 px-3 text-gray-500">{c.contacto || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Follow-up Priority View ──────────────────────────────────
+function FollowUpView({ data, onView, onDelete }) {
+  // Ordenar: vermelho primeiro, depois laranja, depois por dias sem contacto desc, depois sem dados
+  const sorted = [...data].sort((a, b) => {
+    const priority = { red: 0, orange: 1, green: 3, null: 2 }
+    const pa = priority[a._alertStatus] ?? 2
+    const pb = priority[b._alertStatus] ?? 2
+    if (pa !== pb) return pa - pb
+    // Dentro do mesmo grupo, ordenar por dias sem contacto (mais dias = mais urgente)
+    const da = a._diasSemContacto ?? -1
+    const db = b._diasSemContacto ?? -1
+    return db - da
+  })
+
+  const urgentes = sorted.filter(c => c._alertStatus === 'red')
+  const atencao = sorted.filter(c => c._alertStatus === 'orange')
+  const pendentes = sorted.filter(c => !c._alertStatus || c._alertStatus === null)
+  const ok = sorted.filter(c => c._alertStatus === 'green')
+
+  function Section({ title, icon, color, items, borderColor }) {
+    if (items.length === 0) return null
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <span className={`w-3 h-3 rounded-full ${color}`} />
+          <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
+          <span className="text-xs text-gray-400">({items.length})</span>
+        </div>
+        <div className="space-y-1.5">
+          {items.map(c => {
+            const agencia = c._agencia || (() => { try { return JSON.parse(c.imobiliaria || '[]').join(', ') } catch { return '' } })()
+            const diasLabel = c._diasSemContacto != null ? `${c._diasSemContacto}d sem contacto` : 'Sem contacto registado'
+            const followUp = c.data_proximo_follow_up
+            const followUpLabel = followUp ? fmtDate(followUp) : null
+            const isOverdue = followUp && new Date(followUp) < new Date()
+            return (
+              <div key={c.id}
+                onClick={() => onView(c.id)}
+                className={`flex items-center gap-3 p-3 bg-white rounded-lg border cursor-pointer hover:shadow-sm transition-all ${borderColor}`}>
+                <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${color}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-gray-800 truncate">{c.nome}</span>
+                    {agencia && <span className="text-xs text-gray-400 truncate hidden sm:inline">{agencia}</span>}
+                  </div>
+                  <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                    <span className="text-xs text-gray-500">{diasLabel}</span>
+                    {followUpLabel && (
+                      <span className={`text-xs ${isOverdue ? 'text-red-600 font-medium' : 'text-gray-400'}`}>
+                        Follow-up: {followUpLabel} {isOverdue ? '(atrasado)' : ''}
+                      </span>
+                    )}
+                    {c.contacto && (
+                      <a href={`tel:${c.contacto}`} onClick={e => e.stopPropagation()} className="text-xs text-green-600 hover:underline">
+                        {c.contacto}
+                      </a>
+                    )}
+                  </div>
+                  {c.notas && (
+                    <p className="text-xs text-gray-400 mt-1 truncate max-w-xl">{c.notas.split('\n')[0]}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Badge text={c.estatuto} colorMap={CONS_ESTATUTO_COLOR} />
+                  {c.score_prioridade > 0 && (
+                    <span className="text-xs font-mono font-semibold" style={{ color: '#C9A84C' }}>{c.score_prioridade}</span>
+                  )}
+                  <span className="text-xs text-gray-300">{c._totalImoveis ?? 0} im.</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Resumo */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-red-50 rounded-xl p-3 text-center border border-red-200">
+          <p className="text-2xl font-bold text-red-600">{urgentes.length}</p>
+          <p className="text-xs text-red-500">Sem 1o contacto (&gt;48h)</p>
+        </div>
+        <div className="bg-orange-50 rounded-xl p-3 text-center border border-orange-200">
+          <p className="text-2xl font-bold text-orange-600">{atencao.length}</p>
+          <p className="text-xs text-orange-500">Inactivos (&gt;15 dias)</p>
+        </div>
+        <div className="bg-gray-50 rounded-xl p-3 text-center border border-gray-200">
+          <p className="text-2xl font-bold text-gray-600">{pendentes.length}</p>
+          <p className="text-xs text-gray-500">Pendentes</p>
+        </div>
+        <div className="bg-green-50 rounded-xl p-3 text-center border border-green-200">
+          <p className="text-2xl font-bold text-green-600">{ok.length}</p>
+          <p className="text-xs text-green-500">Em dia</p>
+        </div>
+      </div>
+
+      <Section title="Urgente — Sem 1o contacto" color="bg-red-500" borderColor="border-red-200" items={urgentes} />
+      <Section title="Atenção — Inactivos há mais de 15 dias" color="bg-orange-500" borderColor="border-orange-200" items={atencao} />
+      <Section title="Pendentes" color="bg-gray-400" borderColor="border-gray-200" items={pendentes} />
+      <Section title="Em dia — Check positivo recente" color="bg-green-500" borderColor="border-green-200" items={ok} />
+
+      {data.length === 0 && (
+        <EmptyState icon={UserCheck} title="Sem consultores" description="Ainda não existem consultores registados." />
+      )}
+    </div>
+  )
 }
 
 export function CRM() {
@@ -42,28 +339,38 @@ export function CRM() {
     setLoading(true)
     try {
       if (search) {
-        const r = await fetch(`/api/crm/${endpoint}?search=${encodeURIComponent(search)}`)
+        const r = await apiFetch(`/api/crm/${endpoint}?search=${encodeURIComponent(search)}`)
         const d = await r.json()
         setData(d.data ?? []); setTotal(d.data?.length ?? 0)
+      } else if (tab === 'Consultores' && !search) {
+        // Usar endpoint enriquecido para consultores (com métricas e alertas)
+        const params = new URLSearchParams()
+        for (const [k, v] of Object.entries(filters)) { if (v) params.set(k, v) }
+        const r = await apiFetch(`/api/crm/consultores/enriched${params.toString() ? '?' + params : ''}`)
+        const d = await r.json()
+        let items = d.data ?? []
+        // Filtrar client-side por estado_avaliacao se necessário
+        if (filters.estado_avaliacao) items = items.filter(c => c.estado_avaliacao === filters.estado_avaliacao)
+        setData(items); setTotal(items.length)
       } else {
         const params = new URLSearchParams({ limit: '200' })
         for (const [k, v] of Object.entries(filters)) { if (v) params.set(k, v) }
-        const r = await fetch(`/api/crm/${endpoint}?${params}`)
+        const r = await apiFetch(`/api/crm/${endpoint}?${params}`)
         const d = await r.json()
         setData(d.data ?? []); setTotal(d.total ?? 0)
       }
     } catch {}
     setLoading(false)
-  }, [endpoint, search, filters])
+  }, [endpoint, tab, search, filters])
 
   useEffect(() => { load() }, [load])
-  useEffect(() => { fetch('/api/crm/stats').then(r => r.json()).then(setStats).catch(() => {}) }, [])
-  useEffect(() => { fetch('/api/alertas').then(r => r.json()).then(d => setAlertCount(d.resumo?.total ?? 0)).catch(() => {}) }, [])
+  useEffect(() => { apiFetch('/api/crm/stats').then(r => r.json()).then(setStats).catch(() => {}) }, [])
+  useEffect(() => { apiFetch('/api/alertas').then(r => r.json()).then(d => setAlertCount(d.resumo?.total ?? 0)).catch(() => {}) }, [])
 
   // Kanban config por tab
   const KANBAN_CONFIG = {
     'Imóveis': {
-      columns: ['Adicionado','Chamada Não Atendida','Pendentes','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'],
+      columns: ['Adicionado','Chamada Não Atendida','Pendentes','Pré-aprovação','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'],
       groupField: 'estado',
       renderCard: (item) => (
         <div>
@@ -95,15 +402,20 @@ export function CRM() {
       groupField: 'estatuto',
       renderCard: (item) => {
         const imobs = (() => { try { return JSON.parse(item.imobiliaria || '[]').join(', ') } catch { return '' } })()
+        const alertDot = item._alertStatus === 'red' ? 'bg-red-500' : item._alertStatus === 'orange' ? 'bg-orange-500' : item._alertStatus === 'green' ? 'bg-green-500' : null
         return (
           <div>
             <div className="flex items-center gap-2">
+              {alertDot && <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${alertDot}`} />}
               <ClassBadge cls={item.classificacao} />
               <p className="text-sm font-semibold text-gray-800 truncate">{item.nome}</p>
             </div>
             {imobs && <p className="text-xs text-gray-500 mt-1">{imobs}</p>}
             {item.contacto && <p className="text-xs text-gray-400 mt-1">{item.contacto}</p>}
-            {item.imoveis_enviados > 0 && <p className="text-xs text-indigo-600 mt-1">{item.imoveis_enviados} leads</p>}
+            {(item._totalImoveis > 0 || item.imoveis_enviados > 0) && (
+              <p className="text-xs text-indigo-600 mt-1">{item._totalImoveis ?? item.imoveis_enviados} leads</p>
+            )}
+            {item.score_prioridade > 0 && <p className="text-xs text-amber-600 mt-0.5">Score: {item.score_prioridade}</p>}
           </div>
         )
       },
@@ -141,13 +453,13 @@ export function CRM() {
     if (!kanbanConfig) return
     const field = kanbanConfig.groupField
     const item = data.find(i => i.id === id)
-    await fetch(`/api/crm/${endpoint}/${id}`, {
+    await apiFetch(`/api/crm/${endpoint}/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ [field]: newColumn }),
     })
     // Auto-task on phase change
-    fetch('/api/crm/auto-task', {
+    apiFetch('/api/crm/auto-task', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ entity: endpoint, entityId: id, entityName: item?.nome ?? item?.movimento ?? '', newPhase: newColumn }),
@@ -187,7 +499,7 @@ export function CRM() {
   async function handleDelete(id) {
     if (!confirm('Tens a certeza que queres apagar este registo?')) return
     try {
-      await fetch(`/api/crm/${endpoint}/${id}`, { method: 'DELETE' })
+      await apiFetch(`/api/crm/${endpoint}/${id}`, { method: 'DELETE' })
       toast('Registo apagado', 'success')
       load()
     } catch (e) {
@@ -252,6 +564,16 @@ export function CRM() {
                   className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'kanban' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
                   Kanban
                 </button>
+                {tab === 'Consultores' && (<>
+                  <button onClick={() => setView('followups')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'followups' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
+                    Follow-ups
+                  </button>
+                  <button onClick={() => setView('relatorio')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'relatorio' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
+                    Relatório
+                  </button>
+                </>)}
               </div>
             )}
             <button onClick={() => setEditing({})} className="px-3 sm:px-4 py-2 bg-indigo-600 text-white text-xs sm:text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors whitespace-nowrap">
@@ -270,24 +592,43 @@ export function CRM() {
 
         {/* Loading */}
         {loading && editing === null && (
-          <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-            <div className="animate-spin w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full mx-auto" />
-            <p className="text-sm text-gray-400 mt-3">A carregar...</p>
-          </div>
+          view === 'kanban' ? <KanbanSkeleton columns={5} /> : <TableSkeleton rows={8} cols={6} />
         )}
 
         {/* Detail Panel — substitui Kanban/Tabela quando aberto */}
         {detail && ['Imóveis', 'Investidores', 'Consultores'].includes(tab) ? (
-          <DetailPanel type={tab} id={detail} onClose={() => { setDetail(null); load() }} onSave={load} />
+          <DetailPanel type={tab} id={detail} onClose={() => { setDetail(null); load() }} onSave={load}
+            onNavigate={(navType, navId) => { setTab(navType); setDetail(navId) }} />
         ) : (<>
+          {/* Follow-ups View (Consultores only) */}
+          {!loading && editing === null && view === 'followups' && tab === 'Consultores' && (
+            <FollowUpView data={data} onView={setDetail} onDelete={handleDelete} />
+          )}
+
+          {/* Relatório View (Consultores only) */}
+          {!loading && editing === null && view === 'relatorio' && tab === 'Consultores' && (
+            <RelatorioConsultores />
+          )}
+
           {/* Kanban View */}
-          {!loading && editing === null && view === 'kanban' && kanbanConfig && (
+          {!loading && editing === null && view === 'kanban' && kanbanConfig && data.length === 0 && (
+            <EmptyState
+              icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Negócios': Briefcase, 'Empreiteiros': HardHat }[tab] || Building2}
+              title={`Sem ${tab.toLowerCase()}`}
+              description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
+            />
+          )}
+          {!loading && editing === null && view === 'kanban' && kanbanConfig && data.length > 0 && (
             <KanbanBoard
               columns={kanbanConfig.columns}
               items={data}
               groupField={kanbanConfig.groupField}
               renderCard={kanbanConfig.renderCard}
               onMove={handleMove}
+              onDelete={(id, nome) => {
+                if (!confirm(`Apagar "${nome || 'este registo'}"?`)) return
+                handleDelete(id)
+              }}
               onCardClick={(id) => {
                 if (['Imóveis', 'Investidores', 'Consultores'].includes(tab)) {
                   setDetail(id)
@@ -300,7 +641,14 @@ export function CRM() {
           )}
 
           {/* Table View */}
-          {!loading && editing === null && (view === 'table' || !hasKanban) && (
+          {!loading && editing === null && (view === 'table' || !hasKanban) && data.length === 0 && (
+            <EmptyState
+              icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Negócios': Briefcase, 'Empreiteiros': HardHat }[tab] || Building2}
+              title={`Sem ${tab.toLowerCase()}`}
+              description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
+            />
+          )}
+          {!loading && editing === null && (view === 'table' || !hasKanban) && data.length > 0 && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 {tab === 'Imóveis' && <ImoveisTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
@@ -344,7 +692,7 @@ function ClickableName({ name, item, onEdit }) {
 
 function ImoveisTable({ data, onEdit, onDelete, onView }) {
   return (
-    <table className="min-w-full text-xs">
+    <table className="min-w-[800px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
         <th className="text-left py-2 px-3">Imóvel</th><th className="text-left py-2 px-3">Estado</th>
         <th className="text-left py-2 px-3">Zona</th><th className="text-right py-2 px-3">Ask Price</th>
@@ -372,7 +720,7 @@ function ImoveisTable({ data, onEdit, onDelete, onView }) {
 
 function InvestidoresTable({ data, onEdit, onDelete, onView }) {
   return (
-    <table className="min-w-full text-xs">
+    <table className="min-w-[900px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
         <th className="text-left py-2 px-3">Nome</th><th className="py-2 px-3">Class.</th>
         <th className="text-left py-2 px-3">Status</th><th className="text-left py-2 px-3">Origem</th>
@@ -400,31 +748,53 @@ function InvestidoresTable({ data, onEdit, onDelete, onView }) {
   )
 }
 
+function AlertDot({ status }) {
+  if (!status) return null
+  const color = status === 'red' ? 'bg-red-500' : status === 'orange' ? 'bg-orange-500' : status === 'green' ? 'bg-green-500' : null
+  const title = status === 'red' ? 'Sem 1o contacto (>48h)' : status === 'orange' ? 'Inativo (>15 dias)' : status === 'green' ? 'Check positivo recente' : ''
+  if (!color) return null
+  return <span className={`inline-block w-2.5 h-2.5 rounded-full ${color}`} title={title} />
+}
+
 function ConsultoresTable({ data, onEdit, onDelete, onView }) {
   return (
-    <table className="min-w-full text-xs">
+    <table className="min-w-[1100px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
-        <th className="text-left py-2 px-3">Nome</th><th className="py-2 px-3">Class.</th>
-        <th className="text-left py-2 px-3">Estatuto</th><th className="text-left py-2 px-3">Imobiliária</th>
-        <th className="text-left py-2 px-3">Contacto</th><th className="text-right py-2 px-3">Leads</th>
+        <th className="w-6 py-2 px-1"></th>
+        <th className="text-left py-2 px-3">Nome</th>
+        <th className="text-left py-2 px-3">Agência</th>
+        <th className="text-right py-2 px-3">Score</th>
+        <th className="text-right py-2 px-3">Imóveis</th>
+        <th className="text-right py-2 px-3">Taxa Qualidade</th>
+        <th className="text-right py-2 px-3">Tempo Resposta</th>
+        <th className="text-left py-2 px-3">Estado</th>
+        <th className="text-left py-2 px-3">Próx. Follow-up</th>
+        <th className="text-right py-2 px-3">Dias s/ contacto</th>
         <th className="py-2 px-3"></th>
       </tr></thead>
       <tbody>
         {data.map(r => {
-          const imobs = (() => { try { return JSON.parse(r.imobiliaria || '[]').join(', ') } catch { return '—' } })()
+          const agencia = r._agencia || (() => { try { return JSON.parse(r.imobiliaria || '[]').join(', ') } catch { return '—' } })()
+          const tempoResp = r.tempo_medio_resposta != null
+            ? (r.tempo_medio_resposta < 1 ? `${Math.round(r.tempo_medio_resposta * 60)}min` : r.tempo_medio_resposta < 24 ? `${Math.round(r.tempo_medio_resposta)}h` : `${Math.round(r.tempo_medio_resposta / 24)}d`)
+            : '—'
           return (
             <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
+              <td className="py-2 px-1 text-center"><AlertDot status={r._alertStatus} /></td>
               <td className="py-2 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
-              <td className="py-2 px-3 text-center"><ClassBadge cls={r.classificacao} /></td>
-              <td className="py-2 px-3"><Badge text={r.estatuto} colorMap={CONS_ESTATUTO_COLOR} /></td>
-              <td className="py-2 px-3 text-gray-500">{imobs}</td>
-              <td className="py-2 px-3 text-gray-500">{r.contacto ?? '—'}</td>
-              <td className="py-2 px-3 text-right font-mono">{r.imoveis_enviados || '—'}</td>
+              <td className="py-2 px-3 text-gray-500">{agencia}</td>
+              <td className="py-2 px-3 text-right font-mono font-semibold" style={{ color: '#C9A84C' }}>{r.score_prioridade > 0 ? r.score_prioridade : '—'}</td>
+              <td className="py-2 px-3 text-right font-mono">{r._totalImoveis ?? r.imoveis_enviados ?? '—'}</td>
+              <td className="py-2 px-3 text-right font-mono">{r.taxa_qualidade > 0 ? `${r.taxa_qualidade}%` : '—'}</td>
+              <td className="py-2 px-3 text-right font-mono">{tempoResp}</td>
+              <td className="py-2 px-3"><Badge text={r.estado_avaliacao || 'Em avaliação'} colorMap={CONS_ESTADO_AVALIACAO_COLOR} /></td>
+              <td className="py-2 px-3 text-gray-400">{fmtDate(r.data_proximo_follow_up)}</td>
+              <td className="py-2 px-3 text-right font-mono">{r._diasSemContacto != null ? `${r._diasSemContacto}d` : '—'}</td>
               <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
             </tr>
           )
         })}
-        {!data.length && <tr><td colSpan={7} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
+        {!data.length && <tr><td colSpan={11} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
       </tbody>
     </table>
   )
@@ -432,7 +802,7 @@ function ConsultoresTable({ data, onEdit, onDelete, onView }) {
 
 function NegociosTable({ data, onEdit, onDelete }) {
   return (
-    <table className="min-w-full text-xs">
+    <table className="min-w-[700px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
         <th className="text-left py-2 px-3">Negócio</th><th className="text-left py-2 px-3">Categoria</th>
         <th className="text-left py-2 px-3">Fase</th><th className="text-right py-2 px-3">Lucro Est.</th>
@@ -459,7 +829,7 @@ function NegociosTable({ data, onEdit, onDelete }) {
 
 function GenericTable({ data, onEdit, onDelete, columns, labels }) {
   return (
-    <table className="min-w-full text-xs">
+    <table className="min-w-[700px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
         {columns.map(c => <th key={c} className="text-left py-2 px-3">{labels[c] || c}</th>)}
         <th className="py-2 px-3"></th>
@@ -515,7 +885,7 @@ const FREGUESIAS = [
 const FIELD_DEFS = {
   'Imóveis': [
     { key: 'nome', label: 'Nome do Imóvel', type: 'text', required: true },
-    { key: 'estado', label: 'Estado', type: 'select', options: ['Adicionado','Chamada Não Atendida','Pendentes','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'] },
+    { key: 'estado', label: 'Estado', type: 'select', options: ['Adicionado','Chamada Não Atendida','Pendentes','Pré-aprovação','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'] },
     { key: 'tipologia', label: 'Tipologia', type: 'text' },
     { key: 'ask_price', label: 'Ask Price (€)', type: 'number' },
     { key: 'valor_proposta', label: 'Valor Proposta (€)', type: 'number' },
@@ -525,8 +895,11 @@ const FIELD_DEFS = {
     { key: 'zonas', label: 'Zonas', type: 'multiselect', options: FREGUESIAS },
     { key: 'origem', label: 'Origem', type: 'select', options: ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro'] },
     { key: 'modelo_negocio', label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix & Flip','CAEP','Mediação'] },
-    { key: 'nome_consultor', label: 'Consultor', type: 'relation_name_or_new', endpoint: '/api/crm/lookup/consultores', display: r => `${r.nome} (${r.estatuto ?? '—'})`, createEndpoint: '/api/crm/consultores' },
+    { key: 'nome_consultor', label: 'Consultor', type: 'relation_name_or_new', endpoint: '/api/crm/lookup/consultores', display: r => `${r.nome} (${r.estatuto ?? '—'})`, createEndpoint: '/api/crm/consultores/find-or-create' },
+    { key: 'tipo_oportunidade', label: 'Tipo Oportunidade', type: 'select', options: ['Portal', 'Off-Market'] },
     { key: 'link', label: 'Link do Imóvel', type: 'url' },
+    { key: 'check_qualidade', label: 'Check Qualidade', type: 'checkbox' },
+    { key: 'check_ouro', label: 'Check Ouro (3 critérios)', type: 'checkbox' },
     { key: 'motivo_descarte', label: 'Motivo Descarte', type: 'select', options: ['Preço elevado','Produto final não vendável','Sem interesse do investidor','Zona fraca','ROI insuficiente','Já vendido','Outro'] },
     { key: 'data_adicionado', label: 'Data Adicionado', type: 'date' },
     { key: 'data_chamada', label: 'Data Chamada', type: 'date' },
@@ -565,6 +938,7 @@ const FIELD_DEFS = {
   'Consultores': [
     { key: 'nome', label: 'Nome', type: 'text', required: true },
     { key: 'estatuto', label: 'Estatuto', type: 'select', options: ['Cold Call','Follow up','Aberto Parcerias','Acesso imoveis Off market','Consultores em Parceria'] },
+    { key: 'estado_avaliacao', label: 'Estado Avaliação', type: 'select', options: ['Em avaliação','Ativo','Inativo'] },
     { key: 'classificacao', label: 'Classificação', type: 'select', options: ['A','B','C','D'] },
     { key: 'contacto', label: 'Contacto (telefone)', type: 'tel' },
     { key: 'email', label: 'Email', type: 'email' },
@@ -623,12 +997,13 @@ function RelationOrNew({ value, options, display, createEndpoint, onChange, onCr
     if (!newName.trim()) return
     setCreating(true)
     try {
-      await fetch(createEndpoint, {
+      const r = await fetch(createEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: newName.trim(), estatuto: 'Cold Call' }),
+        body: JSON.stringify({ nome: newName.trim() }),
       })
-      onChange(newName.trim())
+      const data = await r.json()
+      onChange(data.nome || newName.trim())
       onCreated()
       setMode('select')
       setNewName('')

@@ -4,7 +4,11 @@
  */
 import pg from 'pg'
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres.mjgusjuougzoeiyavsor:alexandre.joao.25@aws-0-eu-west-1.pooler.supabase.com:6543/postgres'
+const DATABASE_URL = process.env.DATABASE_URL
+if (!DATABASE_URL) {
+  console.error('[pg] ERRO: DATABASE_URL não está definido. Adiciona ao ficheiro .env')
+  process.exit(1)
+}
 
 const pool = new pg.Pool({
   connectionString: DATABASE_URL,
@@ -366,6 +370,43 @@ export async function initSchema() {
         ALTER TABLE reunioes ADD COLUMN IF NOT EXISTS analise_completa TEXT;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
+
+      -- Migration: módulo gestão de consultores — novas colunas
+      DO $$ BEGIN
+        ALTER TABLE consultores ADD COLUMN IF NOT EXISTS score_prioridade REAL DEFAULT 0;
+        ALTER TABLE consultores ADD COLUMN IF NOT EXISTS taxa_qualidade REAL DEFAULT 0;
+        ALTER TABLE consultores ADD COLUMN IF NOT EXISTS tempo_medio_resposta REAL;
+        ALTER TABLE consultores ADD COLUMN IF NOT EXISTS estado_avaliacao TEXT DEFAULT 'Em avaliação';
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
+      -- Migration: campos para agente WhatsApp + follow-up automático
+      DO $$ BEGIN
+        ALTER TABLE consultores ADD COLUMN IF NOT EXISTS canal_followup TEXT DEFAULT 'whatsapp_auto';
+        ALTER TABLE consultores ADD COLUMN IF NOT EXISTS controlo_manual BOOLEAN DEFAULT false;
+        ALTER TABLE consultores ADD COLUMN IF NOT EXISTS reactivado BOOLEAN DEFAULT false;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
+      DO $$ BEGIN
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS tipo_oportunidade TEXT;
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS check_qualidade BOOLEAN DEFAULT false;
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS check_ouro BOOLEAN DEFAULT false;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
+      -- Nova tabela: log de interacções por consultor
+      CREATE TABLE IF NOT EXISTS consultor_interacoes (
+        id TEXT PRIMARY KEY,
+        consultor_id TEXT NOT NULL,
+        data_hora TEXT NOT NULL DEFAULT (NOW()::TEXT),
+        canal TEXT NOT NULL,
+        direcao TEXT NOT NULL,
+        notas TEXT,
+        created_at TEXT DEFAULT (NOW()::TEXT)
+      );
+      CREATE INDEX IF NOT EXISTS idx_interacoes_consultor ON consultor_interacoes(consultor_id);
+      CREATE INDEX IF NOT EXISTS idx_interacoes_data ON consultor_interacoes(data_hora DESC);
 
       CREATE INDEX IF NOT EXISTS idx_imoveis_estado ON imoveis(estado);
       CREATE INDEX IF NOT EXISTS idx_investidores_status ON investidores(status);

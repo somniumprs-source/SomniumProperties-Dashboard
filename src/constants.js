@@ -7,7 +7,10 @@ export const EUR = v => {
   return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v)
 }
 export const EUR2 = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0)
-export const PCT = v => `${(v ?? 0).toFixed(1)}%`
+export const PCT = v => v == null ? '—' : `${Number(v).toFixed(1)}%`
+export const DAYS = v => v == null ? '—' : `${Number(v).toFixed(0)}d`
+export const NUM = v => v == null ? '—' : String(v)
+export const RATIO = v => v == null ? '—' : `${Number(v).toFixed(1)}:1`
 
 // ── Status helper ────────────────────────────────────────────
 export function statusColor(value, meta, higherIsBetter = true) {
@@ -29,6 +32,7 @@ export const IMOVEL_ESTADO_COLOR = {
   'Adicionado':                     'bg-gray-100 text-gray-600',
   'Chamada Não Atendida':           'bg-gray-100 text-gray-600',
   'Pendentes':                      'bg-gray-100 text-gray-600',
+  'Pré-aprovação':                  'bg-amber-100 text-amber-700',
   'Necessidade de Visita':          'bg-blue-100 text-blue-700',
   'Visita Marcada':                 'bg-indigo-100 text-indigo-700',
   'Follow UP':                      'bg-yellow-100 text-yellow-700',
@@ -74,6 +78,15 @@ export const CONS_ESTATUTO_COLOR = {
   'Aberto Parcerias':           'bg-yellow-100 text-yellow-700',
   'Acesso imoveis Off market':  'bg-purple-100 text-purple-700',
   'Consultores em Parceria':    'bg-green-100 text-green-700',
+}
+
+// ── Consultores — Estado de Avaliação ────────────────────────
+export const CONS_ESTADO_AVALIACAO = ['Em avaliação', 'Ativo', 'Inativo']
+
+export const CONS_ESTADO_AVALIACAO_COLOR = {
+  'Em avaliação': 'bg-yellow-100 text-yellow-700',
+  'Ativo':        'bg-green-100 text-green-700',
+  'Inativo':      'bg-gray-100 text-gray-600',
 }
 
 // ── Negócios — Categorias e Fases ────────────────────────────

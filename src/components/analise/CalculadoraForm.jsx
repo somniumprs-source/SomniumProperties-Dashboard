@@ -3,8 +3,8 @@
  * Os inputs são guardados com debounce via useAnalise.guardar().
  */
 import { useState, useEffect, useCallback } from 'react'
+import { EUR } from '../../constants.js'
 
-const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const GOLD = '#C9A84C'
 const BLACK = '#1A1A1A'
 

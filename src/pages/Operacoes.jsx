@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Header } from '../components/layout/Header.jsx'
+import { PageSkeleton } from '../components/ui/Skeleton.jsx'
+import { apiFetch } from '../lib/api.js'
+import { EUR, PCT, NUM } from '../constants.js'
 
-const EUR = v => v == null ? '—' : new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v)
-const PCT = v => v == null ? '—' : `${Number(v).toFixed(1)}%`
-const NUM = v => v == null ? '—' : String(v)
 const HRS = v => v == null ? '—' : `${Number(v).toFixed(1)}h`
 const GOLD = '#C9A84C'
 const MES_LABEL = { '01':'Jan','02':'Fev','03':'Mar','04':'Abr','05':'Mai','06':'Jun','07':'Jul','08':'Ago','09':'Set','10':'Out','11':'Nov','12':'Dez' }
@@ -247,9 +247,9 @@ export function Operacoes() {
     setLoading(true); setError(null)
     try {
       const [tr, tf, ce] = await Promise.all([
-        fetch('/api/time-tracking').then(r => r.json()),
-        fetch('/api/tarefas?limit=200').then(r => r.json()),
-        fetch('/api/calendar/events?days=14&past=7').then(r => r.json()).catch(() => ({ events: [] })),
+        apiFetch('/api/time-tracking').then(r => r.json()),
+        apiFetch('/api/tarefas?limit=200').then(r => r.json()),
+        apiFetch('/api/calendar/events?days=14&past=7').then(r => r.json()).catch(() => ({ events: [] })),
       ])
       if (tr.error) throw new Error(tr.error)
       setData(tr)
@@ -275,7 +275,7 @@ export function Operacoes() {
 
   async function deleteTarefa(id) {
     try {
-      await fetch(`/api/tarefas/${id}`, { method: 'DELETE' })
+      await apiFetch(`/api/tarefas/${id}`, { method: 'DELETE' })
       setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n })
       await loadAll()
     } catch (e) { setError(e.message) }
@@ -283,7 +283,7 @@ export function Operacoes() {
 
   async function updateStatus(id, status) {
     try {
-      await fetch(`/api/tarefas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
+      await apiFetch(`/api/tarefas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
       await loadAll()
     } catch (e) { setError(e.message) }
   }
@@ -291,7 +291,7 @@ export function Operacoes() {
   async function syncNotion() {
     setSyncing(true)
     try {
-      const r = await fetch('/api/crm/sync/tarefas', { method: 'POST' })
+      const r = await apiFetch('/api/crm/sync/tarefas', { method: 'POST' })
       const d = await r.json()
       if (d.error) throw new Error(d.error)
       await loadAll()
@@ -333,7 +333,7 @@ export function Operacoes() {
     if (selectedIds.size === 0) return
     if (!confirm(`Apagar ${selectedIds.size} tarefa(s)?`)) return
     try {
-      await Promise.all([...selectedIds].map(id => fetch(`/api/tarefas/${id}`, { method: 'DELETE' })))
+      await Promise.all([...selectedIds].map(id => apiFetch(`/api/tarefas/${id}`, { method: 'DELETE' })))
       setSelectedIds(new Set())
       await loadAll()
     } catch (e) { setError(e.message) }
@@ -375,6 +375,8 @@ export function Operacoes() {
 
       <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
         {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>}
+
+        {loading && !error && <PageSkeleton />}
 
         {/* ══════════ VISAO GERAL ══════════ */}
         {tab === 'resumo' && r && (
@@ -544,7 +546,8 @@ export function Operacoes() {
                     Arquivo — tarefas concluídas. Seleciona e apaga as que já não precisas.
                   </div>
                 )}
-                <table className="min-w-full text-sm">
+                <div className="overflow-x-auto">
+                <table className="min-w-[800px] w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase bg-gray-50">
                       <th className="py-2.5 px-3 w-8"><input type="checkbox" onChange={selectAll} checked={selectedIds.size > 0 && selectedIds.size === filteredTarefas.length} className="rounded border-gray-300" /></th>
@@ -595,6 +598,7 @@ export function Operacoes() {
                     )}
                   </tbody>
                 </table>
+                </div>
                 <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex justify-between text-xs text-gray-400">
                   <span>{filteredTarefas.length} tarefa(s)</span>
                   <span>Total: {HRS(filteredTarefas.reduce((s, t) => s + (t.tempo_horas || 0), 0))}</span>
@@ -646,7 +650,7 @@ export function Operacoes() {
             </div>
             <SectionTitle>Detalhe Mensal</SectionTitle>
             <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
-              <table className="min-w-full text-sm">
+              <table className="min-w-[600px] w-full text-sm">
                 <thead><tr className="border-b border-gray-100 text-xs text-gray-400 uppercase"><th className="text-left py-2 px-3">Mes</th><th className="text-right py-2 px-3">Horas</th><th className="text-right py-2 px-3">Tarefas</th><th className="text-right py-2 px-3">Custo</th><th className="text-right py-2 px-3">h/sem</th></tr></thead>
                 <tbody>
                   {data.meses.map(m => (
@@ -674,7 +678,7 @@ export function Operacoes() {
             </div>
             <SectionTitle>Detalhe</SectionTitle>
             <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
-              <table className="min-w-full text-sm">
+              <table className="min-w-[700px] w-full text-sm">
                 <thead><tr className="border-b border-gray-100 text-xs text-gray-400 uppercase"><th className="text-left py-2 px-3">Atividade</th><th className="text-right py-2 px-3">Horas</th><th className="text-right py-2 px-3">%</th><th className="text-right py-2 px-3">Tarefas</th><th className="text-right py-2 px-3">h/tarefa</th><th className="text-right py-2 px-3">Custo</th></tr></thead>
                 <tbody>
                   {data.categorias.map((c, i) => (

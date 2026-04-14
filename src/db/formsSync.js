@@ -71,14 +71,26 @@ export async function syncForms() {
     const normNome = nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
     const phoneLast9 = telemovel.replace(/[^\d]/g, '').slice(-9)
 
+    // Build parameterized query dynamically
+    const params = [nome, normNome]
+    const conditions = [
+      'LOWER(TRIM(nome)) = LOWER($1)',
+      "LOWER(TRANSLATE(TRIM(nome), 'áàâãéèêíìîóòôõúùûçñ', 'aaaaeeeiiioooouuucn')) = $2",
+    ]
+    if (email) {
+      params.push(email)
+      conditions.push(`LOWER(TRIM(email)) = LOWER($${params.length})`)
+    }
+    if (phoneLast9.length === 9) {
+      params.push(phoneLast9)
+      conditions.push(`RIGHT(REGEXP_REPLACE(telemovel, '[^0-9]', '', 'g'), 9) = $${params.length}`)
+    }
+
     const { rows: candidates } = await pool.query(
       `SELECT id, nome, email, telemovel, capital_min, capital_max, estrategia, tipo_investidor, notas FROM investidores
-       WHERE LOWER(TRIM(nome)) = LOWER($1)
-          OR LOWER(TRANSLATE(TRIM(nome), 'áàâãéèêíìîóòôõúùûçñ', 'aaaaeeeiiioooouuucn')) = $2
-          ${email ? "OR LOWER(TRIM(email)) = LOWER('" + email.replace(/'/g, "''") + "')" : ''}
-          ${phoneLast9.length === 9 ? "OR RIGHT(REGEXP_REPLACE(telemovel, '[^0-9]', '', 'g'), 9) = '" + phoneLast9 + "'" : ''}
+       WHERE ${conditions.join('\n          OR ')}
        LIMIT 1`,
-      [nome, normNome]
+      params
     )
     let existing = candidates[0]
 
