@@ -19,6 +19,88 @@ async function getToken() {
   } catch { return '' }
 }
 
+// ── Tab Documentos para Imóveis ─────────────────────────────
+const DOC_LABELS = {
+  ficha_imovel: 'Ficha do Imóvel', ficha_pre_visita: 'Ficha Pré-Visita',
+  checklist_visita: 'Checklist Visita', relatorio_visita: 'Relatório de Visita',
+  analise_rentabilidade: 'Análise de Rentabilidade', estudo_comparaveis: 'Estudo Comparáveis',
+  proposta_formal: 'Proposta Formal', apresentacao_investidor: 'Apresentação Investidor',
+  resumo_negociacao: 'Resumo Negociação', resumo_acordo: 'Resumo Acordo',
+  dossier_investimento: 'Dossier Investimento', ficha_follow_up: 'Ficha Follow-Up',
+  ficha_cedencia: 'Ficha Cedência', ficha_acompanhamento_obra: 'Ficha Acompanhamento Obra',
+}
+const ESTADO_DOCS = {
+  'Adicionado': ['ficha_imovel'], 'Pré-aprovação': ['ficha_imovel'],
+  'Necessidade de Visita': ['ficha_pre_visita'], 'Visita Marcada': ['checklist_visita'],
+  'Estudo de VVR': ['relatorio_visita', 'analise_rentabilidade', 'estudo_comparaveis'],
+  'Criar Proposta ao Proprietário': ['proposta_formal'], 'Enviar proposta ao Proprietário': ['proposta_formal'],
+  'Em negociação': ['resumo_negociacao'], 'Proposta aceite': ['resumo_acordo'],
+  'Enviar proposta ao investidor': ['apresentacao_investidor', 'dossier_investimento'],
+  'Follow Up após proposta': ['ficha_follow_up'], 'Follow UP': ['ficha_follow_up'],
+  'Wholesaling': ['ficha_cedencia'], 'CAEP': ['ficha_acompanhamento_obra'], 'Fix and Flip': ['ficha_acompanhamento_obra'],
+}
+
+function DocumentosTab({ imovelId, estado, driveFolderId }) {
+  const estadoClean = (estado || '').replace(/^\d+-\s*/, '').trim()
+  const docsActuais = ESTADO_DOCS[estadoClean] || ['ficha_imovel']
+  const todosDocs = Object.keys(DOC_LABELS)
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-gray-700">Documentos — {estadoClean || 'Sem estado'}</h3>
+          {driveFolderId && (
+            <a href={`https://drive.google.com/drive/folders/${driveFolderId}`} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors">
+              Abrir no Drive
+            </a>
+          )}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {docsActuais.map(tipo => (
+            <a key={tipo} href={`/api/crm/imoveis/${imovelId}/documento/${tipo}`} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200 hover:bg-amber-100 transition-colors cursor-pointer">
+              <FileDown className="w-5 h-5 text-amber-600" />
+              <div>
+                <p className="text-sm font-medium text-gray-800">{DOC_LABELS[tipo] || tipo}</p>
+                <p className="text-xs text-amber-600">Fase actual</p>
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+      <div>
+        <a href={`/api/crm/imoveis/${imovelId}/relatorio`} target="_blank" rel="noopener noreferrer"
+          className="flex items-center gap-3 p-3 bg-indigo-50 rounded-lg border border-indigo-200 hover:bg-indigo-100 transition-colors cursor-pointer">
+          <FileText className="w-5 h-5 text-indigo-600" />
+          <div>
+            <p className="text-sm font-medium text-gray-800">Relatório PDF Completo</p>
+            <p className="text-xs text-indigo-600">Todos os dados e análise financeira</p>
+          </div>
+        </a>
+      </div>
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Todos os Documentos</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          {todosDocs.map(tipo => {
+            const isActive = docsActuais.includes(tipo)
+            return (
+              <a key={tipo} href={`/api/crm/imoveis/${imovelId}/documento/${tipo}`} target="_blank" rel="noopener noreferrer"
+                className={`flex items-center gap-2 p-2 rounded-lg border text-xs transition-colors cursor-pointer ${
+                  isActive ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'
+                }`}>
+                <span className="text-xs">{isActive ? '●' : '○'}</span>
+                <span>{DOC_LABELS[tipo]}</span>
+              </a>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function DetailPanel({ type, id, onClose, onSave }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -81,6 +163,8 @@ export function DetailPanel({ type, id, onClose, onSave }) {
   // Tabs dinâmicos por tipo
   const tabs = [
     { key: 'detalhe', label: 'Detalhe', icon: '📋', show: true },
+    { key: 'interacoes', label: `Interacções (${data?.interacoes?.length ?? 0})`, icon: '💬', show: type === 'Consultores' },
+    { key: 'documentos', label: 'Documentos', icon: '📁', show: type === 'Imóveis' },
     { key: 'relatorios', label: `Relatórios (${reunioes.length})`, icon: '📄', show: (type === 'Investidores' || type === 'Consultores') },
     { key: 'analise', label: 'Análise Financeira', icon: '📊', show: type === 'Imóveis' },
   ].filter(t => t.show)
@@ -151,6 +235,12 @@ export function DetailPanel({ type, id, onClose, onSave }) {
       {type === 'Imóveis' && activeTab === 'analise' ? (
         <div className="p-4 sm:p-6">
           <AnaliseTab imovelId={data.id} imovelNome={data.nome} />
+        </div>
+
+      /* Documentos tab */
+      ) : type === 'Imóveis' && activeTab === 'documentos' ? (
+        <div className="p-4 sm:p-6">
+          <DocumentosTab imovelId={data.id} estado={data.estado} driveFolderId={data.drive_folder_id} />
         </div>
 
       /* Relatórios tab */
