@@ -207,6 +207,147 @@ function RelatorioConsultores() {
   )
 }
 
+// ── Relatório Semanal de Investidores ────────────────────────
+function RelatorioInvestidores() {
+  const [report, setReport] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    apiFetch('/api/crm/relatorio/investidores').then(r => r.json()).then(setReport).catch(() => {}).finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return <div className="text-center py-12 text-gray-400">A gerar relatório...</div>
+  if (!report) return <div className="text-center py-12 text-gray-400">Erro ao carregar relatório</div>
+
+  const classeColor = { A: 'bg-green-100 text-green-700 border-green-200', B: 'bg-blue-100 text-blue-700 border-blue-200', C: 'bg-yellow-100 text-yellow-700 border-yellow-200', D: 'bg-gray-100 text-gray-600 border-gray-200', 'Sem classificação': 'bg-gray-50 text-gray-500 border-gray-200' }
+  const classeLabel = { A: 'Parceiro', B: 'Qualificado', C: 'Em qualificação', D: 'Potencial', 'Sem classificação': 'Por classificar' }
+  const m = report.metricas_globais
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="text-lg font-bold text-gray-800">Relatório Semanal de Investidores</h2>
+        <p className="text-xs text-gray-400">{report.semana} — Gerado: {new Date(report.gerado_em).toLocaleString('pt-PT')}</p>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
+          <p className="text-2xl font-bold text-gray-800">{report.total_investidores}</p>
+          <p className="text-xs text-gray-500">Total</p>
+        </div>
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
+          <p className="text-2xl font-bold" style={{ color: '#C9A84C' }}>{EUR(m.capital_total)}</p>
+          <p className="text-xs text-gray-500">Capital Pool</p>
+        </div>
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
+          <p className="text-2xl font-bold text-green-600">{m.taxa_conversao}%</p>
+          <p className="text-xs text-gray-500">Taxa Conversão</p>
+        </div>
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
+          <p className="text-2xl font-bold text-indigo-600">{m.com_reuniao}</p>
+          <p className="text-xs text-gray-500">Com Reunião</p>
+        </div>
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
+          <p className="text-2xl font-bold text-red-600">{report.alertas.sem_contacto_30d}</p>
+          <p className="text-xs text-gray-500">Sem Contacto 30d</p>
+        </div>
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
+          <p className="text-2xl font-bold text-orange-600">{m.em_parceria}</p>
+          <p className="text-xs text-gray-500">Em Parceria</p>
+        </div>
+      </div>
+
+      {/* Distribuição por classificação */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Distribuição por Classificação</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          {['A', 'B', 'C', 'D', 'Sem classificação'].map(cl => (
+            <div key={cl} className={`rounded-xl p-4 text-center border ${classeColor[cl]}`}>
+              <p className="text-3xl font-bold">{report.distribuicao[cl] || 0}</p>
+              <p className="text-xs font-medium mt-1">{cl === 'Sem classificação' ? '—' : `Classe ${cl}`}</p>
+              <p className="text-xs opacity-70">{classeLabel[cl]}</p>
+            </div>
+          ))}
+        </div>
+        <div className="flex rounded-full overflow-hidden h-3 mt-4">
+          {['A', 'B', 'C', 'D', 'Sem classificação'].map(cl => {
+            const count = report.distribuicao[cl] || 0
+            const pct = report.total_investidores > 0 ? (count / report.total_investidores * 100) : 0
+            const colors = { A: 'bg-green-500', B: 'bg-blue-500', C: 'bg-yellow-500', D: 'bg-gray-300', 'Sem classificação': 'bg-gray-200' }
+            return pct > 0 ? <div key={cl} className={colors[cl]} style={{ width: `${pct}%` }} title={`${cl}: ${count}`} /> : null
+          })}
+        </div>
+      </div>
+
+      {/* Pipeline por status */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Pipeline por Status</h3>
+        <div className="space-y-2">
+          {Object.entries(report.por_status).filter(([,c]) => c > 0).map(([status, count]) => {
+            const pct = report.total_investidores > 0 ? Math.round(count / report.total_investidores * 100) : 0
+            return (
+              <div key={status} className="flex items-center gap-3">
+                <span className="text-xs text-gray-600 w-40 shrink-0 truncate">{status}</span>
+                <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
+                  <div className="h-full rounded-full flex items-center px-2" style={{ width: `${Math.max(pct, 8)}%`, backgroundColor: '#C9A84C' }}>
+                    <span className="text-[10px] font-bold text-white">{count}</span>
+                  </div>
+                </div>
+                <span className="text-xs text-gray-400 w-10 text-right">{pct}%</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Top 5 por capital */}
+      {report.top5?.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Top 5 Investidores (por capital)</h3>
+          <div className="space-y-2">
+            {report.top5.map((inv, i) => (
+              <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
+                <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                  style={{ backgroundColor: i === 0 ? '#C9A84C' : i === 1 ? '#9CA3AF' : i === 2 ? '#B87333' : '#E5E7EB', color: i > 2 ? '#6B7280' : '#fff' }}>
+                  {i + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800">{inv.nome}</p>
+                  <p className="text-xs text-gray-400">{inv.status}</p>
+                </div>
+                <span className="text-sm font-mono font-bold" style={{ color: '#C9A84C' }}>{EUR(inv.capital)}</span>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${classeColor[inv.classificacao] || classeColor.D}`}>{inv.classificacao}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Alertas */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Alertas</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          {[
+            { label: 'Sem contacto 30d', value: report.alertas.sem_contacto_30d, color: 'text-red-600' },
+            { label: 'Sem reunião', value: report.alertas.sem_reuniao, color: 'text-orange-600' },
+            { label: 'Sem capital', value: report.alertas.sem_capital, color: 'text-yellow-600' },
+            { label: 'Sem classificação', value: report.alertas.sem_classificacao, color: 'text-gray-600' },
+            { label: 'NDA pendente', value: report.alertas.nda_pendente, color: 'text-indigo-600' },
+          ].map(a => (
+            <div key={a.label} className="text-center p-2 rounded-lg bg-gray-50">
+              <p className={`text-xl font-bold ${a.color}`}>{a.value}</p>
+              <p className="text-[10px] text-gray-500">{a.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Follow-up Priority View ──────────────────────────────────
 function FollowUpView({ data, onView, onDelete }) {
   // Ordenar: vermelho primeiro, depois laranja, depois por dias sem contacto desc, depois sem dados
@@ -565,16 +706,18 @@ export function CRM() {
                   className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'kanban' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
                   Kanban
                 </button>
-                {tab === 'Consultores' && (<>
+                {tab === 'Consultores' && (
                   <button onClick={() => setView('followups')}
                     className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'followups' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
                     Follow-ups
                   </button>
+                )}
+                {(tab === 'Consultores' || tab === 'Investidores') && (
                   <button onClick={() => setView('relatorio')}
                     className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'relatorio' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
                     Relatório
                   </button>
-                </>)}
+                )}
               </div>
             )}
             <button onClick={() => setEditing({})} className="px-3 sm:px-4 py-2 bg-indigo-600 text-white text-xs sm:text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors whitespace-nowrap">
@@ -606,9 +749,12 @@ export function CRM() {
             <FollowUpView data={data} onView={setDetail} onDelete={handleDelete} />
           )}
 
-          {/* Relatório View (Consultores only) */}
+          {/* Relatório View */}
           {!loading && editing === null && view === 'relatorio' && tab === 'Consultores' && (
             <RelatorioConsultores />
+          )}
+          {!loading && editing === null && view === 'relatorio' && tab === 'Investidores' && (
+            <RelatorioInvestidores />
           )}
 
           {/* Kanban View */}
