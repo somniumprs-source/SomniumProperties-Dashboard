@@ -250,6 +250,77 @@ class DocBuilder {
     return this
   }
 
+  // ── Premium Layout Methods ─────────────────────────────────
+
+  // KPI card row (2-4 cards side by side with big numbers)
+  kpiRow(cards) {
+    this.ensure(65)
+    const gap = 8
+    const cardW = (CW - gap * (cards.length - 1)) / cards.length
+    cards.forEach((card, i) => {
+      const x = ML + i * (cardW + gap)
+      const color = card.color || C.gold
+      this.doc.roundedRect(x, this.y, cardW, 56, 6).fill(C.black)
+      this.doc.roundedRect(x, this.y, cardW, 3, 0).fill(color)
+      this.doc.fontSize(7).fillColor(C.muted).text((card.label || '').toUpperCase(), x + 12, this.y + 12, { width: cardW - 24, lineBreak: false })
+      this.doc.fontSize(16).fillColor(C.white).text(String(card.value || '—'), x + 12, this.y + 26, { width: cardW - 24, lineBreak: false })
+      if (card.sub) this.doc.fontSize(7).fillColor(color).text(card.sub, x + 12, this.y + 44, { width: cardW - 24, lineBreak: false })
+    })
+    this.y += 64
+    return this
+  }
+
+  // Metric row with colored value (for financial breakdowns)
+  metric(label, value, options = {}) {
+    this.ensure(28)
+    const { color, bold, border } = options
+    if (border) {
+      this.doc.rect(ML, this.y, CW, 0.5).fill(C.border)
+      this.y += 4
+    }
+    this.doc.fontSize(bold ? 9 : 8).fillColor(C.body).text(label, ML + 12, this.y + 5, { width: 250, lineBreak: false })
+    this.doc.fontSize(bold ? 11 : 9).fillColor(color || C.body).text(String(value || '—'), ML + 270, this.y + (bold ? 3 : 5), { width: CW - 282, align: 'right', lineBreak: false })
+    if (bold) {
+      this.doc.rect(ML, this.y + 22, CW, 0.5).fill(C.gold)
+    }
+    this.y += bold ? 28 : 24
+    return this
+  }
+
+  // Progress bar (visual percentage)
+  progressBar(label, value, max, color = C.gold) {
+    this.ensure(32)
+    const pct = max > 0 ? Math.min(value / max, 1) : 0
+    this.doc.fontSize(8).fillColor(C.body).text(label, ML, this.y + 2, { width: 200, lineBreak: false })
+    this.doc.fontSize(8).fillColor(color).text(`${Math.round(pct * 100)}%`, ML + CW - 40, this.y + 2, { width: 40, align: 'right', lineBreak: false })
+    // Bar background
+    this.doc.roundedRect(ML, this.y + 16, CW, 8, 4).fill(C.light)
+    // Bar fill
+    if (pct > 0) this.doc.roundedRect(ML, this.y + 16, Math.max(CW * pct, 8), 8, 4).fill(color)
+    this.y += 30
+    return this
+  }
+
+  // Divider line
+  divider() {
+    this.doc.rect(ML, this.y, CW, 0.5).fill(C.border)
+    this.y += 6
+    return this
+  }
+
+  // Verdict box (large, centered, with icon)
+  verdict(text, isPositive) {
+    this.ensure(50)
+    const color = isPositive ? C.green : C.red
+    this.doc.roundedRect(ML, this.y, CW, 44, 6).fill(color).opacity(0.1)
+    this.doc.opacity(1)
+    this.doc.roundedRect(ML, this.y, CW, 44, 6).lineWidth(1).stroke(color)
+    this.doc.fontSize(14).fillColor(color).text(isPositive ? '●' : '▲', ML + 16, this.y + 14, { lineBreak: false })
+    this.doc.fontSize(12).fillColor(C.body).text(text, ML + 36, this.y + 15, { width: CW - 52, lineBreak: false })
+    this.y += 52
+    return this
+  }
+
   end() { this.doc.end(); return this.doc }
 }
 
@@ -811,190 +882,236 @@ const GENERATORS = {
     return b.end()
   },
 
-  // ── RELATÓRIO DE INVESTIMENTO ─────────────────────────────
+  // ── RELATÓRIO DE INVESTIMENTO (Premium) ────────────────────
   relatorio_investimento: (im, an) => {
     const b = new DocBuilder('Análise de Investimento', im.zona || '', im)
     if (!an) { b.text('Sem análise financeira activa para este imóvel.'); return b.end() }
 
-    // Resumo executivo
-    b.header('RESUMO EXECUTIVO')
     const ra = an.retorno_anualizado || 0
-    const veredicto = ra >= 15 ? 'Negócio atractivo' : ra >= 8 ? 'Analisar com cuidado' : 'Não recomendado'
-    b.highlight('Retorno Anualizado', `${ra}% — ${veredicto}`, ra >= 15 ? C.green : ra >= 8 ? C.gold : C.red)
-    b.row('Capital Necessário', EUR(an.capital_necessario), { alt: true })
-    b.row('Lucro Líquido', EUR(an.lucro_liquido)).row('ROI Total', PCT(an.retorno_total), { alt: true })
-    b.row('Cash-on-Cash', PCT(an.cash_on_cash)).row('Prazo', `${an.meses || 6} meses`, { alt: true })
-    b.space()
+    const isGood = ra >= 15
+    const isOk = ra >= 8
+
+    // KPI dashboard
+    b.kpiRow([
+      { label: 'Retorno Anualizado', value: `${ra}%`, color: isGood ? C.green : isOk ? C.gold : C.red, sub: isGood ? 'Negócio atractivo' : isOk ? 'Analisar com cuidado' : 'Não recomendado' },
+      { label: 'Lucro Líquido', value: EUR(an.lucro_liquido), color: an.lucro_liquido >= 0 ? C.green : C.red },
+      { label: 'Capital Necessário', value: EUR(an.capital_necessario), color: C.blue },
+    ])
+    b.kpiRow([
+      { label: 'ROI Total', value: PCT(an.retorno_total), color: C.gold },
+      { label: 'Cash-on-Cash', value: PCT(an.cash_on_cash), color: C.gold },
+      { label: 'Break-even', value: EUR(an.break_even), color: C.blue },
+      { label: 'Prazo', value: `${an.meses || 6} meses` },
+    ])
 
     // Aquisição
     b.header('CUSTOS DE AQUISIÇÃO')
-    b.row('Preço de Compra', EUR(an.compra), { alt: true }).row('VPT', EUR(an.vpt))
-    b.row('IMT', EUR(an.imt), { alt: true }).row('Imposto de Selo', EUR(an.imposto_selo))
-    b.row('Escritura', EUR(an.escritura), { alt: true }).row('CPCV', EUR(an.cpcv_compra))
-    b.row('Due Diligence', EUR(an.due_diligence), { alt: true })
-    b.highlight('Total Aquisição', EUR(an.total_aquisicao))
+    b.metric('Preço de Compra', EUR(an.compra))
+    b.metric('Valor Patrimonial Tributário (VPT)', EUR(an.vpt))
+    b.metric('IMT', EUR(an.imt))
+    b.metric('Imposto de Selo', EUR(an.imposto_selo))
+    b.metric('Escritura', EUR(an.escritura))
+    b.metric('CPCV Compra', EUR(an.cpcv_compra))
+    b.metric('Due Diligence', EUR(an.due_diligence))
+    b.metric('TOTAL AQUISIÇÃO', EUR(an.total_aquisicao), { bold: true, color: C.gold, border: true })
     b.space()
 
     // Obra
     b.header('CUSTOS DE OBRA')
-    b.row('Obra (s/ IVA)', EUR(an.obra), { alt: true }).row('IVA Obra', EUR(an.iva_obra))
-    b.row('Licenciamento', EUR(an.licenciamento), { alt: true })
-    b.highlight('Total Obra c/ IVA', EUR(an.obra_com_iva))
+    b.metric('Obra (sem IVA)', EUR(an.obra))
+    b.metric('IVA Obra', EUR(an.iva_obra))
+    b.metric('Licenciamento', EUR(an.licenciamento))
+    b.metric('TOTAL OBRA c/ IVA', EUR(an.obra_com_iva), { bold: true, color: C.gold, border: true })
     b.space()
 
     // Detenção
     b.header('CUSTOS DE DETENÇÃO')
-    b.row('Prazo', `${an.meses || 6} meses`, { alt: true })
-    b.row('Seguro mensal', EUR(an.seguro_mensal)).row('Condomínio mensal', EUR(an.condominio_mensal), { alt: true })
-    b.row('IMI proporcional', EUR(an.imi_proporcional))
-    b.highlight('Total Detenção', EUR(an.total_detencao))
+    b.metric('Prazo estimado', `${an.meses || 6} meses`)
+    b.metric('Seguro mensal', EUR(an.seguro_mensal))
+    b.metric('Condomínio mensal', EUR(an.condominio_mensal))
+    b.metric('IMI proporcional', EUR(an.imi_proporcional))
+    b.metric('TOTAL DETENÇÃO', EUR(an.total_detencao), { bold: true, color: C.gold, border: true })
     b.space()
 
     // Venda
-    b.header('CUSTOS DE VENDA')
-    b.row('VVR (Valor Venda Remodelado)', EUR(an.vvr), { alt: true })
-    b.row('Comissão', `${an.comissao_perc || 2.5}% → ${EUR(an.comissao_com_iva)}`)
-    b.row('Home Staging', EUR(an.home_staging), { alt: true }).row('Certificado Energético', EUR(an.cert_energetico))
-    b.highlight('Total Custos Venda', EUR(an.total_venda))
+    b.header('VENDA')
+    b.metric('VVR (Valor Venda Remodelado)', EUR(an.vvr), { color: C.green })
+    b.metric(`Comissão (${an.comissao_perc || 2.5}%)`, EUR(an.comissao_com_iva))
+    b.metric('Home Staging', EUR(an.home_staging))
+    b.metric('Certificado Energético', EUR(an.cert_energetico))
+    b.metric('TOTAL CUSTOS VENDA', EUR(an.total_venda), { bold: true, color: C.gold, border: true })
     b.space()
 
     // Fiscalidade
     b.header('FISCALIDADE')
-    b.row('Regime', an.regime_fiscal || 'Empresa', { alt: true })
-    b.row('Impostos', EUR(an.impostos)).row('Retenção Dividendos', EUR(an.retencao_dividendos), { alt: true })
+    b.metric('Regime Fiscal', an.regime_fiscal || 'Empresa')
+    b.metric('Impostos', EUR(an.impostos), { color: C.red })
+    b.metric('Retenção Dividendos', EUR(an.retencao_dividendos), { color: C.red })
     b.space()
 
-    // Resultados
-    b.header('RESULTADOS')
-    b.highlight('Lucro Bruto', EUR(an.lucro_bruto), C.blue)
-    b.highlight('Impostos', EUR(an.impostos), C.red)
-    b.highlight('Lucro Líquido', EUR(an.lucro_liquido), an.lucro_liquido >= 0 ? C.green : C.red)
-    b.row('Break-even', EUR(an.break_even), { alt: true })
+    // Resultado final
+    b.header('RESULTADO DO INVESTIMENTO')
+    b.kpiRow([
+      { label: 'Lucro Bruto', value: EUR(an.lucro_bruto), color: C.blue },
+      { label: 'Impostos', value: EUR(an.impostos), color: C.red },
+      { label: 'Lucro Líquido', value: EUR(an.lucro_liquido), color: an.lucro_liquido >= 0 ? C.green : C.red, sub: isGood ? 'Investimento recomendado' : '' },
+    ])
 
     return b.end()
   },
 
-  // ── RELATÓRIO DE COMPARÁVEIS ──────────────────────────────
+  // ── RELATÓRIO DE COMPARÁVEIS (Premium) ────────────────────
   relatorio_comparaveis: (im, an) => {
-    const b = new DocBuilder('Estudo de Comparáveis', im.zona || '', im)
+    const b = new DocBuilder('Estudo de Mercado', im.zona || '', im)
     const comps = an?.comparaveis
     const parsed = typeof comps === 'string' ? JSON.parse(comps || '[]') : (comps || [])
 
-    if (!parsed.length) { b.text('Sem dados de comparáveis registados.'); return b.end() }
+    if (!parsed.length) { b.text('Sem dados de comparáveis registados. Preencha a secção de Comparáveis na Análise Financeira.'); return b.end() }
 
-    b.header('RESUMO DE MERCADO')
     for (const tip of parsed) {
-      b.section(`${tip.tipologia || '—'} — ${tip.area || '?'}m²`)
       const items = tip.comparaveis || []
       const valid = items.filter(c => c.preco > 0 && c.area > 0)
-      if (valid.length === 0) { b.text('Sem comparáveis válidos.'); continue }
+      if (valid.length === 0) continue
 
       const precosM2 = valid.map(c => {
         const base = c.preco / c.area
         const ajTotal = Object.values(c.ajustes || {}).reduce((s, v) => s + (parseFloat(v) || 0), 0)
         return base * (1 + ajTotal / 100)
       })
-      const media = precosM2.reduce((a, b) => a + b, 0) / precosM2.length
+      const media = Math.round(precosM2.reduce((a, b) => a + b, 0) / precosM2.length)
       const vvr = media * (tip.area || 0)
+      const minM2 = Math.round(Math.min(...precosM2))
+      const maxM2 = Math.round(Math.max(...precosM2))
 
-      b.highlight('Média €/m² ajustada', `${Math.round(media)} €/m²`, C.gold)
-      b.highlight('VVR estimado', EUR(vvr), C.green)
-      b.space()
+      b.header(`${(tip.tipologia || 'Tipologia').toUpperCase()} — ${tip.area || '?'}M²`)
+      b.kpiRow([
+        { label: 'VVR Estimado', value: EUR(vvr), color: C.green, sub: `${tip.area || '?'}m² × ${media} €/m²` },
+        { label: 'Média €/m²', value: `${media} €/m²`, color: C.gold },
+        { label: 'Intervalo', value: `${minM2} — ${maxM2} €/m²`, color: C.blue },
+      ])
+      b.space(4)
 
-      // Tabela de comparáveis
-      const widths = [80, 55, 55, 55, 55, 55, 55, 55]
-      b.tableHeader([['COMP.', 80], ['PREÇO', 55], ['ÁREA', 55], ['€/M²', 55], ['NEG.', 55], ['ÁREA', 55], ['LOC.', 55], ['AJUST.', 55]])
+      // Tabela comparáveis
+      b.tableHeader([['#', 30], ['PREÇO', 75], ['ÁREA', 50], ['€/M²', 55], ['NEG.', 45], ['ÁREA', 45], ['LOC.', 45], ['IDADE', 45], ['CONS.', 45], ['AJUST.', 50]])
       valid.forEach((c, i) => {
         const m2 = Math.round(c.preco / c.area)
         const aj = c.ajustes || {}
         const ajTotal = Object.values(aj).reduce((s, v) => s + (parseFloat(v) || 0), 0)
-        b.tableRow([`#${i + 1}`, EUR(c.preco), `${c.area}m²`, `${m2}`, `${aj.neg || 0}%`, `${aj.area || 0}%`, `${aj.loc || 0}%`, `${ajTotal >= 0 ? '+' : ''}${ajTotal}%`], widths, i % 2 === 1)
+        const widths = [30, 75, 50, 55, 45, 45, 45, 45, 45, 50]
+        b.tableRow([
+          `${i + 1}`, EUR(c.preco), `${c.area}m²`, `${m2}`,
+          `${aj.neg || 0}%`, `${aj.area || 0}%`, `${aj.loc || 0}%`, `${aj.idade || 0}%`, `${aj.conserv || 0}%`,
+          `${ajTotal >= 0 ? '+' : ''}${ajTotal}%`
+        ], widths, i % 2 === 1)
       })
-      b.space()
+      if (tip.renda > 0) {
+        b.space()
+        b.metric('Renda mensal estimada', EUR(tip.renda))
+        b.metric('Yield bruta', PCT(tip.yield))
+      }
+      b.space(12)
     }
     return b.end()
   },
 
-  // ── RELATÓRIO CAEP ────────────────────────────────────────
+  // ── RELATÓRIO CAEP (Premium) ──────────────────────────────
   relatorio_caep: (im, an) => {
-    const b = new DocBuilder('Distribuição CAEP', im.zona || '', im)
+    const b = new DocBuilder('Estrutura CAEP', im.zona || '', im)
     const caep = an?.caep
     const parsed = typeof caep === 'string' ? JSON.parse(caep || 'null') : caep
 
-    if (!parsed || parsed.quota_somnium === undefined) { b.text('Sem dados CAEP configurados.'); return b.end() }
+    if (!parsed || parsed.quota_somnium === undefined) { b.text('Sem dados CAEP configurados. Preencha a secção CAEP na Análise Financeira.'); return b.end() }
+
+    const percInv = 100 - parsed.perc_somnium
+
+    // KPIs principais
+    b.kpiRow([
+      { label: 'Quota Somnium', value: EUR(parsed.quota_somnium), color: C.gold, sub: `${parsed.perc_somnium}% do lucro` },
+      { label: 'Pool Investidores', value: EUR(parsed.lucro_base - parsed.quota_somnium), color: C.blue, sub: `${percInv}% proporcional ao capital` },
+      { label: 'Capital Total', value: EUR(parsed.capital_total), color: C.green },
+    ])
 
     b.header('ESTRUTURA DA PARCERIA')
-    b.row('% Somnium', `${parsed.perc_somnium}%`, { alt: true })
-    b.row('% Investidores', `${100 - parsed.perc_somnium}% (proporcional ao capital)`)
-    b.row('Base de distribuição', parsed.base_distribuicao === 'liquido' ? 'Lucro Líquido' : 'Lucro Bruto', { alt: true })
-    b.row('Lucro Base', EUR(parsed.lucro_base))
+    b.metric('Percentagem Somnium', `${parsed.perc_somnium}%`)
+    b.metric('Percentagem Investidores', `${percInv}% (proporcional ao capital)`)
+    b.metric('Base de distribuição', parsed.base_distribuicao === 'liquido' ? 'Lucro Líquido' : 'Lucro Bruto')
+    b.metric('Lucro Base', EUR(parsed.lucro_base), { bold: true, color: C.gold, border: true })
     b.space()
 
-    b.header('DISTRIBUIÇÃO')
-    b.highlight('Quota Somnium', EUR(parsed.quota_somnium), C.gold)
-    b.highlight('Capital Total Investidores', EUR(parsed.capital_total), C.blue)
-    b.space()
+    // Barra capital
+    if (an?.capital_necessario > 0) {
+      b.header('CAPITAL')
+      b.progressBar('Capital angariado vs necessário', parsed.capital_total, an.capital_necessario, C.green)
+      b.metric('Capital angariado', EUR(parsed.capital_total))
+      b.metric('Capital necessário', EUR(an.capital_necessario))
+      b.space()
+    }
 
     // Tabela investidores
     if (parsed.investidores?.length) {
-      b.header('INVESTIDORES')
-      const widths = [90, 70, 50, 70, 50, 70, 60]
-      b.tableHeader([['NOME', 90], ['CAPITAL', 70], ['% POOL', 50], ['LUCRO LÍQ.', 70], ['IMPOSTOS', 50], ['ROI', 70], ['RA', 60]])
+      b.header('DETALHE POR INVESTIDOR')
       parsed.investidores.forEach((inv, i) => {
-        b.tableRow([
-          inv.nome || `Inv. ${i + 1}`,
-          EUR(inv.capital),
-          `${inv.perc_lucro || 0}%`,
-          EUR(inv.lucro_liquido),
-          EUR(inv.impostos),
-          PCT(inv.roi),
-          PCT(inv.retorno_anualizado),
-        ], widths, i % 2 === 1)
+        b.section(`${inv.nome || `Investidor ${i + 1}`} — ${inv.tipo === 'empresa' ? 'Empresa' : 'Particular'}`)
+        b.kpiRow([
+          { label: 'Capital', value: EUR(inv.capital), color: C.blue },
+          { label: 'Lucro Líquido', value: EUR(inv.lucro_liquido), color: inv.lucro_liquido >= 0 ? C.green : C.red },
+          { label: 'ROI', value: PCT(inv.roi), color: C.gold },
+          { label: 'Retorno Anualiz.', value: PCT(inv.retorno_anualizado), color: C.gold },
+        ])
+        b.metric('Percentagem do pool', `${inv.perc_lucro || 0}%`)
+        b.metric('Lucro bruto', EUR(inv.lucro_bruto))
+        b.metric('Impostos', EUR(inv.impostos), { color: C.red })
+        b.metric('Lucro líquido', EUR(inv.lucro_liquido), { bold: true, color: inv.lucro_liquido >= 0 ? C.green : C.red, border: true })
+        b.space(8)
       })
     }
     return b.end()
   },
 
-  // ── RELATÓRIO STRESS TESTS ────────────────────────────────
+  // ── RELATÓRIO STRESS TESTS (Premium) ──────────────────────
   relatorio_stress: (im, an) => {
-    const b = new DocBuilder('Stress Tests', im.zona || '', im)
+    const b = new DocBuilder('Análise de Risco', im.zona || '', im)
     const st = an?.stress_tests
     const parsed = typeof st === 'string' ? JSON.parse(st || 'null') : st
 
-    if (!parsed) { b.text('Sem stress tests calculados.'); return b.end() }
+    if (!parsed) { b.text('Sem stress tests calculados. Execute os Stress Tests na Análise Financeira.'); return b.end() }
 
-    b.header('VEREDICTO')
     const resiliente = parsed.veredicto === 'resiliente'
-    b.highlight('Resultado', resiliente ? 'RESILIENTE — Lucro no pior cenário' : 'RISCO — Prejuízo no pior cenário', resiliente ? C.green : C.red)
-    b.space()
 
-    b.header('CENÁRIOS PRINCIPAIS')
-    b.row('Base — Lucro Líquido', EUR(parsed.base?.lucro_liquido), { alt: true })
-    b.row('Base — Retorno Anualizado', PCT(parsed.base?.retorno_anualizado))
-    b.row('Pior — Lucro Líquido', EUR(parsed.pior?.lucro_liquido), { alt: true })
-    b.row('Pior — Cenário', parsed.pior?.label)
-    b.row('Melhor — Lucro Líquido', EUR(parsed.melhor?.lucro_liquido), { alt: true })
-    b.row('Melhor — Cenário', parsed.melhor?.label)
-    b.space()
+    // Veredicto
+    b.verdict(
+      resiliente ? 'RESILIENTE — Este investimento mantém lucro mesmo no pior cenário' : 'RISCO — Este investimento pode resultar em prejuízo no pior cenário',
+      resiliente
+    )
 
+    // KPIs cenários
+    b.kpiRow([
+      { label: 'Pior Cenário', value: EUR(parsed.pior?.lucro_liquido), color: C.red, sub: parsed.pior?.label || '' },
+      { label: 'Cenário Base', value: EUR(parsed.base?.lucro_liquido), color: C.gold, sub: `RA: ${PCT(parsed.base?.retorno_anualizado)}` },
+      { label: 'Melhor Cenário', value: EUR(parsed.melhor?.lucro_liquido), color: C.green, sub: parsed.melhor?.label || '' },
+    ])
+
+    // Cenários de risco
     if (parsed.downside?.length) {
       b.header('CENÁRIOS DE RISCO')
-      const widths = [120, 120, 80, 70, 70]
-      b.tableHeader([['CENÁRIO', 120], ['DESCRIÇÃO', 120], ['LUCRO LÍQ.', 80], ['DELTA', 70], ['RA', 70]])
+      const widths = [130, 130, 80, 70, 60]
+      b.tableHeader([['CENÁRIO', 130], ['DESCRIÇÃO', 130], ['LUCRO LÍQ.', 80], ['DELTA', 70], ['RA', 60]])
       parsed.downside.forEach((s, i) => {
         b.tableRow([s.label, s.descricao || '', EUR(s.lucro_liquido), EUR(s.delta), PCT(s.retorno_anualizado)], widths, i % 2 === 1)
       })
+      b.space()
     }
-    b.space()
 
+    // Cenários favoráveis
     if (parsed.upside?.length) {
       b.header('CENÁRIOS FAVORÁVEIS')
-      const widths = [120, 120, 80, 70, 70]
-      b.tableHeader([['CENÁRIO', 120], ['DESCRIÇÃO', 120], ['LUCRO LÍQ.', 80], ['DELTA', 70], ['RA', 70]])
+      const widths = [130, 130, 80, 70, 60]
+      b.tableHeader([['CENÁRIO', 130], ['DESCRIÇÃO', 130], ['LUCRO LÍQ.', 80], ['DELTA', 70], ['RA', 60]])
       parsed.upside.forEach((s, i) => {
         b.tableRow([s.label, s.descricao || '', EUR(s.lucro_liquido), EUR(s.delta), PCT(s.retorno_anualizado)], widths, i % 2 === 1)
       })
     }
+
     return b.end()
   },
 }
