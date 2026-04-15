@@ -27,6 +27,16 @@ const PCT = v => v == null ? '—' : `${v}%`
 const FDATE = d => { if (!d) return '—'; try { return new Date(d).toLocaleDateString('pt-PT') } catch { return d } }
 const NOW = () => new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' })
 
+// Parse fotos JSON from imovel — only images, max 6 for PDF
+function parseFotos(im) {
+  try {
+    const all = typeof im.fotos === 'string' ? JSON.parse(im.fotos || '[]') : (im.fotos || [])
+    return all
+      .filter(f => f.folder !== 'documentos' && (f.type?.startsWith('image/') || f.path?.match(/\.(jpg|jpeg|png|webp)$/i)))
+      .slice(0, 6) // max 6 photos in PDF
+  } catch { return [] }
+}
+
 // ── Estado → Documentos ──────────────────────────────────────
 const ESTADO_DOC_MAP = {
   'Adicionado': ['ficha_imovel'],
@@ -237,6 +247,42 @@ class DocBuilder {
     return this
   }
 
+  // Photo gallery — grid of property photos
+  photos(fotos, title = 'GALERIA FOTOGRÁFICA') {
+    if (!fotos || fotos.length === 0) return this
+    this.header(title)
+    const ROOT = path.resolve(__dirname, '../..')
+    const imgSize = (CW - 10) / 2 // 2 columns
+    const imgHeight = imgSize * 0.65 // 4:3ish ratio
+    let col = 0
+    for (const foto of fotos) {
+      // Skip non-image files
+      if (!foto.type?.startsWith('image/') && !foto.path?.match(/\.(jpg|jpeg|png|webp)$/i)) continue
+      const filePath = path.join(ROOT, 'public', foto.path)
+      try {
+        const imgData = readFileSync(filePath)
+        this.ensure(imgHeight + 20)
+        const x = ML + col * (imgSize + 10)
+        this.doc.save()
+        this.doc.roundedRect(x, this.y, imgSize, imgHeight, 4).clip()
+        this.doc.image(imgData, x, this.y, { width: imgSize, height: imgHeight, fit: [imgSize, imgHeight], align: 'center', valign: 'center' })
+        this.doc.restore()
+        // Border
+        this.doc.roundedRect(x, this.y, imgSize, imgHeight, 4).lineWidth(0.5).stroke(C.border)
+        col++
+        if (col >= 2) {
+          col = 0
+          this.y += imgHeight + 8
+        }
+      } catch {
+        // File not found — skip silently
+      }
+    }
+    if (col > 0) this.y += imgHeight + 8 // close last row
+    this.space(4)
+    return this
+  }
+
   // Bullet point
   bullet(text) {
     this.ensure(18)
@@ -407,9 +453,12 @@ class DocBuilder {
 const GENERATORS = {
   // ── 1. FICHA DO IMÓVEL ──────────────────────────────────────
   ficha_imovel: (im) => {
+    const fotos = parseFotos(im)
     const b = new DocBuilder('Ficha do Imóvel', im.zona || '', im)
     b.inlineData([{ label: 'Estado', value: (im.estado || '').replace(/^\d+-/, '') }, { label: 'Data', value: FDATE(im.data_adicionado) }, { label: 'Origem', value: im.origem }])
     b.space(4)
+    // Fotografias logo no início
+    if (fotos.length > 0) b.photos(fotos)
     b.header('INFORMAÇÃO GERAL')
     b.simpleTable([
       { label: 'Tipologia', value: im.tipologia }, { label: 'Zona', value: im.zona },
@@ -507,12 +556,14 @@ const GENERATORS = {
 
   // ── 4a. RELATÓRIO DE VISITA ─────────────────────────────────
   relatorio_visita: (im) => {
+    const fotos = parseFotos(im)
     const b = new DocBuilder('Relatório de Visita', im.zona || '', im)
     b.header('DADOS DA VISITA')
     b.simpleTable([
       { label: 'Imóvel', value: im.nome }, { label: 'Zona', value: im.zona },
       { label: 'Data Visita', value: FDATE(im.data_visita) }, { label: 'Consultor', value: im.nome_consultor },
     ])
+    if (fotos.length > 0) { b.space(4); b.photos(fotos, 'FOTOGRAFIAS DA VISITA') }
     b.space(4)
     b.header('ESTADO REAL DO IMÓVEL')
     b.metric('Descrição geral do estado encontrado', '________________')
@@ -785,6 +836,7 @@ const GENERATORS = {
 
   // ── 6. APRESENTAÇÃO AO INVESTIDOR (dossier completo com calculadora + CAEP)
   apresentacao_investidor: (im, analise) => {
+    const fotos = parseFotos(im)
     const b = new DocBuilder('Dossier de Investimento', `Oportunidade · ${im.zona || ''}`, im)
     const a = analise || {}
     const compra = a.compra || im.valor_proposta || im.ask_price || 0
@@ -797,6 +849,7 @@ const GENERATORS = {
       { label: 'Tipologia', value: im.tipologia }, { label: 'Modelo', value: im.modelo_negocio || 'CAEP 50/50' },
       { label: 'Prazo Estimado', value: a.meses ? `${a.meses} meses` : '—' },
     ])
+    if (fotos.length > 0) { b.space(4); b.photos(fotos, 'O IMÓVEL') }
     b.space(4)
 
     b.header('NÚMEROS DO NEGÓCIO')
