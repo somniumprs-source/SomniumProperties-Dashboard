@@ -121,23 +121,39 @@ IMÓVEIS NA BASE: ${imNomes}
 Devolve SEMPRE JSON com exactamente este schema:
 {
   "accao": "TAREFA|NOTA_IMOVEL|NOTA_CONSULTOR|INTERACAO|MOVER_ESTADO|CLASSIFICAR|FOLLOW_UP",
-  "descricao": "texto da tarefa/nota/interaccao",
+  "descricao": "texto limpo e claro da tarefa/nota (reformula se necessario)",
   "entidade": "nome do consultor ou imovel (exacto da base)",
   "entidade_tipo": "consultor|imovel|null",
-  "data": "YYYY-MM-DD ou null",
-  "hora": "HH:MM ou null",
+  "data": "YYYY-MM-DD",
+  "hora_inicio": "HH:MM ou null",
+  "hora_fim": "HH:MM ou null",
+  "duracao_horas": numero (default 1 se nao especificado),
   "categoria": "Follow-up Consultor|Visita|Análise|Proposta|Documentação|Reunião|Obra|Outro",
-  "novo_estado": "estado pipeline ou null (ex: Estudo de VVR, Adicionado)",
+  "novo_estado": "estado pipeline ou null",
   "canal": "chamada|whatsapp|null",
+  "preencher_data_visita": true|false (true se for visita a imovel),
+  "preencher_data_chamada": true|false (true se for chamada a consultor/imovel),
   "mensagem_ui": "texto curto para mostrar ao utilizador"
 }
 
+REGRAS DE INTERPRETAÇÃO:
+- Se diz "às 18 horas" sem hora fim → hora_inicio=18:00, duracao=1h, hora_fim=19:00
+- Se diz "das 10 às 12" → hora_inicio=10:00, hora_fim=12:00, duracao=2
+- Se diz "durante 2 horas" → duracao=2
+- Se diz "sexta-feira" → calcular a data exacta YYYY-MM-DD
+- Se diz "amanhã" → data de amanha
+- Se diz "visita ao imovel X" → preencher_data_visita=true + TAREFA categoria Visita
+- Se diz "ligar ao consultor X" → preencher_data_chamada=true + INTERACAO/TAREFA
+- Se diz "follow up feito" → registar como ja realizado (INTERACAO passada)
+- Se diz "nota ao imovel/consultor" → NOTA_IMOVEL ou NOTA_CONSULTOR
+- SEMPRE reformula a descricao para ser clara e concisa
+
 Exemplos:
-"adicionar nota ao prédio rua do clube proprietário aceita baixar" → NOTA_IMOVEL no Prédio Rua do Clube
-"follow up ao consultor Teresa feito hoje por chamada" → INTERACAO com Teresa Sousa, canal chamada
-"marcar visita ao T2 Santa Clara quinta às 10" → TAREFA visita
-"mover prédio Bencanta para estudo de VVR" → MOVER_ESTADO
-"classificar João Rodrigues como activo" → CLASSIFICAR
+"na sexta-feira vamos fazer visita ao imovel pelas 18 horas" → TAREFA, Visita, imovel match, data=sexta, hora_inicio=18:00, hora_fim=19:00, preencher_data_visita=true
+"ligar ao consultor Teresa amanha as 10" → TAREFA, Follow-up, Teresa Sousa, data=amanha, hora_inicio=10:00, hora_fim=10:30, duracao=0.5
+"nota ao prédio rua do clube: proprietário aceita 150k" → NOTA_IMOVEL, Prédio Rua do Clube
+"follow up ao Amaro feito hoje por chamada" → INTERACAO, Amaro Bailão, canal=chamada, data=hoje
+"mover prédio Bencanta para estudo de VVR" → MOVER_ESTADO, Prédio Bencanta, novo_estado=Estudo de VVR
 
 Faz match aproximado dos nomes (Teresa → Teresa Sousa, prédio clube → Prédio Rua do Clube).`,
           messages: [{ role: 'user', content: text }]
@@ -211,14 +227,42 @@ Faz match aproximado dos nomes (Teresa → Teresa Sousa, prédio clube → Préd
           }
 
         } else {
-          // Default: criar tarefa
-          const inicio = parsed.data ? `${parsed.data}T${parsed.hora || '09:00'}:00Z` : now
+          // Default: criar tarefa com hora inicio/fim
+          const hInicio = parsed.hora_inicio || '09:00'
+          const duracao = parsed.duracao_horas || 1
+          const hFim = parsed.hora_fim || (() => {
+            const [h, m] = hInicio.split(':').map(Number)
+            const totalMin = h * 60 + m + duracao * 60
+            return `${String(Math.floor(totalMin / 60)).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}`
+          })()
+          const dataStr = parsed.data || hoje
+          const inicio = `${dataStr}T${hInicio}:00Z`
+          const fim = `${dataStr}T${hFim}:00Z`
+
           await pgQuery(
-            `INSERT INTO tarefas (id, tarefa, status, categoria, funcionario, inicio, created_at, updated_at)
-             VALUES ($1, $2, 'A fazer', $3, $4, $5, $6, $6)`,
-            [randomUUID(), parsed.descricao || text, parsed.categoria || 'Outro', 'Alexandre Mendes', inicio, now]
+            `INSERT INTO tarefas (id, tarefa, status, categoria, funcionario, inicio, fim, created_at, updated_at)
+             VALUES ($1, $2, 'A fazer', $3, $4, $5, $6, $7, $7)`,
+            [randomUUID(), parsed.descricao || text, parsed.categoria || 'Outro', 'Alexandre Mendes', inicio, fim, now]
           )
-          msg = `Tarefa criada: "${parsed.descricao || text}"`
+
+          // Se for visita a imovel → preencher data_visita
+          if (parsed.preencher_data_visita && entNome) {
+            const im = imoveis.find(i => i.nome.toLowerCase().includes(entNome.toLowerCase()))
+            if (im) {
+              await pgQuery('UPDATE imoveis SET data_visita = $1, updated_at = $2 WHERE id = $3', [dataStr, now, im.id])
+              msg = `Visita agendada: "${parsed.descricao}" (${hInicio}-${hFim}) — data_visita preenchida em "${im.nome}"`
+            } else {
+              msg = `Tarefa criada: "${parsed.descricao}" (${hInicio}-${hFim})`
+            }
+          } else if (parsed.preencher_data_chamada && entNome) {
+            const im = imoveis.find(i => i.nome.toLowerCase().includes(entNome.toLowerCase()))
+            if (im) {
+              await pgQuery('UPDATE imoveis SET data_chamada = $1, updated_at = $2 WHERE id = $3', [dataStr, now, im.id])
+            }
+            msg = `Tarefa criada: "${parsed.descricao}" (${hInicio}-${hFim})`
+          } else {
+            msg = `Tarefa criada: "${parsed.descricao}" (${hInicio}-${hFim})`
+          }
         }
 
         res.json({ ok: true, message: msg, accao, parsed })
