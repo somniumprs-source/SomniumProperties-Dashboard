@@ -319,7 +319,7 @@ function RelatorioInvestidores() {
                   <p className="text-xs text-gray-400">{inv.status}</p>
                 </div>
                 <span className="text-sm font-mono font-bold" style={{ color: '#C9A84C' }}>{EUR(inv.capital)}</span>
-                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${classeColor[inv.classificacao] || classeColor.D}`}>{inv.classificacao}</span>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${classeColor[inv.classificacao] || classeColor['Sem classificação']}`}>{inv.classificacao || '—'}</span>
               </div>
             ))}
           </div>
