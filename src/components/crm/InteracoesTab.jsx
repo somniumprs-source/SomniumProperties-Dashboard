@@ -26,7 +26,7 @@ export function InteracoesTab({ consultorId, onUpdate }) {
   const [interacoes, setInteracoes] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ canal: 'Chamada', direcao: 'Enviado', notas: '', data_hora: '' })
+  const [form, setForm] = useState({ canal: 'WhatsApp', direcao: 'Enviado', notas: '', data_hora: '' })
   const [saving, setSaving] = useState(false)
 
   async function load() {
@@ -43,24 +43,39 @@ export function InteracoesTab({ consultorId, onUpdate }) {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (!form.notas?.trim()) return
     setSaving(true)
     try {
-      await apiFetch('/api/crm/consultor-interacoes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          consultor_id: consultorId,
-          canal: form.canal,
-          direcao: form.direcao,
-          notas: form.notas || null,
-          data_hora: form.data_hora || new Date().toISOString(),
-        }),
-      })
-      setForm({ canal: 'Chamada', direcao: 'Enviado', notas: '', data_hora: '' })
+      // Se WhatsApp + Enviado → enviar mensagem real pelo Twilio
+      if (form.canal === 'WhatsApp' && form.direcao === 'Enviado') {
+        const r = await apiFetch(`/api/consultores/${consultorId}/enviar-whatsapp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mensagem: form.notas.trim() }),
+        })
+        const data = await r.json()
+        if (!r.ok) throw new Error(data.error || 'Erro ao enviar')
+      } else {
+        // Registo manual (chamada ou resposta recebida)
+        await apiFetch('/api/crm/consultor-interacoes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            consultor_id: consultorId,
+            canal: form.canal,
+            direcao: form.direcao,
+            notas: form.notas || null,
+            data_hora: form.data_hora || new Date().toISOString(),
+          }),
+        })
+      }
+      setForm({ canal: 'WhatsApp', direcao: 'Enviado', notas: '', data_hora: '' })
       setShowForm(false)
       await load()
       if (onUpdate) onUpdate()
-    } catch {}
+    } catch (err) {
+      alert(err.message || 'Erro ao enviar')
+    }
     setSaving(false)
   }
 
@@ -136,7 +151,9 @@ export function InteracoesTab({ consultorId, onUpdate }) {
             </div>
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Notas</label>
+            <label className="block text-xs text-gray-500 mb-1">
+              {form.canal === 'WhatsApp' && form.direcao === 'Enviado' ? 'Mensagem (será enviada pelo WhatsApp)' : 'Notas'}
+            </label>
             <textarea
               value={form.notas}
               onChange={e => setForm(p => ({ ...p, notas: e.target.value }))}
@@ -146,8 +163,13 @@ export function InteracoesTab({ consultorId, onUpdate }) {
             />
           </div>
           <div className="flex gap-2">
-            <button type="submit" disabled={saving} className="px-4 py-2 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700">
-              {saving ? 'A guardar...' : 'Registar'}
+            <button type="submit" disabled={saving || !form.notas?.trim()}
+              className={`px-4 py-2 text-white text-xs font-medium rounded-lg transition-colors ${
+                form.canal === 'WhatsApp' && form.direcao === 'Enviado'
+                  ? 'bg-green-600 hover:bg-green-700'
+                  : 'bg-indigo-600 hover:bg-indigo-700'
+              }`}>
+              {saving ? 'A enviar...' : form.canal === 'WhatsApp' && form.direcao === 'Enviado' ? 'Enviar WhatsApp' : 'Registar'}
             </button>
             <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-100 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-200">
               Cancelar
