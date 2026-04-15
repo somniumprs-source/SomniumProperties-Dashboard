@@ -91,6 +91,49 @@ try {
       } catch (e) { res.status(500).json({ error: e.message }) }
     })
 
+    // Endpoint para processar comando de voz (Speech → IA → Tarefa)
+    app.post('/api/voice/process', async (req, res) => {
+      try {
+        const { text } = req.body
+        if (!text?.trim()) return res.status(400).json({ error: 'Texto vazio' })
+
+        const { query: pgQuery } = await import('./src/db/pg.js')
+        const { randomUUID } = await import('crypto')
+        const Anthropic = (await import('@anthropic-ai/sdk')).default
+        const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+        const response = await client.messages.create({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 500,
+          system: `Interpretas comandos de voz em português para um CRM imobiliário. Extrai a tarefa e devolve JSON:
+{"tarefa": "descrição da tarefa", "categoria": "Follow-up Consultor|Visita|Análise|Proposta|Documentação|Outro", "funcionario": "Alexandre Mendes", "prioridade": "normal|urgente"}
+Se não for uma tarefa clara, devolve: {"tarefa": null, "nota": "texto interpretado"}
+Exemplos: "ligar ao consultor João amanhã" → {"tarefa": "Ligar ao consultor João", "categoria": "Follow-up Consultor"}
+"agendar visita ao prédio de Santa Clara" → {"tarefa": "Agendar visita ao prédio de Santa Clara", "categoria": "Visita"}`,
+          messages: [{ role: 'user', content: text }]
+        })
+
+        const respText = response.content[0]?.text || '{}'
+        let parsed
+        try {
+          const jsonMatch = respText.match(/\{[\s\S]*\}/)
+          parsed = JSON.parse(jsonMatch?.[0] || respText)
+        } catch { parsed = { tarefa: text, categoria: 'Outro' } }
+
+        if (parsed.tarefa) {
+          const now = new Date().toISOString()
+          await pgQuery(
+            `INSERT INTO tarefas (id, tarefa, status, categoria, funcionario, inicio, created_at, updated_at)
+             VALUES ($1, $2, 'A fazer', $3, $4, $5, $5, $5)`,
+            [randomUUID(), parsed.tarefa, parsed.categoria || 'Outro', parsed.funcionario || 'Alexandre Mendes', now]
+          )
+          res.json({ ok: true, message: `Tarefa criada: ${parsed.tarefa}`, tarefa: parsed })
+        } else {
+          res.json({ ok: true, message: `Nota registada: ${parsed.nota || text}`, nota: parsed.nota || text })
+        }
+      } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
+    })
+
     // Endpoint para enviar WhatsApp manualmente (handoff — tu a falar directamente)
     app.post('/api/consultores/:id/enviar-whatsapp', async (req, res) => {
       try {
