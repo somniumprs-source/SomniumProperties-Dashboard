@@ -22,10 +22,12 @@ function formatHoras(h) {
   return `${Math.round(h / 24)}d ${Math.round(h % 24)}h`
 }
 
-export function InteracoesTab({ consultorId, onUpdate }) {
+export function InteracoesTab({ consultorId, onUpdate, controloManual }) {
   const [interacoes, setInteracoes] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [handoff, setHandoff] = useState(!!controloManual)
+  const [togglingAgent, setTogglingAgent] = useState(false)
   const [form, setForm] = useState({ canal: 'WhatsApp', direcao: 'Enviado', notas: '', data_hora: '' })
   const [saving, setSaving] = useState(false)
 
@@ -100,8 +102,45 @@ export function InteracoesTab({ consultorId, onUpdate }) {
 
   const inputClass = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300'
 
+  async function toggleAgent() {
+    setTogglingAgent(true)
+    try {
+      const endpoint = handoff ? 'retomar-agente' : 'handoff'
+      await apiFetch(`/api/consultores/${consultorId}/${endpoint}`, { method: 'POST' })
+      setHandoff(!handoff)
+      if (onUpdate) onUpdate()
+    } catch {}
+    setTogglingAgent(false)
+  }
+
   return (
     <div className="space-y-4">
+      {/* Banner handoff */}
+      {handoff && (
+        <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-xl">
+          <div>
+            <p className="text-sm font-medium text-amber-800">Agente pausado — controlo manual activo</p>
+            <p className="text-xs text-amber-600">O agente não responde automaticamente enquanto estiveres em controlo manual.</p>
+          </div>
+          <button onClick={toggleAgent} disabled={togglingAgent}
+            className="px-4 py-2 text-xs font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors shrink-0">
+            {togglingAgent ? '...' : 'Retomar Agente'}
+          </button>
+        </div>
+      )}
+      {!handoff && (
+        <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-xl">
+          <div>
+            <p className="text-sm font-medium text-green-800">Agente activo — respostas automáticas ligadas</p>
+            <p className="text-xs text-green-600">O agente responde automaticamente às mensagens do consultor.</p>
+          </div>
+          <button onClick={toggleAgent} disabled={togglingAgent}
+            className="px-4 py-2 text-xs font-medium rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors shrink-0">
+            {togglingAgent ? '...' : 'Pausar Agente'}
+          </button>
+        </div>
+      )}
+
       {/* Header + stats */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">

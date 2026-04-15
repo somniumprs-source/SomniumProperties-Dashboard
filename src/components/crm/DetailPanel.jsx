@@ -43,17 +43,31 @@ const ESTADO_DOCS = {
   'Wholesaling': ['ficha_cedencia'], 'CAEP': ['ficha_acompanhamento_obra'], 'Fix and Flip': ['ficha_acompanhamento_obra'],
 }
 
-// ── Tab Relatórios (documentos de fase + geral) ─────────────
+// ── Tab Documentos (lista única, todos iguais, checkbox para dossier) ──
 function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
   const estadoClean = (estado || '').replace(/^\d+-\s*/, '').trim()
   const docsActuais = ESTADO_DOCS[estadoClean] || ['ficha_imovel']
 
+  // Lista única — todos são "documentos", sem distinção
   const ALL_DOCS = [
-    { tipo: 'relatorio_investimento', label: 'Analise de Investimento', desc: 'Custos, rentabilidade, fiscalidade', cat: 'investidor', compilavel: 'investimento' },
-    { tipo: 'relatorio_comparaveis', label: 'Estudo de Comparaveis', desc: 'Precos de mercado, ajustes, VVR', cat: 'investidor', compilavel: 'comparaveis' },
-    { tipo: 'relatorio_caep', label: 'Distribuicao CAEP', desc: 'Split Somnium/investidores, ROI', cat: 'investidor', compilavel: 'caep' },
-    { tipo: 'relatorio_stress', label: 'Stress Tests', desc: 'Cenarios de risco e favoraveis', cat: 'investidor', compilavel: 'stress_tests' },
-    ...Object.keys(DOC_LABELS).map(tipo => ({ tipo, label: DOC_LABELS[tipo], cat: docsActuais.includes(tipo) ? 'fase' : 'outro' })),
+    { tipo: 'ficha_imovel',              label: 'Ficha do Imóvel',               compilavel: 'ficha_imovel' },
+    { tipo: 'ficha_pre_visita',          label: 'Ficha Pré-Visita',              compilavel: 'ficha_pre_visita' },
+    { tipo: 'checklist_visita',          label: 'Checklist de Visita',            compilavel: 'checklist_visita' },
+    { tipo: 'relatorio_visita',          label: 'Relatório de Visita',            compilavel: 'relatorio_visita' },
+    { tipo: 'analise_rentabilidade',     label: 'Análise de Rentabilidade',       compilavel: 'analise_rentabilidade' },
+    { tipo: 'estudo_comparaveis',        label: 'Estudo de Comparáveis',          compilavel: 'estudo_comparaveis' },
+    { tipo: 'proposta_formal',           label: 'Proposta ao Proprietário',       compilavel: 'proposta_formal' },
+    { tipo: 'apresentacao_investidor',   label: 'Apresentação ao Investidor',     compilavel: 'apresentacao_investidor' },
+    { tipo: 'resumo_negociacao',         label: 'Resumo de Negociação',           compilavel: 'resumo_negociacao' },
+    { tipo: 'resumo_acordo',             label: 'Resumo de Acordo',               compilavel: 'resumo_acordo' },
+    { tipo: 'dossier_investimento',      label: 'Dossier de Investimento',        compilavel: 'dossier_investimento' },
+    { tipo: 'ficha_follow_up',           label: 'Ficha de Follow Up',             compilavel: 'ficha_follow_up' },
+    { tipo: 'ficha_cedencia',            label: 'Ficha de Cedência',              compilavel: 'ficha_cedencia' },
+    { tipo: 'ficha_acompanhamento_obra', label: 'Acompanhamento de Obra',         compilavel: 'ficha_acompanhamento_obra' },
+    { tipo: 'relatorio_investimento',    label: 'Análise de Investimento (Inv.)', compilavel: 'investimento' },
+    { tipo: 'relatorio_comparaveis',     label: 'Estudo Comparáveis (Inv.)',      compilavel: 'comparaveis' },
+    { tipo: 'relatorio_caep',            label: 'Distribuição CAEP',              compilavel: 'caep' },
+    { tipo: 'relatorio_stress',          label: 'Stress Tests',                   compilavel: 'stress_tests' },
   ]
 
   const [selected, setSelected] = useState(new Set())
@@ -61,155 +75,77 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
   function toggle(key) {
     setSelected(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
   }
+  function selectAll() { setSelected(new Set(ALL_DOCS.map(d => d.compilavel))) }
+  function selectNone() { setSelected(new Set()) }
 
-  const compilaveis = ALL_DOCS.filter(d => d.compilavel && selected.has(d.compilavel))
-  const compilarUrl = compilaveis.length > 0
-    ? `/api/crm/imoveis/${imovelId}/relatorio-investidor?seccoes=${compilaveis.map(d => d.compilavel).join(',')}`
+  const selectedDocs = ALL_DOCS.filter(d => selected.has(d.compilavel))
+  const compilarUrl = selectedDocs.length > 0
+    ? `/api/crm/imoveis/${imovelId}/relatorio-investidor?seccoes=${selectedDocs.map(d => d.compilavel).join(',')}`
     : null
 
-  const CAT_META = {
-    fase: { label: 'Fase Actual', accent: 'emerald', icon: '🟢' },
-    investidor: { label: 'Dossier Investidor', accent: 'amber', icon: '💼' },
-    outro: { label: 'Outros Documentos', accent: 'neutral', icon: '📄' },
-  }
-
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h3 className="text-sm font-bold text-neutral-800">Relatorios e Documentos</h3>
-          <p className="text-xs text-neutral-400 mt-0.5">Fase actual: {estadoClean || 'Sem estado'}</p>
+          <h3 className="text-sm font-bold text-neutral-800">Documentos do Imóvel</h3>
+          <p className="text-xs text-neutral-400 mt-0.5">Selecciona os documentos para gerar o dossier para investidor</p>
         </div>
         <div className="flex items-center gap-2">
-          {compilarUrl ? (
-            <a href={compilarUrl} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg text-white shadow-sm hover:shadow transition-shadow"
-              style={{ backgroundColor: '#C9A84C' }}>
-              <FileDown className="w-3.5 h-3.5" /> Compilar Dossier ({compilaveis.length})
-            </a>
-          ) : (
-            <span className="px-4 py-2 text-xs text-neutral-400 rounded-lg bg-neutral-100">Selecciona relatorios para compilar</span>
-          )}
+          <button onClick={selectAll} className="px-2.5 py-1.5 text-[11px] text-neutral-500 hover:text-neutral-700 rounded-lg hover:bg-neutral-100 transition-colors">Todos</button>
+          <button onClick={selectNone} className="px-2.5 py-1.5 text-[11px] text-neutral-500 hover:text-neutral-700 rounded-lg hover:bg-neutral-100 transition-colors">Nenhum</button>
         </div>
       </div>
 
-      {/* Relatorio Geral */}
-      <a href={`/api/crm/imoveis/${imovelId}/relatorio`} target="_blank" rel="noopener noreferrer"
-        className="flex items-center gap-4 p-4 rounded-xl border-2 hover:shadow-sm transition-all cursor-pointer"
-        style={{ borderColor: '#C9A84C33', backgroundColor: '#faf8f2' }}>
-        <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: '#C9A84C15' }}>
-          <FileText className="w-5 h-5" style={{ color: '#C9A84C' }} />
-        </div>
-        <div className="flex-1">
-          <p className="text-sm font-bold text-neutral-800">Relatorio Geral do Imovel</p>
-          <p className="text-xs text-neutral-400">Ficha completa com todos os dados e analise</p>
-        </div>
-        <span className="px-2.5 py-1 text-[10px] font-bold rounded-lg" style={{ backgroundColor: '#C9A84C20', color: '#C9A84C' }}>PDF</span>
-      </a>
-
-      {/* Documentos por categoria */}
-      {['fase', 'investidor', 'outro'].map(cat => {
-        const docs = ALL_DOCS.filter(d => d.cat === cat)
-        if (docs.length === 0) return null
-        const meta = CAT_META[cat]
-        return (
-          <div key={cat}>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs">{meta.icon}</span>
-              <p className="text-xs font-bold text-neutral-600 uppercase tracking-wider">{meta.label}</p>
-              {cat === 'fase' && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">{estadoClean}</span>}
+      {/* Lista de documentos — todos iguais */}
+      <div className="rounded-xl border border-neutral-100 overflow-hidden divide-y divide-neutral-50">
+        {ALL_DOCS.map(d => {
+          const isSelected = selected.has(d.compilavel)
+          const isFaseActual = docsActuais.includes(d.tipo)
+          return (
+            <div key={d.tipo}
+              className={`flex items-center gap-3 px-4 py-3 transition-colors group cursor-pointer ${
+                isSelected ? 'bg-amber-50/70' : 'bg-white hover:bg-neutral-50/50'
+              }`}
+              onClick={() => toggle(d.compilavel)}>
+              <input type="checkbox" checked={isSelected} readOnly
+                className="w-4 h-4 rounded border-neutral-300 shrink-0 pointer-events-none" style={{ accentColor: '#C9A84C' }} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-neutral-700">{d.label}</p>
+                  {isFaseActual && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">Fase actual</span>}
+                </div>
+              </div>
+              <a href={`/api/crm/imoveis/${imovelId}/documento/${d.tipo}`} target="_blank" rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors shrink-0 opacity-50 group-hover:opacity-100">
+                Abrir
+              </a>
             </div>
-            <div className="rounded-xl border border-neutral-100 overflow-hidden divide-y divide-neutral-50">
-              {docs.map(d => {
-                const canCompile = !!d.compilavel
-                const isSelected = canCompile && selected.has(d.compilavel)
-                const isFase = d.cat === 'fase'
-                return (
-                  <div key={d.tipo}
-                    className={`flex items-center gap-3 px-4 py-3 transition-colors group ${
-                      isSelected ? 'bg-amber-50/80' : 'bg-white hover:bg-neutral-50/50'
-                    }`}>
-                    {canCompile ? (
-                      <input type="checkbox" checked={isSelected}
-                        onChange={() => toggle(d.compilavel)}
-                        className="w-4 h-4 rounded border-neutral-300 shrink-0 cursor-pointer" style={{ accentColor: '#C9A84C' }} />
-                    ) : (
-                      <div className={`w-2 h-2 rounded-full shrink-0 ${isFase ? 'bg-emerald-500' : 'bg-neutral-300'}`} />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-neutral-700">{d.label}</p>
-                      {d.desc && <p className="text-[11px] text-neutral-400 mt-0.5">{d.desc}</p>}
-                    </div>
-                    <a href={`/api/crm/imoveis/${imovelId}/documento/${d.tipo}`} target="_blank" rel="noopener noreferrer"
-                      className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors shrink-0 opacity-60 group-hover:opacity-100">
-                      Abrir PDF
-                    </a>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
+          )
+        })}
+      </div>
 
-// ── Tab Investidor (dossier compilável) ─────────────────────
-function InvestidorTab({ imovelId, imovelNome }) {
-  const [selected, setSelected] = useState({ investimento: true, comparaveis: true, caep: true, stress_tests: true })
-
-  const REPORTS = [
-    { key: 'investimento', label: 'Análise de Investimento', desc: 'Custos detalhados, rentabilidade, fiscalidade, resultados', tipo: 'relatorio_investimento' },
-    { key: 'comparaveis', label: 'Estudo de Comparáveis', desc: 'Preços de mercado, ajustes, VVR estimado', tipo: 'relatorio_comparaveis' },
-    { key: 'caep', label: 'Distribuição CAEP', desc: 'Split Somnium/investidores, ROI por investidor', tipo: 'relatorio_caep' },
-    { key: 'stress_tests', label: 'Stress Tests', desc: 'Cenários de risco e cenários favoráveis', tipo: 'relatorio_stress' },
-  ]
-
-  const selectedKeys = Object.entries(selected).filter(([, v]) => v).map(([k]) => k)
-  const compilarUrl = `/api/crm/imoveis/${imovelId}/relatorio-investidor?seccoes=${selectedKeys.join(',')}`
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="rounded-xl p-4 border-2" style={{ borderColor: '#C9A84C', backgroundColor: '#faf8f2' }}>
-        <div className="flex items-center justify-between mb-1">
-          <div>
-            <h3 className="text-base font-bold text-gray-800">Dossier para Investidor</h3>
-            <p className="text-xs text-gray-500">Selecciona as secções a incluir e gera um PDF profissional</p>
-          </div>
+      {/* Barra fixa em baixo — gerar dossier */}
+      <div className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
+        selectedDocs.length > 0 ? 'border-[#C9A84C] bg-[#faf8f2]' : 'border-neutral-200 bg-neutral-50'
+      }`}>
+        <div>
+          <p className="text-sm font-bold text-neutral-800">
+            {selectedDocs.length > 0 ? `${selectedDocs.length} documento${selectedDocs.length > 1 ? 's' : ''} seleccionado${selectedDocs.length > 1 ? 's' : ''}` : 'Nenhum documento seleccionado'}
+          </p>
+          <p className="text-xs text-neutral-400 mt-0.5">O dossier compilado inclui capa profissional e índice</p>
+        </div>
+        {compilarUrl ? (
           <a href={compilarUrl} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl text-white transition-colors shadow-sm hover:shadow-md"
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl text-white shadow-sm hover:shadow transition-all"
             style={{ backgroundColor: '#C9A84C' }}>
-            <FileDown className="w-4 h-4" /> Compilar Dossier
+            <FileDown className="w-4 h-4" /> Gerar Dossier
           </a>
-        </div>
+        ) : (
+          <span className="px-5 py-2.5 text-sm text-neutral-400 rounded-xl bg-neutral-200/50">Gerar Dossier</span>
+        )}
       </div>
-
-      {/* Relatórios individuais */}
-      <div className="space-y-3">
-        {REPORTS.map(r => (
-          <div key={r.key} className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 hover:border-gray-300 transition-colors">
-            <input type="checkbox" checked={selected[r.key]}
-              onChange={e => setSelected(prev => ({ ...prev, [r.key]: e.target.checked }))}
-              className="w-5 h-5 rounded border-gray-300 shrink-0" style={{ accentColor: '#C9A84C' }} />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-800">{r.label}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{r.desc}</p>
-            </div>
-            <a href={`/api/crm/imoveis/${imovelId}/documento/${r.tipo}`} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 shrink-0 transition-colors">
-              <FileDown className="w-3.5 h-3.5" /> Abrir PDF
-            </a>
-          </div>
-        ))}
-      </div>
-
-      {/* Info */}
-      <p className="text-xs text-gray-400 text-center">
-        {selectedKeys.length} de 4 secções seleccionadas — o dossier compilado inclui capa profissional e índice
-      </p>
     </div>
   )
 }
@@ -288,7 +224,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
     { key: 'ficheiros', label: 'Ficheiros', icon: '📷', show: type === 'Imóveis' },
     { key: 'interacoes', label: `Interacções (${data?.interacoes?.length ?? 0})`, icon: '💬', show: type === 'Consultores' },
     { key: 'analise', label: 'Análise Financeira', icon: '📊', show: type === 'Imóveis' },
-    { key: 'relatorios_imovel', label: 'Relatórios', icon: '📄', show: type === 'Imóveis' },
+    { key: 'relatorios_imovel', label: 'Documentos', icon: '📄', show: type === 'Imóveis' },
     { key: 'relatorios', label: `Relatórios (${reunioes.length})`, icon: '📄', show: (type === 'Investidores' || type === 'Consultores') },
   ].filter(t => t.show)
 
