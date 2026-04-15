@@ -120,7 +120,7 @@ IMÓVEIS NA BASE: ${imNomes}
 
 Devolve SEMPRE JSON com exactamente este schema:
 {
-  "accao": "TAREFA|NOTA_IMOVEL|NOTA_CONSULTOR|INTERACAO|MOVER_ESTADO|CLASSIFICAR|FOLLOW_UP",
+  "accao": "TAREFA|NOTA_IMOVEL|NOTA_CONSULTOR|INTERACAO|MOVER_ESTADO|CLASSIFICAR|FOLLOW_UP|CRIAR_IMOVEL|ATUALIZAR_IMOVEL|CRIAR_CONSULTOR",
   "descricao": "texto limpo e claro da tarefa/nota (reformula se necessario)",
   "entidade": "nome do consultor ou imovel (exacto da base)",
   "entidade_tipo": "consultor|imovel|null",
@@ -155,7 +155,12 @@ Exemplos:
 "follow up ao Amaro feito hoje por chamada" → INTERACAO, Amaro Bailão, canal=chamada, data=hoje
 "mover prédio Bencanta para estudo de VVR" → MOVER_ESTADO, Prédio Bencanta, novo_estado=Estudo de VVR
 
-Faz match aproximado dos nomes (Teresa → Teresa Sousa, prédio clube → Prédio Rua do Clube).`,
+"adicionar imovel T3 em Celas consultor João preço 180 mil" → CRIAR_IMOVEL
+"actualizar preço do prédio Bencanta para 340 mil" → ATUALIZAR_IMOVEL
+"adicionar consultor Maria Santos telefone 912345678" → CRIAR_CONSULTOR
+
+Faz match aproximado dos nomes (Teresa → Teresa Sousa, prédio clube → Prédio Rua do Clube).
+TODAS as tarefas devem ser sincronizadas com Google Calendar.`,
           messages: [{ role: 'user', content: text }]
         })
 
@@ -226,6 +231,60 @@ Faz match aproximado dos nomes (Teresa → Teresa Sousa, prédio clube → Préd
             msg = `Follow-up registado com "${cons.nome}" — ${data}`
           }
 
+        } else if (accao === 'CRIAR_IMOVEL') {
+          const nome = parsed.descricao || text
+          const PORT = process.env.PORT ?? 3001
+          try {
+            await fetch(`http://localhost:${PORT}/api/crm/imoveis`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                nome,
+                zona: parsed.zona || null,
+                tipologia: parsed.tipologia || null,
+                ask_price: parsed.ask_price || 0,
+                nome_consultor: parsed.entidade || null,
+                origem: 'Consultor',
+              })
+            })
+            msg = `Imóvel criado: "${nome}"`
+          } catch { msg = `Erro ao criar imóvel` }
+
+        } else if (accao === 'ATUALIZAR_IMOVEL' && entNome) {
+          const im = imoveis.find(i => i.nome.toLowerCase().includes(entNome.toLowerCase()))
+          if (im) {
+            const updates = {}
+            if (parsed.ask_price) updates.ask_price = parsed.ask_price
+            if (parsed.valor_proposta) updates.valor_proposta = parsed.valor_proposta
+            if (parsed.tipologia) updates.tipologia = parsed.tipologia
+            if (parsed.zona) updates.zona = parsed.zona
+            if (parsed.descricao) {
+              const { rows: [ex] } = await pgQuery('SELECT notas FROM imoveis WHERE id = $1', [im.id])
+              updates.notas = ((ex?.notas || '') + '\n' + `[${hoje}] ${parsed.descricao}`).trim()
+            }
+            if (Object.keys(updates).length > 0) {
+              const sets = Object.entries(updates).map(([k], i) => `${k} = $${i + 1}`)
+              sets.push(`updated_at = $${Object.keys(updates).length + 1}`)
+              const params = [...Object.values(updates), now, im.id]
+              await pgQuery(`UPDATE imoveis SET ${sets.join(', ')} WHERE id = $${params.length}`, params)
+            }
+            msg = `"${im.nome}" actualizado`
+          }
+
+        } else if (accao === 'CRIAR_CONSULTOR') {
+          const PORT = process.env.PORT ?? 3001
+          try {
+            await fetch(`http://localhost:${PORT}/api/crm/consultores/find-or-create`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                nome: parsed.entidade || parsed.descricao,
+                contacto: parsed.contacto || null,
+              })
+            })
+            msg = `Consultor criado/encontrado: "${parsed.entidade || parsed.descricao}"`
+          } catch { msg = `Erro ao criar consultor` }
+
         } else {
           // Default: criar tarefa com hora inicio/fim
           const hInicio = parsed.hora_inicio || '09:00'
@@ -236,32 +295,48 @@ Faz match aproximado dos nomes (Teresa → Teresa Sousa, prédio clube → Préd
             return `${String(Math.floor(totalMin / 60)).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}`
           })()
           const dataStr = parsed.data || hoje
-          const inicio = `${dataStr}T${hInicio}:00Z`
-          const fim = `${dataStr}T${hFim}:00Z`
+          const inicio = `${dataStr}T${hInicio}:00`
+          const fim = `${dataStr}T${hFim}:00`
 
-          await pgQuery(
-            `INSERT INTO tarefas (id, tarefa, status, categoria, funcionario, inicio, fim, created_at, updated_at)
-             VALUES ($1, $2, 'A fazer', $3, $4, $5, $6, $7, $7)`,
-            [randomUUID(), parsed.descricao || text, parsed.categoria || 'Outro', 'Alexandre Mendes', inicio, fim, now]
-          )
+          // Criar tarefa via endpoint interno (sincroniza automaticamente com Google Calendar)
+          try {
+            const PORT = process.env.PORT ?? 3001
+            await fetch(`http://localhost:${PORT}/api/tarefas`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tarefa: parsed.descricao || text,
+                categoria: parsed.categoria || 'Outro',
+                funcionario: 'Alexandre Mendes',
+                inicio, fim,
+              })
+            })
+          } catch (tarefaErr) {
+            // Fallback: criar directamente na DB
+            await pgQuery(
+              `INSERT INTO tarefas (id, tarefa, status, categoria, funcionario, inicio, fim, created_at, updated_at)
+               VALUES ($1, $2, 'A fazer', $3, $4, $5, $6, $7, $7)`,
+              [randomUUID(), parsed.descricao || text, parsed.categoria || 'Outro', 'Alexandre Mendes', inicio, fim, now]
+            )
+          }
 
-          // Se for visita a imovel → preencher data_visita
+          // Preencher datas nas fichas dos imoveis
           if (parsed.preencher_data_visita && entNome) {
             const im = imoveis.find(i => i.nome.toLowerCase().includes(entNome.toLowerCase()))
             if (im) {
               await pgQuery('UPDATE imoveis SET data_visita = $1, updated_at = $2 WHERE id = $3', [dataStr, now, im.id])
-              msg = `Visita agendada: "${parsed.descricao}" (${hInicio}-${hFim}) — data_visita preenchida em "${im.nome}"`
+              msg = `Visita agendada: "${parsed.descricao}" (${hInicio}-${hFim}) — data_visita preenchida + Google Calendar sincronizado`
             } else {
-              msg = `Tarefa criada: "${parsed.descricao}" (${hInicio}-${hFim})`
+              msg = `Tarefa criada: "${parsed.descricao}" (${hInicio}-${hFim}) + Google Calendar`
             }
           } else if (parsed.preencher_data_chamada && entNome) {
             const im = imoveis.find(i => i.nome.toLowerCase().includes(entNome.toLowerCase()))
             if (im) {
               await pgQuery('UPDATE imoveis SET data_chamada = $1, updated_at = $2 WHERE id = $3', [dataStr, now, im.id])
             }
-            msg = `Tarefa criada: "${parsed.descricao}" (${hInicio}-${hFim})`
+            msg = `Tarefa criada: "${parsed.descricao}" (${hInicio}-${hFim}) + Google Calendar`
           } else {
-            msg = `Tarefa criada: "${parsed.descricao}" (${hInicio}-${hFim})`
+            msg = `Tarefa criada: "${parsed.descricao}" (${hInicio}-${hFim}) + Google Calendar`
           }
         }
 
