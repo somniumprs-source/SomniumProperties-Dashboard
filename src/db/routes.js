@@ -52,7 +52,7 @@ const uploadImovel = multer({
   storage: imoveisStorage,
   limits: { fileSize: 15 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowed = /\.(jpg|jpeg|png|webp|heic|pdf)$/i
+    const allowed = /\.(jpg|jpeg|png|webp|heic|pdf|doc|docx|xls|xlsx)$/i
     cb(null, allowed.test(path.extname(file.originalname)))
   },
 })
@@ -356,6 +356,21 @@ router.post('/imoveis/:id/fotos', uploadImovel.array('fotos', 20), async (req, r
     }
     await Imoveis.update(req.params.id, { fotos: JSON.stringify(fotos) })
     res.json({ ok: true, fotos })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Mover ficheiro entre categorias (fotos ↔ documentos)
+router.put('/imoveis/:id/fotos/:fotoId/mover', async (req, res) => {
+  try {
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+    const { folder } = req.body // 'fotos' ou 'documentos'
+    if (!['fotos', 'documentos'].includes(folder)) return res.status(400).json({ error: 'Pasta inválida' })
+
+    const fotos = imovel.fotos ? JSON.parse(imovel.fotos) : []
+    const updated = fotos.map(f => f.id === req.params.fotoId ? { ...f, folder } : f)
+    await Imoveis.update(req.params.id, { fotos: JSON.stringify(updated) })
+    res.json({ ok: true, fotos: updated })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 

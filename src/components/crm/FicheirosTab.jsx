@@ -2,7 +2,7 @@
  * Tab "Ficheiros" — galeria de fotos + documentos do imóvel.
  */
 import { useState, useEffect, useRef } from 'react'
-import { Upload, Image, FileText, Trash2, ExternalLink, FolderOpen, X, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import { Upload, Image, FileText, Trash2, ExternalLink, FolderOpen, X, ChevronLeft, ChevronRight, Plus, ArrowRightLeft } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 
 export function FicheirosTab({ imovelId, driveFolderId }) {
@@ -49,6 +49,17 @@ export function FicheirosTab({ imovelId, driveFolderId }) {
     if (!confirm('Apagar este ficheiro?')) return
     try {
       const r = await apiFetch(`/api/crm/imoveis/${imovelId}/fotos/${fotoId}`, { method: 'DELETE' })
+      const data = await r.json()
+      if (data.fotos) setAllFiles(data.fotos)
+    } catch (e) { console.error('Erro:', e) }
+  }
+
+  async function handleMove(fotoId, toFolder) {
+    try {
+      const r = await apiFetch(`/api/crm/imoveis/${imovelId}/fotos/${fotoId}/mover`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: toFolder }),
+      })
       const data = await r.json()
       if (data.fotos) setAllFiles(data.fotos)
     } catch (e) { console.error('Erro:', e) }
@@ -132,7 +143,7 @@ export function FicheirosTab({ imovelId, driveFolderId }) {
             }
             {uploading ? 'A carregar...' : 'Adicionar'}
           </button>
-          <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf" className="hidden" onChange={handleUpload} />
+          <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" className="hidden" onChange={handleUpload} />
         </div>
       </div>
 
@@ -167,6 +178,13 @@ export function FicheirosTab({ imovelId, driveFolderId }) {
                 </div>
                 {/* Actions */}
                 <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {foto.source === 'local' && (
+                    <button onClick={e => { e.stopPropagation(); handleMove(foto.id, 'documentos') }}
+                      title="Mover para Documentos"
+                      className="w-7 h-7 rounded-lg bg-white/95 flex items-center justify-center shadow-sm hover:bg-indigo-50">
+                      <ArrowRightLeft className="w-3.5 h-3.5 text-indigo-600" />
+                    </button>
+                  )}
                   {foto.source === 'drive' && foto.viewLink && (
                     <a href={foto.viewLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
                       className="w-7 h-7 rounded-lg bg-white/95 flex items-center justify-center shadow-sm hover:bg-white">
@@ -251,6 +269,12 @@ export function FicheirosTab({ imovelId, driveFolderId }) {
                         className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors">
                         Abrir
                       </a>
+                    )}
+                    {doc.source === 'local' && isImage && (
+                      <button onClick={() => handleMove(doc.id, 'fotos')} title="Mover para Fotografias"
+                        className="p-1.5 rounded-lg text-neutral-300 hover:bg-emerald-50 hover:text-emerald-500 transition-colors">
+                        <ArrowRightLeft className="w-3.5 h-3.5" />
+                      </button>
                     )}
                     {doc.source === 'local' && (
                       <button onClick={() => handleDelete(doc.id)}
