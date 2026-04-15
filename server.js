@@ -91,7 +91,7 @@ try {
       } catch (e) { res.status(500).json({ error: e.message }) }
     })
 
-    // Endpoint para processar comando de voz (Speech → IA → Tarefa)
+    // Endpoint para processar comando de voz (Speech → Regras → Tarefa) — sem custo de API
     app.post('/api/voice/process', async (req, res) => {
       try {
         const { text } = req.body
@@ -99,38 +99,61 @@ try {
 
         const { query: pgQuery } = await import('./src/db/pg.js')
         const { randomUUID } = await import('crypto')
-        const Anthropic = (await import('@anthropic-ai/sdk')).default
-        const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+        const lower = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
-        const response = await client.messages.create({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 500,
-          system: `Interpretas comandos de voz em português para um CRM imobiliário. Extrai a tarefa e devolve JSON:
-{"tarefa": "descrição da tarefa", "categoria": "Follow-up Consultor|Visita|Análise|Proposta|Documentação|Outro", "funcionario": "Alexandre Mendes", "prioridade": "normal|urgente"}
-Se não for uma tarefa clara, devolve: {"tarefa": null, "nota": "texto interpretado"}
-Exemplos: "ligar ao consultor João amanhã" → {"tarefa": "Ligar ao consultor João", "categoria": "Follow-up Consultor"}
-"agendar visita ao prédio de Santa Clara" → {"tarefa": "Agendar visita ao prédio de Santa Clara", "categoria": "Visita"}`,
-          messages: [{ role: 'user', content: text }]
+        // Extrair hora (10h, 10:00, as 10, etc.)
+        const horaMatch = text.match(/(\d{1,2})\s*(?:h|horas?|:00|:\d{2})/i) || text.match(/[aà]s\s+(\d{1,2})/i)
+        const hora = horaMatch ? parseInt(horaMatch[1]) : null
+
+        // Extrair data relativa
+        let dataInicio = new Date()
+        if (lower.includes('amanha')) dataInicio.setDate(dataInicio.getDate() + 1)
+        else if (lower.includes('segunda')) { const d = dataInicio.getDay(); dataInicio.setDate(dataInicio.getDate() + ((8 - d) % 7 || 7)) }
+        else if (lower.includes('terca')) { const d = dataInicio.getDay(); dataInicio.setDate(dataInicio.getDate() + ((9 - d) % 7 || 7)) }
+        else if (lower.includes('quarta')) { const d = dataInicio.getDay(); dataInicio.setDate(dataInicio.getDate() + ((10 - d) % 7 || 7)) }
+        else if (lower.includes('quinta')) { const d = dataInicio.getDay(); dataInicio.setDate(dataInicio.getDate() + ((11 - d) % 7 || 7)) }
+        else if (lower.includes('sexta')) { const d = dataInicio.getDay(); dataInicio.setDate(dataInicio.getDate() + ((12 - d) % 7 || 7)) }
+        if (hora) dataInicio.setHours(hora, 0, 0, 0)
+
+        // Detectar categoria
+        let categoria = 'Outro'
+        if (lower.match(/ligar|telefonar|chamada|contactar|follow.?up/)) categoria = 'Follow-up Consultor'
+        else if (lower.match(/visita|ver.*imovel|ir.*ver|agendar.*visita/)) categoria = 'Visita'
+        else if (lower.match(/analise|analisar|calcul|estudo/)) categoria = 'Análise'
+        else if (lower.match(/proposta|enviar.*proposta/)) categoria = 'Proposta'
+        else if (lower.match(/documento|certidao|caderneta|licen/)) categoria = 'Documentação'
+        else if (lower.match(/reuniao|meeting|encontro/)) categoria = 'Reunião'
+        else if (lower.match(/obra|empreiteiro|orcamento/)) categoria = 'Obra'
+
+        // Detectar pessoa mencionada
+        const pessoaMatch = text.match(/(?:ao?|com|do|da)\s+(?:consultor[a]?\s+)?([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)?)/i)
+        const pessoa = pessoaMatch ? pessoaMatch[1] : null
+
+        // Construir descricao da tarefa
+        let tarefa = text.charAt(0).toUpperCase() + text.slice(1)
+        // Limpar palavras de comando
+        tarefa = tarefa.replace(/^(cria|criar|adiciona|adicionar|agenda|agendar|marca|marcar)\s+(uma?\s+)?(tarefa|reuniao|visita|chamada)?\s*/i, '').trim()
+        if (!tarefa) tarefa = text
+
+        // Capitalizar primeira letra
+        tarefa = tarefa.charAt(0).toUpperCase() + tarefa.slice(1)
+
+        const now = new Date().toISOString()
+        const inicioStr = dataInicio.toISOString()
+
+        await pgQuery(
+          `INSERT INTO tarefas (id, tarefa, status, categoria, funcionario, inicio, created_at, updated_at)
+           VALUES ($1, $2, 'A fazer', $3, $4, $5, $6, $6)`,
+          [randomUUID(), tarefa, categoria, 'Alexandre Mendes', inicioStr, now]
+        )
+
+        const horaStr = hora ? ` às ${hora}h` : ''
+        const dataStr = dataInicio.toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' })
+        res.json({
+          ok: true,
+          message: `Tarefa criada: "${tarefa}" — ${dataStr}${horaStr}`,
+          tarefa: { descricao: tarefa, categoria, data: inicioStr, pessoa }
         })
-
-        const respText = response.content[0]?.text || '{}'
-        let parsed
-        try {
-          const jsonMatch = respText.match(/\{[\s\S]*\}/)
-          parsed = JSON.parse(jsonMatch?.[0] || respText)
-        } catch { parsed = { tarefa: text, categoria: 'Outro' } }
-
-        if (parsed.tarefa) {
-          const now = new Date().toISOString()
-          await pgQuery(
-            `INSERT INTO tarefas (id, tarefa, status, categoria, funcionario, inicio, created_at, updated_at)
-             VALUES ($1, $2, 'A fazer', $3, $4, $5, $5, $5)`,
-            [randomUUID(), parsed.tarefa, parsed.categoria || 'Outro', parsed.funcionario || 'Alexandre Mendes', now]
-          )
-          res.json({ ok: true, message: `Tarefa criada: ${parsed.tarefa}`, tarefa: parsed })
-        } else {
-          res.json({ ok: true, message: `Nota registada: ${parsed.nota || text}`, nota: parsed.nota || text })
-        }
       } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
     })
 
