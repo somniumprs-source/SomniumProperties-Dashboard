@@ -193,7 +193,7 @@ function RelatorioConsultores() {
                       <td className="py-2 px-3 text-right font-mono">{c.taxaQualidade}%</td>
                       <td className="py-2 px-3 text-right font-mono">{c.volume}</td>
                       <td className="py-2 px-3 text-right font-mono">{c.tempoResposta != null ? `${c.tempoResposta}h` : '—'}</td>
-                      <td className="py-2 px-3"><Badge text={c.estatuto} colorMap={CONS_ESTATUTO_COLOR} /></td>
+                      <td className="py-3 px-3"><Badge text={c.estatuto} colorMap={CONS_ESTATUTO_COLOR} /></td>
                       <td className="py-2 px-3 text-gray-500">{c.contacto || '—'}</td>
                     </tr>
                   ))}
@@ -551,7 +551,7 @@ export function CRM() {
           <input
             type="text" placeholder={`Pesquisar ${tab.toLowerCase()}...`}
             value={search} onChange={e => handleSearch(e.target.value)}
-            className="w-full sm:flex-1 px-3 sm:px-4 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            className="w-full sm:flex-1 px-4 py-3 sm:py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
           />
           <div className="flex gap-2 items-center">
             {hasKanban && (
@@ -658,7 +658,7 @@ export function CRM() {
           )}
           {!loading && editing === null && (view === 'table' || !hasKanban) && data.length > 0 && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto -webkit-overflow-scrolling-touch">
                 {tab === 'Imóveis' && <ImoveisTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
                 {tab === 'Investidores' && <InvestidoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
                 {tab === 'Consultores' && <ConsultoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
@@ -721,7 +721,7 @@ function Th({ field, label, sortField, sortDir, onSort, align }) {
   const arrow = active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
   return (
     <th onClick={() => onSort(field)}
-      className={`${align === 'right' ? 'text-right' : 'text-left'} py-2 px-3 cursor-pointer select-none hover:text-indigo-600 transition-colors ${active ? 'text-indigo-700' : ''}`}>
+      className={`${align === 'right' ? 'text-right' : 'text-left'} py-3 px-3 cursor-pointer select-none hover:text-indigo-600 active:text-indigo-800 transition-colors whitespace-nowrap ${active ? 'text-indigo-700' : ''}`}>
       {label}{arrow}
     </th>
   )
@@ -731,10 +731,10 @@ function Th({ field, label, sortField, sortDir, onSort, align }) {
 
 function ActionButtons({ item, onEdit, onDelete, onView }) {
   return (
-    <div className="flex gap-1">
-      {onView && <button onClick={() => onView(item.id)} className="px-2 py-1 text-xs bg-gray-50 text-gray-600 rounded hover:bg-gray-100">Ver</button>}
-      <button onClick={() => onEdit(item)} className="px-2 py-1 text-xs bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100">Abrir</button>
-      <button onClick={() => onDelete(item.id)} className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Apagar</button>
+    <div className="flex gap-1.5">
+      {onView && <button onClick={() => onView(item.id)} className="px-3 py-2 min-h-[36px] text-xs bg-gray-50 text-gray-600 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors">Ver</button>}
+      <button onClick={() => onEdit(item)} className="px-3 py-2 min-h-[36px] text-xs bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 active:bg-indigo-200 transition-colors">Abrir</button>
+      <button onClick={() => onDelete(item.id)} className="px-3 py-2 min-h-[36px] text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 active:bg-red-200 transition-colors">Apagar</button>
     </div>
   )
 }
@@ -760,19 +760,19 @@ function ImoveisTable({ data, onEdit, onDelete, onView }) {
         <Th field="roi" label="ROI" align="right" {...sp} />
         <Th field="origem" label="Origem" {...sp} />
         <Th field="data_adicionado" label="Data" {...sp} />
-        <th className="py-2 px-3"></th>
+        <th className="py-3 px-3"></th>
       </tr></thead>
       <tbody>
         {sorted.map(r => (
           <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
-            <td className="py-2 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
-            <td className="py-2 px-3"><Badge text={r.estado} colorMap={IMOVEL_ESTADO_COLOR} /></td>
+            <td className="py-3 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
+            <td className="py-3 px-3"><Badge text={r.estado} colorMap={IMOVEL_ESTADO_COLOR} /></td>
             <td className="py-2 px-3 text-gray-500">{r.zona ?? '—'}</td>
             <td className="py-2 px-3 text-right font-mono">{r.ask_price > 0 ? EUR(r.ask_price) : '—'}</td>
             <td className="py-2 px-3 text-right font-mono">{r.roi > 0 ? `${r.roi}%` : '—'}</td>
             <td className="py-2 px-3 text-gray-500">{r.origem ?? '—'}</td>
             <td className="py-2 px-3 text-gray-400">{fmtDate(r.data_adicionado)}</td>
-            <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
+            <td className="py-3 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
           </tr>
         ))}
         {!sorted.length && <tr><td colSpan={8} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
@@ -795,20 +795,20 @@ function InvestidoresTable({ data, onEdit, onDelete, onView }) {
         <Th field="nda_assinado" label="NDA" {...sp} />
         <Th field="telemovel" label="Contacto" {...sp} />
         <Th field="data_primeiro_contacto" label="1º Contacto" {...sp} />
-        <th className="py-2 px-3"></th>
+        <th className="py-3 px-3"></th>
       </tr></thead>
       <tbody>
         {sorted.map(r => (
           <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
-            <td className="py-2 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
+            <td className="py-3 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
             <td className="py-2 px-3 text-center"><ClassBadge cls={r.classificacao} /></td>
-            <td className="py-2 px-3"><Badge text={r.status} colorMap={INV_STATUS_COLOR} /></td>
+            <td className="py-3 px-3"><Badge text={r.status} colorMap={INV_STATUS_COLOR} /></td>
             <td className="py-2 px-3 text-gray-500">{r.origem ?? '—'}</td>
             <td className="py-2 px-3 text-right font-mono">{r.capital_max > 0 ? EUR(r.capital_max) : '—'}</td>
             <td className="py-2 px-3 text-center">{r.nda_assinado ? '✓' : '—'}</td>
             <td className="py-2 px-3 text-gray-500">{r.telemovel ? <a href={`tel:${r.telemovel}`} className="text-green-600 hover:underline">{r.telemovel}</a> : r.email ? <a href={`mailto:${r.email}`} className="text-blue-600 hover:underline">{r.email}</a> : '—'}</td>
             <td className="py-2 px-3 text-gray-400">{fmtDate(r.data_primeiro_contacto)}</td>
-            <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
+            <td className="py-3 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
           </tr>
         ))}
         {!sorted.length && <tr><td colSpan={9} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
@@ -841,7 +841,7 @@ function ConsultoresTable({ data, onEdit, onDelete, onView }) {
         <Th field="estado_avaliacao" label="Estado" {...sp} />
         <Th field="data_proximo_follow_up" label="Próx. Follow-up" {...sp} />
         <Th field="_diasSemContacto" label="Dias s/ contacto" align="right" {...sp} />
-        <th className="py-2 px-3"></th>
+        <th className="py-3 px-3"></th>
       </tr></thead>
       <tbody>
         {sorted.map(r => {
@@ -852,16 +852,16 @@ function ConsultoresTable({ data, onEdit, onDelete, onView }) {
           return (
             <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
               <td className="py-2 px-1 text-center"><AlertDot status={r._alertStatus} /></td>
-              <td className="py-2 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
+              <td className="py-3 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
               <td className="py-2 px-3 text-gray-500">{agencia}</td>
               <td className="py-2 px-3 text-right font-mono font-semibold" style={{ color: '#C9A84C' }}>{r.score_prioridade > 0 ? r.score_prioridade : '—'}</td>
               <td className="py-2 px-3 text-right font-mono">{r._totalImoveis ?? r.imoveis_enviados ?? '—'}</td>
               <td className="py-2 px-3 text-right font-mono">{r.taxa_qualidade > 0 ? `${r.taxa_qualidade}%` : '—'}</td>
               <td className="py-2 px-3 text-right font-mono">{tempoResp}</td>
-              <td className="py-2 px-3"><Badge text={r.estado_avaliacao || 'Em avaliação'} colorMap={CONS_ESTADO_AVALIACAO_COLOR} /></td>
+              <td className="py-3 px-3"><Badge text={r.estado_avaliacao || 'Em avaliação'} colorMap={CONS_ESTADO_AVALIACAO_COLOR} /></td>
               <td className="py-2 px-3 text-gray-400">{fmtDate(r.data_proximo_follow_up)}</td>
               <td className="py-2 px-3 text-right font-mono">{r._diasSemContacto != null ? `${r._diasSemContacto}d` : '—'}</td>
-              <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
+              <td className="py-3 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
             </tr>
           )
         })}
@@ -883,20 +883,20 @@ function NegociosTable({ data, onEdit, onDelete, onViewImovel }) {
         <Th field="lucro_estimado" label="Lucro Est." align="right" {...sp} />
         <Th field="lucro_real" label="Lucro Real" align="right" {...sp} />
         <Th field="data" label="Data" {...sp} />
-        <th className="py-2 px-3"></th>
+        <th className="py-3 px-3"></th>
       </tr></thead>
       <tbody>
         {sorted.map(r => (
           <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
             onClick={() => r.imovel_id && onViewImovel?.(r.imovel_id)}>
-            <td className="py-2 px-3">
+            <td className="py-3 px-3">
               <span className={`font-medium ${r.imovel_id ? 'text-[#C9A84C] hover:underline' : 'text-gray-800'}`}>
                 {r.movimento}
               </span>
               {r.imovel_id && <span className="text-[10px] text-gray-300 ml-1.5">→ ver imóvel</span>}
             </td>
-            <td className="py-2 px-3"><Badge text={r.categoria} colorMap={NEG_CAT_COLOR} /></td>
-            <td className="py-2 px-3"><Badge text={r.fase} colorMap={NEG_FASE_COLOR} /></td>
+            <td className="py-3 px-3"><Badge text={r.categoria} colorMap={NEG_CAT_COLOR} /></td>
+            <td className="py-3 px-3"><Badge text={r.fase} colorMap={NEG_FASE_COLOR} /></td>
             <td className="py-2 px-3 text-right font-mono text-indigo-600">{EUR(r.lucro_estimado)}</td>
             <td className="py-2 px-3 text-right font-mono text-green-600">{r.lucro_real > 0 ? EUR(r.lucro_real) : '—'}</td>
             <td className="py-2 px-3 text-gray-400">{fmtDate(r.data)}</td>
@@ -916,7 +916,7 @@ function GenericTable({ data, onEdit, onDelete, columns, labels }) {
     <table className="min-w-[700px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
         {columns.map(c => <Th key={c} field={c} label={labels[c] || c} {...sp} />)}
-        <th className="py-2 px-3"></th>
+        <th className="py-3 px-3"></th>
       </tr></thead>
       <tbody>
         {sorted.map(r => (
@@ -926,7 +926,7 @@ function GenericTable({ data, onEdit, onDelete, columns, labels }) {
                 {c === columns[0] ? <ClickableName name={r[c]} item={r} onEdit={onEdit} /> : (r[c] ?? '—')}
               </td>
             ))}
-            <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} /></td>
+            <td className="py-3 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} /></td>
           </tr>
         ))}
         {!sorted.length && <tr><td colSpan={columns.length + 1} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
