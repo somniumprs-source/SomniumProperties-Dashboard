@@ -162,37 +162,46 @@ export function InteracoesTab({ consultorId, onUpdate }) {
       ) : interacoes.length === 0 ? (
         <div className="text-center py-8 text-gray-400 text-sm">Sem interacções registadas</div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3 bg-gray-50 rounded-xl p-4" style={{ minHeight: '200px' }}>
           {interacoes.map(i => {
-            const CanalIcon = CANAL_ICON[i.canal] || Phone
-            const DirecaoIcon = DIRECAO_ICON[i.direcao] || ArrowUpRight
-            const dirColor = DIRECAO_COLOR[i.direcao] || 'text-gray-600 bg-gray-50'
+            const isEnviado = i.direcao === 'Enviado'
+            const isAgente = (i.notas || '').includes('[AGENTE]') || (i.notas || '').includes('[FOLLOW-UP') || (i.notas || '').includes('[REACTIVAÇÃO')
             const tempoResp = tempoRespostaMap[i.id]
             const dataHora = i.data_hora ? new Date(i.data_hora) : null
             const dataStr = dataHora
               ? `${dataHora.toLocaleDateString('pt-PT')} ${dataHora.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}`
               : '—'
+            // Limpar prefixos do agente para mostrar so o texto
+            const textoLimpo = (i.notas || '').replace(/^\[AGENTE\]\s*/, '').replace(/^\[FOLLOW-UP AUTO\]\s*/, '').replace(/^\[REACTIVAÇÃO\]\s*/, '')
 
             return (
-              <div key={i.id} className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-100 hover:border-gray-200 transition-colors">
-                <div className={`flex items-center justify-center w-8 h-8 rounded-full shrink-0 ${dirColor}`}>
-                  <DirecaoIcon className="w-4 h-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${dirColor}`}>
-                      <CanalIcon className="w-3 h-3" />
-                      {i.canal} — {i.direcao === 'Enviado' ? 'Enviado por nós' : 'Resposta do consultor'}
-                    </span>
+              <div key={i.id} className={`flex ${isEnviado ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
+                  isEnviado
+                    ? isAgente ? 'bg-amber-50 border border-amber-200' : 'bg-indigo-50 border border-indigo-200'
+                    : 'bg-white border border-gray-200'
+                }`}>
+                  {/* Header — quem enviou */}
+                  <div className="flex items-center gap-2 mb-1">
+                    {isEnviado ? (
+                      <span className={`text-xs font-medium ${isAgente ? 'text-amber-600' : 'text-indigo-600'}`}>
+                        {isAgente ? 'Agente Alexandre' : 'Tu'} · {i.canal}
+                      </span>
+                    ) : (
+                      <span className="text-xs font-medium text-gray-700">
+                        Consultor · {i.canal}
+                      </span>
+                    )}
                     {tempoResp != null && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-50 text-purple-600">
-                        <Clock className="w-3 h-3" />
-                        Respondeu em {formatHoras(tempoResp)}
+                      <span className="text-xs text-purple-500">
+                        ⏱ {formatHoras(tempoResp)}
                       </span>
                     )}
                   </div>
-                  {i.notas && <p className="text-sm text-gray-600 mt-1">{i.notas}</p>}
-                  <p className="text-xs text-gray-400 mt-1">{dataStr}</p>
+                  {/* Texto da mensagem */}
+                  {textoLimpo && <p className="text-sm text-gray-800 whitespace-pre-line">{textoLimpo}</p>}
+                  {/* Data/hora */}
+                  <p className="text-xs text-gray-400 mt-1 text-right">{dataStr}</p>
                 </div>
               </div>
             )
