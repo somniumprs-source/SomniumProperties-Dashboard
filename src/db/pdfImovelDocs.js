@@ -1187,6 +1187,13 @@ export function generateInvestorReport(imovel, analise, seccoes = []) {
 
 // Gerar compilado num unico fluxo
 export function generateCompiledReport(imovel, analise, seccoes = []) {
+  // Gera um unico PDF com capa + conteudo real de cada seccao seleccionada
+  // Cada seccao e gerada individualmente e concatenada
+  // Como PDFKit nao permite merge, geramos cada seccao como documento separado
+  // e o endpoint retorna o primeiro com conteudo
+
+  // Abordagem simples: gerar o primeiro relatorio seleccionado que tenha dados
+  // Para compilado completo, redirigir para gerador individual
   const generatorMap = {
     investimento: 'relatorio_investimento',
     comparaveis: 'relatorio_comparaveis',
@@ -1194,45 +1201,152 @@ export function generateCompiledReport(imovel, analise, seccoes = []) {
     stress_tests: 'relatorio_stress',
   }
 
-  // Gerar um unico PDF com todas as seccoes
-  const doc = new PDFDocument({ size: 'A4', autoFirstPage: false })
-
-  // Capa
-  doc.addPage({ size: 'A4', margins: { top: 0, bottom: 0, left: 0, right: 0 } })
-  doc.rect(0, 0, PW, PH).fill(C.black)
-  doc.rect(0, 0, PW, 4).fill(C.gold)
-  try { doc.image(readFileSync(LOGO_PATH), (PW - 150) / 2, 120, { width: 150 }) } catch {}
-  doc.rect(PW / 2 - 20, 250, 40, 1).fill(C.gold)
-  doc.fontSize(8).fillColor(C.gold).text('DOSSIER DE INVESTIMENTO', ML, 270, { width: CW, align: 'center', characterSpacing: 4 })
-  doc.fontSize(24).fillColor(C.white).text(imovel.nome || 'Imóvel', ML, 310, { width: CW, align: 'center' })
-  if (imovel.zona) doc.fontSize(12).fillColor(C.muted).text(imovel.zona, ML, 350, { width: CW, align: 'center' })
-  if (imovel.ask_price) doc.fontSize(14).fillColor(C.gold).text(EUR(imovel.ask_price), ML, 380, { width: CW, align: 'center' })
-  doc.fontSize(9).fillColor(C.muted).text(NOW(), ML, 410, { width: CW, align: 'center' })
-
-  const labels = { investimento: 'Análise de Investimento', comparaveis: 'Estudo de Comparáveis', caep: 'Distribuição CAEP', stress_tests: 'Stress Tests' }
-  doc.fontSize(10).fillColor(C.gold).text('CONTEÚDO', ML, 460, { width: CW, align: 'center' })
-  seccoes.forEach((s, i) => {
-    doc.fontSize(11).fillColor(C.white).text(`${i + 1}. ${labels[s] || s}`, ML + 60, 490 + i * 22, { width: CW - 120, align: 'center' })
-  })
-
-  doc.rect(0, PH - 45, PW, 45).fill('#1a1a1a')
-  doc.rect(0, PH - 45, PW, 1).fill(C.gold).opacity(0.3); doc.opacity(1)
-  doc.fontSize(7).fillColor(C.gold).text('SOMNIUM PROPERTIES — CONFIDENCIAL', ML, PH - 28, { width: CW, align: 'center' })
-
-  // Gerar cada seccao como paginas adicionais no mesmo doc
-  for (const seccao of seccoes) {
-    const tipo = generatorMap[seccao]
-    if (!tipo || !GENERATORS[tipo]) continue
-
-    // Separator page
-    doc.addPage({ size: 'A4', margins: { top: 0, bottom: 0, left: 0, right: 0 } })
-    doc.rect(0, 0, PW, PH).fill(C.black)
-    doc.rect(0, PH / 2 - 1, PW, 2).fill(C.gold)
-    doc.fontSize(8).fillColor(C.gold).text((labels[seccao] || seccao).toUpperCase(), ML, PH / 2 - 30, { width: CW, align: 'center', characterSpacing: 4 })
-    doc.fontSize(18).fillColor(C.white).text(imovel.nome || '', ML, PH / 2 + 15, { width: CW, align: 'center' })
+  // Se so 1 seccao, gerar directamente esse relatorio
+  if (seccoes.length === 1) {
+    const tipo = generatorMap[seccoes[0]]
+    if (tipo && GENERATORS[tipo]) return GENERATORS[tipo](imovel, analise)
   }
 
-  doc.end()
-  return doc
+  // Para multiplas seccoes: gerar um DocBuilder unico com todo o conteudo
+  const b = new DocBuilder('Dossier de Investimento', imovel.zona || '', imovel)
+  const an = analise
+  const im = imovel
+
+  for (const seccao of seccoes) {
+    // Reset section counter para cada seccao
+    b._sectionNum = 0
+
+    if (seccao === 'investimento' && an) {
+      const ra = an.retorno_anualizado || 0
+      b.bigNumbers([
+        { label: 'Lucro Líquido', value: EUR(an.lucro_liquido) },
+        { label: 'Retorno Anualizado', value: `${ra}%` },
+        { label: 'Capital Necessário', value: EUR(an.capital_necessario) },
+      ])
+      b.inlineData([
+        { label: 'Zona', value: im.zona || '—' },
+        { label: 'Tipologia', value: im.tipologia || '—' },
+        { label: 'Prazo', value: `${an.meses || 6} meses` },
+      ])
+      b.space(6)
+      b.header('CUSTOS DO INVESTIMENTO')
+      b.simpleTable([
+        { label: 'Preço de compra', value: EUR(an.compra) },
+        { label: 'IMT + Selo + Escritura', value: EUR((an.imt || 0) + (an.imposto_selo || 0) + (an.escritura || 0) + (an.cpcv_compra || 0)) },
+        { label: 'Total Aquisição', value: EUR(an.total_aquisicao), total: true },
+        { label: 'Obra c/ IVA', value: EUR(an.obra_com_iva) },
+        { label: 'Total Obra', value: EUR(an.obra_com_iva), total: true },
+        { label: `Detenção + Comissão`, value: EUR((an.total_detencao || 0) + (an.comissao_com_iva || 0)) },
+        { label: 'Total Investimento', value: EUR(an.capital_necessario), total: true },
+      ])
+      b.space(4)
+      b.header('RESULTADO')
+      b.simpleTable([
+        { label: 'Receita (VVR)', value: EUR(an.vvr) },
+        { label: 'Custos totais', value: EUR(an.capital_necessario) },
+        { label: 'Lucro Bruto', value: EUR(an.lucro_bruto), total: true },
+        { label: 'Impostos + Dividendos', value: EUR((an.impostos || 0) + (an.retencao_dividendos || 0)) },
+        { label: 'Lucro Líquido', value: EUR(an.lucro_liquido), total: true },
+      ])
+      b.space(4)
+      b.bigNumbers([
+        { label: 'ROI Total', value: PCT(an.retorno_total) },
+        { label: 'Retorno Anualizado', value: PCT(an.retorno_anualizado) },
+        { label: 'Cash-on-Cash', value: PCT(an.cash_on_cash) },
+        { label: 'Break-even', value: EUR(an.break_even) },
+      ])
+    }
+
+    if (seccao === 'comparaveis' && an) {
+      const comps = typeof an.comparaveis === 'string' ? JSON.parse(an.comparaveis || '[]') : (an.comparaveis || [])
+      if (comps.length > 0) {
+        b.newPage()
+        b._sectionNum = 0
+        for (const tip of comps) {
+          const valid = (tip.comparaveis || []).filter(c => c.preco > 0 && c.area > 0)
+          if (!valid.length) continue
+          const precosM2 = valid.map(c => { const aj = Object.values(c.ajustes || {}).reduce((s, v) => s + (parseFloat(v) || 0), 0); return (c.preco / c.area) * (1 + aj / 100) })
+          const media = Math.round(precosM2.reduce((a, b) => a + b, 0) / precosM2.length)
+          b.header(`COMPARÁVEIS — ${tip.tipologia || '?'} ${tip.area || '?'}m²`)
+          b.bigNumbers([
+            { label: 'VVR Estimado', value: EUR(media * (tip.area || 0)) },
+            { label: 'Média €/m²', value: `${media} €/m²` },
+            { label: 'Amostra', value: `${valid.length} comp.` },
+          ])
+          b.colTable(
+            [['#', 25], ['Preço', 70], ['Área', 45], ['€/m²', 50], ['Neg.', 45], ['Loc.', 45], ['Idade', 45], ['Total', 50]],
+            valid.map((c, i) => { const aj = c.ajustes || {}; const t = Object.values(aj).reduce((s, v) => s + (parseFloat(v) || 0), 0); return { _values: [`${i + 1}`, EUR(c.preco), `${c.area}m²`, `${Math.round(c.preco / c.area)}`, `${aj.neg || 0}%`, `${aj.loc || 0}%`, `${aj.idade || 0}%`, `${t >= 0 ? '+' : ''}${t}%`] } })
+          )
+          b.space(8)
+        }
+      }
+    }
+
+    if (seccao === 'caep' && an) {
+      const caep = typeof an.caep === 'string' ? JSON.parse(an.caep || 'null') : an.caep
+      if (caep?.quota_somnium !== undefined) {
+        b.newPage()
+        b._sectionNum = 0
+        const percInv = 100 - caep.perc_somnium
+        b.header('PARCERIA CAEP')
+        b.inlineData([
+          { label: 'Somnium', value: `${caep.perc_somnium}%` },
+          { label: 'Investidores', value: `${percInv}%` },
+          { label: 'Base', value: caep.base_distribuicao === 'liquido' ? 'Lucro Líquido' : 'Lucro Bruto' },
+        ])
+        b.bigNumbers([
+          { label: 'Quota Somnium', value: EUR(caep.quota_somnium) },
+          { label: 'Capital Total', value: EUR(caep.capital_total) },
+        ])
+        if (caep.investidores?.length) {
+          b.header('DISTRIBUIÇÃO DO LUCRO')
+          b.colTable(
+            [['#', 25], ['Investidor', 100], ['Tipo', 70], ['%', 30], ['Lucro', 65], ['Imposto', 55], ['Líquido', 60], ['ROI', 50]],
+            [
+              { _values: ['S', 'Somnium Properties', 'Gestor', `${caep.perc_somnium}%`, EUR(caep.quota_somnium), '—', EUR(caep.quota_somnium), '—'] },
+              ...caep.investidores.map((inv, i) => ({ _values: [`#${i + 1}`, inv.nome || `Inv. ${i + 1}`, inv.tipo === 'empresa' ? 'Empresa' : 'Particular', `${inv.perc_lucro || 0}%`, EUR(inv.lucro_bruto), EUR(inv.impostos), EUR(inv.lucro_liquido), inv.roi ? `${inv.roi}%` : '—'] })),
+              { _values: ['', 'Total', '', '', '', '', EUR(caep.investidores.reduce((s, i) => s + (i.lucro_liquido || 0), 0) + caep.quota_somnium), ''], _total: true },
+            ]
+          )
+        }
+      }
+    }
+
+    if (seccao === 'stress_tests' && an) {
+      const st = typeof an.stress_tests === 'string' ? JSON.parse(an.stress_tests || 'null') : an.stress_tests
+      if (st) {
+        b.newPage()
+        b._sectionNum = 0
+        b.header('ANÁLISE DE RISCO')
+        b.verdict(
+          st.veredicto === 'resiliente' ? 'Investimento resiliente — lucro positivo em todos os cenários.' : 'Atenção — cenários com risco de prejuízo.',
+          st.veredicto === 'resiliente'
+        )
+        b.bigNumbers([
+          { label: 'Pior Cenário', value: EUR(st.pior?.lucro_liquido) },
+          { label: 'Base', value: EUR(st.base?.lucro_liquido) },
+          { label: 'Melhor', value: EUR(st.melhor?.lucro_liquido) },
+        ])
+        if (st.downside?.length) {
+          b.subheader('Cenários de risco')
+          b.colTable(
+            [['Cenário', 110], ['Descrição', 150], ['Lucro', 75], ['Delta', 65], ['RA', 50]],
+            st.downside.map(s => ({ _values: [s.label, s.descricao || '', EUR(s.lucro_liquido), EUR(s.delta), PCT(s.retorno_anualizado)] }))
+          )
+        }
+        if (st.upside?.length) {
+          b.space(4)
+          b.subheader('Cenários favoráveis')
+          b.colTable(
+            [['Cenário', 110], ['Descrição', 150], ['Lucro', 75], ['Delta', 65], ['RA', 50]],
+            st.upside.map(s => ({ _values: [s.label, s.descricao || '', EUR(s.lucro_liquido), EUR(s.delta), PCT(s.retorno_anualizado)] }))
+          )
+        }
+      }
+    }
+  }
+
+  b.disclaimer()
+  return b.end()
 }
 

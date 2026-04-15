@@ -19,6 +19,11 @@ import { generateMeetingPDF } from './pdfMeetingReport.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.resolve(__dirname, '../../public/uploads/despesas')
+const imoveisUploadsDir = path.resolve(__dirname, '../../public/uploads/imoveis')
+
+// Garantir que a pasta de uploads de imóveis existe
+import { mkdirSync } from 'fs'
+try { mkdirSync(imoveisUploadsDir, { recursive: true }) } catch {}
 
 const storage = multer.diskStorage({
   destination: uploadsDir,
@@ -32,6 +37,22 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowed = /\.(pdf|jpg|jpeg|png|webp|heic)$/i
+    cb(null, allowed.test(path.extname(file.originalname)))
+  },
+})
+
+const imoveisStorage = multer.diskStorage({
+  destination: imoveisUploadsDir,
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname)
+    cb(null, `${randomUUID()}${ext}`)
+  },
+})
+const uploadImovel = multer({
+  storage: imoveisStorage,
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = /\.(jpg|jpeg|png|webp|heic|pdf)$/i
     cb(null, allowed.test(path.extname(file.originalname)))
   },
 })
@@ -310,6 +331,103 @@ router.get('/consultores/:id/interacoes', async (req, res) => {
     )
     res.json(rows)
   } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Upload de fotos para imóveis ─────────────────────────────
+router.post('/imoveis/:id/fotos', uploadImovel.array('fotos', 20), async (req, res) => {
+  try {
+    if (!req.files?.length) return res.status(400).json({ error: 'Nenhum ficheiro válido (JPG, PNG, WEBP até 15MB)' })
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+
+    const fotos = imovel.fotos ? JSON.parse(imovel.fotos) : []
+    for (const file of req.files) {
+      fotos.push({
+        id: randomUUID(),
+        name: file.originalname,
+        path: `/uploads/imoveis/${file.filename}`,
+        type: file.mimetype,
+        size: file.size,
+        uploaded_at: new Date().toISOString(),
+      })
+    }
+    await Imoveis.update(req.params.id, { fotos: JSON.stringify(fotos) })
+    res.json({ ok: true, fotos })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/imoveis/:id/fotos/:fotoId', async (req, res) => {
+  try {
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+
+    const fotos = imovel.fotos ? JSON.parse(imovel.fotos) : []
+    const filtered = fotos.filter(f => f.id !== req.params.fotoId)
+    await Imoveis.update(req.params.id, { fotos: JSON.stringify(filtered) })
+    res.json({ ok: true, fotos: filtered })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Listar ficheiros do Google Drive do imóvel ───────────────
+router.get('/imoveis/:id/drive-files', async (req, res) => {
+  try {
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+    if (!imovel.drive_folder_id) return res.json({ files: [], fotos: [], documentos: [], configured: false })
+
+    if (!driveConfigured()) return res.json({ files: [], fotos: [], documentos: [], configured: false })
+
+    const { google: googleapis } = await import('googleapis')
+    const { readFileSync, existsSync } = await import('fs')
+    const pth = await import('path')
+    const root = pth.resolve(__dirname, '../..')
+    const oauthPath = pth.join(root, 'google-oauth.json')
+    const tokenPath = pth.join(root, 'google-token.json')
+    const creds = JSON.parse(readFileSync(oauthPath, 'utf8'))
+    const { client_id, client_secret } = creds.installed || creds.web
+    const oauth2 = new googleapis.auth.OAuth2(client_id, client_secret, 'http://localhost:3333')
+    oauth2.setCredentials(JSON.parse(readFileSync(tokenPath, 'utf8')))
+    const drive = googleapis.drive({ version: 'v3', auth: oauth2 })
+
+    // Listar subpastas
+    const foldersRes = await drive.files.list({
+      q: `'${imovel.drive_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id,name)',
+      supportsAllDrives: true,
+    })
+    const subfolders = foldersRes.data.files || []
+
+    const result = { files: [], fotos: [], documentos: [], configured: true, folderId: imovel.drive_folder_id }
+
+    for (const folder of subfolders) {
+      const filesRes = await drive.files.list({
+        q: `'${folder.id}' in parents and trashed=false`,
+        fields: 'files(id,name,mimeType,size,createdTime,thumbnailLink,webViewLink,webContentLink)',
+        orderBy: 'createdTime desc',
+        supportsAllDrives: true,
+      })
+      const files = (filesRes.data.files || []).map(f => ({
+        id: f.id,
+        name: f.name,
+        mimeType: f.mimeType,
+        size: parseInt(f.size || '0'),
+        createdTime: f.createdTime,
+        thumbnailLink: f.thumbnailLink,
+        viewLink: f.webViewLink,
+        downloadLink: f.webContentLink,
+        folder: folder.name,
+      }))
+
+      result.files.push(...files)
+      if (folder.name === 'Fotos') result.fotos.push(...files)
+      if (folder.name === 'Documentos') result.documentos.push(...files)
+    }
+
+    res.json(result)
+  } catch (e) {
+    console.error('[drive] list files error:', e.message)
+    res.json({ files: [], fotos: [], documentos: [], configured: false, error: e.message })
+  }
 })
 
 // ── Upload de documentos para despesas ───────────────────────
