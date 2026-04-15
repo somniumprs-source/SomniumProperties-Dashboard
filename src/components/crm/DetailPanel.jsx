@@ -42,13 +42,65 @@ const ESTADO_DOCS = {
 }
 
 // ── Tab Relatórios (documentos de fase + geral) ─────────────
-function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
+function RelatoriosImovelTab({ imovelId, estado, driveFolderId, imovelNome }) {
   const estadoClean = (estado || '').replace(/^\d+-\s*/, '').trim()
   const docsActuais = ESTADO_DOCS[estadoClean] || ['ficha_imovel']
   const todosDocs = Object.keys(DOC_LABELS)
+  const [selected, setSelected] = useState({ investimento: true, comparaveis: true, caep: true, stress_tests: true })
+
+  const INVESTOR_REPORTS = [
+    { key: 'investimento', label: 'Análise de Investimento', desc: 'Custos, rentabilidade, resultado', tipo: 'relatorio_investimento' },
+    { key: 'comparaveis', label: 'Estudo de Comparáveis', desc: 'Preços de mercado, VVR', tipo: 'relatorio_comparaveis' },
+    { key: 'caep', label: 'Distribuição CAEP', desc: 'Split e retorno por investidor', tipo: 'relatorio_caep' },
+    { key: 'stress_tests', label: 'Stress Tests', desc: 'Cenários de risco', tipo: 'relatorio_stress' },
+  ]
+  const selectedKeys = Object.entries(selected).filter(([, v]) => v).map(([k]) => k)
+  const compilarUrl = `/api/crm/imoveis/${imovelId}/relatorio-investidor?seccoes=${selectedKeys.join(',')}`
 
   return (
     <div className="space-y-6">
+      {/* Relatórios para investidor — seleccionar e compilar */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-gray-700">Relatórios para Investidor</h3>
+          <a href={compilarUrl} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg text-white transition-colors"
+            style={{ backgroundColor: '#C9A84C' }}>
+            <FileDown className="w-3.5 h-3.5" /> Compilar Dossier ({selectedKeys.length})
+          </a>
+        </div>
+        <div className="space-y-2">
+          {INVESTOR_REPORTS.map(r => (
+            <div key={r.key} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
+              <input type="checkbox" checked={selected[r.key]}
+                onChange={e => setSelected(prev => ({ ...prev, [r.key]: e.target.checked }))}
+                className="w-4 h-4 rounded border-gray-300 shrink-0" style={{ accentColor: '#C9A84C' }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-800">{r.label}</p>
+                <p className="text-xs text-gray-400">{r.desc}</p>
+              </div>
+              <a href={`/api/crm/imoveis/${imovelId}/documento/${r.tipo}`} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded bg-gray-100 text-gray-700 hover:bg-gray-200 shrink-0 transition-colors">
+                <FileDown className="w-3 h-3" /> Abrir
+              </a>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Relatório geral */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Relatório Geral</h3>
+        <a href={`/api/crm/imoveis/${imovelId}/relatorio`} target="_blank" rel="noopener noreferrer"
+          className="flex items-center gap-3 p-3 bg-indigo-50 rounded-lg border border-indigo-200 hover:bg-indigo-100 transition-colors cursor-pointer">
+          <FileText className="w-5 h-5 text-indigo-600" />
+          <div>
+            <p className="text-sm font-medium text-gray-800">Ficha Completa do Imóvel</p>
+            <p className="text-xs text-indigo-600">Todos os dados e cronologia</p>
+          </div>
+        </a>
+      </div>
+
       {/* Documentos da fase */}
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -64,7 +116,7 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
           {docsActuais.map(tipo => (
             <a key={tipo} href={`/api/crm/imoveis/${imovelId}/documento/${tipo}`} target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-3 p-3 bg-green-50 rounded-lg border border-green-200 hover:bg-green-100 transition-colors cursor-pointer">
-              <FileDown className="w-5 h-5 text-green-600" />
+              <FileDown className="w-4 h-4 text-green-600" />
               <div>
                 <p className="text-sm font-medium text-gray-800">{DOC_LABELS[tipo] || tipo}</p>
                 <p className="text-xs text-green-600">Fase actual</p>
@@ -74,19 +126,7 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
         </div>
       </div>
 
-      {/* Relatorio geral */}
-      <div>
-        <a href={`/api/crm/imoveis/${imovelId}/relatorio`} target="_blank" rel="noopener noreferrer"
-          className="flex items-center gap-3 p-3 bg-indigo-50 rounded-lg border border-indigo-200 hover:bg-indigo-100 transition-colors cursor-pointer">
-          <FileText className="w-5 h-5 text-indigo-600" />
-          <div>
-            <p className="text-sm font-medium text-gray-800">Relatório Geral PDF</p>
-            <p className="text-xs text-indigo-600">Ficha completa do imóvel</p>
-          </div>
-        </a>
-      </div>
-
-      {/* Todos os docs */}
+      {/* Todos os docs (colapsado) */}
       <div>
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Todos os Documentos</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -232,7 +272,6 @@ export function DetailPanel({ type, id, onClose, onSave }) {
     { key: 'interacoes', label: `Interacções (${data?.interacoes?.length ?? 0})`, icon: '💬', show: type === 'Consultores' },
     { key: 'analise', label: 'Análise Financeira', icon: '📊', show: type === 'Imóveis' },
     { key: 'relatorios_imovel', label: 'Relatórios', icon: '📄', show: type === 'Imóveis' },
-    { key: 'investidor', label: 'Investidor', icon: '💼', show: type === 'Imóveis' },
     { key: 'relatorios', label: `Relatórios (${reunioes.length})`, icon: '📄', show: (type === 'Investidores' || type === 'Consultores') },
   ].filter(t => t.show)
 
@@ -313,13 +352,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
       /* Relatórios do imóvel (documentos de fase) */
       ) : type === 'Imóveis' && activeTab === 'relatorios_imovel' ? (
         <div className="p-4 sm:p-6">
-          <RelatoriosImovelTab imovelId={data.id} estado={data.estado} driveFolderId={data.drive_folder_id} />
-        </div>
-
-      /* Investidor (dossier compilável) */
-      ) : type === 'Imóveis' && activeTab === 'investidor' ? (
-        <div className="p-4 sm:p-6">
-          <InvestidorTab imovelId={data.id} imovelNome={data.nome} />
+          <RelatoriosImovelTab imovelId={data.id} estado={data.estado} driveFolderId={data.drive_folder_id} imovelNome={data.nome} />
         </div>
 
       /* Relatórios reuniões (investidores/consultores) */
