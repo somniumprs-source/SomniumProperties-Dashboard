@@ -91,6 +91,39 @@ try {
       } catch (e) { res.status(500).json({ error: e.message }) }
     })
 
+    // Endpoint para enviar WhatsApp manualmente (handoff — tu a falar directamente)
+    app.post('/api/consultores/:id/enviar-whatsapp', async (req, res) => {
+      try {
+        const { query: pgQuery } = await import('./src/db/pg.js')
+        const { sendWhatsApp } = await import('./src/db/whatsappAgent.js')
+        const { randomUUID } = await import('crypto')
+        const { mensagem } = req.body
+        if (!mensagem?.trim()) return res.status(400).json({ error: 'Mensagem vazia' })
+
+        // Buscar consultor
+        const { rows: [consultor] } = await pgQuery('SELECT id, nome, contacto, controlo_manual FROM consultores WHERE id = $1', [req.params.id])
+        if (!consultor) return res.status(404).json({ error: 'Consultor não encontrado' })
+        if (!consultor.contacto) return res.status(400).json({ error: 'Consultor sem contacto' })
+
+        // Marcar handoff (agente para de responder)
+        await pgQuery('UPDATE consultores SET controlo_manual = true, updated_at = $1 WHERE id = $2',
+          [new Date().toISOString(), consultor.id])
+
+        // Enviar pelo Twilio
+        const result = await sendWhatsApp(consultor.contacto, mensagem.trim())
+        if (!result) return res.status(500).json({ error: 'Falha no envio' })
+
+        // Registar no log
+        const now = new Date().toISOString()
+        await pgQuery(
+          'INSERT INTO consultor_interacoes (id, consultor_id, data_hora, canal, direcao, notas) VALUES ($1, $2, $3, $4, $5, $6)',
+          [randomUUID(), consultor.id, now, 'whatsapp', 'Enviado', mensagem.trim()]
+        )
+
+        res.json({ ok: true, sid: result.sid })
+      } catch (e) { res.status(500).json({ error: e.message }) }
+    })
+
     // Endpoints para execução manual de cron jobs
     app.post('/api/cron/followup', async (_req, res) => {
       try { await runFollowUp(); res.json({ ok: true }) } catch (e) { res.status(500).json({ error: e.message }) }
