@@ -49,6 +49,36 @@ export function generateImovelPDF(imovel, analise = null) {
   doc.fontSize(20).fillColor(rgbStr(BLACK)).text(imovel.nome || 'Sem nome', 50, y)
   y += 30
 
+  // ── Photos ────────────────────────────────────────────────
+  const fotos = (() => {
+    try {
+      const all = typeof imovel.fotos === 'string' ? JSON.parse(imovel.fotos || '[]') : (imovel.fotos || [])
+      return all.filter(f => f.folder !== 'documentos' && (f.type?.startsWith('image/') || f.path?.match(/\.(jpg|jpeg|png)$/i))).slice(0, 4)
+    } catch { return [] }
+  })()
+  if (fotos.length > 0) {
+    const ROOT = path.resolve(__dirname, '../..')
+    const imgW = (pageWidth - 10) / 2
+    const imgH = imgW * 0.6
+    let col = 0
+    for (const foto of fotos) {
+      try {
+        const filePath = path.join(ROOT, 'public', foto.path)
+        const imgData = readFileSync(filePath)
+        const x = 50 + col * (imgW + 10)
+        doc.save()
+        doc.roundedRect(x, y, imgW, imgH, 4).clip()
+        doc.image(imgData, x, y, { fit: [imgW, imgH], align: 'center', valign: 'center' })
+        doc.restore()
+        doc.roundedRect(x, y, imgW, imgH, 4).lineWidth(0.5).strokeColor('#e0ddd5').stroke()
+        col++
+        if (col >= 2) { col = 0; y += imgH + 6 }
+      } catch {}
+    }
+    if (col > 0) y += imgH + 6
+    y += 10
+  }
+
   // Subtitle with estado
   const estado = (imovel.estado || '').replace(/^\d+-/, '')
   if (estado) {
