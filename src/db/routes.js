@@ -273,9 +273,12 @@ router.get('/consultores/enriched', async (req, res) => {
     const now = Date.now()
     const enriched = consultores.map(c => {
       const meusImoveis = imoveis.filter(i => i.nome_consultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase())
-      const totalImoveis = meusImoveis.length
-      // Qualidade baseada no estado do pipeline
-      const imoveisAvancados = meusImoveis.filter(im => qualidadeImovel(im.estado) >= 0.75).length
+      // Só contam como "entregues" os que passaram de Pré-aprovação (validados)
+      const imoveisEntregues = meusImoveis.filter(im => (im.estado || '').replace(/^\d+-\s*/, '').trim() !== 'Pré-aprovação')
+      const totalImoveis = imoveisEntregues.length
+      const totalComPreAprovacao = meusImoveis.length
+      // Qualidade baseada no estado do pipeline (só entregues)
+      const imoveisAvancados = imoveisEntregues.filter(im => qualidadeImovel(im.estado) >= 0.75).length
 
       const minhasInteracoes = interacoes.filter(i => i.consultor_id === c.id)
       const ultimaInteracao = minhasInteracoes[0]?.data_hora
@@ -810,7 +813,7 @@ router.post('/automation/score-consultores', async (req, res) => {
       const meusImoveis = imoveis.filter(i => i.nome_consultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase())
       const leads = meusImoveis.length
       // Qualidade baseada no estado do pipeline
-      const imoveisAvancados = meusImoveis.filter(im => qualidadeImovel(im.estado) >= 0.75).length
+      const imoveisAvancados = imoveisEntregues.filter(im => qualidadeImovel(im.estado) >= 0.75).length
       const imoveisMedios = meusImoveis.filter(im => qualidadeImovel(im.estado) >= 0.5).length
 
       score += Math.min(leads * 3, 30)
@@ -882,7 +885,9 @@ router.post('/automation/score-prioridade-consultores', async (req, res) => {
 
     for (const c of consultores) {
       const meusImoveis = imoveis.filter(i => i.nome_consultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase())
-      const totalImoveis = meusImoveis.length
+      // Só contam como entregues os que passaram de Pré-aprovação
+      const imoveisEntregues = meusImoveis.filter(im => (im.estado || '').replace(/^\d+-\s*/, '').trim() !== 'Pré-aprovação')
+      const totalImoveis = imoveisEntregues.length
       const classeAnterior = c.classificacao
 
       // Regra: inactivo 60+ dias → manter Inativo, sem classe
@@ -919,8 +924,8 @@ router.post('/automation/score-prioridade-consultores', async (req, res) => {
         continue
       }
 
-      // Componente 1: Taxa de qualidade (50%)
-      const somaQualidade = meusImoveis.reduce((sum, im) => sum + qualidadeImovel(im.estado), 0)
+      // Componente 1: Taxa de qualidade (50%) — só imóveis entregues (validados)
+      const somaQualidade = imoveisEntregues.reduce((sum, im) => sum + qualidadeImovel(im.estado), 0)
       const taxaQualidade = Math.round(somaQualidade / totalImoveis * 100)
 
       // Componente 2: Volume normalizado (30%)
@@ -946,7 +951,7 @@ router.post('/automation/score-prioridade-consultores', async (req, res) => {
       const classificacao = CLASSE_POR_SCORE(scorePrioridade)
       relatorio.distribuicao[classificacao]++
 
-      const imoveisAvancados = meusImoveis.filter(im => qualidadeImovel(im.estado) >= 0.75).length
+      const imoveisAvancados = imoveisEntregues.filter(im => qualidadeImovel(im.estado) >= 0.75).length
 
       const changed = Math.abs((c.score_prioridade || 0) - scorePrioridade) > 0.5 ||
                        Math.abs((c.taxa_qualidade || 0) - taxaQualidade) > 0.5 ||
