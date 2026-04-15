@@ -58,8 +58,99 @@ try {
     const { runFollowUp, runRelatorioDiario, runRelatorioSemanal, REACTIVATION_TEMPLATE } = await import('./src/db/cronJobs.js')
     const { startCronJobs } = await import('./src/db/cronJobs.js')
 
+    // ── Transcrição de áudio (Google Speech-to-Text) ──────────
+    async function transcribeAudio(mediaUrl) {
+      const { readFileSync, existsSync } = await import('fs')
+      const { google } = await import('googleapis')
+
+      // Autenticação Google (reutiliza OAuth2 do Calendar)
+      const oauthCredPath = path.join(__dirname, 'google-oauth.json')
+      const tokenPath = path.join(__dirname, 'google-token.json')
+
+      let authClient
+      const serviceCredPath = path.join(__dirname, 'google-credentials.json')
+      if (existsSync(serviceCredPath)) {
+        const creds = JSON.parse(readFileSync(serviceCredPath, 'utf8'))
+        const gAuth = new google.auth.GoogleAuth({
+          credentials: creds,
+          scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+        })
+        authClient = await gAuth.getClient()
+      } else if (existsSync(oauthCredPath) && existsSync(tokenPath)) {
+        const oauthCreds = JSON.parse(readFileSync(oauthCredPath, 'utf8'))
+        const { client_id, client_secret } = oauthCreds.installed || oauthCreds.web
+        const oauth2 = new google.auth.OAuth2(client_id, client_secret, 'http://localhost')
+        const tokens = JSON.parse(readFileSync(tokenPath, 'utf8'))
+        oauth2.setCredentials(tokens)
+        authClient = oauth2
+      } else {
+        console.warn('[speech] Sem credenciais Google — transcrição indisponível')
+        return null
+      }
+
+      // 1. Descarregar áudio do Twilio (requer autenticação Twilio)
+      const authHeader = 'Basic ' + Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')
+      const audioResponse = await fetch(mediaUrl, {
+        headers: { 'Authorization': authHeader },
+        redirect: 'follow',
+      })
+      if (!audioResponse.ok) {
+        console.error('[speech] Erro download áudio:', audioResponse.status)
+        return null
+      }
+      const audioBuffer = Buffer.from(await audioResponse.arrayBuffer())
+      const audioBase64 = audioBuffer.toString('base64')
+
+      console.log(`[speech] Áudio descarregado: ${audioBuffer.length} bytes`)
+
+      // 2. Enviar para Google Speech-to-Text API v1
+      const accessToken = (await authClient.getAccessToken()).token || authClient.credentials?.access_token
+      const speechResponse = await fetch('https://speech.googleapis.com/v1/speech:recognize', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          config: {
+            encoding: 'OGG_OPUS',
+            sampleRateHertz: 16000,
+            languageCode: 'pt-PT',
+            alternativeLanguageCodes: ['pt-BR'],
+            model: 'latest_long',
+            enableAutomaticPunctuation: true,
+            maxAlternatives: 1,
+          },
+          audio: {
+            content: audioBase64,
+          },
+        }),
+      })
+
+      if (!speechResponse.ok) {
+        const errText = await speechResponse.text()
+        console.error('[speech] Erro Google Speech API:', speechResponse.status, errText.slice(0, 200))
+        return null
+      }
+
+      const speechData = await speechResponse.json()
+      const results = speechData.results || []
+      const transcript = results
+        .map(r => r.alternatives?.[0]?.transcript || '')
+        .join(' ')
+        .trim()
+
+      if (!transcript) {
+        console.warn('[speech] Transcrição vazia — áudio sem fala detectada')
+        return null
+      }
+
+      console.log(`[speech] Transcrito: "${transcript.slice(0, 100)}${transcript.length > 100 ? '...' : ''}"`)
+      return transcript
+    }
+
     // Webhook POST /api/webhook/whatsapp (recepção Twilio)
-    app.post('/api/webhook/whatsapp', express.urlencoded({ extended: false }), (req, res) => {
+    app.post('/api/webhook/whatsapp', express.urlencoded({ extended: false }), async (req, res) => {
       // Responder 200 ao Twilio sem mensagem automática (o agente responde via API)
       res.set('Content-Type', 'text/xml')
       res.status(200).send('<Response></Response>')
@@ -68,16 +159,30 @@ try {
       let body = req.body.Body || ''
       const numMedia = parseInt(req.body.NumMedia || '0')
 
-      // Detectar media (áudios, fotos, ficheiros) e informar o agente
-      if (numMedia > 0 && !body) {
+      // Detectar media (áudios, fotos, ficheiros)
+      if (numMedia > 0) {
         const mediaType = req.body.MediaContentType0 || ''
-        if (mediaType.startsWith('audio/')) body = '[ÁUDIO RECEBIDO — pedir texto ao consultor]'
-        else if (mediaType.startsWith('image/')) body = '[IMAGEM RECEBIDA — pedir dados por escrito ao consultor]'
-        else body = '[FICHEIRO RECEBIDO — pedir dados por escrito ao consultor]'
-      } else if (numMedia > 0 && body) {
-        const mediaType = req.body.MediaContentType0 || ''
-        if (mediaType.startsWith('audio/')) body += '\n[ÁUDIO TAMBÉM ENVIADO]'
-        else if (mediaType.startsWith('image/')) body += '\n[IMAGEM TAMBÉM ENVIADA]'
+        const mediaUrl = req.body.MediaUrl0 || ''
+
+        if (mediaType.startsWith('audio/') && mediaUrl) {
+          // Transcrever áudio via Google Speech-to-Text
+          try {
+            const transcription = await transcribeAudio(mediaUrl)
+            if (transcription) {
+              body = body ? `${body}\n[TRANSCRIÇÃO DO ÁUDIO]: ${transcription}` : transcription
+              console.log(`[whatsapp] Áudio transcrito (${transcription.length} chars): ${transcription.slice(0, 100)}...`)
+            } else {
+              body = body || '[ÁUDIO RECEBIDO — transcrição falhou, pedir texto ao consultor]'
+            }
+          } catch (e) {
+            console.error('[whatsapp] Erro transcrição áudio:', e.message)
+            body = body || '[ÁUDIO RECEBIDO — transcrição falhou, pedir texto ao consultor]'
+          }
+        } else if (mediaType.startsWith('image/')) {
+          body = body ? `${body}\n[IMAGEM TAMBÉM ENVIADA]` : '[IMAGEM RECEBIDA — pedir dados por escrito ao consultor]'
+        } else if (!body) {
+          body = '[FICHEIRO RECEBIDO — pedir dados por escrito ao consultor]'
+        }
       }
 
       if (from && body) {
