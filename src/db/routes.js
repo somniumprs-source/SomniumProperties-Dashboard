@@ -987,6 +987,100 @@ router.post('/automation/score-prioridade-consultores', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// ── Relatório semanal de investidores ────────────────────────
+router.get('/relatorio/investidores', async (req, res) => {
+  try {
+    const { rows: investidores } = await pool.query('SELECT * FROM investidores ORDER BY pontuacao DESC NULLS LAST')
+    const { rows: negocios } = await pool.query('SELECT * FROM negocios')
+    const { rows: reunioes } = await pool.query("SELECT id, entidade_id, data, duracao_min FROM reunioes WHERE entidade_tipo = 'investidores'")
+    const now = new Date()
+
+    const statusOrder = ['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor classificado','Investidor em parceria']
+
+    const report = {
+      gerado_em: now.toISOString(),
+      semana: `${now.toISOString().slice(0, 10)} (Semana ${Math.ceil(now.getDate() / 7)})`,
+      total_investidores: investidores.length,
+      distribuicao: { A: 0, B: 0, C: 0, D: 0, 'Sem classificação': 0 },
+      por_status: {},
+      top5: [],
+      investidores_detalhados: [],
+      alertas: { sem_contacto_30d: 0, sem_reuniao: 0, sem_capital: 0, sem_classificacao: 0, nda_pendente: 0 },
+      metricas_globais: {
+        capital_total: 0, capital_investido: 0, media_capital: 0,
+        com_reuniao: 0, com_nda: 0, em_parceria: 0,
+        taxa_conversao: 0, ticket_medio: 0,
+      },
+    }
+
+    for (const s of statusOrder) report.por_status[s] = 0
+
+    let somaCapital = 0, comCapital = 0
+
+    for (const inv of investidores) {
+      const classe = inv.classificacao || 'Sem classificação'
+      if (report.distribuicao[classe] !== undefined) report.distribuicao[classe]++
+      else report.distribuicao['Sem classificação']++
+
+      const status = inv.status || '?'
+      if (report.por_status[status] !== undefined) report.por_status[status]++
+      else report.por_status[status] = (report.por_status[status] || 0) + 1
+
+      const capitalMax = inv.capital_max || 0
+      const montante = inv.montante_investido || 0
+      const meusNegocios = negocios.filter(n => (n.investidor_ids || '').includes(inv.id))
+      const minhasReunioes = reunioes.filter(r => r.entidade_id === inv.id)
+
+      const diasSemContacto = inv.data_ultimo_contacto
+        ? Math.floor((now - new Date(inv.data_ultimo_contacto)) / 86400000)
+        : null
+
+      // Alertas
+      if (!inv.data_ultimo_contacto || diasSemContacto > 30) report.alertas.sem_contacto_30d++
+      if (minhasReunioes.length === 0) report.alertas.sem_reuniao++
+      if (!capitalMax) report.alertas.sem_capital++
+      if (!inv.classificacao) report.alertas.sem_classificacao++
+      if (!inv.nda_assinado && ['Investidor classificado','Investidor em parceria'].includes(status)) report.alertas.nda_pendente++
+
+      // Métricas
+      if (capitalMax > 0) { somaCapital += capitalMax; comCapital++ }
+      report.metricas_globais.capital_total += capitalMax
+      report.metricas_globais.capital_investido += montante
+      if (minhasReunioes.length > 0) report.metricas_globais.com_reuniao++
+      if (inv.nda_assinado) report.metricas_globais.com_nda++
+      if (status === 'Investidor em parceria') report.metricas_globais.em_parceria++
+
+      let estrategias = []
+      try { estrategias = JSON.parse(inv.estrategia || '[]') } catch {}
+
+      report.investidores_detalhados.push({
+        id: inv.id, nome: inv.nome, status, classificacao: inv.classificacao || '—',
+        pontuacao: inv.pontuacao || 0, capitalMax, montanteInvestido: montante,
+        email: inv.email, telemovel: inv.telemovel,
+        estrategias, perfilRisco: inv.perfil_risco,
+        ndaAssinado: !!inv.nda_assinado,
+        reunioes: minhasReunioes.length, negocios: meusNegocios.length,
+        diasSemContacto, proximaAcao: inv.proxima_acao, dataProximaAcao: inv.data_proxima_acao,
+        dataReuniao: inv.data_reuniao, dataPrimeiroContacto: inv.data_primeiro_contacto,
+      })
+    }
+
+    report.metricas_globais.media_capital = comCapital > 0 ? Math.round(somaCapital / comCapital) : 0
+    report.metricas_globais.taxa_conversao = investidores.length > 0
+      ? Math.round(report.metricas_globais.em_parceria / investidores.length * 100) : 0
+    report.metricas_globais.ticket_medio = report.metricas_globais.em_parceria > 0
+      ? Math.round(report.metricas_globais.capital_investido / report.metricas_globais.em_parceria) : 0
+
+    report.top5 = report.investidores_detalhados
+      .filter(i => i.capitalMax > 0)
+      .sort((a, b) => b.capitalMax - a.capitalMax)
+      .slice(0, 5)
+      .map(i => ({ nome: i.nome, classificacao: i.classificacao, capital: i.capitalMax, status: i.status, reunioes: i.reunioes }))
+
+    res.json(report)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 // ── Relatório semanal de consultores ─────────────────────────
 router.get('/relatorio/consultores', async (req, res) => {
   try {
