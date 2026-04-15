@@ -247,7 +247,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
     try {
       // Limpar campos do form que são relações (não enviar ao PUT)
       const { negocios, consultores, imoveis, tarefas, timeline, analises, ...cleanForm } = form
-      const r = await fetch(`/api/crm/${endpoint}/${id}`, {
+      const r = await apiFetch(`/api/crm/${endpoint}/${id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cleanForm),
       })
       if (!r.ok) throw new Error('Erro ao guardar')
@@ -271,7 +271,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
 
     // Carregar reuniões para investidores e consultores
     if (type === 'Investidores' || type === 'Consultores') {
-      fetch(`/api/crm/reunioes?entidade_tipo=${endpoint}&entidade_id=${id}`)
+      apiFetch(`/api/crm/reunioes?entidade_tipo=${endpoint}&entidade_id=${id}`)
         .then(r => r.json())
         .then(setReunioes)
         .catch(() => {})
@@ -702,7 +702,7 @@ function RelatoriosTab({ reunioes, investidorNome }) {
 
   async function loadTranscricao(id) {
     if (transcricao[id]) return
-    const r = await fetch(`/api/crm/reunioes/${id}/transcricao`)
+    const r = await apiFetch(`/api/crm/reunioes/${id}/transcricao`)
     const d = await r.json()
     setTranscricao(prev => ({ ...prev, [id]: d.transcricao }))
   }
@@ -710,7 +710,7 @@ function RelatoriosTab({ reunioes, investidorNome }) {
   async function runAnalise(id) {
     setAnalyzing(id)
     try {
-      const r = await fetch(`/api/crm/reunioes/${id}/analisar`, { method: 'POST' })
+      const r = await apiFetch(`/api/crm/reunioes/${id}/analisar`, { method: 'POST' })
       const d = await r.json()
       setAnalises(prev => ({ ...prev, [id]: d }))
     } catch {}
