@@ -294,7 +294,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
       {/* Interacções (Consultores) */}
       {type === 'Consultores' && activeTab === 'interacoes' ? (
         <div className="p-4 sm:p-6">
-          <InteracoesTab consultorId={data.id} onUpdate={loadData} />
+          <InteracoesTab consultorId={data.id} onUpdate={loadData} controloManual={data.controlo_manual} />
         </div>
 
       ) : type === 'Imóveis' && activeTab === 'analise' ? (
