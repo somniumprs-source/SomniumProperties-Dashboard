@@ -404,8 +404,13 @@ export async function initSchema() {
         canal TEXT NOT NULL,
         direcao TEXT NOT NULL,
         notas TEXT,
-        created_at TEXT DEFAULT (NOW()::TEXT)
+        created_at TEXT DEFAULT (NOW()::TEXT),
+        updated_at TEXT DEFAULT (NOW()::TEXT)
       );
+      DO $$ BEGIN
+        ALTER TABLE consultor_interacoes ADD COLUMN IF NOT EXISTS updated_at TEXT DEFAULT (NOW()::TEXT);
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
       CREATE INDEX IF NOT EXISTS idx_interacoes_consultor ON consultor_interacoes(consultor_id);
       CREATE INDEX IF NOT EXISTS idx_interacoes_data ON consultor_interacoes(data_hora DESC);
 
