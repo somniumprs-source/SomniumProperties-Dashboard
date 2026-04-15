@@ -52,25 +52,21 @@ export function Financeiro() {
   async function load() {
     setLoading(true); setError(null)
     try {
-      const [kr, dr, cr, pr, ar, nr, dsr, agr, rr] = await Promise.all([
-        apiFetch('/api/kpis/financeiro'),
-        apiFetch('/api/financeiro/despesas'),
-        apiFetch('/api/financeiro/cashflow'),
-        apiFetch('/api/financeiro/projecao'),
-        apiFetch('/api/crm/analises-kpis'),
-        apiFetch('/api/crm/negocios?limit=200'),
-        apiFetch('/api/crm/despesas?limit=200'),
-        apiFetch('/api/financeiro/aging'),
-        apiFetch('/api/financeiro/rentabilidade'),
-      ])
-      if (!kr.ok || !dr.ok || !cr.ok) throw new Error('Erro no servidor')
+      const safe = (promise) => promise.then(r => r.ok ? r.json() : null).catch(() => null)
       const [k, d, c, p, a, n, ds, ag, re] = await Promise.all([
-        kr.json(), dr.json(), cr.json(), pr.ok ? pr.json() : null, ar.ok ? ar.json() : null,
-        nr.json(), dsr.json(), agr.ok ? agr.json() : null, rr.ok ? rr.json() : null,
+        safe(apiFetch('/api/kpis/financeiro')),
+        safe(apiFetch('/api/financeiro/despesas')),
+        safe(apiFetch('/api/financeiro/cashflow')),
+        safe(apiFetch('/api/financeiro/projecao')),
+        safe(apiFetch('/api/crm/analises-kpis')),
+        safe(apiFetch('/api/crm/negocios?limit=200')),
+        safe(apiFetch('/api/crm/despesas?limit=200')),
+        safe(apiFetch('/api/financeiro/aging')),
+        safe(apiFetch('/api/financeiro/rentabilidade')),
       ])
-      if (k.error) throw new Error(k.error)
+      if (!k) throw new Error('Erro ao carregar dados financeiros')
       setKpis(k); setDespesas(d); setCashflow(c); setProjecao(p); setAnalises(a)
-      setCrmNegocios(n.data ?? []); setCrmDespesas(ds.data ?? [])
+      setCrmNegocios(n?.data ?? []); setCrmDespesas(ds?.data ?? [])
       setAging(ag); setRent(re)
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
@@ -81,9 +77,17 @@ export function Financeiro() {
       const isNew = !form.id
       const url = isNew ? '/api/crm/negocios' : `/api/crm/negocios/${form.id}`
       const r = await apiFetch(url, { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
-      if (!r.ok) throw new Error('Erro ao guardar')
-      setEditingNeg(null); load()
-    } catch (e) { setError(e.message) }
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        throw new Error(err.error || `Erro ${r.status}`)
+      }
+      setEditingNeg(null)
+      setError(null)
+      load()
+    } catch (e) {
+      console.error('[saveNegocio]', e)
+      setError(e.message)
+    }
   }
 
   async function deleteNegocio(id) {
@@ -97,9 +101,17 @@ export function Financeiro() {
       const isNew = !form.id
       const url = isNew ? '/api/crm/despesas' : `/api/crm/despesas/${form.id}`
       const r = await apiFetch(url, { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
-      if (!r.ok) throw new Error('Erro ao guardar')
-      setEditingDesp(null); load()
-    } catch (e) { setError(e.message) }
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        throw new Error(err.error || `Erro ${r.status}`)
+      }
+      setEditingDesp(null)
+      setError(null)
+      load()
+    } catch (e) {
+      console.error('[saveDespesa]', e)
+      setError(e.message)
+    }
   }
 
   async function deleteDespesa(id) {
