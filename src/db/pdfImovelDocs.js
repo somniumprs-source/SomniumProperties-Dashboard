@@ -10,12 +10,13 @@ import { fileURLToPath } from 'url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const LOGO_PATH = path.resolve(__dirname, '../../public/logo-transparent.png')
 
-// Design tokens
+// Design tokens (reference: Proposta de Investimento Somnium)
 const C = {
   gold: '#C9A84C', black: '#0d0d0d', white: '#ffffff',
-  bg: '#f7f6f2', body: '#2a2a2a', muted: '#999999',
+  bg: '#f7f6f2', body: '#2a2a2a', muted: '#888888',
   border: '#e0ddd5', light: '#f0efe9', accent: '#1a1a1a',
-  green: '#22c55e', red: '#ef4444', blue: '#6366f1',
+  headerBg: '#f0efe9', totalBg: '#f5f3ee',
+  green: '#2d6a2d', red: '#8b2020', blue: '#6366f1',
 }
 const ML = 50, MR = 50 // margins
 const PW = 595.28, PH = 841.89
@@ -75,28 +76,42 @@ class DocBuilder {
 
   _drawCover(title, subtitle) {
     const d = this.doc
+    const im = this.imovel
     d.addPage({ size: 'A4', margins: { top: 0, bottom: 0, left: 0, right: 0 } })
-    // Fundo branco com barra dourada no topo
-    d.rect(0, 0, PW, 3).fill(C.gold)
-    try { d.image(readFileSync(LOGO_PATH), (PW - 120) / 2, 200, { width: 120 }) } catch {}
-    d.rect(PW / 2 - 25, 310, 50, 1).fill(C.gold)
-    d.fontSize(8).fillColor(C.gold).text(title.toUpperCase(), ML, 330, { width: CW, align: 'center', lineBreak: false, characterSpacing: 3 })
-    d.fontSize(22).fillColor(C.body).text(this.imovel.nome || 'Imóvel', ML, 365, { width: CW, align: 'center', lineBreak: false })
-    if (subtitle) d.fontSize(10).fillColor(C.muted).text(subtitle, ML, 405, { width: CW, align: 'center', lineBreak: false })
-    d.fontSize(9).fillColor(C.muted).text(NOW(), ML, 430, { width: CW, align: 'center', lineBreak: false })
-    // Footer — linha dourada + texto
-    d.rect(ML, PH - 50, CW, 0.5).fill(C.gold)
-    d.fontSize(7).fillColor(C.muted).text('SOMNIUM PROPERTIES', ML, PH - 38, { width: CW, align: 'center', lineBreak: false })
+    // Barra dourada no topo
+    d.rect(0, 0, PW, 6).fill(C.gold)
+    // Logo centrado
+    try { d.image(readFileSync(LOGO_PATH), (PW - 160) / 2, 140, { width: 160 }) } catch {}
+    // Linha dourada decorativa
+    d.rect(PW / 2 - 30, 310, 60, 1.5).fill(C.gold)
+    // Titulo grande
+    d.fontSize(28).fillColor(C.body).text(title, ML, 340, { width: CW, align: 'center' })
+    // Subtitulo dourado (nome imovel + zona)
+    const sub = [im.nome, im.zona].filter(Boolean).join(' · ').toUpperCase()
+    if (sub) d.fontSize(10).fillColor(C.gold).text(sub, ML, 390, { width: CW, align: 'center', characterSpacing: 1.5 })
+    // Localizacao
+    if (subtitle) d.fontSize(10).fillColor(C.muted).text(subtitle + ' · Coimbra · Portugal', ML, 415, { width: CW, align: 'center' })
+    // Linha separadora
+    d.rect(ML + 80, 450, CW - 160, 0.5).fill(C.gold)
+    // Data
+    d.fontSize(9).fillColor(C.muted).text(NOW(), ML, 465, { width: CW, align: 'center' })
+    // Footer
+    d.rect(ML, PH - 65, CW, 0.5).fill(C.gold)
+    d.fontSize(7).fillColor(C.muted).text('Somnium Properties · Investimento Imobiliário', ML, PH - 52, { width: CW, align: 'center' })
+    d.fontSize(7).fillColor(C.muted).text(`Documento Confidencial · ${NOW()}`, ML, PH - 40, { width: CW, align: 'center' })
+    // Barra dourada no fundo
+    d.rect(0, PH - 6, PW, 6).fill(C.gold)
   }
 
   newPage() {
-    this.doc.addPage({ size: 'A4', margins: { top: 50, bottom: 50, left: ML, right: MR } })
-    this.y = 50
-    // Clean minimal header — white bg, thin gold line
-    this.doc.fontSize(7).fillColor(C.muted).text(this.imovel.nome || '', ML, 20, { lineBreak: false })
-    this.doc.fontSize(7).fillColor(C.muted).text(NOW(), PW - MR - 100, 20, { width: 100, align: 'right', lineBreak: false })
-    this.doc.rect(ML, 34, CW, 1.5).fill(C.gold)
-    this.y = 50
+    this.doc.addPage({ size: 'A4', margins: { top: 60, bottom: 60, left: ML, right: MR } })
+    const d = this.doc
+    // Header: logo left, date right, gold line
+    try { d.image(readFileSync(LOGO_PATH), ML, 15, { height: 22 }) } catch {}
+    d.rect(ML, 45, CW, 1.5).fill(C.gold)
+    // Footer: just the gold line (text added in end() to avoid cursor issues)
+    d.rect(ML, PH - 45, CW, 0.5).fill(C.gold)
+    this.y = 60
     return this
   }
 
@@ -105,23 +120,21 @@ class DocBuilder {
     return this
   }
 
-  // Section header — numbered, clean, gold underline (like the example)
+  // Section header — bold uppercase + gold underline (no numbering)
   header(title) {
-    this.ensure(30)
-    if (!this._sectionNum) this._sectionNum = 0
-    this._sectionNum++
-    this.doc.fontSize(10).fillColor(C.body).text(`${this._sectionNum}. ${title.toUpperCase()}`, ML, this.y, { characterSpacing: 0.5, lineBreak: false })
-    this.y += 14
+    this.ensure(28)
+    this.doc.fontSize(11).fillColor(C.body).text(title.toUpperCase(), ML, this.y, { characterSpacing: 0.3 })
+    this.y = this.doc.y + 4
     this.doc.rect(ML, this.y, CW, 1.5).fill(C.gold)
     this.y += 10
     return this
   }
 
-  // Sub-header (no number, lighter)
+  // Sub-header (lighter, smaller)
   subheader(title) {
     this.ensure(22)
-    this.doc.fontSize(9).fillColor(C.body).text(title.toUpperCase(), ML, this.y, { characterSpacing: 0.3, lineBreak: false })
-    this.y += 12
+    this.doc.fontSize(9.5).fillColor(C.body).text(title.toUpperCase(), ML, this.y, { characterSpacing: 0.3 })
+    this.y = this.doc.y + 3
     this.doc.rect(ML, this.y, 40, 1).fill(C.gold)
     this.y += 8
     return this
@@ -260,17 +273,20 @@ class DocBuilder {
 
   // ── Metodos empresariais (minimalistas, sem caixas escuras) ─
 
-  // Numeros grandes em texto puro — sem caixas, sem backgrounds
+  // KPI grid — thin bordered cells, like the reference document
   bigNumbers(items) {
-    this.ensure(42)
+    this.ensure(56)
     const colW = CW / items.length
+    // Draw border around all cells
+    this.doc.rect(ML, this.y, CW, 50).lineWidth(0.5).stroke(C.border)
     items.forEach((item, i) => {
       const x = ML + i * colW
-      if (i > 0) this.doc.rect(x - 0.5, this.y + 4, 0.5, 30).fill('#ddd')
-      this.doc.fontSize(7).fillColor(C.muted).text((item.label || '').toUpperCase(), x + 8, this.y, { width: colW - 16, lineBreak: false, characterSpacing: 0.3 })
-      this.doc.fontSize(18).fillColor(C.body).text(String(item.value || '—'), x + 8, this.y + 14, { width: colW - 16, lineBreak: false })
+      if (i > 0) this.doc.rect(x, this.y, 0.5, 50).fill(C.border)
+      this.doc.fontSize(7).fillColor(C.muted).text((item.label || '').toUpperCase(), x + 10, this.y + 8, { width: colW - 20, lineBreak: false, characterSpacing: 0.3 })
+      this.doc.fontSize(16).fillColor(C.body).text(String(item.value || '—'), x + 10, this.y + 22, { width: colW - 20, lineBreak: false })
+      if (item.sub) this.doc.fontSize(7).fillColor(C.muted).text(item.sub, x + 10, this.y + 40, { width: colW - 20, lineBreak: false })
     })
-    this.y += 42
+    this.y += 56
     return this
   }
 
@@ -286,51 +302,49 @@ class DocBuilder {
     return this
   }
 
-  // Tabela limpa — SEM header escuro, so linha fina no topo + entre linhas
+  // Professional table — warm header, generous rows (reference style)
   simpleTable(rows) {
-    this.ensure(rows.length * 18 + 4)
-    this.doc.rect(ML, this.y, CW, 0.5).fill(C.gold)
-    this.y += 4
+    this.ensure(rows.length * 22 + 4)
     rows.forEach(row => {
       const isTotal = row.total
       if (isTotal) {
-        this.doc.rect(ML, this.y - 1, CW, 0.5).fill(C.body)
-        this.y += 3
+        this.doc.rect(ML, this.y, CW, 24).fill(C.totalBg)
       }
-      this.doc.fontSize(isTotal ? 9 : 8.5).fillColor(C.body).text(row.label || '', ML + 4, this.y + 1, { width: 320, lineBreak: false })
-      this.doc.fontSize(isTotal ? 9 : 8.5).fillColor(C.body).text(String(row.value || '—'), ML + 330, this.y + 1, { width: CW - 334, align: 'right', lineBreak: false })
-      if (!isTotal) this.doc.rect(ML, this.y + 15, CW, 0.2).fill('#e0ddd5')
-      this.y += isTotal ? 20 : 16
+      this.doc.fontSize(isTotal ? 9.5 : 8.5).fillColor(C.body).text(row.label || '', ML + 10, this.y + 6, { width: 310, lineBreak: false })
+      this.doc.fontSize(isTotal ? 9.5 : 8.5).fillColor(isTotal ? C.gold : C.body).text(String(row.value || '—'), ML + 320, this.y + 6, { width: CW - 330, align: 'right', lineBreak: false })
+      this.doc.rect(ML, this.y + (isTotal ? 24 : 22), CW, 0.3).fill(C.border)
+      this.y += isTotal ? 26 : 22
     })
     this.y += 4
     return this
   }
 
-  // Tabela com colunas — header cinza claro (nao escuro)
+  // Column table — warm gray header with gold labels (reference style)
   colTable(headers, rows) {
-    this.ensure(20 + rows.length * 18)
-    // Header — fundo cinza muito claro
-    this.doc.rect(ML, this.y, CW, 16).fill('#f0efe9')
-    let x = ML + 4
+    this.ensure(24 + rows.length * 24)
+    // Header — warm gray bg, gold bold labels
+    this.doc.rect(ML, this.y, CW, 22).fill(C.headerBg)
+    let x = ML + 8
     for (const [label, w] of headers) {
-      this.doc.fontSize(7).fillColor(C.muted).text(label.toUpperCase(), x, this.y + 4, { width: w, lineBreak: false, characterSpacing: 0.3 })
+      this.doc.fontSize(7.5).fillColor(C.gold).text(label, x, this.y + 6, { width: w, lineBreak: false })
       x += w
     }
-    this.y += 18
+    this.y += 24
     // Rows
     rows.forEach(row => {
       const isTotal = row._total
-      if (isTotal) { this.doc.rect(ML, this.y - 1, CW, 0.5).fill(C.body); this.y += 2 }
-      x = ML + 4
+      if (isTotal) this.doc.rect(ML, this.y, CW, 24).fill(C.totalBg)
+      x = ML + 8
       const vals = row._values || row
       for (let i = 0; i < vals.length; i++) {
         const cell = vals[i]
         const val = cell?.value !== undefined ? cell.value : cell
-        this.doc.fontSize(isTotal ? 8.5 : 8).fillColor(C.body).text(String(val || '—'), x, this.y + 2, { width: headers[i][1], lineBreak: false })
+        const clr = cell?.color || C.body
+        this.doc.fontSize(isTotal ? 9 : 8.5).fillColor(clr).text(String(val || '—'), x, this.y + 6, { width: headers[i][1], lineBreak: false })
         x += headers[i][1]
       }
-      if (!isTotal) this.doc.rect(ML, this.y + 14, CW, 0.2).fill('#e0ddd5')
-      this.y += isTotal ? 18 : 16
+      this.doc.rect(ML, this.y + (isTotal ? 24 : 22), CW, 0.3).fill(C.border)
+      this.y += isTotal ? 26 : 24
     })
     this.y += 4
     return this
@@ -349,20 +363,35 @@ class DocBuilder {
   }
 
   // Verdict — uma linha simples com cor
-  verdict(text, isPositive) {
-    this.ensure(20)
-    this.doc.fontSize(9).fillColor(isPositive ? '#2d6a2d' : '#8b2020').text(text, ML, this.y, { width: CW })
-    this.y = this.doc.y + 6
+  // Narrative text block
+  textBlock(content) {
+    this.ensure(30)
+    this.doc.fontSize(9).fillColor(C.body).text(content, ML, this.y, { width: CW, lineGap: 4, align: 'justify' })
+    this.y = this.doc.y + 8
     return this
   }
 
-  // Disclaimer
+  // Note/pressuposto
+  note(text) {
+    this.ensure(16)
+    this.doc.fontSize(7.5).fillColor(C.muted).text(text, ML, this.y, { width: CW, lineGap: 3 })
+    this.y = this.doc.y + 4
+    return this
+  }
+
+  verdict(text, isPositive) {
+    this.ensure(20)
+    this.doc.fontSize(9.5).fillColor(isPositive ? C.green : C.red).text(text, ML, this.y, { width: CW })
+    this.y = this.doc.y + 8
+    return this
+  }
+
   disclaimer() {
     this.ensure(30)
-    this.doc.rect(ML, this.y, CW, 0.3).fill('#ddd')
+    this.doc.rect(ML, this.y, CW, 0.3).fill(C.border)
     this.y += 6
-    this.doc.fontSize(6).fillColor(C.muted).text(
-      'Este documento é preparado para fins informativos e não constitui aconselhamento financeiro ou fiscal. Os valores são estimativas. Somnium Properties — Confidencial.',
+    this.doc.fontSize(6.5).fillColor(C.muted).text(
+      'Este documento é preparado para fins informativos e não constitui aconselhamento financeiro ou fiscal. Os valores são estimativas e podem variar. Somnium Properties — Confidencial.',
       ML, this.y, { width: CW, lineGap: 2 })
     this.y = this.doc.y + 4
     return this
@@ -1298,7 +1327,6 @@ export function generateCompiledReport(imovel, analise, seccoes = []) {
 
   for (const seccao of seccoes) {
     // Reset section counter para cada seccao
-    b._sectionNum = 0
 
     if (seccao === 'investimento' && an) {
       const ra = an.retorno_anualizado || 0
@@ -1345,7 +1373,6 @@ export function generateCompiledReport(imovel, analise, seccoes = []) {
       const comps = typeof an.comparaveis === 'string' ? JSON.parse(an.comparaveis || '[]') : (an.comparaveis || [])
       if (comps.length > 0) {
         b.newPage()
-        b._sectionNum = 0
         for (const tip of comps) {
           const valid = (tip.comparaveis || []).filter(c => c.preco > 0 && c.area > 0)
           if (!valid.length) continue
@@ -1370,7 +1397,6 @@ export function generateCompiledReport(imovel, analise, seccoes = []) {
       const caep = typeof an.caep === 'string' ? JSON.parse(an.caep || 'null') : an.caep
       if (caep?.quota_somnium !== undefined) {
         b.newPage()
-        b._sectionNum = 0
         const percInv = 100 - caep.perc_somnium
         b.header('PARCERIA CAEP')
         b.inlineData([
@@ -1400,7 +1426,6 @@ export function generateCompiledReport(imovel, analise, seccoes = []) {
       const st = typeof an.stress_tests === 'string' ? JSON.parse(an.stress_tests || 'null') : an.stress_tests
       if (st) {
         b.newPage()
-        b._sectionNum = 0
         b.header('ANÁLISE DE RISCO')
         b.verdict(
           st.veredicto === 'resiliente' ? 'Investimento resiliente — lucro positivo em todos os cenários.' : 'Atenção — cenários com risco de prejuízo.',
