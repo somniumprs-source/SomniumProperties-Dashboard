@@ -131,8 +131,27 @@ try {
 
         for (const c of consultores) {
           try {
-            const msg = REACTIVATION_TEMPLATE(c.nome.split(' ')[0])
-            const result = await sendWhatsApp(c.contacto, msg)
+            const firstName = (c.nome || '').split(' ')[0]
+            const msg = REACTIVATION_TEMPLATE(firstName)
+            // Usar template aprovado pela Meta (necessario para primeira mensagem)
+            const twilio = (await import('twilio')).default
+            const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+            const to = c.contacto.startsWith('whatsapp:') ? c.contacto : `whatsapp:${c.contacto.replace(/\s/g, '')}`
+            let result
+            try {
+              // Tentar com template content SID
+              result = await twilioClient.messages.create({
+                from: process.env.TWILIO_WHATSAPP_NUMBER,
+                to,
+                contentSid: 'HXa6f25c714d7850e23796ea471a3c4fa9',
+                contentVariables: JSON.stringify({ '1': firstName }),
+              })
+            } catch (templateErr) {
+              // Se template nao aprovado, tentar texto livre (funciona se ja houve conversa)
+              console.warn('[reactivacao] Template falhou, tentando texto livre:', templateErr.message)
+              const { sendWhatsApp: sendWA } = await import('./src/db/whatsappAgent.js')
+              result = await sendWA(c.contacto, msg)
+            }
             if (result) {
               // Marcar como reactivado
               await pgQuery('UPDATE consultores SET reactivado = true, updated_at = $1 WHERE id = $2', [now, c.id])
