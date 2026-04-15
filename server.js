@@ -91,7 +91,7 @@ try {
       } catch (e) { res.status(500).json({ error: e.message }) }
     })
 
-    // Endpoint para processar comando de voz (Speech → Regras → Tarefa) — sem custo de API
+    // Endpoint para processar comando de voz (Speech → Claude API → Accao no CRM)
     app.post('/api/voice/process', async (req, res) => {
       try {
         const { text } = req.body
@@ -99,61 +99,129 @@ try {
 
         const { query: pgQuery } = await import('./src/db/pg.js')
         const { randomUUID } = await import('crypto')
-        const lower = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-
-        // Extrair hora (10h, 10:00, as 10, etc.)
-        const horaMatch = text.match(/(\d{1,2})\s*(?:h|horas?|:00|:\d{2})/i) || text.match(/[aà]s\s+(\d{1,2})/i)
-        const hora = horaMatch ? parseInt(horaMatch[1]) : null
-
-        // Extrair data relativa
-        let dataInicio = new Date()
-        if (lower.includes('amanha')) dataInicio.setDate(dataInicio.getDate() + 1)
-        else if (lower.includes('segunda')) { const d = dataInicio.getDay(); dataInicio.setDate(dataInicio.getDate() + ((8 - d) % 7 || 7)) }
-        else if (lower.includes('terca')) { const d = dataInicio.getDay(); dataInicio.setDate(dataInicio.getDate() + ((9 - d) % 7 || 7)) }
-        else if (lower.includes('quarta')) { const d = dataInicio.getDay(); dataInicio.setDate(dataInicio.getDate() + ((10 - d) % 7 || 7)) }
-        else if (lower.includes('quinta')) { const d = dataInicio.getDay(); dataInicio.setDate(dataInicio.getDate() + ((11 - d) % 7 || 7)) }
-        else if (lower.includes('sexta')) { const d = dataInicio.getDay(); dataInicio.setDate(dataInicio.getDate() + ((12 - d) % 7 || 7)) }
-        if (hora) dataInicio.setHours(hora, 0, 0, 0)
-
-        // Detectar categoria
-        let categoria = 'Outro'
-        if (lower.match(/ligar|telefonar|chamada|contactar|follow.?up/)) categoria = 'Follow-up Consultor'
-        else if (lower.match(/visita|ver.*imovel|ir.*ver|agendar.*visita/)) categoria = 'Visita'
-        else if (lower.match(/analise|analisar|calcul|estudo/)) categoria = 'Análise'
-        else if (lower.match(/proposta|enviar.*proposta/)) categoria = 'Proposta'
-        else if (lower.match(/documento|certidao|caderneta|licen/)) categoria = 'Documentação'
-        else if (lower.match(/reuniao|meeting|encontro/)) categoria = 'Reunião'
-        else if (lower.match(/obra|empreiteiro|orcamento/)) categoria = 'Obra'
-
-        // Detectar pessoa mencionada
-        const pessoaMatch = text.match(/(?:ao?|com|do|da)\s+(?:consultor[a]?\s+)?([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)?)/i)
-        const pessoa = pessoaMatch ? pessoaMatch[1] : null
-
-        // Construir descricao da tarefa
-        let tarefa = text.charAt(0).toUpperCase() + text.slice(1)
-        // Limpar palavras de comando
-        tarefa = tarefa.replace(/^(cria|criar|adiciona|adicionar|agenda|agendar|marca|marcar)\s+(uma?\s+)?(tarefa|reuniao|visita|chamada)?\s*/i, '').trim()
-        if (!tarefa) tarefa = text
-
-        // Capitalizar primeira letra
-        tarefa = tarefa.charAt(0).toUpperCase() + tarefa.slice(1)
-
+        const Anthropic = (await import('@anthropic-ai/sdk')).default
+        const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
         const now = new Date().toISOString()
-        const inicioStr = dataInicio.toISOString()
+        const hoje = new Date().toISOString().slice(0, 10)
 
-        await pgQuery(
-          `INSERT INTO tarefas (id, tarefa, status, categoria, funcionario, inicio, created_at, updated_at)
-           VALUES ($1, $2, 'A fazer', $3, $4, $5, $6, $6)`,
-          [randomUUID(), tarefa, categoria, 'Alexandre Mendes', inicioStr, now]
-        )
+        // Buscar consultores e imoveis para contexto
+        const { rows: consultores } = await pgQuery("SELECT id, nome FROM consultores LIMIT 200")
+        const { rows: imoveis } = await pgQuery("SELECT id, nome, estado FROM imoveis LIMIT 200")
+        const consNomes = consultores.map(c => c.nome).join(', ')
+        const imNomes = imoveis.map(i => `${i.nome} (${i.estado})`).join(', ')
 
-        const horaStr = hora ? ` às ${hora}h` : ''
-        const dataStr = dataInicio.toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' })
-        res.json({
-          ok: true,
-          message: `Tarefa criada: "${tarefa}" — ${dataStr}${horaStr}`,
-          tarefa: { descricao: tarefa, categoria, data: inicioStr, pessoa }
+        const response = await client.messages.create({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 500,
+          system: `Interpretas comandos de voz em português para um CRM imobiliário. Data de hoje: ${hoje}.
+
+CONSULTORES NA BASE: ${consNomes}
+IMÓVEIS NA BASE: ${imNomes}
+
+Devolve SEMPRE JSON com exactamente este schema:
+{
+  "accao": "TAREFA|NOTA_IMOVEL|NOTA_CONSULTOR|INTERACAO|MOVER_ESTADO|CLASSIFICAR|FOLLOW_UP",
+  "descricao": "texto da tarefa/nota/interaccao",
+  "entidade": "nome do consultor ou imovel (exacto da base)",
+  "entidade_tipo": "consultor|imovel|null",
+  "data": "YYYY-MM-DD ou null",
+  "hora": "HH:MM ou null",
+  "categoria": "Follow-up Consultor|Visita|Análise|Proposta|Documentação|Reunião|Obra|Outro",
+  "novo_estado": "estado pipeline ou null (ex: Estudo de VVR, Adicionado)",
+  "canal": "chamada|whatsapp|null",
+  "mensagem_ui": "texto curto para mostrar ao utilizador"
+}
+
+Exemplos:
+"adicionar nota ao prédio rua do clube proprietário aceita baixar" → NOTA_IMOVEL no Prédio Rua do Clube
+"follow up ao consultor Teresa feito hoje por chamada" → INTERACAO com Teresa Sousa, canal chamada
+"marcar visita ao T2 Santa Clara quinta às 10" → TAREFA visita
+"mover prédio Bencanta para estudo de VVR" → MOVER_ESTADO
+"classificar João Rodrigues como activo" → CLASSIFICAR
+
+Faz match aproximado dos nomes (Teresa → Teresa Sousa, prédio clube → Prédio Rua do Clube).`,
+          messages: [{ role: 'user', content: text }]
         })
+
+        const respText = response.content[0]?.text || '{}'
+        let parsed
+        try {
+          const jsonMatch = respText.match(/\{[\s\S]*\}/)
+          parsed = JSON.parse(jsonMatch?.[0] || respText)
+        } catch { parsed = { accao: 'TAREFA', descricao: text, mensagem_ui: text } }
+
+        const accao = parsed.accao || 'TAREFA'
+        const entNome = parsed.entidade
+        let msg = parsed.mensagem_ui || 'Processado'
+
+        // Executar accao
+        if (accao === 'NOTA_IMOVEL' && entNome) {
+          const im = imoveis.find(i => i.nome.toLowerCase().includes(entNome.toLowerCase()))
+          if (im) {
+            const { rows: [existing] } = await pgQuery('SELECT notas FROM imoveis WHERE id = $1', [im.id])
+            const notas = (existing?.notas || '') + '\n' + `[${hoje}] ${parsed.descricao}`
+            await pgQuery('UPDATE imoveis SET notas = $1, updated_at = $2 WHERE id = $3', [notas.trim(), now, im.id])
+            msg = `Nota adicionada ao imóvel "${im.nome}"`
+          } else { msg = `Imóvel "${entNome}" não encontrado` }
+
+        } else if (accao === 'NOTA_CONSULTOR' && entNome) {
+          const cons = consultores.find(c => c.nome.toLowerCase().includes(entNome.toLowerCase()))
+          if (cons) {
+            const { rows: [existing] } = await pgQuery('SELECT notas FROM consultores WHERE id = $1', [cons.id])
+            const notas = (existing?.notas || '') + '\n' + `[${hoje}] ${parsed.descricao}`
+            await pgQuery('UPDATE consultores SET notas = $1, updated_at = $2 WHERE id = $3', [notas.trim(), now, cons.id])
+            msg = `Nota adicionada ao consultor "${cons.nome}"`
+          } else { msg = `Consultor "${entNome}" não encontrado` }
+
+        } else if (accao === 'INTERACAO' && entNome) {
+          const cons = consultores.find(c => c.nome.toLowerCase().includes(entNome.toLowerCase()))
+          if (cons) {
+            await pgQuery(
+              'INSERT INTO consultor_interacoes (id, consultor_id, data_hora, canal, direcao, notas) VALUES ($1, $2, $3, $4, $5, $6)',
+              [randomUUID(), cons.id, parsed.data ? `${parsed.data}T${parsed.hora || '09:00'}:00Z` : now, parsed.canal || 'chamada', 'Enviado', parsed.descricao]
+            )
+            msg = `Interacção registada com "${cons.nome}" (${parsed.canal || 'chamada'})`
+          } else { msg = `Consultor "${entNome}" não encontrado` }
+
+        } else if (accao === 'MOVER_ESTADO' && entNome && parsed.novo_estado) {
+          const im = imoveis.find(i => i.nome.toLowerCase().includes(entNome.toLowerCase()))
+          if (im) {
+            await pgQuery('UPDATE imoveis SET estado = $1, updated_at = $2 WHERE id = $3', [parsed.novo_estado, now, im.id])
+            msg = `"${im.nome}" movido para "${parsed.novo_estado}"`
+          } else { msg = `Imóvel "${entNome}" não encontrado` }
+
+        } else if (accao === 'CLASSIFICAR' && entNome) {
+          const cons = consultores.find(c => c.nome.toLowerCase().includes(entNome.toLowerCase()))
+          if (cons) {
+            const estado = parsed.descricao.toLowerCase().includes('inativo') ? 'Inativo' : parsed.descricao.toLowerCase().includes('ativo') ? 'Ativo' : 'Em avaliação'
+            await pgQuery('UPDATE consultores SET estado_avaliacao = $1, updated_at = $2 WHERE id = $3', [estado, now, cons.id])
+            msg = `"${cons.nome}" classificado como "${estado}"`
+          }
+
+        } else if (accao === 'FOLLOW_UP' && entNome) {
+          const cons = consultores.find(c => c.nome.toLowerCase().includes(entNome.toLowerCase()))
+          if (cons) {
+            const data = parsed.data || hoje
+            await pgQuery('UPDATE consultores SET data_follow_up = $1, data_proximo_follow_up = $2, updated_at = $3 WHERE id = $4', [data, data, now, cons.id])
+            await pgQuery(
+              'INSERT INTO consultor_interacoes (id, consultor_id, data_hora, canal, direcao, notas) VALUES ($1, $2, $3, $4, $5, $6)',
+              [randomUUID(), cons.id, `${data}T${parsed.hora || '09:00'}:00Z`, parsed.canal || 'chamada', 'Enviado', `Follow-up: ${parsed.descricao}`]
+            )
+            msg = `Follow-up registado com "${cons.nome}" — ${data}`
+          }
+
+        } else {
+          // Default: criar tarefa
+          const inicio = parsed.data ? `${parsed.data}T${parsed.hora || '09:00'}:00Z` : now
+          await pgQuery(
+            `INSERT INTO tarefas (id, tarefa, status, categoria, funcionario, inicio, created_at, updated_at)
+             VALUES ($1, $2, 'A fazer', $3, $4, $5, $6, $6)`,
+            [randomUUID(), parsed.descricao || text, parsed.categoria || 'Outro', 'Alexandre Mendes', inicio, now]
+          )
+          msg = `Tarefa criada: "${parsed.descricao || text}"`
+        }
+
+        res.json({ ok: true, message: msg, accao, parsed })
       } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
     })
 
