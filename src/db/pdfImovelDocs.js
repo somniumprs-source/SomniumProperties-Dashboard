@@ -76,18 +76,17 @@ class DocBuilder {
   _drawCover(title, subtitle) {
     const d = this.doc
     d.addPage({ size: 'A4', margins: { top: 0, bottom: 0, left: 0, right: 0 } })
-    d.rect(0, 0, PW, PH).fill(C.black)
-    d.rect(0, 0, PW, 4).fill(C.gold)
-    try { d.image(readFileSync(LOGO_PATH), (PW - 150) / 2, 150, { width: 150 }) } catch {}
-    d.rect(PW / 2 - 20, 280, 40, 1).fill(C.gold)
-    d.fontSize(8).fillColor(C.gold).text(title.toUpperCase(), ML, 300, { width: CW, align: 'center', lineBreak: false, characterSpacing: 4 })
-    d.fontSize(22).fillColor(C.white).text(this.imovel.nome || 'Imóvel', ML, 335, { width: CW, align: 'center', lineBreak: false })
-    if (subtitle) d.fontSize(10).fillColor(C.muted).text(subtitle, ML, 375, { width: CW, align: 'center', lineBreak: false })
-    d.fontSize(9).fillColor(C.muted).text(NOW(), ML, 400, { width: CW, align: 'center', lineBreak: false })
-    // Footer
-    d.rect(0, PH - 45, PW, 45).fill(C.accent)
-    d.rect(0, PH - 45, PW, 1).fill(C.gold).opacity(0.3); d.opacity(1)
-    d.fontSize(7).fillColor(C.gold).text('SOMNIUM PROPERTIES', ML, PH - 28, { width: CW, align: 'center', lineBreak: false })
+    // Fundo branco com barra dourada no topo
+    d.rect(0, 0, PW, 3).fill(C.gold)
+    try { d.image(readFileSync(LOGO_PATH), (PW - 120) / 2, 200, { width: 120 }) } catch {}
+    d.rect(PW / 2 - 25, 310, 50, 1).fill(C.gold)
+    d.fontSize(8).fillColor(C.gold).text(title.toUpperCase(), ML, 330, { width: CW, align: 'center', lineBreak: false, characterSpacing: 3 })
+    d.fontSize(22).fillColor(C.body).text(this.imovel.nome || 'Imóvel', ML, 365, { width: CW, align: 'center', lineBreak: false })
+    if (subtitle) d.fontSize(10).fillColor(C.muted).text(subtitle, ML, 405, { width: CW, align: 'center', lineBreak: false })
+    d.fontSize(9).fillColor(C.muted).text(NOW(), ML, 430, { width: CW, align: 'center', lineBreak: false })
+    // Footer — linha dourada + texto
+    d.rect(ML, PH - 50, CW, 0.5).fill(C.gold)
+    d.fontSize(7).fillColor(C.muted).text('SOMNIUM PROPERTIES', ML, PH - 38, { width: CW, align: 'center', lineBreak: false })
   }
 
   newPage() {
