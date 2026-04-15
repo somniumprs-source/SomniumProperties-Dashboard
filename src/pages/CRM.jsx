@@ -429,6 +429,7 @@ export function CRM() {
           <p className="text-xs text-gray-500 mt-1">{item.categoria ?? '—'}</p>
           {item.lucro_estimado > 0 && <p className="text-xs font-mono text-indigo-600 mt-1">Est. {EUR(item.lucro_estimado)}</p>}
           {item.lucro_real > 0 && <p className="text-xs font-mono text-green-600">Real {EUR(item.lucro_real)}</p>}
+          {item.imovel_id && <p className="text-[10px] text-[#C9A84C] mt-1">→ ver imóvel</p>}
         </div>
       ),
     },

@@ -387,9 +387,11 @@ export function DetailPanel({ type, id, onClose, onSave }) {
             {type === 'Imóveis' && <>
               {editing ? <>
                 <EF label="Nome" field="nome" form={form} set={setField} />
-                <EF label="Estado" field="estado" form={form} set={setField} type="select" options={['Adicionado','Chamada Não Atendida','Pendentes','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa']} />
+                <EF label="Estado" field="estado" form={form} set={setField} type="select" options={['Pré-aprovação','Adicionado','Chamada Não Atendida','Pendentes','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa']} />
                 <EF label="Ask Price (€)" field="ask_price" form={form} set={setField} type="number" />
                 <EF label="Valor Proposta (€)" field="valor_proposta" form={form} set={setField} type="number" />
+                <EF label="VVR (€)" field="valor_venda_remodelado" form={form} set={setField} type="number" />
+                <EF label="Custo Obra (€)" field="custo_estimado_obra" form={form} set={setField} type="number" />
                 <EF label="Tipologia" field="tipologia" form={form} set={setField} />
                 <EF label="Área Útil (m²)" field="area_util" form={form} set={setField} type="number" />
                 <EF label="Área Bruta (m²)" field="area_bruta" form={form} set={setField} type="number" />
@@ -417,6 +419,8 @@ export function DetailPanel({ type, id, onClose, onSave }) {
                 <Field label="Estado" value={data.estado?.replace(/^\d+-/, '')} />
                 <Field label="Ask Price" value={data.ask_price > 0 ? EUR(data.ask_price) : '—'} />
                 <Field label="Valor Proposta" value={data.valor_proposta > 0 ? EUR(data.valor_proposta) : '—'} />
+                <Field label="VVR" value={data.valor_venda_remodelado > 0 ? EUR(data.valor_venda_remodelado) : '—'} />
+                <Field label="Custo Obra" value={data.custo_estimado_obra > 0 ? EUR(data.custo_estimado_obra) : '—'} />
                 <Field label="Zona" value={data.zona} />
                 <Field label="Tipologia" value={data.tipologia} />
                 <Field label="Modelo" value={data.modelo_negocio} />
@@ -429,6 +433,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
                 <Field label="Data Chamada" value={data.data_chamada} />
                 <Field label="Data Visita" value={data.data_visita} />
                 <Field label="Data Proposta" value={data.data_proposta} />
+                {data.notas && <div className="col-span-2 md:col-span-3"><Field label="Notas" value={data.notas} /></div>}
 
                 {/* ── Dados da Calculadora de Rentabilidade ── */}
                 {analise && (
