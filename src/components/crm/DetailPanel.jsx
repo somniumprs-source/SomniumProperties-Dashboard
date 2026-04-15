@@ -2,8 +2,9 @@
  * Painel de detalhe para Imóveis, Investidores, Consultores.
  * Mostra: campos editáveis + relações + timeline + tarefas + reuniões.
  */
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X } from 'lucide-react'
+import { apiFetch } from '../../lib/api.js'
 import { AnaliseTab } from '../analise/AnaliseTab.jsx'
 import { FicheirosTab } from './FicheirosTab.jsx'
 import { supabase } from '../../lib/supabase.js'
@@ -220,6 +221,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
   const [saving, setSaving] = useState(false)
 
   const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores' }[type]
+  const prevTab = useRef(activeTab)
 
   function startEdit() {
     setForm({ ...data })
@@ -227,8 +229,16 @@ export function DetailPanel({ type, id, onClose, onSave }) {
   }
 
   function loadData() {
-    return fetch(`/api/crm/${endpoint}/${id}/full`).then(r => r.json()).then(setData).catch(() => {})
+    return apiFetch(`/api/crm/${endpoint}/${id}/full`).then(r => r.json()).then(setData).catch(() => {})
   }
+
+  // Recarregar dados quando sai da tab analise (para reflectir alterações da calculadora)
+  useEffect(() => {
+    if (prevTab.current === 'analise' && activeTab !== 'analise') {
+      loadData()
+    }
+    prevTab.current = activeTab
+  }, [activeTab])
 
   async function saveEdit() {
     setSaving(true)
@@ -399,11 +409,12 @@ export function DetailPanel({ type, id, onClose, onSave }) {
                   <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={4}
                     className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
                 </div>
-              </> : <>
+              </> : (() => {
+                const analise = data.analises?.find(a => a.activa) || null
+                return <>
                 <Field label="Estado" value={data.estado?.replace(/^\d+-/, '')} />
                 <Field label="Ask Price" value={data.ask_price > 0 ? EUR(data.ask_price) : '—'} />
                 <Field label="Valor Proposta" value={data.valor_proposta > 0 ? EUR(data.valor_proposta) : '—'} />
-                <Field label="ROI" value={data.roi > 0 ? `${data.roi}%` : '—'} />
                 <Field label="Zona" value={data.zona} />
                 <Field label="Tipologia" value={data.tipologia} />
                 <Field label="Modelo" value={data.modelo_negocio} />
@@ -416,7 +427,62 @@ export function DetailPanel({ type, id, onClose, onSave }) {
                 <Field label="Data Chamada" value={data.data_chamada} />
                 <Field label="Data Visita" value={data.data_visita} />
                 <Field label="Data Proposta" value={data.data_proposta} />
-              </>}
+
+                {/* ── Dados da Calculadora de Rentabilidade ── */}
+                {analise && (
+                  <div className="col-span-2 md:col-span-3 mt-2">
+                    <div className="rounded-xl border border-[#C9A84C33] p-4" style={{ backgroundColor: '#faf8f2' }}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-sm">📊</span>
+                        <h4 className="text-sm font-bold text-neutral-800">Análise de Rentabilidade</h4>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Activa</span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                        {analise.vvr > 0 && <div>
+                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">VVR</p>
+                          <p className="text-sm font-bold text-neutral-800">{EUR(analise.vvr)}</p>
+                        </div>}
+                        {analise.custo_obra > 0 && <div>
+                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">Custo Obra</p>
+                          <p className="text-sm font-bold text-neutral-800">{EUR(analise.custo_obra)}</p>
+                        </div>}
+                        {analise.capital_necessario > 0 && <div>
+                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">Capital Necessário</p>
+                          <p className="text-sm font-bold text-neutral-800">{EUR(analise.capital_necessario)}</p>
+                        </div>}
+                        {analise.lucro_liquido != null && <div>
+                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">Lucro Líquido</p>
+                          <p className={`text-sm font-bold ${analise.lucro_liquido >= 0 ? 'text-green-700' : 'text-red-600'}`}>{EUR(analise.lucro_liquido)}</p>
+                        </div>}
+                        {analise.retorno_total != null && <div>
+                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">ROI Total</p>
+                          <p className={`text-sm font-bold ${analise.retorno_total >= 0 ? 'text-green-700' : 'text-red-600'}`}>{analise.retorno_total}%</p>
+                        </div>}
+                        {analise.retorno_anualizado != null && <div>
+                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">ROI Anualizado</p>
+                          <p className={`text-sm font-bold ${analise.retorno_anualizado >= 0 ? 'text-green-700' : 'text-red-600'}`}>{analise.retorno_anualizado}%</p>
+                        </div>}
+                        {analise.payback_meses > 0 && <div>
+                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">Payback</p>
+                          <p className="text-sm font-bold text-neutral-800">{analise.payback_meses} meses</p>
+                        </div>}
+                        {analise.risco && <div>
+                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">Risco</p>
+                          <p className={`text-sm font-bold ${analise.risco === 'Baixo' ? 'text-green-700' : analise.risco === 'Médio' ? 'text-yellow-600' : 'text-red-600'}`}>{analise.risco}</p>
+                        </div>}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {!analise && (
+                  <div className="col-span-2 md:col-span-3 mt-2">
+                    <div className="rounded-xl border border-dashed border-neutral-200 p-4 text-center">
+                      <p className="text-xs text-neutral-400">Sem análise de rentabilidade — usa a tab "Análise Financeira" para calcular</p>
+                    </div>
+                  </div>
+                )}
+              </>
+              })()}
             </>}
             {type === 'Investidores' && <>
               {editing ? <>
