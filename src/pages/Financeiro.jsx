@@ -1093,14 +1093,21 @@ const NEG_FASES = ['Fase de obras', 'Fase de venda', 'Vendido']
 
 function NegocioForm({ item, onSave, onCancel }) {
   const isNew = !item.id
-  // Normalizar: aceitar tanto snake_case (DB) como camelCase (API mapped)
-  const initPag = item.pagamentos_faseados ?? item.pagamentosFaseados ?? '[]'
+  // Normalizar camelCase → snake_case (financeiro API vs CRM)
+  const normalized = { ...item }
+  if (normalized.lucroEstimado !== undefined && normalized.lucro_estimado === undefined) normalized.lucro_estimado = normalized.lucroEstimado
+  if (normalized.lucroReal !== undefined && normalized.lucro_real === undefined) normalized.lucro_real = normalized.lucroReal
+  if (normalized.custoRealObra !== undefined && normalized.custo_real_obra === undefined) normalized.custo_real_obra = normalized.custoRealObra
+  if (normalized.capitalTotal !== undefined && normalized.capital_total === undefined) normalized.capital_total = normalized.capitalTotal
+  if (normalized.dataVenda !== undefined && normalized.data_venda === undefined) normalized.data_venda = normalized.dataVenda
+  if (normalized.dataCompra !== undefined && normalized.data_compra === undefined) normalized.data_compra = normalized.dataCompra
+  const initPag = normalized.pagamentos_faseados ?? normalized.pagamentosFaseados ?? '[]'
   const pagStr = typeof initPag === 'string' ? initPag : JSON.stringify(initPag)
   const [f, setF] = useState({
     movimento: '', categoria: '', fase: '', lucro_estimado: '', lucro_real: '',
     custo_real_obra: '', capital_total: '', n_investidores: '', pagamento_em_falta: 1,
     data: '', data_compra: '', data_estimada_venda: '', data_venda: '', notas: '',
-    ...item,
+    ...normalized,
     pagamentos_faseados: pagStr,
   })
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
@@ -1245,9 +1252,13 @@ const DESP_TIMING = ['Mensalmente', 'Anual', 'Único']
 
 function DespesaForm({ item, onSave, onCancel, onReload }) {
   const isNew = !item.id
+  // Normalizar campos camelCase → snake_case (endpoint financeiro vs CRM)
+  const normalized = { ...item }
+  if (normalized.custoMensal !== undefined && normalized.custo_mensal === undefined) normalized.custo_mensal = normalized.custoMensal
+  if (normalized.custoAnual !== undefined && normalized.custo_anual === undefined) normalized.custo_anual = normalized.custoAnual
   const [f, setF] = useState({
     movimento: '', categoria: '', timing: 'Mensalmente', custo_mensal: '', custo_anual: '', data: '', notas: '',
-    ...item,
+    ...normalized,
   })
   const [docs, setDocs] = useState(() => {
     try { return item.documentos ? JSON.parse(item.documentos) : [] } catch { return [] }
