@@ -81,26 +81,30 @@ async function main() {
       linked++
     }
 
-    // Procurar fotos em TODOS os locais: raiz + subpastas "Fotos" / "2. Fotos" etc.
+    // Procurar fotos em TODOS os locais, marcando a origem
     const allFilesInRoot = await listFiles(drive, match.id)
-    const rootImages = allFilesInRoot.filter(f =>
-      f.mimeType?.startsWith('image/') || /\.(jpg|jpeg|png|webp|heic)$/i.test(f.name)
-    )
+    const rootImages = allFilesInRoot
+      .filter(f => f.mimeType?.startsWith('image/') || /\.(jpg|jpeg|png|webp|heic)$/i.test(f.name))
+      .map(f => ({ ...f, _folder: 'fotos' })) // imagens na raiz = fotos do imóvel
 
-    // Procurar subpastas que contenham "Foto" no nome
+    // Procurar subpastas
     const subfolders = allFilesInRoot.filter(f => f.mimeType === 'application/vnd.google-apps.folder')
-    let subfolderImages = []
+    let subfolderFiles = []
     for (const sub of subfolders) {
-      if (/foto/i.test(sub.name)) {
-        const subFiles = await listFiles(drive, sub.id)
-        const imgs = subFiles.filter(f =>
-          f.mimeType?.startsWith('image/') || /\.(jpg|jpeg|png|webp|heic)$/i.test(f.name)
-        )
-        subfolderImages.push(...imgs)
-      }
+      const subFiles = await listFiles(drive, sub.id)
+      const imgs = subFiles.filter(f =>
+        f.mimeType?.startsWith('image/') || /\.(jpg|jpeg|png|webp|heic)$/i.test(f.name)
+      )
+      // Determinar categoria pelo nome da pasta
+      const folderCategory = /foto/i.test(sub.name) ? 'fotos'
+        : /doc/i.test(sub.name) ? 'documentos'
+        : /estudo|mercado/i.test(sub.name) ? 'documentos'
+        : /obra/i.test(sub.name) ? 'documentos'
+        : 'fotos'
+      subfolderFiles.push(...imgs.map(f => ({ ...f, _folder: folderCategory })))
     }
 
-    const imageFiles = [...rootImages, ...subfolderImages]
+    const imageFiles = [...rootImages, ...subfolderFiles]
     if (imageFiles.length === 0) {
       console.log(`      ℹ️  Sem fotos encontradas`)
       continue
@@ -147,6 +151,7 @@ async function main() {
           size: parseInt(photo.size || '0'),
           uploaded_at: new Date().toISOString(),
           drive_file_id: photo.id,
+          folder: photo._folder || 'fotos',
         })
 
         imported++

@@ -370,7 +370,7 @@ export function CRM() {
   // Kanban config por tab
   const KANBAN_CONFIG = {
     'Imóveis': {
-      columns: ['Adicionado','Chamada Não Atendida','Pendentes','Pré-aprovação','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'],
+      columns: ['Pré-aprovação','Adicionado','Chamada Não Atendida','Pendentes','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'],
       groupField: 'estado',
       renderCard: (item) => (
         <div>
@@ -670,6 +670,54 @@ export function CRM() {
   )
 }
 
+// ── Sorting ──────────────────────────────────────────────────
+
+function useSortableData(data) {
+  const [sortField, setSortField] = useState(null)
+  const [sortDir, setSortDir] = useState('asc') // 'asc' | 'desc'
+
+  function onSort(field) {
+    if (sortField === field) {
+      if (sortDir === 'asc') setSortDir('desc')
+      else { setSortField(null); setSortDir('asc') } // reset
+    } else {
+      setSortField(field)
+      setSortDir('asc')
+    }
+  }
+
+  const sorted = [...data].sort((a, b) => {
+    if (!sortField) return 0
+    let va = a[sortField], vb = b[sortField]
+    // Nulls go last
+    if (va == null && vb == null) return 0
+    if (va == null) return 1
+    if (vb == null) return -1
+    // Numbers
+    if (typeof va === 'number' && typeof vb === 'number') return sortDir === 'asc' ? va - vb : vb - va
+    // Try parse as number
+    const na = parseFloat(va), nb = parseFloat(vb)
+    if (!isNaN(na) && !isNaN(nb)) return sortDir === 'asc' ? na - nb : nb - na
+    // Strings
+    const sa = String(va).toLowerCase(), sb = String(vb).toLowerCase()
+    const cmp = sa.localeCompare(sb, 'pt')
+    return sortDir === 'asc' ? cmp : -cmp
+  })
+
+  return { sorted, sortField, sortDir, onSort }
+}
+
+function Th({ field, label, sortField, sortDir, onSort, align }) {
+  const active = sortField === field
+  const arrow = active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
+  return (
+    <th onClick={() => onSort(field)}
+      className={`${align === 'right' ? 'text-right' : 'text-left'} py-2 px-3 cursor-pointer select-none hover:text-indigo-600 transition-colors ${active ? 'text-indigo-700' : ''}`}>
+      {label}{arrow}
+    </th>
+  )
+}
+
 // ── Tables ────────────────────────────────────────────────────
 
 function ActionButtons({ item, onEdit, onDelete, onView }) {
@@ -691,16 +739,22 @@ function ClickableName({ name, item, onEdit }) {
 }
 
 function ImoveisTable({ data, onEdit, onDelete, onView }) {
+  const { sorted, sortField, sortDir, onSort } = useSortableData(data)
+  const sp = { sortField, sortDir, onSort }
   return (
     <table className="min-w-[800px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
-        <th className="text-left py-2 px-3">Imóvel</th><th className="text-left py-2 px-3">Estado</th>
-        <th className="text-left py-2 px-3">Zona</th><th className="text-right py-2 px-3">Ask Price</th>
-        <th className="text-right py-2 px-3">ROI</th><th className="text-left py-2 px-3">Origem</th>
-        <th className="text-left py-2 px-3">Data</th><th className="py-2 px-3"></th>
+        <Th field="nome" label="Imóvel" {...sp} />
+        <Th field="estado" label="Estado" {...sp} />
+        <Th field="zona" label="Zona" {...sp} />
+        <Th field="ask_price" label="Ask Price" align="right" {...sp} />
+        <Th field="roi" label="ROI" align="right" {...sp} />
+        <Th field="origem" label="Origem" {...sp} />
+        <Th field="data_adicionado" label="Data" {...sp} />
+        <th className="py-2 px-3"></th>
       </tr></thead>
       <tbody>
-        {data.map(r => (
+        {sorted.map(r => (
           <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
             <td className="py-2 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
             <td className="py-2 px-3"><Badge text={r.estado} colorMap={IMOVEL_ESTADO_COLOR} /></td>
@@ -712,24 +766,30 @@ function ImoveisTable({ data, onEdit, onDelete, onView }) {
             <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
           </tr>
         ))}
-        {!data.length && <tr><td colSpan={8} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
+        {!sorted.length && <tr><td colSpan={8} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
       </tbody>
     </table>
   )
 }
 
 function InvestidoresTable({ data, onEdit, onDelete, onView }) {
+  const { sorted, sortField, sortDir, onSort } = useSortableData(data)
+  const sp = { sortField, sortDir, onSort }
   return (
     <table className="min-w-[900px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
-        <th className="text-left py-2 px-3">Nome</th><th className="py-2 px-3">Class.</th>
-        <th className="text-left py-2 px-3">Status</th><th className="text-left py-2 px-3">Origem</th>
-        <th className="text-right py-2 px-3">Capital Max</th><th className="py-2 px-3">NDA</th>
-        <th className="text-left py-2 px-3">Contacto</th><th className="text-left py-2 px-3">1º Contacto</th>
+        <Th field="nome" label="Nome" {...sp} />
+        <Th field="classificacao" label="Class." {...sp} />
+        <Th field="status" label="Status" {...sp} />
+        <Th field="origem" label="Origem" {...sp} />
+        <Th field="capital_max" label="Capital Max" align="right" {...sp} />
+        <Th field="nda_assinado" label="NDA" {...sp} />
+        <Th field="telemovel" label="Contacto" {...sp} />
+        <Th field="data_primeiro_contacto" label="1º Contacto" {...sp} />
         <th className="py-2 px-3"></th>
       </tr></thead>
       <tbody>
-        {data.map(r => (
+        {sorted.map(r => (
           <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
             <td className="py-2 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
             <td className="py-2 px-3 text-center"><ClassBadge cls={r.classificacao} /></td>
@@ -742,7 +802,7 @@ function InvestidoresTable({ data, onEdit, onDelete, onView }) {
             <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
           </tr>
         ))}
-        {!data.length && <tr><td colSpan={9} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
+        {!sorted.length && <tr><td colSpan={9} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
       </tbody>
     </table>
   )
@@ -757,23 +817,25 @@ function AlertDot({ status }) {
 }
 
 function ConsultoresTable({ data, onEdit, onDelete, onView }) {
+  const { sorted, sortField, sortDir, onSort } = useSortableData(data)
+  const sp = { sortField, sortDir, onSort }
   return (
     <table className="min-w-[1100px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
         <th className="w-6 py-2 px-1"></th>
-        <th className="text-left py-2 px-3">Nome</th>
-        <th className="text-left py-2 px-3">Agência</th>
-        <th className="text-right py-2 px-3">Score</th>
-        <th className="text-right py-2 px-3">Imóveis</th>
-        <th className="text-right py-2 px-3">Taxa Qualidade</th>
-        <th className="text-right py-2 px-3">Tempo Resposta</th>
-        <th className="text-left py-2 px-3">Estado</th>
-        <th className="text-left py-2 px-3">Próx. Follow-up</th>
-        <th className="text-right py-2 px-3">Dias s/ contacto</th>
+        <Th field="nome" label="Nome" {...sp} />
+        <Th field="_agencia" label="Agência" {...sp} />
+        <Th field="score_prioridade" label="Score" align="right" {...sp} />
+        <Th field="_totalImoveis" label="Imóveis" align="right" {...sp} />
+        <Th field="taxa_qualidade" label="Taxa Qualidade" align="right" {...sp} />
+        <Th field="tempo_medio_resposta" label="Tempo Resposta" align="right" {...sp} />
+        <Th field="estado_avaliacao" label="Estado" {...sp} />
+        <Th field="data_proximo_follow_up" label="Próx. Follow-up" {...sp} />
+        <Th field="_diasSemContacto" label="Dias s/ contacto" align="right" {...sp} />
         <th className="py-2 px-3"></th>
       </tr></thead>
       <tbody>
-        {data.map(r => {
+        {sorted.map(r => {
           const agencia = r._agencia || (() => { try { return JSON.parse(r.imobiliaria || '[]').join(', ') } catch { return '—' } })()
           const tempoResp = r.tempo_medio_resposta != null
             ? (r.tempo_medio_resposta < 1 ? `${Math.round(r.tempo_medio_resposta * 60)}min` : r.tempo_medio_resposta < 24 ? `${Math.round(r.tempo_medio_resposta)}h` : `${Math.round(r.tempo_medio_resposta / 24)}d`)
@@ -794,23 +856,28 @@ function ConsultoresTable({ data, onEdit, onDelete, onView }) {
             </tr>
           )
         })}
-        {!data.length && <tr><td colSpan={11} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
+        {!sorted.length && <tr><td colSpan={11} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
       </tbody>
     </table>
   )
 }
 
 function NegociosTable({ data, onEdit, onDelete }) {
+  const { sorted, sortField, sortDir, onSort } = useSortableData(data)
+  const sp = { sortField, sortDir, onSort }
   return (
     <table className="min-w-[700px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
-        <th className="text-left py-2 px-3">Negócio</th><th className="text-left py-2 px-3">Categoria</th>
-        <th className="text-left py-2 px-3">Fase</th><th className="text-right py-2 px-3">Lucro Est.</th>
-        <th className="text-right py-2 px-3">Lucro Real</th><th className="text-left py-2 px-3">Data</th>
+        <Th field="movimento" label="Negócio" {...sp} />
+        <Th field="categoria" label="Categoria" {...sp} />
+        <Th field="fase" label="Fase" {...sp} />
+        <Th field="lucro_estimado" label="Lucro Est." align="right" {...sp} />
+        <Th field="lucro_real" label="Lucro Real" align="right" {...sp} />
+        <Th field="data" label="Data" {...sp} />
         <th className="py-2 px-3"></th>
       </tr></thead>
       <tbody>
-        {data.map(r => (
+        {sorted.map(r => (
           <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
             <td className="py-2 px-3"><ClickableName name={r.movimento} item={r} onEdit={onEdit} /></td>
             <td className="py-2 px-3"><Badge text={r.categoria} colorMap={NEG_CAT_COLOR} /></td>
@@ -821,21 +888,23 @@ function NegociosTable({ data, onEdit, onDelete }) {
             <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} /></td>
           </tr>
         ))}
-        {!data.length && <tr><td colSpan={7} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
+        {!sorted.length && <tr><td colSpan={7} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
       </tbody>
     </table>
   )
 }
 
 function GenericTable({ data, onEdit, onDelete, columns, labels }) {
+  const { sorted, sortField, sortDir, onSort } = useSortableData(data)
+  const sp = { sortField, sortDir, onSort }
   return (
     <table className="min-w-[700px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
-        {columns.map(c => <th key={c} className="text-left py-2 px-3">{labels[c] || c}</th>)}
+        {columns.map(c => <Th key={c} field={c} label={labels[c] || c} {...sp} />)}
         <th className="py-2 px-3"></th>
       </tr></thead>
       <tbody>
-        {data.map(r => (
+        {sorted.map(r => (
           <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
             {columns.map(c => (
               <td key={c} className="py-2 px-3 text-gray-600">
@@ -845,7 +914,7 @@ function GenericTable({ data, onEdit, onDelete, columns, labels }) {
             <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} /></td>
           </tr>
         ))}
-        {!data.length && <tr><td colSpan={columns.length + 1} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
+        {!sorted.length && <tr><td colSpan={columns.length + 1} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
       </tbody>
     </table>
   )
