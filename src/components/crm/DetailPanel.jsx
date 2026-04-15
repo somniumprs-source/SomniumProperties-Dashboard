@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { AnaliseTab } from '../analise/AnaliseTab.jsx'
+import { InteracoesTab } from './InteracoesTab.jsx'
 import { FicheirosTab } from './FicheirosTab.jsx'
 import { supabase } from '../../lib/supabase.js'
 
@@ -354,7 +355,13 @@ export function DetailPanel({ type, id, onClose, onSave }) {
       )}
 
       {/* Análise Financeira tab */}
-      {type === 'Imóveis' && activeTab === 'analise' ? (
+      {/* Interacções (Consultores) */}
+      {type === 'Consultores' && activeTab === 'interacoes' ? (
+        <div className="p-4 sm:p-6">
+          <InteracoesTab consultorId={data.id} onUpdate={loadData} />
+        </div>
+
+      ) : type === 'Imóveis' && activeTab === 'analise' ? (
         <div className="p-4 sm:p-6">
           <AnaliseTab imovelId={data.id} imovelNome={data.nome} />
         </div>
