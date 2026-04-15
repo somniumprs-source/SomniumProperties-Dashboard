@@ -1054,7 +1054,7 @@ router.get('/relatorio/investidores', async (req, res) => {
       try { estrategias = JSON.parse(inv.estrategia || '[]') } catch {}
 
       report.investidores_detalhados.push({
-        id: inv.id, nome: inv.nome, status, classificacao: inv.classificacao || '—',
+        id: inv.id, nome: inv.nome, status, classificacao: inv.classificacao || null,
         pontuacao: inv.pontuacao || 0, capitalMax, montanteInvestido: montante,
         email: inv.email, telemovel: inv.telemovel,
         estrategias, perfilRisco: inv.perfil_risco,
