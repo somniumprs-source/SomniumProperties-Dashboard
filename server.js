@@ -60,12 +60,26 @@ try {
 
     // Webhook POST /api/webhook/whatsapp (recepção Twilio)
     app.post('/api/webhook/whatsapp', express.urlencoded({ extended: false }), (req, res) => {
-      // Responder 200 imediatamente ao Twilio
+      // Responder 200 ao Twilio sem mensagem automática (o agente responde via API)
       res.set('Content-Type', 'text/xml')
-      res.status(200).send('<Response><Message>Recebi, fico a ver 👍</Message></Response>')
+      res.status(200).send('<Response></Response>')
 
       const from = req.body.From || ''
-      const body = req.body.Body || ''
+      let body = req.body.Body || ''
+      const numMedia = parseInt(req.body.NumMedia || '0')
+
+      // Detectar media (áudios, fotos, ficheiros) e informar o agente
+      if (numMedia > 0 && !body) {
+        const mediaType = req.body.MediaContentType0 || ''
+        if (mediaType.startsWith('audio/')) body = '[ÁUDIO RECEBIDO — pedir texto ao consultor]'
+        else if (mediaType.startsWith('image/')) body = '[IMAGEM RECEBIDA — pedir dados por escrito ao consultor]'
+        else body = '[FICHEIRO RECEBIDO — pedir dados por escrito ao consultor]'
+      } else if (numMedia > 0 && body) {
+        const mediaType = req.body.MediaContentType0 || ''
+        if (mediaType.startsWith('audio/')) body += '\n[ÁUDIO TAMBÉM ENVIADO]'
+        else if (mediaType.startsWith('image/')) body += '\n[IMAGEM TAMBÉM ENVIADA]'
+      }
+
       if (from && body) {
         receiveWhatsAppMessage(from, body, true)
       }
