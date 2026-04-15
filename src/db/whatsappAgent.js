@@ -421,11 +421,33 @@ ${urgente ? '⚠️ URGÊNCIA DETECTADA — prioridade máxima' : ''}
       })
     }
 
-    // 12. Actualizar consultor
-    await pool.query(
-      'UPDATE consultores SET updated_at = $1 WHERE id = $2',
-      [now.toISOString(), consultor.id]
-    )
+    // 12. Recalcular tempo medio de resposta e actualizar score
+    try {
+      const { rows: allInt } = await pool.query(
+        'SELECT direcao, data_hora FROM consultor_interacoes WHERE consultor_id = $1 ORDER BY data_hora ASC',
+        [consultor.id]
+      )
+      const temposResp = []
+      for (let i = 0; i < allInt.length; i++) {
+        if (allInt[i].direcao === 'Enviado') {
+          const resp = allInt.slice(i + 1).find(x => x.direcao === 'Resposta')
+          if (resp) {
+            const horas = (new Date(resp.data_hora) - new Date(allInt[i].data_hora)) / 3600000
+            if (horas >= 0 && horas < 720) temposResp.push(horas) // max 30 dias
+          }
+        }
+      }
+      const tempoMedio = temposResp.length > 0
+        ? Math.round(temposResp.reduce((a, b) => a + b, 0) / temposResp.length * 10) / 10
+        : null
+      await pool.query(
+        'UPDATE consultores SET tempo_medio_resposta = $1, updated_at = $2 WHERE id = $3',
+        [tempoMedio, now.toISOString(), consultor.id]
+      )
+    } catch (e) {
+      console.warn('[agent] Erro recalc tempo resposta:', e.message)
+      await pool.query('UPDATE consultores SET updated_at = $1 WHERE id = $2', [now.toISOString(), consultor.id])
+    }
 
   } catch (e) {
     console.error('[agent] Erro processamento:', e.message)
