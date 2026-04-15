@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X } from 'lucide-react'
 import { AnaliseTab } from '../analise/AnaliseTab.jsx'
+import { FicheirosTab } from './FicheirosTab.jsx'
 import { supabase } from '../../lib/supabase.js'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
@@ -227,6 +228,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
   // Tabs dinâmicos por tipo
   const tabs = [
     { key: 'detalhe', label: 'Detalhe', icon: '📋', show: true },
+    { key: 'ficheiros', label: 'Ficheiros', icon: '📷', show: type === 'Imóveis' },
     { key: 'interacoes', label: `Interacções (${data?.interacoes?.length ?? 0})`, icon: '💬', show: type === 'Consultores' },
     { key: 'analise', label: 'Análise Financeira', icon: '📊', show: type === 'Imóveis' },
     { key: 'relatorios_imovel', label: 'Relatórios', icon: '📄', show: type === 'Imóveis' },
@@ -300,6 +302,12 @@ export function DetailPanel({ type, id, onClose, onSave }) {
       {type === 'Imóveis' && activeTab === 'analise' ? (
         <div className="p-4 sm:p-6">
           <AnaliseTab imovelId={data.id} imovelNome={data.nome} />
+        </div>
+
+      /* Ficheiros do imóvel (fotos + documentos + Drive) */
+      ) : type === 'Imóveis' && activeTab === 'ficheiros' ? (
+        <div className="p-4 sm:p-6">
+          <FicheirosTab imovelId={data.id} driveFolderId={data.drive_folder_id} />
         </div>
 
       /* Relatórios do imóvel (documentos de fase) */
