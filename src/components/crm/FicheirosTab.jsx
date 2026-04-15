@@ -1,9 +1,8 @@
 /**
- * Tab "Ficheiros" para a ficha do imóvel.
- * Separa claramente: Fotografias do imóvel vs Documentos.
+ * Tab "Ficheiros" — galeria de fotos + documentos do imóvel.
  */
 import { useState, useEffect, useRef } from 'react'
-import { Upload, Image, FileText, Trash2, ExternalLink, FolderOpen, Camera, X, ChevronLeft, ChevronRight, File } from 'lucide-react'
+import { Upload, Image, FileText, Trash2, ExternalLink, FolderOpen, X, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 
 export function FicheirosTab({ imovelId, driveFolderId }) {
@@ -12,20 +11,20 @@ export function FicheirosTab({ imovelId, driveFolderId }) {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [lightbox, setLightbox] = useState(null)
+  const [section, setSection] = useState('fotos') // 'fotos' | 'docs'
   const fileInputRef = useRef(null)
 
   async function loadData() {
     setLoading(true)
     try {
-      const imovelRes = await apiFetch(`/api/crm/imoveis/${imovelId}`)
+      const [imovelRes, driveRes] = await Promise.all([
+        apiFetch(`/api/crm/imoveis/${imovelId}`),
+        apiFetch(`/api/crm/imoveis/${imovelId}/drive-files`),
+      ])
       const imovel = await imovelRes.json()
       setAllFiles(imovel.fotos ? JSON.parse(imovel.fotos) : [])
-
-      const driveRes = await apiFetch(`/api/crm/imoveis/${imovelId}/drive-files`)
       setDriveData(await driveRes.json())
-    } catch (e) {
-      console.error('Erro ao carregar ficheiros:', e)
-    }
+    } catch (e) { console.error('Erro:', e) }
     setLoading(false)
   }
 
@@ -52,28 +51,23 @@ export function FicheirosTab({ imovelId, driveFolderId }) {
       const r = await apiFetch(`/api/crm/imoveis/${imovelId}/fotos/${fotoId}`, { method: 'DELETE' })
       const data = await r.json()
       if (data.fotos) setAllFiles(data.fotos)
-    } catch (e) { console.error('Erro ao apagar:', e) }
+    } catch (e) { console.error('Erro:', e) }
   }
 
-  // ── Separar fotos de documentos ─────────────────────────────
+  // Separar
   const localPhotos = allFiles.filter(f => f.folder !== 'documentos' && f.type?.startsWith('image/'))
   const localDocs = allFiles.filter(f => f.folder === 'documentos' || f.type?.startsWith('application/'))
-
   const drivePhotos = (driveData?.fotos || []).map(f => ({
     id: f.id, name: f.name, source: 'drive',
     url: f.thumbnailLink?.replace('=s220', '=s800') || f.viewLink,
     viewLink: f.viewLink, thumbnailLink: f.thumbnailLink,
   }))
-
   const driveDocuments = driveData?.documentos || []
 
-  // Gallery = local photos + drive photos (só fotos reais, sem documentos)
   const galleryPhotos = [
     ...localPhotos.map(f => ({ ...f, source: 'local', url: f.path })),
     ...drivePhotos,
   ]
-
-  // Documents = local docs + drive documents
   const allDocuments = [
     ...localDocs.map(f => ({ ...f, source: 'local' })),
     ...driveDocuments.map(f => ({ ...f, source: 'drive' })),
@@ -81,197 +75,248 @@ export function FicheirosTab({ imovelId, driveFolderId }) {
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        {[1, 2, 3].map(i => <div key={i} className="h-32 bg-neutral-100 rounded-xl animate-pulse" />)}
+      <div className="space-y-3">
+        <div className="h-10 bg-neutral-100 rounded-lg animate-pulse" />
+        <div className="grid grid-cols-3 gap-2">
+          {[1,2,3,4,5,6].map(i => <div key={i} className="aspect-[4/3] bg-neutral-100 rounded-lg animate-pulse" />)}
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Upload Section */}
-      <div className="rounded-xl border-2 border-dashed border-neutral-200 p-6 text-center hover:border-[#C9A84C] transition-colors cursor-pointer"
-        onClick={() => fileInputRef.current?.click()}>
-        <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf" className="hidden" onChange={handleUpload} />
-        <div className="flex flex-col items-center gap-2">
-          <div className="w-12 h-12 rounded-full bg-neutral-100 flex items-center justify-center">
+    <div className="space-y-4">
+      {/* ── Header: tabs + actions ── */}
+      <div className="flex items-center justify-between">
+        <div className="flex bg-neutral-100 rounded-lg p-0.5">
+          <button onClick={() => setSection('fotos')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-semibold transition-all ${
+              section === 'fotos' ? 'bg-white text-neutral-800 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+            }`}>
+            <Image className="w-3.5 h-3.5" />
+            Fotografias
+            {galleryPhotos.length > 0 && (
+              <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full ${
+                section === 'fotos' ? 'bg-[#C9A84C] text-white' : 'bg-neutral-200 text-neutral-500'
+              }`}>{galleryPhotos.length}</span>
+            )}
+          </button>
+          <button onClick={() => setSection('docs')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-semibold transition-all ${
+              section === 'docs' ? 'bg-white text-neutral-800 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+            }`}>
+            <FileText className="w-3.5 h-3.5" />
+            Documentos
+            {allDocuments.length > 0 && (
+              <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full ${
+                section === 'docs' ? 'bg-indigo-500 text-white' : 'bg-neutral-200 text-neutral-500'
+              }`}>{allDocuments.length}</span>
+            )}
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {driveFolderId && (
+            <a href={`https://drive.google.com/drive/folders/${driveFolderId}`} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-white border border-neutral-200 text-neutral-600 hover:border-blue-300 hover:text-blue-600 transition-colors">
+              <FolderOpen className="w-3.5 h-3.5" /> Drive
+              <ExternalLink className="w-3 h-3 opacity-40" />
+            </a>
+          )}
+          <button onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg text-white transition-colors shadow-sm hover:shadow"
+            style={{ backgroundColor: '#C9A84C' }}>
             {uploading
-              ? <div className="w-5 h-5 border-2 border-[#C9A84C] border-t-transparent rounded-full animate-spin" />
-              : <Upload className="w-5 h-5 text-neutral-400" />
+              ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              : <Plus className="w-3.5 h-3.5" />
             }
-          </div>
-          <p className="text-sm font-medium text-neutral-600">
-            {uploading ? 'A carregar...' : 'Carregar fotos ou documentos'}
-          </p>
-          <p className="text-xs text-neutral-400">JPG, PNG, WEBP, PDF (max 15MB por ficheiro)</p>
+            {uploading ? 'A carregar...' : 'Adicionar'}
+          </button>
+          <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf" className="hidden" onChange={handleUpload} />
         </div>
       </div>
 
-      {/* Drive Folder Link */}
-      {driveFolderId && (
-        <a href={`https://drive.google.com/drive/folders/${driveFolderId}`} target="_blank" rel="noopener noreferrer"
-          className="flex items-center gap-3 p-3 rounded-xl bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors">
-          <FolderOpen className="w-5 h-5 text-blue-600" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-blue-800">Pasta Google Drive</p>
-            <p className="text-xs text-blue-500">Ver todos os ficheiros no Drive</p>
-          </div>
-          <ExternalLink className="w-4 h-4 text-blue-400" />
-        </a>
-      )}
-
-      {/* ═══════════ FOTOGRAFIAS ═══════════ */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <Camera className="w-4 h-4 text-emerald-600" />
-          <h3 className="text-sm font-bold text-neutral-800">
-            Fotografias do Imóvel
-          </h3>
-          <span className="text-xs text-neutral-400 ml-1">({galleryPhotos.length})</span>
-        </div>
-
-        {galleryPhotos.length === 0 ? (
-          <div className="text-center py-8 bg-neutral-50 rounded-xl border border-neutral-100">
-            <Image className="w-10 h-10 text-neutral-300 mx-auto mb-2" />
-            <p className="text-sm text-neutral-400">Sem fotografias</p>
-            <p className="text-xs text-neutral-300 mt-1">Carrega fotos ou adiciona-as na pasta Fotos do Drive</p>
+      {/* ── FOTOGRAFIAS ── */}
+      {section === 'fotos' && (
+        galleryPhotos.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 rounded-xl bg-neutral-50 border border-dashed border-neutral-200 cursor-pointer hover:border-[#C9A84C] transition-colors"
+            onClick={() => fileInputRef.current?.click()}>
+            <div className="w-16 h-16 rounded-2xl bg-white border border-neutral-100 flex items-center justify-center mb-3 shadow-sm">
+              <Image className="w-7 h-7 text-neutral-300" />
+            </div>
+            <p className="text-sm font-medium text-neutral-500">Sem fotografias</p>
+            <p className="text-xs text-neutral-400 mt-1">Clica para carregar ou adiciona na pasta Drive</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1.5">
             {galleryPhotos.map((foto, idx) => (
-              <div key={foto.id + '-' + idx} className="group relative aspect-[4/3] rounded-lg overflow-hidden bg-neutral-100 cursor-pointer"
+              <div key={foto.id + '-' + idx}
+                className="group relative aspect-square rounded-xl overflow-hidden bg-neutral-100 cursor-pointer ring-0 hover:ring-2 hover:ring-[#C9A84C]/50 transition-all"
                 onClick={() => setLightbox(idx)}>
                 <img
                   src={foto.source === 'local' ? foto.url : (foto.thumbnailLink || foto.url)}
                   alt={foto.name}
-                  className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                  className="w-full h-full object-cover"
                   loading="lazy"
-                  onError={e => { e.target.src = ''; e.target.className = 'w-full h-full bg-neutral-200 flex items-center justify-center' }}
+                  onError={e => { e.target.style.display = 'none' }}
                 />
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-end justify-between p-2 opacity-0 group-hover:opacity-100">
-                  <span className="text-[10px] text-white bg-black/50 px-1.5 py-0.5 rounded truncate max-w-[70%]">
-                    {foto.name}
-                  </span>
-                  <div className="flex gap-1">
-                    {foto.source === 'drive' && foto.viewLink && (
-                      <a href={foto.viewLink} target="_blank" rel="noopener noreferrer"
-                        onClick={e => e.stopPropagation()}
-                        className="w-6 h-6 rounded-full bg-white/90 flex items-center justify-center hover:bg-white">
-                        <ExternalLink className="w-3 h-3 text-neutral-700" />
+                {/* Hover overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <p className="text-[10px] text-white/90 truncate">{foto.name}</p>
+                </div>
+                {/* Actions */}
+                <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {foto.source === 'drive' && foto.viewLink && (
+                    <a href={foto.viewLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                      className="w-7 h-7 rounded-lg bg-white/95 flex items-center justify-center shadow-sm hover:bg-white">
+                      <ExternalLink className="w-3.5 h-3.5 text-neutral-600" />
+                    </a>
+                  )}
+                  {foto.source === 'local' && (
+                    <button onClick={e => { e.stopPropagation(); handleDelete(foto.id) }}
+                      className="w-7 h-7 rounded-lg bg-red-500/90 flex items-center justify-center shadow-sm hover:bg-red-600">
+                      <Trash2 className="w-3.5 h-3.5 text-white" />
+                    </button>
+                  )}
+                </div>
+                {/* Source indicator — small dot */}
+                {foto.source === 'drive' && (
+                  <div className="absolute top-2 left-2 w-2 h-2 rounded-full bg-blue-500 ring-2 ring-white shadow-sm" title="Google Drive" />
+                )}
+              </div>
+            ))}
+
+            {/* Add more button */}
+            <div className="aspect-square rounded-xl border-2 border-dashed border-neutral-200 flex flex-col items-center justify-center cursor-pointer hover:border-[#C9A84C] hover:bg-[#faf8f2] transition-colors"
+              onClick={() => fileInputRef.current?.click()}>
+              <Plus className="w-6 h-6 text-neutral-300 mb-1" />
+              <span className="text-[10px] text-neutral-400 font-medium">Adicionar</span>
+            </div>
+          </div>
+        )
+      )}
+
+      {/* ── DOCUMENTOS ── */}
+      {section === 'docs' && (
+        allDocuments.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 rounded-xl bg-neutral-50 border border-dashed border-neutral-200 cursor-pointer hover:border-indigo-300 transition-colors"
+            onClick={() => fileInputRef.current?.click()}>
+            <div className="w-16 h-16 rounded-2xl bg-white border border-neutral-100 flex items-center justify-center mb-3 shadow-sm">
+              <FileText className="w-7 h-7 text-neutral-300" />
+            </div>
+            <p className="text-sm font-medium text-neutral-500">Sem documentos</p>
+            <p className="text-xs text-neutral-400 mt-1">Os PDFs e ficheiros da pasta Drive aparecem aqui</p>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-neutral-100 overflow-hidden divide-y divide-neutral-50">
+            {allDocuments.map(doc => {
+              const isPdf = doc.name?.toLowerCase().endsWith('.pdf') || doc.mimeType?.includes('pdf') || doc.type?.includes('pdf')
+              const isImage = doc.type?.startsWith('image/') || doc.mimeType?.startsWith('image/')
+              const link = doc.source === 'drive' ? doc.viewLink : doc.path
+              return (
+                <div key={doc.id} className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-neutral-50/80 transition-colors group">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    isPdf ? 'bg-red-50' : isImage ? 'bg-amber-50' : 'bg-neutral-50'
+                  }`}>
+                    {isPdf ? (
+                      <span className="text-[10px] font-black text-red-500">PDF</span>
+                    ) : isImage ? (
+                      <Image className="w-4.5 h-4.5 text-amber-500" />
+                    ) : (
+                      <FileText className="w-4.5 h-4.5 text-neutral-400" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-neutral-700 truncate">{doc.name}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {doc.size > 0 && (
+                        <span className="text-[10px] text-neutral-400">
+                          {doc.size > 1024 * 1024 ? `${(doc.size / 1024 / 1024).toFixed(1)}MB` : `${Math.round(doc.size / 1024)}KB`}
+                        </span>
+                      )}
+                      {(doc.uploaded_at || doc.createdTime) && (
+                        <span className="text-[10px] text-neutral-300">
+                          {new Date(doc.uploaded_at || doc.createdTime).toLocaleDateString('pt-PT')}
+                        </span>
+                      )}
+                      {doc.source === 'drive' && (
+                        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-500">Drive</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
+                    {link && (
+                      <a href={link} target="_blank" rel="noopener noreferrer"
+                        className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors">
+                        Abrir
                       </a>
                     )}
-                    {foto.source === 'local' && (
-                      <button onClick={e => { e.stopPropagation(); handleDelete(foto.id) }}
-                        className="w-6 h-6 rounded-full bg-red-500/90 flex items-center justify-center hover:bg-red-600">
-                        <Trash2 className="w-3 h-3 text-white" />
+                    {doc.source === 'local' && (
+                      <button onClick={() => handleDelete(doc.id)}
+                        className="p-1.5 rounded-lg text-neutral-300 hover:bg-red-50 hover:text-red-500 transition-colors">
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>
                 </div>
-                {foto.source === 'drive' && (
-                  <div className="absolute top-1.5 right-1.5">
-                    <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-blue-500 text-white">Drive</span>
-                  </div>
-                )}
-              </div>
-            ))}
+              )
+            })}
           </div>
-        )}
-      </div>
+        )
+      )}
 
-      {/* ═══════════ DOCUMENTOS ═══════════ */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <FileText className="w-4 h-4 text-indigo-600" />
-          <h3 className="text-sm font-bold text-neutral-800">
-            Documentos
-          </h3>
-          <span className="text-xs text-neutral-400 ml-1">({allDocuments.length})</span>
-        </div>
-
-        {allDocuments.length === 0 ? (
-          <div className="text-center py-6 bg-neutral-50 rounded-xl border border-neutral-100">
-            <File className="w-8 h-8 text-neutral-300 mx-auto mb-2" />
-            <p className="text-sm text-neutral-400">Sem documentos</p>
-            <p className="text-xs text-neutral-300 mt-1">Os documentos da pasta Drive e uploads aparecem aqui</p>
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            {allDocuments.map(doc => (
-              <div key={doc.id} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-neutral-100 hover:border-neutral-200 transition-colors">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                  doc.source === 'drive' ? 'bg-blue-50' : 'bg-indigo-50'
-                }`}>
-                  {doc.type?.startsWith('image/') || doc.mimeType?.startsWith('image/')
-                    ? <Image className={`w-4 h-4 ${doc.source === 'drive' ? 'text-blue-500' : 'text-indigo-500'}`} />
-                    : <FileText className={`w-4 h-4 ${doc.source === 'drive' ? 'text-blue-500' : 'text-indigo-500'}`} />
-                  }
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-neutral-700 truncate">{doc.name}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    {doc.size > 0 && <span className="text-xs text-neutral-400">{Math.round(doc.size / 1024)}KB</span>}
-                    {(doc.uploaded_at || doc.createdTime) && (
-                      <span className="text-xs text-neutral-400">
-                        {new Date(doc.uploaded_at || doc.createdTime).toLocaleDateString('pt-PT')}
-                      </span>
-                    )}
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
-                      doc.source === 'drive' ? 'bg-blue-100 text-blue-600' : 'bg-neutral-100 text-neutral-500'
-                    }`}>
-                      {doc.source === 'drive' ? 'Drive' : 'Local'}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {doc.source === 'drive' && doc.viewLink ? (
-                    <a href={doc.viewLink} target="_blank" rel="noopener noreferrer"
-                      className="text-xs text-blue-600 hover:underline">Abrir</a>
-                  ) : doc.source === 'local' && doc.path ? (
-                    <a href={doc.path} target="_blank" rel="noopener noreferrer"
-                      className="text-xs text-indigo-600 hover:underline">Abrir</a>
-                  ) : null}
-                  {doc.source === 'local' && (
-                    <button onClick={() => handleDelete(doc.id)} className="text-neutral-300 hover:text-red-500 ml-1">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ═══════════ LIGHTBOX ═══════════ */}
+      {/* ── LIGHTBOX ── */}
       {lightbox !== null && galleryPhotos[lightbox] && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center" onClick={() => setLightbox(null)}>
-          <button className="absolute top-4 right-4 text-white/80 hover:text-white z-10" onClick={() => setLightbox(null)}>
-            <X className="w-8 h-8" />
+        <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center backdrop-blur-sm" onClick={() => setLightbox(null)}>
+          {/* Close */}
+          <button className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white/80 hover:bg-white/20 hover:text-white z-10 transition-colors"
+            onClick={() => setLightbox(null)}>
+            <X className="w-5 h-5" />
           </button>
+          {/* Nav */}
           {lightbox > 0 && (
-            <button className="absolute left-4 top-1/2 -translate-y-1/2 text-white/60 hover:text-white z-10"
+            <button className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white/60 hover:bg-white/20 hover:text-white z-10 transition-colors"
               onClick={e => { e.stopPropagation(); setLightbox(lightbox - 1) }}>
-              <ChevronLeft className="w-10 h-10" />
+              <ChevronLeft className="w-6 h-6" />
             </button>
           )}
           {lightbox < galleryPhotos.length - 1 && (
-            <button className="absolute right-4 top-1/2 -translate-y-1/2 text-white/60 hover:text-white z-10"
+            <button className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white/60 hover:bg-white/20 hover:text-white z-10 transition-colors"
               onClick={e => { e.stopPropagation(); setLightbox(lightbox + 1) }}>
-              <ChevronRight className="w-10 h-10" />
+              <ChevronRight className="w-6 h-6" />
             </button>
           )}
+          {/* Image */}
           <img
             src={galleryPhotos[lightbox].source === 'local'
               ? galleryPhotos[lightbox].url
               : (galleryPhotos[lightbox].thumbnailLink?.replace('=s220', '=s1600') || galleryPhotos[lightbox].url)}
             alt={galleryPhotos[lightbox].name}
-            className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg"
+            className="max-h-[85vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
             onClick={e => e.stopPropagation()}
           />
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/80 text-sm bg-black/50 px-4 py-2 rounded-lg">
-            {galleryPhotos[lightbox].name} — {lightbox + 1}/{galleryPhotos.length}
+          {/* Bottom bar */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-black/60 backdrop-blur-sm px-5 py-2.5 rounded-full">
+            <span className="text-xs text-white/60">{lightbox + 1} / {galleryPhotos.length}</span>
+            <span className="w-px h-3 bg-white/20" />
+            <span className="text-xs text-white/80 max-w-[200px] truncate">{galleryPhotos[lightbox].name}</span>
           </div>
+          {/* Thumbnail strip */}
+          {galleryPhotos.length > 1 && (
+            <div className="absolute bottom-14 left-1/2 -translate-x-1/2 flex gap-1 max-w-[80vw] overflow-x-auto px-2 py-1">
+              {galleryPhotos.map((f, i) => (
+                <div key={f.id + '-t-' + i}
+                  className={`w-10 h-10 rounded-md overflow-hidden shrink-0 cursor-pointer transition-all ${
+                    i === lightbox ? 'ring-2 ring-white scale-110' : 'opacity-50 hover:opacity-80'
+                  }`}
+                  onClick={e => { e.stopPropagation(); setLightbox(i) }}>
+                  <img src={f.source === 'local' ? f.url : (f.thumbnailLink || f.url)}
+                    alt="" className="w-full h-full object-cover" />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
