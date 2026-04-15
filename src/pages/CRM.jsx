@@ -632,6 +632,14 @@ export function CRM() {
               onCardClick={(id) => {
                 if (['Imóveis', 'Investidores', 'Consultores'].includes(tab)) {
                   setDetail(id)
+                } else if (tab === 'Negócios') {
+                  const item = data.find(i => i.id === id)
+                  if (item?.imovel_id) {
+                    setTab('Imóveis')
+                    setTimeout(() => setDetail(item.imovel_id), 100)
+                  } else if (item) {
+                    setEditing(item)
+                  }
                 } else {
                   const item = data.find(i => i.id === id)
                   if (item) setEditing(item)
@@ -654,7 +662,8 @@ export function CRM() {
                 {tab === 'Imóveis' && <ImoveisTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
                 {tab === 'Investidores' && <InvestidoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
                 {tab === 'Consultores' && <ConsultoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
-                {tab === 'Negócios' && <NegociosTable data={data} onEdit={setEditing} onDelete={handleDelete} />}
+                {tab === 'Negócios' && <NegociosTable data={data} onEdit={setEditing} onDelete={handleDelete}
+                  onViewImovel={(imovelId) => { setTab('Imóveis'); setTimeout(() => setDetail(imovelId), 100) }} />}
                 {tab === 'Empreiteiros' && <GenericTable data={data} onEdit={setEditing} onDelete={handleDelete}
                   columns={['nome','empresa','estado','zona','especializacao','score','custo_medio_m2']}
                   labels={{ nome:'Nome', empresa:'Empresa', estado:'Estado', zona:'Zona', especializacao:'Especialização', score:'Score', custo_medio_m2:'Custo/m²' }} />}
@@ -862,7 +871,7 @@ function ConsultoresTable({ data, onEdit, onDelete, onView }) {
   )
 }
 
-function NegociosTable({ data, onEdit, onDelete }) {
+function NegociosTable({ data, onEdit, onDelete, onViewImovel }) {
   const { sorted, sortField, sortDir, onSort } = useSortableData(data)
   const sp = { sortField, sortDir, onSort }
   return (
@@ -878,14 +887,20 @@ function NegociosTable({ data, onEdit, onDelete }) {
       </tr></thead>
       <tbody>
         {sorted.map(r => (
-          <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
-            <td className="py-2 px-3"><ClickableName name={r.movimento} item={r} onEdit={onEdit} /></td>
+          <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
+            onClick={() => r.imovel_id && onViewImovel?.(r.imovel_id)}>
+            <td className="py-2 px-3">
+              <span className={`font-medium ${r.imovel_id ? 'text-[#C9A84C] hover:underline' : 'text-gray-800'}`}>
+                {r.movimento}
+              </span>
+              {r.imovel_id && <span className="text-[10px] text-gray-300 ml-1.5">→ ver imóvel</span>}
+            </td>
             <td className="py-2 px-3"><Badge text={r.categoria} colorMap={NEG_CAT_COLOR} /></td>
             <td className="py-2 px-3"><Badge text={r.fase} colorMap={NEG_FASE_COLOR} /></td>
             <td className="py-2 px-3 text-right font-mono text-indigo-600">{EUR(r.lucro_estimado)}</td>
             <td className="py-2 px-3 text-right font-mono text-green-600">{r.lucro_real > 0 ? EUR(r.lucro_real) : '—'}</td>
             <td className="py-2 px-3 text-gray-400">{fmtDate(r.data)}</td>
-            <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} /></td>
+            <td className="py-2 px-3" onClick={e => e.stopPropagation()}><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} /></td>
           </tr>
         ))}
         {!sorted.length && <tr><td colSpan={7} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
