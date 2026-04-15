@@ -45,105 +45,109 @@ const ESTADO_DOCS = {
 function RelatoriosImovelTab({ imovelId, estado, driveFolderId, imovelNome }) {
   const estadoClean = (estado || '').replace(/^\d+-\s*/, '').trim()
   const docsActuais = ESTADO_DOCS[estadoClean] || ['ficha_imovel']
-  const todosDocs = Object.keys(DOC_LABELS)
-  const [selected, setSelected] = useState({ investimento: true, comparaveis: true, caep: true, stress_tests: true })
 
-  const INVESTOR_REPORTS = [
-    { key: 'investimento', label: 'Análise de Investimento', desc: 'Custos, rentabilidade, resultado', tipo: 'relatorio_investimento' },
-    { key: 'comparaveis', label: 'Estudo de Comparáveis', desc: 'Preços de mercado, VVR', tipo: 'relatorio_comparaveis' },
-    { key: 'caep', label: 'Distribuição CAEP', desc: 'Split e retorno por investidor', tipo: 'relatorio_caep' },
-    { key: 'stress_tests', label: 'Stress Tests', desc: 'Cenários de risco', tipo: 'relatorio_stress' },
+  // Lista unica de TODOS os documentos — fase + investidor + geral
+  const ALL_DOCS = [
+    // Relatorios investidor
+    { tipo: 'relatorio_investimento', label: 'Análise de Investimento', cat: 'investidor', compilavel: 'investimento' },
+    { tipo: 'relatorio_comparaveis', label: 'Estudo de Comparáveis', cat: 'investidor', compilavel: 'comparaveis' },
+    { tipo: 'relatorio_caep', label: 'Distribuição CAEP', cat: 'investidor', compilavel: 'caep' },
+    { tipo: 'relatorio_stress', label: 'Stress Tests', cat: 'investidor', compilavel: 'stress_tests' },
+    // Documentos de fase
+    ...Object.keys(DOC_LABELS).map(tipo => ({ tipo, label: DOC_LABELS[tipo], cat: docsActuais.includes(tipo) ? 'fase' : 'outro' })),
   ]
-  const selectedKeys = Object.entries(selected).filter(([, v]) => v).map(([k]) => k)
-  const compilarUrl = `/api/crm/imoveis/${imovelId}/relatorio-investidor?seccoes=${selectedKeys.join(',')}`
+
+  const [selected, setSelected] = useState(new Set())
+
+  function toggle(tipo) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(tipo)) next.delete(tipo); else next.add(tipo)
+      return next
+    })
+  }
+  function selectAll() { setSelected(new Set(ALL_DOCS.map(d => d.compilavel || d.tipo))) }
+  function selectNone() { setSelected(new Set()) }
+
+  // Para compilar: usar os keys compilaveis dos seleccionados
+  const compilaveis = ALL_DOCS.filter(d => d.compilavel && selected.has(d.compilavel || d.tipo))
+  const compilarKeys = compilaveis.map(d => d.compilavel)
+  const compilarUrl = compilarKeys.length > 0
+    ? `/api/crm/imoveis/${imovelId}/relatorio-investidor?seccoes=${compilarKeys.join(',')}`
+    : null
+
+  const CAT_LABEL = { investidor: 'Relatórios Investidor', fase: 'Documentos da Fase Actual', outro: 'Outros Documentos' }
+  const CAT_ORDER = ['investidor', 'fase', 'outro']
 
   return (
-    <div className="space-y-6">
-      {/* Relatórios para investidor — seleccionar e compilar */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-gray-700">Relatórios para Investidor</h3>
-          <a href={compilarUrl} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg text-white transition-colors"
-            style={{ backgroundColor: '#C9A84C' }}>
-            <FileDown className="w-3.5 h-3.5" /> Compilar Dossier ({selectedKeys.length})
-          </a>
-        </div>
-        <div className="space-y-2">
-          {INVESTOR_REPORTS.map(r => (
-            <div key={r.key} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
-              <input type="checkbox" checked={selected[r.key]}
-                onChange={e => setSelected(prev => ({ ...prev, [r.key]: e.target.checked }))}
-                className="w-4 h-4 rounded border-gray-300 shrink-0" style={{ accentColor: '#C9A84C' }} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-800">{r.label}</p>
-                <p className="text-xs text-gray-400">{r.desc}</p>
-              </div>
-              <a href={`/api/crm/imoveis/${imovelId}/documento/${r.tipo}`} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded bg-gray-100 text-gray-700 hover:bg-gray-200 shrink-0 transition-colors">
-                <FileDown className="w-3 h-3" /> Abrir
-              </a>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Relatório geral */}
-      <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Relatório Geral</h3>
-        <a href={`/api/crm/imoveis/${imovelId}/relatorio`} target="_blank" rel="noopener noreferrer"
-          className="flex items-center gap-3 p-3 bg-indigo-50 rounded-lg border border-indigo-200 hover:bg-indigo-100 transition-colors cursor-pointer">
-          <FileText className="w-5 h-5 text-indigo-600" />
-          <div>
-            <p className="text-sm font-medium text-gray-800">Ficha Completa do Imóvel</p>
-            <p className="text-xs text-indigo-600">Todos os dados e cronologia</p>
-          </div>
-        </a>
-      </div>
-
-      {/* Documentos da fase */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-gray-700">Documentos da Fase — {estadoClean || 'Sem estado'}</h3>
+    <div className="space-y-4">
+      {/* Barra de acções */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-gray-700">Todos os Relatórios e Documentos</h3>
           {driveFolderId && (
             <a href={`https://drive.google.com/drive/folders/${driveFolderId}`} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors">
-              Abrir no Drive
-            </a>
+              className="px-2 py-0.5 text-xs rounded bg-blue-50 text-blue-600 hover:bg-blue-100">Drive</a>
           )}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {docsActuais.map(tipo => (
-            <a key={tipo} href={`/api/crm/imoveis/${imovelId}/documento/${tipo}`} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-3 p-3 bg-green-50 rounded-lg border border-green-200 hover:bg-green-100 transition-colors cursor-pointer">
-              <FileDown className="w-4 h-4 text-green-600" />
-              <div>
-                <p className="text-sm font-medium text-gray-800">{DOC_LABELS[tipo] || tipo}</p>
-                <p className="text-xs text-green-600">Fase actual</p>
-              </div>
+        <div className="flex items-center gap-2">
+          <button onClick={selectAll} className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700">Seleccionar todos</button>
+          <button onClick={selectNone} className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700">Limpar</button>
+          {compilarUrl ? (
+            <a href={compilarUrl} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg text-white"
+              style={{ backgroundColor: '#C9A84C' }}>
+              <FileDown className="w-3.5 h-3.5" /> Compilar ({compilaveis.length})
             </a>
-          ))}
+          ) : (
+            <span className="px-4 py-1.5 text-xs text-gray-400 rounded-lg bg-gray-100">Seleccione para compilar</span>
+          )}
         </div>
       </div>
 
-      {/* Todos os docs (colapsado) */}
-      <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Todos os Documentos</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          {todosDocs.map(tipo => {
-            const isActive = docsActuais.includes(tipo)
-            return (
-              <a key={tipo} href={`/api/crm/imoveis/${imovelId}/documento/${tipo}`} target="_blank" rel="noopener noreferrer"
-                className={`flex items-center gap-2 p-2 rounded-lg border text-xs transition-colors cursor-pointer ${
-                  isActive ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'
-                }`}>
-                <span className="text-xs">{isActive ? '●' : '○'}</span>
-                <span>{DOC_LABELS[tipo]}</span>
-              </a>
-            )
-          })}
+      {/* Relatorio geral (sempre no topo) */}
+      <a href={`/api/crm/imoveis/${imovelId}/relatorio`} target="_blank" rel="noopener noreferrer"
+        className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors cursor-pointer">
+        <FileText className="w-4 h-4 text-gray-500" />
+        <div className="flex-1">
+          <p className="text-sm font-medium text-gray-800">Relatório Geral do Imóvel</p>
+          <p className="text-xs text-gray-400">Ficha completa com todos os dados</p>
         </div>
-      </div>
+        <span className="px-2 py-0.5 text-xs rounded bg-indigo-50 text-indigo-600">PDF</span>
+      </a>
+
+      {/* Documentos agrupados por categoria */}
+      {CAT_ORDER.map(cat => {
+        const docs = ALL_DOCS.filter(d => d.cat === cat)
+        if (docs.length === 0) return null
+        return (
+          <div key={cat}>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{CAT_LABEL[cat]}</p>
+            <div className="space-y-1">
+              {docs.map(d => {
+                const isSelected = selected.has(d.compilavel || d.tipo)
+                const canCompile = !!d.compilavel
+                return (
+                  <div key={d.tipo} className={`flex items-center gap-3 p-2.5 rounded-lg border transition-colors ${isSelected ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}>
+                    {canCompile ? (
+                      <input type="checkbox" checked={isSelected}
+                        onChange={() => toggle(d.compilavel)}
+                        className="w-4 h-4 rounded border-gray-300 shrink-0" style={{ accentColor: '#C9A84C' }} />
+                    ) : (
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${cat === 'fase' ? 'bg-green-500' : 'bg-gray-300'}`} />
+                    )}
+                    <span className="flex-1 text-sm text-gray-800">{d.label}</span>
+                    <a href={`/api/crm/imoveis/${imovelId}/documento/${d.tipo}`} target="_blank" rel="noopener noreferrer"
+                      className="px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-600 hover:bg-gray-200 shrink-0">
+                      Abrir
+                    </a>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
