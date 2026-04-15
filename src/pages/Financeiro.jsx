@@ -6,6 +6,7 @@ import {
 import { Upload, X, FileText, Image, Trash2, Plus, Filter, ArrowUpDown } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { KPICard } from '../components/dashboard/KPICard.jsx'
+import { apiFetch } from '../lib/api.js'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const EUR2 = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0)
@@ -52,15 +53,15 @@ export function Financeiro() {
     setLoading(true); setError(null)
     try {
       const [kr, dr, cr, pr, ar, nr, dsr, agr, rr] = await Promise.all([
-        fetch('/api/kpis/financeiro'),
-        fetch('/api/financeiro/despesas'),
-        fetch('/api/financeiro/cashflow'),
-        fetch('/api/financeiro/projecao'),
-        fetch('/api/crm/analises-kpis'),
-        fetch('/api/crm/negocios?limit=200'),
-        fetch('/api/crm/despesas?limit=200'),
-        fetch('/api/financeiro/aging'),
-        fetch('/api/financeiro/rentabilidade'),
+        apiFetch('/api/kpis/financeiro'),
+        apiFetch('/api/financeiro/despesas'),
+        apiFetch('/api/financeiro/cashflow'),
+        apiFetch('/api/financeiro/projecao'),
+        apiFetch('/api/crm/analises-kpis'),
+        apiFetch('/api/crm/negocios?limit=200'),
+        apiFetch('/api/crm/despesas?limit=200'),
+        apiFetch('/api/financeiro/aging'),
+        apiFetch('/api/financeiro/rentabilidade'),
       ])
       if (!kr.ok || !dr.ok || !cr.ok) throw new Error('Erro no servidor')
       const [k, d, c, p, a, n, ds, ag, re] = await Promise.all([
@@ -79,7 +80,7 @@ export function Financeiro() {
     try {
       const isNew = !form.id
       const url = isNew ? '/api/crm/negocios' : `/api/crm/negocios/${form.id}`
-      const r = await fetch(url, { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+      const r = await apiFetch(url, { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
       if (!r.ok) throw new Error('Erro ao guardar')
       setEditingNeg(null); load()
     } catch (e) { setError(e.message) }
@@ -87,7 +88,7 @@ export function Financeiro() {
 
   async function deleteNegocio(id) {
     if (!confirm('Apagar este negócio?')) return
-    await fetch(`/api/crm/negocios/${id}`, { method: 'DELETE' })
+    await apiFetch(`/api/crm/negocios/${id}`, { method: 'DELETE' })
     load()
   }
 
@@ -95,7 +96,7 @@ export function Financeiro() {
     try {
       const isNew = !form.id
       const url = isNew ? '/api/crm/despesas' : `/api/crm/despesas/${form.id}`
-      const r = await fetch(url, { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+      const r = await apiFetch(url, { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
       if (!r.ok) throw new Error('Erro ao guardar')
       setEditingDesp(null); load()
     } catch (e) { setError(e.message) }
@@ -103,7 +104,7 @@ export function Financeiro() {
 
   async function deleteDespesa(id) {
     if (!confirm('Apagar esta despesa?')) return
-    await fetch(`/api/crm/despesas/${id}`, { method: 'DELETE' })
+    await apiFetch(`/api/crm/despesas/${id}`, { method: 'DELETE' })
     load()
   }
 
@@ -1251,7 +1252,7 @@ function DespesaForm({ item, onSave, onCancel, onReload }) {
     try {
       const fd = new FormData()
       fd.append('file', file)
-      const r = await fetch(`/api/crm/despesas/${item.id}/upload`, { method: 'POST', body: fd })
+      const r = await apiFetch(`/api/crm/despesas/${item.id}/upload`, { method: 'POST', body: fd })
       const d = await r.json()
       if (d.error) throw new Error(d.error)
       setDocs(d.documentos)
@@ -1261,7 +1262,7 @@ function DespesaForm({ item, onSave, onCancel, onReload }) {
 
   async function handleDeleteDoc(docId) {
     try {
-      const r = await fetch(`/api/crm/despesas/${item.id}/upload/${docId}`, { method: 'DELETE' })
+      const r = await apiFetch(`/api/crm/despesas/${item.id}/upload/${docId}`, { method: 'DELETE' })
       const d = await r.json()
       if (d.error) throw new Error(d.error)
       setDocs(d.documentos)

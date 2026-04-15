@@ -28,6 +28,24 @@ async function auditLog(tabela, registoId, acao, dadosAnteriores, dadosNovos) {
   )
 }
 
+// ── Limpar dados do form antes de inserir/actualizar ─────────
+function cleanFormData(data) {
+  const cleaned = { ...data }
+  for (const [key, value] of Object.entries(cleaned)) {
+    // Converter strings vazias em null (evita erros de tipo no PostgreSQL)
+    if (value === '' || value === undefined) {
+      cleaned[key] = null
+      continue
+    }
+    // Converter strings numéricas para número
+    if (typeof value === 'string' && /^(custo|lucro|capital|ask_price|valor|roi|area|montante|score|comissao|pontuacao|tempo)/.test(key)) {
+      const num = parseFloat(value)
+      cleaned[key] = isNaN(num) ? null : num
+    }
+  }
+  return cleaned
+}
+
 // ── Generic CRUD factory ─────────────────────────────────────
 function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at DESC' } = {}) {
   return {
@@ -54,7 +72,8 @@ function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at 
       return rows[0] ?? null
     },
 
-    async create(data) {
+    async create(rawData) {
+      const data = cleanFormData(rawData)
       const id = randomUUID()
       const now = new Date().toISOString()
       const today = now.slice(0, 10)
@@ -78,7 +97,8 @@ function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at 
       return { id, ...data, created_at: now, updated_at: now }
     },
 
-    async update(id, data) {
+    async update(id, rawData) {
+      const data = cleanFormData(rawData)
       const { rows: existing } = await pool.query(`SELECT * FROM ${table} WHERE id = $1`, [id])
       if (!existing[0]) return null
       const now = new Date().toISOString()
