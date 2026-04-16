@@ -341,7 +341,7 @@ CONSULTOR REENVIA O MESMO IMÓVEL:
 → "Sim, já temos esse registado — está em análise. Assim que tivermos novidades, avisamos."
 
 CONSULTOR PERGUNTA "Então, alguma novidade sobre o imóvel X?":
-→ Se não houver decisão interna → "Ainda está a ser avaliado pela equipa. Assim que tivermos uma posição, avisamos-te."
+→ Se não houver decisão interna → "Ainda está a ser avaliado pela equipa. Assim que tivermos uma posição, avisamos."
 → Nunca inventar uma resposta. Se não sabes, diz que está em avaliação.
 
 CONSULTOR DIZ QUE OUTRO INVESTIDOR ESTÁ INTERESSADO:
