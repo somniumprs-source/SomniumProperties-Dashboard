@@ -642,6 +642,57 @@ router.post('/gmail/auto-organize', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// ── Excel Export por departamento ────────────────────────────────
+router.get('/export/:dept', async (req, res) => {
+  try {
+    const { dept } = req.params
+    const driveFolderId = req.query.driveFolderId || null
+    const { buffer, fileName, driveFile } = await exportDepartment(dept, driveFolderId)
+    if (req.query.download !== 'false') {
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`)
+      return res.send(Buffer.from(buffer))
+    }
+    res.json({ fileName, driveFile })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── DOCX — documentos Word ──────────────────────────────────────
+router.get('/imoveis/:id/docx/:tipo', async (req, res) => {
+  try {
+    const { buffer, fileName } = await generateDocx(req.params.tipo, req.params.id)
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`)
+    res.send(Buffer.from(buffer))
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/docx/tipos', (req, res) => {
+  res.json({ tipos: getAvailableTypes() })
+})
+
+// ── Pesquisa global ─────────────────────────────────────────────
+router.get('/search', async (req, res) => {
+  try {
+    const q = req.query.q
+    if (!q || q.length < 2) return res.json({ results: [] })
+    const term = `%${q}%`
+    const [imoveis, investidores, consultores, negocios] = await Promise.all([
+      pool.query("SELECT id, nome, zona, estado, 'imovel' as tipo FROM imoveis WHERE nome ILIKE $1 OR zona ILIKE $1 OR notas ILIKE $1 LIMIT 10", [term]),
+      pool.query("SELECT id, nome, email, status, 'investidor' as tipo FROM investidores WHERE nome ILIKE $1 OR email ILIKE $1 OR telemovel ILIKE $1 LIMIT 10", [term]),
+      pool.query("SELECT id, nome, email, estatuto, 'consultor' as tipo FROM consultores WHERE nome ILIKE $1 OR email ILIKE $1 OR contacto ILIKE $1 LIMIT 10", [term]),
+      pool.query("SELECT id, movimento, categoria, fase, 'negocio' as tipo FROM negocios WHERE movimento ILIKE $1 OR categoria ILIKE $1 LIMIT 10", [term]),
+    ])
+    res.json({
+      results: [
+        ...imoveis.rows, ...investidores.rows,
+        ...consultores.rows, ...negocios.rows,
+      ],
+      total: imoveis.rowCount + investidores.rowCount + consultores.rowCount + negocios.rowCount,
+    })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 // ── Sync Notion ↔ CRM ─────────────────────────────────────────
 router.post('/sync', async (req, res) => {
   try { res.json({ ok: true, results: await syncAllFromNotion() }) }
