@@ -1,8 +1,8 @@
 # CLAUDE.md — Somnium Properties Dashboard
 
-## O que e este projecto
+## Identidade do projecto
 
-CRM e dashboard operacional da Somnium Properties. Gere imoveis, investidores, consultores, negocios, despesas, tarefas e OKRs. Full-stack com React frontend e Express backend.
+O meu papel neste projecto e CFO da Somnium Properties. O projecto e o CRM e dashboard operacional da empresa: gere imoveis, investidores, consultores, negocios, despesas, tarefas e OKRs.
 
 ## Tech Stack
 
@@ -15,58 +15,75 @@ CRM e dashboard operacional da Somnium Properties. Gere imoveis, investidores, c
 ## Integracoes
 
 - Notion: sync bidireccional (PostgreSQL e fonte de verdade)
-- Google Drive: pasta automatica por imovel com subpastas Documentos/Fotos/Estudo de Mercado
+- Google Drive: pasta automatica por imovel (subpastas Documentos/Fotos/Estudo de Mercado)
 - Google Calendar: sync bidireccional de tarefas
 - Google Forms: sync automatico de investidores (a cada 15 min)
 - Fireflies.ai: transcricoes de reunioes + auto-fill investidores
-- WhatsApp (Twilio): agente de follow-up automatico para consultores
+- WhatsApp (Twilio): agente de follow-up para consultores
 - Anthropic API: analise de reunioes com Claude
 
-## Estrutura de ficheiros chave
+## Estrutura de pastas (Workspaces)
 
-```
-server.js                    # Backend monolitico (4200 linhas) — maior ficheiro, ler por seccoes
-src/pages/CRM.jsx            # Pagina principal do CRM (imoveis, investidores, consultores, negocios)
-src/pages/Financeiro.jsx     # Departamento financeiro (despesas, negocios, cashflow, P&L)
-src/pages/Metricas.jsx       # Metricas avancadas (6 tabs, 1200 linhas)
-src/pages/Operacoes.jsx      # Tarefas, time-tracking, calendario
-src/pages/Dashboard.jsx      # Dashboard central com KPIs
-src/components/crm/DetailPanel.jsx  # Ficha de imovel/investidor/consultor
-src/components/crm/FicheirosTab.jsx # Galeria de fotos + documentos
-src/db/crud.js               # CRUD generico com cleanFormData()
-src/db/routes.js             # API REST do CRM (endpoints /api/crm/*)
-src/db/pg.js                 # Schema PostgreSQL + migrations
-src/db/pdfReport.js          # Relatorio geral PDF do imovel
-src/db/pdfImovelDocs.js      # 14 tipos de documentos PDF (DocBuilder)
-src/db/driveSync.js          # Google Drive: criar/mover pastas
-src/db/calendarSync.js       # Google Calendar sync
-src/db/firefliesSync.js      # Fireflies.ai sync
-src/db/formsSync.js          # Google Forms sync
-src/server/shared.js         # Helpers e mappers partilhados do server
-src/constants.js             # Formatters (EUR, PCT), cores, estados
-src/lib/api.js               # apiFetch() — wrapper com auth token
-```
+| Pasta | Conteudo | Ler antes de trabalhar |
+|-------|----------|----------------------|
+| `/src/pages/` | Paginas do frontend (CRM, Financeiro, Metricas, Operacoes, Dashboard, Alertas) | CLAUDE.md |
+| `/src/components/` | Componentes reutilizaveis (DetailPanel, FicheirosTab, Skeleton, etc.) | CLAUDE.md |
+| `/src/db/` | Backend: CRUD, routes, PDFs, syncs, migrations | CLAUDE.md |
+| `/scripts/` | Scripts de automacao (auth Google, import fotos, migracao Notion) | CLAUDE.md |
+| `/public/uploads/imoveis/` | Fotos carregadas dos imoveis | — |
+
+## Tabela de Encaminhamento
+
+| Tarefa | Ir para | Ficheiros chave |
+|--------|---------|----------------|
+| Alterar ficha do imovel/investidor/consultor | src/components/crm/ | DetailPanel.jsx, FicheirosTab.jsx |
+| Alterar CRM (tabelas, kanban, filtros) | src/pages/ | CRM.jsx |
+| Alterar financeiro (despesas, negocios, KPIs) | src/pages/ | Financeiro.jsx |
+| Alterar PDFs e documentos | src/db/ | pdfReport.js, pdfImovelDocs.js |
+| Alterar endpoints API | src/db/ | routes.js, crud.js |
+| Alterar integracoes (Drive, Calendar, Forms) | src/db/ | driveSync.js, calendarSync.js, formsSync.js |
+| Alterar metricas, OKRs, alertas | src/pages/ + server.js | Metricas.jsx, server.js (ler por seccoes) |
+| Adicionar novo campo a uma entidade | src/db/ | pg.js (migration), crud.js, routes.js |
+
+## Ficheiros grandes (nao ler inteiros)
+
+| Ficheiro | Linhas | Como ler |
+|----------|--------|----------|
+| server.js | ~4200 | Usar offset/limit. Grep para encontrar seccao relevante. |
+| src/pages/CRM.jsx | ~1100 | Ler por funcao (grep nome da funcao). |
+| src/pages/Metricas.jsx | ~1200 | Ler por tab (grep "tab === 'nome'"). |
+| src/pages/Financeiro.jsx | ~1350 | Ler por tab ou form. |
+| src/db/pdfImovelDocs.js | ~1000 | Ler gerador especifico (grep tipo do documento). |
 
 ## Comandos
 
 ```bash
-npm run dev          # Arranca backend (3001) + Vite (5173) em simultaneo
-npm run build        # Build de producao
-npm start            # Build + servidor de producao
-node scripts/auth-google.js           # Configurar OAuth do Google
-node scripts/import-drive-photos.js   # Importar fotos do Drive para o CRM
-node scripts/migrate-from-notion.js   # Migrar dados do Notion para PostgreSQL
+npm run dev          # Backend (3001) + Vite (5173)
+npm run build        # Build producao
+node scripts/auth-google.js           # OAuth Google
+node scripts/import-drive-photos.js   # Importar fotos do Drive
 ```
 
-## Regras do projecto
+## Regras de Operacao
 
-- Todos os fetch no frontend usam `apiFetch()` de `src/lib/api.js` (nunca fetch directo)
-- Campos numericos vazios ("") sao convertidos para null pelo `cleanFormData()` no crud.js
-- server.js: NAO ler inteiro. Usar offset/limit para ler seccoes especificas.
-- Fotos dos imoveis: guardadas em `/public/uploads/imoveis/` com metadados JSON na coluna `fotos`
-- PDFs incluem fotografias do imovel automaticamente (max 4-6 por documento)
-- Palette: brand gold #C9A84C, brand dark #0d0d0d (definidos em tailwind.config.js)
-- Commit messages em portugues, com Co-Authored-By do Claude
+- Ler este CLAUDE.md primeiro em cada nova sessao.
+- Todos os fetch no frontend usam `apiFetch()` de `src/lib/api.js` (nunca fetch directo).
+- Campos numericos vazios ("") convertidos para null pelo `cleanFormData()` no crud.js.
+- server.js: NAO ler inteiro. Usar offset/limit ou grep.
+- Fotos: guardadas em `/public/uploads/imoveis/` com metadados JSON na coluna `fotos`.
+- PDFs incluem fotografias do imovel automaticamente (max 6 por documento).
+- Palette: brand gold #C9A84C, brand dark #0d0d0d (tailwind.config.js).
+- Commit messages em portugues. Commit e push automatico quando build passa.
+- Nunca criar ficheiros fora das pastas existentes sem perguntar.
+- Se tiver duvidas sobre onde colocar algo, parar e perguntar.
+
+## Convencoes de Nomenclatura
+
+- Componentes React: `PascalCase.jsx` (ex: DetailPanel.jsx, FicheirosTab.jsx)
+- Ficheiros backend: `camelCase.js` (ex: driveSync.js, pdfReport.js)
+- Campos BD: `snake_case` (ex: custo_mensal, data_follow_up)
+- Campos API Notion: `camelCase` (ex: custoMensal) — normalizar para snake_case nos forms
+- CSS: Tailwind utility classes, cores via tailwind.config.js
 
 ## Estado actual (Abril 2026)
 
@@ -74,5 +91,5 @@ node scripts/migrate-from-notion.js   # Migrar dados do Notion para PostgreSQL
 - 0 deals fechados (pipeline em fase de obras)
 - Score semanal: 20/100 (operacao em arranque)
 - Data health: 61%
-- Google Drive, Calendar, Forms e WhatsApp todos activos e a sincronizar
+- Google Drive, Calendar, Forms e WhatsApp activos
 - 113 fotos importadas do Drive para 8 imoveis
