@@ -6,6 +6,13 @@ import multer from 'multer'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { randomUUID } from 'crypto'
+import { readFile, unlink } from 'fs/promises'
+import { createClient } from '@supabase/supabase-js'
+
+// Supabase Storage client para uploads persistentes
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.supabase.co'
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
+const supabaseStorage = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null
 import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, getDashboardStats } from './crud.js'
 import pool from './pg.js'
 import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
@@ -348,10 +355,30 @@ router.post('/imoveis/:id/fotos', uploadImovel.array('fotos', 20), async (req, r
 
     const fotos = imovel.fotos ? JSON.parse(imovel.fotos) : []
     for (const file of req.files) {
+      let filePath = `/uploads/imoveis/${file.filename}`
+
+      // Upload para Supabase Storage (persistente) se configurado
+      if (supabaseStorage) {
+        const storagePath = `imoveis/${req.params.id}/${file.filename}`
+        const fileBuffer = await readFile(file.path)
+        const { error } = await supabaseStorage.storage
+          .from('imoveis')
+          .upload(storagePath, fileBuffer, { contentType: file.mimetype, upsert: true })
+
+        if (!error) {
+          const { data: urlData } = supabaseStorage.storage
+            .from('imoveis')
+            .getPublicUrl(storagePath)
+          filePath = urlData.publicUrl
+          // Apagar ficheiro temporario do disco
+          await unlink(file.path).catch(() => {})
+        }
+      }
+
       fotos.push({
         id: randomUUID(),
         name: file.originalname,
-        path: `/uploads/imoveis/${file.filename}`,
+        path: filePath,
         type: file.mimetype,
         size: file.size,
         uploaded_at: new Date().toISOString(),
@@ -383,6 +410,16 @@ router.delete('/imoveis/:id/fotos/:fotoId', async (req, res) => {
     if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
 
     const fotos = imovel.fotos ? JSON.parse(imovel.fotos) : []
+    const foto = fotos.find(f => f.id === req.params.fotoId)
+
+    // Apagar do Supabase Storage se for URL do Supabase
+    if (foto && supabaseStorage && foto.path?.includes('supabase.co/storage/')) {
+      const match = foto.path.match(/\/storage\/v1\/object\/public\/imoveis\/(.+)$/)
+      if (match) {
+        await supabaseStorage.storage.from('imoveis').remove([match[1]]).catch(() => {})
+      }
+    }
+
     const filtered = fotos.filter(f => f.id !== req.params.fotoId)
     await Imoveis.update(req.params.id, { fotos: JSON.stringify(filtered) })
     res.json({ ok: true, fotos: filtered })
