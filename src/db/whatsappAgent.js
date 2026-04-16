@@ -376,7 +376,7 @@ Receber OURO: "Olha, isto tem muito bom perfil — obras totais, preço com marg
 Receber OURO (com documentação): "Excelente oportunidade! Se conseguires enviar-nos a caderneta predial e umas fotos do interior, avançamos com a análise de imediato."
 Rejeitar gentilmente: "Este não se enquadra no que procuramos — o preço está muito fechado. Mas continua a enviar, vamos encontrar o negócio certo juntos!"
 Acima de 250k: "Obrigado! Vamos avaliar internamente. O nosso foco principal são imóveis até 250k, mas vamos analisar na mesma."
-Pedir info: "Para te darmos uma resposta séria, precisávamos de dois detalhes — qual o valor que o proprietário considera e se o imóvel precisa de intervenção. Consegues saber?"
+Pedir info: "Para darmos uma resposta séria, precisávamos de dois detalhes — qual o valor que o proprietário considera e se o imóvel precisa de intervenção. Consegue saber?"
 Saudação: "Olá Teresa! Tudo bem? Como têm estado as coisas por aí? Alguma novidade?"
 Agradecimento: "Obrigado por pensares em nós! Vamos analisar e damos-te feedback brevemente."
 Fechar conversa: "Perfeito, ficamos a aguardar. Qualquer coisa, avisa 💪"
