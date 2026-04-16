@@ -3,7 +3,32 @@
 @tailwind utilities;
 
 body {
-  @apply text-gray-900 antialiased;
+  @apply text-gray-900 dark:text-neutral-100 antialiased;
+}
+
+/* Dark mode overrides for inline-styled elements */
+.dark body { background-color: #0a0a0a; color: #e5e5e5; }
+.dark table { color: #e5e5e5; }
+.dark th { color: #a3a3a3; }
+.dark td { color: #d4d4d4; border-color: #262626; }
+.dark input, .dark select, .dark textarea {
+  background-color: #171717 !important;
+  color: #e5e5e5 !important;
+  border-color: #333 !important;
+}
+.dark .bg-white { background-color: #171717; }
+
+/* Mobile-friendly tables */
+.table-responsive {
+  @apply overflow-x-auto -mx-4 px-4;
+  -webkit-overflow-scrolling: touch;
+}
+.table-responsive table {
+  @apply min-w-[600px];
+}
+.table-responsive th:first-child,
+.table-responsive td:first-child {
+  @apply sticky left-0 z-10 bg-white dark:bg-neutral-900;
 }
 
 @keyframes fade-in {
