@@ -362,12 +362,12 @@ router.post('/imoveis/:id/fotos', uploadImovel.array('fotos', 20), async (req, r
         const storagePath = `imoveis/${req.params.id}/${file.filename}`
         const fileBuffer = await readFile(file.path)
         const { error } = await supabaseStorage.storage
-          .from('imoveis')
+          .from('Imoveis')
           .upload(storagePath, fileBuffer, { contentType: file.mimetype, upsert: true })
 
         if (!error) {
           const { data: urlData } = supabaseStorage.storage
-            .from('imoveis')
+            .from('Imoveis')
             .getPublicUrl(storagePath)
           filePath = urlData.publicUrl
           // Apagar ficheiro temporario do disco
@@ -414,9 +414,9 @@ router.delete('/imoveis/:id/fotos/:fotoId', async (req, res) => {
 
     // Apagar do Supabase Storage se for URL do Supabase
     if (foto && supabaseStorage && foto.path?.includes('supabase.co/storage/')) {
-      const match = foto.path.match(/\/storage\/v1\/object\/public\/imoveis\/(.+)$/)
+      const match = foto.path.match(/\/storage\/v1\/object\/public\/Imoveis\/(.+)$/)
       if (match) {
-        await supabaseStorage.storage.from('imoveis').remove([match[1]]).catch(() => {})
+        await supabaseStorage.storage.from('Imoveis').remove([match[1]]).catch(() => {})
       }
     }
 
