@@ -24,7 +24,7 @@ npm run build        # Build producao
 | Comercial (CRM, imoveis, investidores, consultores) | `.claude/dept/comercial.md` | /comercial/crm-audit, /comercial/crm-health |
 | Financeiro (despesas, negocios, analises, PDFs) | `.claude/dept/financeiro.md` | /financeiro/pdf-upgrade |
 | Administrativo (OKRs, tarefas, alertas, metricas, email) | `.claude/dept/administrativo.md` | /administrativo/email-ops |
-| Geral (cross-department) | Perguntar qual departamento | /geral/layout-review, /geral/new-feature |
+| Geral (cross-department) | Perguntar qual departamento | /geral/layout-review, /geral/new-feature, /geral/cashvertising |
 
 Para trabalhar num departamento: correr o skill respectivo ou ler o ficheiro de contexto.
 
