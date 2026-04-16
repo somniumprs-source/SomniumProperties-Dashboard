@@ -671,6 +671,51 @@ router.get('/docx/tipos', (req, res) => {
   res.json({ tipos: getAvailableTypes() })
 })
 
+// ── CSV Export ──────────────────────────────────────────────────
+router.get('/export-csv/:entity', async (req, res) => {
+  try {
+    const { entity } = req.params
+    const allowed = ['imoveis', 'investidores', 'consultores', 'negocios', 'despesas', 'tarefas']
+    if (!allowed.includes(entity)) return res.status(400).json({ error: `Entidade invalida. Usar: ${allowed.join(', ')}` })
+    const { rows } = await pool.query(`SELECT * FROM ${entity} ORDER BY created_at DESC`)
+    if (rows.length === 0) return res.status(404).json({ error: 'Sem dados' })
+    const headers = Object.keys(rows[0])
+    const csvRows = [headers.join(',')]
+    for (const row of rows) {
+      csvRows.push(headers.map(h => {
+        let v = row[h]
+        if (v == null) return ''
+        if (v instanceof Date) return v.toISOString().slice(0, 10)
+        v = String(v).replace(/"/g, '""')
+        return v.includes(',') || v.includes('"') || v.includes('\n') ? `"${v}"` : v
+      }).join(','))
+    }
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename="${entity}_${new Date().toISOString().slice(0,10)}.csv"`)
+    res.send('\uFEFF' + csvRows.join('\n'))
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── CSV Import ──────────────────────────────────────────────────
+router.post('/import-csv/:entity', async (req, res) => {
+  try {
+    const { entity } = req.params
+    const allowed = ['investidores', 'consultores', 'despesas']
+    if (!allowed.includes(entity)) return res.status(400).json({ error: `Import permitido para: ${allowed.join(', ')}` })
+    const { rows: data } = req.body
+    if (!Array.isArray(data) || data.length === 0) return res.status(400).json({ error: 'Body deve conter { rows: [...] }' })
+    let imported = 0
+    for (const row of data) {
+      const keys = Object.keys(row).filter(k => k !== 'id' && k !== 'created_at' && k !== 'updated_at')
+      if (keys.length === 0) continue
+      const vals = keys.map((_, i) => `$${i + 1}`)
+      await pool.query(`INSERT INTO ${entity} (${keys.join(',')}) VALUES (${vals.join(',')})`, keys.map(k => row[k] || null))
+      imported++
+    }
+    res.json({ imported, total: data.length })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 // ── Pesquisa global ─────────────────────────────────────────────
 router.get('/search', async (req, res) => {
   try {

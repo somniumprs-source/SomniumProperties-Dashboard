@@ -4,6 +4,24 @@
 import pool from './pg.js'
 import { randomUUID } from 'crypto'
 
+// ── Validacao de campos obrigatorios ─────────────────────────
+const REQUIRED_FIELDS = {
+  imoveis: ['nome'],
+  investidores: ['nome'],
+  consultores: ['nome'],
+  negocios: ['movimento'],
+  despesas: ['movimento'],
+  tarefas: ['titulo'],
+}
+
+function validateRequired(table, data) {
+  const fields = REQUIRED_FIELDS[table]
+  if (!fields) return null
+  const missing = fields.filter(f => !data[f] || (typeof data[f] === 'string' && data[f].trim() === ''))
+  if (missing.length > 0) return `Campos obrigatórios em falta: ${missing.join(', ')}`
+  return null
+}
+
 // ── Auto-calc ROI ────────────────────────────────────────────
 function autoCalcROI(data) {
   const askPrice = parseFloat(data.ask_price) || 0
@@ -74,6 +92,8 @@ function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at 
 
     async create(rawData) {
       const data = cleanFormData(rawData)
+      const validationError = validateRequired(table, data)
+      if (validationError) throw new Error(validationError)
       const id = randomUUID()
       const now = new Date().toISOString()
       const today = now.slice(0, 10)
