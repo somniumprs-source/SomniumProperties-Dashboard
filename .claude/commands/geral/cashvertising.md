@@ -87,6 +87,7 @@ Aplicar o template do canal com os principios seleccionados.
 - Emojis: proibidos em emails formais. Max 1 em WhatsApp
 - Nunca prometer resultados que a Somnium nao pode garantir
 - Nunca inventar dados, numeros ou testemunhos
+- Nunca perguntar o valor de mercado apos obras (VVR) a consultores ou proprietarios. A Somnium faz o seu proprio estudo de mercado internamente. Perguntar isso revela criterios de decisao e enfraquece a posicao negocial
 
 **Numero de versoes:**
 
