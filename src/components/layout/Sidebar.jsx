@@ -53,7 +53,7 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex flex-col gap-0.5 px-3 flex-1">
-        {nav.map(({ to, label, Icon, end, badge }) => (
+        {nav.map(({ to, label, Icon, end, badgeKey }) => (
           <NavLink
             key={to}
             to={to}
