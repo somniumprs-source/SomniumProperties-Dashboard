@@ -16,6 +16,9 @@ import { createImovelFolder, moveImovelFolder, uploadDocToFolder, isConfigured a
 import { generateDoc, getDocsForEstado } from './pdfImovelDocs.js'
 import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
 import { generateMeetingPDF } from './pdfMeetingReport.js'
+import { ensureLabels, organizeMessage, organizeBatch, autoOrganize, isConfigured as gmailConfigured } from './gmailSync.js'
+import { exportDepartment } from './excelExport.js'
+import { generateDocx, getAvailableTypes } from './docxGenerator.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.resolve(__dirname, '../../public/uploads/despesas')
@@ -598,6 +601,43 @@ router.post('/forms/sync', async (req, res) => {
   try {
     if (!formsConfigured()) return res.status(503).json({ error: 'Google Forms não configurado' })
     const result = await syncForms()
+    res.json(result)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Gmail — Organizar emails por departamento ───────────────────
+router.get('/gmail/labels', async (req, res) => {
+  try {
+    if (!gmailConfigured()) return res.status(503).json({ error: 'Gmail não configurado. Correr: node scripts/auth-google.js' })
+    const labels = await ensureLabels()
+    res.json({ labels })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/gmail/organize', async (req, res) => {
+  try {
+    if (!gmailConfigured()) return res.status(503).json({ error: 'Gmail não configurado' })
+    const { messageId, label, markRead } = req.body
+    if (!messageId || !label) return res.status(400).json({ error: 'messageId e label obrigatórios' })
+    const result = await organizeMessage(messageId, label, markRead !== false)
+    res.json(result)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/gmail/organize-batch', async (req, res) => {
+  try {
+    if (!gmailConfigured()) return res.status(503).json({ error: 'Gmail não configurado' })
+    const { messages } = req.body
+    if (!Array.isArray(messages)) return res.status(400).json({ error: 'messages deve ser um array' })
+    const results = await organizeBatch(messages)
+    res.json({ results })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/gmail/auto-organize', async (req, res) => {
+  try {
+    if (!gmailConfigured()) return res.status(503).json({ error: 'Gmail não configurado' })
+    const result = await autoOrganize()
     res.json(result)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
