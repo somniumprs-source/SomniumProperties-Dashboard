@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import rateLimit from 'express-rate-limit'
 import { Client } from '@notionhq/client'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -10,6 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
 app.use(cors())
 app.use(express.json())
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500, standardHeaders: true, legacyHeaders: false }))
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')))
 
 // ── Auth middleware (Supabase JWT) ────────────────────────────
