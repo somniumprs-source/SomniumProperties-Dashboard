@@ -23,6 +23,8 @@ const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets.readonly',
   'https://www.googleapis.com/auth/forms.responses.readonly',
   'https://www.googleapis.com/auth/drive',
+  'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/gmail.labels',
 ]
 
 async function main() {
@@ -36,22 +38,30 @@ async function main() {
 
   const oauth2 = new google.auth.OAuth2(client_id, client_secret, 'http://localhost:3333')
 
-  if (existsSync(TOKEN_PATH)) {
+  if (existsSync(TOKEN_PATH) && !process.argv.includes('--force')) {
     console.log('Token já existe em google-token.json — a verificar...')
     const token = JSON.parse(readFileSync(TOKEN_PATH, 'utf8'))
     oauth2.setCredentials(token)
 
-    try {
-      const cal = google.calendar({ version: 'v3', auth: oauth2 })
-      const r = await cal.calendarList.list({ maxResults: 3 })
-      console.log('Token válido! Calendários encontrados:')
-      for (const c of r.data.items) {
-        console.log(`  - ${c.summary} (${c.id})`)
+    // Verificar se todos os scopes estao autorizados
+    const tokenScopes = (token.scope || '').split(' ')
+    const missing = SCOPES.filter(s => !tokenScopes.includes(s))
+    if (missing.length > 0) {
+      console.log(`Scopes em falta: ${missing.join(', ')}`)
+      console.log('A pedir nova autorizacao...\n')
+    } else {
+      try {
+        const cal = google.calendar({ version: 'v3', auth: oauth2 })
+        const r = await cal.calendarList.list({ maxResults: 3 })
+        console.log('Token válido! Calendários encontrados:')
+        for (const c of r.data.items) {
+          console.log(`  - ${c.summary} (${c.id})`)
+        }
+        console.log('\nGoogle Calendar já está configurado.')
+        return
+      } catch {
+        console.log('Token expirado, a renovar...')
       }
-      console.log('\nGoogle Calendar já está configurado.')
-      return
-    } catch {
-      console.log('Token expirado, a renovar...')
     }
   }
 

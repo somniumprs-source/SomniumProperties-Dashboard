@@ -11,3 +11,4 @@ backups/
 public/uploads/despesas/*
 !public/uploads/.gitkeep
 .claude/settings.local.json
+relatorio-agente.html
