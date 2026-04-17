@@ -185,7 +185,7 @@ def make_bubble(text, is_agente=False):
 
 
 def add_interaction(story, num, title, context, consultor_msg, agente_msg, decision, note=None):
-    """Adiciona uma interaccao completa ao story."""
+    """Adiciona uma intera\u00e7\u00e3o completa ao story."""
     # Separador
     if num > 1:
         story.append(Spacer(1, 4*mm))
@@ -195,7 +195,7 @@ def add_interaction(story, num, title, context, consultor_msg, agente_msg, decis
         ))
 
     # Numero + titulo
-    story.append(Paragraph(f'Interaccao {num}', styles['section_num']))
+    story.append(Paragraph(f'Intera\u00e7\u00e3o {num}', styles['section_num']))
     story.append(Paragraph(title, styles['section_title']))
     story.append(Paragraph(context, styles['context']))
 
@@ -205,7 +205,7 @@ def add_interaction(story, num, title, context, consultor_msg, agente_msg, decis
     story.append(make_bubble(agente_msg, is_agente=True))
 
     # Decisao
-    story.append(Paragraph(f'Decisao: {decision}', styles['decision']))
+    story.append(Paragraph(f'Decis\u00e3o: {decision}', styles['decision']))
 
     # Nota Cashvertising
     if note:
@@ -228,22 +228,22 @@ story.append(Paragraph('Somnium Properties', ParagraphStyle(
     'TitleGold', fontName='Helvetica-Bold', fontSize=22,
     textColor=GOLD, spaceAfter=8*mm
 )))
-story.append(Paragraph('20 Interaccoes de Exemplo', styles['subtitle']))
+story.append(Paragraph('20 Intera\u00e7\u00f5es de Exemplo', styles['subtitle']))
 story.append(Paragraph('Abril 2026 \u00b7 Documento interno', styles['subtitle']))
 
 story.append(Spacer(1, 20*mm))
 
 # Intro
 story.append(Paragraph(
-    'Este documento apresenta 20 cenarios reais de interaccao entre o agente '
-    'WhatsApp da Somnium Properties e consultores imobiliarios. '
-    'O agente responde automaticamente via Twilio, usando inteligencia artificial '
+    'Este documento apresenta 20 cen\u00e1rios reais de intera\u00e7\u00e3o entre o agente '
+    'WhatsApp da Somnium Properties e consultores imobili\u00e1rios. '
+    'O agente responde automaticamente via Twilio, usando intelig\u00eancia artificial '
     'treinada com as regras comerciais da empresa.',
     styles['intro']
 ))
 story.append(Paragraph(
     'Cada exemplo mostra a mensagem do consultor, a resposta do agente, '
-    'a decisao interna tomada, e (quando aplicavel) o principio de persuasao utilizado.',
+    'a decis\u00e3o interna tomada, e (quando aplic\u00e1vel) o princ\u00edpio de persuas\u00e3o utilizado.',
     styles['intro']
 ))
 
@@ -252,11 +252,11 @@ story.append(Spacer(1, 10*mm))
 story.append(Paragraph('Caracteristicas do agente:', styles['intro_bold']))
 story.append(Paragraph(
     '\u2022 Nome: Alexandre \u00b7 Horario: 08:00\u201323:30<br/>'
-    '\u2022 Tom: simpatico, acessivel, sempre na 3.a pessoa do plural ("nos", "a equipa")<br/>'
+    '\u2022 Tom: simp\u00e1tico, acess\u00edvel, sempre na 3.\u00aa pessoa do plural ("n\u00f3s", "a equipa")<br/>'
     '\u2022 Max 3\u20134 linhas por mensagem<br/>'
     '\u2022 Nunca promete prazos concretos<br/>'
-    '\u2022 Nunca revela criterios internos, margens ou nomes de investidores<br/>'
-    '\u2022 Principios Cashvertising integrados de forma invisivel',
+    '\u2022 Nunca revela crit\u00e9rios internos, margens ou nomes de investidores<br/>'
+    '\u2022 Princ\u00edpios Cashvertising integrados de forma invis\u00edvel',
     styles['intro']
 ))
 
@@ -270,10 +270,10 @@ add_interaction(story, 1,
     'Consultor novo envia mensagem pela primeira vez. N\u00e3o conhecemos.',
     'Boa tarde, sou a Sofia da Century 21 Coimbra. Disseram-me que voc\u00eas compram im\u00f3veis para renovar.',
     'Ol\u00e1 Sofia! Sou o Alexandre da Somnium Properties. Prazer! '
-    'Sim, \u00e9 exactamente isso que fazemos. Procuramos im\u00f3veis com margem em '
+    'Sim, \u00e9 exatamente isso que fazemos. Procuramos im\u00f3veis com margem em '
     'Coimbra e arredores, at\u00e9 250k. Tem algo para partilhar?',
     'RESPONDER_QUEM_SOMOS',
-    'Prova de Rigor: "\u00e9 exactamente isso que fazemos" posiciona como especialista, n\u00e3o como generalista.'
+    'Prova de Rigor: "\u00e9 exatamente isso que fazemos" posiciona como especialista, n\u00e3o como generalista.'
 )
 
 # 2
@@ -365,7 +365,7 @@ add_interaction(story, 9,
     'Im\u00f3vel Off-Market',
     'Consultor oferece im\u00f3vel que n\u00e3o est\u00e1 publicamente \u00e0 venda.',
     'Alexandre, tenho uma coisa off-market. Moradia em Eiras, o dono s\u00f3 vende a quem vier directamente. 190k, precisa de interven\u00e7\u00e3o.',
-    'Off-market \u00e9 exactamente o tipo de oportunidade que valorizamos! '
+    'Off-market \u00e9 exatamente o tipo de oportunidade que valorizamos! '
     'Consegue dizer-nos a \u00e1rea do terreno e da implanta\u00e7\u00e3o? E o propriet\u00e1rio, qual a motiva\u00e7\u00e3o de venda?',
     'TRIAGEM \u00b7 Dados em falta: \u00e1rea, motiva\u00e7\u00e3o',
     'Autoridade: "\u00e1rea do terreno e da implanta\u00e7\u00e3o" s\u00e3o as perguntas certas para moradias.'
@@ -419,7 +419,7 @@ add_interaction(story, 13,
 add_interaction(story, 14,
     'Quem Somos',
     'Consultor n\u00e3o sabe quem \u00e9 a Somnium. Explicar de forma natural.',
-    'Desculpe, mas o que \u00e9 que a Somnium Properties faz exactamente?',
+    'Desculpe, mas o que \u00e9 que a Somnium Properties faz exatamente?',
     'Somos a Somnium Properties. Investimos em im\u00f3veis com potencial em Coimbra e arredores. '
     'Compramos, renovamos e colocamos novamente no mercado. '
     'Trabalhamos com consultores como o(a) senhor(a) para encontrar as melhores oportunidades.',
@@ -436,7 +436,7 @@ add_interaction(story, 15,
     'Procuramos im\u00f3veis com margem de negocia\u00e7\u00e3o. Constru\u00e7\u00e3o antiga ou que precise de obras, '
     'onde haja espa\u00e7o para criar valor. Zonas de Coimbra, Condeixa e arredores. At\u00e9 250k.',
     'RESPONDER_CRITERIOS',
-    'Prova de Rigor: "onde haja espa\u00e7o para criar valor" posiciona como selectivos, n\u00e3o como compradores de tudo.'
+    'Prova de Rigor: "onde haja espa\u00e7o para criar valor" posiciona como seletivos, n\u00e3o como compradores de tudo.'
 )
 
 # 16
