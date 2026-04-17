@@ -1957,13 +1957,16 @@ export function generateCompiledReport(imovel, analise, seccoes = []) {
 
   // Para multiplas seccoes: gerar um DocBuilder unico com todo o conteudo
   const b = new DocBuilder('Dossier de Investimento', imovel.zona || '', imovel)
-  const an = analise
+  const an = analise || {}
   const im = imovel
   let hasContent = false
 
+  // Se não há análise activa, usar dados do imóvel como fallback
+  const hasAnalise = analise && (analise.compra || analise.vvr || analise.lucro_liquido)
+
   for (const seccao of seccoes) {
 
-    if (seccao === 'investimento' && an) {
+    if (seccao === 'investimento') {
       if (hasContent) b.newPage()
       hasContent = true
       const ra = an.retorno_anualizado || 0
@@ -2007,7 +2010,7 @@ export function generateCompiledReport(imovel, analise, seccoes = []) {
       continue
     }
 
-    if (seccao === 'comparaveis' && an) {
+    if (seccao === 'comparaveis') {
       const comps = typeof an.comparaveis === 'string' ? JSON.parse(an.comparaveis || '[]') : (an.comparaveis || [])
       if (comps.length > 0) {
         if (hasContent) b.newPage()
@@ -2033,7 +2036,7 @@ export function generateCompiledReport(imovel, analise, seccoes = []) {
       continue
     }
 
-    if (seccao === 'caep' && an) {
+    if (seccao === 'caep') {
       const caep = typeof an.caep === 'string' ? JSON.parse(an.caep || 'null') : an.caep
       if (caep?.quota_somnium !== undefined) {
         if (hasContent) b.newPage()
