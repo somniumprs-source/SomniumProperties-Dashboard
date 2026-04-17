@@ -31,6 +31,7 @@ const DOC_LABELS = {
   resumo_negociacao: 'Resumo Negociação', resumo_acordo: 'Resumo Acordo',
   dossier_investimento: 'Dossier Investimento', ficha_follow_up: 'Ficha Follow-Up',
   ficha_cedencia: 'Ficha Cedência', ficha_acompanhamento_obra: 'Ficha Acompanhamento Obra',
+  apresentacao_negocio: 'Apresentação de Negócio (Anónima)',
 }
 const ESTADO_DOCS = {
   'Adicionado': ['ficha_imovel'], 'Pré-aprovação': ['ficha_imovel'],
@@ -38,7 +39,7 @@ const ESTADO_DOCS = {
   'Estudo de VVR': ['relatorio_visita', 'analise_rentabilidade', 'estudo_comparaveis'],
   'Criar Proposta ao Proprietário': ['proposta_formal'], 'Enviar proposta ao Proprietário': ['proposta_formal'],
   'Em negociação': ['resumo_negociacao'], 'Proposta aceite': ['resumo_acordo'],
-  'Enviar proposta ao investidor': ['apresentacao_investidor', 'dossier_investimento'],
+  'Enviar proposta ao investidor': ['apresentacao_investidor', 'dossier_investimento', 'apresentacao_negocio'],
   'Follow Up após proposta': ['ficha_follow_up'], 'Follow UP': ['ficha_follow_up'],
   'Wholesaling': ['ficha_cedencia'], 'CAEP': ['ficha_acompanhamento_obra'], 'Fix and Flip': ['ficha_acompanhamento_obra'],
 }
@@ -68,6 +69,7 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
     { tipo: 'relatorio_comparaveis',     label: 'Estudo Comparáveis (Inv.)',      compilavel: 'comparaveis' },
     { tipo: 'relatorio_caep',            label: 'Distribuição CAEP',              compilavel: 'caep' },
     { tipo: 'relatorio_stress',          label: 'Stress Tests',                   compilavel: 'stress_tests' },
+    { tipo: 'apresentacao_negocio',     label: 'Apresentação de Negócio (Anónima)', compilavel: 'apresentacao_negocio' },
   ]
 
   const [selected, setSelected] = useState(new Set())
