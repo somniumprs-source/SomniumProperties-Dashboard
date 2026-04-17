@@ -11,6 +11,36 @@ import { Comparaveis } from './Comparaveis.jsx'
 import { CAEPParcerias } from './CAEPParcerias.jsx'
 import { QuickCheck } from './QuickCheck.jsx'
 
+function RenameInput({ nome, onRename }) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(nome || '')
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => { setValue(nome || ''); setEditing(true) }}
+        className="rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:border-gray-400 hover:bg-white transition-colors"
+        title="Clica para renomear"
+      >
+        ✏️ {nome || 'Sem nome'}
+      </button>
+    )
+  }
+
+  return (
+    <input
+      autoFocus
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => { if (value.trim() && value !== nome) onRename(value.trim()); setEditing(false) }}
+      onKeyDown={(e) => { if (e.key === 'Enter') { if (value.trim() && value !== nome) onRename(value.trim()); setEditing(false) } if (e.key === 'Escape') setEditing(false) }}
+      className="rounded-lg border-2 border-yellow-400 px-3 py-2 text-sm font-medium outline-none bg-white"
+      style={{ minWidth: 160 }}
+      placeholder="Nome do cenário"
+    />
+  )
+}
+
 const SUB_TABS = [
   { key: 'Calculadora', icon: '📊' },
   { key: 'Quick Check', icon: '⚡' },
@@ -86,6 +116,10 @@ export function AnaliseTab({ imovelId, imovelNome }) {
             </option>
           ))}
         </select>
+
+        {selected && (
+          <RenameInput nome={selected.nome} onRename={(nome) => guardarAgora({ nome })} />
+        )}
 
         <button
           onClick={() => criar({ nome: `Cenário ${analises.length + 1}` })}
