@@ -371,6 +371,12 @@ export async function initSchema() {
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 
+      -- Migration: adicionar ABD (area_bruta_dependente) à tabela imoveis
+      DO $$ BEGIN
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS area_bruta_dependente REAL;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
       -- Migration: módulo gestão de consultores — novas colunas
       DO $$ BEGIN
         ALTER TABLE consultores ADD COLUMN IF NOT EXISTS score_prioridade REAL DEFAULT 0;

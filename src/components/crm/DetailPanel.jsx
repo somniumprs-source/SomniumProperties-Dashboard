@@ -173,8 +173,9 @@ export function DetailPanel({ type, id, onClose, onSave }) {
                 <EF label="Ask Price (€)" field="ask_price" form={form} set={setField} type="number" />
                 <EF label="Valor Proposta (€)" field="valor_proposta" form={form} set={setField} type="number" />
                 <EF label="Tipologia" field="tipologia" form={form} set={setField} />
+                <EF label="ABP — Área Bruta Privativa (m²)" field="area_bruta" form={form} set={setField} type="number" />
+                <EF label="ABD — Área Bruta Dependente (m²)" field="area_bruta_dependente" form={form} set={setField} type="number" />
                 <EF label="Área Útil (m²)" field="area_util" form={form} set={setField} type="number" />
-                <EF label="Área Bruta (m²)" field="area_bruta" form={form} set={setField} type="number" />
                 <EF label="Zona" field="zona" form={form} set={setField} />
                 <EF label="Modelo de Negócio" field="modelo_negocio" form={form} set={setField} type="select" options={['Wholesaling','Fix & Flip','CAEP','Mediação']} />
                 <EF label="Origem" field="origem" form={form} set={setField} type="select" options={['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro']} />
@@ -204,8 +205,9 @@ export function DetailPanel({ type, id, onClose, onSave }) {
                 <Field label="Origem" value={data.origem} />
                 <Field label="Consultor" value={data.nome_consultor} />
                 <Field label="Link" value={data.link ? <a href={data.link} target="_blank" rel="noopener noreferrer" className="text-[#C9A84C] hover:underline truncate block">{data.link === 'OFF MARKET' ? 'OFF MARKET' : 'Ver anúncio'}</a> : '—'} />
+                <Field label="ABP" value={data.area_bruta > 0 ? `${data.area_bruta} m²` : '—'} />
+                <Field label="ABD" value={data.area_bruta_dependente > 0 ? `${data.area_bruta_dependente} m²` : '—'} />
                 <Field label="Área Útil" value={data.area_util > 0 ? `${data.area_util} m²` : '—'} />
-                <Field label="Área Bruta" value={data.area_bruta > 0 ? `${data.area_bruta} m²` : '—'} />
                 <Field label="Data Adicionado" value={data.data_adicionado} />
                 <Field label="Data Chamada" value={data.data_chamada} />
                 <Field label="Data Visita" value={data.data_visita} />
