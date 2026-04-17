@@ -119,10 +119,17 @@ def generate(dest_name, meses):
 
     # ── Remover texto antigo de TODAS as paginas ──
     nome_antigo = "Luís Gouveia"
+    footer_antigo = "Somnium Properties  \u00b7  Proposta de Investimento  \u00b7  Rua do Clube, Coimbra  \u00b7  Abril 2026  \u00b7  Lu\u00eds Gouveia"
     for pn in range(len(fitz_doc)):
         page = fitz_doc[pn]
-        areas = page.search_for(nome_antigo)
-        for area in areas:
+        # 1. Remover footer INTEIRO
+        footer_areas = page.search_for(footer_antigo)
+        for area in footer_areas:
+            bg = get_bg_at(bg_map, pn, area.y0 + 5)
+            page.add_redact_annot(area, text="", fill=bg)
+        # 2. Remover TODAS as ocorrencias restantes do nome (Preparado para, capa, etc.)
+        name_areas = page.search_for(nome_antigo)
+        for area in name_areas:
             bg = get_bg_at(bg_map, pn, area.y0 + 5)
             page.add_redact_annot(area, text="", fill=bg)
         page.apply_redactions()
@@ -138,9 +145,9 @@ def generate(dest_name, meses):
     # ── Pagina 2: remover valores antigos ──
     p = fitz_doc[1]
     removals_p2 = [
-        ("Preparado para:", WHITE_BG),
+        ("Preparado para:", WHITE_BG),  # o main loop ja removeu o nome, limpar o label restante
         ("42.1%", COVER_BG), ("59.7%", COVER_BG), ("base 9 meses", COVER_BG),
-        ("148.063 €", COVER_BG), ("118.451 €", COVER_BG), ("351.937 €", COVER_BG),
+        ("148.063 \u20ac", COVER_BG), ("118.451 \u20ac", COVER_BG), ("351.937 \u20ac", COVER_BG),
         ("9 meses", COVER_BG),  # Prazo de Retencao
     ]
     for text, bg in removals_p2:
