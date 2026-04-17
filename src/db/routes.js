@@ -25,6 +25,7 @@ import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
 import { generateMeetingPDF } from './pdfMeetingReport.js'
 import { ensureLabels, organizeMessage, organizeBatch, autoOrganize, isConfigured as gmailConfigured } from './gmailSync.js'
 import { exportDepartment } from './excelExport.js'
+import { scrapePhotosFromLink } from './linkScraper.js'
 import { generateDocx, getAvailableTypes } from './docxGenerator.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -343,6 +344,26 @@ router.get('/consultores/:id/interacoes', async (req, res) => {
       [req.params.id]
     )
     res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Extrair fotos de link de anuncio ─────────────────────────
+router.post('/imoveis/:id/scrape-fotos', async (req, res) => {
+  try {
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+
+    const url = req.body.url || imovel.link
+    if (!url) return res.status(400).json({ error: 'Nenhum link fornecido. Enviar { url: "..." } ou preencher o campo link do imóvel.' })
+
+    const scraped = await scrapePhotosFromLink(url, req.params.id)
+    if (scraped.length === 0) return res.json({ ok: true, fotos: [], message: 'Nenhuma foto encontrada no link.' })
+
+    const fotos = imovel.fotos ? JSON.parse(imovel.fotos) : []
+    fotos.push(...scraped)
+    await Imoveis.update(req.params.id, { fotos: JSON.stringify(fotos) })
+
+    res.json({ ok: true, extraidas: scraped.length, fotos })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
