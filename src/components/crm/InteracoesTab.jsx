@@ -22,11 +22,13 @@ function formatHoras(h) {
   return `${Math.round(h / 24)}d ${Math.round(h % 24)}h`
 }
 
-export function InteracoesTab({ consultorId, onUpdate }) {
+export function InteracoesTab({ consultorId, onUpdate, controloManual }) {
   const [interacoes, setInteracoes] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ canal: 'Chamada', direcao: 'Enviado', notas: '', data_hora: '' })
+  const [handoff, setHandoff] = useState(!!controloManual)
+  const [togglingAgent, setTogglingAgent] = useState(false)
+  const [form, setForm] = useState({ canal: 'WhatsApp', direcao: 'Enviado', notas: '', data_hora: '' })
   const [saving, setSaving] = useState(false)
 
   async function load() {
@@ -43,24 +45,39 @@ export function InteracoesTab({ consultorId, onUpdate }) {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (!form.notas?.trim()) return
     setSaving(true)
     try {
-      await apiFetch('/api/crm/consultor-interacoes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          consultor_id: consultorId,
-          canal: form.canal,
-          direcao: form.direcao,
-          notas: form.notas || null,
-          data_hora: form.data_hora || new Date().toISOString(),
-        }),
-      })
-      setForm({ canal: 'Chamada', direcao: 'Enviado', notas: '', data_hora: '' })
+      // Se WhatsApp + Enviado → enviar mensagem real pelo Twilio
+      if (form.canal === 'WhatsApp' && form.direcao === 'Enviado') {
+        const r = await apiFetch(`/api/consultores/${consultorId}/enviar-whatsapp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mensagem: form.notas.trim() }),
+        })
+        const data = await r.json()
+        if (!r.ok) throw new Error(data.error || 'Erro ao enviar')
+      } else {
+        // Registo manual (chamada ou resposta recebida)
+        await apiFetch('/api/crm/consultor-interacoes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            consultor_id: consultorId,
+            canal: form.canal,
+            direcao: form.direcao,
+            notas: form.notas || null,
+            data_hora: form.data_hora || new Date().toISOString(),
+          }),
+        })
+      }
+      setForm({ canal: 'WhatsApp', direcao: 'Enviado', notas: '', data_hora: '' })
       setShowForm(false)
       await load()
       if (onUpdate) onUpdate()
-    } catch {}
+    } catch (err) {
+      alert(err.message || 'Erro ao enviar')
+    }
     setSaving(false)
   }
 
@@ -85,8 +102,45 @@ export function InteracoesTab({ consultorId, onUpdate }) {
 
   const inputClass = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300'
 
+  async function toggleAgent() {
+    setTogglingAgent(true)
+    try {
+      const endpoint = handoff ? 'retomar-agente' : 'handoff'
+      await apiFetch(`/api/consultores/${consultorId}/${endpoint}`, { method: 'POST' })
+      setHandoff(!handoff)
+      if (onUpdate) onUpdate()
+    } catch {}
+    setTogglingAgent(false)
+  }
+
   return (
     <div className="space-y-4">
+      {/* Banner handoff */}
+      {handoff && (
+        <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-xl">
+          <div>
+            <p className="text-sm font-medium text-amber-800">Agente pausado — controlo manual activo</p>
+            <p className="text-xs text-amber-600">O agente não responde automaticamente enquanto estiveres em controlo manual.</p>
+          </div>
+          <button onClick={toggleAgent} disabled={togglingAgent}
+            className="px-4 py-2 text-xs font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors shrink-0">
+            {togglingAgent ? '...' : 'Retomar Agente'}
+          </button>
+        </div>
+      )}
+      {!handoff && (
+        <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-xl">
+          <div>
+            <p className="text-sm font-medium text-green-800">Agente activo — respostas automáticas ligadas</p>
+            <p className="text-xs text-green-600">O agente responde automaticamente às mensagens do consultor.</p>
+          </div>
+          <button onClick={toggleAgent} disabled={togglingAgent}
+            className="px-4 py-2 text-xs font-medium rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors shrink-0">
+            {togglingAgent ? '...' : 'Pausar Agente'}
+          </button>
+        </div>
+      )}
+
       {/* Header + stats */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -136,7 +190,9 @@ export function InteracoesTab({ consultorId, onUpdate }) {
             </div>
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Notas</label>
+            <label className="block text-xs text-gray-500 mb-1">
+              {form.canal === 'WhatsApp' && form.direcao === 'Enviado' ? 'Mensagem (será enviada pelo WhatsApp)' : 'Notas'}
+            </label>
             <textarea
               value={form.notas}
               onChange={e => setForm(p => ({ ...p, notas: e.target.value }))}
@@ -146,8 +202,13 @@ export function InteracoesTab({ consultorId, onUpdate }) {
             />
           </div>
           <div className="flex gap-2">
-            <button type="submit" disabled={saving} className="px-4 py-2 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700">
-              {saving ? 'A guardar...' : 'Registar'}
+            <button type="submit" disabled={saving || !form.notas?.trim()}
+              className={`px-4 py-2 text-white text-xs font-medium rounded-lg transition-colors ${
+                form.canal === 'WhatsApp' && form.direcao === 'Enviado'
+                  ? 'bg-green-600 hover:bg-green-700'
+                  : 'bg-indigo-600 hover:bg-indigo-700'
+              }`}>
+              {saving ? 'A enviar...' : form.canal === 'WhatsApp' && form.direcao === 'Enviado' ? 'Enviar WhatsApp' : 'Registar'}
             </button>
             <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-100 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-200">
               Cancelar
@@ -162,37 +223,46 @@ export function InteracoesTab({ consultorId, onUpdate }) {
       ) : interacoes.length === 0 ? (
         <div className="text-center py-8 text-gray-400 text-sm">Sem interacções registadas</div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3 bg-gray-50 rounded-xl p-4" style={{ minHeight: '200px' }}>
           {interacoes.map(i => {
-            const CanalIcon = CANAL_ICON[i.canal] || Phone
-            const DirecaoIcon = DIRECAO_ICON[i.direcao] || ArrowUpRight
-            const dirColor = DIRECAO_COLOR[i.direcao] || 'text-gray-600 bg-gray-50'
+            const isEnviado = i.direcao === 'Enviado'
+            const isAgente = (i.notas || '').includes('[AGENTE]') || (i.notas || '').includes('[FOLLOW-UP') || (i.notas || '').includes('[REACTIVAÇÃO')
             const tempoResp = tempoRespostaMap[i.id]
             const dataHora = i.data_hora ? new Date(i.data_hora) : null
             const dataStr = dataHora
               ? `${dataHora.toLocaleDateString('pt-PT')} ${dataHora.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}`
               : '—'
+            // Limpar prefixos do agente para mostrar so o texto
+            const textoLimpo = (i.notas || '').replace(/^\[AGENTE\]\s*/, '').replace(/^\[FOLLOW-UP AUTO\]\s*/, '').replace(/^\[REACTIVAÇÃO\]\s*/, '')
 
             return (
-              <div key={i.id} className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-100 hover:border-gray-200 transition-colors">
-                <div className={`flex items-center justify-center w-8 h-8 rounded-full shrink-0 ${dirColor}`}>
-                  <DirecaoIcon className="w-4 h-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${dirColor}`}>
-                      <CanalIcon className="w-3 h-3" />
-                      {i.canal} — {i.direcao === 'Enviado' ? 'Enviado por nós' : 'Resposta do consultor'}
-                    </span>
+              <div key={i.id} className={`flex ${isEnviado ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
+                  isEnviado
+                    ? isAgente ? 'bg-amber-50 border border-amber-200' : 'bg-indigo-50 border border-indigo-200'
+                    : 'bg-white border border-gray-200'
+                }`}>
+                  {/* Header — quem enviou */}
+                  <div className="flex items-center gap-2 mb-1">
+                    {isEnviado ? (
+                      <span className={`text-xs font-medium ${isAgente ? 'text-amber-600' : 'text-indigo-600'}`}>
+                        {isAgente ? 'Agente Alexandre' : 'Tu'} · {i.canal}
+                      </span>
+                    ) : (
+                      <span className="text-xs font-medium text-gray-700">
+                        Consultor · {i.canal}
+                      </span>
+                    )}
                     {tempoResp != null && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-50 text-purple-600">
-                        <Clock className="w-3 h-3" />
-                        Respondeu em {formatHoras(tempoResp)}
+                      <span className="text-xs text-purple-500">
+                        ⏱ {formatHoras(tempoResp)}
                       </span>
                     )}
                   </div>
-                  {i.notas && <p className="text-sm text-gray-600 mt-1">{i.notas}</p>}
-                  <p className="text-xs text-gray-400 mt-1">{dataStr}</p>
+                  {/* Texto da mensagem */}
+                  {textoLimpo && <p className="text-sm text-gray-800 whitespace-pre-line">{textoLimpo}</p>}
+                  {/* Data/hora */}
+                  <p className="text-xs text-gray-400 mt-1 text-right">{dataStr}</p>
                 </div>
               </div>
             )

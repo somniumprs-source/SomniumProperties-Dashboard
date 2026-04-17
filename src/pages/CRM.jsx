@@ -193,7 +193,7 @@ function RelatorioConsultores() {
                       <td className="py-2 px-3 text-right font-mono">{c.taxaQualidade}%</td>
                       <td className="py-2 px-3 text-right font-mono">{c.volume}</td>
                       <td className="py-2 px-3 text-right font-mono">{c.tempoResposta != null ? `${c.tempoResposta}h` : '—'}</td>
-                      <td className="py-2 px-3"><Badge text={c.estatuto} colorMap={CONS_ESTATUTO_COLOR} /></td>
+                      <td className="py-3 px-3"><Badge text={c.estatuto} colorMap={CONS_ESTATUTO_COLOR} /></td>
                       <td className="py-2 px-3 text-gray-500">{c.contacto || '—'}</td>
                     </tr>
                   ))}
@@ -203,6 +203,147 @@ function RelatorioConsultores() {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ── Relatório Semanal de Investidores ────────────────────────
+function RelatorioInvestidores() {
+  const [report, setReport] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    apiFetch('/api/crm/relatorio/investidores').then(r => r.json()).then(setReport).catch(() => {}).finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return <div className="text-center py-12 text-gray-400">A gerar relatório...</div>
+  if (!report) return <div className="text-center py-12 text-gray-400">Erro ao carregar relatório</div>
+
+  const classeColor = { A: 'bg-green-100 text-green-700 border-green-200', B: 'bg-blue-100 text-blue-700 border-blue-200', C: 'bg-yellow-100 text-yellow-700 border-yellow-200', D: 'bg-gray-100 text-gray-600 border-gray-200', 'Sem classificação': 'bg-gray-50 text-gray-500 border-gray-200' }
+  const classeLabel = { A: 'Parceiro', B: 'Qualificado', C: 'Em qualificação', D: 'Potencial', 'Sem classificação': 'Por classificar' }
+  const m = report.metricas_globais
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="text-lg font-bold text-gray-800">Relatório Semanal de Investidores</h2>
+        <p className="text-xs text-gray-400">{report.semana} — Gerado: {new Date(report.gerado_em).toLocaleString('pt-PT')}</p>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
+          <p className="text-2xl font-bold text-gray-800">{report.total_investidores}</p>
+          <p className="text-xs text-gray-500">Total</p>
+        </div>
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
+          <p className="text-2xl font-bold" style={{ color: '#C9A84C' }}>{EUR(m.capital_total)}</p>
+          <p className="text-xs text-gray-500">Capital Pool</p>
+        </div>
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
+          <p className="text-2xl font-bold text-green-600">{m.taxa_conversao}%</p>
+          <p className="text-xs text-gray-500">Taxa Conversão</p>
+        </div>
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
+          <p className="text-2xl font-bold text-indigo-600">{m.com_reuniao}</p>
+          <p className="text-xs text-gray-500">Com Reunião</p>
+        </div>
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
+          <p className="text-2xl font-bold text-red-600">{report.alertas.sem_contacto_30d}</p>
+          <p className="text-xs text-gray-500">Sem Contacto 30d</p>
+        </div>
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
+          <p className="text-2xl font-bold text-orange-600">{m.em_parceria}</p>
+          <p className="text-xs text-gray-500">Em Parceria</p>
+        </div>
+      </div>
+
+      {/* Distribuição por classificação */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Distribuição por Classificação</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          {['A', 'B', 'C', 'D', 'Sem classificação'].map(cl => (
+            <div key={cl} className={`rounded-xl p-4 text-center border ${classeColor[cl]}`}>
+              <p className="text-3xl font-bold">{report.distribuicao[cl] || 0}</p>
+              <p className="text-xs font-medium mt-1">{cl === 'Sem classificação' ? '—' : `Classe ${cl}`}</p>
+              <p className="text-xs opacity-70">{classeLabel[cl]}</p>
+            </div>
+          ))}
+        </div>
+        <div className="flex rounded-full overflow-hidden h-3 mt-4">
+          {['A', 'B', 'C', 'D', 'Sem classificação'].map(cl => {
+            const count = report.distribuicao[cl] || 0
+            const pct = report.total_investidores > 0 ? (count / report.total_investidores * 100) : 0
+            const colors = { A: 'bg-green-500', B: 'bg-blue-500', C: 'bg-yellow-500', D: 'bg-gray-300', 'Sem classificação': 'bg-gray-200' }
+            return pct > 0 ? <div key={cl} className={colors[cl]} style={{ width: `${pct}%` }} title={`${cl}: ${count}`} /> : null
+          })}
+        </div>
+      </div>
+
+      {/* Pipeline por status */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Pipeline por Status</h3>
+        <div className="space-y-2">
+          {Object.entries(report.por_status).filter(([,c]) => c > 0).map(([status, count]) => {
+            const pct = report.total_investidores > 0 ? Math.round(count / report.total_investidores * 100) : 0
+            return (
+              <div key={status} className="flex items-center gap-3">
+                <span className="text-xs text-gray-600 w-40 shrink-0 truncate">{status}</span>
+                <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
+                  <div className="h-full rounded-full flex items-center px-2" style={{ width: `${Math.max(pct, 8)}%`, backgroundColor: '#C9A84C' }}>
+                    <span className="text-[10px] font-bold text-white">{count}</span>
+                  </div>
+                </div>
+                <span className="text-xs text-gray-400 w-10 text-right">{pct}%</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Top 5 por capital */}
+      {report.top5?.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Top 5 Investidores (por capital)</h3>
+          <div className="space-y-2">
+            {report.top5.map((inv, i) => (
+              <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
+                <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                  style={{ backgroundColor: i === 0 ? '#C9A84C' : i === 1 ? '#9CA3AF' : i === 2 ? '#B87333' : '#E5E7EB', color: i > 2 ? '#6B7280' : '#fff' }}>
+                  {i + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800">{inv.nome}</p>
+                  <p className="text-xs text-gray-400">{inv.status}</p>
+                </div>
+                <span className="text-sm font-mono font-bold" style={{ color: '#C9A84C' }}>{EUR(inv.capital)}</span>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${classeColor[inv.classificacao] || classeColor['Sem classificação']}`}>{inv.classificacao || '—'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Alertas */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Alertas</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          {[
+            { label: 'Sem contacto 30d', value: report.alertas.sem_contacto_30d, color: 'text-red-600' },
+            { label: 'Sem reunião', value: report.alertas.sem_reuniao, color: 'text-orange-600' },
+            { label: 'Sem capital', value: report.alertas.sem_capital, color: 'text-yellow-600' },
+            { label: 'Sem classificação', value: report.alertas.sem_classificacao, color: 'text-gray-600' },
+            { label: 'NDA pendente', value: report.alertas.nda_pendente, color: 'text-indigo-600' },
+          ].map(a => (
+            <div key={a.label} className="text-center p-2 rounded-lg bg-gray-50">
+              <p className={`text-xl font-bold ${a.color}`}>{a.value}</p>
+              <p className="text-[10px] text-gray-500">{a.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
@@ -370,7 +511,7 @@ export function CRM() {
   // Kanban config por tab
   const KANBAN_CONFIG = {
     'Imóveis': {
-      columns: ['Adicionado','Chamada Não Atendida','Pendentes','Pré-aprovação','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'],
+      columns: ['Pré-aprovação','Adicionado','Chamada Não Atendida','Pendentes','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'],
       groupField: 'estado',
       renderCard: (item) => (
         <div>
@@ -429,6 +570,7 @@ export function CRM() {
           <p className="text-xs text-gray-500 mt-1">{item.categoria ?? '—'}</p>
           {item.lucro_estimado > 0 && <p className="text-xs font-mono text-indigo-600 mt-1">Est. {EUR(item.lucro_estimado)}</p>}
           {item.lucro_real > 0 && <p className="text-xs font-mono text-green-600">Real {EUR(item.lucro_real)}</p>}
+          {item.imovel_id && <p className="text-[10px] text-[#C9A84C] mt-1">→ ver imóvel</p>}
         </div>
       ),
     },
@@ -551,7 +693,7 @@ export function CRM() {
           <input
             type="text" placeholder={`Pesquisar ${tab.toLowerCase()}...`}
             value={search} onChange={e => handleSearch(e.target.value)}
-            className="w-full sm:flex-1 px-3 sm:px-4 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            className="w-full sm:flex-1 px-4 py-3 sm:py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
           />
           <div className="flex gap-2 items-center">
             {hasKanban && (
@@ -564,16 +706,18 @@ export function CRM() {
                   className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'kanban' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
                   Kanban
                 </button>
-                {tab === 'Consultores' && (<>
+                {tab === 'Consultores' && (
                   <button onClick={() => setView('followups')}
                     className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'followups' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
                     Follow-ups
                   </button>
+                )}
+                {(tab === 'Consultores' || tab === 'Investidores') && (
                   <button onClick={() => setView('relatorio')}
                     className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'relatorio' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
                     Relatório
                   </button>
-                </>)}
+                )}
               </div>
             )}
             <button onClick={() => setEditing({})} className="px-3 sm:px-4 py-2 bg-indigo-600 text-white text-xs sm:text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors whitespace-nowrap">
@@ -605,9 +749,12 @@ export function CRM() {
             <FollowUpView data={data} onView={setDetail} onDelete={handleDelete} />
           )}
 
-          {/* Relatório View (Consultores only) */}
+          {/* Relatório View */}
           {!loading && editing === null && view === 'relatorio' && tab === 'Consultores' && (
             <RelatorioConsultores />
+          )}
+          {!loading && editing === null && view === 'relatorio' && tab === 'Investidores' && (
+            <RelatorioInvestidores />
           )}
 
           {/* Kanban View */}
@@ -632,6 +779,14 @@ export function CRM() {
               onCardClick={(id) => {
                 if (['Imóveis', 'Investidores', 'Consultores'].includes(tab)) {
                   setDetail(id)
+                } else if (tab === 'Negócios') {
+                  const item = data.find(i => i.id === id)
+                  if (item?.imovel_id) {
+                    setTab('Imóveis')
+                    setTimeout(() => setDetail(item.imovel_id), 100)
+                  } else if (item) {
+                    setEditing(item)
+                  }
                 } else {
                   const item = data.find(i => i.id === id)
                   if (item) setEditing(item)
@@ -650,11 +805,12 @@ export function CRM() {
           )}
           {!loading && editing === null && (view === 'table' || !hasKanban) && data.length > 0 && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto -webkit-overflow-scrolling-touch">
                 {tab === 'Imóveis' && <ImoveisTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
                 {tab === 'Investidores' && <InvestidoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
                 {tab === 'Consultores' && <ConsultoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
-                {tab === 'Negócios' && <NegociosTable data={data} onEdit={setEditing} onDelete={handleDelete} />}
+                {tab === 'Negócios' && <NegociosTable data={data} onEdit={setEditing} onDelete={handleDelete}
+                  onViewImovel={(imovelId) => { setTab('Imóveis'); setTimeout(() => setDetail(imovelId), 100) }} />}
                 {tab === 'Empreiteiros' && <GenericTable data={data} onEdit={setEditing} onDelete={handleDelete}
                   columns={['nome','empresa','estado','zona','especializacao','score','custo_medio_m2']}
                   labels={{ nome:'Nome', empresa:'Empresa', estado:'Estado', zona:'Zona', especializacao:'Especialização', score:'Score', custo_medio_m2:'Custo/m²' }} />}
@@ -670,14 +826,62 @@ export function CRM() {
   )
 }
 
+// ── Sorting ──────────────────────────────────────────────────
+
+function useSortableData(data) {
+  const [sortField, setSortField] = useState(null)
+  const [sortDir, setSortDir] = useState('asc') // 'asc' | 'desc'
+
+  function onSort(field) {
+    if (sortField === field) {
+      if (sortDir === 'asc') setSortDir('desc')
+      else { setSortField(null); setSortDir('asc') } // reset
+    } else {
+      setSortField(field)
+      setSortDir('asc')
+    }
+  }
+
+  const sorted = [...data].sort((a, b) => {
+    if (!sortField) return 0
+    let va = a[sortField], vb = b[sortField]
+    // Nulls go last
+    if (va == null && vb == null) return 0
+    if (va == null) return 1
+    if (vb == null) return -1
+    // Numbers
+    if (typeof va === 'number' && typeof vb === 'number') return sortDir === 'asc' ? va - vb : vb - va
+    // Try parse as number
+    const na = parseFloat(va), nb = parseFloat(vb)
+    if (!isNaN(na) && !isNaN(nb)) return sortDir === 'asc' ? na - nb : nb - na
+    // Strings
+    const sa = String(va).toLowerCase(), sb = String(vb).toLowerCase()
+    const cmp = sa.localeCompare(sb, 'pt')
+    return sortDir === 'asc' ? cmp : -cmp
+  })
+
+  return { sorted, sortField, sortDir, onSort }
+}
+
+function Th({ field, label, sortField, sortDir, onSort, align }) {
+  const active = sortField === field
+  const arrow = active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
+  return (
+    <th onClick={() => onSort(field)}
+      className={`${align === 'right' ? 'text-right' : 'text-left'} py-3 px-3 cursor-pointer select-none hover:text-indigo-600 active:text-indigo-800 transition-colors whitespace-nowrap ${active ? 'text-indigo-700' : ''}`}>
+      {label}{arrow}
+    </th>
+  )
+}
+
 // ── Tables ────────────────────────────────────────────────────
 
 function ActionButtons({ item, onEdit, onDelete, onView }) {
   return (
-    <div className="flex gap-1">
-      {onView && <button onClick={() => onView(item.id)} className="px-2 py-1 text-xs bg-gray-50 text-gray-600 rounded hover:bg-gray-100">Ver</button>}
-      <button onClick={() => onEdit(item)} className="px-2 py-1 text-xs bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100">Abrir</button>
-      <button onClick={() => onDelete(item.id)} className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Apagar</button>
+    <div className="flex gap-1.5">
+      {onView && <button onClick={() => onView(item.id)} className="px-3 py-2 min-h-[36px] text-xs bg-gray-50 text-gray-600 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors">Ver</button>}
+      <button onClick={() => onEdit(item)} className="px-3 py-2 min-h-[36px] text-xs bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 active:bg-indigo-200 transition-colors">Abrir</button>
+      <button onClick={() => onDelete(item.id)} className="px-3 py-2 min-h-[36px] text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 active:bg-red-200 transition-colors">Apagar</button>
     </div>
   )
 }
@@ -691,58 +895,70 @@ function ClickableName({ name, item, onEdit }) {
 }
 
 function ImoveisTable({ data, onEdit, onDelete, onView }) {
+  const { sorted, sortField, sortDir, onSort } = useSortableData(data)
+  const sp = { sortField, sortDir, onSort }
   return (
     <table className="min-w-[800px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
-        <th className="text-left py-2 px-3">Imóvel</th><th className="text-left py-2 px-3">Estado</th>
-        <th className="text-left py-2 px-3">Zona</th><th className="text-right py-2 px-3">Ask Price</th>
-        <th className="text-right py-2 px-3">ROI</th><th className="text-left py-2 px-3">Origem</th>
-        <th className="text-left py-2 px-3">Data</th><th className="py-2 px-3"></th>
+        <Th field="nome" label="Imóvel" {...sp} />
+        <Th field="estado" label="Estado" {...sp} />
+        <Th field="zona" label="Zona" {...sp} />
+        <Th field="ask_price" label="Ask Price" align="right" {...sp} />
+        <Th field="roi" label="ROI" align="right" {...sp} />
+        <Th field="origem" label="Origem" {...sp} />
+        <Th field="data_adicionado" label="Data" {...sp} />
+        <th className="py-3 px-3"></th>
       </tr></thead>
       <tbody>
-        {data.map(r => (
+        {sorted.map(r => (
           <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
-            <td className="py-2 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
-            <td className="py-2 px-3"><Badge text={r.estado} colorMap={IMOVEL_ESTADO_COLOR} /></td>
+            <td className="py-3 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
+            <td className="py-3 px-3"><Badge text={r.estado} colorMap={IMOVEL_ESTADO_COLOR} /></td>
             <td className="py-2 px-3 text-gray-500">{r.zona ?? '—'}</td>
             <td className="py-2 px-3 text-right font-mono">{r.ask_price > 0 ? EUR(r.ask_price) : '—'}</td>
             <td className="py-2 px-3 text-right font-mono">{r.roi > 0 ? `${r.roi}%` : '—'}</td>
             <td className="py-2 px-3 text-gray-500">{r.origem ?? '—'}</td>
             <td className="py-2 px-3 text-gray-400">{fmtDate(r.data_adicionado)}</td>
-            <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
+            <td className="py-3 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
           </tr>
         ))}
-        {!data.length && <tr><td colSpan={8} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
+        {!sorted.length && <tr><td colSpan={8} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
       </tbody>
     </table>
   )
 }
 
 function InvestidoresTable({ data, onEdit, onDelete, onView }) {
+  const { sorted, sortField, sortDir, onSort } = useSortableData(data)
+  const sp = { sortField, sortDir, onSort }
   return (
     <table className="min-w-[900px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
-        <th className="text-left py-2 px-3">Nome</th><th className="py-2 px-3">Class.</th>
-        <th className="text-left py-2 px-3">Status</th><th className="text-left py-2 px-3">Origem</th>
-        <th className="text-right py-2 px-3">Capital Max</th><th className="py-2 px-3">NDA</th>
-        <th className="text-left py-2 px-3">Contacto</th><th className="text-left py-2 px-3">1º Contacto</th>
-        <th className="py-2 px-3"></th>
+        <Th field="nome" label="Nome" {...sp} />
+        <Th field="classificacao" label="Class." {...sp} />
+        <Th field="status" label="Status" {...sp} />
+        <Th field="origem" label="Origem" {...sp} />
+        <Th field="capital_max" label="Capital Max" align="right" {...sp} />
+        <Th field="nda_assinado" label="NDA" {...sp} />
+        <Th field="telemovel" label="Contacto" {...sp} />
+        <Th field="data_primeiro_contacto" label="1º Contacto" {...sp} />
+        <th className="py-3 px-3"></th>
       </tr></thead>
       <tbody>
-        {data.map(r => (
+        {sorted.map(r => (
           <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
-            <td className="py-2 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
+            <td className="py-3 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
             <td className="py-2 px-3 text-center"><ClassBadge cls={r.classificacao} /></td>
-            <td className="py-2 px-3"><Badge text={r.status} colorMap={INV_STATUS_COLOR} /></td>
+            <td className="py-3 px-3"><Badge text={r.status} colorMap={INV_STATUS_COLOR} /></td>
             <td className="py-2 px-3 text-gray-500">{r.origem ?? '—'}</td>
             <td className="py-2 px-3 text-right font-mono">{r.capital_max > 0 ? EUR(r.capital_max) : '—'}</td>
             <td className="py-2 px-3 text-center">{r.nda_assinado ? '✓' : '—'}</td>
             <td className="py-2 px-3 text-gray-500">{r.telemovel ? <a href={`tel:${r.telemovel}`} className="text-green-600 hover:underline">{r.telemovel}</a> : r.email ? <a href={`mailto:${r.email}`} className="text-blue-600 hover:underline">{r.email}</a> : '—'}</td>
             <td className="py-2 px-3 text-gray-400">{fmtDate(r.data_primeiro_contacto)}</td>
-            <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
+            <td className="py-3 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
           </tr>
         ))}
-        {!data.length && <tr><td colSpan={9} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
+        {!sorted.length && <tr><td colSpan={9} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
       </tbody>
     </table>
   )
@@ -757,23 +973,25 @@ function AlertDot({ status }) {
 }
 
 function ConsultoresTable({ data, onEdit, onDelete, onView }) {
+  const { sorted, sortField, sortDir, onSort } = useSortableData(data)
+  const sp = { sortField, sortDir, onSort }
   return (
     <table className="min-w-[1100px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
         <th className="w-6 py-2 px-1"></th>
-        <th className="text-left py-2 px-3">Nome</th>
-        <th className="text-left py-2 px-3">Agência</th>
-        <th className="text-right py-2 px-3">Score</th>
-        <th className="text-right py-2 px-3">Imóveis</th>
-        <th className="text-right py-2 px-3">Taxa Qualidade</th>
-        <th className="text-right py-2 px-3">Tempo Resposta</th>
-        <th className="text-left py-2 px-3">Estado</th>
-        <th className="text-left py-2 px-3">Próx. Follow-up</th>
-        <th className="text-right py-2 px-3">Dias s/ contacto</th>
-        <th className="py-2 px-3"></th>
+        <Th field="nome" label="Nome" {...sp} />
+        <Th field="_agencia" label="Agência" {...sp} />
+        <Th field="score_prioridade" label="Score" align="right" {...sp} />
+        <Th field="_totalImoveis" label="Imóveis" align="right" {...sp} />
+        <Th field="taxa_qualidade" label="Taxa Qualidade" align="right" {...sp} />
+        <Th field="tempo_medio_resposta" label="Tempo Resposta" align="right" {...sp} />
+        <Th field="estado_avaliacao" label="Estado" {...sp} />
+        <Th field="data_proximo_follow_up" label="Próx. Follow-up" {...sp} />
+        <Th field="_diasSemContacto" label="Dias s/ contacto" align="right" {...sp} />
+        <th className="py-3 px-3"></th>
       </tr></thead>
       <tbody>
-        {data.map(r => {
+        {sorted.map(r => {
           const agencia = r._agencia || (() => { try { return JSON.parse(r.imobiliaria || '[]').join(', ') } catch { return '—' } })()
           const tempoResp = r.tempo_medio_resposta != null
             ? (r.tempo_medio_resposta < 1 ? `${Math.round(r.tempo_medio_resposta * 60)}min` : r.tempo_medio_resposta < 24 ? `${Math.round(r.tempo_medio_resposta)}h` : `${Math.round(r.tempo_medio_resposta / 24)}d`)
@@ -781,71 +999,84 @@ function ConsultoresTable({ data, onEdit, onDelete, onView }) {
           return (
             <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
               <td className="py-2 px-1 text-center"><AlertDot status={r._alertStatus} /></td>
-              <td className="py-2 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
+              <td className="py-3 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
               <td className="py-2 px-3 text-gray-500">{agencia}</td>
               <td className="py-2 px-3 text-right font-mono font-semibold" style={{ color: '#C9A84C' }}>{r.score_prioridade > 0 ? r.score_prioridade : '—'}</td>
               <td className="py-2 px-3 text-right font-mono">{r._totalImoveis ?? r.imoveis_enviados ?? '—'}</td>
               <td className="py-2 px-3 text-right font-mono">{r.taxa_qualidade > 0 ? `${r.taxa_qualidade}%` : '—'}</td>
               <td className="py-2 px-3 text-right font-mono">{tempoResp}</td>
-              <td className="py-2 px-3"><Badge text={r.estado_avaliacao || 'Em avaliação'} colorMap={CONS_ESTADO_AVALIACAO_COLOR} /></td>
+              <td className="py-3 px-3"><Badge text={r.estado_avaliacao || 'Em avaliação'} colorMap={CONS_ESTADO_AVALIACAO_COLOR} /></td>
               <td className="py-2 px-3 text-gray-400">{fmtDate(r.data_proximo_follow_up)}</td>
               <td className="py-2 px-3 text-right font-mono">{r._diasSemContacto != null ? `${r._diasSemContacto}d` : '—'}</td>
-              <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
+              <td className="py-3 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
             </tr>
           )
         })}
-        {!data.length && <tr><td colSpan={11} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
+        {!sorted.length && <tr><td colSpan={11} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
       </tbody>
     </table>
   )
 }
 
-function NegociosTable({ data, onEdit, onDelete }) {
+function NegociosTable({ data, onEdit, onDelete, onViewImovel }) {
+  const { sorted, sortField, sortDir, onSort } = useSortableData(data)
+  const sp = { sortField, sortDir, onSort }
   return (
     <table className="min-w-[700px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
-        <th className="text-left py-2 px-3">Negócio</th><th className="text-left py-2 px-3">Categoria</th>
-        <th className="text-left py-2 px-3">Fase</th><th className="text-right py-2 px-3">Lucro Est.</th>
-        <th className="text-right py-2 px-3">Lucro Real</th><th className="text-left py-2 px-3">Data</th>
-        <th className="py-2 px-3"></th>
+        <Th field="movimento" label="Negócio" {...sp} />
+        <Th field="categoria" label="Categoria" {...sp} />
+        <Th field="fase" label="Fase" {...sp} />
+        <Th field="lucro_estimado" label="Lucro Est." align="right" {...sp} />
+        <Th field="lucro_real" label="Lucro Real" align="right" {...sp} />
+        <Th field="data" label="Data" {...sp} />
+        <th className="py-3 px-3"></th>
       </tr></thead>
       <tbody>
-        {data.map(r => (
-          <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
-            <td className="py-2 px-3"><ClickableName name={r.movimento} item={r} onEdit={onEdit} /></td>
-            <td className="py-2 px-3"><Badge text={r.categoria} colorMap={NEG_CAT_COLOR} /></td>
-            <td className="py-2 px-3"><Badge text={r.fase} colorMap={NEG_FASE_COLOR} /></td>
+        {sorted.map(r => (
+          <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
+            onClick={() => r.imovel_id && onViewImovel?.(r.imovel_id)}>
+            <td className="py-3 px-3">
+              <span className={`font-medium ${r.imovel_id ? 'text-[#C9A84C] hover:underline' : 'text-gray-800'}`}>
+                {r.movimento}
+              </span>
+              {r.imovel_id && <span className="text-[10px] text-gray-300 ml-1.5">→ ver imóvel</span>}
+            </td>
+            <td className="py-3 px-3"><Badge text={r.categoria} colorMap={NEG_CAT_COLOR} /></td>
+            <td className="py-3 px-3"><Badge text={r.fase} colorMap={NEG_FASE_COLOR} /></td>
             <td className="py-2 px-3 text-right font-mono text-indigo-600">{EUR(r.lucro_estimado)}</td>
             <td className="py-2 px-3 text-right font-mono text-green-600">{r.lucro_real > 0 ? EUR(r.lucro_real) : '—'}</td>
             <td className="py-2 px-3 text-gray-400">{fmtDate(r.data)}</td>
-            <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} /></td>
+            <td className="py-2 px-3" onClick={e => e.stopPropagation()}><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} /></td>
           </tr>
         ))}
-        {!data.length && <tr><td colSpan={7} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
+        {!sorted.length && <tr><td colSpan={7} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
       </tbody>
     </table>
   )
 }
 
 function GenericTable({ data, onEdit, onDelete, columns, labels }) {
+  const { sorted, sortField, sortDir, onSort } = useSortableData(data)
+  const sp = { sortField, sortDir, onSort }
   return (
     <table className="min-w-[700px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
-        {columns.map(c => <th key={c} className="text-left py-2 px-3">{labels[c] || c}</th>)}
-        <th className="py-2 px-3"></th>
+        {columns.map(c => <Th key={c} field={c} label={labels[c] || c} {...sp} />)}
+        <th className="py-3 px-3"></th>
       </tr></thead>
       <tbody>
-        {data.map(r => (
+        {sorted.map(r => (
           <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
             {columns.map(c => (
               <td key={c} className="py-2 px-3 text-gray-600">
                 {c === columns[0] ? <ClickableName name={r[c]} item={r} onEdit={onEdit} /> : (r[c] ?? '—')}
               </td>
             ))}
-            <td className="py-2 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} /></td>
+            <td className="py-3 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} /></td>
           </tr>
         ))}
-        {!data.length && <tr><td colSpan={columns.length + 1} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
+        {!sorted.length && <tr><td colSpan={columns.length + 1} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
       </tbody>
     </table>
   )

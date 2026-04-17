@@ -74,6 +74,11 @@ export function CAEPParcerias({ analise, onUpdate }) {
         </div>
       </div>
 
+      {/* Info split */}
+      <p className="text-xs text-gray-400">
+        Somnium: <strong className="text-gray-600">{config.perc_somnium}%</strong> · Investidores: <strong className="text-gray-600">{100 - config.perc_somnium}%</strong> distribuído proporcionalmente ao capital de cada um
+      </p>
+
       {/* Barra de capital */}
       <div>
         <div className="flex justify-between text-xs mb-1">
@@ -103,9 +108,10 @@ export function CAEPParcerias({ analise, onUpdate }) {
                     className="w-full border rounded px-2 py-1 font-mono" />
                 </div>
                 <div>
-                  <label className="text-gray-400">% Lucro</label>
-                  <input type="number" value={inv.perc_lucro || ''} onChange={e => updateInvestidor(idx, 'perc_lucro', parseFloat(e.target.value) || 0)}
-                    className="w-full border rounded px-2 py-1 font-mono" />
+                  <label className="text-gray-400">% do pool</label>
+                  <p className="w-full border rounded px-2 py-1 font-mono bg-gray-50 text-gray-600">
+                    {capitalTotal > 0 ? ((parseFloat(inv.capital) || 0) / capitalTotal * 100).toFixed(1) : '0.0'}%
+                  </p>
                 </div>
                 <div>
                   <label className="text-gray-400">Tipo</label>

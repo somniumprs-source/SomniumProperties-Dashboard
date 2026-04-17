@@ -6,6 +6,7 @@ import {
 import { Upload, X, FileText, Image, Trash2, Plus, Filter, ArrowUpDown } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { KPICard } from '../components/dashboard/KPICard.jsx'
+import { apiFetch } from '../lib/api.js'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const EUR2 = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0)
@@ -51,25 +52,21 @@ export function Financeiro() {
   async function load() {
     setLoading(true); setError(null)
     try {
-      const [kr, dr, cr, pr, ar, nr, dsr, agr, rr] = await Promise.all([
-        fetch('/api/kpis/financeiro'),
-        fetch('/api/financeiro/despesas'),
-        fetch('/api/financeiro/cashflow'),
-        fetch('/api/financeiro/projecao'),
-        fetch('/api/crm/analises-kpis'),
-        fetch('/api/crm/negocios?limit=200'),
-        fetch('/api/crm/despesas?limit=200'),
-        fetch('/api/financeiro/aging'),
-        fetch('/api/financeiro/rentabilidade'),
-      ])
-      if (!kr.ok || !dr.ok || !cr.ok) throw new Error('Erro no servidor')
+      const safe = (promise) => promise.then(r => r.ok ? r.json() : null).catch(() => null)
       const [k, d, c, p, a, n, ds, ag, re] = await Promise.all([
-        kr.json(), dr.json(), cr.json(), pr.ok ? pr.json() : null, ar.ok ? ar.json() : null,
-        nr.json(), dsr.json(), agr.ok ? agr.json() : null, rr.ok ? rr.json() : null,
+        safe(apiFetch('/api/kpis/financeiro')),
+        safe(apiFetch('/api/financeiro/despesas')),
+        safe(apiFetch('/api/financeiro/cashflow')),
+        safe(apiFetch('/api/financeiro/projecao')),
+        safe(apiFetch('/api/crm/analises-kpis')),
+        safe(apiFetch('/api/crm/negocios?limit=200')),
+        safe(apiFetch('/api/crm/despesas?limit=200')),
+        safe(apiFetch('/api/financeiro/aging')),
+        safe(apiFetch('/api/financeiro/rentabilidade')),
       ])
-      if (k.error) throw new Error(k.error)
+      if (!k) throw new Error('Erro ao carregar dados financeiros')
       setKpis(k); setDespesas(d); setCashflow(c); setProjecao(p); setAnalises(a)
-      setCrmNegocios(n.data ?? []); setCrmDespesas(ds.data ?? [])
+      setCrmNegocios(n?.data ?? []); setCrmDespesas(ds?.data ?? [])
       setAging(ag); setRent(re)
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
@@ -79,15 +76,23 @@ export function Financeiro() {
     try {
       const isNew = !form.id
       const url = isNew ? '/api/crm/negocios' : `/api/crm/negocios/${form.id}`
-      const r = await fetch(url, { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
-      if (!r.ok) throw new Error('Erro ao guardar')
-      setEditingNeg(null); load()
-    } catch (e) { setError(e.message) }
+      const r = await apiFetch(url, { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        throw new Error(err.error || `Erro ${r.status}`)
+      }
+      setEditingNeg(null)
+      setError(null)
+      load()
+    } catch (e) {
+      console.error('[saveNegocio]', e)
+      setError(e.message)
+    }
   }
 
   async function deleteNegocio(id) {
     if (!confirm('Apagar este negócio?')) return
-    await fetch(`/api/crm/negocios/${id}`, { method: 'DELETE' })
+    await apiFetch(`/api/crm/negocios/${id}`, { method: 'DELETE' })
     load()
   }
 
@@ -95,15 +100,23 @@ export function Financeiro() {
     try {
       const isNew = !form.id
       const url = isNew ? '/api/crm/despesas' : `/api/crm/despesas/${form.id}`
-      const r = await fetch(url, { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
-      if (!r.ok) throw new Error('Erro ao guardar')
-      setEditingDesp(null); load()
-    } catch (e) { setError(e.message) }
+      const r = await apiFetch(url, { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        throw new Error(err.error || `Erro ${r.status}`)
+      }
+      setEditingDesp(null)
+      setError(null)
+      load()
+    } catch (e) {
+      console.error('[saveDespesa]', e)
+      setError(e.message)
+    }
   }
 
   async function deleteDespesa(id) {
     if (!confirm('Apagar esta despesa?')) return
-    await fetch(`/api/crm/despesas/${id}`, { method: 'DELETE' })
+    await apiFetch(`/api/crm/despesas/${id}`, { method: 'DELETE' })
     load()
   }
 
@@ -1080,14 +1093,21 @@ const NEG_FASES = ['Fase de obras', 'Fase de venda', 'Vendido']
 
 function NegocioForm({ item, onSave, onCancel }) {
   const isNew = !item.id
-  // Normalizar: aceitar tanto snake_case (DB) como camelCase (API mapped)
-  const initPag = item.pagamentos_faseados ?? item.pagamentosFaseados ?? '[]'
+  // Normalizar camelCase → snake_case (financeiro API vs CRM)
+  const normalized = { ...item }
+  if (normalized.lucroEstimado !== undefined && normalized.lucro_estimado === undefined) normalized.lucro_estimado = normalized.lucroEstimado
+  if (normalized.lucroReal !== undefined && normalized.lucro_real === undefined) normalized.lucro_real = normalized.lucroReal
+  if (normalized.custoRealObra !== undefined && normalized.custo_real_obra === undefined) normalized.custo_real_obra = normalized.custoRealObra
+  if (normalized.capitalTotal !== undefined && normalized.capital_total === undefined) normalized.capital_total = normalized.capitalTotal
+  if (normalized.dataVenda !== undefined && normalized.data_venda === undefined) normalized.data_venda = normalized.dataVenda
+  if (normalized.dataCompra !== undefined && normalized.data_compra === undefined) normalized.data_compra = normalized.dataCompra
+  const initPag = normalized.pagamentos_faseados ?? normalized.pagamentosFaseados ?? '[]'
   const pagStr = typeof initPag === 'string' ? initPag : JSON.stringify(initPag)
   const [f, setF] = useState({
     movimento: '', categoria: '', fase: '', lucro_estimado: '', lucro_real: '',
     custo_real_obra: '', capital_total: '', n_investidores: '', pagamento_em_falta: 1,
     data: '', data_compra: '', data_estimada_venda: '', data_venda: '', notas: '',
-    ...item,
+    ...normalized,
     pagamentos_faseados: pagStr,
   })
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
@@ -1232,9 +1252,13 @@ const DESP_TIMING = ['Mensalmente', 'Anual', 'Único']
 
 function DespesaForm({ item, onSave, onCancel, onReload }) {
   const isNew = !item.id
+  // Normalizar campos camelCase → snake_case (endpoint financeiro vs CRM)
+  const normalized = { ...item }
+  if (normalized.custoMensal !== undefined && normalized.custo_mensal === undefined) normalized.custo_mensal = normalized.custoMensal
+  if (normalized.custoAnual !== undefined && normalized.custo_anual === undefined) normalized.custo_anual = normalized.custoAnual
   const [f, setF] = useState({
     movimento: '', categoria: '', timing: 'Mensalmente', custo_mensal: '', custo_anual: '', data: '', notas: '',
-    ...item,
+    ...normalized,
   })
   const [docs, setDocs] = useState(() => {
     try { return item.documentos ? JSON.parse(item.documentos) : [] } catch { return [] }
@@ -1251,7 +1275,7 @@ function DespesaForm({ item, onSave, onCancel, onReload }) {
     try {
       const fd = new FormData()
       fd.append('file', file)
-      const r = await fetch(`/api/crm/despesas/${item.id}/upload`, { method: 'POST', body: fd })
+      const r = await apiFetch(`/api/crm/despesas/${item.id}/upload`, { method: 'POST', body: fd })
       const d = await r.json()
       if (d.error) throw new Error(d.error)
       setDocs(d.documentos)
@@ -1261,7 +1285,7 @@ function DespesaForm({ item, onSave, onCancel, onReload }) {
 
   async function handleDeleteDoc(docId) {
     try {
-      const r = await fetch(`/api/crm/despesas/${item.id}/upload/${docId}`, { method: 'DELETE' })
+      const r = await apiFetch(`/api/crm/despesas/${item.id}/upload/${docId}`, { method: 'DELETE' })
       const d = await r.json()
       if (d.error) throw new Error(d.error)
       setDocs(d.documentos)

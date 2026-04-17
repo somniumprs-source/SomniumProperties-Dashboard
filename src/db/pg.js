@@ -398,6 +398,7 @@ export async function initSchema() {
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS tipo_oportunidade TEXT;
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS check_qualidade BOOLEAN DEFAULT false;
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS check_ouro BOOLEAN DEFAULT false;
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS fotos TEXT DEFAULT '[]';
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 
@@ -409,8 +410,13 @@ export async function initSchema() {
         canal TEXT NOT NULL,
         direcao TEXT NOT NULL,
         notas TEXT,
-        created_at TEXT DEFAULT (NOW()::TEXT)
+        created_at TEXT DEFAULT (NOW()::TEXT),
+        updated_at TEXT DEFAULT (NOW()::TEXT)
       );
+      DO $$ BEGIN
+        ALTER TABLE consultor_interacoes ADD COLUMN IF NOT EXISTS updated_at TEXT DEFAULT (NOW()::TEXT);
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
       CREATE INDEX IF NOT EXISTS idx_interacoes_consultor ON consultor_interacoes(consultor_id);
       CREATE INDEX IF NOT EXISTS idx_interacoes_data ON consultor_interacoes(data_hora DESC);
 

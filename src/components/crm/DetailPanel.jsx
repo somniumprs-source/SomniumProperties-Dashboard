@@ -2,9 +2,12 @@
  * Painel de detalhe para Imóveis, Investidores, Consultores.
  * Mostra: campos editáveis + relações + timeline + tarefas + reuniões.
  */
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X } from 'lucide-react'
+import { apiFetch } from '../../lib/api.js'
 import { AnaliseTab } from '../analise/AnaliseTab.jsx'
+import { InteracoesTab } from './InteracoesTab.jsx'
+import { FicheirosTab } from './FicheirosTab.jsx'
 import { supabase } from '../../lib/supabase.js'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
@@ -19,6 +22,136 @@ async function getToken() {
   } catch { return '' }
 }
 
+// ── Tab Documentos para Imóveis ─────────────────────────────
+const DOC_LABELS = {
+  ficha_imovel: 'Ficha do Imóvel', ficha_pre_visita: 'Ficha Pré-Visita',
+  checklist_visita: 'Checklist Visita', relatorio_visita: 'Relatório de Visita',
+  analise_rentabilidade: 'Análise de Rentabilidade', estudo_comparaveis: 'Estudo Comparáveis',
+  proposta_formal: 'Proposta Formal', apresentacao_investidor: 'Apresentação Investidor',
+  resumo_negociacao: 'Resumo Negociação', resumo_acordo: 'Resumo Acordo',
+  dossier_investimento: 'Dossier Investimento', ficha_follow_up: 'Ficha Follow-Up',
+  ficha_cedencia: 'Ficha Cedência', ficha_acompanhamento_obra: 'Ficha Acompanhamento Obra',
+  apresentacao_negocio: 'Apresentação de Negócio (Anónima)',
+}
+const ESTADO_DOCS = {
+  'Adicionado': ['ficha_imovel'], 'Pré-aprovação': ['ficha_imovel'],
+  'Necessidade de Visita': ['ficha_pre_visita'], 'Visita Marcada': ['checklist_visita'],
+  'Estudo de VVR': ['relatorio_visita', 'analise_rentabilidade', 'estudo_comparaveis'],
+  'Criar Proposta ao Proprietário': ['proposta_formal'], 'Enviar proposta ao Proprietário': ['proposta_formal'],
+  'Em negociação': ['resumo_negociacao'], 'Proposta aceite': ['resumo_acordo'],
+  'Enviar proposta ao investidor': ['apresentacao_investidor', 'dossier_investimento', 'apresentacao_negocio'],
+  'Follow Up após proposta': ['ficha_follow_up'], 'Follow UP': ['ficha_follow_up'],
+  'Wholesaling': ['ficha_cedencia'], 'CAEP': ['ficha_acompanhamento_obra'], 'Fix and Flip': ['ficha_acompanhamento_obra'],
+}
+
+// ── Tab Documentos (lista única, todos iguais, checkbox para dossier) ──
+function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
+  const estadoClean = (estado || '').replace(/^\d+-\s*/, '').trim()
+  const docsActuais = ESTADO_DOCS[estadoClean] || ['ficha_imovel']
+
+  // Lista única — todos são "documentos", sem distinção
+  const ALL_DOCS = [
+    { tipo: 'ficha_imovel',              label: 'Ficha do Imóvel',               compilavel: 'ficha_imovel' },
+    { tipo: 'ficha_pre_visita',          label: 'Ficha Pré-Visita',              compilavel: 'ficha_pre_visita' },
+    { tipo: 'checklist_visita',          label: 'Checklist de Visita',            compilavel: 'checklist_visita' },
+    { tipo: 'relatorio_visita',          label: 'Relatório de Visita',            compilavel: 'relatorio_visita' },
+    { tipo: 'analise_rentabilidade',     label: 'Análise de Rentabilidade',       compilavel: 'analise_rentabilidade' },
+    { tipo: 'estudo_comparaveis',        label: 'Estudo de Comparáveis',          compilavel: 'estudo_comparaveis' },
+    { tipo: 'proposta_formal',           label: 'Proposta ao Proprietário',       compilavel: 'proposta_formal' },
+    { tipo: 'apresentacao_investidor',   label: 'Apresentação ao Investidor',     compilavel: 'apresentacao_investidor' },
+    { tipo: 'apresentacao_negocio',     label: 'Apresentação de Negócio (Anónima)', compilavel: 'apresentacao_negocio' },
+    { tipo: 'resumo_negociacao',         label: 'Resumo de Negociação',           compilavel: 'resumo_negociacao' },
+    { tipo: 'resumo_acordo',             label: 'Resumo de Acordo',               compilavel: 'resumo_acordo' },
+    { tipo: 'dossier_investimento',      label: 'Dossier de Investimento',        compilavel: 'dossier_investimento' },
+    { tipo: 'ficha_follow_up',           label: 'Ficha de Follow Up',             compilavel: 'ficha_follow_up' },
+    { tipo: 'ficha_cedencia',            label: 'Ficha de Cedência',              compilavel: 'ficha_cedencia' },
+    { tipo: 'ficha_acompanhamento_obra', label: 'Acompanhamento de Obra',         compilavel: 'ficha_acompanhamento_obra' },
+    { tipo: 'relatorio_investimento',    label: 'Análise de Investimento (Inv.)', compilavel: 'investimento' },
+    { tipo: 'relatorio_comparaveis',     label: 'Estudo Comparáveis (Inv.)',      compilavel: 'comparaveis' },
+    { tipo: 'relatorio_caep',            label: 'Distribuição CAEP',              compilavel: 'caep' },
+    { tipo: 'relatorio_stress',          label: 'Stress Tests',                   compilavel: 'stress_tests' },
+  ]
+
+  const [selected, setSelected] = useState(new Set())
+
+  function toggle(key) {
+    setSelected(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+  }
+  function selectAll() { setSelected(new Set(ALL_DOCS.map(d => d.compilavel))) }
+  function selectNone() { setSelected(new Set()) }
+
+  const selectedDocs = ALL_DOCS.filter(d => selected.has(d.compilavel))
+  const compilarUrl = selectedDocs.length > 0
+    ? `/api/crm/imoveis/${imovelId}/relatorio-investidor?seccoes=${selectedDocs.map(d => d.compilavel).join(',')}`
+    : null
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h3 className="text-sm font-bold text-neutral-800">Documentos do Imóvel</h3>
+          <p className="text-xs text-neutral-400 mt-0.5">Selecciona os documentos para gerar o dossier para investidor</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={selectAll} className="px-2.5 py-1.5 text-[11px] text-neutral-500 hover:text-neutral-700 rounded-lg hover:bg-neutral-100 transition-colors">Todos</button>
+          <button onClick={selectNone} className="px-2.5 py-1.5 text-[11px] text-neutral-500 hover:text-neutral-700 rounded-lg hover:bg-neutral-100 transition-colors">Nenhum</button>
+        </div>
+      </div>
+
+      {/* Lista de documentos — todos iguais */}
+      <div className="rounded-xl border border-neutral-100 overflow-hidden divide-y divide-neutral-50">
+        {ALL_DOCS.map(d => {
+          const isSelected = selected.has(d.compilavel)
+          const isFaseActual = docsActuais.includes(d.tipo)
+          return (
+            <div key={d.tipo}
+              className={`flex items-center gap-3 px-4 py-3 transition-colors group cursor-pointer ${
+                isSelected ? 'bg-amber-50/70' : 'bg-white hover:bg-neutral-50/50'
+              }`}
+              onClick={() => toggle(d.compilavel)}>
+              <input type="checkbox" checked={isSelected} readOnly
+                className="w-4 h-4 rounded border-neutral-300 shrink-0 pointer-events-none" style={{ accentColor: '#C9A84C' }} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-neutral-700">{d.label}</p>
+                  {isFaseActual && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">Fase actual</span>}
+                </div>
+              </div>
+              <a href={`/api/crm/imoveis/${imovelId}/documento/${d.tipo}`} target="_blank" rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors shrink-0 opacity-50 group-hover:opacity-100">
+                Abrir
+              </a>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Barra fixa em baixo — gerar dossier */}
+      <div className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
+        selectedDocs.length > 0 ? 'border-[#C9A84C] bg-[#faf8f2]' : 'border-neutral-200 bg-neutral-50'
+      }`}>
+        <div>
+          <p className="text-sm font-bold text-neutral-800">
+            {selectedDocs.length > 0 ? `${selectedDocs.length} documento${selectedDocs.length > 1 ? 's' : ''} seleccionado${selectedDocs.length > 1 ? 's' : ''}` : 'Nenhum documento seleccionado'}
+          </p>
+          <p className="text-xs text-neutral-400 mt-0.5">O dossier compilado inclui capa profissional e índice</p>
+        </div>
+        {compilarUrl ? (
+          <a href={compilarUrl} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl text-white shadow-sm hover:shadow transition-all"
+            style={{ backgroundColor: '#C9A84C' }}>
+            <FileDown className="w-4 h-4" /> Gerar Dossier
+          </a>
+        ) : (
+          <span className="px-5 py-2.5 text-sm text-neutral-400 rounded-xl bg-neutral-200/50">Gerar Dossier</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function DetailPanel({ type, id, onClose, onSave }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -29,6 +162,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
   const [saving, setSaving] = useState(false)
 
   const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores' }[type]
+  const prevTab = useRef(activeTab)
 
   function startEdit() {
     setForm({ ...data })
@@ -36,15 +170,23 @@ export function DetailPanel({ type, id, onClose, onSave }) {
   }
 
   function loadData() {
-    return fetch(`/api/crm/${endpoint}/${id}/full`).then(r => r.json()).then(setData).catch(() => {})
+    return apiFetch(`/api/crm/${endpoint}/${id}/full`).then(r => r.json()).then(setData).catch(() => {})
   }
+
+  // Recarregar dados quando sai da tab analise (para reflectir alterações da calculadora)
+  useEffect(() => {
+    if (prevTab.current === 'analise' && activeTab !== 'analise') {
+      loadData()
+    }
+    prevTab.current = activeTab
+  }, [activeTab])
 
   async function saveEdit() {
     setSaving(true)
     try {
       // Limpar campos do form que são relações (não enviar ao PUT)
       const { negocios, consultores, imoveis, tarefas, timeline, analises, ...cleanForm } = form
-      const r = await fetch(`/api/crm/${endpoint}/${id}`, {
+      const r = await apiFetch(`/api/crm/${endpoint}/${id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cleanForm),
       })
       if (!r.ok) throw new Error('Erro ao guardar')
@@ -68,7 +210,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
 
     // Carregar reuniões para investidores e consultores
     if (type === 'Investidores' || type === 'Consultores') {
-      fetch(`/api/crm/reunioes?entidade_tipo=${endpoint}&entidade_id=${id}`)
+      apiFetch(`/api/crm/reunioes?entidade_tipo=${endpoint}&entidade_id=${id}`)
         .then(r => r.json())
         .then(setReunioes)
         .catch(() => {})
@@ -81,8 +223,11 @@ export function DetailPanel({ type, id, onClose, onSave }) {
   // Tabs dinâmicos por tipo
   const tabs = [
     { key: 'detalhe', label: 'Detalhe', icon: '📋', show: true },
-    { key: 'relatorios', label: `Relatórios (${reunioes.length})`, icon: '📄', show: (type === 'Investidores' || type === 'Consultores') },
+    { key: 'ficheiros', label: 'Ficheiros', icon: '📷', show: type === 'Imóveis' },
+    { key: 'interacoes', label: `Interacções (${data?.interacoes?.length ?? 0})`, icon: '💬', show: type === 'Consultores' },
     { key: 'analise', label: 'Análise Financeira', icon: '📊', show: type === 'Imóveis' },
+    { key: 'relatorios_imovel', label: 'Documentos', icon: '📄', show: type === 'Imóveis' },
+    { key: 'relatorios', label: `Relatórios (${reunioes.length})`, icon: '📄', show: (type === 'Investidores' || type === 'Consultores') },
   ].filter(t => t.show)
 
   return (
@@ -148,12 +293,30 @@ export function DetailPanel({ type, id, onClose, onSave }) {
       )}
 
       {/* Análise Financeira tab */}
-      {type === 'Imóveis' && activeTab === 'analise' ? (
+      {/* Interacções (Consultores) */}
+      {type === 'Consultores' && activeTab === 'interacoes' ? (
+        <div className="p-4 sm:p-6">
+          <InteracoesTab consultorId={data.id} onUpdate={loadData} controloManual={data.controlo_manual} />
+        </div>
+
+      ) : type === 'Imóveis' && activeTab === 'analise' ? (
         <div className="p-4 sm:p-6">
           <AnaliseTab imovelId={data.id} imovelNome={data.nome} />
         </div>
 
-      /* Relatórios tab */
+      /* Ficheiros do imóvel (fotos + documentos + Drive) */
+      ) : type === 'Imóveis' && activeTab === 'ficheiros' ? (
+        <div className="p-4 sm:p-6">
+          <FicheirosTab imovelId={data.id} driveFolderId={data.drive_folder_id} />
+        </div>
+
+      /* Relatórios do imóvel (documentos de fase) */
+      ) : type === 'Imóveis' && activeTab === 'relatorios_imovel' ? (
+        <div className="p-4 sm:p-6">
+          <RelatoriosImovelTab imovelId={data.id} estado={data.estado} driveFolderId={data.drive_folder_id} imovelNome={data.nome} />
+        </div>
+
+      /* Relatórios reuniões (investidores/consultores) */
       ) : activeTab === 'relatorios' ? (
         <div className="p-4 sm:p-6">
           <RelatoriosTab reunioes={reunioes} investidorNome={data.nome} />
@@ -169,9 +332,11 @@ export function DetailPanel({ type, id, onClose, onSave }) {
             {type === 'Imóveis' && <>
               {editing ? <>
                 <EF label="Nome" field="nome" form={form} set={setField} />
-                <EF label="Estado" field="estado" form={form} set={setField} type="select" options={['Adicionado','Chamada Não Atendida','Pendentes','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa']} />
+                <EF label="Estado" field="estado" form={form} set={setField} type="select" options={['Pré-aprovação','Adicionado','Chamada Não Atendida','Pendentes','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa']} />
                 <EF label="Ask Price (€)" field="ask_price" form={form} set={setField} type="number" />
                 <EF label="Valor Proposta (€)" field="valor_proposta" form={form} set={setField} type="number" />
+                <EF label="VVR (€)" field="valor_venda_remodelado" form={form} set={setField} type="number" />
+                <EF label="Custo Obra (€)" field="custo_estimado_obra" form={form} set={setField} type="number" />
                 <EF label="Tipologia" field="tipologia" form={form} set={setField} />
                 <EF label="ABP — Área Bruta Privativa (m²)" field="area_bruta" form={form} set={setField} type="number" />
                 <EF label="ABD — Área Bruta Dependente (m²)" field="area_bruta_dependente" form={form} set={setField} type="number" />
@@ -194,11 +359,14 @@ export function DetailPanel({ type, id, onClose, onSave }) {
                   <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={4}
                     className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
                 </div>
-              </> : <>
+              </> : (() => {
+                const analise = data.analises?.find(a => a.activa) || null
+                return <>
                 <Field label="Estado" value={data.estado?.replace(/^\d+-/, '')} />
                 <Field label="Ask Price" value={data.ask_price > 0 ? EUR(data.ask_price) : '—'} />
                 <Field label="Valor Proposta" value={data.valor_proposta > 0 ? EUR(data.valor_proposta) : '—'} />
-                <Field label="ROI" value={data.roi > 0 ? `${data.roi}%` : '—'} />
+                <Field label="VVR" value={data.valor_venda_remodelado > 0 ? EUR(data.valor_venda_remodelado) : '—'} />
+                <Field label="Custo Obra" value={data.custo_estimado_obra > 0 ? EUR(data.custo_estimado_obra) : '—'} />
                 <Field label="Zona" value={data.zona} />
                 <Field label="Tipologia" value={data.tipologia} />
                 <Field label="Modelo" value={data.modelo_negocio} />
@@ -212,7 +380,63 @@ export function DetailPanel({ type, id, onClose, onSave }) {
                 <Field label="Data Chamada" value={data.data_chamada} />
                 <Field label="Data Visita" value={data.data_visita} />
                 <Field label="Data Proposta" value={data.data_proposta} />
-              </>}
+                {data.notas && <div className="col-span-2 md:col-span-3"><Field label="Notas" value={data.notas} /></div>}
+
+                {/* ── Dados da Calculadora de Rentabilidade ── */}
+                {analise && (
+                  <div className="col-span-2 md:col-span-3 mt-2">
+                    <div className="rounded-xl border border-[#C9A84C33] p-4" style={{ backgroundColor: '#faf8f2' }}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-sm">📊</span>
+                        <h4 className="text-sm font-bold text-neutral-800">Análise de Rentabilidade</h4>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Activa</span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                        {analise.vvr > 0 && <div>
+                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">VVR</p>
+                          <p className="text-sm font-bold text-neutral-800">{EUR(analise.vvr)}</p>
+                        </div>}
+                        {analise.custo_obra > 0 && <div>
+                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">Custo Obra</p>
+                          <p className="text-sm font-bold text-neutral-800">{EUR(analise.custo_obra)}</p>
+                        </div>}
+                        {analise.capital_necessario > 0 && <div>
+                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">Capital Necessário</p>
+                          <p className="text-sm font-bold text-neutral-800">{EUR(analise.capital_necessario)}</p>
+                        </div>}
+                        {analise.lucro_liquido != null && <div>
+                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">Lucro Líquido</p>
+                          <p className={`text-sm font-bold ${analise.lucro_liquido >= 0 ? 'text-green-700' : 'text-red-600'}`}>{EUR(analise.lucro_liquido)}</p>
+                        </div>}
+                        {analise.retorno_total != null && <div>
+                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">ROI Total</p>
+                          <p className={`text-sm font-bold ${analise.retorno_total >= 0 ? 'text-green-700' : 'text-red-600'}`}>{analise.retorno_total}%</p>
+                        </div>}
+                        {analise.retorno_anualizado != null && <div>
+                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">ROI Anualizado</p>
+                          <p className={`text-sm font-bold ${analise.retorno_anualizado >= 0 ? 'text-green-700' : 'text-red-600'}`}>{analise.retorno_anualizado}%</p>
+                        </div>}
+                        {analise.payback_meses > 0 && <div>
+                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">Payback</p>
+                          <p className="text-sm font-bold text-neutral-800">{analise.payback_meses} meses</p>
+                        </div>}
+                        {analise.risco && <div>
+                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">Risco</p>
+                          <p className={`text-sm font-bold ${analise.risco === 'Baixo' ? 'text-green-700' : analise.risco === 'Médio' ? 'text-yellow-600' : 'text-red-600'}`}>{analise.risco}</p>
+                        </div>}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {!analise && (
+                  <div className="col-span-2 md:col-span-3 mt-2">
+                    <div className="rounded-xl border border-dashed border-neutral-200 p-4 text-center">
+                      <p className="text-xs text-neutral-400">Sem análise de rentabilidade — usa a tab "Análise Financeira" para calcular</p>
+                    </div>
+                  </div>
+                )}
+              </>
+              })()}
             </>}
             {type === 'Investidores' && <>
               {editing ? <>
@@ -430,7 +654,7 @@ function RelatoriosTab({ reunioes, investidorNome }) {
 
   async function loadTranscricao(id) {
     if (transcricao[id]) return
-    const r = await fetch(`/api/crm/reunioes/${id}/transcricao`)
+    const r = await apiFetch(`/api/crm/reunioes/${id}/transcricao`)
     const d = await r.json()
     setTranscricao(prev => ({ ...prev, [id]: d.transcricao }))
   }
@@ -438,7 +662,7 @@ function RelatoriosTab({ reunioes, investidorNome }) {
   async function runAnalise(id) {
     setAnalyzing(id)
     try {
-      const r = await fetch(`/api/crm/reunioes/${id}/analisar`, { method: 'POST' })
+      const r = await apiFetch(`/api/crm/reunioes/${id}/analisar`, { method: 'POST' })
       const d = await r.json()
       setAnalises(prev => ({ ...prev, [id]: d }))
     } catch {}

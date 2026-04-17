@@ -85,7 +85,28 @@ async function runFollowUp() {
           msg = `Olá ${c.nome}, tudo bem? Alguma novidade de imóveis que possam encaixar no nosso perfil? Estamos à procura de oportunidades com margem negocial em Coimbra e arredores.`
         }
 
-        await sendWhatsApp(c.contacto, msg)
+        // Enviar via template aprovado (necessario para primeira mensagem)
+        const templateSids = {
+          geral: 'HXa7c0a58c493495883965a44988542916',
+          reminder: 'HXacd7d45a76226a7f10619a3878669c13',
+          inativo: 'HXac84ceb95bbd70a8d2c492c3a7f08c53',
+        }
+        const templateSid = diasSem > 30 ? templateSids.inativo : diasSem > 15 ? templateSids.reminder : templateSids.geral
+        const firstName = (c.nome || '').split(' ')[0]
+        try {
+          const twilio = (await import('twilio')).default
+          const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+          const to = c.contacto.startsWith('whatsapp:') ? c.contacto : `whatsapp:${c.contacto.replace(/\s/g, '')}`
+          await twilioClient.messages.create({
+            from: process.env.TWILIO_WHATSAPP_NUMBER,
+            to,
+            contentSid: templateSid,
+            contentVariables: JSON.stringify({ '1': firstName }),
+          })
+        } catch (templateErr) {
+          console.warn('[cron] Template falhou, tentando texto livre:', templateErr.message)
+          await sendWhatsApp(c.contacto, msg)
+        }
         await pool.query(
           'INSERT INTO consultor_interacoes (id, consultor_id, data_hora, canal, direcao, notas) VALUES ($1, $2, $3, $4, $5, $6)',
           [randomUUID(), c.id, now.toISOString(), 'whatsapp', 'Enviado', `[FOLLOW-UP AUTO] ${msg}`]

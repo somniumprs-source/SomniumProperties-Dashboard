@@ -10,12 +10,13 @@ import { fileURLToPath } from 'url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const LOGO_PATH = path.resolve(__dirname, '../../public/logo-transparent.png')
 
-// Design tokens
+// Design tokens (reference: Proposta de Investimento Somnium)
 const C = {
   gold: '#C9A84C', black: '#0d0d0d', white: '#ffffff',
-  bg: '#f7f6f2', body: '#2a2a2a', muted: '#999999',
+  bg: '#f7f6f2', body: '#2a2a2a', muted: '#888888',
   border: '#e0ddd5', light: '#f0efe9', accent: '#1a1a1a',
-  green: '#22c55e', red: '#ef4444', blue: '#6366f1',
+  headerBg: '#f0efe9', totalBg: '#f5f3ee',
+  green: '#2d6a2d', red: '#8b2020', blue: '#6366f1',
 }
 const ML = 50, MR = 50 // margins
 const PW = 595.28, PH = 841.89
@@ -25,6 +26,16 @@ const EUR = v => v == null || v === 0 ? '—' : new Intl.NumberFormat('pt-PT', {
 const PCT = v => v == null ? '—' : `${v}%`
 const FDATE = d => { if (!d) return '—'; try { return new Date(d).toLocaleDateString('pt-PT') } catch { return d } }
 const NOW = () => new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' })
+
+// Parse fotos JSON from imovel — only images, max 6 for PDF
+function parseFotos(im) {
+  try {
+    const all = typeof im.fotos === 'string' ? JSON.parse(im.fotos || '[]') : (im.fotos || [])
+    return all
+      .filter(f => f.folder !== 'documentos' && (f.type?.startsWith('image/') || f.path?.match(/\.(jpg|jpeg|png|webp)$/i)))
+      .slice(0, 6) // max 6 photos in PDF
+  } catch { return [] }
+}
 
 // ── Estado → Documentos ──────────────────────────────────────
 const ESTADO_DOC_MAP = {
@@ -37,7 +48,7 @@ const ESTADO_DOC_MAP = {
   'Enviar proposta ao investidor': ['apresentacao_investidor'],
   'Em negociação': ['resumo_negociacao'],
   'Proposta aceite': ['resumo_acordo'],
-  'Enviar proposta ao investidor': ['dossier_investimento'],
+  'Enviar proposta ao investidor': ['dossier_investimento', 'apresentacao_negocio'],
   'Follow Up após proposta': ['ficha_follow_up'],
   'Follow UP': ['ficha_follow_up'],
   'Wholesaling': ['ficha_cedencia'],
@@ -53,6 +64,7 @@ const DOC_LABELS = {
   proposta_formal: 'Proposta ao Proprietário', apresentacao_investidor: 'Apresentação ao Investidor',
   resumo_negociacao: 'Resumo de Negociação', resumo_acordo: 'Resumo de Acordo', dossier_investimento: 'Dossier de Investimento',
   ficha_follow_up: 'Ficha de Follow Up', ficha_cedencia: 'Ficha de Cedência', ficha_acompanhamento_obra: 'Acompanhamento de Obra',
+  apresentacao_negocio: 'Apresentação de Negócio (Anónima)',
 }
 
 export function generateDoc(tipo, imovel, analise = null) {
@@ -75,31 +87,42 @@ class DocBuilder {
 
   _drawCover(title, subtitle) {
     const d = this.doc
+    const im = this.imovel
     d.addPage({ size: 'A4', margins: { top: 0, bottom: 0, left: 0, right: 0 } })
-    d.rect(0, 0, PW, PH).fill(C.black)
-    d.rect(0, 0, PW, 4).fill(C.gold)
-    try { d.image(readFileSync(LOGO_PATH), (PW - 150) / 2, 150, { width: 150 }) } catch {}
-    d.rect(PW / 2 - 20, 280, 40, 1).fill(C.gold)
-    d.fontSize(8).fillColor(C.gold).text(title.toUpperCase(), ML, 300, { width: CW, align: 'center', lineBreak: false, characterSpacing: 4 })
-    d.fontSize(22).fillColor(C.white).text(this.imovel.nome || 'Imóvel', ML, 335, { width: CW, align: 'center', lineBreak: false })
-    if (subtitle) d.fontSize(10).fillColor(C.muted).text(subtitle, ML, 375, { width: CW, align: 'center', lineBreak: false })
-    d.fontSize(9).fillColor(C.muted).text(NOW(), ML, 400, { width: CW, align: 'center', lineBreak: false })
+    // Barra dourada no topo
+    d.rect(0, 0, PW, 6).fill(C.gold)
+    // Logo centrado
+    try { d.image(readFileSync(LOGO_PATH), (PW - 160) / 2, 140, { width: 160 }) } catch {}
+    // Linha dourada decorativa
+    d.rect(PW / 2 - 30, 310, 60, 1.5).fill(C.gold)
+    // Titulo grande
+    d.fontSize(28).fillColor(C.body).text(title, ML, 340, { width: CW, align: 'center' })
+    // Subtitulo dourado (nome imovel + zona)
+    const sub = [im.nome, im.zona].filter(Boolean).join(' · ').toUpperCase()
+    if (sub) d.fontSize(10).fillColor(C.gold).text(sub, ML, 390, { width: CW, align: 'center', characterSpacing: 1.5 })
+    // Localizacao
+    if (subtitle) d.fontSize(10).fillColor(C.muted).text(subtitle + ' · Coimbra · Portugal', ML, 415, { width: CW, align: 'center' })
+    // Linha separadora
+    d.rect(ML + 80, 450, CW - 160, 0.5).fill(C.gold)
+    // Data
+    d.fontSize(9).fillColor(C.muted).text(NOW(), ML, 465, { width: CW, align: 'center' })
     // Footer
-    d.rect(0, PH - 45, PW, 45).fill(C.accent)
-    d.rect(0, PH - 45, PW, 1).fill(C.gold).opacity(0.3); d.opacity(1)
-    d.fontSize(7).fillColor(C.gold).text('SOMNIUM PROPERTIES', ML, PH - 28, { width: CW, align: 'center', lineBreak: false })
+    d.rect(ML, PH - 65, CW, 0.5).fill(C.gold)
+    d.fontSize(7).fillColor(C.muted).text('Somnium Properties · Investimento Imobiliário', ML, PH - 52, { width: CW, align: 'center' })
+    d.fontSize(7).fillColor(C.muted).text(`Documento Confidencial · ${NOW()}`, ML, PH - 40, { width: CW, align: 'center' })
+    // Barra dourada no fundo
+    d.rect(0, PH - 6, PW, 6).fill(C.gold)
   }
 
   newPage() {
-    this.doc.addPage({ size: 'A4', margins: { top: 45, bottom: 45, left: ML, right: MR } })
-    this.y = 45
-    // Mini header
-    this.doc.rect(0, 0, PW, 32).fill(C.black)
-    this.doc.rect(0, 32, PW, 2).fill(C.gold)
-    try { this.doc.image(readFileSync(LOGO_PATH), ML, 6, { height: 20 }) } catch {}
-    this.doc.fontSize(7).fillColor(C.muted).text(this.imovel.nome || '', ML + 80, 12, { lineBreak: false })
-    this.doc.fontSize(7).fillColor(C.gold).text(NOW(), PW - MR - 80, 12, { width: 80, align: 'right', lineBreak: false })
-    this.y = 45
+    this.doc.addPage({ size: 'A4', margins: { top: 60, bottom: 60, left: ML, right: MR } })
+    const d = this.doc
+    // Header: logo left, date right, gold line
+    try { d.image(readFileSync(LOGO_PATH), ML, 15, { height: 22 }) } catch {}
+    d.rect(ML, 45, CW, 1.5).fill(C.gold)
+    // Footer: just the gold line (text added in end() to avoid cursor issues)
+    d.rect(ML, PH - 45, CW, 0.5).fill(C.gold)
+    this.y = 60
     return this
   }
 
@@ -108,14 +131,23 @@ class DocBuilder {
     return this
   }
 
-  // Section header (dark bar with gold accent)
+  // Section header — bold uppercase + gold underline (no numbering)
   header(title) {
-    this.ensure(35)
-    const d = this.doc
-    d.rect(ML, this.y, CW, 28).fill(C.black)
-    d.rect(ML, this.y, 3, 28).fill(C.gold)
-    d.fontSize(8).fillColor(C.gold).text(title.toUpperCase(), ML + 14, this.y + 9, { characterSpacing: 2, lineBreak: false })
-    this.y += 34
+    this.ensure(28)
+    this.doc.fontSize(11).fillColor(C.body).text(title.toUpperCase(), ML, this.y, { characterSpacing: 0.3 })
+    this.y = this.doc.y + 4
+    this.doc.rect(ML, this.y, CW, 1.5).fill(C.gold)
+    this.y += 10
+    return this
+  }
+
+  // Sub-header (lighter, smaller)
+  subheader(title) {
+    this.ensure(22)
+    this.doc.fontSize(9.5).fillColor(C.body).text(title.toUpperCase(), ML, this.y, { characterSpacing: 0.3 })
+    this.y = this.doc.y + 3
+    this.doc.rect(ML, this.y, 40, 1).fill(C.gold)
+    this.y += 8
     return this
   }
 
@@ -216,6 +248,42 @@ class DocBuilder {
     return this
   }
 
+  // Photo gallery — grid of property photos
+  photos(fotos, title = 'GALERIA FOTOGRÁFICA') {
+    if (!fotos || fotos.length === 0) return this
+    this.header(title)
+    const ROOT = path.resolve(__dirname, '../..')
+    const imgSize = (CW - 10) / 2 // 2 columns
+    const imgHeight = imgSize * 0.65 // 4:3ish ratio
+    let col = 0
+    for (const foto of fotos) {
+      // Skip non-image files
+      if (!foto.type?.startsWith('image/') && !foto.path?.match(/\.(jpg|jpeg|png|webp)$/i)) continue
+      const filePath = path.join(ROOT, 'public', foto.path)
+      try {
+        const imgData = readFileSync(filePath)
+        this.ensure(imgHeight + 20)
+        const x = ML + col * (imgSize + 10)
+        this.doc.save()
+        this.doc.roundedRect(x, this.y, imgSize, imgHeight, 4).clip()
+        this.doc.image(imgData, x, this.y, { width: imgSize, height: imgHeight, fit: [imgSize, imgHeight], align: 'center', valign: 'center' })
+        this.doc.restore()
+        // Border
+        this.doc.roundedRect(x, this.y, imgSize, imgHeight, 4).lineWidth(0.5).stroke(C.border)
+        col++
+        if (col >= 2) {
+          col = 0
+          this.y += imgHeight + 8
+        }
+      } catch {
+        // File not found — skip silently
+      }
+    }
+    if (col > 0) this.y += imgHeight + 8 // close last row
+    this.space(4)
+    return this
+  }
+
   // Bullet point
   bullet(text) {
     this.ensure(18)
@@ -250,6 +318,132 @@ class DocBuilder {
     return this
   }
 
+  // ── Metodos empresariais (minimalistas, sem caixas escuras) ─
+
+  // KPI grid — thin bordered cells, like the reference document
+  bigNumbers(items) {
+    this.ensure(56)
+    const colW = CW / items.length
+    // Draw border around all cells
+    this.doc.rect(ML, this.y, CW, 50).lineWidth(0.5).stroke(C.border)
+    items.forEach((item, i) => {
+      const x = ML + i * colW
+      if (i > 0) this.doc.rect(x, this.y, 0.5, 50).fill(C.border)
+      this.doc.fontSize(7).fillColor(C.muted).text((item.label || '').toUpperCase(), x + 10, this.y + 8, { width: colW - 20, lineBreak: false, characterSpacing: 0.3 })
+      this.doc.fontSize(16).fillColor(C.body).text(String(item.value || '—'), x + 10, this.y + 22, { width: colW - 20, lineBreak: false })
+      if (item.sub) this.doc.fontSize(7).fillColor(C.muted).text(item.sub, x + 10, this.y + 40, { width: colW - 20, lineBreak: false })
+    })
+    this.y += 56
+    return this
+  }
+
+  // Dados inline — label: valor lado a lado, compacto
+  inlineData(items) {
+    this.ensure(16)
+    const colW = CW / items.length
+    items.forEach((item, i) => {
+      const x = ML + i * colW
+      this.doc.fontSize(7.5).fillColor(C.muted).text(`${item.label}: `, x, this.y + 2, { continued: true }).fillColor(C.body).text(String(item.value || '—'), { lineBreak: false })
+    })
+    this.y += 16
+    return this
+  }
+
+  // Professional table — warm header, generous rows (reference style)
+  simpleTable(rows) {
+    this.ensure(rows.length * 22 + 4)
+    rows.forEach(row => {
+      const isTotal = row.total
+      if (isTotal) {
+        this.doc.rect(ML, this.y, CW, 24).fill(C.totalBg)
+      }
+      this.doc.fontSize(isTotal ? 9.5 : 8.5).fillColor(C.body).text(row.label || '', ML + 10, this.y + 6, { width: 310, lineBreak: false })
+      this.doc.fontSize(isTotal ? 9.5 : 8.5).fillColor(isTotal ? C.gold : C.body).text(String(row.value || '—'), ML + 320, this.y + 6, { width: CW - 330, align: 'right', lineBreak: false })
+      this.doc.rect(ML, this.y + (isTotal ? 24 : 22), CW, 0.3).fill(C.border)
+      this.y += isTotal ? 26 : 22
+    })
+    this.y += 4
+    return this
+  }
+
+  // Column table — warm gray header with gold labels (reference style)
+  colTable(headers, rows) {
+    this.ensure(24 + rows.length * 24)
+    // Header — warm gray bg, gold bold labels
+    this.doc.rect(ML, this.y, CW, 22).fill(C.headerBg)
+    let x = ML + 8
+    for (const [label, w] of headers) {
+      this.doc.fontSize(7.5).fillColor(C.gold).text(label, x, this.y + 6, { width: w, lineBreak: false })
+      x += w
+    }
+    this.y += 24
+    // Rows
+    rows.forEach(row => {
+      const isTotal = row._total
+      if (isTotal) this.doc.rect(ML, this.y, CW, 24).fill(C.totalBg)
+      x = ML + 8
+      const vals = row._values || row
+      for (let i = 0; i < vals.length; i++) {
+        const cell = vals[i]
+        const val = cell?.value !== undefined ? cell.value : cell
+        const clr = cell?.color || C.body
+        this.doc.fontSize(isTotal ? 9 : 8.5).fillColor(clr).text(String(val || '—'), x, this.y + 6, { width: headers[i][1], lineBreak: false })
+        x += headers[i][1]
+      }
+      this.doc.rect(ML, this.y + (isTotal ? 24 : 22), CW, 0.3).fill(C.border)
+      this.y += isTotal ? 26 : 24
+    })
+    this.y += 4
+    return this
+  }
+
+  // Metrica simples — label + valor
+  metric(label, value, options = {}) {
+    this.ensure(16)
+    const { total } = options
+    if (total) { this.doc.rect(ML, this.y - 1, CW, 0.5).fill(C.body); this.y += 3 }
+    this.doc.fontSize(total ? 9 : 8.5).fillColor(C.body).text(label, ML + 4, this.y + 1, { width: 320, lineBreak: false })
+    this.doc.fontSize(total ? 9 : 8.5).fillColor(C.body).text(String(value || '—'), ML + 330, this.y + 1, { width: CW - 334, align: 'right', lineBreak: false })
+    if (!total) this.doc.rect(ML, this.y + 13, CW, 0.2).fill('#e0ddd5')
+    this.y += total ? 18 : 14
+    return this
+  }
+
+  // Verdict — uma linha simples com cor
+  // Narrative text block
+  textBlock(content) {
+    this.ensure(30)
+    this.doc.fontSize(9).fillColor(C.body).text(content, ML, this.y, { width: CW, lineGap: 4, align: 'justify' })
+    this.y = this.doc.y + 8
+    return this
+  }
+
+  // Note/pressuposto
+  note(text) {
+    this.ensure(16)
+    this.doc.fontSize(7.5).fillColor(C.muted).text(text, ML, this.y, { width: CW, lineGap: 3 })
+    this.y = this.doc.y + 4
+    return this
+  }
+
+  verdict(text, isPositive) {
+    this.ensure(20)
+    this.doc.fontSize(9.5).fillColor(isPositive ? C.green : C.red).text(text, ML, this.y, { width: CW })
+    this.y = this.doc.y + 8
+    return this
+  }
+
+  disclaimer() {
+    this.ensure(30)
+    this.doc.rect(ML, this.y, CW, 0.3).fill(C.border)
+    this.y += 6
+    this.doc.fontSize(6.5).fillColor(C.muted).text(
+      'Este documento é preparado para fins informativos e não constitui aconselhamento financeiro ou fiscal. Os valores são estimativas e podem variar. Somnium Properties — Confidencial.',
+      ML, this.y, { width: CW, lineGap: 2 })
+    this.y = this.doc.y + 4
+    return this
+  }
+
   end() { this.doc.end(); return this.doc }
 }
 
@@ -260,105 +454,493 @@ class DocBuilder {
 const GENERATORS = {
   // ── 1. FICHA DO IMÓVEL ──────────────────────────────────────
   ficha_imovel: (im) => {
+    const fotos = parseFotos(im)
     const b = new DocBuilder('Ficha do Imóvel', im.zona || '', im)
+    b.inlineData([{ label: 'Estado', value: (im.estado || '').replace(/^\d+-/, '') }, { label: 'Data', value: FDATE(im.data_adicionado) }, { label: 'Origem', value: im.origem }])
+    b.space(4)
+    // Fotografias logo no início
+    if (fotos.length > 0) b.photos(fotos)
     b.header('INFORMAÇÃO GERAL')
-    b.row('Nome', im.nome, { alt: true }).row('Estado', (im.estado || '').replace(/^\d+-/, ''))
-    b.row('Tipologia', im.tipologia, { alt: true }).row('Zona', im.zona)
-    b.row('Origem', im.origem, { alt: true }).row('Consultor', im.nome_consultor)
-    b.row('Modelo de Negócio', im.modelo_negocio, { alt: true }).row('Link', im.link)
-    b.row('Data Adicionado', FDATE(im.data_adicionado), { alt: true })
-    b.space()
+    b.simpleTable([
+      { label: 'Tipologia', value: im.tipologia }, { label: 'Zona', value: im.zona },
+      { label: 'Consultor', value: im.nome_consultor }, { label: 'Modelo de Negócio', value: im.modelo_negocio },
+      { label: 'Link', value: im.link }, { label: 'Área Útil', value: im.area_util ? `${im.area_util} m²` : '—' },
+      { label: 'Área Bruta', value: im.area_bruta ? `${im.area_bruta} m²` : '—' },
+    ])
+    b.space(4)
     b.header('VALORES')
-    b.row('Ask Price', EUR(im.ask_price), { alt: true }).row('Valor Proposta', EUR(im.valor_proposta))
-    b.row('Custo Estimado Obra', EUR(im.custo_estimado_obra), { alt: true }).row('Valor Venda Remodelado', EUR(im.valor_venda_remodelado))
-    b.row('ROI', PCT(im.roi), { alt: true }).row('ROI Anualizado', PCT(im.roi_anualizado))
-    b.row('Área Útil', im.area_util ? `${im.area_util} m²` : '—', { alt: true }).row('Área Bruta', im.area_bruta ? `${im.area_bruta} m²` : '—')
-    if (im.notas) { b.space().section('Notas').text(im.notas) }
+    b.bigNumbers([
+      { label: 'Ask Price', value: EUR(im.ask_price) },
+      { label: 'Valor Proposta', value: EUR(im.valor_proposta) },
+      { label: 'VVR', value: EUR(im.valor_venda_remodelado) },
+    ])
+    b.simpleTable([
+      { label: 'Custo Estimado Obra', value: EUR(im.custo_estimado_obra) },
+      { label: 'ROI', value: PCT(im.roi) }, { label: 'ROI Anualizado', value: PCT(im.roi_anualizado) },
+    ])
+    if (im.notas) { b.space(4); b.header('NOTAS'); b.text(im.notas) }
+    b.disclaimer()
     return b.end()
   },
 
   // ── 2. FICHA PRÉ-VISITA ────────────────────────────────────
   ficha_pre_visita: (im) => {
+    const fotos = parseFotos(im)
     const b = new DocBuilder('Ficha Pré-Visita', im.zona || '', im)
-    b.header('DADOS DO IMÓVEL')
-    b.row('Imóvel', im.nome, { alt: true }).row('Tipologia', im.tipologia)
-    b.row('Zona', im.zona, { alt: true }).row('Ask Price', EUR(im.ask_price))
-    b.row('Consultor', im.nome_consultor, { alt: true }).row('Link', im.link)
-    b.space()
-    b.header('PONTOS A AVALIAR NA VISITA')
-    ;['Estado geral da estrutura (paredes, tectos, pavimentos)', 'Telhado e cobertura — infiltração ou degradação',
-      'Instalação eléctrica — quadro, tomadas, iluminação', 'Canalização — pressão de água, esgotos, humidade',
-      'Caixilharia e janelas — estado, isolamento térmico', 'Orientação solar e luminosidade natural',
-      'Acessos, estacionamento e envolvente', 'Possibilidade de ampliação ou alteração de layout',
-    ].forEach(p => b.check(p))
-    b.space()
-    b.header('PERGUNTAS AO PROPRIETÁRIO')
-    ;['Há quanto tempo está à venda? Motivo da venda?', 'Valor mínimo que aceita? Margem de negociação?',
-      'Algum problema estrutural ou legal conhecido?', 'Documentação em dia? (caderneta, certidão permanente)',
-      'Existem ónus, hipotecas ou penhoras?', 'Área real corresponde à área registada?',
-    ].forEach(p => b.check(p))
-    b.space()
+
+    // ── Resumo executivo do imóvel ──
+    b.header('IDENTIFICAÇÃO DO IMÓVEL')
+    b.simpleTable([
+      { label: 'Nome / Referência', value: im.nome },
+      { label: 'Tipologia', value: im.tipologia },
+      { label: 'Zona', value: im.zona },
+      { label: 'Modelo de Negócio', value: im.modelo_negocio },
+      { label: 'Origem do Lead', value: im.origem },
+      { label: 'Consultor Responsável', value: im.nome_consultor },
+      { label: 'Data Adicionado', value: FDATE(im.data_adicionado) },
+      { label: 'Data da Chamada', value: FDATE(im.data_chamada) },
+      { label: 'Link do Anúncio', value: im.link || '—' },
+    ])
+    b.space(4)
+
+    // ── Áreas e características ──
+    b.header('ÁREAS E CARACTERÍSTICAS')
+    b.simpleTable([
+      { label: 'Área Útil', value: im.area_util ? `${im.area_util} m²` : '—' },
+      { label: 'Área Bruta', value: im.area_bruta ? `${im.area_bruta} m²` : '—' },
+      { label: 'Preço por m² (Ask)', value: im.ask_price && im.area_util ? EUR(Math.round(im.ask_price / im.area_util)) + '/m²' : '—' },
+    ])
+    b.space(4)
+
+    // ── Valores financeiros ──
+    b.header('ENQUADRAMENTO FINANCEIRO')
+    b.bigNumbers([
+      { label: 'Ask Price', value: EUR(im.ask_price) },
+      { label: 'Proposta Estimada', value: EUR(im.valor_proposta) },
+      { label: 'VVR Estimado', value: EUR(im.valor_venda_remodelado) },
+    ])
+    b.simpleTable([
+      { label: 'Custo Estimado de Obra', value: EUR(im.custo_estimado_obra) },
+      { label: 'ROI Estimado', value: PCT(im.roi) },
+      { label: 'ROI Anualizado Estimado', value: PCT(im.roi_anualizado) },
+      { label: 'Desconto face ao Ask Price', value: im.ask_price && im.valor_proposta ? PCT(Math.round((1 - im.valor_proposta / im.ask_price) * 100)) : '—' },
+    ])
+    b.space(4)
+
+    // ── Fotografias do anúncio ──
+    if (fotos.length > 0) {
+      b.photos(fotos, 'FOTOGRAFIAS DO ANÚNCIO')
+    }
+
+    // ── Pontos a avaliar ── (organizado por categorias)
+    b.header('AVALIAÇÃO ESTRUTURAL')
+    b.simpleTable([
+      'Fachada: fissuras, humidade, descasque de reboco, eflorescências',
+      'Telhado / cobertura: telhas partidas, infiltrações, isolamento térmico',
+      'Fundações: assentamentos visíveis, fissuras em escada',
+      'Paredes interiores: fissuras, humidade ascendente, bolor',
+      'Tectos: manchas de água, deformações, descasque',
+      'Pavimentos: nivelamento, estado do revestimento, soalho podre',
+      'Laje / estrutura: vigas expostas, ferrugem em armaduras, flexão',
+    ].map(p => ({ label: `□  ${p}`, value: '' })))
+    b.space(4)
+
+    b.header('INSTALAÇÕES TÉCNICAS')
+    b.simpleTable([
+      'Quadro eléctrico: disjuntores, terra, estado geral, potência contratada',
+      'Tomadas e interruptores: quantidade e funcionamento',
+      'Canalização de água: pressão, tubagens (cobre, PPR, ferro), fugas',
+      'Esgotos: cheiros, escoamento lento, caixas de visita',
+      'Aquecimento: tipo de sistema (central, esquentador, caldeira), estado',
+      'Gás: tipo de instalação, certificação, segurança',
+      'Ventilação: VMC, exaustores, ventilação natural nas casas de banho',
+    ].map(p => ({ label: `□  ${p}`, value: '' })))
+    b.space(4)
+
+    b.header('CAIXILHARIA E ISOLAMENTO')
+    b.simpleTable([
+      'Janelas: material (alumínio, PVC, madeira), vidro simples ou duplo',
+      'Estores / portadas: funcionamento e estado',
+      'Isolamento térmico: paredes exteriores, cobertura, pontes térmicas',
+      'Isolamento acústico: ruído exterior, entre fracções',
+    ].map(p => ({ label: `□  ${p}`, value: '' })))
+    b.space(4)
+
+    b.header('ESPAÇOS HÚMIDOS')
+    b.simpleTable([
+      'Cozinha: bancada, armários, equipamentos, ventilação, ponto de água',
+      'WC: louças sanitárias, torneiras, impermeabilização, ventilação',
+      'Azulejos: estado, fissuras, descolamentos',
+    ].map(p => ({ label: `□  ${p}`, value: '' })))
+    b.space(4)
+
+    b.header('ENVOLVENTE E LOCALIZAÇÃO')
+    b.simpleTable([
+      'Orientação solar e luminosidade natural dos compartimentos',
+      'Acessos ao imóvel: estrada, passeios, rampa, escadas',
+      'Estacionamento: garagem, lugar de parqueamento, rua',
+      'Vizinhança: tipo de zona, ruído, segurança, serviços próximos',
+      'Transportes públicos e acessos rodoviários',
+      'Possibilidade de ampliação ou alteração de layout (PDM)',
+      'Existência de logradouro, quintal ou terraço',
+    ].map(p => ({ label: `□  ${p}`, value: '' })))
+    b.space(4)
+
+    // ── Perguntas ao proprietário ──
+    b.header('PERGUNTAS AO PROPRIETÁRIO / MEDIADOR')
+    b.subheader('Motivação e Urgência')
+    b.simpleTable([
+      'Há quanto tempo está à venda? Já baixou o preço?',
+      'Motivo da venda? (herança, divórcio, emigração, necessidade financeira)',
+      'Existe urgência na venda? Prazo pretendido?',
+      'Está aberto a CPCV com sinal reduzido?',
+    ].map(p => ({ label: `□  ${p}`, value: '' })))
+    b.space(4)
+    b.subheader('Negociação e Valor')
+    b.simpleTable([
+      'Valor mínimo que aceita? Margem de negociação?',
+      'Já recebeu outras propostas? Qual o valor?',
+      'Aceita permuta ou pagamento faseado?',
+      'Quem é o decisor? (um proprietário, vários herdeiros, tribunal)',
+    ].map(p => ({ label: `□  ${p}`, value: '' })))
+    b.space(4)
+    b.subheader('Situação Jurídica e Técnica')
+    b.simpleTable([
+      'Algum problema estrutural ou legal conhecido?',
+      'Documentação em dia? (caderneta, certidão permanente, licença)',
+      'Existem ónus, hipotecas, penhoras ou litígios?',
+      'Área real corresponde à área registada? Há áreas não licenciadas?',
+      'Existem obras recentes não declaradas?',
+      'O imóvel está arrendado ou ocupado?',
+      'Condomínio: valor mensal, dívidas, obras previstas no prédio?',
+    ].map(p => ({ label: `□  ${p}`, value: '' })))
+    b.space(4)
+
+    // ── Documentos ──
     b.header('DOCUMENTOS A SOLICITAR')
-    ;['Caderneta predial urbana', 'Certidão permanente do registo predial', 'Licença de utilização',
-      'Plantas do imóvel', 'Certificado energético', 'Declaração de dívidas ao condomínio',
-    ].forEach(p => b.check(p))
-    b.space()
-    b.section('Notas').input('Observações', '', { tall: true })
+    b.subheader('Obrigatórios')
+    b.simpleTable([
+      'Caderneta predial urbana (actualizada)',
+      'Certidão permanente do registo predial (com encargos)',
+      'Licença de utilização',
+      'Certificado energético',
+      'Plantas do imóvel (aprovadas pela Câmara)',
+    ].map(p => ({ label: `□  ${p}`, value: '' })))
+    b.space(4)
+    b.subheader('Complementares')
+    b.simpleTable([
+      'Ficha técnica da habitação (pós-2004)',
+      'Declaração de dívidas ao condomínio',
+      'Certidão de teor (se herança)',
+      'Habilitação de herdeiros (se herança)',
+      'Planta de localização e extracto do PDM',
+      'Projecto de arquitectura (se disponível)',
+      'Certificado de conformidade das instalações de gás',
+    ].map(p => ({ label: `□  ${p}`, value: '' })))
+    b.space(4)
+
+    // ── Notas do imóvel e espaço para notas de campo ──
+    if (im.notas) {
+      b.header('NOTAS DO CRM')
+      b.textBlock(im.notas)
+      b.space(4)
+    }
+
+    b.header('NOTAS DE CAMPO')
+    b.input('Impressão geral do contacto telefónico', '', { tall: true })
+    b.input('Pontos críticos a confirmar na visita', '', { tall: true })
+    b.input('Estratégia de negociação a adoptar', '', { tall: true })
+
+    b.disclaimer()
     return b.end()
   },
 
   // ── 3. CHECKLIST DE VISITA ──────────────────────────────────
   checklist_visita: (im) => {
+    const fotos = parseFotos(im)
     const b = new DocBuilder('Checklist de Visita', `${im.zona || ''} · ${im.tipologia || ''}`, im)
-    b.header('DADOS DA VISITA')
-    b.inputRow('Data da Visita', FDATE(im.data_visita), 'Consultor Presente', im.nome_consultor)
-    b.space()
 
-    const secs = {
-      'ESTRUTURA E EXTERIOR': ['Fachada — fissuras, humidade, degradação', 'Telhado / cobertura — telhas, isolamento', 'Terraço / varanda — impermeabilização', 'Garagem / estacionamento'],
-      'INTERIOR': ['Paredes — fissuras, humidade, bolor', 'Tectos — manchas, infiltrações', 'Pavimentos — estado, nivelamento', 'Portas — funcionamento, estado'],
-      'INSTALAÇÕES TÉCNICAS': ['Quadro eléctrico — disjuntores, estado', 'Tomadas e interruptores', 'Canalização — água quente e fria', 'Esgotos — cheiros, escoamento', 'Aquecimento — sistema, estado'],
-      'COZINHA E CASAS DE BANHO': ['Cozinha — bancada, armários, equipamentos', 'WC — louças, torneiras, ventilação', 'Azulejos — estado geral'],
-      'ENVOLVENTE': ['Vizinhança — ruído, segurança', 'Transportes e serviços próximos', 'Orientação solar', 'Estacionamento na zona'],
+    // ── Dados completos da visita ──
+    b.header('DADOS DA VISITA')
+    b.simpleTable([
+      { label: 'Imóvel', value: im.nome },
+      { label: 'Tipologia', value: im.tipologia },
+      { label: 'Zona', value: im.zona },
+      { label: 'Data da Visita', value: FDATE(im.data_visita) },
+      { label: 'Consultor', value: im.nome_consultor },
+      { label: 'Modelo de Negócio', value: im.modelo_negocio },
+      { label: 'Origem', value: im.origem },
+    ])
+    b.space(4)
+
+    // ── Valores de referência ──
+    b.header('VALORES DE REFERÊNCIA')
+    b.bigNumbers([
+      { label: 'Ask Price', value: EUR(im.ask_price) },
+      { label: 'Obra Estimada', value: EUR(im.custo_estimado_obra) },
+      { label: 'VVR Estimado', value: EUR(im.valor_venda_remodelado) },
+    ])
+    b.simpleTable([
+      { label: 'Área Útil', value: im.area_util ? `${im.area_util} m²` : 'A confirmar' },
+      { label: 'Área Bruta', value: im.area_bruta ? `${im.area_bruta} m²` : 'A confirmar' },
+      { label: 'Preço por m² (Ask)', value: im.ask_price && im.area_util ? EUR(Math.round(im.ask_price / im.area_util)) + '/m²' : '—' },
+    ])
+    b.space(4)
+
+    // ── Fotografias para referência ──
+    if (fotos.length > 0) {
+      b.photos(fotos, 'FOTOGRAFIAS DE REFERÊNCIA')
     }
 
-    for (const [title, items] of Object.entries(secs)) {
-      b.header(title)
-      items.forEach(item => b.check(item))
+    // ── Avaliação por categorias com classificação ──
+    // Legenda
+    b.header('LEGENDA DE CLASSIFICAÇÃO')
+    b.note('B = Bom (sem intervenção)  ·  R = Razoável (intervenção ligeira)  ·  M = Mau (intervenção profunda)  ·  N/A = Não aplicável')
+    b.space(4)
+
+    // ESTRUTURA E EXTERIOR
+    b.header('1. ESTRUTURA E EXTERIOR')
+    b.colTable(
+      [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
+      [
+        'Fachada (reboco, pintura, fissuras)',
+        'Telhado / cobertura (telhas, isolamento)',
+        'Chaminés e saídas de ventilação',
+        'Terraço / varanda (impermeabilização)',
+        'Garagem / estacionamento coberto',
+        'Muros / vedação / portões',
+        'Logradouro / jardim / quintal',
+        'Fundações (assentamentos visíveis)',
+        'Caixas de estore exteriores',
+      ].map(item => ({ _values: [item, '□', '□', '□', ''] }))
+    )
+    b.space(4)
+
+    // INTERIOR — COMPARTIMENTOS
+    b.header('2. INTERIOR — COMPARTIMENTOS')
+    b.colTable(
+      [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
+      [
+        'Hall de entrada',
+        'Sala de estar',
+        'Sala de jantar',
+        'Cozinha',
+        'Quarto 1 (suite)',
+        'Quarto 2',
+        'Quarto 3',
+        'WC 1',
+        'WC 2',
+        'Despensa / arrecadação',
+        'Corredor / circulação',
+      ].map(item => ({ _values: [item, '□', '□', '□', ''] }))
+    )
+    b.space(4)
+
+    // PAREDES, TECTOS E PAVIMENTOS
+    b.header('3. PAREDES, TECTOS E PAVIMENTOS')
+    b.colTable(
+      [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
+      [
+        'Paredes interiores (fissuras, humidade, bolor)',
+        'Tectos (manchas, infiltrações, deformações)',
+        'Pavimento sala / quartos (tipo e estado)',
+        'Pavimento cozinha (tipo e estado)',
+        'Pavimento WC (tipo e estado)',
+        'Rodapés e molduras',
+        'Portas interiores (funcionamento, estado)',
+      ].map(item => ({ _values: [item, '□', '□', '□', ''] }))
+    )
+    b.space(4)
+
+    // INSTALAÇÕES TÉCNICAS
+    b.header('4. INSTALAÇÕES TÉCNICAS')
+    b.colTable(
+      [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
+      [
+        'Quadro eléctrico (disjuntores, diferencial, terra)',
+        'Tomadas e interruptores (quantidade, estado)',
+        'Iluminação (pontos de luz, funcionamento)',
+        'Canalização de água fria (pressão, material)',
+        'Canalização de água quente (pressão, material)',
+        'Esgotos (cheiros, escoamento, caixas de visita)',
+        'Esquentador / caldeira / bomba de calor',
+        'Aquecimento central (radiadores, piso radiante)',
+        'Ar condicionado (unidades, estado)',
+        'Instalação de gás (tipo, certificação)',
+        'Telecomunicações (fibra, TV cabo, tomadas)',
+      ].map(item => ({ _values: [item, '□', '□', '□', ''] }))
+    )
+    b.space(4)
+
+    // CAIXILHARIA E ISOLAMENTO
+    b.header('5. CAIXILHARIA E ISOLAMENTO')
+    b.colTable(
+      [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
+      [
+        'Janelas (material, vidro simples/duplo)',
+        'Estores / portadas (funcionamento)',
+        'Porta de entrada (segurança, estado)',
+        'Isolamento térmico (pontes térmicas visíveis)',
+        'Isolamento acústico (ruído exterior)',
+        'Humidade por condensação (paredes frias)',
+      ].map(item => ({ _values: [item, '□', '□', '□', ''] }))
+    )
+    b.space(4)
+
+    // COZINHA E CASAS DE BANHO — DETALHE
+    b.header('6. COZINHA — DETALHE')
+    b.colTable(
+      [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
+      [
+        'Bancada (material, estado)',
+        'Armários superiores e inferiores',
+        'Equipamentos (forno, placa, exaustor)',
+        'Ponto de água (torneira, lava-louça)',
+        'Revestimento de parede (azulejo, estado)',
+        'Ventilação / exaustão',
+      ].map(item => ({ _values: [item, '□', '□', '□', ''] }))
+    )
+    b.space(4)
+
+    b.header('7. CASAS DE BANHO — DETALHE')
+    b.colTable(
+      [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
+      [
+        'Louças sanitárias (sanita, bidé, lavatório)',
+        'Base de duche / banheira (impermeabilização)',
+        'Torneiras e misturadoras',
+        'Azulejos (estado, fissuras, juntas)',
+        'Ventilação (natural ou mecânica)',
+        'Espelho e acessórios',
+      ].map(item => ({ _values: [item, '□', '□', '□', ''] }))
+    )
+    b.space(4)
+
+    // ENVOLVENTE E LOCALIZAÇÃO
+    b.header('8. ENVOLVENTE E LOCALIZAÇÃO')
+    b.colTable(
+      [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
+      [
+        'Vizinhança (tipo de zona, comércio, serviços)',
+        'Segurança da zona',
+        'Ruído (tráfego, vizinhos, indústria)',
+        'Transportes públicos (proximidade)',
+        'Estacionamento na envolvente',
+        'Orientação solar (nascente, poente)',
+        'Luminosidade natural dos compartimentos',
+        'Estado do prédio / condomínio (se aplicável)',
+        'Elevador (se aplicável)',
+        'Zonas comuns (se aplicável)',
+      ].map(item => ({ _values: [item, '□', '□', '□', ''] }))
+    )
+    b.space(4)
+
+    // CONFIRMAÇÃO DE ÁREAS
+    b.header('9. CONFIRMAÇÃO DE ÁREAS E MEDIÇÕES')
+    b.note('Medir ou estimar as áreas reais e comparar com o anunciado / registado.')
+    b.colTable(
+      [['Compartimento', 200], ['Medição (m²)', 130], ['Observações', 150]],
+      [
+        'Sala', 'Cozinha', 'Quarto 1', 'Quarto 2', 'Quarto 3',
+        'WC 1', 'WC 2', 'Corredor', 'Varanda / Terraço', 'Garagem',
+      ].map(item => ({ _values: [item, '', ''] }))
+    )
+    b.space(2)
+    b.simpleTable([
+      { label: 'Área Útil Anunciada', value: im.area_util ? `${im.area_util} m²` : '—' },
+      { label: 'Área Útil Medida / Estimada', value: '__________ m²' },
+      { label: 'Área Bruta Anunciada', value: im.area_bruta ? `${im.area_bruta} m²` : '—' },
+      { label: 'Discrepância', value: '□ Sim  □ Não' },
+    ])
+    b.space(4)
+
+    // ESTIMATIVA DE OBRA (preenchimento rápido)
+    b.header('10. ESTIMATIVA PRELIMINAR DE OBRA')
+    b.note('Registo rápido dos trabalhos necessários observados na visita.')
+    b.colTable(
+      [['Trabalho', 230], ['Necessário?', 80], ['Grau', 80], ['Custo Est.', 90]],
+      [
+        'Demolições e remoção de entulho',
+        'Estrutura / alvenaria / paredes',
+        'Cobertura / telhado',
+        'Canalização (água e esgotos)',
+        'Electricidade (quadro e instalação)',
+        'Revestimentos (pavimentos e paredes)',
+        'Cozinha completa',
+        'Casa(s) de banho completa(s)',
+        'Caixilharia (janelas e portas)',
+        'Pintura interior e exterior',
+        'Isolamento térmico / acústico',
+        'Ar condicionado / aquecimento',
+        'Arranjos exteriores / jardim',
+        'Outros',
+      ].map(item => ({ _values: [item, '□ S  □ N', '□ L  □ P', '€ _____'] }))
+    )
+    b.note('L = Ligeira  ·  P = Profunda')
+    b.space(2)
+    b.highlight('Total Estimado de Obra (campo)', '€ _______________')
+    b.space(4)
+
+    // NOTAS
+    if (im.notas) {
+      b.header('NOTAS DO CRM')
+      b.textBlock(im.notas)
       b.space(4)
     }
 
-    b.header('IMPRESSÃO GERAL')
-    b.input('Impressão geral do imóvel', '', { tall: true })
-    b.space()
-    b.section('Decisão')
-    b.check('Avançar para estudo de mercado')
-    b.check('Necessita segunda visita')
-    b.check('Descartar')
-    b.input('Motivo / Observações', '', { tall: true })
+    // IMPRESSÃO E DECISÃO
+    b.header('11. IMPRESSÃO GERAL')
+    b.input('Pontos fortes do imóvel', '', { tall: true })
+    b.input('Pontos fracos / riscos identificados', '', { tall: true })
+    b.input('Potencial de valorização', '', { tall: true })
+    b.space(4)
+
+    b.header('12. DECISÃO')
+    b.simpleTable([
+      { label: '□  GO — Avançar para estudo de mercado e análise de rentabilidade', value: '' },
+      { label: '□  SEGUNDA VISITA — Necessita validação adicional (especificar)', value: '' },
+      { label: '□  PERITO — Necessita avaliação por engenheiro / arquitecto', value: '' },
+      { label: '□  STAND-BY — Aguardar documentação ou informação adicional', value: '' },
+      { label: '□  NO GO — Descartar (especificar motivo)', value: '' },
+    ])
+    b.space(4)
+    b.input('Justificação da decisão', '', { tall: true })
+    b.input('Próximos passos', '', { tall: true })
+
+    b.disclaimer()
     return b.end()
   },
 
   // ── 4a. RELATÓRIO DE VISITA ─────────────────────────────────
   relatorio_visita: (im) => {
+    const fotos = parseFotos(im)
     const b = new DocBuilder('Relatório de Visita', im.zona || '', im)
     b.header('DADOS DA VISITA')
-    b.row('Imóvel', im.nome, { alt: true }).row('Zona', im.zona)
-    b.row('Data Visita', FDATE(im.data_visita), { alt: true }).row('Consultor', im.nome_consultor)
-    b.space()
+    b.simpleTable([
+      { label: 'Imóvel', value: im.nome }, { label: 'Zona', value: im.zona },
+      { label: 'Data Visita', value: FDATE(im.data_visita) }, { label: 'Consultor', value: im.nome_consultor },
+    ])
+    if (fotos.length > 0) { b.space(4); b.photos(fotos, 'FOTOGRAFIAS DA VISITA') }
+    b.space(4)
     b.header('ESTADO REAL DO IMÓVEL')
-    b.input('Descrição geral do estado encontrado', '', { tall: true })
-    b.space()
+    b.metric('Descrição geral do estado encontrado', '________________')
+    b.space(4)
     b.header('OBRAS NECESSÁRIAS')
-    ;['Demolições e remoção', 'Estrutura / alvenaria', 'Canalização', 'Electricidade',
-      'Revestimentos / acabamentos', 'Cozinha e WC', 'Caixilharia', 'Pintura', 'Outros',
-    ].forEach(item => b.inputRow(item, '', 'Custo estimado', ''))
-    b.space()
+    b.colTable(
+      [['Trabalho', 280], ['Custo Estimado', 200]],
+      ['Demolições e remoção', 'Estrutura / alvenaria', 'Canalização', 'Electricidade',
+        'Revestimentos / acabamentos', 'Cozinha e WC', 'Caixilharia', 'Pintura', 'Outros',
+      ].map(item => ({ _values: [item, '________________'] }))
+    )
+    b.space(4)
     b.header('DECISÃO')
-    b.check('GO — Avançar para análise de rentabilidade')
-    b.check('SEGUNDA VISITA — Necessita validação adicional')
-    b.check('NO GO — Descartar')
-    b.input('Justificação', '', { tall: true })
+    b.simpleTable([
+      { label: '□  GO — Avançar para análise de rentabilidade', value: '' },
+      { label: '□  SEGUNDA VISITA — Necessita validação adicional', value: '' },
+      { label: '□  NO GO — Descartar', value: '' },
+    ])
+    b.metric('Justificação', '________________')
+    b.disclaimer()
     return b.end()
   },
 
@@ -370,121 +952,128 @@ const GENERATORS = {
     const obra = a.obra_com_iva || a.obra || im.custo_estimado_obra || 0
     const vvr = a.vvr || im.valor_venda_remodelado || 0
 
-    // KPIs em destaque
     b.header('RESUMO DO INVESTIMENTO')
-    b.highlight('Capital Necessário', EUR(a.capital_necessario || compra + obra), C.blue)
-    b.highlight('Lucro Líquido', EUR(a.lucro_liquido), a.lucro_liquido > 0 ? C.green : C.red)
-    b.highlight('Retorno Anualizado', PCT(a.retorno_anualizado), C.gold)
-    b.space()
+    b.bigNumbers([
+      { label: 'Capital Necessário', value: EUR(a.capital_necessario || compra + obra) },
+      { label: 'Lucro Líquido', value: EUR(a.lucro_liquido) },
+      { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
+    ])
+    b.space(4)
 
-    // A. Custos de Aquisição
     b.header('A. CUSTOS DE AQUISIÇÃO')
-    b.row('Valor de Compra', EUR(compra), { alt: true })
-    b.row('VPT', EUR(a.vpt))
-    b.row('Finalidade', (a.finalidade || '').replace(/_/g, ' '), { alt: true })
-    b.row('IMT', EUR(a.imt))
-    b.row('Imposto de Selo', EUR(a.imposto_selo), { alt: true })
-    b.row('Escritura', EUR(a.escritura))
-    b.row('CPCV Compra', EUR(a.cpcv_compra), { alt: true })
-    b.row('Due Diligence', EUR(a.due_diligence))
-    b.row('Total Aquisição', EUR(a.total_aquisicao), { alt: true })
-    b.space()
+    b.simpleTable([
+      { label: 'Valor de Compra', value: EUR(compra) },
+      { label: 'VPT', value: EUR(a.vpt) },
+      { label: 'Finalidade', value: (a.finalidade || '').replace(/_/g, ' ') },
+      { label: 'IMT', value: EUR(a.imt) },
+      { label: 'Imposto de Selo', value: EUR(a.imposto_selo) },
+      { label: 'Escritura', value: EUR(a.escritura) },
+      { label: 'CPCV Compra', value: EUR(a.cpcv_compra) },
+      { label: 'Due Diligence', value: EUR(a.due_diligence) },
+      { label: 'Total Aquisição', value: EUR(a.total_aquisicao), total: true },
+    ])
+    b.space(4)
 
-    // B. Financiamento
     if (a.perc_financiamento > 0) {
       b.header('B. FINANCIAMENTO')
-      b.row('% Financiamento', PCT(a.perc_financiamento), { alt: true })
-      b.row('Valor Financiado', EUR(a.valor_financiado))
-      b.row('Prazo', `${a.prazo_anos || 30} anos`, { alt: true })
-      b.row('TAN', PCT(a.tan))
-      b.row('Tipo Taxa', a.tipo_taxa, { alt: true })
-      b.row('Prestação Mensal', EUR(a.prestacao_mensal))
-      b.row('Comissões Bancárias', EUR(a.comissoes_banco), { alt: true })
-      b.row('IS Financiamento', EUR(a.is_financiamento))
-      b.space()
+      b.simpleTable([
+        { label: '% Financiamento', value: PCT(a.perc_financiamento) },
+        { label: 'Valor Financiado', value: EUR(a.valor_financiado) },
+        { label: 'Prazo', value: `${a.prazo_anos || 30} anos` },
+        { label: 'TAN', value: PCT(a.tan) },
+        { label: 'Tipo Taxa', value: a.tipo_taxa },
+        { label: 'Prestação Mensal', value: EUR(a.prestacao_mensal) },
+        { label: 'Comissões Bancárias', value: EUR(a.comissoes_banco) },
+        { label: 'IS Financiamento', value: EUR(a.is_financiamento) },
+      ])
+      b.space(4)
     }
 
-    // C. Custos de Obra
     b.header('C. CUSTOS DE OBRA')
-    b.row('Obra', EUR(a.obra), { alt: true })
-    b.row('PMO %', PCT(a.pmo_perc))
-    b.row('ARU', a.aru ? 'Sim' : 'Não', { alt: true })
-    b.row('Ampliação', a.ampliacao ? 'Sim' : 'Não')
-    b.row('IVA Obra', EUR(a.iva_obra), { alt: true })
-    b.row('Obra com IVA', EUR(a.obra_com_iva))
-    b.row('Licenciamento', EUR(a.licenciamento), { alt: true })
-    b.space()
+    b.simpleTable([
+      { label: 'Obra', value: EUR(a.obra) },
+      { label: 'PMO %', value: PCT(a.pmo_perc) },
+      { label: 'ARU', value: a.aru ? 'Sim' : 'Não' },
+      { label: 'Ampliação', value: a.ampliacao ? 'Sim' : 'Não' },
+      { label: 'IVA Obra', value: EUR(a.iva_obra) },
+      { label: 'Obra com IVA', value: EUR(a.obra_com_iva) },
+      { label: 'Licenciamento', value: EUR(a.licenciamento) },
+    ])
+    b.space(4)
 
-    // D. Detenção
     b.header('D. CUSTOS DE DETENÇÃO')
-    b.row('Meses de Retenção', a.meses || '—', { alt: true })
-    b.row('Seguro Mensal', EUR(a.seguro_mensal))
-    b.row('Condomínio Mensal', EUR(a.condominio_mensal), { alt: true })
-    b.row('Taxa IMI', PCT(a.taxa_imi))
-    b.space()
+    b.simpleTable([
+      { label: 'Meses de Retenção', value: a.meses || '—' },
+      { label: 'Seguro Mensal', value: EUR(a.seguro_mensal) },
+      { label: 'Condomínio Mensal', value: EUR(a.condominio_mensal) },
+      { label: 'Taxa IMI', value: PCT(a.taxa_imi) },
+    ])
+    b.space(4)
 
-    // E. Venda
     b.header('E. VENDA')
-    b.row('VVR', EUR(vvr), { alt: true })
-    b.row('Comissão %', PCT(a.comissao_perc))
-    b.row('Comissão com IVA', EUR(a.comissao_com_iva), { alt: true })
-    b.row('Total Custos Venda', EUR(a.total_venda))
-    b.space()
+    b.simpleTable([
+      { label: 'VVR', value: EUR(vvr) },
+      { label: 'Comissão %', value: PCT(a.comissao_perc) },
+      { label: 'Comissão com IVA', value: EUR(a.comissao_com_iva) },
+      { label: 'Total Custos Venda', value: EUR(a.total_venda), total: true },
+    ])
+    b.space(4)
 
-    // F. Fiscalidade
     b.header('F. FISCALIDADE')
-    b.row('Regime', a.regime_fiscal || '—', { alt: true })
-    b.row('Impostos', EUR(a.impostos))
+    const fiscRows = [
+      { label: 'Regime', value: a.regime_fiscal || '—' },
+      { label: 'Impostos', value: EUR(a.impostos) },
+    ]
     if (a.regime_fiscal === 'Empresa') {
-      b.row('Derrama Municipal', PCT(a.derrama_perc), { alt: true })
-      b.row('% Distribuição Dividendos', PCT(a.perc_dividendos))
-      b.row('Retenção Dividendos', EUR(a.retencao_dividendos), { alt: true })
+      fiscRows.push({ label: 'Derrama Municipal', value: PCT(a.derrama_perc) })
+      fiscRows.push({ label: '% Distribuição Dividendos', value: PCT(a.perc_dividendos) })
+      fiscRows.push({ label: 'Retenção Dividendos', value: EUR(a.retencao_dividendos) })
     }
-    b.space()
+    b.simpleTable(fiscRows)
+    b.space(4)
 
-    // G. Resultado Final
     b.header('G. RESULTADO')
-    b.highlight('Lucro Bruto', EUR(a.lucro_bruto), C.green)
-    b.highlight('Impostos', EUR(a.impostos), C.red)
-    b.highlight('Lucro Líquido', EUR(a.lucro_liquido), a.lucro_liquido > 0 ? C.green : C.red)
-    b.space()
-    b.row('Retorno Total', PCT(a.retorno_total), { alt: true })
-    b.row('Retorno Anualizado', PCT(a.retorno_anualizado))
-    b.row('Cash-on-Cash', PCT(a.cash_on_cash), { alt: true })
-    b.row('Break-Even', EUR(a.break_even))
-    b.space()
+    b.bigNumbers([
+      { label: 'Lucro Bruto', value: EUR(a.lucro_bruto) },
+      { label: 'Impostos', value: EUR(a.impostos) },
+      { label: 'Lucro Líquido', value: EUR(a.lucro_liquido) },
+    ])
+    b.simpleTable([
+      { label: 'Retorno Total', value: PCT(a.retorno_total) },
+      { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
+      { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash) },
+      { label: 'Break-Even', value: EUR(a.break_even) },
+    ])
+    b.space(4)
 
-    // H. Stress Tests
     if (a.stress_tests) {
       let st = a.stress_tests
       if (typeof st === 'string') try { st = JSON.parse(st) } catch { st = null }
       if (st) {
         b.header('H. TESTES DE STRESS')
-        if (st.base) {
-          b.row('Base — Lucro Líquido', EUR(st.base.lucro_liquido), { alt: true })
-          b.row('Base — RA', PCT(st.base.retorno_anualizado))
-        }
-        if (st.pior) {
-          b.row('Pior Cenário — Lucro', EUR(st.pior.lucro_liquido), { alt: true })
-          b.row('Pior Cenário — RA', PCT(st.pior.retorno_anualizado))
-        }
-        if (st.melhor) {
-          b.row('Melhor Cenário — Lucro', EUR(st.melhor.lucro_liquido), { alt: true })
-          b.row('Melhor Cenário — RA', PCT(st.melhor.retorno_anualizado))
-        }
-        // Cenários individuais
+        b.bigNumbers([
+          { label: 'Pior Cenário', value: EUR(st.pior?.lucro_liquido) },
+          { label: 'Cenário Base', value: EUR(st.base?.lucro_liquido) },
+          { label: 'Melhor Cenário', value: EUR(st.melhor?.lucro_liquido) },
+        ])
+        b.simpleTable([
+          ...(st.base ? [{ label: 'Base — RA', value: PCT(st.base.retorno_anualizado) }] : []),
+          ...(st.pior ? [{ label: 'Pior Cenário — RA', value: PCT(st.pior.retorno_anualizado) }] : []),
+          ...(st.melhor ? [{ label: 'Melhor Cenário — RA', value: PCT(st.melhor.retorno_anualizado) }] : []),
+        ])
+
         const cenarios = st.cenarios || st.downside || []
         if (Array.isArray(cenarios) && cenarios.length > 0) {
-          b.space()
-          const ws = [200, 100, 90, 90]
-          b.tableHeader([['Cenário', 200], ['Lucro Líq.', 100], ['RT', 90], ['RA', 90]])
-          cenarios.forEach((c, i) => {
-            b.tableRow([c.nome || c.label || `Cenário ${i+1}`, EUR(c.lucro_liquido), PCT(c.retorno_total), PCT(c.retorno_anualizado)], ws, i % 2 === 0)
-          })
+          b.space(4)
+          b.colTable(
+            [['Cenário', 200], ['Lucro Líq.', 100], ['RT', 90], ['RA', 90]],
+            cenarios.map((c, i) => ({ _values: [c.nome || c.label || `Cenário ${i+1}`, EUR(c.lucro_liquido), PCT(c.retorno_total), PCT(c.retorno_anualizado)] }))
+          )
         }
       }
     }
 
+    b.disclaimer()
     return b.end()
   },
 
@@ -494,87 +1083,87 @@ const GENERATORS = {
     const a = analise || {}
 
     b.header('IMÓVEL EM ANÁLISE')
-    b.row('Imóvel', im.nome, { alt: true }).row('Zona', im.zona)
-    b.row('Tipologia', im.tipologia, { alt: true }).row('VVR Estimado', EUR(a.vvr || im.valor_venda_remodelado))
-    b.space()
+    b.simpleTable([
+      { label: 'Imóvel', value: im.nome }, { label: 'Zona', value: im.zona },
+      { label: 'Tipologia', value: im.tipologia }, { label: 'VVR Estimado', value: EUR(a.vvr || im.valor_venda_remodelado) },
+    ])
+    b.space(4)
 
-    // Comparáveis da calculadora
     let comps = a.comparaveis || []
     if (typeof comps === 'string') try { comps = JSON.parse(comps) } catch { comps = [] }
 
     if (Array.isArray(comps) && comps.length > 0) {
-      // Comparáveis organizados por tipologia
       for (let t = 0; t < comps.length; t++) {
         const tip = comps[t]
         if (!tip) continue
 
-        // Tipologia header
         const tipLabel = tip.tipologia || tip.label || `Tipologia ${t + 1}`
         b.header(`TIPOLOGIA: ${tipLabel.toUpperCase()}`)
 
         if (tip.area || tip.renda || tip.yield_bruta) {
-          b.row('Área (m²)', tip.area, { alt: true })
-          b.row('Renda Mensal', EUR(tip.renda))
-          b.row('Yield Bruta', PCT(tip.yield_bruta), { alt: true })
-          b.row('VVR pelo Rendimento', EUR(tip.vvr_rendimento))
-          b.space()
+          b.simpleTable([
+            { label: 'Área (m²)', value: tip.area },
+            { label: 'Renda Mensal', value: EUR(tip.renda) },
+            { label: 'Yield Bruta', value: PCT(tip.yield_bruta) },
+            { label: 'VVR pelo Rendimento', value: EUR(tip.vvr_rendimento) },
+          ])
+          b.space(4)
         }
 
         if (tip.vvr_alvo) {
-          b.highlight('VVR Alvo', EUR(tip.vvr_alvo), C.gold)
-          b.space()
+          b.bigNumbers([{ label: 'VVR Alvo', value: EUR(tip.vvr_alvo) }])
+          b.space(4)
         }
 
-        // Comparáveis individuais
         const items = tip.comparaveis || tip.items || []
         if (items.length > 0) {
-          const ws = [120, 55, 70, 70, 55, 60, 55]
-          b.tableHeader([['Comparável', 120], ['Área', 55], ['Preço', 70], ['€/m²', 70], ['Ajuste', 55], ['€/m² Aj.', 60], ['VVR Est.', 55]])
-          items.forEach((c, i) => {
-            const eurM2 = c.area > 0 ? Math.round((c.preco || c.preco_anuncio || 0) / c.area) : '—'
-            const ajTotal = (c.ajuste_total || 0)
-            const eurM2Aj = typeof eurM2 === 'number' ? Math.round(eurM2 * (1 + ajTotal / 100)) : '—'
-            const vvrEst = typeof eurM2Aj === 'number' && tip.area ? eurM2Aj * tip.area : '—'
-            b.tableRow([
-              c.notas || c.zona || `Comp. ${i+1}`,
-              c.area ? `${c.area}m²` : '—',
-              EUR(c.preco || c.preco_anuncio),
-              typeof eurM2 === 'number' ? `€${eurM2}` : '—',
-              ajTotal ? `${ajTotal > 0 ? '+' : ''}${ajTotal}%` : '0%',
-              typeof eurM2Aj === 'number' ? `€${eurM2Aj}` : '—',
-              typeof vvrEst === 'number' ? EUR(vvrEst) : '—',
-            ], ws, i % 2 === 0)
-          })
+          b.colTable(
+            [['Comparável', 120], ['Área', 55], ['Preço', 70], ['€/m²', 70], ['Ajuste', 55], ['€/m² Aj.', 60], ['VVR Est.', 55]],
+            items.map((c, i) => {
+              const eurM2 = c.area > 0 ? Math.round((c.preco || c.preco_anuncio || 0) / c.area) : '—'
+              const ajTotal = (c.ajuste_total || 0)
+              const eurM2Aj = typeof eurM2 === 'number' ? Math.round(eurM2 * (1 + ajTotal / 100)) : '—'
+              const vvrEst = typeof eurM2Aj === 'number' && tip.area ? eurM2Aj * tip.area : '—'
+              return { _values: [
+                c.notas || c.zona || `Comp. ${i+1}`,
+                c.area ? `${c.area}m²` : '—',
+                EUR(c.preco || c.preco_anuncio),
+                typeof eurM2 === 'number' ? `€${eurM2}` : '—',
+                ajTotal ? `${ajTotal > 0 ? '+' : ''}${ajTotal}%` : '0%',
+                typeof eurM2Aj === 'number' ? `€${eurM2Aj}` : '—',
+                typeof vvrEst === 'number' ? EUR(vvrEst) : '—',
+              ] }
+            })
+          )
 
-          // Média
           const validVVRs = items.filter(c => c.vvr_estimado > 0).map(c => c.vvr_estimado)
           if (validVVRs.length > 0) {
             const media = Math.round(validVVRs.reduce((a, b) => a + b, 0) / validVVRs.length)
             b.space(4)
-            b.highlight('Média VVR Comparáveis', EUR(media), C.green)
+            b.metric('Média VVR Comparáveis', EUR(media), { total: true })
           }
         }
-        b.space()
+        b.space(4)
       }
     } else {
-      // Sem dados da calculadora — template vazio
       for (let i = 1; i <= 5; i++) {
         b.header(`COMPARÁVEL ${i}`)
-        b.inputRow('Endereço / Zona', '', 'Tipologia', '')
-        b.inputRow('Área (m²)', '', 'Valor de Venda', '')
-        b.inputRow('Valor por m²', '', 'Data de Venda', '')
-        b.inputRow('Fonte', '', 'Ajuste %', '')
-        b.input('Notas', '')
+        b.simpleTable([
+          { label: 'Endereço / Zona', value: '________________' }, { label: 'Tipologia', value: '________________' },
+          { label: 'Área (m²)', value: '________________' }, { label: 'Valor de Venda', value: '________________' },
+          { label: 'Valor por m²', value: '________________' }, { label: 'Data de Venda', value: '________________' },
+          { label: 'Fonte', value: '________________' }, { label: 'Ajuste %', value: '________________' },
+        ])
+        b.metric('Notas', '________________')
         b.space(4)
       }
       b.header('CONCLUSÃO')
-      b.input('Análise comparativa e valor de mercado estimado', '', { tall: true })
+      b.metric('Análise comparativa e valor de mercado estimado', '________________')
     }
 
-    // Disclaimer
-    b.space()
+    b.space(4)
     b.text('Nota: Os valores apresentados são estimativas baseadas em comparáveis de mercado e podem não reflectir o valor exacto de transacção. A Somnium Properties recomenda validação com avaliação profissional certificada.', { size: 7, color: C.muted })
-
+    b.disclaimer()
     return b.end()
   },
 
@@ -582,122 +1171,138 @@ const GENERATORS = {
   proposta_formal: (im) => {
     const b = new DocBuilder('Proposta ao Proprietário', im.zona || '', im)
     b.header('DADOS DO IMÓVEL')
-    b.row('Imóvel', im.nome, { alt: true }).row('Zona', im.zona)
-    b.row('Consultor', im.nome_consultor, { alt: true }).row('Ask Price', EUR(im.ask_price))
-    b.space()
+    b.simpleTable([
+      { label: 'Imóvel', value: im.nome }, { label: 'Zona', value: im.zona },
+      { label: 'Consultor', value: im.nome_consultor }, { label: 'Ask Price', value: EUR(im.ask_price) },
+    ])
+    b.space(4)
     b.header('PROPOSTA')
-    b.highlight('Valor Proposto', EUR(im.valor_proposta))
-    b.input('Condições de Pagamento', '')
-    b.inputRow('Prazo para CPCV', '', 'Prazo para Escritura', '')
-    b.input('Condições Especiais', '', { tall: true })
-    b.space()
-    b.section('Justificação do Valor')
-    b.input('Fundamentos da proposta (comparáveis, estado, obra necessária)', '', { tall: true })
+    b.bigNumbers([{ label: 'Valor Proposto', value: EUR(im.valor_proposta) }])
+    b.simpleTable([
+      { label: 'Condições de Pagamento', value: '________________' },
+      { label: 'Prazo para CPCV', value: '________________' },
+      { label: 'Prazo para Escritura', value: '________________' },
+      { label: 'Condições Especiais', value: '________________' },
+    ])
+    b.space(4)
+    b.subheader('Justificação do Valor')
+    b.metric('Fundamentos da proposta (comparáveis, estado, obra necessária)', '________________')
+    b.disclaimer()
     return b.end()
   },
 
   // ── 6. APRESENTAÇÃO AO INVESTIDOR (dossier completo com calculadora + CAEP)
   apresentacao_investidor: (im, analise) => {
+    const fotos = parseFotos(im)
     const b = new DocBuilder('Dossier de Investimento', `Oportunidade · ${im.zona || ''}`, im)
     const a = analise || {}
     const compra = a.compra || im.valor_proposta || im.ask_price || 0
     const obra = a.obra_com_iva || a.obra || im.custo_estimado_obra || 0
     const vvr = a.vvr || im.valor_venda_remodelado || 0
 
-    // 1. Oportunidade
     b.header('OPORTUNIDADE DE INVESTIMENTO')
-    b.row('Imóvel', im.nome, { alt: true }).row('Zona', im.zona)
-    b.row('Tipologia', im.tipologia, { alt: true }).row('Modelo', im.modelo_negocio || 'CAEP 50/50')
-    b.row('Prazo Estimado', a.meses ? `${a.meses} meses` : '—', { alt: true })
-    b.space()
+    b.simpleTable([
+      { label: 'Imóvel', value: im.nome }, { label: 'Zona', value: im.zona },
+      { label: 'Tipologia', value: im.tipologia }, { label: 'Modelo', value: im.modelo_negocio || 'CAEP 50/50' },
+      { label: 'Prazo Estimado', value: a.meses ? `${a.meses} meses` : '—' },
+    ])
+    if (fotos.length > 0) { b.space(4); b.photos(fotos, 'O IMÓVEL') }
+    b.space(4)
 
-    // 2. KPIs em destaque
     b.header('NÚMEROS DO NEGÓCIO')
-    b.highlight('Capital Necessário', EUR(a.capital_necessario || compra + obra), C.blue)
-    b.highlight('Lucro Líquido', EUR(a.lucro_liquido), a.lucro_liquido > 0 ? C.green : C.red)
-    b.highlight('Retorno Anualizado', PCT(a.retorno_anualizado), C.gold)
-    b.space()
+    b.bigNumbers([
+      { label: 'Capital Necessário', value: EUR(a.capital_necessario || compra + obra) },
+      { label: 'Lucro Líquido', value: EUR(a.lucro_liquido) },
+      { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
+    ])
+    b.space(4)
 
-    // 3. Decomposição de custos
     b.header('DECOMPOSIÇÃO DE CUSTOS')
-    b.row('Compra', EUR(compra), { alt: true }).row('IMT + IS + Escritura', EUR((a.imt || 0) + (a.imposto_selo || 0) + (a.escritura || 0)))
-    b.row('Total Aquisição', EUR(a.total_aquisicao), { alt: true })
-    b.row('Obra com IVA', EUR(a.obra_com_iva || obra))
-    b.row('Custos Detenção', EUR(a.total_manutencao), { alt: true })
-    b.row('VVR (conservador)', EUR(vvr))
-    b.row('Comissão Venda', EUR(a.comissao_com_iva), { alt: true })
-    b.row('Impostos (' + (a.regime_fiscal || 'Empresa') + ')', EUR(a.impostos))
-    b.space()
+    b.simpleTable([
+      { label: 'Compra', value: EUR(compra) },
+      { label: 'IMT + IS + Escritura', value: EUR((a.imt || 0) + (a.imposto_selo || 0) + (a.escritura || 0)) },
+      { label: 'Total Aquisição', value: EUR(a.total_aquisicao), total: true },
+      { label: 'Obra com IVA', value: EUR(a.obra_com_iva || obra) },
+      { label: 'Custos Detenção', value: EUR(a.total_manutencao) },
+      { label: 'VVR (conservador)', value: EUR(vvr) },
+      { label: 'Comissão Venda', value: EUR(a.comissao_com_iva) },
+      { label: `Impostos (${a.regime_fiscal || 'Empresa'})`, value: EUR(a.impostos) },
+    ])
+    b.space(4)
 
-    // 4. Resultado
     b.header('RESULTADO')
-    b.row('Lucro Bruto', EUR(a.lucro_bruto), { alt: true })
-    b.row('Impostos', EUR(a.impostos))
-    b.row('Lucro Líquido', EUR(a.lucro_liquido), { alt: true })
-    b.row('Retorno Total', PCT(a.retorno_total))
-    b.row('Retorno Anualizado', PCT(a.retorno_anualizado), { alt: true })
-    b.row('Cash-on-Cash', PCT(a.cash_on_cash))
-    b.space()
+    b.simpleTable([
+      { label: 'Lucro Bruto', value: EUR(a.lucro_bruto) },
+      { label: 'Impostos', value: EUR(a.impostos) },
+      { label: 'Lucro Líquido', value: EUR(a.lucro_liquido), total: true },
+      { label: 'Retorno Total', value: PCT(a.retorno_total) },
+      { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
+      { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash) },
+    ])
+    b.space(4)
 
-    // 5. CAEP
+    // CAEP
     let caep = a.caep
     if (typeof caep === 'string') try { caep = JSON.parse(caep) } catch { caep = null }
     if (caep) {
       b.header('ESTRUTURA CAEP')
-      b.row('% Somnium', PCT(caep.perc_somnium || 40), { alt: true })
-      b.row('Base Distribuição', caep.base_distribuicao || 'Lucro bruto')
+      b.inlineData([{ label: '% Somnium', value: PCT(caep.perc_somnium || 40) }, { label: 'Base Distribuição', value: caep.base_distribuicao || 'Lucro bruto' }])
       if (caep.investidores && caep.investidores.length > 0) {
         b.space(4)
-        const ws = [140, 90, 60, 70, 60, 60]
-        b.tableHeader([['Investidor', 140], ['Capital', 90], ['%', 60], ['Lucro', 70], ['ROI', 60], ['RA', 60]])
-        caep.investidores.forEach((inv, i) => {
-          b.tableRow([inv.nome || `Inv. ${i+1}`, EUR(inv.capital), PCT(inv.perc), EUR(inv.lucro), PCT(inv.roi), PCT(inv.ra)], ws, i % 2 === 0)
-        })
+        b.colTable(
+          [['Investidor', 140], ['Capital', 90], ['%', 60], ['Lucro', 70], ['ROI', 60], ['RA', 60]],
+          caep.investidores.map((inv, i) => ({ _values: [inv.nome || `Inv. ${i+1}`, EUR(inv.capital), PCT(inv.perc), EUR(inv.lucro), PCT(inv.roi), PCT(inv.ra)] }))
+        )
       }
-      b.space()
+      b.space(4)
     } else {
       b.header('MODELO DE PARCERIA')
-      b.bullet('Investidor(es) passivo(s): 50% do lucro')
-      b.bullet('Somnium Properties: 50% (gestão operacional + obra)')
-      b.bullet('Acesso total a documentação via Google Drive')
-      b.bullet('Relatórios semanais de obra com fotos e vídeos')
-      b.bullet('Comunicação dedicada via Slack')
-      b.space()
+      b.simpleTable([
+        { label: 'Investidor(es) passivo(s)', value: '50% do lucro' },
+        { label: 'Somnium Properties', value: '50% (gestão operacional + obra)' },
+        { label: 'Documentação', value: 'Acesso total via Google Drive' },
+        { label: 'Relatórios', value: 'Semanais de obra com fotos e vídeos' },
+        { label: 'Comunicação', value: 'Canal dedicado via Slack' },
+      ])
+      b.space(4)
     }
 
-    // 6. Stress Tests
+    // Stress Tests
     if (a.stress_tests) {
       let st = a.stress_tests
       if (typeof st === 'string') try { st = JSON.parse(st) } catch { st = null }
       if (st) {
         b.header('TESTES DE STRESS')
-        if (st.pior) b.highlight('Pior Cenário — Lucro', EUR(st.pior.lucro_liquido), C.red)
-        if (st.base) b.highlight('Cenário Base — Lucro', EUR(st.base.lucro_liquido), C.gold)
-        if (st.melhor) b.highlight('Melhor Cenário — Lucro', EUR(st.melhor.lucro_liquido), C.green)
-        b.space()
+        b.bigNumbers([
+          { label: 'Pior Cenário', value: EUR(st.pior?.lucro_liquido) },
+          { label: 'Cenário Base', value: EUR(st.base?.lucro_liquido) },
+          { label: 'Melhor Cenário', value: EUR(st.melhor?.lucro_liquido) },
+        ])
+        b.space(4)
       }
     }
 
-    // 7. Estratégia de saída
     b.header('ESTRATÉGIA DE SAÍDA')
-    b.step(1, 'Exclusividade 15 dias para consultor original')
-    b.step(2, 'Top 2-3 consultores de Coimbra')
-    b.step(3, 'Ajuste de preço (-5%) após 2 meses sem venda')
-    b.step(4, 'Plano B: conversão para arrendamento (estudantes)')
-    b.space()
+    b.simpleTable([
+      { label: '1. Exclusividade 15 dias para consultor original', value: '' },
+      { label: '2. Top 2-3 consultores de Coimbra', value: '' },
+      { label: '3. Ajuste de preço (-5%) após 2 meses sem venda', value: '' },
+      { label: '4. Plano B: conversão para arrendamento (estudantes)', value: '' },
+    ])
+    b.space(4)
 
-    // 8. Transparência
     b.header('TRANSPARÊNCIA E COMUNICAÇÃO')
-    b.bullet('Google Drive exclusivo com toda a documentação do negócio')
-    b.bullet('Canal Slack dedicado para comunicação em tempo real')
-    b.bullet('Relatórios semanais de obra com fotos e vídeos')
-    b.bullet('Acesso a orçamentos, faturas e contratos')
-    b.bullet('Acesso vitalício aos documentos do negócio')
+    b.simpleTable([
+      { label: 'Google Drive exclusivo com toda a documentação do negócio', value: '' },
+      { label: 'Canal Slack dedicado para comunicação em tempo real', value: '' },
+      { label: 'Relatórios semanais de obra com fotos e vídeos', value: '' },
+      { label: 'Acesso a orçamentos, faturas e contratos', value: '' },
+      { label: 'Acesso vitalício aos documentos do negócio', value: '' },
+    ])
 
-    // Disclaimer
-    b.space()
+    b.space(4)
     b.text('Os valores apresentados são estimativas conservadoras baseadas em análise de mercado e podem variar. A Somnium Properties utiliza stress tests automáticos em todos os negócios para protecção do investidor. Investimento imobiliário envolve risco de capital.', { size: 7, color: C.muted })
-
+    b.disclaimer()
     return b.end()
   },
 
@@ -705,19 +1310,24 @@ const GENERATORS = {
   resumo_negociacao: (im) => {
     const b = new DocBuilder('Resumo de Negociação', im.zona || '', im)
     b.header('DADOS')
-    b.row('Imóvel', im.nome, { alt: true }).row('Ask Price', EUR(im.ask_price))
-    b.row('Valor Proposta', EUR(im.valor_proposta), { alt: true }).row('Consultor', im.nome_consultor)
-    b.space()
+    b.simpleTable([
+      { label: 'Imóvel', value: im.nome }, { label: 'Ask Price', value: EUR(im.ask_price) },
+      { label: 'Valor Proposta', value: EUR(im.valor_proposta) }, { label: 'Consultor', value: im.nome_consultor },
+    ])
+    b.space(4)
 
     for (let i = 1; i <= 4; i++) {
-      b.section(`Proposta ${i}`)
-      b.inputRow('Data', '', 'Valor', '')
-      b.input('Resposta do Proprietário', '')
-      b.input('Notas', '')
+      b.subheader(`Proposta ${i}`)
+      b.simpleTable([
+        { label: 'Data', value: '________________' }, { label: 'Valor', value: '________________' },
+        { label: 'Resposta do Proprietário', value: '________________' },
+        { label: 'Notas', value: '________________' },
+      ])
       b.space(4)
     }
     b.header('ESTADO ACTUAL')
-    b.input('Ponto de situação da negociação', '', { tall: true })
+    b.metric('Ponto de situação da negociação', '________________')
+    b.disclaimer()
     return b.end()
   },
 
@@ -725,22 +1335,32 @@ const GENERATORS = {
   resumo_acordo: (im) => {
     const b = new DocBuilder('Resumo de Acordo', im.zona || '', im)
     b.header('TERMOS ACORDADOS')
-    b.highlight('Valor Final de Compra', EUR(im.valor_proposta || im.ask_price))
-    b.row('Data Proposta Aceite', FDATE(im.data_proposta_aceite), { alt: true })
-    b.row('Consultor', im.nome_consultor)
-    b.space()
+    b.bigNumbers([{ label: 'Valor Final de Compra', value: EUR(im.valor_proposta || im.ask_price) }])
+    b.simpleTable([
+      { label: 'Data Proposta Aceite', value: FDATE(im.data_proposta_aceite) },
+      { label: 'Consultor', value: im.nome_consultor },
+    ])
+    b.space(4)
     b.header('CONDIÇÕES DO CPCV')
-    b.input('Sinal', '').input('Prazo para escritura', '')
-    b.input('Condições suspensivas', '', { tall: true })
-    b.input('Penalizações', '')
-    b.space()
+    b.simpleTable([
+      { label: 'Sinal', value: '________________' },
+      { label: 'Prazo para escritura', value: '________________' },
+      { label: 'Condições suspensivas', value: '________________' },
+      { label: 'Penalizações', value: '________________' },
+    ])
+    b.space(4)
     b.header('TIMELINE')
-    b.inputRow('Data CPCV', '', 'Data Escritura', '')
-    b.inputRow('Início Obra', '', 'Conclusão Obra', '')
-    b.input('Data Prevista Venda', '')
-    b.space()
+    b.simpleTable([
+      { label: 'Data CPCV', value: '________________' }, { label: 'Data Escritura', value: '________________' },
+      { label: 'Início Obra', value: '________________' }, { label: 'Conclusão Obra', value: '________________' },
+      { label: 'Data Prevista Venda', value: '________________' },
+    ])
+    b.space(4)
     b.header('PASSOS LEGAIS')
-    ;['Validação documental', 'Licenciamento (se necessário)', 'Aprovação bancária (se financiado)', 'Assinatura CPCV', 'Escritura'].forEach(p => b.check(p))
+    b.simpleTable([
+      'Validação documental', 'Licenciamento (se necessário)', 'Aprovação bancária (se financiado)', 'Assinatura CPCV', 'Escritura',
+    ].map(p => ({ label: `□  ${p}`, value: '' })))
+    b.disclaimer()
     return b.end()
   },
 
@@ -751,16 +1371,19 @@ const GENERATORS = {
   ficha_follow_up: (im) => {
     const b = new DocBuilder('Ficha de Follow Up', im.zona || '', im)
     b.header('ESTADO ACTUAL')
-    b.row('Imóvel', im.nome, { alt: true }).row('Estado', (im.estado || '').replace(/^\d+-/, ''))
-    b.row('Consultor', im.nome_consultor, { alt: true }).row('Data Follow Up', FDATE(im.data_follow_up))
-    b.space()
+    b.simpleTable([
+      { label: 'Imóvel', value: im.nome }, { label: 'Estado', value: (im.estado || '').replace(/^\d+-/, '') },
+      { label: 'Consultor', value: im.nome_consultor }, { label: 'Data Follow Up', value: FDATE(im.data_follow_up) },
+    ])
+    b.space(4)
     b.header('PONTO DE SITUAÇÃO')
-    b.input('O que aconteceu desde o último contacto?', '', { tall: true })
-    b.space()
+    b.metric('O que aconteceu desde o último contacto?', '________________')
+    b.space(4)
     b.header('PRÓXIMAS AÇÕES')
-    for (let i = 1; i <= 5; i++) b.check(`Ação ${i}`)
-    b.inputRow('Data próximo contacto', '', 'Data limite decisão', '')
-    b.input('Notas', '', { tall: true })
+    b.simpleTable([1, 2, 3, 4, 5].map(i => ({ label: `□  Ação ${i}`, value: '' })))
+    b.inlineData([{ label: 'Data próximo contacto', value: '________________' }, { label: 'Data limite decisão', value: '________________' }])
+    b.metric('Notas', '________________')
+    b.disclaimer()
     return b.end()
   },
 
@@ -768,17 +1391,25 @@ const GENERATORS = {
   ficha_cedencia: (im) => {
     const b = new DocBuilder('Ficha de Cedência de Posição', im.zona || '', im)
     b.header('DADOS DO NEGÓCIO')
-    b.row('Imóvel', im.nome, { alt: true }).row('Zona', im.zona)
-    b.highlight('Valor de Entrada (compra)', EUR(im.valor_proposta || im.ask_price))
-    b.inputRow('Valor de Saída (cedência)', '', 'Margem', '')
-    b.space()
+    b.simpleTable([
+      { label: 'Imóvel', value: im.nome }, { label: 'Zona', value: im.zona },
+    ])
+    b.bigNumbers([{ label: 'Valor de Entrada (compra)', value: EUR(im.valor_proposta || im.ask_price) }])
+    b.simpleTable([
+      { label: 'Valor de Saída (cedência)', value: '________________' },
+      { label: 'Margem', value: '________________' },
+    ])
+    b.space(4)
     b.header('COMPRADOR / CESSIONÁRIO')
-    b.inputRow('Nome', '', 'Contacto', '')
-    b.inputRow('Email', '', 'Capital confirmado', '')
-    b.input('Data prevista cedência', '')
-    b.space()
+    b.simpleTable([
+      { label: 'Nome', value: '________________' }, { label: 'Contacto', value: '________________' },
+      { label: 'Email', value: '________________' }, { label: 'Capital confirmado', value: '________________' },
+      { label: 'Data prevista cedência', value: '________________' },
+    ])
+    b.space(4)
     b.header('CONDIÇÕES DA CEDÊNCIA')
-    b.input('Termos e condições acordados', '', { tall: true })
+    b.metric('Termos e condições acordados', '________________')
+    b.disclaimer()
     return b.end()
   },
 
@@ -786,28 +1417,713 @@ const GENERATORS = {
   ficha_acompanhamento_obra: (im) => {
     const b = new DocBuilder('Acompanhamento de Obra', im.zona || '', im)
     b.header('DADOS DO PROJECTO')
-    b.row('Imóvel', im.nome, { alt: true }).row('Zona', im.zona)
-    b.row('Modelo', im.modelo_negocio || 'CAEP', { alt: true }).row('Custo Estimado', EUR(im.custo_estimado_obra))
-    b.inputRow('Data Início Obra', '', 'Data Prevista Conclusão', '')
-    b.space()
+    b.simpleTable([
+      { label: 'Imóvel', value: im.nome }, { label: 'Zona', value: im.zona },
+      { label: 'Modelo', value: im.modelo_negocio || 'CAEP' }, { label: 'Custo Estimado', value: EUR(im.custo_estimado_obra) },
+      { label: 'Data Início Obra', value: '________________' }, { label: 'Data Prevista Conclusão', value: '________________' },
+    ])
+    b.space(4)
     b.header('EMPREITEIRO')
-    b.inputRow('Nome / Empresa', '', 'Contacto', '')
-    b.inputRow('Orçamento acordado', '', 'Prazo acordado', '')
-    b.space()
+    b.simpleTable([
+      { label: 'Nome / Empresa', value: '________________' }, { label: 'Contacto', value: '________________' },
+      { label: 'Orçamento acordado', value: '________________' }, { label: 'Prazo acordado', value: '________________' },
+    ])
+    b.space(4)
 
     for (let sem = 1; sem <= 4; sem++) {
       b.header(`SEMANA ${sem}`)
-      b.inputRow('Data', '', 'Custos semana', '')
-      b.input('Trabalhos realizados', '', { tall: true })
-      b.inputRow('Custos acumulados', '', 'Problemas', '')
-      b.input('Próximos trabalhos', '')
+      b.simpleTable([
+        { label: 'Data', value: '________________' }, { label: 'Custos semana', value: '________________' },
+        { label: 'Trabalhos realizados', value: '________________' },
+        { label: 'Custos acumulados', value: '________________' }, { label: 'Problemas', value: '________________' },
+        { label: 'Próximos trabalhos', value: '________________' },
+      ])
       b.space(4)
     }
 
     b.header('DESVIOS AO ORÇAMENTO')
-    b.inputRow('Orçamento inicial', EUR(im.custo_estimado_obra), 'Custos reais acumulados', '')
-    b.inputRow('Desvio (€)', '', 'Desvio (%)', '')
-    b.input('Justificação do desvio', '', { tall: true })
+    b.simpleTable([
+      { label: 'Orçamento inicial', value: EUR(im.custo_estimado_obra) },
+      { label: 'Custos reais acumulados', value: '________________' },
+      { label: 'Desvio (€)', value: '________________' },
+      { label: 'Desvio (%)', value: '________________' },
+      { label: 'Justificação do desvio', value: '________________' },
+    ])
+    b.disclaimer()
+    return b.end()
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // RELATÓRIOS PARA INVESTIDOR (estilo limpo, arejado, profissional)
+  // ══════════════════════════════════════════════════════════════
+
+  relatorio_investimento: (im, an) => {
+    const b = new DocBuilder('Análise de Investimento', im.zona || '', im)
+    if (!an) { b.text('Sem análise financeira activa para este imóvel.'); return b.end() }
+
+    const ra = an.retorno_anualizado || 0
+
+    // 3 numeros-chave — grandes, texto puro, sem caixas
+    b.bigNumbers([
+      { label: 'Lucro Líquido', value: EUR(an.lucro_liquido) },
+      { label: 'Retorno Anualizado', value: `${ra}%` },
+      { label: 'Capital Necessário', value: EUR(an.capital_necessario) },
+    ])
+
+    // Enquadramento inline
+    b.inlineData([
+      { label: 'Zona', value: im.zona || '—' },
+      { label: 'Tipologia', value: im.tipologia || '—' },
+      { label: 'Prazo', value: `${an.meses || 6} meses` },
+      { label: 'Regime', value: an.regime_fiscal || 'Empresa' },
+    ])
+    b.space(8)
+
+    // Custos — tabela unica limpa
+    b.header('CUSTOS DO INVESTIMENTO')
+    b.simpleTable([
+      { label: 'Preço de compra', value: EUR(an.compra) },
+      { label: 'IMT', value: EUR(an.imt) },
+      { label: 'Imposto de Selo', value: EUR(an.imposto_selo) },
+      { label: 'Escritura + CPCV', value: EUR((an.escritura || 0) + (an.cpcv_compra || 0)) },
+      { label: 'Total Aquisição', value: EUR(an.total_aquisicao), total: true },
+      { label: 'Obra c/ IVA', value: EUR(an.obra_com_iva) },
+      { label: 'Licenciamento', value: EUR(an.licenciamento) },
+      { label: 'Total Obra', value: EUR(an.obra_com_iva), total: true },
+      { label: `Detenção (${an.meses || 6} meses)`, value: EUR(an.total_detencao) },
+      { label: `Comissão venda (${an.comissao_perc || 2.5}%)`, value: EUR(an.comissao_com_iva) },
+      { label: 'Total Investimento', value: EUR(an.capital_necessario), total: true },
+    ])
+    b.space(6)
+
+    // Resultado
+    b.header('RESULTADO')
+    b.simpleTable([
+      { label: 'Receita de venda (VVR)', value: EUR(an.vvr) },
+      { label: 'Total de custos', value: EUR(an.capital_necessario) },
+      { label: 'Lucro Bruto', value: EUR(an.lucro_bruto), total: true },
+      { label: 'Impostos (IRC + Derrama)', value: EUR(an.impostos) },
+      { label: 'Retenção dividendos', value: EUR(an.retencao_dividendos) },
+      { label: 'Lucro Líquido', value: EUR(an.lucro_liquido), total: true },
+    ])
+    b.space(6)
+
+    // Metricas inline
+    b.header('MÉTRICAS DE RETORNO')
+    b.bigNumbers([
+      { label: 'ROI Total', value: PCT(an.retorno_total) },
+      { label: 'Retorno Anualizado', value: PCT(an.retorno_anualizado) },
+      { label: 'Cash-on-Cash', value: PCT(an.cash_on_cash) },
+      { label: 'Break-even', value: EUR(an.break_even) },
+    ])
+
+    b.disclaimer()
+    return b.end()
+  },
+
+  relatorio_comparaveis: (im, an) => {
+    const b = new DocBuilder('Estudo de Mercado', im.zona || '', im)
+    const comps = an?.comparaveis
+    const parsed = typeof comps === 'string' ? JSON.parse(comps || '[]') : (comps || [])
+    if (!parsed.length) { b.text('Sem dados de comparáveis registados.'); return b.end() }
+
+    b.inlineData([{ label: 'Imóvel', value: im.nome }, { label: 'Zona', value: im.zona }])
+    b.space(6)
+
+    for (const tip of parsed) {
+      const items = tip.comparaveis || []
+      const valid = items.filter(c => c.preco > 0 && c.area > 0)
+      if (valid.length === 0) continue
+
+      const precosM2 = valid.map(c => {
+        const base = c.preco / c.area
+        const ajTotal = Object.values(c.ajustes || {}).reduce((s, v) => s + (parseFloat(v) || 0), 0)
+        return base * (1 + ajTotal / 100)
+      })
+      const media = Math.round(precosM2.reduce((a, b) => a + b, 0) / precosM2.length)
+      const vvr = media * (tip.area || 0)
+
+      b.header(`${tip.tipologia || 'Tipologia'} — ${tip.area || '?'} m²`)
+      b.bigNumbers([
+        { label: 'VVR Estimado', value: EUR(vvr) },
+        { label: 'Média €/m²', value: `${media} €/m²` },
+        { label: 'Amostra', value: `${valid.length} comparáveis` },
+      ])
+
+      b.colTable(
+        [['#', 25], ['Preço', 70], ['Área', 45], ['€/m²', 50], ['Neg.', 45], ['Loc.', 45], ['Idade', 45], ['Cons.', 45], ['Total', 50]],
+        valid.map((c, i) => {
+          const aj = c.ajustes || {}
+          const ajTotal = Object.values(aj).reduce((s, v) => s + (parseFloat(v) || 0), 0)
+          return { _values: [`${i + 1}`, EUR(c.preco), `${c.area}m²`, `${Math.round(c.preco / c.area)}`, `${aj.neg || 0}%`, `${aj.loc || 0}%`, `${aj.idade || 0}%`, `${aj.conserv || 0}%`, `${ajTotal >= 0 ? '+' : ''}${ajTotal}%`] }
+        })
+      )
+      b.space(10)
+    }
+    b.disclaimer()
+    return b.end()
+  },
+
+  relatorio_caep: (im, an) => {
+    const b = new DocBuilder('Parceria CAEP — Distribuição de Lucro', im.zona || '', im)
+    const caep = an?.caep
+    const parsed = typeof caep === 'string' ? JSON.parse(caep || 'null') : caep
+    if (!parsed || parsed.quota_somnium === undefined) { b.text('Sem dados CAEP configurados.'); return b.end() }
+
+    const percInv = 100 - parsed.perc_somnium
+    const captado = parsed.capital_total || 0
+    const necessario = an?.capital_necessario || captado
+    const cobertura = necessario > 0 ? Math.round(captado / necessario * 100) : 100
+
+    b.header('ENQUADRAMENTO DA PARCERIA')
+    b.inlineData([
+      { label: 'Estrutura', value: 'Associação em Participação' },
+      { label: 'Base', value: parsed.base_distribuicao === 'liquido' ? 'Lucro Líquido (após IRC)' : 'Lucro Bruto' },
+    ])
+    b.space(6)
+
+    b.header('CAPITAL DA OPERAÇÃO')
+    b.bigNumbers([
+      { label: 'Necessário', value: EUR(necessario) },
+      { label: 'Captado', value: EUR(captado) },
+      { label: 'Cobertura', value: `${cobertura}%` },
+    ])
+
+    if (parsed.investidores?.length) {
+      b.colTable(
+        [['#', 30], ['Investidor', 140], ['Tipo', 100], ['Capital', 100], ['% Capital', 80]],
+        [
+          ...parsed.investidores.map((inv, i) => ({
+            _values: [`#${i + 1}`, inv.nome || `Investidor ${i + 1}`, inv.tipo === 'empresa' ? 'Empresa (IRC)' : 'Particular (IRS)', EUR(inv.capital), `${necessario > 0 ? ((inv.capital / necessario) * 100).toFixed(1) : 0}%`]
+          })),
+          { _values: ['', 'Total captado', '', EUR(captado), `${cobertura}%`], _total: true },
+        ]
+      )
+      b.space(6)
+
+      b.header('DISTRIBUIÇÃO DO LUCRO')
+      b.colTable(
+        [['#', 25], ['Parte', 95], ['Tipo', 70], ['%', 30], ['Lucro', 65], ['Imposto', 55], ['Líquido', 60], ['ROI', 50]],
+        [
+          { _values: ['S', 'Somnium Properties', 'Gestor', `${parsed.perc_somnium}%`, EUR(parsed.quota_somnium), '—', EUR(parsed.quota_somnium), '—'] },
+          ...parsed.investidores.map((inv, i) => ({
+            _values: [`#${i + 1}`, inv.nome || `Inv. ${i + 1}`, inv.tipo === 'empresa' ? 'Empresa' : 'Particular', `${inv.perc_lucro || 0}%`, EUR(inv.lucro_bruto), EUR(inv.impostos), EUR(inv.lucro_liquido), inv.roi ? `${inv.roi}%` : '—']
+          })),
+          { _values: ['', 'Total distribuído', '', '', '', '', EUR((parsed.investidores.reduce((s, inv) => s + (inv.lucro_liquido || 0), 0)) + parsed.quota_somnium), ''], _total: true },
+        ]
+      )
+    }
+
+    b.disclaimer()
+    return b.end()
+  },
+
+  relatorio_stress: (im, an) => {
+    const b = new DocBuilder('Análise de Risco', im.zona || '', im)
+    const st = an?.stress_tests
+    const parsed = typeof st === 'string' ? JSON.parse(st || 'null') : st
+    if (!parsed) { b.text('Sem stress tests calculados.'); return b.end() }
+
+    const resiliente = parsed.veredicto === 'resiliente'
+
+    b.header('VEREDICTO')
+    b.verdict(
+      resiliente ? 'Investimento resiliente — mantém resultado positivo em todos os cenários.' : 'Atenção — cenários com risco de prejuízo identificados.',
+      resiliente
+    )
+    b.space(6)
+
+    b.header('CENÁRIOS PRINCIPAIS')
+    b.bigNumbers([
+      { label: 'Pior Cenário', value: EUR(parsed.pior?.lucro_liquido) },
+      { label: 'Cenário Base', value: EUR(parsed.base?.lucro_liquido) },
+      { label: 'Melhor Cenário', value: EUR(parsed.melhor?.lucro_liquido) },
+    ])
+    b.inlineData([
+      { label: 'Pior', value: parsed.pior?.label || '—' },
+      { label: 'Melhor', value: parsed.melhor?.label || '—' },
+    ])
+    b.space(6)
+
+    if (parsed.downside?.length) {
+      b.header('CENÁRIOS DE RISCO')
+      b.colTable(
+        [['Cenário', 110], ['Descrição', 140], ['Lucro Líq.', 80], ['Delta', 70], ['RA', 55]],
+        parsed.downside.map(s => ({ _values: [s.label, s.descricao || '', EUR(s.lucro_liquido), EUR(s.delta), PCT(s.retorno_anualizado)] }))
+      )
+    }
+
+    if (parsed.upside?.length) {
+      b.space(6)
+      b.header('CENÁRIOS FAVORÁVEIS')
+      b.colTable(
+        [['Cenário', 110], ['Descrição', 140], ['Lucro Líq.', 80], ['Delta', 70], ['RA', 55]],
+        parsed.upside.map(s => ({ _values: [s.label, s.descricao || '', EUR(s.lucro_liquido), EUR(s.delta), PCT(s.retorno_anualizado)] }))
+      )
+    }
+
+    b.disclaimer()
+    return b.end()
+  },
+
+  // ── APRESENTAÇÃO DE NEGÓCIO (ANÓNIMA — para partilha em grupos) ──
+  apresentacao_negocio: (im, analise) => {
+    const a = analise || {}
+    const compra = a.compra || im.valor_proposta || im.ask_price || 0
+    const obra = a.obra_com_iva || a.obra || im.custo_estimado_obra || 0
+    const vvr = a.vvr || im.valor_venda_remodelado || 0
+    const meses = a.meses || 6
+    const capitalNecessario = a.capital_necessario || (compra + obra)
+
+    // Capa anónima — sem nome do imóvel, sem morada exacta
+    const b = new DocBuilder('Proposta de Investimento', '', {
+      ...im,
+      nome: 'OPORTUNIDADE DE INVESTIMENTO',
+      zona: im.zona ? `Zona de ${im.zona}` : 'Coimbra',
+    })
+
+    // ── SUMÁRIO EXECUTIVO ──
+    b.header('SUMÁRIO EXECUTIVO')
+    b.bigNumbers([
+      { label: 'Valor de Aquisição', value: EUR(compra), sub: a.perc_financiamento ? `${a.perc_financiamento}% financiado` : '100% capitais próprios' },
+      { label: 'Valor de Venda Alvo', value: EUR(vvr) },
+      { label: 'Retorno Total', value: PCT(a.retorno_total), sub: 'lucro bruto / total investido' },
+      { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado), sub: `base ${meses} meses` },
+    ])
+    b.space(2)
+    b.bigNumbers([
+      { label: 'Lucro Bruto Estimado', value: EUR(a.lucro_bruto), sub: 'antes de impostos' },
+      { label: 'Lucro Líquido', value: EUR(a.lucro_liquido), sub: `${a.regime_fiscal || 'IRC'} sobre lucro` },
+      { label: 'Total Investido', value: EUR(capitalNecessario), sub: 'aquisição + obra + custos' },
+      { label: 'Prazo de Retenção', value: `${meses} meses`, sub: 'da compra à escritura de venda' },
+    ])
+    b.space(6)
+
+    // Sobre o projecto
+    b.header('SOBRE O PROJECTO')
+    const tipoDesc = im.tipologia ? `um ${im.tipologia}` : 'um imóvel'
+    const areaDesc = im.area_bruta ? ` com uma área bruta de ${im.area_bruta} m²` : (im.area_util ? ` com uma área útil de ${im.area_util} m²` : '')
+    const zonaDesc = im.zona ? ` na zona de ${im.zona}, Coimbra` : ' em Coimbra'
+    b.textBlock(
+      `O projecto consiste na aquisição, remodelação integral e revenda de ${tipoDesc}${areaDesc}, localizado${zonaDesc}. ` +
+      `O imóvel encontra-se num estado de conservação que exige remodelação total, o que justifica o preço de aquisição abaixo do valor de mercado e cria a margem de valorização identificada.`
+    )
+    b.space(4)
+
+    // ── IDENTIFICAÇÃO GENÉRICA ──
+    b.header('IDENTIFICAÇÃO DO IMÓVEL')
+    b.simpleTable([
+      { label: 'Localização', value: im.zona ? `Zona de ${im.zona}, Coimbra` : 'Coimbra, Portugal' },
+      { label: 'Tipologia', value: im.tipologia || '—' },
+      { label: 'Área Bruta Privativa', value: im.area_bruta ? `${im.area_bruta} m²` : (im.area_util ? `${im.area_util} m²` : '—') },
+      { label: 'Modelo de Negócio', value: im.modelo_negocio || 'CAEP 50/50' },
+      { label: 'Prazo Estimado', value: `${meses} meses` },
+    ])
+    b.space(6)
+
+    // ── ESTUDO DE MERCADO (comparáveis) ──
+    let comps = a.comparaveis
+    if (typeof comps === 'string') try { comps = JSON.parse(comps || '[]') } catch { comps = [] }
+    if (comps && comps.length > 0) {
+      b.newPage()
+      b.header('ESTUDO DE MERCADO — VALORES DE VENDA COMPARÁVEIS')
+
+      for (const tip of comps) {
+        const items = tip.comparaveis || []
+        const valid = items.filter(c => c.preco > 0 && c.area > 0)
+        if (valid.length === 0) continue
+
+        const precosM2 = valid.map(c => {
+          const base = c.preco / c.area
+          const ajTotal = Object.values(c.ajustes || {}).reduce((s, v) => s + (parseFloat(v) || 0), 0)
+          return base * (1 + ajTotal / 100)
+        })
+        const media = Math.round(precosM2.reduce((a, b) => a + b, 0) / precosM2.length)
+        const vvrTip = media * (tip.area || 0)
+
+        b.subheader(`${tip.tipologia || 'Tipologia'} — ${tip.area || '?'} m²`)
+        b.bigNumbers([
+          { label: 'VVR Estimado', value: EUR(vvrTip) },
+          { label: 'Média €/m²', value: `${media} €/m²` },
+          { label: 'Amostra', value: `${valid.length} comparáveis` },
+        ])
+        b.colTable(
+          [['#', 25], ['Preço', 70], ['Área', 45], ['€/m²', 50], ['Neg.', 45], ['Loc.', 45], ['Idade', 45], ['Total', 50]],
+          valid.map((c, i) => {
+            const aj = c.ajustes || {}
+            const ajTotal = Object.values(aj).reduce((s, v) => s + (parseFloat(v) || 0), 0)
+            return { _values: [`${i + 1}`, EUR(c.preco), `${c.area}m²`, `${Math.round(c.preco / c.area)}`, `${aj.neg || 0}%`, `${aj.loc || 0}%`, `${aj.idade || 0}%`, `${ajTotal >= 0 ? '+' : ''}${ajTotal}%`] }
+          })
+        )
+        b.space(8)
+      }
+    }
+
+    // ── ANÁLISE FINANCEIRA ──
+    b.newPage()
+    b.header('ANÁLISE FINANCEIRA — CENÁRIO BASE')
+
+    b.subheader('Estrutura de Custos')
+    b.simpleTable([
+      { label: 'Valor de Compra', value: EUR(compra) },
+      { label: 'IMT + Imposto de Selo', value: EUR((a.imt || 0) + (a.imposto_selo || 0)) },
+      { label: 'Escritura + Registos + CPCV', value: EUR((a.escritura || 0) + (a.cpcv_compra || 0)) },
+      { label: 'Total Custos de Aquisição', value: EUR(a.total_aquisicao), total: true },
+      { label: 'Obra + IVA', value: EUR(obra) },
+      { label: `Manutenção (${meses} meses)`, value: EUR(a.total_detencao) },
+      { label: 'Comissão Imobiliária', value: EUR(a.comissao_com_iva) },
+      { label: 'Total Investido', value: EUR(capitalNecessario), total: true },
+    ])
+    b.space(6)
+
+    b.subheader('Retornos')
+    b.simpleTable([
+      { label: 'Valor de Venda Alvo', value: EUR(vvr) },
+      { label: 'Lucro Estimado (Bruto)', value: EUR(a.lucro_bruto), total: true },
+      { label: `Impostos (${a.regime_fiscal || 'IRC'})`, value: EUR(a.impostos) },
+      { label: 'Lucro Estimado Líquido', value: EUR(a.lucro_liquido), total: true },
+    ])
+    b.space(4)
+
+    b.bigNumbers([
+      { label: 'Retorno Total', value: PCT(a.retorno_total) },
+      { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash) },
+      { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
+    ])
+    b.space(4)
+
+    b.note(`Pressupostos: ${a.perc_financiamento ? `Financiamento ${a.perc_financiamento}%` : '100% capitais próprios'} · Regime fiscal: ${a.regime_fiscal || 'Empresa'} · Prazo: ${meses} meses`)
+
+    // ── STRESS TESTS ──
+    let st = a.stress_tests
+    if (typeof st === 'string') try { st = JSON.parse(st) } catch { st = null }
+    if (st) {
+      b.newPage()
+      b.header('ANÁLISE DE SENSIBILIDADE — STRESS TESTS')
+
+      const resiliente = st.veredicto === 'resiliente'
+      b.verdict(
+        resiliente ? 'Investimento resiliente — mantém resultado positivo em todos os cenários testados.' : 'Atenção — identificados cenários com risco de prejuízo.',
+        resiliente
+      )
+      b.space(4)
+
+      b.bigNumbers([
+        { label: 'Pior Cenário', value: EUR(st.pior?.lucro_liquido) },
+        { label: 'Cenário Base', value: EUR(st.base?.lucro_liquido) },
+        { label: 'Melhor Cenário', value: EUR(st.melhor?.lucro_liquido) },
+      ])
+      b.space(6)
+
+      if (st.downside?.length) {
+        b.subheader('Cenários de Risco (Downside)')
+        b.colTable(
+          [['Cenário', 100], ['Descrição', 140], ['Lucro Líq.', 75], ['Delta', 65], ['RA', 55]],
+          st.downside.map(s => ({ _values: [s.label, s.descricao || '', EUR(s.lucro_liquido), EUR(s.delta), PCT(s.retorno_anualizado)] }))
+        )
+        b.space(6)
+      }
+
+      if (st.upside?.length) {
+        b.subheader('Cenários Favoráveis (Upside)')
+        b.colTable(
+          [['Cenário', 100], ['Descrição', 140], ['Lucro Líq.', 75], ['Delta', 65], ['RA', 55]],
+          st.upside.map(s => ({ _values: [s.label, s.descricao || '', EUR(s.lucro_liquido), EUR(s.delta), PCT(s.retorno_anualizado)] }))
+        )
+        b.space(6)
+      }
+    }
+
+    // ── CONCLUSÃO ──
+    b.newPage()
+    b.header('CONCLUSÃO E RECOMENDAÇÃO')
+
+    const raVal = a.retorno_anualizado || 0
+    const rtVal = a.retorno_total || 0
+    let conclusao = `O projecto apresenta um perfil de risco-retorno atractivo: no cenário base conservador, o investimento gera um retorno total de ${rtVal}% e anualizado de ${raVal}% num prazo de ${meses} meses.`
+    if (st) {
+      if (st.pior?.lucro_liquido > 0) {
+        conclusao += ` O investimento mantém lucro positivo mesmo no pior cenário (${EUR(st.pior.lucro_liquido)}), o que valida a solidez estrutural do projecto.`
+      } else if (st.pior?.lucro_liquido != null) {
+        conclusao += ` No pior cenário, o lucro estimado é de ${EUR(st.pior.lucro_liquido)}, o que requer atenção ao risco.`
+      }
+    }
+    if (im.zona) {
+      conclusao += ` A localização na zona de ${im.zona}, Coimbra, sustenta os valores de venda projectados.`
+    }
+    b.textBlock(conclusao)
+
+    // Modelo de parceria
+    b.space(4)
+    b.header('MODELO DE PARCERIA')
+    let caep = a.caep
+    if (typeof caep === 'string') try { caep = JSON.parse(caep) } catch { caep = null }
+    if (caep?.quota_somnium !== undefined) {
+      b.simpleTable([
+        { label: 'Investidor(es) passivo(s)', value: `${100 - (caep.perc_somnium || 40)}% do lucro` },
+        { label: 'Somnium Properties', value: `${caep.perc_somnium || 40}% (gestão operacional + obra)` },
+      ])
+    } else {
+      b.simpleTable([
+        { label: 'Investidor(es) passivo(s)', value: '50% do lucro' },
+        { label: 'Somnium Properties', value: '50% (gestão operacional + obra)' },
+      ])
+    }
+    b.space(4)
+
+    b.header('TRANSPARÊNCIA E COMUNICAÇÃO')
+    b.simpleTable([
+      { label: 'Google Drive exclusivo com toda a documentação do negócio', value: '' },
+      { label: 'Canal Slack dedicado para comunicação em tempo real', value: '' },
+      { label: 'Relatórios semanais de obra com fotos e vídeos', value: '' },
+      { label: 'Acesso a orçamentos, facturas e contratos', value: '' },
+      { label: 'Acesso vitalício aos documentos do negócio', value: '' },
+    ])
+
+    b.space(6)
+    b.note('Os valores apresentados são estimativas conservadoras baseadas em análise de mercado e podem variar. A Somnium Properties utiliza stress tests automáticos em todos os negócios para protecção do investidor. Investimento imobiliário envolve risco de capital.')
+    b.disclaimer()
     return b.end()
   },
 }
+
+// ── Compilador de relatório para investidor ─────────────────
+export function generateInvestorReport(imovel, analise, seccoes = []) {
+  const doc = new PDFDocument({ size: 'A4', autoFirstPage: false })
+
+  // Capa
+  doc.addPage({ size: 'A4', margins: { top: 0, bottom: 0, left: 0, right: 0 } })
+  doc.rect(0, 0, PW, PH).fill(C.black)
+  doc.rect(0, 0, PW, 4).fill(C.gold)
+  try { doc.image(readFileSync(LOGO_PATH), (PW - 150) / 2, 120, { width: 150 }) } catch {}
+  doc.rect(PW / 2 - 20, 250, 40, 1).fill(C.gold)
+  doc.fontSize(8).fillColor(C.gold).text('DOSSIER DE INVESTIMENTO', ML, 270, { width: CW, align: 'center', characterSpacing: 4 })
+  doc.fontSize(24).fillColor(C.white).text(imovel.nome || 'Imóvel', ML, 310, { width: CW, align: 'center' })
+  if (imovel.zona) doc.fontSize(12).fillColor(C.muted).text(imovel.zona, ML, 350, { width: CW, align: 'center' })
+  doc.fontSize(9).fillColor(C.muted).text(NOW(), ML, 380, { width: CW, align: 'center' })
+
+  // Índice
+  doc.fontSize(10).fillColor(C.gold).text('CONTEÚDO', ML, 430, { width: CW, align: 'center' })
+  let idx = 1
+  const labels = {
+    investimento: 'Análise de Investimento',
+    comparaveis: 'Estudo de Comparáveis',
+    caep: 'Distribuição CAEP',
+    stress_tests: 'Stress Tests',
+  }
+  for (const s of seccoes) {
+    doc.fontSize(11).fillColor(C.white).text(`${idx}. ${labels[s] || s}`, ML + 60, 460 + (idx - 1) * 22, { width: CW - 120, align: 'center' })
+    idx++
+  }
+
+  doc.rect(0, PH - 45, PW, 45).fill('#1a1a1a')
+  doc.rect(0, PH - 45, PW, 1).fill(C.gold).opacity(0.3); doc.opacity(1)
+  doc.fontSize(7).fillColor(C.gold).text('SOMNIUM PROPERTIES — CONFIDENCIAL', ML, PH - 28, { width: CW, align: 'center' })
+
+  doc.end()
+
+  // Para cada seccao, gerar PDF separado e indicar ao frontend
+  // (PDFKit nao suporta merge nativo — geramos cada seccao como paginas adicionais)
+  // Alternativa: gerar tudo num unico DocBuilder
+  return doc
+}
+
+// Gerar compilado num unico fluxo
+export function generateCompiledReport(imovel, analise, seccoes = []) {
+  // Mapa de compilavel → gerador GENERATORS
+  const compilavelToGenerator = {
+    investimento: 'relatorio_investimento',
+    comparaveis: 'relatorio_comparaveis',
+    caep: 'relatorio_caep',
+    stress_tests: 'relatorio_stress',
+  }
+
+  // Documentos individuais que podem ser gerados directamente
+  // (chave compilavel = chave tipo no GENERATORS)
+  const directGenerators = [
+    'ficha_imovel', 'ficha_pre_visita', 'checklist_visita', 'relatorio_visita',
+    'analise_rentabilidade', 'estudo_comparaveis', 'proposta_formal',
+    'apresentacao_investidor', 'resumo_negociacao', 'resumo_acordo',
+    'dossier_investimento', 'ficha_follow_up', 'ficha_cedencia',
+    'ficha_acompanhamento_obra', 'apresentacao_negocio',
+  ]
+
+  // Se so 1 seccao, gerar directamente esse relatorio
+  if (seccoes.length === 1) {
+    const s = seccoes[0]
+    const tipo = compilavelToGenerator[s] || (directGenerators.includes(s) ? s : null)
+    if (tipo && GENERATORS[tipo]) return GENERATORS[tipo](imovel, analise)
+  }
+
+  // Para multiplas seccoes: gerar um DocBuilder unico com todo o conteudo
+  const b = new DocBuilder('Dossier de Investimento', imovel.zona || '', imovel)
+  const an = analise || {}
+  const im = imovel
+  let hasContent = false
+
+  // Se não há análise activa, usar dados do imóvel como fallback
+  const hasAnalise = analise && (analise.compra || analise.vvr || analise.lucro_liquido)
+
+  for (const seccao of seccoes) {
+
+    if (seccao === 'investimento') {
+      if (hasContent) b.newPage()
+      hasContent = true
+      const compra = an.compra || im.valor_proposta || im.ask_price || 0
+      const obra = an.obra_com_iva || an.obra || im.custo_estimado_obra || 0
+      const vvr = an.vvr || im.valor_venda_remodelado || 0
+      const capital = an.capital_necessario || (compra + obra)
+      const ra = an.retorno_anualizado || im.roi_anualizado || 0
+      b.bigNumbers([
+        { label: 'Lucro Líquido', value: EUR(an.lucro_liquido) },
+        { label: 'Retorno Anualizado', value: `${ra}%` },
+        { label: 'Capital Necessário', value: EUR(capital) },
+      ])
+      b.inlineData([
+        { label: 'Zona', value: im.zona || '—' },
+        { label: 'Tipologia', value: im.tipologia || '—' },
+        { label: 'Prazo', value: `${an.meses || 6} meses` },
+      ])
+      b.space(6)
+      b.header('CUSTOS DO INVESTIMENTO')
+      b.simpleTable([
+        { label: 'Preço de compra', value: EUR(compra) },
+        { label: 'IMT + Selo + Escritura', value: EUR((an.imt || 0) + (an.imposto_selo || 0) + (an.escritura || 0) + (an.cpcv_compra || 0)) },
+        { label: 'Total Aquisição', value: EUR(an.total_aquisicao), total: true },
+        { label: 'Obra c/ IVA', value: EUR(obra) },
+        { label: 'Total Obra', value: EUR(obra), total: true },
+        { label: `Detenção + Comissão`, value: EUR((an.total_detencao || 0) + (an.comissao_com_iva || 0)) },
+        { label: 'Total Investimento', value: EUR(capital), total: true },
+      ])
+      b.space(4)
+      b.header('RESULTADO')
+      b.simpleTable([
+        { label: 'Receita (VVR)', value: EUR(vvr) },
+        { label: 'Custos totais', value: EUR(capital) },
+        { label: 'Lucro Bruto', value: EUR(an.lucro_bruto), total: true },
+        { label: 'Impostos + Dividendos', value: EUR((an.impostos || 0) + (an.retencao_dividendos || 0)) },
+        { label: 'Lucro Líquido', value: EUR(an.lucro_liquido), total: true },
+      ])
+      b.space(4)
+      b.bigNumbers([
+        { label: 'ROI Total', value: PCT(an.retorno_total || im.roi) },
+        { label: 'Retorno Anualizado', value: PCT(ra) },
+        { label: 'Cash-on-Cash', value: PCT(an.cash_on_cash) },
+        { label: 'Break-even', value: EUR(an.break_even) },
+      ])
+      continue
+    }
+
+    if (seccao === 'comparaveis') {
+      const comps = typeof an.comparaveis === 'string' ? JSON.parse(an.comparaveis || '[]') : (an.comparaveis || [])
+      if (comps.length > 0) {
+        if (hasContent) b.newPage()
+        hasContent = true
+        for (const tip of comps) {
+          const valid = (tip.comparaveis || []).filter(c => c.preco > 0 && c.area > 0)
+          if (!valid.length) continue
+          const precosM2 = valid.map(c => { const aj = Object.values(c.ajustes || {}).reduce((s, v) => s + (parseFloat(v) || 0), 0); return (c.preco / c.area) * (1 + aj / 100) })
+          const media = Math.round(precosM2.reduce((a, b) => a + b, 0) / precosM2.length)
+          b.header(`COMPARÁVEIS — ${tip.tipologia || '?'} ${tip.area || '?'}m²`)
+          b.bigNumbers([
+            { label: 'VVR Estimado', value: EUR(media * (tip.area || 0)) },
+            { label: 'Média €/m²', value: `${media} €/m²` },
+            { label: 'Amostra', value: `${valid.length} comp.` },
+          ])
+          b.colTable(
+            [['#', 25], ['Preço', 70], ['Área', 45], ['€/m²', 50], ['Neg.', 45], ['Loc.', 45], ['Idade', 45], ['Total', 50]],
+            valid.map((c, i) => { const aj = c.ajustes || {}; const t = Object.values(aj).reduce((s, v) => s + (parseFloat(v) || 0), 0); return { _values: [`${i + 1}`, EUR(c.preco), `${c.area}m²`, `${Math.round(c.preco / c.area)}`, `${aj.neg || 0}%`, `${aj.loc || 0}%`, `${aj.idade || 0}%`, `${t >= 0 ? '+' : ''}${t}%`] } })
+          )
+          b.space(8)
+        }
+      }
+      continue
+    }
+
+    if (seccao === 'caep') {
+      const caep = typeof an.caep === 'string' ? JSON.parse(an.caep || 'null') : an.caep
+      if (caep?.quota_somnium !== undefined) {
+        if (hasContent) b.newPage()
+        hasContent = true
+        const percInv = 100 - caep.perc_somnium
+        b.header('PARCERIA CAEP')
+        b.inlineData([
+          { label: 'Somnium', value: `${caep.perc_somnium}%` },
+          { label: 'Investidores', value: `${percInv}%` },
+          { label: 'Base', value: caep.base_distribuicao === 'liquido' ? 'Lucro Líquido' : 'Lucro Bruto' },
+        ])
+        b.bigNumbers([
+          { label: 'Quota Somnium', value: EUR(caep.quota_somnium) },
+          { label: 'Capital Total', value: EUR(caep.capital_total) },
+        ])
+        if (caep.investidores?.length) {
+          b.header('DISTRIBUIÇÃO DO LUCRO')
+          b.colTable(
+            [['#', 25], ['Investidor', 100], ['Tipo', 70], ['%', 30], ['Lucro', 65], ['Imposto', 55], ['Líquido', 60], ['ROI', 50]],
+            [
+              { _values: ['S', 'Somnium Properties', 'Gestor', `${caep.perc_somnium}%`, EUR(caep.quota_somnium), '—', EUR(caep.quota_somnium), '—'] },
+              ...caep.investidores.map((inv, i) => ({ _values: [`#${i + 1}`, inv.nome || `Inv. ${i + 1}`, inv.tipo === 'empresa' ? 'Empresa' : 'Particular', `${inv.perc_lucro || 0}%`, EUR(inv.lucro_bruto), EUR(inv.impostos), EUR(inv.lucro_liquido), inv.roi ? `${inv.roi}%` : '—'] })),
+              { _values: ['', 'Total', '', '', '', '', EUR(caep.investidores.reduce((s, i) => s + (i.lucro_liquido || 0), 0) + caep.quota_somnium), ''], _total: true },
+            ]
+          )
+        }
+      }
+      continue
+    }
+
+    if (seccao === 'stress_tests') {
+      const st = typeof an.stress_tests === 'string' ? JSON.parse(an.stress_tests || 'null') : an.stress_tests
+      if (st) {
+        if (hasContent) b.newPage()
+        hasContent = true
+        b.header('ANÁLISE DE RISCO')
+        b.verdict(
+          st.veredicto === 'resiliente' ? 'Investimento resiliente — lucro positivo em todos os cenários.' : 'Atenção — cenários com risco de prejuízo.',
+          st.veredicto === 'resiliente'
+        )
+        b.bigNumbers([
+          { label: 'Pior Cenário', value: EUR(st.pior?.lucro_liquido) },
+          { label: 'Base', value: EUR(st.base?.lucro_liquido) },
+          { label: 'Melhor', value: EUR(st.melhor?.lucro_liquido) },
+        ])
+        if (st.downside?.length) {
+          b.subheader('Cenários de risco')
+          b.colTable(
+            [['Cenário', 110], ['Descrição', 150], ['Lucro', 75], ['Delta', 65], ['RA', 50]],
+            st.downside.map(s => ({ _values: [s.label, s.descricao || '', EUR(s.lucro_liquido), EUR(s.delta), PCT(s.retorno_anualizado)] }))
+          )
+        }
+        if (st.upside?.length) {
+          b.space(4)
+          b.subheader('Cenários favoráveis')
+          b.colTable(
+            [['Cenário', 110], ['Descrição', 150], ['Lucro', 75], ['Delta', 65], ['RA', 50]],
+            st.upside.map(s => ({ _values: [s.label, s.descricao || '', EUR(s.lucro_liquido), EUR(s.delta), PCT(s.retorno_anualizado)] }))
+          )
+        }
+      }
+      continue
+    }
+
+    // Documentos individuais — gerar inline no DocBuilder partilhado
+    // Usar o gerador individual mas capturar o conteudo numa nova pagina
+    const genKey = directGenerators.includes(seccao) ? seccao : null
+    if (genKey && GENERATORS[genKey]) {
+      // Gerar como documento separado nao e possivel (PDFKit streams),
+      // mas podemos adicionar uma pagina separadora com titulo
+      if (hasContent) b.newPage()
+      hasContent = true
+      const label = DOC_LABELS[genKey] || genKey
+      b.header(label.toUpperCase())
+      b.text(`Documento disponível individualmente: clique "Abrir" no documento "${label}".`, { size: 8, color: C.muted })
+    }
+  }
+
+  if (!hasContent) {
+    b.text('Nenhuma secção com dados disponíveis para compilar.')
+  }
+
+  b.disclaimer()
+  return b.end()
+}
+
