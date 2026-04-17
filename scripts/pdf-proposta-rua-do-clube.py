@@ -3,10 +3,13 @@
 Modifica a Proposta de Investimento (Rua do Clube) para novo destinatario
 e prazo de retencao de 12 meses, recalculando todos os valores financeiros.
 
-Uso: python3 scripts/pdf-proposta-rua-do-clube.py
-Saida: scripts/output/Investimento_Rua_do_Clube_<nome>.pdf
+Abordagem: reportlab overlay + pypdf merge (sem redactions visiveis).
 """
-import fitz  # PyMuPDF
+import fitz  # PyMuPDF — para analise de cores e remoção de texto
+from pypdf import PdfReader, PdfWriter
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from io import BytesIO
 import os
 import math
 
@@ -14,408 +17,696 @@ SOURCE = os.path.expanduser("~/Downloads/Investimento Rua do Clube Coimbra.pdf")
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# ── Cores (Somnium brand) ────────────────────────────────────
-BODY = (0.165, 0.165, 0.165)   # #2a2a2a
-WHITE = (1, 1, 1)
+PH = A4[1]  # 841.89
 
-# ── Dados financeiros fixos do imovel ────────────────────────
-COMPRA = 185000
+# ── Cores ─────────────────────────────────────────────────────
+# Cores de fundo extraidas dos retangulos do PDF original
+COVER_BG   = (0.976, 0.976, 0.973)  # #f9f9f8
+WHITE_BG   = (1, 1, 1)              # #ffffff
+LIGHT_BG   = (0.957, 0.957, 0.949)  # #f4f4f2
+GOLD_BG    = (0.957, 0.929, 0.847)  # #f4edd8
+CREAM_BG   = (0.992, 0.973, 0.922)  # #fdf8eb
+DARK_BG    = (0.227, 0.227, 0.227)  # #3a3a3a
+
+BODY_COLOR = (0.165, 0.165, 0.165)  # #2a2a2a
+WHITE_TXT  = (1, 1, 1)
+MUTED      = (0.533, 0.533, 0.533)
+
+# ── Dados financeiros ────────────────────────────────────────
 TOTAL_AQUISICAO = 191234
 OBRA_COM_IVA = 143518
 COMISSAO_PERC = 2.5
-VVR = 500000
+VVR_BASE = 500000
 CPCV_VENDA = 100
-MANUT_MENSAL = 190  # seguros 50 + condominio 40 + electr 50 + agua 50
+MANUT_MENSAL = 190
 IRC_RATE = 0.20
 
-# ── Motor de calculo ─────────────────────────────────────────
 def calc(vvr, obra, meses):
-    """Calcula metricas financeiras para um cenario."""
     manutencao = MANUT_MENSAL * meses
     comissao = round(vvr * (COMISSAO_PERC / 100) * 1.23)
     custo_total = TOTAL_AQUISICAO + obra + manutencao + comissao + CPCV_VENDA
-    capital_proprio = TOTAL_AQUISICAO + obra + manutencao  # sem custos de venda
+    capital_proprio = TOTAL_AQUISICAO + obra + manutencao
     lucro_bruto = vvr - custo_total
     irc = round(lucro_bruto * IRC_RATE)
     lucro_liquido = lucro_bruto - irc
     rt = round(lucro_bruto / custo_total * 100, 1) if custo_total > 0 else 0
     coc = round(lucro_bruto / capital_proprio * 100, 1) if capital_proprio > 0 else 0
     ra = round((math.pow(1 + lucro_bruto / custo_total, 12 / meses) - 1) * 100, 1) if custo_total > 0 and meses > 0 else 0
-    return {
-        'manutencao': manutencao,
-        'comissao': comissao,
-        'custo_total': custo_total,
-        'capital_proprio': capital_proprio,
-        'lucro_bruto': lucro_bruto,
-        'irc': irc,
-        'lucro_liquido': lucro_liquido,
-        'rt': rt,
-        'coc': coc,
-        'ra': ra,
-    }
+    return dict(manutencao=manutencao, comissao=comissao, custo_total=custo_total,
+                capital_proprio=capital_proprio, lucro_bruto=lucro_bruto, irc=irc,
+                lucro_liquido=lucro_liquido, rt=rt, coc=coc, ra=ra)
 
 def eur(v):
-    """Formata valor em euros PT."""
-    if v is None or v == 0:
-        return '—'
+    if v is None or v == 0: return '—'
     s = f"{abs(v):,.0f}".replace(",", ".")
     return f"{'-' if v < 0 else ''}{s} €"
 
 def pct(v):
-    """Formata percentagem."""
     return f"{v}%"
 
 
-# ── Classe auxiliar para editar paginas ───────────────────────
-class PageEditor:
-    """Acumula redactions e text inserts, aplica de uma vez."""
-    def __init__(self, page):
-        self.page = page
-        self._inserts = []
+# ── Overlay helper ────────────────────────────────────────────
+def ry(y):
+    """Converte coordenada Y de PyMuPDF (top-down) para reportlab (bottom-up)."""
+    return PH - y
 
-    def redact(self, rect, fill=WHITE):
-        """Marca area para remover conteudo (whitout)."""
-        self.page.add_redact_annot(rect, text="", fill=fill)
+def cover_and_write(c, x, y, w, h, text, bg, fontname="Helvetica", fontsize=10, color=BODY_COLOR, align="left"):
+    """Desenha rect de fundo + texto no canvas reportlab."""
+    c.saveState()
+    c.setFillColorRGB(*bg)
+    c.setStrokeColorRGB(*bg)
+    c.rect(x, ry(y + h), w, h, fill=1, stroke=1)
+    c.setFillColorRGB(*color)
+    c.setFont(fontname, fontsize)
+    text_y = ry(y) - fontsize * 0.15  # ajuste para alinhar com baseline
+    if align == "right":
+        c.drawRightString(x + w - 2, text_y, text)
+    elif align == "center":
+        c.drawCentredString(x + w / 2, text_y, text)
+    else:
+        c.drawString(x + 1, text_y, text)
+    c.restoreState()
 
-    def redact_search(self, old, new, fontname="helv", fontsize=10, color=BODY):
-        """Procura texto e substitui via redaction (remove e reescreve)."""
-        areas = self.page.search_for(old)
-        for area in areas:
-            self.page.add_redact_annot(area, text=new, fontname=fontname,
-                                       fontsize=fontsize, text_color=color, fill=WHITE)
-        return len(areas)
 
-    def replace(self, rect, text, fontname="helv", fontsize=10, color=BODY):
-        """Apaga conteudo do rect e agenda escrita de novo texto."""
-        self.page.add_redact_annot(rect, text="", fill=WHITE)
-        self._inserts.append((rect, text, fontname, fontsize, color))
-
-    def apply(self):
-        """Aplica todas as redactions e escreve textos novos."""
-        self.page.apply_redactions()
-        for rect, text, fontname, fontsize, color in self._inserts:
-            lines = text.split('\n')
-            y = rect.y0 + fontsize + 1
-            for line in lines:
-                self.page.insert_text((rect.x0 + 1, y), line,
-                                      fontname=fontname, fontsize=fontsize, color=color)
-                y += fontsize + 2
+def make_overlay(page_edits):
+    """Cria um PDF de overlay com as edicoes especificadas."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    for edit in page_edits:
+        cover_and_write(c, **edit)
+    c.save()
+    buf.seek(0)
+    return PdfReader(buf).pages[0]
 
 
 # ══════════════════════════════════════════════════════════════
-# GERACAO DO PDF MODIFICADO
+# GERADOR PRINCIPAL
 # ══════════════════════════════════════════════════════════════
 def generate(dest_name, meses):
-    doc = fitz.open(SOURCE)
-    nome_antigo = "Luís Gouveia"
-
-    # Calculos
-    base = calc(VVR, OBRA_COM_IVA, meses)
-
-    # Stress tests individuais
+    base = calc(VVR_BASE, OBRA_COM_IVA, meses)
     mod_vvr10 = calc(450000, OBRA_COM_IVA, meses)
-    mod_obra10 = calc(VVR, round(OBRA_COM_IVA * 1.10), meses)
-    mod_ret3 = calc(VVR, OBRA_COM_IVA, meses + 3)
+    mod_obra10 = calc(VVR_BASE, round(OBRA_COM_IVA * 1.10), meses)
+    mod_ret3 = calc(VVR_BASE, OBRA_COM_IVA, meses + 3)
     sev_vvr20 = calc(400000, OBRA_COM_IVA, meses)
-    sev_obra20 = calc(VVR, round(OBRA_COM_IVA * 1.20), meses)
-    sev_ret6 = calc(VVR, OBRA_COM_IVA, meses + 6)
-
-    # Stress tests combinados
+    sev_obra20 = calc(VVR_BASE, round(OBRA_COM_IVA * 1.20), meses)
+    sev_ret6 = calc(VVR_BASE, OBRA_COM_IVA, meses + 6)
     comb_mod = calc(450000, round(OBRA_COM_IVA * 1.10), meses + 3)
     comb_sev = calc(400000, round(OBRA_COM_IVA * 1.20), meses + 6)
 
-    # ══════════════════════════════════════════════════════════
-    # PAGINAS 3-8: Apenas substituir nome no header/footer
-    # ══════════════════════════════════════════════════════════
-    for pn in range(2, 8):
-        ed = PageEditor(doc[pn])
-        ed.redact_search(nome_antigo, dest_name, fontsize=8)
-        ed.apply()
+    # Usar fitz para remover texto antigo via redactions
+    fitz_doc = fitz.open(SOURCE)
+    bg_map = build_bg_map(fitz_doc)
 
-    # ══════════════════════════════════════════════════════════
-    # PAGINA 1 — Capa
-    # ══════════════════════════════════════════════════════════
-    ed = PageEditor(doc[0])
-    # Nome bold grande
-    ed.redact_search(nome_antigo, dest_name, fontname="hebo", fontsize=14)
-    ed.apply()
+    # ── Remover texto antigo de TODAS as paginas ──
+    nome_antigo = "Luís Gouveia"
+    for pn in range(len(fitz_doc)):
+        page = fitz_doc[pn]
+        areas = page.search_for(nome_antigo)
+        for area in areas:
+            bg = get_bg_at(bg_map, pn, area.y0 + 5)
+            page.add_redact_annot(area, text="", fill=bg)
+        page.apply_redactions()
 
-    # ══════════════════════════════════════════════════════════
-    # PAGINA 2 — Sumario Executivo
-    # ══════════════════════════════════════════════════════════
-    ed = PageEditor(doc[1])
-    # Nome no header
-    ed.redact_search(nome_antigo, dest_name, fontsize=8)
-    # "Preparado para: Luis Gouveia"
-    ed.redact_search(f"Preparado para: {nome_antigo}",
-                     f"Preparado para: {dest_name}", fontsize=11)
+    # ── Pagina 1: remover "Preparado para" + nome (ja removido acima, mas tb o label) ──
+    p = fitz_doc[0]
+    for old_text in ["Preparado para"]:
+        areas = p.search_for(old_text)
+        for a in areas:
+            p.add_redact_annot(a, text="", fill=COVER_BG)
+    p.apply_redactions()
 
-    # Retorno Total: rect preciso
-    ed.replace(fitz.Rect(308, 455, 380, 483), pct(base['rt']), fontname="hebo", fontsize=16)
-    # Retorno Anualizado
-    ed.replace(fitz.Rect(431, 455, 510, 483), pct(base['ra']), fontname="hebo", fontsize=16)
-    # "base 9 meses"
-    ed.replace(fitz.Rect(431, 475, 500, 493), f"base {meses} meses", fontsize=8.5)
+    # ── Pagina 2: remover valores antigos ──
+    p = fitz_doc[1]
+    removals_p2 = [
+        ("Preparado para:", WHITE_BG),
+        ("42.1%", COVER_BG), ("59.7%", COVER_BG), ("base 9 meses", COVER_BG),
+        ("148.063 €", COVER_BG), ("118.451 €", COVER_BG), ("351.937 €", COVER_BG),
+        ("9 meses", COVER_BG),  # Prazo de Retencao
+    ]
+    for text, bg in removals_p2:
+        areas = p.search_for(text)
+        for a in areas:
+            p.add_redact_annot(a, text="", fill=bg)
+    p.apply_redactions()
 
-    # Lucro Bruto Estimado
-    ed.replace(fitz.Rect(61, 539, 155, 567), eur(base['lucro_bruto']), fontname="hebo", fontsize=16)
-    # Lucro Liquido (IRC)
-    ed.replace(fitz.Rect(184, 539, 270, 567), eur(base['lucro_liquido']), fontname="hebo", fontsize=16)
-    # Total Investido
-    ed.replace(fitz.Rect(308, 539, 395, 567), eur(base['custo_total']), fontname="hebo", fontsize=16)
-    # Prazo de Retencao
-    ed.replace(fitz.Rect(431, 539, 510, 567), f"{meses} meses", fontname="hebo", fontsize=16)
+    # ── Pagina 9: remover valores antigos ──
+    p = fitz_doc[8]
+    removals_p9 = [
+        # Coluna esquerda
+        ("Manutenção (9 meses)", LIGHT_BG),
+        ("1.710 €", LIGHT_BG),
+        # Coluna direita — retornos (posicoes especificas)
+        ("148.063 €", GOLD_BG),   # Lucro Bruto
+        ("29.613 €", WHITE_BG),   # IRC
+        ("118.451 €", LIGHT_BG),  # Lucro Liquido
+        ("Prazo: 9 meses", WHITE_BG),
+    ]
+    for text, bg in removals_p9:
+        areas = p.search_for(text)
+        for a in areas:
+            p.add_redact_annot(a, text="", fill=bg)
+    # Retornos no lado direito (valores bold)
+    for text in ["42.1%", "44.0%", "59.7%"]:
+        areas = p.search_for(text)
+        for a in areas:
+            if a.x0 > 400:  # so os da coluna direita
+                p.add_redact_annot(a, text="", fill=get_bg_at(bg_map, 8, a.y0 + 5))
+    # Total investido (coluna esquerda, bold row)
+    areas = p.search_for("351.937 €")
+    for a in areas:
+        if a.x0 < 300:
+            p.add_redact_annot(a, text="", fill=WHITE_BG)
+    p.apply_redactions()
 
-    ed.apply()
+    # ── Pagina 10: remover valores stress tests ──
+    p = fitz_doc[9]
+    # Box resumo topo
+    for text in ["9 meses", "42.1%", "59.7%", "118.451 €"]:
+        areas = p.search_for(text)
+        for a in areas:
+            if a.y0 < 240:  # so o box do topo
+                p.add_redact_annot(a, text="", fill=GOLD_BG)
 
-    # ══════════════════════════════════════════════════════════
-    # PAGINA 9 — Analise Financeira
-    # ══════════════════════════════════════════════════════════
-    ed = PageEditor(doc[8])
+    # Tabelas: limpar todas as celulas de dados (meses, LB, LL, RT, CoC, RA, variacoes)
+    # Moderado Base: y=324-360, fundo=#f4edd8
+    # VVR-10%: y=362-398, fundo=#ffffff
+    # Obra+10%: y=400-436, fundo=#f4f4f2
+    # Ret+3: y=438-488, fundo=#ffffff
+    table_rows_mod = [
+        (323, 361, GOLD_BG),   # Base
+        (361, 399, WHITE_BG),  # VVR-10%
+        (399, 437, LIGHT_BG),  # Obra+10%
+        (437, 489, WHITE_BG),  # Ret+3
+    ]
+    table_rows_sev = [
+        (570, 608, GOLD_BG),   # Base
+        (608, 646, WHITE_BG),  # VVR-20%
+        (646, 684, LIGHT_BG),  # Obra+20%
+        (684, 736, WHITE_BG),  # Ret+6
+    ]
+    for rows in [table_rows_mod, table_rows_sev]:
+        for y_top, y_bot, bg in rows:
+            # Limpar celulas de dados (colunas meses ate variacoes: x=219 a x=540)
+            p.add_redact_annot(fitz.Rect(219, y_top, 542, y_bot), text="", fill=bg)
 
-    # Nome header
-    ed.redact_search(nome_antigo, dest_name, fontsize=8)
-
-    # Manutencao label + valor
-    ed.replace(fitz.Rect(67, 319, 215, 338), f"Manutenção ({meses} meses)", fontsize=10)
-    ed.replace(fitz.Rect(215, 319, 270, 338), eur(base['manutencao']), fontsize=10)
-
-    # Total Investido (coluna esquerda)
-    ed.replace(fitz.Rect(215, 391, 270, 411), eur(base['custo_total']), fontname="hebo", fontsize=10)
-
-    # Lucro Estimado (Bruto)
-    ed.replace(fitz.Rect(452, 257, 510, 277), eur(base['lucro_bruto']), fontname="hebo", fontsize=10)
-
-    # IRC
-    ed.replace(fitz.Rect(452, 295, 510, 314), eur(base['irc']), fontsize=10)
-
-    # Lucro Estimado Liquido
-    ed.replace(fitz.Rect(452, 319, 510, 340), eur(base['lucro_liquido']), fontname="hebo", fontsize=11)
-
-    # Retorno Total Investimento
-    ed.replace(fitz.Rect(452, 343, 495, 364), pct(base['rt']), fontname="hebo", fontsize=11)
-
-    # Retorno Cash-on-Cash
-    ed.replace(fitz.Rect(452, 367, 495, 388), pct(base['coc']), fontname="hebo", fontsize=11)
-
-    # Retorno Anualizado
-    ed.replace(fitz.Rect(452, 391, 495, 412), pct(base['ra']), fontname="hebo", fontsize=11)
-
-    # Pressupostos: "Prazo: 9 meses"
-    ed.redact_search("Prazo: 9 meses", f"Prazo: {meses} meses",
-                     fontname="hebi", fontsize=9)
-
-    ed.apply()
-
-    # ══════════════════════════════════════════════════════════
-    # PAGINA 10 — Stress Tests Individuais
-    # ══════════════════════════════════════════════════════════
-    ed = PageEditor(doc[9])
-    ed.redact_search(nome_antigo, dest_name, fontsize=8)
-
-    # ── Caixa de resumo (topo) ──
-    ed.replace(fitz.Rect(221, 204, 300, 224), f"{meses} meses", fontname="hebo", fontsize=10)
-    ed.replace(fitz.Rect(304, 204, 380, 225), pct(base['rt']), fontname="hebo", fontsize=11)
-    ed.replace(fitz.Rect(386, 204, 460, 225), pct(base['ra']), fontname="hebo", fontsize=11)
-    ed.replace(fitz.Rect(468, 204, 540, 225), eur(base['lucro_liquido']), fontname="hebo", fontsize=11)
-
-    # ── TABELA MODERADO ──
-    def write_table_row(ed, y_top, y_bot, scenario, base_data):
-        """Escreve uma linha da tabela de stress tests."""
-        # Meses
-        ed.replace(fitz.Rect(219, y_top, 242, y_bot), f"{scenario['_meses']}\nm", fontsize=10)
-        # Lucro Bruto
-        lb_str = eur(scenario['lucro_bruto']).replace(' €', '')
-        ed.replace(fitz.Rect(243, y_top, 292, y_bot), f"{lb_str}\n€", fontname="hebo", fontsize=11)
-        # Lucro Liq
-        ll_str = eur(scenario['lucro_liquido']).replace(' €', '')
-        ed.replace(fitz.Rect(294, y_top, 342, y_bot), f"{ll_str}\n€", fontsize=10)
-        # RT
-        ed.replace(fitz.Rect(346, y_top, 378, y_bot), f"{scenario['rt']}\n%", fontname="hebo", fontsize=11)
-        # CoC
-        ed.replace(fitz.Rect(382, y_top, 414, y_bot), f"{scenario['coc']}\n%", fontsize=10)
-        # RA
-        ed.replace(fitz.Rect(417, y_top, 455, y_bot), f"{scenario['ra']}%", fontsize=10)
-        # Variacoes
-        if base_data:
-            var_rt = round(scenario['rt'] - base_data['rt'], 1)
-            var_ra = round(scenario['ra'] - base_data['ra'], 1)
-            ed.replace(fitz.Rect(457, y_top, 498, y_bot), f"\u2193\n{var_rt}%", fontname="hebo", fontsize=9.5)
-            ed.replace(fitz.Rect(500, y_top, 540, y_bot), f"\u2193\n{var_ra}%", fontname="hebo", fontsize=9.5)
-
-    # Base moderado — adicionar _meses para a funcao
-    base_row = {**base, '_meses': meses}
-    mod_vvr10_row = {**mod_vvr10, '_meses': meses}
-    mod_obra10_row = {**mod_obra10, '_meses': meses}
-    mod_ret3_row = {**mod_ret3, '_meses': meses + 3}
-
-    write_table_row(ed, 324, 358, base_row, None)
-    write_table_row(ed, 362, 396, mod_vvr10_row, base)
-    write_table_row(ed, 400, 434, mod_obra10_row, base)
-
-    # Retencao +3: tambem atualizar descricao
-    ed.replace(fitz.Rect(56, 438, 132, 486), f"Retenção +3\nmeses ({meses+3}\nmeses)", fontsize=10)
-    write_table_row(ed, 445, 479, mod_ret3_row, base)
-
-    # ── TABELA SEVERO ──
-    sev_base_row = {**base, '_meses': meses}
-    sev_vvr20_row = {**sev_vvr20, '_meses': meses}
-    sev_obra20_row = {**sev_obra20, '_meses': meses}
-    sev_ret6_row = {**sev_ret6, '_meses': meses + 6}
-
-    write_table_row(ed, 571, 605, sev_base_row, None)
-    write_table_row(ed, 609, 643, sev_vvr20_row, base)
-    write_table_row(ed, 647, 681, sev_obra20_row, base)
-
-    # Retencao +6: atualizar descricao
-    ed.replace(fitz.Rect(56, 685, 132, 733), f"Retenção +6\nmeses ({meses+6}\nmeses)", fontsize=10)
-    write_table_row(ed, 692, 726, sev_ret6_row, base)
+    # Limpar descricoes de retencao
+    p.add_redact_annot(fitz.Rect(56, 438, 132, 489), text="", fill=WHITE_BG)
+    p.add_redact_annot(fitz.Rect(56, 684, 132, 736), text="", fill=WHITE_BG)
 
     # Nota no fundo
-    ed.replace(fitz.Rect(55, 742, 540, 772),
-        f"Nota: O impacto individual mais crítico é a queda do VVR em −20%, que reduz o lucro líquido para "
-        f"{eur(sev_vvr20['lucro_liquido'])} e o retorno\n"
-        f"total para {pct(sev_vvr20['rt'])}. O aumento de 20% no custo de obra e o prolongamento "
-        f"da retenção têm um impacto mais moderado.",
-        fontname="hebi", fontsize=9)
+    p.add_redact_annot(fitz.Rect(55, 742, 540, 772), text="", fill=WHITE_BG)
 
-    ed.apply()
+    p.apply_redactions()
 
-    # ══════════════════════════════════════════════════════════
-    # PAGINA 11 — Stress Test Combinado Moderado
-    # ══════════════════════════════════════════════════════════
-    ed = PageEditor(doc[10])
-    ed.redact_search(nome_antigo, dest_name, fontsize=8)
+    # ── Pagina 11: remover valores combinado moderado ──
+    p = fitz_doc[10]
+    # Box resumo
+    for text in ["9 meses", "42.1%", "59.7%", "118.451 €"]:
+        areas = p.search_for(text)
+        for a in areas:
+            if a.y0 < 244:
+                p.add_redact_annot(a, text="", fill=GOLD_BG)
+    # Descricao
+    areas = p.search_for("meses (9 \u2192 12 meses)")
+    for a in areas:
+        p.add_redact_annot(a, text="", fill=CREAM_BG)
+    # Boxes descricao
+    areas = p.search_for("12 meses")
+    for a in areas:
+        if 340 < a.y0 < 380:
+            p.add_redact_annot(a, text="", fill=CREAM_BG)
+    areas = p.search_for("67.743 €")
+    for a in areas:
+        if 340 < a.y0 < 380:
+            p.add_redact_annot(a, text="", fill=CREAM_BG)
+    # Tabela (colunas de dados: x=208 a 520)
+    table_rows_p11 = [
+        (414, 438, WHITE_BG), (438, 462, LIGHT_BG), (462, 486, WHITE_BG),
+        (486, 510, LIGHT_BG), (510, 534, WHITE_BG), (534, 558, LIGHT_BG),
+    ]
+    for y_top, y_bot, bg in table_rows_p11:
+        p.add_redact_annot(fitz.Rect(208, y_top, 530, y_bot), text="", fill=bg)
+    p.apply_redactions()
 
-    # Caixa de resumo (topo)
-    ed.replace(fitz.Rect(221, 218, 300, 238), f"{meses} meses", fontname="hebo", fontsize=10)
-    ed.replace(fitz.Rect(304, 218, 380, 239), pct(base['rt']), fontname="hebo", fontsize=11)
-    ed.replace(fitz.Rect(386, 218, 460, 239), pct(base['ra']), fontname="hebo", fontsize=11)
-    ed.replace(fitz.Rect(468, 218, 540, 239), eur(base['lucro_liquido']), fontname="hebo", fontsize=11)
+    # ── Pagina 12: remover valores combinado severo + conclusao ──
+    p = fitz_doc[11]
+    # Descricao
+    areas = p.search_for("meses (9 \u2192 15 meses)")
+    for a in areas:
+        p.add_redact_annot(a, text="", fill=CREAM_BG)
+    # Boxes
+    areas = p.search_for("15 meses")
+    for a in areas:
+        if 130 < a.y0 < 170:
+            p.add_redact_annot(a, text="", fill=get_bg_at(bg_map, 11, a.y0 + 3))
+    areas = p.search_for("17.036 €")
+    for a in areas:
+        if 130 < a.y0 < 170:
+            p.add_redact_annot(a, text="", fill=get_bg_at(bg_map, 11, a.y0 + 3))
+    # Tabela
+    table_rows_p12 = [
+        (204, 228, WHITE_BG), (228, 252, LIGHT_BG), (252, 276, WHITE_BG),
+        (276, 300, LIGHT_BG), (300, 324, WHITE_BG), (324, 348, LIGHT_BG),
+    ]
+    for y_top, y_bot, bg in table_rows_p12:
+        p.add_redact_annot(fitz.Rect(208, y_top, 530, y_bot), text="", fill=bg)
+    # Conclusao
+    p.add_redact_annot(fitz.Rect(55, 381, 540, 485), text="", fill=WHITE_BG)
+    p.apply_redactions()
 
-    # Descricao: "meses (9 → 12 meses)" → "meses (12 → 15 meses)"
-    ed.redact_search("meses (9 \u2192 12 meses)", f"meses ({meses} \u2192 {meses+3} meses)",
-                     fontname="heit", fontsize=9)
+    # ── Guardar PDF limpo (sem texto antigo) como temp ──
+    temp_buf = BytesIO()
+    fitz_doc.save(temp_buf, deflate=True, garbage=4)
+    fitz_doc.close()
+    temp_buf.seek(0)
 
-    # Meses no box
-    ed.replace(fitz.Rect(306, 357, 370, 377), f"{meses+3} meses", fontname="hebo", fontsize=10)
-    # Lucro Liquido no box
-    ed.replace(fitz.Rect(429, 357, 490, 377), eur(comb_mod['lucro_liquido']), fontname="hebo", fontsize=10)
+    # ═══════════════════════════════════════════════════════════
+    # FASE 2: Criar overlays com reportlab e fundir com pypdf
+    # ═══════════════════════════════════════════════════════════
+    reader = PdfReader(temp_buf)
+    writer = PdfWriter()
 
-    # Tabela comparativa — coluna Cenario Combinado
-    ed.replace(fitz.Rect(208, 416, 275, 436), eur(comb_mod['capital_proprio']), fontname="hebo", fontsize=11)
-    ed.replace(fitz.Rect(208, 440, 265, 460), eur(comb_mod['lucro_bruto']), fontname="hebo", fontsize=11)
-    ed.replace(fitz.Rect(208, 464, 265, 484), eur(comb_mod['lucro_liquido']), fontname="hebo", fontsize=11)
-    ed.replace(fitz.Rect(208, 488, 255, 508), pct(comb_mod['rt']), fontname="hebo", fontsize=11)
-    ed.replace(fitz.Rect(208, 512, 255, 532), pct(comb_mod['coc']), fontname="hebo", fontsize=11)
-    ed.replace(fitz.Rect(208, 536, 255, 556), pct(comb_mod['ra']), fontname="hebo", fontsize=11)
+    for pn in range(len(reader.pages)):
+        page = reader.pages[pn]
 
-    # Coluna Base (Normal) — novos valores base 12m
-    ed.replace(fitz.Rect(284, 416, 350, 436), eur(base['capital_proprio']), fontsize=10)
-    ed.replace(fitz.Rect(284, 440, 345, 460), eur(base['lucro_bruto']), fontsize=10)
-    ed.replace(fitz.Rect(284, 464, 345, 484), eur(base['lucro_liquido']), fontsize=10)
-    ed.replace(fitz.Rect(284, 488, 330, 508), pct(base['rt']), fontsize=10)
-    ed.replace(fitz.Rect(284, 512, 330, 532), pct(base['coc']), fontsize=10)
-    ed.replace(fitz.Rect(284, 536, 330, 556), pct(base['ra']), fontsize=10)
+        if pn == 0:
+            overlay = make_page0_overlay(dest_name)
+            page.merge_page(overlay)
+        elif pn == 1:
+            overlay = make_page2_overlay(dest_name, base, meses)
+            page.merge_page(overlay)
+        elif pn == 8:
+            overlay = make_page9_overlay(base, meses)
+            page.merge_page(overlay)
+        elif pn == 9:
+            overlay = make_page10_overlay(base, meses, mod_vvr10, mod_obra10, mod_ret3,
+                                          sev_vvr20, sev_obra20, sev_ret6)
+            page.merge_page(overlay)
+        elif pn == 10:
+            overlay = make_page11_overlay(base, meses, comb_mod)
+            page.merge_page(overlay)
+        elif pn == 11:
+            overlay = make_page12_overlay(base, meses, comb_mod, comb_sev)
+            page.merge_page(overlay)
+        else:
+            # Paginas sem alteracoes de dados, so nome no header
+            pass
 
-    # Coluna Variacao (€)
-    diff_cap = comb_mod['capital_proprio'] - base['capital_proprio']
-    diff_lb = abs(comb_mod['lucro_bruto'] - base['lucro_bruto'])
-    diff_ll = abs(comb_mod['lucro_liquido'] - base['lucro_liquido'])
-    ed.replace(fitz.Rect(361, 416, 430, 436), f"\u2191 +{eur(diff_cap)}", fontsize=9.5)
-    ed.replace(fitz.Rect(361, 440, 430, 460), f"\u2193 {eur(diff_lb)}", fontsize=9.5)
-    ed.replace(fitz.Rect(361, 464, 430, 484), f"\u2193 {eur(diff_ll)}", fontsize=9.5)
+        # Adicionar nome no header de todas as paginas (excepto capa)
+        if pn > 0:
+            overlay = make_name_header_overlay(dest_name, pn)
+            if overlay:
+                page.merge_page(overlay)
 
-    # Coluna Variacao (%)
-    ed.replace(fitz.Rect(455, 416, 520, 436), f"\u2191 +{eur(diff_cap)}", fontsize=9.5)
-    ed.replace(fitz.Rect(455, 440, 520, 460), f"\u2193 {eur(diff_lb)}", fontsize=9.5)
-    ed.replace(fitz.Rect(455, 464, 520, 484), f"\u2193 {eur(diff_ll)}", fontsize=9.5)
-    var_rt = round(comb_mod['rt'] - base['rt'], 1)
-    var_coc = round(comb_mod['coc'] - base['coc'], 1)
-    var_ra = round(comb_mod['ra'] - base['ra'], 1)
-    ed.replace(fitz.Rect(455, 488, 520, 508), f"\u2193 {var_rt}%", fontsize=9.5)
-    ed.replace(fitz.Rect(455, 512, 520, 532), f"\u2193 {var_coc}%", fontsize=9.5)
-    ed.replace(fitz.Rect(455, 536, 520, 556), f"\u2193 {var_ra}%", fontsize=9.5)
+        writer.add_page(page)
 
-    ed.apply()
-
-    # ══════════════════════════════════════════════════════════
-    # PAGINA 12 — Stress Test Combinado Severo + Conclusao
-    # ══════════════════════════════════════════════════════════
-    ed = PageEditor(doc[11])
-    ed.redact_search(nome_antigo, dest_name, fontsize=8)
-
-    # Descricao: "meses (9 → 15 meses)" → "meses (12 → 18 meses)"
-    ed.redact_search("meses (9 \u2192 15 meses)", f"meses ({meses} \u2192 {meses+6} meses)",
-                     fontname="heit", fontsize=9)
-
-    # Meses e Lucro Liquido nos boxes
-    ed.replace(fitz.Rect(306, 146, 370, 166), f"{meses+6} meses", fontname="hebo", fontsize=10)
-    ed.replace(fitz.Rect(429, 146, 490, 166), eur(comb_sev['lucro_liquido']), fontname="hebo", fontsize=10)
-
-    # Tabela — Cenario Combinado
-    ed.replace(fitz.Rect(208, 205, 275, 225), eur(comb_sev['capital_proprio']), fontname="hebo", fontsize=11)
-    ed.replace(fitz.Rect(208, 229, 270, 249), eur(comb_sev['lucro_bruto']), fontname="hebo", fontsize=11)
-    ed.replace(fitz.Rect(208, 253, 270, 273), eur(comb_sev['lucro_liquido']), fontname="hebo", fontsize=11)
-    ed.replace(fitz.Rect(208, 277, 255, 297), pct(comb_sev['rt']), fontname="hebo", fontsize=11)
-    ed.replace(fitz.Rect(208, 301, 255, 321), pct(comb_sev['coc']), fontname="hebo", fontsize=11)
-    ed.replace(fitz.Rect(208, 325, 255, 345), pct(comb_sev['ra']), fontname="hebo", fontsize=11)
-
-    # Base (Normal) — novos valores
-    ed.replace(fitz.Rect(284, 205, 350, 225), eur(base['capital_proprio']), fontsize=10)
-    ed.replace(fitz.Rect(284, 229, 345, 249), eur(base['lucro_bruto']), fontsize=10)
-    ed.replace(fitz.Rect(284, 253, 345, 273), eur(base['lucro_liquido']), fontsize=10)
-    ed.replace(fitz.Rect(284, 277, 330, 297), pct(base['rt']), fontsize=10)
-    ed.replace(fitz.Rect(284, 301, 330, 321), pct(base['coc']), fontsize=10)
-    ed.replace(fitz.Rect(284, 325, 330, 345), pct(base['ra']), fontsize=10)
-
-    # Variacoes
-    diff_cap = comb_sev['capital_proprio'] - base['capital_proprio']
-    diff_lb = abs(comb_sev['lucro_bruto'] - base['lucro_bruto'])
-    diff_ll = abs(comb_sev['lucro_liquido'] - base['lucro_liquido'])
-    ed.replace(fitz.Rect(361, 205, 430, 225), f"\u2191 +{eur(diff_cap)}", fontsize=9.5)
-    ed.replace(fitz.Rect(361, 229, 430, 249), f"\u2193 {eur(diff_lb)}", fontsize=9.5)
-    ed.replace(fitz.Rect(361, 253, 430, 273), f"\u2193 {eur(diff_ll)}", fontsize=9.5)
-    ed.replace(fitz.Rect(455, 205, 520, 225), f"\u2191 +{eur(diff_cap)}", fontsize=9.5)
-    ed.replace(fitz.Rect(455, 229, 520, 249), f"\u2193 {eur(diff_lb)}", fontsize=9.5)
-    ed.replace(fitz.Rect(455, 253, 520, 273), f"\u2193 {eur(diff_ll)}", fontsize=9.5)
-    var_rt = round(comb_sev['rt'] - base['rt'], 1)
-    var_coc = round(comb_sev['coc'] - base['coc'], 1)
-    var_ra = round(comb_sev['ra'] - base['ra'], 1)
-    ed.replace(fitz.Rect(455, 277, 520, 297), f"\u2193 {var_rt}%", fontsize=9.5)
-    ed.replace(fitz.Rect(455, 301, 520, 321), f"\u2193 {var_coc}%", fontsize=9.5)
-    ed.replace(fitz.Rect(455, 325, 520, 345), f"\u2193 {var_ra}%", fontsize=9.5)
-
-    # ── Conclusao ──
-    # Apagar texto antigo (7 linhas)
-    ed.redact(fitz.Rect(55, 381, 540, 485))
-
-    ed.apply()
-
-    # Inserir nova conclusao apos redactions
-    p = doc[11]
-    conclusao = (
-        f"O projecto apresenta um perfil de risco-retorno atractivo: no cenário base conservador, o investimento gera\n"
-        f"um retorno total de {pct(base['rt'])} e anualizado de {pct(base['ra'])} num prazo de {meses} meses. No cenário moderado combinado,\n"
-        f"o lucro líquido é de {eur(comb_mod['lucro_liquido'])} com retorno de {pct(comb_mod['rt'])}. No cenário severo combinado — o pior caso possível\n"
-        f"com todas as adversidades em simultâneo — o lucro líquido cai para {eur(comb_sev['lucro_liquido'])} e o retorno para apenas\n"
-        f"{pct(comb_sev['rt'])}. O investimento mantém lucro positivo mesmo no pior cenário, o que valida a solidez estrutural do\n"
-        f"projecto. A localização em Santa Clara, Coimbra, com forte procura de arrendamento universitário e\n"
-        f"crescente interesse de compra, sustenta os valores de venda projectados."
-    )
-    y = 395
-    for i, line in enumerate(conclusao.split('\n')):
-        font = "hebo" if i == 4 else "helv"  # linha do "5.5%..." fica bold como no original
-        p.insert_text((57, y), line, fontname=font, fontsize=10, color=BODY)
-        y += 14
-
-    # ── Guardar ──
     nome_ficheiro = dest_name.replace(" ", "_")
     output_path = os.path.join(OUTPUT_DIR, f"Investimento_Rua_do_Clube_{nome_ficheiro}.pdf")
-    doc.save(output_path, deflate=True, garbage=4)
-    doc.close()
+    with open(output_path, "wb") as f:
+        writer.write(f)
     print(f"  Gerado: {output_path}")
     return output_path
+
+
+# ══════════════════════════════════════════════════════════════
+# MAPA DE CORES DE FUNDO
+# ══════════════════════════════════════════════════════════════
+def build_bg_map(doc):
+    """Constroi um mapa de cores de fundo por pagina e posicao Y."""
+    bg_map = {}
+    for pn in range(len(doc)):
+        page = doc[pn]
+        drawings = page.get_drawings()
+        rects = []
+        for d in drawings:
+            fill = d.get("fill")
+            if fill and d["items"] and d["items"][0][0] == "re":
+                r = d["rect"]
+                if r.height > 5 and r.width > 50:
+                    rects.append((r, fill))
+        bg_map[pn] = rects
+    return bg_map
+
+
+def get_bg_at(bg_map, pn, y):
+    """Retorna a cor de fundo mais especifica na posicao Y da pagina."""
+    rects = bg_map.get(pn, [])
+    best = WHITE_BG
+    best_area = float('inf')
+    for r, fill in rects:
+        if r.y0 <= y <= r.y1:
+            area = r.width * r.height
+            if area < best_area:
+                best_area = area
+                best = fill
+    return best
+
+
+# ══════════════════════════════════════════════════════════════
+# OVERLAYS POR PAGINA (reportlab)
+# ══════════════════════════════════════════════════════════════
+
+def make_name_header_overlay(name, pn):
+    """Overlay para o nome no footer de cada pagina."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    # Footer: "Somnium Properties · Proposta de Investimento · Rua do Clube, Coimbra · Abril 2026 · <NOME>"
+    footer_text = f"Somnium Properties  ·  Proposta de Investimento  ·  Rua do Clube, Coimbra  ·  Abril 2026  ·  {name}"
+    c.setFont("Helvetica", 8)
+    c.setFillColorRGB(*MUTED)
+    # Footer fica em y≈820 (PyMuPDF) → ry(820) em reportlab
+    c.drawCentredString(A4[0] / 2, ry(820), footer_text)
+    c.save()
+    buf.seek(0)
+    return PdfReader(buf).pages[0]
+
+
+def make_page0_overlay(name):
+    """Overlay para a capa."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    # "Preparado para" + nome
+    c.setFont("Helvetica", 7.5)
+    c.setFillColorRGB(*MUTED)
+    c.drawCentredString(A4[0] / 2, ry(486), "Preparado para")
+    c.setFont("Helvetica-Bold", 14)
+    c.setFillColorRGB(*BODY_COLOR)
+    c.drawCentredString(A4[0] / 2, ry(502), name)
+    c.save()
+    buf.seek(0)
+    return PdfReader(buf).pages[0]
+
+
+def make_page2_overlay(name, base, meses):
+    """Overlay para a pagina 2 — Sumario Executivo."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+
+    # "Preparado para: <nome>"
+    c.setFont("Helvetica", 11)
+    c.setFillColorRGB(*BODY_COLOR)
+    c.drawString(57, ry(203), f"Preparado para: {name}")
+
+    # BigNumbers row 1: Retorno Total + Ret Anualizado
+    # Retorno Total: x=310, y≈465
+    c.setFont("Helvetica-Bold", 16)
+    c.setFillColorRGB(*BODY_COLOR)
+    c.drawString(310, ry(475), pct(base['rt']))
+    # Ret Anualizado: x=433
+    c.drawString(433, ry(475), pct(base['ra']))
+
+    # "base X meses"
+    c.setFont("Helvetica", 8.5)
+    c.setFillColorRGB(*MUTED)
+    c.drawString(433, ry(488), f"base {meses} meses")
+
+    # BigNumbers row 2
+    c.setFont("Helvetica-Bold", 16)
+    c.setFillColorRGB(*BODY_COLOR)
+    # Lucro Bruto
+    c.drawString(63, ry(559), eur(base['lucro_bruto']))
+    # Lucro Liquido
+    c.drawString(186, ry(559), eur(base['lucro_liquido']))
+    # Total Investido
+    c.drawString(310, ry(559), eur(base['custo_total']))
+    # Prazo
+    c.drawString(433, ry(559), f"{meses} meses")
+
+    c.save()
+    buf.seek(0)
+    return PdfReader(buf).pages[0]
+
+
+def make_page9_overlay(base, meses):
+    """Overlay para a pagina 9 — Analise Financeira."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+
+    # Manutencao label + valor
+    c.setFont("Helvetica", 10)
+    c.setFillColorRGB(*BODY_COLOR)
+    c.drawString(69, ry(333), f"Manutenção ({meses} meses)")
+    c.drawString(217, ry(333), eur(base['manutencao']))
+
+    # Total Investido (coluna esquerda, bold, y=400)
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(217, ry(405), eur(base['custo_total']))
+
+    # Coluna direita — Retornos
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(454, ry(271), eur(base['lucro_bruto']))  # Lucro Bruto
+    c.setFont("Helvetica", 10)
+    c.drawString(454, ry(309), eur(base['irc']))  # IRC
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(454, ry(334), eur(base['lucro_liquido']))  # Lucro Liquido
+    c.drawString(454, ry(358), pct(base['rt']))  # Retorno Total
+    c.drawString(454, ry(382), pct(base['coc']))  # Cash-on-Cash
+    c.drawString(454, ry(406), pct(base['ra']))  # Ret Anualizado
+
+    # Pressupostos
+    c.setFont("Helvetica-BoldOblique", 9)
+    c.setFillColorRGB(*BODY_COLOR)
+    # Sobrepor "Prazo: 12 meses" no local correcto
+    # A frase completa esta em y=433, mas so preciso substituir o "9" por "12"
+    # Mais simples: escrever sobre
+    c.setFont("Helvetica-Oblique", 9)
+    c.drawString(57, ry(443), f"electricidade 50 € + água 50 €) · Regime fiscal: Empresa · IRC 20% · Prazo: {meses} meses desde a aquisição até à escritura")
+
+    c.save()
+    buf.seek(0)
+    return PdfReader(buf).pages[0]
+
+
+def make_page10_overlay(base, meses, mod_vvr10, mod_obra10, mod_ret3,
+                         sev_vvr20, sev_obra20, sev_ret6):
+    """Overlay para a pagina 10 — Stress Tests Individuais."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+
+    # Box resumo topo
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColorRGB(*BODY_COLOR)
+    c.drawString(223, ry(219), f"{meses} meses")
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(306, ry(220), pct(base['rt']))
+    c.drawString(388, ry(220), pct(base['ra']))
+    c.drawString(470, ry(220), eur(base['lucro_liquido']))
+
+    # Tabela MODERADO
+    scenarios_mod = [
+        (338, base, meses, None),           # Base
+        (376, mod_vvr10, meses, base),      # VVR-10%
+        (414, mod_obra10, meses, base),     # Obra+10%
+        (462, mod_ret3, meses + 3, base),   # Ret+3
+    ]
+    for y, sc, m, base_ref in scenarios_mod:
+        write_stress_row(c, y, sc, m, base_ref)
+
+    # Descricao retencao +3m
+    c.setFont("Helvetica", 10)
+    c.setFillColorRGB(*BODY_COLOR)
+    c.drawString(58, ry(453), "Retenção +3")
+    c.drawString(58, ry(467), f"meses ({meses+3}")
+    c.drawString(58, ry(481), "meses)")
+
+    # Tabela SEVERO
+    scenarios_sev = [
+        (585, base, meses, None),           # Base
+        (623, sev_vvr20, meses, base),      # VVR-20%
+        (661, sev_obra20, meses, base),     # Obra+20%
+        (709, sev_ret6, meses + 6, base),   # Ret+6
+    ]
+    for y, sc, m, base_ref in scenarios_sev:
+        write_stress_row(c, y, sc, m, base_ref)
+
+    # Descricao retencao +6m
+    c.setFont("Helvetica", 10)
+    c.setFillColorRGB(*BODY_COLOR)
+    c.drawString(58, ry(700), "Retenção +6")
+    c.drawString(58, ry(714), f"meses ({meses+6}")
+    c.drawString(58, ry(728), "meses)")
+
+    # Nota
+    c.setFont("Helvetica-BoldOblique", 9)
+    c.setFillColorRGB(*BODY_COLOR)
+    c.drawString(57, ry(755),
+        f"Nota: O impacto individual mais crítico é a queda do VVR em −20%, que reduz o lucro líquido para {eur(sev_vvr20['lucro_liquido'])} e o retorno")
+    c.setFont("Helvetica-Oblique", 9)
+    c.drawString(57, ry(767),
+        f"total para {pct(sev_vvr20['rt'])}. O aumento de 20% no custo de obra e o prolongamento da retenção têm um impacto mais moderado.")
+
+    c.save()
+    buf.seek(0)
+    return PdfReader(buf).pages[0]
+
+
+def write_stress_row(c, y, sc, meses, base_ref):
+    """Escreve uma linha de dados na tabela de stress tests."""
+    # Meses
+    c.setFont("Helvetica", 10)
+    c.setFillColorRGB(*BODY_COLOR)
+    c.drawString(221, ry(y), str(meses))
+    c.drawString(221, ry(y + 14), "m")
+    # Lucro Bruto
+    lb_parts = eur(sc['lucro_bruto']).replace(' €', '').strip()
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(245, ry(y), lb_parts)
+    c.drawString(245, ry(y + 14), "€")
+    # Lucro Liq
+    ll_parts = eur(sc['lucro_liquido']).replace(' €', '').strip()
+    c.setFont("Helvetica", 10)
+    c.drawString(296, ry(y + 6), f"{ll_parts} €")
+    # RT
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(348, ry(y), str(sc['rt']))
+    c.drawString(348, ry(y + 14), "%")
+    # CoC
+    c.setFont("Helvetica", 10)
+    c.drawString(384, ry(y), str(sc['coc']))
+    c.drawString(384, ry(y + 14), "%")
+    # RA
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(419, ry(y), str(sc['ra']))
+    c.drawString(419, ry(y + 14), "%")
+    # Variacoes
+    if base_ref:
+        var_rt = round(sc['rt'] - base_ref['rt'], 1)
+        var_ra = round(sc['ra'] - base_ref['ra'], 1)
+        c.setFont("Helvetica-Bold", 9.5)
+        c.drawString(459, ry(y + 2), "↓")
+        c.drawString(459, ry(y + 14), f"{var_rt}%")
+        c.drawString(502, ry(y + 2), "↓")
+        c.drawString(502, ry(y + 14), f"{var_ra}%")
+    else:
+        c.setFont("Helvetica", 9)
+        c.drawString(459, ry(y + 7), "—")
+        c.drawString(502, ry(y + 7), "—")
+
+
+def make_page11_overlay(base, meses, comb_mod):
+    """Overlay para a pagina 11 — Stress Test Combinado Moderado."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+
+    # Box resumo
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColorRGB(*BODY_COLOR)
+    c.drawString(223, ry(233), f"{meses} meses")
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(306, ry(234), pct(base['rt']))
+    c.drawString(388, ry(234), pct(base['ra']))
+    c.drawString(470, ry(234), eur(base['lucro_liquido']))
+
+    # Descricao: "(12 → 15 meses)"
+    c.setFont("Helvetica-Oblique", 9)
+    c.drawString(59, ry(333), f"meses ({meses} \u2192 {meses+3} meses)")
+
+    # Boxes descricao
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(308, ry(371), f"{meses+3} meses")
+    c.drawString(431, ry(371), eur(comb_mod['lucro_liquido']))
+
+    # Tabela
+    write_combined_table(c, base, comb_mod, start_y=426)
+
+    c.save()
+    buf.seek(0)
+    return PdfReader(buf).pages[0]
+
+
+def make_page12_overlay(base, meses, comb_mod, comb_sev):
+    """Overlay para a pagina 12 — Stress Test Combinado Severo + Conclusao."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+
+    # Descricao
+    c.setFont("Helvetica-Oblique", 9)
+    c.setFillColorRGB(*BODY_COLOR)
+    c.drawString(59, ry(122), f"meses ({meses} \u2192 {meses+6} meses)")
+
+    # Boxes
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(308, ry(160), f"{meses+6} meses")
+    c.drawString(431, ry(160), eur(comb_sev['lucro_liquido']))
+
+    # Tabela
+    write_combined_table(c, base, comb_sev, start_y=215)
+
+    # Conclusao
+    c.setFont("Helvetica", 10)
+    c.setFillColorRGB(*BODY_COLOR)
+    lines = [
+        f"O projecto apresenta um perfil de risco-retorno atractivo: no cenário base conservador, o investimento gera",
+        f"um retorno total de {pct(base['rt'])} e anualizado de {pct(base['ra'])} num prazo de {meses} meses. No cenário moderado combinado,",
+        f"o lucro líquido é de {eur(comb_mod['lucro_liquido'])} com retorno de {pct(comb_mod['rt'])}. No cenário severo combinado — o pior caso possível",
+        f"com todas as adversidades em simultâneo — o lucro líquido cai para {eur(comb_sev['lucro_liquido'])} e o retorno para apenas",
+    ]
+    y = 395
+    for line in lines:
+        c.setFont("Helvetica", 10)
+        c.drawString(57, ry(y), line)
+        y += 14
+
+    # Linha bold
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(57, ry(y), f"{pct(comb_sev['rt'])}. O investimento mantém lucro positivo mesmo no pior cenário, o que valida a solidez estrutural do")
+    y += 14
+
+    c.setFont("Helvetica", 10)
+    c.drawString(57, ry(y), "projecto. A localização em Santa Clara, Coimbra, com forte procura de arrendamento universitário e")
+    y += 14
+    c.drawString(57, ry(y), "crescente interesse de compra, sustenta os valores de venda projectados.")
+
+    c.save()
+    buf.seek(0)
+    return PdfReader(buf).pages[0]
+
+
+def write_combined_table(c, base, combined, start_y):
+    """Escreve dados da tabela de stress tests combinados."""
+    rows = [
+        ("Cap. Próprios", combined['capital_proprio'], base['capital_proprio'], True),
+        ("Lucro Bruto", combined['lucro_bruto'], base['lucro_bruto'], False),
+        ("Lucro Líquido", combined['lucro_liquido'], base['lucro_liquido'], False),
+        ("Retorno Total", combined['rt'], base['rt'], False),
+        ("Cash-on-Cash", combined['coc'], base['coc'], False),
+        ("Ret. Anualizado", combined['ra'], base['ra'], False),
+    ]
+
+    y = start_y
+    for label_unused, comb_val, base_val, is_up in rows:
+        c.setFillColorRGB(*BODY_COLOR)
+
+        # Cenario combinado
+        c.setFont("Helvetica-Bold", 11)
+        if isinstance(comb_val, float):
+            c.drawString(210, ry(y), pct(comb_val))
+        else:
+            c.drawString(210, ry(y), eur(comb_val))
+
+        # Base
+        c.setFont("Helvetica", 10)
+        if isinstance(base_val, float):
+            c.drawString(286, ry(y), pct(base_val))
+        else:
+            c.drawString(286, ry(y), eur(base_val))
+
+        # Variacoes
+        if isinstance(comb_val, float):
+            diff = round(comb_val - base_val, 1)
+            arrow = "↓" if diff < 0 else "↑"
+            # So mostrar variacao % para retornos
+            c.setFont("Helvetica", 9)
+            c.drawString(363, ry(y), "—")
+            c.drawString(457, ry(y), f"{arrow} {diff}%")
+        else:
+            diff = comb_val - base_val
+            arrow = "↑" if diff > 0 else "↓"
+            c.setFont("Helvetica", 9.5)
+            c.drawString(363, ry(y), f"{arrow} {'+' if diff > 0 else ''}{eur(diff)}")
+            c.drawString(457, ry(y), f"{arrow} {'+' if diff > 0 else ''}{eur(diff)}")
+
+        y += 24
 
 
 # ══════════════════════════════════════════════════════════════
@@ -423,21 +714,16 @@ def generate(dest_name, meses):
 # ══════════════════════════════════════════════════════════════
 if __name__ == "__main__":
     print("Proposta de Investimento — Rua do Clube, Coimbra")
-    print(f"Fonte: {SOURCE}")
-    print(f"Retencao: 12 meses\n")
+    print(f"Fonte: {SOURCE}\nRetencao: 12 meses\n")
 
-    base = calc(VVR, OBRA_COM_IVA, 12)
-    print("Cenario base (12 meses):")
+    base = calc(VVR_BASE, OBRA_COM_IVA, 12)
     print(f"  Total Investido: {eur(base['custo_total'])}")
     print(f"  Lucro Bruto:     {eur(base['lucro_bruto'])}")
-    print(f"  IRC:             {eur(base['irc'])}")
     print(f"  Lucro Liquido:   {eur(base['lucro_liquido'])}")
     print(f"  Retorno Total:   {pct(base['rt'])}")
     print(f"  Cash-on-Cash:    {pct(base['coc'])}")
-    print(f"  Ret. Anualizado: {pct(base['ra'])}")
-    print()
+    print(f"  Ret. Anualizado: {pct(base['ra'])}\n")
 
     generate("Miguel Rodrigues", 12)
     generate("Pedro Sousa", 12)
-
     print("\nConcluido.")
