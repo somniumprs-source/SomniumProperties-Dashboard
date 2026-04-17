@@ -1969,11 +1969,15 @@ export function generateCompiledReport(imovel, analise, seccoes = []) {
     if (seccao === 'investimento') {
       if (hasContent) b.newPage()
       hasContent = true
-      const ra = an.retorno_anualizado || 0
+      const compra = an.compra || im.valor_proposta || im.ask_price || 0
+      const obra = an.obra_com_iva || an.obra || im.custo_estimado_obra || 0
+      const vvr = an.vvr || im.valor_venda_remodelado || 0
+      const capital = an.capital_necessario || (compra + obra)
+      const ra = an.retorno_anualizado || im.roi_anualizado || 0
       b.bigNumbers([
         { label: 'Lucro Líquido', value: EUR(an.lucro_liquido) },
         { label: 'Retorno Anualizado', value: `${ra}%` },
-        { label: 'Capital Necessário', value: EUR(an.capital_necessario) },
+        { label: 'Capital Necessário', value: EUR(capital) },
       ])
       b.inlineData([
         { label: 'Zona', value: im.zona || '—' },
@@ -1983,27 +1987,27 @@ export function generateCompiledReport(imovel, analise, seccoes = []) {
       b.space(6)
       b.header('CUSTOS DO INVESTIMENTO')
       b.simpleTable([
-        { label: 'Preço de compra', value: EUR(an.compra) },
+        { label: 'Preço de compra', value: EUR(compra) },
         { label: 'IMT + Selo + Escritura', value: EUR((an.imt || 0) + (an.imposto_selo || 0) + (an.escritura || 0) + (an.cpcv_compra || 0)) },
         { label: 'Total Aquisição', value: EUR(an.total_aquisicao), total: true },
-        { label: 'Obra c/ IVA', value: EUR(an.obra_com_iva) },
-        { label: 'Total Obra', value: EUR(an.obra_com_iva), total: true },
+        { label: 'Obra c/ IVA', value: EUR(obra) },
+        { label: 'Total Obra', value: EUR(obra), total: true },
         { label: `Detenção + Comissão`, value: EUR((an.total_detencao || 0) + (an.comissao_com_iva || 0)) },
-        { label: 'Total Investimento', value: EUR(an.capital_necessario), total: true },
+        { label: 'Total Investimento', value: EUR(capital), total: true },
       ])
       b.space(4)
       b.header('RESULTADO')
       b.simpleTable([
-        { label: 'Receita (VVR)', value: EUR(an.vvr) },
-        { label: 'Custos totais', value: EUR(an.capital_necessario) },
+        { label: 'Receita (VVR)', value: EUR(vvr) },
+        { label: 'Custos totais', value: EUR(capital) },
         { label: 'Lucro Bruto', value: EUR(an.lucro_bruto), total: true },
         { label: 'Impostos + Dividendos', value: EUR((an.impostos || 0) + (an.retencao_dividendos || 0)) },
         { label: 'Lucro Líquido', value: EUR(an.lucro_liquido), total: true },
       ])
       b.space(4)
       b.bigNumbers([
-        { label: 'ROI Total', value: PCT(an.retorno_total) },
-        { label: 'Retorno Anualizado', value: PCT(an.retorno_anualizado) },
+        { label: 'ROI Total', value: PCT(an.retorno_total || im.roi) },
+        { label: 'Retorno Anualizado', value: PCT(ra) },
         { label: 'Cash-on-Cash', value: PCT(an.cash_on_cash) },
         { label: 'Break-even', value: EUR(an.break_even) },
       ])
@@ -2067,7 +2071,7 @@ export function generateCompiledReport(imovel, analise, seccoes = []) {
       continue
     }
 
-    if (seccao === 'stress_tests' && an) {
+    if (seccao === 'stress_tests') {
       const st = typeof an.stress_tests === 'string' ? JSON.parse(an.stress_tests || 'null') : an.stress_tests
       if (st) {
         if (hasContent) b.newPage()
