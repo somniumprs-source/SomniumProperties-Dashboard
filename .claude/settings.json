@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git pull origin main 2>/dev/null || true",
+            "timeout": 30,
+            "statusMessage": "A buscar alterações do GitHub..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git add -A && git diff --cached --quiet || (git commit -m \"auto: update from Claude Code\" && git pull origin main --rebase --no-edit && git push origin main) 2>/dev/null || true",
+            "timeout": 60,
+            "statusMessage": "A guardar e enviar alterações para o GitHub..."
+          }
+        ]
+      }
+    ]
+  }
+}

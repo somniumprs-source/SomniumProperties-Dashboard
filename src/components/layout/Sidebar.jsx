@@ -6,20 +6,30 @@ import { apiFetch } from '../../lib/api.js'
 
 const nav = [
   { to: '/',           label: 'Dashboard',  Icon: LayoutDashboard, end: true },
-  { to: '/crm',        label: 'CRM',        Icon: Database },
+  { to: '/crm',        label: 'CRM',        Icon: Database, badgeKey: 'crm' },
   { to: '/financeiro', label: 'Financeiro', Icon: TrendingUp },
-  { to: '/operacoes',  label: 'Operações',  Icon: Clock },
+  { to: '/operacoes',  label: 'Operações',  Icon: Clock, badgeKey: 'tarefas' },
   { to: '/metricas',   label: 'Métricas',   Icon: BarChart3 },
-  { to: '/alertas',    label: 'Alertas',    Icon: Bell, badge: true },
+  { to: '/alertas',    label: 'Alertas',    Icon: Bell, badgeKey: 'alertas' },
 ]
 
 export function Sidebar() {
   const { profile, signOut, selectProfile } = useAuth()
-  const [alertCount, setAlertCount] = useState(0)
+  const [badges, setBadges] = useState({ alertas: 0, crm: 0, tarefas: 0 })
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
-    const load = () => apiFetch('/api/alertas').then(r => r.json()).then(d => setAlertCount(d.resumo?.criticos ?? 0)).catch(() => {})
+    const load = async () => {
+      try {
+        const [alertas, tarefas] = await Promise.all([
+          apiFetch('/api/alertas').then(r => r.json()).catch(() => null),
+          apiFetch('/api/crm/tarefas?limit=200').then(r => r.json()).catch(() => null),
+        ])
+        const criticos = alertas?.resumo?.criticos ?? 0
+        const atrasadas = Array.isArray(tarefas?.data) ? tarefas.data.filter(t => t.estado === 'Atrasada').length : 0
+        setBadges({ alertas: criticos, crm: 0, tarefas: atrasadas })
+      } catch {}
+    }
     load()
     const interval = setInterval(load, 60000)
     return () => clearInterval(interval)
@@ -43,7 +53,7 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex flex-col gap-0.5 px-3 flex-1">
-        {nav.map(({ to, label, Icon, end, badge }) => (
+        {nav.map(({ to, label, Icon, end, badgeKey }) => (
           <NavLink
             key={to}
             to={to}
@@ -65,9 +75,9 @@ export function Sidebar() {
                 <Icon className="w-4 h-4 shrink-0 transition-colors"
                   style={{ color: isActive ? '#C9A84C' : undefined }} />
                 {label}
-                {badge && alertCount > 0 && (
+                {badgeKey && badges[badgeKey] > 0 && (
                   <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                    {alertCount > 9 ? '9+' : alertCount}
+                    {badges[badgeKey] > 9 ? '9+' : badges[badgeKey]}
                   </span>
                 )}
               </>

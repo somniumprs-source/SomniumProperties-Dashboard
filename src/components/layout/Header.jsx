@@ -1,4 +1,5 @@
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Moon, Sun } from 'lucide-react'
+import { useTheme } from '../../contexts/ThemeContext.jsx'
 
 function NotionIcon() {
   return (
@@ -10,20 +11,27 @@ function NotionIcon() {
 
 export function Header({ title, subtitle, onRefresh, loading, notionUrl }) {
   const now = new Date().toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const { isDark, toggle } = useTheme()
 
   return (
-    <header className="flex items-center justify-between px-4 sm:px-7 py-3 sm:py-4 bg-white sticky top-0 z-20 ml-10 md:ml-0"
-      style={{ borderBottom: '1px solid #e8e8e8', boxShadow: '0 1px 0 rgba(0,0,0,0.04)' }}>
+    <header className="flex items-center justify-between px-4 sm:px-7 py-3 sm:py-4 bg-white dark:bg-neutral-900 sticky top-0 z-20 ml-10 md:ml-0 border-b border-neutral-200 dark:border-neutral-700"
+      style={{ boxShadow: '0 1px 0 rgba(0,0,0,0.04)' }}>
       <div className="min-w-0 flex-1">
-        <h1 className="text-lg sm:text-xl font-bold text-black tracking-tight truncate">{title}</h1>
-        <p className="text-xs mt-0.5 capitalize truncate" style={{ color: '#999' }}>{subtitle ?? now}</p>
+        <h1 className="text-lg sm:text-xl font-bold text-black dark:text-white tracking-tight truncate">{title}</h1>
+        <p className="text-xs mt-0.5 capitalize truncate text-neutral-400">{subtitle ?? now}</p>
       </div>
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        <span className="hidden sm:block text-xs capitalize" style={{ color: '#bbb' }}>{now}</span>
+        <span className="hidden sm:block text-xs capitalize text-neutral-400">{now}</span>
+        <button
+          onClick={toggle}
+          className="p-2 rounded-xl transition-all hover:opacity-80 active:scale-95 bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300"
+          title={isDark ? 'Tema claro' : 'Tema escuro'}
+        >
+          {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+        </button>
         {notionUrl && (
           <a href={notionUrl} target="_blank" rel="noopener noreferrer"
-            className="hidden sm:flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition-all hover:opacity-80 active:scale-95"
-            style={{ backgroundColor: '#f5f5f5', color: '#444', border: '1px solid #e0e0e0' }}>
+            className="hidden sm:flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition-all hover:opacity-80 active:scale-95 bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700">
             <NotionIcon />
             <span className="hidden md:inline">Notion</span>
           </a>

@@ -3,7 +3,125 @@
 @tailwind utilities;
 
 body {
-  @apply text-gray-900 antialiased;
+  @apply text-gray-900 dark:text-neutral-100 antialiased;
+}
+
+/* Dark mode — override inline styles que usam cores claras */
+.dark body { background-color: #0a0a0a; color: #e5e5e5; }
+
+/* Textos — forcar contraste em dark mode */
+.dark [style*="color: #999"],
+.dark [style*="color: #888"],
+.dark [style*="color: #bbb"],
+.dark [style*="color: #aaa"],
+.dark [style*="color: #ccc"],
+.dark [style*="color: rgb(153"],
+.dark [style*="color: rgb(136"] {
+  color: #a3a3a3 !important;
+}
+
+.dark [style*="color: #333"],
+.dark [style*="color: #444"],
+.dark [style*="color: #555"],
+.dark [style*="color: #666"],
+.dark [style*="color: #2a2a2a"],
+.dark [style*="color: #0d0d0d"],
+.dark [style*="color: rgb(0, 0, 0"],
+.dark [style*="color: rgb(51"],
+.dark [style*="color: rgb(68"] {
+  color: #e5e5e5 !important;
+}
+
+.dark [style*="color: black"],
+.dark .text-black,
+.dark .text-gray-900,
+.dark .text-gray-800,
+.dark .text-gray-700,
+.dark .text-neutral-900,
+.dark .text-neutral-800,
+.dark .text-neutral-700 {
+  color: #f5f5f5 !important;
+}
+
+.dark .text-gray-500,
+.dark .text-gray-400,
+.dark .text-neutral-500,
+.dark .text-neutral-400 {
+  color: #a3a3a3 !important;
+}
+
+/* Backgrounds */
+.dark [style*="background-color: #f5f5f0"],
+.dark [style*="background-color: #f5f5f5"],
+.dark [style*="background-color: #fafafa"],
+.dark [style*="background-color: #fff"],
+.dark [style*="background-color: white"],
+.dark [style*="background-color: rgb(255"] {
+  background-color: #0a0a0a !important;
+}
+
+.dark [style*="background-color: #f0f0f0"],
+.dark [style*="background-color: #e8e8e8"],
+.dark [style*="background-color: #eee"],
+.dark [style*="background-color: rgb(245"],
+.dark [style*="background-color: rgb(238"] {
+  background-color: #1a1a1a !important;
+}
+
+.dark .bg-white { background-color: #171717 !important; }
+.dark .bg-gray-50, .dark .bg-neutral-50 { background-color: #0f0f0f !important; }
+.dark .bg-gray-100, .dark .bg-neutral-100 { background-color: #171717 !important; }
+
+/* Borders */
+.dark [style*="border"] {
+  border-color: #333 !important;
+}
+.dark .border-gray-200, .dark .border-neutral-200 { border-color: #333 !important; }
+.dark .border-gray-100, .dark .border-neutral-100 { border-color: #262626 !important; }
+
+/* Tabelas */
+.dark table { color: #e5e5e5; }
+.dark th { color: #a3a3a3 !important; background-color: #111 !important; }
+.dark td { color: #d4d4d4; border-color: #262626 !important; }
+.dark tr:hover td { background-color: #1a1a1a !important; }
+
+/* Inputs e forms */
+.dark input, .dark select, .dark textarea {
+  background-color: #171717 !important;
+  color: #e5e5e5 !important;
+  border-color: #333 !important;
+}
+.dark input::placeholder, .dark textarea::placeholder {
+  color: #666 !important;
+}
+
+/* Cards com shadow */
+.dark [style*="box-shadow"] {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.2) !important;
+}
+
+/* Botoes */
+.dark button:not([style*="background-color: #0d0d0d"]):not([style*="background-color: #C9A84C"]) {
+  border-color: #333 !important;
+}
+
+/* Links e badges que usam bg claros */
+.dark .bg-indigo-50 { background-color: rgba(99, 102, 241, 0.15) !important; }
+.dark .bg-red-50 { background-color: rgba(239, 68, 68, 0.15) !important; }
+.dark .bg-green-50 { background-color: rgba(34, 197, 94, 0.15) !important; }
+.dark .bg-yellow-50 { background-color: rgba(234, 179, 8, 0.15) !important; }
+
+/* Mobile-friendly tables */
+.table-responsive {
+  @apply overflow-x-auto -mx-4 px-4;
+  -webkit-overflow-scrolling: touch;
+}
+.table-responsive table {
+  @apply min-w-[600px];
+}
+.table-responsive th:first-child,
+.table-responsive td:first-child {
+  @apply sticky left-0 z-10 bg-white dark:bg-neutral-900;
 }
 
 @keyframes fade-in {

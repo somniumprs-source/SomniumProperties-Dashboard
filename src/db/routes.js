@@ -6,6 +6,13 @@ import multer from 'multer'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { randomUUID } from 'crypto'
+import { readFile, unlink } from 'fs/promises'
+import { createClient } from '@supabase/supabase-js'
+
+// Supabase Storage client para uploads persistentes
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.supabase.co'
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
+const supabaseStorage = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null
 import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, getDashboardStats } from './crud.js'
 import pool from './pg.js'
 import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
@@ -16,9 +23,18 @@ import { createImovelFolder, moveImovelFolder, uploadDocToFolder, isConfigured a
 import { generateDoc, getDocsForEstado } from './pdfImovelDocs.js'
 import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
 import { generateMeetingPDF } from './pdfMeetingReport.js'
+import { ensureLabels, organizeMessage, organizeBatch, autoOrganize, isConfigured as gmailConfigured } from './gmailSync.js'
+import { exportDepartment } from './excelExport.js'
+import { scrapePhotosFromLink } from './linkScraper.js'
+import { generateDocx, getAvailableTypes } from './docxGenerator.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.resolve(__dirname, '../../public/uploads/despesas')
+const imoveisUploadsDir = path.resolve(__dirname, '../../public/uploads/imoveis')
+
+// Garantir que a pasta de uploads de imóveis existe
+import { mkdirSync } from 'fs'
+try { mkdirSync(imoveisUploadsDir, { recursive: true }) } catch {}
 
 const storage = multer.diskStorage({
   destination: uploadsDir,
@@ -32,6 +48,22 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowed = /\.(pdf|jpg|jpeg|png|webp|heic)$/i
+    cb(null, allowed.test(path.extname(file.originalname)))
+  },
+})
+
+const imoveisStorage = multer.diskStorage({
+  destination: imoveisUploadsDir,
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname)
+    cb(null, `${randomUUID()}${ext}`)
+  },
+})
+const uploadImovel = multer({
+  storage: imoveisStorage,
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = /\.(jpg|jpeg|png|webp|heic|pdf|doc|docx|xls|xlsx)$/i
     cb(null, allowed.test(path.extname(file.originalname)))
   },
 })
@@ -120,8 +152,35 @@ crudRoutes('/imoveis', Imoveis, {
     if (driveConfigured()) {
       await createImovelFolder(item.id, item.nome || 'Sem nome', item.estado || 'Adicionado')
     }
+    // Auto-scrape fotos do link do anuncio
+    if (item.link && item.link.startsWith('http')) {
+      scrapePhotosFromLink(item.link, item.id).then(async (photos) => {
+        if (photos.length > 0) {
+          const existing = item.fotos ? JSON.parse(item.fotos) : []
+          existing.push(...photos)
+          await Imoveis.update(item.id, { fotos: JSON.stringify(existing) })
+          console.log(`[scraper] ${photos.length} fotos extraidas automaticamente para ${item.nome || item.id}`)
+        }
+      }).catch(e => console.error(`[scraper] Erro auto-scrape:`, e.message))
+    }
   },
   onUpdate: async (item, body) => {
+    // Auto-scrape fotos quando link e adicionado ou alterado
+    if (body.link && body.link.startsWith('http')) {
+      const existingFotos = item.fotos ? JSON.parse(item.fotos) : []
+      const alreadyScraped = existingFotos.some(f => f.source === 'scraper' && f.source_url?.includes(new URL(body.link).hostname))
+      if (!alreadyScraped) {
+        scrapePhotosFromLink(body.link, item.id).then(async (photos) => {
+          if (photos.length > 0) {
+            const current = await Imoveis.getById(item.id)
+            const fotos = current?.fotos ? JSON.parse(current.fotos) : []
+            fotos.push(...photos)
+            await Imoveis.update(item.id, { fotos: JSON.stringify(fotos) })
+            console.log(`[scraper] ${photos.length} fotos extraidas de link actualizado para ${item.nome || item.id}`)
+          }
+        }).catch(e => console.error(`[scraper] Erro auto-scrape update:`, e.message))
+      }
+    }
     if (body.estado) {
       // Mover pasta no Drive
       if (driveConfigured()) {
@@ -187,6 +246,25 @@ router.get('/imoveis/:id/relatorio', async (req, res) => {
   }
 })
 
+// ── Relatório compilado para investidor ──────────────────────
+router.get('/imoveis/:id/relatorio-investidor', async (req, res) => {
+  try {
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+    const { rows: [analise] } = await pool.query(
+      'SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1', [imovel.id]
+    ).catch(() => ({ rows: [] }))
+
+    const seccoes = (req.query.seccoes || 'investimento,comparaveis,caep,stress_tests').split(',').filter(Boolean)
+    const { generateCompiledReport } = await import('./pdfImovelDocs.js')
+    const nome = (imovel.nome || 'imovel').replace(/[^a-zA-Z0-9À-ú ]/g, '').replace(/\s+/g, '_')
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `inline; filename="Dossier_Investimento_${nome}.pdf"`)
+    const doc = generateCompiledReport(imovel, analise || null, seccoes)
+    doc.pipe(res)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 crudRoutes('/investidores', Investidores)
 
 // ── Endpoints específicos de consultores (ANTES do crudRoutes para evitar conflito com :id) ─
@@ -233,9 +311,12 @@ router.get('/consultores/enriched', async (req, res) => {
     const now = Date.now()
     const enriched = consultores.map(c => {
       const meusImoveis = imoveis.filter(i => i.nome_consultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase())
-      const totalImoveis = meusImoveis.length
-      // Qualidade baseada no estado do pipeline
-      const imoveisAvancados = meusImoveis.filter(im => qualidadeImovel(im.estado) >= 0.75).length
+      // Só contam como "entregues" os que passaram de Pré-aprovação (validados)
+      const imoveisEntregues = meusImoveis.filter(im => (im.estado || '').replace(/^\d+-\s*/, '').trim() !== 'Pré-aprovação')
+      const totalImoveis = imoveisEntregues.length
+      const totalComPreAprovacao = meusImoveis.length
+      // Qualidade baseada no estado do pipeline (só entregues)
+      const imoveisAvancados = imoveisEntregues.filter(im => qualidadeImovel(im.estado) >= 0.75).length
 
       const minhasInteracoes = interacoes.filter(i => i.consultor_id === c.id)
       const ultimaInteracao = minhasInteracoes[0]?.data_hora
@@ -291,6 +372,168 @@ router.get('/consultores/:id/interacoes', async (req, res) => {
     )
     res.json(rows)
   } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Extrair fotos de link de anuncio ─────────────────────────
+router.post('/imoveis/:id/scrape-fotos', async (req, res) => {
+  try {
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+
+    const url = req.body.url || imovel.link
+    if (!url) return res.status(400).json({ error: 'Nenhum link fornecido. Enviar { url: "..." } ou preencher o campo link do imóvel.' })
+
+    const scraped = await scrapePhotosFromLink(url, req.params.id)
+    if (scraped.length === 0) return res.json({ ok: true, fotos: [], message: 'Nenhuma foto encontrada no link.' })
+
+    const fotos = imovel.fotos ? JSON.parse(imovel.fotos) : []
+    fotos.push(...scraped)
+    await Imoveis.update(req.params.id, { fotos: JSON.stringify(fotos) })
+
+    res.json({ ok: true, extraidas: scraped.length, fotos })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Upload de fotos para imóveis ─────────────────────────────
+router.post('/imoveis/:id/fotos', uploadImovel.array('fotos', 20), async (req, res) => {
+  try {
+    if (!req.files?.length) return res.status(400).json({ error: 'Nenhum ficheiro válido (JPG, PNG, WEBP até 15MB)' })
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+
+    const fotos = imovel.fotos ? JSON.parse(imovel.fotos) : []
+    for (const file of req.files) {
+      let filePath = `/uploads/imoveis/${file.filename}`
+
+      // Upload para Supabase Storage (persistente) se configurado
+      if (supabaseStorage) {
+        const storagePath = `imoveis/${req.params.id}/${file.filename}`
+        const fileBuffer = await readFile(file.path)
+        const { error } = await supabaseStorage.storage
+          .from('Imoveis')
+          .upload(storagePath, fileBuffer, { contentType: file.mimetype, upsert: true })
+
+        if (!error) {
+          const { data: urlData } = supabaseStorage.storage
+            .from('Imoveis')
+            .getPublicUrl(storagePath)
+          filePath = urlData.publicUrl
+          // Apagar ficheiro temporario do disco
+          await unlink(file.path).catch(() => {})
+        }
+      }
+
+      fotos.push({
+        id: randomUUID(),
+        name: file.originalname,
+        path: filePath,
+        type: file.mimetype,
+        size: file.size,
+        uploaded_at: new Date().toISOString(),
+      })
+    }
+    await Imoveis.update(req.params.id, { fotos: JSON.stringify(fotos) })
+    res.json({ ok: true, fotos })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Mover ficheiro entre categorias (fotos ↔ documentos)
+router.put('/imoveis/:id/fotos/:fotoId/mover', async (req, res) => {
+  try {
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+    const { folder } = req.body // 'fotos' ou 'documentos'
+    if (!['fotos', 'documentos'].includes(folder)) return res.status(400).json({ error: 'Pasta inválida' })
+
+    const fotos = imovel.fotos ? JSON.parse(imovel.fotos) : []
+    const updated = fotos.map(f => f.id === req.params.fotoId ? { ...f, folder } : f)
+    await Imoveis.update(req.params.id, { fotos: JSON.stringify(updated) })
+    res.json({ ok: true, fotos: updated })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/imoveis/:id/fotos/:fotoId', async (req, res) => {
+  try {
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+
+    const fotos = imovel.fotos ? JSON.parse(imovel.fotos) : []
+    const foto = fotos.find(f => f.id === req.params.fotoId)
+
+    // Apagar do Supabase Storage se for URL do Supabase
+    if (foto && supabaseStorage && foto.path?.includes('supabase.co/storage/')) {
+      const match = foto.path.match(/\/storage\/v1\/object\/public\/Imoveis\/(.+)$/)
+      if (match) {
+        await supabaseStorage.storage.from('Imoveis').remove([match[1]]).catch(() => {})
+      }
+    }
+
+    const filtered = fotos.filter(f => f.id !== req.params.fotoId)
+    await Imoveis.update(req.params.id, { fotos: JSON.stringify(filtered) })
+    res.json({ ok: true, fotos: filtered })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Listar ficheiros do Google Drive do imóvel ───────────────
+router.get('/imoveis/:id/drive-files', async (req, res) => {
+  try {
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+    if (!imovel.drive_folder_id) return res.json({ files: [], fotos: [], documentos: [], configured: false })
+
+    if (!driveConfigured()) return res.json({ files: [], fotos: [], documentos: [], configured: false })
+
+    const { google: googleapis } = await import('googleapis')
+    const { readFileSync, existsSync } = await import('fs')
+    const pth = await import('path')
+    const root = pth.resolve(__dirname, '../..')
+    const oauthPath = pth.join(root, 'google-oauth.json')
+    const tokenPath = pth.join(root, 'google-token.json')
+    const creds = JSON.parse(readFileSync(oauthPath, 'utf8'))
+    const { client_id, client_secret } = creds.installed || creds.web
+    const oauth2 = new googleapis.auth.OAuth2(client_id, client_secret, 'http://localhost:3333')
+    oauth2.setCredentials(JSON.parse(readFileSync(tokenPath, 'utf8')))
+    const drive = googleapis.drive({ version: 'v3', auth: oauth2 })
+
+    // Listar subpastas
+    const foldersRes = await drive.files.list({
+      q: `'${imovel.drive_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id,name)',
+      supportsAllDrives: true,
+    })
+    const subfolders = foldersRes.data.files || []
+
+    const result = { files: [], fotos: [], documentos: [], configured: true, folderId: imovel.drive_folder_id }
+
+    for (const folder of subfolders) {
+      const filesRes = await drive.files.list({
+        q: `'${folder.id}' in parents and trashed=false`,
+        fields: 'files(id,name,mimeType,size,createdTime,thumbnailLink,webViewLink,webContentLink)',
+        orderBy: 'createdTime desc',
+        supportsAllDrives: true,
+      })
+      const files = (filesRes.data.files || []).map(f => ({
+        id: f.id,
+        name: f.name,
+        mimeType: f.mimeType,
+        size: parseInt(f.size || '0'),
+        createdTime: f.createdTime,
+        thumbnailLink: f.thumbnailLink,
+        viewLink: f.webViewLink,
+        downloadLink: f.webContentLink,
+        folder: folder.name,
+      }))
+
+      result.files.push(...files)
+      if (folder.name === 'Fotos') result.fotos.push(...files)
+      if (folder.name === 'Documentos') result.documentos.push(...files)
+    }
+
+    res.json(result)
+  } catch (e) {
+    console.error('[drive] list files error:', e.message)
+    res.json({ files: [], fotos: [], documentos: [], configured: false, error: e.message })
+  }
 })
 
 // ── Upload de documentos para despesas ───────────────────────
@@ -444,6 +687,139 @@ router.post('/forms/sync', async (req, res) => {
     if (!formsConfigured()) return res.status(503).json({ error: 'Google Forms não configurado' })
     const result = await syncForms()
     res.json(result)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Gmail — Organizar emails por departamento ───────────────────
+router.get('/gmail/labels', async (req, res) => {
+  try {
+    if (!gmailConfigured()) return res.status(503).json({ error: 'Gmail não configurado. Correr: node scripts/auth-google.js' })
+    const labels = await ensureLabels()
+    res.json({ labels })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/gmail/organize', async (req, res) => {
+  try {
+    if (!gmailConfigured()) return res.status(503).json({ error: 'Gmail não configurado' })
+    const { messageId, label, markRead } = req.body
+    if (!messageId || !label) return res.status(400).json({ error: 'messageId e label obrigatórios' })
+    const result = await organizeMessage(messageId, label, markRead !== false)
+    res.json(result)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/gmail/organize-batch', async (req, res) => {
+  try {
+    if (!gmailConfigured()) return res.status(503).json({ error: 'Gmail não configurado' })
+    const { messages } = req.body
+    if (!Array.isArray(messages)) return res.status(400).json({ error: 'messages deve ser um array' })
+    const results = await organizeBatch(messages)
+    res.json({ results })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/gmail/auto-organize', async (req, res) => {
+  try {
+    if (!gmailConfigured()) return res.status(503).json({ error: 'Gmail não configurado' })
+    const result = await autoOrganize()
+    res.json(result)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Excel Export por departamento ────────────────────────────────
+router.get('/export/:dept', async (req, res) => {
+  try {
+    const { dept } = req.params
+    const driveFolderId = req.query.driveFolderId || null
+    const { buffer, fileName, driveFile } = await exportDepartment(dept, driveFolderId)
+    if (req.query.download !== 'false') {
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`)
+      return res.send(Buffer.from(buffer))
+    }
+    res.json({ fileName, driveFile })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── DOCX — documentos Word ──────────────────────────────────────
+router.get('/imoveis/:id/docx/:tipo', async (req, res) => {
+  try {
+    const { buffer, fileName } = await generateDocx(req.params.tipo, req.params.id)
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`)
+    res.send(Buffer.from(buffer))
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/docx/tipos', (req, res) => {
+  res.json({ tipos: getAvailableTypes() })
+})
+
+// ── CSV Export ──────────────────────────────────────────────────
+router.get('/export-csv/:entity', async (req, res) => {
+  try {
+    const { entity } = req.params
+    const allowed = ['imoveis', 'investidores', 'consultores', 'negocios', 'despesas', 'tarefas']
+    if (!allowed.includes(entity)) return res.status(400).json({ error: `Entidade invalida. Usar: ${allowed.join(', ')}` })
+    const { rows } = await pool.query(`SELECT * FROM ${entity} ORDER BY created_at DESC`)
+    if (rows.length === 0) return res.status(404).json({ error: 'Sem dados' })
+    const headers = Object.keys(rows[0])
+    const csvRows = [headers.join(',')]
+    for (const row of rows) {
+      csvRows.push(headers.map(h => {
+        let v = row[h]
+        if (v == null) return ''
+        if (v instanceof Date) return v.toISOString().slice(0, 10)
+        v = String(v).replace(/"/g, '""')
+        return v.includes(',') || v.includes('"') || v.includes('\n') ? `"${v}"` : v
+      }).join(','))
+    }
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename="${entity}_${new Date().toISOString().slice(0,10)}.csv"`)
+    res.send('\uFEFF' + csvRows.join('\n'))
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── CSV Import ──────────────────────────────────────────────────
+router.post('/import-csv/:entity', async (req, res) => {
+  try {
+    const { entity } = req.params
+    const allowed = ['investidores', 'consultores', 'despesas']
+    if (!allowed.includes(entity)) return res.status(400).json({ error: `Import permitido para: ${allowed.join(', ')}` })
+    const { rows: data } = req.body
+    if (!Array.isArray(data) || data.length === 0) return res.status(400).json({ error: 'Body deve conter { rows: [...] }' })
+    let imported = 0
+    for (const row of data) {
+      const keys = Object.keys(row).filter(k => k !== 'id' && k !== 'created_at' && k !== 'updated_at')
+      if (keys.length === 0) continue
+      const vals = keys.map((_, i) => `$${i + 1}`)
+      await pool.query(`INSERT INTO ${entity} (${keys.join(',')}) VALUES (${vals.join(',')})`, keys.map(k => row[k] || null))
+      imported++
+    }
+    res.json({ imported, total: data.length })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Pesquisa global ─────────────────────────────────────────────
+router.get('/search', async (req, res) => {
+  try {
+    const q = req.query.q
+    if (!q || q.length < 2) return res.json({ results: [] })
+    const term = `%${q}%`
+    const [imoveis, investidores, consultores, negocios] = await Promise.all([
+      pool.query("SELECT id, nome, zona, estado, 'imovel' as tipo FROM imoveis WHERE nome ILIKE $1 OR zona ILIKE $1 OR notas ILIKE $1 LIMIT 10", [term]),
+      pool.query("SELECT id, nome, email, status, 'investidor' as tipo FROM investidores WHERE nome ILIKE $1 OR email ILIKE $1 OR telemovel ILIKE $1 LIMIT 10", [term]),
+      pool.query("SELECT id, nome, email, estatuto, 'consultor' as tipo FROM consultores WHERE nome ILIKE $1 OR email ILIKE $1 OR contacto ILIKE $1 LIMIT 10", [term]),
+      pool.query("SELECT id, movimento, categoria, fase, 'negocio' as tipo FROM negocios WHERE movimento ILIKE $1 OR categoria ILIKE $1 LIMIT 10", [term]),
+    ])
+    res.json({
+      results: [
+        ...imoveis.rows, ...investidores.rows,
+        ...consultores.rows, ...negocios.rows,
+      ],
+      total: imoveis.rowCount + investidores.rowCount + consultores.rowCount + negocios.rowCount,
+    })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -673,7 +1049,7 @@ router.post('/automation/score-consultores', async (req, res) => {
       const meusImoveis = imoveis.filter(i => i.nome_consultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase())
       const leads = meusImoveis.length
       // Qualidade baseada no estado do pipeline
-      const imoveisAvancados = meusImoveis.filter(im => qualidadeImovel(im.estado) >= 0.75).length
+      const imoveisAvancados = imoveisEntregues.filter(im => qualidadeImovel(im.estado) >= 0.75).length
       const imoveisMedios = meusImoveis.filter(im => qualidadeImovel(im.estado) >= 0.5).length
 
       score += Math.min(leads * 3, 30)
@@ -745,7 +1121,9 @@ router.post('/automation/score-prioridade-consultores', async (req, res) => {
 
     for (const c of consultores) {
       const meusImoveis = imoveis.filter(i => i.nome_consultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase())
-      const totalImoveis = meusImoveis.length
+      // Só contam como entregues os que passaram de Pré-aprovação
+      const imoveisEntregues = meusImoveis.filter(im => (im.estado || '').replace(/^\d+-\s*/, '').trim() !== 'Pré-aprovação')
+      const totalImoveis = imoveisEntregues.length
       const classeAnterior = c.classificacao
 
       // Regra: inactivo 60+ dias → manter Inativo, sem classe
@@ -782,8 +1160,8 @@ router.post('/automation/score-prioridade-consultores', async (req, res) => {
         continue
       }
 
-      // Componente 1: Taxa de qualidade (50%)
-      const somaQualidade = meusImoveis.reduce((sum, im) => sum + qualidadeImovel(im.estado), 0)
+      // Componente 1: Taxa de qualidade (50%) — só imóveis entregues (validados)
+      const somaQualidade = imoveisEntregues.reduce((sum, im) => sum + qualidadeImovel(im.estado), 0)
       const taxaQualidade = Math.round(somaQualidade / totalImoveis * 100)
 
       // Componente 2: Volume normalizado (30%)
@@ -809,7 +1187,7 @@ router.post('/automation/score-prioridade-consultores', async (req, res) => {
       const classificacao = CLASSE_POR_SCORE(scorePrioridade)
       relatorio.distribuicao[classificacao]++
 
-      const imoveisAvancados = meusImoveis.filter(im => qualidadeImovel(im.estado) >= 0.75).length
+      const imoveisAvancados = imoveisEntregues.filter(im => qualidadeImovel(im.estado) >= 0.75).length
 
       const changed = Math.abs((c.score_prioridade || 0) - scorePrioridade) > 0.5 ||
                        Math.abs((c.taxa_qualidade || 0) - taxaQualidade) > 0.5 ||
@@ -842,6 +1220,100 @@ router.post('/automation/score-prioridade-consultores', async (req, res) => {
     }))
 
     res.json({ ok: true, atualizados: relatorio.reclassificados, relatorio, detalhes: updated })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Relatório semanal de investidores ────────────────────────
+router.get('/relatorio/investidores', async (req, res) => {
+  try {
+    const { rows: investidores } = await pool.query('SELECT * FROM investidores ORDER BY pontuacao DESC NULLS LAST')
+    const { rows: negocios } = await pool.query('SELECT * FROM negocios')
+    const { rows: reunioes } = await pool.query("SELECT id, entidade_id, data, duracao_min FROM reunioes WHERE entidade_tipo = 'investidores'")
+    const now = new Date()
+
+    const statusOrder = ['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor classificado','Investidor em parceria']
+
+    const report = {
+      gerado_em: now.toISOString(),
+      semana: `${now.toISOString().slice(0, 10)} (Semana ${Math.ceil(now.getDate() / 7)})`,
+      total_investidores: investidores.length,
+      distribuicao: { A: 0, B: 0, C: 0, D: 0, 'Sem classificação': 0 },
+      por_status: {},
+      top5: [],
+      investidores_detalhados: [],
+      alertas: { sem_contacto_30d: 0, sem_reuniao: 0, sem_capital: 0, sem_classificacao: 0, nda_pendente: 0 },
+      metricas_globais: {
+        capital_total: 0, capital_investido: 0, media_capital: 0,
+        com_reuniao: 0, com_nda: 0, em_parceria: 0,
+        taxa_conversao: 0, ticket_medio: 0,
+      },
+    }
+
+    for (const s of statusOrder) report.por_status[s] = 0
+
+    let somaCapital = 0, comCapital = 0
+
+    for (const inv of investidores) {
+      const classe = inv.classificacao || 'Sem classificação'
+      if (report.distribuicao[classe] !== undefined) report.distribuicao[classe]++
+      else report.distribuicao['Sem classificação']++
+
+      const status = inv.status || '?'
+      if (report.por_status[status] !== undefined) report.por_status[status]++
+      else report.por_status[status] = (report.por_status[status] || 0) + 1
+
+      const capitalMax = inv.capital_max || 0
+      const montante = inv.montante_investido || 0
+      const meusNegocios = negocios.filter(n => (n.investidor_ids || '').includes(inv.id))
+      const minhasReunioes = reunioes.filter(r => r.entidade_id === inv.id)
+
+      const diasSemContacto = inv.data_ultimo_contacto
+        ? Math.floor((now - new Date(inv.data_ultimo_contacto)) / 86400000)
+        : null
+
+      // Alertas
+      if (!inv.data_ultimo_contacto || diasSemContacto > 30) report.alertas.sem_contacto_30d++
+      if (minhasReunioes.length === 0) report.alertas.sem_reuniao++
+      if (!capitalMax) report.alertas.sem_capital++
+      if (!inv.classificacao) report.alertas.sem_classificacao++
+      if (!inv.nda_assinado && ['Investidor classificado','Investidor em parceria'].includes(status)) report.alertas.nda_pendente++
+
+      // Métricas
+      if (capitalMax > 0) { somaCapital += capitalMax; comCapital++ }
+      report.metricas_globais.capital_total += capitalMax
+      report.metricas_globais.capital_investido += montante
+      if (minhasReunioes.length > 0) report.metricas_globais.com_reuniao++
+      if (inv.nda_assinado) report.metricas_globais.com_nda++
+      if (status === 'Investidor em parceria') report.metricas_globais.em_parceria++
+
+      let estrategias = []
+      try { estrategias = JSON.parse(inv.estrategia || '[]') } catch {}
+
+      report.investidores_detalhados.push({
+        id: inv.id, nome: inv.nome, status, classificacao: inv.classificacao || null,
+        pontuacao: inv.pontuacao || 0, capitalMax, montanteInvestido: montante,
+        email: inv.email, telemovel: inv.telemovel,
+        estrategias, perfilRisco: inv.perfil_risco,
+        ndaAssinado: !!inv.nda_assinado,
+        reunioes: minhasReunioes.length, negocios: meusNegocios.length,
+        diasSemContacto, proximaAcao: inv.proxima_acao, dataProximaAcao: inv.data_proxima_acao,
+        dataReuniao: inv.data_reuniao, dataPrimeiroContacto: inv.data_primeiro_contacto,
+      })
+    }
+
+    report.metricas_globais.media_capital = comCapital > 0 ? Math.round(somaCapital / comCapital) : 0
+    report.metricas_globais.taxa_conversao = investidores.length > 0
+      ? Math.round(report.metricas_globais.em_parceria / investidores.length * 100) : 0
+    report.metricas_globais.ticket_medio = report.metricas_globais.em_parceria > 0
+      ? Math.round(report.metricas_globais.capital_investido / report.metricas_globais.em_parceria) : 0
+
+    report.top5 = report.investidores_detalhados
+      .filter(i => i.capitalMax > 0)
+      .sort((a, b) => b.capitalMax - a.capitalMax)
+      .slice(0, 5)
+      .map(i => ({ nome: i.nome, classificacao: i.classificacao, capital: i.capitalMax, status: i.status, reunioes: i.reunioes }))
+
+    res.json(report)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 

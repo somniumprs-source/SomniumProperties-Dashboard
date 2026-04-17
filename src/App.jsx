@@ -11,6 +11,7 @@ import { ProfileSelect } from './pages/ProfileSelect.jsx'
 import { ToastProvider } from './components/ui/Toast.jsx'
 import { ErrorBoundary } from './components/ui/ErrorBoundary.jsx'
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
+import { ThemeProvider } from './contexts/ThemeContext.jsx'
 
 function AppRoutes() {
   const { isAuthenticated, hasProfile, loading } = useAuth()
@@ -48,12 +49,14 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <ToastProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </ToastProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </ToastProvider>
+      </AuthProvider>
+    </ThemeProvider>
   )
 }

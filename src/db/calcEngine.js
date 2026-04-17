@@ -355,14 +355,15 @@ export function calcCAEP(inputs, caepConfig) {
   const quotaSomnium = round2(lucroBase * percSomnium / 100)
   const lucroInvestidores = round2(lucroBase - quotaSomnium)
 
-  const totalPercInvest = investidores.reduce((s, inv) => s + (parseFloat(inv.perc_lucro) || 0), 0)
+  // Distribuição proporcional ao capital investido (não por % manual)
   const capitalTotal = investidores.reduce((s, inv) => s + (parseFloat(inv.capital) || 0), 0)
   const meses = Math.max(parseInt(inputs.meses) || 6, 1)
 
   const detalhes = investidores.map(inv => {
-    const perc = parseFloat(inv.perc_lucro) || 0
     const capital = parseFloat(inv.capital) || 0
-    const lucro = round2(lucroInvestidores * perc / Math.max(totalPercInvest, 1))
+    // Percentagem calculada automaticamente com base no capital
+    const perc = capitalTotal > 0 ? round2((capital / capitalTotal) * 100) : 0
+    const lucro = capitalTotal > 0 ? round2(lucroInvestidores * capital / capitalTotal) : 0
     const tipo = inv.tipo || 'particular'
 
     let impostos = 0

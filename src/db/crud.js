@@ -4,6 +4,24 @@
 import pool from './pg.js'
 import { randomUUID } from 'crypto'
 
+// ── Validacao de campos obrigatorios ─────────────────────────
+const REQUIRED_FIELDS = {
+  imoveis: ['nome'],
+  investidores: ['nome'],
+  consultores: ['nome'],
+  negocios: ['movimento'],
+  despesas: ['movimento'],
+  tarefas: ['titulo'],
+}
+
+function validateRequired(table, data) {
+  const fields = REQUIRED_FIELDS[table]
+  if (!fields) return null
+  const missing = fields.filter(f => !data[f] || (typeof data[f] === 'string' && data[f].trim() === ''))
+  if (missing.length > 0) return `Campos obrigatórios em falta: ${missing.join(', ')}`
+  return null
+}
+
 // ── Auto-calc ROI ────────────────────────────────────────────
 function autoCalcROI(data) {
   const askPrice = parseFloat(data.ask_price) || 0
@@ -26,6 +44,24 @@ async function auditLog(tabela, registoId, acao, dadosAnteriores, dadosNovos) {
     `INSERT INTO audit_log (tabela, registo_id, acao, dados_anteriores, dados_novos) VALUES ($1, $2, $3, $4, $5)`,
     [tabela, registoId, acao, dadosAnteriores ? JSON.stringify(dadosAnteriores) : null, dadosNovos ? JSON.stringify(dadosNovos) : null]
   )
+}
+
+// ── Limpar dados do form antes de inserir/actualizar ─────────
+function cleanFormData(data) {
+  const cleaned = { ...data }
+  for (const [key, value] of Object.entries(cleaned)) {
+    // Converter strings vazias em null (evita erros de tipo no PostgreSQL)
+    if (value === '' || value === undefined) {
+      cleaned[key] = null
+      continue
+    }
+    // Converter strings numéricas para número
+    if (typeof value === 'string' && /^(custo|lucro|capital|ask_price|valor|roi|area|montante|score|comissao|pontuacao|tempo)/.test(key)) {
+      const num = parseFloat(value)
+      cleaned[key] = isNaN(num) ? null : num
+    }
+  }
+  return cleaned
 }
 
 // ── Generic CRUD factory ─────────────────────────────────────
@@ -54,7 +90,10 @@ function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at 
       return rows[0] ?? null
     },
 
-    async create(data) {
+    async create(rawData) {
+      const data = cleanFormData(rawData)
+      const validationError = validateRequired(table, data)
+      if (validationError) throw new Error(validationError)
       const id = randomUUID()
       const now = new Date().toISOString()
       const today = now.slice(0, 10)
@@ -78,7 +117,8 @@ function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at 
       return { id, ...data, created_at: now, updated_at: now }
     },
 
-    async update(id, data) {
+    async update(id, rawData) {
+      const data = cleanFormData(rawData)
       const { rows: existing } = await pool.query(`SELECT * FROM ${table} WHERE id = $1`, [id])
       if (!existing[0]) return null
       const now = new Date().toISOString()
