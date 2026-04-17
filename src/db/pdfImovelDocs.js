@@ -1930,23 +1930,28 @@ export function generateInvestorReport(imovel, analise, seccoes = []) {
 
 // Gerar compilado num unico fluxo
 export function generateCompiledReport(imovel, analise, seccoes = []) {
-  // Gera um unico PDF com capa + conteudo real de cada seccao seleccionada
-  // Cada seccao e gerada individualmente e concatenada
-  // Como PDFKit nao permite merge, geramos cada seccao como documento separado
-  // e o endpoint retorna o primeiro com conteudo
-
-  // Abordagem simples: gerar o primeiro relatorio seleccionado que tenha dados
-  // Para compilado completo, redirigir para gerador individual
-  const generatorMap = {
+  // Mapa de compilavel → gerador GENERATORS
+  const compilavelToGenerator = {
     investimento: 'relatorio_investimento',
     comparaveis: 'relatorio_comparaveis',
     caep: 'relatorio_caep',
     stress_tests: 'relatorio_stress',
   }
 
+  // Documentos individuais que podem ser gerados directamente
+  // (chave compilavel = chave tipo no GENERATORS)
+  const directGenerators = [
+    'ficha_imovel', 'ficha_pre_visita', 'checklist_visita', 'relatorio_visita',
+    'analise_rentabilidade', 'estudo_comparaveis', 'proposta_formal',
+    'apresentacao_investidor', 'resumo_negociacao', 'resumo_acordo',
+    'dossier_investimento', 'ficha_follow_up', 'ficha_cedencia',
+    'ficha_acompanhamento_obra', 'apresentacao_negocio',
+  ]
+
   // Se so 1 seccao, gerar directamente esse relatorio
   if (seccoes.length === 1) {
-    const tipo = generatorMap[seccoes[0]]
+    const s = seccoes[0]
+    const tipo = compilavelToGenerator[s] || (directGenerators.includes(s) ? s : null)
     if (tipo && GENERATORS[tipo]) return GENERATORS[tipo](imovel, analise)
   }
 
@@ -1954,11 +1959,13 @@ export function generateCompiledReport(imovel, analise, seccoes = []) {
   const b = new DocBuilder('Dossier de Investimento', imovel.zona || '', imovel)
   const an = analise
   const im = imovel
+  let hasContent = false
 
   for (const seccao of seccoes) {
-    // Reset section counter para cada seccao
 
     if (seccao === 'investimento' && an) {
+      if (hasContent) b.newPage()
+      hasContent = true
       const ra = an.retorno_anualizado || 0
       b.bigNumbers([
         { label: 'Lucro Líquido', value: EUR(an.lucro_liquido) },
@@ -1997,12 +2004,14 @@ export function generateCompiledReport(imovel, analise, seccoes = []) {
         { label: 'Cash-on-Cash', value: PCT(an.cash_on_cash) },
         { label: 'Break-even', value: EUR(an.break_even) },
       ])
+      continue
     }
 
     if (seccao === 'comparaveis' && an) {
       const comps = typeof an.comparaveis === 'string' ? JSON.parse(an.comparaveis || '[]') : (an.comparaveis || [])
       if (comps.length > 0) {
-        b.newPage()
+        if (hasContent) b.newPage()
+        hasContent = true
         for (const tip of comps) {
           const valid = (tip.comparaveis || []).filter(c => c.preco > 0 && c.area > 0)
           if (!valid.length) continue
@@ -2021,12 +2030,14 @@ export function generateCompiledReport(imovel, analise, seccoes = []) {
           b.space(8)
         }
       }
+      continue
     }
 
     if (seccao === 'caep' && an) {
       const caep = typeof an.caep === 'string' ? JSON.parse(an.caep || 'null') : an.caep
       if (caep?.quota_somnium !== undefined) {
-        b.newPage()
+        if (hasContent) b.newPage()
+        hasContent = true
         const percInv = 100 - caep.perc_somnium
         b.header('PARCERIA CAEP')
         b.inlineData([
@@ -2050,12 +2061,14 @@ export function generateCompiledReport(imovel, analise, seccoes = []) {
           )
         }
       }
+      continue
     }
 
     if (seccao === 'stress_tests' && an) {
       const st = typeof an.stress_tests === 'string' ? JSON.parse(an.stress_tests || 'null') : an.stress_tests
       if (st) {
-        b.newPage()
+        if (hasContent) b.newPage()
+        hasContent = true
         b.header('ANÁLISE DE RISCO')
         b.verdict(
           st.veredicto === 'resiliente' ? 'Investimento resiliente — lucro positivo em todos os cenários.' : 'Atenção — cenários com risco de prejuízo.',
@@ -2082,7 +2095,25 @@ export function generateCompiledReport(imovel, analise, seccoes = []) {
           )
         }
       }
+      continue
     }
+
+    // Documentos individuais — gerar inline no DocBuilder partilhado
+    // Usar o gerador individual mas capturar o conteudo numa nova pagina
+    const genKey = directGenerators.includes(seccao) ? seccao : null
+    if (genKey && GENERATORS[genKey]) {
+      // Gerar como documento separado nao e possivel (PDFKit streams),
+      // mas podemos adicionar uma pagina separadora com titulo
+      if (hasContent) b.newPage()
+      hasContent = true
+      const label = DOC_LABELS[genKey] || genKey
+      b.header(label.toUpperCase())
+      b.text(`Documento disponível individualmente: clique "Abrir" no documento "${label}".`, { size: 8, color: C.muted })
+    }
+  }
+
+  if (!hasContent) {
+    b.text('Nenhuma secção com dados disponíveis para compilar.')
   }
 
   b.disclaimer()
