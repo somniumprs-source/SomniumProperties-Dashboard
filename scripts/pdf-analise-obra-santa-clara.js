@@ -315,9 +315,9 @@ const OBRA = {
   ],
   totalObra: 134293,
   licenciamento: {
-    projecto: 5535,
-    taxas: 2768,
-    total: 8303,
+    projecto: 6150,
+    taxas: 3075,
+    total: 9225,
   }
 }
 
