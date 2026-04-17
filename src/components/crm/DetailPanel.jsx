@@ -59,6 +59,7 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
     { tipo: 'estudo_comparaveis',        label: 'Estudo de Comparáveis',          compilavel: 'estudo_comparaveis' },
     { tipo: 'proposta_formal',           label: 'Proposta ao Proprietário',       compilavel: 'proposta_formal' },
     { tipo: 'apresentacao_investidor',   label: 'Apresentação ao Investidor',     compilavel: 'apresentacao_investidor' },
+    { tipo: 'apresentacao_negocio',     label: 'Apresentação de Negócio (Anónima)', compilavel: 'apresentacao_negocio' },
     { tipo: 'resumo_negociacao',         label: 'Resumo de Negociação',           compilavel: 'resumo_negociacao' },
     { tipo: 'resumo_acordo',             label: 'Resumo de Acordo',               compilavel: 'resumo_acordo' },
     { tipo: 'dossier_investimento',      label: 'Dossier de Investimento',        compilavel: 'dossier_investimento' },
@@ -69,7 +70,6 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
     { tipo: 'relatorio_comparaveis',     label: 'Estudo Comparáveis (Inv.)',      compilavel: 'comparaveis' },
     { tipo: 'relatorio_caep',            label: 'Distribuição CAEP',              compilavel: 'caep' },
     { tipo: 'relatorio_stress',          label: 'Stress Tests',                   compilavel: 'stress_tests' },
-    { tipo: 'apresentacao_negocio',     label: 'Apresentação de Negócio (Anónima)', compilavel: 'apresentacao_negocio' },
   ]
 
   const [selected, setSelected] = useState(new Set())
