@@ -174,9 +174,10 @@ class Builder {
   }
 
   bullet(text) {
-    this.ensure(18)
-    this.doc.fontSize(9).fillColor(C.gold).text('▸ ', ML, this.y, { continued: true }).fillColor(C.body).text(text, { width: CW - 14, lineGap: 3 })
-    this.y = this.doc.y + 4
+    this.ensure(30)
+    this.doc.fontSize(9).fillColor(C.gold).text('▸', ML, this.y, { lineBreak: false })
+    this.doc.fontSize(9).fillColor(C.body).text(text, ML + 14, this.y, { width: CW - 14, lineGap: 3 })
+    this.y = this.doc.y + 6
     return this
   }
 
