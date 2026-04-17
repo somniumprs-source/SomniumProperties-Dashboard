@@ -220,104 +220,104 @@ const OBRA = {
   ],
   categorias: [
     {
-      nome: 'Demolições e Limpeza', total: 4106,
+      nome: 'Demolições e Limpeza', total: 4517,
       items: [
-        { desc: 'Entrega de entulhos (500 € + IVA)', valor: 630 },
-        { desc: 'Serviço de remoção e transporte (3 dias × 400 € + IVA)', valor: 1476 },
-        { desc: 'Nivelamento terreno exterior (150 m² × 0,10 m × 35 €/m³)', valor: 525 },
-        { desc: 'Remoção de lixo interior e limpeza (2 dias MO)', valor: 295 },
-        { desc: 'Demolição paredes interiores, remoção revestimentos, roços (8 dias MO)', valor: 1180 },
+        { desc: 'Entrega de entulhos (500 € + IVA)', valor: 693 },
+        { desc: 'Serviço de remoção e transporte (3 dias × 400 € + IVA)', valor: 1624 },
+        { desc: 'Nivelamento terreno exterior (150 m² × 0,10 m × 35 €/m³)', valor: 578 },
+        { desc: 'Remoção de lixo interior e limpeza (2 dias MO)', valor: 325 },
+        { desc: 'Demolição paredes interiores, remoção revestimentos, roços (8 dias MO)', valor: 1298 },
       ]
     },
     {
-      nome: 'Electricidade e Canalização', total: 12925,
+      nome: 'Electricidade e Canalização', total: 14218,
       items: [
-        { desc: 'R/C — 55 m² × 70 €/m² + IVA', valor: 4735 },
-        { desc: '1.º Andar — 95 m² × 70 €/m² + IVA', valor: 8190 },
+        { desc: 'R/C — 55 m² × 77 €/m² + IVA', valor: 5209 },
+        { desc: '1.º Andar — 95 m² × 77 €/m² + IVA', valor: 9009 },
       ],
-      nota: 'Custo médio de 60 €/m²'
+      nota: 'Custo médio de 66 €/m² (ajuste +10%)'
     },
     {
-      nome: 'Pavimento Geral', total: 10331,
+      nome: 'Pavimento Geral', total: 11364,
       items: [
-        { desc: 'R/C — 55 m² × 56 €/m² + IVA (mosaico 1.ª escolha retificado)', valor: 3788 },
-        { desc: '1.º Andar — 95 m² × 56 €/m² + IVA', valor: 6543 },
+        { desc: 'R/C — 55 m² × 62 €/m² + IVA (mosaico 1.ª escolha retificado)', valor: 4167 },
+        { desc: '1.º Andar — 95 m² × 62 €/m² + IVA', valor: 7197 },
       ],
-      nota: 'Mosaico 24 €/m² + IVA, cola flexível C2T1S1 5 €/m², rejuntamento 2 €/m², MO 25 €/m²'
+      nota: 'Mosaico 26 €/m² + IVA, cola flexível C2T1S1 6 €/m², rejuntamento 2 €/m², MO 28 €/m²'
     },
     {
-      nome: 'Pladur Interior nos Tectos', total: 8873,
+      nome: 'Pladur Interior nos Tectos', total: 9760,
       items: [
-        { desc: 'R/C — 55 m² × 50 €/m² + IVA (placa hidrófuga Knauf, lã rocha 60 mm)', valor: 3382 },
-        { desc: '1.º Andar — 95 m² × 47 €/m² + IVA (placa hidrófuga, lã mineral 60 mm)', valor: 5492 },
+        { desc: 'R/C — 55 m² × 55 €/m² + IVA (placa hidrófuga Knauf, lã rocha 60 mm)', valor: 3720 },
+        { desc: '1.º Andar — 95 m² × 52 €/m² + IVA (placa hidrófuga, lã mineral 60 mm)', valor: 6041 },
       ],
       nota: 'Inclui perfis, massas de acabamento, sancas e outros acabamentos'
     },
     {
-      nome: 'Caixilharias', total: 13414,
+      nome: 'Caixilharias', total: 14755,
       items: [
-        { desc: 'R/C — 5 janelas de 1,5 m² × 450 €/m² + IVA', valor: 4151 },
-        { desc: 'R/C — 1 janela WC (0,50 × 0,50) × 200 € + IVA', valor: 250 },
-        { desc: '1.º Andar — 7 janelas de 1,5 m² × 450 €/m² + IVA', valor: 5811 },
-        { desc: '1.º Andar — 1 janela WC (0,50 × 0,50) × 200 € + IVA', valor: 250 },
-        { desc: 'Trabalho de pedreiro adjacente (1 000 € + IVA)', valor: 1230 },
-        { desc: 'Soleiras novas — 14 unidades × 100 € + IVA', valor: 1722 },
+        { desc: 'R/C — 5 janelas de 1,5 m² × 495 €/m² + IVA', valor: 4566 },
+        { desc: 'R/C — 1 janela WC (0,50 × 0,50) × 220 € + IVA', valor: 275 },
+        { desc: '1.º Andar — 7 janelas de 1,5 m² × 495 €/m² + IVA', valor: 6392 },
+        { desc: '1.º Andar — 1 janela WC (0,50 × 0,50) × 220 € + IVA', valor: 275 },
+        { desc: 'Trabalho de pedreiro adjacente (1 100 € + IVA)', valor: 1353 },
+        { desc: 'Soleiras novas — 14 unidades × 110 € + IVA', valor: 1894 },
       ],
       nota: 'Alumínio de qualidade, com corte térmico e vidro duplo'
     },
     {
-      nome: 'Sistema VMC', total: 13500,
+      nome: 'Sistema VMC', total: 14850,
       items: [
-        { desc: 'R/C — ventilação mecânica controlada', valor: 5000 },
-        { desc: '1.º Andar — ventilação mecânica controlada', valor: 8500 },
+        { desc: 'R/C — ventilação mecânica controlada', valor: 5500 },
+        { desc: '1.º Andar — ventilação mecânica controlada', valor: 9350 },
       ],
       nota: 'Valores com IVA incluído'
     },
     {
-      nome: 'Pintura', total: 10884,
+      nome: 'Pintura', total: 11972,
       items: [
-        { desc: 'R/C — ~215 m² (160 m² paredes + 55 m² tecto) × 15 €/m² + IVA', valor: 3966 },
-        { desc: '1.º Andar — ~375 m² (280 m² paredes + 95 m² tecto) × 15 €/m² + IVA', valor: 6918 },
+        { desc: 'R/C — ~215 m² (160 m² paredes + 55 m² tecto) × 17 €/m² + IVA', valor: 4363 },
+        { desc: '1.º Andar — ~375 m² (280 m² paredes + 95 m² tecto) × 17 €/m² + IVA', valor: 7610 },
       ]
     },
     {
-      nome: 'Casas de Banho', total: 12000,
+      nome: 'Casas de Banho', total: 13200,
       items: [
-        { desc: '3 casas de banho completas × 4 000 € (com IVA)', valor: 12000 },
+        { desc: '3 casas de banho completas × 4 400 € (com IVA)', valor: 13200 },
       ]
     },
     {
-      nome: 'Portas', total: 2400,
+      nome: 'Portas', total: 2640,
       items: [
-        { desc: '12 unidades × 175 € com aplicação (+ IVA)', valor: 2400 },
+        { desc: '12 unidades × 193 € com aplicação (+ IVA)', valor: 2640 },
       ]
     },
     {
-      nome: 'Cozinhas', total: 18000,
+      nome: 'Cozinhas', total: 19800,
       items: [
-        { desc: '2 cozinhas × 9 000 € (com IVA)', valor: 18000 },
+        { desc: '2 cozinhas × 9 900 € (com IVA)', valor: 19800 },
       ],
       nota: '4,50 m comprimento, fogão, exaustor, forno, micro-ondas, frigorífico, máquina lavar louça e roupa'
     },
     {
-      nome: 'Capoto Exterior (ETICS)', total: 14206,
+      nome: 'Capoto Exterior (ETICS)', total: 15627,
       items: [
-        { desc: 'R/C — 40 m perímetro × 3,00 m × 55 €/m² + IVA', valor: 8118 },
-        { desc: '1.º Andar — 30 m perímetro × 3,00 m × 55 €/m² + IVA', valor: 6088 },
+        { desc: 'R/C — 40 m perímetro × 3,00 m × 61 €/m² + IVA', valor: 8930 },
+        { desc: '1.º Andar — 30 m perímetro × 3,00 m × 61 €/m² + IVA', valor: 6697 },
       ]
     },
     {
-      nome: 'Cobertura', total: 14250,
+      nome: 'Cobertura', total: 15675,
       items: [
-        { desc: '95 m² × 150 €/m² (com IVA)', valor: 14250 },
+        { desc: '95 m² × 165 €/m² (com IVA)', valor: 15675 },
       ]
     },
   ],
-  totalObra: 149214,
+  totalObra: 164135,
   licenciamento: {
-    projecto: 6150,
-    taxas: 3075,
-    total: 9225,
+    projecto: 6765,
+    taxas: 3383,
+    total: 10148,
   }
 }
 
