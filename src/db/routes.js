@@ -152,8 +152,35 @@ crudRoutes('/imoveis', Imoveis, {
     if (driveConfigured()) {
       await createImovelFolder(item.id, item.nome || 'Sem nome', item.estado || 'Adicionado')
     }
+    // Auto-scrape fotos do link do anuncio
+    if (item.link && item.link.startsWith('http')) {
+      scrapePhotosFromLink(item.link, item.id).then(async (photos) => {
+        if (photos.length > 0) {
+          const existing = item.fotos ? JSON.parse(item.fotos) : []
+          existing.push(...photos)
+          await Imoveis.update(item.id, { fotos: JSON.stringify(existing) })
+          console.log(`[scraper] ${photos.length} fotos extraidas automaticamente para ${item.nome || item.id}`)
+        }
+      }).catch(e => console.error(`[scraper] Erro auto-scrape:`, e.message))
+    }
   },
   onUpdate: async (item, body) => {
+    // Auto-scrape fotos quando link e adicionado ou alterado
+    if (body.link && body.link.startsWith('http')) {
+      const existingFotos = item.fotos ? JSON.parse(item.fotos) : []
+      const alreadyScraped = existingFotos.some(f => f.source === 'scraper' && f.source_url?.includes(new URL(body.link).hostname))
+      if (!alreadyScraped) {
+        scrapePhotosFromLink(body.link, item.id).then(async (photos) => {
+          if (photos.length > 0) {
+            const current = await Imoveis.getById(item.id)
+            const fotos = current?.fotos ? JSON.parse(current.fotos) : []
+            fotos.push(...photos)
+            await Imoveis.update(item.id, { fotos: JSON.stringify(fotos) })
+            console.log(`[scraper] ${photos.length} fotos extraidas de link actualizado para ${item.nome || item.id}`)
+          }
+        }).catch(e => console.error(`[scraper] Erro auto-scrape update:`, e.message))
+      }
+    }
     if (body.estado) {
       // Mover pasta no Drive
       if (driveConfigured()) {
