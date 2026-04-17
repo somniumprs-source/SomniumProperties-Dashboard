@@ -331,8 +331,8 @@ async function generate() {
   // ── CAPA ──
   b.cover(
     'Análise de Custo de Obra',
-    OBRA.nome,
-    'Santa Clara · Coimbra · Portugal'
+    null,
+    'Coimbra · Portugal'
   )
 
   // ── PÁGINA 1: Descrição do Imóvel ──
