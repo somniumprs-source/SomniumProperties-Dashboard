@@ -4,7 +4,7 @@
  */
 import pool from './pg.js'
 import { randomUUID } from 'crypto'
-import { detectPortalLink, fetchPortalData } from './portalFetch.js'
+import { detectPortalLink, fetchPortalData, downloadPortalPhotos } from './portalFetch.js'
 import { sendEscalacaoEmail } from './emailService.js'
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY
@@ -620,6 +620,22 @@ ${urgente ? '⚠️ URGÊNCIA DETECTADA — prioridade máxima' : ''}
           ]
         )
         console.log(`[agent] Imóvel criado em Pré-aprovação: ${imovelId}`)
+
+        // Importar fotografias do portal (se existirem)
+        if (portalData?.fotos_urls?.length) {
+          try {
+            const fotosImportadas = await downloadPortalPhotos(imovelId, portalData.fotos_urls)
+            if (fotosImportadas.length) {
+              await pool.query(
+                'UPDATE imoveis SET fotos = $1, updated_at = $2 WHERE id = $3',
+                [JSON.stringify(fotosImportadas), new Date().toISOString(), imovelId]
+              )
+              console.log(`[agent] ${fotosImportadas.length} fotos importadas do portal para ${imovelId}`)
+            }
+          } catch (e) {
+            console.warn('[agent] Erro ao importar fotos do portal:', e.message)
+          }
+        }
       }
     }
 
