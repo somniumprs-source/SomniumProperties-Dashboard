@@ -58,27 +58,88 @@ export function detectPortalLink(text) {
 
 /**
  * Faz fetch a um portal e tenta extrair dados básicos do imóvel.
- * Usa Open Graph e meta tags como fallback.
- * @returns {{ tipologia, zona, ask_price, area_m2, referencia, ano_construcao } | null}
+ * Tenta primeiro com fetch simples. Se falhar (403/anti-bot), usa Playwright.
+ * @returns {{ tipologia, zona, ask_price, area_m2, referencia, ano_construcao, fotos_urls } | null}
  */
 export async function fetchPortalData(url) {
+  // 1. Tentar fetch simples (rápido, sem browser)
   try {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 10000)
     const res = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        'Accept': 'text/html',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
         'Accept-Language': 'pt-PT,pt;q=0.9',
       },
       signal: controller.signal,
     })
     clearTimeout(timeout)
-    if (!res.ok) return null
-    const html = await res.text()
-    return parseHtml(html, url)
+    if (res.ok) {
+      const html = await res.text()
+      const parsed = parseHtml(html, url)
+      // Só aceitar se extraiu pelo menos 1 dado útil (evitar shells JS vazias)
+      if (parsed.tipologia || parsed.ask_price || parsed.zona || parsed.fotos_urls.length > 0) {
+        console.log('[portalFetch] Fetch simples OK:', url)
+        return parsed
+      }
+    }
   } catch (e) {
-    console.warn('[portalFetch] Erro ao aceder:', url, e.message)
+    console.warn('[portalFetch] Fetch simples falhou:', e.message)
+  }
+
+  // 2. Fallback: Playwright (browser real, contorna anti-bot)
+  console.log('[portalFetch] A tentar com Playwright:', url)
+  return fetchWithPlaywright(url)
+}
+
+/**
+ * Usa Playwright (Chromium headless) para aceder a portais com proteção anti-bot.
+ */
+async function fetchWithPlaywright(url) {
+  let browser
+  try {
+    const { chromium } = await import('playwright')
+    browser = await chromium.launch({ headless: true })
+    const ctx = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      locale: 'pt-PT',
+      viewport: { width: 1280, height: 720 },
+    })
+    const page = await ctx.newPage()
+
+    await page.goto(url, { waitUntil: 'networkidle', timeout: 20000 })
+
+    // Extrair HTML renderizado
+    const html = await page.content()
+
+    // Extrair imagens adicionais do DOM (lazy-loaded, JavaScript-rendered)
+    const domImages = await page.evaluate(() => {
+      return [...document.querySelectorAll('img')]
+        .map(i => i.src || i.dataset?.src || i.dataset?.original || i.dataset?.lazy || '')
+        .filter(s => s.match(/\.(jpg|jpeg|png|webp)/i) && s.startsWith('http'))
+    })
+
+    await browser.close()
+    browser = null
+
+    // Parsear HTML + combinar imagens do DOM
+    const result = parseHtml(html, url)
+
+    // Adicionar imagens do DOM que o regex não apanhou
+    const urlSet = new Set(result.fotos_urls)
+    for (const img of domImages) {
+      if (!EXCLUDE_PATTERNS.test(img) && !img.includes('1x1')) {
+        urlSet.add(img)
+      }
+    }
+    result.fotos_urls = [...urlSet].slice(0, MAX_PHOTOS)
+
+    console.log(`[portalFetch] Playwright OK: ${result.fotos_urls.length} fotos, tipologia=${result.tipologia}, zona=${result.zona}`)
+    return result
+  } catch (e) {
+    console.warn('[portalFetch] Playwright falhou:', e.message)
+    if (browser) await browser.close().catch(() => {})
     return null
   }
 }

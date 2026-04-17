@@ -37,6 +37,8 @@
     "nodemailer": "^8.0.5",
     "pdfkit": "^0.18.0",
     "pg": "^8.20.0",
+    "playwright": "^1.59.1",
+    "playwright-core": "^1.59.1",
     "postcss": "^8.4.35",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
