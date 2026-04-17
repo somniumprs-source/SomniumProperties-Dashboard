@@ -163,10 +163,10 @@ def generate(dest_name, meses):
         ("Manutenção (9 meses)", LIGHT_BG),
         ("1.710 €", LIGHT_BG),
         # Coluna direita — retornos (posicoes especificas)
-        ("148.063 €", GOLD_BG),   # Lucro Bruto
+        ("148.063 €", LIGHT_BG),  # Lucro Bruto (fundo #f4f4f2)
         ("29.613 €", WHITE_BG),   # IRC
         ("118.451 €", LIGHT_BG),  # Lucro Liquido
-        ("Prazo: 9 meses", WHITE_BG),
+        # "Prazo: 9 meses" removido via redaccao integral das linhas de pressupostos
     ]
     for text, bg in removals_p9:
         areas = p.search_for(text)
@@ -182,7 +182,9 @@ def generate(dest_name, meses):
     areas = p.search_for("351.937 €")
     for a in areas:
         if a.x0 < 300:
-            p.add_redact_annot(a, text="", fill=WHITE_BG)
+            p.add_redact_annot(a, text="", fill=GOLD_BG)
+    # Pressupostos: redactar linhas 2 e 3 inteiras (evitar sobreposicao)
+    p.add_redact_annot(fitz.Rect(55, 436, 540, 460), text="", fill=WHITE_BG)
     p.apply_redactions()
 
     # ── Pagina 10: remover valores stress tests ──
@@ -470,14 +472,11 @@ def make_page9_overlay(base, meses):
     c.drawString(454, ry(382), pct(base['coc']))  # Cash-on-Cash
     c.drawString(454, ry(406), pct(base['ra']))  # Ret Anualizado
 
-    # Pressupostos
-    c.setFont("Helvetica-BoldOblique", 9)
-    c.setFillColorRGB(*BODY_COLOR)
-    # Sobrepor "Prazo: 12 meses" no local correcto
-    # A frase completa esta em y=433, mas so preciso substituir o "9" por "12"
-    # Mais simples: escrever sobre
+    # Pressupostos (linhas 2+3 redactadas inteiras, reescrever)
     c.setFont("Helvetica-Oblique", 9)
-    c.drawString(57, ry(443), f"electricidade 50 € + água 50 €) · Regime fiscal: Empresa · IRC 20% · Prazo: {meses} meses desde a aquisição até à escritura")
+    c.setFillColorRGB(*BODY_COLOR)
+    c.drawString(57, ry(443), f"electricidade 50 \u20ac + \u00e1gua 50 \u20ac) \u00b7 Regime fiscal: Empresa \u00b7 IRC 20% \u00b7 Prazo: {meses} meses desde a aquisi\u00e7\u00e3o at\u00e9 \u00e0 escritura")
+    c.drawString(57, ry(455), "de venda")
 
     c.save()
     buf.seek(0)
