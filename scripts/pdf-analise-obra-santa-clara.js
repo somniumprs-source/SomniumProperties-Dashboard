@@ -214,7 +214,7 @@ const OBRA = {
     andar: { bruta: 55, extra: 40, desc: '2 quartos (~9 m² cada), 1 WC (~3,5 m²), cozinha, sala, 1 quarto maior (~20 m²), corredor e despensa.' },
   },
   alertas: [
-    'No 1.º andar, os 40 m² de Área Bruta Independente não foram identificados com clareza. O quarto maior, corredor e despensa podem ser construção ilegal.',
+    'No 1.º andar, os 40 m² de Área Bruta Independente são construção ilegal (sem registo). O quarto maior, corredor e despensa não se encontram legalizados.',
     'Existe um edificado em madeira e chapas (~40 m²) na frente da casa que terá de ser demolido.',
     'A análise considera a parte habitacional 100% legal e o 1.º andar como T3.',
   ],
@@ -352,7 +352,7 @@ async function generate() {
   b.subheader('1.º Andar')
   b.simpleTable([
     { label: 'Área Bruta Privativa', value: `${OBRA.areas.andar.bruta} m²` },
-    { label: 'Área adicional (legalidade por confirmar)', value: `${OBRA.areas.andar.extra} m²` },
+    { label: 'Área adicional (ilegal / sem registo)', value: `${OBRA.areas.andar.extra} m²` },
   ])
   b.text(OBRA.areas.andar.desc)
   b.space(8)
@@ -361,7 +361,7 @@ async function generate() {
   b.bigNumbers([
     { label: 'R/C', value: `${OBRA.areas.rc.bruta} m²` },
     { label: '1.º Andar (registado)', value: `${OBRA.areas.andar.bruta} m²` },
-    { label: 'Área Total Estimada', value: `${OBRA.areas.rc.bruta + OBRA.areas.andar.bruta + OBRA.areas.andar.extra} m²`, sub: `inclui ${OBRA.areas.andar.extra} m² por confirmar` },
+    { label: 'Área Total Estimada', value: `${OBRA.areas.rc.bruta + OBRA.areas.andar.bruta + OBRA.areas.andar.extra} m²`, sub: `inclui ${OBRA.areas.andar.extra} m² ilegais` },
   ])
   b.space(8)
 
