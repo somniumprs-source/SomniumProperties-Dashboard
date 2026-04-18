@@ -439,6 +439,45 @@ class DocBuilder {
     return this
   }
 
+  // Duas tabelas lado a lado (custos | retornos) — layout financeiro profissional
+  dualTable(leftRows, rightRows, pressupostos) {
+    const colW = (CW - 14) / 2 // gap de 14px entre colunas
+    const maxRows = Math.max(leftRows.length, rightRows.length)
+    const rowH = 22, totalRowH = 26, headerH = 24
+    const totalH = headerH + maxRows * totalRowH + 10
+    this.ensure(totalH + (pressupostos ? 30 : 0))
+
+    const drawCol = (rows, xStart, w) => {
+      let cy = this.y
+      rows.forEach(row => {
+        const isTotal = row.total
+        const h = isTotal ? totalRowH : rowH
+        if (isTotal) {
+          this.doc.rect(xStart, cy, w, h).fill(C.totalBg)
+        }
+        this.doc.fontSize(isTotal ? 9 : 8.5).fillColor(C.body)
+          .text(row.label || '', xStart + 8, cy + (isTotal ? 7 : 5), { width: w * 0.62, lineBreak: false })
+        this.doc.fontSize(isTotal ? 9 : 8.5).fillColor(isTotal ? C.gold : C.body)
+          .text(String(row.value || '—'), xStart + w * 0.62, cy + (isTotal ? 7 : 5), { width: w * 0.36, align: 'right', lineBreak: false })
+        this.doc.rect(xStart, cy + h, w, 0.3).fill(C.border)
+        cy += h
+      })
+      return cy
+    }
+
+    const xLeft = ML
+    const xRight = ML + colW + 14
+    const endLeft = drawCol(leftRows, xLeft, colW)
+    const endRight = drawCol(rightRows, xRight, colW)
+    this.y = Math.max(endLeft, endRight) + 6
+
+    if (pressupostos) {
+      this.doc.fontSize(7).fillColor(C.muted).text(pressupostos, ML, this.y, { width: CW, lineGap: 2 })
+      this.y = this.doc.y + 6
+    }
+    return this
+  }
+
   disclaimer() {
     this.ensure(30)
     this.doc.rect(ML, this.y, CW, 0.3).fill(C.border)
@@ -451,6 +490,138 @@ class DocBuilder {
   }
 
   end() { this.doc.end(); return this.doc }
+}
+
+// ══════════════════════════════════════════════════════════════
+// STRESS TEST RENDERER — layout duas colunas (custos | retornos)
+// ══════════════════════════════════════════════════════════════
+
+function renderStressTests(b, a, opts = {}) {
+  let st = a.stress_tests
+  if (!st) return
+  if (typeof st === 'string') try { st = JSON.parse(st) } catch { return }
+  if (!st) return
+
+  if (opts.newPage) b.newPage()
+  b.header(opts.title || 'ANÁLISE DE SENSIBILIDADE — STRESS TESTS')
+
+  const resiliente = st.veredicto === 'resiliente'
+  b.verdict(
+    resiliente ? 'Investimento resiliente — mantém resultado positivo em todos os cenários testados.' : 'Atenção — identificados cenários com risco de prejuízo.',
+    resiliente
+  )
+  b.space(4)
+
+  // Cenário base — duas colunas
+  if (st.base) {
+    b.subheader('Cenário Base')
+    const base = st.base
+    b.dualTable(
+      [
+        { label: 'Total Custos de Aquisição', value: EUR(base.total_aquisicao || a.total_aquisicao) },
+        { label: 'Obra + IVA (Orçamento Gestor)', value: EUR(base.obra_com_iva || a.obra_com_iva) },
+        { label: `Manutenção (${base.meses || a.meses || 12} meses)`, value: EUR(base.total_detencao || a.total_detencao || a.total_manutencao) },
+        { label: `Comissão Imob. (${base.comissao_perc || a.comissao_perc || 2.5}% + IVA)`, value: EUR(base.comissao_com_iva || a.comissao_com_iva) },
+        { label: 'CPCV de Venda', value: EUR(base.cpcv_venda || a.cpcv_venda || 100) },
+        { label: 'Total Investido', value: EUR(base.capital_necessario || a.capital_necessario), total: true },
+      ],
+      [
+        { label: 'Lucro Estimado (Bruto)', value: EUR(base.lucro_bruto || a.lucro_bruto) },
+        { label: `${a.regime_fiscal || 'IRC'} (${a.regime_fiscal === 'Particular' ? 'IRS' : '20%'} sobre lucro)`, value: EUR(base.impostos || a.impostos) },
+        { label: 'Lucro Estimado Líquido', value: EUR(base.lucro_liquido || a.lucro_liquido), total: true },
+        { label: 'Retorno Total Investimento', value: PCT(base.retorno_total || a.retorno_total) },
+        { label: 'Retorno Cash-on-Cash', value: PCT(base.cash_on_cash || a.cash_on_cash) },
+        { label: 'Retorno Anualizado', value: PCT(base.retorno_anualizado || a.retorno_anualizado), total: true },
+      ],
+      `Pressupostos/Financiamento: ${a.perc_financiamento ? `${a.perc_financiamento}% financiado` : '100% capitais próprios'} · Manutenção mensal: ${EUR(a.seguro_mensal || 0)} + condomínio ${EUR(a.condominio_mensal || 0)} · Regime fiscal: ${a.regime_fiscal || 'Empresa'} · Prazo: ${base.meses || a.meses || 12} meses desde a aquisição até a escritura de venda`
+    )
+    b.space(6)
+  }
+
+  // Pior cenário
+  if (st.pior) {
+    b.subheader(`Pior Cenário — ${st.pior.label || 'Stress máximo'}`)
+    b.dualTable(
+      [
+        { label: 'Total Custos de Aquisição', value: EUR(st.pior.total_aquisicao || a.total_aquisicao) },
+        { label: 'Obra + IVA', value: EUR(st.pior.obra_com_iva || a.obra_com_iva) },
+        { label: `Manutenção (${st.pior.meses || a.meses || 12} meses)`, value: EUR(st.pior.total_detencao || a.total_detencao || a.total_manutencao) },
+        { label: 'Comissão + Custos Venda', value: EUR(st.pior.comissao_com_iva || a.comissao_com_iva) },
+        { label: 'Total Investido', value: EUR(st.pior.capital_necessario || a.capital_necessario), total: true },
+      ],
+      [
+        { label: 'Lucro Estimado (Bruto)', value: EUR(st.pior.lucro_bruto) },
+        { label: 'Impostos', value: EUR(st.pior.impostos) },
+        { label: 'Lucro Estimado Líquido', value: EUR(st.pior.lucro_liquido), total: true },
+        { label: 'Retorno Total', value: PCT(st.pior.retorno_total) },
+        { label: 'Retorno Anualizado', value: PCT(st.pior.retorno_anualizado), total: true },
+      ],
+      st.pior.descricao || null
+    )
+    b.space(6)
+  }
+
+  // Melhor cenário
+  if (st.melhor) {
+    b.subheader(`Melhor Cenário — ${st.melhor.label || 'Cenário optimista'}`)
+    b.dualTable(
+      [
+        { label: 'Total Custos de Aquisição', value: EUR(st.melhor.total_aquisicao || a.total_aquisicao) },
+        { label: 'Obra + IVA', value: EUR(st.melhor.obra_com_iva || a.obra_com_iva) },
+        { label: `Manutenção (${st.melhor.meses || a.meses || 12} meses)`, value: EUR(st.melhor.total_detencao || a.total_detencao || a.total_manutencao) },
+        { label: 'Comissão + Custos Venda', value: EUR(st.melhor.comissao_com_iva || a.comissao_com_iva) },
+        { label: 'Total Investido', value: EUR(st.melhor.capital_necessario || a.capital_necessario), total: true },
+      ],
+      [
+        { label: 'Lucro Estimado (Bruto)', value: EUR(st.melhor.lucro_bruto) },
+        { label: 'Impostos', value: EUR(st.melhor.impostos) },
+        { label: 'Lucro Estimado Líquido', value: EUR(st.melhor.lucro_liquido), total: true },
+        { label: 'Retorno Total', value: PCT(st.melhor.retorno_total) },
+        { label: 'Retorno Anualizado', value: PCT(st.melhor.retorno_anualizado), total: true },
+      ],
+      st.melhor.descricao || null
+    )
+    b.space(6)
+  }
+
+  // Tabela de cenários individuais (downside + upside)
+  if (st.downside?.length) {
+    b.subheader('Cenários de Risco (Downside)')
+    for (const s of st.downside) {
+      b.dualTable(
+        [
+          { label: 'Cenário', value: s.label },
+          { label: 'Total Investido', value: EUR(s.capital_necessario || a.capital_necessario), total: true },
+        ],
+        [
+          { label: 'Lucro Líquido', value: EUR(s.lucro_liquido), total: true },
+          { label: 'Delta vs. Base', value: EUR(s.delta) },
+          { label: 'Retorno Anualizado', value: PCT(s.retorno_anualizado) },
+        ],
+        s.descricao || null
+      )
+      b.space(4)
+    }
+  }
+
+  if (st.upside?.length) {
+    b.subheader('Cenários Favoráveis (Upside)')
+    for (const s of st.upside) {
+      b.dualTable(
+        [
+          { label: 'Cenário', value: s.label },
+          { label: 'Total Investido', value: EUR(s.capital_necessario || a.capital_necessario), total: true },
+        ],
+        [
+          { label: 'Lucro Líquido', value: EUR(s.lucro_liquido), total: true },
+          { label: 'Delta vs. Base', value: EUR(s.delta) },
+          { label: 'Retorno Anualizado', value: PCT(s.retorno_anualizado) },
+        ],
+        s.descricao || null
+      )
+      b.space(4)
+    }
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -987,32 +1158,7 @@ const GENERATORS = {
     ])
     b.space(4)
 
-    if (a.stress_tests) {
-      let st = a.stress_tests
-      if (typeof st === 'string') try { st = JSON.parse(st) } catch { st = null }
-      if (st) {
-        b.header('H. TESTES DE STRESS')
-        b.bigNumbers([
-          { label: 'Pior Cenário', value: EUR(st.pior?.lucro_liquido) },
-          { label: 'Cenário Base', value: EUR(st.base?.lucro_liquido) },
-          { label: 'Melhor Cenário', value: EUR(st.melhor?.lucro_liquido) },
-        ])
-        b.simpleTable([
-          ...(st.base ? [{ label: 'Base — RA', value: PCT(st.base.retorno_anualizado) }] : []),
-          ...(st.pior ? [{ label: 'Pior Cenário — RA', value: PCT(st.pior.retorno_anualizado) }] : []),
-          ...(st.melhor ? [{ label: 'Melhor Cenário — RA', value: PCT(st.melhor.retorno_anualizado) }] : []),
-        ])
-
-        const cenarios = st.cenarios || st.downside || []
-        if (Array.isArray(cenarios) && cenarios.length > 0) {
-          b.space(4)
-          b.colTable(
-            [['Cenário', 200], ['Lucro Líq.', 100], ['RT', 90], ['RA', 90]],
-            cenarios.map((c, i) => ({ _values: [c.nome || c.label || `Cenário ${i+1}`, EUR(c.lucro_liquido), PCT(c.retorno_total), PCT(c.retorno_anualizado)] }))
-          )
-        }
-      }
-    }
+    renderStressTests(b, a, { title: 'H. TESTES DE STRESS' })
 
     b.disclaimer()
     return b.end()
@@ -1209,19 +1355,7 @@ const GENERATORS = {
     }
 
     // Stress Tests
-    if (a.stress_tests) {
-      let st = a.stress_tests
-      if (typeof st === 'string') try { st = JSON.parse(st) } catch { st = null }
-      if (st) {
-        b.header('TESTES DE STRESS')
-        b.bigNumbers([
-          { label: 'Pior Cenário', value: EUR(st.pior?.lucro_liquido) },
-          { label: 'Cenário Base', value: EUR(st.base?.lucro_liquido) },
-          { label: 'Melhor Cenário', value: EUR(st.melhor?.lucro_liquido) },
-        ])
-        b.space(4)
-      }
-    }
+    renderStressTests(b, a)
 
     b.header('ESTRATÉGIA DE SAÍDA')
     b.simpleTable([
@@ -1558,47 +1692,10 @@ const GENERATORS = {
 
   relatorio_stress: (im, an) => {
     const b = new DocBuilder('Análise de Risco', im.zona || '', im)
-    const st = an?.stress_tests
-    const parsed = typeof st === 'string' ? JSON.parse(st || 'null') : st
-    if (!parsed) { b.text('Sem stress tests calculados.'); return b.end() }
+    const a = an || {}
+    if (!a.stress_tests) { b.text('Sem stress tests calculados.'); b.disclaimer(); return b.end() }
 
-    const resiliente = parsed.veredicto === 'resiliente'
-
-    b.header('VEREDICTO')
-    b.verdict(
-      resiliente ? 'Investimento resiliente — mantém resultado positivo em todos os cenários.' : 'Atenção — cenários com risco de prejuízo identificados.',
-      resiliente
-    )
-    b.space(6)
-
-    b.header('CENÁRIOS PRINCIPAIS')
-    b.bigNumbers([
-      { label: 'Pior Cenário', value: EUR(parsed.pior?.lucro_liquido) },
-      { label: 'Cenário Base', value: EUR(parsed.base?.lucro_liquido) },
-      { label: 'Melhor Cenário', value: EUR(parsed.melhor?.lucro_liquido) },
-    ])
-    b.inlineData([
-      { label: 'Pior', value: parsed.pior?.label || '—' },
-      { label: 'Melhor', value: parsed.melhor?.label || '—' },
-    ])
-    b.space(6)
-
-    if (parsed.downside?.length) {
-      b.header('CENÁRIOS DE RISCO')
-      b.colTable(
-        [['Cenário', 110], ['Descrição', 140], ['Lucro Líq.', 80], ['Delta', 70], ['RA', 55]],
-        parsed.downside.map(s => ({ _values: [s.label, s.descricao || '', EUR(s.lucro_liquido), EUR(s.delta), PCT(s.retorno_anualizado)] }))
-      )
-    }
-
-    if (parsed.upside?.length) {
-      b.space(6)
-      b.header('CENÁRIOS FAVORÁVEIS')
-      b.colTable(
-        [['Cenário', 110], ['Descrição', 140], ['Lucro Líq.', 80], ['Delta', 70], ['RA', 55]],
-        parsed.upside.map(s => ({ _values: [s.label, s.descricao || '', EUR(s.lucro_liquido), EUR(s.delta), PCT(s.retorno_anualizado)] }))
-      )
-    }
+    renderStressTests(b, a, { title: 'ANÁLISE DE RISCO — STRESS TESTS' })
 
     b.disclaimer()
     return b.end()
@@ -1732,45 +1829,7 @@ const GENERATORS = {
 
     b.note(`Pressupostos: ${a.perc_financiamento ? `Financiamento ${a.perc_financiamento}%` : '100% capitais próprios'} · Regime fiscal: ${a.regime_fiscal || 'Empresa'} · Prazo: ${meses} meses`)
 
-    // ── STRESS TESTS ──
-    let st = a.stress_tests
-    if (typeof st === 'string') try { st = JSON.parse(st) } catch { st = null }
-    if (st) {
-      b.newPage()
-      b.header('ANÁLISE DE SENSIBILIDADE — STRESS TESTS')
-
-      const resiliente = st.veredicto === 'resiliente'
-      b.verdict(
-        resiliente ? 'Investimento resiliente — mantém resultado positivo em todos os cenários testados.' : 'Atenção — identificados cenários com risco de prejuízo.',
-        resiliente
-      )
-      b.space(4)
-
-      b.bigNumbers([
-        { label: 'Pior Cenário', value: EUR(st.pior?.lucro_liquido) },
-        { label: 'Cenário Base', value: EUR(st.base?.lucro_liquido) },
-        { label: 'Melhor Cenário', value: EUR(st.melhor?.lucro_liquido) },
-      ])
-      b.space(6)
-
-      if (st.downside?.length) {
-        b.subheader('Cenários de Risco (Downside)')
-        b.colTable(
-          [['Cenário', 100], ['Descrição', 140], ['Lucro Líq.', 75], ['Delta', 65], ['RA', 55]],
-          st.downside.map(s => ({ _values: [s.label, s.descricao || '', EUR(s.lucro_liquido), EUR(s.delta), PCT(s.retorno_anualizado)] }))
-        )
-        b.space(6)
-      }
-
-      if (st.upside?.length) {
-        b.subheader('Cenários Favoráveis (Upside)')
-        b.colTable(
-          [['Cenário', 100], ['Descrição', 140], ['Lucro Líq.', 75], ['Delta', 65], ['RA', 55]],
-          st.upside.map(s => ({ _values: [s.label, s.descricao || '', EUR(s.lucro_liquido), EUR(s.delta), PCT(s.retorno_anualizado)] }))
-        )
-        b.space(6)
-      }
-    }
+    renderStressTests(b, a, { newPage: true })
 
     // ── CONCLUSÃO ──
     b.newPage()
@@ -1778,12 +1837,14 @@ const GENERATORS = {
 
     const raVal = a.retorno_anualizado || 0
     const rtVal = a.retorno_total || 0
+    let stParsed = a.stress_tests
+    if (typeof stParsed === 'string') try { stParsed = JSON.parse(stParsed) } catch { stParsed = null }
     let conclusao = `O projecto apresenta um perfil de risco-retorno atractivo: no cenário base conservador, o investimento gera um retorno total de ${rtVal}% e anualizado de ${raVal}% num prazo de ${meses} meses.`
-    if (st) {
-      if (st.pior?.lucro_liquido > 0) {
-        conclusao += ` O investimento mantém lucro positivo mesmo no pior cenário (${EUR(st.pior.lucro_liquido)}), o que valida a solidez estrutural do projecto.`
-      } else if (st.pior?.lucro_liquido != null) {
-        conclusao += ` No pior cenário, o lucro estimado é de ${EUR(st.pior.lucro_liquido)}, o que requer atenção ao risco.`
+    if (stParsed) {
+      if (stParsed.pior?.lucro_liquido > 0) {
+        conclusao += ` O investimento mantém lucro positivo mesmo no pior cenário (${EUR(stParsed.pior.lucro_liquido)}), o que valida a solidez estrutural do projecto.`
+      } else if (stParsed.pior?.lucro_liquido != null) {
+        conclusao += ` No pior cenário, o lucro estimado é de ${EUR(stParsed.pior.lucro_liquido)}, o que requer atenção ao risco.`
       }
     }
     if (im.zona) {
@@ -2062,35 +2123,10 @@ export function generateCompiledReport(imovel, analise, seccoes = []) {
     }
 
     if (seccao === 'stress_tests') {
-      const st = typeof an.stress_tests === 'string' ? JSON.parse(an.stress_tests || 'null') : an.stress_tests
-      if (st) {
+      if (an.stress_tests) {
         if (hasContent) b.newPage()
         hasContent = true
-        b.header('ANÁLISE DE RISCO')
-        b.verdict(
-          st.veredicto === 'resiliente' ? 'Investimento resiliente — lucro positivo em todos os cenários.' : 'Atenção — cenários com risco de prejuízo.',
-          st.veredicto === 'resiliente'
-        )
-        b.bigNumbers([
-          { label: 'Pior Cenário', value: EUR(st.pior?.lucro_liquido) },
-          { label: 'Base', value: EUR(st.base?.lucro_liquido) },
-          { label: 'Melhor', value: EUR(st.melhor?.lucro_liquido) },
-        ])
-        if (st.downside?.length) {
-          b.subheader('Cenários de risco')
-          b.colTable(
-            [['Cenário', 110], ['Descrição', 150], ['Lucro', 75], ['Delta', 65], ['RA', 50]],
-            st.downside.map(s => ({ _values: [s.label, s.descricao || '', EUR(s.lucro_liquido), EUR(s.delta), PCT(s.retorno_anualizado)] }))
-          )
-        }
-        if (st.upside?.length) {
-          b.space(4)
-          b.subheader('Cenários favoráveis')
-          b.colTable(
-            [['Cenário', 110], ['Descrição', 150], ['Lucro', 75], ['Delta', 65], ['RA', 50]],
-            st.upside.map(s => ({ _values: [s.label, s.descricao || '', EUR(s.lucro_liquido), EUR(s.delta), PCT(s.retorno_anualizado)] }))
-          )
-        }
+        renderStressTests(b, an, { title: 'ANÁLISE DE RISCO — STRESS TESTS' })
       }
       continue
     }
