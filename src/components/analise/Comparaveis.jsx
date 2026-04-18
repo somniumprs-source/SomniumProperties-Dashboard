@@ -37,8 +37,8 @@ export function Comparaveis({ analise, onUpdate }) {
       setTipologias(parsed)
       setTipCount(parsed.length)
     } else {
-      setTipologias([{ ...EMPTY_TIP }])
-      setTipCount(1)
+      setTipologias([])
+      setTipCount(0)
     }
   }, [analise?.id])
 
@@ -47,11 +47,18 @@ export function Comparaveis({ analise, onUpdate }) {
     onUpdate({ comparaveis: JSON.stringify(updated) })
   }
 
-  const changeTipCount = (n) => {
-    const next = [...tipologias]
-    while (next.length < n) next.push({ ...EMPTY_TIP, tipologia: `T${next.length + 1}`, comparaveis: Array(5).fill(null).map(() => ({ ...EMPTY_COMP, ajustes: { ...EMPTY_COMP.ajustes } })) })
-    setTipCount(n)
-    setTipologias(next.slice(0, n))
+  const addTipologia = () => {
+    const next = [...tipologias, { ...EMPTY_TIP, tipologia: `T${tipologias.length + 1}`, comparaveis: Array(5).fill(null).map(() => ({ ...EMPTY_COMP, ajustes: { ...EMPTY_COMP.ajustes } })) }]
+    setTipologias(next)
+    setTipCount(next.length)
+    save(next)
+  }
+
+  const removeTipologia = (idx) => {
+    const next = tipologias.filter((_, i) => i !== idx)
+    setTipologias(next)
+    setTipCount(next.length)
+    save(next)
   }
 
   const updateTip = (tIdx, field, value) => {
@@ -137,18 +144,16 @@ export function Comparaveis({ analise, onUpdate }) {
 
   return (
     <div className="space-y-6">
-      {/* Selector de tipologias + toggle auto */}
+      {/* Barra de acções */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500">Tipologias:</span>
-          {[1, 2, 3].map(n => (
-            <button key={n} onClick={() => changeTipCount(n)}
-              className={`w-8 h-8 rounded-lg text-sm font-semibold transition-colors ${
-                tipCount >= n ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-              }`}>
-              {n}
+          {tipCount < 3 && (
+            <button onClick={addTipologia}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-900 text-white hover:bg-gray-800 transition-colors">
+              + Tipologia
             </button>
-          ))}
+          )}
+          <span className="text-xs text-gray-400">{tipCount} de 3</span>
         </div>
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-1.5 cursor-pointer">
@@ -201,6 +206,8 @@ export function Comparaveis({ analise, onUpdate }) {
             <div className="px-4 py-3 bg-gray-50 flex items-center gap-3 flex-wrap">
               <input value={tip.tipologia} onChange={e => updateTip(tIdx, 'tipologia', e.target.value)}
                 className="text-sm font-semibold bg-transparent border-none outline-none w-20" />
+              <button onClick={() => { if (confirm(`Remover tipologia "${tip.tipologia}"?`)) removeTipologia(tIdx) }}
+                className="text-xs text-red-400 hover:text-red-600 transition-colors">✕</button>
               <div className="flex gap-3 text-xs text-gray-400 items-center flex-wrap">
                 <label>Área imóvel: <input type="number" value={tip.area || ''} onChange={e => updateTip(tIdx, 'area', parseFloat(e.target.value) || 0)}
                   className="w-16 bg-white border rounded px-1 py-0.5 font-mono" /> m²</label>
