@@ -52,21 +52,6 @@ const upload = multer({
   },
 })
 
-const stressDir = path.resolve(__dirname, '../../public/uploads/stress_tests')
-try { mkdirSync(stressDir, { recursive: true }) } catch {}
-
-const stressStorage = multer.diskStorage({
-  destination: stressDir,
-  filename: (req, file, cb) => {
-    cb(null, `${req.params.id}.png`)
-  },
-})
-const uploadStress = multer({
-  storage: stressStorage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => cb(null, /\.png$/i.test(path.extname(file.originalname))),
-})
-
 const imoveisStorage = multer.diskStorage({
   destination: imoveisUploadsDir,
   filename: (req, file, cb) => {
@@ -278,12 +263,6 @@ router.get('/imoveis/:id/relatorio-investidor', async (req, res) => {
     const doc = generateCompiledReport(imovel, analise || null, seccoes)
     doc.pipe(res)
   } catch (e) { res.status(500).json({ error: e.message }) }
-})
-
-// ── Upload de screenshot dos stress tests ───────────────────
-router.post('/analises/:id/stress-screenshot', uploadStress.single('screenshot'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Ficheiro não recebido' })
-  res.json({ ok: true, path: `/uploads/stress_tests/${req.params.id}.png` })
 })
 
 crudRoutes('/investidores', Investidores)
