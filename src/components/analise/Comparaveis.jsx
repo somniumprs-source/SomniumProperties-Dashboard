@@ -33,13 +33,8 @@ export function Comparaveis({ analise, onUpdate }) {
     } catch {
       parsed = []
     }
-    if (parsed.length > 0) {
-      setTipologias(parsed)
-      setTipCount(parsed.length)
-    } else {
-      setTipologias([])
-      setTipCount(0)
-    }
+    setTipologias(parsed)
+    setTipCount(parsed.length)
   }, [analise?.id])
 
   const save = (updated) => {
@@ -48,15 +43,15 @@ export function Comparaveis({ analise, onUpdate }) {
   }
 
   const addTipologia = () => {
-    const next = [...tipologias, { ...EMPTY_TIP, tipologia: `T${tipologias.length + 1}`, comparaveis: Array(5).fill(null).map(() => ({ ...EMPTY_COMP, ajustes: { ...EMPTY_COMP.ajustes } })) }]
-    setTipologias(next)
+    const newTip = { ...EMPTY_TIP, tipologia: `T${tipologias.length + 1}`, comparaveis: Array(5).fill(null).map(() => ({ ...EMPTY_COMP, ajustes: { ...EMPTY_COMP.ajustes } })) }
+    const next = [...tipologias, newTip]
     setTipCount(next.length)
     save(next)
   }
 
   const removeTipologia = (idx) => {
+    if (!confirm(`Remover tipologia "${tipologias[idx]?.tipologia}"?`)) return
     const next = tipologias.filter((_, i) => i !== idx)
-    setTipologias(next)
     setTipCount(next.length)
     save(next)
   }
@@ -206,7 +201,7 @@ export function Comparaveis({ analise, onUpdate }) {
             <div className="px-4 py-3 bg-gray-50 flex items-center gap-3 flex-wrap">
               <input value={tip.tipologia} onChange={e => updateTip(tIdx, 'tipologia', e.target.value)}
                 className="text-sm font-semibold bg-transparent border-none outline-none w-20" />
-              <button onClick={() => { if (confirm(`Remover tipologia "${tip.tipologia}"?`)) removeTipologia(tIdx) }}
+              <button onClick={() => removeTipologia(tIdx)}
                 className="text-xs text-red-400 hover:text-red-600 transition-colors">✕</button>
               <div className="flex gap-3 text-xs text-gray-400 items-center flex-wrap">
                 <label>Área imóvel: <input type="number" value={tip.area || ''} onChange={e => updateTip(tIdx, 'area', parseFloat(e.target.value) || 0)}
