@@ -1,18 +1,55 @@
 /**
  * Stress Tests — tabelas downside/upside + veredicto executivo.
+ * Captura automatica de screenshot para inclusao nos PDFs.
  */
+import { useRef, useEffect, useCallback } from 'react'
 import { EUR, PCT } from '../../constants.js'
+import { apiFetch } from '../../lib/api.js'
 
 export function StressTests({ analise }) {
   const raw = analise?.stress_tests
   const st = typeof raw === 'string' ? JSON.parse(raw || 'null') : raw
+  const containerRef = useRef(null)
+  const capturedRef = useRef(null) // evitar capturas duplicadas
+
+  const captureScreenshot = useCallback(async () => {
+    if (!containerRef.current || !analise?.id || !st) return
+    // Evitar captura duplicada para os mesmos dados
+    const key = `${analise.id}_${JSON.stringify(st.base?.lucro_liquido)}`
+    if (capturedRef.current === key) return
+    capturedRef.current = key
+
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const canvas = await html2canvas(containerRef.current, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false,
+      })
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/png', 0.95))
+      const form = new FormData()
+      form.append('screenshot', blob, `stress_tests_${analise.id}.png`)
+      await apiFetch(`/api/crm/analises/${analise.id}/stress-screenshot`, { method: 'POST', body: form })
+    } catch (e) {
+      console.warn('[StressTests] Screenshot falhou:', e.message)
+    }
+  }, [analise?.id, st])
+
+  useEffect(() => {
+    if (!st) return
+    // Aguardar render completo antes de capturar
+    const timer = setTimeout(captureScreenshot, 500)
+    return () => clearTimeout(timer)
+  }, [captureScreenshot, st])
+
   if (!st) return <p className="text-sm text-gray-400 py-8 text-center">Preenche a calculadora para ver stress tests</p>
 
   const verdColor = st.veredicto === 'resiliente' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
   const verdText = st.veredicto === 'resiliente' ? 'text-green-700' : 'text-red-700'
 
   return (
-    <div className="space-y-6">
+    <div ref={containerRef} className="space-y-6">
       {/* Veredicto executivo */}
       <div className={`rounded-xl border p-4 ${verdColor}`}>
         <p className={`text-sm font-semibold ${verdText}`}>
