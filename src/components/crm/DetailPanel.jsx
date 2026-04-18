@@ -70,10 +70,6 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
     { tipo: 'ficha_cedencia',            label: 'Ficha de Cedência',              compilavel: 'ficha_cedencia' },
     { tipo: 'ficha_acompanhamento_obra', label: 'Acompanhamento de Obra',         compilavel: 'ficha_acompanhamento_obra' },
     { tipo: 'ficha_descarte',            label: 'Ficha de Descarte',              compilavel: 'ficha_descarte' },
-    { tipo: 'relatorio_investimento',    label: 'Análise de Investimento (Inv.)', compilavel: 'investimento' },
-    { tipo: 'relatorio_comparaveis',     label: 'Estudo Comparáveis (Inv.)',      compilavel: 'comparaveis' },
-    { tipo: 'relatorio_caep',            label: 'Distribuição CAEP',              compilavel: 'caep' },
-    { tipo: 'relatorio_stress',          label: 'Stress Tests',                   compilavel: 'stress_tests' },
   ]
 
   const [selected, setSelected] = useState(new Set())
