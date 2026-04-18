@@ -24,24 +24,30 @@ async function getToken() {
 
 // ── Tab Documentos para Imóveis ─────────────────────────────
 const DOC_LABELS = {
-  ficha_imovel: 'Ficha do Imóvel', ficha_pre_visita: 'Ficha Pré-Visita',
-  checklist_visita: 'Checklist Visita', relatorio_visita: 'Relatório de Visita',
-  analise_rentabilidade: 'Análise de Rentabilidade', estudo_comparaveis: 'Estudo Comparáveis',
-  proposta_formal: 'Proposta Formal', apresentacao_investidor: 'Apresentação Investidor',
-  resumo_negociacao: 'Resumo Negociação', resumo_acordo: 'Resumo Acordo',
-  dossier_investimento: 'Dossier Investimento', ficha_follow_up: 'Ficha Follow-Up',
-  ficha_cedencia: 'Ficha Cedência', ficha_acompanhamento_obra: 'Ficha Acompanhamento Obra',
-  apresentacao_negocio: 'Apresentação de Negócio (Anónima)',
+  ficha_imovel: 'Ficha do Imóvel',
+  ficha_visita: 'Ficha de Visita',
+  analise_rentabilidade: 'Análise de Rentabilidade',
+  estudo_comparaveis: 'Estudo Comparáveis',
+  proposta_formal: 'Proposta Formal',
+  dossier_investidor: 'Dossier de Investimento',
+  proposta_investimento_anonima: 'Proposta de Investimento (Anónima)',
+  resumo_negociacao: 'Resumo Negociação',
+  resumo_acordo: 'Resumo Acordo',
+  ficha_follow_up: 'Ficha Follow-Up',
+  ficha_cedencia: 'Ficha Cedência',
+  ficha_acompanhamento_obra: 'Ficha Acompanhamento Obra',
+  ficha_descarte: 'Ficha de Descarte',
 }
 const ESTADO_DOCS = {
   'Adicionado': ['ficha_imovel'], 'Pré-aprovação': ['ficha_imovel'],
-  'Necessidade de Visita': ['ficha_pre_visita'], 'Visita Marcada': ['checklist_visita'],
-  'Estudo de VVR': ['relatorio_visita', 'analise_rentabilidade', 'estudo_comparaveis'],
+  'Necessidade de Visita': ['ficha_visita'],
+  'Estudo de VVR': ['analise_rentabilidade', 'estudo_comparaveis'],
   'Criar Proposta ao Proprietário': ['proposta_formal'], 'Enviar proposta ao Proprietário': ['proposta_formal'],
   'Em negociação': ['resumo_negociacao'], 'Proposta aceite': ['resumo_acordo'],
-  'Enviar proposta ao investidor': ['apresentacao_investidor', 'dossier_investimento', 'apresentacao_negocio'],
+  'Enviar proposta ao investidor': ['dossier_investidor', 'proposta_investimento_anonima'],
   'Follow Up após proposta': ['ficha_follow_up'], 'Follow UP': ['ficha_follow_up'],
   'Wholesaling': ['ficha_cedencia'], 'CAEP': ['ficha_acompanhamento_obra'], 'Fix and Flip': ['ficha_acompanhamento_obra'],
+  'Não interessa': ['ficha_descarte'],
 }
 
 // ── Tab Documentos (lista única, todos iguais, checkbox para dossier) ──
@@ -52,24 +58,18 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
   // Lista única — todos são "documentos", sem distinção
   const ALL_DOCS = [
     { tipo: 'ficha_imovel',              label: 'Ficha do Imóvel',               compilavel: 'ficha_imovel' },
-    { tipo: 'ficha_pre_visita',          label: 'Ficha Pré-Visita',              compilavel: 'ficha_pre_visita' },
-    { tipo: 'checklist_visita',          label: 'Checklist de Visita',            compilavel: 'checklist_visita' },
-    { tipo: 'relatorio_visita',          label: 'Relatório de Visita',            compilavel: 'relatorio_visita' },
+    { tipo: 'ficha_visita',              label: 'Ficha de Visita',               compilavel: 'ficha_visita' },
     { tipo: 'analise_rentabilidade',     label: 'Análise de Rentabilidade',       compilavel: 'analise_rentabilidade' },
     { tipo: 'estudo_comparaveis',        label: 'Estudo de Comparáveis',          compilavel: 'estudo_comparaveis' },
     { tipo: 'proposta_formal',           label: 'Proposta ao Proprietário',       compilavel: 'proposta_formal' },
-    { tipo: 'apresentacao_investidor',   label: 'Apresentação ao Investidor',     compilavel: 'apresentacao_investidor' },
-    { tipo: 'apresentacao_negocio',     label: 'Apresentação de Negócio (Anónima)', compilavel: 'apresentacao_negocio' },
+    { tipo: 'dossier_investidor',        label: 'Dossier de Investimento',        compilavel: 'dossier_investidor' },
+    { tipo: 'proposta_investimento_anonima', label: 'Proposta de Investimento (Anónima)', compilavel: 'proposta_investimento_anonima' },
     { tipo: 'resumo_negociacao',         label: 'Resumo de Negociação',           compilavel: 'resumo_negociacao' },
     { tipo: 'resumo_acordo',             label: 'Resumo de Acordo',               compilavel: 'resumo_acordo' },
-    { tipo: 'dossier_investimento',      label: 'Dossier de Investimento',        compilavel: 'dossier_investimento' },
     { tipo: 'ficha_follow_up',           label: 'Ficha de Follow Up',             compilavel: 'ficha_follow_up' },
     { tipo: 'ficha_cedencia',            label: 'Ficha de Cedência',              compilavel: 'ficha_cedencia' },
     { tipo: 'ficha_acompanhamento_obra', label: 'Acompanhamento de Obra',         compilavel: 'ficha_acompanhamento_obra' },
-    { tipo: 'relatorio_investimento',    label: 'Análise de Investimento (Inv.)', compilavel: 'investimento' },
-    { tipo: 'relatorio_comparaveis',     label: 'Estudo Comparáveis (Inv.)',      compilavel: 'comparaveis' },
-    { tipo: 'relatorio_caep',            label: 'Distribuição CAEP',              compilavel: 'caep' },
-    { tipo: 'relatorio_stress',          label: 'Stress Tests',                   compilavel: 'stress_tests' },
+    { tipo: 'ficha_descarte',            label: 'Ficha de Descarte',              compilavel: 'ficha_descarte' },
   ]
 
   const [selected, setSelected] = useState(new Set())

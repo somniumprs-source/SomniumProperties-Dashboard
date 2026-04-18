@@ -4,8 +4,26 @@
  */
 import { Router } from 'express'
 import { randomUUID } from 'crypto'
+import { mkdirSync } from 'fs'
+import multer from 'multer'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import pool from './pg.js'
 import { calcAnalise, calcStressTests, calcCAEP, quickCheck } from './calcEngine.js'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const stressDir = path.resolve(__dirname, '../../public/uploads/stress_tests')
+try { mkdirSync(stressDir, { recursive: true }) } catch {}
+
+const stressStorage = multer.diskStorage({
+  destination: stressDir,
+  filename: (req, file, cb) => cb(null, `${req.params.id}.png`),
+})
+const uploadStress = multer({
+  storage: stressStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => cb(null, /\.png$/i.test(path.extname(file.originalname))),
+})
 
 const router = Router()
 
@@ -241,6 +259,12 @@ router.get('/analises/:id/stress', async (req, res) => {
     if (!analise) return res.status(404).json({ error: 'Análise não encontrada' })
     res.json(calcStressTests(analise))
   } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Upload screenshot dos stress tests ──────────────────────
+router.post('/analises/:id/stress-screenshot', uploadStress.single('screenshot'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Ficheiro não recebido' })
+  res.json({ ok: true, path: `/uploads/stress_tests/${req.params.id}.png` })
 })
 
 // ── Quick Check ──────────────────────────────────────────────
