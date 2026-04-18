@@ -39,32 +39,38 @@ function parseFotos(im) {
 
 // ── Estado → Documentos ──────────────────────────────────────
 const ESTADO_DOC_MAP = {
-  'Adicionado': ['ficha_imovel'],
-  'Necessidade de Visita': ['ficha_pre_visita'],
-  'Visita Marcada': ['checklist_visita'],
-  'Estudo de VVR': ['relatorio_visita', 'analise_rentabilidade', 'estudo_comparaveis'],
-  'Criar Proposta ao Proprietário': ['proposta_formal'],
+  'Adicionado':                      ['ficha_imovel'],
+  'Necessidade de Visita':           ['ficha_visita'],
+  'Estudo de VVR':                   ['analise_rentabilidade', 'estudo_comparaveis'],
+  'Criar Proposta ao Proprietário':  ['proposta_formal'],
   'Enviar proposta ao Proprietário': ['proposta_formal'],
-  'Enviar proposta ao investidor': ['apresentacao_investidor'],
-  'Em negociação': ['resumo_negociacao'],
-  'Proposta aceite': ['resumo_acordo'],
-  'Enviar proposta ao investidor': ['dossier_investimento', 'apresentacao_negocio'],
-  'Follow Up após proposta': ['ficha_follow_up'],
-  'Follow UP': ['ficha_follow_up'],
-  'Wholesaling': ['ficha_cedencia'],
-  'CAEP': ['ficha_acompanhamento_obra'],
-  'Fix and Flip': ['ficha_acompanhamento_obra'],
+  'Em negociação':                   ['resumo_negociacao'],
+  'Proposta aceite':                 ['resumo_acordo'],
+  'Enviar proposta ao investidor':   ['dossier_investidor', 'proposta_investimento_anonima'],
+  'Follow Up após proposta':         ['ficha_follow_up'],
+  'Follow UP':                       ['ficha_follow_up'],
+  'Wholesaling':                     ['ficha_cedencia'],
+  'CAEP':                            ['ficha_acompanhamento_obra'],
+  'Fix and Flip':                    ['ficha_acompanhamento_obra'],
+  'Não interessa':                   ['ficha_descarte'],
 }
 
 export function getDocsForEstado(estado) { return ESTADO_DOC_MAP[estado] || [] }
 
 const DOC_LABELS = {
-  ficha_imovel: 'Ficha do Imóvel', ficha_pre_visita: 'Ficha Pré-Visita', checklist_visita: 'Checklist de Visita',
-  relatorio_visita: 'Relatório de Visita', analise_rentabilidade: 'Análise de Rentabilidade', estudo_comparaveis: 'Estudo de Comparáveis',
-  proposta_formal: 'Proposta ao Proprietário', apresentacao_investidor: 'Apresentação ao Investidor',
-  resumo_negociacao: 'Resumo de Negociação', resumo_acordo: 'Resumo de Acordo', dossier_investimento: 'Dossier de Investimento',
-  ficha_follow_up: 'Ficha de Follow Up', ficha_cedencia: 'Ficha de Cedência', ficha_acompanhamento_obra: 'Acompanhamento de Obra',
-  apresentacao_negocio: 'Apresentação de Negócio (Anónima)',
+  ficha_imovel: 'Ficha do Imóvel',
+  ficha_visita: 'Ficha de Visita',
+  analise_rentabilidade: 'Análise de Rentabilidade',
+  estudo_comparaveis: 'Estudo de Comparáveis',
+  proposta_formal: 'Proposta ao Proprietário',
+  dossier_investidor: 'Dossier de Investimento',
+  proposta_investimento_anonima: 'Proposta de Investimento (Anónima)',
+  resumo_negociacao: 'Resumo de Negociação',
+  resumo_acordo: 'Resumo de Acordo',
+  ficha_follow_up: 'Ficha de Follow Up',
+  ficha_cedencia: 'Ficha de Cedência',
+  ficha_acompanhamento_obra: 'Acompanhamento de Obra',
+  ficha_descarte: 'Ficha de Descarte',
 }
 
 export function generateDoc(tipo, imovel, analise = null) {
@@ -484,11 +490,15 @@ const GENERATORS = {
   },
 
   // ── 2. FICHA PRÉ-VISITA ────────────────────────────────────
-  ficha_pre_visita: (im) => {
+  // ── 2. FICHA DE VISITA (documento único: pré-visita + checklist + relatório) ──
+  ficha_visita: (im) => {
     const fotos = parseFotos(im)
-    const b = new DocBuilder('Ficha Pré-Visita', im.zona || '', im)
+    const b = new DocBuilder('Ficha de Visita', `${im.zona || ''} · ${im.tipologia || ''}`, im)
 
-    // ── Resumo executivo do imóvel ──
+    // ═══════════════════════════════════════════════════════════
+    // BLOCO A — PRÉ-VISITA
+    // ═══════════════════════════════════════════════════════════
+
     b.header('IDENTIFICAÇÃO DO IMÓVEL')
     b.simpleTable([
       { label: 'Nome / Referência', value: im.nome },
@@ -499,11 +509,11 @@ const GENERATORS = {
       { label: 'Consultor Responsável', value: im.nome_consultor },
       { label: 'Data Adicionado', value: FDATE(im.data_adicionado) },
       { label: 'Data da Chamada', value: FDATE(im.data_chamada) },
+      { label: 'Data da Visita', value: FDATE(im.data_visita) },
       { label: 'Link do Anúncio', value: im.link || '—' },
     ])
     b.space(4)
 
-    // ── Áreas e características ──
     b.header('ÁREAS E CARACTERÍSTICAS')
     b.simpleTable([
       { label: 'Área Útil', value: im.area_util ? `${im.area_util} m²` : '—' },
@@ -512,7 +522,6 @@ const GENERATORS = {
     ])
     b.space(4)
 
-    // ── Valores financeiros ──
     b.header('ENQUADRAMENTO FINANCEIRO')
     b.bigNumbers([
       { label: 'Ask Price', value: EUR(im.ask_price) },
@@ -527,13 +536,13 @@ const GENERATORS = {
     ])
     b.space(4)
 
-    // ── Fotografias do anúncio ──
     if (fotos.length > 0) {
       b.photos(fotos, 'FOTOGRAFIAS DO ANÚNCIO')
     }
 
-    // ── Pontos a avaliar ── (organizado por categorias)
-    b.header('AVALIAÇÃO ESTRUTURAL')
+    // Pontos a avaliar antes da visita
+    b.header('PONTOS A AVALIAR NA VISITA')
+    b.subheader('Estrutural')
     b.simpleTable([
       'Fachada: fissuras, humidade, descasque de reboco, eflorescências',
       'Telhado / cobertura: telhas partidas, infiltrações, isolamento térmico',
@@ -545,7 +554,7 @@ const GENERATORS = {
     ].map(p => ({ label: `□  ${p}`, value: '' })))
     b.space(4)
 
-    b.header('INSTALAÇÕES TÉCNICAS')
+    b.subheader('Instalações Técnicas')
     b.simpleTable([
       'Quadro eléctrico: disjuntores, terra, estado geral, potência contratada',
       'Tomadas e interruptores: quantidade e funcionamento',
@@ -557,7 +566,7 @@ const GENERATORS = {
     ].map(p => ({ label: `□  ${p}`, value: '' })))
     b.space(4)
 
-    b.header('CAIXILHARIA E ISOLAMENTO')
+    b.subheader('Caixilharia e Isolamento')
     b.simpleTable([
       'Janelas: material (alumínio, PVC, madeira), vidro simples ou duplo',
       'Estores / portadas: funcionamento e estado',
@@ -566,7 +575,7 @@ const GENERATORS = {
     ].map(p => ({ label: `□  ${p}`, value: '' })))
     b.space(4)
 
-    b.header('ESPAÇOS HÚMIDOS')
+    b.subheader('Espaços Húmidos')
     b.simpleTable([
       'Cozinha: bancada, armários, equipamentos, ventilação, ponto de água',
       'WC: louças sanitárias, torneiras, impermeabilização, ventilação',
@@ -574,7 +583,7 @@ const GENERATORS = {
     ].map(p => ({ label: `□  ${p}`, value: '' })))
     b.space(4)
 
-    b.header('ENVOLVENTE E LOCALIZAÇÃO')
+    b.subheader('Envolvente e Localização')
     b.simpleTable([
       'Orientação solar e luminosidade natural dos compartimentos',
       'Acessos ao imóvel: estrada, passeios, rampa, escadas',
@@ -586,7 +595,7 @@ const GENERATORS = {
     ].map(p => ({ label: `□  ${p}`, value: '' })))
     b.space(4)
 
-    // ── Perguntas ao proprietário ──
+    // Perguntas ao proprietário
     b.header('PERGUNTAS AO PROPRIETÁRIO / MEDIADOR')
     b.subheader('Motivação e Urgência')
     b.simpleTable([
@@ -616,7 +625,7 @@ const GENERATORS = {
     ].map(p => ({ label: `□  ${p}`, value: '' })))
     b.space(4)
 
-    // ── Documentos ──
+    // Documentos a solicitar
     b.header('DOCUMENTOS A SOLICITAR')
     b.subheader('Obrigatórios')
     b.simpleTable([
@@ -639,66 +648,27 @@ const GENERATORS = {
     ].map(p => ({ label: `□  ${p}`, value: '' })))
     b.space(4)
 
-    // ── Notas do imóvel e espaço para notas de campo ──
     if (im.notas) {
       b.header('NOTAS DO CRM')
       b.textBlock(im.notas)
       b.space(4)
     }
 
-    b.header('NOTAS DE CAMPO')
+    b.header('NOTAS DE CAMPO (PRÉ-VISITA)')
     b.input('Impressão geral do contacto telefónico', '', { tall: true })
     b.input('Pontos críticos a confirmar na visita', '', { tall: true })
     b.input('Estratégia de negociação a adoptar', '', { tall: true })
-
-    b.disclaimer()
-    return b.end()
-  },
-
-  // ── 3. CHECKLIST DE VISITA ──────────────────────────────────
-  checklist_visita: (im) => {
-    const fotos = parseFotos(im)
-    const b = new DocBuilder('Checklist de Visita', `${im.zona || ''} · ${im.tipologia || ''}`, im)
-
-    // ── Dados completos da visita ──
-    b.header('DADOS DA VISITA')
-    b.simpleTable([
-      { label: 'Imóvel', value: im.nome },
-      { label: 'Tipologia', value: im.tipologia },
-      { label: 'Zona', value: im.zona },
-      { label: 'Data da Visita', value: FDATE(im.data_visita) },
-      { label: 'Consultor', value: im.nome_consultor },
-      { label: 'Modelo de Negócio', value: im.modelo_negocio },
-      { label: 'Origem', value: im.origem },
-    ])
     b.space(4)
 
-    // ── Valores de referência ──
-    b.header('VALORES DE REFERÊNCIA')
-    b.bigNumbers([
-      { label: 'Ask Price', value: EUR(im.ask_price) },
-      { label: 'Obra Estimada', value: EUR(im.custo_estimado_obra) },
-      { label: 'VVR Estimado', value: EUR(im.valor_venda_remodelado) },
-    ])
-    b.simpleTable([
-      { label: 'Área Útil', value: im.area_util ? `${im.area_util} m²` : 'A confirmar' },
-      { label: 'Área Bruta', value: im.area_bruta ? `${im.area_bruta} m²` : 'A confirmar' },
-      { label: 'Preço por m² (Ask)', value: im.ask_price && im.area_util ? EUR(Math.round(im.ask_price / im.area_util)) + '/m²' : '—' },
-    ])
-    b.space(4)
+    // ═══════════════════════════════════════════════════════════
+    // BLOCO B — CHECKLIST DE VISITA
+    // ═══════════════════════════════════════════════════════════
 
-    // ── Fotografias para referência ──
-    if (fotos.length > 0) {
-      b.photos(fotos, 'FOTOGRAFIAS DE REFERÊNCIA')
-    }
-
-    // ── Avaliação por categorias com classificação ──
-    // Legenda
-    b.header('LEGENDA DE CLASSIFICAÇÃO')
+    b.newPage()
+    b.header('CHECKLIST DE VISITA')
     b.note('B = Bom (sem intervenção)  ·  R = Razoável (intervenção ligeira)  ·  M = Mau (intervenção profunda)  ·  N/A = Não aplicável')
     b.space(4)
 
-    // ESTRUTURA E EXTERIOR
     b.header('1. ESTRUTURA E EXTERIOR')
     b.colTable(
       [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
@@ -716,7 +686,6 @@ const GENERATORS = {
     )
     b.space(4)
 
-    // INTERIOR — COMPARTIMENTOS
     b.header('2. INTERIOR — COMPARTIMENTOS')
     b.colTable(
       [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
@@ -736,7 +705,6 @@ const GENERATORS = {
     )
     b.space(4)
 
-    // PAREDES, TECTOS E PAVIMENTOS
     b.header('3. PAREDES, TECTOS E PAVIMENTOS')
     b.colTable(
       [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
@@ -752,7 +720,6 @@ const GENERATORS = {
     )
     b.space(4)
 
-    // INSTALAÇÕES TÉCNICAS
     b.header('4. INSTALAÇÕES TÉCNICAS')
     b.colTable(
       [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
@@ -772,7 +739,6 @@ const GENERATORS = {
     )
     b.space(4)
 
-    // CAIXILHARIA E ISOLAMENTO
     b.header('5. CAIXILHARIA E ISOLAMENTO')
     b.colTable(
       [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
@@ -787,7 +753,6 @@ const GENERATORS = {
     )
     b.space(4)
 
-    // COZINHA E CASAS DE BANHO — DETALHE
     b.header('6. COZINHA — DETALHE')
     b.colTable(
       [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
@@ -816,7 +781,6 @@ const GENERATORS = {
     )
     b.space(4)
 
-    // ENVOLVENTE E LOCALIZAÇÃO
     b.header('8. ENVOLVENTE E LOCALIZAÇÃO')
     b.colTable(
       [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
@@ -835,7 +799,6 @@ const GENERATORS = {
     )
     b.space(4)
 
-    // CONFIRMAÇÃO DE ÁREAS
     b.header('9. CONFIRMAÇÃO DE ÁREAS E MEDIÇÕES')
     b.note('Medir ou estimar as áreas reais e comparar com o anunciado / registado.')
     b.colTable(
@@ -854,7 +817,6 @@ const GENERATORS = {
     ])
     b.space(4)
 
-    // ESTIMATIVA DE OBRA (preenchimento rápido)
     b.header('10. ESTIMATIVA PRELIMINAR DE OBRA')
     b.note('Registo rápido dos trabalhos necessários observados na visita.')
     b.colTable(
@@ -881,21 +843,33 @@ const GENERATORS = {
     b.highlight('Total Estimado de Obra (campo)', '€ _______________')
     b.space(4)
 
-    // NOTAS
-    if (im.notas) {
-      b.header('NOTAS DO CRM')
-      b.textBlock(im.notas)
-      b.space(4)
-    }
+    // ═══════════════════════════════════════════════════════════
+    // BLOCO C — RELATÓRIO E DECISÃO
+    // ═══════════════════════════════════════════════════════════
 
-    // IMPRESSÃO E DECISÃO
-    b.header('11. IMPRESSÃO GERAL')
+    b.newPage()
+    b.header('RELATÓRIO DE VISITA')
+
+    b.subheader('Estado Real do Imóvel')
+    b.input('Descrição geral do estado encontrado', '', { tall: true })
+    b.space(4)
+
+    b.subheader('Obras Necessárias')
+    b.colTable(
+      [['Trabalho', 280], ['Custo Estimado', 200]],
+      ['Demolições e remoção', 'Estrutura / alvenaria', 'Canalização', 'Electricidade',
+        'Revestimentos / acabamentos', 'Cozinha e WC', 'Caixilharia', 'Pintura', 'Outros',
+      ].map(item => ({ _values: [item, '________________'] }))
+    )
+    b.space(4)
+
+    b.header('IMPRESSÃO GERAL')
     b.input('Pontos fortes do imóvel', '', { tall: true })
     b.input('Pontos fracos / riscos identificados', '', { tall: true })
     b.input('Potencial de valorização', '', { tall: true })
     b.space(4)
 
-    b.header('12. DECISÃO')
+    b.header('DECISÃO')
     b.simpleTable([
       { label: '□  GO — Avançar para estudo de mercado e análise de rentabilidade', value: '' },
       { label: '□  SEGUNDA VISITA — Necessita validação adicional (especificar)', value: '' },
@@ -907,39 +881,6 @@ const GENERATORS = {
     b.input('Justificação da decisão', '', { tall: true })
     b.input('Próximos passos', '', { tall: true })
 
-    b.disclaimer()
-    return b.end()
-  },
-
-  // ── 4a. RELATÓRIO DE VISITA ─────────────────────────────────
-  relatorio_visita: (im) => {
-    const fotos = parseFotos(im)
-    const b = new DocBuilder('Relatório de Visita', im.zona || '', im)
-    b.header('DADOS DA VISITA')
-    b.simpleTable([
-      { label: 'Imóvel', value: im.nome }, { label: 'Zona', value: im.zona },
-      { label: 'Data Visita', value: FDATE(im.data_visita) }, { label: 'Consultor', value: im.nome_consultor },
-    ])
-    if (fotos.length > 0) { b.space(4); b.photos(fotos, 'FOTOGRAFIAS DA VISITA') }
-    b.space(4)
-    b.header('ESTADO REAL DO IMÓVEL')
-    b.metric('Descrição geral do estado encontrado', '________________')
-    b.space(4)
-    b.header('OBRAS NECESSÁRIAS')
-    b.colTable(
-      [['Trabalho', 280], ['Custo Estimado', 200]],
-      ['Demolições e remoção', 'Estrutura / alvenaria', 'Canalização', 'Electricidade',
-        'Revestimentos / acabamentos', 'Cozinha e WC', 'Caixilharia', 'Pintura', 'Outros',
-      ].map(item => ({ _values: [item, '________________'] }))
-    )
-    b.space(4)
-    b.header('DECISÃO')
-    b.simpleTable([
-      { label: '□  GO — Avançar para análise de rentabilidade', value: '' },
-      { label: '□  SEGUNDA VISITA — Necessita validação adicional', value: '' },
-      { label: '□  NO GO — Descartar', value: '' },
-    ])
-    b.metric('Justificação', '________________')
     b.disclaimer()
     return b.end()
   },
@@ -1191,8 +1132,8 @@ const GENERATORS = {
     return b.end()
   },
 
-  // ── 6. APRESENTAÇÃO AO INVESTIDOR (dossier completo com calculadora + CAEP)
-  apresentacao_investidor: (im, analise) => {
+  // ── 6. DOSSIER DE INVESTIMENTO (personalizado, com nome do investidor) ──
+  dossier_investidor: (im, analise) => {
     const fotos = parseFotos(im)
     const b = new DocBuilder('Dossier de Investimento', `Oportunidade · ${im.zona || ''}`, im)
     const a = analise || {}
@@ -1363,9 +1304,6 @@ const GENERATORS = {
     b.disclaimer()
     return b.end()
   },
-
-  // ── 9. DOSSIER DE INVESTIMENTO (versão final = apresentação)
-  dossier_investimento: (im, analise) => GENERATORS.apresentacao_investidor(im, analise),
 
   // ── 10. FICHA FOLLOW UP ───────────────────────────────────
   ficha_follow_up: (im) => {
@@ -1666,8 +1604,8 @@ const GENERATORS = {
     return b.end()
   },
 
-  // ── APRESENTAÇÃO DE NEGÓCIO (ANÓNIMA — para partilha em grupos) ──
-  apresentacao_negocio: (im, analise) => {
+  // ── PROPOSTA DE INVESTIMENTO ANÓNIMA (calculadora + orçamento de obra) ──
+  proposta_investimento_anonima: (im, analise) => {
     const a = analise || {}
     const compra = a.compra || im.valor_proposta || im.ask_price || 0
     const obra = a.obra_com_iva || a.obra || im.custo_estimado_obra || 0
@@ -1885,6 +1823,57 @@ const GENERATORS = {
     b.disclaimer()
     return b.end()
   },
+
+  // ── FICHA DE DESCARTE ─────────────────────────────────────
+  ficha_descarte: (im) => {
+    const b = new DocBuilder('Ficha de Descarte', im.zona || '', im)
+
+    b.header('DADOS DO IMÓVEL')
+    b.simpleTable([
+      { label: 'Nome / Referência', value: im.nome },
+      { label: 'Zona', value: im.zona },
+      { label: 'Tipologia', value: im.tipologia },
+      { label: 'Ask Price', value: EUR(im.ask_price) },
+      { label: 'Valor Proposta', value: EUR(im.valor_proposta) },
+      { label: 'Modelo de Negócio', value: im.modelo_negocio },
+      { label: 'Origem', value: im.origem },
+      { label: 'Consultor', value: im.nome_consultor },
+    ])
+    b.space(4)
+
+    b.header('MOTIVO DO DESCARTE')
+    b.bigNumbers([
+      { label: 'Motivo', value: im.motivo_descarte || 'Não especificado' },
+    ])
+    b.space(4)
+
+    b.header('TIMELINE')
+    b.simpleTable([
+      { label: 'Data Adicionado', value: FDATE(im.data_adicionado || im.created_at) },
+      { label: 'Data da Chamada', value: FDATE(im.data_chamada) },
+      { label: 'Data da Visita', value: FDATE(im.data_visita) },
+      { label: 'Data de Descarte', value: NOW() },
+    ])
+    b.space(4)
+
+    b.header('VALORES FINANCEIROS (NA DATA DE DESCARTE)')
+    b.simpleTable([
+      { label: 'Ask Price', value: EUR(im.ask_price) },
+      { label: 'VVR Estimado', value: EUR(im.valor_venda_remodelado) },
+      { label: 'Custo Estimado Obra', value: EUR(im.custo_estimado_obra) },
+      { label: 'ROI Estimado', value: PCT(im.roi) },
+    ])
+    b.space(4)
+
+    if (im.notas) {
+      b.header('NOTAS')
+      b.textBlock(im.notas)
+      b.space(4)
+    }
+
+    b.disclaimer()
+    return b.end()
+  },
 }
 
 // ── Compilador de relatório para investidor ─────────────────
@@ -1941,11 +1930,12 @@ export function generateCompiledReport(imovel, analise, seccoes = []) {
   // Documentos individuais que podem ser gerados directamente
   // (chave compilavel = chave tipo no GENERATORS)
   const directGenerators = [
-    'ficha_imovel', 'ficha_pre_visita', 'checklist_visita', 'relatorio_visita',
+    'ficha_imovel', 'ficha_visita',
     'analise_rentabilidade', 'estudo_comparaveis', 'proposta_formal',
-    'apresentacao_investidor', 'resumo_negociacao', 'resumo_acordo',
-    'dossier_investimento', 'ficha_follow_up', 'ficha_cedencia',
-    'ficha_acompanhamento_obra', 'apresentacao_negocio',
+    'dossier_investidor', 'proposta_investimento_anonima',
+    'resumo_negociacao', 'resumo_acordo',
+    'ficha_follow_up', 'ficha_cedencia',
+    'ficha_acompanhamento_obra', 'ficha_descarte',
   ]
 
   // Se so 1 seccao, gerar directamente esse relatorio
