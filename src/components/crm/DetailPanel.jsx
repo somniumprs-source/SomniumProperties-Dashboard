@@ -221,7 +221,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
     setSaving(true)
     try {
       // Limpar campos do form que são relações (não enviar ao PUT)
-      const { negocios, consultores, imoveis, tarefas, timeline, analises, ...cleanForm } = form
+      const { negocios, consultores, imoveis, tarefas, timeline, analises, documentos, ...cleanForm } = form
       const r = await apiFetch(`/api/crm/${endpoint}/${id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cleanForm),
       })
