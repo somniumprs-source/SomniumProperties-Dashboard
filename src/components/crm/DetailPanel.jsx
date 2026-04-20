@@ -1000,121 +1000,120 @@ const CRITERIOS_INFO = {
 // Script de perguntas SOP 2 — guião para Discovery Call
 const SCRIPT_PERGUNTAS = {
   Passivo: {
-    intro: `Bom dia/Boa tarde [Nome], obrigado por teres preenchido o formulário e por disponibilizares tempo para esta conversa. Sou o Alexandre da Somnium Properties.\n\nAntes de mais, quero perceber melhor o teu perfil enquanto investidor para garantir que conseguimos alinhar expectativas e encontrar a melhor oportunidade para ti. Vou fazer algumas perguntas sobre a tua experiência, objectivos e disponibilidade — é uma conversa aberta, não um interrogatório.`,
+    intro: `Bom dia/Boa tarde [Nome], obrigado pelo teu tempo. Sou o Alexandre da Somnium Properties.\n\nAntes de te falar do que fazemos, quero perceber o que te trouxe até nós. Vi que preencheste o formulário — o que é que te chamou a atenção no investimento imobiliário?\n\n→ Deixar falar. A resposta inicial revela motivação, urgência e nível de sofisticação. Não interromper.`,
     c1: {
       label: 'Capacidade Financeira',
-      contexto: 'Capital mínimo: €50.000. Deve ser real e rapidamente mobilizável. Não conta património teórico, imóveis, capital preso ou dependente de financiamento.',
+      contexto: 'Objectivo: perceber se o capital é real, líquido e mobilizável. Mínimo €50k. Não perguntar directamente "quanto tens" — conduzir a conversa para que revelem naturalmente.',
       perguntas: [
-        'Tens possibilidade de mobilizar o capital em 30 dias, caso surja uma oportunidade concreta?',
-        'Esse capital está em conta corrente, depósito a prazo ou noutra forma?',
-        'É capital exclusivo para investimento ou partilhado com outras finalidades?',
-        'Já mobilizaste montantes semelhantes anteriormente para investimento?',
+        { pergunta: 'Já tens uma ideia do montante que queres alocar a este tipo de investimento?', extrai: 'Range de capital. Se diz um valor concreto → bom sinal. Se diz "depende" → explorar.' },
+        { pergunta: 'Imagina que amanhã te mostro um negócio que encaixa no teu perfil. Conseguias avançar rapidamente ou precisavas de tempo para organizar as coisas?', extrai: 'Liquidez real e velocidade de decisão. "Preciso vender primeiro X" = capital preso.' },
+        { pergunta: 'Esse capital é algo que já tens separado para investimento, ou é algo que ainda estás a construir?', extrai: 'Capital exclusivo vs partilhado. Poupança dedicada vs depende de outras coisas.' },
+        { pergunta: 'Já fizeste algum investimento com montantes parecidos? Como correu essa experiência?', extrai: 'Historial de mobilização. Conforto com valores altos. Se nunca movimentou, pode hesitar.' },
       ],
-      red_flags: ['Capital dependente de venda de imóvel', 'Financiamento bancário como única fonte', 'Hesitação em falar de valores concretos'],
+      red_flags: ['Fala em valores mas não concretiza ("um bom montante", "depende")', 'Capital depende de venda de casa/herança/financiamento', 'Desconforto visível quando se fala de números', 'Montante muito abaixo de €50k sem perspectiva de crescimento'],
     },
     c2: {
       label: 'Experiência Imobiliária',
-      contexto: 'Peso reduzido para passivo. Importa mais a sofisticação financeira e historial como investidor. Foco: entender produtos estruturados e tolerar incerteza.',
+      contexto: 'Para passivo, experiência imobiliária directa é menos importante. O que interessa é sofisticação financeira: percebe o que é risco-retorno? Já investiu em algo além de depósitos? Tolera incerteza?',
       perguntas: [
-        'Que tipos de investimento já fizeste até agora? (imobiliário, ações, fundos, depósitos...)',
-        'Podes contar-me sobre um investimento que não tenha corrido como esperavas? O que aprendeste?',
-        'Para ti, o que é uma rentabilidade realista num investimento imobiliário?',
+        { pergunta: 'Fora o imobiliário, tens algum tipo de investimento activo neste momento? Ações, fundos, crypto, algum negócio?', extrai: 'Nível de sofisticação. Se só tem depósitos → precisa de mais educação. Se tem portfólio diversificado → já pensa como investidor.' },
+        { pergunta: 'Conta-me uma história de um investimento que não correu como esperavas. Todos temos uma.', extrai: 'Maturidade e tolerância ao risco. Se nunca perdeu dinheiro, pode reagir mal ao primeiro imprevisto. Como fala da perda? Com calma ou com ressentimento?' },
+        { pergunta: 'Se te disser que um projecto nosso tipicamente rende entre 15% a 25% em 12 a 18 meses, como é que isso soa para ti?', extrai: 'Calibração de expectativas. Se diz "pouco" → expectativas inflacionadas. Se diz "parece-me bem" → realista. Se diz "e a garantia?" → red flag.' },
       ],
-      red_flags: ['Expectativa de "retorno garantido"', 'Nunca investiu em nada além de depósitos', 'Não entende o conceito de risco-retorno'],
+      red_flags: ['Espera "retorno garantido" ou "sem risco"', 'Nunca investiu em nada e tem receio de tudo', 'Não distingue entre investimento e especulação', 'Compara directamente com depósitos a prazo como benchmark'],
     },
     c3: {
       label: 'Alinhamento Estratégico',
-      contexto: 'Critério MAIS IMPORTANTE para passivo. Expectativas de ROI, tolerância a imprevistos e interferência operacional devem ser compatíveis. Passivos que querem controlar tudo operacionalmente são risco.',
+      contexto: 'CRITÉRIO MAIS IMPORTANTE PARA PASSIVO. Quer perceber: delegará a operação ou quer controlar tudo? Aceita que há imprevistos em obra? As expectativas de retorno são compatíveis com o que entregamos?',
       perguntas: [
-        'Qual seria o ROI mínimo que considerarias interessante?',
-        'Descreve-me o teu cenário ideal de investimento.',
-        'Se houvesse um atraso de 3 meses numa obra, como reagirias?',
-        'Que nível de acompanhamento precisas? Relatórios mensais? Semanais? Queres estar envolvido nas decisões operacionais?',
-        'O que te faria recusar uma oportunidade mesmo com bons números?',
+        { pergunta: 'Imagina que investes connosco e o projecto está a decorrer. Como é que gostavas que fosse a tua vida nesse período? Queres acompanhar de perto, ou preferes receber um relatório e saber que está a andar?', extrai: 'Nível de envolvimento desejado. Passivo ideal: "confio e quero updates". Red flag: "quero estar em todas as decisões".' },
+        { pergunta: 'Vou ser honesto contigo: em obras, atrasos acontecem. Já tivemos projectos a atrasar 2-3 meses por licenças ou por materiais. Se isso acontecer, como reages?', extrai: 'Tolerância a imprevistos. Aceita como parte do processo ou entra em pânico? A forma como responde revela a qualidade futura da relação.' },
+        { pergunta: 'O que seria para ti o cenário de sonho neste investimento? Descreve-me o resultado ideal.', extrai: 'Expectativas de ROI e timeline. Se o cenário de sonho é "dobrar o dinheiro em 6 meses" → desalinhado. Se é "15-20% num ano, sem dores de cabeça" → alinhado.' },
+        { pergunta: 'E o contrário — o que te faria perder a confiança ou querer sair de um investimento, mesmo que os números ainda fizessem sentido?', extrai: 'Dealbreakers escondidos. Falta de comunicação? Atrasos? Mudança de plano? Saber isto agora evita problemas depois.' },
+        { pergunta: 'Tens alguma preferência de zona, tipo de imóvel ou modelo de negócio? Ou confias na análise que fazemos?', extrai: 'Quanto quer controlar. Se diz "confio em vocês" → excelente. Se tem condições muito específicas → pode ser difícil acomodar.' },
       ],
-      red_flags: ['Quer controlar decisões operacionais', 'ROI esperado acima de 30% sem risco', 'Intolerância total a atrasos ou imprevistos'],
+      red_flags: ['Quer aprovar cada decisão operacional', 'Expectativa de ROI > 30% sem risco', 'Zero tolerância a atrasos ou desvios', '"Se não for exactamente assim, eu saio"', 'Quer escolher empreiteiro, materiais, etc. (não é passivo)'],
     },
     c4: {
       label: 'Estabilidade e Credibilidade',
-      contexto: 'Coerência desde o formulário até à entrevista. Disposição para documentação KYC (obrigação legal, não opcional).',
+      contexto: 'Avaliar coerência entre o que disse no formulário e o que diz na call. A disposição para KYC não se pergunta logo — sente-se. Introduzir naturalmente quando há confiança.',
       perguntas: [
-        'Seria possível enviar-nos cópia do BI e IBAN ainda esta semana para formalização?',
-        'Qual é a origem do capital que pretendes investir? (poupança, venda de activo, actividade empresarial...)',
-        'Tens outros investimentos activos neste momento?',
+        { pergunta: 'Só por curiosidade, o que é que fazes profissionalmente? Às vezes ajuda-nos a perceber melhor o perfil.', extrai: 'Profissão e estabilidade. Revela capacidade financeira real, padrão de decisão e se o investimento faz sentido no contexto da vida dele.' },
+        { pergunta: 'Esse capital que pensas investir, vem de poupança, de alguma venda recente, actividade empresarial? Pergunto porque nos ajuda a perceber a timeline.', extrai: 'Origem do capital (compliance KYC). Formulação suave — "ajuda-nos a perceber a timeline" em vez de "temos de saber a origem".' },
+        { pergunta: 'Quando avançarmos, vamos precisar de trocar documentação — NDA, identificação, IBAN para formalizar. É algo que consegues tratar rapidamente?', extrai: 'Disposição para KYC. Introduzir como passo normal do processo, não como exigência. Se hesita ou recusa → red flag séria.' },
       ],
-      red_flags: ['Incoerência entre respostas do formulário e da entrevista', 'Recusa KYC', 'Origem do capital vaga ou evasiva'],
+      red_flags: ['Contradiz informação do formulário (capital, experiência, timeline)', 'Desconforto com documentação ("para que precisam disso?")', 'Origem do capital vaga ou muda de versão', 'Evita perguntas pessoais ou profissionais básicas'],
     },
     c5: {
       label: 'Disponibilidade e Compromisso',
-      contexto: 'Timing real de decisão, não entusiasmo. Um investidor calmo com capital reservado vale mais que um entusiasmado sem data concreta.',
+      contexto: 'Não medir entusiasmo — medir compromisso real. Um "sim entusiasmado" sem data não vale nada. Um "preciso de pensar até dia X" vale ouro.',
       perguntas: [
-        'Estás em posição de tomar uma decisão de investimento nos próximos 30 dias?',
-        'Há algum factor que possa impedir ou atrasar a tua decisão?',
-        'O que precisas da nossa parte para dizeres sim?',
-        'Tens critérios não negociáveis que devamos saber?',
-        'Estás a avaliar outras formas de investimento neste momento?',
+        { pergunta: 'Se os números fizerem sentido e estivermos alinhados, qual seria o teu timing ideal para avançar? Este mês, próximo trimestre, ou estás a pensar mais a médio prazo?', extrai: 'Timeline real. Respostas vagas ("quando surgir") = baixo compromisso. Respostas concretas ("até Junho quero ter decidido") = alto compromisso.' },
+        { pergunta: 'Há alguma coisa na tua vida neste momento que possa atrasar a decisão? Pergunto para gerir expectativas dos dois lados.', extrai: 'Impedimentos reais. Venda de imóvel? Decisão com cônjuge? Outro investimento em análise? Melhor saber agora.' },
+        { pergunta: 'O que é que precisas de ver ou ouvir da nossa parte para ficares confortável a dizer sim?', extrai: 'Critérios de decisão e objecções escondidas. Se sabe exactamente o que precisa → está perto. Se diz "não sei" → ainda está a explorar.' },
+        { pergunta: 'Estás a olhar para outras oportunidades de investimento neste momento, ou o imobiliário é o teu foco principal?', extrai: 'Competição e prioridade. Se tem 5 coisas em avaliação → baixa prioridade. Se está focado → alta probabilidade.' },
       ],
-      red_flags: ['Sem timeline definida', 'Dependente de decisão de terceiros', '"Estou a ver várias coisas" sem compromisso'],
+      red_flags: ['Sem data concreta ("logo se vê", "quando for a altura")', 'Decisão depende de terceiros sem timeline', '"Estou a ver muitas coisas" — disperso', 'Entusiasmo alto mas zero acção concreta após a call'],
     },
-    fecho: `Perfeito, [Nome]. Agradeço muito a transparência. Com base nesta conversa vou preparar uma análise do teu perfil e, se fizer sentido, apresentar-te as oportunidades que melhor se alinham com o que procuras.\n\nPróximos passos:\n1. Envio-te um resumo desta conversa por email nas próximas 24h\n2. Se avançarmos, preparo a documentação (NDA + ficha de investidor)\n3. Apresentação de oportunidade concreta dentro de [X] dias\n\nTens alguma questão?`,
+    fecho: `[Nome], gostei muito desta conversa. Fiquei com uma imagem clara do que procuras e acho que conseguimos alinhar.\n\nO que vou fazer agora:\n1. Envio-te um resumo por email nas próximas 24 horas com os pontos que falámos\n2. Se fizer sentido para ambos, preparo a documentação formal — é rápido, um NDA e a ficha de investidor\n3. Assim que estiver tudo alinhado, apresento-te a primeira oportunidade com os números todos\n\nDo teu lado, a única coisa que te peço é: pensa no que falámos e diz-me se estás confortável para avançar para o passo seguinte. Sem pressão, ao teu ritmo.\n\nAlguma questão que tenhas ficado com?`,
   },
   Ativo: {
-    intro: `Bom dia/Boa tarde [Nome], obrigado por teres preenchido o formulário e por esta conversa. Sou o Alexandre da Somnium Properties.\n\nVi pelo teu perfil que tens experiência operacional em imobiliário, o que é exactamente o que procuramos nos nossos parceiros activos. Quero perceber melhor o teu historial, capacidade e como poderias encaixar no modelo Somnium. Vou ser directo nas perguntas.`,
+    intro: `Bom dia/Boa tarde [Nome], obrigado pelo tempo. Sou o Alexandre da Somnium Properties.\n\nVi pelo teu formulário que já tens experiência em imobiliário, o que já nos coloca numa conversa diferente. Não te vou vender nada — quero perceber o que fazes, como trabalhas, e se faz sentido juntarmos forças.\n\nConta-me: como é que começaste no imobiliário?\n\n→ Deixar contar a história. Revela experiência real, ego, estilo de trabalho e honestidade. A melhor pergunta de abertura para activos.`,
     c1: {
       label: 'Capacidade Financeira',
-      contexto: 'Capital mínimo: €200.000. Margem necessária para aquisição, obra e contingências. Sem pressão de liquidez.',
+      contexto: 'Objectivo: perceber se cobre aquisição + obra + contingências (mín €200k). Activos são mais directos — pode-se falar de dinheiro mais abertamente. A questão não é só "quanto", é "quanto disponível sem stress".',
       perguntas: [
-        'Tens possibilidade de mobilizar €200k+ em 30 dias?',
-        'Esse capital cobre aquisição e obra, ou apenas a aquisição?',
-        'Tens reserva para contingências (tipicamente 10-15% do orçamento de obra)?',
-        'Já mobilizaste montantes semelhantes em projectos anteriores?',
+        { pergunta: 'Nos teus projectos anteriores, qual foi o maior montante que alocaste a um único negócio? Aquisição e obra incluídos.', extrai: 'Historial de montantes. Se já movimentou €200k+ → confortável. Se o máximo foi €80k → pode não ter escala.' },
+        { pergunta: 'Quando encontras um bom negócio, quanto tempo demoras a ter o capital disponível? Tens liquidez imediata ou precisas de organizar?', extrai: 'Velocidade de mobilização. Activos bons têm dinheiro pronto. Se precisa vender algo primeiro → atrasa o projecto.' },
+        { pergunta: 'Uma coisa que vemos muito: pessoas que cobrem a aquisição mas depois ficam apertadas na obra. Como costumas estruturar isso? Reservas contingência?', extrai: 'Maturidade financeira. Se diz "sempre guardo 10-15% extra" → excelente. Se não percebe o conceito → risco.' },
+        { pergunta: 'Se te mostrar um negócio esta semana que precisasse de €200k a €250k tudo incluído — estavas nessa faixa?', extrai: 'Confirmação directa do range. Pergunta natural após a conversa sobre projectos anteriores. A resposta revela se está no mínimo ou acima.' },
       ],
-      red_flags: ['Capital cobre só aquisição sem margem para obra', 'Dependente de financiamento para cobrir totalidade', 'Pressão de liquidez evidente'],
+      red_flags: ['Nunca operou acima de €100k', 'Capital depende de venda de outro projecto que ainda não vendeu', 'Não reserva contingência ("a obra é o que é")', 'Diz valores altos mas hesita quando se concretiza'],
     },
     c2: {
       label: 'Experiência Imobiliária',
-      contexto: 'PESO MÁXIMO para activo. Será quem gere obra, negoceia com empreiteiros, toma decisões no terreno. Sem historial, o risco operacional recai sobre o projecto inteiro.',
+      contexto: 'PESO MÁXIMO. O activo gere a obra. Sem experiência real → risco operacional total. Não basta dizer que "já fez obras" — queremos detalhes: onde, quando, problemas, como resolveu, com que equipa.',
       perguntas: [
-        'Fala-me do teu último projecto de remodelação: como começou, que problemas surgiram, como correu no final?',
-        'Tens empreiteiro disponível? Com que frequência trabalham juntos?',
-        'Consegues dar-me uma estimativa para a remodelação de um T2 com 80m² em Coimbra? (teste de conhecimento)',
-        'Qual foi o maior imprevisto que tiveste numa obra? Como resolveste? Quanto custou?',
+        { pergunta: 'Conta-me o teu último projecto do início ao fim. Como encontraste o imóvel, quanto pagaste, o que fizeste, e como correu a venda?', extrai: 'Historial completo num caso real. Atenção aos detalhes: se é vago → pode não ter feito. Se é específico → genuíno. Notar se os números fazem sentido.' },
+        { pergunta: 'Qual foi a maior dor de cabeça que tiveste numa obra? Aquele momento em que pensaste "para que é que eu me meti nisto?"', extrai: 'Resiliência e honestidade. Toda a gente que faz obras tem histórias de horror. Se diz "nunca tive problemas" → ou não fez obras ou não é honesto.' },
+        { pergunta: 'Tens empreiteiro de confiança? Há quanto tempo trabalham juntos e em quantos projectos?', extrai: 'Equipa operacional. Empreiteiro de confiança com historial = activo sólido. "Tenho de procurar" = risco de atraso.' },
+        { pergunta: 'Só para calibrar: quanto achas que custaria remodelar um T2 com 80m² aqui em Coimbra? Cozinha e casas de banho novas, pavimento, pintura, canalização.', extrai: 'TESTE DE CONHECIMENTO REAL. Resposta razoável: €35k-€55k. Se diz €15k ou €100k → desfasado do mercado. A precisão da estimativa revela experiência operacional.' },
       ],
-      red_flags: ['Nunca geriu obra directamente', 'Sem empreiteiro de confiança', 'Estimativas muito desfasadas do mercado', 'Respostas vagas sobre projectos anteriores'],
+      red_flags: ['Respostas vagas sobre projectos ("fiz umas coisas")', 'Não consegue estimar custos de obra', 'Sem empreiteiro e sem plano para arranjar', 'Nunca geriu obra directamente — delegou tudo', 'Projectos "todos correram bem, sem problemas"'],
     },
     c3: {
       label: 'Alinhamento Estratégico',
-      contexto: 'Disposição para trabalhar no modelo Somnium: operador independente com estrutura partilhada. Incompatível se quiser fazer "à sua maneira" sem coordenação.',
+      contexto: 'Activo trabalha no modelo Somnium: a Somnium encontra o negócio e estrutura, o activo executa com a sua equipa. Tem de aceitar esta divisão. Se quer fazer "à sua maneira" total → incompatível.',
       perguntas: [
-        'Como imaginas a divisão de responsabilidades entre ti e a Somnium?',
-        'Já trabalhaste em parceria noutros projectos de obra? Como funcionou?',
-        'Qual é o ROI mínimo que considerarias interessante para avançar?',
-        'O que faria mudar a tua avaliação de uma oportunidade depois de a aceitares?',
+        { pergunta: 'Nos teus projectos, trabalhas sempre sozinho ou já fizeste alguma coisa em parceria? Como é que foi?', extrai: 'Historial de parcerias. Se já trabalhou em equipa e correu bem → sinal positivo. Se diz "prefiro sozinho" → pode não encaixar no modelo.' },
+        { pergunta: 'No nosso modelo, a Somnium identifica e estrutura os negócios, e o parceiro activo executa a obra e gere o terreno. Como é que isso soa para ti?', extrai: 'Reacção ao modelo. Aceita? Tem dúvidas? Quer negociar? A primeira reacção é a mais genuína.' },
+        { pergunta: 'Se durante um projecto surgir uma decisão em que a tua opinião e a nossa não coincidem — como achas que devíamos resolver isso?', extrai: 'Gestão de conflito e ego. Procura consenso → maduro. "Faço o que eu achar melhor" → incompatível.' },
+        { pergunta: 'Qual é o retorno mínimo que te faz mover? Abaixo de quanto é que não te compensa o trabalho?', extrai: 'Expectativas de ROI e threshold de effort. Se diz 15-25% → realista. Se diz 40%+ → desfasado.' },
       ],
-      red_flags: ['Quer total autonomia sem reportar', 'Experiência negativa anterior com parcerias', 'Inflexível no modelo de trabalho'],
+      red_flags: ['"Eu faço à minha maneira"', 'Experiências negativas com parcerias sem autocrítica', 'Não aceita reportar ou coordenar decisões', 'Quer controlo total incluindo sourcing de negócios'],
     },
     c4: {
       label: 'Estabilidade e Credibilidade',
-      contexto: 'Mesmos critérios do passivo + ênfase na verificação de historial operacional real. Activo sem documentação ou com litígios é risco duplo (financeiro + operacional).',
+      contexto: 'Activo sem documentação ou com historial problemático é risco duplo: financeiro + operacional. Verificar se o que conta é verificável. A coerência entre o formulário e a call é fundamental.',
       perguntas: [
-        'Seria possível enviar-nos cópia do BI e IBAN esta semana?',
-        'Podes partilhar 2-3 obras que geriste nos últimos 3 anos? (localização, tipo, resultado)',
-        'Algum projecto que tenha ficado abaixo das expectativas? O que aconteceu e como resolveste?',
+        { pergunta: 'Essas obras que fizeste — se eu quisesse ir ver ou falar com alguém que trabalhou contigo, seria possível?', extrai: 'Verificabilidade do historial. Se diz "claro, posso dar contactos" → credível. Se hesita → pode estar a inflacionar.' },
+        { pergunta: 'De onde vem o capital que tens para investir? Actividade empresarial, poupança de anos, venda de alguma coisa?', extrai: 'Origem do capital. Mesmo para activos, compliance é necessário. Formular como curiosidade natural.' },
+        { pergunta: 'Quando avançarmos para formalizar, precisamos de documentação básica — BI, IBAN, e assinamos um NDA. Costuma ser rápido. Consegues tratar disso facilmente?', extrai: 'Disposição KYC. Activos sérios estão habituados a formalizar. Quem hesita pode ter problemas.' },
       ],
-      red_flags: ['Sem obras verificáveis', 'Recusa de documentação', 'Historial de litígios com empreiteiros ou parceiros'],
+      red_flags: ['Não consegue dar referências de projectos anteriores', 'Incoerência entre o formulário e o que diz na call', 'Resistência a documentação ou formalização', 'Historial de litígios com parceiros ou empreiteiros (perguntar indirectamente)'],
     },
     c5: {
       label: 'Disponibilidade e Compromisso',
-      contexto: 'Inclui capacidade operacional imediata. Não basta ter capital — precisa ter equipa de obras, agenda e foco. Activo sobrecarregado é risco operacional.',
+      contexto: 'Para activos, compromisso = capital MAIS equipa MAIS tempo. Não basta ter dinheiro. Precisa ter empreiteiro livre, agenda disponível e foco. Activo com 4 obras em simultâneo é risco.',
       perguntas: [
-        'Tens capacidade operacional para arrancar com um projecto já em Março?',
-        'O capital e o empreiteiro estão disponíveis para começar?',
-        'O teu empreiteiro está livre para uma nova obra em 2-3 meses?',
-        'Tens outros projectos activos que possam condicionar a tua disponibilidade?',
+        { pergunta: 'Neste momento, quantos projectos tens activos? E nos próximos 2-3 meses, como está a tua agenda?', extrai: 'Capacidade real. 0-1 projectos = disponível. 2 = pode funcionar. 3+ = sobrecarregado.' },
+        { pergunta: 'Se te mostrar um negócio no próximo mês, tu e o teu empreiteiro conseguiam arrancar em quanto tempo?', extrai: 'Velocidade operacional. Se diz "2-3 semanas" → pronto. Se diz "3-4 meses" → não está operacionalmente disponível.' },
+        { pergunta: 'Quando tens um projecto a decorrer, quanto tempo por semana costumas dedicar? Vais à obra todos os dias ou geres mais à distância?', extrai: 'Estilo de gestão e capacidade de absorver mais um projecto. Hands-on diário = dedica-se mas pode não ter espaço. Gestão à distância = pode acumular.' },
+        { pergunta: 'O que te impediria de avançar se os números fizessem sentido? Há alguma coisa pendente que possa atrasar?', extrai: 'Impedimentos escondidos. Obras por fechar, empreiteiro ocupado, liquidez presa.' },
       ],
-      red_flags: ['3+ obras em simultâneo', 'Empreiteiro sem disponibilidade próxima', 'Agenda sobrecarregada com outros compromissos'],
+      red_flags: ['3+ projectos activos simultaneamente', 'Empreiteiro sem disponibilidade nos próximos meses', '"Tenho de ver a agenda" — sem compromisso concreto', 'Muitos compromissos e sem capacidade de recusar novos'],
     },
-    fecho: `Excelente, [Nome]. A tua experiência é exactamente o perfil que procuramos para parcerias activas. Vou preparar uma análise e, se os números encaixarem, apresento-te uma oportunidade concreta.\n\nPróximos passos:\n1. Resumo desta conversa por email nas próximas 24h\n2. Verificação do historial e documentação (NDA + ficha de investidor activo)\n3. Apresentação de oportunidade com análise financeira detalhada\n\nAlguma questão da tua parte?`,
+    fecho: `[Nome], esta conversa confirmou-me que tens o perfil que procuramos. Tens experiência, tens equipa, sabes do que estamos a falar.\n\nO que vou fazer:\n1. Envio-te um resumo por email nas próximas 24h\n2. Tratamos da documentação — NDA e ficha de parceiro activo. É standard, é rápido\n3. Quando estiver formalizado, apresento-te o primeiro negócio com análise financeira completa\n\nDo teu lado, confirma-me se o teu empreiteiro está disponível e se o capital está acessível para quando surgir oportunidade.\n\nAlguma dúvida?`,
   },
 }
 
@@ -1271,12 +1270,20 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                     </div>
 
                     {/* Perguntas */}
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <p className="text-[10px] uppercase text-gray-400 font-semibold tracking-wide">Perguntas a fazer</p>
                       {bloco.perguntas.map((p, i) => (
-                        <div key={i} className="flex gap-3 items-start rounded-lg bg-white border border-gray-200 p-3 hover:border-[#C9A84C] transition cursor-pointer group">
-                          <span className="text-xs font-bold text-[#C9A84C] shrink-0 mt-0.5">{i + 1}.</span>
-                          <p className="text-sm text-gray-700 leading-relaxed">{p.replace(/\[Nome\]/g, investidorNome.split(' ')[0])}</p>
+                        <div key={i} className="rounded-lg bg-white border border-gray-200 hover:border-[#C9A84C] transition overflow-hidden">
+                          <div className="flex gap-3 items-start p-3 pb-2">
+                            <span className="text-xs font-bold text-[#C9A84C] shrink-0 mt-0.5">{i + 1}.</span>
+                            <p className="text-sm text-gray-800 leading-relaxed font-medium">"{p.pergunta.replace(/\[Nome\]/g, investidorNome.split(' ')[0])}"</p>
+                          </div>
+                          <div className="px-3 pb-3 pl-8">
+                            <div className="flex items-start gap-1.5 rounded bg-amber-50 px-2.5 py-1.5">
+                              <span className="text-[10px] text-amber-600 shrink-0 mt-px">EXTRAI:</span>
+                              <p className="text-[11px] text-amber-800 leading-snug">{p.extrai}</p>
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
