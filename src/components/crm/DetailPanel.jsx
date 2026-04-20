@@ -189,7 +189,7 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
   )
 }
 
-export function DetailPanel({ type, id, onClose, onSave }) {
+export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('detalhe')
@@ -463,7 +463,12 @@ export function DetailPanel({ type, id, onClose, onSave }) {
                 <Field label="Tipologia" value={data.tipologia} />
                 <Field label="Modelo" value={data.modelo_negocio} />
                 <Field label="Origem" value={data.origem} />
-                <Field label="Consultor" value={data.nome_consultor} />
+                <Field label="Consultor" value={data.nome_consultor && data.consultores?.[0]?.id ? (
+                  <button onClick={() => onNavigate?.('Consultores', data.consultores[0].id)}
+                    className="text-blue-600 hover:text-blue-800 hover:underline transition-colors text-left">
+                    {data.nome_consultor}
+                  </button>
+                ) : data.nome_consultor} />
                 <Field label="Link" value={data.link ? <a href={data.link} target="_blank" rel="noopener noreferrer" className="text-[#C9A84C] hover:underline truncate block">{data.link === 'OFF MARKET' ? 'OFF MARKET' : 'Ver anúncio'}</a> : '—'} />
                 <Field label="ABP" value={data.area_bruta > 0 ? `${data.area_bruta} m²` : '—'} />
                 <Field label="ABD" value={data.area_bruta_dependente > 0 ? `${data.area_bruta_dependente} m²` : '—'} />
@@ -654,7 +659,9 @@ export function DetailPanel({ type, id, onClose, onSave }) {
               <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Consultores</p>
               <div className="space-y-2">
                 {data.consultores.map(c => (
-                  <div key={c.id} className="flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2">
+                  <div key={c.id}
+                    onClick={() => onNavigate?.('Consultores', c.id)}
+                    className={`flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2 ${onNavigate ? 'cursor-pointer hover:bg-blue-100 transition-colors' : ''}`}>
                     <span className="text-sm font-medium text-blue-800">{c.nome}</span>
                     <span className="text-xs text-blue-600">{c.estatuto} · {c.contacto}</span>
                   </div>
@@ -676,7 +683,9 @@ export function DetailPanel({ type, id, onClose, onSave }) {
               <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Imóveis</p>
               <div className="space-y-2">
                 {data.imoveis.map(i => (
-                  <div key={i.id} className="flex items-center justify-between bg-green-50 rounded-lg px-3 py-2">
+                  <div key={i.id}
+                    onClick={() => onNavigate?.('Imóveis', i.id)}
+                    className={`flex items-center justify-between bg-green-50 rounded-lg px-3 py-2 ${onNavigate ? 'cursor-pointer hover:bg-green-100 transition-colors' : ''}`}>
                     <span className="text-sm font-medium text-green-800">{i.nome}</span>
                     <div className="flex gap-3 text-xs">
                       <span className="text-green-600">{i.estado?.replace(/^\d+-/, '')}</span>

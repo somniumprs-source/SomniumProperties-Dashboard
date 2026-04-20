@@ -474,6 +474,7 @@ export function CRM() {
   const [view, setView] = useState('kanban') // 'kanban' | 'table'
   const [filters, setFilters] = useState({})
   const [alertCount, setAlertCount] = useState(0)
+  const [consultoresLookup, setConsultoresLookup] = useState({})
 
   const toast = useToast()
   const searchTimer = useRef(null)
@@ -516,6 +517,19 @@ export function CRM() {
   useEffect(() => { load() }, [load])
   useEffect(() => { apiFetch('/api/crm/stats').then(r => r.json()).then(setStats).catch(() => {}) }, [])
   useEffect(() => { apiFetch('/api/alertas').then(r => r.json()).then(d => setAlertCount(d.resumo?.total ?? 0)).catch(() => {}) }, [])
+  useEffect(() => {
+    apiFetch('/api/crm/lookup/consultores').then(r => r.json()).then(list => {
+      const map = {}
+      for (const c of list) map[c.nome?.trim().toLowerCase()] = c.id
+      setConsultoresLookup(map)
+    }).catch(() => {})
+  }, [])
+
+  function navigateToConsultor(nomeConsultor) {
+    if (!nomeConsultor) return
+    const id = consultoresLookup[nomeConsultor.trim().toLowerCase()]
+    if (id) { setTab('Consultores'); setDetail(id) }
+  }
 
   // Kanban config por tab
   const KANBAN_CONFIG = {
@@ -530,7 +544,12 @@ export function CRM() {
             <p className="text-xs text-gray-500 mt-1">{item.zona ?? '—'} · {item.tipologia ?? '—'}</p>
             {item.ask_price > 0 && <p className="text-xs font-mono text-indigo-600 mt-1">{EUR(item.ask_price)}</p>}
             {item.roi > 0 && <p className="text-xs text-green-600">ROI: {item.roi}%</p>}
-            {item.nome_consultor && <p className="text-xs text-gray-400 mt-1">{item.nome_consultor}</p>}
+            {item.nome_consultor && (
+              <p className="text-xs text-blue-500 mt-1 cursor-pointer hover:text-blue-700 hover:underline transition-colors"
+                onClick={(e) => { e.stopPropagation(); navigateToConsultor(item.nome_consultor) }}>
+                {item.nome_consultor}
+              </p>
+            )}
             {cp && cp.total > 0 && (
               <div className="mt-2">
                 <div className="flex items-center justify-between text-[10px] mb-0.5">
@@ -834,7 +853,7 @@ export function CRM() {
           {!loading && editing === null && (view === 'table' || !hasKanban) && data.length > 0 && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="overflow-x-auto -webkit-overflow-scrolling-touch">
-                {tab === 'Imóveis' && <ImoveisTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
+                {tab === 'Imóveis' && <ImoveisTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} onConsultorClick={navigateToConsultor} />}
                 {tab === 'Investidores' && <InvestidoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
                 {tab === 'Consultores' && <ConsultoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
                 {tab === 'Negócios' && <NegociosTable data={data} onEdit={setEditing} onDelete={handleDelete}
@@ -922,7 +941,7 @@ function ClickableName({ name, item, onEdit }) {
   )
 }
 
-function ImoveisTable({ data, onEdit, onDelete, onView }) {
+function ImoveisTable({ data, onEdit, onDelete, onView, onConsultorClick }) {
   const { sorted, sortField, sortDir, onSort } = useSortableData(data)
   const sp = { sortField, sortDir, onSort }
   return (
@@ -931,6 +950,7 @@ function ImoveisTable({ data, onEdit, onDelete, onView }) {
         <Th field="nome" label="Imóvel" {...sp} />
         <Th field="estado" label="Estado" {...sp} />
         <Th field="zona" label="Zona" {...sp} />
+        <Th field="nome_consultor" label="Consultor" {...sp} />
         <Th field="ask_price" label="Ask Price" align="right" {...sp} />
         <Th field="roi" label="ROI" align="right" {...sp} />
         <Th field="origem" label="Origem" {...sp} />
@@ -943,6 +963,14 @@ function ImoveisTable({ data, onEdit, onDelete, onView }) {
             <td className="py-3 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
             <td className="py-3 px-3"><Badge text={r.estado} colorMap={IMOVEL_ESTADO_COLOR} /></td>
             <td className="py-2 px-3 text-gray-500">{r.zona ?? '—'}</td>
+            <td className="py-2 px-3">
+              {r.nome_consultor ? (
+                <button onClick={() => onConsultorClick?.(r.nome_consultor)}
+                  className="text-blue-600 hover:text-blue-800 hover:underline transition-colors text-left">
+                  {r.nome_consultor}
+                </button>
+              ) : '—'}
+            </td>
             <td className="py-2 px-3 text-right font-mono">{r.ask_price > 0 ? EUR(r.ask_price) : '—'}</td>
             <td className="py-2 px-3 text-right font-mono">{r.roi > 0 ? `${r.roi}%` : '—'}</td>
             <td className="py-2 px-3 text-gray-500">{r.origem ?? '—'}</td>
@@ -950,7 +978,7 @@ function ImoveisTable({ data, onEdit, onDelete, onView }) {
             <td className="py-3 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
           </tr>
         ))}
-        {!sorted.length && <tr><td colSpan={8} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
+        {!sorted.length && <tr><td colSpan={9} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
       </tbody>
     </table>
   )
