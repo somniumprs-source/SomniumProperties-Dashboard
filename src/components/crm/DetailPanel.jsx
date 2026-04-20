@@ -562,6 +562,13 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                 <EF label="Email" field="email" form={form} set={setField} />
                 <EF label="Perfil Risco" field="perfil_risco" form={form} set={setField} type="select" options={['Conservador','Moderado','Agressivo']} />
                 <EF label="Montante Investido (€)" field="montante_investido" form={form} set={setField} type="number" />
+                <EF label="ROI Pretendido" field="roi_pretendido" form={form} set={setField} />
+                <EF label="Experiência Imobiliária" field="experiencia_imobiliario" form={form} set={setField} />
+                <EF label="Localização Preferida" field="localizacao_preferida" form={form} set={setField} />
+                <EF label="Tipo Imóvel Preferido" field="tipo_imovel_preferido" form={form} set={setField} />
+                <EF label="Equipa de Obras" field="equipa_obras" form={form} set={setField} />
+                <EF label="Origem do Capital" field="origem_capital" form={form} set={setField} type="select" options={['Poupança pessoal','Actividade empresarial','Venda de activo','Herança','Outro']} />
+                <EF label="Preferência de Contacto" field="preferencia_contacto" form={form} set={setField} type="select" options={['WhatsApp','Chamada','Email','Presencial']} />
                 <EF label="Próxima Ação Data" field="data_proxima_acao" form={form} set={setField} type="date" />
                 <EF label="Motivo Não Aprovação" field="motivo_nao_aprovacao" form={form} set={setField} />
                 <EF label="Motivo Inatividade" field="motivo_inatividade" form={form} set={setField} />
@@ -627,6 +634,13 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                 <Field label="Perfil Risco" value={data.perfil_risco} />
                 <Field label="Estratégia" value={(() => { try { return JSON.parse(data.estrategia || '[]').join(', ') } catch { return data.estrategia || '—' } })()} />
                 <Field label="NDA" value={data.nda_assinado ? 'Sim' : 'Não'} />
+                <Field label="ROI Pretendido" value={data.roi_pretendido} />
+                <Field label="Experiência" value={data.experiencia_imobiliario} />
+                <Field label="Localização" value={data.localizacao_preferida} />
+                <Field label="Tipo Imóvel" value={data.tipo_imovel_preferido} />
+                <Field label="Equipa Obras" value={data.equipa_obras} />
+                <Field label="Origem Capital" value={data.origem_capital} />
+                <Field label="Pref. Contacto" value={data.preferencia_contacto} />
                 <Field label="1º Contacto" value={data.data_primeiro_contacto} />
                 <Field label="Último Contacto" value={data.data_ultimo_contacto} />
                 <Field label="Reunião" value={data.data_reuniao} />

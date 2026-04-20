@@ -87,12 +87,18 @@ export async function syncForms() {
     }
 
     const { rows: candidates } = await pool.query(
-      `SELECT id, nome, email, telemovel, capital_min, capital_max, estrategia, tipo_investidor, notas FROM investidores
+      `SELECT id, nome, email, telemovel, capital_min, capital_max, estrategia, tipo_investidor, tipo_principal,
+              preferencia_contacto, tipo_imovel_preferido, localizacao_preferida, equipa_obras,
+              roi_pretendido, experiencia_imobiliario, perfil_risco, notas
+       FROM investidores
        WHERE ${conditions.join('\n          OR ')}
        LIMIT 1`,
       params
     )
     let existing = candidates[0]
+
+    // Derivar tipo_principal a partir do tipo_investidor
+    const tipoPrincipal = derivarTipoPrincipal(tipoInvestidor)
 
     if (existing) {
       // Actualizar apenas campos vazios
@@ -103,11 +109,16 @@ export async function syncForms() {
       if (!existing.capital_max && capital_max) updates.capital_max = capital_max
       if (!existing.estrategia && estrategia) updates.estrategia = estrategia
       if (!existing.tipo_investidor && tipoInvestidor) updates.tipo_investidor = tipoInvestidor
-
-      // Adicionar info do form às notas se não existir
-      const formNote = buildFormNote(prefContacto, tipoImovel, localizacao, equipaObras, roi, roiAnualizado, experiencia)
-      if (formNote && (!existing.notas || !existing.notas.includes('[Google Form]'))) {
-        updates.notas = existing.notas ? existing.notas + '\n\n' + formNote : formNote
+      if (!existing.tipo_principal && tipoPrincipal) updates.tipo_principal = tipoPrincipal
+      if (!existing.preferencia_contacto && prefContacto) updates.preferencia_contacto = prefContacto
+      if (!existing.tipo_imovel_preferido && tipoImovel) updates.tipo_imovel_preferido = tipoImovel
+      if (!existing.localizacao_preferida && localizacao) updates.localizacao_preferida = localizacao
+      if (!existing.equipa_obras && equipaObras && equipaObras !== 'Não') updates.equipa_obras = equipaObras
+      if (!existing.roi_pretendido && roi && roi !== '.') updates.roi_pretendido = roi
+      if (!existing.experiencia_imobiliario && experiencia) updates.experiencia_imobiliario = experiencia
+      if (!existing.perfil_risco) {
+        const perfil = derivarPerfilRisco(roi, roiAnualizado)
+        if (perfil) updates.perfil_risco = perfil
       }
 
       if (Object.keys(updates).length > 0) {
@@ -118,7 +129,6 @@ export async function syncForms() {
       }
     } else {
       // Criar novo investidor
-      const formNote = buildFormNote(prefContacto, tipoImovel, localizacao, equipaObras, roi, roiAnualizado, experiencia)
       const data = {
         nome,
         status: 'Potencial Investidor',
@@ -131,7 +141,15 @@ export async function syncForms() {
       if (capital_max) data.capital_max = capital_max
       if (estrategia) data.estrategia = estrategia
       if (tipoInvestidor) data.tipo_investidor = tipoInvestidor
-      if (formNote) data.notas = formNote
+      if (tipoPrincipal) data.tipo_principal = tipoPrincipal
+      if (prefContacto) data.preferencia_contacto = prefContacto
+      if (tipoImovel) data.tipo_imovel_preferido = tipoImovel
+      if (localizacao) data.localizacao_preferida = localizacao
+      if (equipaObras && equipaObras !== 'Não') data.equipa_obras = equipaObras
+      if (roi && roi !== '.') data.roi_pretendido = roi
+      if (experiencia) data.experiencia_imobiliario = experiencia
+      const perfil = derivarPerfilRisco(roi, roiAnualizado)
+      if (perfil) data.perfil_risco = perfil
 
       await Investidores.create(data)
       created++
@@ -215,4 +233,24 @@ function buildFormNote(prefContacto, tipoImovel, localizacao, equipaObras, roi, 
   if (roi && roi !== '.') parts.push(`ROI pretendido: ${roi}`)
   if (roiAnualizado && roiAnualizado !== '.') parts.push(`ROI anualizado: ${roiAnualizado}`)
   return parts.length > 1 ? parts.join('\n') : null
+}
+
+function derivarTipoPrincipal(tipoInvestidorJson) {
+  if (!tipoInvestidorJson) return 'Passivo'
+  try {
+    const tipos = JSON.parse(tipoInvestidorJson)
+    if (tipos.includes('Ativo')) return 'Ativo'
+    return 'Passivo'
+  } catch { return 'Passivo' }
+}
+
+function derivarPerfilRisco(roi, roiAnualizado) {
+  const roiText = (roi || roiAnualizado || '').toLowerCase()
+  const numMatch = roiText.match(/(\d+)/)
+  if (!numMatch) return null
+  const val = parseInt(numMatch[1])
+  if (val >= 30) return 'Agressivo'
+  if (val >= 15) return 'Moderado'
+  if (val > 0) return 'Conservador'
+  return null
 }
