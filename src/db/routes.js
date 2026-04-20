@@ -851,7 +851,9 @@ router.get('/imoveis/:id/full', async (req, res) => {
     const { rows: analises } = await pool.query('SELECT * FROM analises WHERE imovel_id = $1 ORDER BY activa DESC, updated_at DESC', [imovel.id])
     // Audit log (timeline)
     const { rows: timeline } = await pool.query("SELECT * FROM audit_log WHERE registo_id = $1 ORDER BY created_at DESC LIMIT 20", [imovel.id])
-    res.json({ ...imovel, negocios, consultores, tarefas, analises, timeline })
+    // Checklist obrigatória
+    const { rows: checklist } = await pool.query('SELECT * FROM checklist_imovel WHERE imovel_id = $1 ORDER BY estado, ordem', [imovel.id])
+    res.json({ ...imovel, negocios, consultores, tarefas, analises, timeline, checklist })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -953,16 +955,34 @@ router.get('/kpis/:tab', async (req, res) => {
 router.post('/auto-task', async (req, res) => {
   try {
     const { entity, entityId, entityName, newPhase } = req.body
+
+    // Para imóveis: gerar checklist automaticamente
+    if (entity === 'imoveis' && entityId) {
+      const { CHECKLIST_TEMPLATES } = await import('../constants/checklistTemplates.js')
+      const templates = CHECKLIST_TEMPLATES[newPhase]
+      if (templates && templates.length > 0) {
+        const now = new Date().toISOString()
+        let created = 0
+        for (let i = 0; i < templates.length; i++) {
+          const t = templates[i]
+          const id = (await import('crypto')).randomUUID()
+          try {
+            await pool.query(
+              `INSERT INTO checklist_imovel (id, imovel_id, estado, template_key, titulo, campo_crm, categoria, tempo_estimado, obrigatoria, ordem, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+               ON CONFLICT (imovel_id, template_key) DO NOTHING`,
+              [id, entityId, newPhase, t.key, t.titulo, t.campo_crm, t.categoria, t.tempo_estimado, t.obrigatoria, i + 1, now, now]
+            )
+            created++
+          } catch (e) { /* duplicado, ignorar */ }
+        }
+        console.log(`[checklist] ${created} items gerados para ${entityName} → ${newPhase}`)
+        return res.json({ ok: true, created: true, count: created })
+      }
+    }
+
+    // Fallback para investidores/consultores: manter auto-task antigo
     const TASK_MAP = {
-      imoveis: {
-        'Em Análise':       'Estudar mercado e comparáveis para {name}',
-        'Visita Marcada':   'Preparar visita ao imóvel {name}',
-        'Follow UP':        'Follow-up do imóvel {name}',
-        'Estudo de VVR':    'Elaborar estudo de VVR para {name}',
-        'Enviar proposta ao investidor': 'Preparar proposta para investidor — {name}',
-        'Wholesaling':      'Formalizar contrato de wholesaling — {name}',
-        'Negócio em Curso': 'Acompanhar negócio em curso — {name}',
-      },
       investidores: {
         'Marcar call':             'Marcar call com investidor {name}',
         'Call marcada':            'Preparar apresentação para {name}',
@@ -975,8 +995,8 @@ router.post('/auto-task', async (req, res) => {
         'Aberto Parcerias':   'Formalizar parceria com {name}',
       },
     }
-    const templates = TASK_MAP[entity] ?? {}
-    const template = templates[newPhase]
+    const taskTemplates = TASK_MAP[entity] ?? {}
+    const template = taskTemplates[newPhase]
     if (!template) return res.json({ ok: true, created: false, reason: 'No task for this phase' })
 
     const tarefa = template.replace('{name}', entityName)
@@ -987,6 +1007,81 @@ router.post('/auto-task', async (req, res) => {
       [id, tarefa, 'A fazer', now, now]
     )
     res.json({ ok: true, created: true, tarefa, id })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Checklist de imóveis ─────────────────────────────────────
+router.get('/checklist/:imovelId', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM checklist_imovel WHERE imovel_id = $1 ORDER BY estado, ordem',
+      [req.params.imovelId]
+    )
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.put('/checklist/:itemId', async (req, res) => {
+  try {
+    const { concluida, notas, concluida_por } = req.body
+    const now = new Date().toISOString()
+    const sets = ['updated_at = $2']
+    const vals = [req.params.itemId, now]
+    let idx = 3
+    if (concluida !== undefined) {
+      sets.push(`concluida = $${idx}`)
+      vals.push(concluida)
+      idx++
+      sets.push(`concluida_em = $${idx}`)
+      vals.push(concluida ? now : null)
+      idx++
+      sets.push(`concluida_por = $${idx}`)
+      vals.push(concluida ? (concluida_por || null) : null)
+      idx++
+    }
+    if (notas !== undefined) {
+      sets.push(`notas = $${idx}`)
+      vals.push(notas)
+      idx++
+    }
+    const { rows: [item] } = await pool.query(
+      `UPDATE checklist_imovel SET ${sets.join(', ')} WHERE id = $1 RETURNING *`,
+      vals
+    )
+    res.json(item)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/checklist/progress-batch', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT imovel_id, estado,
+              COUNT(*) FILTER (WHERE obrigatoria) as total,
+              COUNT(*) FILTER (WHERE obrigatoria AND concluida) as done
+       FROM checklist_imovel
+       GROUP BY imovel_id, estado`
+    )
+    // Agrupar por imovel_id: retornar progresso do estado actual do imovel
+    const map = {}
+    for (const r of rows) {
+      if (!map[r.imovel_id]) map[r.imovel_id] = {}
+      map[r.imovel_id][r.estado] = { done: parseInt(r.done), total: parseInt(r.total) }
+    }
+    res.json(map)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/checklist/:imovelId/progress', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT estado,
+              COUNT(*) FILTER (WHERE obrigatoria) as total,
+              COUNT(*) FILTER (WHERE obrigatoria AND concluida) as done
+       FROM checklist_imovel WHERE imovel_id = $1
+       GROUP BY estado`,
+      [req.params.imovelId]
+    )
+    res.json(rows)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
