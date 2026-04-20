@@ -740,6 +740,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
           </div>
         </div>
       </div>
+      </div>
       )}
     </div>
   )
