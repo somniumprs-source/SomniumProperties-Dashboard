@@ -365,7 +365,7 @@ export const FUNIL_INVESTIDORES = [
   'Marcar call', 'Marcar Call',
   'Call marcada', 'Call Marcada',
   'Follow Up',
-  'Investidor classificado', 'Classificado',
+  'Investidor em espera', 'Classificado',
   'Investidor em parceria', 'Em Parceria',
 ]
 
@@ -373,6 +373,6 @@ export const FUNIL_INV_LABEL = {
   'Potencial Investidor':    'Potencial',
   'Marcar call':             'Marcar Call',
   'Call marcada':            'Call Marcada',
-  'Investidor classificado': 'Classificado',
+  'Investidor em espera': 'Classificado',
   'Investidor em parceria':  'Em Parceria',
 }

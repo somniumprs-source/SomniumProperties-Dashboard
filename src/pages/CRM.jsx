@@ -575,7 +575,7 @@ export function CRM() {
       },
     },
     'Investidores': {
-      columns: ['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor classificado','Investidor em parceria'],
+      columns: ['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor em espera','Investidor em parceria'],
       groupField: 'status',
       renderCard: (item) => {
         const tipo = item.tipo_principal || 'Passivo'
@@ -1214,7 +1214,7 @@ const FIELD_DEFS = {
   'Investidores': [
     { key: 'nome', label: 'Nome', type: 'text', required: true },
     { key: 'tipo_principal', label: 'Tipo de Investidor', type: 'select', options: ['Passivo','Ativo'], required: true },
-    { key: 'status', label: 'Status', type: 'select', options: ['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor classificado','Investidor em parceria'] },
+    { key: 'status', label: 'Status', type: 'select', options: ['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor em espera','Investidor em parceria'] },
     { key: 'classificacao', label: 'Classificação', type: 'select', options: ['A','B','C','D'] },
     { key: 'origem', label: 'Origem', type: 'select', options: ['Skool','Grupos Whatsapp','Referenciação','LinkedIn','Google Forms','Outro'] },
     { key: 'telemovel', label: 'Telemóvel', type: 'tel' },

@@ -54,7 +54,7 @@ export const IMOVEL_ESTADO_COLOR = {
 // ── Investidores — Status ────────────────────────────────────
 export const INV_STATUS = [
   'Potencial Investidor', 'Marcar call', 'Call marcada',
-  'Follow Up', 'Investidor classificado', 'Investidor em parceria',
+  'Follow Up', 'Investidor em espera', 'Investidor em parceria',
 ]
 
 export const INV_STATUS_COLOR = {
@@ -62,7 +62,7 @@ export const INV_STATUS_COLOR = {
   'Marcar call':             'bg-yellow-100 text-yellow-700',
   'Call marcada':            'bg-blue-100 text-blue-700',
   'Follow Up':               'bg-orange-100 text-orange-700',
-  'Investidor classificado': 'bg-indigo-100 text-indigo-700',
+  'Investidor em espera': 'bg-indigo-100 text-indigo-700',
   'Investidor em parceria':  'bg-green-100 text-green-700',
 }
 

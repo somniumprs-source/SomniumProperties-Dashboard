@@ -193,7 +193,7 @@ const INVESTIDORES_RENAME = {
   'Investidor em parceria': 'Em Parceria',
   // Unused states — renamed to mark as legacy so they're visually clear
   'Hibernacao':             'Hibernação',
-  'Investidor classificado':'Classificado',
+  'Investidor em espera':'Classificado',
   'Lead Frio':              'Lead Frio',
   'Primeiro Contacto':      'Primeiro Contacto',
   'Em Qualificacao':        'Em Qualificação',

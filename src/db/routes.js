@@ -1116,7 +1116,7 @@ router.post('/auto-task', async (req, res) => {
         'Marcar call':             'Marcar call com investidor {name}',
         'Call marcada':            'Preparar apresentação para {name}',
         'Follow Up':               'Follow-up com investidor {name}',
-        'Investidor classificado': 'Enviar proposta de negócio a {name}',
+        'Investidor em espera': 'Enviar proposta de negócio a {name}',
         'Investidor em parceria':  'Preparar onboarding de {name}',
       },
       consultores: {
@@ -1489,7 +1489,7 @@ router.get('/relatorio/investidores', async (req, res) => {
     const { rows: reunioes } = await pool.query("SELECT id, entidade_id, data, duracao_min FROM reunioes WHERE entidade_tipo = 'investidores'")
     const now = new Date()
 
-    const statusOrder = ['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor classificado','Investidor em parceria']
+    const statusOrder = ['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor em espera','Investidor em parceria']
 
     const report = {
       gerado_em: now.toISOString(),
@@ -1534,7 +1534,7 @@ router.get('/relatorio/investidores', async (req, res) => {
       if (minhasReunioes.length === 0) report.alertas.sem_reuniao++
       if (!capitalMax) report.alertas.sem_capital++
       if (!inv.classificacao) report.alertas.sem_classificacao++
-      if (!inv.nda_assinado && ['Investidor classificado','Investidor em parceria'].includes(status)) report.alertas.nda_pendente++
+      if (!inv.nda_assinado && ['Investidor em espera','Investidor em parceria'].includes(status)) report.alertas.nda_pendente++
 
       // Métricas
       if (capitalMax > 0) { somaCapital += capitalMax; comCapital++ }
@@ -1735,7 +1735,7 @@ router.post('/scorecards', async (req, res) => {
     // Atualizar investidor com nova classificação e pontuação
     await pool.query(
       'UPDATE investidores SET classificacao = $1, pontuacao = $2, status = CASE WHEN status IN ($5, $6) THEN $4 ELSE status END, updated_at = $3 WHERE id = $7',
-      [classificacao, ponderado, now, 'Investidor classificado', 'Call marcada', 'Follow Up', investidor_id]
+      [classificacao, ponderado, now, 'Investidor em espera', 'Call marcada', 'Follow Up', investidor_id]
     )
 
     // Registar no histórico de classificação

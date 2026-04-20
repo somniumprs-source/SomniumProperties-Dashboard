@@ -37,7 +37,7 @@ const COLUMN_COLORS = {
   'Marcar call':      { bg: 'bg-yellow-50',  border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-700' },
   'Call marcada':     { bg: 'bg-blue-50',    border: 'border-blue-200',   header: 'bg-blue-100 text-blue-700' },
   'Follow Up':        { bg: 'bg-orange-50',  border: 'border-orange-200', header: 'bg-orange-100 text-orange-700' },
-  'Investidor classificado': { bg: 'bg-indigo-50', border: 'border-indigo-200', header: 'bg-indigo-100 text-indigo-700' },
+  'Investidor em espera': { bg: 'bg-indigo-50', border: 'border-indigo-200', header: 'bg-indigo-100 text-indigo-700' },
   'Investidor em parceria':  { bg: 'bg-green-50',  border: 'border-green-200',  header: 'bg-green-100 text-green-700' },
   // Consultores
   'Cold Call':              { bg: 'bg-gray-50',    border: 'border-gray-200',   header: 'bg-gray-100 text-gray-700' },
