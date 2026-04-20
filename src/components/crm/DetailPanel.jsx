@@ -51,68 +51,49 @@ const ESTADO_DOCS = {
   'Não interessa': ['ficha_descarte'],
 }
 
-// ── Tab Documentos (sub-abas por fase + checkbox para dossier) ──
-const DOC_GROUPS = {
-  prospeccao: {
-    label: 'Prospecção',
-    docs: [
-      { tipo: 'ficha_imovel',  label: 'Ficha do Imóvel',  compilavel: 'ficha_imovel' },
-      { tipo: 'ficha_visita',  label: 'Ficha de Visita',  compilavel: 'ficha_visita' },
-    ],
-  },
-  analise: {
-    label: 'Análise',
+// ── Sub-abas por fase da pipeline (estados com mesmos docs agrupados) ──
+const FASE_TABS = [
+  { key: 'adicionado',   label: 'Adicionado',         estados: ['Adicionado', 'Pré-aprovação'],
+    docs: [{ tipo: 'ficha_imovel', label: 'Ficha do Imóvel', compilavel: 'ficha_imovel' }] },
+  { key: 'visita',       label: 'Visita',              estados: ['Necessidade de Visita', 'Visita Marcada'],
+    docs: [{ tipo: 'ficha_visita', label: 'Ficha de Visita', compilavel: 'ficha_visita' }] },
+  { key: 'vvr',          label: 'Estudo de VVR',       estados: ['Estudo de VVR'],
     docs: [
       { tipo: 'analise_rentabilidade', label: 'Análise de Rentabilidade', compilavel: 'analise_rentabilidade' },
       { tipo: 'estudo_comparaveis',    label: 'Estudo de Comparáveis',    compilavel: 'estudo_comparaveis' },
-    ],
-  },
-  negociacao: {
-    label: 'Negociação',
+    ] },
+  { key: 'proposta',     label: 'Proposta',            estados: ['Criar Proposta ao Proprietário', 'Enviar proposta ao Proprietário'],
+    docs: [{ tipo: 'proposta_formal', label: 'Proposta ao Proprietário', compilavel: 'proposta_formal' }] },
+  { key: 'negociacao',   label: 'Negociação',          estados: ['Em negociação'],
+    docs: [{ tipo: 'resumo_negociacao', label: 'Resumo de Negociação', compilavel: 'resumo_negociacao' }] },
+  { key: 'aceite',       label: 'Proposta Aceite',     estados: ['Proposta aceite'],
+    docs: [{ tipo: 'resumo_acordo', label: 'Resumo de Acordo', compilavel: 'resumo_acordo' }] },
+  { key: 'investidor',   label: 'Investidor',          estados: ['Enviar proposta ao investidor'],
     docs: [
-      { tipo: 'proposta_formal',   label: 'Proposta ao Proprietário', compilavel: 'proposta_formal' },
-      { tipo: 'resumo_negociacao', label: 'Resumo de Negociação',     compilavel: 'resumo_negociacao' },
-      { tipo: 'resumo_acordo',     label: 'Resumo de Acordo',         compilavel: 'resumo_acordo' },
-    ],
-  },
-  investidor: {
-    label: 'Investidor',
-    docs: [
-      { tipo: 'dossier_investidor',            label: 'Dossier de Investimento',              compilavel: 'dossier_investidor' },
-      { tipo: 'proposta_investimento_anonima', label: 'Proposta de Investimento (Anónima)',   compilavel: 'proposta_investimento_anonima' },
-    ],
-  },
-  operacao: {
-    label: 'Operação',
-    docs: [
-      { tipo: 'ficha_follow_up',           label: 'Ficha de Follow Up',    compilavel: 'ficha_follow_up' },
-      { tipo: 'ficha_cedencia',            label: 'Ficha de Cedência',     compilavel: 'ficha_cedencia' },
-      { tipo: 'ficha_acompanhamento_obra', label: 'Acompanhamento de Obra', compilavel: 'ficha_acompanhamento_obra' },
-      { tipo: 'ficha_descarte',            label: 'Ficha de Descarte',     compilavel: 'ficha_descarte' },
-    ],
-  },
-}
+      { tipo: 'dossier_investidor',            label: 'Dossier de Investimento',            compilavel: 'dossier_investidor' },
+      { tipo: 'proposta_investimento_anonima', label: 'Proposta de Investimento (Anónima)', compilavel: 'proposta_investimento_anonima' },
+    ] },
+  { key: 'followup',     label: 'Follow Up',           estados: ['Follow Up após proposta', 'Follow UP'],
+    docs: [{ tipo: 'ficha_follow_up', label: 'Ficha de Follow Up', compilavel: 'ficha_follow_up' }] },
+  { key: 'wholesaling',  label: 'Wholesaling',         estados: ['Wholesaling'],
+    docs: [{ tipo: 'ficha_cedencia', label: 'Ficha de Cedência', compilavel: 'ficha_cedencia' }] },
+  { key: 'obra',         label: 'CAEP / Fix & Flip',   estados: ['CAEP', 'Fix and Flip'],
+    docs: [{ tipo: 'ficha_acompanhamento_obra', label: 'Acompanhamento de Obra', compilavel: 'ficha_acompanhamento_obra' }] },
+  { key: 'descarte',     label: 'Descartado',          estados: ['Não interessa', 'Nao interessa', 'Descartado'],
+    docs: [{ tipo: 'ficha_descarte', label: 'Ficha de Descarte', compilavel: 'ficha_descarte' }] },
+]
 
-const ALL_DOCS = Object.values(DOC_GROUPS).flatMap(g => g.docs)
+const ALL_DOCS = FASE_TABS.flatMap(f => f.docs)
 
 function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
   const estadoClean = (estado || '').replace(/^\d+-\s*/, '').trim()
-  const docsActuais = ESTADO_DOCS[estadoClean] || ['ficha_imovel']
-  const faseActualDocs = ALL_DOCS.filter(d => docsActuais.includes(d.tipo))
+  const faseActual = FASE_TABS.find(f => f.estados.includes(estadoClean))
 
-  const [subTab, setSubTab] = useState('actual')
+  const [subTab, setSubTab] = useState(faseActual?.key || 'adicionado')
   const [selected, setSelected] = useState(new Set())
 
-  const SUB_TABS = [
-    { key: 'actual',     label: 'Fase actual', count: faseActualDocs.length },
-    { key: 'prospeccao', label: 'Prospecção' },
-    { key: 'analise',    label: 'Análise' },
-    { key: 'negociacao', label: 'Negociação' },
-    { key: 'investidor', label: 'Investidor' },
-    { key: 'operacao',   label: 'Operação' },
-  ]
-
-  const visibleDocs = subTab === 'actual' ? faseActualDocs : (DOC_GROUPS[subTab]?.docs || [])
+  const activeTab = FASE_TABS.find(f => f.key === subTab)
+  const visibleDocs = activeTab?.docs || []
 
   function toggle(key) {
     setSelected(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
@@ -139,63 +120,48 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
         </div>
       </div>
 
-      {/* Sub-abas */}
+      {/* Sub-abas — fases da pipeline */}
       <div className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1">
-        {SUB_TABS.map(t => (
-          <button key={t.key} onClick={() => setSubTab(t.key)}
-            className={`px-3 py-2 text-xs font-medium rounded-lg whitespace-nowrap transition-all ${
-              subTab === t.key ? 'text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'
-            }`}
-            style={subTab === t.key ? { backgroundColor: '#1A1A1A' } : undefined}>
-            {t.label}
-            {t.key === 'actual' && <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold" style={subTab === t.key ? { backgroundColor: '#C9A84C', color: '#fff' } : { backgroundColor: '#e5e5e5', color: '#737373' }}>{faseActualDocs.length}</span>}
-          </button>
-        ))}
+        {FASE_TABS.map(f => {
+          const isActive = subTab === f.key
+          const isCurrent = faseActual?.key === f.key
+          return (
+            <button key={f.key} onClick={() => setSubTab(f.key)}
+              className={`px-3 py-2 text-xs font-medium rounded-lg whitespace-nowrap transition-all ${
+                isActive ? 'text-white shadow-sm' : isCurrent ? 'text-emerald-700 bg-emerald-50' : 'text-gray-500 hover:bg-gray-100'
+              }`}
+              style={isActive ? { backgroundColor: '#1A1A1A' } : undefined}>
+              {f.label}
+              {isCurrent && !isActive && <span className="ml-1 w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />}
+            </button>
+          )
+        })}
       </div>
 
-      {/* Badge do estado actual */}
-      {subTab === 'actual' && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-neutral-50 border border-neutral-100">
-          <span className="text-xs text-neutral-400">Estado:</span>
-          <span className="text-xs font-semibold text-neutral-700">{estadoClean || 'Sem estado'}</span>
-        </div>
-      )}
-
-      {/* Lista de documentos */}
-      {visibleDocs.length > 0 ? (
-        <div className="rounded-xl border border-neutral-100 overflow-hidden divide-y divide-neutral-50">
-          {visibleDocs.map(d => {
-            const isSelected = selected.has(d.compilavel)
-            const isFaseActual = docsActuais.includes(d.tipo)
-            return (
-              <div key={d.tipo}
-                className={`flex items-center gap-3 px-4 py-3 transition-colors group cursor-pointer ${
-                  isSelected ? 'bg-amber-50/70' : 'bg-white hover:bg-neutral-50/50'
-                }`}
-                onClick={() => toggle(d.compilavel)}>
-                <input type="checkbox" checked={isSelected} readOnly
-                  className="w-4 h-4 rounded border-neutral-300 shrink-0 pointer-events-none" style={{ accentColor: '#C9A84C' }} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-neutral-700">{d.label}</p>
-                    {subTab !== 'actual' && isFaseActual && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">Fase actual</span>}
-                  </div>
-                </div>
-                <a href={`/api/crm/imoveis/${imovelId}/documento/${d.tipo}`} target="_blank" rel="noopener noreferrer"
-                  onClick={e => e.stopPropagation()}
-                  className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors shrink-0 opacity-50 group-hover:opacity-100">
-                  Abrir
-                </a>
+      {/* Lista de documentos da fase seleccionada */}
+      <div className="rounded-xl border border-neutral-100 overflow-hidden divide-y divide-neutral-50">
+        {visibleDocs.map(d => {
+          const isSelected = selected.has(d.compilavel)
+          return (
+            <div key={d.tipo}
+              className={`flex items-center gap-3 px-4 py-3 transition-colors group cursor-pointer ${
+                isSelected ? 'bg-amber-50/70' : 'bg-white hover:bg-neutral-50/50'
+              }`}
+              onClick={() => toggle(d.compilavel)}>
+              <input type="checkbox" checked={isSelected} readOnly
+                className="w-4 h-4 rounded border-neutral-300 shrink-0 pointer-events-none" style={{ accentColor: '#C9A84C' }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-neutral-700">{d.label}</p>
               </div>
-            )
-          })}
-        </div>
-      ) : (
-        <div className="py-8 text-center rounded-xl border border-dashed border-neutral-200">
-          <p className="text-sm text-neutral-400">Sem documentos para o estado "{estadoClean}"</p>
-          <p className="text-xs text-neutral-300 mt-1">Navega pelas outras abas para ver todos os documentos</p>
-        </div>
-      )}
+              <a href={`/api/crm/imoveis/${imovelId}/documento/${d.tipo}`} target="_blank" rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors shrink-0 opacity-50 group-hover:opacity-100">
+                Abrir
+              </a>
+            </div>
+          )
+        })}
+      </div>
 
       {/* Barra fixa em baixo — gerar dossier */}
       <div className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
