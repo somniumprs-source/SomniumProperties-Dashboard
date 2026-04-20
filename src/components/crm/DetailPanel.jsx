@@ -10,6 +10,7 @@ import { InteracoesTab } from './InteracoesTab.jsx'
 import { FicheirosTab } from './FicheirosTab.jsx'
 import { ChecklistTab } from './ChecklistTab.jsx'
 import { DocumentosInvestidorTab } from './DocumentosInvestidorTab.jsx'
+import { ImovelInteracoesSection } from './ImovelInteracoesSection.jsx'
 import { supabase } from '../../lib/supabase.js'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
