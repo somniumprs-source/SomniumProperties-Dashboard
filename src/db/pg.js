@@ -468,6 +468,20 @@ export async function initSchema() {
       END $$;
       CREATE INDEX IF NOT EXISTS idx_investidores_tipo ON investidores(tipo_principal);
 
+      -- Migration: campos do Google Forms que antes iam para notas
+      DO $$ BEGIN
+        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS profissao TEXT;
+        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS localizacao_preferida TEXT;
+        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS tipo_imovel_preferido TEXT;
+        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS equipa_obras TEXT;
+        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS roi_pretendido TEXT;
+        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS experiencia_imobiliario TEXT;
+        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS preferencia_contacto TEXT;
+        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS horizonte_investimento TEXT;
+        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS origem_capital TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
       -- Scorecards de Discovery Call (SOP 2)
       CREATE TABLE IF NOT EXISTS scorecards (
         id TEXT PRIMARY KEY,
