@@ -474,7 +474,7 @@ export function CRM() {
   const [view, setView] = useState('kanban') // 'kanban' | 'table'
   const [filters, setFilters] = useState({})
   const [alertCount, setAlertCount] = useState(0)
-  const [consultoresLookup, setConsultoresLookup] = useState({})
+  const [consultoresLookup, setConsultoresLookup] = useState([])
 
   const toast = useToast()
   const searchTimer = useRef(null)
@@ -519,16 +519,20 @@ export function CRM() {
   useEffect(() => { apiFetch('/api/alertas').then(r => r.json()).then(d => setAlertCount(d.resumo?.total ?? 0)).catch(() => {}) }, [])
   useEffect(() => {
     apiFetch('/api/crm/lookup/consultores').then(r => r.json()).then(list => {
-      const map = {}
-      for (const c of list) map[c.nome?.trim().toLowerCase()] = c.id
-      setConsultoresLookup(map)
+      setConsultoresLookup(list)
     }).catch(() => {})
   }, [])
 
   function navigateToConsultor(nomeConsultor) {
     if (!nomeConsultor) return
-    const id = consultoresLookup[nomeConsultor.trim().toLowerCase()]
-    if (id) { setTab('Consultores'); setDetail(id) }
+    const nome = nomeConsultor.trim().toLowerCase()
+    // Match parcial como o backend (ILIKE %nome%)
+    const match = consultoresLookup.find(c =>
+      c.nome?.trim().toLowerCase() === nome ||
+      nome.includes(c.nome?.trim().toLowerCase()) ||
+      c.nome?.trim().toLowerCase().includes(nome)
+    )
+    if (match) { setDetail(null); setTab('Consultores'); setTimeout(() => setDetail(match.id), 150) }
   }
 
   // Kanban config por tab
@@ -789,7 +793,7 @@ export function CRM() {
         {/* Detail Panel — substitui Kanban/Tabela quando aberto */}
         {detail && ['Imóveis', 'Investidores', 'Consultores'].includes(tab) ? (
           <DetailPanel type={tab} id={detail} onClose={() => { setDetail(null); load() }} onSave={load}
-            onNavigate={(navType, navId) => { setTab(navType); setDetail(navId) }} />
+            onNavigate={(navType, navId) => { setDetail(null); setTab(navType); setTimeout(() => setDetail(navId), 150) }} />
         ) : (<>
           {/* Follow-ups View (Consultores only) */}
           {!loading && editing === null && view === 'followups' && tab === 'Consultores' && (
