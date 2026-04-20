@@ -7,7 +7,7 @@ import { TabKPIs } from '../components/crm/TabKPIs.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { KanbanSkeleton, TableSkeleton } from '../components/ui/Skeleton.jsx'
 import { EmptyState } from '../components/ui/EmptyState.jsx'
-import { Building2, Users, UserCheck, Briefcase, HardHat } from 'lucide-react'
+import { Building2, Users, UserCheck, Briefcase, HardHat, ChevronLeft, ChevronRight } from 'lucide-react'
 import { MultiSelect } from '../components/ui/MultiSelect.jsx'
 import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS_COLOR, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
 import { apiFetch } from '../lib/api.js'
@@ -475,6 +475,7 @@ export function CRM() {
   const [filters, setFilters] = useState({})
   const [alertCount, setAlertCount] = useState(0)
   const [consultoresLookup, setConsultoresLookup] = useState([])
+  const [invSubTab, setInvSubTab] = useState('Passivo') // sub-tab investidores
 
   const toast = useToast()
   const searchTimer = useRef(null)
@@ -515,6 +516,12 @@ export function CRM() {
   }, [endpoint, tab, search, filters])
 
   useEffect(() => { load() }, [load])
+  // Forçar filtro tipo_principal quando sub-tab investidores muda
+  useEffect(() => {
+    if (tab === 'Investidores') {
+      setFilters(f => ({ ...f, tipo_principal: invSubTab }))
+    }
+  }, [invSubTab, tab])
   useEffect(() => { apiFetch('/api/crm/stats').then(r => r.json()).then(setStats).catch(() => {}) }, [])
   useEffect(() => { apiFetch('/api/alertas').then(r => r.json()).then(d => setAlertCount(d.resumo?.total ?? 0)).catch(() => {}) }, [])
   useEffect(() => {
@@ -742,6 +749,23 @@ export function CRM() {
         {/* KPIs integrados */}
         <TabKPIs tab={tab} />
 
+        {/* Sub-tabs Investidores: Passivo / Ativo */}
+        {tab === 'Investidores' && (
+          <div className="flex items-center gap-3">
+            <div className="flex rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+              <button onClick={() => { setInvSubTab('Passivo'); setDetail(null) }}
+                className={`px-5 py-2.5 text-sm font-semibold transition-all ${invSubTab === 'Passivo' ? 'bg-violet-600 text-white' : 'bg-white text-gray-500 hover:bg-violet-50 hover:text-violet-600'}`}>
+                Passivos
+              </button>
+              <button onClick={() => { setInvSubTab('Ativo'); setDetail(null) }}
+                className={`px-5 py-2.5 text-sm font-semibold transition-all border-l border-gray-200 ${invSubTab === 'Ativo' ? 'bg-orange-600 text-white' : 'bg-white text-gray-500 hover:bg-orange-50 hover:text-orange-600'}`}>
+                Ativos
+              </button>
+            </div>
+            <span className="text-xs text-gray-400">{data.length} investidor{data.length !== 1 ? 'es' : ''}</span>
+          </div>
+        )}
+
         {/* Filtros dinâmicos */}
         <Filters tab={tab} filters={filters} onChange={f => { setFilters(f); setSearch('') }} />
 
@@ -796,8 +820,81 @@ export function CRM() {
           view === 'kanban' ? <KanbanSkeleton columns={5} /> : <TableSkeleton rows={8} cols={6} />
         )}
 
-        {/* Detail Panel — substitui Kanban/Tabela quando aberto */}
-        {detail && ['Imóveis', 'Investidores', 'Consultores'].includes(tab) ? (
+        {/* Investidores: Split View (lista compacta + detalhe lado a lado) */}
+        {tab === 'Investidores' && detail ? (
+          <div className="flex gap-4" style={{ minHeight: '70vh' }}>
+            {/* Lista compacta à esquerda */}
+            <div className="w-72 shrink-0 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+              <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
+                <input type="text" placeholder="Filtrar..." value={search} onChange={e => handleSearch(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {[...data].sort((a, b) => {
+                  const order = ['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor em espera','Investidor em parceria']
+                  return (order.indexOf(a.status) - order.indexOf(b.status)) || (a.nome || '').localeCompare(b.nome || '')
+                }).map((inv, idx, sorted) => {
+                  const isActive = inv.id === detail
+                  const prevInv = idx > 0 ? sorted[idx - 1] : null
+                  const statusChanged = !prevInv || prevInv.status !== inv.status
+                  return (
+                    <div key={inv.id}>
+                      {statusChanged && (
+                        <div className="px-3 py-1 bg-gray-50 border-b border-gray-100">
+                          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{inv.status}</span>
+                        </div>
+                      )}
+                      <button onClick={() => setDetail(inv.id)}
+                        className={`w-full text-left px-3 py-2.5 border-b border-gray-50 transition-all ${
+                          isActive
+                            ? `${invSubTab === 'Ativo' ? 'bg-orange-50 border-l-3 border-l-orange-500' : 'bg-violet-50 border-l-3 border-l-violet-500'}`
+                            : 'hover:bg-gray-50'
+                        }`}>
+                        <div className="flex items-center gap-2">
+                          <ClassBadge cls={inv.classificacao} />
+                          <span className={`text-sm truncate ${isActive ? 'font-bold text-gray-900' : 'text-gray-700'}`}>{inv.nome}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {inv.capital_max > 0 && <span className="text-[10px] font-mono text-indigo-600">{EUR(inv.capital_max)}</span>}
+                          {inv.telemovel && <span className="text-[10px] text-gray-400">{inv.telemovel}</span>}
+                        </div>
+                      </button>
+                    </div>
+                  )
+                })}
+                {data.length === 0 && <p className="text-xs text-gray-400 text-center py-6">Sem investidores</p>}
+              </div>
+              <div className="px-3 py-2 border-t border-gray-100 bg-gray-50 text-[10px] text-gray-400 text-center">
+                {data.length} investidor{data.length !== 1 ? 'es' : ''} {invSubTab === 'Ativo' ? 'ativos' : 'passivos'}
+              </div>
+            </div>
+
+            {/* Detalhe à direita */}
+            <div className="flex-1 min-w-0">
+              {/* Navegação anterior/seguinte */}
+              {(() => {
+                const currentIdx = data.findIndex(i => i.id === detail)
+                const prev = currentIdx > 0 ? data[currentIdx - 1] : null
+                const next = currentIdx < data.length - 1 ? data[currentIdx + 1] : null
+                return (
+                  <div className="flex items-center justify-between mb-2">
+                    <button onClick={() => prev && setDetail(prev.id)} disabled={!prev}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition">
+                      <ChevronLeft className="w-3.5 h-3.5" /> {prev ? prev.nome : 'Anterior'}
+                    </button>
+                    <span className="text-[10px] text-gray-400">{currentIdx + 1} de {data.length}</span>
+                    <button onClick={() => next && setDetail(next.id)} disabled={!next}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition">
+                      {next ? next.nome : 'Seguinte'} <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )
+              })()}
+              <DetailPanel type="Investidores" id={detail} onClose={() => { setDetail(null); load() }} onSave={load}
+                onNavigate={(navType, navId) => { setDetail(null); setTab(navType); setTimeout(() => setDetail(navId), 150) }} />
+            </div>
+          </div>
+        ) : detail && ['Imóveis', 'Consultores'].includes(tab) ? (
           <DetailPanel type={tab} id={detail} onClose={() => { setDetail(null); load() }} onSave={load}
             onNavigate={(navType, navId) => { setDetail(null); setTab(navType); setTimeout(() => setDetail(navId), 150) }} />
         ) : (<>
