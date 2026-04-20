@@ -735,4 +735,5 @@ if __name__ == "__main__":
     generate("Daniela Gaspar", 12)
     generate("Miguel Pacheco", 12)
     generate("Hugo Batista", 12)
+    generate("Marta Brito", 12)
     print("\nConcluido.")
