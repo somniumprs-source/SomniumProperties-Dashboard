@@ -47,7 +47,7 @@ export function Filters({ tab, filters, onChange }) {
         </div>
         <select value={filters.status ?? ''} onChange={e => set('status', e.target.value)} className={selectClass}>
           <option value="">Todos os status</option>
-          {['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor classificado','Investidor em parceria'].map(o =>
+          {['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor em espera','Investidor em parceria'].map(o =>
             <option key={o} value={o}>{o}</option>
           )}
         </select>

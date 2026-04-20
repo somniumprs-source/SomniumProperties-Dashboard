@@ -553,7 +553,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
               {editing ? <>
                 <EF label="Nome" field="nome" form={form} set={setField} />
                 <EF label="Tipo" field="tipo_principal" form={form} set={setField} type="select" options={['Passivo','Ativo']} />
-                <EF label="Status" field="status" form={form} set={setField} type="select" options={['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor classificado','Investidor em parceria']} />
+                <EF label="Status" field="status" form={form} set={setField} type="select" options={['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor em espera','Investidor em parceria']} />
                 <EF label="Classificação" field="classificacao" form={form} set={setField} type="select" options={['A','B','C','D']} />
                 <EF label="Origem" field="origem" form={form} set={setField} type="select" options={['Skool','Grupos Whatsapp','Referenciação','LinkedIn','Google Forms','Outro']} />
                 <EF label="Capital Min (€)" field="capital_min" form={form} set={setField} type="number" />
@@ -1364,7 +1364,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                     <div className="space-y-1 text-xs text-green-800">
                       <p>1. Preencher o Scorecard com base nas respostas (botão abaixo)</p>
                       <p>2. Enviar resumo por email ao investidor dentro de 24h</p>
-                      <p>3. Actualizar status no CRM para "Follow Up" ou "Investidor classificado"</p>
+                      <p>3. Actualizar status no CRM para "Follow Up" ou "Investidor em espera"</p>
                       <p>4. Se Classe A/B: agendar apresentação de oportunidade</p>
                     </div>
                   </div>

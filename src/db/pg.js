@@ -468,6 +468,9 @@ export async function initSchema() {
       END $$;
       CREATE INDEX IF NOT EXISTS idx_investidores_tipo ON investidores(tipo_principal);
 
+      -- Migration: renomear status "Investidor classificado" → "Investidor em espera"
+      UPDATE investidores SET status = 'Investidor em espera' WHERE status = 'Investidor classificado';
+
       -- Migration: campos do Google Forms que antes iam para notas
       DO $$ BEGIN
         ALTER TABLE investidores ADD COLUMN IF NOT EXISTS profissao TEXT;
