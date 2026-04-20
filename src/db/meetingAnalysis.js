@@ -71,7 +71,20 @@ Responde APENAS em JSON válido com esta estrutura:
   ],
   "classificacao_sugerida": "A" ou "B" ou "C" ou "D",
   "probabilidade_investimento": 0 a 100,
-  "notas_adicionais": "informação relevante adicional"
+  "notas_adicionais": "informação relevante adicional",
+  "scorecard": {
+    "tipo_investidor": "Passivo" ou "Ativo",
+    "c1_score": 1 a 5 (Capacidade Financeira — Passivo: mín €50k, Ativo: mín €200k. 1=sem capital, 3=mínimo OK, 5=muito acima),
+    "c1_notas": "justificação breve",
+    "c2_score": 1 a 5 (Experiência Imobiliária — Passivo: peso reduzido, foco sofisticação. Ativo: peso máximo, gestão obra),
+    "c2_notas": "justificação breve",
+    "c3_score": 1 a 5 (Alinhamento Estratégico — ROI realista, tolerância imprevistos, aceita modelo Somnium),
+    "c3_notas": "justificação breve",
+    "c4_score": 1 a 5 (Estabilidade e Credibilidade — coerência respostas, disposição KYC, origem capital),
+    "c4_notas": "justificação breve",
+    "c5_score": 1 a 5 (Disponibilidade e Compromisso — timing decisão, capital reservado, agenda livre),
+    "c5_notas": "justificação breve"
+  }
 }`
     }]
   })
@@ -168,6 +181,19 @@ function analyzeWithPatterns(reuniao, transcricao, resumo) {
 
   const classificacao = score >= 70 ? 'A' : score >= 50 ? 'B' : score >= 30 ? 'C' : 'D'
 
+  // Gerar scorecard por padrões
+  const tipoInv = tipo_investidor.includes('Ativo') ? 'Ativo' : 'Passivo'
+  const sc_c1 = capital_max >= 200000 ? 5 : capital_max >= 100000 ? 4 : capital_max >= 50000 ? 3 : capital_max > 0 ? 2 : 1
+  const sc_c2 = /(já investiu|experiência|obras|gerido|remodelação)/i.test(text) ? 4
+    : /(fundos|ações|depósitos)/i.test(text) ? 3 : /(primeira vez|nunca)/i.test(text) ? 1 : 2
+  const sc_c3 = /(alinhado|aceito|modelo|parceria|longo prazo)/i.test(text) ? 4
+    : /(dúvida|mas|condição|à minha maneira)/i.test(text) ? 2 : 3
+  const sc_c4 = /(documento|BI|IBAN|coerente|origem)/i.test(text) ? 4
+    : /(inconsist|recusa|litígio)/i.test(text) ? 2 : 3
+  const sc_c5 = /(pronto|amanhã|imediato|reservado)/i.test(text) ? 5
+    : /(60 dias|90 dias|talvez)/i.test(text) ? 2
+    : /(30 dias|breve|próximo mês)/i.test(text) ? 4 : 3
+
   return {
     investidor_dados: {
       capital_min,
@@ -188,6 +214,14 @@ function analyzeWithPatterns(reuniao, transcricao, resumo) {
     classificacao_sugerida: classificacao,
     probabilidade_investimento: score,
     notas_adicionais: null,
+    scorecard: {
+      tipo_investidor: tipoInv,
+      c1_score: sc_c1, c1_notas: `Capital detectado: ${capital_max ? '€' + capital_max.toLocaleString() : 'não mencionado'}`,
+      c2_score: sc_c2, c2_notas: 'Avaliação por padrões de texto — validar manualmente',
+      c3_score: sc_c3, c3_notas: 'Avaliação por padrões de texto — validar manualmente',
+      c4_score: sc_c4, c4_notas: 'Avaliação por padrões de texto — validar manualmente',
+      c5_score: sc_c5, c5_notas: 'Avaliação por padrões de texto — validar manualmente',
+    },
   }
 }
 
@@ -238,9 +272,70 @@ export async function autoFillInvestidor(reuniaoId) {
     )
   }
 
+  // Auto-criar scorecard se a análise incluir dados de scorecard
+  let scorecardCreated = false
+  if (analise.scorecard) {
+    try {
+      const sc = analise.scorecard
+      const tipo = sc.tipo_investidor || 'Passivo'
+      const c1 = Math.max(1, Math.min(5, +sc.c1_score || 3))
+      const c2 = Math.max(1, Math.min(5, +sc.c2_score || 3))
+      const c3 = Math.max(1, Math.min(5, +sc.c3_score || 3))
+      const c4 = Math.max(1, Math.min(5, +sc.c4_score || 3))
+      const c5 = Math.max(1, Math.min(5, +sc.c5_score || 3))
+
+      // Pesos SOP 2
+      const pesos = tipo === 'Ativo'
+        ? { c1: 0.25, c2: 0.30, c3: 0.20, c4: 0.15, c5: 0.10 }
+        : { c1: 0.20, c2: 0.10, c3: 0.30, c4: 0.20, c5: 0.20 }
+
+      const total = c1 + c2 + c3 + c4 + c5
+      const ponderado = Math.round((c1 * pesos.c1 + c2 * pesos.c2 + c3 * pesos.c3 + c4 * pesos.c4 + c5 * pesos.c5) * 20 * 100) / 100
+      const classificacao = ponderado >= 88 ? 'A' : ponderado >= 72 ? 'B' : ponderado >= 56 ? 'C' : 'D'
+
+      const { randomUUID } = await import('crypto')
+      const scId = randomUUID()
+      const now = new Date().toISOString()
+
+      await pool.query(
+        `INSERT INTO scorecards (id, investidor_id, reuniao_id, tipo_investidor,
+          c1_score, c2_score, c3_score, c4_score, c5_score,
+          c1_notas, c2_notas, c3_notas, c4_notas, c5_notas,
+          pontuacao_total, pontuacao_ponderada, classificacao,
+          avaliador, fonte, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$20)`,
+        [scId, inv.id, reuniaoId, tipo,
+          c1, c2, c3, c4, c5,
+          sc.c1_notas || null, sc.c2_notas || null, sc.c3_notas || null, sc.c4_notas || null, sc.c5_notas || null,
+          total, ponderado, classificacao,
+          'Claude AI', 'transcricao_automatica', now]
+      )
+
+      // Atualizar investidor com classificação do scorecard
+      await pool.query(
+        'UPDATE investidores SET classificacao = $1, pontuacao = $2, updated_at = $3 WHERE id = $4',
+        [classificacao, ponderado, now, inv.id]
+      )
+
+      // Registar no histórico
+      await pool.query(
+        `INSERT INTO classificacao_historico (id, investidor_id, classificacao_anterior, classificacao_nova,
+          pontuacao_anterior, pontuacao_nova, motivo, tipo, scorecard_id, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [randomUUID(), inv.id, inv.classificacao || null, classificacao,
+          inv.pontuacao || 0, ponderado, 'Scorecard automático via transcrição de reunião', 'transcricao_automatica', scId, now]
+      )
+
+      scorecardCreated = true
+    } catch (scErr) {
+      console.error('[meetingAnalysis] Erro ao criar scorecard automático:', scErr.message)
+    }
+  }
+
   return {
     ...analise,
     autoFilled: true,
+    scorecardCreated,
     fieldsUpdated: Object.keys(updates),
     investidor_id: inv.id,
     investidor_nome: inv.nome,

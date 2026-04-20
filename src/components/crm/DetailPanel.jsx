@@ -267,6 +267,8 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
     { key: 'relatorios_imovel', label: 'Documentos', icon: '📄', show: type === 'Imóveis' },
     { key: 'documentos', label: `Documentos (${data?.documentos?.length ?? 0})`, icon: '📎', show: type === 'Investidores' },
     { key: 'relatorios', label: `Relatórios (${reunioes.length})`, icon: '📄', show: (type === 'Investidores' || type === 'Consultores') },
+    { key: 'scorecard', label: 'Scorecard', icon: '🎯', show: type === 'Investidores' },
+    { key: 'classificacao', label: 'Classificação', icon: '📈', show: type === 'Investidores' },
   ].filter(t => t.show)
 
   return (
@@ -368,6 +370,18 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
       ) : activeTab === 'relatorios' ? (
         <div className="p-4 sm:p-6">
           <RelatoriosTab reunioes={reunioes} investidorNome={data.nome} />
+        </div>
+
+      /* Scorecard Discovery Call (Investidores) */
+      ) : type === 'Investidores' && activeTab === 'scorecard' ? (
+        <div className="p-4 sm:p-6">
+          <ScorecardTab investidorId={data.id} investidorNome={data.nome} tipoInvestidor={(() => { try { const t = JSON.parse(data.tipo_investidor || '[]'); return t.includes('Ativo') ? 'Ativo' : 'Passivo' } catch { return 'Passivo' } })()} onUpdate={loadData} />
+        </div>
+
+      /* Histórico de Classificação (Investidores) */
+      ) : type === 'Investidores' && activeTab === 'classificacao' ? (
+        <div className="p-4 sm:p-6">
+          <ClassificacaoTab investidorId={data.id} investidorNome={data.nome} classificacaoActual={data.classificacao} pontuacaoActual={data.pontuacao} />
         </div>
 
       ) : (
@@ -970,6 +984,399 @@ function EF({ label, field, form, set, type = 'text', options }) {
       ) : (
         <input type="text" value={form[field] || ''} onChange={e => set(field, e.target.value)} className={inputClass} />
       )}
+    </div>
+  )
+}
+
+// ── Scorecard Tab (Discovery Call — SOP 2) ────────────────────
+const CRITERIOS_INFO = {
+  c1: { label: 'Capacidade Financeira', icon: '💰' },
+  c2: { label: 'Experiência Imobiliária', icon: '🏗️' },
+  c3: { label: 'Alinhamento Estratégico', icon: '🎯' },
+  c4: { label: 'Estabilidade e Credibilidade', icon: '🔒' },
+  c5: { label: 'Disponibilidade e Compromisso', icon: '⏱️' },
+}
+
+const CLASSE_CORES = {
+  A: { bg: 'bg-green-100', text: 'text-green-800', border: 'border-green-300', bar: 'bg-green-500' },
+  B: { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300', bar: 'bg-blue-500' },
+  C: { bg: 'bg-yellow-100', text: 'text-yellow-800', border: 'border-yellow-300', bar: 'bg-yellow-500' },
+  D: { bg: 'bg-red-100', text: 'text-red-800', border: 'border-red-300', bar: 'bg-red-500' },
+}
+
+function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }) {
+  const [scorecards, setScorecards] = useState([])
+  const [rubrica, setRubrica] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [tipo, setTipo] = useState(tipoInvestidor || 'Passivo')
+  const [form, setForm] = useState({ c1_score: 3, c2_score: 3, c3_score: 3, c4_score: 3, c5_score: 3, c1_notas: '', c2_notas: '', c3_notas: '', c4_notas: '', c5_notas: '' })
+
+  useEffect(() => {
+    Promise.all([
+      apiFetch(`/api/crm/scorecards/${investidorId}`).then(r => r.json()),
+      apiFetch('/api/crm/scorecards/rubrica').then(r => r.json()),
+    ]).then(([sc, rb]) => {
+      setScorecards(sc)
+      setRubrica(rb)
+    }).finally(() => setLoading(false))
+  }, [investidorId])
+
+  const pesos = rubrica?.pesos?.[tipo] || { c1: 0.20, c2: 0.10, c3: 0.30, c4: 0.20, c5: 0.20 }
+
+  // Calcular preview em tempo real
+  const previewTotal = form.c1_score + form.c2_score + form.c3_score + form.c4_score + form.c5_score
+  const previewPonderado = Math.round((form.c1_score * pesos.c1 + form.c2_score * pesos.c2 + form.c3_score * pesos.c3 + form.c4_score * pesos.c4 + form.c5_score * pesos.c5) * 20 * 100) / 100
+  const previewClasse = previewPonderado >= 88 ? 'A' : previewPonderado >= 72 ? 'B' : previewPonderado >= 56 ? 'C' : 'D'
+
+  async function saveScorecard() {
+    setSaving(true)
+    try {
+      const r = await apiFetch('/api/crm/scorecards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          investidor_id: investidorId,
+          tipo_investidor: tipo,
+          ...form,
+          avaliador: 'Manual',
+          fonte: 'manual',
+        }),
+      })
+      const result = await r.json()
+      if (result.ok) {
+        setCreating(false)
+        setForm({ c1_score: 3, c2_score: 3, c3_score: 3, c4_score: 3, c5_score: 3, c1_notas: '', c2_notas: '', c3_notas: '', c4_notas: '', c5_notas: '' })
+        const sc = await apiFetch(`/api/crm/scorecards/${investidorId}`).then(r => r.json())
+        setScorecards(sc)
+        if (onUpdate) onUpdate()
+      }
+    } catch (e) { console.error(e) }
+    setSaving(false)
+  }
+
+  if (loading) return <div className="text-center text-gray-400 py-8">A carregar...</div>
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-gray-800">Scorecard Discovery Call</h3>
+          <p className="text-xs text-gray-400">Avaliação SOP 2 — 5 critérios ponderados por tipo de investidor</p>
+        </div>
+        {!creating && (
+          <button onClick={() => setCreating(true)}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ backgroundColor: '#C9A84C' }}>
+            + Novo Scorecard
+          </button>
+        )}
+      </div>
+
+      {/* Formulário de criação */}
+      {creating && (
+        <div className="rounded-xl border border-[#C9A84C33] p-5 space-y-5" style={{ backgroundColor: '#faf8f2' }}>
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-bold text-gray-800">Nova Avaliação — {investidorNome}</h4>
+            <button onClick={() => setCreating(false)} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+          </div>
+
+          {/* Tipo investidor */}
+          <div className="flex gap-2">
+            {['Passivo', 'Ativo'].map(t => (
+              <button key={t} onClick={() => setTipo(t)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tipo === t ? 'bg-[#0d0d0d] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                {t}
+              </button>
+            ))}
+            <span className="text-[10px] text-gray-400 self-center ml-2">Pesos ajustados automaticamente</span>
+          </div>
+
+          {/* Critérios */}
+          <div className="space-y-4">
+            {['c1', 'c2', 'c3', 'c4', 'c5'].map(c => {
+              const info = CRITERIOS_INFO[c]
+              const peso = pesos[c]
+              const rubricaItems = rubrica?.rubrica?.[tipo]?.[c] || []
+              const score = form[`${c}_score`]
+              const rubricaDesc = rubricaItems.find(r => r.min === score)?.desc || ''
+
+              return (
+                <div key={c} className="rounded-lg border border-gray-200 bg-white p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">{info.icon}</span>
+                      <span className="text-sm font-semibold text-gray-800">{info.label}</span>
+                    </div>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">
+                      Peso: {Math.round(peso * 100)}%
+                    </span>
+                  </div>
+
+                  {/* Score selector */}
+                  <div className="flex gap-1 mb-2">
+                    {[1, 2, 3, 4, 5].map(v => (
+                      <button key={v} onClick={() => setForm(f => ({ ...f, [`${c}_score`]: v }))}
+                        className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${
+                          score === v ? 'bg-[#0d0d0d] text-white shadow-sm' : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                        }`}>
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Rubrica description */}
+                  {rubricaDesc && (
+                    <p className="text-xs text-[#C9A84C] font-medium mb-2">{rubricaDesc}</p>
+                  )}
+
+                  {/* Notas */}
+                  <textarea
+                    value={form[`${c}_notas`] || ''}
+                    onChange={e => setForm(f => ({ ...f, [`${c}_notas`]: e.target.value }))}
+                    placeholder="Notas da entrevista..."
+                    rows={2}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300 resize-none"
+                  />
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Preview resultado */}
+          <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] uppercase text-gray-400 tracking-wide">Resultado Previsto</p>
+                <div className="flex items-center gap-3 mt-1">
+                  <span className={`text-2xl font-black ${CLASSE_CORES[previewClasse]?.text || 'text-gray-800'}`}>
+                    Classe {previewClasse}
+                  </span>
+                  <span className="text-sm text-gray-500">{previewPonderado}/100 pts</span>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] text-gray-400">Total bruto: {previewTotal}/25</p>
+                <p className="text-[10px] text-gray-400">A ≥88 | B ≥72 | C ≥56 | D &lt;56</p>
+              </div>
+            </div>
+
+            {/* Barra visual por critério */}
+            <div className="mt-3 space-y-1">
+              {['c1', 'c2', 'c3', 'c4', 'c5'].map(c => {
+                const s = form[`${c}_score`]
+                const p = pesos[c]
+                return (
+                  <div key={c} className="flex items-center gap-2">
+                    <span className="text-[10px] text-gray-400 w-8">{CRITERIOS_INFO[c].icon}</span>
+                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all ${CLASSE_CORES[previewClasse]?.bar || 'bg-gray-400'}`}
+                        style={{ width: `${(s / 5) * 100}%` }} />
+                    </div>
+                    <span className="text-[10px] text-gray-400 w-12 text-right">{s}/5 ({Math.round(p * 100)}%)</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => setCreating(false)} className="px-4 py-2 rounded-lg text-xs text-gray-600 bg-gray-100 hover:bg-gray-200">
+              Cancelar
+            </button>
+            <button onClick={saveScorecard} disabled={saving}
+              className="px-4 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{ backgroundColor: '#C9A84C' }}>
+              {saving ? 'A guardar...' : 'Guardar Scorecard'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Histórico de scorecards */}
+      {scorecards.length > 0 ? (
+        <div className="space-y-3">
+          {scorecards.map((sc, idx) => {
+            const cores = CLASSE_CORES[sc.classificacao] || CLASSE_CORES.D
+            return (
+              <div key={sc.id} className={`rounded-xl border ${cores.border} p-4 ${idx === 0 ? cores.bg : 'bg-white'}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-lg font-black ${cores.text}`}>Classe {sc.classificacao}</span>
+                    <span className="text-xs text-gray-500">{sc.pontuacao_ponderada}/100 pts</span>
+                    {idx === 0 && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#0d0d0d] text-white font-medium">Actual</span>}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500">{new Date(sc.created_at).toLocaleDateString('pt-PT')}</p>
+                    <p className="text-[10px] text-gray-400">{sc.tipo_investidor} · {sc.fonte === 'transcricao_automatica' ? 'Via transcrição' : sc.fonte === 'manual' ? 'Manual' : sc.fonte}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-5 gap-2">
+                  {['c1', 'c2', 'c3', 'c4', 'c5'].map(c => (
+                    <div key={c} className="text-center">
+                      <p className="text-[10px] text-gray-400">{CRITERIOS_INFO[c].icon}</p>
+                      <p className="text-sm font-bold text-gray-800">{sc[`${c}_score`]}</p>
+                      {sc[`${c}_notas`] && (
+                        <p className="text-[9px] text-gray-400 mt-1 line-clamp-2">{sc[`${c}_notas`]}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      ) : !creating && (
+        <div className="rounded-xl border border-dashed border-gray-200 p-8 text-center">
+          <p className="text-2xl mb-2">🎯</p>
+          <p className="text-sm text-gray-500">Sem scorecards registados</p>
+          <p className="text-xs text-gray-400 mt-1">Cria um scorecard após a Discovery Call ou analisa uma transcrição de reunião</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Classificação Tab (Histórico + Reclassificação) ──────────
+function ClassificacaoTab({ investidorId, investidorNome, classificacaoActual, pontuacaoActual }) {
+  const [historico, setHistorico] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [reclassificando, setReclassificando] = useState(false)
+
+  useEffect(() => {
+    apiFetch(`/api/crm/classificacao-historico/${investidorId}`)
+      .then(r => r.json())
+      .then(setHistorico)
+      .finally(() => setLoading(false))
+  }, [investidorId])
+
+  async function triggerReclassificacao() {
+    setReclassificando(true)
+    try {
+      await apiFetch('/api/crm/automation/reclassificar-investidores', { method: 'POST' })
+      const h = await apiFetch(`/api/crm/classificacao-historico/${investidorId}`).then(r => r.json())
+      setHistorico(h)
+    } catch (e) { console.error(e) }
+    setReclassificando(false)
+  }
+
+  if (loading) return <div className="text-center text-gray-400 py-8">A carregar...</div>
+
+  const coresActual = CLASSE_CORES[classificacaoActual] || CLASSE_CORES.D
+
+  return (
+    <div className="space-y-6">
+      {/* Estado actual */}
+      <div className={`rounded-xl border ${coresActual.border} ${coresActual.bg} p-5`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[10px] uppercase text-gray-500 tracking-wide">Classificação Actual</p>
+            <div className="flex items-center gap-3 mt-1">
+              <span className={`text-3xl font-black ${coresActual.text}`}>
+                {classificacaoActual || '—'}
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-gray-800">{pontuacaoActual || 0}/100 pts</p>
+                <p className="text-xs text-gray-500">
+                  {classificacaoActual === 'A' ? 'Prioritário — recebe oportunidades primeiro' :
+                   classificacaoActual === 'B' ? 'Elegível — recebe oportunidades em 2.ª prioridade' :
+                   classificacaoActual === 'C' ? 'Em observação — reavaliação periódica' :
+                   classificacaoActual === 'D' ? 'Não elegível — manter em pipeline de nurturing' :
+                   'Sem classificação — completar scorecard'}
+                </p>
+              </div>
+            </div>
+          </div>
+          <button onClick={triggerReclassificacao} disabled={reclassificando}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50">
+            {reclassificando ? 'A processar...' : 'Reavaliar agora'}
+          </button>
+        </div>
+      </div>
+
+      {/* Regras de follow-up */}
+      <div className="rounded-xl border border-gray-200 bg-white p-4">
+        <h4 className="text-sm font-semibold text-gray-800 mb-3">Ciclo de Follow-Up e Reclassificação</h4>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-lg bg-green-50 p-3 border border-green-100 text-center">
+            <p className="text-lg font-bold text-green-700">30d</p>
+            <p className="text-[10px] text-green-600 font-medium">Follow-up quente</p>
+            <p className="text-[10px] text-gray-400">Sem penalização</p>
+          </div>
+          <div className="rounded-lg bg-yellow-50 p-3 border border-yellow-100 text-center">
+            <p className="text-lg font-bold text-yellow-700">60d</p>
+            <p className="text-[10px] text-yellow-600 font-medium">Follow-up intermédio</p>
+            <p className="text-[10px] text-gray-400">-5 a -10 pts</p>
+          </div>
+          <div className="rounded-lg bg-red-50 p-3 border border-red-100 text-center">
+            <p className="text-lg font-bold text-red-700">90d</p>
+            <p className="text-[10px] text-red-600 font-medium">Follow-up frio</p>
+            <p className="text-[10px] text-gray-400">-15 a -25 pts</p>
+          </div>
+        </div>
+        <p className="text-[10px] text-gray-400 mt-2">
+          Bónus: NDA assinado (+5), montante investido (+10), negócios activos (+10).
+          Classe C sem evolução em 180 dias → sugestão de arquivo.
+        </p>
+      </div>
+
+      {/* Timeline de classificação */}
+      <div>
+        <h4 className="text-sm font-semibold text-gray-800 mb-3">Histórico de Classificação</h4>
+        {historico.length > 0 ? (
+          <div className="relative">
+            <div className="absolute left-3 top-0 bottom-0 w-px bg-gray-200" />
+            <div className="space-y-4">
+              {historico.map((h, idx) => {
+                const coresNova = CLASSE_CORES[h.classificacao_nova] || CLASSE_CORES.D
+                const subiu = h.classificacao_anterior && h.classificacao_nova < h.classificacao_anterior
+                const desceu = h.classificacao_anterior && h.classificacao_nova > h.classificacao_anterior
+                return (
+                  <div key={h.id} className="relative pl-8">
+                    <div className={`absolute left-1.5 top-1.5 w-3 h-3 rounded-full border-2 ${coresNova.border} ${idx === 0 ? coresNova.bg : 'bg-white'}`} />
+                    <div className="rounded-lg border border-gray-200 bg-white p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {h.classificacao_anterior ? (
+                            <span className="text-xs">
+                              <span className="font-semibold text-gray-500">{h.classificacao_anterior}</span>
+                              <span className="mx-1">{subiu ? '→' : desceu ? '→' : '→'}</span>
+                              <span className={`font-bold ${coresNova.text}`}>{h.classificacao_nova}</span>
+                              {subiu && <span className="ml-1 text-green-500">▲</span>}
+                              {desceu && <span className="ml-1 text-red-500">▼</span>}
+                            </span>
+                          ) : (
+                            <span className={`text-xs font-bold ${coresNova.text}`}>
+                              → {h.classificacao_nova} (primeira classificação)
+                            </span>
+                          )}
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                            {h.pontuacao_anterior ? `${h.pontuacao_anterior} → ` : ''}{h.pontuacao_nova} pts
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-gray-400">{new Date(h.created_at).toLocaleDateString('pt-PT')}</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">{h.motivo}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">
+                        {h.tipo === 'manual' ? 'Scorecard manual' :
+                         h.tipo === 'transcricao_automatica' ? 'Via transcrição automática' :
+                         h.tipo === 'reclassificacao_periodica' ? 'Reclassificação periódica' : h.tipo}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-gray-200 p-6 text-center">
+            <p className="text-sm text-gray-400">Sem histórico de classificação</p>
+            <p className="text-xs text-gray-300 mt-1">O histórico é criado automaticamente quando um scorecard é preenchido ou na reclassificação periódica</p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -1237,24 +1237,59 @@ router.get('/lookup/consultores', async (req, res) => {
 router.post('/automation/score-investidores', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM investidores')
+    const { rows: allScorecards } = await pool.query('SELECT * FROM scorecards ORDER BY created_at DESC')
     const updated = []
-    for (const inv of rows) {
-      let score = 0
-      if (inv.capital_min > 0 || inv.capital_max > 0) score += 20
-      if (inv.data_reuniao) score += 20
-      if (inv.nda_assinado) score += 15
-      const estrategia = inv.estrategia ? JSON.parse(inv.estrategia) : []
-      if (estrategia.length > 0) score += 10
-      const tipo = inv.tipo_investidor ? JSON.parse(inv.tipo_investidor) : []
-      if (tipo.length > 0) score += 10
-      if (inv.telemovel || inv.email) score += 5
-      if (inv.data_primeiro_contacto) score += 5
+    const now = new Date().toISOString()
 
-      const classificacao = score >= 80 ? 'A' : score >= 60 ? 'B' : score >= 35 ? 'C' : 'D'
-      if (inv.pontuacao !== score || inv.classificacao !== classificacao) {
+    for (const inv of rows) {
+      // Se tem scorecard, usar a pontuação ponderada do último scorecard
+      const ultimoSc = allScorecards.find(s => s.investidor_id === inv.id)
+      if (ultimoSc) {
+        // Scorecard existe — usar classificação do scorecard (mais precisa)
+        if (inv.classificacao !== ultimoSc.classificacao || Math.abs((inv.pontuacao || 0) - ultimoSc.pontuacao_ponderada) > 1) {
+          await pool.query('UPDATE investidores SET pontuacao = $1, classificacao = $2, updated_at = $3 WHERE id = $4',
+            [ultimoSc.pontuacao_ponderada, ultimoSc.classificacao, now, inv.id])
+          updated.push({ nome: inv.nome, score: ultimoSc.pontuacao_ponderada, classificacao: ultimoSc.classificacao, fonte: 'scorecard' })
+        }
+        continue
+      }
+
+      // Sem scorecard — scoring por completude do perfil (SOP 2 simplificado)
+      let tipo = 'Passivo'
+      try { if (JSON.parse(inv.tipo_investidor || '[]').includes('Ativo')) tipo = 'Ativo' } catch {}
+
+      // C1: Capacidade Financeira
+      const capital = Math.max(inv.capital_min || 0, inv.capital_max || 0)
+      const limiteMin = tipo === 'Ativo' ? 200000 : 50000
+      const c1 = capital >= limiteMin * 4 ? 5 : capital >= limiteMin * 2 ? 4 : capital >= limiteMin ? 3 : capital > 0 ? 2 : 1
+
+      // C2: Experiência (estimada pelo perfil)
+      const estrategia = inv.estrategia ? JSON.parse(inv.estrategia) : []
+      const c2 = estrategia.length >= 3 ? 4 : estrategia.length >= 1 ? 3 : inv.data_reuniao ? 2 : 1
+
+      // C3: Alinhamento (estimado por engagement)
+      const c3 = inv.data_reuniao && inv.nda_assinado ? 5
+        : inv.data_reuniao ? 4
+        : inv.data_primeiro_contacto ? 3
+        : (inv.telemovel || inv.email) ? 2 : 1
+
+      // C4: Estabilidade
+      const c4 = inv.nda_assinado && inv.perfil_risco ? 4
+        : inv.nda_assinado || inv.perfil_risco ? 3
+        : (inv.telemovel && inv.email) ? 2 : 1
+
+      // C5: Compromisso
+      const c5 = inv.montante_investido > 0 ? 5
+        : inv.numero_negocios > 0 ? 4
+        : inv.data_reuniao ? 3
+        : inv.data_primeiro_contacto ? 2 : 1
+
+      const { ponderado, classificacao } = calcularScorecard({ c1, c2, c3, c4, c5 }, tipo)
+
+      if (Math.abs((inv.pontuacao || 0) - ponderado) > 1 || inv.classificacao !== classificacao) {
         await pool.query('UPDATE investidores SET pontuacao = $1, classificacao = $2, updated_at = $3 WHERE id = $4',
-          [score, classificacao, new Date().toISOString(), inv.id])
-        updated.push({ nome: inv.nome, score, classificacao })
+          [ponderado, classificacao, now, inv.id])
+        updated.push({ nome: inv.nome, score: ponderado, classificacao, fonte: 'perfil', criterios: { c1, c2, c3, c4, c5 } })
       }
     }
     res.json({ ok: true, atualizados: updated.length, detalhes: updated })
@@ -1537,6 +1572,296 @@ router.get('/relatorio/investidores', async (req, res) => {
       .map(i => ({ nome: i.nome, classificacao: i.classificacao, capital: i.capitalMax, status: i.status, reunioes: i.reunioes }))
 
     res.json(report)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Scorecards Discovery Call (SOP 2) ───────────────────────
+
+// Pesos por tipo de investidor (soma = 100%)
+const PESOS_SCORECARD = {
+  Passivo: { c1: 0.20, c2: 0.10, c3: 0.30, c4: 0.20, c5: 0.20 },
+  Ativo:   { c1: 0.25, c2: 0.30, c3: 0.20, c4: 0.15, c5: 0.10 },
+}
+
+const CRITERIOS_LABELS = {
+  c1: 'Capacidade Financeira',
+  c2: 'Experiência Imobiliária',
+  c3: 'Alinhamento Estratégico',
+  c4: 'Estabilidade e Credibilidade',
+  c5: 'Disponibilidade e Compromisso',
+}
+
+// Rubrica detalhada de pontuação (1-5) por critério e tipo
+const RUBRICA = {
+  Passivo: {
+    c1: [
+      { min: 1, max: 1, desc: 'Sem capital mobilizável ou < €30.000' },
+      { min: 2, max: 2, desc: '€30.000–€49.999, mobilização > 60 dias' },
+      { min: 3, max: 3, desc: '€50.000–€99.999, mobilizável em 30 dias' },
+      { min: 4, max: 4, desc: '€100.000–€199.999, conta corrente/depósito' },
+      { min: 5, max: 5, desc: '≥ €200.000, capital exclusivo, mobilização imediata' },
+    ],
+    c2: [
+      { min: 1, max: 1, desc: 'Sem experiência de investimento' },
+      { min: 2, max: 2, desc: 'Experiência em depósitos/certificados apenas' },
+      { min: 3, max: 3, desc: 'Investimentos diversificados (ações, fundos)' },
+      { min: 4, max: 4, desc: 'Investimento imobiliário indireto (fundos, REITs)' },
+      { min: 5, max: 5, desc: 'Investimentos imobiliários diretos anteriores' },
+    ],
+    c3: [
+      { min: 1, max: 1, desc: 'Expectativas irrealistas ou quer controlo operacional' },
+      { min: 2, max: 2, desc: 'ROI esperado acima do mercado, pouca flexibilidade' },
+      { min: 3, max: 3, desc: 'ROI realista mas baixa tolerância a imprevistos' },
+      { min: 4, max: 4, desc: 'Alinhado com modelo Somnium, aceita volatilidade' },
+      { min: 5, max: 5, desc: 'Totalmente alinhado, delega operação, foco longo prazo' },
+    ],
+    c4: [
+      { min: 1, max: 1, desc: 'Incoerências graves entre Forms e entrevista' },
+      { min: 2, max: 2, desc: 'Resistente a documentação KYC' },
+      { min: 3, max: 3, desc: 'Coerente mas sem documentação imediata' },
+      { min: 4, max: 4, desc: 'Coerente, KYC parcial, origem capital clara' },
+      { min: 5, max: 5, desc: 'Totalmente coerente, KYC completo, referências' },
+    ],
+    c5: [
+      { min: 1, max: 1, desc: 'Sem data de decisão, apenas curiosidade' },
+      { min: 2, max: 2, desc: 'Interessado mas com impedimentos indefinidos' },
+      { min: 3, max: 3, desc: 'Decisão em 60–90 dias, capital parcialmente reservado' },
+      { min: 4, max: 4, desc: 'Decisão em 30 dias, capital reservado' },
+      { min: 5, max: 5, desc: 'Pronto para investir, capital disponível, sem impedimentos' },
+    ],
+  },
+  Ativo: {
+    c1: [
+      { min: 1, max: 1, desc: 'Sem capital ou < €100.000' },
+      { min: 2, max: 2, desc: '€100.000–€149.999, sem reserva contingência' },
+      { min: 3, max: 3, desc: '€150.000–€199.999, cobre aquisição mas não obra' },
+      { min: 4, max: 4, desc: '€200.000–€299.999, cobre aquisição + obra' },
+      { min: 5, max: 5, desc: '≥ €300.000, com reserva contingência, sem pressão liquidez' },
+    ],
+    c2: [
+      { min: 1, max: 1, desc: 'Sem experiência em gestão de obra' },
+      { min: 2, max: 2, desc: '1 obra gerida, sem empreiteiro fixo' },
+      { min: 3, max: 3, desc: '2-3 obras, empreiteiro ocasional, conhece preços' },
+      { min: 4, max: 4, desc: '3-5 obras, empreiteiro de confiança, gestão sólida' },
+      { min: 5, max: 5, desc: '5+ obras, equipa própria, estimativas precisas' },
+    ],
+    c3: [
+      { min: 1, max: 1, desc: 'Quer fazer à sua maneira, não aceita modelo Somnium' },
+      { min: 2, max: 2, desc: 'Aceita parceria mas com muitas condições' },
+      { min: 3, max: 3, desc: 'Alinhado parcialmente, necessita alinhamento' },
+      { min: 4, max: 4, desc: 'Aceita modelo Somnium, experiência com parcerias' },
+      { min: 5, max: 5, desc: 'Totalmente alinhado, historial de parcerias bem-sucedidas' },
+    ],
+    c4: [
+      { min: 1, max: 1, desc: 'Sem historial verificável, incoerências' },
+      { min: 2, max: 2, desc: 'Historial parcial, recusa documentação' },
+      { min: 3, max: 3, desc: 'Coerente, historial parcialmente verificável' },
+      { min: 4, max: 4, desc: 'Historial sólido, KYC parcial, sem litígios' },
+      { min: 5, max: 5, desc: 'Historial exemplar, KYC completo, referências verificadas' },
+    ],
+    c5: [
+      { min: 1, max: 1, desc: 'Sem equipa, sem agenda, sem capital imediato' },
+      { min: 2, max: 2, desc: 'Capital OK mas sem empreiteiro disponível' },
+      { min: 3, max: 3, desc: 'Capital + empreiteiro em 60 dias' },
+      { min: 4, max: 4, desc: 'Capital + empreiteiro em 30 dias, agenda livre' },
+      { min: 5, max: 5, desc: 'Tudo pronto: capital, empreiteiro, agenda, foco total' },
+    ],
+  },
+}
+
+function calcularScorecard(scores, tipo) {
+  const pesos = PESOS_SCORECARD[tipo] || PESOS_SCORECARD.Passivo
+  const total = (scores.c1 || 0) + (scores.c2 || 0) + (scores.c3 || 0) + (scores.c4 || 0) + (scores.c5 || 0)
+  const ponderado = (
+    (scores.c1 || 0) * pesos.c1 +
+    (scores.c2 || 0) * pesos.c2 +
+    (scores.c3 || 0) * pesos.c3 +
+    (scores.c4 || 0) * pesos.c4 +
+    (scores.c5 || 0) * pesos.c5
+  ) * 20 // normalizar para 0-100
+
+  const classificacao = ponderado >= 88 ? 'A' : ponderado >= 72 ? 'B' : ponderado >= 56 ? 'C' : 'D'
+  return { total, ponderado: Math.round(ponderado * 100) / 100, classificacao }
+}
+
+// GET rubrica (para o frontend mostrar as descrições)
+router.get('/scorecards/rubrica', (req, res) => {
+  res.json({ pesos: PESOS_SCORECARD, criterios: CRITERIOS_LABELS, rubrica: RUBRICA })
+})
+
+// GET scorecards de um investidor
+router.get('/scorecards/:investidorId', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM scorecards WHERE investidor_id = $1 ORDER BY created_at DESC',
+      [req.params.investidorId]
+    )
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// POST criar scorecard (manual ou automático via transcrição)
+router.post('/scorecards', async (req, res) => {
+  try {
+    const { investidor_id, reuniao_id, tipo_investidor, c1_score, c2_score, c3_score, c4_score, c5_score,
+      c1_notas, c2_notas, c3_notas, c4_notas, c5_notas, avaliador, fonte } = req.body
+
+    if (!investidor_id) return res.status(400).json({ error: 'investidor_id obrigatório' })
+
+    const tipo = tipo_investidor || 'Passivo'
+    const scores = { c1: +c1_score || 0, c2: +c2_score || 0, c3: +c3_score || 0, c4: +c4_score || 0, c5: +c5_score || 0 }
+    const { total, ponderado, classificacao } = calcularScorecard(scores, tipo)
+
+    const id = randomUUID()
+    const now = new Date().toISOString()
+
+    await pool.query(
+      `INSERT INTO scorecards (id, investidor_id, reuniao_id, tipo_investidor,
+        c1_score, c2_score, c3_score, c4_score, c5_score,
+        c1_notas, c2_notas, c3_notas, c4_notas, c5_notas,
+        pontuacao_total, pontuacao_ponderada, classificacao,
+        avaliador, fonte, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$20)`,
+      [id, investidor_id, reuniao_id || null, tipo,
+        scores.c1, scores.c2, scores.c3, scores.c4, scores.c5,
+        c1_notas || null, c2_notas || null, c3_notas || null, c4_notas || null, c5_notas || null,
+        total, ponderado, classificacao,
+        avaliador || 'Sistema', fonte || 'manual', now]
+    )
+
+    // Buscar classificação anterior do investidor
+    const { rows: [inv] } = await pool.query('SELECT classificacao, pontuacao FROM investidores WHERE id = $1', [investidor_id])
+
+    // Atualizar investidor com nova classificação e pontuação
+    await pool.query(
+      'UPDATE investidores SET classificacao = $1, pontuacao = $2, status = CASE WHEN status IN ($5, $6) THEN $4 ELSE status END, updated_at = $3 WHERE id = $7',
+      [classificacao, ponderado, now, 'Investidor classificado', 'Call marcada', 'Follow Up', investidor_id]
+    )
+
+    // Registar no histórico de classificação
+    await pool.query(
+      `INSERT INTO classificacao_historico (id, investidor_id, classificacao_anterior, classificacao_nova,
+        pontuacao_anterior, pontuacao_nova, motivo, tipo, scorecard_id, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [randomUUID(), investidor_id, inv?.classificacao || null, classificacao,
+        inv?.pontuacao || 0, ponderado, 'Scorecard Discovery Call', fonte || 'manual', id, now]
+    )
+
+    res.json({
+      ok: true, id, classificacao, pontuacao_ponderada: ponderado, pontuacao_total: total,
+      classificacao_anterior: inv?.classificacao || null,
+    })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// GET histórico de classificação de um investidor
+router.get('/classificacao-historico/:investidorId', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM classificacao_historico WHERE investidor_id = $1 ORDER BY created_at DESC',
+      [req.params.investidorId]
+    )
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Reclassificação periódica (30/60/90 dias follow-up) ─────
+
+const FOLLOWUP_INVESTIDOR_RULES = {
+  A: { dias_quente: 30, dias_intermedio: 60, dias_frio: 90, penalizacao_quente: 0, penalizacao_intermedio: 5, penalizacao_frio: 15 },
+  B: { dias_quente: 30, dias_intermedio: 60, dias_frio: 90, penalizacao_quente: 0, penalizacao_intermedio: 8, penalizacao_frio: 20 },
+  C: { dias_quente: 30, dias_intermedio: 60, dias_frio: 90, penalizacao_quente: 0, penalizacao_intermedio: 10, penalizacao_frio: 25 },
+  D: { dias_quente: 30, dias_intermedio: 60, dias_frio: 90, penalizacao_quente: 0, penalizacao_intermedio: 5, penalizacao_frio: 10 },
+}
+
+router.post('/automation/reclassificar-investidores', async (req, res) => {
+  try {
+    const { rows: investidores } = await pool.query('SELECT * FROM investidores')
+    const { rows: allScorecards } = await pool.query('SELECT * FROM scorecards ORDER BY created_at DESC')
+    const now = new Date()
+    const updated = []
+    const alertas = { promovidos: [], despromovidos: [], follow_up_urgente: [], arquivo: [] }
+
+    for (const inv of investidores) {
+      if (!inv.classificacao || inv.classificacao === 'D') continue
+
+      // Último scorecard
+      const ultimoScorecard = allScorecards.find(s => s.investidor_id === inv.id)
+      if (!ultimoScorecard) continue
+
+      // Calcular dias sem contacto
+      const ultimoContacto = inv.data_ultimo_contacto || inv.data_reuniao || inv.data_primeiro_contacto
+      if (!ultimoContacto) continue
+
+      const diasSem = Math.floor((now - new Date(ultimoContacto)) / 86400000)
+      const rules = FOLLOWUP_INVESTIDOR_RULES[inv.classificacao] || FOLLOWUP_INVESTIDOR_RULES.C
+
+      // Calcular penalização baseada no tempo sem contacto
+      let penalizacao = 0
+      let tipoFollowUp = null
+
+      if (diasSem >= rules.dias_frio) {
+        penalizacao = rules.penalizacao_frio
+        tipoFollowUp = 'frio'
+      } else if (diasSem >= rules.dias_intermedio) {
+        penalizacao = rules.penalizacao_intermedio
+        tipoFollowUp = 'intermedio'
+      } else if (diasSem >= rules.dias_quente) {
+        penalizacao = rules.penalizacao_quente
+        tipoFollowUp = 'quente'
+      }
+
+      if (penalizacao === 0) continue
+
+      // Bónus por engagement positivo
+      let bonus = 0
+      if (inv.nda_assinado) bonus += 5
+      if (inv.montante_investido > 0) bonus += 10
+      if (inv.numero_negocios > 0) bonus += 10
+
+      const pontuacaoAjustada = Math.max(0, Math.min(100, (inv.pontuacao || 0) - penalizacao + bonus))
+      const novaClassificacao = pontuacaoAjustada >= 88 ? 'A' : pontuacaoAjustada >= 72 ? 'B' : pontuacaoAjustada >= 56 ? 'C' : 'D'
+
+      if (novaClassificacao !== inv.classificacao || Math.abs(pontuacaoAjustada - (inv.pontuacao || 0)) > 1) {
+        const motivo = `Reclassificação periódica — ${diasSem}d sem contacto (follow-up ${tipoFollowUp}), penalização ${penalizacao}pts` +
+          (bonus > 0 ? `, bónus engagement +${bonus}pts` : '')
+
+        await pool.query(
+          'UPDATE investidores SET classificacao = $1, pontuacao = $2, data_follow_up = $3, updated_at = $3 WHERE id = $4',
+          [novaClassificacao, pontuacaoAjustada, now.toISOString(), inv.id]
+        )
+
+        await pool.query(
+          `INSERT INTO classificacao_historico (id, investidor_id, classificacao_anterior, classificacao_nova,
+            pontuacao_anterior, pontuacao_nova, motivo, tipo, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [randomUUID(), inv.id, inv.classificacao, novaClassificacao,
+            inv.pontuacao || 0, pontuacaoAjustada, motivo, 'reclassificacao_periodica', now.toISOString()]
+        )
+
+        const mudanca = { nome: inv.nome, de: inv.classificacao, para: novaClassificacao,
+          pontuacao_de: inv.pontuacao || 0, pontuacao_para: pontuacaoAjustada, diasSem, tipoFollowUp }
+        updated.push(mudanca)
+
+        if (novaClassificacao > inv.classificacao) alertas.despromovidos.push(mudanca)
+        else alertas.promovidos.push(mudanca)
+
+        // Classe C sem evolução há 180 dias → sugerir arquivo
+        if (novaClassificacao === 'C' || novaClassificacao === 'D') {
+          const primContacto = inv.data_primeiro_contacto ? new Date(inv.data_primeiro_contacto) : null
+          if (primContacto && Math.floor((now - primContacto) / 86400000) > 180) {
+            alertas.arquivo.push({ nome: inv.nome, classificacao: novaClassificacao, diasTotal: Math.floor((now - primContacto) / 86400000) })
+          }
+        }
+      }
+
+      // Alertas de follow-up urgente (sem reclassificação mas perto)
+      if (tipoFollowUp === 'intermedio' && novaClassificacao === inv.classificacao) {
+        alertas.follow_up_urgente.push({ nome: inv.nome, classificacao: inv.classificacao, diasSem, proximoLimite: rules.dias_frio })
+      }
+    }
+
+    res.json({ ok: true, atualizados: updated.length, detalhes: updated, alertas })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
