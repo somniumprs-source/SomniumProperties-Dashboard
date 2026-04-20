@@ -308,9 +308,30 @@ export function DetailPanel({ type, id, onClose, onSave }) {
               <FileDown className="w-3.5 h-3.5" /> PDF
             </button>
           )}
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">&times;</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
         </div>
       </div>
+
+      {/* Barra de progresso checklist */}
+      {type === 'Imóveis' && data.checklist?.length > 0 && (() => {
+        const obrig = data.checklist.filter(c => c.obrigatoria)
+        const done = obrig.filter(c => c.concluida).length
+        const total = obrig.length
+        const pct = total > 0 ? Math.round((done / total) * 100) : 0
+        const isComplete = done === total && total > 0
+        return (
+          <div className="px-4 sm:px-6 py-2.5 border-b border-gray-100 flex items-center gap-3" style={{ backgroundColor: '#FAFAF8' }}>
+            <span className="text-[11px] font-medium text-gray-500 shrink-0">Progresso</span>
+            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div className="h-full rounded-full transition-all duration-500"
+                style={{ width: `${pct}%`, backgroundColor: isComplete ? '#22c55e' : '#C9A84C' }} />
+            </div>
+            <span className={`text-[11px] font-bold shrink-0 ${isComplete ? 'text-green-600' : 'text-gray-600'}`}>
+              {done}/{total} ({pct}%)
+            </span>
+          </div>
+        )
+      })()}
 
       {/* Tabs */}
       {tabs.length > 1 && (
@@ -617,6 +638,14 @@ export function DetailPanel({ type, id, onClose, onSave }) {
                 ))}
               </div>
             </div>
+          )}
+
+          {type === 'Imóveis' && data.consultores?.length > 0 && (
+            <ImovelInteracoesSection
+              imovelId={data.id}
+              consultores={data.consultores}
+              onUpdate={loadData}
+            />
           )}
 
           {data.imoveis?.length > 0 && (
