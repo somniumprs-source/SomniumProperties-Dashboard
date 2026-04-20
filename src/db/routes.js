@@ -13,7 +13,7 @@ import { createClient } from '@supabase/supabase-js'
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.supabase.co'
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
 const supabaseStorage = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null
-import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, getDashboardStats } from './crud.js'
+import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, DocumentosInvestidor, getDashboardStats } from './crud.js'
 import pool from './pg.js'
 import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
 import { generateImovelPDF } from './pdfReport.js'
@@ -266,6 +266,47 @@ router.get('/imoveis/:id/relatorio-investidor', async (req, res) => {
 })
 
 crudRoutes('/investidores', Investidores)
+
+// ── Documentos enviados a investidores (historico) ──────────
+router.get('/investidores/:id/documentos', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT d.*, i.nome as imovel_nome
+       FROM documentos_investidor d
+       LEFT JOIN imoveis i ON i.id = d.imovel_id
+       WHERE d.investidor_id = $1
+       ORDER BY d.created_at DESC`,
+      [req.params.id]
+    )
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/investidores/:id/documentos', async (req, res) => {
+  try {
+    const { tipo, nome, imovel_id, notas } = req.body
+    if (!tipo || !nome) return res.status(400).json({ error: 'tipo e nome são obrigatórios' })
+    const id = randomUUID()
+    const now = new Date().toISOString()
+    await pool.query(
+      `INSERT INTO documentos_investidor (id, investidor_id, imovel_id, tipo, nome, notas, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [id, req.params.id, imovel_id || null, tipo, nome, notas || null, now]
+    )
+    res.status(201).json({ id, investidor_id: req.params.id, imovel_id, tipo, nome, notas, created_at: now })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/investidores/:id/documentos/:docId', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      'DELETE FROM documentos_investidor WHERE id = $1 AND investidor_id = $2',
+      [req.params.docId, req.params.id]
+    )
+    if (rowCount === 0) return res.status(404).json({ error: 'Não encontrado' })
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
 
 // ── Endpoints específicos de consultores (ANTES do crudRoutes para evitar conflito com :id) ─
 
@@ -866,7 +907,11 @@ router.get('/investidores/:id/full', async (req, res) => {
     // Tarefas relacionadas
     const { rows: tarefas } = await pool.query("SELECT * FROM tarefas WHERE tarefa ILIKE $1 ORDER BY created_at DESC", [`%${inv.nome}%`])
     const { rows: timeline } = await pool.query("SELECT * FROM audit_log WHERE registo_id = $1 ORDER BY created_at DESC LIMIT 20", [inv.id])
-    res.json({ ...inv, negocios, tarefas, timeline })
+    const { rows: documentos } = await pool.query(
+      `SELECT d.*, i.nome as imovel_nome FROM documentos_investidor d LEFT JOIN imoveis i ON i.id = d.imovel_id WHERE d.investidor_id = $1 ORDER BY d.created_at DESC`,
+      [inv.id]
+    )
+    res.json({ ...inv, negocios, tarefas, timeline, documentos })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 

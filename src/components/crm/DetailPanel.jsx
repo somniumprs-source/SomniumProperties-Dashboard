@@ -9,6 +9,7 @@ import { AnaliseTab } from '../analise/AnaliseTab.jsx'
 import { InteracoesTab } from './InteracoesTab.jsx'
 import { FicheirosTab } from './FicheirosTab.jsx'
 import { ChecklistTab } from './ChecklistTab.jsx'
+import { DocumentosInvestidorTab } from './DocumentosInvestidorTab.jsx'
 import { supabase } from '../../lib/supabase.js'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
@@ -263,6 +264,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
     { key: 'checklist', label: 'Checklist', icon: '📋', show: type === 'Imóveis' },
     { key: 'analise', label: 'Análise Financeira', icon: '📊', show: type === 'Imóveis' },
     { key: 'relatorios_imovel', label: 'Documentos', icon: '📄', show: type === 'Imóveis' },
+    { key: 'documentos', label: `Documentos (${data?.documentos?.length ?? 0})`, icon: '📎', show: type === 'Investidores' },
     { key: 'relatorios', label: `Relatórios (${reunioes.length})`, icon: '📄', show: (type === 'Investidores' || type === 'Consultores') },
   ].filter(t => t.show)
 
@@ -353,6 +355,12 @@ export function DetailPanel({ type, id, onClose, onSave }) {
       ) : type === 'Imóveis' && activeTab === 'relatorios_imovel' ? (
         <div className="p-4 sm:p-6">
           <RelatoriosImovelTab imovelId={data.id} estado={data.estado} driveFolderId={data.drive_folder_id} imovelNome={data.nome} />
+        </div>
+
+      /* Documentos enviados a investidor */
+      ) : type === 'Investidores' && activeTab === 'documentos' ? (
+        <div className="p-4 sm:p-6">
+          <DocumentosInvestidorTab investidorId={data.id} documentos={data.documentos || []} onUpdate={loadData} />
         </div>
 
       /* Relatórios reuniões (investidores/consultores) */
