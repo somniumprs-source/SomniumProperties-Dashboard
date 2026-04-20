@@ -31,6 +31,20 @@ export function Filters({ tab, filters, onChange }) {
         </select>
       </>}
       {tab === 'Investidores' && <>
+        <div className="flex bg-gray-100 rounded-lg p-0.5">
+          <button onClick={() => set('tipo_principal', filters.tipo_principal === undefined ? undefined : undefined)}
+            className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${!filters.tipo_principal ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
+            Todos
+          </button>
+          <button onClick={() => set('tipo_principal', 'Passivo')}
+            className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${filters.tipo_principal === 'Passivo' ? 'bg-violet-600 text-white shadow-sm' : 'text-gray-500 hover:text-violet-600'}`}>
+            Passivo
+          </button>
+          <button onClick={() => set('tipo_principal', 'Ativo')}
+            className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${filters.tipo_principal === 'Ativo' ? 'bg-orange-600 text-white shadow-sm' : 'text-gray-500 hover:text-orange-600'}`}>
+            Ativo
+          </button>
+        </div>
         <select value={filters.status ?? ''} onChange={e => set('status', e.target.value)} className={selectClass}>
           <option value="">Todos os status</option>
           {['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor classificado','Investidor em parceria'].map(o =>
@@ -43,7 +57,7 @@ export function Filters({ tab, filters, onChange }) {
         </select>
         <select value={filters.origem ?? ''} onChange={e => set('origem', e.target.value)} className={selectClass}>
           <option value="">Todas as origens</option>
-          {['Skool','Grupos Whatsapp','Referenciação','LinkedIn'].map(o =>
+          {['Skool','Grupos Whatsapp','Referenciação','LinkedIn','Google Forms','Outro'].map(o =>
             <option key={o} value={o}>{o}</option>
           )}
         </select>
