@@ -420,6 +420,29 @@ export async function initSchema() {
       CREATE INDEX IF NOT EXISTS idx_interacoes_consultor ON consultor_interacoes(consultor_id);
       CREATE INDEX IF NOT EXISTS idx_interacoes_data ON consultor_interacoes(data_hora DESC);
 
+      -- Checklist obrigatória por estado do imóvel
+      CREATE TABLE IF NOT EXISTS checklist_imovel (
+        id TEXT PRIMARY KEY,
+        imovel_id TEXT NOT NULL,
+        estado TEXT NOT NULL,
+        template_key TEXT NOT NULL,
+        titulo TEXT NOT NULL,
+        campo_crm TEXT,
+        categoria TEXT,
+        tempo_estimado REAL DEFAULT 0.25,
+        obrigatoria BOOLEAN DEFAULT true,
+        concluida BOOLEAN DEFAULT false,
+        concluida_por TEXT,
+        concluida_em TEXT,
+        notas TEXT,
+        ordem INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (NOW()::TEXT),
+        updated_at TEXT DEFAULT (NOW()::TEXT)
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_checklist_unique ON checklist_imovel(imovel_id, template_key);
+      CREATE INDEX IF NOT EXISTS idx_checklist_imovel_id ON checklist_imovel(imovel_id);
+      CREATE INDEX IF NOT EXISTS idx_checklist_estado ON checklist_imovel(imovel_id, estado);
+
       CREATE INDEX IF NOT EXISTS idx_imoveis_estado ON imoveis(estado);
       CREATE INDEX IF NOT EXISTS idx_investidores_status ON investidores(status);
       CREATE INDEX IF NOT EXISTS idx_consultores_estatuto ON consultores(estatuto);
