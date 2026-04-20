@@ -30,6 +30,7 @@ export function InteracoesTab({ consultorId, onUpdate, controloManual }) {
   const [togglingAgent, setTogglingAgent] = useState(false)
   const [form, setForm] = useState({ canal: 'WhatsApp', direcao: 'Enviado', notas: '', data_hora: '' })
   const [saving, setSaving] = useState(false)
+  const [filtroImovel, setFiltroImovel] = useState('todas')
 
   async function load() {
     setLoading(true)
@@ -160,6 +161,31 @@ export function InteracoesTab({ consultorId, onUpdate, controloManual }) {
         </button>
       </div>
 
+      {/* Filtro por contexto */}
+      {(() => {
+        const imoveisUnicos = [...new Set(interacoes.filter(i => i.imovel_nome).map(i => i.imovel_nome))]
+        if (imoveisUnicos.length === 0) return null
+        return (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-gray-500">Filtrar:</span>
+            <button onClick={() => setFiltroImovel('todas')}
+              className={`px-2.5 py-1 text-xs rounded-full transition-colors ${filtroImovel === 'todas' ? 'bg-indigo-100 text-indigo-700 font-medium' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+              Todas
+            </button>
+            <button onClick={() => setFiltroImovel('geral')}
+              className={`px-2.5 py-1 text-xs rounded-full transition-colors ${filtroImovel === 'geral' ? 'bg-indigo-100 text-indigo-700 font-medium' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+              Geral
+            </button>
+            {imoveisUnicos.map(nome => (
+              <button key={nome} onClick={() => setFiltroImovel(nome)}
+                className={`px-2.5 py-1 text-xs rounded-full transition-colors ${filtroImovel === nome ? 'bg-green-100 text-green-700 font-medium' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                {nome}
+              </button>
+            ))}
+          </div>
+        )
+      })()}
+
       {/* Form */}
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-200">
@@ -224,7 +250,12 @@ export function InteracoesTab({ consultorId, onUpdate, controloManual }) {
         <div className="text-center py-8 text-gray-400 text-sm">Sem interacções registadas</div>
       ) : (
         <div className="space-y-3 bg-gray-50 rounded-xl p-4" style={{ minHeight: '200px' }}>
-          {interacoes.map(i => {
+          {interacoes.filter(i => {
+            if (filtroImovel === 'todas') return true
+            if (filtroImovel === 'geral') return !i.imovel_nome
+            return i.imovel_nome === filtroImovel
+          }).map(i => {
+            const isNota = i.canal === 'Nota'
             const isEnviado = i.direcao === 'Enviado'
             const isAgente = (i.notas || '').includes('[AGENTE]') || (i.notas || '').includes('[FOLLOW-UP') || (i.notas || '').includes('[REACTIVAÇÃO')
             const tempoResp = tempoRespostaMap[i.id]
@@ -236,21 +267,30 @@ export function InteracoesTab({ consultorId, onUpdate, controloManual }) {
             const textoLimpo = (i.notas || '').replace(/^\[AGENTE\]\s*/, '').replace(/^\[FOLLOW-UP AUTO\]\s*/, '').replace(/^\[REACTIVAÇÃO\]\s*/, '')
 
             return (
-              <div key={i.id} className={`flex ${isEnviado ? 'justify-end' : 'justify-start'}`}>
+              <div key={i.id} className={`flex ${isNota ? 'justify-center' : isEnviado ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
-                  isEnviado
-                    ? isAgente ? 'bg-amber-50 border border-amber-200' : 'bg-indigo-50 border border-indigo-200'
-                    : 'bg-white border border-gray-200'
+                  isNota
+                    ? 'bg-amber-50 border border-amber-200'
+                    : isEnviado
+                      ? isAgente ? 'bg-amber-50 border border-amber-200' : 'bg-indigo-50 border border-indigo-200'
+                      : 'bg-white border border-gray-200'
                 }`}>
                   {/* Header — quem enviou */}
-                  <div className="flex items-center gap-2 mb-1">
-                    {isEnviado ? (
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    {isNota ? (
+                      <span className="text-xs font-medium text-amber-700">Nota de contacto</span>
+                    ) : isEnviado ? (
                       <span className={`text-xs font-medium ${isAgente ? 'text-amber-600' : 'text-indigo-600'}`}>
                         {isAgente ? 'Agente Alexandre' : 'Tu'} · {i.canal}
                       </span>
                     ) : (
                       <span className="text-xs font-medium text-gray-700">
                         Consultor · {i.canal}
+                      </span>
+                    )}
+                    {i.imovel_nome && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700">
+                        {i.imovel_nome}
                       </span>
                     )}
                     {tempoResp != null && (
