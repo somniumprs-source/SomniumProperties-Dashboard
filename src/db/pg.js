@@ -460,6 +460,14 @@ export async function initSchema() {
       );
       CREATE INDEX IF NOT EXISTS idx_docsinv_investidor ON documentos_investidor(investidor_id);
 
+      -- Migration: tipo_principal (Ativo/Passivo) para separação clara de investidores
+      DO $$ BEGIN
+        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS tipo_principal TEXT DEFAULT 'Passivo';
+        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS duplicado_de TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+      CREATE INDEX IF NOT EXISTS idx_investidores_tipo ON investidores(tipo_principal);
+
       -- Scorecards de Discovery Call (SOP 2)
       CREATE TABLE IF NOT EXISTS scorecards (
         id TEXT PRIMARY KEY,

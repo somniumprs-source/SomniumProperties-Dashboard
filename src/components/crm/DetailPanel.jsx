@@ -552,6 +552,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
             {type === 'Investidores' && <>
               {editing ? <>
                 <EF label="Nome" field="nome" form={form} set={setField} />
+                <EF label="Tipo" field="tipo_principal" form={form} set={setField} type="select" options={['Passivo','Ativo']} />
                 <EF label="Status" field="status" form={form} set={setField} type="select" options={['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor classificado','Investidor em parceria']} />
                 <EF label="Classificação" field="classificacao" form={form} set={setField} type="select" options={['A','B','C','D']} />
                 <EF label="Origem" field="origem" form={form} set={setField} type="select" options={['Skool','Grupos Whatsapp','Referenciação','LinkedIn','Google Forms','Outro']} />
@@ -580,6 +581,41 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                     className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
                 </div>
               </> : <>
+                {/* Tipo Investidor — destaque */}
+                <div className="col-span-2 md:col-span-3">
+                  {(() => {
+                    const tipo = data.tipo_principal || 'Passivo'
+                    const isAtivo = tipo === 'Ativo'
+                    const outroTipo = isAtivo ? 'Passivo' : 'Ativo'
+                    return (
+                      <div className={`flex items-center justify-between rounded-lg border p-3 ${isAtivo ? 'bg-orange-50 border-orange-200' : 'bg-violet-50 border-violet-200'}`}>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-lg font-black ${isAtivo ? 'text-orange-700' : 'text-violet-700'}`}>
+                            Investidor {tipo}
+                          </span>
+                          {data.duplicado_de && <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">Perfil duplo</span>}
+                        </div>
+                        <button onClick={async () => {
+                          if (!confirm(`Criar perfil ${outroTipo} para ${data.nome}?`)) return
+                          try {
+                            const r = await apiFetch(`/api/crm/investidores/${data.id}/duplicar`, {
+                              method: 'POST', headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ tipo_principal: outroTipo }),
+                            })
+                            const result = await r.json()
+                            if (result.ok) { alert(`Perfil ${outroTipo} criado: ${result.nome}`) }
+                            else { alert(result.error || 'Erro ao duplicar') }
+                          } catch (e) { alert('Erro: ' + e.message) }
+                        }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
+                            isAtivo ? 'border-violet-300 text-violet-700 hover:bg-violet-100' : 'border-orange-300 text-orange-700 hover:bg-orange-100'
+                          }`}>
+                          + Criar perfil {outroTipo}
+                        </button>
+                      </div>
+                    )
+                  })()}
+                </div>
                 <Field label="Status" value={data.status} />
                 <Field label="Classificação" value={data.classificacao} />
                 <Field label="Pontuação" value={data.pontuacao} />
@@ -589,7 +625,6 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                 <Field label="Telemóvel" value={data.telemovel} />
                 <Field label="Email" value={data.email} />
                 <Field label="Perfil Risco" value={data.perfil_risco} />
-                <Field label="Tipo Investidor" value={(() => { try { return JSON.parse(data.tipo_investidor || '[]').join(', ') } catch { return data.tipo_investidor || '—' } })()} />
                 <Field label="Estratégia" value={(() => { try { return JSON.parse(data.estrategia || '[]').join(', ') } catch { return data.estrategia || '—' } })()} />
                 <Field label="NDA" value={data.nda_assinado ? 'Sim' : 'Não'} />
                 <Field label="1º Contacto" value={data.data_primeiro_contacto} />

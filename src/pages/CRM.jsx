@@ -577,17 +577,23 @@ export function CRM() {
     'Investidores': {
       columns: ['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor classificado','Investidor em parceria'],
       groupField: 'status',
-      renderCard: (item) => (
-        <div>
-          <div className="flex items-center gap-2">
-            <ClassBadge cls={item.classificacao} />
-            <p className="text-sm font-semibold text-gray-800 truncate">{item.nome}</p>
+      renderCard: (item) => {
+        const tipo = item.tipo_principal || 'Passivo'
+        const tipoColor = tipo === 'Ativo' ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-violet-100 text-violet-700 border-violet-200'
+        return (
+          <div>
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-semibold ${tipoColor}`}>{tipo === 'Ativo' ? 'A' : 'P'}</span>
+              <ClassBadge cls={item.classificacao} />
+              <p className="text-sm font-semibold text-gray-800 truncate">{item.nome}</p>
+            </div>
+            <p className="text-xs text-gray-500">{item.origem ?? '—'}</p>
+            {item.capital_max > 0 && <p className="text-xs font-mono text-indigo-600 mt-1">até {EUR(item.capital_max)}</p>}
+            {item.telemovel && <p className="text-xs text-gray-400 mt-0.5">{item.telemovel}</p>}
+            {item.duplicado_de && <p className="text-[9px] text-gray-300 mt-0.5">Perfil duplo</p>}
           </div>
-          <p className="text-xs text-gray-500 mt-1">{item.origem ?? '—'}</p>
-          {item.capital_max > 0 && <p className="text-xs font-mono text-indigo-600 mt-1">até {EUR(item.capital_max)}</p>}
-          {item.telemovel && <p className="text-xs text-gray-400 mt-1">{item.telemovel}</p>}
-        </div>
-      ),
+        )
+      },
     },
     'Consultores': {
       columns: ['Cold Call','Follow up','Aberto Parcerias','Acesso imoveis Off market','Consultores em Parceria'],
@@ -995,9 +1001,9 @@ function InvestidoresTable({ data, onEdit, onDelete, onView }) {
     <table className="min-w-[900px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
         <Th field="nome" label="Nome" {...sp} />
+        <Th field="tipo_principal" label="Tipo" {...sp} />
         <Th field="classificacao" label="Class." {...sp} />
         <Th field="status" label="Status" {...sp} />
-        <Th field="origem" label="Origem" {...sp} />
         <Th field="capital_max" label="Capital Max" align="right" {...sp} />
         <Th field="nda_assinado" label="NDA" {...sp} />
         <Th field="telemovel" label="Contacto" {...sp} />
@@ -1005,19 +1011,23 @@ function InvestidoresTable({ data, onEdit, onDelete, onView }) {
         <th className="py-3 px-3"></th>
       </tr></thead>
       <tbody>
-        {sorted.map(r => (
-          <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
-            <td className="py-3 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
-            <td className="py-2 px-3 text-center"><ClassBadge cls={r.classificacao} /></td>
-            <td className="py-3 px-3"><Badge text={r.status} colorMap={INV_STATUS_COLOR} /></td>
-            <td className="py-2 px-3 text-gray-500">{r.origem ?? '—'}</td>
-            <td className="py-2 px-3 text-right font-mono">{r.capital_max > 0 ? EUR(r.capital_max) : '—'}</td>
-            <td className="py-2 px-3 text-center">{r.nda_assinado ? '✓' : '—'}</td>
-            <td className="py-2 px-3 text-gray-500">{r.telemovel ? <a href={`tel:${r.telemovel}`} className="text-green-600 hover:underline">{r.telemovel}</a> : r.email ? <a href={`mailto:${r.email}`} className="text-blue-600 hover:underline">{r.email}</a> : '—'}</td>
-            <td className="py-2 px-3 text-gray-400">{fmtDate(r.data_primeiro_contacto)}</td>
-            <td className="py-3 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
-          </tr>
-        ))}
+        {sorted.map(r => {
+          const tipo = r.tipo_principal || 'Passivo'
+          const tipoStyle = tipo === 'Ativo' ? 'bg-orange-100 text-orange-700' : 'bg-violet-100 text-violet-700'
+          return (
+            <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
+              <td className="py-3 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
+              <td className="py-2 px-3"><span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${tipoStyle}`}>{tipo}</span></td>
+              <td className="py-2 px-3 text-center"><ClassBadge cls={r.classificacao} /></td>
+              <td className="py-3 px-3"><Badge text={r.status} colorMap={INV_STATUS_COLOR} /></td>
+              <td className="py-2 px-3 text-right font-mono">{r.capital_max > 0 ? EUR(r.capital_max) : '—'}</td>
+              <td className="py-2 px-3 text-center">{r.nda_assinado ? '✓' : '—'}</td>
+              <td className="py-2 px-3 text-gray-500">{r.telemovel ? <a href={`tel:${r.telemovel}`} className="text-green-600 hover:underline">{r.telemovel}</a> : r.email ? <a href={`mailto:${r.email}`} className="text-blue-600 hover:underline">{r.email}</a> : '—'}</td>
+              <td className="py-2 px-3 text-gray-400">{fmtDate(r.data_primeiro_contacto)}</td>
+              <td className="py-3 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
+            </tr>
+          )
+        })}
         {!sorted.length && <tr><td colSpan={9} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
       </tbody>
     </table>
@@ -1203,6 +1213,7 @@ const FIELD_DEFS = {
   ],
   'Investidores': [
     { key: 'nome', label: 'Nome', type: 'text', required: true },
+    { key: 'tipo_principal', label: 'Tipo de Investidor', type: 'select', options: ['Passivo','Ativo'], required: true },
     { key: 'status', label: 'Status', type: 'select', options: ['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor classificado','Investidor em parceria'] },
     { key: 'classificacao', label: 'Classificação', type: 'select', options: ['A','B','C','D'] },
     { key: 'origem', label: 'Origem', type: 'select', options: ['Skool','Grupos Whatsapp','Referenciação','LinkedIn','Google Forms','Outro'] },
@@ -1213,7 +1224,6 @@ const FIELD_DEFS = {
     { key: 'montante_investido', label: 'Montante Investido (€)', type: 'number' },
     { key: 'nda_assinado', label: 'NDA Assinado', type: 'checkbox' },
     { key: 'estrategia', label: 'Estratégia de Investimento', type: 'multiselect', options: ['Wholesaling','CAEP','Fix & Flip','Mediação','Capital Passivo','Construção'] },
-    { key: 'tipo_investidor', label: 'Tipo de Investidor', type: 'multiselect', options: ['Ativo','Passivo','Institucional','Particular'] },
     { key: 'perfil_risco', label: 'Perfil de Risco', type: 'select', options: ['Conservador','Moderado','Agressivo'] },
     { key: 'data_primeiro_contacto', label: 'Data 1º Contacto', type: 'date' },
     { key: 'data_reuniao', label: 'Data Reunião', type: 'date' },
