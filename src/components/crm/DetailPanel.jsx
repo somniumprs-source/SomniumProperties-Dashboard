@@ -8,6 +8,7 @@ import { apiFetch } from '../../lib/api.js'
 import { AnaliseTab } from '../analise/AnaliseTab.jsx'
 import { InteracoesTab } from './InteracoesTab.jsx'
 import { FicheirosTab } from './FicheirosTab.jsx'
+import { ChecklistTab } from './ChecklistTab.jsx'
 import { supabase } from '../../lib/supabase.js'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
@@ -293,6 +294,7 @@ export function DetailPanel({ type, id, onClose, onSave }) {
     { key: 'detalhe', label: 'Detalhe', icon: '📋', show: true },
     { key: 'ficheiros', label: 'Ficheiros', icon: '📷', show: type === 'Imóveis' },
     { key: 'interacoes', label: `Interacções (${data?.interacoes?.length ?? 0})`, icon: '💬', show: type === 'Consultores' },
+    { key: 'checklist', label: 'Checklist', icon: '📋', show: type === 'Imóveis' },
     { key: 'analise', label: 'Análise Financeira', icon: '📊', show: type === 'Imóveis' },
     { key: 'relatorios_imovel', label: 'Documentos', icon: '📄', show: type === 'Imóveis' },
     { key: 'relatorios', label: `Relatórios (${reunioes.length})`, icon: '📄', show: (type === 'Investidores' || type === 'Consultores') },
@@ -366,6 +368,9 @@ export function DetailPanel({ type, id, onClose, onSave }) {
         <div className="p-4 sm:p-6">
           <InteracoesTab consultorId={data.id} onUpdate={loadData} controloManual={data.controlo_manual} />
         </div>
+
+      ) : type === 'Imóveis' && activeTab === 'checklist' ? (
+        <ChecklistTab imovel={data} onUpdate={loadData} />
 
       ) : type === 'Imóveis' && activeTab === 'analise' ? (
         <div className="p-4 sm:p-6">

@@ -14,6 +14,9 @@ import { apiFetch } from '../lib/api.js'
 
 const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Negócios', 'Empreiteiros']
 
+// Progresso checklist por imóvel (cache local)
+let checklistProgressCache = {}
+
 function Badge({ text, colorMap }) {
   const clean = cleanLabel(text)
   const cls = colorMap?.[clean] ?? colorMap?.[text] ?? 'bg-gray-100 text-gray-600'
@@ -500,6 +503,12 @@ export function CRM() {
         const d = await r.json()
         setData(d.data ?? []); setTotal(d.total ?? 0)
       }
+      // Carregar progresso checklist para imóveis
+      if (tab === 'Imóveis') {
+        apiFetch('/api/crm/checklist/progress-batch').then(r => r.json()).then(d => {
+          checklistProgressCache = d
+        }).catch(() => {})
+      }
     } catch {}
     setLoading(false)
   }, [endpoint, tab, search, filters])
@@ -513,15 +522,34 @@ export function CRM() {
     'Imóveis': {
       columns: ['Pré-aprovação','Adicionado','Chamada Não Atendida','Pendentes','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'],
       groupField: 'estado',
-      renderCard: (item) => (
-        <div>
-          <p className="text-sm font-semibold text-gray-800 truncate">{item.nome}</p>
-          <p className="text-xs text-gray-500 mt-1">{item.zona ?? '—'} · {item.tipologia ?? '—'}</p>
-          {item.ask_price > 0 && <p className="text-xs font-mono text-indigo-600 mt-1">{EUR(item.ask_price)}</p>}
-          {item.roi > 0 && <p className="text-xs text-green-600">ROI: {item.roi}%</p>}
-          {item.nome_consultor && <p className="text-xs text-gray-400 mt-1">{item.nome_consultor}</p>}
-        </div>
-      ),
+      renderCard: (item) => {
+        const cp = checklistProgressCache[item.id]?.[item.estado]
+        return (
+          <div>
+            <p className="text-sm font-semibold text-gray-800 truncate">{item.nome}</p>
+            <p className="text-xs text-gray-500 mt-1">{item.zona ?? '—'} · {item.tipologia ?? '—'}</p>
+            {item.ask_price > 0 && <p className="text-xs font-mono text-indigo-600 mt-1">{EUR(item.ask_price)}</p>}
+            {item.roi > 0 && <p className="text-xs text-green-600">ROI: {item.roi}%</p>}
+            {item.nome_consultor && <p className="text-xs text-gray-400 mt-1">{item.nome_consultor}</p>}
+            {cp && cp.total > 0 && (
+              <div className="mt-2">
+                <div className="flex items-center justify-between text-[10px] mb-0.5">
+                  <span className="text-gray-400">{cp.done}/{cp.total}</span>
+                  {cp.done < cp.total && <span className="text-amber-500 font-medium">Pendente</span>}
+                  {cp.done === cp.total && <span className="text-green-600 font-medium">Completa</span>}
+                </div>
+                <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${(cp.done / cp.total) * 100}%`,
+                      backgroundColor: cp.done === cp.total ? '#22c55e' : '#C9A84C'
+                    }} />
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      },
     },
     'Investidores': {
       columns: ['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor classificado','Investidor em parceria'],
