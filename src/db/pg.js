@@ -460,6 +460,62 @@ export async function initSchema() {
       );
       CREATE INDEX IF NOT EXISTS idx_docsinv_investidor ON documentos_investidor(investidor_id);
 
+      -- Scorecards de Discovery Call (SOP 2)
+      CREATE TABLE IF NOT EXISTS scorecards (
+        id TEXT PRIMARY KEY,
+        investidor_id TEXT NOT NULL,
+        reuniao_id TEXT,
+        tipo_investidor TEXT NOT NULL DEFAULT 'Passivo',
+
+        -- Critério 1: Capacidade Financeira (1-5)
+        c1_score INTEGER DEFAULT 0,
+        c1_notas TEXT,
+
+        -- Critério 2: Experiência Imobiliária (1-5)
+        c2_score INTEGER DEFAULT 0,
+        c2_notas TEXT,
+
+        -- Critério 3: Alinhamento Estratégico (1-5)
+        c3_score INTEGER DEFAULT 0,
+        c3_notas TEXT,
+
+        -- Critério 4: Estabilidade e Credibilidade (1-5)
+        c4_score INTEGER DEFAULT 0,
+        c4_notas TEXT,
+
+        -- Critério 5: Disponibilidade e Compromisso (1-5)
+        c5_score INTEGER DEFAULT 0,
+        c5_notas TEXT,
+
+        -- Totais calculados
+        pontuacao_total REAL DEFAULT 0,
+        pontuacao_ponderada REAL DEFAULT 0,
+        classificacao TEXT,
+
+        avaliador TEXT,
+        fonte TEXT DEFAULT 'manual',
+        created_at TEXT DEFAULT (NOW()::TEXT),
+        updated_at TEXT DEFAULT (NOW()::TEXT)
+      );
+      CREATE INDEX IF NOT EXISTS idx_scorecards_investidor ON scorecards(investidor_id);
+      CREATE INDEX IF NOT EXISTS idx_scorecards_data ON scorecards(created_at DESC);
+
+      -- Histórico de classificação (reclassificação periódica)
+      CREATE TABLE IF NOT EXISTS classificacao_historico (
+        id TEXT PRIMARY KEY,
+        investidor_id TEXT NOT NULL,
+        classificacao_anterior TEXT,
+        classificacao_nova TEXT NOT NULL,
+        pontuacao_anterior REAL DEFAULT 0,
+        pontuacao_nova REAL DEFAULT 0,
+        motivo TEXT NOT NULL,
+        tipo TEXT DEFAULT 'manual',
+        scorecard_id TEXT,
+        created_at TEXT DEFAULT (NOW()::TEXT)
+      );
+      CREATE INDEX IF NOT EXISTS idx_class_hist_investidor ON classificacao_historico(investidor_id);
+      CREATE INDEX IF NOT EXISTS idx_class_hist_data ON classificacao_historico(created_at DESC);
+
       CREATE INDEX IF NOT EXISTS idx_imoveis_estado ON imoveis(estado);
       CREATE INDEX IF NOT EXISTS idx_investidores_status ON investidores(status);
       CREATE INDEX IF NOT EXISTS idx_consultores_estatuto ON consultores(estatuto);

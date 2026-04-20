@@ -298,6 +298,72 @@ async function runRelatorioSemanal() {
   }
 }
 
+// ── JOB 4: Reclassificação semanal de investidores (Domingos 10:00) ──
+async function runReclassificacaoInvestidores() {
+  console.log('[cron] Reclassificação semanal de investidores — a correr')
+  try {
+    const { rows: investidores } = await pool.query('SELECT * FROM investidores WHERE classificacao IS NOT NULL')
+    const { rows: allScorecards } = await pool.query('SELECT * FROM scorecards ORDER BY created_at DESC')
+    const now = new Date()
+    let reclassificados = 0
+
+    const RULES = {
+      A: { dias_quente: 30, dias_intermedio: 60, dias_frio: 90, pen_inter: 5, pen_frio: 15 },
+      B: { dias_quente: 30, dias_intermedio: 60, dias_frio: 90, pen_inter: 8, pen_frio: 20 },
+      C: { dias_quente: 30, dias_intermedio: 60, dias_frio: 90, pen_inter: 10, pen_frio: 25 },
+      D: { dias_quente: 30, dias_intermedio: 60, dias_frio: 90, pen_inter: 5, pen_frio: 10 },
+    }
+
+    for (const inv of investidores) {
+      if (inv.classificacao === 'D') continue
+      const ultimoSc = allScorecards.find(s => s.investidor_id === inv.id)
+      if (!ultimoSc) continue
+
+      const ultimoContacto = inv.data_ultimo_contacto || inv.data_reuniao || inv.data_primeiro_contacto
+      if (!ultimoContacto) continue
+
+      const diasSem = Math.floor((now - new Date(ultimoContacto)) / 86400000)
+      const rules = RULES[inv.classificacao] || RULES.C
+
+      let penalizacao = 0
+      let tipoFU = null
+      if (diasSem >= rules.dias_frio) { penalizacao = rules.pen_frio; tipoFU = 'frio' }
+      else if (diasSem >= rules.dias_intermedio) { penalizacao = rules.pen_inter; tipoFU = 'intermedio' }
+
+      if (penalizacao === 0) continue
+
+      let bonus = 0
+      if (inv.nda_assinado) bonus += 5
+      if (inv.montante_investido > 0) bonus += 10
+      if (inv.numero_negocios > 0) bonus += 10
+
+      const pontuacaoAjustada = Math.max(0, Math.min(100, (inv.pontuacao || 0) - penalizacao + bonus))
+      const novaClasse = pontuacaoAjustada >= 88 ? 'A' : pontuacaoAjustada >= 72 ? 'B' : pontuacaoAjustada >= 56 ? 'C' : 'D'
+
+      if (novaClasse !== inv.classificacao) {
+        const motivo = `[CRON] Reclassificação semanal — ${diasSem}d sem contacto (${tipoFU}), -${penalizacao}pts${bonus > 0 ? `, +${bonus}pts engagement` : ''}`
+
+        await pool.query('UPDATE investidores SET classificacao = $1, pontuacao = $2, updated_at = $3 WHERE id = $4',
+          [novaClasse, pontuacaoAjustada, now.toISOString(), inv.id])
+
+        await pool.query(
+          `INSERT INTO classificacao_historico (id, investidor_id, classificacao_anterior, classificacao_nova,
+            pontuacao_anterior, pontuacao_nova, motivo, tipo, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [randomUUID(), inv.id, inv.classificacao, novaClasse,
+            inv.pontuacao || 0, pontuacaoAjustada, motivo, 'reclassificacao_periodica', now.toISOString()]
+        )
+        reclassificados++
+        console.log(`[cron] Reclassificado: ${inv.nome} ${inv.classificacao}→${novaClasse} (${diasSem}d)`)
+      }
+    }
+
+    console.log(`[cron] Reclassificação: ${reclassificados} investidores actualizados`)
+  } catch (e) {
+    console.error('[cron] Erro reclassificação investidores:', e.message)
+  }
+}
+
 // ── Registar jobs ───────────────────────────────────────────
 export function startCronJobs() {
   // Follow-up diário às 08:00
@@ -311,7 +377,11 @@ export function startCronJobs() {
   // Relatório semanal Domingos às 09:00
   cron.schedule('0 9 * * 0', runRelatorioSemanal, { timezone: TIMEZONE })
   console.log('[cron] Relatório semanal registado → Domingos 09:00 Europe/Lisbon')
+
+  // Reclassificação semanal investidores Domingos às 10:00
+  cron.schedule('0 10 * * 0', runReclassificacaoInvestidores, { timezone: TIMEZONE })
+  console.log('[cron] Reclassificação investidores registada → Domingos 10:00 Europe/Lisbon')
 }
 
 // Exports para execução manual via API
-export { runFollowUp, runRelatorioDiario, runRelatorioSemanal, REACTIVATION_TEMPLATE }
+export { runFollowUp, runRelatorioDiario, runRelatorioSemanal, runReclassificacaoInvestidores, REACTIVATION_TEMPLATE }
