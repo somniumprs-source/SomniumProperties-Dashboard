@@ -417,8 +417,13 @@ export async function initSchema() {
         ALTER TABLE consultor_interacoes ADD COLUMN IF NOT EXISTS updated_at TEXT DEFAULT (NOW()::TEXT);
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
+      DO $$ BEGIN
+        ALTER TABLE consultor_interacoes ADD COLUMN IF NOT EXISTS imovel_id TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
       CREATE INDEX IF NOT EXISTS idx_interacoes_consultor ON consultor_interacoes(consultor_id);
       CREATE INDEX IF NOT EXISTS idx_interacoes_data ON consultor_interacoes(data_hora DESC);
+      CREATE INDEX IF NOT EXISTS idx_interacoes_imovel ON consultor_interacoes(imovel_id);
 
       -- Checklist obrigatória por estado do imóvel
       CREATE TABLE IF NOT EXISTS checklist_imovel (

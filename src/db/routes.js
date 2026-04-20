@@ -408,7 +408,22 @@ crudRoutes('/consultor-interacoes', ConsultorInteracoes)
 router.get('/consultores/:id/interacoes', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT * FROM consultor_interacoes WHERE consultor_id = $1 ORDER BY data_hora DESC',
+      `SELECT ci.*, i.nome as imovel_nome FROM consultor_interacoes ci
+       LEFT JOIN imoveis i ON i.id = ci.imovel_id
+       WHERE ci.consultor_id = $1 ORDER BY ci.data_hora DESC`,
+      [req.params.id]
+    )
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Interacções por imóvel ──────────────────────────────────
+router.get('/imoveis/:id/interacoes', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT ci.*, c.nome as consultor_nome FROM consultor_interacoes ci
+       LEFT JOIN consultores c ON c.id = ci.consultor_id
+       WHERE ci.imovel_id = $1 ORDER BY ci.data_hora DESC`,
       [req.params.id]
     )
     res.json(rows)
@@ -894,7 +909,14 @@ router.get('/imoveis/:id/full', async (req, res) => {
     const { rows: timeline } = await pool.query("SELECT * FROM audit_log WHERE registo_id = $1 ORDER BY created_at DESC LIMIT 20", [imovel.id])
     // Checklist obrigatória
     const { rows: checklist } = await pool.query('SELECT * FROM checklist_imovel WHERE imovel_id = $1 ORDER BY estado, ordem', [imovel.id])
-    res.json({ ...imovel, negocios, consultores, tarefas, analises, timeline, checklist })
+    // Interacções com consultores (registadas no contexto deste imóvel)
+    const { rows: interacoes } = await pool.query(
+      `SELECT ci.*, c.nome as consultor_nome FROM consultor_interacoes ci
+       LEFT JOIN consultores c ON c.id = ci.consultor_id
+       WHERE ci.imovel_id = $1 ORDER BY ci.data_hora DESC`,
+      [imovel.id]
+    )
+    res.json({ ...imovel, negocios, consultores, tarefas, analises, timeline, checklist, interacoes })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -925,8 +947,13 @@ router.get('/consultores/:id/full', async (req, res) => {
     const { rows: negocios } = await pool.query("SELECT * FROM negocios WHERE consultor_ids LIKE $1", [`%${cons.notion_id ?? cons.id}%`])
     const { rows: tarefas } = await pool.query("SELECT * FROM tarefas WHERE tarefa ILIKE $1 ORDER BY created_at DESC", [`%${cons.nome}%`])
     const { rows: timeline } = await pool.query("SELECT * FROM audit_log WHERE registo_id = $1 ORDER BY created_at DESC LIMIT 20", [cons.id])
-    // Interacções
-    const { rows: interacoes } = await pool.query("SELECT * FROM consultor_interacoes WHERE consultor_id = $1 ORDER BY data_hora DESC", [cons.id])
+    // Interacções (com nome do imóvel quando aplicável)
+    const { rows: interacoes } = await pool.query(
+      `SELECT ci.*, i.nome as imovel_nome FROM consultor_interacoes ci
+       LEFT JOIN imoveis i ON i.id = ci.imovel_id
+       WHERE ci.consultor_id = $1 ORDER BY ci.data_hora DESC`,
+      [cons.id]
+    )
     // Métricas computadas — qualidade baseada no estado do pipeline
     const totalImoveis = imoveis.length
     const somaQualidade = imoveis.reduce((sum, im) => sum + qualidadeImovel(im.estado), 0)
