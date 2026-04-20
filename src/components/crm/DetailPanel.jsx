@@ -997,6 +997,127 @@ const CRITERIOS_INFO = {
   c5: { label: 'Disponibilidade e Compromisso', icon: '⏱️' },
 }
 
+// Script de perguntas SOP 2 — guião para Discovery Call
+const SCRIPT_PERGUNTAS = {
+  Passivo: {
+    intro: `Bom dia/Boa tarde [Nome], obrigado por teres preenchido o formulário e por disponibilizares tempo para esta conversa. Sou o Alexandre da Somnium Properties.\n\nAntes de mais, quero perceber melhor o teu perfil enquanto investidor para garantir que conseguimos alinhar expectativas e encontrar a melhor oportunidade para ti. Vou fazer algumas perguntas sobre a tua experiência, objectivos e disponibilidade — é uma conversa aberta, não um interrogatório.`,
+    c1: {
+      label: 'Capacidade Financeira',
+      contexto: 'Capital mínimo: €50.000. Deve ser real e rapidamente mobilizável. Não conta património teórico, imóveis, capital preso ou dependente de financiamento.',
+      perguntas: [
+        'Tens possibilidade de mobilizar o capital em 30 dias, caso surja uma oportunidade concreta?',
+        'Esse capital está em conta corrente, depósito a prazo ou noutra forma?',
+        'É capital exclusivo para investimento ou partilhado com outras finalidades?',
+        'Já mobilizaste montantes semelhantes anteriormente para investimento?',
+      ],
+      red_flags: ['Capital dependente de venda de imóvel', 'Financiamento bancário como única fonte', 'Hesitação em falar de valores concretos'],
+    },
+    c2: {
+      label: 'Experiência Imobiliária',
+      contexto: 'Peso reduzido para passivo. Importa mais a sofisticação financeira e historial como investidor. Foco: entender produtos estruturados e tolerar incerteza.',
+      perguntas: [
+        'Que tipos de investimento já fizeste até agora? (imobiliário, ações, fundos, depósitos...)',
+        'Podes contar-me sobre um investimento que não tenha corrido como esperavas? O que aprendeste?',
+        'Para ti, o que é uma rentabilidade realista num investimento imobiliário?',
+      ],
+      red_flags: ['Expectativa de "retorno garantido"', 'Nunca investiu em nada além de depósitos', 'Não entende o conceito de risco-retorno'],
+    },
+    c3: {
+      label: 'Alinhamento Estratégico',
+      contexto: 'Critério MAIS IMPORTANTE para passivo. Expectativas de ROI, tolerância a imprevistos e interferência operacional devem ser compatíveis. Passivos que querem controlar tudo operacionalmente são risco.',
+      perguntas: [
+        'Qual seria o ROI mínimo que considerarias interessante?',
+        'Descreve-me o teu cenário ideal de investimento.',
+        'Se houvesse um atraso de 3 meses numa obra, como reagirias?',
+        'Que nível de acompanhamento precisas? Relatórios mensais? Semanais? Queres estar envolvido nas decisões operacionais?',
+        'O que te faria recusar uma oportunidade mesmo com bons números?',
+      ],
+      red_flags: ['Quer controlar decisões operacionais', 'ROI esperado acima de 30% sem risco', 'Intolerância total a atrasos ou imprevistos'],
+    },
+    c4: {
+      label: 'Estabilidade e Credibilidade',
+      contexto: 'Coerência desde o formulário até à entrevista. Disposição para documentação KYC (obrigação legal, não opcional).',
+      perguntas: [
+        'Seria possível enviar-nos cópia do BI e IBAN ainda esta semana para formalização?',
+        'Qual é a origem do capital que pretendes investir? (poupança, venda de activo, actividade empresarial...)',
+        'Tens outros investimentos activos neste momento?',
+      ],
+      red_flags: ['Incoerência entre respostas do formulário e da entrevista', 'Recusa KYC', 'Origem do capital vaga ou evasiva'],
+    },
+    c5: {
+      label: 'Disponibilidade e Compromisso',
+      contexto: 'Timing real de decisão, não entusiasmo. Um investidor calmo com capital reservado vale mais que um entusiasmado sem data concreta.',
+      perguntas: [
+        'Estás em posição de tomar uma decisão de investimento nos próximos 30 dias?',
+        'Há algum factor que possa impedir ou atrasar a tua decisão?',
+        'O que precisas da nossa parte para dizeres sim?',
+        'Tens critérios não negociáveis que devamos saber?',
+        'Estás a avaliar outras formas de investimento neste momento?',
+      ],
+      red_flags: ['Sem timeline definida', 'Dependente de decisão de terceiros', '"Estou a ver várias coisas" sem compromisso'],
+    },
+    fecho: `Perfeito, [Nome]. Agradeço muito a transparência. Com base nesta conversa vou preparar uma análise do teu perfil e, se fizer sentido, apresentar-te as oportunidades que melhor se alinham com o que procuras.\n\nPróximos passos:\n1. Envio-te um resumo desta conversa por email nas próximas 24h\n2. Se avançarmos, preparo a documentação (NDA + ficha de investidor)\n3. Apresentação de oportunidade concreta dentro de [X] dias\n\nTens alguma questão?`,
+  },
+  Ativo: {
+    intro: `Bom dia/Boa tarde [Nome], obrigado por teres preenchido o formulário e por esta conversa. Sou o Alexandre da Somnium Properties.\n\nVi pelo teu perfil que tens experiência operacional em imobiliário, o que é exactamente o que procuramos nos nossos parceiros activos. Quero perceber melhor o teu historial, capacidade e como poderias encaixar no modelo Somnium. Vou ser directo nas perguntas.`,
+    c1: {
+      label: 'Capacidade Financeira',
+      contexto: 'Capital mínimo: €200.000. Margem necessária para aquisição, obra e contingências. Sem pressão de liquidez.',
+      perguntas: [
+        'Tens possibilidade de mobilizar €200k+ em 30 dias?',
+        'Esse capital cobre aquisição e obra, ou apenas a aquisição?',
+        'Tens reserva para contingências (tipicamente 10-15% do orçamento de obra)?',
+        'Já mobilizaste montantes semelhantes em projectos anteriores?',
+      ],
+      red_flags: ['Capital cobre só aquisição sem margem para obra', 'Dependente de financiamento para cobrir totalidade', 'Pressão de liquidez evidente'],
+    },
+    c2: {
+      label: 'Experiência Imobiliária',
+      contexto: 'PESO MÁXIMO para activo. Será quem gere obra, negoceia com empreiteiros, toma decisões no terreno. Sem historial, o risco operacional recai sobre o projecto inteiro.',
+      perguntas: [
+        'Fala-me do teu último projecto de remodelação: como começou, que problemas surgiram, como correu no final?',
+        'Tens empreiteiro disponível? Com que frequência trabalham juntos?',
+        'Consegues dar-me uma estimativa para a remodelação de um T2 com 80m² em Coimbra? (teste de conhecimento)',
+        'Qual foi o maior imprevisto que tiveste numa obra? Como resolveste? Quanto custou?',
+      ],
+      red_flags: ['Nunca geriu obra directamente', 'Sem empreiteiro de confiança', 'Estimativas muito desfasadas do mercado', 'Respostas vagas sobre projectos anteriores'],
+    },
+    c3: {
+      label: 'Alinhamento Estratégico',
+      contexto: 'Disposição para trabalhar no modelo Somnium: operador independente com estrutura partilhada. Incompatível se quiser fazer "à sua maneira" sem coordenação.',
+      perguntas: [
+        'Como imaginas a divisão de responsabilidades entre ti e a Somnium?',
+        'Já trabalhaste em parceria noutros projectos de obra? Como funcionou?',
+        'Qual é o ROI mínimo que considerarias interessante para avançar?',
+        'O que faria mudar a tua avaliação de uma oportunidade depois de a aceitares?',
+      ],
+      red_flags: ['Quer total autonomia sem reportar', 'Experiência negativa anterior com parcerias', 'Inflexível no modelo de trabalho'],
+    },
+    c4: {
+      label: 'Estabilidade e Credibilidade',
+      contexto: 'Mesmos critérios do passivo + ênfase na verificação de historial operacional real. Activo sem documentação ou com litígios é risco duplo (financeiro + operacional).',
+      perguntas: [
+        'Seria possível enviar-nos cópia do BI e IBAN esta semana?',
+        'Podes partilhar 2-3 obras que geriste nos últimos 3 anos? (localização, tipo, resultado)',
+        'Algum projecto que tenha ficado abaixo das expectativas? O que aconteceu e como resolveste?',
+      ],
+      red_flags: ['Sem obras verificáveis', 'Recusa de documentação', 'Historial de litígios com empreiteiros ou parceiros'],
+    },
+    c5: {
+      label: 'Disponibilidade e Compromisso',
+      contexto: 'Inclui capacidade operacional imediata. Não basta ter capital — precisa ter equipa de obras, agenda e foco. Activo sobrecarregado é risco operacional.',
+      perguntas: [
+        'Tens capacidade operacional para arrancar com um projecto já em Março?',
+        'O capital e o empreiteiro estão disponíveis para começar?',
+        'O teu empreiteiro está livre para uma nova obra em 2-3 meses?',
+        'Tens outros projectos activos que possam condicionar a tua disponibilidade?',
+      ],
+      red_flags: ['3+ obras em simultâneo', 'Empreiteiro sem disponibilidade próxima', 'Agenda sobrecarregada com outros compromissos'],
+    },
+    fecho: `Excelente, [Nome]. A tua experiência é exactamente o perfil que procuramos para parcerias activas. Vou preparar uma análise e, se os números encaixarem, apresento-te uma oportunidade concreta.\n\nPróximos passos:\n1. Resumo desta conversa por email nas próximas 24h\n2. Verificação do historial e documentação (NDA + ficha de investidor activo)\n3. Apresentação de oportunidade com análise financeira detalhada\n\nAlguma questão da tua parte?`,
+  },
+}
+
 const CLASSE_CORES = {
   A: { bg: 'bg-green-100', text: 'text-green-800', border: 'border-green-300', bar: 'bg-green-500' },
   B: { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300', bar: 'bg-blue-500' },
@@ -1010,6 +1131,8 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [showScript, setShowScript] = useState(false)
+  const [scriptStep, setScriptStep] = useState(0) // 0=intro, 1-5=critérios, 6=fecho
   const [tipo, setTipo] = useState(tipoInvestidor || 'Passivo')
   const [form, setForm] = useState({ c1_score: 3, c2_score: 3, c3_score: 3, c4_score: 3, c5_score: 3, c1_notas: '', c2_notas: '', c3_notas: '', c4_notas: '', c5_notas: '' })
 
@@ -1066,13 +1189,155 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
           <h3 className="text-sm font-bold text-gray-800">Scorecard Discovery Call</h3>
           <p className="text-xs text-gray-400">Avaliação SOP 2 — 5 critérios ponderados por tipo de investidor</p>
         </div>
-        {!creating && (
-          <button onClick={() => setCreating(true)}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ backgroundColor: '#C9A84C' }}>
-            + Novo Scorecard
+        <div className="flex gap-2">
+          <button onClick={() => { setShowScript(!showScript); setScriptStep(0) }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${showScript ? 'bg-[#0d0d0d] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+            {showScript ? 'Fechar Script' : 'Script da Call'}
           </button>
-        )}
+          {!creating && !showScript && (
+            <button onClick={() => setCreating(true)}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ backgroundColor: '#C9A84C' }}>
+              + Novo Scorecard
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Script de Discovery Call */}
+      {showScript && (() => {
+        const script = SCRIPT_PERGUNTAS[tipo]
+        if (!script) return null
+        const criterioKeys = ['c1', 'c2', 'c3', 'c4', 'c5']
+        const totalSteps = criterioKeys.length + 2 // intro + 5 critérios + fecho
+        const stepLabels = ['Introdução', ...criterioKeys.map(c => CRITERIOS_INFO[c].label), 'Fecho e Próximos Passos']
+
+        return (
+          <div className="rounded-xl border-2 border-[#C9A84C] overflow-hidden" style={{ backgroundColor: '#faf8f2' }}>
+            {/* Script header + tipo selector */}
+            <div className="px-5 py-3 border-b border-[#C9A84C33] flex items-center justify-between" style={{ backgroundColor: '#0d0d0d' }}>
+              <div className="flex items-center gap-3">
+                <span className="text-white text-sm font-bold">Script Discovery Call</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#C9A84C] text-black font-medium">{investidorNome}</span>
+              </div>
+              <div className="flex gap-1">
+                {['Passivo', 'Ativo'].map(t => (
+                  <button key={t} onClick={() => setTipo(t)}
+                    className={`px-2 py-1 rounded text-[10px] font-medium transition ${tipo === t ? 'bg-[#C9A84C] text-black' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Step navigation */}
+            <div className="px-5 py-2 border-b border-[#C9A84C22] flex gap-1 overflow-x-auto">
+              {stepLabels.map((label, i) => (
+                <button key={i} onClick={() => setScriptStep(i)}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-medium whitespace-nowrap transition ${
+                    scriptStep === i ? 'bg-[#0d0d0d] text-white' : 'bg-white text-gray-500 hover:bg-gray-100'
+                  }`}>
+                  {i > 0 && i < totalSteps - 1 ? `${i}. ` : ''}{label}
+                </button>
+              ))}
+            </div>
+
+            {/* Step content */}
+            <div className="p-5">
+              {scriptStep === 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-bold text-gray-800">Introdução</h4>
+                  <div className="rounded-lg bg-white border border-gray-200 p-4">
+                    <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{script.intro.replace(/\[Nome\]/g, investidorNome.split(' ')[0])}</p>
+                  </div>
+                  <p className="text-[10px] text-gray-400">Tom: profissional mas acessível. Objectivo: criar confiança e alinhar expectativas.</p>
+                </div>
+              )}
+
+              {scriptStep >= 1 && scriptStep <= 5 && (() => {
+                const ck = criterioKeys[scriptStep - 1]
+                const bloco = script[ck]
+                return (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{CRITERIOS_INFO[ck].icon}</span>
+                      <h4 className="text-sm font-bold text-gray-800">{bloco.label}</h4>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#C9A84C22] text-[#C9A84C] font-medium">Critério {scriptStep}/5</span>
+                    </div>
+
+                    {/* Contexto */}
+                    <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+                      <p className="text-[10px] uppercase text-blue-500 font-semibold tracking-wide mb-1">Contexto (não ler em voz alta)</p>
+                      <p className="text-xs text-blue-800">{bloco.contexto}</p>
+                    </div>
+
+                    {/* Perguntas */}
+                    <div className="space-y-2">
+                      <p className="text-[10px] uppercase text-gray-400 font-semibold tracking-wide">Perguntas a fazer</p>
+                      {bloco.perguntas.map((p, i) => (
+                        <div key={i} className="flex gap-3 items-start rounded-lg bg-white border border-gray-200 p-3 hover:border-[#C9A84C] transition cursor-pointer group">
+                          <span className="text-xs font-bold text-[#C9A84C] shrink-0 mt-0.5">{i + 1}.</span>
+                          <p className="text-sm text-gray-700 leading-relaxed">{p.replace(/\[Nome\]/g, investidorNome.split(' ')[0])}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Red flags */}
+                    <div className="rounded-lg bg-red-50 border border-red-200 p-3">
+                      <p className="text-[10px] uppercase text-red-500 font-semibold tracking-wide mb-1.5">Red Flags (atenção a)</p>
+                      <div className="space-y-1">
+                        {bloco.red_flags.map((rf, i) => (
+                          <div key={i} className="flex items-center gap-2 text-xs text-red-700">
+                            <span className="text-red-400 shrink-0">!</span>
+                            <span>{rf}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {scriptStep === 6 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-bold text-gray-800">Fecho e Próximos Passos</h4>
+                  <div className="rounded-lg bg-white border border-gray-200 p-4">
+                    <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{script.fecho.replace(/\[Nome\]/g, investidorNome.split(' ')[0])}</p>
+                  </div>
+                  <div className="rounded-lg bg-green-50 border border-green-200 p-3">
+                    <p className="text-[10px] uppercase text-green-600 font-semibold tracking-wide mb-1">Após a call</p>
+                    <div className="space-y-1 text-xs text-green-800">
+                      <p>1. Preencher o Scorecard com base nas respostas (botão abaixo)</p>
+                      <p>2. Enviar resumo por email ao investidor dentro de 24h</p>
+                      <p>3. Actualizar status no CRM para "Follow Up" ou "Investidor classificado"</p>
+                      <p>4. Se Classe A/B: agendar apresentação de oportunidade</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Script navigation */}
+            <div className="px-5 py-3 border-t border-[#C9A84C22] flex items-center justify-between">
+              <button onClick={() => setScriptStep(Math.max(0, scriptStep - 1))} disabled={scriptStep === 0}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed">
+                Anterior
+              </button>
+              <span className="text-[10px] text-gray-400">{scriptStep + 1} / {totalSteps}</span>
+              {scriptStep < totalSteps - 1 ? (
+                <button onClick={() => setScriptStep(scriptStep + 1)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ backgroundColor: '#C9A84C' }}>
+                  Seguinte
+                </button>
+              ) : (
+                <button onClick={() => { setShowScript(false); setCreating(true) }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ backgroundColor: '#0d0d0d' }}>
+                  Preencher Scorecard
+                </button>
+              )}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Formulário de criação */}
       {creating && (
