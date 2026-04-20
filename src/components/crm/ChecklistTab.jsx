@@ -1,8 +1,10 @@
 /**
  * Tab de Checklist obrigatória para imóveis.
  * Mostra tarefas agrupadas por estado, com inputs inline para preencher campos do CRM.
+ * Campos do imóvel (ask_price, zona, etc.) editam directamente o imóvel.
+ * Campos "notas" editam as notas do próprio item da checklist (cada item tem o seu).
  */
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { CheckCircle2, Circle, Clock, ChevronDown, ChevronRight, AlertTriangle, Save, Pencil } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { CHECKLIST_TEMPLATES } from '../../constants/checklistTemplates.js'
@@ -16,8 +18,8 @@ const PIPELINE_ORDER = [
   'Wholesaling','CAEP','Fix and Flip','Não interessa',
 ]
 
-// Mapa de campo_crm → configuração do input
-const FIELD_CONFIG = {
+// Campos editáveis do imóvel (NOT notas — notas vão para o item da checklist)
+const IMOVEL_FIELD_CONFIG = {
   'nome': { label: 'Nome', type: 'text' },
   'link': { label: 'Link', type: 'text' },
   'origem': { label: 'Origem', type: 'select', options: ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro'] },
@@ -40,23 +42,26 @@ const FIELD_CONFIG = {
   'data_proposta_aceite': { label: 'Data Proposta Aceite', type: 'date' },
   'data_follow_up': { label: 'Data Follow Up', type: 'date' },
   'data_aceite_investidor': { label: 'Data Aceite Investidor', type: 'date' },
-  'notas': { label: 'Notas', type: 'textarea' },
 }
 
-// Extrair o primeiro campo simples (do imóvel) de um campo_crm string
-function parseMainField(campo_crm) {
+// Extrair campos do imóvel (exclui notas, análise, negócio, docs, calendário)
+function parseImovelFields(campo_crm) {
   if (!campo_crm) return null
-  // Ignorar campos de análise, negócio, documentos ou calendário
   if (campo_crm.startsWith('analise:') || campo_crm.startsWith('negocio:') || campo_crm.startsWith('doc:') || campo_crm === 'tarefa calendario') return null
-  // Pode ser "area_bruta, area_util" — retornar array
-  const fields = campo_crm.split(',').map(f => f.trim()).filter(f => FIELD_CONFIG[f])
+  const fields = campo_crm.split(',').map(f => f.trim()).filter(f => IMOVEL_FIELD_CONFIG[f])
   return fields.length > 0 ? fields : null
+}
+
+// Verificar se o item deve ter campo de notas próprio (campo_crm contém 'notas' ou 'fotos')
+function hasOwnNotes(campo_crm) {
+  if (!campo_crm) return false
+  return campo_crm.split(',').map(f => f.trim()).some(f => f === 'notas' || f === 'fotos')
 }
 
 const inputClass = 'w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300'
 
-function InlineField({ field, value, onChange }) {
-  const cfg = FIELD_CONFIG[field]
+function InlineImovelField({ field, value, onChange }) {
+  const cfg = IMOVEL_FIELD_CONFIG[field]
   if (!cfg) return null
 
   if (cfg.type === 'select') {
@@ -73,9 +78,6 @@ function InlineField({ field, value, onChange }) {
   if (cfg.type === 'number') {
     return <input type="number" value={value ?? ''} onChange={e => onChange(field, +e.target.value || null)} className={inputClass} placeholder={cfg.label} />
   }
-  if (cfg.type === 'textarea') {
-    return <textarea value={value ?? ''} onChange={e => onChange(field, e.target.value)} rows={2} className={inputClass} placeholder="Registar aqui..." />
-  }
   return <input type="text" value={value ?? ''} onChange={e => onChange(field, e.target.value)} className={inputClass} placeholder={cfg.label} />
 }
 
@@ -83,13 +85,15 @@ export function ChecklistTab({ imovel, onUpdate }) {
   const [items, setItems] = useState([])
   const [expanded, setExpanded] = useState({})
   const [loading, setLoading] = useState(true)
-  const [localData, setLocalData] = useState({})  // dados editaveis do imovel
-  const [dirty, setDirty] = useState({})           // campos modificados
+  const [localData, setLocalData] = useState({})
+  const [dirty, setDirty] = useState({})
   const [saving, setSaving] = useState(false)
+  // Notas locais por item (id -> texto)
+  const [itemNotes, setItemNotes] = useState({})
+  const [dirtyNotes, setDirtyNotes] = useState({})
 
   const estado = imovel?.estado
 
-  // Inicializar localData com dados do imovel
   useEffect(() => {
     if (!imovel) return
     setLocalData({ ...imovel })
@@ -107,6 +111,13 @@ export function ChecklistTab({ imovel, onUpdate }) {
       const r = await apiFetch(`/api/crm/checklist/${imovel.id}`)
       const data = await r.json()
       setItems(data)
+      // Inicializar notas locais
+      const notes = {}
+      for (const item of data) {
+        notes[item.id] = item.notas || ''
+      }
+      setItemNotes(notes)
+      setDirtyNotes({})
       if (estado) setExpanded(prev => ({ ...prev, [estado]: true }))
     } catch {}
     setLoading(false)
@@ -117,25 +128,39 @@ export function ChecklistTab({ imovel, onUpdate }) {
     setDirty(prev => ({ ...prev, [field]: true }))
   }
 
-  async function saveFields() {
-    const dirtyFields = Object.keys(dirty)
-    if (dirtyFields.length === 0) return
+  function handleItemNoteChange(itemId, value) {
+    setItemNotes(prev => ({ ...prev, [itemId]: value }))
+    setDirtyNotes(prev => ({ ...prev, [itemId]: true }))
+  }
 
+  async function saveAll() {
     setSaving(true)
     try {
-      const payload = {}
-      for (const f of dirtyFields) {
-        payload[f] = localData[f]
+      // 1. Gravar campos do imóvel
+      const dirtyFields = Object.keys(dirty)
+      if (dirtyFields.length > 0) {
+        const payload = {}
+        for (const f of dirtyFields) payload[f] = localData[f]
+        await apiFetch(`/api/crm/imoveis/${imovel.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
       }
-      const r = await apiFetch(`/api/crm/imoveis/${imovel.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (r.ok) {
-        setDirty({})
-        if (onUpdate) onUpdate()
+
+      // 2. Gravar notas dos items da checklist
+      const dirtyNoteIds = Object.keys(dirtyNotes)
+      for (const itemId of dirtyNoteIds) {
+        await apiFetch(`/api/crm/checklist/${itemId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ notas: itemNotes[itemId] }),
+        })
       }
+
+      setDirty({})
+      setDirtyNotes({})
+      if (onUpdate) onUpdate()
     } catch {}
     setSaving(false)
   }
@@ -186,7 +211,8 @@ export function ChecklistTab({ imovel, onUpdate }) {
   const pipelineIdx = PIPELINE_ORDER.indexOf(estado)
   const hasTemplates = estado && CHECKLIST_TEMPLATES[estado]?.length > 0
   const isEmpty = items.length === 0
-  const hasDirty = Object.keys(dirty).length > 0
+  const hasDirty = Object.keys(dirty).length > 0 || Object.keys(dirtyNotes).length > 0
+  const dirtyCount = Object.keys(dirty).length + Object.keys(dirtyNotes).length
 
   async function generateChecklist() {
     try {
@@ -199,11 +225,9 @@ export function ChecklistTab({ imovel, onUpdate }) {
     } catch {}
   }
 
-  // Verificar se um campo está preenchido
   function isFieldFilled(field) {
     const val = localData[field]
-    if (val === null || val === undefined || val === '' || val === 0) return false
-    return true
+    return val !== null && val !== undefined && val !== '' && val !== 0
   }
 
   if (loading) return <div className="p-6 text-center text-gray-400">A carregar checklist...</div>
@@ -228,22 +252,20 @@ export function ChecklistTab({ imovel, onUpdate }) {
 
   return (
     <div className="p-4 space-y-4">
-      {/* Resumo do estado actual + botão gravar */}
+      {/* Resumo do estado actual */}
       {estado && grouped[estado] && (
         <div className="rounded-lg border border-gray-200 p-4" style={{ backgroundColor: '#FAFAF8' }}>
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-semibold text-gray-800">Estado actual: {estado}</span>
-            <div className="flex items-center gap-2">
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                currentProgress.done === currentProgress.total
-                  ? 'bg-green-100 text-green-700'
-                  : currentProgress.done > 0
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-red-100 text-red-600'
-              }`}>
-                {currentProgress.done}/{currentProgress.total} obrigatórias
-              </span>
-            </div>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+              currentProgress.done === currentProgress.total
+                ? 'bg-green-100 text-green-700'
+                : currentProgress.done > 0
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-red-100 text-red-600'
+            }`}>
+              {currentProgress.done}/{currentProgress.total} obrigatórias
+            </span>
           </div>
           <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
             <div className="h-full rounded-full transition-all duration-300"
@@ -260,14 +282,14 @@ export function ChecklistTab({ imovel, onUpdate }) {
         </div>
       )}
 
-      {/* Barra de gravar fixa */}
+      {/* Barra de gravar sticky */}
       {hasDirty && (
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 p-3 rounded-lg border-2 border-amber-400 bg-amber-50 shadow-md">
           <div className="flex items-center gap-2 text-sm text-amber-800">
             <Pencil size={14} />
-            <span>{Object.keys(dirty).length} campo(s) alterado(s)</span>
+            <span>{dirtyCount} campo(s) alterado(s)</span>
           </div>
-          <button onClick={saveFields} disabled={saving}
+          <button onClick={saveAll} disabled={saving}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg text-white transition-all hover:opacity-90 disabled:opacity-50"
             style={{ backgroundColor: '#C9A84C' }}>
             <Save size={14} />
@@ -327,8 +349,8 @@ export function ChecklistTab({ imovel, onUpdate }) {
             {isExpanded && (
               <div className="divide-y divide-gray-100">
                 {stateItems.map(item => {
-                  const fields = parseMainField(item.campo_crm)
-                  const hasInlineFields = fields && fields.length > 0
+                  const imovelFields = parseImovelFields(item.campo_crm)
+                  const showOwnNotes = hasOwnNotes(item.campo_crm)
 
                   return (
                     <div key={item.id}
@@ -366,11 +388,11 @@ export function ChecklistTab({ imovel, onUpdate }) {
                         </div>
                       </div>
 
-                      {/* Inputs inline para preencher campos do CRM */}
-                      {hasInlineFields && !item.concluida && (
+                      {/* Inputs inline: campos do imóvel */}
+                      {imovelFields && !item.concluida && (
                         <div className="ml-8 mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {fields.map(field => {
-                            const cfg = FIELD_CONFIG[field]
+                          {imovelFields.map(field => {
+                            const cfg = IMOVEL_FIELD_CONFIG[field]
                             if (!cfg) return null
                             const filled = isFieldFilled(field)
                             return (
@@ -381,7 +403,7 @@ export function ChecklistTab({ imovel, onUpdate }) {
                                   {!filled && <span className="text-[10px] text-red-400">vazio</span>}
                                   {dirty[field] && <span className="text-[10px] text-amber-500 font-medium">alterado</span>}
                                 </div>
-                                <InlineField
+                                <InlineImovelField
                                   field={field}
                                   value={localData[field]}
                                   onChange={handleFieldChange}
@@ -392,11 +414,30 @@ export function ChecklistTab({ imovel, onUpdate }) {
                         </div>
                       )}
 
-                      {/* Campos preenchidos (quando concluido) */}
-                      {hasInlineFields && item.concluida && (
+                      {/* Campo de notas próprio do item (para tarefas que pedem "registar nas notas") */}
+                      {showOwnNotes && !item.concluida && (
+                        <div className="ml-8 mt-2">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className="text-[10px] font-medium text-gray-500">Notas desta tarefa</span>
+                            {(itemNotes[item.id] || '').trim() && <CheckCircle2 size={10} className="text-green-500" />}
+                            {!(itemNotes[item.id] || '').trim() && <span className="text-[10px] text-red-400">vazio</span>}
+                            {dirtyNotes[item.id] && <span className="text-[10px] text-amber-500 font-medium">alterado</span>}
+                          </div>
+                          <textarea
+                            value={itemNotes[item.id] || ''}
+                            onChange={e => handleItemNoteChange(item.id, e.target.value)}
+                            rows={2}
+                            className={inputClass}
+                            placeholder="Registar aqui..."
+                          />
+                        </div>
+                      )}
+
+                      {/* Resumo quando concluído */}
+                      {imovelFields && item.concluida && (
                         <div className="ml-8 mt-1 flex flex-wrap gap-2">
-                          {fields.map(field => {
-                            const cfg = FIELD_CONFIG[field]
+                          {imovelFields.map(field => {
+                            const cfg = IMOVEL_FIELD_CONFIG[field]
                             if (!cfg) return null
                             const val = localData[field]
                             const display = val != null && val !== '' && val !== 0
@@ -408,6 +449,15 @@ export function ChecklistTab({ imovel, onUpdate }) {
                               </span>
                             )
                           })}
+                        </div>
+                      )}
+
+                      {/* Notas do item quando concluído */}
+                      {showOwnNotes && item.concluida && (itemNotes[item.id] || item.notas) && (
+                        <div className="ml-8 mt-1">
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-600">
+                            {itemNotes[item.id] || item.notas}
+                          </span>
                         </div>
                       )}
                     </div>
