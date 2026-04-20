@@ -199,6 +199,34 @@ crudRoutes('/imoveis', Imoveis, {
         } catch (e) { console.error(`[docs] Erro ${tipo}:`, e.message) }
       }
     }
+    // Auto-complete checklist: verificar campos preenchidos
+    try {
+      const merged = { ...item, ...body }
+      const { rows: pending } = await pool.query(
+        "SELECT * FROM checklist_imovel WHERE imovel_id = $1 AND concluida = false AND campo_crm IS NOT NULL",
+        [item.id]
+      )
+      const now = new Date().toISOString()
+      const toComplete = []
+      for (const cl of pending) {
+        if (/^(analise:|negocio:|doc:|tarefa calendario)/.test(cl.campo_crm)) continue
+        const fields = cl.campo_crm.split(',').map(f => f.trim()).filter(f => f !== 'notas' && f !== 'fotos')
+        if (fields.length === 0) continue
+        const allFilled = fields.every(f => {
+          const v = merged[f]
+          return v !== null && v !== undefined && v !== '' && v !== 0
+        })
+        if (allFilled) toComplete.push(cl.id)
+      }
+      if (toComplete.length > 0) {
+        await pool.query(
+          `UPDATE checklist_imovel SET concluida = true, concluida_em = $1, concluida_por = 'auto', updated_at = $1
+           WHERE id = ANY($2)`,
+          [now, toComplete]
+        )
+        console.log(`[checklist] Auto-completadas ${toComplete.length} tarefas para ${item.nome || item.id}`)
+      }
+    } catch (e) { console.error('[checklist] Erro auto-complete:', e.message) }
   },
 })
 
@@ -907,8 +935,37 @@ router.get('/imoveis/:id/full', async (req, res) => {
     const { rows: analises } = await pool.query('SELECT * FROM analises WHERE imovel_id = $1 ORDER BY activa DESC, updated_at DESC', [imovel.id])
     // Audit log (timeline)
     const { rows: timeline } = await pool.query("SELECT * FROM audit_log WHERE registo_id = $1 ORDER BY created_at DESC LIMIT 20", [imovel.id])
-    // Checklist obrigatória
+    // Checklist obrigatória — com auto-complete de campos preenchidos
     const { rows: checklist } = await pool.query('SELECT * FROM checklist_imovel WHERE imovel_id = $1 ORDER BY estado, ordem', [imovel.id])
+    const now = new Date().toISOString()
+    const autoCompleteIds = []
+    for (const item of checklist) {
+      if (item.concluida) continue
+      if (!item.campo_crm) continue
+      // Ignorar campos de análise, negócio, docs, calendário
+      if (/^(analise:|negocio:|doc:|tarefa calendario)/.test(item.campo_crm)) continue
+      // Verificar campos do imóvel
+      const fields = item.campo_crm.split(',').map(f => f.trim()).filter(f => f !== 'notas' && f !== 'fotos')
+      if (fields.length === 0) continue
+      const allFilled = fields.every(f => {
+        const v = imovel[f]
+        return v !== null && v !== undefined && v !== '' && v !== 0
+      })
+      if (allFilled) {
+        autoCompleteIds.push(item.id)
+        item.concluida = true
+        item.concluida_em = now
+        item.concluida_por = 'auto'
+      }
+    }
+    // Persistir auto-completes em batch
+    if (autoCompleteIds.length > 0) {
+      await pool.query(
+        `UPDATE checklist_imovel SET concluida = true, concluida_em = $1, concluida_por = 'auto', updated_at = $1
+         WHERE id = ANY($2) AND concluida = false`,
+        [now, autoCompleteIds]
+      )
+    }
     // Interacções com consultores (registadas no contexto deste imóvel)
     const { rows: interacoes } = await pool.query(
       `SELECT ci.*, c.nome as consultor_nome FROM consultor_interacoes ci
