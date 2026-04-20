@@ -177,6 +177,18 @@ db.exec(`
     updated_at TEXT DEFAULT (datetime('now'))
   );
 
+  -- Documentos enviados a investidores (historico)
+  CREATE TABLE IF NOT EXISTS documentos_investidor (
+    id TEXT PRIMARY KEY,
+    investidor_id TEXT NOT NULL,
+    imovel_id TEXT,
+    tipo TEXT NOT NULL,
+    nome TEXT NOT NULL,
+    notas TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_docsinv_investidor ON documentos_investidor(investidor_id);
+
   -- Audit log (para backup e recovery)
   CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

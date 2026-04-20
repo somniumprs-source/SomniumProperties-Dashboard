@@ -443,6 +443,18 @@ export async function initSchema() {
       CREATE INDEX IF NOT EXISTS idx_checklist_imovel_id ON checklist_imovel(imovel_id);
       CREATE INDEX IF NOT EXISTS idx_checklist_estado ON checklist_imovel(imovel_id, estado);
 
+      -- Documentos enviados a investidores (historico)
+      CREATE TABLE IF NOT EXISTS documentos_investidor (
+        id TEXT PRIMARY KEY,
+        investidor_id TEXT NOT NULL,
+        imovel_id TEXT,
+        tipo TEXT NOT NULL,
+        nome TEXT NOT NULL,
+        notas TEXT,
+        created_at TEXT DEFAULT (NOW()::TEXT)
+      );
+      CREATE INDEX IF NOT EXISTS idx_docsinv_investidor ON documentos_investidor(investidor_id);
+
       CREATE INDEX IF NOT EXISTS idx_imoveis_estado ON imoveis(estado);
       CREATE INDEX IF NOT EXISTS idx_investidores_status ON investidores(status);
       CREATE INDEX IF NOT EXISTS idx_consultores_estatuto ON consultores(estatuto);
