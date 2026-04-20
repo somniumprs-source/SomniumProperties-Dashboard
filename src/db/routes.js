@@ -1056,6 +1056,24 @@ router.post('/auto-task', async (req, res) => {
 })
 
 // ── Checklist de imóveis ─────────────────────────────────────
+router.get('/checklist/progress-batch', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT imovel_id, estado,
+              COUNT(*) FILTER (WHERE obrigatoria) as total,
+              COUNT(*) FILTER (WHERE obrigatoria AND concluida) as done
+       FROM checklist_imovel
+       GROUP BY imovel_id, estado`
+    )
+    const map = {}
+    for (const r of rows) {
+      if (!map[r.imovel_id]) map[r.imovel_id] = {}
+      map[r.imovel_id][r.estado] = { done: parseInt(r.done), total: parseInt(r.total) }
+    }
+    res.json(map)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 router.get('/checklist/:imovelId', async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -1094,25 +1112,6 @@ router.put('/checklist/:itemId', async (req, res) => {
       vals
     )
     res.json(item)
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
-
-router.get('/checklist/progress-batch', async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT imovel_id, estado,
-              COUNT(*) FILTER (WHERE obrigatoria) as total,
-              COUNT(*) FILTER (WHERE obrigatoria AND concluida) as done
-       FROM checklist_imovel
-       GROUP BY imovel_id, estado`
-    )
-    // Agrupar por imovel_id: retornar progresso do estado actual do imovel
-    const map = {}
-    for (const r of rows) {
-      if (!map[r.imovel_id]) map[r.imovel_id] = {}
-      map[r.imovel_id][r.estado] = { done: parseInt(r.done), total: parseInt(r.total) }
-    }
-    res.json(map)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
