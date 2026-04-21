@@ -3,30 +3,18 @@
  * Lê respostas do Google Sheet, verifica duplicados, cria/actualiza investidores.
  */
 import { google } from 'googleapis'
-import { readFileSync, existsSync } from 'fs'
-import path from 'path'
-import { fileURLToPath } from 'url'
 import pool from './pg.js'
 import { Investidores } from './crud.js'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const ROOT = path.resolve(__dirname, '../..')
-const OAUTH_PATH = path.join(ROOT, 'google-oauth.json')
-const TOKEN_PATH = path.join(ROOT, 'google-token.json')
+import { getGoogleAuth, isGoogleConfigured } from './googleAuth.js'
 
 const SHEET_ID = process.env.GOOGLE_FORMS_SHEET_ID || '1NxsPoLBwLuoCh6SvBOrr_sph8BugwJPuZ4vihriIA1s'
 
 function getAuth() {
-  if (!existsSync(OAUTH_PATH) || !existsSync(TOKEN_PATH)) return null
-  const creds = JSON.parse(readFileSync(OAUTH_PATH, 'utf8'))
-  const { client_id, client_secret } = creds.installed || creds.web
-  const oauth2 = new google.auth.OAuth2(client_id, client_secret, 'http://localhost:3333')
-  oauth2.setCredentials(JSON.parse(readFileSync(TOKEN_PATH, 'utf8')))
-  return oauth2
+  return getGoogleAuth()
 }
 
 export function isConfigured() {
-  return !!SHEET_ID && existsSync(OAUTH_PATH) && existsSync(TOKEN_PATH)
+  return !!SHEET_ID && isGoogleConfigured()
 }
 
 /**

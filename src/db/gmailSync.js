@@ -3,14 +3,7 @@
  * Cria labels Somnium/* e permite classificar, mover e marcar como lido.
  */
 import { google } from 'googleapis'
-import { readFileSync, existsSync } from 'fs'
-import path from 'path'
-import { fileURLToPath } from 'url'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const ROOT = path.resolve(__dirname, '../..')
-const OAUTH_PATH = path.join(ROOT, 'google-oauth.json')
-const TOKEN_PATH = path.join(ROOT, 'google-token.json')
+import { getGoogleAuth, isGoogleConfigured } from './googleAuth.js'
 
 // Labels por departamento (sem cores customizadas — Gmail tem paleta muito restrita)
 const DEPARTMENT_LABELS = [
@@ -55,16 +48,13 @@ const AUTO_RULES = [
 ]
 
 function getGmail() {
-  if (!existsSync(OAUTH_PATH) || !existsSync(TOKEN_PATH)) return null
-  const creds = JSON.parse(readFileSync(OAUTH_PATH, 'utf8'))
-  const { client_id, client_secret } = creds.installed || creds.web
-  const oauth2 = new google.auth.OAuth2(client_id, client_secret, 'http://localhost:3333')
-  oauth2.setCredentials(JSON.parse(readFileSync(TOKEN_PATH, 'utf8')))
-  return google.gmail({ version: 'v1', auth: oauth2 })
+  const auth = getGoogleAuth()
+  if (!auth) return null
+  return google.gmail({ version: 'v1', auth })
 }
 
 export function isConfigured() {
-  return existsSync(OAUTH_PATH) && existsSync(TOKEN_PATH)
+  return isGoogleConfigured()
 }
 
 /**
