@@ -67,9 +67,13 @@ try {
     const { runFollowUp, runRelatorioDiario, runRelatorioSemanal, REACTIVATION_TEMPLATE } = await import('./src/db/cronJobs.js')
     const { startCronJobs } = await import('./src/db/cronJobs.js')
 
+    // Tracking do ultimo pedido recebido no webhook
+    let lastWebhookReceived = null
+
     // Webhook POST /api/webhook/whatsapp (recepção Twilio — com validacao de assinatura)
     const { validateTwilioSignature } = await import('./src/db/whatsappAgent.js')
     app.post('/api/webhook/whatsapp', express.urlencoded({ extended: false }), (req, res) => {
+      lastWebhookReceived = { timestamp: new Date().toISOString(), from: req.body?.From || '?' }
       // Validar assinatura Twilio (se configurada)
       const twilioSig = req.headers['x-twilio-signature']
       const webhookUrl = process.env.TWILIO_WEBHOOK_URL
@@ -107,6 +111,26 @@ try {
       if (from && body) {
         receiveWhatsAppMessage(from, body, true)
       }
+    })
+
+    // Endpoint de status do agente WhatsApp
+    const { isGoogleConfigured } = await import('./src/db/googleAuth.js')
+    app.get('/api/webhook/whatsapp/status', (_req, res) => {
+      res.json({
+        agente_activo: waConfigured(),
+        twilio: {
+          sid: !!process.env.TWILIO_ACCOUNT_SID,
+          token: !!process.env.TWILIO_AUTH_TOKEN,
+          number: process.env.TWILIO_WHATSAPP_NUMBER || null,
+          webhook_url: process.env.TWILIO_WEBHOOK_URL || 'NAO CONFIGURADO — definir TWILIO_WEBHOOK_URL',
+        },
+        anthropic: !!process.env.ANTHROPIC_API_KEY,
+        google_oauth: isGoogleConfigured(),
+        ultimo_webhook: lastWebhookReceived || 'Nenhum pedido recebido desde o ultimo restart',
+        instrucoes: !process.env.TWILIO_WEBHOOK_URL
+          ? 'Configurar no Twilio Console: Sandbox Settings → When a message comes in → https://somniumproperties-dashboard.onrender.com/api/webhook/whatsapp (HTTP POST)'
+          : null,
+      })
     })
 
     // Endpoint para retomar controlo do agente

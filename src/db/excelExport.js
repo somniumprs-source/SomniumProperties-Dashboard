@@ -4,25 +4,15 @@
 import ExcelJS from 'exceljs'
 import pool from './pg.js'
 import { google } from 'googleapis'
-import { readFileSync, existsSync } from 'fs'
 import { Readable } from 'stream'
-import path from 'path'
-import { fileURLToPath } from 'url'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const ROOT = path.resolve(__dirname, '../..')
-const OAUTH_PATH = path.join(ROOT, 'google-oauth.json')
-const TOKEN_PATH = path.join(ROOT, 'google-token.json')
+import { getGoogleAuth } from './googleAuth.js'
 
 const BRAND = { gold: 'C9A84C', dark: '0D0D0D', white: 'FFFFFF', light: 'F5F5F0', muted: '888888' }
 
 function getDrive() {
-  if (!existsSync(OAUTH_PATH) || !existsSync(TOKEN_PATH)) return null
-  const creds = JSON.parse(readFileSync(OAUTH_PATH, 'utf8'))
-  const { client_id, client_secret } = creds.installed || creds.web
-  const oauth2 = new google.auth.OAuth2(client_id, client_secret, 'http://localhost:3333')
-  oauth2.setCredentials(JSON.parse(readFileSync(TOKEN_PATH, 'utf8')))
-  return google.drive({ version: 'v3', auth: oauth2 })
+  const auth = getGoogleAuth()
+  if (!auth) return null
+  return google.drive({ version: 'v3', auth })
 }
 
 function styleHeader(row) {
