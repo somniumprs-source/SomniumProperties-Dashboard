@@ -7,6 +7,7 @@ import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save,
 import { apiFetch } from '../../lib/api.js'
 import { AnaliseTab } from '../analise/AnaliseTab.jsx'
 import { InteracoesTab } from './InteracoesTab.jsx'
+import { WhatsAppTab } from './WhatsAppTab.jsx'
 import { FicheirosTab } from './FicheirosTab.jsx'
 import { ChecklistTab } from './ChecklistTab.jsx'
 import { DocumentosInvestidorTab } from './DocumentosInvestidorTab.jsx'
@@ -261,6 +262,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
   const tabs = [
     { key: 'detalhe', label: 'Detalhe', icon: '📋', show: true },
     { key: 'ficheiros', label: 'Ficheiros', icon: '📷', show: type === 'Imóveis' },
+    { key: 'whatsapp', label: 'WhatsApp', icon: '📱', show: type === 'Consultores' },
     { key: 'interacoes', label: `Interacções (${data?.interacoes?.length ?? 0})`, icon: '💬', show: type === 'Consultores' },
     { key: 'checklist', label: 'Checklist', icon: '📋', show: type === 'Imóveis' },
     { key: 'analise', label: 'Análise Financeira', icon: '📊', show: type === 'Imóveis' },
@@ -335,7 +337,10 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
 
       {/* Análise Financeira tab */}
       {/* Interacções (Consultores) */}
-      {type === 'Consultores' && activeTab === 'interacoes' ? (
+      {type === 'Consultores' && activeTab === 'whatsapp' ? (
+        <WhatsAppTab consultorId={data.id} consultorNome={data.nome} controloManual={data.controlo_manual} onUpdate={loadData} />
+
+      ) : type === 'Consultores' && activeTab === 'interacoes' ? (
         <div className="p-4 sm:p-6">
           <InteracoesTab consultorId={data.id} onUpdate={loadData} controloManual={data.controlo_manual} />
         </div>
