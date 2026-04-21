@@ -9,10 +9,11 @@ import { apiFetch } from '../../lib/api.js'
 import { fmtDate } from '../../constants.js'
 
 const CANAL_ICON = { Chamada: Phone, WhatsApp: MessageCircle }
-const DIRECAO_ICON = { Enviado: ArrowUpRight, Resposta: ArrowDownLeft }
+const DIRECAO_ICON = { Enviado: ArrowUpRight, Resposta: ArrowDownLeft, Recebido: ArrowDownLeft }
 const DIRECAO_COLOR = {
   Enviado: 'text-blue-600 bg-blue-50',
   Resposta: 'text-green-600 bg-green-50',
+  Recebido: 'text-green-600 bg-green-50',
 }
 
 function formatHoras(h) {
@@ -87,7 +88,7 @@ export function InteracoesTab({ consultorId, onUpdate, controloManual }) {
   const tempoRespostaMap = {}
   for (let i = 0; i < sorted.length; i++) {
     if (sorted[i].direcao === 'Enviado') {
-      const resp = sorted.slice(i + 1).find(x => x.direcao === 'Resposta')
+      const resp = sorted.slice(i + 1).find(x => x.direcao === 'Recebido' || x.direcao === 'Resposta')
       if (resp) {
         const horas = (new Date(resp.data_hora) - new Date(sorted[i].data_hora)) / 3600000
         tempoRespostaMap[resp.id] = horas
@@ -257,6 +258,7 @@ export function InteracoesTab({ consultorId, onUpdate, controloManual }) {
           }).map(i => {
             const isNota = i.canal === 'Nota'
             const isEnviado = i.direcao === 'Enviado'
+            const isRecebido = i.direcao === 'Recebido' || i.direcao === 'Resposta'
             const isAgente = (i.notas || '').includes('[AGENTE]') || (i.notas || '').includes('[FOLLOW-UP') || (i.notas || '').includes('[REACTIVAÇÃO')
             const tempoResp = tempoRespostaMap[i.id]
             const dataHora = i.data_hora ? new Date(i.data_hora) : null

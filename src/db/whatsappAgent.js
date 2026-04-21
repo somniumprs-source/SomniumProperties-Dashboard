@@ -1,9 +1,11 @@
 /**
  * WhatsApp Agent — Agente IA "Alexandre" da Somnium Properties.
  * Recebe mensagens via Twilio webhook, acumula com timer, processa com Claude API.
+ *
+ * Auditoria 2026-04-21: seguranca, fiabilidade e optimizacoes aplicadas.
  */
 import pool from './pg.js'
-import { randomUUID } from 'crypto'
+import { randomUUID, createHmac } from 'crypto'
 import { detectPortalLink, fetchPortalData, downloadPortalPhotos } from './portalFetch.js'
 import { sendEscalacaoEmail } from './emailService.js'
 
@@ -11,6 +13,44 @@ const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY
 const TWILIO_SID = process.env.TWILIO_ACCOUNT_SID
 const TWILIO_TOKEN = process.env.TWILIO_AUTH_TOKEN
 const TWILIO_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER
+const TWILIO_WEBHOOK_URL = process.env.TWILIO_WEBHOOK_URL || '' // URL completa do webhook para validacao
+
+// ── Retry com backoff exponencial ─────────────────────────
+const MAX_RETRIES = 3
+async function withRetry(fn, label = 'op') {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await fn()
+    } catch (e) {
+      const isRetryable = e.status === 429 || e.status === 500 || e.status === 502 || e.status === 503 || e.code === 'ECONNRESET'
+      if (!isRetryable || attempt === MAX_RETRIES) throw e
+      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 8000)
+      console.warn(`[agent] ${label} tentativa ${attempt}/${MAX_RETRIES} falhou (${e.status || e.code}), retry em ${delay}ms`)
+      await new Promise(r => setTimeout(r, delay))
+    }
+  }
+}
+
+// ── Validacao de assinatura Twilio ─────────────────────────
+export function validateTwilioSignature(url, params, signature) {
+  if (!TWILIO_TOKEN || !signature) return false
+  // Construir string: URL + params ordenados por chave
+  const sortedKeys = Object.keys(params).sort()
+  let data = url
+  for (const key of sortedKeys) {
+    data += key + (params[key] ?? '')
+  }
+  const expected = createHmac('sha1', TWILIO_TOKEN)
+    .update(Buffer.from(data, 'utf-8'))
+    .digest('base64')
+  return expected === signature
+}
+
+// ── Sanitizacao HTML ────────────���──────────────────────────
+function escapeHtml(str) {
+  if (!str) return ''
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
 
 // ── Acumulador de mensagens (por número, com timer) ─────────
 const messageBuffers = new Map() // phone → { messages: [], timer: null, urgente: false }
@@ -28,33 +68,36 @@ function isUrgent(text) {
   return URGENCY_WORDS.some(w => lower.includes(w))
 }
 
-// ── Enviar WhatsApp via Twilio ──────────────────────────────
+// ── Enviar WhatsApp via Twilio (com retry) ─────────────────
 async function sendWhatsApp(to, body) {
+  if (!TWILIO_SID || !TWILIO_TOKEN || !TWILIO_NUMBER) {
+    console.warn('[whatsapp] Twilio não configurado')
+    return { ok: false, error: 'Twilio não configurado' }
+  }
   try {
-    if (!TWILIO_SID || !TWILIO_TOKEN || !TWILIO_NUMBER) {
-      console.warn('[whatsapp] Twilio não configurado')
-      return null
-    }
-    const twilio = (await import('twilio')).default
-    const client = twilio(TWILIO_SID, TWILIO_TOKEN)
-    const msg = await client.messages.create({
-      from: TWILIO_NUMBER,
-      to: to.startsWith('whatsapp:') ? to : `whatsapp:${to}`,
-      body,
-    })
+    const msg = await withRetry(async () => {
+      const twilio = (await import('twilio')).default
+      const client = twilio(TWILIO_SID, TWILIO_TOKEN)
+      return client.messages.create({
+        from: TWILIO_NUMBER,
+        to: to.startsWith('whatsapp:') ? to : `whatsapp:${to}`,
+        body,
+      })
+    }, 'sendWhatsApp')
     console.log('[whatsapp] Enviado:', msg.sid, '→', to)
-    return msg
+    return { ok: true, sid: msg.sid }
   } catch (e) {
-    console.error('[whatsapp] Erro envio:', e.message)
-    return null
+    console.error('[whatsapp] Erro envio após retries:', e.message)
+    return { ok: false, error: e.message }
   }
 }
 
-// ── Horário ativo ──────────────────────────────────────────
+// ── Horário ativo (timezone-safe) ──────────────────────────
 function isActiveHours() {
-  const now = new Date().toLocaleString('en-US', { timeZone: 'Europe/Lisbon' })
-  const hour = new Date(now).getHours()
-  return hour >= 8 && hour < 23.5
+  const hour = parseInt(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Lisbon', hour: 'numeric', hour12: false,
+  }).format(new Date()))
+  return hour >= 8 && hour <= 23
 }
 
 // ── System Prompt ───────────────────────────────────────────
@@ -417,6 +460,76 @@ Devolve SEMPRE JSON com este schema exato:
 }
 `
 
+// ── Normalizar numero de telefone para +351XXXXXXXXX ──────
+function normalizePhone(raw) {
+  const digits = (raw || '').replace(/\D/g, '')
+  if (digits.length === 9) return `+351${digits}`
+  if (digits.startsWith('351') && digits.length === 12) return `+${digits}`
+  if (digits.startsWith('00351')) return `+${digits.slice(2)}`
+  return `+${digits}`
+}
+
+// ── Validar decisao Claude ────────────────────────────────
+const VALID_DECISOES = ['ADICIONAR', 'TRIAGEM', 'IGNORAR', 'RESPONDER_CRITERIOS', 'RESPONDER_QUEM_SOMOS', 'AGUARDAR', 'DUPLICADO', 'ESCALAR']
+
+function validateDecision(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  if (!raw.decisao || !VALID_DECISOES.includes(raw.decisao)) return null
+  return {
+    decisao: raw.decisao,
+    prioridade: ['OURO', 'NORMAL', 'URGENTE'].includes(raw.prioridade) ? raw.prioridade : null,
+    confianca: typeof raw.confianca === 'number' ? raw.confianca : parseInt(raw.confianca) || 0,
+    resposta_consultor: typeof raw.resposta_consultor === 'string' ? raw.resposta_consultor : null,
+    escalar_email: !!raw.escalar_email,
+    documentacao_pedida: !!raw.documentacao_pedida,
+    dados_em_falta: Array.isArray(raw.dados_em_falta) ? raw.dados_em_falta : [],
+    imovel: raw.imovel && typeof raw.imovel === 'object' ? {
+      tipologia: raw.imovel.tipologia || null,
+      zona: raw.imovel.zona || null,
+      ask_price: typeof raw.imovel.ask_price === 'number' ? raw.imovel.ask_price : parseFloat(raw.imovel.ask_price) || null,
+      area_m2: typeof raw.imovel.area_m2 === 'number' ? raw.imovel.area_m2 : parseFloat(raw.imovel.area_m2) || null,
+      tipo: raw.imovel.tipo || 'OFF-MARKET',
+      link_anuncio: raw.imovel.link_anuncio || null,
+      ano_construcao: raw.imovel.ano_construcao || null,
+      estado_conservacao: raw.imovel.estado_conservacao || null,
+      motivacao_venda: raw.imovel.motivacao_venda || null,
+      criterios: {
+        equity: raw.imovel.criterios?.equity ?? null,
+        obras: raw.imovel.criterios?.obras ?? null,
+        pressao_venda: raw.imovel.criterios?.pressao_venda ?? null,
+      },
+      notas: raw.imovel.notas || null,
+    } : null,
+    motivo: raw.motivo || '',
+  }
+}
+
+// ── Extrair JSON robusto da resposta Claude ────────────────
+function extractJson(text) {
+  // 1. Tentar markdown ```json ... ```
+  const mdMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (mdMatch) {
+    try { return JSON.parse(mdMatch[1].trim()) } catch { /* continuar */ }
+  }
+  // 2. Encontrar JSON por depth tracking (evita greedy match)
+  let depth = 0, start = -1, lastValid = null
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '{') { if (depth === 0) start = i; depth++ }
+    else if (text[i] === '}') {
+      depth--
+      if (depth === 0 && start >= 0) {
+        try { lastValid = JSON.parse(text.slice(start, i + 1)) } catch { /* continuar */ }
+        start = -1
+      }
+    }
+  }
+  if (lastValid) return lastValid
+  // 3. Fallback greedy
+  const greedy = text.match(/\{[\s\S]*\}/)
+  if (greedy) { try { return JSON.parse(greedy[0]) } catch { /* falhou */ } }
+  return null
+}
+
 // ── Processar mensagens acumuladas ──────────────────────────
 async function processMessages(phone) {
   const buffer = messageBuffers.get(phone)
@@ -426,62 +539,64 @@ async function processMessages(phone) {
   const combinedText = buffer.messages.map(m => m.body).join('\n')
   const urgente = buffer.urgente
   const now = new Date()
+  let consultor = null
 
   console.log(`[agent] Processando ${buffer.messages.length} msgs de ${phone} (urgente: ${urgente})`)
 
   try {
-    // 1. Identificar consultor
-    const cleanPhone = phone.replace('whatsapp:', '').replace(/\s/g, '')
+    // 1. Identificar consultor (match por ultimos 9 digitos, ORDER BY para consistencia)
+    const cleanPhone = normalizePhone(phone)
+    const last9 = cleanPhone.slice(-9)
     const { rows } = await pool.query(
-      "SELECT * FROM consultores WHERE REPLACE(REPLACE(contacto, ' ', ''), '+', '') LIKE $1 OR contacto LIKE $2",
-      [`%${cleanPhone.slice(-9)}`, `%${cleanPhone.slice(-9)}%`]
+      `SELECT * FROM consultores
+       WHERE REPLACE(REPLACE(REPLACE(contacto, ' ', ''), '+', ''), '00', '') LIKE $1
+       ORDER BY updated_at DESC LIMIT 1`,
+      [`%${last9}`]
     )
-    let consultor = rows[0]
+    consultor = rows[0]
 
     if (!consultor) {
-      // Criar novo consultor classe D
       const id = randomUUID()
       const nowStr = now.toISOString()
       await pool.query(
         `INSERT INTO consultores (id, nome, contacto, estatuto, estado_avaliacao, classificacao, created_at, updated_at)
          VALUES ($1, $2, $3, 'Cold Call', 'Em avaliação', 'D', $4, $4)`,
-        [id, `Consultor ${cleanPhone.slice(-4)}`, cleanPhone, nowStr]
+        [id, `Consultor ${last9.slice(-4)}`, cleanPhone, nowStr]
       )
       const { rows: [novo] } = await pool.query('SELECT * FROM consultores WHERE id = $1', [id])
       consultor = novo
       console.log(`[agent] Novo consultor criado: ${consultor.nome} (${cleanPhone})`)
     }
 
-    // 2. Verificar controlo manual
+    // 2. SEMPRE registar mensagem recebida na BD (nunca perder mensagem)
+    await pool.query(
+      'INSERT INTO consultor_interacoes (id, consultor_id, data_hora, canal, direcao, notas) VALUES ($1, $2, $3, $4, $5, $6)',
+      [randomUUID(), consultor.id, now.toISOString(), 'whatsapp', 'Recebido', combinedText]
+    )
+
+    // 3. Verificar controlo manual (mensagem ja registada acima)
     if (consultor.controlo_manual) {
-      console.log(`[agent] ${consultor.nome} em controlo manual — ignorado`)
-      // Registar no log mesmo assim
-      await pool.query(
-        'INSERT INTO consultor_interacoes (id, consultor_id, data_hora, canal, direcao, notas) VALUES ($1, $2, $3, $4, $5, $6)',
-        [randomUUID(), consultor.id, now.toISOString(), 'whatsapp', 'Resposta', combinedText]
-      )
+      console.log(`[agent] ${consultor.nome} em controlo manual — mensagem registada, agente ignorado`)
       return
     }
 
-    // 3. Verificar horário
+    // 4. Verificar horario (mensagem ja registada acima)
     if (!isActiveHours()) {
-      console.log(`[agent] Fora de horário — acumulado para 08:00`)
-      await pool.query(
-        'INSERT INTO consultor_interacoes (id, consultor_id, data_hora, canal, direcao, notas) VALUES ($1, $2, $3, $4, $5, $6)',
-        [randomUUID(), consultor.id, now.toISOString(), 'whatsapp', 'Resposta', combinedText]
-      )
+      console.log(`[agent] Fora de horario — mensagem registada, resposta pendente para 08:00`)
       return
     }
 
-    // 4. Fetch portal data se houver link
+    // 5. Fetch portal data se houver link
     let portalData = null
     const portalLink = detectPortalLink(combinedText)
     if (portalLink) {
       console.log(`[agent] Link detetado: ${portalLink.portal} — ${portalLink.url}`)
-      portalData = await fetchPortalData(portalLink.url)
+      try { portalData = await fetchPortalData(portalLink.url) } catch (e) {
+        console.warn('[agent] Erro portal fetch:', e.message)
+      }
     }
 
-    // 5. Carregar histórico recente
+    // 6. Carregar historico recente
     const { rows: historico } = await pool.query(
       'SELECT direcao, notas, data_hora FROM consultor_interacoes WHERE consultor_id = $1 ORDER BY data_hora DESC LIMIT 10',
       [consultor.id]
@@ -490,17 +605,21 @@ async function processMessages(phone) {
       `[${new Date(h.data_hora).toLocaleString('pt-PT')}] ${h.direcao === 'Enviado' ? 'Alexandre' : consultor.nome}: ${h.notas}`
     ).join('\n')
 
-    // 6. Verificar duplicado
-    const { rows: imoveisExistentes } = await pool.query('SELECT nome, zona, tipologia, ask_price, link FROM imoveis')
+    // 7. Carregar imoveis recentes para deteccao de duplicados (ultimos 90 dias + activos)
+    const cutoff90d = new Date(now - 90 * 86400000).toISOString()
+    const { rows: imoveisExistentes } = await pool.query(
+      "SELECT nome, zona, tipologia, ask_price, link FROM imoveis WHERE created_at > $1 OR estado NOT IN ('Descartado', 'Vendido')",
+      [cutoff90d]
+    )
 
-    // 7. Chamar Claude API
+    // 8. Chamar Claude API (com retry e prompt caching)
     const Anthropic = (await import('@anthropic-ai/sdk')).default
     const client = new Anthropic({ apiKey: ANTHROPIC_KEY })
 
     const userContent = `
 CONSULTOR: ${consultor.nome} (${consultor.contacto}) — Classe ${consultor.classificacao || 'D'} — ${consultor.estatuto}
 AGÊNCIA: ${(() => { try { return JSON.parse(consultor.imobiliaria || '[]').join(', ') } catch { return 'Desconhecida' } })()}
-PRIMEIRO CONTACTO: ${historico.length === 0 ? 'SIM' : 'NÃO — já temos histórico'}
+PRIMEIRO CONTACTO: ${historico.length <= 1 ? 'SIM' : 'NÃO — já temos histórico'}
 
 HISTÓRICO RECENTE:
 ${historicoText || '(sem histórico)'}
@@ -523,77 +642,78 @@ ${combinedText}
 ${urgente ? '⚠️ URGÊNCIA DETECTADA — prioridade máxima' : ''}
 `
 
-    const response = await client.messages.create({
+    const response = await withRetry(() => client.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 1500,
+      max_tokens: 2000,
+      temperature: 0,
       messages: [
         { role: 'user', content: userContent }
       ],
-      system: SYSTEM_PROMPT,
-    })
+      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+    }), 'claude-api')
 
     const responseText = response.content[0]?.text || '{}'
-    let decision
-    try {
-      // Extrair JSON (pode estar envolvido em markdown ```json ... ```)
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/)
-      decision = JSON.parse(jsonMatch?.[0] || responseText)
-    } catch {
-      console.error('[agent] Resposta inválida do Claude:', responseText.slice(0, 300))
-      // Tentativa de recuperação: enviar mensagem genérica se houver texto legível
+
+    // 9. Extrair e validar JSON (parsing robusto + validacao de tipos)
+    const rawJson = extractJson(responseText)
+    const decision = validateDecision(rawJson)
+
+    if (!decision) {
+      console.error('[agent] Resposta Claude invalida:', responseText.slice(0, 300))
+      // Registar erro na BD para auditoria
+      await pool.query(
+        'INSERT INTO consultor_interacoes (id, consultor_id, data_hora, canal, direcao, notas) VALUES ($1, $2, $3, $4, $5, $6)',
+        [randomUUID(), consultor.id, now.toISOString(), 'whatsapp', 'Enviado', `[ERRO AGENTE] Resposta Claude invalida — mensagem nao processada automaticamente`]
+      )
+      // Fallback: tentar extrair resposta_consultor do texto
       const fallbackMatch = responseText.match(/"resposta_consultor"\s*:\s*"([^"]+)"/)
       if (fallbackMatch) {
-        await sendWhatsApp(phone, fallbackMatch[1])
+        const sent = await sendWhatsApp(phone, fallbackMatch[1])
+        if (sent.ok) {
+          await pool.query(
+            'INSERT INTO consultor_interacoes (id, consultor_id, data_hora, canal, direcao, notas) VALUES ($1, $2, $3, $4, $5, $6)',
+            [randomUUID(), consultor.id, new Date().toISOString(), 'whatsapp', 'Enviado', `[AGENTE FALLBACK] ${fallbackMatch[1]}`]
+          )
+        }
       }
       return
     }
 
-    // Validar que a decisão tem os campos mínimos
-    if (!decision.decisao) {
-      console.error('[agent] Decisão sem campo "decisao":', JSON.stringify(decision).slice(0, 200))
-      return
-    }
+    console.log(`[agent] Decisao: ${decision.decisao} | Prioridade: ${decision.prioridade} | Confianca: ${decision.confianca}`)
 
-    console.log(`[agent] Decisão: ${decision.decisao} | Prioridade: ${decision.prioridade} | Confiança: ${decision.confianca}`)
-
-    // 8. Registar interação do consultor
-    await pool.query(
-      'INSERT INTO consultor_interacoes (id, consultor_id, data_hora, canal, direcao, notas) VALUES ($1, $2, $3, $4, $5, $6)',
-      [randomUUID(), consultor.id, now.toISOString(), 'whatsapp', 'Resposta', combinedText]
-    )
-
-    // 9. Enviar resposta se existir
+    // 10. Enviar resposta se existir (verificar sucesso antes de registar)
     if (decision.resposta_consultor) {
-      await sendWhatsApp(phone, decision.resposta_consultor)
-      // Registar resposta do agente
+      const sent = await sendWhatsApp(phone, decision.resposta_consultor)
       await pool.query(
         'INSERT INTO consultor_interacoes (id, consultor_id, data_hora, canal, direcao, notas) VALUES ($1, $2, $3, $4, $5, $6)',
-        [randomUUID(), consultor.id, new Date().toISOString(), 'whatsapp', 'Enviado', `[AGENTE] ${decision.resposta_consultor}`]
+        [randomUUID(), consultor.id, new Date().toISOString(), 'whatsapp', 'Enviado',
+          sent.ok
+            ? `[AGENTE] ${decision.resposta_consultor}`
+            : `[AGENTE FALHOU] ${decision.resposta_consultor} — Erro: ${sent.error}`
+        ]
       )
     }
 
-    // 10. Actuar conforme decisão
+    // 11. Actuar conforme decisao
     if (decision.decisao === 'ADICIONAR' && decision.imovel) {
       const im = decision.imovel
-      // Verificar duplicado: link exato OU (zona + tipologia + preço ±10%)
+      // Duplicado: link exacto OU (zona + tipologia + preco ±10%) com normalizacao de diacriticos
+      const norm = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
       const isDuplicate = imoveisExistentes.some(e => {
-        // Duplicado por link
         if (im.link_anuncio && e.link && im.link_anuncio === e.link) return true
         if (!im.zona || !e.zona) return false
-        const zonaSimilar = e.zona.toLowerCase().includes(im.zona.toLowerCase()) || im.zona.toLowerCase().includes(e.zona?.toLowerCase())
-        const tipoSimilar = im.tipologia && e.tipologia && e.tipologia.toLowerCase() === im.tipologia.toLowerCase()
+        const zonaSimilar = norm(e.zona).includes(norm(im.zona)) || norm(im.zona).includes(norm(e.zona))
+        const tipoSimilar = im.tipologia && e.tipologia && norm(e.tipologia) === norm(im.tipologia)
         const precoSimilar = im.ask_price && e.ask_price && Math.abs(e.ask_price - im.ask_price) / e.ask_price <= 0.10
         return zonaSimilar && (tipoSimilar || precoSimilar)
       })
 
       if (isDuplicate) {
-        if (decision.resposta_consultor) {
-          await sendWhatsApp(phone, 'Esse imóvel já está no nosso radar — estamos a acompanhar a situação. Se houver novidade do lado do proprietário, avisa-nos!')
-        }
+        await sendWhatsApp(phone, 'Esse imóvel já está no nosso radar — estamos a acompanhar a situação. Se houver novidade do lado do proprietário, avisa-nos!')
         console.log('[agent] Duplicado detetado — não criado no CRM')
       } else {
-        // Criar imóvel em Pré-aprovação
         const imovelId = randomUUID()
+        const nomeImovel = (im.tipologia && im.zona) ? `${im.tipologia} ${im.zona}` : `Imóvel ${consultor.nome}`
         const notasAgente = [
           `[Agente] ${decision.motivo || ''}`,
           `Prioridade: ${decision.prioridade || 'NORMAL'}`,
@@ -609,19 +729,16 @@ ${urgente ? '⚠️ URGÊNCIA DETECTADA — prioridade máxima' : ''}
           `INSERT INTO imoveis (id, nome, estado, nome_consultor, origem, tipo_oportunidade, link, tipologia, zona, ask_price, area_util, notas, created_at, updated_at, data_adicionado)
            VALUES ($1, $2, 'Pré-aprovação', $3, 'Consultor', $4, $5, $6, $7, $8, $9, $10, $11, $11, $12)`,
           [
-            imovelId,
-            im.tipologia && im.zona ? `${im.tipologia} ${im.zona}` : `Imóvel ${consultor.nome}`,
-            consultor.nome,
+            imovelId, nomeImovel, consultor.nome,
             im.tipo === 'PORTAL' ? 'Portal' : 'Off-Market',
             im.link_anuncio || portalLink?.url || null,
-            im.tipologia, im.zona, im.ask_price || 0, im.area_m2 || null,
-            notasAgente,
-            now.toISOString(), now.toISOString().slice(0, 10),
+            im.tipologia, im.zona, im.ask_price, im.area_m2,
+            notasAgente, now.toISOString(), now.toISOString().slice(0, 10),
           ]
         )
         console.log(`[agent] Imóvel criado em Pré-aprovação: ${imovelId}`)
 
-        // Importar fotografias do portal (se existirem)
+        // Importar fotografias do portal
         if (portalData?.fotos_urls?.length) {
           try {
             const fotosImportadas = await downloadPortalPhotos(imovelId, portalData.fotos_urls)
@@ -639,18 +756,18 @@ ${urgente ? '⚠️ URGÊNCIA DETECTADA — prioridade máxima' : ''}
       }
     }
 
-    // 11. Escalada por email
+    // 12. Escalada por email (com HTML sanitizado)
     if (decision.escalar_email) {
       await sendEscalacaoEmail({
-        consultorNome: consultor.nome,
-        consultorTelefone: consultor.contacto,
-        pergunta: combinedText,
-        historico: historicoText,
-        respostaDada: decision.resposta_consultor,
+        consultorNome: escapeHtml(consultor.nome),
+        consultorTelefone: escapeHtml(consultor.contacto),
+        pergunta: escapeHtml(combinedText),
+        historico: escapeHtml(historicoText),
+        respostaDada: escapeHtml(decision.resposta_consultor),
       })
     }
 
-    // 12. Recalcular tempo medio de resposta e actualizar score
+    // 13. Recalcular tempo medio de resposta
     try {
       const { rows: allInt } = await pool.query(
         'SELECT direcao, data_hora FROM consultor_interacoes WHERE consultor_id = $1 ORDER BY data_hora ASC',
@@ -659,10 +776,10 @@ ${urgente ? '⚠️ URGÊNCIA DETECTADA — prioridade máxima' : ''}
       const temposResp = []
       for (let i = 0; i < allInt.length; i++) {
         if (allInt[i].direcao === 'Enviado') {
-          const resp = allInt.slice(i + 1).find(x => x.direcao === 'Resposta')
+          const resp = allInt.slice(i + 1).find(x => x.direcao === 'Recebido' || x.direcao === 'Resposta')
           if (resp) {
             const horas = (new Date(resp.data_hora) - new Date(allInt[i].data_hora)) / 3600000
-            if (horas >= 0 && horas < 720) temposResp.push(horas) // max 30 dias
+            if (horas >= 0 && horas < 720) temposResp.push(horas)
           }
         }
       }
@@ -675,11 +792,19 @@ ${urgente ? '⚠️ URGÊNCIA DETECTADA — prioridade máxima' : ''}
       )
     } catch (e) {
       console.warn('[agent] Erro recalc tempo resposta:', e.message)
-      await pool.query('UPDATE consultores SET updated_at = $1 WHERE id = $2', [now.toISOString(), consultor.id])
     }
 
   } catch (e) {
-    console.error('[agent] Erro processamento:', e.message)
+    console.error('[agent] Erro processamento:', e.message, e.stack?.split('\n')[1])
+    // Registar erro na BD se tivermos consultor identificado
+    if (consultor?.id) {
+      try {
+        await pool.query(
+          'INSERT INTO consultor_interacoes (id, consultor_id, data_hora, canal, direcao, notas) VALUES ($1, $2, $3, $4, $5, $6)',
+          [randomUUID(), consultor.id, new Date().toISOString(), 'whatsapp', 'Enviado', `[ERRO AGENTE] ${e.message}`]
+        )
+      } catch { /* ignorar erro no log de erro */ }
+    }
   }
 }
 
@@ -687,19 +812,21 @@ ${urgente ? '⚠️ URGÊNCIA DETECTADA — prioridade máxima' : ''}
 export function receiveWhatsAppMessage(from, body, isFromAgent = true) {
   const phone = from.replace('whatsapp:', '')
 
-  // Se mensagem vem de humano (não do agente) → handoff
+  // Se mensagem vem de humano (nao do agente) → handoff
   if (!isFromAgent) {
-    pool.query('UPDATE consultores SET controlo_manual = true, updated_at = $1 WHERE REPLACE(REPLACE(contacto, \' \', \'\'), \'+\', \'\') LIKE $2',
-      [new Date().toISOString(), `%${phone.slice(-9)}%`]
+    const last9 = normalizePhone(phone).slice(-9)
+    pool.query(
+      `UPDATE consultores SET controlo_manual = true, updated_at = $1
+       WHERE REPLACE(REPLACE(REPLACE(contacto, ' ', ''), '+', ''), '00', '') LIKE $2`,
+      [new Date().toISOString(), `%${last9}`]
     ).catch(e => console.warn('[agent] Erro handoff:', e.message))
     return
   }
 
   let buffer = messageBuffers.get(phone)
   if (!buffer) {
-    // Primeiro mensagem — iniciar timer
     const urgente = isUrgent(body)
-    const timerMs = urgente ? 30000 : 120000 // 30s urgente, 120s normal
+    const timerMs = urgente ? 30000 : 120000
     buffer = {
       messages: [],
       urgente,
@@ -709,7 +836,6 @@ export function receiveWhatsAppMessage(from, body, isFromAgent = true) {
     console.log(`[agent] Timer iniciado para ${phone}: ${timerMs / 1000}s (urgente: ${urgente})`)
   }
 
-  // Acumular (timer NÃO reinicia)
   buffer.messages.push({ body, timestamp: new Date().toISOString() })
   if (isUrgent(body)) buffer.urgente = true
 }

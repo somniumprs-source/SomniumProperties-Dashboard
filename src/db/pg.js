@@ -425,6 +425,10 @@ export async function initSchema() {
       CREATE INDEX IF NOT EXISTS idx_interacoes_data ON consultor_interacoes(data_hora DESC);
       CREATE INDEX IF NOT EXISTS idx_interacoes_imovel ON consultor_interacoes(imovel_id);
 
+      -- Migrar direcao 'Resposta' para 'Recebido' (correcao semantica)
+      UPDATE consultor_interacoes SET direcao = 'Recebido'
+        WHERE direcao = 'Resposta' AND notas NOT LIKE '[AGENTE]%' AND notas NOT LIKE '[FOLLOW-UP%' AND notas NOT LIKE '[REACTIVAÇÃO%';
+
       -- Checklist obrigatória por estado do imóvel
       CREATE TABLE IF NOT EXISTS checklist_imovel (
         id TEXT PRIMARY KEY,

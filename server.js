@@ -23,10 +23,17 @@ const supabaseAdmin = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE
 app.use('/api', async (req, res, next) => {
   // CRM API — usa PostgreSQL directamente, sem auth Supabase
   if (req.path.startsWith('/crm/')) return next()
-  // Webhook Twilio — sem autenticação (Twilio não envia token Supabase)
+  // Webhook Twilio — validacao feita no handler (X-Twilio-Signature)
   if (req.path.startsWith('/webhook/')) return next()
-  // Cron jobs, templates, relatórios, reactivação — acesso interno
-  if (req.path.startsWith('/cron/') || req.path.startsWith('/template/') || req.path.startsWith('/relatorios') || req.path.startsWith('/reactivacao')) return next()
+  // Cron jobs, templates, relatórios, reactivação — protegidos por API key interna
+  if (req.path.startsWith('/cron/') || req.path.startsWith('/template/') || req.path.startsWith('/relatorios') || req.path.startsWith('/reactivacao')) {
+    const internalKey = process.env.INTERNAL_API_KEY
+    if (internalKey && req.headers['x-api-key'] !== internalKey) {
+      // Em dev (sem key configurada), deixar passar
+      if (internalKey) return res.status(403).json({ error: 'Acesso negado' })
+    }
+    return next()
+  }
   // PDFs e documentos — abrem em nova janela sem token
   if (req.path.includes('/relatorio') || req.path.includes('/documento/')) return next()
   // Se não há service key configurada, deixar passar (dev mode)
@@ -60,9 +67,20 @@ try {
     const { runFollowUp, runRelatorioDiario, runRelatorioSemanal, REACTIVATION_TEMPLATE } = await import('./src/db/cronJobs.js')
     const { startCronJobs } = await import('./src/db/cronJobs.js')
 
-    // Webhook POST /api/webhook/whatsapp (recepção Twilio)
+    // Webhook POST /api/webhook/whatsapp (recepção Twilio — com validacao de assinatura)
+    const { validateTwilioSignature } = await import('./src/db/whatsappAgent.js')
     app.post('/api/webhook/whatsapp', express.urlencoded({ extended: false }), (req, res) => {
-      // Responder 200 ao Twilio sem mensagem automática (o agente responde via API)
+      // Validar assinatura Twilio (se configurada)
+      const twilioSig = req.headers['x-twilio-signature']
+      const webhookUrl = process.env.TWILIO_WEBHOOK_URL
+      if (webhookUrl && twilioSig) {
+        if (!validateTwilioSignature(webhookUrl, req.body || {}, twilioSig)) {
+          console.warn('[whatsapp] Assinatura Twilio invalida — pedido rejeitado')
+          return res.status(403).send('<Response></Response>')
+        }
+      }
+
+      // Responder 200 ao Twilio sem mensagem automatica (o agente responde via API)
       res.set('Content-Type', 'text/xml')
       res.status(200).send('<Response></Response>')
 
