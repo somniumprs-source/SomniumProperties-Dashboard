@@ -11,6 +11,7 @@ import { Building2, Users, UserCheck, Briefcase, HardHat, ChevronLeft, ChevronRi
 import { MultiSelect } from '../components/ui/MultiSelect.jsx'
 import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS_COLOR, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
 import { apiFetch } from '../lib/api.js'
+import { useUnreadCounts } from '../hooks/useUnreadCounts.js'
 
 const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Negócios', 'Empreiteiros']
 
@@ -476,6 +477,7 @@ export function CRM() {
   const [alertCount, setAlertCount] = useState(0)
   const [consultoresLookup, setConsultoresLookup] = useState([])
   const [invSubTab, setInvSubTab] = useState('Passivo') // sub-tab investidores
+  const { counts: unreadCounts } = useUnreadCounts(tab === 'Consultores')
 
   const toast = useToast()
   const searchTimer = useRef(null)
@@ -626,7 +628,13 @@ export function CRM() {
             <div className="flex items-center gap-2">
               {alertDot && <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${alertDot}`} />}
               <ClassBadge cls={item.classificacao} />
-              <p className="text-sm font-semibold text-gray-800 truncate">{item.nome}</p>
+              <p className="text-sm font-semibold text-gray-800 truncate flex-1">{item.nome}</p>
+              {unreadCounts[item.id] > 0 && (
+                <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                  style={{ backgroundColor: '#25D366' }}>
+                  {unreadCounts[item.id] > 99 ? '99+' : unreadCounts[item.id]}
+                </span>
+              )}
             </div>
             {imobs && <p className="text-xs text-gray-500 mt-1">{imobs}</p>}
             {item.contacto && <p className="text-xs text-gray-400 mt-1">{item.contacto}</p>}

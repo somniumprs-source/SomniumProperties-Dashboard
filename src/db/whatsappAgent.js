@@ -8,6 +8,7 @@ import pool from './pg.js'
 import { randomUUID, createHmac } from 'crypto'
 import { detectPortalLink, fetchPortalData, downloadPortalPhotos } from './portalFetch.js'
 import { sendEscalacaoEmail } from './emailService.js'
+import { sendWhatsAppNotification } from './notificationService.js'
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY
 const TWILIO_SID = process.env.TWILIO_ACCOUNT_SID
@@ -574,6 +575,11 @@ async function processMessages(phone) {
       [randomUUID(), consultor.id, now.toISOString(), 'whatsapp', 'Recebido', combinedText]
     )
 
+    // 2b. Notificar por email (fire-and-forget)
+    sendWhatsAppNotification({
+      consultorNome: consultor.nome, direcao: 'Recebido', mensagem: combinedText,
+    }).catch(e => console.warn('[notif] Erro notificacao recebida:', e.message))
+
     // 3. Verificar controlo manual (mensagem ja registada acima)
     if (consultor.controlo_manual) {
       console.log(`[agent] ${consultor.nome} em controlo manual — mensagem registada, agente ignorado`)
@@ -692,6 +698,15 @@ ${urgente ? '⚠️ URGÊNCIA DETECTADA — prioridade máxima' : ''}
             : `[AGENTE FALHOU] ${decision.resposta_consultor} — Erro: ${sent.error}`
         ]
       )
+
+      // Notificar resposta do agente por email (fire-and-forget)
+      if (sent.ok) {
+        sendWhatsAppNotification({
+          consultorNome: consultor.nome, direcao: 'Enviado',
+          mensagem: decision.resposta_consultor,
+          decisao: decision.decisao, prioridade: decision.prioridade, confianca: decision.confianca,
+        }).catch(e => console.warn('[notif] Erro notificacao enviada:', e.message))
+      }
     }
 
     // 11. Actuar conforme decisao

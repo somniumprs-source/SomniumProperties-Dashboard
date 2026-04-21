@@ -202,6 +202,13 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
   const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores' }[type]
   const prevTab = useRef(activeTab)
 
+  // Mark-seen: quando o utilizador abre o tab WhatsApp, marca como lido
+  useEffect(() => {
+    if (activeTab === 'whatsapp' && id && type === 'Consultores') {
+      apiFetch(`/api/crm/whatsapp/mark-seen/${id}`, { method: 'POST' }).catch(() => {})
+    }
+  }, [activeTab, id, type])
+
   function startEdit() {
     setForm({ ...data })
     setEditing(true)
