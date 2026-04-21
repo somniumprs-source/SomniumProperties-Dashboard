@@ -2212,4 +2212,35 @@ router.get('/backup/:id/download', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// ── WhatsApp unread counts + mark-seen ────────────────────
+router.get('/whatsapp/unread-counts', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT ci.consultor_id, COUNT(*)::int as unread
+      FROM consultor_interacoes ci
+      LEFT JOIN whatsapp_last_seen ls ON ls.consultor_id = ci.consultor_id
+      WHERE ci.canal = 'whatsapp'
+        AND ci.direcao = 'Recebido'
+        AND ci.data_hora > COALESCE(ls.last_seen_at, '1970-01-01')
+      GROUP BY ci.consultor_id
+      HAVING COUNT(*) > 0
+    `)
+    const result = {}
+    for (const r of rows) result[r.consultor_id] = r.unread
+    res.json(result)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/whatsapp/mark-seen/:id', async (req, res) => {
+  try {
+    await pool.query(
+      `INSERT INTO whatsapp_last_seen (consultor_id, last_seen_at)
+       VALUES ($1, $2)
+       ON CONFLICT (consultor_id) DO UPDATE SET last_seen_at = $2`,
+      [req.params.id, new Date().toISOString()]
+    )
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 export default router

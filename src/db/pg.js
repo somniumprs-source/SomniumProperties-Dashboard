@@ -429,6 +429,12 @@ export async function initSchema() {
       UPDATE consultor_interacoes SET direcao = 'Recebido'
         WHERE direcao = 'Resposta' AND notas NOT LIKE '[AGENTE]%' AND notas NOT LIKE '[FOLLOW-UP%' AND notas NOT LIKE '[REACTIVAÇÃO%';
 
+      -- Tracking de "ultima vez que o utilizador viu" as mensagens WhatsApp de cada consultor
+      CREATE TABLE IF NOT EXISTS whatsapp_last_seen (
+        consultor_id TEXT PRIMARY KEY,
+        last_seen_at TEXT NOT NULL DEFAULT (NOW()::TEXT)
+      );
+
       -- Checklist obrigatória por estado do imóvel
       CREATE TABLE IF NOT EXISTS checklist_imovel (
         id TEXT PRIMARY KEY,
