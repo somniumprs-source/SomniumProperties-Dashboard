@@ -481,29 +481,42 @@ export function CRM() {
   const searchTimer = useRef(null)
   const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores', 'Negócios': 'negocios', 'Empreiteiros': 'empreiteiros' }[tab]
 
+  // Garantir filtro tipo_principal sincronizado para investidores
+  const effectiveFilters = tab === 'Investidores' ? { ...filters, tipo_principal: invSubTab } : filters
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
       if (search) {
-        const r = await apiFetch(`/api/crm/${endpoint}?search=${encodeURIComponent(search)}`)
+        const params = new URLSearchParams({ search })
+        // Investidores: sempre filtrar por tipo mesmo na pesquisa
+        if (tab === 'Investidores') params.set('tipo_principal', invSubTab)
+        for (const [k, v] of Object.entries(effectiveFilters)) { if (v && k !== 'tipo_principal') params.set(k, v) }
+        const r = await apiFetch(`/api/crm/${endpoint}?${params}`)
         const d = await r.json()
-        setData(d.data ?? []); setTotal(d.data?.length ?? 0)
-      } else if (tab === 'Consultores' && !search) {
+        let items = d.data ?? []
+        // Filtrar client-side se backend não suportar tipo_principal na pesquisa
+        if (tab === 'Investidores') items = items.filter(i => (i.tipo_principal || 'Passivo') === invSubTab)
+        setData(items); setTotal(items.length)
+      } else if (tab === 'Consultores') {
         // Usar endpoint enriquecido para consultores (com métricas e alertas)
         const params = new URLSearchParams()
-        for (const [k, v] of Object.entries(filters)) { if (v) params.set(k, v) }
+        for (const [k, v] of Object.entries(effectiveFilters)) { if (v) params.set(k, v) }
         const r = await apiFetch(`/api/crm/consultores/enriched${params.toString() ? '?' + params : ''}`)
         const d = await r.json()
         let items = d.data ?? []
         // Filtrar client-side por estado_avaliacao se necessário
-        if (filters.estado_avaliacao) items = items.filter(c => c.estado_avaliacao === filters.estado_avaliacao)
+        if (effectiveFilters.estado_avaliacao) items = items.filter(c => c.estado_avaliacao === effectiveFilters.estado_avaliacao)
         setData(items); setTotal(items.length)
       } else {
         const params = new URLSearchParams({ limit: '200' })
-        for (const [k, v] of Object.entries(filters)) { if (v) params.set(k, v) }
+        for (const [k, v] of Object.entries(effectiveFilters)) { if (v) params.set(k, v) }
         const r = await apiFetch(`/api/crm/${endpoint}?${params}`)
         const d = await r.json()
-        setData(d.data ?? []); setTotal(d.total ?? 0)
+        let items = d.data ?? []
+        // Segurança extra: filtrar client-side para investidores
+        if (tab === 'Investidores') items = items.filter(i => (i.tipo_principal || 'Passivo') === invSubTab)
+        setData(items); setTotal(items.length)
       }
       // Carregar progresso checklist para imóveis
       if (tab === 'Imóveis') {
@@ -513,7 +526,7 @@ export function CRM() {
       }
     } catch {}
     setLoading(false)
-  }, [endpoint, tab, search, filters])
+  }, [endpoint, tab, search, filters, invSubTab, effectiveFilters])
 
   useEffect(() => { load() }, [load])
   // Forçar filtro tipo_principal quando sub-tab investidores muda
