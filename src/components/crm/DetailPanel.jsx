@@ -666,16 +666,34 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
               </>}
             </>}
             {type === 'Consultores' && <>
-              <Field label="Estatuto" value={data.estatuto} />
-              <Field label="Classificação" value={data.classificacao} />
-              <Field label="Contacto" value={data.contacto} />
-              <Field label="Email" value={data.email} />
-              <Field label="Imobiliária" value={(() => { try { return JSON.parse(data.imobiliaria || '[]').join(', ') } catch { return '—' } })()} />
-              <Field label="Leads Enviados" value={data.imoveis_enviados} />
-              <Field label="Off-Market" value={data.imoveis_off_market} />
-              <Field label="Comissão" value={data.comissao > 0 ? `${data.comissao}%` : '—'} />
-              <Field label="Follow Up" value={data.data_follow_up} />
-              <Field label="Próx. Follow Up" value={data.data_proximo_follow_up} />
+              {editing ? <>
+                <EF label="Nome" field="nome" form={form} set={setField} />
+                <EF label="Estatuto" field="estatuto" form={form} set={setField} type="select" options={['Cold Call','Follow up','Aberto Parcerias','Acesso imoveis Off market','Consultores em Parceria']} />
+                <EF label="Estado Avaliação" field="estado_avaliacao" form={form} set={setField} type="select" options={['Em avaliação','Ativo','Inativo']} />
+                <EF label="Classificação" field="classificacao" form={form} set={setField} type="select" options={['A','B','C','D']} />
+                <EF label="Contacto" field="contacto" form={form} set={setField} />
+                <EF label="Email" field="email" form={form} set={setField} />
+                <EF label="Comissão %" field="comissao" form={form} set={setField} type="number" />
+                <EF label="Leads Enviados" field="imoveis_enviados" form={form} set={setField} type="number" />
+                <EF label="Off-Market" field="imoveis_off_market" form={form} set={setField} type="number" />
+                <EF label="Meta Mensal Leads" field="meta_mensal_leads" form={form} set={setField} type="number" />
+                <EF label="Data Início Parceria" field="data_inicio" form={form} set={setField} type="date" />
+                <EF label="Data Follow Up" field="data_follow_up" form={form} set={setField} type="date" />
+                <EF label="Próx. Follow Up" field="data_proximo_follow_up" form={form} set={setField} type="date" />
+                <EF label="Motivo Follow Up" field="motivo_follow_up" form={form} set={setField} />
+                <EF label="Motivo Descontinuação" field="motivo_descontinuacao" form={form} set={setField} />
+              </> : <>
+                <Field label="Estatuto" value={data.estatuto} />
+                <Field label="Classificação" value={data.classificacao} />
+                <Field label="Contacto" value={data.contacto} />
+                <Field label="Email" value={data.email} />
+                <Field label="Imobiliária" value={(() => { try { return JSON.parse(data.imobiliaria || '[]').join(', ') } catch { return '—' } })()} />
+                <Field label="Leads Enviados" value={data.imoveis_enviados} />
+                <Field label="Off-Market" value={data.imoveis_off_market} />
+                <Field label="Comissão" value={data.comissao > 0 ? `${data.comissao}%` : '—'} />
+                <Field label="Follow Up" value={data.data_follow_up} />
+                <Field label="Próx. Follow Up" value={data.data_proximo_follow_up} />
+              </>}
             </>}
           </div>
 
