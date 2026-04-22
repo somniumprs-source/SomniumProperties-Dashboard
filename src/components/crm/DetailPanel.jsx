@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
+import { useToast } from '../ui/Toast.jsx'
 import { AnaliseTab } from '../analise/AnaliseTab.jsx'
 import { InteracoesTab } from './InteracoesTab.jsx'
 import { WhatsAppTab } from './WhatsAppTab.jsx'
@@ -198,6 +199,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
+  const toast = useToast()
 
   const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores' }[type]
   const prevTab = useRef(activeTab)
@@ -230,15 +232,19 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
     setSaving(true)
     try {
       // Limpar campos do form que são relações (não enviar ao PUT)
-      const { negocios, consultores, imoveis, tarefas, timeline, analises, documentos, ...cleanForm } = form
+      const { negocios, consultores, imoveis, tarefas, timeline, analises, documentos, checklist, interacoes, ...cleanForm } = form
       const r = await apiFetch(`/api/crm/${endpoint}/${id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cleanForm),
       })
-      if (!r.ok) throw new Error('Erro ao guardar')
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        throw new Error(err.error || 'Erro ao guardar')
+      }
       await loadData()
       setEditing(false)
       if (onSave) onSave()
-    } catch (e) { console.error('Erro ao guardar:', e) }
+      toast('Alterações guardadas', 'success')
+    } catch (e) { console.error('Erro ao guardar:', e); toast(e.message, 'error') }
     setSaving(false)
   }
 
