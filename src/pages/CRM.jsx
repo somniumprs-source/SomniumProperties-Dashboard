@@ -705,7 +705,7 @@ export function CRM() {
       const isNew = !item.id
       const url = isNew ? `/api/crm/${endpoint}` : `/api/crm/${endpoint}/${item.id}`
       const method = isNew ? 'POST' : 'PUT'
-      const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) })
+      const r = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) })
       if (!r.ok) throw new Error('Erro ao guardar')
       const saved = await r.json()
       toast(isNew ? 'Registo criado' : 'Registo atualizado', 'success')
