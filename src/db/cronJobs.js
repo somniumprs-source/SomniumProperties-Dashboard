@@ -19,10 +19,25 @@ const FOLLOWUP_RULES = {
 }
 
 // ── Template de reactivação ─────────────────────────────────
-const REACTIVATION_TEMPLATE = (nome) => `Olá ${nome}, sou o Alexandre da Somnium Properties — mudei de contacto (antes era o 925 323 797), daí o número novo.
-Continuo à procura de imóveis com potencial de negociação — construção antiga ou que precisem de obras, onde haja margem no preço. Se o proprietário precisar de vender rápido, ainda melhor.
-Zonas: Concelho de Coimbra, zona central de Condeixa-a-Nova e Ventosa do Bairro (Mealhada). Valor máximo: 250.000€.
-Se cruzares com algo assim, fala comigo.`
+const REACTIVATION_TEMPLATE = (nome) => {
+  const primeiroNome = nome.split(' ')[0]
+  return `Boa tarde ${primeiroNome}, sou o Alexandre Mendes da Somnium Properties.
+
+Mudei recentemente de contacto e estou a retomar a comunicação com consultores com quem já trabalhei ou que operam na zona de Coimbra.
+
+Investimos em imóveis com potencial de valorização. Compramos directamente, renovamos e recolocamos no mercado. Trabalhamos com consultores como parceiros de negócio e valorizamos quem nos apresenta boas oportunidades.
+
+*O que procuramos:*
+• Imóveis com margem de negociação, construção anterior a 2000 ou que precisem de obras
+• Proprietário com motivação concreta para vender (herança, emigração, divórcio, dificuldades financeiras)
+• Questões de licenciamento ou documentação não são impedimento
+• Zonas: concelho de Coimbra, zona central de Condeixa-a-Nova e Ventosa do Bairro (Mealhada)
+• Valor máximo de aquisição: 250.000€
+
+Quando encontramos o imóvel certo, avançamos com rapidez e sem burocracia.
+
+Se cruzar com algo neste perfil, basta responder aqui. Cumprimentos.`
+}
 
 // ── JOB 1: Follow-up diário (08:00 Europe/Lisbon) ──────────
 async function runFollowUp() {
