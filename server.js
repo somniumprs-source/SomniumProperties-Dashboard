@@ -4925,6 +4925,22 @@ autoMigrate().then(() => {
   app.listen(PORT, () => {
     console.log(`[server] a correr na porta ${PORT}`)
 
+    // Sync lucro_real a partir de tranches confirmadas (corrige dados legacy)
+    try {
+      const { rows } = await pool.query('SELECT id, pagamentos_faseados, pagamento_em_falta FROM negocios')
+      let fixed = 0
+      for (const r of rows) {
+        let pags = []
+        try { pags = typeof r.pagamentos_faseados === 'string' ? JSON.parse(r.pagamentos_faseados || '[]') : (r.pagamentos_faseados || []) } catch { continue }
+        if (!pags.length) continue
+        const totalRecebido = Math.round(pags.filter(p => p.recebido).reduce((s, p) => s + (parseFloat(p.valor) || 0), 0) * 100) / 100
+        const emFalta = pags.every(p => p.recebido) ? 0 : 1
+        await pool.query('UPDATE negocios SET lucro_real = $1, pagamento_em_falta = $2 WHERE id = $3 AND (lucro_real IS DISTINCT FROM $1 OR pagamento_em_falta IS DISTINCT FROM $2)', [totalRecebido, emFalta, r.id])
+        fixed++
+      }
+      if (fixed) console.log(`[sync] lucro_real recalculado para ${fixed} negócios com tranches`)
+    } catch (e) { console.error('[sync] Erro ao sincronizar lucro_real:', e.message) }
+
     // Backup automático diário (corre 1x por dia às 3:00 AM)
     function scheduleBackup() {
       const now = new Date()
