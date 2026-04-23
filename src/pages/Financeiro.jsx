@@ -1038,7 +1038,7 @@ function NegocioDetailPanel({ negocio: n, crm, onEdit, onClose, confirmarPagamen
               <span className="text-xl font-bold font-mono text-indigo-600">{EUR(n.lucroEstimado)}</span>
             </div>
             <div className="bg-white rounded-lg p-3 border border-gray-100">
-              <span className="text-xs text-gray-400 block">Lucro Real <span className="text-gray-300">— auto-calculado</span></span>
+              <span className="text-xs text-gray-400 block">Lucro Real</span>
               <span className="text-xl font-bold font-mono text-green-600">{EUR(n.lucroReal)}</span>
             </div>
             {comPct > 0 && (
@@ -1098,7 +1098,7 @@ function NegocioDetailPanel({ negocio: n, crm, onEdit, onClose, confirmarPagamen
             </>
           ) : (
             <p className="text-xs text-gray-400 bg-white rounded-lg p-3 border border-gray-100">
-              Sem tranches definidas. Carrega em "Editar" para adicionar pagamentos faseados.
+              Sem tranches definidas.
             </p>
           )}
         </div>
@@ -1347,10 +1347,10 @@ function NegocioForm({ item, onSave, onCancel }) {
           <input type="number" value={f.lucro_estimado} onChange={e => set('lucro_estimado', +e.target.value)} className={inputClass} />
         </div>
         <div>
-          <label className="text-xs text-gray-500 block mb-1">Lucro Real (€) <span className="text-gray-300">— auto-calculado</span></label>
+          <label className="text-xs text-gray-500 block mb-1">Lucro Real (€)</label>
           {pagamentos.length > 0
             ? <div className="w-full px-3 py-2 rounded-lg border border-gray-100 bg-gray-50 text-sm font-mono text-green-600 font-semibold">{EUR(totalRecebido)}</div>
-            : <input type="number" value={f.lucro_real} onChange={e => set('lucro_real', +e.target.value)} className={inputClass} placeholder="Sem tranches — valor manual" />
+            : <input type="number" value={f.lucro_real} onChange={e => set('lucro_real', +e.target.value)} className={inputClass} />
           }
         </div>
         <div>
