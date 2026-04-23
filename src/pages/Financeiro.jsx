@@ -201,9 +201,9 @@ export function Financeiro() {
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-              <KPICard label="Pipeline de Lucro"   value={EUR(kpis?.lucroEstimadoTotal)} meta="—" status="green"                                       trend="neutral" unit="" />
-              <KPICard label="Lucro Real Recebido" value={EUR(kpis?.lucroRealTotal)}     meta="—" status={kpis?.lucroRealTotal > 0 ? 'green' : 'yellow'} trend="neutral" unit="" />
-              <KPICard label="A Receber (pendente)" value={EUR(kpis?.lucroPendente)}     meta="—" status={kpis?.lucroPendente > 0 ? 'yellow' : 'green'} trend="neutral" unit="" />
+              <KPICard label="Faturação Expectável" value={EUR(kpis?.lucroEstimadoTotal)} meta="—" status="green"                                       trend="neutral" unit="" />
+              <KPICard label="Faturação Real"      value={EUR(kpis?.lucroRealTotal)}     meta="—" status={kpis?.lucroRealTotal > 0 ? 'green' : 'yellow'} trend="neutral" unit="" />
+              <KPICard label="A Receber (pendente)" value={EUR((kpis?.lucroEstimadoTotal ?? 0) - (kpis?.lucroRealTotal ?? 0))} meta="—" status={(kpis?.lucroEstimadoTotal ?? 0) - (kpis?.lucroRealTotal ?? 0) > 0 ? 'yellow' : 'green'} trend="neutral" unit="" />
               <KPICard label="Burn Rate / Mês"     value={EUR(kpis?.burnRate)}           meta="—" status="green"                                       trend="neutral" unit="" />
             </div>
 
@@ -260,7 +260,7 @@ export function Financeiro() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-gray-700 mb-4">Lucro Estimado por Categoria</h2>
+                <h2 className="text-sm font-semibold text-gray-700 mb-4">Faturação por Categoria</h2>
                 {categoriasPie.length > 0 ? (
                   <ResponsiveContainer width="100%" height={200}>
                     <PieChart>
@@ -284,10 +284,10 @@ export function Financeiro() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
                       <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
                       <YAxis type="category" dataKey="fase" tick={{ fontSize: 11 }} width={110} />
-                      <Tooltip formatter={(v, n) => n === 'Lucro Est. €' ? EUR(v) : v} />
+                      <Tooltip formatter={(v, n) => n === 'Fat. Expect. €' ? EUR(v) : v} />
                       <Legend />
-                      <Bar dataKey="count"    name="Nº Negócios"  fill="#6366f1" radius={[0,3,3,0]} />
-                      <Bar dataKey="lucroEst" name="Lucro Est. €" fill="#10b981" radius={[0,3,3,0]} />
+                      <Bar dataKey="count"    name="Nº Negócios"     fill="#6366f1" radius={[0,3,3,0]} />
+                      <Bar dataKey="lucroEst" name="Fat. Expect. €"  fill="#10b981" radius={[0,3,3,0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : <EmptyState />}
@@ -509,7 +509,7 @@ export function Financeiro() {
                 <span className="text-xs text-gray-400 block mt-1">{pendentes.length} negócios pendentes</span>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-                <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Já Recebido</span>
+                <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Faturação Real</span>
                 <span className="text-2xl font-bold text-green-600">{EUR(cashflow?.lucroRecebido)}</span>
                 <span className="text-xs text-gray-400 block mt-1">{recebidos.length} negócios fechados</span>
               </div>
@@ -562,7 +562,7 @@ export function Financeiro() {
                     <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
                       <th className="text-left py-2 px-3">Negócio</th>
                       <th className="text-left py-2 px-3">Categoria</th>
-                      <th className="text-right py-2 px-3">Lucro Real</th>
+                      <th className="text-right py-2 px-3">Fat. Real</th>
                       <th className="text-left py-2 px-3">Data Venda</th>
                     </tr>
                   </thead>
@@ -587,12 +587,12 @@ export function Financeiro() {
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
               <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-                <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Receita Estimada</span>
+                <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Faturação Expectável</span>
                 <span className="text-2xl font-bold text-indigo-600">{EUR(projecao.pl.receitaEstimada)}</span>
-                <span className="text-xs text-gray-400 block mt-1">Pipeline total</span>
+                <span className="text-xs text-gray-400 block mt-1">Total expectável</span>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-                <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Receita Real</span>
+                <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Faturação Real</span>
                 <span className={`text-2xl font-bold ${projecao.pl.receitaReal > 0 ? 'text-green-600' : 'text-gray-400'}`}>{EUR(projecao.pl.receitaReal)}</span>
                 <span className="text-xs text-gray-400 block mt-1">Já recebido</span>
               </div>
@@ -613,7 +613,7 @@ export function Financeiro() {
               <h2 className="text-sm font-semibold text-gray-700 mb-3">Margem Operacional</h2>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <p className="text-xs text-gray-400 uppercase">Receita Pipeline</p>
+                  <p className="text-xs text-gray-400 uppercase">Faturação Pipeline</p>
                   <p className="text-xl font-bold text-indigo-600 mt-1">{EUR(projecao.pl.receitaEstimada)}</p>
                 </div>
                 <div>
@@ -641,7 +641,7 @@ export function Financeiro() {
                   <p className="text-xl font-bold text-red-500 mt-1">{EUR(projecao.breakEven.despesasAnuais)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-400 uppercase">Lucro Médio / Deal</p>
+                  <p className="text-xs text-gray-400 uppercase">Fat. Média / Deal</p>
                   <p className="text-xl font-bold text-indigo-600 mt-1">{EUR(projecao.breakEven.lucroMedioDeal)}</p>
                 </div>
                 <div>
@@ -778,8 +778,8 @@ function NegociosTab({ kpis, negociosLista, crmNegocios, editingNeg, setEditingN
             <p className="text-xl font-bold text-gray-900">
               {c.count} <span className="text-sm font-normal text-gray-400">negócio{c.count !== 1 ? 's' : ''}</span>
             </p>
-            <p className="text-sm text-indigo-600 font-mono">{EUR(c.lucroEst)} estimado</p>
-            {c.lucroReal > 0 && <p className="text-xs text-green-600 font-mono">{EUR(c.lucroReal)} real</p>}
+            <p className="text-sm text-indigo-600 font-mono">{EUR(c.lucroEst)} expectável</p>
+            {c.lucroReal > 0 && <p className="text-xs text-green-600 font-mono">{EUR(c.lucroReal)} recebido</p>}
           </div>
         ))}
       </div>
@@ -799,8 +799,8 @@ function NegociosTab({ kpis, negociosLista, crmNegocios, editingNeg, setEditingN
                 <th className="text-left py-2 px-3">Consultor</th>
                 <SortHeader label="Fase" field="fase" className="text-left" />
                 <SortHeader label="Comissão" field="comissaoPct" className="text-right" />
-                <SortHeader label="Lucro Est." field="lucroEstimado" className="text-right" />
-                <SortHeader label="Lucro Real" field="lucroReal" className="text-right" />
+                <SortHeader label="Fat. Expect." field="lucroEstimado" className="text-right" />
+                <SortHeader label="Fat. Real" field="lucroReal" className="text-right" />
                 <th className="text-left py-2 px-3">Pagamento</th>
                 <th className="py-2 px-3"></th>
               </tr>
@@ -1034,11 +1034,11 @@ function NegocioDetailPanel({ negocio: n, crm, onEdit, onClose, confirmarPagamen
           <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Financeiro</h4>
           <div className="space-y-2">
             <div className="bg-white rounded-lg p-3 border border-gray-100">
-              <span className="text-xs text-gray-400 block">Lucro Estimado</span>
+              <span className="text-xs text-gray-400 block">Fat. Expectável</span>
               <span className="text-xl font-bold font-mono text-indigo-600">{EUR(n.lucroEstimado)}</span>
             </div>
             <div className="bg-white rounded-lg p-3 border border-gray-100">
-              <span className="text-xs text-gray-400 block">Lucro Real</span>
+              <span className="text-xs text-gray-400 block">Fat. Real</span>
               <span className="text-xl font-bold font-mono text-green-600">{EUR(n.lucroReal)}</span>
             </div>
             {comPct > 0 && (
@@ -1123,7 +1123,7 @@ function RentabilidadeTab({ rent }) {
           <span className="text-xs text-gray-400 block mt-1">Adicionado → Proposta aceite ({rent.cicloCount} imóveis)</span>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-          <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Pipeline Total</span>
+          <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Faturação Total</span>
           <span className="text-2xl font-bold text-green-600">{EUR(rent.totalPipeline)}</span>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
@@ -1180,8 +1180,8 @@ function RentabilidadeTab({ rent }) {
               <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
                 <th className="text-left py-2 px-3">Consultor</th>
                 <th className="text-right py-2 px-3">Deals</th>
-                <th className="text-right py-2 px-3">Lucro Est.</th>
-                <th className="text-right py-2 px-3">Lucro Real</th>
+                <th className="text-right py-2 px-3">Fat. Expect.</th>
+                <th className="text-right py-2 px-3">Fat. Real</th>
                 <th className="text-right py-2 px-3">Média / Deal</th>
               </tr>
             </thead>
@@ -1209,8 +1209,8 @@ function RentabilidadeTab({ rent }) {
               <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
                 <th className="text-left py-2 px-3">Investidor</th>
                 <th className="text-right py-2 px-3">Negócios</th>
-                <th className="text-right py-2 px-3">Lucro Est.</th>
-                <th className="text-right py-2 px-3">Lucro Real</th>
+                <th className="text-right py-2 px-3">Fat. Expect.</th>
+                <th className="text-right py-2 px-3">Fat. Real</th>
                 <th className="text-right py-2 px-3">Capital Investido</th>
               </tr>
             </thead>
@@ -1253,7 +1253,7 @@ function NegociosTable({ rows, emptyMsg = 'Sem dados' }) {
           <th className="text-left py-2 px-3">Negócio</th>
           <th className="text-left py-2 px-3">Categoria</th>
           <th className="text-left py-2 px-3">Fase</th>
-          <th className="text-right py-2 px-3">Valor Esperado</th>
+          <th className="text-right py-2 px-3">Fat. Expectável</th>
           <th className="text-left py-2 px-3">Data Estimada</th>
         </tr>
       </thead>
@@ -1343,11 +1343,11 @@ function NegocioForm({ item, onSave, onCancel }) {
           </select>
         </div>
         <div>
-          <label className="text-xs text-gray-500 block mb-1">Lucro Estimado (€)</label>
+          <label className="text-xs text-gray-500 block mb-1">Faturação Expectável (€)</label>
           <input type="number" value={f.lucro_estimado} onChange={e => set('lucro_estimado', +e.target.value)} className={inputClass} />
         </div>
         <div>
-          <label className="text-xs text-gray-500 block mb-1">Lucro Real (€)</label>
+          <label className="text-xs text-gray-500 block mb-1">Faturação Real (€)</label>
           {pagamentos.length > 0
             ? <div className="w-full px-3 py-2 rounded-lg border border-gray-100 bg-gray-50 text-sm font-mono text-green-600 font-semibold">{EUR(totalRecebido)}</div>
             : <input type="number" value={f.lucro_real} onChange={e => set('lucro_real', +e.target.value)} className={inputClass} />

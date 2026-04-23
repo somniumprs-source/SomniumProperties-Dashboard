@@ -927,8 +927,8 @@ app.get('/api/kpis/financeiro', async (req, res) => {
 
     const lucroEstimadoTotal = round2(negócios.reduce((s,n) => s + n.lucroEstimado, 0))
     const lucroRealTotal     = round2(negócios.reduce((s,n) => s + n.lucroReal, 0))
+    const lucroPendente      = round2(lucroEstimadoTotal - lucroRealTotal)
     const pendentes          = negócios.filter(n => n.pagamentoEmFalta)
-    const lucroPendente      = round2(pendentes.reduce((s,n) => s + n.lucroEstimado, 0))
     const negóciosAtivos     = negócios.filter(n => n.fase !== 'Vendido')
 
     // Burn rate — despesas mensais recorrentes
@@ -936,7 +936,7 @@ app.get('/api/kpis/financeiro', async (req, res) => {
       .filter(d => d.timing === 'Mensalmente')
       .reduce((s,d) => s + d.custoMensal, 0))
     const despesasAnuaisTotal = round2(despesas.reduce((s,d) => s + d.custoAnual, 0))
-    const runway = burnRate > 0 ? round2(lucroPendente / burnRate) : null
+    const runway = burnRate > 0 && lucroPendente > 0 ? round2(lucroPendente / burnRate) : null
 
     // Por categoria
     const porCategoria = {}
@@ -989,7 +989,7 @@ app.get('/api/kpis/financeiro', async (req, res) => {
 
     // YTD
     const anoActual = hoje.getFullYear()
-    const ytdReal = round2(negócios.filter(n => n.dataVenda && new Date(n.dataVenda).getFullYear() === anoActual).reduce((s, n) => s + n.lucroReal, 0))
+    const ytdReal = lucroRealTotal
     const ytdDespesas = round2(burnRate * (hoje.getMonth() + 1))
     const ytdResultado = round2(ytdReal - ytdDespesas)
 
@@ -1067,9 +1067,11 @@ app.get('/api/financeiro/cashflow', async (req, res) => {
     const recebidos  = negócios.filter(n => !n.pagamentoEmFalta && n.lucroReal > 0)
     const burnRate   = round2(despesas.filter(d => d.timing === 'Mensalmente').reduce((s,d) => s + d.custoMensal, 0))
 
-    const lucroPendente = round2(pendentes.reduce((s,n) => s + n.lucroEstimado, 0))
-    const lucroRecebido = round2(recebidos.reduce((s,n) => s + n.lucroReal, 0))
-    const runway = burnRate > 0 ? round2(lucroPendente / burnRate) : null
+    const fatExpectavel  = round2(negócios.reduce((s,n) => s + n.lucroEstimado, 0))
+    const fatReal        = round2(negócios.reduce((s,n) => s + n.lucroReal, 0))
+    const lucroPendente  = round2(fatExpectavel - fatReal)
+    const lucroRecebido  = fatReal
+    const runway = burnRate > 0 && lucroPendente > 0 ? round2(lucroPendente / burnRate) : null
 
     const pendentesOrdenados = [...pendentes].sort((a,b) => {
       const da = a.dataEstimada ?? a.dataVenda ?? '9999'
