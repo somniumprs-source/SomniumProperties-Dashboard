@@ -13,7 +13,7 @@ import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STA
 import { apiFetch } from '../lib/api.js'
 import { useUnreadCounts } from '../hooks/useUnreadCounts.js'
 
-const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Negócios', 'Empreiteiros']
+const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Empreiteiros']
 
 // Progresso checklist por imóvel (cache local)
 let checklistProgressCache = {}
@@ -481,7 +481,7 @@ export function CRM() {
 
   const toast = useToast()
   const searchTimer = useRef(null)
-  const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores', 'Negócios': 'negocios', 'Empreiteiros': 'empreiteiros' }[tab]
+  const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores', 'Empreiteiros': 'empreiteiros' }[tab]
 
   // Garantir filtro tipo_principal sincronizado para investidores
   const effectiveFilters = tab === 'Investidores' ? { ...filters, tipo_principal: invSubTab } : filters
@@ -646,19 +646,6 @@ export function CRM() {
         )
       },
     },
-    'Negócios': {
-      columns: ['Fase de obras','Fase de venda','Vendido'],
-      groupField: 'fase',
-      renderCard: (item) => (
-        <div>
-          <p className="text-sm font-semibold text-gray-800 truncate">{item.movimento}</p>
-          <p className="text-xs text-gray-500 mt-1">{item.categoria ?? '—'}</p>
-          {item.lucro_estimado > 0 && <p className="text-xs font-mono text-indigo-600 mt-1">Est. {EUR(item.lucro_estimado)}</p>}
-          {item.lucro_real > 0 && <p className="text-xs font-mono text-green-600">Real {EUR(item.lucro_real)}</p>}
-          {item.imovel_id && <p className="text-[10px] text-[#C9A84C] mt-1">→ ver imóvel</p>}
-        </div>
-      ),
-    },
     'Empreiteiros': {
       columns: ['Qualificado','Em avaliação','Rejeitado','Inativo'],
       groupField: 'estado',
@@ -691,6 +678,10 @@ export function CRM() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ entity: endpoint, entityId: id, entityName: item?.nome ?? item?.movimento ?? '', newPhase: newColumn }),
     }).catch(() => {})
+    // Auto-criar projecto quando imóvel passa para modelo de negócio
+    if (tab === 'Imóveis' && ['Wholesaling', 'Fix and Flip', 'CAEP', 'Mediação Imobiliária'].includes(newColumn)) {
+      apiFetch('/api/automation/pipeline-to-faturacao', { method: 'POST' }).catch(() => {})
+    }
     load()
   }
 
@@ -935,7 +926,7 @@ export function CRM() {
           {/* Kanban View */}
           {!loading && editing === null && view === 'kanban' && kanbanConfig && data.length === 0 && (
             <EmptyState
-              icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Negócios': Briefcase, 'Empreiteiros': HardHat }[tab] || Building2}
+              icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Empreiteiros': HardHat }[tab] || Building2}
               title={`Sem ${tab.toLowerCase()}`}
               description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
             />
@@ -973,7 +964,7 @@ export function CRM() {
           {/* Table View */}
           {!loading && editing === null && (view === 'table' || !hasKanban) && data.length === 0 && (
             <EmptyState
-              icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Negócios': Briefcase, 'Empreiteiros': HardHat }[tab] || Building2}
+              icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Empreiteiros': HardHat }[tab] || Building2}
               title={`Sem ${tab.toLowerCase()}`}
               description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
             />
@@ -1379,25 +1370,6 @@ const FIELD_DEFS = {
     { key: 'meta_mensal_leads', label: 'Meta Mensal Leads', type: 'number' },
     { key: 'comissao', label: 'Comissão %', type: 'number' },
     { key: 'motivo_descontinuacao', label: 'Motivo Descontinuação', type: 'text' },
-    { key: 'notas', label: 'Notas', type: 'textarea' },
-  ],
-  'Negócios': [
-    { key: 'movimento', label: 'Nome do Negócio', type: 'text', required: true },
-    { key: 'categoria', label: 'Categoria', type: 'select', options: ['Wholesalling','CAEP','Mediação Imobiliária','Fix and Flip'] },
-    { key: 'fase', label: 'Fase', type: 'select', options: ['Fase de obras','Fase de venda','Vendido'] },
-    { key: 'imovel_id', label: 'Imóvel', type: 'relation', endpoint: '/api/crm/lookup/imoveis', display: r => `${r.nome} (${r.estado})` },
-    { key: 'split_caep', label: 'Split CAEP (só CAEP)', type: 'select', options: ['30/70','40/60','50/50'] },
-    { key: 'comissao_pct', label: 'Comissão % (ajustar se ≠ default)', type: 'number' },
-    { key: 'lucro_estimado', label: 'Lucro Estimado (€)', type: 'number' },
-    { key: 'lucro_real', label: 'Lucro Real (€)', type: 'number' },
-    { key: 'custo_real_obra', label: 'Custo Real Obra (€)', type: 'number' },
-    { key: 'capital_total', label: 'Capital Total Investido (€)', type: 'number' },
-    { key: 'n_investidores', label: 'Nº Investidores Passivos', type: 'number' },
-    { key: 'pagamento_em_falta', label: 'Pagamento em Falta', type: 'checkbox' },
-    { key: 'data', label: 'Data', type: 'date' },
-    { key: 'data_compra', label: 'Data Compra', type: 'date' },
-    { key: 'data_estimada_venda', label: 'Data Estimada Venda', type: 'date' },
-    { key: 'data_venda', label: 'Data Venda', type: 'date' },
     { key: 'notas', label: 'Notas', type: 'textarea' },
   ],
   'Empreiteiros': [
