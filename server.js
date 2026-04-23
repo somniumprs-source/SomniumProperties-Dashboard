@@ -4994,35 +4994,54 @@ autoMigrate().then(() => {
         let criados = 0
 
         for (const sub of subs) {
-          // Determinar dia de pagamento a partir do campo data
-          const diaPagamento = sub.data ? new Date(sub.data).getDate() : 1
-          if (hoje.getDate() < diaPagamento) continue // dia ainda não chegou
+          const dataSub = sub.data ? new Date(sub.data) : null
+          const diaPagamento = dataSub ? dataSub.getDate() : 1
 
-          // Valor mensal: para anuais = custo_anual / 12, para mensais = custo_mensal
-          const valorMensal = sub.timing === 'Anual'
-            ? Math.round((sub.custo_anual || 0) / 12 * 100) / 100
-            : (sub.custo_mensal || 0)
-          if (valorMensal <= 0) continue
+          if (sub.timing === 'Anual') {
+            // Anuais: registo único no mês de pagamento, valor total
+            const mesPagamento = dataSub ? dataSub.getMonth() + 1 : 1
+            if (hoje.getMonth() + 1 !== mesPagamento) continue // não é o mês de pagamento
+            if (hoje.getDate() < diaPagamento) continue // dia ainda não chegou
+            const valor = sub.custo_anual || 0
+            if (valor <= 0) continue
 
-          // Data do registo = dia de pagamento no mês actual
-          const dataRegisto = `${mesActual}-${String(diaPagamento).padStart(2, '0')}`
+            const dataRegisto = `${mesActual}-${String(diaPagamento).padStart(2, '0')}`
+            const { rows: existente } = await pool.query(
+              "SELECT id FROM despesas WHERE timing = 'Registado' AND movimento = $1 AND data LIKE $2",
+              [sub.movimento, `${mesActual}%`]
+            )
+            if (existente.length > 0) continue
 
-          // Verificar se já existe registo para este mês
-          const { rows: existente } = await pool.query(
-            "SELECT id FROM despesas WHERE timing = 'Registado' AND movimento = $1 AND data LIKE $2",
-            [sub.movimento, `${mesActual}%`]
-          )
-          if (existente.length > 0) continue
+            const id = `auto-${sub.id}-${mesActual}`
+            await pool.query(
+              `INSERT INTO despesas (id, movimento, categoria, data, custo_mensal, custo_anual, timing, notas, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, $5, $5, 'Registado', $6, NOW(), NOW())
+               ON CONFLICT (id) DO NOTHING`,
+              [id, sub.movimento, sub.categoria, dataRegisto, valor, 'Subscrição anual']
+            )
+            criados++
+          } else {
+            // Mensais: registo todos os meses, valor mensal
+            if (hoje.getDate() < diaPagamento) continue
+            const valor = sub.custo_mensal || 0
+            if (valor <= 0) continue
 
-          // Criar registo mensal
-          const id = `auto-${sub.id}-${mesActual}`
-          await pool.query(
-            `INSERT INTO despesas (id, movimento, categoria, data, custo_mensal, custo_anual, timing, notas, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $5, 'Registado', $6, NOW(), NOW())
-             ON CONFLICT (id) DO NOTHING`,
-            [id, sub.movimento, sub.categoria, dataRegisto, valorMensal, `Auto-registo de ${sub.timing === 'Anual' ? 'subscrição anual' : 'subscrição mensal'}`]
-          )
-          criados++
+            const dataRegisto = `${mesActual}-${String(diaPagamento).padStart(2, '0')}`
+            const { rows: existente } = await pool.query(
+              "SELECT id FROM despesas WHERE timing = 'Registado' AND movimento = $1 AND data LIKE $2",
+              [sub.movimento, `${mesActual}%`]
+            )
+            if (existente.length > 0) continue
+
+            const id = `auto-${sub.id}-${mesActual}`
+            await pool.query(
+              `INSERT INTO despesas (id, movimento, categoria, data, custo_mensal, custo_anual, timing, notas, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, $5, $5, 'Registado', $6, NOW(), NOW())
+               ON CONFLICT (id) DO NOTHING`,
+              [id, sub.movimento, sub.categoria, dataRegisto, valor, 'Subscrição mensal']
+            )
+            criados++
+          }
         }
         if (criados > 0) console.log(`[despesas] ${criados} registo(s) mensal(is) criado(s) automaticamente`)
       } catch (e) { console.error('[despesas] Erro auto-registo:', e.message) }
