@@ -1052,10 +1052,14 @@ app.get('/api/financeiro/despesas', async (req, res) => {
       .map(([cat, v]) => ({ categoria: cat, custoMensal: round2(v.custoMensal), custoAnual: round2(v.custoAnual), count: v.count }))
       .sort((a,b) => b.custoAnual - a.custoAnual)
 
-    // Total anual = mensais × 12 + anuais (subscrições activas, sem registos/únicos)
+    // Total anual = subscrições projectadas + únicos/registados do ano corrente
+    const anoActual = new Date().getFullYear()
     const totalAnual = round2(
       recorrentes.reduce((s,d) => s + (d.custoMensal || 0) * 12, 0) +
-      anuais.reduce((s,d) => s + (d.custoAnual || 0), 0)
+      anuais.reduce((s,d) => s + (d.custoAnual || 0), 0) +
+      [...unicaVez, ...despesas.filter(d => d.timing === 'Registado')]
+        .filter(d => d.data && new Date(d.data).getFullYear() === anoActual)
+        .reduce((s,d) => s + (d.custoMensal || d.custoAnual || 0), 0)
     )
 
     res.json({
