@@ -4832,29 +4832,49 @@ app.post('/api/automation/pipeline-to-faturacao', async (req, res) => {
     const [imoveis, negocios] = await Promise.all([getImóveis(), getNegócios()])
     const created = []
 
-    // Imóveis em Wholesaling ou Negócio em Curso que não têm entrada na Faturação
+    // Imóveis que passaram para um modelo de negócio definido
+    const ESTADOS_PROJECTO = ['Wholesaling', 'Fix and Flip', 'CAEP', 'Mediação Imobiliária', 'Negócio em Curso']
     const imoveisComNegocio = new Set(negocios.flatMap(n => n.imovel))
     const candidatos = imoveis.filter(im =>
-      ['Wholesaling', 'Negócio em Curso'].includes(im.estado) &&
+      ESTADOS_PROJECTO.includes(im.estado) &&
       !imoveisComNegocio.has(im.id)
     )
 
     for (const im of candidatos) {
       try {
-        const modelo = im.modeloNegocio ?? 'Wholesalling'
-        const categoria = modelo.includes('Fix') ? 'Fix and Flip' : modelo.includes('CAEP') ? 'CAEP' : 'Wholesalling'
+        // Determinar categoria a partir do estado do pipeline
+        let categoria = 'Wholesalling'
+        if (im.estado === 'Fix and Flip') categoria = 'Fix and Flip'
+        else if (im.estado === 'CAEP') categoria = 'CAEP'
+        else if (im.estado === 'Mediação Imobiliária') categoria = 'Mediação Imobiliária'
 
-        await notion.pages.create({
-          parent: { database_id: DB.negócios },
-          properties: {
-            'Movimento': { title: [{ text: { content: im.nome } }] },
-            'Categoria': { select: { name: categoria } },
-            'Fase': { select: { name: 'Fase de obras' } },
-            'Lucro estimado': { number: im.askPrice > 0 && im.valorProposta > 0 ? im.askPrice - im.valorProposta : 0 },
-            'Data': { date: { start: new Date().toISOString().slice(0, 10) } },
-            'Imóvel': { relation: [{ id: im.id }] },
-          },
-        })
+        const lucroEstimado = im.askPrice > 0 && im.valorProposta > 0 ? im.askPrice - im.valorProposta : 0
+        const hoje = new Date().toISOString().slice(0, 10)
+
+        // Criar no PostgreSQL
+        await pool.query(
+          `INSERT INTO negocios (movimento, categoria, fase, lucro_estimado, data, imovel_id, pagamento_em_falta, created_at, updated_at)
+           VALUES ($1, $2, 'Fase de obras', $3, $4, $5, 1, NOW(), NOW())`,
+          [im.nome, categoria, lucroEstimado, hoje, im.id]
+        )
+
+        // Criar no Notion (se configurado)
+        try {
+          if (DB.negócios) {
+            await notion.pages.create({
+              parent: { database_id: DB.negócios },
+              properties: {
+                'Movimento': { title: [{ text: { content: im.nome } }] },
+                'Categoria': { select: { name: categoria } },
+                'Fase': { select: { name: 'Fase de obras' } },
+                'Lucro estimado': { number: lucroEstimado },
+                'Data': { date: { start: hoje } },
+                'Imóvel': { relation: [{ id: im.id }] },
+              },
+            })
+          }
+        } catch (e) { console.error(`[pipeline-to-fat] Notion sync ${im.nome}:`, e.message) }
+
         created.push({ nome: im.nome, categoria })
       } catch (e) {
         console.error(`[pipeline-to-fat] Erro ao criar ${im.nome}:`, e.message)

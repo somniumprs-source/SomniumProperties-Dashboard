@@ -6,6 +6,7 @@ import { Alertas } from './pages/Alertas.jsx'
 import { CRM } from './pages/CRM.jsx'
 import { Operacoes } from './pages/Operacoes.jsx'
 import { Metricas } from './pages/Metricas.jsx'
+import { Projectos } from './pages/Projectos.jsx'
 import { Login } from './pages/Login.jsx'
 import { ProfileSelect } from './pages/ProfileSelect.jsx'
 import { ToastProvider } from './components/ui/Toast.jsx'
@@ -35,6 +36,7 @@ function AppRoutes() {
       <Route element={<Layout />}>
         <Route index element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
         <Route path="/crm" element={<ErrorBoundary><CRM /></ErrorBoundary>} />
+        <Route path="/projectos" element={<ErrorBoundary><Projectos /></ErrorBoundary>} />
         <Route path="/financeiro" element={<ErrorBoundary><Financeiro /></ErrorBoundary>} />
         <Route path="/operacoes" element={<ErrorBoundary><Operacoes /></ErrorBoundary>} />
         <Route path="/metricas" element={<ErrorBoundary><Metricas /></ErrorBoundary>} />
