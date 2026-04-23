@@ -120,6 +120,25 @@ export function Financeiro() {
     load()
   }
 
+  async function confirmarPagamento(negocioId, trancheIndex, descricao) {
+    if (!confirm(`Confirmar recebimento: ${descricao || 'Pagamento'}?`)) return
+    try {
+      const r = await apiFetch(`/api/crm/negocios/${negocioId}/confirmar-pagamento`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trancheIndex }),
+      })
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        throw new Error(err.error || `Erro ${r.status}`)
+      }
+      load()
+    } catch (e) {
+      console.error('[confirmarPagamento]', e)
+      setError(e.message)
+    }
+  }
+
   useEffect(() => { load() }, [])
 
   const negociosLista  = kpis?.negociosLista ?? []
@@ -532,7 +551,7 @@ export function Financeiro() {
             {/* Pagamentos Faseados Timeline */}
             {(() => {
               const allPags = pendentes.flatMap(n =>
-                (n.pagamentosFaseados || []).map(p => ({ ...p, negocio: n.movimento, categoria: n.categoria }))
+                (n.pagamentosFaseados || []).map((p, idx) => ({ ...p, negocio: n.movimento, categoria: n.categoria, negocioId: n.id, trancheIndex: idx }))
               ).sort((a, b) => (a.data || '9999').localeCompare(b.data || '9999'))
               const pagsPendentes = allPags.filter(p => !p.recebido)
               const pagsRecebidos = allPags.filter(p => p.recebido)
@@ -560,9 +579,17 @@ export function Financeiro() {
                                 <p className="text-sm font-medium text-gray-800 truncate">{p.negocio}</p>
                                 <p className="text-xs text-gray-500">{p.descricao || 'Pagamento'} {atrasado && <span className="text-red-600 font-medium">— ATRASADO</span>}</p>
                               </div>
-                              <div className="text-right shrink-0">
-                                <p className={`text-sm font-mono font-semibold ${atrasado ? 'text-red-700' : 'text-yellow-700'}`}>{EUR(p.valor)}</p>
-                                <p className="text-xs text-gray-400">{p.data || 'Sem data'}</p>
+                              <div className="text-right shrink-0 flex items-center gap-2">
+                                <div>
+                                  <p className={`text-sm font-mono font-semibold ${atrasado ? 'text-red-700' : 'text-yellow-700'}`}>{EUR(p.valor)}</p>
+                                  <p className="text-xs text-gray-400">{p.data || 'Sem data'}</p>
+                                </div>
+                                <button
+                                  onClick={() => confirmarPagamento(p.negocioId, p.trancheIndex, `${p.negocio} — ${p.descricao || 'Pagamento'} (${EUR(p.valor)})`)}
+                                  className="px-2.5 py-1.5 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap"
+                                >
+                                  Confirmar
+                                </button>
                               </div>
                             </div>
                           )

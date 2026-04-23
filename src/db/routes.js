@@ -428,6 +428,45 @@ router.get('/consultores/enriched', async (req, res) => {
 
 crudRoutes('/consultores', Consultores)
 crudRoutes('/negocios', Negocios)
+
+// ── Confirmar pagamento de tranche ──────────────────────────
+router.put('/negocios/:id/confirmar-pagamento', async (req, res) => {
+  try {
+    const { trancheIndex } = req.body
+    if (trancheIndex == null) return res.status(400).json({ error: 'trancheIndex obrigatório' })
+
+    const { rows } = await pool.query('SELECT * FROM negocios WHERE id = $1', [req.params.id])
+    if (!rows.length) return res.status(404).json({ error: 'Negócio não encontrado' })
+    const neg = rows[0]
+
+    let pags = []
+    try { pags = typeof neg.pagamentos_faseados === 'string' ? JSON.parse(neg.pagamentos_faseados || '[]') : (neg.pagamentos_faseados || []) } catch { pags = [] }
+    if (trancheIndex < 0 || trancheIndex >= pags.length) return res.status(400).json({ error: 'Índice de tranche inválido' })
+
+    pags[trancheIndex].recebido = true
+
+    const totalRecebido = pags.filter(p => p.recebido).reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
+    const todasRecebidas = pags.every(p => p.recebido)
+    const updates = {
+      pagamentos_faseados: JSON.stringify(pags),
+      lucro_real: Math.round(totalRecebido * 100) / 100,
+    }
+    if (todasRecebidas) {
+      updates.pagamento_em_falta = 0
+    }
+
+    const setClauses = Object.keys(updates).map((k, i) => `${k} = $${i + 2}`).join(', ')
+    const values = Object.values(updates)
+    await pool.query(`UPDATE negocios SET ${setClauses}, updated_at = NOW() WHERE id = $1`, [req.params.id, ...values])
+
+    syncToNotion('negocios', req.params.id).catch(e => console.error('[sync] confirmar-pagamento:', e.message))
+    res.json({ ok: true, todasRecebidas, pagamentos: pags })
+  } catch (e) {
+    console.error('[confirmar-pagamento]', e.message)
+    res.status(500).json({ error: e.message })
+  }
+})
+
 crudRoutes('/despesas', Despesas)
 crudRoutes('/tarefas', Tarefas)
 crudRoutes('/consultor-interacoes', ConsultorInteracoes)
