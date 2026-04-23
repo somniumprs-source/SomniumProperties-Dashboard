@@ -1095,6 +1095,71 @@ app.get('/api/financeiro/cashflow', async (req, res) => {
 app.get('/api/financeiro/pl',     async (_req, res) => res.json({}))
 app.get('/api/financeiro/budget', async (_req, res) => res.json({ linhas: [] }))
 
+// ── Conta Corrente (extrato cronológico) ─────────────────────────
+app.get('/api/financeiro/conta-corrente', async (req, res) => {
+  try {
+    const [negócios, despesasAll] = await Promise.all([getNegócios(), getDespesas()])
+    const movimentos = []
+
+    // Entradas: tranches recebidas de projectos
+    for (const n of negócios) {
+      const pags = n.pagamentosFaseados || []
+      for (const p of pags) {
+        if (p.recebido && parseFloat(p.valor) > 0) {
+          movimentos.push({
+            tipo: 'entrada',
+            descricao: `${n.movimento} — ${p.descricao || 'Pagamento'}`,
+            categoria: n.categoria,
+            valor: parseFloat(p.valor),
+            data: p.data || n.data || '2026-01-01',
+          })
+        }
+      }
+      // Negócios sem tranches mas com lucroReal
+      if (pags.length === 0 && n.lucroReal > 0) {
+        movimentos.push({
+          tipo: 'entrada',
+          descricao: n.movimento,
+          categoria: n.categoria,
+          valor: n.lucroReal,
+          data: n.dataVenda || n.data || '2026-01-01',
+        })
+      }
+    }
+
+    // Saídas: despesas com timing Único ou Registado (pagamentos reais)
+    for (const d of despesasAll) {
+      if (['Único', 'Registado'].includes(d.timing) && d.data) {
+        const valor = d.custoMensal || d.custoAnual || 0
+        if (valor > 0) {
+          movimentos.push({
+            tipo: 'saida',
+            descricao: d.movimento,
+            categoria: d.categoria,
+            valor,
+            data: d.data,
+          })
+        }
+      }
+    }
+
+    // Ordenar cronologicamente
+    movimentos.sort((a, b) => a.data.localeCompare(b.data))
+
+    // Calcular saldo corrente
+    let saldo = 0
+    for (const m of movimentos) {
+      saldo += m.tipo === 'entrada' ? m.valor : -m.valor
+      m.saldo = round2(saldo)
+    }
+
+    res.json({ movimentos, saldo: round2(saldo) })
+  } catch (err) {
+    console.error('[conta-corrente]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // ── Aging de pagamentos faseados ─────────────────────────────────
 app.get('/api/financeiro/aging', async (_req, res) => {
   try {

@@ -31,7 +31,7 @@ const TIMING_COLOR = {
   'Único':       'bg-gray-100 text-gray-600',
 }
 
-const TABS = ['Visão Geral', 'Despesas', 'Tesouraria', 'P&L', 'Rentabilidade']
+const TABS = ['Visão Geral', 'Conta Corrente', 'Despesas', 'Tesouraria', 'P&L', 'Rentabilidade']
 
 export function Financeiro() {
   const [kpis,     setKpis]     = useState(null)
@@ -41,6 +41,7 @@ export function Financeiro() {
   const [analises, setAnalises] = useState(null)
   const [aging,    setAging]    = useState(null)
   const [rent,     setRent]     = useState(null)
+  const [conta,    setConta]    = useState(null)
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState(null)
   const [tab,      setTab]      = useState('Visão Geral')
@@ -51,7 +52,7 @@ export function Financeiro() {
     setLoading(true); setError(null)
     try {
       const safe = (promise) => promise.then(r => r.ok ? r.json() : null).catch(() => null)
-      const [k, d, c, p, a, ds, ag, re] = await Promise.all([
+      const [k, d, c, p, a, ds, ag, re, cc] = await Promise.all([
         safe(apiFetch('/api/kpis/financeiro')),
         safe(apiFetch('/api/financeiro/despesas')),
         safe(apiFetch('/api/financeiro/cashflow')),
@@ -60,11 +61,12 @@ export function Financeiro() {
         safe(apiFetch('/api/crm/despesas?limit=200')),
         safe(apiFetch('/api/financeiro/aging')),
         safe(apiFetch('/api/financeiro/rentabilidade')),
+        safe(apiFetch('/api/financeiro/conta-corrente')),
       ])
       if (!k) throw new Error('Erro ao carregar dados financeiros')
       setKpis(k); setDespesas(d); setCashflow(c); setProjecao(p); setAnalises(a)
       setCrmDespesas(ds?.data ?? [])
-      setAging(ag); setRent(re)
+      setAging(ag); setRent(re); setConta(cc)
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
@@ -315,6 +317,11 @@ export function Financeiro() {
               </div>
             )}
           </>
+        )}
+
+        {/* ══════════════════ CONTA CORRENTE ══════════════════ */}
+        {tab === 'Conta Corrente' && (
+          <ContaCorrenteTab conta={conta} />
         )}
 
         {/* ══════════════════ DESPESAS ══════════════════ */}
@@ -670,6 +677,83 @@ export function Financeiro() {
         {/* ══════════════════ RENTABILIDADE ══════════════════ */}
         {tab === 'Rentabilidade' && (
           <RentabilidadeTab rent={rent} />
+        )}
+      </div>
+    </>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════
+// CONTA CORRENTE
+// ══════════════════════════════════════════════════════════════
+function ContaCorrenteTab({ conta }) {
+  if (!conta) return <div className="text-center text-gray-400 py-12 text-sm">A carregar conta corrente...</div>
+
+  const movimentos = conta.movimentos ?? []
+  const saldo = conta.saldo ?? 0
+  const totalEntradas = movimentos.filter(m => m.tipo === 'entrada').reduce((s, m) => s + m.valor, 0)
+  const totalSaidas = movimentos.filter(m => m.tipo === 'saida').reduce((s, m) => s + m.valor, 0)
+
+  return (
+    <>
+      {/* Saldo actual */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+        <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Saldo Conta Somnium Properties</span>
+        <span className={`text-3xl font-bold ${saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}>{EUR(saldo)}</span>
+        <div className="flex gap-6 mt-3">
+          <div>
+            <span className="text-xs text-gray-400 block">Total entradas</span>
+            <span className="text-sm font-mono font-semibold text-green-600">{EUR(totalEntradas)}</span>
+          </div>
+          <div>
+            <span className="text-xs text-gray-400 block">Total saídas</span>
+            <span className="text-sm font-mono font-semibold text-red-500">{EUR(totalSaidas)}</span>
+          </div>
+          <div>
+            <span className="text-xs text-gray-400 block">Movimentos</span>
+            <span className="text-sm font-semibold text-gray-700">{movimentos.length}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Extrato */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <h2 className="text-sm font-semibold text-gray-700 mb-4">Extrato</h2>
+        {movimentos.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
+                  <th className="text-left py-2 px-3">Data</th>
+                  <th className="text-left py-2 px-3">Descrição</th>
+                  <th className="text-left py-2 px-3">Categoria</th>
+                  <th className="text-right py-2 px-3">Entrada</th>
+                  <th className="text-right py-2 px-3">Saída</th>
+                  <th className="text-right py-2 px-3">Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...movimentos].reverse().map((m, i) => (
+                  <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
+                    <td className="py-2 px-3 text-xs text-gray-500 whitespace-nowrap">{m.data}</td>
+                    <td className="py-2 px-3 font-medium text-gray-800">{m.descricao}</td>
+                    <td className="py-2 px-3 text-xs text-gray-500">{m.categoria || '—'}</td>
+                    <td className="py-2 px-3 text-right font-mono text-green-600">
+                      {m.tipo === 'entrada' ? EUR(m.valor) : ''}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono text-red-500">
+                      {m.tipo === 'saida' ? EUR(m.valor) : ''}
+                    </td>
+                    <td className={`py-2 px-3 text-right font-mono font-semibold ${m.saldo >= 0 ? 'text-gray-800' : 'text-red-600'}`}>
+                      {EUR(m.saldo)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400 text-center py-8">Sem movimentos registados</p>
         )}
       </div>
     </>
