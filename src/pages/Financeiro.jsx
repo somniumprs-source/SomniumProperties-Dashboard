@@ -342,72 +342,40 @@ export function Financeiro() {
               <KPICard label="Total Despesas (ano)" value={EUR(despesas?.totalAnual)}    meta="—" status="yellow" trend="neutral" unit="" />
             </div>
 
-            {/* Previsão mensal de despesas */}
+            {/* Todas as despesas cronologicamente */}
             <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-              <h2 className="text-sm font-semibold text-gray-700 mb-4">Previsão Mensal de Despesas (próximos 12 meses)</h2>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={(() => {
-                  const now = new Date()
-                  const burnRate = despesas?.burnRate || 0
-                  const anuais = despesas?.anuais || []
-                  return Array.from({ length: 12 }, (_, i) => {
-                    const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
-                    const m = d.getMonth()
-                    let total = burnRate
-                    for (const da of anuais) {
-                      if (da.data) { const dd = new Date(da.data); if (dd.getMonth() === m) total += (da.custoAnual || da.custoMensal || 0) }
-                    }
-                    return { label: `${MES_ABREV[m]} ${String(d.getFullYear()).slice(2)}`, recorrente: burnRate, extra: Math.round((total - burnRate) * 100) / 100, total: Math.round(total * 100) / 100 }
-                  })
-                })()}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                  <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}€`} />
-                  <Tooltip formatter={v => EUR2(v)} />
-                  <Bar dataKey="recorrente" name="Recorrente" fill="#ef4444" stackId="a" radius={[0,0,0,0]} />
-                  <Bar dataKey="extra" name="Anual/Único" fill="#f59e0b" stackId="a" radius={[3,3,0,0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-gray-700 mb-4">Custo Anual por Categoria</h2>
-                {despCat.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={despCat} layout="vertical" margin={{ left: 10 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
-                      <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={v => EUR(v)} />
-                      <YAxis type="category" dataKey="categoria" tick={{ fontSize: 10 }} width={160} />
-                      <Tooltip formatter={v => EUR(v)} />
-                      <Bar dataKey="custoAnual" name="Custo Anual €" fill="#ef4444" radius={[0,3,3,0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : <EmptyState />}
-              </div>
-
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-gray-700 mb-3">Recorrentes (mensais)</h2>
-                <table className="min-w-full text-xs">
+              <h2 className="text-sm font-semibold text-gray-700 mb-4">Todas as Despesas</h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
-                      <th className="text-left py-1.5 px-2">Despesa</th>
-                      <th className="text-left py-1.5 px-2">Categoria</th>
-                      <th className="text-right py-1.5 px-2">€/mês</th>
-                      <th className="text-right py-1.5 px-2">€/ano</th>
-                      <th className="py-1.5 px-2"></th>
+                    <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
+                      <th className="text-left py-2 px-3">Data</th>
+                      <th className="text-left py-2 px-3">Despesa</th>
+                      <th className="text-left py-2 px-3">Categoria</th>
+                      <th className="text-left py-2 px-3">Tipo</th>
+                      <th className="text-right py-2 px-3">Valor</th>
+                      <th className="py-2 px-3"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {despRecorrentes.map(d => (
+                    {[...(despesas?.todas ?? [])]
+                      .sort((a, b) => (b.data || '').localeCompare(a.data || ''))
+                      .map(d => (
                       <tr key={d.id} className="border-b border-gray-50 hover:bg-gray-50">
-                        <td className="py-1.5 px-2 font-medium text-gray-700">
+                        <td className="py-2 px-3 text-xs text-gray-500 whitespace-nowrap">{d.data ?? '—'}</td>
+                        <td className="py-2 px-3 font-medium text-gray-800">
                           <button onClick={() => setEditingDesp(crmDespesas.find(x => x.id === d.id) || d)} className="text-left hover:text-indigo-600 hover:underline">{d.movimento}</button>
                         </td>
-                        <td className="py-1.5 px-2 text-gray-500">{d.categoria}</td>
-                        <td className="py-1.5 px-2 text-right font-mono text-red-500">{EUR2(d.custoMensal)}</td>
-                        <td className="py-1.5 px-2 text-right font-mono text-gray-600">{EUR(d.custoAnual)}</td>
-                        <td className="py-1.5 px-2">
+                        <td className="py-2 px-3 text-xs text-gray-500">{d.categoria || '—'}</td>
+                        <td className="py-2 px-3">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            TIMING_COLOR[d.timing] ?? (d.timing === 'Registado' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600')
+                          }`}>
+                            {d.timing}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-right font-mono text-red-500 font-semibold">{EUR(d.custoMensal || d.custoAnual)}</td>
+                        <td className="py-2 px-3">
                           <div className="flex gap-1">
                             <button onClick={() => setEditingDesp(crmDespesas.find(x => x.id === d.id) || d)} className="px-1.5 py-0.5 text-xs bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100">Editar</button>
                             <button onClick={() => deleteDespesa(d.id)} className="px-1.5 py-0.5 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">x</button>
@@ -415,55 +383,13 @@ export function Financeiro() {
                         </td>
                       </tr>
                     ))}
-                    {!despRecorrentes.length && (
-                      <tr><td colSpan={5} className="py-4 text-center text-gray-400">Sem despesas mensais</td></tr>
-                    )}
-                    {despRecorrentes.length > 0 && (
-                      <tr className="border-t-2 border-gray-200 font-semibold bg-gray-50">
-                        <td colSpan={2} className="py-1.5 px-2 text-gray-700">TOTAL</td>
-                        <td className="py-1.5 px-2 text-right font-mono text-red-600">{EUR2(despesas?.burnRate)}</td>
-                        <td className="py-1.5 px-2 text-right font-mono text-gray-700">{EUR(despesas?.burnRateAnual)}</td>
-                        <td></td>
-                      </tr>
+                    {!(despesas?.todas ?? []).length && (
+                      <tr><td colSpan={6} className="py-8 text-center text-gray-400 text-xs">Sem despesas registadas</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
             </div>
-
-            {despOneTime.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-gray-700 mb-3">One-time & Anuais</h2>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
-                        <th className="text-left py-2 px-3">Despesa</th>
-                        <th className="text-left py-2 px-3">Categoria</th>
-                        <th className="text-left py-2 px-3">Tipo</th>
-                        <th className="text-left py-2 px-3">Data</th>
-                        <th className="text-right py-2 px-3">Valor</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {despOneTime.map(d => (
-                        <tr key={d.id} className="border-b border-gray-50 hover:bg-gray-50">
-                          <td className="py-2 px-3 font-medium text-gray-800">{d.movimento}</td>
-                          <td className="py-2 px-3 text-gray-500 text-xs">{d.categoria}</td>
-                          <td className="py-2 px-3">
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${TIMING_COLOR[d.timing] ?? 'bg-gray-100 text-gray-600'}`}>
-                              {d.timing}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 text-gray-400 text-xs">{d.data ?? '—'}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs font-semibold">{EUR(d.custoAnual || d.custoMensal)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
           </>
         )}
 
