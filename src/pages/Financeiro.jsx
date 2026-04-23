@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, ComposedChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts'
-import { Upload, X, FileText, Image, Trash2, Plus, Filter, ArrowUpDown } from 'lucide-react'
+import { Upload, X, FileText, Image, Trash2, Plus, Filter, ArrowUpDown, ChevronDown, ChevronUp, Check } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { KPICard } from '../components/dashboard/KPICard.jsx'
 import { apiFetch } from '../lib/api.js'
@@ -46,6 +46,7 @@ export function Financeiro() {
   const [tab,      setTab]      = useState('Visão Geral')
   const [editingNeg, setEditingNeg] = useState(null)
   const [editingDesp, setEditingDesp] = useState(null)
+  const [expandedNeg, setExpandedNeg] = useState(null)
   const [crmNegocios, setCrmNegocios] = useState([])
   const [crmDespesas, setCrmDespesas] = useState([])
 
@@ -350,6 +351,8 @@ export function Financeiro() {
             kpis={kpis} negociosLista={negociosLista} crmNegocios={crmNegocios}
             editingNeg={editingNeg} setEditingNeg={setEditingNeg}
             saveNegocio={saveNegocio} deleteNegocio={deleteNegocio} load={load}
+            expandedNeg={expandedNeg} setExpandedNeg={setExpandedNeg}
+            confirmarPagamento={confirmarPagamento}
           />
         )}
 
@@ -548,84 +551,8 @@ export function Financeiro() {
               </div>
             )}
 
-            {/* Pagamentos Faseados Timeline */}
-            {(() => {
-              const allPags = pendentes.flatMap(n =>
-                (n.pagamentosFaseados || []).map((p, idx) => ({ ...p, negocio: n.movimento, categoria: n.categoria, negocioId: n.id, trancheIndex: idx }))
-              ).sort((a, b) => (a.data || '9999').localeCompare(b.data || '9999'))
-              const pagsPendentes = allPags.filter(p => !p.recebido)
-              const pagsRecebidos = allPags.filter(p => p.recebido)
-
-              if (allPags.length === 0) return (
-                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                  <h2 className="text-sm font-semibold text-gray-700 mb-3">Pagamentos Pendentes</h2>
-                  <NegociosTable rows={pendentes} emptyMsg="Sem pagamentos pendentes" />
-                </div>
-              )
-
-              return (
-                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                  <h2 className="text-sm font-semibold text-gray-700 mb-4">Timeline de Pagamentos</h2>
-                  {pagsPendentes.length > 0 && (
-                    <>
-                      <h3 className="text-xs text-gray-400 uppercase tracking-wide mb-2">Pendentes ({pagsPendentes.length})</h3>
-                      <div className="space-y-2 mb-5">
-                        {pagsPendentes.map((p, i) => {
-                          const atrasado = p.data && new Date(p.data) < new Date()
-                          return (
-                            <div key={i} className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${atrasado ? 'bg-red-50 border-red-100' : 'bg-yellow-50 border-yellow-100'}`}>
-                              <div className={`w-2 h-2 rounded-full shrink-0 ${atrasado ? 'bg-red-400' : 'bg-yellow-400'}`} />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-gray-800 truncate">{p.negocio}</p>
-                                <p className="text-xs text-gray-500">{p.descricao || 'Pagamento'} {atrasado && <span className="text-red-600 font-medium">— ATRASADO</span>}</p>
-                              </div>
-                              <div className="text-right shrink-0 flex items-center gap-2">
-                                <div>
-                                  <p className={`text-sm font-mono font-semibold ${atrasado ? 'text-red-700' : 'text-yellow-700'}`}>{EUR(p.valor)}</p>
-                                  <p className="text-xs text-gray-400">{p.data || 'Sem data'}</p>
-                                </div>
-                                <button
-                                  onClick={() => confirmarPagamento(p.negocioId, p.trancheIndex, `${p.negocio} — ${p.descricao || 'Pagamento'} (${EUR(p.valor)})`)}
-                                  className="px-2.5 py-1.5 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap"
-                                >
-                                  Confirmar
-                                </button>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </>
-                  )}
-                  {pagsRecebidos.length > 0 && (
-                    <>
-                      <h3 className="text-xs text-gray-400 uppercase tracking-wide mb-2">Recebidos ({pagsRecebidos.length})</h3>
-                      <div className="space-y-2">
-                        {pagsRecebidos.map((p, i) => (
-                          <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-green-50 border border-green-100">
-                            <div className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-800 truncate">{p.negocio}</p>
-                              <p className="text-xs text-gray-500">{p.descricao || 'Pagamento'}</p>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <p className="text-sm font-mono font-semibold text-green-700">{EUR(p.valor)}</p>
-                              <p className="text-xs text-gray-400">{p.data || '—'}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                  {pendentes.filter(n => !(n.pagamentosFaseados || []).length).length > 0 && (
-                    <>
-                      <h3 className="text-xs text-gray-400 uppercase tracking-wide mb-2 mt-5">Negócios sem tranches definidas</h3>
-                      <NegociosTable rows={pendentes.filter(n => !(n.pagamentosFaseados || []).length)} emptyMsg="" />
-                    </>
-                  )}
-                </div>
-              )
-            })()}
+            {/* Pagamentos por Negócio */}
+            <TesourariaPagamentos pendentes={pendentes} confirmarPagamento={confirmarPagamento} />
 
             {recebidos.length > 0 && (
               <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
@@ -791,7 +718,7 @@ export function Financeiro() {
 // ══════════════════════════════════════════════════════════════
 // NEGÓCIOS TAB (with filters and relation columns)
 // ══════════════════════════════════════════════════════════════
-function NegociosTab({ kpis, negociosLista, crmNegocios, editingNeg, setEditingNeg, saveNegocio, deleteNegocio }) {
+function NegociosTab({ kpis, negociosLista, crmNegocios, editingNeg, setEditingNeg, saveNegocio, deleteNegocio, expandedNeg, setExpandedNeg, confirmarPagamento }) {
   const [filterCat, setFilterCat] = useState('')
   const [filterFase, setFilterFase] = useState('')
   const [sortKey, setSortKey] = useState('movimento')
@@ -887,10 +814,16 @@ function NegociosTab({ kpis, negociosLista, crmNegocios, editingNeg, setEditingN
                 const totalRecebido = pagsRecebidos.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
                 const crm = crmNegocios.find(x => x.id === n.id)
                 const comPct = crm?.comissao_pct
+                const isExpanded = expandedNeg === n.id
                 return (
-                <tr key={n.id} className="border-b border-gray-50 hover:bg-gray-50">
+                <Fragment key={n.id}>
+                <tr onClick={() => setExpandedNeg(isExpanded ? null : n.id)}
+                  className={`border-b border-gray-50 cursor-pointer transition-colors ${isExpanded ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}>
                   <td className="py-2 px-3 font-medium text-gray-800">
-                    <button onClick={() => setEditingNeg(crm || n)} className="text-left hover:text-indigo-600 hover:underline">{n.movimento}</button>
+                    <span className="flex items-center gap-1.5">
+                      {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-indigo-500" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />}
+                      {n.movimento}
+                    </span>
                   </td>
                   <td className="py-2 px-3"><CatBadge cat={n.categoria} /></td>
                   <td className="py-2 px-3 text-xs text-gray-500 max-w-[120px] truncate">{n.imovelNome || '—'}</td>
@@ -917,13 +850,23 @@ function NegociosTab({ kpis, negociosLista, crmNegocios, editingNeg, setEditingN
                       ? <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-medium">Pendente</span>
                       : <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Recebido</span>}
                   </td>
-                  <td className="py-2 px-3">
-                    <div className="flex gap-1">
-                      <button onClick={() => setEditingNeg(crm || n)} className="px-2 py-1 text-xs bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100">Editar</button>
-                      <button onClick={() => deleteNegocio(n.id)} className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Apagar</button>
-                    </div>
+                  <td className="py-2 px-3" onClick={e => e.stopPropagation()}>
+                    <button onClick={() => deleteNegocio(n.id)} className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Apagar</button>
                   </td>
                 </tr>
+                {isExpanded && (
+                  <tr>
+                    <td colSpan={10} className="p-0">
+                      <NegocioDetailPanel
+                        negocio={n} crm={crm}
+                        onEdit={() => { setExpandedNeg(null); setEditingNeg(crm || n) }}
+                        onClose={() => setExpandedNeg(null)}
+                        confirmarPagamento={confirmarPagamento}
+                      />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               )})}
               {!filtered.length && (
                 <tr><td colSpan={10} className="py-8 text-center text-gray-400 text-xs">Sem negócios registados</td></tr>
@@ -933,6 +876,234 @@ function NegociosTab({ kpis, negociosLista, crmNegocios, editingNeg, setEditingN
         </div>
       </div>
     </>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════
+// TESOURARIA — PAGAMENTOS AGRUPADOS POR NEGÓCIO
+// ══════════════════════════════════════════════════════════════
+function TesourariaPagamentos({ pendentes, confirmarPagamento }) {
+  const [expandedDeals, setExpandedDeals] = useState(new Set())
+  const toggleDeal = (id) => setExpandedDeals(prev => {
+    const next = new Set(prev)
+    next.has(id) ? next.delete(id) : next.add(id)
+    return next
+  })
+
+  const comTranches = pendentes.filter(n => (n.pagamentosFaseados || []).length > 0)
+  const semTranches = pendentes.filter(n => !(n.pagamentosFaseados || []).length)
+
+  if (!comTranches.length && !semTranches.length) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <h2 className="text-sm font-semibold text-gray-700 mb-3">Pagamentos</h2>
+        <p className="text-xs text-gray-400 text-center py-6">Sem pagamentos pendentes</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <h2 className="text-sm font-semibold text-gray-700">Pagamentos por Negócio</h2>
+
+      {comTranches.map(n => {
+        const pags = n.pagamentosFaseados || []
+        const received = pags.filter(p => p.recebido)
+        const totalVal = pags.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
+        const recVal = received.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
+        const pct = totalVal > 0 ? Math.round((recVal / totalVal) * 100) : 0
+        const isOpen = expandedDeals.has(n.id)
+        const temAtrasado = pags.some(p => !p.recebido && p.data && new Date(p.data) < new Date())
+        const nextPending = pags.find(p => !p.recebido)
+
+        return (
+          <div key={n.id} className={`bg-white rounded-xl border shadow-sm overflow-hidden ${temAtrasado ? 'border-red-200' : 'border-gray-200'}`}>
+            {/* Card header — always visible */}
+            <button onClick={() => toggleDeal(n.id)} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left">
+              {isOpen ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-gray-800 truncate">{n.movimento}</span>
+                  <CatBadge cat={n.categoria} />
+                  {n.fase && <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${FASE_COLOR[n.fase] ?? 'bg-gray-100 text-gray-600'}`}>{n.fase}</span>}
+                  {temAtrasado && <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-100 text-red-700">ATRASADO</span>}
+                </div>
+                <div className="flex items-center gap-3 mt-1.5">
+                  <div className="flex-1 max-w-[200px] bg-gray-100 rounded-full h-2">
+                    <div className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-green-500' : temAtrasado ? 'bg-red-400' : 'bg-yellow-400'}`} style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-xs text-gray-500">{received.length}/{pags.length} tranches</span>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-sm font-mono font-semibold text-gray-800">{EUR(recVal)} <span className="text-gray-400 font-normal">/ {EUR(totalVal)}</span></p>
+                {nextPending?.data && <p className="text-[10px] text-gray-400 mt-0.5">Próx: {nextPending.data}</p>}
+              </div>
+            </button>
+
+            {/* Expanded — tranche list */}
+            {isOpen && (
+              <div className="border-t border-gray-100 px-4 py-3 bg-gray-50 space-y-1.5">
+                {pags.map((p, idx) => {
+                  const atrasado = !p.recebido && p.data && new Date(p.data) < new Date()
+                  return (
+                    <div key={idx} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm ${
+                      p.recebido ? 'bg-green-50 border-green-100' :
+                      atrasado ? 'bg-red-50 border-red-100' :
+                      'bg-yellow-50 border-yellow-100'
+                    }`}>
+                      {p.recebido
+                        ? <Check className="w-4 h-4 text-green-600 shrink-0" />
+                        : <div className={`w-4 h-4 rounded-full border-2 shrink-0 ${atrasado ? 'border-red-400' : 'border-yellow-400'}`} />
+                      }
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-800">{p.descricao || 'Pagamento'}</p>
+                        <p className="text-[10px] text-gray-400">{p.data || 'Sem data'} {atrasado && <span className="text-red-600 font-medium">— ATRASADO</span>}</p>
+                      </div>
+                      <span className={`text-xs font-mono font-semibold shrink-0 ${p.recebido ? 'text-green-700' : atrasado ? 'text-red-700' : 'text-yellow-700'}`}>{EUR(p.valor)}</span>
+                      {!p.recebido && (
+                        <button
+                          onClick={() => confirmarPagamento(n.id, idx, `${n.movimento} — ${p.descricao || 'Pagamento'} (${EUR(p.valor)})`)}
+                          className="px-2.5 py-1.5 text-[10px] font-medium bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors shrink-0"
+                        >
+                          Confirmar
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {semTranches.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h3 className="text-xs text-gray-400 uppercase tracking-wide mb-3">Negócios sem tranches definidas</h3>
+          <NegociosTable rows={semTranches} emptyMsg="" />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════
+// NEGÓCIO DETAIL PANEL (inline expandable)
+// ══════════════════════════════════════════════════════════════
+function NegocioDetailPanel({ negocio: n, crm, onEdit, onClose, confirmarPagamento }) {
+  const pags = n.pagamentosFaseados || []
+  const pagsRecebidos = pags.filter(p => p.recebido)
+  const totalFaseados = pags.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
+  const totalRecebido = pagsRecebidos.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
+  const pctRecebido = totalFaseados > 0 ? Math.round((totalRecebido / totalFaseados) * 100) : 0
+  const comPct = crm?.comissao_pct
+
+  return (
+    <div className="border-t-2 border-indigo-200">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-3" style={{ background: '#0d0d0d' }}>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-bold" style={{ color: '#C9A84C' }}>{n.categoria || 'Negócio'}</span>
+          <span className="text-white font-semibold text-sm">{n.movimento}</span>
+          {n.fase && <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${FASE_COLOR[n.fase] ?? 'bg-gray-700 text-gray-300'}`}>{n.fase}</span>}
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={onEdit} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors">Editar</button>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-white transition-colors"><X className="w-4 h-4" /></button>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-5 bg-gray-50">
+        {/* Col 1: Resumo */}
+        <div className="space-y-3">
+          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Resumo</h4>
+          <div className="space-y-2 text-sm">
+            {n.imovelNome && <div className="flex justify-between"><span className="text-gray-500">Imóvel</span><span className="font-medium text-gray-800">{n.imovelNome}</span></div>}
+            {n.consultorNome && <div className="flex justify-between"><span className="text-gray-500">Consultor</span><span className="font-medium text-gray-800">{n.consultorNome}</span></div>}
+            {n.dataCompra && <div className="flex justify-between"><span className="text-gray-500">Data compra</span><span className="text-gray-700">{n.dataCompra}</span></div>}
+            {n.dataEstimada && <div className="flex justify-between"><span className="text-gray-500">Venda estimada</span><span className="text-gray-700">{n.dataEstimada}</span></div>}
+            {n.dataVenda && <div className="flex justify-between"><span className="text-gray-500">Data venda</span><span className="text-gray-700">{n.dataVenda}</span></div>}
+            {n.notas && <div className="mt-2 text-xs text-gray-500 bg-white rounded-lg p-2.5 border border-gray-100">{n.notas}</div>}
+          </div>
+        </div>
+
+        {/* Col 2: Financeiro */}
+        <div className="space-y-3">
+          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Financeiro</h4>
+          <div className="space-y-2">
+            <div className="bg-white rounded-lg p-3 border border-gray-100">
+              <span className="text-xs text-gray-400 block">Lucro Estimado</span>
+              <span className="text-xl font-bold font-mono text-indigo-600">{EUR(n.lucroEstimado)}</span>
+            </div>
+            <div className="bg-white rounded-lg p-3 border border-gray-100">
+              <span className="text-xs text-gray-400 block">Lucro Real <span className="text-gray-300">— auto-calculado</span></span>
+              <span className="text-xl font-bold font-mono text-green-600">{EUR(n.lucroReal)}</span>
+            </div>
+            {comPct > 0 && (
+              <div className="bg-white rounded-lg p-3 border border-gray-100">
+                <span className="text-xs text-gray-400 block">Comissão</span>
+                <span className="text-lg font-bold text-gray-700">{comPct}%</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Col 3: Tranches */}
+        <div className="space-y-3">
+          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Tranches</h4>
+          {pags.length > 0 ? (
+            <>
+              {/* Progress */}
+              <div className="bg-white rounded-lg p-3 border border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-gray-500">{pagsRecebidos.length}/{pags.length} recebidas</span>
+                  <span className="text-xs font-mono font-semibold text-gray-700">{EUR(totalRecebido)} / {EUR(totalFaseados)}</span>
+                </div>
+                <div className="w-full bg-gray-100 rounded-full h-2.5">
+                  <div className="h-full rounded-full bg-green-500 transition-all" style={{ width: `${pctRecebido}%` }} />
+                </div>
+                <p className="text-xs text-gray-400 text-right mt-1">{pctRecebido}%</p>
+              </div>
+
+              {/* Tranche list */}
+              <div className="space-y-1.5">
+                {pags.map((p, idx) => (
+                  <div key={idx} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm ${
+                    p.recebido ? 'bg-green-50 border-green-100' :
+                    (p.data && new Date(p.data) < new Date()) ? 'bg-red-50 border-red-100' :
+                    'bg-yellow-50 border-yellow-100'
+                  }`}>
+                    {p.recebido
+                      ? <Check className="w-4 h-4 text-green-600 shrink-0" />
+                      : <div className="w-4 h-4 rounded-full border-2 border-gray-300 shrink-0" />
+                    }
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-gray-800 truncate">{p.descricao || 'Pagamento'}</p>
+                      <p className="text-[10px] text-gray-400">{p.data || 'Sem data'}</p>
+                    </div>
+                    <span className={`text-xs font-mono font-semibold shrink-0 ${p.recebido ? 'text-green-700' : 'text-gray-700'}`}>{EUR(p.valor)}</span>
+                    {!p.recebido && (
+                      <button
+                        onClick={() => confirmarPagamento(n.id, idx, `${n.movimento} — ${p.descricao || 'Pagamento'} (${EUR(p.valor)})`)}
+                        className="px-2 py-1 text-[10px] font-medium bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors shrink-0"
+                      >
+                        Confirmar
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-gray-400 bg-white rounded-lg p-3 border border-gray-100">
+              Sem tranches definidas. Carrega em "Editar" para adicionar pagamentos faseados.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -1176,15 +1347,11 @@ function NegocioForm({ item, onSave, onCancel }) {
           <input type="number" value={f.lucro_estimado} onChange={e => set('lucro_estimado', +e.target.value)} className={inputClass} />
         </div>
         <div>
-          <label className="text-xs text-gray-500 block mb-1">Lucro Real (€)</label>
-          <input type="number" value={f.lucro_real} onChange={e => set('lucro_real', +e.target.value)} className={inputClass} />
-        </div>
-        <div>
-          <label className="text-xs text-gray-500 block mb-1">Pagamento</label>
-          <select value={f.pagamento_em_falta} onChange={e => set('pagamento_em_falta', +e.target.value)} className={inputClass}>
-            <option value={1}>Pendente</option>
-            <option value={0}>Recebido</option>
-          </select>
+          <label className="text-xs text-gray-500 block mb-1">Lucro Real (€) <span className="text-gray-300">— auto-calculado</span></label>
+          {pagamentos.length > 0
+            ? <div className="w-full px-3 py-2 rounded-lg border border-gray-100 bg-gray-50 text-sm font-mono text-green-600 font-semibold">{EUR(totalRecebido)}</div>
+            : <input type="number" value={f.lucro_real} onChange={e => set('lucro_real', +e.target.value)} className={inputClass} placeholder="Sem tranches — valor manual" />
+          }
         </div>
         <div>
           <label className="text-xs text-gray-500 block mb-1">Data</label>
@@ -1214,9 +1381,13 @@ function NegocioForm({ item, onSave, onCancel }) {
           <div>
             <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Pagamentos Faseados</h4>
             {pagamentos.length > 0 && (
-              <p className="text-xs text-gray-400 mt-0.5">
-                {EUR(totalRecebido)} recebido de {EUR(totalFaseados)} total
-              </p>
+              <div className="flex items-center gap-3 mt-1">
+                <span className="text-xs text-gray-400">{EUR(totalRecebido)} / {EUR(totalFaseados)}</span>
+                <div className="flex-1 max-w-[140px] bg-gray-100 rounded-full h-2">
+                  <div className="h-full rounded-full bg-green-500 transition-all" style={{ width: `${totalFaseados > 0 ? Math.min(100, (totalRecebido / totalFaseados) * 100) : 0}%` }} />
+                </div>
+                <span className="text-xs text-gray-400">{pagamentos.filter(p => p.recebido).length}/{pagamentos.length} tranches</span>
+              </div>
             )}
           </div>
           <button onClick={addPagamento} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors">
@@ -1264,7 +1435,12 @@ function NegocioForm({ item, onSave, onCancel }) {
       </div>
 
       <div className="flex gap-3 mt-4">
-        <button onClick={() => onSave(f)} disabled={!f.movimento?.trim()} className="px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 disabled:opacity-40">
+        <button onClick={() => {
+          const autoFields = pagamentos.length > 0
+            ? { lucro_real: totalRecebido, pagamento_em_falta: pagamentos.some(p => !p.recebido) ? 1 : 0 }
+            : {}
+          onSave({ ...f, ...autoFields })
+        }} disabled={!f.movimento?.trim()} className="px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 disabled:opacity-40">
           {isNew ? 'Criar' : 'Guardar'}
         </button>
         <button onClick={onCancel} className="px-5 py-2 bg-gray-100 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-200">Cancelar</button>
