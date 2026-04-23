@@ -284,10 +284,10 @@ export function Financeiro() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
                       <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
                       <YAxis type="category" dataKey="fase" tick={{ fontSize: 11 }} width={110} />
-                      <Tooltip formatter={(v, n) => n === 'Fat. Expect. €' ? EUR(v) : v} />
+                      <Tooltip formatter={(v, n) => n === 'Faturação Expectável €' ? EUR(v) : v} />
                       <Legend />
                       <Bar dataKey="count"    name="Nº Negócios"     fill="#6366f1" radius={[0,3,3,0]} />
-                      <Bar dataKey="lucroEst" name="Fat. Expect. €"  fill="#10b981" radius={[0,3,3,0]} />
+                      <Bar dataKey="lucroEst" name="Faturação Expectável €"  fill="#10b981" radius={[0,3,3,0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : <EmptyState />}
@@ -300,7 +300,7 @@ export function Financeiro() {
                 <h2 className="text-sm font-semibold text-gray-700 mb-4">Pipeline de Análises (calculadora integrada)</h2>
                 <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
                   <div className="bg-green-50 rounded-lg p-3 text-center">
-                    <p className="text-xs text-gray-500">Lucro Líq. Pipeline</p>
+                    <p className="text-xs text-gray-500">Lucro Líquido Pipeline</p>
                     <p className="text-lg font-bold text-green-700">{EUR(analises.pipeline_lucro_liquido)}</p>
                   </div>
                   <div className="bg-blue-50 rounded-lg p-3 text-center">
@@ -323,7 +323,7 @@ export function Financeiro() {
                       <th className="text-right py-1.5">Compra</th>
                       <th className="text-right py-1.5">VVR</th>
                       <th className="text-right py-1.5">Capital</th>
-                      <th className="text-right py-1.5">Lucro Líq.</th>
+                      <th className="text-right py-1.5">Lucro Líquido</th>
                       <th className="text-right py-1.5">RA</th>
                     </tr>
                   </thead>
@@ -562,7 +562,7 @@ export function Financeiro() {
                     <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
                       <th className="text-left py-2 px-3">Negócio</th>
                       <th className="text-left py-2 px-3">Categoria</th>
-                      <th className="text-right py-2 px-3">Fat. Real</th>
+                      <th className="text-right py-2 px-3">Faturação Real</th>
                       <th className="text-left py-2 px-3">Data Venda</th>
                     </tr>
                   </thead>
@@ -641,7 +641,7 @@ export function Financeiro() {
                   <p className="text-xl font-bold text-red-500 mt-1">{EUR(projecao.breakEven.despesasAnuais)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-400 uppercase">Fat. Média / Deal</p>
+                  <p className="text-xs text-gray-400 uppercase">Faturação Média / Deal</p>
                   <p className="text-xl font-bold text-indigo-600 mt-1">{EUR(projecao.breakEven.lucroMedioDeal)}</p>
                 </div>
                 <div>
@@ -799,8 +799,8 @@ function NegociosTab({ kpis, negociosLista, crmNegocios, editingNeg, setEditingN
                 <th className="text-left py-2 px-3">Consultor</th>
                 <SortHeader label="Fase" field="fase" className="text-left" />
                 <SortHeader label="Comissão" field="comissaoPct" className="text-right" />
-                <SortHeader label="Fat. Expect." field="lucroEstimado" className="text-right" />
-                <SortHeader label="Fat. Real" field="lucroReal" className="text-right" />
+                <SortHeader label="Faturação Expectável" field="lucroEstimado" className="text-right" />
+                <SortHeader label="Faturação Real" field="lucroReal" className="text-right" />
                 <th className="text-left py-2 px-3">Pagamento</th>
                 <th className="py-2 px-3"></th>
               </tr>
@@ -1034,11 +1034,11 @@ function NegocioDetailPanel({ negocio: n, crm, onEdit, onClose, confirmarPagamen
           <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Financeiro</h4>
           <div className="space-y-2">
             <div className="bg-white rounded-lg p-3 border border-gray-100">
-              <span className="text-xs text-gray-400 block">Fat. Expectável</span>
+              <span className="text-xs text-gray-400 block">Faturação Expectável</span>
               <span className="text-xl font-bold font-mono text-indigo-600">{EUR(n.lucroEstimado)}</span>
             </div>
             <div className="bg-white rounded-lg p-3 border border-gray-100">
-              <span className="text-xs text-gray-400 block">Fat. Real</span>
+              <span className="text-xs text-gray-400 block">Faturação Real</span>
               <span className="text-xl font-bold font-mono text-green-600">{EUR(n.lucroReal)}</span>
             </div>
             {comPct > 0 && (
@@ -1180,8 +1180,8 @@ function RentabilidadeTab({ rent }) {
               <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
                 <th className="text-left py-2 px-3">Consultor</th>
                 <th className="text-right py-2 px-3">Deals</th>
-                <th className="text-right py-2 px-3">Fat. Expect.</th>
-                <th className="text-right py-2 px-3">Fat. Real</th>
+                <th className="text-right py-2 px-3">Faturação Expectável</th>
+                <th className="text-right py-2 px-3">Faturação Real</th>
                 <th className="text-right py-2 px-3">Média / Deal</th>
               </tr>
             </thead>
@@ -1209,8 +1209,8 @@ function RentabilidadeTab({ rent }) {
               <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
                 <th className="text-left py-2 px-3">Investidor</th>
                 <th className="text-right py-2 px-3">Negócios</th>
-                <th className="text-right py-2 px-3">Fat. Expect.</th>
-                <th className="text-right py-2 px-3">Fat. Real</th>
+                <th className="text-right py-2 px-3">Faturação Expectável</th>
+                <th className="text-right py-2 px-3">Faturação Real</th>
                 <th className="text-right py-2 px-3">Capital Investido</th>
               </tr>
             </thead>
@@ -1253,7 +1253,7 @@ function NegociosTable({ rows, emptyMsg = 'Sem dados' }) {
           <th className="text-left py-2 px-3">Negócio</th>
           <th className="text-left py-2 px-3">Categoria</th>
           <th className="text-left py-2 px-3">Fase</th>
-          <th className="text-right py-2 px-3">Fat. Expectável</th>
+          <th className="text-right py-2 px-3">Faturação Expectável</th>
           <th className="text-left py-2 px-3">Data Estimada</th>
         </tr>
       </thead>
