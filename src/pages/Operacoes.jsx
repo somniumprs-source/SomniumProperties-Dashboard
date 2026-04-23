@@ -12,9 +12,11 @@ const CATEGORIAS = [
   'Cold Call', 'Pesquisa de Imóveis', 'Estudo de Mercado',
   'Follow Up Consultores', 'Follow Up Investidores',
   'Reunião Investidores', 'Reunião de Equipa Somnium',
-  'Visita', 'Proposta', 'Apresentação de Negócios',
+  'Reunião com Parceiros', 'Visita', 'Visita a Obra', 'Proposta',
+  'Apresentação de Negócios', 'Negociações',
   'SOP / Formação', 'Planeamento', 'Implementação com IA',
-  'Análise de Negócio', 'Contacto Consultores', 'Outros',
+  'Análise de Negócio', 'Contacto Consultores',
+  'Networking / Eventos', 'Gestão Financeira', 'Outros',
 ]
 const STATUS_OPTIONS = ['A fazer', 'Em andamento', 'Concluída', 'Atrasada']
 const STATUS_COLOR = { 'A fazer': 'bg-gray-100 text-gray-600', 'Em andamento': 'bg-blue-100 text-blue-700', 'Concluída': 'bg-green-100 text-green-700', 'Atrasada': 'bg-red-100 text-red-600' }
