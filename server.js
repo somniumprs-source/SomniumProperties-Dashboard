@@ -4848,17 +4848,34 @@ app.post('/api/automation/pipeline-to-faturacao', async (req, res) => {
         else if (im.estado === 'CAEP') categoria = 'CAEP'
         else if (im.estado === 'Mediação Imobiliária') categoria = 'Mediação Imobiliária'
 
-        const lucroEstimado = im.askPrice > 0 && im.valorProposta > 0 ? im.askPrice - im.valorProposta : 0
         const hoje = new Date().toISOString().slice(0, 10)
 
-        // Criar no PostgreSQL
-        await pool.query(
+        // Criar no PostgreSQL (lucro_estimado = 0, será calculado pela análise)
+        const { rows: [newNeg] } = await pool.query(
           `INSERT INTO negocios (movimento, categoria, fase, lucro_estimado, data, imovel_id, pagamento_em_falta, created_at, updated_at)
-           VALUES ($1, $2, 'Fase de obras', $3, $4, $5, 1, NOW(), NOW())`,
-          [im.nome, categoria, lucroEstimado, hoje, im.id]
+           VALUES ($1, $2, 'Fase de obras', 0, $3, $4, 1, NOW(), NOW()) RETURNING id`,
+          [im.nome, categoria, hoje, im.id]
         )
 
-        // Criar no Notion (se configurado)
+        // Se já existir análise activa para este imóvel, propagar faturação expectável
+        const { rows: analises } = await pool.query(
+          'SELECT id, calculados FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1', [im.id]
+        )
+        if (analises.length > 0) {
+          const calc = typeof analises[0].calculados === 'string' ? JSON.parse(analises[0].calculados) : (analises[0].calculados || {})
+          const lucroBruto = calc.lucro_bruto || 0
+          const vvr = calc.vvr || 0
+          let lucroEstimado = 0
+          if (categoria === 'Wholesalling') lucroEstimado = Math.round(lucroBruto * 0.1 * 100) / 100
+          else if (categoria === 'Mediação Imobiliária') lucroEstimado = Math.round(vvr * 0.025 * 100) / 100
+          else if (categoria === 'CAEP') lucroEstimado = Math.round(lucroBruto * 0.4 * (2 / 3) * 100) / 100
+          else lucroEstimado = calc.lucro_liquido || 0
+          if (lucroEstimado > 0) {
+            await pool.query('UPDATE negocios SET lucro_estimado = $1, updated_at = NOW() WHERE id = $2', [lucroEstimado, newNeg.id])
+          }
+        }
+
+        // Sync Notion (se configurado)
         try {
           if (DB.negócios) {
             await notion.pages.create({
@@ -4867,7 +4884,7 @@ app.post('/api/automation/pipeline-to-faturacao', async (req, res) => {
                 'Movimento': { title: [{ text: { content: im.nome } }] },
                 'Categoria': { select: { name: categoria } },
                 'Fase': { select: { name: 'Fase de obras' } },
-                'Lucro estimado': { number: lucroEstimado },
+                'Lucro estimado': { number: 0 },
                 'Data': { date: { start: hoje } },
                 'Imóvel': { relation: [{ id: im.id }] },
               },
