@@ -931,10 +931,11 @@ app.get('/api/kpis/financeiro', async (req, res) => {
     const pendentes          = negócios.filter(n => n.pagamentoEmFalta)
     const negóciosAtivos     = negócios.filter(n => n.fase !== 'Vendido')
 
-    // Burn rate — despesas mensais recorrentes
-    const burnRate = round2(despesas
-      .filter(d => d.timing === 'Mensalmente')
-      .reduce((s,d) => s + d.custoMensal, 0))
+    // Burn rate — mensais + anuais ÷ 12
+    const burnRate = round2(
+      despesas.filter(d => d.timing === 'Mensalmente').reduce((s,d) => s + d.custoMensal, 0) + despesas.filter(d => d.timing === 'Anual').reduce((s,d) => s + (d.custoAnual || 0) / 12, 0) +
+      despesas.filter(d => d.timing === 'Anual').reduce((s,d) => s + (d.custoAnual || 0) / 12, 0)
+    )
     const despesasAnuaisTotal = round2(despesas.reduce((s,d) => s + d.custoAnual, 0))
     const runway = burnRate > 0 && lucroPendente > 0 ? round2(lucroPendente / burnRate) : null
 
@@ -1033,7 +1034,11 @@ app.get('/api/financeiro/despesas', async (req, res) => {
     const recorrentes = despesas.filter(d => d.timing === 'Mensalmente')
     const anuais      = despesas.filter(d => d.timing === 'Anual')
     const unicaVez    = despesas.filter(d => d.timing === 'Único')
-    const burnRate    = round2(recorrentes.reduce((s,d) => s + d.custoMensal, 0))
+    // Burn rate = mensais + anuais ÷ 12
+    const burnRate    = round2(
+      recorrentes.reduce((s,d) => s + d.custoMensal, 0) +
+      anuais.reduce((s,d) => s + (d.custoAnual || 0) / 12, 0)
+    )
 
     const porCategoria = {}
     for (const d of despesas) {
@@ -1065,7 +1070,7 @@ app.get('/api/financeiro/cashflow', async (req, res) => {
 
     const pendentes  = negócios.filter(n => n.pagamentoEmFalta)
     const recebidos  = negócios.filter(n => !n.pagamentoEmFalta && n.lucroReal > 0)
-    const burnRate   = round2(despesas.filter(d => d.timing === 'Mensalmente').reduce((s,d) => s + d.custoMensal, 0))
+    const burnRate   = round2(despesas.filter(d => d.timing === 'Mensalmente').reduce((s,d) => s + d.custoMensal, 0) + despesas.filter(d => d.timing === 'Anual').reduce((s,d) => s + (d.custoAnual || 0) / 12, 0))
 
     const fatExpectavel  = round2(negócios.reduce((s,n) => s + n.lucroEstimado, 0))
     const fatReal        = round2(negócios.reduce((s,n) => s + n.lucroReal, 0))
@@ -2015,7 +2020,7 @@ app.get('/api/weekly-pulse', async (req, res) => {
     ).length
 
     // Cash
-    const burnRate = round2(despesas.filter(d => d.timing === 'Mensalmente').reduce((s,d) => s + d.custoMensal, 0))
+    const burnRate = round2(despesas.filter(d => d.timing === 'Mensalmente').reduce((s,d) => s + d.custoMensal, 0) + despesas.filter(d => d.timing === 'Anual').reduce((s,d) => s + (d.custoAnual || 0) / 12, 0))
     const lucroPendente = round2(negocios.filter(n => n.pagamentoEmFalta).reduce((s,n) => s + n.lucroEstimado, 0))
     const runway = burnRate > 0 ? round2(lucroPendente / burnRate) : null
 
@@ -2053,7 +2058,7 @@ app.get('/api/financeiro/projecao', async (req, res) => {
     const [negocios, despesas] = await Promise.all([getNegócios(), getDespesas()])
     const now = new Date()
 
-    const burnRate = round2(despesas.filter(d => d.timing === 'Mensalmente').reduce((s,d) => s + d.custoMensal, 0))
+    const burnRate = round2(despesas.filter(d => d.timing === 'Mensalmente').reduce((s,d) => s + d.custoMensal, 0) + despesas.filter(d => d.timing === 'Anual').reduce((s,d) => s + (d.custoAnual || 0) / 12, 0))
     const despesasAnuais = despesas.filter(d => d.timing === 'Anual')
 
     // Projeção: próximos 12 meses
@@ -2751,7 +2756,7 @@ app.get('/api/metricas', async (req, res) => {
 
     const CUSTO_HORA = 15
     const CUSTOS_FIXOS_MENSAIS = 360.40
-    const burnRateMensal = round2(despesas.filter(d => d.timing === 'Mensalmente').reduce((s,d) => s + d.custoMensal, 0)) || CUSTOS_FIXOS_MENSAIS
+    const burnRateMensal = round2(despesas.filter(d => d.timing === 'Mensalmente').reduce((s,d) => s + d.custoMensal, 0) + despesas.filter(d => d.timing === 'Anual').reduce((s,d) => s + (d.custoAnual || 0) / 12, 0)) || CUSTOS_FIXOS_MENSAIS
     // Meses desde início (usar data mais antiga de qualquer registo)
     const datasIniciais = [
       ...imoveis.map(i => i.dataAdicionado).filter(Boolean),
@@ -4186,7 +4191,7 @@ app.get('/api/time-tracking', async (req, res) => {
     const rphRealizado = totalHoras > 0 && receitaRealizada > 0 ? round2(receitaRealizada / totalHoras) : null
 
     // Custo por hora (horas × 15€ + custos fixos rateados)
-    const burnRateMensal = round2(despesas.filter(d => d.timing === 'Mensalmente').reduce((s, d) => s + d.custoMensal, 0)) || 360.40
+    const burnRateMensal = round2(despesas.filter(d => d.timing === 'Mensalmente').reduce((s, d) => s + d.custoMensal, 0) + despesas.filter(d => d.timing === 'Anual').reduce((s,d) => s + (d.custoAnual || 0) / 12, 0)) || 360.40
     const custoHorasTotal = round2(totalHoras * CUSTO_HORA)
     const mesesOp = meses.length || 1
     const custoFixoTotal = round2(burnRateMensal * mesesOp)
@@ -4979,6 +4984,63 @@ autoMigrate().then(() => {
       }
       if (fixed) console.log(`[sync] lucro_real recalculado para ${fixed} negócios com tranches`)
     } catch (e) { console.error('[sync] Erro ao sincronizar lucro_real:', e.message) }
+
+    // Auto-registo mensal de despesas recorrentes (subscrições)
+    async function registarDespesasMensais() {
+      try {
+        const { rows: subs } = await pool.query("SELECT * FROM despesas WHERE timing IN ('Mensalmente', 'Anual')")
+        const hoje = new Date()
+        const mesActual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
+        let criados = 0
+
+        for (const sub of subs) {
+          // Determinar dia de pagamento a partir do campo data
+          const diaPagamento = sub.data ? new Date(sub.data).getDate() : 1
+          if (hoje.getDate() < diaPagamento) continue // dia ainda não chegou
+
+          // Valor mensal: para anuais = custo_anual / 12, para mensais = custo_mensal
+          const valorMensal = sub.timing === 'Anual'
+            ? Math.round((sub.custo_anual || 0) / 12 * 100) / 100
+            : (sub.custo_mensal || 0)
+          if (valorMensal <= 0) continue
+
+          // Data do registo = dia de pagamento no mês actual
+          const dataRegisto = `${mesActual}-${String(diaPagamento).padStart(2, '0')}`
+
+          // Verificar se já existe registo para este mês
+          const { rows: existente } = await pool.query(
+            "SELECT id FROM despesas WHERE timing = 'Registado' AND movimento = $1 AND data LIKE $2",
+            [sub.movimento, `${mesActual}%`]
+          )
+          if (existente.length > 0) continue
+
+          // Criar registo mensal
+          const id = `auto-${sub.id}-${mesActual}`
+          await pool.query(
+            `INSERT INTO despesas (id, movimento, categoria, data, custo_mensal, custo_anual, timing, notas, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $5, 'Registado', $6, NOW(), NOW())
+             ON CONFLICT (id) DO NOTHING`,
+            [id, sub.movimento, sub.categoria, dataRegisto, valorMensal, `Auto-registo de ${sub.timing === 'Anual' ? 'subscrição anual' : 'subscrição mensal'}`]
+          )
+          criados++
+        }
+        if (criados > 0) console.log(`[despesas] ${criados} registo(s) mensal(is) criado(s) automaticamente`)
+      } catch (e) { console.error('[despesas] Erro auto-registo:', e.message) }
+    }
+    await registarDespesasMensais()
+
+    // Agendar auto-registo diário à meia-noite
+    function scheduleDespesas() {
+      const now = new Date()
+      const nextMidnight = new Date(now)
+      nextMidnight.setHours(0, 10, 0, 0)
+      if (nextMidnight <= now) nextMidnight.setDate(nextMidnight.getDate() + 1)
+      setTimeout(() => {
+        registarDespesasMensais()
+        setInterval(registarDespesasMensais, 24 * 60 * 60 * 1000)
+      }, nextMidnight - now)
+    }
+    scheduleDespesas()
 
     // Backup automático diário (corre 1x por dia às 3:00 AM)
     function scheduleBackup() {
