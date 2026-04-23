@@ -1052,9 +1052,15 @@ app.get('/api/financeiro/despesas', async (req, res) => {
       .map(([cat, v]) => ({ categoria: cat, custoMensal: round2(v.custoMensal), custoAnual: round2(v.custoAnual), count: v.count }))
       .sort((a,b) => b.custoAnual - a.custoAnual)
 
+    // Total anual = mensais × 12 + anuais (subscrições activas, sem registos/únicos)
+    const totalAnual = round2(
+      recorrentes.reduce((s,d) => s + (d.custoMensal || 0) * 12, 0) +
+      anuais.reduce((s,d) => s + (d.custoAnual || 0), 0)
+    )
+
     res.json({
       burnRate, burnRateAnual: round2(burnRate * 12),
-      totalAnual: round2(despesas.reduce((s,d) => s + d.custoAnual, 0)),
+      totalAnual,
       recorrentes, anuais, unicaVez, todas: despesas, categorias,
     })
   } catch (err) {
