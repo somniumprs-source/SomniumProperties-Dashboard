@@ -210,34 +210,53 @@ export async function pullGCalToTarefas(gcal, calendarId, { days = 30 } = {}) {
 }
 
 /**
- * Full sync: push tarefas sem gcal_event_id, depois pull novos eventos.
+ * Push-only: Tarefas → GCal (GCal é espelho).
+ * sinceDate (ISO YYYY-MM-DD) — se definido, só migra tarefas com inicio >= sinceDate.
  */
-export async function fullSync(gcal, calendarId, options = {}) {
-  if (!gcal) return { push: { synced: 0 }, pull: { created: 0, updated: 0 } }
+export async function pushAllTarefas(gcal, calendarId, { sinceDate } = {}) {
+  if (!gcal) return { created: 0, updated: 0, skipped: 0 }
 
-  // 1. Push: tarefas com data mas sem gcal_event_id
+  const params = []
+  let dateCond = ''
+  if (sinceDate) {
+    params.push(sinceDate)
+    dateCond = ` AND inicio >= $${params.length}`
+  }
+
+  // 1. Tarefas com data mas sem gcal_event_id (criar)
   const { rows: unsynced } = await pool.query(
-    "SELECT * FROM tarefas WHERE gcal_event_id IS NULL AND inicio IS NOT NULL AND status != 'Concluida'"
+    `SELECT * FROM tarefas WHERE gcal_event_id IS NULL AND inicio IS NOT NULL${dateCond}`,
+    params
   )
-  let pushSynced = 0
+  let created = 0
   for (const t of unsynced) {
     const eventId = await pushTarefaToGCal(gcal, calendarId, t)
-    if (eventId) pushSynced++
+    if (eventId) created++
   }
 
-  // 2. Push: tarefas alteradas depois do último sync
+  // 2. Tarefas alteradas depois do último sync (atualizar evento existente)
   const { rows: stale } = await pool.query(
-    "SELECT * FROM tarefas WHERE gcal_event_id IS NOT NULL AND updated_at > COALESCE(gcal_synced_at, '1970-01-01')"
+    `SELECT * FROM tarefas WHERE gcal_event_id IS NOT NULL
+     AND updated_at > COALESCE(gcal_synced_at, '1970-01-01')${dateCond}`,
+    params
   )
+  let updated = 0
   for (const t of stale) {
-    await updateGCalEvent(gcal, calendarId, t)
-    pushSynced++
+    const ok = await updateGCalEvent(gcal, calendarId, t)
+    if (ok) updated++
   }
 
-  // 3. Pull: eventos do GCal
-  const pull = await pullGCalToTarefas(gcal, calendarId, options)
+  return { created, updated, skipped: 0 }
+}
 
-  return { push: { synced: pushSynced }, pull }
+/**
+ * @deprecated — mantido apenas como escape hatch manual. GCal é espelho (push-only).
+ * Sincronização bidirecional desligada para evitar que eventos criados no GCal
+ * criem tarefas na app.
+ */
+export async function fullSync(gcal, calendarId, options = {}) {
+  const push = await pushAllTarefas(gcal, calendarId, options)
+  return { push: { synced: push.created + push.updated }, pull: { created: 0, updated: 0, skipped: 0 } }
 }
 
 // ── Helpers ─────────────────────────────────────────────────
