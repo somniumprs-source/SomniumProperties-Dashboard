@@ -3576,7 +3576,7 @@ try {
   const tokenPath = path.join(__dirname, 'google-token.json')
 
   if (existsSync(serviceCredPath)) {
-    // Service Account auth
+    // Service Account auth (local dev)
     const creds = JSON.parse(readFileSync(serviceCredPath, 'utf8'))
     const gAuth = new google.auth.GoogleAuth({
       credentials: creds,
@@ -3588,13 +3588,12 @@ try {
     gcal = google.calendar({ version: 'v3', auth: gAuth })
     console.log('[gcal] Google Calendar conectado (Service Account)')
   } else if (existsSync(oauthCredPath) && existsSync(tokenPath)) {
-    // OAuth2 auth
+    // OAuth2 auth via ficheiros (local dev)
     const oauthCreds = JSON.parse(readFileSync(oauthCredPath, 'utf8'))
     const { client_id, client_secret } = oauthCreds.installed || oauthCreds.web
     const oauth2 = new google.auth.OAuth2(client_id, client_secret, 'http://localhost:3333')
     const tokens = JSON.parse(readFileSync(tokenPath, 'utf8'))
     oauth2.setCredentials(tokens)
-    // Auto-refresh tokens
     oauth2.on('tokens', (newTokens) => {
       const merged = { ...tokens, ...newTokens }
       import('fs').then(fs => {
@@ -3602,15 +3601,47 @@ try {
       })
     })
     gcal = google.calendar({ version: 'v3', auth: oauth2 })
-    console.log('[gcal] Google Calendar conectado (OAuth2)')
+    console.log('[gcal] Google Calendar conectado (OAuth2 ficheiros)')
   } else {
-    throw new Error('Falta google-credentials.json ou google-oauth.json + google-token.json — corre: node scripts/auth-google.js')
+    // OAuth2 via env vars (Render produção)
+    const { getGoogleAuth } = await import('./src/db/googleAuth.js')
+    const auth = getGoogleAuth()
+    if (!auth) {
+      throw new Error('Sem credenciais: nem ficheiros nem GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN definidos')
+    }
+    gcal = google.calendar({ version: 'v3', auth })
+    console.log('[gcal] Google Calendar conectado (OAuth2 env)')
   }
 } catch (e) {
   console.warn('[gcal] Google Calendar não disponível:', e.message)
 }
 
 const GCAL_ID = process.env.GOOGLE_CALENDAR_ID || 'somniumprs@gmail.com'
+
+app.get('/api/calendar/status', async (req, res) => {
+  const status = {
+    gcal_ok: !!gcal,
+    calendar_id: GCAL_ID,
+    credentials_source: null,
+  }
+  const { existsSync } = await import('fs')
+  if (existsSync(path.join(__dirname, 'google-credentials.json'))) status.credentials_source = 'service_account_file'
+  else if (existsSync(path.join(__dirname, 'google-token.json'))) status.credentials_source = 'oauth2_file'
+  else if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_REFRESH_TOKEN) status.credentials_source = 'oauth2_env'
+  else status.credentials_source = 'missing'
+
+  if (gcal) {
+    try {
+      const r = await gcal.events.list({ calendarId: GCAL_ID, maxResults: 1 })
+      status.can_read = true
+      status.sample_count = r.data.items?.length ?? 0
+    } catch (e) {
+      status.can_read = false
+      status.read_error = e.message
+    }
+  }
+  res.json(status)
+})
 
 // Ler eventos da semana (ou período custom)
 app.get('/api/calendar/events', async (req, res) => {
