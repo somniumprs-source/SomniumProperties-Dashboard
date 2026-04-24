@@ -74,9 +74,27 @@ export function Financeiro() {
 
   async function saveDespesa(form) {
     try {
-      const isNew = !form.id
-      const url = isNew ? '/api/crm/despesas' : `/api/crm/despesas/${form.id}`
-      const r = await apiFetch(url, { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+      // Normalizar custo_mensal/custo_anual com base no timing
+      const payload = { ...form }
+      const mensal = parseFloat(payload.custo_mensal) || 0
+      const anual = parseFloat(payload.custo_anual) || 0
+      if (payload.timing === 'Mensalmente') {
+        payload.custo_mensal = mensal || anual / 12
+        payload.custo_anual = payload.custo_mensal * 12
+      } else if (payload.timing === 'Anual') {
+        payload.custo_anual = anual || mensal * 12
+        payload.custo_mensal = 0
+      } else {
+        // Único ou Registado: valor fica em custo_mensal, anual = 0
+        payload.custo_mensal = mensal || anual
+        payload.custo_anual = 0
+      }
+      payload.custo_mensal = Math.round(payload.custo_mensal * 100) / 100
+      payload.custo_anual = Math.round(payload.custo_anual * 100) / 100
+
+      const isNew = !payload.id
+      const url = isNew ? '/api/crm/despesas' : `/api/crm/despesas/${payload.id}`
+      const r = await apiFetch(url, { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       if (!r.ok) {
         const err = await r.json().catch(() => ({}))
         throw new Error(err.error || `Erro ${r.status}`)
@@ -1035,12 +1053,32 @@ function DespesaForm({ item, onSave, onCancel, onReload }) {
           </select>
         </div>
         <div>
-          <label className="text-xs text-gray-500 block mb-1">Custo Mensal (€)</label>
-          <input type="number" step="0.01" value={f.custo_mensal} onChange={e => set('custo_mensal', +e.target.value)} className={inputClass} />
+          <label className="text-xs text-gray-500 block mb-1">
+            {f.timing === 'Anual' ? 'Valor Anual (€)' : f.timing === 'Mensalmente' ? 'Valor Mensal (€)' : 'Valor (€)'}
+          </label>
+          <input type="number" step="0.01"
+            value={f.timing === 'Anual' ? f.custo_anual : f.custo_mensal}
+            onChange={e => {
+              const v = parseFloat(e.target.value) || 0
+              if (f.timing === 'Anual') {
+                setF(p => ({ ...p, custo_anual: v, custo_mensal: 0 }))
+              } else if (f.timing === 'Mensalmente') {
+                setF(p => ({ ...p, custo_mensal: v, custo_anual: Math.round(v * 12 * 100) / 100 }))
+              } else {
+                setF(p => ({ ...p, custo_mensal: v, custo_anual: 0 }))
+              }
+            }}
+            className={inputClass} />
         </div>
         <div>
-          <label className="text-xs text-gray-500 block mb-1">Custo Anual (€)</label>
-          <input type="number" step="0.01" value={f.custo_anual} onChange={e => set('custo_anual', +e.target.value)} className={inputClass} />
+          <label className="text-xs text-gray-500 block mb-1">
+            {f.timing === 'Mensalmente' ? 'Projecção Anual' : f.timing === 'Anual' ? 'Custo Mensal Equivalente' : '—'}
+          </label>
+          <div className="w-full px-3 py-2 rounded-lg border border-gray-100 bg-gray-50 text-sm font-mono text-gray-600">
+            {f.timing === 'Mensalmente' && EUR((parseFloat(f.custo_mensal) || 0) * 12)}
+            {f.timing === 'Anual' && EUR((parseFloat(f.custo_anual) || 0) / 12)}
+            {!['Mensalmente', 'Anual'].includes(f.timing) && '—'}
+          </div>
         </div>
         <div>
           <label className="text-xs text-gray-500 block mb-1">Data</label>
