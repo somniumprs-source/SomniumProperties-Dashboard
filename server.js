@@ -3918,7 +3918,7 @@ app.delete('/api/tarefas/:id', async (req, res) => {
 })
 
 // ════════════════════════════════════════════════════════════════
-// SYNC UNIDIRECIONAL TAREFAS → GOOGLE CALENDAR (GCal é espelho)
+// SYNC BIDIRECIONAL TAREFAS ↔ GOOGLE CALENDAR
 // ════════════════════════════════════════════════════════════════
 
 // Helper: segunda-feira da semana corrente em ISO (YYYY-MM-DD)
@@ -3930,17 +3930,18 @@ function mondayOfCurrentWeek() {
   return d.toISOString().slice(0, 10)
 }
 
-// Sync manual push-only. ?since=YYYY-MM-DD (default: segunda desta semana). ?all=1 ignora filtro.
+// Sync manual bidirecional. ?since=YYYY-MM-DD (default: segunda desta semana). ?all=1 ignora filtro.
 app.post('/api/calendar/sync', async (req, res) => {
   try {
-    const { pushAllTarefas } = await import('./src/db/calendarSync.js')
+    const { pushAllTarefas, pullGCalToTarefas } = await import('./src/db/calendarSync.js')
     const sinceDate = req.query.all === '1' ? undefined : (req.query.since || mondayOfCurrentWeek())
-    const result = await pushAllTarefas(gcal, GCAL_ID, { sinceDate })
-    res.json({ ok: true, sinceDate: sinceDate || null, ...result })
+    const push = await pushAllTarefas(gcal, GCAL_ID, { sinceDate })
+    const pull = await pullGCalToTarefas(gcal, GCAL_ID, { days: parseInt(req.query.days) || 30 })
+    res.json({ ok: true, sinceDate: sinceDate || null, push, pull })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// Pull manual (escape hatch — não corre automaticamente)
+// Pull manual (GCal → tarefas)
 app.post('/api/calendar/pull', async (req, res) => {
   try {
     const { pullGCalToTarefas } = await import('./src/db/calendarSync.js')
@@ -3949,23 +3950,24 @@ app.post('/api/calendar/pull', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// Auto-sync push-only a cada 15 minutos (Tarefas → GCal)
+// Auto-sync bidirecional a cada 15 minutos
 if (gcal) {
   const GCAL_SYNC_INTERVAL = 15 * 60 * 1000
   async function autoSyncCalendar() {
     try {
-      const { pushAllTarefas } = await import('./src/db/calendarSync.js')
-      const result = await pushAllTarefas(gcal, GCAL_ID, { sinceDate: mondayOfCurrentWeek() })
-      if (result.created > 0 || result.updated > 0) {
-        console.log(`[gcal-sync] Auto-push: ${result.created} criadas, ${result.updated} atualizadas`)
+      const { pushAllTarefas, pullGCalToTarefas } = await import('./src/db/calendarSync.js')
+      const push = await pushAllTarefas(gcal, GCAL_ID, { sinceDate: mondayOfCurrentWeek() })
+      const pull = await pullGCalToTarefas(gcal, GCAL_ID, { days: 30 })
+      if (push.created || push.updated || pull.created || pull.updated) {
+        console.log(`[gcal-sync] Auto: push=${push.created}+${push.updated} pull=${pull.created}+${pull.updated}`)
       }
     } catch (e) {
-      console.error('[gcal-sync] Auto-push erro:', e.message)
+      console.error('[gcal-sync] Auto erro:', e.message)
     }
   }
   setTimeout(autoSyncCalendar, 30000)
   setInterval(autoSyncCalendar, GCAL_SYNC_INTERVAL)
-  console.log('[gcal-sync] Auto-push ativo (a cada 15 min, desde segunda da semana corrente)')
+  console.log('[gcal-sync] Auto-sync bidirecional ativo (a cada 15 min)')
 }
 
 // ── Auto-sync Fireflies (a cada 15 min) ──────────────────────
