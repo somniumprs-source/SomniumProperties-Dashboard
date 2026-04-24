@@ -1,5 +1,5 @@
-import { RefreshCw, Moon, Sun, ArrowLeft } from 'lucide-react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { RefreshCw, Moon, Sun, ArrowLeft, ChevronRight } from 'lucide-react'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useTheme } from '../../contexts/ThemeContext.jsx'
 
 function NotionIcon() {
@@ -10,12 +10,13 @@ function NotionIcon() {
   )
 }
 
-export function Header({ title, subtitle, onRefresh, loading, notionUrl }) {
+export function Header({ title, subtitle, onRefresh, loading, notionUrl, breadcrumbs }) {
   const now = new Date().toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   const { isDark, toggle } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
   const canGoBack = (typeof window !== 'undefined' && window.history.length > 1) || location.search !== ''
+  const trail = breadcrumbs?.filter(Boolean) ?? []
 
   return (
     <header className="flex items-center justify-between px-4 sm:px-7 py-3 sm:py-4 bg-white dark:bg-neutral-900 sticky top-0 z-20 ml-10 md:ml-0 border-b border-neutral-200 dark:border-neutral-700"
@@ -25,15 +26,43 @@ export function Header({ title, subtitle, onRefresh, loading, notionUrl }) {
           <button
             onClick={() => navigate(-1)}
             className="p-2 rounded-xl transition-all hover:opacity-80 active:scale-95 bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 shrink-0"
-            title="Voltar"
+            title="Voltar (Alt+←)"
             aria-label="Voltar"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
         )}
         <div className="min-w-0 flex-1">
-          <h1 className="text-lg sm:text-xl font-bold text-black dark:text-white tracking-tight truncate">{title}</h1>
-          <p className="text-xs mt-0.5 capitalize truncate text-neutral-400">{subtitle ?? now}</p>
+          {trail.length > 0 ? (
+            <>
+              <nav className="flex items-center gap-1 text-xs text-neutral-400 truncate" aria-label="Breadcrumb">
+                {trail.map((b, i) => {
+                  const isLast = i === trail.length - 1
+                  const content = isLast ? (
+                    <span className="font-semibold text-black dark:text-white truncate" aria-current="page">{b.label}</span>
+                  ) : b.to ? (
+                    <Link to={b.to} className="hover:text-black dark:hover:text-white transition-colors truncate">{b.label}</Link>
+                  ) : b.onClick ? (
+                    <button onClick={b.onClick} className="hover:text-black dark:hover:text-white transition-colors truncate">{b.label}</button>
+                  ) : (
+                    <span className="truncate">{b.label}</span>
+                  )
+                  return (
+                    <span key={i} className="flex items-center gap-1 min-w-0">
+                      {content}
+                      {!isLast && <ChevronRight className="w-3 h-3 shrink-0 text-neutral-300" />}
+                    </span>
+                  )
+                })}
+              </nav>
+              <p className="text-xs mt-0.5 capitalize truncate text-neutral-400">{subtitle ?? now}</p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-lg sm:text-xl font-bold text-black dark:text-white tracking-tight truncate">{title}</h1>
+              <p className="text-xs mt-0.5 capitalize truncate text-neutral-400">{subtitle ?? now}</p>
+            </>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
