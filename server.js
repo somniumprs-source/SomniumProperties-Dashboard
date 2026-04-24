@@ -3721,16 +3721,36 @@ app.post('/api/calendar/backfill', async (req, res) => {
         id: t.id,
         tarefa: t.tarefa,
         inicio_raw: t.inicio,
-        inicio_type: typeof t.inicio,
-        inicio_iso: t.inicio instanceof Date ? t.inicio.toISOString() : t.inicio,
         status: t.status,
       }
+      // Construir o evento localmente para expor erro detalhado
+      let inicio = t.inicio instanceof Date ? t.inicio.toISOString() : String(t.inicio || '')
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(inicio)) inicio += ':00'
+      const isDiaInteiro = /^\d{4}-\d{2}-\d{2}$/.test(inicio)
+      let fim = t.fim instanceof Date ? t.fim.toISOString() : (t.fim ? String(t.fim) : null)
+      if (fim && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(fim)) fim += ':00'
+      if (!fim && !isDiaInteiro) {
+        fim = new Date(new Date(inicio).getTime() + ((t.tempo_horas || 1) * 3600000)).toISOString()
+      }
+      const resource = isDiaInteiro
+        ? { summary: t.tarefa, description: t.funcionario ? `Funcionário: ${t.funcionario}` : '',
+            start: { date: inicio }, end: { date: (fim || inicio).slice(0, 10) } }
+        : { summary: t.tarefa, description: t.funcionario ? `Funcionário: ${t.funcionario}` : '',
+            start: { dateTime: inicio, timeZone: 'Europe/Lisbon' },
+            end: { dateTime: fim, timeZone: 'Europe/Lisbon' } }
+      entry.resource = resource
       try {
-        const eventId = await pushTarefaToGCal(gcal, GCAL_ID, t)
-        if (eventId) { created++; entry.result = 'created'; entry.eventId = eventId }
-        else { failed++; entry.result = 'null_return' }
+        const r = await gcal.events.insert({ calendarId: GCAL_ID, resource })
+        const eventId = r.data.id
+        await pgPool.query(
+          'UPDATE tarefas SET gcal_event_id = $1, gcal_synced_at = $2 WHERE id = $3',
+          [eventId, new Date().toISOString(), t.id]
+        )
+        created++; entry.result = 'created'; entry.eventId = eventId
       } catch (e) {
-        failed++; entry.result = 'threw'; entry.error = e.message
+        failed++; entry.result = 'error'
+        entry.error = e.errors?.[0]?.message || e.response?.data?.error?.message || e.message
+        entry.code = e.code
       }
       log.push(entry)
     }
