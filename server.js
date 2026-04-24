@@ -3575,18 +3575,25 @@ try {
   const oauthCredPath = path.join(__dirname, 'google-oauth.json')
   const tokenPath = path.join(__dirname, 'google-token.json')
 
-  if (existsSync(serviceCredPath)) {
-    // Service Account auth (local dev)
-    const creds = JSON.parse(readFileSync(serviceCredPath, 'utf8'))
-    const gAuth = new google.auth.GoogleAuth({
-      credentials: creds,
-      scopes: [
-        'https://www.googleapis.com/auth/calendar.readonly',
-        'https://www.googleapis.com/auth/calendar.events',
-      ],
-    })
+  const saScopes = [
+    'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/calendar.events',
+  ]
+
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+    // Service Account via env var (Render produção)
+    const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON.trim()
+    const json = raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf8')
+    const creds = JSON.parse(json)
+    const gAuth = new google.auth.GoogleAuth({ credentials: creds, scopes: saScopes })
     gcal = google.calendar({ version: 'v3', auth: gAuth })
-    console.log('[gcal] Google Calendar conectado (Service Account)')
+    console.log('[gcal] Google Calendar conectado (Service Account env)')
+  } else if (existsSync(serviceCredPath)) {
+    // Service Account auth via ficheiro (local dev)
+    const creds = JSON.parse(readFileSync(serviceCredPath, 'utf8'))
+    const gAuth = new google.auth.GoogleAuth({ credentials: creds, scopes: saScopes })
+    gcal = google.calendar({ version: 'v3', auth: gAuth })
+    console.log('[gcal] Google Calendar conectado (Service Account ficheiro)')
   } else if (existsSync(oauthCredPath) && existsSync(tokenPath)) {
     // OAuth2 auth via ficheiros (local dev)
     const oauthCreds = JSON.parse(readFileSync(oauthCredPath, 'utf8'))
@@ -3625,7 +3632,8 @@ app.get('/api/calendar/status', async (req, res) => {
     credentials_source: null,
   }
   const { existsSync } = await import('fs')
-  if (existsSync(path.join(__dirname, 'google-credentials.json'))) status.credentials_source = 'service_account_file'
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) status.credentials_source = 'service_account_env'
+  else if (existsSync(path.join(__dirname, 'google-credentials.json'))) status.credentials_source = 'service_account_file'
   else if (existsSync(path.join(__dirname, 'google-token.json'))) status.credentials_source = 'oauth2_file'
   else if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_REFRESH_TOKEN) status.credentials_source = 'oauth2_env'
   else status.credentials_source = 'missing'
