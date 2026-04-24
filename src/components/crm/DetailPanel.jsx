@@ -202,9 +202,11 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
   const [linkCopied, setLinkCopied] = useState(false)
   const toast = useToast()
 
-  function attemptClose() {
+  async function attemptClose() {
+    if (saving) return
     if (editing && JSON.stringify(form) !== JSON.stringify(data)) {
-      if (!confirm('Tens alterações não guardadas. Sair sem guardar?')) return
+      const ok = await saveEdit()
+      if (!ok) return
     }
     onClose?.()
   }
@@ -262,8 +264,14 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
       setEditing(false)
       if (onSave) onSave()
       toast('Alterações guardadas', 'success')
-    } catch (e) { console.error('Erro ao guardar:', e); toast(e.message, 'error') }
-    setSaving(false)
+      setSaving(false)
+      return true
+    } catch (e) {
+      console.error('Erro ao guardar:', e)
+      toast(e.message, 'error')
+      setSaving(false)
+      return false
+    }
   }
 
   function cancelEdit() { setEditing(false); setForm({}) }
@@ -308,11 +316,11 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
       {/* Header */}
       <div className="px-4 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3" style={{ backgroundColor: '#0d0d0d' }}>
-        <button onClick={attemptClose}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors shrink-0"
+        <button onClick={attemptClose} disabled={saving}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ backgroundColor: '#1a1a1a', color: '#C9A84C', border: '1px solid #C9A84C33' }}
-          title="Voltar à lista (Esc)">
-          <ArrowLeft className="w-3.5 h-3.5" /> Voltar
+          title={editing ? 'Guardar e voltar' : 'Voltar à lista (Esc)'}>
+          <ArrowLeft className="w-3.5 h-3.5" /> {editing ? 'Guardar e voltar' : 'Voltar'}
         </button>
         <div className="min-w-0 flex-1">
           <p className="text-xs uppercase tracking-widest" style={{ color: '#C9A84C' }}>{type}</p>
@@ -355,7 +363,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
               <FileDown className="w-3.5 h-3.5" /> PDF
             </button>
           )}
-          <button onClick={attemptClose} className="text-gray-400 hover:text-white text-xl leading-none" title="Fechar">&times;</button>
+          <button onClick={attemptClose} disabled={saving} className="text-gray-400 hover:text-white text-xl leading-none disabled:opacity-50 disabled:cursor-not-allowed" title={editing ? 'Guardar e fechar' : 'Fechar'}>&times;</button>
         </div>
       </div>
 
