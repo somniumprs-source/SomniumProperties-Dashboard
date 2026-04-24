@@ -5041,7 +5041,7 @@ async function autoMigrate() {
 
 const PORT = process.env.PORT ?? 3001
 autoMigrate().then(() => {
-  app.listen(PORT, () => {
+  app.listen(PORT, async () => {
     console.log(`[server] a correr na porta ${PORT}`)
 
     // Sync lucro_real a partir de tranches confirmadas (corrige dados legacy)
