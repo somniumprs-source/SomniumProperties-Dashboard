@@ -81,7 +81,7 @@ function calcHoras(inicio, fim) {
 }
 
 function TaskForm({ onSave, onCancel, initial }) {
-  const defaults = { tarefa: '', status: 'A fazer', categoria: '', inicio: '', fim: '', funcionario: FUNCIONARIOS[0], tempo_horas: '', enviar_calendar: false }
+  const defaults = { tarefa: '', status: 'A fazer', categoria: '', inicio: '', fim: '', funcionario: FUNCIONARIOS[0], tempo_horas: '' }
   const [f, setF] = useState(() => {
     if (!initial) return defaults
     return {
@@ -155,11 +155,7 @@ function TaskForm({ onSave, onCancel, initial }) {
           </div>
         </div>
       </div>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-4 gap-3">
-        <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer">
-          <input type="checkbox" checked={f.enviar_calendar} onChange={e => set('enviar_calendar', e.target.checked)} className="rounded border-gray-300" />
-          Enviar para Google Calendar
-        </label>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-end mt-4 gap-3">
         <div className="flex gap-3">
           {onCancel && <button onClick={onCancel} className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Cancelar</button>}
           <button onClick={() => {
