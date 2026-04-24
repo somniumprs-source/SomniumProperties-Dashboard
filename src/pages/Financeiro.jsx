@@ -7,6 +7,7 @@ import { Upload, X, FileText, Image, Trash2, Plus, ChevronDown, ChevronUp, Check
 import { Header } from '../components/layout/Header.jsx'
 import { KPICard } from '../components/dashboard/KPICard.jsx'
 import { apiFetch } from '../lib/api.js'
+import { useUrlState } from '../hooks/useUrlState.js'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const EUR2 = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0)
@@ -44,7 +45,7 @@ export function Financeiro() {
   const [conta,    setConta]    = useState(null)
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState(null)
-  const [tab,      setTab]      = useState('Visão Geral')
+  const [tab,      setTab]      = useUrlState('tab', 'Visão Geral')
   const [editingDesp, setEditingDesp] = useState(null)
   const [crmDespesas, setCrmDespesas] = useState([])
 

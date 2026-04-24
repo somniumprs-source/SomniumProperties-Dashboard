@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Header } from '../components/layout/Header.jsx'
 import { PageSkeleton } from '../components/ui/Skeleton.jsx'
 import { apiFetch } from '../lib/api.js'
+import { useUrlState } from '../hooks/useUrlState.js'
 import { EUR, PCT, NUM } from '../constants.js'
 
 const HRS = v => v == null ? '—' : `${Number(v).toFixed(1)}h`
@@ -230,7 +231,7 @@ function CalendarWeek({ events, tarefas }) {
 
 // ── Main ────────────────────────────────────────────────────────
 export function Operacoes() {
-  const [tab, setTab] = useState('resumo')
+  const [tab, setTab] = useUrlState('tab', 'resumo')
   const [data, setData] = useState(null)
   const [tarefas, setTarefas] = useState([])
   const [calEvents, setCalEvents] = useState([])

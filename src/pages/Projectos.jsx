@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, Fragment } from 'react'
 import { X, Trash2, Plus, Filter, ArrowUpDown, ChevronDown, ChevronUp, Check } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { apiFetch } from '../lib/api.js'
+import { useUrlState } from '../hooks/useUrlState.js'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 
@@ -37,7 +38,7 @@ export function Projectos() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [editing, setEditing] = useState(null)
-  const [expanded, setExpanded] = useState(null)
+  const [expanded, setExpanded] = useUrlState('expanded', '')
 
   async function load() {
     setLoading(true); setError(null)

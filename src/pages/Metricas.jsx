@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Header } from '../components/layout/Header.jsx'
 import { PageSkeleton } from '../components/ui/Skeleton.jsx'
 import { apiFetch } from '../lib/api.js'
+import { useUrlState } from '../hooks/useUrlState.js'
 import { EUR, PCT, DAYS, NUM, RATIO } from '../constants.js'
 
 const GOLD = '#C9A84C'
@@ -162,7 +163,7 @@ function ProgressMeta({ label, value, meta, format = 'eur' }) {
 
 // ── Main ────────────────────────────────────────────────────────
 export function Metricas() {
-  const [tab, setTab]       = useState('resumo')
+  const [tab, setTab]       = useUrlState('tab', 'resumo')
   const [data, setData]     = useState(null)
   const [okrs, setOkrs]     = useState([])
   const [fontes, setFontes] = useState([])
