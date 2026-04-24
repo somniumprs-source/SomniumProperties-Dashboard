@@ -1,4 +1,4 @@
-const CACHE_NAME = 'somnium-crm-v1'
+const CACHE_NAME = 'somnium-crm-v2'
 const STATIC_ASSETS = [
   '/',
   '/manifest.webmanifest',
@@ -8,7 +8,6 @@ const STATIC_ASSETS = [
   '/logo-transparent.png'
 ]
 
-// Instalar: pre-cache dos assets estaticos
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
@@ -16,7 +15,6 @@ self.addEventListener('install', (event) => {
   self.skipWaiting()
 })
 
-// Activar: limpar caches antigos
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -26,34 +24,21 @@ self.addEventListener('activate', (event) => {
   self.clients.claim()
 })
 
-// Fetch: network-first para API, cache-first para assets
 self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
 
-  // Ignorar requests nao-GET
   if (request.method !== 'GET') return
 
-  // API: network-first (tentar rede, fallback cache)
-  if (url.pathname.startsWith('/api')) {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const clone = response.clone()
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
-          return response
-        })
-        .catch(() => caches.match(request))
-    )
-    return
-  }
+  // API CRM e afins: NUNCA servir cache — dados sempre frescos da rede.
+  // Caching de GETs escondia edicoes acabadas de guardar apos refresh.
+  if (url.pathname.startsWith('/api')) return
 
-  // Assets estaticos: cache-first (tentar cache, fallback rede)
+  // Assets estaticos: cache-first
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached
       return fetch(request).then((response) => {
-        // Cachear novos assets estaticos (JS, CSS, imagens)
         if (response.ok && (url.pathname.match(/\.(js|css|png|jpg|svg|woff2?)$/) || url.pathname === '/')) {
           const clone = response.clone()
           caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
