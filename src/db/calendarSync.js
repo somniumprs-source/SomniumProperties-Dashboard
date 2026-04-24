@@ -22,7 +22,6 @@ export async function pushTarefaToGCal(gcal, calendarId, tarefa) {
     const event = buildEvent(tarefa)
     const r = await gcal.events.insert({ calendarId, resource: event })
     const eventId = r.data.id
-    // Guardar referência
     await pool.query(
       'UPDATE tarefas SET gcal_event_id = $1, gcal_synced_at = $2 WHERE id = $3',
       [eventId, new Date().toISOString(), tarefa.id]
@@ -30,7 +29,8 @@ export async function pushTarefaToGCal(gcal, calendarId, tarefa) {
     console.log(`[gcal-sync] PUSH criado: "${tarefa.tarefa}" → ${eventId}`)
     return eventId
   } catch (e) {
-    console.error('[gcal-sync] PUSH criar erro:', e.message)
+    const detail = e.errors?.[0]?.message || e.response?.data?.error?.message || e.message
+    console.error(`[gcal-sync] PUSH erro "${tarefa.tarefa}":`, detail)
     return null
   }
 }
@@ -261,8 +261,22 @@ export async function fullSync(gcal, calendarId, options = {}) {
 
 // ── Helpers ─────────────────────────────────────────────────
 
+// Normaliza strings como "2026-04-23T14:00" → "2026-04-23T14:00:00" (RFC3339)
+// Date objects → ISO string. Aceita "2026-04-23T14:00:00.000Z" intacto.
+function normaliseDateTime(v) {
+  if (!v) return null
+  if (v instanceof Date) return v.toISOString()
+  let s = String(v).trim()
+  // YYYY-MM-DDTHH:MM → adicionar segundos
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) s += ':00'
+  return s
+}
+
 function buildEvent(tarefa) {
-  const isDiaInteiro = tarefa.inicio && tarefa.inicio.length === 10 // YYYY-MM-DD
+  const inicioStr = tarefa.inicio instanceof Date
+    ? tarefa.inicio.toISOString()
+    : String(tarefa.inicio || '')
+  const isDiaInteiro = /^\d{4}-\d{2}-\d{2}$/.test(inicioStr)
 
   const event = {
     summary: tarefa.tarefa,
@@ -270,20 +284,25 @@ function buildEvent(tarefa) {
   }
 
   if (isDiaInteiro) {
-    event.start = { date: tarefa.inicio }
-    event.end = { date: tarefa.fim || tarefa.inicio }
+    const fimStr = tarefa.fim instanceof Date ? tarefa.fim.toISOString().slice(0,10) : String(tarefa.fim || inicioStr)
+    event.start = { date: inicioStr }
+    event.end = { date: fimStr.slice(0, 10) }
   } else {
-    event.start = { dateTime: tarefa.inicio, timeZone: GCAL_TZ }
-    const fim = tarefa.fim || new Date(
-      new Date(tarefa.inicio).getTime() + (tarefa.tempo_horas || 1) * 3600000
-    ).toISOString()
+    const inicio = normaliseDateTime(tarefa.inicio)
+    let fim = normaliseDateTime(tarefa.fim)
+    if (!fim) {
+      // Derivar fim a partir de tempo_horas (default 1h)
+      fim = new Date(new Date(inicio).getTime() + (tarefa.tempo_horas || 1) * 3600000).toISOString()
+    }
+    event.start = { dateTime: inicio, timeZone: GCAL_TZ }
     event.end = { dateTime: fim, timeZone: GCAL_TZ }
   }
 
-  // Cor baseada no status
-  if (tarefa.status === 'Concluida') event.colorId = '2' // verde
-  else if (tarefa.status === 'Atrasada') event.colorId = '11' // vermelho
-  else if (tarefa.status === 'Em progresso') event.colorId = '5' // amarelo
+  // Cor baseada no status (tolera acentos)
+  const status = (tarefa.status || '').toLowerCase()
+  if (status.startsWith('conclu')) event.colorId = '2' // verde
+  else if (status.startsWith('atrasad')) event.colorId = '11' // vermelho
+  else if (status.startsWith('em ')) event.colorId = '5' // amarelo
 
   return event
 }
