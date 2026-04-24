@@ -360,13 +360,13 @@ export function Financeiro() {
                   </thead>
                   <tbody>
                     {[...(despesas?.todas ?? [])]
-                      .sort((a, b) => (b.data || '').localeCompare(a.data || ''))
+                      .sort((a, b) => (b.data || '0').localeCompare(a.data || '0'))
                       .map(d => (
-                      <tr key={d.id} className="border-b border-gray-50 hover:bg-gray-50">
+                      <tr key={d.id}
+                        onClick={() => setEditingDesp(crmDespesas.find(x => x.id === d.id) || d)}
+                        className="border-b border-gray-50 hover:bg-indigo-50 cursor-pointer transition-colors">
                         <td className="py-2 px-3 text-xs text-gray-500 whitespace-nowrap">{d.data ?? '—'}</td>
-                        <td className="py-2 px-3 font-medium text-gray-800">
-                          <button onClick={() => setEditingDesp(crmDespesas.find(x => x.id === d.id) || d)} className="text-left hover:text-indigo-600 hover:underline">{d.movimento}</button>
-                        </td>
+                        <td className="py-2 px-3 font-medium text-gray-800">{d.movimento}</td>
                         <td className="py-2 px-3 text-xs text-gray-500">{d.categoria || '—'}</td>
                         <td className="py-2 px-3">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -376,11 +376,8 @@ export function Financeiro() {
                           </span>
                         </td>
                         <td className="py-2 px-3 text-right font-mono text-red-500 font-semibold">{EUR(d.custoMensal || d.custoAnual)}</td>
-                        <td className="py-2 px-3">
-                          <div className="flex gap-1">
-                            <button onClick={() => setEditingDesp(crmDespesas.find(x => x.id === d.id) || d)} className="px-1.5 py-0.5 text-xs bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100">Editar</button>
-                            <button onClick={() => deleteDespesa(d.id)} className="px-1.5 py-0.5 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">x</button>
-                          </div>
+                        <td className="py-2 px-3" onClick={e => e.stopPropagation()}>
+                          <button onClick={() => deleteDespesa(d.id)} className="px-1.5 py-0.5 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">x</button>
                         </td>
                       </tr>
                     ))}
