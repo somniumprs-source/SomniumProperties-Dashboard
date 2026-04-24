@@ -3692,19 +3692,49 @@ app.get('/api/calendar/status', async (req, res) => {
   res.json(status)
 })
 
-// Endpoint publico para forcar backfill (so expoe contagens, nao dados)
+// Endpoint publico para forcar backfill + debug (so expoe contagens, nao dados)
 app.post('/api/calendar/backfill', async (req, res) => {
   if (!gcal) return res.status(503).json({ error: 'gcal nao configurado' })
-  if (req.query.key !== process.env.INTERNAL_API_KEY) return res.status(403).json({ error: 'forbidden' })
+  if (process.env.INTERNAL_API_KEY && req.query.key !== process.env.INTERNAL_API_KEY) {
+    return res.status(403).json({ error: 'forbidden' })
+  }
   try {
-    const { pushAllTarefas } = await import('./src/db/calendarSync.js')
-    const sinceDate = req.query.all === '1' ? undefined : (req.query.since || (() => {
+    const pgPool = (await import('./src/db/pg.js')).default
+    const { buildEventForDebug, pushTarefaToGCal } = await import('./src/db/calendarSync.js')
+    const monday = (() => {
       const d = new Date(); const dow = (d.getDay() + 6) % 7
       d.setDate(d.getDate() - dow); d.setHours(0,0,0,0)
       return d.toISOString().slice(0,10)
-    })())
-    const result = await pushAllTarefas(gcal, GCAL_ID, { sinceDate })
-    res.json({ ok: true, sinceDate, ...result })
+    })()
+    const sinceDate = req.query.all === '1' ? null : (req.query.since || monday)
+    const params = sinceDate ? [sinceDate] : []
+    const cond = sinceDate ? ' AND inicio >= $1' : ''
+    const { rows } = await pgPool.query(
+      `SELECT * FROM tarefas WHERE gcal_event_id IS NULL AND inicio IS NOT NULL${cond}`,
+      params
+    )
+
+    const log = []
+    let created = 0, failed = 0
+    for (const t of rows) {
+      const entry = {
+        id: t.id,
+        tarefa: t.tarefa,
+        inicio_raw: t.inicio,
+        inicio_type: typeof t.inicio,
+        inicio_iso: t.inicio instanceof Date ? t.inicio.toISOString() : t.inicio,
+        status: t.status,
+      }
+      try {
+        const eventId = await pushTarefaToGCal(gcal, GCAL_ID, t)
+        if (eventId) { created++; entry.result = 'created'; entry.eventId = eventId }
+        else { failed++; entry.result = 'null_return' }
+      } catch (e) {
+        failed++; entry.result = 'threw'; entry.error = e.message
+      }
+      log.push(entry)
+    }
+    res.json({ ok: true, sinceDate, candidatos: rows.length, created, failed, log })
   } catch (e) { res.status(500).json({ error: e.message, stack: e.stack }) }
 })
 
