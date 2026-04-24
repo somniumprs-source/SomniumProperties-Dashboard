@@ -1153,17 +1153,21 @@ app.get('/api/financeiro/conta-corrente', async (req, res) => {
       }
     }
 
+    // Filtrar a partir de 16/04/2026 (data de início da conta corrente)
+    const DATA_INICIO = '2026-04-16'
+    const movimentosFiltrados = movimentos.filter(m => m.data >= DATA_INICIO)
+
     // Ordenar cronologicamente
-    movimentos.sort((a, b) => a.data.localeCompare(b.data))
+    movimentosFiltrados.sort((a, b) => a.data.localeCompare(b.data))
 
     // Calcular saldo corrente
     let saldo = 0
-    for (const m of movimentos) {
+    for (const m of movimentosFiltrados) {
       saldo += m.tipo === 'entrada' ? m.valor : -m.valor
       m.saldo = round2(saldo)
     }
 
-    res.json({ movimentos, saldo: round2(saldo) })
+    res.json({ movimentos: movimentosFiltrados, saldo: round2(saldo), dataInicio: DATA_INICIO })
   } catch (err) {
     console.error('[conta-corrente]', err.message)
     res.status(500).json({ error: err.message })

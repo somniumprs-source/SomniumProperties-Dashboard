@@ -642,6 +642,7 @@ function ContaCorrenteTab({ conta }) {
       <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
         <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Saldo Conta Somnium Properties</span>
         <span className={`text-3xl font-bold ${saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}>{EUR(saldo)}</span>
+        {conta?.dataInicio && <span className="text-xs text-gray-400 block mt-1">desde {conta.dataInicio}</span>}
         <div className="flex gap-6 mt-3">
           <div>
             <span className="text-xs text-gray-400 block">Total entradas</span>
