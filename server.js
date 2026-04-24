@@ -38,6 +38,8 @@ app.use('/api', async (req, res, next) => {
   if (req.path.includes('/relatorio') || req.path.includes('/documento/')) return next()
   // Diagnostico publico de integracoes — so expoe estado, nunca credenciais
   if (req.path === '/calendar/status') return next()
+  // Backfill protegido por INTERNAL_API_KEY (validado no handler)
+  if (req.path === '/calendar/backfill') return next()
   // Se não há service key configurada, deixar passar (dev mode)
   if (!supabaseAdmin) return next()
   // Token via header Authorization OU via query string (para PDFs abertos em novo tab)
@@ -3649,8 +3651,61 @@ app.get('/api/calendar/status', async (req, res) => {
       status.can_read = false
       status.read_error = e.message
     }
+
+    // Identificar a conta OAuth2 autenticada
+    try {
+      const { google } = await import('googleapis')
+      const oauth2 = google.oauth2({ version: 'v2', auth: gcal.context._options.auth })
+      const info = await oauth2.userinfo.get()
+      status.authenticated_as = info.data.email
+    } catch {}
+
+    // Metadados do calendário (confirmar acesso de escrita)
+    try {
+      const cal = await gcal.calendarList.get({ calendarId: GCAL_ID })
+      status.calendar_access_role = cal.data.accessRole
+      status.calendar_summary = cal.data.summary
+    } catch (e) {
+      status.calendar_access_error = e.message
+    }
+
+    // Estatísticas de tarefas
+    try {
+      const pgPool = (await import('./src/db/pg.js')).default
+      const monday = (() => {
+        const d = new Date(); const dow = (d.getDay() + 6) % 7
+        d.setDate(d.getDate() - dow); d.setHours(0,0,0,0)
+        return d.toISOString().slice(0,10)
+      })()
+      const { rows: [row] } = await pgPool.query(
+        `SELECT
+          COUNT(*) FILTER (WHERE inicio IS NOT NULL) AS com_data,
+          COUNT(*) FILTER (WHERE inicio IS NOT NULL AND inicio >= $1) AS desta_semana,
+          COUNT(*) FILTER (WHERE inicio IS NOT NULL AND inicio >= $1 AND gcal_event_id IS NOT NULL) AS desta_semana_sincronizadas,
+          COUNT(*) FILTER (WHERE inicio IS NOT NULL AND inicio >= $1 AND gcal_event_id IS NULL) AS desta_semana_pendentes
+         FROM tarefas`,
+        [monday]
+      )
+      status.tarefas = { monday_filter: monday, ...row }
+    } catch (e) { status.tarefas_error = e.message }
   }
   res.json(status)
+})
+
+// Endpoint publico para forcar backfill (so expoe contagens, nao dados)
+app.post('/api/calendar/backfill', async (req, res) => {
+  if (!gcal) return res.status(503).json({ error: 'gcal nao configurado' })
+  if (req.query.key !== process.env.INTERNAL_API_KEY) return res.status(403).json({ error: 'forbidden' })
+  try {
+    const { pushAllTarefas } = await import('./src/db/calendarSync.js')
+    const sinceDate = req.query.all === '1' ? undefined : (req.query.since || (() => {
+      const d = new Date(); const dow = (d.getDay() + 6) % 7
+      d.setDate(d.getDate() - dow); d.setHours(0,0,0,0)
+      return d.toISOString().slice(0,10)
+    })())
+    const result = await pushAllTarefas(gcal, GCAL_ID, { sinceDate })
+    res.json({ ok: true, sinceDate, ...result })
+  } catch (e) { res.status(500).json({ error: e.message, stack: e.stack }) }
 })
 
 // Ler eventos da semana (ou período custom)
