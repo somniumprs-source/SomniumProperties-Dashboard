@@ -12,6 +12,7 @@ import { MultiSelect } from '../components/ui/MultiSelect.jsx'
 import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS_COLOR, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
 import { apiFetch } from '../lib/api.js'
 import { useUnreadCounts } from '../hooks/useUnreadCounts.js'
+import { useUrlState } from '../hooks/useUrlState.js'
 
 const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Empreiteiros']
 
@@ -464,19 +465,19 @@ function FollowUpView({ data, onView, onDelete }) {
 }
 
 export function CRM() {
-  const [tab, setTab] = useState('Imóveis')
+  const [tab, setTab] = useUrlState('tab', 'Imóveis')
   const [data, setData] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState(null) // null = list view, object = edit/create
-  const [detail, setDetail] = useState(null) // null = no detail, id = show detail panel
+  const [detail, setDetail] = useUrlState('detail', '') // '' = no detail, id = show detail panel
   const [stats, setStats] = useState(null)
-  const [view, setView] = useState('kanban') // 'kanban' | 'table'
+  const [view, setView] = useUrlState('view', 'kanban') // 'kanban' | 'table'
   const [filters, setFilters] = useState({})
   const [alertCount, setAlertCount] = useState(0)
   const [consultoresLookup, setConsultoresLookup] = useState([])
-  const [invSubTab, setInvSubTab] = useState('Passivo') // sub-tab investidores
+  const [invSubTab, setInvSubTab] = useUrlState('invSubTab', 'Passivo') // sub-tab investidores
   const { counts: unreadCounts } = useUnreadCounts(tab === 'Consultores')
 
   const toast = useToast()
@@ -902,13 +903,13 @@ export function CRM() {
                   </div>
                 )
               })()}
-              <DetailPanel type="Investidores" id={detail} onClose={() => { setDetail(null); load() }} onSave={load}
-                onNavigate={(navType, navId) => { setDetail(null); setTab(navType); setTimeout(() => setDetail(navId), 150) }} />
+              <DetailPanel type="Investidores" id={detail} onClose={() => { setDetail(null, { replace: true }); load() }} onSave={load}
+                onNavigate={(navType, navId) => { setDetail(null, { replace: true }); setTab(navType, { replace: true }); setTimeout(() => setDetail(navId), 150) }} />
             </div>
           </div>
         ) : detail && ['Imóveis', 'Consultores'].includes(tab) ? (
-          <DetailPanel type={tab} id={detail} onClose={() => { setDetail(null); load() }} onSave={load}
-            onNavigate={(navType, navId) => { setDetail(null); setTab(navType); setTimeout(() => setDetail(navId), 150) }} />
+          <DetailPanel type={tab} id={detail} onClose={() => { setDetail(null, { replace: true }); load() }} onSave={load}
+            onNavigate={(navType, navId) => { setDetail(null, { replace: true }); setTab(navType, { replace: true }); setTimeout(() => setDetail(navId), 150) }} />
         ) : (<>
           {/* Follow-ups View (Consultores only) */}
           {!loading && editing === null && view === 'followups' && tab === 'Consultores' && (
@@ -1052,9 +1053,9 @@ function ActionButtons({ item, onEdit, onDelete, onView }) {
   )
 }
 
-function ClickableName({ name, item, onEdit }) {
+function ClickableName({ name, onClick }) {
   return (
-    <button onClick={() => onEdit(item)} className="text-left font-medium text-gray-800 hover:text-indigo-600 hover:underline transition-colors">
+    <button onClick={onClick} className="text-left font-medium text-gray-800 hover:text-indigo-600 hover:underline transition-colors">
       {name}
     </button>
   )
@@ -1078,11 +1079,11 @@ function ImoveisTable({ data, onEdit, onDelete, onView, onConsultorClick }) {
       </tr></thead>
       <tbody>
         {sorted.map(r => (
-          <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
-            <td className="py-3 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
+          <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => onView?.(r.id)}>
+            <td className="py-3 px-3"><ClickableName name={r.nome} onClick={() => onView?.(r.id)} /></td>
             <td className="py-3 px-3"><Badge text={r.estado} colorMap={IMOVEL_ESTADO_COLOR} /></td>
             <td className="py-2 px-3 text-gray-500">{r.zona ?? '—'}</td>
-            <td className="py-2 px-3">
+            <td className="py-2 px-3" onClick={e => e.stopPropagation()}>
               {r.nome_consultor ? (
                 <button onClick={() => onConsultorClick?.(r.nome_consultor)}
                   className="text-blue-600 hover:text-blue-800 hover:underline transition-colors text-left">
@@ -1094,7 +1095,7 @@ function ImoveisTable({ data, onEdit, onDelete, onView, onConsultorClick }) {
             <td className="py-2 px-3 text-right font-mono">{r.roi > 0 ? `${r.roi}%` : '—'}</td>
             <td className="py-2 px-3 text-gray-500">{r.origem ?? '—'}</td>
             <td className="py-2 px-3 text-gray-400">{fmtDate(r.data_adicionado)}</td>
-            <td className="py-3 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
+            <td className="py-3 px-3" onClick={e => e.stopPropagation()}><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
           </tr>
         ))}
         {!sorted.length && <tr><td colSpan={9} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
@@ -1124,16 +1125,16 @@ function InvestidoresTable({ data, onEdit, onDelete, onView }) {
           const tipo = r.tipo_principal || 'Passivo'
           const tipoStyle = tipo === 'Ativo' ? 'bg-orange-100 text-orange-700' : 'bg-violet-100 text-violet-700'
           return (
-            <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
-              <td className="py-3 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
+            <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => onView?.(r.id)}>
+              <td className="py-3 px-3"><ClickableName name={r.nome} onClick={() => onView?.(r.id)} /></td>
               <td className="py-2 px-3"><span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${tipoStyle}`}>{tipo}</span></td>
               <td className="py-2 px-3 text-center"><ClassBadge cls={r.classificacao} /></td>
               <td className="py-3 px-3"><Badge text={r.status} colorMap={INV_STATUS_COLOR} /></td>
               <td className="py-2 px-3 text-right font-mono">{r.capital_max > 0 ? EUR(r.capital_max) : '—'}</td>
               <td className="py-2 px-3 text-center">{r.nda_assinado ? '✓' : '—'}</td>
-              <td className="py-2 px-3 text-gray-500">{r.telemovel ? <a href={`tel:${r.telemovel}`} className="text-green-600 hover:underline">{r.telemovel}</a> : r.email ? <a href={`mailto:${r.email}`} className="text-blue-600 hover:underline">{r.email}</a> : '—'}</td>
+              <td className="py-2 px-3 text-gray-500" onClick={e => e.stopPropagation()}>{r.telemovel ? <a href={`tel:${r.telemovel}`} className="text-green-600 hover:underline">{r.telemovel}</a> : r.email ? <a href={`mailto:${r.email}`} className="text-blue-600 hover:underline">{r.email}</a> : '—'}</td>
               <td className="py-2 px-3 text-gray-400">{fmtDate(r.data_primeiro_contacto)}</td>
-              <td className="py-3 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
+              <td className="py-3 px-3" onClick={e => e.stopPropagation()}><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
             </tr>
           )
         })}
@@ -1176,9 +1177,9 @@ function ConsultoresTable({ data, onEdit, onDelete, onView }) {
             ? (r.tempo_medio_resposta < 1 ? `${Math.round(r.tempo_medio_resposta * 60)}min` : r.tempo_medio_resposta < 24 ? `${Math.round(r.tempo_medio_resposta)}h` : `${Math.round(r.tempo_medio_resposta / 24)}d`)
             : '—'
           return (
-            <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
+            <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => onView?.(r.id)}>
               <td className="py-2 px-1 text-center"><AlertDot status={r._alertStatus} /></td>
-              <td className="py-3 px-3"><ClickableName name={r.nome} item={r} onEdit={onEdit} /></td>
+              <td className="py-3 px-3"><ClickableName name={r.nome} onClick={() => onView?.(r.id)} /></td>
               <td className="py-2 px-3 text-gray-500">{agencia}</td>
               <td className="py-2 px-3 text-right font-mono font-semibold" style={{ color: '#C9A84C' }}>{r.score_prioridade > 0 ? r.score_prioridade : '—'}</td>
               <td className="py-2 px-3 text-right font-mono">{r._totalImoveis ?? r.imoveis_enviados ?? '—'}</td>
@@ -1187,7 +1188,7 @@ function ConsultoresTable({ data, onEdit, onDelete, onView }) {
               <td className="py-3 px-3"><Badge text={r.estado_avaliacao || 'Em avaliação'} colorMap={CONS_ESTADO_AVALIACAO_COLOR} /></td>
               <td className="py-2 px-3 text-gray-400">{fmtDate(r.data_proximo_follow_up)}</td>
               <td className="py-2 px-3 text-right font-mono">{r._diasSemContacto != null ? `${r._diasSemContacto}d` : '—'}</td>
-              <td className="py-3 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
+              <td className="py-3 px-3" onClick={e => e.stopPropagation()}><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
             </tr>
           )
         })}
