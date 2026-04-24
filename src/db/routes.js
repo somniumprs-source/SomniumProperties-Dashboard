@@ -70,6 +70,14 @@ const uploadImovel = multer({
 
 const router = Router()
 
+// Desactivar cache em todas as respostas do CRM — dados tem que ser sempre frescos
+router.use((_req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+  res.set('Pragma', 'no-cache')
+  res.set('Expires', '0')
+  next()
+})
+
 // ── Mapa de qualidade por estado do pipeline ─────────────────
 // 0% = enviado sem info | 25% = check qualidade (SOP §5.1)
 // 50% = visita/VVR concluído | 75% = negociação activa | 100% = proposta apresentada
