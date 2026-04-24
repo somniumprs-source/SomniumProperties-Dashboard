@@ -3,7 +3,7 @@
  * Mostra: campos editáveis + relações + timeline + tarefas + reuniões.
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X } from 'lucide-react'
+import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { AnaliseTab } from '../analise/AnaliseTab.jsx'
@@ -199,7 +199,25 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
   const toast = useToast()
+
+  function attemptClose() {
+    if (editing && JSON.stringify(form) !== JSON.stringify(data)) {
+      if (!confirm('Tens alterações não guardadas. Sair sem guardar?')) return
+    }
+    onClose?.()
+  }
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 1500)
+    } catch {
+      toast('Não foi possível copiar', 'error')
+    }
+  }
 
   const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores' }[type]
   const prevTab = useRef(activeTab)
@@ -289,12 +307,24 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
       {/* Header */}
-      <div className="px-4 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between" style={{ backgroundColor: '#0d0d0d' }}>
+      <div className="px-4 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3" style={{ backgroundColor: '#0d0d0d' }}>
+        <button onClick={attemptClose}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors shrink-0"
+          style={{ backgroundColor: '#1a1a1a', color: '#C9A84C', border: '1px solid #C9A84C33' }}
+          title="Voltar à lista (Esc)">
+          <ArrowLeft className="w-3.5 h-3.5" /> Voltar
+        </button>
         <div className="min-w-0 flex-1">
           <p className="text-xs uppercase tracking-widest" style={{ color: '#C9A84C' }}>{type}</p>
           <h2 className="text-lg font-bold text-white truncate">{data.nome ?? data.movimento}</h2>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <button onClick={copyLink}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
+            style={{ backgroundColor: '#1a1a1a', color: '#C9A84C', border: '1px solid #C9A84C33' }}
+            title="Copiar link partilhável">
+            {linkCopied ? <><Check className="w-3.5 h-3.5" /> Copiado</> : <><Link2 className="w-3.5 h-3.5" /> Link</>}
+          </button>
           {editing ? (
             <>
               <button onClick={saveEdit} disabled={saving}
@@ -325,7 +355,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
               <FileDown className="w-3.5 h-3.5" /> PDF
             </button>
           )}
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none">&times;</button>
+          <button onClick={attemptClose} className="text-gray-400 hover:text-white text-xl leading-none" title="Fechar">&times;</button>
         </div>
       </div>
 

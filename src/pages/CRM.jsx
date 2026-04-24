@@ -12,7 +12,7 @@ import { MultiSelect } from '../components/ui/MultiSelect.jsx'
 import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS_COLOR, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
 import { apiFetch } from '../lib/api.js'
 import { useUnreadCounts } from '../hooks/useUnreadCounts.js'
-import { useUrlState } from '../hooks/useUrlState.js'
+import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
 
 const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Empreiteiros']
 
@@ -469,15 +469,17 @@ export function CRM() {
   const [data, setData] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useUrlState('q', '')
+  const [searchInput, setSearchInput] = useState(search)
   const [editing, setEditing] = useState(null) // null = list view, object = edit/create
   const [detail, setDetail] = useUrlState('detail', '') // '' = no detail, id = show detail panel
   const [stats, setStats] = useState(null)
   const [view, setView] = useUrlState('view', 'kanban') // 'kanban' | 'table'
-  const [filters, setFilters] = useState({})
+  const [filters, setFilters] = useUrlFilters()
   const [alertCount, setAlertCount] = useState(0)
   const [consultoresLookup, setConsultoresLookup] = useState([])
   const [invSubTab, setInvSubTab] = useUrlState('invSubTab', 'Passivo') // sub-tab investidores
+  const [detailName, setDetailName] = useState(null) // nome para breadcrumb
   const { counts: unreadCounts } = useUnreadCounts(tab === 'Consultores')
 
   const toast = useToast()
@@ -727,14 +729,54 @@ export function CRM() {
   }
 
   function handleSearch(value) {
-    setSearch(value)
+    setSearchInput(value)
     clearTimeout(searchTimer.current)
-    searchTimer.current = setTimeout(() => load(), 300) // debounce 300ms
+    searchTimer.current = setTimeout(() => setSearch(value, { replace: true }), 300) // debounce 300ms
   }
+
+  // Sync local input com URL state quando este muda externamente (ex: Voltar do browser)
+  useEffect(() => { setSearchInput(search) }, [search])
+
+  // Atalhos de teclado: Esc fecha detalhe, ←/→ navega entre propriedades, /  foca pesquisa
+  useEffect(() => {
+    function onKey(e) {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName)) {
+        if (e.key === 'Escape') e.target.blur()
+        return
+      }
+      if (e.key === 'Escape' && detail) { setDetail(null, { replace: true }); return }
+      if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && detail) {
+        const idx = data.findIndex(i => i.id === detail)
+        if (idx === -1) return
+        const target = e.key === 'ArrowLeft' ? data[idx - 1] : data[idx + 1]
+        if (target) setDetail(target.id, { replace: true })
+        return
+      }
+      if (e.key === '/' && !detail) {
+        const input = document.querySelector('input[type="text"][placeholder^="Pesquisar"]')
+        if (input) { e.preventDefault(); input.focus() }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [detail, data, setDetail])
+
+  // Tracking do nome do registo aberto (para breadcrumb)
+  useEffect(() => {
+    if (!detail) { setDetailName(null); return }
+    const found = data.find(i => i.id === detail)
+    if (found) setDetailName(found.nome ?? found.movimento ?? null)
+  }, [detail, data])
+
+  // Breadcrumbs
+  const breadcrumbs = []
+  breadcrumbs.push({ label: 'CRM', to: '/crm' })
+  if (tab) breadcrumbs.push({ label: tab, onClick: () => setDetail(null, { replace: true }) })
+  if (detail && detailName) breadcrumbs.push({ label: detailName })
 
   return (
     <>
-      <Header title="CRM" subtitle="Gestão de dados — Base de dados local" onRefresh={load} loading={loading} />
+      <Header title="CRM" subtitle="Gestão de dados — Base de dados local" onRefresh={load} loading={loading} breadcrumbs={breadcrumbs} />
       <div className="p-4 sm:p-6 flex flex-col gap-3 sm:gap-4">
 
         {/* Stats banner */}
@@ -785,8 +827,8 @@ export function CRM() {
         {/* Search + Actions */}
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center">
           <input
-            type="text" placeholder={`Pesquisar ${tab.toLowerCase()}...`}
-            value={search} onChange={e => handleSearch(e.target.value)}
+            type="text" placeholder={`Pesquisar ${tab.toLowerCase()}... (/ para focar)`}
+            value={searchInput} onChange={e => handleSearch(e.target.value)}
             className="w-full sm:flex-1 px-4 py-3 sm:py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
           />
           <div className="flex gap-2 items-center">
@@ -839,7 +881,7 @@ export function CRM() {
             {/* Lista compacta à esquerda */}
             <div className="w-72 shrink-0 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
               <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
-                <input type="text" placeholder="Filtrar..." value={search} onChange={e => handleSearch(e.target.value)}
+                <input type="text" placeholder="Filtrar..." value={searchInput} onChange={e => handleSearch(e.target.value)}
                   className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300" />
               </div>
               <div className="flex-1 overflow-y-auto">

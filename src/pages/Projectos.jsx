@@ -85,6 +85,16 @@ export function Projectos() {
 
   useEffect(() => { load() }, [])
 
+  // Esc fecha linha expandida
+  useEffect(() => {
+    function onKey(e) {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName)) return
+      if (e.key === 'Escape' && expanded) setExpanded(null, { replace: true })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [expanded, setExpanded])
+
   const lista = kpis?.negociosLista ?? []
 
   // Filters & sort
