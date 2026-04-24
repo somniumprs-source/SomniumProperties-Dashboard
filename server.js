@@ -36,6 +36,8 @@ app.use('/api', async (req, res, next) => {
   }
   // PDFs e documentos — abrem em nova janela sem token
   if (req.path.includes('/relatorio') || req.path.includes('/documento/')) return next()
+  // Diagnostico publico de integracoes — so expoe estado, nunca credenciais
+  if (req.path === '/calendar/status') return next()
   // Se não há service key configurada, deixar passar (dev mode)
   if (!supabaseAdmin) return next()
   // Token via header Authorization OU via query string (para PDFs abertos em novo tab)
