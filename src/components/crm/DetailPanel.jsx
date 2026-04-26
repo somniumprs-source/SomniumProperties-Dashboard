@@ -3,7 +3,7 @@
  * Mostra: campos editáveis + relações + timeline + tarefas + reuniões.
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check } from 'lucide-react'
+import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { AnaliseTab } from '../analise/AnaliseTab.jsx'
@@ -200,6 +200,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [openContactoForm, setOpenContactoForm] = useState(false)
   const toast = useToast()
 
   async function attemptClose() {
@@ -353,6 +354,14 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
               <Pencil className="w-3.5 h-3.5" /> Editar
             </button>
           )}
+          {type === 'Consultores' && !editing && (
+            <button onClick={() => { setActiveTab('interacoes'); setOpenContactoForm(true) }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
+              style={{ backgroundColor: '#22c55e', color: '#fff' }}
+              title="Registar contacto efectuado">
+              <PhoneCall className="w-3.5 h-3.5" /> Registar Contacto
+            </button>
+          )}
           {type === 'Imóveis' && !editing && (
             <button onClick={async () => {
               const token = await getToken()
@@ -393,7 +402,8 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
 
       ) : type === 'Consultores' && activeTab === 'interacoes' ? (
         <div className="p-4 sm:p-6">
-          <InteracoesTab consultorId={data.id} onUpdate={loadData} controloManual={data.controlo_manual} />
+          <InteracoesTab consultorId={data.id} onUpdate={loadData} controloManual={data.controlo_manual}
+            autoOpenForm={openContactoForm} onAutoOpenConsumed={() => setOpenContactoForm(false)} />
         </div>
 
       ) : type === 'Imóveis' && activeTab === 'checklist' ? (

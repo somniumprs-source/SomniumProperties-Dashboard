@@ -23,15 +23,23 @@ function formatHoras(h) {
   return `${Math.round(h / 24)}d ${Math.round(h % 24)}h`
 }
 
-export function InteracoesTab({ consultorId, onUpdate, controloManual }) {
+export function InteracoesTab({ consultorId, onUpdate, controloManual, autoOpenForm = false, onAutoOpenConsumed }) {
   const [interacoes, setInteracoes] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [handoff, setHandoff] = useState(!!controloManual)
   const [togglingAgent, setTogglingAgent] = useState(false)
-  const [form, setForm] = useState({ canal: 'WhatsApp', direcao: 'Enviado', notas: '', data_hora: '' })
+  const [form, setForm] = useState({ canal: 'Chamada', direcao: 'Enviado', notas: '', data_hora: '' })
   const [saving, setSaving] = useState(false)
   const [filtroImovel, setFiltroImovel] = useState('todas')
+
+  // Quando o utilizador clica "Registar Contacto" no header, abrir o form automaticamente
+  useEffect(() => {
+    if (autoOpenForm) {
+      setShowForm(true)
+      onAutoOpenConsumed?.()
+    }
+  }, [autoOpenForm, onAutoOpenConsumed])
 
   async function load() {
     setLoading(true)
