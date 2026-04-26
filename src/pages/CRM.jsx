@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Header } from '../components/layout/Header.jsx'
 import { KanbanBoard } from '../components/crm/KanbanBoard.jsx'
 import { DetailPanel } from '../components/crm/DetailPanel.jsx'
@@ -486,8 +486,13 @@ export function CRM() {
   const searchTimer = useRef(null)
   const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores', 'Empreiteiros': 'empreiteiros' }[tab]
 
-  // Garantir filtro tipo_principal sincronizado para investidores
-  const effectiveFilters = tab === 'Investidores' ? { ...filters, tipo_principal: invSubTab } : filters
+  // Garantir filtro tipo_principal sincronizado para investidores.
+  // useMemo estabiliza referencia entre renders — sem isto, o load (useCallback)
+  // recriava a cada render em Investidores e causava loop infinito de fetch.
+  const effectiveFilters = useMemo(
+    () => tab === 'Investidores' ? { ...filters, tipo_principal: invSubTab } : filters,
+    [tab, filters, invSubTab]
+  )
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -794,7 +799,16 @@ export function CRM() {
         {/* Tabs */}
         <div className="flex gap-0.5 sm:gap-1 border-b border-gray-200 bg-white relative z-10 rounded-t-xl px-1 sm:px-2 pt-2 overflow-x-auto">
           {TABS.map(t => (
-            <button key={t} onClick={() => { setTab(t); setSearch(''); setDetail(null, { replace: true }); setEditing(null) }}
+            <button key={t} onClick={() => {
+              setTab(t)
+              setSearch('')
+              setDetail(null, { replace: true })
+              setEditing(null)
+              // Reset view se ficou num estado invalido para a nova tab
+              const followupsOnlyConsultores = view === 'followups' && t !== 'Consultores'
+              const relatorioOnlyCertasTabs = view === 'relatorio' && t !== 'Consultores' && t !== 'Investidores'
+              if (followupsOnlyConsultores || relatorioOnlyCertasTabs) setView('kanban')
+            }}
               className={`px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap ${
                 tab === t ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600' : 'text-gray-500 hover:text-gray-700'
               }`}>{t}</button>
