@@ -15,7 +15,10 @@ export function Header({ title, subtitle, onRefresh, loading, notionUrl, breadcr
   const { isDark, toggle } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
-  const canGoBack = (typeof window !== 'undefined' && window.history.length > 1) || location.search !== ''
+  // So mostrar seta de Voltar se estamos numa rota aninhada (path com mais de 1 segmento).
+  // Em paginas top-level (/crm, /dashboard, /financeiro), a seta nao tem destino util.
+  const pathSegments = location.pathname.split('/').filter(Boolean)
+  const canGoBack = pathSegments.length > 1
   const trail = breadcrumbs?.filter(Boolean) ?? []
 
   return (
