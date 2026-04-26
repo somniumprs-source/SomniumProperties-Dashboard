@@ -6,6 +6,7 @@ import { Login } from './pages/Login.jsx'
 import { ProfileSelect } from './pages/ProfileSelect.jsx'
 import { ToastProvider } from './components/ui/Toast.jsx'
 import { ErrorBoundary } from './components/ui/ErrorBoundary.jsx'
+import { ChunkErrorBoundary } from './components/ui/ChunkErrorBoundary.jsx'
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
 import { ThemeProvider } from './contexts/ThemeContext.jsx'
 
@@ -42,22 +43,24 @@ function AppRoutes() {
   if (!hasProfile) return <ProfileSelect />
 
   return (
-    <Suspense fallback={<PageFallback />}>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route index element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
-          <Route path="/crm" element={<ErrorBoundary><CRM /></ErrorBoundary>} />
-          <Route path="/projectos" element={<ErrorBoundary><Projectos /></ErrorBoundary>} />
-          <Route path="/financeiro" element={<ErrorBoundary><Financeiro /></ErrorBoundary>} />
-          <Route path="/operacoes" element={<ErrorBoundary><Operacoes /></ErrorBoundary>} />
-          <Route path="/metricas" element={<ErrorBoundary><Metricas /></ErrorBoundary>} />
-          <Route path="/alertas" element={<ErrorBoundary><Alertas /></ErrorBoundary>} />
-          {/* Redirects de páginas removidas */}
-          <Route path="/comercial" element={<Navigate to="/crm" replace />} />
-          <Route path="/marketing" element={<Navigate to="/crm" replace />} />
-        </Route>
-      </Routes>
-    </Suspense>
+    <ChunkErrorBoundary>
+      <Suspense fallback={<PageFallback />}>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route index element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+            <Route path="/crm" element={<ErrorBoundary><CRM /></ErrorBoundary>} />
+            <Route path="/projectos" element={<ErrorBoundary><Projectos /></ErrorBoundary>} />
+            <Route path="/financeiro" element={<ErrorBoundary><Financeiro /></ErrorBoundary>} />
+            <Route path="/operacoes" element={<ErrorBoundary><Operacoes /></ErrorBoundary>} />
+            <Route path="/metricas" element={<ErrorBoundary><Metricas /></ErrorBoundary>} />
+            <Route path="/alertas" element={<ErrorBoundary><Alertas /></ErrorBoundary>} />
+            {/* Redirects de páginas removidas */}
+            <Route path="/comercial" element={<Navigate to="/crm" replace />} />
+            <Route path="/marketing" element={<Navigate to="/crm" replace />} />
+          </Route>
+        </Routes>
+      </Suspense>
+    </ChunkErrorBoundary>
   )
 }
 
