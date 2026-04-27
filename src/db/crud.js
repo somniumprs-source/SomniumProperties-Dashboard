@@ -50,6 +50,11 @@ async function auditLog(tabela, registoId, acao, dadosAnteriores, dadosNovos) {
 function cleanFormData(data) {
   const cleaned = { ...data }
   for (const [key, value] of Object.entries(cleaned)) {
+    // Remover campos virtuais/enriched (prefixo _) — não existem na BD
+    if (key.startsWith('_')) {
+      delete cleaned[key]
+      continue
+    }
     // Converter strings vazias em null (evita erros de tipo no PostgreSQL)
     if (value === '' || value === undefined) {
       cleaned[key] = null
