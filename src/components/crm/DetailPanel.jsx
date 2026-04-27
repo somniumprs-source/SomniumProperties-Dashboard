@@ -254,7 +254,9 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
     setSaving(true)
     try {
       // Limpar campos do form que são relações (não enviar ao PUT)
-      const { negocios, consultores, imoveis, tarefas, timeline, analises, documentos, checklist, interacoes, ...cleanForm } = form
+      const { negocios, consultores, imoveis, tarefas, timeline, analises, documentos, checklist, interacoes, ...rest } = form
+      // Remover campos virtuais (prefixo _) que vêm da lista enriquecida e não existem na BD
+      const cleanForm = Object.fromEntries(Object.entries(rest).filter(([k]) => !k.startsWith('_')))
       const r = await apiFetch(`/api/crm/${endpoint}/${id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cleanForm),
       })
