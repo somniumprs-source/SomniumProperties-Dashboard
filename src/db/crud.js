@@ -173,6 +173,7 @@ export const Negocios = createCRUD('negocios', { searchFields: ['movimento', 'ca
 export const Despesas = createCRUD('despesas', { searchFields: ['movimento', 'categoria'], defaultSort: 'data DESC NULLS LAST' })
 export const Tarefas = createCRUD('tarefas', { searchFields: ['tarefa'], defaultSort: 'created_at DESC' })
 export const ConsultorInteracoes = createCRUD('consultor_interacoes', { searchFields: ['notas'], defaultSort: 'data_hora DESC' })
+export const ConsultorFollowups = createCRUD('consultor_followups', { searchFields: ['motivo'], defaultSort: 'data DESC' })
 export const DocumentosInvestidor = createCRUD('documentos_investidor', { searchFields: ['nome', 'tipo'], defaultSort: 'created_at DESC' })
 
 export async function getDashboardStats() {
