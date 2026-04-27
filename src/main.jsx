@@ -40,8 +40,19 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 )
 
-// Registar Service Worker para PWA
+// Registar Service Worker para PWA.
+// Quando um SW novo toma controlo (apos deploy) recarregamos uma vez
+// para garantir que o utilizador apanha o HTML/JS mais recente sem
+// precisar de limpar cache manualmente. So fazemos reload se ja havia
+// um SW anterior — primeira visita nao precisa.
 if ('serviceWorker' in navigator) {
+  const hadControllerOnLoad = navigator.serviceWorker.controller !== null
+  let refreshing = false
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadControllerOnLoad || refreshing) return
+    refreshing = true
+    window.location.reload()
+  })
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => {})
   })
