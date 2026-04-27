@@ -438,6 +438,14 @@ export async function initSchema() {
       CREATE INDEX IF NOT EXISTS idx_followups_consultor ON consultor_followups(consultor_id);
       CREATE INDEX IF NOT EXISTS idx_followups_data ON consultor_followups(data DESC);
 
+      -- Migrar follow-ups legados (campos directos no consultor) para o histórico
+      INSERT INTO consultor_followups (id, consultor_id, data, motivo, proximo_follow_up, created_at, updated_at)
+      SELECT gen_random_uuid()::text, c.id, c.data_follow_up, c.motivo_follow_up, c.data_proximo_follow_up,
+             NOW()::TEXT, NOW()::TEXT
+      FROM consultores c
+      WHERE c.data_follow_up IS NOT NULL AND c.data_follow_up <> ''
+        AND NOT EXISTS (SELECT 1 FROM consultor_followups f WHERE f.consultor_id = c.id);
+
       -- Migrar direcao 'Resposta' para 'Recebido' (correcao semantica)
       UPDATE consultor_interacoes SET direcao = 'Recebido'
         WHERE direcao = 'Resposta' AND notas NOT LIKE '[AGENTE]%' AND notas NOT LIKE '[FOLLOW-UP%' AND notas NOT LIKE '[REACTIVAÇÃO%';
