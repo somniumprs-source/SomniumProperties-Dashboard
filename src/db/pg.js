@@ -425,6 +425,19 @@ export async function initSchema() {
       CREATE INDEX IF NOT EXISTS idx_interacoes_data ON consultor_interacoes(data_hora DESC);
       CREATE INDEX IF NOT EXISTS idx_interacoes_imovel ON consultor_interacoes(imovel_id);
 
+      -- Histórico de follow-ups por consultor (multi-entrada)
+      CREATE TABLE IF NOT EXISTS consultor_followups (
+        id TEXT PRIMARY KEY,
+        consultor_id TEXT NOT NULL,
+        data TEXT NOT NULL,
+        motivo TEXT,
+        proximo_follow_up TEXT,
+        created_at TEXT DEFAULT (NOW()::TEXT),
+        updated_at TEXT DEFAULT (NOW()::TEXT)
+      );
+      CREATE INDEX IF NOT EXISTS idx_followups_consultor ON consultor_followups(consultor_id);
+      CREATE INDEX IF NOT EXISTS idx_followups_data ON consultor_followups(data DESC);
+
       -- Migrar direcao 'Resposta' para 'Recebido' (correcao semantica)
       UPDATE consultor_interacoes SET direcao = 'Recebido'
         WHERE direcao = 'Resposta' AND notas NOT LIKE '[AGENTE]%' AND notas NOT LIKE '[FOLLOW-UP%' AND notas NOT LIKE '[REACTIVAÇÃO%';

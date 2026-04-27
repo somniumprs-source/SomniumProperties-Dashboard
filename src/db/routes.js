@@ -13,7 +13,7 @@ import { createClient } from '@supabase/supabase-js'
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.supabase.co'
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
 const supabaseStorage = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null
-import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, DocumentosInvestidor, getDashboardStats } from './crud.js'
+import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, ConsultorFollowups, DocumentosInvestidor, getDashboardStats } from './crud.js'
 import pool from './pg.js'
 import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
 import { generateImovelPDF } from './pdfReport.js'
@@ -478,6 +478,69 @@ router.put('/negocios/:id/confirmar-pagamento', async (req, res) => {
 crudRoutes('/despesas', Despesas)
 crudRoutes('/tarefas', Tarefas)
 crudRoutes('/consultor-interacoes', ConsultorInteracoes)
+
+// ── Histórico de follow-ups por consultor ───────────────────
+router.get('/consultores/:id/followups', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM consultor_followups WHERE consultor_id = $1 ORDER BY data DESC, created_at DESC`,
+      [req.params.id]
+    )
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/consultores/:id/followups', async (req, res) => {
+  try {
+    const consultorId = req.params.id
+    const { data, motivo, proximo_follow_up } = req.body
+    if (!data) return res.status(400).json({ error: 'Data do follow-up é obrigatória' })
+
+    const item = await ConsultorFollowups.create({
+      consultor_id: consultorId,
+      data,
+      motivo: motivo || null,
+      proximo_follow_up: proximo_follow_up || null,
+    })
+
+    // Sincronizar campos legados no consultor com a entrada mais recente
+    const { rows } = await pool.query(
+      `SELECT data, motivo, proximo_follow_up FROM consultor_followups
+       WHERE consultor_id = $1 ORDER BY data DESC, created_at DESC LIMIT 1`,
+      [consultorId]
+    )
+    if (rows[0]) {
+      await Consultores.update(consultorId, {
+        data_follow_up: rows[0].data,
+        motivo_follow_up: rows[0].motivo,
+        data_proximo_follow_up: rows[0].proximo_follow_up,
+      })
+    }
+
+    res.status(201).json(item)
+  } catch (e) { res.status(400).json({ error: e.message }) }
+})
+
+router.delete('/consultores/:id/followups/:followupId', async (req, res) => {
+  try {
+    const ok = await ConsultorFollowups.delete(req.params.followupId)
+    if (!ok) return res.status(404).json({ error: 'Follow-up não encontrado' })
+
+    // Re-sincronizar campos legados com a entrada mais recente que sobrou
+    const { rows } = await pool.query(
+      `SELECT data, motivo, proximo_follow_up FROM consultor_followups
+       WHERE consultor_id = $1 ORDER BY data DESC, created_at DESC LIMIT 1`,
+      [req.params.id]
+    )
+    await Consultores.update(req.params.id, {
+      data_follow_up: rows[0]?.data || null,
+      motivo_follow_up: rows[0]?.motivo || null,
+      data_proximo_follow_up: rows[0]?.proximo_follow_up || null,
+    })
+
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
 
 // ── Interacções por consultor ────────────────────────────────
 router.get('/consultores/:id/interacoes', async (req, res) => {

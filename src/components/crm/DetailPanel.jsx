@@ -8,6 +8,7 @@ import { apiFetch } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { AnaliseTab } from '../analise/AnaliseTab.jsx'
 import { InteracoesTab } from './InteracoesTab.jsx'
+import { FollowUpsSection } from './FollowUpsSection.jsx'
 import { WhatsAppTab } from './WhatsAppTab.jsx'
 import { FicheirosTab } from './FicheirosTab.jsx'
 import { ChecklistTab } from './ChecklistTab.jsx'
@@ -726,9 +727,6 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                 <EF label="Off-Market" field="imoveis_off_market" form={form} set={setField} type="number" />
                 <EF label="Meta Mensal Leads" field="meta_mensal_leads" form={form} set={setField} type="number" />
                 <EF label="Data Início Parceria" field="data_inicio" form={form} set={setField} type="date" />
-                <EF label="Data Follow Up" field="data_follow_up" form={form} set={setField} type="date" />
-                <EF label="Próx. Follow Up" field="data_proximo_follow_up" form={form} set={setField} type="date" />
-                <EF label="Motivo Follow Up" field="motivo_follow_up" form={form} set={setField} />
                 <EF label="Motivo Descontinuação" field="motivo_descontinuacao" form={form} set={setField} />
               </> : <>
                 <Field label="Estatuto" value={data.estatuto} />
@@ -739,8 +737,6 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                 <Field label="Leads Enviados" value={data.imoveis_enviados} />
                 <Field label="Off-Market" value={data.imoveis_off_market} />
                 <Field label="Comissão" value={data.comissao > 0 ? `${data.comissao}%` : '—'} />
-                <Field label="Follow Up" value={data.data_follow_up} />
-                <Field label="Próx. Follow Up" value={data.data_proximo_follow_up} />
               </>}
             </>}
           </div>
@@ -757,6 +753,10 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
               <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Notas</p>
               <p className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3 whitespace-pre-line">{data.notas}</p>
             </div>
+          )}
+
+          {type === 'Consultores' && data.id && (
+            <FollowUpsSection consultorId={data.id} onUpdate={loadData} />
           )}
 
           {/* Relações — Negócios Associados (resumo) */}
