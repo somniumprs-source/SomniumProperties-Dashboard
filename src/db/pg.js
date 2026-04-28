@@ -402,6 +402,13 @@ export async function initSchema() {
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 
+      -- Migration: motivos para transições de estado em imóveis
+      DO $$ BEGIN
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS motivo_follow_up TEXT;
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS motivo_nao_interessa TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
       -- Nova tabela: log de interacções por consultor
       CREATE TABLE IF NOT EXISTS consultor_interacoes (
         id TEXT PRIMARY KEY,

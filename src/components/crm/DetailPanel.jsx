@@ -530,6 +530,16 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                 <EF label="Data Follow Up" field="data_follow_up" form={form} set={setField} type="date" />
                 <EF label="Data Aceite Investidor" field="data_aceite_investidor" form={form} set={setField} type="date" />
                 <div className="col-span-2 md:col-span-3">
+                  <label className="text-xs text-gray-400 block mb-1">Motivo Follow Up</label>
+                  <textarea value={form.motivo_follow_up || ''} onChange={e => setField('motivo_follow_up', e.target.value)} rows={2}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                </div>
+                <div className="col-span-2 md:col-span-3">
+                  <label className="text-xs text-gray-400 block mb-1">Motivo Não Interessa</label>
+                  <textarea value={form.motivo_nao_interessa || ''} onChange={e => setField('motivo_nao_interessa', e.target.value)} rows={2}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                </div>
+                <div className="col-span-2 md:col-span-3">
                   <label className="text-xs text-gray-400 block mb-1">Notas</label>
                   <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={4}
                     className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
@@ -560,6 +570,9 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                 <Field label="Data Chamada" value={data.data_chamada} />
                 <Field label="Data Visita" value={data.data_visita} />
                 <Field label="Data Proposta" value={data.data_proposta} />
+                <Field label="Data Follow Up" value={data.data_follow_up} />
+                {data.motivo_follow_up && <div className="col-span-2 md:col-span-3"><Field label="Motivo Follow Up" value={data.motivo_follow_up} /></div>}
+                {data.motivo_nao_interessa && <div className="col-span-2 md:col-span-3"><Field label="Motivo Não Interessa" value={data.motivo_nao_interessa} /></div>}
                 {data.notas && <div className="col-span-2 md:col-span-3"><Field label="Notas" value={data.notas} /></div>}
 
                 {/* ── Dados da Calculadora de Rentabilidade ── */}
