@@ -1460,6 +1460,8 @@ const FIELD_DEFS = {
     { key: 'data_proposta', label: 'Data Proposta', type: 'date' },
     { key: 'data_proposta_aceite', label: 'Data Proposta Aceite', type: 'date' },
     { key: 'data_follow_up', label: 'Data Follow Up', type: 'date' },
+    { key: 'motivo_follow_up', label: 'Motivo Follow Up', type: 'textarea' },
+    { key: 'motivo_nao_interessa', label: 'Motivo Não Interessa', type: 'textarea' },
     { key: 'notas', label: 'Notas', type: 'textarea' },
   ],
   'Investidores': [
