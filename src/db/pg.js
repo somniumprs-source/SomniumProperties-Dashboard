@@ -409,6 +409,21 @@ export async function initSchema() {
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 
+      -- Migration: ressincronizar ROI dos imóveis com a análise activa.
+      -- Antes coexistiam duas fórmulas (autoCalcROI naive vs calcEngine),
+      -- pelo que o valor podia divergir do que a calculadora mostra. A
+      -- partir daqui o ROI dos imóveis é sempre o calculado pela análise
+      -- activa; idempotente — corre em cada arranque sem efeitos colaterais.
+      DO $$ BEGIN
+        UPDATE imoveis i SET
+          roi = a.retorno_total,
+          roi_anualizado = a.retorno_anualizado
+        FROM analises a
+        WHERE a.imovel_id = i.id AND a.activa = true
+          AND (i.roi IS DISTINCT FROM a.retorno_total OR i.roi_anualizado IS DISTINCT FROM a.retorno_anualizado);
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
       -- Nova tabela: log de interacções por consultor
       CREATE TABLE IF NOT EXISTS consultor_interacoes (
         id TEXT PRIMARY KEY,
