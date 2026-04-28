@@ -251,6 +251,18 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
   }, [activeTab])
 
   async function saveEdit() {
+    // Validação: imóvel em Follow Up / Não interessa exige motivo
+    if (type === 'Imóveis') {
+      const est = (form.estado || '').replace(/^\d+-\s*/, '').trim()
+      if (/follow ?up/i.test(est) && !(form.motivo_follow_up || '').trim()) {
+        toast('Indica o "Motivo Follow Up" antes de guardar', 'error')
+        return false
+      }
+      if (/n[ãa]o interessa/i.test(est) && !(form.motivo_nao_interessa || '').trim()) {
+        toast('Indica o "Motivo Não Interessa" antes de guardar', 'error')
+        return false
+      }
+    }
     setSaving(true)
     try {
       // Limpar campos do form que são relações (não enviar ao PUT)
@@ -570,9 +582,13 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                 <Field label="Data Chamada" value={data.data_chamada} />
                 <Field label="Data Visita" value={data.data_visita} />
                 <Field label="Data Proposta" value={data.data_proposta} />
-                <Field label="Data Follow Up" value={data.data_follow_up} />
-                {data.motivo_follow_up && <div className="col-span-2 md:col-span-3"><Field label="Motivo Follow Up" value={data.motivo_follow_up} /></div>}
-                {data.motivo_nao_interessa && <div className="col-span-2 md:col-span-3"><Field label="Motivo Não Interessa" value={data.motivo_nao_interessa} /></div>}
+                {(/follow ?up/i.test(data.estado || '')) && <Field label="Data Follow Up" value={data.data_follow_up || '—'} />}
+                {(/follow ?up/i.test(data.estado || '')) && (
+                  <div className="col-span-2 md:col-span-3"><Field label="Motivo Follow Up" value={data.motivo_follow_up || '—'} /></div>
+                )}
+                {(/n[ãa]o interessa/i.test(data.estado || '')) && (
+                  <div className="col-span-2 md:col-span-3"><Field label="Motivo Não Interessa" value={data.motivo_nao_interessa || '—'} /></div>
+                )}
                 {data.notas && <div className="col-span-2 md:col-span-3"><Field label="Notas" value={data.notas} /></div>}
 
                 {/* ── Dados da Calculadora de Rentabilidade ── */}
