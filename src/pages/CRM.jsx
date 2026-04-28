@@ -464,6 +464,67 @@ function FollowUpView({ data, onView, onDelete }) {
   )
 }
 
+// ── Modal: capturar motivo (+ data) ao mover imóvel para Follow UP / Não interessa
+function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
+  const isFollowUp = moveModal.type === 'follow_up'
+  const today = new Date().toISOString().slice(0, 10)
+  const [data, setData] = useState(item?.data_follow_up || today)
+  const [motivo, setMotivo] = useState(isFollowUp ? (item?.motivo_follow_up || '') : (item?.motivo_nao_interessa || ''))
+  const [saving, setSaving] = useState(false)
+
+  async function confirm() {
+    if (!motivo.trim()) return
+    setSaving(true)
+    const extra = isFollowUp
+      ? { motivo_follow_up: motivo.trim(), data_follow_up: data || null }
+      : { motivo_nao_interessa: motivo.trim() }
+    try { await onConfirm(extra) } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center backdrop-blur-sm p-4" onClick={onCancel}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+        <h3 className="text-lg font-bold text-gray-800 mb-1">
+          {isFollowUp ? 'Mover para Follow UP' : 'Mover para Não Interessa'}
+        </h3>
+        <p className="text-xs text-gray-500 mb-4">
+          {item?.nome ? `Imóvel: ${item.nome}` : 'Indica o motivo da transição.'}
+        </p>
+
+        {isFollowUp && (
+          <div className="mb-4">
+            <label className="text-xs font-medium text-gray-600 block mb-1">Data Follow Up</label>
+            <input type="date" value={data || ''} onChange={e => setData(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+          </div>
+        )}
+
+        <div className="mb-5">
+          <label className="text-xs font-medium text-gray-600 block mb-1">
+            {isFollowUp ? 'Motivo do Follow Up' : 'Motivo de Não Interessa'} *
+          </label>
+          <textarea value={motivo} onChange={e => setMotivo(e.target.value)} rows={4}
+            placeholder={isFollowUp ? 'Ex: Aguardar resposta do proprietário…' : 'Ex: Preço acima de mercado, zona não interessante…'}
+            autoFocus
+            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancel} disabled={saving}
+            className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+            Cancelar
+          </button>
+          <button onClick={confirm} disabled={saving || !motivo.trim()}
+            className="px-4 py-2 text-sm font-medium rounded-lg text-white disabled:opacity-50"
+            style={{ backgroundColor: '#C9A84C' }}>
+            {saving ? 'A guardar…' : 'Confirmar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function CRM() {
   const [tab, setTab] = useUrlState('tab', 'Imóveis')
   const [data, setData] = useState([])
@@ -480,6 +541,7 @@ export function CRM() {
   const [consultoresLookup, setConsultoresLookup] = useState([])
   const [invSubTab, setInvSubTab] = useUrlState('invSubTab', 'Passivo') // sub-tab investidores
   const [detailName, setDetailName] = useState(null) // nome para breadcrumb
+  const [moveModal, setMoveModal] = useState(null) // { id, newColumn, type } | null
   const { counts: unreadCounts } = useUnreadCounts(tab === 'Consultores')
 
   const toast = useToast()
@@ -671,14 +733,14 @@ export function CRM() {
   const kanbanConfig = KANBAN_CONFIG[tab]
   const hasKanban = !!kanbanConfig
 
-  async function handleMove(id, newColumn) {
+  async function persistMove(id, newColumn, extra = {}) {
     if (!kanbanConfig) return
     const field = kanbanConfig.groupField
     const item = data.find(i => i.id === id)
     await apiFetch(`/api/crm/${endpoint}/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ [field]: newColumn }),
+      body: JSON.stringify({ [field]: newColumn, ...extra }),
     })
     // Auto-task on phase change
     apiFetch('/api/crm/auto-task', {
@@ -691,6 +753,16 @@ export function CRM() {
       apiFetch('/api/automation/pipeline-to-faturacao', { method: 'POST' }).catch(() => {})
     }
     load()
+  }
+
+  async function handleMove(id, newColumn) {
+    if (!kanbanConfig) return
+    // Imóveis: capturar motivo (e data) ao mover para Follow UP / Não interessa
+    if (tab === 'Imóveis' && (newColumn === 'Follow UP' || newColumn === 'Não interessa')) {
+      setMoveModal({ id, newColumn, type: newColumn === 'Follow UP' ? 'follow_up' : 'nao_interessa' })
+      return
+    }
+    await persistMove(id, newColumn)
   }
 
   async function handleSave(item) {
@@ -986,6 +1058,17 @@ export function CRM() {
               icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Empreiteiros': HardHat }[tab] || Building2}
               title={`Sem ${tab.toLowerCase()}`}
               description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
+            />
+          )}
+          {moveModal && (
+            <MoveReasonModal
+              moveModal={moveModal}
+              item={data.find(i => i.id === moveModal.id)}
+              onCancel={() => setMoveModal(null)}
+              onConfirm={async (extra) => {
+                await persistMove(moveModal.id, moveModal.newColumn, extra)
+                setMoveModal(null)
+              }}
             />
           )}
           {!loading && editing === null && view === 'kanban' && kanbanConfig && data.length > 0 && (
