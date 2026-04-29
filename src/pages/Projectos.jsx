@@ -3,8 +3,6 @@ import { X, Trash2, Plus, Filter, ArrowUpDown, ChevronDown, ChevronUp, Check } f
 import { Header } from '../components/layout/Header.jsx'
 import { apiFetch } from '../lib/api.js'
 import { useUrlState } from '../hooks/useUrlState.js'
-import { useAuth } from '../contexts/AuthContext.jsx'
-import { PartilharAcesso } from '../components/PartilharAcesso.jsx'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 
@@ -35,9 +33,6 @@ function CatBadge({ cat }) {
 }
 
 export function Projectos() {
-  const { profile } = useAuth()
-  const isAdmin = profile?.role === 'admin'
-  const isParceiro = profile?.role === 'parceiro'
   const [kpis, setKpis] = useState(null)
   const [projectos, setProjectos] = useState([])
   const [loading, setLoading] = useState(true)
@@ -133,11 +128,9 @@ export function Projectos() {
 
         {/* Toolbar */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          {!isParceiro ? (
-            <button onClick={() => setEditing({})} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors">
-              <Plus className="w-4 h-4" /> Novo Projecto
-            </button>
-          ) : <span />}
+          <button onClick={() => setEditing({})} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors">
+            <Plus className="w-4 h-4" /> Novo Projecto
+          </button>
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-gray-400" />
             <select value={filterCat} onChange={e => setFilterCat(e.target.value)} className="text-xs border rounded-lg px-2 py-1.5">
@@ -237,12 +230,7 @@ export function Projectos() {
                         : <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Recebido</span>}
                     </td>
                     <td className="py-2 px-3" onClick={e => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1.5">
-                        {isAdmin && <PartilharAcesso entidade="negocio" entidadeId={n.id} nome={n.movimento} />}
-                        {isAdmin && (
-                          <button onClick={() => remove(n.id)} className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Apagar</button>
-                        )}
-                      </div>
+                      <button onClick={() => remove(n.id)} className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Apagar</button>
                     </td>
                   </tr>
                   {isExpanded && (
