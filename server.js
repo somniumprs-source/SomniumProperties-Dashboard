@@ -75,23 +75,25 @@ app.use('/api', async (req, res, next) => {
 try {
   const { initSchema } = await import('./src/db/pg.js')
   await initSchema()
-  const { default: crmRoutes } = await import('./src/db/routes.js')
-  app.use('/api/crm', crmRoutes)
-  const { default: analiseRoutes } = await import('./src/db/analiseRoutes.js')
-  app.use('/api/crm', analiseRoutes)
-  console.log('[crm] API CRM + Análises montada em /api/crm (PostgreSQL)')
 
-  // ── Gestão de utilizadores e camadas de acesso ───────────────
+  // ── Gestão de utilizadores e camadas de acesso (TEM de ser registado ANTES do router CRM) ──
   const { default: userRoutes, accessRouter, requireRole, requireModule, restrictByAccess } = await import('./src/db/userRoutes.js')
   app.use('/api/users', userRoutes)
   app.use('/api/acessos', accessRouter)
-  // Sub-módulos do CRM — bloqueiam roles que não estão na ROLE_MODULES respectiva
+  // Sub-módulos do CRM — bloqueiam roles que não têm o módulo na sua ROLE_MODULES
   app.use('/api/crm/investidores', requireModule('crm.investidores'))
   app.use('/api/crm/consultores',  requireModule('crm.consultores'))
   app.use('/api/crm/empreiteiros', requireModule('crm.empreiteiros'))
   // Imóveis e Negócios: parceiros podem aceder mas filtrados por registo (tabela acessos)
   app.use('/api/crm/imoveis',  restrictByAccess('imovel'))
   app.use('/api/crm/negocios', requireModule('crm.negocios'), restrictByAccess('negocio'))
+
+  // Router CRM — montado DEPOIS dos guards para que estes corram primeiro
+  const { default: crmRoutes } = await import('./src/db/routes.js')
+  app.use('/api/crm', crmRoutes)
+  const { default: analiseRoutes } = await import('./src/db/analiseRoutes.js')
+  app.use('/api/crm', analiseRoutes)
+  console.log('[crm] API CRM + Análises montada em /api/crm (PostgreSQL)')
   // Filtros por área (admin passa sempre; em dev sem Supabase passa sempre)
   app.use('/api/financeiro',         requireRole('financeiro'))
   app.use('/api/kpis/financeiro',    requireRole('financeiro'))
