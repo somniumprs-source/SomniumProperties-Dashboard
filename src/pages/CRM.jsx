@@ -1079,7 +1079,12 @@ export function CRM() {
             <EmptyState
               icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Empreiteiros': HardHat }[tab] || Building2}
               title={`Sem ${tab.toLowerCase()}`}
-              description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
+              description={
+                search ? `Nenhum resultado para "${search}".` :
+                profile?.role === 'parceiro'
+                  ? `Não tens nenhum ${tab.toLowerCase().replace(/s$/, '')} partilhado contigo. Pede ao administrador para te dar acesso.`
+                  : `Ainda não existem ${tab.toLowerCase()} registados. (role: ${profile?.role || 'desconhecido'})`
+              }
             />
           )}
           {moveModal && (

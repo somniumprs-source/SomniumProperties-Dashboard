@@ -170,6 +170,22 @@ router.use((_req, res, next) => {
   next()
 })
 
+// GET /api/users/whoami — endpoint de diagnóstico (debug)
+router.get('/whoami', async (req, res) => {
+  try {
+    const tokenPresent = !!(req.headers.authorization || req.query.token)
+    const supabaseUserEmail = req.user?.email || null
+    const u = await resolveAppUser(req)
+    res.json({
+      tokenPresent,
+      supabaseUserEmail,
+      ownerEmails: OWNER_EMAILS,
+      resolvedUser: u ? { id: u.id, email: u.email, role: u.role, ativo: u.ativo } : null,
+      isOwnerEmail: supabaseUserEmail ? OWNER_EMAILS.includes(supabaseUserEmail.toLowerCase()) : false,
+    })
+  } catch (e) { res.status(500).json({ error: e.message, stack: e.stack }) }
+})
+
 // GET /api/users/me — perfil do utilizador autenticado
 router.get('/me', async (req, res) => {
   try {
@@ -444,8 +460,15 @@ export function restrictByAccess(entidade) {
       if (!u) {
         try { u = await resolveAppUser(req); req.appUser = u } catch {}
       }
-      if (!u) return next()
-      if (u.role === 'admin' || !RECORD_RESTRICTED_ROLES.has(u.role)) return next()
+      if (!u) {
+        console.log(`[restrictByAccess:${entidade}] sem user → next (path=${req.path})`)
+        return next()
+      }
+      if (u.role === 'admin' || !RECORD_RESTRICTED_ROLES.has(u.role)) {
+        // Admin/comercial/etc — passam sem filtro
+        return next()
+      }
+      console.log(`[restrictByAccess:${entidade}] role=${u.role} email=${u.email} → vai filtrar`)
 
     // Extrair ID do registo na primeira parte do path (ex: /abc-123, /abc-123/fotos)
     const m = req.path.match(/^\/([^/]+)/)
