@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
+import { PartilharAcesso } from '../PartilharAcesso.jsx'
 import { AnaliseTab } from '../analise/AnaliseTab.jsx'
 import { InteracoesTab } from './InteracoesTab.jsx'
 import { FollowUpsSection } from './FollowUpsSection.jsx'
@@ -349,6 +350,9 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
             title="Copiar link partilhável">
             {linkCopied ? <><Check className="w-3.5 h-3.5" /> Copiado</> : <><Link2 className="w-3.5 h-3.5" /> Link</>}
           </button>
+          {type === 'Imóveis' && (
+            <PartilharAcesso entidade="imovel" entidadeId={data.id} nome={data.nome} />
+          )}
           {editing ? (
             <>
               <button onClick={saveEdit} disabled={saving}

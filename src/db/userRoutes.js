@@ -20,20 +20,27 @@ export const ROLE_AREAS = {
   comercial:  ['dashboard', 'crm', 'projectos', 'metricas'],
   financeiro: ['dashboard', 'financeiro', 'metricas'],
   operacoes:  ['dashboard', 'operacoes', 'alertas', 'metricas'],
-  // Parceiro externo: só vê o CRM, e dentro do CRM só a tab de Imóveis
-  parceiro:   ['crm'],
+  // Parceiro externo: vê CRM (só tab Imóveis) e Projectos.
+  // Dentro destes, só vê os registos partilhados com ele (filtro pela tabela `acessos`).
+  parceiro:   ['crm', 'projectos'],
 }
 
 // Sub-módulos dentro de cada área. Usado para filtrar tabs/secções no frontend
 // e para proteger endpoints específicos no backend.
 // Se uma role não estiver listada num módulo, NÃO tem acesso a esse módulo.
+// Parceiros têm acesso a 'crm.imoveis' e 'crm.negocios' MAS sujeito a filtro
+// por registo (tabela `acessos`) — só vêem os imóveis/negócios partilhados com eles.
 export const ROLE_MODULES = {
   admin:      ['crm.imoveis', 'crm.investidores', 'crm.consultores', 'crm.empreiteiros', 'crm.negocios'],
   comercial:  ['crm.imoveis', 'crm.investidores', 'crm.consultores', 'crm.empreiteiros', 'crm.negocios'],
   financeiro: ['crm.negocios'],
   operacoes:  [],
-  parceiro:   ['crm.imoveis'],
+  parceiro:   ['crm.imoveis', 'crm.negocios'],
 }
+
+// Roles cujo acesso a registos é restrito pela tabela `acessos`.
+// Outros roles (admin, comercial, etc.) vêem tudo.
+export const RECORD_RESTRICTED_ROLES = new Set(['parceiro'])
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.supabase.co'
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
@@ -315,4 +322,151 @@ router.post('/:id/magic-link', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// ── Acessos por registo (gestão admin) ───────────────────────
+
+// GET /api/users/:id/acessos — listar registos a que o user tem acesso (com nome do registo)
+router.get('/:id/acessos', async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT a.*,
+        COALESCE(i.nome, n.movimento) AS nome,
+        i.estado AS imovel_estado, n.fase AS negocio_fase
+      FROM acessos a
+      LEFT JOIN imoveis  i ON a.entidade = 'imovel'  AND i.id = a.entidade_id
+      LEFT JOIN negocios n ON a.entidade = 'negocio' AND n.id = a.entidade_id
+      WHERE a.user_id = $1
+      ORDER BY a.created_at DESC
+    `, [req.params.id])
+    res.json({ data: r.rows })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// POST /api/users/:id/acessos — conceder acesso { entidade, entidade_id }
+router.post('/:id/acessos', async (req, res) => {
+  try {
+    const { entidade, entidade_id } = req.body || {}
+    if (!['imovel', 'negocio'].includes(entidade)) return res.status(400).json({ error: 'entidade inválida (imovel|negocio)' })
+    if (!entidade_id) return res.status(400).json({ error: 'entidade_id obrigatório' })
+    const u = await getUserById(req.params.id)
+    if (!u) return res.status(404).json({ error: 'Utilizador não encontrado' })
+    const id = `acc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const r = await pool.query(
+      `INSERT INTO acessos (id, user_id, entidade, entidade_id, granted_by)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (user_id, entidade, entidade_id) DO UPDATE SET created_at = NOW()::TEXT
+       RETURNING *`,
+      [id, u.id, entidade, entidade_id, req.appUser?.id || null]
+    )
+    res.status(201).json(r.rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// DELETE /api/users/:userId/acessos/:acessoId — revogar
+router.delete('/:userId/acessos/:acessoId', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM acessos WHERE id = $1 AND user_id = $2', [req.params.acessoId, req.params.userId])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 export default router
+
+// ── Endpoints e helpers de acesso por registo ─────────────────
+
+export const accessRouter = (() => {
+  const r = Router()
+  r.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next() })
+
+  // Quem tem acesso a um registo (lista de users, para o modal de partilha)
+  // GET /api/acessos/:entidade/:id
+  r.get('/:entidade/:id', async (req, res) => {
+    try {
+      const { entidade, id } = req.params
+      if (!['imovel', 'negocio'].includes(entidade)) return res.status(400).json({ error: 'entidade inválida' })
+      const result = await pool.query(`
+        SELECT a.id AS acesso_id, u.id AS user_id, u.nome, u.email, u.iniciais, u.cor, u.role
+        FROM acessos a JOIN users u ON u.id = a.user_id
+        WHERE a.entidade = $1 AND a.entidade_id = $2
+        ORDER BY u.nome
+      `, [entidade, id])
+      res.json({ data: result.rows })
+    } catch (e) { res.status(500).json({ error: e.message }) }
+  })
+  return r
+})()
+
+/**
+ * Devolve a lista de IDs (entidade) a que um user tem acesso.
+ * Usado no middleware restrictByAccess.
+ */
+async function getAccessibleIds(userId, entidade) {
+  const r = await pool.query(
+    'SELECT entidade_id FROM acessos WHERE user_id = $1 AND entidade = $2',
+    [userId, entidade]
+  )
+  return new Set(r.rows.map(x => x.entidade_id))
+}
+
+/**
+ * Middleware: para roles restritos por registo (parceiro), filtra
+ * listagens e bloqueia operações em registos a que não tem acesso.
+ *
+ * - GET /              → mantém handler, depois filtra response.data por IDs com acesso
+ * - GET /:id, PUT /:id, sub-paths → 403 se não tem acesso ao :id
+ * - POST / (criar)     → 403 (parceiros não criam registos novos)
+ * - DELETE /:id (raiz) → 403 (parceiros não apagam)
+ */
+export function restrictByAccess(entidade) {
+  return async (req, res, next) => {
+    if (!supabaseAdmin) return next()
+    let u = req.appUser
+    if (!u) {
+      try { u = await resolveAppUser(req); req.appUser = u } catch {}
+    }
+    if (!u) return next() // sem identificação — outros middlewares tratam
+    if (u.role === 'admin' || !RECORD_RESTRICTED_ROLES.has(u.role)) return next()
+
+    // Extrair ID do registo na primeira parte do path (ex: /abc-123, /abc-123/fotos)
+    const m = req.path.match(/^\/([^/]+)/)
+    const firstSeg = m ? m[1] : null
+    const restPath = m ? req.path.slice(m[0].length) : ''
+    // Segmentos especiais que NÃO são IDs de registos
+    const NON_ID_SEGS = new Set(['stats', 'enriched', 'find-or-create', 'lookup', 'checklist', 'relatorio'])
+    const isRecordPath = firstSeg && !NON_ID_SEGS.has(firstSeg)
+
+    // Criação: POST sem ID na URL
+    if (req.method === 'POST' && !isRecordPath) {
+      return res.status(403).json({ error: 'Parceiros não podem criar novos registos' })
+    }
+    // Apagar registo inteiro: DELETE /:id (sem sub-path)
+    if (req.method === 'DELETE' && isRecordPath && !restPath) {
+      return res.status(403).json({ error: 'Parceiros não podem apagar registos' })
+    }
+
+    // Acesso a registo individual (qualquer método)
+    if (isRecordPath) {
+      const r = await pool.query(
+        'SELECT 1 FROM acessos WHERE user_id = $1 AND entidade = $2 AND entidade_id = $3',
+        [u.id, entidade, firstSeg]
+      )
+      if (r.rowCount === 0) return res.status(403).json({ error: 'Sem acesso a este registo' })
+      return next()
+    }
+
+    // Listagem (GET /) — filtrar response por IDs com acesso
+    if (req.method === 'GET') {
+      const ids = await getAccessibleIds(u.id, entidade)
+      const origJson = res.json.bind(res)
+      res.json = (body) => {
+        if (body && Array.isArray(body.data)) {
+          body.data = body.data.filter(item => ids.has(item.id))
+          if (typeof body.total === 'number') body.total = body.data.length
+        } else if (Array.isArray(body)) {
+          body = body.filter(item => ids.has(item.id))
+        }
+        return origJson(body)
+      }
+    }
+    next()
+  }
+}

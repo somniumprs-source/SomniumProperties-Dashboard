@@ -1,4 +1,4 @@
-const CACHE_NAME = 'somnium-crm-v5'
+const CACHE_NAME = 'somnium-crm-v6'
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/icons/icon-192x192.png',

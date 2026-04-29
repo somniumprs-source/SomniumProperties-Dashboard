@@ -76,16 +76,16 @@ try {
   console.log('[crm] API CRM + Análises montada em /api/crm (PostgreSQL)')
 
   // ── Gestão de utilizadores e camadas de acesso ───────────────
-  const { default: userRoutes, requireRole, requireModule } = await import('./src/db/userRoutes.js')
+  const { default: userRoutes, accessRouter, requireRole, requireModule, restrictByAccess } = await import('./src/db/userRoutes.js')
   app.use('/api/users', userRoutes)
-  // Sub-módulos do CRM — bloqueiam parceiros que só têm crm.imoveis
-  // NOTA: aplicam-se aos endpoints que vivem no /api/crm router (definido acima),
-  // mas como o auth middleware faz bypass de /api/crm/, estes guards só são
-  // efectivos quando o user tem token (parceiros têm sempre token).
+  app.use('/api/acessos', accessRouter)
+  // Sub-módulos do CRM — bloqueiam roles que não estão na ROLE_MODULES respectiva
   app.use('/api/crm/investidores', requireModule('crm.investidores'))
   app.use('/api/crm/consultores',  requireModule('crm.consultores'))
   app.use('/api/crm/empreiteiros', requireModule('crm.empreiteiros'))
-  app.use('/api/crm/negocios',     requireModule('crm.negocios'))
+  // Imóveis e Negócios: parceiros podem aceder mas filtrados por registo (tabela acessos)
+  app.use('/api/crm/imoveis',  restrictByAccess('imovel'))
+  app.use('/api/crm/negocios', requireModule('crm.negocios'), restrictByAccess('negocio'))
   // Filtros por área (admin passa sempre; em dev sem Supabase passa sempre)
   app.use('/api/financeiro',         requireRole('financeiro'))
   app.use('/api/kpis/financeiro',    requireRole('financeiro'))

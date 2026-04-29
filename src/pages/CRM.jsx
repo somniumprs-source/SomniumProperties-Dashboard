@@ -13,8 +13,15 @@ import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STA
 import { apiFetch } from '../lib/api.js'
 import { useUnreadCounts } from '../hooks/useUnreadCounts.js'
 import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
+import { useAuth } from '../contexts/AuthContext.jsx'
 
-const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Empreiteiros']
+const ALL_TABS = ['Imóveis', 'Investidores', 'Consultores', 'Empreiteiros']
+const TAB_MODULE = {
+  'Imóveis':       'crm.imoveis',
+  'Investidores':  'crm.investidores',
+  'Consultores':   'crm.consultores',
+  'Empreiteiros':  'crm.empreiteiros',
+}
 
 // Progresso checklist por imóvel (cache local)
 let checklistProgressCache = {}
@@ -526,7 +533,18 @@ function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
 }
 
 export function CRM() {
-  const [tab, setTab] = useUrlState('tab', 'Imóveis')
+  const { profile } = useAuth()
+  const userModules = profile?.modules || []
+  const TABS = useMemo(
+    () => profile?.role === 'admin'
+      ? ALL_TABS
+      : ALL_TABS.filter(t => userModules.includes(TAB_MODULE[t])),
+    [profile?.role, userModules]
+  )
+  const defaultTab = TABS[0] || 'Imóveis'
+  const [tab, setTab] = useUrlState('tab', defaultTab)
+  // Se a tab guardada no URL não está acessível, redireciona para a primeira disponível
+  useEffect(() => { if (!TABS.includes(tab)) setTab(defaultTab) }, [tab, TABS, defaultTab, setTab])
   const [data, setData] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)

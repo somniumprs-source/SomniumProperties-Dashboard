@@ -80,6 +80,7 @@ export function AuthProvider({ children }) {
       hasProfile: !!profile,
       role: profile?.role || null,
       areas: profile?.areas || [],
+      modules: profile?.modules || [],
       canAccess,
       signIn, signOut, refreshProfile: loadProfile,
     }}>
