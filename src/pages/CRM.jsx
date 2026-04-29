@@ -13,15 +13,8 @@ import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STA
 import { apiFetch } from '../lib/api.js'
 import { useUnreadCounts } from '../hooks/useUnreadCounts.js'
 import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
-import { useAuth } from '../contexts/AuthContext.jsx'
 
-const ALL_TABS = ['Imóveis', 'Investidores', 'Consultores', 'Empreiteiros']
-const TAB_MODULE = {
-  'Imóveis':       'crm.imoveis',
-  'Investidores':  'crm.investidores',
-  'Consultores':   'crm.consultores',
-  'Empreiteiros':  'crm.empreiteiros',
-}
+const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Empreiteiros']
 
 // Progresso checklist por imóvel (cache local)
 let checklistProgressCache = {}
@@ -533,20 +526,7 @@ function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
 }
 
 export function CRM() {
-  const { profile } = useAuth()
-  const role = profile?.role
-  const modulesKey = (profile?.modules || []).join(',')
-  const TABS = useMemo(() => {
-    if (role === 'admin') return ALL_TABS
-    const mods = modulesKey ? modulesKey.split(',') : []
-    return ALL_TABS.filter(t => mods.includes(TAB_MODULE[t]))
-  }, [role, modulesKey])
-  const fallbackTab = TABS[0] || 'Imóveis'
-  const [tab, setTab] = useUrlState('tab', fallbackTab)
-  // Se a tab guardada no URL não está acessível, redireciona para a primeira disponível
-  useEffect(() => {
-    if (TABS.length && !TABS.includes(tab)) setTab(fallbackTab)
-  }, [tab, TABS, fallbackTab, setTab])
+  const [tab, setTab] = useUrlState('tab', 'Imóveis')
   const [data, setData] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -1079,12 +1059,7 @@ export function CRM() {
             <EmptyState
               icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Empreiteiros': HardHat }[tab] || Building2}
               title={`Sem ${tab.toLowerCase()}`}
-              description={
-                search ? `Nenhum resultado para "${search}".` :
-                profile?.role === 'parceiro'
-                  ? `Não tens nenhum ${tab.toLowerCase().replace(/s$/, '')} partilhado contigo. Pede ao administrador para te dar acesso.`
-                  : `Ainda não existem ${tab.toLowerCase()} registados. (role: ${profile?.role || 'desconhecido'})`
-              }
+              description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
             />
           )}
           {moveModal && (
