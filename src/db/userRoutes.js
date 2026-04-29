@@ -26,6 +26,11 @@ const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.s
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
 const supabaseAdmin = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null
 
+// Emails que ficam SEMPRE como admin activo (auto-promovidos no primeiro login).
+// Configurável via env var OWNER_EMAILS (separado por vírgula). Default: somniumprs@gmail.com
+const OWNER_EMAILS = (process.env.OWNER_EMAILS || 'somniumprs@gmail.com')
+  .split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+
 // ── Helpers ──────────────────────────────────────────────────
 async function getUserByEmail(email) {
   const r = await pool.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [email])
@@ -46,24 +51,33 @@ function iniciaisFromNome(nome) {
 
 /**
  * Resolve o registo `users` correspondente ao utilizador autenticado.
- * Em dev (sem Supabase), devolve o owner.
+ * - Em dev (sem Supabase), devolve o owner default.
+ * - Emails em OWNER_EMAILS são sempre admin activos (auto-promovidos).
+ * - Outros logins são auto-provisionados como `comercial` inactivo (admin tem que activar).
  */
 export async function resolveAppUser(req) {
-  // Dev mode — sem Supabase configurado, assume admin
   if (!supabaseAdmin) {
-    return await getUserByEmail('somniumprs@gmail.com')
+    return await getUserByEmail(OWNER_EMAILS[0] || 'somniumprs@gmail.com')
   }
   if (!req.user?.email) return null
-  let u = await getUserByEmail(req.user.email)
+  const email = req.user.email
+  const isOwner = OWNER_EMAILS.includes(email.toLowerCase())
+
+  let u = await getUserByEmail(email)
   if (!u) {
-    // Auto-provisionar entrada inativa para que admin possa activar
     await pool.query(
       `INSERT INTO users (id, email, nome, iniciais, role, ativo)
-       VALUES ($1, $2, $3, $4, 'comercial', false)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (email) DO NOTHING`,
-      [req.user.id, req.user.email, req.user.email.split('@')[0], iniciaisFromNome(req.user.email)]
+      [req.user.id, email, email.split('@')[0], iniciaisFromNome(email),
+       isOwner ? 'admin' : 'comercial', isOwner]
     )
-    u = await getUserByEmail(req.user.email)
+    u = await getUserByEmail(email)
+  }
+  // Garantir que owners ficam sempre admin/activo (mesmo se outro admin os tiver mexido)
+  if (u && isOwner && (u.role !== 'admin' || !u.ativo)) {
+    await pool.query(`UPDATE users SET role = 'admin', ativo = true, updated_at = NOW()::TEXT WHERE id = $1`, [u.id])
+    u = await getUserByEmail(email)
   }
   return u
 }
