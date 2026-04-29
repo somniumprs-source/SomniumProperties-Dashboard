@@ -132,29 +132,49 @@ router.get('/', async (_req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// POST /api/users — convidar novo utilizador (cria em Supabase Auth + tabela users)
+// POST /api/users — convidar novo utilizador por email (cria em Supabase Auth + tabela users)
+//
+// Modos:
+//   - sem `password` e sem `mode`: envia convite/magic link por email (requer SMTP no Supabase)
+//   - mode: 'magic_link'         : gera link de magic-link e devolve-o em `actionLink` (não requer SMTP)
+//   - password fornecida          : cria com password e devolve credenciais para partilhares manualmente
 router.post('/', async (req, res) => {
   try {
-    const { email, nome, role = 'comercial', cor = '#C9A84C', password } = req.body || {}
+    const { email, nome, role = 'comercial', cor = '#C9A84C', password, mode } = req.body || {}
     if (!email || !nome) return res.status(400).json({ error: 'email e nome obrigatórios' })
     if (!ROLES.includes(role)) return res.status(400).json({ error: `role inválido (${ROLES.join(', ')})` })
 
     let authUserId = null
+    let actionLink = null
+    let deliveryNote = null
+
     if (supabaseAdmin) {
-      // Cria utilizador em Supabase Auth (com password se fornecida, ou convite por email)
+      const redirectTo = process.env.PUBLIC_APP_URL || undefined
       if (password) {
         const { data, error } = await supabaseAdmin.auth.admin.createUser({
           email, password, email_confirm: true,
         })
         if (error) return res.status(400).json({ error: `Supabase: ${error.message}` })
         authUserId = data.user.id
-      } else {
-        const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email)
-        if (error) return res.status(400).json({ error: `Convite: ${error.message}` })
+        deliveryNote = 'Conta criada com password. Partilha as credenciais com a pessoa.'
+      } else if (mode === 'magic_link') {
+        // Gera link sem depender de SMTP. Útil para partilhar manualmente (WhatsApp/Slack/Email próprio)
+        const { data, error } = await supabaseAdmin.auth.admin.generateLink({
+          type: 'magiclink', email, options: redirectTo ? { redirectTo } : undefined,
+        })
+        if (error) return res.status(400).json({ error: `Magic link: ${error.message}` })
         authUserId = data.user.id
+        actionLink = data.properties?.action_link || null
+        deliveryNote = 'Link de acesso gerado. Copia e envia à pessoa por email/WhatsApp.'
+      } else {
+        const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, redirectTo ? { redirectTo } : undefined)
+        if (error) return res.status(400).json({ error: `Convite: ${error.message}. Sugestão: usar mode=magic_link se SMTP não estiver configurado no Supabase.` })
+        authUserId = data.user.id
+        deliveryNote = 'Convite enviado por email pelo Supabase.'
       }
     } else {
       authUserId = `local-${Date.now()}`
+      deliveryNote = 'Modo dev — utilizador adicionado apenas localmente.'
     }
 
     const iniciais = iniciaisFromNome(nome)
@@ -165,7 +185,7 @@ router.post('/', async (req, res) => {
        RETURNING *`,
       [authUserId, email, nome, iniciais, cor, role]
     )
-    res.status(201).json(r.rows[0])
+    res.status(201).json({ ...r.rows[0], actionLink, deliveryNote })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -216,15 +236,33 @@ router.delete('/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// POST /api/users/:id/reset-password — enviar link de reset
+// POST /api/users/:id/reset-password — gera link de reset (devolve sempre o action link)
 router.post('/:id/reset-password', async (req, res) => {
   try {
     const u = await getUserById(req.params.id)
     if (!u) return res.status(404).json({ error: 'Não encontrado' })
     if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase não configurado' })
-    const { error } = await supabaseAdmin.auth.admin.generateLink({ type: 'recovery', email: u.email })
+    const redirectTo = process.env.PUBLIC_APP_URL || undefined
+    const { data, error } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'recovery', email: u.email, options: redirectTo ? { redirectTo } : undefined,
+    })
     if (error) return res.status(400).json({ error: error.message })
-    res.json({ ok: true })
+    res.json({ ok: true, actionLink: data?.properties?.action_link || null })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// POST /api/users/:id/magic-link — gera magic link de acesso (não requer SMTP)
+router.post('/:id/magic-link', async (req, res) => {
+  try {
+    const u = await getUserById(req.params.id)
+    if (!u) return res.status(404).json({ error: 'Não encontrado' })
+    if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase não configurado' })
+    const redirectTo = process.env.PUBLIC_APP_URL || undefined
+    const { data, error } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'magiclink', email: u.email, options: redirectTo ? { redirectTo } : undefined,
+    })
+    if (error) return res.status(400).json({ error: error.message })
+    res.json({ ok: true, actionLink: data?.properties?.action_link || null })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Shield, Plus, Trash2, KeyRound, RefreshCw, X } from 'lucide-react'
+import { Shield, Plus, Trash2, KeyRound, RefreshCw, X, Link as LinkIcon, Copy, Check } from 'lucide-react'
 import { apiFetch } from '../lib/api.js'
 import { useToast } from '../components/ui/Toast.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
@@ -20,6 +20,7 @@ export function Utilizadores() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [busy, setBusy] = useState(null)
+  const [linkModal, setLinkModal] = useState(null) // { url, note }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -68,13 +69,27 @@ export function Utilizadores() {
   }
 
   async function resetPassword(u) {
-    if (!confirm(`Enviar link de redefinição de password para ${u.email}?`)) return
+    if (!confirm(`Gerar link de reset de password para ${u.email}?`)) return
     setBusy(u.id)
     try {
       const r = await apiFetch(`/api/users/${u.id}/reset-password`, { method: 'POST' })
       const j = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(j.error || 'Erro')
-      toast('Link enviado', 'success')
+      if (j.actionLink) setLinkModal({ url: j.actionLink, note: `Link de reset de password para ${u.email}. Partilha-o com a pessoa.` })
+      else toast('Link enviado por email', 'success')
+    } catch (e) {
+      toast(`Erro: ${e.message}`, 'error')
+    } finally { setBusy(null) }
+  }
+
+  async function magicLink(u) {
+    setBusy(u.id)
+    try {
+      const r = await apiFetch(`/api/users/${u.id}/magic-link`, { method: 'POST' })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(j.error || 'Erro')
+      if (j.actionLink) setLinkModal({ url: j.actionLink, note: `Magic link de acesso para ${u.email}. Válido uma vez.` })
+      else toast('Link gerado', 'success')
     } catch (e) {
       toast(`Erro: ${e.message}`, 'error')
     } finally { setBusy(null) }
@@ -173,8 +188,13 @@ export function Utilizadores() {
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="inline-flex gap-1">
+                    <button onClick={() => magicLink(u)} disabled={busy === u.id}
+                      title="Gerar magic link de acesso"
+                      className="p-1.5 rounded hover:bg-white/5" style={{ color: '#999' }}>
+                      <LinkIcon className="w-3.5 h-3.5" />
+                    </button>
                     <button onClick={() => resetPassword(u)} disabled={busy === u.id}
-                      title="Enviar reset de password"
+                      title="Gerar reset de password"
                       className="p-1.5 rounded hover:bg-white/5" style={{ color: '#999' }}>
                       <KeyRound className="w-3.5 h-3.5" />
                     </button>
@@ -193,23 +213,65 @@ export function Utilizadores() {
       </div>
 
       {showForm && (
-        <InviteForm onClose={() => setShowForm(false)} onCreated={(u) => { setUsers(prev => [u, ...prev.filter(x => x.id !== u.id)]); setShowForm(false) }} />
+        <InviteForm
+          onClose={() => setShowForm(false)}
+          onCreated={(u) => {
+            setUsers(prev => [u, ...prev.filter(x => x.id !== u.id)])
+            setShowForm(false)
+            if (u.actionLink) setLinkModal({ url: u.actionLink, note: u.deliveryNote || `Link de acesso para ${u.email}` })
+            else if (u.deliveryNote) toast(u.deliveryNote, 'success')
+          }}
+        />
       )}
+      {linkModal && <LinkModal {...linkModal} onClose={() => setLinkModal(null)} />}
+    </div>
+  )
+}
+
+function LinkModal({ url, note, onClose }) {
+  const [copied, setCopied] = useState(false)
+  async function copy() {
+    try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch {}
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.7)' }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()}
+        className="rounded-2xl p-6 w-full max-w-lg" style={{ backgroundColor: '#111', border: '1px solid #1a1a1a' }}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-white font-semibold">Link gerado</h3>
+          <button type="button" onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-4 h-4" /></button>
+        </div>
+        <p className="text-xs text-gray-400 mb-3">{note}</p>
+        <div className="flex gap-2 items-stretch">
+          <input readOnly value={url} onFocus={e => e.target.select()}
+            className="flex-1 bg-transparent text-xs text-white px-3 py-2 rounded outline-none font-mono"
+            style={{ border: '1px solid #1a1a1a' }} />
+          <button onClick={copy}
+            className="flex items-center gap-1.5 px-3 text-xs font-medium rounded"
+            style={{ backgroundColor: '#C9A84C', color: '#0d0d0d' }}>
+            {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? 'Copiado' : 'Copiar'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
 
 function InviteForm({ onClose, onCreated }) {
   const toast = useToast()
-  const [form, setForm] = useState({ email: '', nome: '', role: 'comercial', cor: COR_PALETTE[0], password: '' })
+  // method: 'invite' (email Supabase) | 'magic_link' (gera link, partilhas tu) | 'password' (defines manualmente)
+  const [form, setForm] = useState({ email: '', nome: '', role: 'comercial', cor: COR_PALETTE[0], method: 'magic_link', password: '' })
   const [submitting, setSubmitting] = useState(false)
 
   async function submit(e) {
     e.preventDefault()
     setSubmitting(true)
     try {
-      const body = { ...form }
-      if (!body.password) delete body.password
+      const body = { email: form.email, nome: form.nome, role: form.role, cor: form.cor }
+      if (form.method === 'password') body.password = form.password
+      else if (form.method === 'magic_link') body.mode = 'magic_link'
+      // 'invite' → sem extras: usa inviteUserByEmail
       const r = await apiFetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -217,24 +279,30 @@ function InviteForm({ onClose, onCreated }) {
       })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || 'Erro')
-      toast(form.password ? 'Utilizador criado' : 'Convite enviado', 'success')
       onCreated(j)
     } catch (e) {
       toast(`Erro: ${e.message}`, 'error')
     } finally { setSubmitting(false) }
   }
 
+  const methodOpts = [
+    { id: 'invite',     label: 'Convite por email (Supabase envia)', hint: 'Requer SMTP configurado no Supabase.' },
+    { id: 'magic_link', label: 'Gerar link de acesso (envias tu)',    hint: 'Mostra um link que copias e envias por email/WhatsApp.' },
+    { id: 'password',   label: 'Definir password manualmente',         hint: 'Crias com password e partilhas as credenciais.' },
+  ]
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.7)' }} onClick={onClose}>
       <form onClick={e => e.stopPropagation()} onSubmit={submit}
-        className="rounded-2xl p-6 w-full max-w-md" style={{ backgroundColor: '#111', border: '1px solid #1a1a1a' }}>
+        className="rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" style={{ backgroundColor: '#111', border: '1px solid #1a1a1a' }}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-white font-semibold">Convidar utilizador</h3>
+          <h3 className="text-white font-semibold">Dar acesso a uma pessoa</h3>
           <button type="button" onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-4 h-4" /></button>
         </div>
 
         <label className="block text-[10px] uppercase tracking-widest text-gray-500 mb-1">Email</label>
         <input type="email" required value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
+          placeholder="pessoa@exemplo.com"
           className="w-full bg-transparent text-sm text-white px-3 py-2 rounded mb-3 outline-none"
           style={{ border: '1px solid #1a1a1a' }} />
 
@@ -251,7 +319,7 @@ function InviteForm({ onClose, onCreated }) {
         </select>
 
         <label className="block text-[10px] uppercase tracking-widest text-gray-500 mb-1">Cor</label>
-        <div className="flex gap-2 mb-3">
+        <div className="flex gap-2 mb-4">
           {COR_PALETTE.map(c => (
             <button key={c} type="button" onClick={() => setForm({ ...form, cor: c })}
               className="w-6 h-6 rounded-full transition-transform"
@@ -259,13 +327,36 @@ function InviteForm({ onClose, onCreated }) {
           ))}
         </div>
 
-        <label className="block text-[10px] uppercase tracking-widest text-gray-500 mb-1">
-          Password (opcional — deixa vazio para enviar convite por email)
-        </label>
-        <input type="text" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
-          placeholder="(em branco = convite por email)"
-          className="w-full bg-transparent text-sm text-white px-3 py-2 rounded mb-4 outline-none"
-          style={{ border: '1px solid #1a1a1a' }} />
+        <label className="block text-[10px] uppercase tracking-widest text-gray-500 mb-2">Como dar acesso?</label>
+        <div className="flex flex-col gap-2 mb-4">
+          {methodOpts.map(opt => (
+            <label key={opt.id}
+              className="flex items-start gap-2 p-2.5 rounded cursor-pointer"
+              style={{
+                border: form.method === opt.id ? '1px solid #C9A84C' : '1px solid #1a1a1a',
+                backgroundColor: form.method === opt.id ? 'rgba(201,168,76,0.05)' : 'transparent',
+              }}>
+              <input type="radio" name="method" value={opt.id}
+                checked={form.method === opt.id}
+                onChange={() => setForm({ ...form, method: opt.id })}
+                className="mt-0.5 accent-[#C9A84C]" />
+              <div>
+                <p className="text-xs text-white font-medium">{opt.label}</p>
+                <p className="text-[10px] text-gray-500">{opt.hint}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+
+        {form.method === 'password' && (
+          <>
+            <label className="block text-[10px] uppercase tracking-widest text-gray-500 mb-1">Password</label>
+            <input type="text" required minLength={8} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
+              placeholder="Mínimo 8 caracteres"
+              className="w-full bg-transparent text-sm text-white px-3 py-2 rounded mb-4 outline-none font-mono"
+              style={{ border: '1px solid #1a1a1a' }} />
+          </>
+        )}
 
         <div className="flex gap-2 justify-end">
           <button type="button" onClick={onClose}
@@ -275,7 +366,7 @@ function InviteForm({ onClose, onCreated }) {
           <button type="submit" disabled={submitting}
             className="px-4 py-2 text-xs font-medium rounded"
             style={{ backgroundColor: '#C9A84C', color: '#0d0d0d' }}>
-            {submitting ? 'A criar...' : 'Criar'}
+            {submitting ? 'A criar...' : 'Dar acesso'}
           </button>
         </div>
       </form>
