@@ -13,13 +13,26 @@ import { Router } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import pool from './pg.js'
 
-export const ROLES = ['admin', 'comercial', 'financeiro', 'operacoes']
+export const ROLES = ['admin', 'comercial', 'financeiro', 'operacoes', 'parceiro']
 
 export const ROLE_AREAS = {
   admin:      ['dashboard', 'crm', 'projectos', 'financeiro', 'operacoes', 'metricas', 'alertas', 'admin'],
   comercial:  ['dashboard', 'crm', 'projectos', 'metricas'],
   financeiro: ['dashboard', 'financeiro', 'metricas'],
   operacoes:  ['dashboard', 'operacoes', 'alertas', 'metricas'],
+  // Parceiro externo: só vê o CRM, e dentro do CRM só a tab de Imóveis
+  parceiro:   ['crm'],
+}
+
+// Sub-módulos dentro de cada área. Usado para filtrar tabs/secções no frontend
+// e para proteger endpoints específicos no backend.
+// Se uma role não estiver listada num módulo, NÃO tem acesso a esse módulo.
+export const ROLE_MODULES = {
+  admin:      ['crm.imoveis', 'crm.investidores', 'crm.consultores', 'crm.empreiteiros', 'crm.negocios'],
+  comercial:  ['crm.imoveis', 'crm.investidores', 'crm.consultores', 'crm.empreiteiros', 'crm.negocios'],
+  financeiro: ['crm.negocios'],
+  operacoes:  [],
+  parceiro:   ['crm.imoveis'],
 }
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.supabase.co'
@@ -103,6 +116,27 @@ export function requireRole(...allowed) {
   }
 }
 
+/**
+ * Middleware: permite passar se o utilizador tiver acesso ao módulo indicado.
+ * Uso: app.use('/api/crm/investidores', requireModule('crm.investidores'))
+ */
+export function requireModule(module) {
+  return async (req, res, next) => {
+    if (!supabaseAdmin) return next()
+    try {
+      const u = await resolveAppUser(req)
+      if (!u || !u.ativo) return res.status(403).json({ error: 'Conta inactiva' })
+      req.appUser = u
+      if (u.role === 'admin') return next()
+      const mods = ROLE_MODULES[u.role] || []
+      if (mods.includes(module)) return next()
+      return res.status(403).json({ error: `Sem acesso a ${module}` })
+    } catch (e) {
+      return res.status(500).json({ error: e.message })
+    }
+  }
+}
+
 // ── Routes ───────────────────────────────────────────────────
 const router = Router()
 
@@ -125,6 +159,7 @@ router.get('/me', async (req, res) => {
       role: u.role,
       ativo: u.ativo,
       areas: ROLE_AREAS[u.role] || [],
+      modules: ROLE_MODULES[u.role] || [],
     })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
