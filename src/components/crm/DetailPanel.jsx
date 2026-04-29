@@ -758,6 +758,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                 <EF label="Off-Market" field="imoveis_off_market" form={form} set={setField} type="number" />
                 <EF label="Meta Mensal Leads" field="meta_mensal_leads" form={form} set={setField} type="number" />
                 <EF label="Data Início Parceria" field="data_inicio" form={form} set={setField} type="date" />
+                <EF label="1º Contacto" field="data_primeira_call" form={form} set={setField} type="date" />
                 <EF label="Motivo Descontinuação" field="motivo_descontinuacao" form={form} set={setField} />
               </> : <>
                 <Field label="Estatuto" value={data.estatuto} />
@@ -768,6 +769,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                 <Field label="Leads Enviados" value={data.imoveis_enviados} />
                 <Field label="Off-Market" value={data.imoveis_off_market} />
                 <Field label="Comissão" value={data.comissao > 0 ? `${data.comissao}%` : '—'} />
+                <Field label="1º Contacto" value={data.data_primeira_call} />
               </>}
             </>}
           </div>

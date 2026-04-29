@@ -517,6 +517,22 @@ router.post('/consultores/:id/followups', async (req, res) => {
       })
     }
 
+    // Auto-preencher data_primeira_call com o follow-up mais antigo (apenas se vazio)
+    const { rows: cur } = await pool.query(
+      `SELECT data_primeira_call FROM consultores WHERE id = $1`,
+      [consultorId]
+    )
+    if (cur[0] && (cur[0].data_primeira_call == null || cur[0].data_primeira_call === '')) {
+      const { rows: oldest } = await pool.query(
+        `SELECT data FROM consultor_followups
+         WHERE consultor_id = $1 ORDER BY data ASC, created_at ASC LIMIT 1`,
+        [consultorId]
+      )
+      if (oldest[0]?.data) {
+        await Consultores.update(consultorId, { data_primeira_call: oldest[0].data })
+      }
+    }
+
     res.status(201).json(item)
   } catch (e) { res.status(400).json({ error: e.message }) }
 })

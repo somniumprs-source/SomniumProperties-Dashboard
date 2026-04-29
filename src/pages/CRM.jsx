@@ -1506,6 +1506,7 @@ const FIELD_DEFS = {
     { key: 'imobiliaria', label: 'Imobiliária', type: 'multiselect', options: ['Remax','ERA','KW','Century21','Coldwell Banker','IAD','Listoo','Impactus','Decisões e Soluções','RE/MAX','Outra'] },
     { key: 'zonas', label: 'Zonas de Atuação', type: 'multiselect', options: FREGUESIAS },
     { key: 'data_inicio', label: 'Data Início Parceria', type: 'date' },
+    { key: 'data_primeira_call', label: '1º Contacto (Data)', type: 'date' },
     { key: 'data_follow_up', label: 'Data Follow Up', type: 'date' },
     { key: 'data_proximo_follow_up', label: 'Data Próximo Follow Up', type: 'date' },
     { key: 'motivo_follow_up', label: 'Motivo Follow Up', type: 'text' },
