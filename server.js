@@ -21,8 +21,18 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
 const supabaseAdmin = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null
 
 app.use('/api', async (req, res, next) => {
-  // CRM API — usa PostgreSQL directamente, sem auth Supabase
-  if (req.path.startsWith('/crm/')) return next()
+  // CRM API — historicamente sem auth, mas se vier token populamos req.user
+  // (necessário para os requireModule de /api/crm/* identificarem o utilizador).
+  if (req.path.startsWith('/crm/')) {
+    const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token
+    if (token && supabaseAdmin) {
+      try {
+        const { data: { user } } = await supabaseAdmin.auth.getUser(token)
+        if (user) req.user = user
+      } catch {}
+    }
+    return next()
+  }
   // Webhook Twilio — validacao feita no handler (X-Twilio-Signature)
   if (req.path.startsWith('/webhook/')) return next()
   // Cron jobs, templates, relatórios, reactivação — protegidos por API key interna
@@ -66,8 +76,16 @@ try {
   console.log('[crm] API CRM + Análises montada em /api/crm (PostgreSQL)')
 
   // ── Gestão de utilizadores e camadas de acesso ───────────────
-  const { default: userRoutes, requireRole } = await import('./src/db/userRoutes.js')
+  const { default: userRoutes, requireRole, requireModule } = await import('./src/db/userRoutes.js')
   app.use('/api/users', userRoutes)
+  // Sub-módulos do CRM — bloqueiam parceiros que só têm crm.imoveis
+  // NOTA: aplicam-se aos endpoints que vivem no /api/crm router (definido acima),
+  // mas como o auth middleware faz bypass de /api/crm/, estes guards só são
+  // efectivos quando o user tem token (parceiros têm sempre token).
+  app.use('/api/crm/investidores', requireModule('crm.investidores'))
+  app.use('/api/crm/consultores',  requireModule('crm.consultores'))
+  app.use('/api/crm/empreiteiros', requireModule('crm.empreiteiros'))
+  app.use('/api/crm/negocios',     requireModule('crm.negocios'))
   // Filtros por área (admin passa sempre; em dev sem Supabase passa sempre)
   app.use('/api/financeiro',         requireRole('financeiro'))
   app.use('/api/kpis/financeiro',    requireRole('financeiro'))
