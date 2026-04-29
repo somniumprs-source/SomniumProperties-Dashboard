@@ -314,27 +314,28 @@ function LinkModal({ url, note, onClose }) {
 
 function InviteForm({ onClose, onCreated }) {
   const toast = useToast()
-  // method: 'invite' (email Supabase) | 'magic_link' (gera link, partilhas tu) | 'password' (defines manualmente)
   const [form, setForm] = useState({ email: '', nome: '', role: 'comercial', cor: COR_PALETTE[0], method: 'magic_link', password: '' })
   const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState(null)
 
   async function submit(e) {
     e.preventDefault()
     setSubmitting(true)
+    setError(null)
     try {
       const body = { email: form.email, nome: form.nome, role: form.role, cor: form.cor }
       if (form.method === 'password') body.password = form.password
       else if (form.method === 'magic_link') body.mode = 'magic_link'
-      // 'invite' → sem extras: usa inviteUserByEmail
       const r = await apiFetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Erro')
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
       onCreated(j)
     } catch (e) {
+      setError(e.message)
       toast(`Erro: ${e.message}`, 'error')
     } finally { setSubmitting(false) }
   }
@@ -410,6 +411,13 @@ function InviteForm({ onClose, onCreated }) {
               className="w-full bg-transparent text-sm text-white px-3 py-2 rounded mb-4 outline-none font-mono"
               style={{ border: '1px solid #1a1a1a' }} />
           </>
+        )}
+
+        {error && (
+          <div className="mb-3 p-3 rounded text-xs" style={{ backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5' }}>
+            <p className="font-semibold mb-1">Erro a criar utilizador:</p>
+            <p className="font-mono break-words">{error}</p>
+          </div>
         )}
 
         <div className="flex gap-2 justify-end">
