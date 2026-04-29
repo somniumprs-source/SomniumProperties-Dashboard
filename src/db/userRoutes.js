@@ -248,24 +248,32 @@ router.post('/', async (req, res) => {
         authUserId = data.user.id
         deliveryNote = 'Conta criada com password. Partilha as credenciais com a pessoa.'
       } else if (mode === 'magic_link') {
-        // 1. Tenta INVITE (cria user novo + gera link). Se já existir, falla por isso.
-        let data, error
-        ;({ data, error } = await supabaseAdmin.auth.admin.generateLink({
-          type: 'invite', email, options: redirectTo ? { redirectTo } : undefined,
-        }))
-        if (error) {
-          const msg = (error.message || '').toLowerCase()
-          // Se utilizador já existe, gera magiclink em vez disso
-          if (msg.includes('already') || msg.includes('exist') || msg.includes('registered')) {
-            ;({ data, error } = await supabaseAdmin.auth.admin.generateLink({
-              type: 'magiclink', email, options: redirectTo ? { redirectTo } : undefined,
-            }))
+        // Estratégia robusta:
+        // 1. Cria user com password aleatória (idempotente — se já existe, ignora erro).
+        // 2. Gera magiclink para o email.
+        const tempPassword = `Tmp_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`
+        const createResult = await supabaseAdmin.auth.admin.createUser({
+          email, password: tempPassword, email_confirm: true,
+        })
+        if (createResult.error) {
+          const msg = (createResult.error.message || '').toLowerCase()
+          // Se já existir, segue em frente (gerar link para o user existente)
+          if (!msg.includes('already') && !msg.includes('registered') && !msg.includes('exist')) {
+            return res.status(400).json({ error: `Criar utilizador: ${createResult.error.message}` })
           }
-          if (error) return res.status(400).json({ error: `Link: ${error.message}` })
+        } else {
+          authUserId = createResult.data?.user?.id
         }
-        authUserId = data?.user?.id
-        actionLink = data?.properties?.action_link || null
-        if (!actionLink) return res.status(500).json({ error: 'Supabase não devolveu action_link. Verifica permissões da SUPABASE_SERVICE_KEY.' })
+        // Agora gerar magiclink (já existe seguramente)
+        const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
+          type: 'magiclink', email, options: redirectTo ? { redirectTo } : undefined,
+        })
+        if (linkErr) return res.status(400).json({ error: `Magic link: ${linkErr.message}` })
+        if (!authUserId) authUserId = linkData?.user?.id
+        actionLink = linkData?.properties?.action_link || null
+        if (!actionLink) return res.status(500).json({
+          error: 'Supabase não devolveu action_link. Verifica que SUPABASE_SERVICE_KEY é a service_role key (não a anon).',
+        })
         deliveryNote = 'Link de acesso gerado. Copia e envia à pessoa por email/WhatsApp.'
       } else {
         const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, redirectTo ? { redirectTo } : undefined)
