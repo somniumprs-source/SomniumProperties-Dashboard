@@ -384,6 +384,8 @@ router.get('/consultores/enriched', async (req, res) => {
     const { rows: consultores } = await pool.query('SELECT * FROM consultores ORDER BY score_prioridade DESC NULLS LAST, updated_at DESC')
     const { rows: imoveis } = await pool.query('SELECT nome_consultor, estado, check_qualidade, data_adicionado FROM imoveis WHERE nome_consultor IS NOT NULL')
     const { rows: interacoes } = await pool.query('SELECT consultor_id, data_hora, direcao FROM consultor_interacoes ORDER BY data_hora DESC')
+    const { rows: followupAgg } = await pool.query('SELECT consultor_id, MIN(data) AS primeiro_followup, MAX(data) AS ultimo_followup FROM consultor_followups GROUP BY consultor_id')
+    const followupsByConsultor = new Map(followupAgg.map(f => [f.consultor_id, f]))
 
     const now = Date.now()
     const enriched = consultores.map(c => {
@@ -397,8 +399,15 @@ router.get('/consultores/enriched', async (req, res) => {
 
       const minhasInteracoes = interacoes.filter(i => i.consultor_id === c.id)
       const ultimaInteracao = minhasInteracoes[0]?.data_hora
-      const diasSemContacto = ultimaInteracao ? Math.floor((now - new Date(ultimaInteracao)) / 86400000) : null
-      const temInteracoes = minhasInteracoes.length > 0
+      const followupAggC = followupsByConsultor.get(c.id)
+      const ultimoFollowup = followupAggC?.ultimo_followup || null
+      // Para "ultimo contacto" considerar tambem o follow-up mais recente quando nao ha interacoes
+      const ultimoContactoCandidatos = [ultimaInteracao, ultimoFollowup, c.data_follow_up].filter(Boolean)
+      const ultimoContacto = ultimoContactoCandidatos.length
+        ? ultimoContactoCandidatos.reduce((max, d) => (new Date(d) > new Date(max) ? d : max))
+        : null
+      const diasSemContacto = ultimoContacto ? Math.floor((now - new Date(ultimoContacto)) / 86400000) : null
+      const temContacto = minhasInteracoes.length > 0 || !!c.data_primeira_call || !!followupAggC
 
       const ultimoImovel = [...meusImoveis].sort((a, b) => (b.data_adicionado || '').localeCompare(a.data_adicionado || ''))[0]
       const dataUltimoImovel = ultimoImovel?.data_adicionado
@@ -411,10 +420,10 @@ router.get('/consultores/enriched', async (req, res) => {
       )
       if (avancadoRecente) {
         alertStatus = 'green'
-      } else if (horasCriado > 48 && !temInteracoes) {
+      } else if (horasCriado > 48 && !temContacto) {
         alertStatus = 'red'
       } else if (diasSemContacto > 15) {
-        const imovelDepoisContacto = dataUltimoImovel && ultimaInteracao && new Date(dataUltimoImovel) > new Date(ultimaInteracao)
+        const imovelDepoisContacto = dataUltimoImovel && ultimoContacto && new Date(dataUltimoImovel) > new Date(ultimoContacto)
         if (!imovelDepoisContacto) alertStatus = 'orange'
       }
 
