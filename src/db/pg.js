@@ -615,6 +615,19 @@ export async function initSchema() {
       );
       CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
       CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+
+      -- Acessos granulares por registo (parceiros externos a imóveis/negócios específicos)
+      CREATE TABLE IF NOT EXISTS acessos (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        entidade TEXT NOT NULL,           -- 'imovel' | 'negocio'
+        entidade_id TEXT NOT NULL,
+        granted_by TEXT,
+        created_at TEXT DEFAULT (NOW()::TEXT),
+        UNIQUE(user_id, entidade, entidade_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_acessos_user ON acessos(user_id);
+      CREATE INDEX IF NOT EXISTS idx_acessos_entidade ON acessos(entidade, entidade_id);
     `)
 
     // Bootstrap: garantir que somniumprs@gmail.com (owner) existe como admin

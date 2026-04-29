@@ -1,14 +1,16 @@
-import { useEffect, useState, useCallback } from 'react'
-import { Shield, Plus, Trash2, KeyRound, RefreshCw, X, Link as LinkIcon, Copy, Check } from 'lucide-react'
+import { useEffect, useState, useCallback, Fragment } from 'react'
+import { Shield, Plus, Trash2, KeyRound, RefreshCw, X, Link as LinkIcon, Copy, Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { apiFetch } from '../lib/api.js'
 import { useToast } from '../components/ui/Toast.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
+import { AcessosDoUser } from '../components/PartilharAcesso.jsx'
 
 const ROLES = [
   { id: 'admin',      label: 'Admin',      desc: 'Acesso total + gestão de utilizadores' },
   { id: 'comercial',  label: 'Comercial',  desc: 'CRM, projectos, métricas' },
   { id: 'financeiro', label: 'Financeiro', desc: 'Financeiro, métricas' },
   { id: 'operacoes',  label: 'Operações',  desc: 'Operações, alertas, métricas' },
+  { id: 'parceiro',   label: 'Parceiro',   desc: 'Externo — só vê imóveis/projectos partilhados' },
 ]
 
 const COR_PALETTE = ['#C9A84C', '#6366f1', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899']
@@ -21,6 +23,7 @@ export function Utilizadores() {
   const [showForm, setShowForm] = useState(false)
   const [busy, setBusy] = useState(null)
   const [linkModal, setLinkModal] = useState(null) // { url, note }
+  const [expandedUser, setExpandedUser] = useState(null) // userId expandido para mostrar acessos
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -149,9 +152,16 @@ export function Utilizadores() {
               <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500 text-xs">Sem utilizadores</td></tr>
             )}
             {users.map(u => (
-              <tr key={u.id} style={{ borderTop: '1px solid #1a1a1a' }}>
+              <Fragment key={u.id}>
+              <tr style={{ borderTop: '1px solid #1a1a1a' }}>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
+                    {u.role === 'parceiro' ? (
+                      <button onClick={() => setExpandedUser(expandedUser === u.id ? null : u.id)}
+                        className="text-gray-500 hover:text-white" title="Ver acessos">
+                        {expandedUser === u.id ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                      </button>
+                    ) : <span className="w-3.5" />}
                     <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
                       style={{ backgroundColor: u.cor || '#C9A84C' }}>
                       {u.iniciais}
@@ -207,6 +217,18 @@ export function Utilizadores() {
                   </div>
                 </td>
               </tr>
+              {u.role === 'parceiro' && expandedUser === u.id && (
+                <tr style={{ backgroundColor: '#0a0a0a', borderTop: '1px solid #1a1a1a' }}>
+                  <td colSpan={5} className="p-0">
+                    <div className="px-4 py-3">
+                      <p className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">Acessos atribuídos</p>
+                      <p className="text-[10px] text-gray-600 mb-2">Para conceder acesso, vai ao detalhe do imóvel ou projecto e clica "Partilhar".</p>
+                    </div>
+                    <AcessosDoUser userId={u.id} />
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
           </tbody>
         </table>
