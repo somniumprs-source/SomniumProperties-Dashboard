@@ -248,13 +248,24 @@ router.post('/', async (req, res) => {
         authUserId = data.user.id
         deliveryNote = 'Conta criada com password. Partilha as credenciais com a pessoa.'
       } else if (mode === 'magic_link') {
-        // Gera link sem depender de SMTP. Útil para partilhar manualmente (WhatsApp/Slack/Email próprio)
-        const { data, error } = await supabaseAdmin.auth.admin.generateLink({
-          type: 'magiclink', email, options: redirectTo ? { redirectTo } : undefined,
-        })
-        if (error) return res.status(400).json({ error: `Magic link: ${error.message}` })
-        authUserId = data.user.id
-        actionLink = data.properties?.action_link || null
+        // 1. Tenta INVITE (cria user novo + gera link). Se já existir, falla por isso.
+        let data, error
+        ;({ data, error } = await supabaseAdmin.auth.admin.generateLink({
+          type: 'invite', email, options: redirectTo ? { redirectTo } : undefined,
+        }))
+        if (error) {
+          const msg = (error.message || '').toLowerCase()
+          // Se utilizador já existe, gera magiclink em vez disso
+          if (msg.includes('already') || msg.includes('exist') || msg.includes('registered')) {
+            ;({ data, error } = await supabaseAdmin.auth.admin.generateLink({
+              type: 'magiclink', email, options: redirectTo ? { redirectTo } : undefined,
+            }))
+          }
+          if (error) return res.status(400).json({ error: `Link: ${error.message}` })
+        }
+        authUserId = data?.user?.id
+        actionLink = data?.properties?.action_link || null
+        if (!actionLink) return res.status(500).json({ error: 'Supabase não devolveu action_link. Verifica permissões da SUPABASE_SERVICE_KEY.' })
         deliveryNote = 'Link de acesso gerado. Copia e envia à pessoa por email/WhatsApp.'
       } else {
         const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, redirectTo ? { redirectTo } : undefined)
@@ -350,11 +361,24 @@ router.post('/:id/magic-link', async (req, res) => {
     if (!u) return res.status(404).json({ error: 'Não encontrado' })
     if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase não configurado' })
     const redirectTo = process.env.PUBLIC_APP_URL || undefined
-    const { data, error } = await supabaseAdmin.auth.admin.generateLink({
+
+    // Tenta magiclink (user existente). Se falhar por não existir, tenta invite (cria + gera link).
+    let data, error
+    ;({ data, error } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink', email: u.email, options: redirectTo ? { redirectTo } : undefined,
-    })
-    if (error) return res.status(400).json({ error: error.message })
-    res.json({ ok: true, actionLink: data?.properties?.action_link || null })
+    }))
+    if (error) {
+      const msg = (error.message || '').toLowerCase()
+      if (msg.includes('not found') || msg.includes('does not exist') || msg.includes('user')) {
+        ;({ data, error } = await supabaseAdmin.auth.admin.generateLink({
+          type: 'invite', email: u.email, options: redirectTo ? { redirectTo } : undefined,
+        }))
+      }
+      if (error) return res.status(400).json({ error: error.message })
+    }
+    const actionLink = data?.properties?.action_link || null
+    if (!actionLink) return res.status(500).json({ error: 'Supabase não devolveu action_link. Verifica SUPABASE_SERVICE_KEY (deve ser a service_role key, não a anon).' })
+    res.json({ ok: true, actionLink })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
