@@ -534,17 +534,19 @@ function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
 
 export function CRM() {
   const { profile } = useAuth()
-  const userModules = profile?.modules || []
-  const TABS = useMemo(
-    () => profile?.role === 'admin'
-      ? ALL_TABS
-      : ALL_TABS.filter(t => userModules.includes(TAB_MODULE[t])),
-    [profile?.role, userModules]
-  )
-  const defaultTab = TABS[0] || 'Imóveis'
-  const [tab, setTab] = useUrlState('tab', defaultTab)
+  const role = profile?.role
+  const modulesKey = (profile?.modules || []).join(',')
+  const TABS = useMemo(() => {
+    if (role === 'admin') return ALL_TABS
+    const mods = modulesKey ? modulesKey.split(',') : []
+    return ALL_TABS.filter(t => mods.includes(TAB_MODULE[t]))
+  }, [role, modulesKey])
+  const fallbackTab = TABS[0] || 'Imóveis'
+  const [tab, setTab] = useUrlState('tab', fallbackTab)
   // Se a tab guardada no URL não está acessível, redireciona para a primeira disponível
-  useEffect(() => { if (!TABS.includes(tab)) setTab(defaultTab) }, [tab, TABS, defaultTab, setTab])
+  useEffect(() => {
+    if (TABS.length && !TABS.includes(tab)) setTab(fallbackTab)
+  }, [tab, TABS, fallbackTab, setTab])
   const [data, setData] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
