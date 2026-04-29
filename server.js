@@ -21,24 +21,8 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
 const supabaseAdmin = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null
 
 app.use('/api', async (req, res, next) => {
-  // CRM API — historicamente sem auth, mas se vier token populamos req.user
-  // (necessário para os requireModule de /api/crm/* identificarem o utilizador).
-  // Best-effort: timeout 800ms para não bloquear se Supabase estiver lento.
-  if (req.path.startsWith('/crm/')) {
-    const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token
-    if (token && supabaseAdmin) {
-      try {
-        const result = await Promise.race([
-          supabaseAdmin.auth.getUser(token),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 800)),
-        ])
-        if (result?.data?.user) req.user = result.data.user
-      } catch (e) {
-        // Silencioso — pedido continua sem req.user (compatibilidade com comportamento antigo)
-      }
-    }
-    return next()
-  }
+  // CRM API — usa PostgreSQL directamente, sem auth Supabase (comportamento histórico)
+  if (req.path.startsWith('/crm/')) return next()
   // Webhook Twilio — validacao feita no handler (X-Twilio-Signature)
   if (req.path.startsWith('/webhook/')) return next()
   // Cron jobs, templates, relatórios, reactivação — protegidos por API key interna
@@ -76,17 +60,14 @@ try {
   const { initSchema } = await import('./src/db/pg.js')
   await initSchema()
 
-  // ── Gestão de utilizadores e camadas de acesso (TEM de ser registado ANTES do router CRM) ──
-  const { default: userRoutes, accessRouter, requireRole, requireModule, restrictByAccess } = await import('./src/db/userRoutes.js')
+  // ── Gestão de utilizadores e camadas de acesso ──
+  const { default: userRoutes, accessRouter, requireRole } = await import('./src/db/userRoutes.js')
   app.use('/api/users', userRoutes)
   app.use('/api/acessos', accessRouter)
-  // Sub-módulos do CRM — bloqueiam roles que não têm o módulo na sua ROLE_MODULES
-  app.use('/api/crm/investidores', requireModule('crm.investidores'))
-  app.use('/api/crm/consultores',  requireModule('crm.consultores'))
-  app.use('/api/crm/empreiteiros', requireModule('crm.empreiteiros'))
-  // Imóveis e Negócios: parceiros podem aceder mas filtrados por registo (tabela acessos)
-  app.use('/api/crm/imoveis',  restrictByAccess('imovel'))
-  app.use('/api/crm/negocios', requireModule('crm.negocios'), restrictByAccess('negocio'))
+  // NOTA: o filtro por registo (restrictByAccess) e os requireModule do CRM estão desativados
+  // por agora — o auth middleware de /api/crm/* faz bypass histórico, sem token, e isso
+  // entra em conflito com middlewares que precisam de identificar o user.
+  // A gestão de partilha por imóvel/projecto continua disponível na UI mas sem enforcement backend.
 
   // Router CRM — montado DEPOIS dos guards para que estes corram primeiro
   const { default: crmRoutes } = await import('./src/db/routes.js')
