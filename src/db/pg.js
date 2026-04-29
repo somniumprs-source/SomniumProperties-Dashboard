@@ -601,6 +601,27 @@ export async function initSchema() {
       CREATE INDEX IF NOT EXISTS idx_audit_tabela ON audit_log(tabela, registo_id);
       CREATE INDEX IF NOT EXISTS idx_analises_imovel ON analises(imovel_id);
       CREATE INDEX IF NOT EXISTS idx_analises_activa ON analises(imovel_id, activa);
+
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        nome TEXT NOT NULL,
+        iniciais TEXT,
+        cor TEXT DEFAULT '#C9A84C',
+        role TEXT NOT NULL DEFAULT 'comercial',
+        ativo BOOLEAN DEFAULT true,
+        created_at TEXT DEFAULT (NOW()::TEXT),
+        updated_at TEXT DEFAULT (NOW()::TEXT)
+      );
+      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+      CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+    `)
+
+    // Bootstrap: garantir que somniumprs@gmail.com (owner) existe como admin
+    await client.query(`
+      INSERT INTO users (id, email, nome, iniciais, cor, role, ativo)
+      VALUES ('owner', 'somniumprs@gmail.com', 'João Abreu', 'JA', '#C9A84C', 'admin', true)
+      ON CONFLICT (email) DO UPDATE SET role = 'admin', ativo = true
     `)
     console.log('[pg] Schema criado/verificado')
   } finally {

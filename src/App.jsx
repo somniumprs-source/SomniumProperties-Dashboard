@@ -3,19 +3,20 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from './components/layout/Layout.jsx'
 import { Dashboard } from './pages/Dashboard.jsx'
 import { Login } from './pages/Login.jsx'
-import { ProfileSelect } from './pages/ProfileSelect.jsx'
+import { NoAccess } from './pages/NoAccess.jsx'
 import { ToastProvider } from './components/ui/Toast.jsx'
 import { ErrorBoundary } from './components/ui/ErrorBoundary.jsx'
 import { ChunkErrorBoundary } from './components/ui/ChunkErrorBoundary.jsx'
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
 import { ThemeProvider } from './contexts/ThemeContext.jsx'
 
-const Financeiro = lazy(() => import('./pages/Financeiro.jsx').then(m => ({ default: m.Financeiro })))
-const Alertas    = lazy(() => import('./pages/Alertas.jsx').then(m => ({ default: m.Alertas })))
-const CRM        = lazy(() => import('./pages/CRM.jsx').then(m => ({ default: m.CRM })))
-const Operacoes  = lazy(() => import('./pages/Operacoes.jsx').then(m => ({ default: m.Operacoes })))
-const Metricas   = lazy(() => import('./pages/Metricas.jsx').then(m => ({ default: m.Metricas })))
-const Projectos  = lazy(() => import('./pages/Projectos.jsx').then(m => ({ default: m.Projectos })))
+const Financeiro  = lazy(() => import('./pages/Financeiro.jsx').then(m => ({ default: m.Financeiro })))
+const Alertas     = lazy(() => import('./pages/Alertas.jsx').then(m => ({ default: m.Alertas })))
+const CRM         = lazy(() => import('./pages/CRM.jsx').then(m => ({ default: m.CRM })))
+const Operacoes   = lazy(() => import('./pages/Operacoes.jsx').then(m => ({ default: m.Operacoes })))
+const Metricas    = lazy(() => import('./pages/Metricas.jsx').then(m => ({ default: m.Metricas })))
+const Projectos   = lazy(() => import('./pages/Projectos.jsx').then(m => ({ default: m.Projectos })))
+const Utilizadores = lazy(() => import('./pages/Utilizadores.jsx').then(m => ({ default: m.Utilizadores })))
 
 function PageFallback() {
   return (
@@ -25,8 +26,14 @@ function PageFallback() {
   )
 }
 
+function Guarded({ area, children }) {
+  const { canAccess } = useAuth()
+  if (!canAccess(area)) return <NoAccess area={area} />
+  return children
+}
+
 function AppRoutes() {
-  const { isAuthenticated, hasProfile, loading } = useAuth()
+  const { isAuthenticated, hasProfile, loading, profileError } = useAuth()
 
   if (loading) {
     return (
@@ -40,7 +47,7 @@ function AppRoutes() {
   }
 
   if (!isAuthenticated) return <Login />
-  if (!hasProfile) return <ProfileSelect />
+  if (!hasProfile) return <NoAccess message={profileError || 'Sem perfil associado a esta conta.'} />
 
   return (
     <ChunkErrorBoundary>
@@ -48,12 +55,13 @@ function AppRoutes() {
         <Routes>
           <Route element={<Layout />}>
             <Route index element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
-            <Route path="/crm" element={<ErrorBoundary><CRM /></ErrorBoundary>} />
-            <Route path="/projectos" element={<ErrorBoundary><Projectos /></ErrorBoundary>} />
-            <Route path="/financeiro" element={<ErrorBoundary><Financeiro /></ErrorBoundary>} />
-            <Route path="/operacoes" element={<ErrorBoundary><Operacoes /></ErrorBoundary>} />
-            <Route path="/metricas" element={<ErrorBoundary><Metricas /></ErrorBoundary>} />
-            <Route path="/alertas" element={<ErrorBoundary><Alertas /></ErrorBoundary>} />
+            <Route path="/crm" element={<ErrorBoundary><Guarded area="crm"><CRM /></Guarded></ErrorBoundary>} />
+            <Route path="/projectos" element={<ErrorBoundary><Guarded area="projectos"><Projectos /></Guarded></ErrorBoundary>} />
+            <Route path="/financeiro" element={<ErrorBoundary><Guarded area="financeiro"><Financeiro /></Guarded></ErrorBoundary>} />
+            <Route path="/operacoes" element={<ErrorBoundary><Guarded area="operacoes"><Operacoes /></Guarded></ErrorBoundary>} />
+            <Route path="/metricas" element={<ErrorBoundary><Guarded area="metricas"><Metricas /></Guarded></ErrorBoundary>} />
+            <Route path="/alertas" element={<ErrorBoundary><Guarded area="alertas"><Alertas /></Guarded></ErrorBoundary>} />
+            <Route path="/admin/utilizadores" element={<ErrorBoundary><Guarded area="admin"><Utilizadores /></Guarded></ErrorBoundary>} />
             {/* Redirects de páginas removidas */}
             <Route path="/comercial" element={<Navigate to="/crm" replace />} />
             <Route path="/marketing" element={<Navigate to="/crm" replace />} />

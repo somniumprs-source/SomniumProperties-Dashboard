@@ -1,23 +1,25 @@
 import { NavLink } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { LayoutDashboard, TrendingUp, Database, Bell, Clock, BarChart3, Menu, X, LogOut, ArrowLeftRight, Briefcase } from 'lucide-react'
+import { LayoutDashboard, TrendingUp, Database, Bell, Clock, BarChart3, Menu, X, LogOut, Briefcase, Shield } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { apiFetch } from '../../lib/api.js'
 
 const nav = [
-  { to: '/',           label: 'Dashboard',  Icon: LayoutDashboard, end: true },
-  { to: '/crm',        label: 'CRM',        Icon: Database, badgeKey: 'crm' },
-  { to: '/projectos',  label: 'Projectos', Icon: Briefcase },
-  { to: '/financeiro', label: 'Financeiro', Icon: TrendingUp },
-  { to: '/operacoes',  label: 'Operações',  Icon: Clock, badgeKey: 'tarefas' },
-  { to: '/metricas',   label: 'Métricas',   Icon: BarChart3 },
-  { to: '/alertas',    label: 'Alertas',    Icon: Bell, badgeKey: 'alertas' },
+  { to: '/',                   label: 'Dashboard',  Icon: LayoutDashboard, end: true, area: 'dashboard' },
+  { to: '/crm',                label: 'CRM',        Icon: Database, badgeKey: 'crm', area: 'crm' },
+  { to: '/projectos',          label: 'Projectos',  Icon: Briefcase, area: 'projectos' },
+  { to: '/financeiro',         label: 'Financeiro', Icon: TrendingUp, area: 'financeiro' },
+  { to: '/operacoes',          label: 'Operações',  Icon: Clock, badgeKey: 'tarefas', area: 'operacoes' },
+  { to: '/metricas',           label: 'Métricas',   Icon: BarChart3, area: 'metricas' },
+  { to: '/alertas',            label: 'Alertas',    Icon: Bell, badgeKey: 'alertas', area: 'alertas' },
+  { to: '/admin/utilizadores', label: 'Utilizadores', Icon: Shield, area: 'admin' },
 ]
 
 export function Sidebar() {
-  const { profile, signOut, selectProfile } = useAuth()
+  const { profile, signOut, canAccess } = useAuth()
   const [badges, setBadges] = useState({ alertas: 0, crm: 0, tarefas: 0 })
   const [open, setOpen] = useState(false)
+  const visibleNav = nav.filter(item => canAccess(item.area))
 
   useEffect(() => {
     const load = async () => {
@@ -54,7 +56,7 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex flex-col gap-0.5 px-3 flex-1">
-        {nav.map(({ to, label, Icon, end, badgeKey }) => (
+        {visibleNav.map(({ to, label, Icon, end, badgeKey }) => (
           <NavLink
             key={to}
             to={to}
@@ -101,12 +103,13 @@ export function Sidebar() {
             </div>
           </div>
         )}
-        <div className="flex gap-2">
-          <button onClick={() => { selectProfile(null); localStorage.removeItem('somnium_profile') }}
-            className="flex items-center gap-1.5 text-[10px] px-2 py-1 rounded transition-colors hover:bg-white/5"
-            style={{ color: '#555' }} title="Trocar perfil">
-            <ArrowLeftRight className="w-3 h-3" /> Trocar
-          </button>
+        <div className="flex items-center justify-between gap-2">
+          {profile?.role && (
+            <span className="text-[9px] uppercase tracking-widest px-2 py-0.5 rounded"
+              style={{ color: '#C9A84C', backgroundColor: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.25)' }}>
+              {profile.role}
+            </span>
+          )}
           <button onClick={signOut}
             className="flex items-center gap-1.5 text-[10px] px-2 py-1 rounded transition-colors hover:bg-white/5"
             style={{ color: '#555' }} title="Sair">

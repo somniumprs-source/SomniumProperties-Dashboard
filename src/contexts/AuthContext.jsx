@@ -1,55 +1,59 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { supabase, authEnabled } from '../lib/supabase.js'
+import { apiFetch } from '../lib/api.js'
 
 const AuthContext = createContext(null)
-
-const PROFILES = [
-  { id: 'joao', nome: 'João Abreu', iniciais: 'JA', cor: '#C9A84C' },
-  { id: 'alexandre', nome: 'Alexandre Mendes', iniciais: 'AM', cor: '#6366f1' },
-]
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [profileError, setProfileError] = useState(null)
+
+  const loadProfile = useCallback(async () => {
+    try {
+      const r = await apiFetch('/api/users/me')
+      if (!r.ok) {
+        setProfile(null)
+        setProfileError(r.status === 403 ? 'Conta inactiva. Contacta o administrador.' : 'Não foi possível carregar perfil.')
+        return null
+      }
+      const u = await r.json()
+      setProfile(u)
+      setProfileError(null)
+      return u
+    } catch (e) {
+      setProfileError(e.message)
+      return null
+    }
+  }, [])
 
   useEffect(() => {
     if (!authEnabled || !supabase) {
       // Sem auth — acesso livre (dev mode)
       setSession({ user: { email: 'dev' } })
-      const saved = localStorage.getItem('somnium_profile')
-      if (saved) {
-        const p = PROFILES.find(pr => pr.id === saved)
-        if (p) setProfile(p)
-      }
-      setLoading(false)
+      loadProfile().finally(() => setLoading(false))
       return
     }
 
-    // Verificar sessão existente
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session)
-      if (session) {
-        const saved = localStorage.getItem('somnium_profile')
-        if (saved) {
-          const p = PROFILES.find(pr => pr.id === saved)
-          if (p) setProfile(p)
-        }
-      }
+      if (session) await loadProfile()
       setLoading(false)
     })
 
-    // Ouvir mudanças de auth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session)
-      if (!session) {
+      if (session) {
+        await loadProfile()
+      } else {
         setProfile(null)
-        localStorage.removeItem('somnium_profile')
+        setProfileError(null)
       }
     })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [loadProfile])
 
   async function signIn(email, password) {
     if (!supabase) throw new Error('Auth não configurado')
@@ -61,29 +65,23 @@ export function AuthProvider({ children }) {
     if (supabase) await supabase.auth.signOut()
     setSession(null)
     setProfile(null)
-    localStorage.removeItem('somnium_profile')
+    setProfileError(null)
   }
 
-  function selectProfile(profileId) {
-    if (!profileId) {
-      setProfile(null)
-      localStorage.removeItem('somnium_profile')
-      return
-    }
-    const p = PROFILES.find(pr => pr.id === profileId)
-    if (p) {
-      setProfile(p)
-      localStorage.setItem('somnium_profile', profileId)
-    }
+  function canAccess(area) {
+    if (!profile?.areas) return false
+    return profile.areas.includes(area)
   }
 
   return (
     <AuthContext.Provider value={{
-      session, profile, loading, authEnabled,
+      session, profile, loading, authEnabled, profileError,
       isAuthenticated: !!session,
       hasProfile: !!profile,
-      profiles: PROFILES,
-      signIn, signOut, selectProfile,
+      role: profile?.role || null,
+      areas: profile?.areas || [],
+      canAccess,
+      signIn, signOut, refreshProfile: loadProfile,
     }}>
       {children}
     </AuthContext.Provider>
