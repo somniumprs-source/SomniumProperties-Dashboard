@@ -122,6 +122,9 @@ export function Utilizadores() {
         </div>
       </div>
 
+      {/* Painel de diagnóstico */}
+      <DiagnosticoPanel />
+
       {/* Legenda de roles */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-6">
         {ROLES.map(r => (
@@ -246,6 +249,35 @@ export function Utilizadores() {
         />
       )}
       {linkModal && <LinkModal {...linkModal} onClose={() => setLinkModal(null)} />}
+    </div>
+  )
+}
+
+function DiagnosticoPanel() {
+  const [info, setInfo] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [open, setOpen] = useState(true)
+  useEffect(() => {
+    apiFetch('/api/users/whoami')
+      .then(r => r.json())
+      .then(setInfo)
+      .catch(e => setInfo({ error: e.message }))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return null
+  return (
+    <div className="mb-4 rounded-lg overflow-hidden" style={{ border: '1px solid #1a1a1a', backgroundColor: '#0f0f0f' }}>
+      <button onClick={() => setOpen(!open)}
+        className="w-full px-3 py-2 text-left text-[10px] uppercase tracking-widest font-semibold flex items-center justify-between"
+        style={{ color: '#C9A84C' }}>
+        Diagnóstico de sessão {open ? '▾' : '▸'}
+      </button>
+      {open && (
+        <pre className="p-3 text-[11px] text-gray-400 overflow-x-auto whitespace-pre-wrap" style={{ borderTop: '1px solid #1a1a1a' }}>
+          {JSON.stringify(info, null, 2)}
+        </pre>
+      )}
     </div>
   )
 }
