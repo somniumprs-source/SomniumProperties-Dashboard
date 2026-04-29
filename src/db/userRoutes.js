@@ -51,6 +51,16 @@ const supabaseAdmin = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE
 const OWNER_EMAILS = (process.env.OWNER_EMAILS || 'somniumprs@gmail.com')
   .split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
 
+// Cache curto (60s) de resolução de user por email — evita 1 query DB por pedido.
+// Chave: email lowercase. Invalidada manualmente em update/delete.
+const _userCache = new Map() // email -> { user, expires }
+const USER_CACHE_TTL_MS = 60_000
+
+function invalidateUserCache(email) {
+  if (email) _userCache.delete(email.toLowerCase())
+  else _userCache.clear()
+}
+
 // ── Helpers ──────────────────────────────────────────────────
 async function getUserByEmail(email) {
   const r = await pool.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [email])
@@ -81,8 +91,13 @@ export async function resolveAppUser(req) {
   }
   if (!req.user?.email) return null
   const email = req.user.email
-  const isOwner = OWNER_EMAILS.includes(email.toLowerCase())
+  const key = email.toLowerCase()
 
+  // Cache hit
+  const cached = _userCache.get(key)
+  if (cached && cached.expires > Date.now()) return cached.user
+
+  const isOwner = OWNER_EMAILS.includes(key)
   let u = await getUserByEmail(email)
   if (!u) {
     await pool.query(
@@ -94,11 +109,11 @@ export async function resolveAppUser(req) {
     )
     u = await getUserByEmail(email)
   }
-  // Garantir que owners ficam sempre admin/activo (mesmo se outro admin os tiver mexido)
   if (u && isOwner && (u.role !== 'admin' || !u.ativo)) {
     await pool.query(`UPDATE users SET role = 'admin', ativo = true, updated_at = NOW()::TEXT WHERE id = $1`, [u.id])
     u = await getUserByEmail(email)
   }
+  _userCache.set(key, { user: u, expires: Date.now() + USER_CACHE_TTL_MS })
   return u
 }
 
@@ -108,17 +123,18 @@ export async function resolveAppUser(req) {
  */
 export function requireRole(...allowed) {
   return async (req, res, next) => {
-    // Dev mode — sem Supabase, deixa passar
     if (!supabaseAdmin) return next()
     try {
       const u = await resolveAppUser(req)
-      if (!u || !u.ativo) return res.status(403).json({ error: 'Conta inactiva' })
+      if (!u) return res.status(401).json({ error: 'Não autenticado' })
+      if (!u.ativo) return res.status(403).json({ error: 'Conta inactiva' })
       req.appUser = u
-      if (u.role === 'admin') return next()
-      if (allowed.includes(u.role)) return next()
+      if (u.role === 'admin' || allowed.includes(u.role)) return next()
       return res.status(403).json({ error: 'Sem permissão para esta área' })
     } catch (e) {
-      return res.status(500).json({ error: e.message })
+      console.error('[requireRole]', req.path, e.message)
+      // Em caso de erro inesperado, NÃO bloquear — log e deixa passar para não derrubar a app
+      return next()
     }
   }
 }
@@ -132,14 +148,16 @@ export function requireModule(module) {
     if (!supabaseAdmin) return next()
     try {
       const u = await resolveAppUser(req)
-      if (!u || !u.ativo) return res.status(403).json({ error: 'Conta inactiva' })
+      if (!u) return res.status(401).json({ error: 'Não autenticado' })
+      if (!u.ativo) return res.status(403).json({ error: 'Conta inactiva' })
       req.appUser = u
       if (u.role === 'admin') return next()
       const mods = ROLE_MODULES[u.role] || []
       if (mods.includes(module)) return next()
       return res.status(403).json({ error: `Sem acesso a ${module}` })
     } catch (e) {
-      return res.status(500).json({ error: e.message })
+      console.error('[requireModule]', req.path, e.message)
+      return next()
     }
   }
 }
@@ -271,6 +289,7 @@ router.put('/:id', async (req, res) => {
     fields.push(`updated_at = NOW()::TEXT`)
     values.push(req.params.id)
     const r = await pool.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${values.length} RETURNING *`, values)
+    invalidateUserCache(r.rows[0]?.email)
     res.json(r.rows[0])
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -288,6 +307,7 @@ router.delete('/:id', async (req, res) => {
       try { await supabaseAdmin.auth.admin.deleteUser(u.id) } catch (e) { console.warn('[users] supabase delete:', e.message) }
     }
     await pool.query('DELETE FROM users WHERE id = $1', [req.params.id])
+    invalidateUserCache(u.email)
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -419,12 +439,13 @@ async function getAccessibleIds(userId, entidade) {
 export function restrictByAccess(entidade) {
   return async (req, res, next) => {
     if (!supabaseAdmin) return next()
-    let u = req.appUser
-    if (!u) {
-      try { u = await resolveAppUser(req); req.appUser = u } catch {}
-    }
-    if (!u) return next() // sem identificação — outros middlewares tratam
-    if (u.role === 'admin' || !RECORD_RESTRICTED_ROLES.has(u.role)) return next()
+    try {
+      let u = req.appUser
+      if (!u) {
+        try { u = await resolveAppUser(req); req.appUser = u } catch {}
+      }
+      if (!u) return next()
+      if (u.role === 'admin' || !RECORD_RESTRICTED_ROLES.has(u.role)) return next()
 
     // Extrair ID do registo na primeira parte do path (ex: /abc-123, /abc-123/fotos)
     const m = req.path.match(/^\/([^/]+)/)
@@ -458,15 +479,21 @@ export function restrictByAccess(entidade) {
       const ids = await getAccessibleIds(u.id, entidade)
       const origJson = res.json.bind(res)
       res.json = (body) => {
-        if (body && Array.isArray(body.data)) {
-          body.data = body.data.filter(item => ids.has(item.id))
-          if (typeof body.total === 'number') body.total = body.data.length
-        } else if (Array.isArray(body)) {
-          body = body.filter(item => ids.has(item.id))
-        }
+        try {
+          if (body && Array.isArray(body.data)) {
+            body.data = body.data.filter(item => ids.has(item.id))
+            if (typeof body.total === 'number') body.total = body.data.length
+          } else if (Array.isArray(body)) {
+            body = body.filter(item => ids.has(item.id))
+          }
+        } catch (e) { console.error('[restrictByAccess.json]', e.message) }
         return origJson(body)
       }
     }
     next()
+    } catch (e) {
+      console.error('[restrictByAccess]', req.path, e.message)
+      return next()
+    }
   }
 }

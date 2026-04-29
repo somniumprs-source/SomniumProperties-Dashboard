@@ -23,13 +23,19 @@ const supabaseAdmin = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE
 app.use('/api', async (req, res, next) => {
   // CRM API — historicamente sem auth, mas se vier token populamos req.user
   // (necessário para os requireModule de /api/crm/* identificarem o utilizador).
+  // Best-effort: timeout 800ms para não bloquear se Supabase estiver lento.
   if (req.path.startsWith('/crm/')) {
     const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token
     if (token && supabaseAdmin) {
       try {
-        const { data: { user } } = await supabaseAdmin.auth.getUser(token)
-        if (user) req.user = user
-      } catch {}
+        const result = await Promise.race([
+          supabaseAdmin.auth.getUser(token),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 800)),
+        ])
+        if (result?.data?.user) req.user = result.data.user
+      } catch (e) {
+        // Silencioso — pedido continua sem req.user (compatibilidade com comportamento antigo)
+      }
     }
     return next()
   }
