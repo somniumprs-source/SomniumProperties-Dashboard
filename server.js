@@ -76,17 +76,8 @@ try {
   app.use('/api/crm', analiseRoutes)
   console.log('[crm] API CRM + Análises montada em /api/crm (PostgreSQL)')
   // Filtros por área (admin passa sempre; em dev sem Supabase passa sempre)
-  app.use('/api/financeiro',         requireRole('financeiro'))
-  app.use('/api/kpis/financeiro',    requireRole('financeiro'))
-  app.use('/api/comercial',          requireRole('comercial'))
-  app.use('/api/kpis/comercial',     requireRole('comercial'))
-  app.use('/api/marketing',          requireRole('comercial'))
-  app.use('/api/kpis/marketing',     requireRole('comercial'))
-  app.use('/api/operacoes',          requireRole('operacoes'))
-  app.use('/api/kpis/operacoes',     requireRole('operacoes'))
-  app.use('/api/tarefas',            requireRole('operacoes'))
-  app.use('/api/calendar/events',    requireRole('operacoes'))
-  app.use('/api/alertas',            requireRole('operacoes'))
+  // Bloqueios por role desactivados — qualquer utilizador autenticado vê tudo.
+  // (Roles continuam como labels na tabela users, mas sem enforcement no backend.)
   console.log('[users] Camadas de acesso activas')
 
   // ── WhatsApp Webhook (Twilio) ───────────────────────────────
