@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from './components/layout/Layout.jsx'
 import { Dashboard } from './pages/Dashboard.jsx'
 import { Login } from './pages/Login.jsx'
-import { NoAccess } from './pages/NoAccess.jsx'
 import { ToastProvider } from './components/ui/Toast.jsx'
 import { ErrorBoundary } from './components/ui/ErrorBoundary.jsx'
 import { ChunkErrorBoundary } from './components/ui/ChunkErrorBoundary.jsx'
@@ -26,16 +25,8 @@ function PageFallback() {
   )
 }
 
-// Guards desactivados — qualquer utilizador autenticado acede a tudo.
-// (Apenas /admin/utilizadores fica restrito a admins.)
-function AdminOnly({ children }) {
-  const { profile } = useAuth()
-  if (profile?.role !== 'admin') return <NoAccess area="admin" />
-  return children
-}
-
 function AppRoutes() {
-  const { isAuthenticated, hasProfile, loading, profileError } = useAuth()
+  const { isAuthenticated, loading } = useAuth()
 
   if (loading) {
     return (
@@ -49,7 +40,6 @@ function AppRoutes() {
   }
 
   if (!isAuthenticated) return <Login />
-  if (!hasProfile) return <NoAccess message={profileError || 'Sem perfil associado a esta conta.'} />
 
   return (
     <ChunkErrorBoundary>
@@ -63,7 +53,7 @@ function AppRoutes() {
             <Route path="/operacoes" element={<ErrorBoundary><Operacoes /></ErrorBoundary>} />
             <Route path="/metricas" element={<ErrorBoundary><Metricas /></ErrorBoundary>} />
             <Route path="/alertas" element={<ErrorBoundary><Alertas /></ErrorBoundary>} />
-            <Route path="/admin/utilizadores" element={<ErrorBoundary><AdminOnly><Utilizadores /></AdminOnly></ErrorBoundary>} />
+            <Route path="/admin/utilizadores" element={<ErrorBoundary><Utilizadores /></ErrorBoundary>} />
             {/* Redirects de páginas removidas */}
             <Route path="/comercial" element={<Navigate to="/crm" replace />} />
             <Route path="/marketing" element={<Navigate to="/crm" replace />} />

@@ -1,59 +1,27 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect } from 'react'
 import { supabase, authEnabled } from '../lib/supabase.js'
-import { apiFetch } from '../lib/api.js'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
-  const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [profileError, setProfileError] = useState(null)
-
-  const loadProfile = useCallback(async () => {
-    try {
-      const r = await apiFetch('/api/users/me')
-      if (!r.ok) {
-        setProfile(null)
-        setProfileError(r.status === 403 ? 'Conta inactiva. Contacta o administrador.' : 'Não foi possível carregar perfil.')
-        return null
-      }
-      const u = await r.json()
-      setProfile(u)
-      setProfileError(null)
-      return u
-    } catch (e) {
-      setProfileError(e.message)
-      return null
-    }
-  }, [])
 
   useEffect(() => {
     if (!authEnabled || !supabase) {
-      // Sem auth — acesso livre (dev mode)
-      setSession({ user: { email: 'dev' } })
-      loadProfile().finally(() => setLoading(false))
+      setSession({ user: { email: 'dev', id: 'dev' } })
+      setLoading(false)
       return
     }
-
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
-      if (session) await loadProfile()
       setLoading(false)
     })
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session)
-      if (session) {
-        await loadProfile()
-      } else {
-        setProfile(null)
-        setProfileError(null)
-      }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s)
     })
-
     return () => subscription.unsubscribe()
-  }, [loadProfile])
+  }, [])
 
   async function signIn(email, password) {
     if (!supabase) throw new Error('Auth não configurado')
@@ -64,25 +32,29 @@ export function AuthProvider({ children }) {
   async function signOut() {
     if (supabase) await supabase.auth.signOut()
     setSession(null)
-    setProfile(null)
-    setProfileError(null)
   }
 
-  function canAccess(area) {
-    if (!profile?.areas) return false
-    return profile.areas.includes(area)
-  }
+  // Perfil derivado simplesmente do email da sessão (sem chamar /api/users/me)
+  const profile = session?.user ? {
+    id: session.user.id,
+    email: session.user.email,
+    nome: session.user.email?.split('@')[0] || 'Utilizador',
+    iniciais: (session.user.email || '?').slice(0, 2).toUpperCase(),
+    cor: '#C9A84C',
+    role: 'admin', // sem enforcement frontend
+  } : null
 
   return (
     <AuthContext.Provider value={{
-      session, profile, loading, authEnabled, profileError,
+      session, profile, loading, authEnabled,
       isAuthenticated: !!session,
       hasProfile: !!profile,
       role: profile?.role || null,
-      areas: profile?.areas || [],
-      modules: profile?.modules || [],
-      canAccess,
-      signIn, signOut, refreshProfile: loadProfile,
+      areas: [],
+      modules: [],
+      canAccess: () => true,
+      signIn, signOut,
+      refreshProfile: () => {},
     }}>
       {children}
     </AuthContext.Provider>
