@@ -1079,7 +1079,6 @@ export function CRM() {
               items={data}
               groupField={kanbanConfig.groupField}
               renderCard={kanbanConfig.renderCard}
-              partilharEntidade={tab === 'Imóveis' ? 'imovel' : null}
               onMove={handleMove}
               onDelete={(id, nome) => {
                 if (!confirm(`Apagar "${nome || 'este registo'}"?`)) return
