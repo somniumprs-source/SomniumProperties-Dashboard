@@ -874,8 +874,23 @@ router.put('/reunioes/:id', async (req, res) => {
 
 router.post('/reunioes/:id/analisar', async (req, res) => {
   try {
-    const result = await autoFillInvestidor(req.params.id)
+    const { rows: [r] } = await pool.query('SELECT entidade_tipo FROM reunioes WHERE id = $1', [req.params.id])
+    if (!r) return res.status(404).json({ error: 'Reunião não encontrada' })
+    const { autoFillConsultor } = await import('./meetingAnalysis.js')
+    const result = r.entidade_tipo === 'consultores'
+      ? await autoFillConsultor(req.params.id)
+      : await autoFillInvestidor(req.params.id)
     res.json(result)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/reunioes/:id/marcar-vista', async (req, res) => {
+  try {
+    await pool.query(
+      'UPDATE reunioes SET analise_vista = true, updated_at = $1 WHERE id = $2',
+      [new Date().toISOString(), req.params.id]
+    )
+    res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 

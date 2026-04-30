@@ -324,7 +324,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
     { key: 'analise', label: 'Análise Financeira', icon: '📊', show: type === 'Imóveis' },
     { key: 'relatorios_imovel', label: 'Documentos', icon: '📄', show: type === 'Imóveis' },
     { key: 'documentos', label: `Documentos (${data?.documentos?.length ?? 0})`, icon: '📎', show: type === 'Investidores' },
-    { key: 'relatorios', label: `Relatórios (${reunioes.length})`, icon: '📄', show: (type === 'Investidores' || type === 'Consultores') },
+    { key: 'relatorios', label: `Reuniões (${reunioes.length})`, icon: '📄', show: (type === 'Investidores' || type === 'Consultores') },
     { key: 'scorecard', label: 'Scorecard', icon: '🎯', show: type === 'Investidores' },
     { key: 'classificacao', label: 'Classificação', icon: '📈', show: type === 'Investidores' },
   ].filter(t => t.show)
@@ -968,6 +968,7 @@ function RelatoriosTab({ reunioes, investidorNome }) {
     setExpanded(id)
     loadTranscricao(id)
     if (!analises[id]) runAnalise(id)
+    apiFetch(`/api/crm/reunioes/${id}/marcar-vista`, { method: 'POST' }).catch(() => {})
   }
 
   return (
