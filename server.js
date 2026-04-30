@@ -3993,22 +3993,29 @@ try {
     async function autoSyncFireflies() {
       try {
         const { syncFireflies } = await import('./src/db/firefliesSync.js')
-        const { autoFillInvestidor } = await import('./src/db/meetingAnalysis.js')
+        const { autoFillInvestidor, autoFillConsultor } = await import('./src/db/meetingAnalysis.js')
         const pgPool = (await import('./src/db/pg.js')).default
 
         const result = await syncFireflies()
         if (result.created > 0) {
           console.log(`[fireflies] Auto-sync: ${result.created} novas reuniões importadas`)
 
-          // Auto-analisar e preencher investidores
+          // Auto-analisar e preencher entidades (investidores + consultores)
           const { rows: novas } = await pgPool.query(
-            "SELECT id FROM reunioes WHERE entidade_tipo = 'investidores' AND entidade_id IS NOT NULL AND analise_completa IS NULL ORDER BY created_at DESC LIMIT $1",
+            "SELECT id, entidade_tipo FROM reunioes WHERE entidade_tipo IN ('investidores','consultores') AND entidade_id IS NOT NULL AND analise_completa IS NULL ORDER BY created_at DESC LIMIT $1",
             [result.created]
           )
+          let invFill = 0, consFill = 0
           for (const r of novas) {
-            try { await autoFillInvestidor(r.id) } catch {}
+            try {
+              if (r.entidade_tipo === 'investidores') { await autoFillInvestidor(r.id); invFill++ }
+              else if (r.entidade_tipo === 'consultores') { await autoFillConsultor(r.id); consFill++ }
+            } catch (e) {
+              console.warn(`[fireflies] Auto-fill falhou para ${r.id}:`, e.message)
+            }
           }
-          if (novas.length > 0) console.log(`[fireflies] Auto-fill: ${novas.length} investidores actualizados`)
+          if (invFill > 0) console.log(`[fireflies] Auto-fill: ${invFill} investidores actualizados`)
+          if (consFill > 0) console.log(`[fireflies] Auto-fill: ${consFill} consultores actualizados`)
         }
       } catch (e) {
         console.error('[fireflies] Auto-sync erro:', e.message)
@@ -4667,6 +4674,37 @@ app.get('/api/alertas', async (req, res) => {
       if (neg.fase === 'Vendido' && neg.lucroReal === 0) missing.push('Lucro Real')
       if (neg.fase === 'Vendido' && !neg.dataVenda) missing.push('Data de Venda')
       if (missing.length > 0) camposEmFalta.push({ db: 'Faturação', nome: neg.movimento, campos: missing, id: neg.id })
+    }
+
+    // ── Reuniões com relatório comercial novo (não vistas) ──
+    try {
+      const { query: pgQuery } = await import('./src/db/pg.js')
+      const { rows: novasReunioes } = await pgQuery(`
+        SELECT r.id, r.titulo, r.data, r.entidade_tipo, r.entidade_id,
+          COALESCE(i.nome, c.nome) AS entidade_nome
+        FROM reunioes r
+        LEFT JOIN investidores i ON r.entidade_tipo = 'investidores' AND i.id = r.entidade_id
+        LEFT JOIN consultores  c ON r.entidade_tipo = 'consultores'  AND c.id = r.entidade_id
+        WHERE r.analise_completa IS NOT NULL
+          AND r.analise_vista = false
+          AND r.entidade_id IS NOT NULL
+        ORDER BY r.data DESC
+        LIMIT 50
+      `)
+      for (const r of novasReunioes) {
+        const dataStr = r.data ? new Date(r.data).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' }) : ''
+        alerts.push({
+          tipo: 'relatorio_reuniao_disponivel',
+          severidade: 'info',
+          entidade: r.entidade_nome || r.titulo,
+          mensagem: `Relatório da reunião disponível${dataStr ? ` (${dataStr})` : ''}`,
+          reuniao_id: r.id,
+          entidade_tipo: r.entidade_tipo,
+          id: r.entidade_id,
+        })
+      }
+    } catch (e) {
+      console.warn('[alertas] Erro ao verificar relatórios de reuniões:', e.message)
     }
 
     // ── Alertas de análises de rentabilidade ──

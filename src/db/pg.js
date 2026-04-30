@@ -371,6 +371,12 @@ export async function initSchema() {
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 
+      -- Migration: marcar relatórios de reunião como vistos (alerta in-app)
+      DO $$ BEGIN
+        ALTER TABLE reunioes ADD COLUMN IF NOT EXISTS analise_vista BOOLEAN DEFAULT false;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
       -- Migration: adicionar ABD (area_bruta_dependente) à tabela imoveis
       DO $$ BEGIN
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS area_bruta_dependente REAL;

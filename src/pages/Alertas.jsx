@@ -14,15 +14,16 @@ const SEV_DOT = {
   info:    'bg-blue-400',
 }
 const TIPO_LABEL = {
-  inatividade_investidor:    'Investidor inativo',
-  followup_consultor:        'Follow-up atrasado',
-  imovel_parado:             'Imóvel parado',
-  consultor_sem_contacto_48h:'Consultor sem 1º contacto',
-  consultor_inativo_15d:     'Consultor inativo',
-  stress_prejuizo:           'Risco de prejuízo',
-  ra_baixo:                  'Retorno baixo',
-  vpt_superior:              'VPT superior',
-  imt_caducidade:            'Isenção IMT a caducar',
+  inatividade_investidor:        'Investidor inativo',
+  followup_consultor:            'Follow-up atrasado',
+  imovel_parado:                 'Imóvel parado',
+  consultor_sem_contacto_48h:    'Consultor sem 1º contacto',
+  consultor_inativo_15d:         'Consultor inativo',
+  stress_prejuizo:               'Risco de prejuízo',
+  ra_baixo:                      'Retorno baixo',
+  vpt_superior:                  'VPT superior',
+  imt_caducidade:                'Isenção IMT a caducar',
+  relatorio_reuniao_disponivel:  'Relatório de reunião',
 }
 
 const HEALTH_COLOR = pct =>

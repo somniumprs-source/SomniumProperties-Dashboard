@@ -332,6 +332,16 @@ export async function autoFillInvestidor(reuniaoId) {
     }
   }
 
+  // Persistir análise completa na reunião (para cache e sistema de alertas)
+  try {
+    await pool.query(
+      'UPDATE reunioes SET analise_completa = $1, analise_vista = false, updated_at = $2 WHERE id = $3',
+      [JSON.stringify(analise), new Date().toISOString(), reuniaoId]
+    )
+  } catch (e) {
+    console.warn('[meetingAnalysis] Erro ao persistir analise_completa (investidor):', e.message)
+  }
+
   return {
     ...analise,
     autoFilled: true,
@@ -339,5 +349,153 @@ export async function autoFillInvestidor(reuniaoId) {
     fieldsUpdated: Object.keys(updates),
     investidor_id: inv.id,
     investidor_nome: inv.nome,
+  }
+}
+
+/**
+ * Análise focada em consultor imobiliário (parceiro Somnium).
+ * Não usa scorecard 5C (esse é para investidores). Foca em qualidade de lead,
+ * disponibilidade e alinhamento estratégico para parceria.
+ */
+async function analyzeConsultorWithClaude(reuniao, transcricao, resumo) {
+  const Anthropic = (await import('@anthropic-ai/sdk')).default
+  const client = new Anthropic({ apiKey: ANTHROPIC_KEY })
+
+  const message = await client.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 2000,
+    messages: [{
+      role: 'user',
+      content: `Analisa esta transcrição de uma reunião com um consultor imobiliário (potencial parceiro da Somnium Properties, empresa de investimento imobiliário em Coimbra).
+
+TÍTULO: ${reuniao.titulo}
+DATA: ${reuniao.data}
+RESUMO FIREFLIES: ${resumo}
+
+TRANSCRIÇÃO:
+${transcricao.slice(0, 8000)}
+
+Responde APENAS em JSON válido com esta estrutura:
+{
+  "consultor_dados": {
+    "imobiliaria": null ou nome da imobiliária mencionada,
+    "zonas": null ou texto com zonas de actuação (ex: "Coimbra, Figueira da Foz"),
+    "tipo_imoveis": null ou texto (ex: "T2/T3 urbano", "rústicos", "comercial"),
+    "equipa_remax": null ou nome da equipa se mencionada,
+    "imoveis_estimados_mes": null ou número aproximado de leads/imóveis por mês,
+    "interesse_parceria": null ou "Alto" ou "Médio" ou "Baixo",
+    "objecoes": null ou texto breve com receios/objeções,
+    "data_proximo_followup": null ou data ISO (YYYY-MM-DD) se houver compromisso explícito,
+    "motivo_followup": null ou texto breve
+  },
+  "resumo_executivo": "2-3 frases resumindo a reunião",
+  "pontos_chave": ["ponto 1", "ponto 2", ...],
+  "proximos_passos": ["passo 1", "passo 2", ...],
+  "sugestoes_melhoria": [
+    "sugestão concreta para melhorar a abordagem comercial ao consultor",
+    "sugestão sobre técnica de qualificação ou comunicação"
+  ],
+  "qualidade_lead": "Alta" ou "Média" ou "Baixa",
+  "classificacao_sugerida": "A" ou "B" ou "C" ou "D",
+  "scorecard_consultor": {
+    "qualidade_lead_score": 1 a 5 (volume e qualidade dos imóveis que consegue trazer),
+    "qualidade_lead_notas": "justificação breve",
+    "disponibilidade_score": 1 a 5 (timing decisão, frequência contacto, agenda livre),
+    "disponibilidade_notas": "justificação breve",
+    "alinhamento_score": 1 a 5 (aceita modelo Somnium, comissões, exclusividade),
+    "alinhamento_notas": "justificação breve"
+  },
+  "notas_adicionais": "informação relevante adicional"
+}`
+    }]
+  })
+
+  try {
+    const text = message.content[0].text
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    return JSON.parse(jsonMatch[0])
+  } catch {
+    return { error: 'Erro ao processar resposta da AI', raw: message.content[0].text }
+  }
+}
+
+/**
+ * Auto-preenche campos do consultor com dados extraídos da reunião.
+ * Espelha autoFillInvestidor mas para a tabela consultores.
+ */
+export async function autoFillConsultor(reuniaoId) {
+  const { rows: [reuniao] } = await pool.query('SELECT * FROM reunioes WHERE id = $1', [reuniaoId])
+  if (!reuniao) throw new Error('Reunião não encontrada')
+  if (!reuniao.entidade_id || reuniao.entidade_tipo !== 'consultores') {
+    return { autoFilled: false, reason: 'Reunião não ligada a consultor' }
+  }
+
+  const { rows: [cons] } = await pool.query('SELECT * FROM consultores WHERE id = $1', [reuniao.entidade_id])
+  if (!cons) return { autoFilled: false, reason: 'Consultor não encontrado' }
+
+  const transcricao = reuniao.transcricao || ''
+  const resumo = reuniao.resumo || ''
+
+  const analise = ANTHROPIC_KEY
+    ? await analyzeConsultorWithClaude(reuniao, transcricao, resumo)
+    : { error: 'ANTHROPIC_API_KEY não configurada' }
+
+  if (analise.error) {
+    return { ...analise, autoFilled: false }
+  }
+
+  const updates = {}
+  const dados = analise.consultor_dados || {}
+
+  if (!cons.imobiliaria && dados.imobiliaria) updates.imobiliaria = dados.imobiliaria
+  if (!cons.zonas && dados.zonas) updates.zonas = dados.zonas
+  if (!cons.equipa_remax && dados.equipa_remax) updates.equipa_remax = dados.equipa_remax
+  if (!cons.classificacao && analise.classificacao_sugerida) updates.classificacao = analise.classificacao_sugerida
+
+  if (dados.data_proximo_followup) {
+    const proximaData = new Date(dados.data_proximo_followup)
+    const proximaCons = cons.data_proximo_follow_up ? new Date(cons.data_proximo_follow_up) : null
+    if (!proximaCons || proximaData > proximaCons) {
+      updates.data_proximo_follow_up = dados.data_proximo_followup
+      if (dados.motivo_followup) updates.motivo_follow_up = dados.motivo_followup
+    }
+  }
+
+  // Adicionar nota da reunião
+  const notaReuniao = `[${reuniao.data?.slice(0, 10)}] ${analise.resumo_executivo || 'Reunião analisada por AI'}`
+  if (cons.notas) {
+    if (!cons.notas.includes(notaReuniao.slice(0, 30))) {
+      updates.notas = cons.notas + '\n\n' + notaReuniao
+    }
+  } else {
+    updates.notas = notaReuniao
+  }
+
+  if (Object.keys(updates).length > 0) {
+    const sets = Object.entries(updates).map(([k], i) => `${k} = $${i + 1}`)
+    sets.push(`updated_at = $${Object.keys(updates).length + 1}`)
+    const params = [...Object.values(updates), new Date().toISOString(), cons.id]
+    await pool.query(
+      `UPDATE consultores SET ${sets.join(', ')} WHERE id = $${params.length}`,
+      params
+    )
+  }
+
+  // Persistir análise completa na reunião (cache + alerta)
+  try {
+    await pool.query(
+      'UPDATE reunioes SET analise_completa = $1, analise_vista = false, updated_at = $2 WHERE id = $3',
+      [JSON.stringify(analise), new Date().toISOString(), reuniaoId]
+    )
+  } catch (e) {
+    console.warn('[meetingAnalysis] Erro ao persistir analise_completa (consultor):', e.message)
+  }
+
+  return {
+    ...analise,
+    autoFilled: true,
+    fieldsUpdated: Object.keys(updates),
+    consultor_id: cons.id,
+    consultor_nome: cons.nome,
   }
 }
