@@ -68,7 +68,9 @@ const DEFAULT_COLORS = { bg: 'bg-gray-50', border: 'border-gray-200', header: 'b
  * @param {Function} props.onMove - callback quando um item é movido (id, newColumn)
  * @param {Function} props.onCardClick - callback quando um card é clicado (id)
  */
-export function KanbanBoard({ columns, items, groupField, renderCard, onMove, onCardClick, onDelete }) {
+import { PartilharAcesso } from '../PartilharAcesso.jsx'
+
+export function KanbanBoard({ columns, items, groupField, renderCard, onMove, onCardClick, onDelete, partilharEntidade }) {
   const [dragging, setDragging] = useState(null)
   const [dragOver, setDragOver] = useState(null)
 
@@ -147,14 +149,19 @@ export function KanbanBoard({ columns, items, groupField, renderCard, onMove, on
                     dragging === item.id ? 'opacity-50 cursor-grabbing' : ''
                   }`}
                 >
-                  {onDelete && (
-                    <button
-                      onClick={e => { e.stopPropagation(); onDelete(item.id, item.nome ?? item.movimento) }}
-                      className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-red-100 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center text-xs opacity-0 group-hover/card:opacity-100 transition-all"
-                      title="Apagar">
-                      ×
-                    </button>
-                  )}
+                  <div className="absolute top-1.5 right-1.5 flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-all" onClick={e => e.stopPropagation()}>
+                    {partilharEntidade && (
+                      <PartilharAcesso entidade={partilharEntidade} entidadeId={item.id} nome={item.nome ?? item.movimento} compact />
+                    )}
+                    {onDelete && (
+                      <button
+                        onClick={e => { e.stopPropagation(); onDelete(item.id, item.nome ?? item.movimento) }}
+                        className="w-5 h-5 rounded-full bg-red-100 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center text-xs"
+                        title="Apagar">
+                        ×
+                      </button>
+                    )}
+                  </div>
                   {renderCard(item)}
                 </div>
               ))}
