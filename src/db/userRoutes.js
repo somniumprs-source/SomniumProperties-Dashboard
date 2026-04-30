@@ -72,6 +72,20 @@ async function getUserById(id) {
   return r.rows[0] || null
 }
 
+/**
+ * Determina o redirectTo para os links Supabase.
+ * Ordem: PUBLIC_APP_URL > derivado do pedido actual > fallback para o domínio Render.
+ */
+function resolveRedirectTo(req) {
+  if (process.env.PUBLIC_APP_URL) return process.env.PUBLIC_APP_URL
+  const host = req.get('host')
+  if (host && !host.startsWith('localhost')) {
+    const proto = req.headers['x-forwarded-proto'] || (host.includes('onrender.com') ? 'https' : req.protocol)
+    return `${proto}://${host}`
+  }
+  return 'https://somniumproperties-dashboard.onrender.com'
+}
+
 function iniciaisFromNome(nome) {
   if (!nome) return '?'
   const parts = nome.trim().split(/\s+/)
@@ -239,7 +253,7 @@ router.post('/', async (req, res) => {
     let deliveryNote = null
 
     if (supabaseAdmin) {
-      const redirectTo = process.env.PUBLIC_APP_URL || undefined
+      const redirectTo = resolveRedirectTo(req)
       if (password) {
         const { data, error } = await supabaseAdmin.auth.admin.createUser({
           email, password, email_confirm: true,
