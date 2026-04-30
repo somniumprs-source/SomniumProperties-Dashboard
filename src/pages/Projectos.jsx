@@ -3,6 +3,7 @@ import { X, Trash2, Plus, Filter, ArrowUpDown, ChevronDown, ChevronUp, Check } f
 import { Header } from '../components/layout/Header.jsx'
 import { apiFetch } from '../lib/api.js'
 import { useUrlState } from '../hooks/useUrlState.js'
+import { PartilharAcesso } from '../components/PartilharAcesso.jsx'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 
@@ -230,7 +231,10 @@ export function Projectos() {
                         : <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Recebido</span>}
                     </td>
                     <td className="py-2 px-3" onClick={e => e.stopPropagation()}>
-                      <button onClick={() => remove(n.id)} className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Apagar</button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <PartilharAcesso entidade="negocio" entidadeId={n.id} nome={n.movimento} />
+                        <button onClick={() => remove(n.id)} className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Apagar</button>
+                      </div>
                     </td>
                   </tr>
                   {isExpanded && (
