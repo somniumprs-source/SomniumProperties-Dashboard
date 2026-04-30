@@ -10,7 +10,7 @@ import { useAuth } from '../contexts/AuthContext.jsx'
  *
  * Uso: <PartilharAcesso entidade="imovel" entidadeId={imovel.id} nome={imovel.nome} />
  */
-export function PartilharAcesso({ entidade, entidadeId, nome }) {
+export function PartilharAcesso({ entidade, entidadeId, nome, compact = false }) {
   const { profile } = useAuth()
   const [open, setOpen] = useState(false)
   if (profile?.role !== 'admin') return null
@@ -18,12 +18,20 @@ export function PartilharAcesso({ entidade, entidadeId, nome }) {
 
   return (
     <>
-      <button onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded transition-colors hover:bg-gray-100"
-        style={{ border: '1px solid #e5e5e5', color: '#666' }}
-        title="Partilhar com parceiro externo">
-        <Share2 className="w-3.5 h-3.5" /> Partilhar
-      </button>
+      {compact ? (
+        <button onClick={(e) => { e.stopPropagation(); setOpen(true) }}
+          className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 hover:bg-amber-500 hover:text-white flex items-center justify-center transition-colors"
+          title="Partilhar acesso">
+          <Share2 className="w-3 h-3" />
+        </button>
+      ) : (
+        <button onClick={() => setOpen(true)}
+          className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded transition-colors hover:bg-gray-100"
+          style={{ border: '1px solid #e5e5e5', color: '#666' }}
+          title="Partilhar com parceiro externo">
+          <Share2 className="w-3.5 h-3.5" /> Partilhar
+        </button>
+      )}
       {open && <PartilharModal entidade={entidade} entidadeId={entidadeId} nome={nome} onClose={() => setOpen(false)} />}
     </>
   )
