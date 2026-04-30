@@ -26,9 +26,11 @@ function PageFallback() {
   )
 }
 
-function Guarded({ area, children }) {
-  const { canAccess } = useAuth()
-  if (!canAccess(area)) return <NoAccess area={area} />
+// Guards desactivados — qualquer utilizador autenticado acede a tudo.
+// (Apenas /admin/utilizadores fica restrito a admins.)
+function AdminOnly({ children }) {
+  const { profile } = useAuth()
+  if (profile?.role !== 'admin') return <NoAccess area="admin" />
   return children
 }
 
@@ -55,13 +57,13 @@ function AppRoutes() {
         <Routes>
           <Route element={<Layout />}>
             <Route index element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
-            <Route path="/crm" element={<ErrorBoundary><Guarded area="crm"><CRM /></Guarded></ErrorBoundary>} />
-            <Route path="/projectos" element={<ErrorBoundary><Guarded area="projectos"><Projectos /></Guarded></ErrorBoundary>} />
-            <Route path="/financeiro" element={<ErrorBoundary><Guarded area="financeiro"><Financeiro /></Guarded></ErrorBoundary>} />
-            <Route path="/operacoes" element={<ErrorBoundary><Guarded area="operacoes"><Operacoes /></Guarded></ErrorBoundary>} />
-            <Route path="/metricas" element={<ErrorBoundary><Guarded area="metricas"><Metricas /></Guarded></ErrorBoundary>} />
-            <Route path="/alertas" element={<ErrorBoundary><Guarded area="alertas"><Alertas /></Guarded></ErrorBoundary>} />
-            <Route path="/admin/utilizadores" element={<ErrorBoundary><Guarded area="admin"><Utilizadores /></Guarded></ErrorBoundary>} />
+            <Route path="/crm" element={<ErrorBoundary><CRM /></ErrorBoundary>} />
+            <Route path="/projectos" element={<ErrorBoundary><Projectos /></ErrorBoundary>} />
+            <Route path="/financeiro" element={<ErrorBoundary><Financeiro /></ErrorBoundary>} />
+            <Route path="/operacoes" element={<ErrorBoundary><Operacoes /></ErrorBoundary>} />
+            <Route path="/metricas" element={<ErrorBoundary><Metricas /></ErrorBoundary>} />
+            <Route path="/alertas" element={<ErrorBoundary><Alertas /></ErrorBoundary>} />
+            <Route path="/admin/utilizadores" element={<ErrorBoundary><AdminOnly><Utilizadores /></AdminOnly></ErrorBoundary>} />
             {/* Redirects de páginas removidas */}
             <Route path="/comercial" element={<Navigate to="/crm" replace />} />
             <Route path="/marketing" element={<Navigate to="/crm" replace />} />

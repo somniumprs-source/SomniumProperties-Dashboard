@@ -16,10 +16,11 @@ const nav = [
 ]
 
 export function Sidebar() {
-  const { profile, signOut, canAccess } = useAuth()
+  const { profile, signOut } = useAuth()
   const [badges, setBadges] = useState({ alertas: 0, crm: 0, tarefas: 0 })
   const [open, setOpen] = useState(false)
-  const visibleNav = nav.filter(item => canAccess(item.area))
+  // Todos os links visíveis — excepto Utilizadores que só aparece para admin
+  const visibleNav = nav.filter(item => item.area !== 'admin' || profile?.role === 'admin')
 
   useEffect(() => {
     const load = async () => {
