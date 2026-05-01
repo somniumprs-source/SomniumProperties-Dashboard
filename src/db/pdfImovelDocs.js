@@ -192,7 +192,11 @@ class DocBuilder {
   drawCoverHero() { return this }
 
   newPage() {
-    this.doc.addPage({ size: 'A4', margins: { top: 60, bottom: 60, left: ML, right: MR } })
+    // CRÍTICO: margin:0 impede o PDFKit de auto-paginar quando texto wrap
+    // ultrapassa a margem inferior. Toda a paginação é controlada manualmente
+    // via this.y + ensure() — nunca implícita pelo PDFKit. Isto elimina as
+    // páginas pares em branco causadas por auto-page seguido de newPage manual.
+    this.doc.addPage({ size: 'A4', margin: 0 })
     const d = this.doc
     if (this.style === 'investor') {
       try { d.image(readFileSync(LOGO_PATH), ML, 18, { height: 16 }) } catch {}
@@ -1233,8 +1237,10 @@ function renderDossierInvestidor(b, im, a) {
   ])
   if (fotos.length > 0) { b.space(4); b.photos(fotos, 'O IMÓVEL') }
   b.space(4)
-  b.localizacao()
-  b.pontosFortesFracosRiscos()
+  // Pros/contras/riscos sempre numa secção dedicada após a apresentação visual
+  // do imóvel (fotos+localização) e antes dos números financeiros.
+  if (im.localizacao_imagem || im._localizacaoImgData) { b.newPage(); b.localizacao() }
+  if (im.pontos_fortes || im.pontos_fracos || im.riscos) { b.pontosFortesFracosRiscos() }
   b.space(4)
 
   b.header('NÚMEROS DO NEGÓCIO')
@@ -1461,6 +1467,15 @@ function renderRelatorioInvestimento(b, im, an) {
   ])
   b.space(8)
 
+  // Localização + pros/contras/riscos numa página dedicada antes da
+  // análise financeira, depois da identificação do imóvel.
+  if (im.localizacao_imagem || im._localizacaoImgData || im.pontos_fortes || im.pontos_fracos || im.riscos) {
+    b.newPage()
+    b.localizacao()
+    b.pontosFortesFracosRiscos()
+    b.newPage()
+  }
+
   b.header('CUSTOS DO INVESTIMENTO')
   b.simpleTable([
     { label: 'Preço de compra', value: EUR(an.compra) },
@@ -1495,9 +1510,6 @@ function renderRelatorioInvestimento(b, im, an) {
     { label: 'Cash-on-Cash', value: PCT(an.cash_on_cash) },
     { label: 'Break-even', value: EUR(an.break_even) },
   ])
-  b.space(8)
-  b.localizacao()
-  b.pontosFortesFracosRiscos()
 }
 
 function renderRelatorioComparaveis(b, im, an) {
