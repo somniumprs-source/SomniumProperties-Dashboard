@@ -560,6 +560,53 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                   <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={4}
                     className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
                 </div>
+                <div className="col-span-2 md:col-span-3">
+                  <label className="text-xs text-gray-400 block mb-1">Pontos fortes</label>
+                  <textarea value={form.pontos_fortes || ''} onChange={e => setField('pontos_fortes', e.target.value)} rows={3}
+                    placeholder="Um por linha. Aparece no relatório enviado ao investidor."
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                </div>
+                <div className="col-span-2 md:col-span-3">
+                  <label className="text-xs text-gray-400 block mb-1">Pontos fracos</label>
+                  <textarea value={form.pontos_fracos || ''} onChange={e => setField('pontos_fracos', e.target.value)} rows={3}
+                    placeholder="Um por linha. Aparece no relatório enviado ao investidor."
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                </div>
+                <div className="col-span-2 md:col-span-3">
+                  <label className="text-xs text-gray-400 block mb-1">Riscos</label>
+                  <textarea value={form.riscos || ''} onChange={e => setField('riscos', e.target.value)} rows={3}
+                    placeholder="Um por linha. Aparece no relatório enviado ao investidor."
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                </div>
+                <div className="col-span-2 md:col-span-3">
+                  <label className="text-xs text-gray-400 block mb-1">Imagem de localização (print do Google Maps)</label>
+                  {form.localizacao_imagem ? (
+                    <div className="flex items-start gap-3">
+                      <img src={form.localizacao_imagem} alt="Localização" className="w-48 h-32 object-cover rounded-lg border border-gray-200" />
+                      <button type="button" onClick={async () => {
+                        if (!confirm('Remover imagem de localização?')) return
+                        try {
+                          const r = await apiFetch(`/api/crm/imoveis/${data.id}/localizacao`, { method: 'DELETE' })
+                          if (!r.ok) throw new Error(await r.text())
+                          setField('localizacao_imagem', null)
+                        } catch (e) { alert('Erro ao remover: ' + e.message) }
+                      }} className="text-xs text-red-600 hover:underline">Remover</button>
+                    </div>
+                  ) : (
+                    <input type="file" accept="image/*" onChange={async e => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      try {
+                        const fd = new FormData()
+                        fd.append('imagem', file)
+                        const r = await apiFetch(`/api/crm/imoveis/${data.id}/localizacao`, { method: 'POST', body: fd })
+                        if (!r.ok) throw new Error(await r.text())
+                        const j = await r.json()
+                        setField('localizacao_imagem', j.localizacao_imagem)
+                      } catch (err) { alert('Erro ao carregar: ' + err.message) }
+                    }} className="block text-xs text-gray-600" />
+                  )}
+                </div>
               </> : (() => {
                 const analise = data.analises?.find(a => a.activa) || null
                 return <>
@@ -594,6 +641,15 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                   <div className="col-span-2 md:col-span-3"><Field label="Motivo Não Interessa" value={data.motivo_nao_interessa || '—'} /></div>
                 )}
                 {data.notas && <div className="col-span-2 md:col-span-3"><Field label="Notas" value={data.notas} /></div>}
+                {data.pontos_fortes && <div className="col-span-2 md:col-span-3"><Field label="Pontos fortes" value={data.pontos_fortes} /></div>}
+                {data.pontos_fracos && <div className="col-span-2 md:col-span-3"><Field label="Pontos fracos" value={data.pontos_fracos} /></div>}
+                {data.riscos && <div className="col-span-2 md:col-span-3"><Field label="Riscos" value={data.riscos} /></div>}
+                {data.localizacao_imagem && (
+                  <div className="col-span-2 md:col-span-3">
+                    <p className="text-xs text-gray-400 mb-1">Localização</p>
+                    <img src={data.localizacao_imagem} alt="Localização" className="w-full max-w-md rounded-lg border border-gray-200" />
+                  </div>
+                )}
 
                 {/* ── Dados da Calculadora de Rentabilidade ── */}
                 {analise && (
