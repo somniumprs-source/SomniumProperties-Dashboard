@@ -415,6 +415,15 @@ export async function initSchema() {
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 
+      -- Migration: pontos fortes/fracos/riscos + imagem de localização (relatórios investidor)
+      DO $$ BEGIN
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS pontos_fortes TEXT;
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS pontos_fracos TEXT;
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS riscos TEXT;
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS localizacao_imagem TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
       -- Migration: ressincronizar ROI dos imóveis com a análise activa.
       -- Antes coexistiam duas fórmulas (autoCalcROI naive vs calcEngine),
       -- pelo que o valor podia divergir do que a calculadora mostra. A

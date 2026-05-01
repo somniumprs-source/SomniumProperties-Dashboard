@@ -671,6 +671,45 @@ router.put('/imoveis/:id/fotos/:fotoId/mover', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// ── Upload da imagem de localização (Google Maps print) ─────
+router.post('/imoveis/:id/localizacao', uploadImovel.single('imagem'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Nenhum ficheiro válido (JPG, PNG, WEBP até 15MB)' })
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+
+    let filePath = `/uploads/imoveis/${req.file.filename}`
+    if (supabaseStorage) {
+      const storagePath = `imoveis/${req.params.id}/localizacao_${req.file.filename}`
+      const fileBuffer = await readFile(req.file.path)
+      const { error } = await supabaseStorage.storage
+        .from('Imoveis')
+        .upload(storagePath, fileBuffer, { contentType: req.file.mimetype, upsert: true })
+      if (!error) {
+        const { data: urlData } = supabaseStorage.storage.from('Imoveis').getPublicUrl(storagePath)
+        filePath = urlData.publicUrl
+        await unlink(req.file.path).catch(() => {})
+      }
+    }
+    await Imoveis.update(req.params.id, { localizacao_imagem: filePath })
+    res.json({ ok: true, localizacao_imagem: filePath })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/imoveis/:id/localizacao', async (req, res) => {
+  try {
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+    const url = imovel.localizacao_imagem
+    if (url && supabaseStorage && url.includes('supabase.co/storage/')) {
+      const match = url.match(/\/storage\/v1\/object\/public\/Imoveis\/(.+)$/)
+      if (match) await supabaseStorage.storage.from('Imoveis').remove([match[1]]).catch(() => {})
+    }
+    await Imoveis.update(req.params.id, { localizacao_imagem: null })
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 router.delete('/imoveis/:id/fotos/:fotoId', async (req, res) => {
   try {
     const imovel = await Imoveis.getById(req.params.id)

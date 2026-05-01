@@ -47,6 +47,10 @@ db.exec(`
     data_follow_up TEXT,
     data_aceite_investidor TEXT,
     notas TEXT,
+    pontos_fortes TEXT,
+    pontos_fracos TEXT,
+    riscos TEXT,
+    localizacao_imagem TEXT,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now')),
     synced_at TEXT

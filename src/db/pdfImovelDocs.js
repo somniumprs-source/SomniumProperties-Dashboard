@@ -84,10 +84,12 @@ export function generateDoc(tipo, imovel, analise = null) {
 // ══════════════════════════════════════════════════════════════
 
 class DocBuilder {
-  constructor(title, subtitle, imovel) {
+  constructor(title, subtitle, imovel, opts = {}) {
     this.doc = new PDFDocument({ size: 'A4', autoFirstPage: false })
     this.y = 0
     this.imovel = imovel
+    this.style = opts.style || 'default'
+    this.title = title
     this._drawCover(title, subtitle)
     this.newPage()
   }
@@ -96,40 +98,154 @@ class DocBuilder {
     const d = this.doc
     const im = this.imovel
     d.addPage({ size: 'A4', margins: { top: 0, bottom: 0, left: 0, right: 0 } })
-    // Barra dourada no topo
+
+    if (this.style === 'investor') {
+      // Capa estilo CIM institucional: barra dark topo, hero box central, term-sheet snippet
+      d.rect(0, 0, PW, 6).fill(C.black)
+      try { d.image(readFileSync(LOGO_PATH), (PW - 130) / 2, 70, { width: 130 }) } catch {}
+      d.fontSize(8).fillColor(C.muted).text('SOMNIUM PROPERTIES', ML, 180, { width: CW, align: 'center', characterSpacing: 2.5, lineBreak: false })
+      d.fontSize(8).fillColor(C.muted).text('Real Estate Value-Add  ·  Coimbra', ML, 194, { width: CW, align: 'center', lineBreak: false })
+      d.rect(ML + 80, 220, CW - 160, 0.5).fill(C.gold)
+
+      d.fontSize(7).fillColor(C.muted).text('CONFIDENCIAL', ML + 30, 240, { width: 200, characterSpacing: 1.5, lineBreak: false })
+      d.fontSize(7).fillColor(C.muted).text(`Emitido em ${NOW()}`, PW - ML - 230, 240, { width: 200, align: 'right', lineBreak: false })
+
+      d.fontSize(28).fillColor(C.body).text(title, ML, 290, { width: CW, align: 'center' })
+      const sub = [im.nome, im.zona].filter(Boolean).join(' · ').toUpperCase()
+      if (sub) d.fontSize(10).fillColor(C.gold).text(sub, ML, 340, { width: CW, align: 'center', characterSpacing: 2 })
+
+      // Hero box vazio (preenchido por renderer através de drawCoverHero)
+      this._coverHeroY = 400
+
+      d.rect(ML + 80, 670, CW - 160, 0.5).fill(C.gold)
+      d.fontSize(8).fillColor(C.muted).text('Somnium Properties · Investimento Imobiliário', ML, 690, { width: CW, align: 'center', characterSpacing: 2, lineBreak: false })
+      d.fontSize(7).fillColor(C.muted).text(`Documento Confidencial · ${NOW()}`, ML, 706, { width: CW, align: 'center', lineBreak: false })
+      d.rect(0, PH - 6, PW, 6).fill(C.gold)
+      return
+    }
+
+    // Capa default
     d.rect(0, 0, PW, 6).fill(C.gold)
-    // Logo centrado
     try { d.image(readFileSync(LOGO_PATH), (PW - 160) / 2, 140, { width: 160 }) } catch {}
-    // Linha dourada decorativa
     d.rect(PW / 2 - 30, 310, 60, 1.5).fill(C.gold)
-    // Titulo grande
     d.fontSize(28).fillColor(C.body).text(title, ML, 340, { width: CW, align: 'center' })
-    // Subtitulo dourado (nome imovel + zona)
     const sub = [im.nome, im.zona].filter(Boolean).join(' · ').toUpperCase()
     if (sub) d.fontSize(10).fillColor(C.gold).text(sub, ML, 390, { width: CW, align: 'center', characterSpacing: 1.5 })
-    // Localizacao
     if (subtitle) d.fontSize(10).fillColor(C.muted).text(subtitle + ' · Coimbra · Portugal', ML, 415, { width: CW, align: 'center' })
-    // Linha separadora
     d.rect(ML + 80, 450, CW - 160, 0.5).fill(C.gold)
-    // Data
     d.fontSize(9).fillColor(C.muted).text(NOW(), ML, 465, { width: CW, align: 'center' })
-    // Footer
     d.rect(ML, PH - 65, CW, 0.5).fill(C.gold)
     d.fontSize(7).fillColor(C.muted).text('Somnium Properties · Investimento Imobiliário', ML, PH - 52, { width: CW, align: 'center' })
     d.fontSize(7).fillColor(C.muted).text(`Documento Confidencial · ${NOW()}`, ML, PH - 40, { width: CW, align: 'center' })
-    // Barra dourada no fundo
     d.rect(0, PH - 6, PW, 6).fill(C.gold)
+  }
+
+  // Hero box no centro da capa (apenas style=investor) — chamado pelo renderer com KPIs principais
+  drawCoverHero(items) {
+    if (this.style !== 'investor' || !this._coverHeroY) return this
+    const d = this.doc
+    const y = this._coverHeroY
+    d.roundedRect(ML + 30, y, CW - 60, 130, 6).lineWidth(1).stroke(C.black)
+    d.rect(ML + 30, y, CW - 60, 4).fill(C.gold)
+    if (items.length === 1) {
+      d.fontSize(36).fillColor(C.body).text(items[0].value, ML + 30, y + 22, { width: CW - 60, align: 'center', lineBreak: false })
+      d.fontSize(8).fillColor(C.muted).text((items[0].label || '').toUpperCase(), ML + 30, y + 70, { width: CW - 60, align: 'center', characterSpacing: 2, lineBreak: false })
+      if (items[0].sub) d.fontSize(8).fillColor(C.muted).text(items[0].sub, ML + 30, y + 100, { width: CW - 60, align: 'center', lineBreak: false })
+    } else {
+      const colW = (CW - 60) / items.length
+      items.forEach((h, i) => {
+        const x = ML + 30 + i * colW
+        if (i > 0) d.rect(x, y + 20, 0.5, 90).fill(C.border)
+        d.fontSize(7).fillColor(C.muted).text((h.label || '').toUpperCase(), x + 10, y + 28, { width: colW - 20, characterSpacing: 1, align: 'center', lineBreak: false })
+        d.fontSize(22).fillColor(C.body).text(String(h.value), x + 10, y + 48, { width: colW - 20, align: 'center', lineBreak: false })
+        if (h.sub) d.fontSize(7).fillColor(C.muted).text(h.sub, x + 10, y + 88, { width: colW - 20, align: 'center', lineBreak: false })
+      })
+    }
+    return this
   }
 
   newPage() {
     this.doc.addPage({ size: 'A4', margins: { top: 60, bottom: 60, left: ML, right: MR } })
     const d = this.doc
-    // Header: logo left, date right, gold line
-    try { d.image(readFileSync(LOGO_PATH), ML, 15, { height: 22 }) } catch {}
-    d.rect(ML, 45, CW, 1.5).fill(C.gold)
-    // Footer: just the gold line (text added in end() to avoid cursor issues)
-    d.rect(ML, PH - 45, CW, 0.5).fill(C.gold)
+    if (this.style === 'investor') {
+      try { d.image(readFileSync(LOGO_PATH), ML, 18, { height: 16 }) } catch {}
+      d.fontSize(7).fillColor(C.muted).text(this.title || 'Relatório de Investimento', ML, 22, { width: CW, align: 'right', lineBreak: false })
+      d.rect(ML, 42, CW, 1).fill(C.gold)
+      d.rect(ML, PH - 42, CW, 0.4).fill(C.gold)
+      d.fontSize(6.5).fillColor(C.muted).text(`Confidencial · Somnium Properties · ${NOW()}`, ML, PH - 35, { width: CW, align: 'center', lineBreak: false })
+    } else {
+      try { d.image(readFileSync(LOGO_PATH), ML, 15, { height: 22 }) } catch {}
+      d.rect(ML, 45, CW, 1.5).fill(C.gold)
+      d.rect(ML, PH - 45, CW, 0.5).fill(C.gold)
+    }
     this.y = 60
+    return this
+  }
+
+  // Bloco "Pontos fortes / Pontos fracos / Riscos" — usa campos do imóvel.
+  // Renderiza apenas as colunas que tiverem conteúdo.
+  pontosFortesFracosRiscos() {
+    const im = this.imovel || {}
+    const blocks = [
+      { label: 'PONTOS FORTES',  text: im.pontos_fortes,  color: C.green },
+      { label: 'PONTOS FRACOS',  text: im.pontos_fracos,  color: C.red },
+      { label: 'RISCOS',         text: im.riscos,         color: C.gold },
+    ].filter(b => b.text && String(b.text).trim())
+    if (blocks.length === 0) return this
+    this.header('PONTOS FORTES, PONTOS FRACOS E RISCOS')
+    const colW = (CW - (blocks.length - 1) * 10) / blocks.length
+    const startY = this.y
+    let maxY = startY
+    blocks.forEach((b, i) => {
+      const x = ML + i * (colW + 10)
+      this.doc.roundedRect(x, startY, colW, 14, 3).fill(b.color)
+      this.doc.fontSize(7).fillColor(C.white).text(b.label, x + 8, startY + 4, { width: colW - 16, characterSpacing: 1, lineBreak: false })
+      const items = String(b.text).split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+      let cy = startY + 22
+      items.forEach(it => {
+        this.doc.fontSize(8).fillColor(b.color).text('▸', x, cy, { width: 10, lineBreak: false })
+        this.doc.fontSize(8).fillColor(C.body).text(it, x + 12, cy, { width: colW - 12, lineGap: 2 })
+        cy = this.doc.y + 4
+      })
+      if (cy > maxY) maxY = cy
+    })
+    this.y = maxY + 6
+    return this
+  }
+
+  // Imagem de localização (print Google Maps) — desenhada como bloco com header
+  localizacao() {
+    const im = this.imovel || {}
+    const url = im.localizacao_imagem
+    if (!url) return this
+    this.header('LOCALIZAÇÃO')
+    const imgW = CW
+    const imgH = imgW * 0.55
+    this.ensure(imgH + 12)
+    try {
+      let imgData
+      if (url.startsWith('http')) {
+        // URL externa (Supabase) — pdfkit aceita Buffer; precisamos baixar via fetch sync.
+        // Fallback: tentar como path local /uploads/...
+        const localPath = path.resolve(__dirname, '../..', 'public', url.replace(/^https?:\/\/[^/]+\//, ''))
+        if (existsSync(localPath)) imgData = readFileSync(localPath)
+      } else {
+        const localPath = path.resolve(__dirname, '../..', 'public', url.replace(/^\//, ''))
+        if (existsSync(localPath)) imgData = readFileSync(localPath)
+      }
+      if (imgData) {
+        this.doc.save()
+        this.doc.roundedRect(ML, this.y, imgW, imgH, 4).clip()
+        this.doc.image(imgData, ML, this.y, { width: imgW, height: imgH, fit: [imgW, imgH], align: 'center', valign: 'center' })
+        this.doc.restore()
+        this.doc.roundedRect(ML, this.y, imgW, imgH, 4).lineWidth(0.5).stroke(C.border)
+        this.y += imgH + 8
+      } else {
+        this.note('Imagem de localização não disponível neste momento.')
+      }
+    } catch {
+      this.note('Imagem de localização não pôde ser carregada.')
+    }
     return this
   }
 
@@ -1050,6 +1166,9 @@ function renderDossierInvestidor(b, im, a) {
   ])
   if (fotos.length > 0) { b.space(4); b.photos(fotos, 'O IMÓVEL') }
   b.space(4)
+  b.localizacao()
+  b.pontosFortesFracosRiscos()
+  b.space(4)
 
   b.header('NÚMEROS DO NEGÓCIO')
   b.bigNumbers([
@@ -1309,6 +1428,9 @@ function renderRelatorioInvestimento(b, im, an) {
     { label: 'Cash-on-Cash', value: PCT(an.cash_on_cash) },
     { label: 'Break-even', value: EUR(an.break_even) },
   ])
+  b.space(8)
+  b.localizacao()
+  b.pontosFortesFracosRiscos()
 }
 
 function renderRelatorioComparaveis(b, im, an) {
@@ -1564,6 +1686,13 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
     { label: 'Acesso vitalício aos documentos do negócio', value: '' },
   ])
 
+  // Localização + pontos fortes/fracos/riscos antes do disclaimer
+  if (im.localizacao_imagem || im.pontos_fortes || im.pontos_fracos || im.riscos) {
+    b.newPage()
+    b.localizacao()
+    b.pontosFortesFracosRiscos()
+  }
+
   b.space(6)
   b.note('Os valores apresentados são estimativas conservadoras baseadas em análise de mercado e podem variar. A Somnium Properties utiliza stress tests automáticos em todos os negócios para protecção do investidor. Investimento imobiliário envolve risco de capital.')
 }
@@ -1654,8 +1783,14 @@ const GENERATORS = {
   },
 
   dossier_investidor: (im, analise) => {
-    const b = new DocBuilder('Dossier de Investimento', `Oportunidade · ${im.zona || ''}`, im)
-    renderDossierInvestidor(b, im, analise || {})
+    const b = new DocBuilder('Dossier de Investimento', `Oportunidade · ${im.zona || ''}`, im, { style: 'investor' })
+    const a = analise || {}
+    b.drawCoverHero([
+      { label: 'Capital Necessário', value: EUR(a.capital_necessario), sub: a.meses ? `Hold ${a.meses} meses` : '' },
+      { label: 'Lucro Líquido',      value: EUR(a.lucro_liquido) },
+      { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
+    ])
+    renderDossierInvestidor(b, im, a)
     b.disclaimer()
     return b.end()
   },
@@ -1700,8 +1835,14 @@ const GENERATORS = {
   // ══════════════════════════════════════════════════════════════
 
   relatorio_investimento: (im, an) => {
-    const b = new DocBuilder('Análise de Investimento', im.zona || '', im)
-    renderRelatorioInvestimento(b, im, an)
+    const b = new DocBuilder('Análise de Investimento', im.zona || '', im, { style: 'investor' })
+    const a = an || {}
+    b.drawCoverHero([
+      { label: 'Lucro Líquido',      value: EUR(a.lucro_liquido) },
+      { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
+      { label: 'Capital Necessário', value: EUR(a.capital_necessario) },
+    ])
+    renderRelatorioInvestimento(b, im, a)
     b.disclaimer()
     return b.end()
   },
@@ -1728,12 +1869,19 @@ const GENERATORS = {
   },
 
   proposta_investimento_anonima: (im, analise) => {
+    const a = analise || {}
+    const meses = a.meses || 6
     const b = new DocBuilder('Proposta de Investimento', '', {
       ...im,
       nome: 'OPORTUNIDADE DE INVESTIMENTO',
       zona: im.zona ? `Zona de ${im.zona}` : 'Coimbra',
-    })
-    renderPropostaInvestimentoAnonima(b, im, analise || {})
+    }, { style: 'investor' })
+    b.drawCoverHero([
+      { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado), sub: `Base ${meses} meses` },
+      { label: 'Lucro Líquido',      value: EUR(a.lucro_liquido) },
+      { label: 'Total Investido',    value: EUR(a.capital_necessario) },
+    ])
+    renderPropostaInvestimentoAnonima(b, im, a)
     b.disclaimer()
     return b.end()
   },
