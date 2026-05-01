@@ -200,7 +200,7 @@ crudRoutes('/imoveis', Imoveis, {
         try {
           let analise = null
           try { const { rows: [a] } = await pool.query('SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1', [item.id]); analise = a } catch {}
-          const pdfDoc = generateDoc(tipo, item, analise)
+          const pdfDoc = await generateDoc(tipo, item, analise)
           if (pdfDoc && driveConfigured()) {
             await uploadDocToFolder(item.id, pdfDoc, `${tipo}.pdf`)
           }
@@ -250,7 +250,7 @@ router.get('/imoveis/:id/documento/:tipo', async (req, res) => {
       analise = a
     } catch {}
 
-    const doc = generateDoc(req.params.tipo, imovel, analise)
+    const doc = await generateDoc(req.params.tipo, imovel, analise)
     if (!doc) return res.status(400).json({ error: 'Tipo de documento inválido' })
 
     const nome = (imovel.nome || 'doc').replace(/[^a-zA-Z0-9À-ú ]/g, '').replace(/\s+/g, '_')

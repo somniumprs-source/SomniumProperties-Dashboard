@@ -74,9 +74,36 @@ const DOC_LABELS = {
   ficha_descarte: 'Ficha de Descarte',
 }
 
-export function generateDoc(tipo, imovel, analise = null) {
+// Pré-carrega imagem de localização (URL Supabase ou path local) e
+// devolve novo objecto imóvel com `_localizacaoImgData` (Buffer) injectado.
+// Sem rede: se a URL externa falhar ou não houver imagem, devolve o
+// imóvel original — o renderer ignora silenciosamente.
+async function preloadLocalizacao(imovel) {
+  const url = imovel?.localizacao_imagem
+  if (!url) return imovel
+  try {
+    if (url.startsWith('http')) {
+      const r = await fetch(url)
+      if (!r.ok) return imovel
+      const buf = Buffer.from(await r.arrayBuffer())
+      return { ...imovel, _localizacaoImgData: buf }
+    }
+    const localPath = path.resolve(__dirname, '../..', 'public', url.replace(/^\//, ''))
+    if (existsSync(localPath)) {
+      return { ...imovel, _localizacaoImgData: readFileSync(localPath) }
+    }
+  } catch { /* ignore — renderer mostra fallback */ }
+  return imovel
+}
+
+export async function generateDoc(tipo, imovel, analise = null) {
   const fn = GENERATORS[tipo]
-  return fn ? fn(imovel, analise) : null
+  if (!fn) return null
+  // Tipos investidor precisam da imagem de localização pré-carregada
+  // (Supabase URL exige fetch async; o resto do render é síncrono).
+  const investidor = ['relatorio_investimento', 'dossier_investidor', 'proposta_investimento_anonima']
+  const im = investidor.includes(tipo) ? await preloadLocalizacao(imovel) : imovel
+  return fn(im, analise)
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -183,7 +210,9 @@ class DocBuilder {
   }
 
   // Bloco "Pontos fortes / Pontos fracos / Riscos" — usa campos do imóvel.
-  // Renderiza apenas as colunas que tiverem conteúdo.
+  // Renderiza apenas as colunas que tiverem conteúdo. Calcula altura
+  // máxima das três colunas antes de desenhar para evitar sobreposição
+  // e auto-paginação do PDFKit.
   pontosFortesFracosRiscos() {
     const im = this.imovel || {}
     const blocks = [
@@ -192,59 +221,79 @@ class DocBuilder {
       { label: 'RISCOS',         text: im.riscos,         color: C.gold },
     ].filter(b => b.text && String(b.text).trim())
     if (blocks.length === 0) return this
-    this.header('PONTOS FORTES, PONTOS FRACOS E RISCOS')
-    const colW = (CW - (blocks.length - 1) * 10) / blocks.length
-    const startY = this.y
-    let maxY = startY
-    blocks.forEach((b, i) => {
-      const x = ML + i * (colW + 10)
-      this.doc.roundedRect(x, startY, colW, 14, 3).fill(b.color)
-      this.doc.fontSize(7).fillColor(C.white).text(b.label, x + 8, startY + 4, { width: colW - 16, characterSpacing: 1, lineBreak: false })
+
+    const gap = 10
+    const colW = (CW - (blocks.length - 1) * gap) / blocks.length
+    const labelH = 14
+    const itemLineGap = 2
+    const itemFontSize = 8
+    const bulletW = 12
+    const textW = colW - bulletW
+
+    // Pré-cálculo: altura de cada coluna (cabeçalho + items wrappable)
+    this.doc.fontSize(itemFontSize)
+    const colHeights = blocks.map(b => {
       const items = String(b.text).split(/\r?\n/).map(s => s.trim()).filter(Boolean)
-      let cy = startY + 22
+      let h = labelH + 8 // header colorido + gap
       items.forEach(it => {
-        this.doc.fontSize(8).fillColor(b.color).text('▸', x, cy, { width: 10, lineBreak: false })
-        this.doc.fontSize(8).fillColor(C.body).text(it, x + 12, cy, { width: colW - 12, lineGap: 2 })
-        cy = this.doc.y + 4
+        h += this.doc.heightOfString(it, { width: textW, lineGap: itemLineGap }) + 4
       })
-      if (cy > maxY) maxY = cy
+      return { h, items }
     })
-    this.y = maxY + 6
+    const blockH = Math.max(...colHeights.map(c => c.h))
+
+    this.header('PONTOS FORTES, PONTOS FRACOS E RISCOS')
+    this.ensure(blockH + 6)
+    const startY = this.y
+
+    blocks.forEach((b, i) => {
+      const x = ML + i * (colW + gap)
+      const { items } = colHeights[i]
+      // Header colorido
+      this.doc.roundedRect(x, startY, colW, labelH, 3).fill(b.color)
+      this.doc.fontSize(7).fillColor(C.white).text(b.label, x + 8, startY + 4, { width: colW - 16, characterSpacing: 1, lineBreak: false })
+      // Items
+      let cy = startY + labelH + 8
+      items.forEach(it => {
+        this.doc.fontSize(itemFontSize).fillColor(b.color).text('▸', x, cy, { width: 10, lineBreak: false })
+        this.doc.fontSize(itemFontSize).fillColor(C.body)
+        const itemH = this.doc.heightOfString(it, { width: textW, lineGap: itemLineGap })
+        this.doc.text(it, x + bulletW, cy, { width: textW, lineGap: itemLineGap })
+        cy += itemH + 4
+      })
+    })
+
+    this.y = startY + blockH + 8
     return this
   }
 
-  // Imagem de localização (print Google Maps) — desenhada como bloco com header
+  // Imagem de localização (print Google Maps). Aceita imgData previamente
+  // carregado via fetchLocalizacaoImagem() ou tenta path local.
   localizacao() {
     const im = this.imovel || {}
     const url = im.localizacao_imagem
-    if (!url) return this
-    this.header('LOCALIZAÇÃO')
+    const cached = im._localizacaoImgData
+    if (!url && !cached) return this
     const imgW = CW
     const imgH = imgW * 0.55
+    this.header('LOCALIZAÇÃO')
     this.ensure(imgH + 12)
-    try {
-      let imgData
-      if (url.startsWith('http')) {
-        // URL externa (Supabase) — pdfkit aceita Buffer; precisamos baixar via fetch sync.
-        // Fallback: tentar como path local /uploads/...
-        const localPath = path.resolve(__dirname, '../..', 'public', url.replace(/^https?:\/\/[^/]+\//, ''))
-        if (existsSync(localPath)) imgData = readFileSync(localPath)
-      } else {
-        const localPath = path.resolve(__dirname, '../..', 'public', url.replace(/^\//, ''))
-        if (existsSync(localPath)) imgData = readFileSync(localPath)
+    let imgData = cached || null
+    if (!imgData && url && !url.startsWith('http')) {
+      const localPath = path.resolve(__dirname, '../..', 'public', url.replace(/^\//, ''))
+      if (existsSync(localPath)) {
+        try { imgData = readFileSync(localPath) } catch {}
       }
-      if (imgData) {
-        this.doc.save()
-        this.doc.roundedRect(ML, this.y, imgW, imgH, 4).clip()
-        this.doc.image(imgData, ML, this.y, { width: imgW, height: imgH, fit: [imgW, imgH], align: 'center', valign: 'center' })
-        this.doc.restore()
-        this.doc.roundedRect(ML, this.y, imgW, imgH, 4).lineWidth(0.5).stroke(C.border)
-        this.y += imgH + 8
-      } else {
-        this.note('Imagem de localização não disponível neste momento.')
-      }
-    } catch {
-      this.note('Imagem de localização não pôde ser carregada.')
+    }
+    if (imgData) {
+      this.doc.save()
+      this.doc.roundedRect(ML, this.y, imgW, imgH, 4).clip()
+      this.doc.image(imgData, ML, this.y, { width: imgW, height: imgH, fit: [imgW, imgH], align: 'center', valign: 'center' })
+      this.doc.restore()
+      this.doc.roundedRect(ML, this.y, imgW, imgH, 4).lineWidth(0.5).stroke(C.border)
+      this.y += imgH + 8
+    } else {
+      this.note('Imagem de localização não disponível neste momento.')
     }
     return this
   }
@@ -257,8 +306,8 @@ class DocBuilder {
   // Section header — bold uppercase + gold underline (no numbering)
   header(title) {
     this.ensure(28)
-    this.doc.fontSize(11).fillColor(C.body).text(title.toUpperCase(), ML, this.y, { characterSpacing: 0.3 })
-    this.y = this.doc.y + 4
+    this.doc.fontSize(11).fillColor(C.body).text(title.toUpperCase(), ML, this.y, { width: CW, characterSpacing: 0.3, lineBreak: false })
+    this.y += 14
     this.doc.rect(ML, this.y, CW, 1.5).fill(C.gold)
     this.y += 10
     return this
@@ -267,8 +316,8 @@ class DocBuilder {
   // Sub-header (lighter, smaller)
   subheader(title) {
     this.ensure(22)
-    this.doc.fontSize(9.5).fillColor(C.body).text(title.toUpperCase(), ML, this.y, { characterSpacing: 0.3 })
-    this.y = this.doc.y + 3
+    this.doc.fontSize(9.5).fillColor(C.body).text(title.toUpperCase(), ML, this.y, { width: CW, characterSpacing: 0.3, lineBreak: false })
+    this.y += 12
     this.doc.rect(ML, this.y, 40, 1).fill(C.gold)
     this.y += 8
     return this
@@ -340,9 +389,13 @@ class DocBuilder {
 
   // Info text
   text(content, options = {}) {
-    this.ensure(20)
-    this.doc.fontSize(options.size || 9).fillColor(options.color || C.body).text(content, ML, this.y, { width: CW, lineGap: options.lineGap || 4 })
-    this.y = this.doc.y + 6
+    const fontSize = options.size || 9
+    const lineGap = options.lineGap || 4
+    this.doc.fontSize(fontSize)
+    const h = this.doc.heightOfString(String(content || ''), { width: CW, lineGap })
+    this.ensure(h + 8)
+    this.doc.fillColor(options.color || C.body).text(String(content || ''), ML, this.y, { width: CW, lineGap })
+    this.y += h + 6
     return this
   }
 
@@ -532,38 +585,44 @@ class DocBuilder {
     return this
   }
 
-  // Verdict — uma linha simples com cor
   // Narrative text block
   textBlock(content) {
-    this.ensure(30)
-    this.doc.fontSize(9).fillColor(C.body).text(content, ML, this.y, { width: CW, lineGap: 4, align: 'justify' })
-    this.y = this.doc.y + 8
+    this.doc.fontSize(9)
+    const h = this.doc.heightOfString(String(content || ''), { width: CW, lineGap: 4 })
+    this.ensure(h + 12)
+    this.doc.fillColor(C.body).text(String(content || ''), ML, this.y, { width: CW, lineGap: 4, align: 'justify' })
+    this.y += h + 8
     return this
   }
 
   // Note/pressuposto
   note(text) {
-    this.ensure(16)
-    this.doc.fontSize(7.5).fillColor(C.muted).text(text, ML, this.y, { width: CW, lineGap: 3 })
-    this.y = this.doc.y + 4
+    this.doc.fontSize(7.5)
+    const h = this.doc.heightOfString(String(text || ''), { width: CW, lineGap: 3 })
+    this.ensure(h + 8)
+    this.doc.fillColor(C.muted).text(String(text || ''), ML, this.y, { width: CW, lineGap: 3 })
+    this.y += h + 4
     return this
   }
 
   verdict(text, isPositive) {
-    this.ensure(20)
-    this.doc.fontSize(9.5).fillColor(isPositive ? C.green : C.red).text(text, ML, this.y, { width: CW })
-    this.y = this.doc.y + 8
+    this.doc.fontSize(9.5)
+    const h = this.doc.heightOfString(String(text || ''), { width: CW, lineGap: 2 })
+    this.ensure(h + 10)
+    this.doc.fillColor(isPositive ? C.green : C.red).text(String(text || ''), ML, this.y, { width: CW, lineGap: 2 })
+    this.y += h + 8
     return this
   }
 
   disclaimer() {
-    this.ensure(30)
+    const txt = 'Este documento é preparado para fins informativos e não constitui aconselhamento financeiro ou fiscal. Os valores são estimativas e podem variar. Somnium Properties — Confidencial.'
+    this.doc.fontSize(6.5)
+    const h = this.doc.heightOfString(txt, { width: CW, lineGap: 2 })
+    this.ensure(h + 14)
     this.doc.rect(ML, this.y, CW, 0.3).fill(C.border)
     this.y += 6
-    this.doc.fontSize(6.5).fillColor(C.muted).text(
-      'Este documento é preparado para fins informativos e não constitui aconselhamento financeiro ou fiscal. Os valores são estimativas e podem variar. Somnium Properties — Confidencial.',
-      ML, this.y, { width: CW, lineGap: 2 })
-    this.y = this.doc.y + 4
+    this.doc.fillColor(C.muted).text(txt, ML, this.y, { width: CW, lineGap: 2 })
+    this.y += h + 4
     return this
   }
 
