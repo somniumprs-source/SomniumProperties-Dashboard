@@ -196,53 +196,60 @@ newPage()
 y = 60
 y = header(y, 'Estrutura de Capital', 'Sources & Uses · capital exposto na compra vs custos pagos no exit')
 
-const colW = (CW - 20) / 2
-const colSx = ML, colUx = ML + colW + 20
+// 2 colunas com gap de 16px
+const colW = (CW - 16) / 2
+const colSx = ML
+const colUx = ML + colW + 16
+
+// Larguras internas por coluna: label | valor | %
+const lblW = 110, valW = 70, pctW = 50
+const totalInner = lblW + valW + pctW  // 230 < colW (~239)
+
 let sy = y, uy = y
 
 T(8, C.gold, 'SOURCES', colSx, sy, colW, { characterSpacing: 1.5 }); sy += 12
 doc.rect(colSx, sy, colW, 0.5).fill(C.border); sy += 5
 const sources = [
-  ['Equity Investidor', '168.655€', '100,0%'],
-  ['Equity Somnium (GP)', 'a definir', 'pari passu'],
-  ['Dívida sénior', '0€', '0,0%'],
-  ['Dívida participativa', '0€', '0,0%'],
+  ['Equity Investidor',     '168.655€',  '100,0%'],
+  ['Equity Somnium (GP)',   'a definir', 'pari passu'],
+  ['Dívida sénior',         '0€',        '0,0%'],
+  ['Dívida participativa',  '0€',        '0,0%'],
 ]
 sources.forEach(([k, v, p]) => {
-  T(8, C.body, k, colSx + 4, sy, 130)
-  T(8, C.body, v, colSx + 130, sy, 70, { align: 'right' })
-  T(7, C.muted, p, colSx + 205, sy + 1, 60, { align: 'right' })
+  T(8, C.body, k, colSx + 2, sy, lblW)
+  T(8, C.body, v, colSx + 2 + lblW, sy, valW, { align: 'right' })
+  T(7, C.muted, p, colSx + 2 + lblW + valW + 4, sy + 1, pctW, { align: 'right' })
   sy += 13
 })
 doc.rect(colSx, sy, colW, 0.5).fill(C.body); sy += 4
-T(8.5, C.body, 'TOTAL SOURCES', colSx + 4, sy, 130)
-T(8.5, C.gold, '168.655€', colSx + 130, sy, 70, { align: 'right' })
-T(7, C.muted, '100,0%', colSx + 205, sy + 1, 60, { align: 'right' })
+T(8.5, C.body, 'TOTAL SOURCES', colSx + 2, sy, lblW)
+T(8.5, C.gold, '168.655€', colSx + 2 + lblW, sy, valW, { align: 'right' })
+T(7, C.muted, '100,0%', colSx + 2 + lblW + valW + 4, sy + 1, pctW, { align: 'right' })
 
 T(8, C.gold, 'USES', colUx, uy, colW, { characterSpacing: 1.5 }); uy += 12
 doc.rect(colUx, uy, colW, 0.5).fill(C.border); uy += 5
 const uses = [
-  ['Compra (preço transmissão)', '110.000€', '65,2%'],
-  ['  ▸ IMT (isento Lei 56/23)', '0€', ''],
-  ['  ▸ Imposto Selo (0,8%)', '880€', ''],
-  ['  ▸ Escritura + CPCV', '900€', ''],
-  ['Subtotal aquisição', '111.780€', '66,3%'],
-  ['Obra com IVA', '55.975€', '33,2%'],
-  ['  ▸ Mão-de-obra (65%)', '32.500€', ''],
-  ['  ▸ Materiais (35%)', '17.500€', ''],
-  ['  ▸ IVA (mix 6/23%)', '5.975€', ''],
-  ['Detenção (6 meses)', '900€', '0,5%'],
+  ['Compra (transmissão)',  '110.000€',  '65,2%'],
+  ['  ▸ IMT (isento)',      '0€',        ''],
+  ['  ▸ Imposto Selo',      '880€',      ''],
+  ['  ▸ Escritura + CPCV',  '900€',      ''],
+  ['Subtotal aquisição',    '111.780€',  '66,3%'],
+  ['Obra com IVA',          '55.975€',   '33,2%'],
+  ['  ▸ Mão-de-obra (65%)', '32.500€',   ''],
+  ['  ▸ Materiais (35%)',   '17.500€',   ''],
+  ['  ▸ IVA (mix 6/23%)',   '5.975€',    ''],
+  ['Detenção (6 meses)',    '900€',      '0,5%'],
 ]
 uses.forEach(([k, v, p]) => {
-  T(8, C.body, k, colUx + 4, uy, 150)
-  T(8, C.body, v, colUx + 150, uy, 60, { align: 'right' })
-  if (p) T(7, C.muted, p, colUx + 215, uy + 1, 50, { align: 'right' })
+  T(8, C.body, k, colUx + 2, uy, lblW)
+  T(8, C.body, v, colUx + 2 + lblW, uy, valW, { align: 'right' })
+  if (p) T(7, C.muted, p, colUx + 2 + lblW + valW + 4, uy + 1, pctW, { align: 'right' })
   uy += 13
 })
 doc.rect(colUx, uy, colW, 0.5).fill(C.body); uy += 4
-T(8.5, C.body, 'TOTAL USES', colUx + 4, uy, 150)
-T(8.5, C.gold, '168.655€', colUx + 150, uy, 60, { align: 'right' })
-T(7, C.muted, '100,0%', colUx + 215, uy + 1, 50, { align: 'right' })
+T(8.5, C.body, 'TOTAL USES', colUx + 2, uy, lblW)
+T(8.5, C.gold, '168.655€', colUx + 2 + lblW, uy, valW, { align: 'right' })
+T(7, C.muted, '100,0%', colUx + 2 + lblW + valW + 4, uy + 1, pctW, { align: 'right' })
 
 y = Math.max(sy, uy) + 24
 
