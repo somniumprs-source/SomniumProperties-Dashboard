@@ -112,11 +112,12 @@ export async function generateDoc(tipo, imovel, analise = null) {
 
 class DocBuilder {
   constructor(title, subtitle, imovel, opts = {}) {
-    this.doc = new PDFDocument({ size: 'A4', autoFirstPage: false })
+    this.doc = new PDFDocument({ size: 'A4', autoFirstPage: false, bufferPages: true })
     this.y = 0
     this.imovel = imovel
     this.style = opts.style || 'default'
     this.title = title
+    this.heroItems = opts.heroItems || null
     this._drawCover(title, subtitle)
     this.newPage()
   }
@@ -137,12 +138,31 @@ class DocBuilder {
       d.fontSize(7).fillColor(C.muted).text('CONFIDENCIAL', ML + 30, 240, { width: 200, characterSpacing: 1.5, lineBreak: false })
       d.fontSize(7).fillColor(C.muted).text(`Emitido em ${NOW()}`, PW - ML - 230, 240, { width: 200, align: 'right', lineBreak: false })
 
-      d.fontSize(28).fillColor(C.body).text(title, ML, 290, { width: CW, align: 'center' })
+      d.fontSize(28).fillColor(C.body).text(title, ML, 290, { width: CW, align: 'center', lineBreak: false })
       const sub = [im.nome, im.zona].filter(Boolean).join(' · ').toUpperCase()
-      if (sub) d.fontSize(10).fillColor(C.gold).text(sub, ML, 340, { width: CW, align: 'center', characterSpacing: 2 })
+      if (sub) d.fontSize(10).fillColor(C.gold).text(sub, ML, 340, { width: CW, align: 'center', characterSpacing: 2, lineBreak: false })
 
-      // Hero box vazio (preenchido por renderer através de drawCoverHero)
-      this._coverHeroY = 400
+      // Hero box (KPIs centrais) — desenhado AQUI dentro da capa, não na página seguinte
+      if (this.heroItems && this.heroItems.length > 0) {
+        const items = this.heroItems
+        const heroY = 400, heroH = 130
+        d.roundedRect(ML + 30, heroY, CW - 60, heroH, 6).lineWidth(1).stroke(C.black)
+        d.rect(ML + 30, heroY, CW - 60, 4).fill(C.gold)
+        if (items.length === 1) {
+          d.fontSize(36).fillColor(C.body).text(items[0].value, ML + 30, heroY + 22, { width: CW - 60, align: 'center', lineBreak: false })
+          d.fontSize(8).fillColor(C.muted).text((items[0].label || '').toUpperCase(), ML + 30, heroY + 70, { width: CW - 60, align: 'center', characterSpacing: 2, lineBreak: false })
+          if (items[0].sub) d.fontSize(8).fillColor(C.muted).text(items[0].sub, ML + 30, heroY + 100, { width: CW - 60, align: 'center', lineBreak: false })
+        } else {
+          const colW = (CW - 60) / items.length
+          items.forEach((h, i) => {
+            const x = ML + 30 + i * colW
+            if (i > 0) d.rect(x, heroY + 20, 0.5, 90).fill(C.border)
+            d.fontSize(7).fillColor(C.muted).text((h.label || '').toUpperCase(), x + 10, heroY + 28, { width: colW - 20, characterSpacing: 1, align: 'center', lineBreak: false })
+            d.fontSize(22).fillColor(C.body).text(String(h.value), x + 10, heroY + 48, { width: colW - 20, align: 'center', lineBreak: false })
+            if (h.sub) d.fontSize(7).fillColor(C.muted).text(h.sub, x + 10, heroY + 88, { width: colW - 20, align: 'center', lineBreak: false })
+          })
+        }
+      }
 
       d.rect(ML + 80, 670, CW - 160, 0.5).fill(C.gold)
       d.fontSize(8).fillColor(C.muted).text('Somnium Properties · Investimento Imobiliário', ML, 690, { width: CW, align: 'center', characterSpacing: 2, lineBreak: false })
@@ -167,29 +187,9 @@ class DocBuilder {
     d.rect(0, PH - 6, PW, 6).fill(C.gold)
   }
 
-  // Hero box no centro da capa (apenas style=investor) — chamado pelo renderer com KPIs principais
-  drawCoverHero(items) {
-    if (this.style !== 'investor' || !this._coverHeroY) return this
-    const d = this.doc
-    const y = this._coverHeroY
-    d.roundedRect(ML + 30, y, CW - 60, 130, 6).lineWidth(1).stroke(C.black)
-    d.rect(ML + 30, y, CW - 60, 4).fill(C.gold)
-    if (items.length === 1) {
-      d.fontSize(36).fillColor(C.body).text(items[0].value, ML + 30, y + 22, { width: CW - 60, align: 'center', lineBreak: false })
-      d.fontSize(8).fillColor(C.muted).text((items[0].label || '').toUpperCase(), ML + 30, y + 70, { width: CW - 60, align: 'center', characterSpacing: 2, lineBreak: false })
-      if (items[0].sub) d.fontSize(8).fillColor(C.muted).text(items[0].sub, ML + 30, y + 100, { width: CW - 60, align: 'center', lineBreak: false })
-    } else {
-      const colW = (CW - 60) / items.length
-      items.forEach((h, i) => {
-        const x = ML + 30 + i * colW
-        if (i > 0) d.rect(x, y + 20, 0.5, 90).fill(C.border)
-        d.fontSize(7).fillColor(C.muted).text((h.label || '').toUpperCase(), x + 10, y + 28, { width: colW - 20, characterSpacing: 1, align: 'center', lineBreak: false })
-        d.fontSize(22).fillColor(C.body).text(String(h.value), x + 10, y + 48, { width: colW - 20, align: 'center', lineBreak: false })
-        if (h.sub) d.fontSize(7).fillColor(C.muted).text(h.sub, x + 10, y + 88, { width: colW - 20, align: 'center', lineBreak: false })
-      })
-    }
-    return this
-  }
+  // No-op (compatibilidade): hero items agora são passados via opts.heroItems
+  // no constructor e desenhados dentro de _drawCover.
+  drawCoverHero() { return this }
 
   newPage() {
     this.doc.addPage({ size: 'A4', margins: { top: 60, bottom: 60, left: ML, right: MR } })
@@ -299,7 +299,9 @@ class DocBuilder {
   }
 
   ensure(needed) {
-    if (this.y > 50 && this.y + needed > PH - 50) this.newPage()
+    // Margem inferior de 70 (em vez de 50) para evitar que o PDFKit
+    // auto-pagine entre a chamada ensure() e a escrita seguinte.
+    if (this.y > 50 && this.y + needed > PH - 70) this.newPage()
     return this
   }
 
@@ -416,11 +418,13 @@ class DocBuilder {
 
   // Numbered step
   step(num, text) {
-    this.ensure(22)
+    this.doc.fontSize(9)
+    const h = this.doc.heightOfString(String(text || ''), { width: CW - 30 })
+    this.ensure(Math.max(22, h + 8))
     this.doc.circle(ML + 8, this.y + 8, 8).fill(C.gold)
     this.doc.fontSize(8).fillColor(C.white).text(String(num), ML + 3, this.y + 4, { width: 10, align: 'center', lineBreak: false })
     this.doc.fontSize(9).fillColor(C.body).text(text, ML + 24, this.y + 3, { width: CW - 30 })
-    this.y = Math.max(this.y + 20, this.doc.y + 4)
+    this.y += Math.max(20, h + 4)
     return this
   }
 
@@ -462,9 +466,12 @@ class DocBuilder {
 
   // Bullet point
   bullet(text) {
-    this.ensure(18)
-    this.doc.fontSize(9).fillColor(C.gold).text('▸ ', ML, this.y, { continued: true }).fillColor(C.body).text(text, { width: CW - 14, lineGap: 3 })
-    this.y = this.doc.y + 4
+    this.doc.fontSize(9)
+    const h = this.doc.heightOfString(String(text || ''), { width: CW - 14, lineGap: 3 })
+    this.ensure(h + 8)
+    this.doc.fillColor(C.gold).text('▸', ML, this.y, { width: 10, lineBreak: false })
+    this.doc.fillColor(C.body).text(String(text || ''), ML + 14, this.y, { width: CW - 14, lineGap: 3 })
+    this.y += h + 4
     return this
   }
 
@@ -519,33 +526,33 @@ class DocBuilder {
     const colW = CW / items.length
     items.forEach((item, i) => {
       const x = ML + i * colW
-      this.doc.fontSize(7.5).fillColor(C.muted).text(`${item.label}: `, x, this.y + 2, { continued: true }).fillColor(C.body).text(String(item.value || '—'), { lineBreak: false })
+      this.doc.fontSize(7.5).fillColor(C.muted).text(`${item.label}: `, x, this.y + 2, { width: colW - 4, continued: true, lineBreak: false }).fillColor(C.body).text(String(item.value || '—'), { lineBreak: false })
     })
     this.y += 16
     return this
   }
 
   // Professional table — warm header, generous rows (reference style)
+  // Cada linha é verificada individualmente para evitar overflow auto-paginado.
   simpleTable(rows) {
-    this.ensure(rows.length * 22 + 4)
     rows.forEach(row => {
       const isTotal = row.total
-      if (isTotal) {
-        this.doc.rect(ML, this.y, CW, 24).fill(C.totalBg)
-      }
+      const rowH = isTotal ? 26 : 22
+      this.ensure(rowH + 1)
+      if (isTotal) this.doc.rect(ML, this.y, CW, 24).fill(C.totalBg)
       this.doc.fontSize(isTotal ? 9.5 : 8.5).fillColor(C.body).text(row.label || '', ML + 10, this.y + 6, { width: 310, lineBreak: false })
       this.doc.fontSize(isTotal ? 9.5 : 8.5).fillColor(isTotal ? C.gold : C.body).text(String(row.value || '—'), ML + 320, this.y + 6, { width: CW - 330, align: 'right', lineBreak: false })
       this.doc.rect(ML, this.y + (isTotal ? 24 : 22), CW, 0.3).fill(C.border)
-      this.y += isTotal ? 26 : 22
+      this.y += rowH
     })
     this.y += 4
     return this
   }
 
   // Column table — warm gray header with gold labels (reference style)
+  // Cada linha verificada individualmente para evitar overflow auto-paginado.
   colTable(headers, rows) {
-    this.ensure(24 + rows.length * 24)
-    // Header — warm gray bg, gold bold labels
+    this.ensure(24)
     this.doc.rect(ML, this.y, CW, 22).fill(C.headerBg)
     let x = ML + 8
     for (const [label, w] of headers) {
@@ -553,9 +560,10 @@ class DocBuilder {
       x += w
     }
     this.y += 24
-    // Rows
     rows.forEach(row => {
       const isTotal = row._total
+      const rowH = isTotal ? 26 : 24
+      this.ensure(rowH + 1)
       if (isTotal) this.doc.rect(ML, this.y, CW, 24).fill(C.totalBg)
       x = ML + 8
       const vals = row._values || row
@@ -567,7 +575,7 @@ class DocBuilder {
         x += headers[i][1]
       }
       this.doc.rect(ML, this.y + (isTotal ? 24 : 22), CW, 0.3).fill(C.border)
-      this.y += isTotal ? 26 : 24
+      this.y += rowH
     })
     this.y += 4
     return this
@@ -1842,13 +1850,15 @@ const GENERATORS = {
   },
 
   dossier_investidor: (im, analise) => {
-    const b = new DocBuilder('Dossier de Investimento', `Oportunidade · ${im.zona || ''}`, im, { style: 'investor' })
     const a = analise || {}
-    b.drawCoverHero([
-      { label: 'Capital Necessário', value: EUR(a.capital_necessario), sub: a.meses ? `Hold ${a.meses} meses` : '' },
-      { label: 'Lucro Líquido',      value: EUR(a.lucro_liquido) },
-      { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
-    ])
+    const b = new DocBuilder('Dossier de Investimento', `Oportunidade · ${im.zona || ''}`, im, {
+      style: 'investor',
+      heroItems: [
+        { label: 'Capital Necessário', value: EUR(a.capital_necessario), sub: a.meses ? `Hold ${a.meses} meses` : '' },
+        { label: 'Lucro Líquido',      value: EUR(a.lucro_liquido) },
+        { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
+      ],
+    })
     renderDossierInvestidor(b, im, a)
     b.disclaimer()
     return b.end()
@@ -1894,13 +1904,15 @@ const GENERATORS = {
   // ══════════════════════════════════════════════════════════════
 
   relatorio_investimento: (im, an) => {
-    const b = new DocBuilder('Análise de Investimento', im.zona || '', im, { style: 'investor' })
     const a = an || {}
-    b.drawCoverHero([
-      { label: 'Lucro Líquido',      value: EUR(a.lucro_liquido) },
-      { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
-      { label: 'Capital Necessário', value: EUR(a.capital_necessario) },
-    ])
+    const b = new DocBuilder('Análise de Investimento', im.zona || '', im, {
+      style: 'investor',
+      heroItems: [
+        { label: 'Lucro Líquido',      value: EUR(a.lucro_liquido) },
+        { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
+        { label: 'Capital Necessário', value: EUR(a.capital_necessario) },
+      ],
+    })
     renderRelatorioInvestimento(b, im, a)
     b.disclaimer()
     return b.end()
@@ -1934,12 +1946,14 @@ const GENERATORS = {
       ...im,
       nome: 'OPORTUNIDADE DE INVESTIMENTO',
       zona: im.zona ? `Zona de ${im.zona}` : 'Coimbra',
-    }, { style: 'investor' })
-    b.drawCoverHero([
-      { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado), sub: `Base ${meses} meses` },
-      { label: 'Lucro Líquido',      value: EUR(a.lucro_liquido) },
-      { label: 'Total Investido',    value: EUR(a.capital_necessario) },
-    ])
+    }, {
+      style: 'investor',
+      heroItems: [
+        { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado), sub: `Base ${meses} meses` },
+        { label: 'Lucro Líquido',      value: EUR(a.lucro_liquido) },
+        { label: 'Total Investido',    value: EUR(a.capital_necessario) },
+      ],
+    })
     renderPropostaInvestimentoAnonima(b, im, a)
     b.disclaimer()
     return b.end()
