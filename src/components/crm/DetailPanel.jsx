@@ -582,29 +582,49 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                   <label className="text-xs text-gray-400 block mb-1">Imagem de localização (print do Google Maps)</label>
                   {form.localizacao_imagem ? (
                     <div className="flex items-start gap-3">
-                      <img src={form.localizacao_imagem} alt="Localização" className="w-48 h-32 object-cover rounded-lg border border-gray-200" />
-                      <button type="button" onClick={async () => {
-                        if (!confirm('Remover imagem de localização?')) return
-                        try {
-                          const r = await apiFetch(`/api/crm/imoveis/${data.id}/localizacao`, { method: 'DELETE' })
-                          if (!r.ok) throw new Error(await r.text())
-                          setField('localizacao_imagem', null)
-                        } catch (e) { alert('Erro ao remover: ' + e.message) }
-                      }} className="text-xs text-red-600 hover:underline">Remover</button>
+                      <img src={form.localizacao_imagem} alt="Localização" className="w-64 h-40 object-cover rounded-lg border border-gray-200" />
+                      <div className="flex flex-col gap-2">
+                        <label className="text-xs px-3 py-1.5 rounded-md bg-yellow-50 border border-yellow-200 text-yellow-800 hover:bg-yellow-100 cursor-pointer text-center">
+                          Substituir
+                          <input type="file" accept="image/*" className="hidden" onChange={async e => {
+                            const file = e.target.files?.[0]
+                            if (!file) return
+                            try {
+                              const fd = new FormData()
+                              fd.append('imagem', file)
+                              const r = await apiFetch(`/api/crm/imoveis/${data.id}/localizacao`, { method: 'POST', body: fd })
+                              if (!r.ok) throw new Error(await r.text())
+                              const j = await r.json()
+                              setField('localizacao_imagem', j.localizacao_imagem)
+                            } catch (err) { alert('Erro ao carregar: ' + err.message) }
+                          }} />
+                        </label>
+                        <button type="button" onClick={async () => {
+                          if (!confirm('Remover imagem de localização?')) return
+                          try {
+                            const r = await apiFetch(`/api/crm/imoveis/${data.id}/localizacao`, { method: 'DELETE' })
+                            if (!r.ok) throw new Error(await r.text())
+                            setField('localizacao_imagem', null)
+                          } catch (e) { alert('Erro ao remover: ' + e.message) }
+                        }} className="text-xs px-3 py-1.5 rounded-md bg-red-50 border border-red-200 text-red-700 hover:bg-red-100">Remover</button>
+                      </div>
                     </div>
                   ) : (
-                    <input type="file" accept="image/*" onChange={async e => {
-                      const file = e.target.files?.[0]
-                      if (!file) return
-                      try {
-                        const fd = new FormData()
-                        fd.append('imagem', file)
-                        const r = await apiFetch(`/api/crm/imoveis/${data.id}/localizacao`, { method: 'POST', body: fd })
-                        if (!r.ok) throw new Error(await r.text())
-                        const j = await r.json()
-                        setField('localizacao_imagem', j.localizacao_imagem)
-                      } catch (err) { alert('Erro ao carregar: ' + err.message) }
-                    }} className="block text-xs text-gray-600" />
+                    <label className="flex items-center justify-center gap-2 px-4 py-6 rounded-lg border-2 border-dashed border-gray-300 hover:border-yellow-400 hover:bg-yellow-50/50 cursor-pointer transition-colors">
+                      <span className="text-sm text-gray-500">Clique para carregar print do Google Maps (JPG, PNG, WEBP)</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={async e => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        try {
+                          const fd = new FormData()
+                          fd.append('imagem', file)
+                          const r = await apiFetch(`/api/crm/imoveis/${data.id}/localizacao`, { method: 'POST', body: fd })
+                          if (!r.ok) throw new Error(await r.text())
+                          const j = await r.json()
+                          setField('localizacao_imagem', j.localizacao_imagem)
+                        } catch (err) { alert('Erro ao carregar: ' + err.message) }
+                      }} />
+                    </label>
                   )}
                 </div>
               </> : (() => {

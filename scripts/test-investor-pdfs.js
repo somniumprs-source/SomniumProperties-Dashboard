@@ -22,7 +22,7 @@ im.localizacao_imagem = null  // nenhuma para já — testa sem imagem
 const tipos = ['relatorio_investimento', 'dossier_investidor', 'proposta_investimento_anonima']
 for (const tipo of tipos) {
   const out = `/tmp/test-${tipo}.pdf`
-  const doc = generateDoc(tipo, im, an)
+  const doc = await generateDoc(tipo, im, an)
   await new Promise((resolve, reject) => {
     const ws = createWriteStream(out)
     doc.pipe(ws)
