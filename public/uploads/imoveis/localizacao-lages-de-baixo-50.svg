@@ -192,9 +192,8 @@
 
   <!-- DISTANCES TABLE -->
   <g transform="translate(50, 1050)">
-    <text x="0" y="0" font-size="18" fill="#0d0d0d" font-weight="700">Distâncias e tempos sem trânsito</text>
+    <text x="0" y="0" font-size="18" fill="#0d0d0d" font-weight="700">Distâncias e tempos de carro</text>
     <line x1="0" y1="10" x2="540" y2="10" stroke="#C9A84C" stroke-width="2"/>
-    <text x="540" y="-2" font-size="10" fill="#888" text-anchor="end" font-style="italic">via Google Distance Matrix</text>
     <g transform="translate(0, 30)">
       <rect width="540" height="32" rx="4" fill="#0d0d0d"/>
       <text x="20" y="21" font-size="11" fill="#C9A84C" font-weight="700" letter-spacing="1">#</text>
@@ -280,7 +279,7 @@
     <rect x="0" y="0" width="1200" height="6" fill="url(#goldGrad)"/>
     <text x="50" y="36" font-size="11" fill="#C9A84C" font-weight="700" letter-spacing="3">SOMNIUM PROPERTIES</text>
     <text x="50" y="56" font-size="10" fill="#888">Estudo de localização · gerado para apresentação a investidor</text>
-    <text x="50" y="74" font-size="9" fill="#666" font-style="italic">Distâncias e tempos: Google Distance Matrix API · valores sem trânsito (free-flow). Modo: condução.</text>
+    <text x="50" y="74" font-size="9" fill="#666" font-style="italic">Distâncias e tempos calculados em modo de condução.</text>
     <text x="1150" y="56" font-size="10" fill="#888" text-anchor="end">Coimbra · Portugal</text>
     <text x="1150" y="74" font-size="9" fill="#666" font-style="italic" text-anchor="end">v2 · valores reais · Lages de Baixo nº 50</text>
   </g>
