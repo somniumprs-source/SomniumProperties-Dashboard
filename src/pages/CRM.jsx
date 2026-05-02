@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Header } from '../components/layout/Header.jsx'
 import { KanbanBoard } from '../components/crm/KanbanBoard.jsx'
-import { DetailPanel } from '../components/crm/DetailPanel.jsx'
+import { DetailPanel, MOTIVOS_NAO_INTERESSA_PADRAO } from '../components/crm/DetailPanel.jsx'
 import { Filters } from '../components/crm/Filters.jsx'
 import { TabKPIs } from '../components/crm/TabKPIs.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
@@ -469,17 +469,40 @@ function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
   const isFollowUp = moveModal.type === 'follow_up'
   const today = new Date().toISOString().slice(0, 10)
   const [data, setData] = useState(item?.data_follow_up || today)
-  const [motivo, setMotivo] = useState(isFollowUp ? (item?.motivo_follow_up || '') : (item?.motivo_nao_interessa || ''))
+  const initialMotivo = isFollowUp ? (item?.motivo_follow_up || '') : (item?.motivo_nao_interessa || '')
+  const padraoSet = new Set(MOTIVOS_NAO_INTERESSA_PADRAO)
+  const partesIniciais = initialMotivo.split(/;\s*/).map(s => s.trim()).filter(Boolean)
+  const [selectedPresets, setSelectedPresets] = useState(
+    new Set(isFollowUp ? [] : partesIniciais.filter(p => padraoSet.has(p)))
+  )
+  const [notas, setNotas] = useState(
+    isFollowUp ? initialMotivo : partesIniciais.filter(p => !padraoSet.has(p)).join('; ')
+  )
   const [saving, setSaving] = useState(false)
 
+  function buildMotivo() {
+    if (isFollowUp) return notas.trim()
+    return [...selectedPresets, notas.trim()].filter(Boolean).join('; ')
+  }
+
+  function togglePreset(m) {
+    const novos = new Set(selectedPresets)
+    if (novos.has(m)) novos.delete(m)
+    else novos.add(m)
+    setSelectedPresets(novos)
+  }
+
   async function confirm() {
-    if (!motivo.trim()) return
+    const motivoFinal = buildMotivo()
+    if (!motivoFinal) return
     setSaving(true)
     const extra = isFollowUp
-      ? { motivo_follow_up: motivo.trim(), data_follow_up: data || null }
-      : { motivo_nao_interessa: motivo.trim() }
+      ? { motivo_follow_up: motivoFinal, data_follow_up: data || null }
+      : { motivo_nao_interessa: motivoFinal }
     try { await onConfirm(extra) } finally { setSaving(false) }
   }
+
+  const motivoFinal = buildMotivo()
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center backdrop-blur-sm p-4" onClick={onCancel}>
@@ -499,13 +522,33 @@ function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
           </div>
         )}
 
+        {!isFollowUp && (
+          <div className="mb-3">
+            <label className="text-xs font-medium text-gray-600 block mb-2">Motivos padrão</label>
+            <div className="flex flex-wrap gap-1.5">
+              {MOTIVOS_NAO_INTERESSA_PADRAO.map(m => {
+                const on = selectedPresets.has(m)
+                return (
+                  <button key={m} type="button" onClick={() => togglePreset(m)}
+                    className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                      on ? 'border-transparent text-white' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                    style={on ? { backgroundColor: '#C9A84C' } : undefined}>
+                    {on && <span className="mr-1">✓</span>}{m}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="mb-5">
           <label className="text-xs font-medium text-gray-600 block mb-1">
-            {isFollowUp ? 'Motivo do Follow Up' : 'Motivo de Não Interessa'} *
+            {isFollowUp ? 'Motivo do Follow Up *' : 'Outras notas (opcional)'}
           </label>
-          <textarea value={motivo} onChange={e => setMotivo(e.target.value)} rows={4}
-            placeholder={isFollowUp ? 'Ex: Aguardar resposta do proprietário…' : 'Ex: Preço acima de mercado, zona não interessante…'}
-            autoFocus
+          <textarea value={notas} onChange={e => setNotas(e.target.value)} rows={isFollowUp ? 4 : 2}
+            placeholder={isFollowUp ? 'Ex: Aguardar resposta do proprietário…' : 'Ex: detalhe específico, contexto adicional…'}
+            autoFocus={isFollowUp}
             className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
         </div>
 
@@ -514,7 +557,7 @@ function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
             className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={confirm} disabled={saving || !motivo.trim()}
+          <button onClick={confirm} disabled={saving || !motivoFinal}
             className="px-4 py-2 text-sm font-medium rounded-lg text-white disabled:opacity-50"
             style={{ backgroundColor: '#C9A84C' }}>
             {saving ? 'A guardar…' : 'Confirmar'}

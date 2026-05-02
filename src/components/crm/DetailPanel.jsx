@@ -22,6 +22,77 @@ const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: '
 const ACAO_LABEL = { INSERT: 'Criado', UPDATE: 'Atualizado', DELETE: 'Apagado' }
 const ACAO_COLOR = { INSERT: 'text-green-600', UPDATE: 'text-blue-600', DELETE: 'text-red-600' }
 
+export const MOTIVOS_NAO_INTERESSA_PADRAO = [
+  'Preço elevado',
+  'Produto final não vendável',
+  'Sem interesse do investidor',
+  'Zona fraca',
+  'ROI insuficiente',
+  'Já vendido',
+  'Estado de conservação',
+  'Discrepância em áreas/documentos',
+  'Proprietário difícil',
+  'Imóvel com ónus / problemas legais',
+]
+
+export function MotivoNaoInteressaInline({ motivoActual, onSave }) {
+  const partes = (motivoActual || '').split(/;\s*/).map(s => s.trim()).filter(Boolean)
+  const padraoSet = new Set(MOTIVOS_NAO_INTERESSA_PADRAO)
+  const initialSelected = partes.filter(p => padraoSet.has(p))
+  const initialNotas = partes.filter(p => !padraoSet.has(p)).join('; ')
+
+  const [selected, setSelected] = useState(new Set(initialSelected))
+  const [notas, setNotas] = useState(initialNotas)
+
+  function build(novosSel, novasNotas) {
+    return [...novosSel, novasNotas.trim()].filter(Boolean).join('; ')
+  }
+
+  function toggle(m) {
+    const novos = new Set(selected)
+    if (novos.has(m)) novos.delete(m)
+    else novos.add(m)
+    setSelected(novos)
+    onSave(build(novos, notas))
+  }
+
+  function saveNotas() {
+    const combined = build(selected, notas)
+    if (combined === (motivoActual || '')) return
+    onSave(combined)
+  }
+
+  return (
+    <>
+      <label className="text-xs text-gray-400 block mb-1">Motivo Não Interessa</label>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {MOTIVOS_NAO_INTERESSA_PADRAO.map(m => {
+          const on = selected.has(m)
+          return (
+            <button key={m} type="button" onClick={() => toggle(m)}
+              className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                on
+                  ? 'border-transparent text-white'
+                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+              style={on ? { backgroundColor: '#C9A84C' } : undefined}>
+              {on && <span className="mr-1">✓</span>}{m}
+            </button>
+          )
+        })}
+      </div>
+      <textarea
+        value={notas}
+        onChange={e => setNotas(e.target.value)}
+        onBlur={saveNotas}
+        rows={2}
+        placeholder="Outras notas (opcional)…"
+        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
+      />
+    </>
+  )
+}
+
 async function getToken() {
   try {
     const { data: { session } } = await supabase?.auth?.getSession() || { data: {} }
@@ -657,29 +728,25 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                 {(/follow ?up/i.test(data.estado || '')) && (
                   <div className="col-span-2 md:col-span-3"><Field label="Motivo Follow Up" value={data.motivo_follow_up || '—'} /></div>
                 )}
-                <div className="col-span-2 md:col-span-3">
-                  <label className="text-xs text-gray-400 block mb-1">Motivo Não Interessa</label>
-                  <textarea
-                    key={`motivo-ni-${data.id}-${data.motivo_nao_interessa || ''}`}
-                    defaultValue={data.motivo_nao_interessa || ''}
-                    rows={2}
-                    placeholder="Justifica o motivo de não interessar…"
-                    onBlur={async (e) => {
-                      const v = e.target.value
-                      if ((v || '') === (data.motivo_nao_interessa || '')) return
-                      try {
-                        const r = await apiFetch(`/api/crm/${endpoint}/${id}`, {
-                          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ motivo_nao_interessa: v }),
-                        })
-                        if (!r.ok) throw new Error(await r.text())
-                        await loadData()
-                        toast('Motivo guardado', 'success')
-                      } catch (err) { toast('Erro: ' + err.message, 'error') }
-                    }}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
-                  />
-                </div>
+                {(/n[ãa]o interessa/i.test(data.estado || '')) && (
+                  <div className="col-span-2 md:col-span-3">
+                    <MotivoNaoInteressaInline
+                      key={`mni-${data.id}-${data.motivo_nao_interessa || ''}`}
+                      motivoActual={data.motivo_nao_interessa || ''}
+                      onSave={async (novo) => {
+                        try {
+                          const r = await apiFetch(`/api/crm/${endpoint}/${id}`, {
+                            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ motivo_nao_interessa: novo }),
+                          })
+                          if (!r.ok) throw new Error(await r.text())
+                          await loadData()
+                          toast('Motivo guardado', 'success')
+                        } catch (err) { toast('Erro: ' + err.message, 'error') }
+                      }}
+                    />
+                  </div>
+                )}
                 {data.notas && <div className="col-span-2 md:col-span-3"><Field label="Notas" value={data.notas} /></div>}
                 {data.pontos_fortes && <div className="col-span-2 md:col-span-3"><Field label="Pontos fortes" value={data.pontos_fortes} /></div>}
                 {data.pontos_fracos && <div className="col-span-2 md:col-span-3"><Field label="Pontos fracos" value={data.pontos_fracos} /></div>}
