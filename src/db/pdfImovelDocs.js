@@ -333,12 +333,23 @@ class DocBuilder {
       }
     }
     if (imgData) {
+      let drawn = false
       this.doc.save()
-      this.doc.roundedRect(ML, this.y, imgW, imgH, 4).clip()
-      this.doc.image(imgData, ML, this.y, { width: imgW, height: imgH, fit: [imgW, imgH], align: 'center', valign: 'center' })
+      try {
+        this.doc.roundedRect(ML, this.y, imgW, imgH, 4).clip()
+        this.doc.image(imgData, ML, this.y, { width: imgW, height: imgH, fit: [imgW, imgH], align: 'center', valign: 'center' })
+        drawn = true
+      } catch {
+        // PDFKit so aceita PNG/JPEG. Se imgData for SVG ou formato exotico
+        // (ex.: legacy estudo .svg), cair no fallback sem derrubar o PDF.
+      }
       this.doc.restore()
-      this.doc.roundedRect(ML, this.y, imgW, imgH, 4).lineWidth(0.5).stroke(C.border)
-      this.y += imgH + 8
+      if (drawn) {
+        this.doc.roundedRect(ML, this.y, imgW, imgH, 4).lineWidth(0.5).stroke(C.border)
+        this.y += imgH + 8
+      } else {
+        this.note('Imagem de localização não disponível neste momento.')
+      }
     } else {
       this.note('Imagem de localização não disponível neste momento.')
     }
