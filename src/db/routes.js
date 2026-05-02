@@ -2432,4 +2432,101 @@ router.post('/whatsapp/mark-seen/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// ── Estudo de localização: Distance Matrix API ────────────────
+// POIs sugeridos por defeito (categoria + label visível). O frontend pode
+// adicionar/remover livremente — esta lista é só o ponto de partida.
+const POIS_SUGERIDOS = [
+  { categoria: 'Mercearia/Supermercado', icone: '🛒' },
+  { categoria: 'Hospital', icone: '🏥' },
+  { categoria: 'Farmácia', icone: '💊' },
+  { categoria: 'Escola Básica', icone: '🏫' },
+  { categoria: 'Estação de Comboios', icone: '🚆' },
+  { categoria: 'Centro Comercial', icone: '🛍️' },
+  { categoria: 'Restaurante', icone: '🍽️' },
+  { categoria: 'Ginásio', icone: '🏋️' },
+  { categoria: 'Acesso A1/A8', icone: '🛣️' },
+  { categoria: 'Aeroporto', icone: '✈️' },
+]
+
+router.get('/imoveis/pois/sugeridos', (req, res) => res.json(POIS_SUGERIDOS))
+
+router.post('/imoveis/:id/distancias', async (req, res) => {
+  try {
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY
+    if (!apiKey) return res.status(500).json({ error: 'GOOGLE_MAPS_API_KEY não configurada' })
+
+    const { rows: [imovel] } = await pool.query('SELECT id, nome, morada, zona FROM imoveis WHERE id = $1', [req.params.id])
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+
+    const origem = (req.body?.origem || imovel.morada || imovel.zona || '').trim()
+    if (!origem) return res.status(400).json({ error: 'Indica morada/origem do imóvel (ou preenche o campo morada).' })
+
+    const destinos = Array.isArray(req.body?.destinos) ? req.body.destinos.filter(d => d?.endereco?.trim()) : []
+    if (destinos.length === 0) return res.status(400).json({ error: 'Lista de destinos vazia.' })
+    if (destinos.length > 25) return res.status(400).json({ error: 'Máximo 25 destinos por chamada (limite Distance Matrix).' })
+
+    const mode = req.body?.mode === 'walking' ? 'walking' : req.body?.mode === 'bicycling' ? 'bicycling' : req.body?.mode === 'transit' ? 'transit' : 'driving'
+    const region = 'pt'
+
+    const url = new URL('https://maps.googleapis.com/maps/api/distancematrix/json')
+    url.searchParams.set('origins', origem)
+    url.searchParams.set('destinations', destinos.map(d => d.endereco).join('|'))
+    url.searchParams.set('mode', mode)
+    url.searchParams.set('region', region)
+    url.searchParams.set('language', 'pt')
+    url.searchParams.set('key', apiKey)
+
+    const r = await fetch(url.toString())
+    const j = await r.json()
+    if (j.status !== 'OK') {
+      return res.status(502).json({ error: `Distance Matrix: ${j.status}`, detalhe: j.error_message || null })
+    }
+
+    const linha = j.rows?.[0]?.elements || []
+    const resultados = destinos.map((d, i) => {
+      const el = linha[i] || {}
+      return {
+        categoria: d.categoria || null,
+        icone: d.icone || null,
+        endereco: d.endereco,
+        distancia_metros: el.status === 'OK' ? el.distance?.value ?? null : null,
+        distancia_texto: el.status === 'OK' ? el.distance?.text ?? null : null,
+        duracao_segundos: el.status === 'OK' ? el.duration?.value ?? null : null,
+        duracao_texto: el.status === 'OK' ? el.duration?.text ?? null : null,
+        status: el.status || 'UNKNOWN',
+      }
+    })
+
+    const payload = {
+      origem,
+      mode,
+      origem_resolvida: j.origin_addresses?.[0] || null,
+      atualizado_em: new Date().toISOString(),
+      resultados,
+    }
+
+    await pool.query(
+      `UPDATE imoveis SET pois_distancias = $1::jsonb, pois_atualizado_em = NOW(), morada = COALESCE(NULLIF($2,''), morada), updated_at = NOW()::text WHERE id = $3`,
+      [JSON.stringify(payload), origem, imovel.id]
+    )
+
+    res.json(payload)
+  } catch (e) {
+    console.error('[distancias]', e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+router.get('/imoveis/:id/distancias', async (req, res) => {
+  try {
+    const { rows: [imovel] } = await pool.query('SELECT pois_distancias, pois_atualizado_em, morada FROM imoveis WHERE id = $1', [req.params.id])
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+    res.json({
+      morada: imovel.morada || null,
+      atualizado_em: imovel.pois_atualizado_em,
+      payload: imovel.pois_distancias || null,
+    })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 export default router
