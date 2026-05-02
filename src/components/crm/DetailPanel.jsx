@@ -657,7 +657,29 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                 {(/follow ?up/i.test(data.estado || '')) && (
                   <div className="col-span-2 md:col-span-3"><Field label="Motivo Follow Up" value={data.motivo_follow_up || '—'} /></div>
                 )}
-                <div className="col-span-2 md:col-span-3"><Field label="Motivo Não Interessa" value={data.motivo_nao_interessa || '—'} /></div>
+                <div className="col-span-2 md:col-span-3">
+                  <label className="text-xs text-gray-400 block mb-1">Motivo Não Interessa</label>
+                  <textarea
+                    key={`motivo-ni-${data.id}-${data.motivo_nao_interessa || ''}`}
+                    defaultValue={data.motivo_nao_interessa || ''}
+                    rows={2}
+                    placeholder="Justifica o motivo de não interessar…"
+                    onBlur={async (e) => {
+                      const v = e.target.value
+                      if ((v || '') === (data.motivo_nao_interessa || '')) return
+                      try {
+                        const r = await apiFetch(`/api/crm/${endpoint}/${id}`, {
+                          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ motivo_nao_interessa: v }),
+                        })
+                        if (!r.ok) throw new Error(await r.text())
+                        await loadData()
+                        toast('Motivo guardado', 'success')
+                      } catch (err) { toast('Erro: ' + err.message, 'error') }
+                    }}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                  />
+                </div>
                 {data.notas && <div className="col-span-2 md:col-span-3"><Field label="Notas" value={data.notas} /></div>}
                 {data.pontos_fortes && <div className="col-span-2 md:col-span-3"><Field label="Pontos fortes" value={data.pontos_fortes} /></div>}
                 {data.pontos_fracos && <div className="col-span-2 md:col-span-3"><Field label="Pontos fracos" value={data.pontos_fracos} /></div>}
