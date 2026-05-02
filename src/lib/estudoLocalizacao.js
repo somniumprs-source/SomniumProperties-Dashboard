@@ -225,13 +225,25 @@ export function composeEstudoSvg({
           <rect y="30" width="540" height="10" fill="${accent}"/>
           <text x="20" y="27" font-size="20" fill="${titleFill}" font-weight="700">${escapeXml(h.titulo || '')}</text>
           <text x="20" y="70" font-size="13" fill="#444" font-weight="500">${escapeXml(h.descricao || '')}</text>
-          ${h.badge ? `
-            <g transform="translate(20, 88)">
-              <rect width="76" height="36" rx="6" fill="#0d0d0d"/>
-              <text x="38" y="24" text-anchor="middle" font-size="20" fill="#C9A84C" font-weight="800">${escapeXml(h.badge)}</text>
-            </g>
-            <text x="106" y="121" font-size="11" fill="#888" font-style="italic">${escapeXml(h.subtitulo || '')}</text>
-          ` : `<text x="20" y="106" font-size="13" fill="#0d0d0d" font-weight="700">${escapeXml(h.subtitulo || '')}</text>`}
+          ${(() => {
+            const badges = Array.isArray(h.badge) ? h.badge.filter(Boolean) : (h.badge ? [String(h.badge)] : [])
+            if (badges.length === 0) {
+              return `<text x="20" y="106" font-size="13" fill="#0d0d0d" font-weight="700">${escapeXml(h.subtitulo || '')}</text>`
+            }
+            const widths = badges.map(b => Math.max(46, b.length * 11 + 18))
+            const totalW = widths.reduce((a, w) => a + w, 0) + (badges.length - 1) * 6
+            let xOff = 0
+            const boxes = badges.map((b, i) => {
+              const w = widths[i]
+              const fs = b.length > 4 ? 14 : 18
+              const el = `<g transform="translate(${xOff}, 0)"><rect width="${w}" height="36" rx="6" fill="#0d0d0d"/><text x="${w/2}" y="${b.length > 4 ? 23 : 25}" text-anchor="middle" font-size="${fs}" fill="#C9A84C" font-weight="800">${escapeXml(b)}</text></g>`
+              xOff += w + 6
+              return el
+            }).join('')
+            return `
+              <g transform="translate(20, 88)">${boxes}</g>
+              <text x="${20 + totalW + 12}" y="121" font-size="11" fill="#888" font-style="italic">${escapeXml(h.subtitulo || '')}</text>`
+          })()}
         </g>`
       }).join('')}
     </g>`
