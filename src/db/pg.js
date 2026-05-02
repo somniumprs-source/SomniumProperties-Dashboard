@@ -424,6 +424,14 @@ export async function initSchema() {
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 
+      -- Migration: estudo de localização — distâncias a pontos de interesse via Google Distance Matrix
+      DO $$ BEGIN
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS morada TEXT;
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS pois_distancias JSONB DEFAULT '[]'::jsonb;
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS pois_atualizado_em TIMESTAMPTZ;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
       -- Migration: ressincronizar ROI dos imóveis com a análise activa.
       -- Antes coexistiam duas fórmulas (autoCalcROI naive vs calcEngine),
       -- pelo que o valor podia divergir do que a calculadora mostra. A

@@ -153,6 +153,163 @@ function PontosRiscosTab({ imovel, endpoint, id, onUpdate, toast }) {
   )
 }
 
+function LocalizacaoTab({ imovel, onUpdate, toast }) {
+  const [origem, setOrigem] = useState(imovel.morada || imovel.zona || '')
+  const [destinos, setDestinos] = useState(() => {
+    const guardados = imovel.pois_distancias?.resultados
+    if (Array.isArray(guardados) && guardados.length > 0) {
+      return guardados.map(r => ({ categoria: r.categoria || '', icone: r.icone || '📍', endereco: r.endereco || '' }))
+    }
+    return [
+      { categoria: 'Mercearia/Supermercado', icone: '🛒', endereco: '' },
+      { categoria: 'Hospital', icone: '🏥', endereco: '' },
+      { categoria: 'Farmácia', icone: '💊', endereco: '' },
+      { categoria: 'Escola Básica', icone: '🏫', endereco: '' },
+    ]
+  })
+  const [mode, setMode] = useState(imovel.pois_distancias?.mode || 'driving')
+  const [calculando, setCalculando] = useState(false)
+  const [resultado, setResultado] = useState(imovel.pois_distancias || null)
+
+  function setDestino(i, patch) {
+    setDestinos(prev => prev.map((d, idx) => idx === i ? { ...d, ...patch } : d))
+  }
+  function adicionar() {
+    setDestinos(prev => [...prev, { categoria: '', icone: '📍', endereco: '' }])
+  }
+  function remover(i) {
+    setDestinos(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  async function calcular() {
+    if (!origem.trim()) { toast('Indica a morada/origem do imóvel', 'error'); return }
+    const validos = destinos.filter(d => d.endereco?.trim())
+    if (validos.length === 0) { toast('Adiciona pelo menos um destino com morada', 'error'); return }
+    setCalculando(true)
+    try {
+      const r = await apiFetch(`/api/crm/imoveis/${imovel.id}/distancias`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ origem, destinos: validos, mode }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || j.detalhe || 'Erro ao calcular distâncias')
+      setResultado(j)
+      await onUpdate()
+      toast(`${j.resultados.length} distâncias calculadas`, 'success')
+    } catch (e) { toast('Erro: ' + e.message, 'error') }
+    setCalculando(false)
+  }
+
+  const MODES = [
+    { v: 'driving', l: '🚗 Carro' },
+    { v: 'walking', l: '🚶 A pé' },
+    { v: 'bicycling', l: '🚴 Bicicleta' },
+    { v: 'transit', l: '🚌 Transp. público' },
+  ]
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h3 className="text-sm font-bold text-neutral-800">Estudo de Localização</h3>
+        <p className="text-xs text-neutral-400 mt-0.5">
+          Distâncias e tempo do imóvel a vários pontos de interesse via Google Distance Matrix.
+        </p>
+      </div>
+
+      {/* Origem + modo */}
+      <div className="rounded-xl border border-gray-200 p-4 bg-white space-y-3">
+        <div>
+          <label className="text-xs font-semibold text-gray-700 block mb-1">📍 Morada do imóvel (origem)</label>
+          <input type="text" value={origem} onChange={e => setOrigem(e.target.value)}
+            placeholder="Ex: Rua das Flores 12, Coimbra"
+            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-gray-700 block mb-1">Modo de transporte</label>
+          <div className="flex flex-wrap gap-1.5">
+            {MODES.map(m => (
+              <button key={m.v} type="button" onClick={() => setMode(m.v)}
+                className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                  mode === m.v ? 'border-transparent text-white' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
+                style={mode === m.v ? { backgroundColor: '#C9A84C' } : undefined}>
+                {m.l}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Destinos */}
+      <div className="rounded-xl border border-gray-200 p-4 bg-white">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-xs font-semibold text-gray-700">Pontos de interesse</h4>
+          <button type="button" onClick={adicionar}
+            className="px-2.5 py-1 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+            + Adicionar
+          </button>
+        </div>
+        <div className="space-y-2">
+          {destinos.map((d, i) => (
+            <div key={i} className="flex gap-2 items-start">
+              <input type="text" value={d.icone || ''} onChange={e => setDestino(i, { icone: e.target.value })}
+                className="w-12 text-center px-2 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+              <input type="text" value={d.categoria || ''} onChange={e => setDestino(i, { categoria: e.target.value })}
+                placeholder="Categoria (ex: Hospital)"
+                className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+              <input type="text" value={d.endereco || ''} onChange={e => setDestino(i, { endereco: e.target.value })}
+                placeholder="Morada do ponto (ex: Hospital Geral, Coimbra)"
+                className="flex-[2] px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+              <button type="button" onClick={() => remover(i)}
+                className="px-2 py-2 text-xs rounded-lg bg-red-50 text-red-600 hover:bg-red-100">×</button>
+            </div>
+          ))}
+          {destinos.length === 0 && <p className="text-xs text-gray-400 text-center py-3">Sem pontos de interesse — clica em "Adicionar"</p>}
+        </div>
+        <div className="flex justify-end mt-4">
+          <button type="button" onClick={calcular} disabled={calculando}
+            className="px-4 py-2 text-sm font-semibold rounded-lg text-white disabled:opacity-50"
+            style={{ backgroundColor: '#C9A84C' }}>
+            {calculando ? 'A calcular…' : 'Calcular distâncias'}
+          </button>
+        </div>
+      </div>
+
+      {/* Resultados */}
+      {resultado?.resultados?.length > 0 && (
+        <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
+          <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+            <span className="text-xs font-semibold text-gray-700">Resultados — {resultado.mode}</span>
+            <span className="text-[10px] text-gray-400">
+              {resultado.atualizado_em ? new Date(resultado.atualizado_em).toLocaleString('pt-PT') : ''}
+            </span>
+          </div>
+          <table className="w-full text-sm">
+            <thead className="text-[11px] text-gray-400 uppercase tracking-wide">
+              <tr className="border-b border-gray-100">
+                <th className="text-left px-4 py-2">Ponto</th>
+                <th className="text-left px-4 py-2">Endereço</th>
+                <th className="text-right px-4 py-2">Distância</th>
+                <th className="text-right px-4 py-2">Tempo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {resultado.resultados.map((r, i) => (
+                <tr key={i} className="border-b border-gray-50">
+                  <td className="px-4 py-2"><span className="mr-1">{r.icone || '📍'}</span>{r.categoria || '—'}</td>
+                  <td className="px-4 py-2 text-gray-500 truncate max-w-xs">{r.endereco}</td>
+                  <td className="px-4 py-2 text-right font-mono">{r.distancia_texto || (r.status !== 'OK' ? r.status : '—')}</td>
+                  <td className="px-4 py-2 text-right font-mono text-emerald-700">{r.duracao_texto || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function MotivoNaoInteressaChips({ value, onChange }) {
   const partes = (value || '').split(/;\s*/).map(s => s.trim()).filter(Boolean)
   const padraoSet = new Set(MOTIVOS_NAO_INTERESSA_PADRAO)
@@ -519,6 +676,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
     { key: 'interacoes', label: `Interacções (${data?.interacoes?.length ?? 0})`, icon: '💬', show: type === 'Consultores' },
     { key: 'checklist', label: 'Checklist', icon: '📋', show: type === 'Imóveis' },
     { key: 'pontos_riscos', label: 'Pontos & Riscos', icon: '⚖️', show: type === 'Imóveis' },
+    { key: 'localizacao', label: 'Localização', icon: '📍', show: type === 'Imóveis' },
     { key: 'analise', label: 'Análise Financeira', icon: '📊', show: type === 'Imóveis' },
     { key: 'relatorios_imovel', label: 'Documentos', icon: '📄', show: type === 'Imóveis' },
     { key: 'documentos', label: `Documentos (${data?.documentos?.length ?? 0})`, icon: '📎', show: type === 'Investidores' },
@@ -629,6 +787,11 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
       ) : type === 'Imóveis' && activeTab === 'pontos_riscos' ? (
         <div className="p-4 sm:p-6">
           <PontosRiscosTab imovel={data} endpoint={endpoint} id={id} onUpdate={loadData} toast={toast} />
+        </div>
+
+      ) : type === 'Imóveis' && activeTab === 'localizacao' ? (
+        <div className="p-4 sm:p-6">
+          <LocalizacaoTab imovel={data} onUpdate={loadData} toast={toast} />
         </div>
 
       ) : type === 'Imóveis' && activeTab === 'analise' ? (
