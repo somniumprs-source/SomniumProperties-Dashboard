@@ -657,9 +657,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                 {(/follow ?up/i.test(data.estado || '')) && (
                   <div className="col-span-2 md:col-span-3"><Field label="Motivo Follow Up" value={data.motivo_follow_up || '—'} /></div>
                 )}
-                {(/n[ãa]o interessa/i.test(data.estado || '')) && (
-                  <div className="col-span-2 md:col-span-3"><Field label="Motivo Não Interessa" value={data.motivo_nao_interessa || '—'} /></div>
-                )}
+                <div className="col-span-2 md:col-span-3"><Field label="Motivo Não Interessa" value={data.motivo_nao_interessa || '—'} /></div>
                 {data.notas && <div className="col-span-2 md:col-span-3"><Field label="Notas" value={data.notas} /></div>}
                 {data.pontos_fortes && <div className="col-span-2 md:col-span-3"><Field label="Pontos fortes" value={data.pontos_fortes} /></div>}
                 {data.pontos_fracos && <div className="col-span-2 md:col-span-3"><Field label="Pontos fracos" value={data.pontos_fracos} /></div>}
