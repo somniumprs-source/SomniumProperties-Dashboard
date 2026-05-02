@@ -6,6 +6,7 @@ import PDFDocument from 'pdfkit'
 import { readFileSync, existsSync } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { rasterizarSvgParaPng } from '../lib/estudoLocalizacao.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const LOGO_PATH = path.resolve(__dirname, '../../public/logo-transparent.png')
@@ -27,6 +28,24 @@ const EUR = v => v == null || v === 0 ? '—' : new Intl.NumberFormat('pt-PT', {
 const PCT = v => v == null ? '—' : `${v}%`
 const FDATE = d => { if (!d) return '—'; try { return new Date(d).toLocaleDateString('pt-PT') } catch { return d } }
 const NOW = () => new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' })
+
+// Limpa items de listas multi-linha (pontos_fortes, riscos, etc.):
+// remove backticks/aspas residuais, numeracao "1." / "1)" e bullets
+// pre-existentes ("•", "-", "*"). Devolve array de strings nao-vazias.
+function parseListItems(text) {
+  if (!text) return []
+  return String(text)
+    .split(/\r?\n/)
+    .map(s => s
+      .trim()
+      .replace(/^[`'"\s]+/, '')
+      .replace(/^[•▸▪◦*\-]+\s*/, '')
+      .replace(/^\d+\s*[.)]\s*/, '')
+      .replace(/^[`'"\s]+/, '')
+      .trim()
+    )
+    .filter(Boolean)
+}
 
 // Parse fotos JSON from imovel — only images, max 6 for PDF
 function parseFotos(im) {
@@ -74,24 +93,43 @@ const DOC_LABELS = {
   ficha_descarte: 'Ficha de Descarte',
 }
 
+// PNG magic number: 0x89 0x50 0x4E 0x47
+function isPng(buf) { return buf.length >= 4 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47 }
+// JPEG magic: FF D8 FF
+function isJpeg(buf) { return buf.length >= 3 && buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF }
+
+// Garante que o buffer e PNG ou JPEG (formatos aceites pelo PDFKit).
+// Se for SVG (legacy estudo de localizacao), rasteriza on-the-fly.
+function normalizarImagemParaPdf(buf) {
+  if (!buf || buf.length === 0) return null
+  if (isPng(buf) || isJpeg(buf)) return buf
+  // Heuristica SVG: comeca com '<' (talvez apos BOM/whitespace)
+  const head = buf.slice(0, 256).toString('utf8').trimStart()
+  if (head.startsWith('<?xml') || head.startsWith('<svg')) {
+    try { return rasterizarSvgParaPng(buf.toString('utf8')) } catch { return null }
+  }
+  return null
+}
+
 // Pré-carrega imagem de localização (URL Supabase ou path local) e
 // devolve novo objecto imóvel com `_localizacaoImgData` (Buffer) injectado.
-// Sem rede: se a URL externa falhar ou não houver imagem, devolve o
-// imóvel original — o renderer ignora silenciosamente.
+// Aceita SVG legacy: rasteriza para PNG antes de entregar ao renderer.
+// Se a URL falhar, devolve o imóvel original — o renderer mostra fallback.
 async function preloadLocalizacao(imovel) {
   const url = imovel?.localizacao_imagem
   if (!url) return imovel
   try {
+    let buf = null
     if (url.startsWith('http')) {
       const r = await fetch(url)
       if (!r.ok) return imovel
-      const buf = Buffer.from(await r.arrayBuffer())
-      return { ...imovel, _localizacaoImgData: buf }
+      buf = Buffer.from(await r.arrayBuffer())
+    } else {
+      const localPath = path.resolve(__dirname, '../..', 'public', url.replace(/^\//, ''))
+      if (existsSync(localPath)) buf = readFileSync(localPath)
     }
-    const localPath = path.resolve(__dirname, '../..', 'public', url.replace(/^\//, ''))
-    if (existsSync(localPath)) {
-      return { ...imovel, _localizacaoImgData: readFileSync(localPath) }
-    }
+    const png = normalizarImagemParaPdf(buf)
+    if (png) return { ...imovel, _localizacaoImgData: png }
   } catch { /* ignore — renderer mostra fallback */ }
   return imovel
 }
@@ -226,21 +264,25 @@ class DocBuilder {
     ].filter(b => b.text && String(b.text).trim())
     if (blocks.length === 0) return this
 
-    const gap = 10
+    const gap = 12
     const colW = (CW - (blocks.length - 1) * gap) / blocks.length
-    const labelH = 14
-    const itemLineGap = 2
-    const itemFontSize = 8
-    const bulletW = 12
-    const textW = colW - bulletW
+    const labelH = 18
+    const itemLineGap = 3
+    const itemFontSize = 8.5
+    const bulletW = 12          // largura reservada para o triangulo
+    const itemPadL = 2          // recuo do texto a partir do triangulo
+    const textW = colW - bulletW - itemPadL
+    const itemSpacing = 7       // espaco entre items
+    const headerGap = 12        // gap entre header colorido e primeiro item
 
-    // Pré-cálculo: altura de cada coluna (cabeçalho + items wrappable)
+    // Pre-calculo: altura de cada coluna (cabecalho + items wrappable)
     this.doc.fontSize(itemFontSize)
     const colHeights = blocks.map(b => {
-      const items = String(b.text).split(/\r?\n/).map(s => s.trim()).filter(Boolean)
-      let h = labelH + 8 // header colorido + gap
-      items.forEach(it => {
-        h += this.doc.heightOfString(it, { width: textW, lineGap: itemLineGap }) + 4
+      const items = parseListItems(b.text)
+      let h = labelH + headerGap
+      items.forEach((it, idx) => {
+        h += this.doc.heightOfString(it, { width: textW, lineGap: itemLineGap })
+        if (idx < items.length - 1) h += itemSpacing
       })
       return { h, items }
     })
@@ -254,20 +296,24 @@ class DocBuilder {
       const x = ML + i * (colW + gap)
       const { items } = colHeights[i]
       // Header colorido
-      this.doc.roundedRect(x, startY, colW, labelH, 3).fill(b.color)
-      this.doc.fontSize(7).fillColor(C.white).text(b.label, x + 8, startY + 4, { width: colW - 16, characterSpacing: 1, lineBreak: false })
+      this.doc.roundedRect(x, startY, colW, labelH, 4).fill(b.color)
+      this.doc.fontSize(7.5).fillColor(C.white).text(b.label, x + 10, startY + 6, {
+        width: colW - 20, characterSpacing: 1.2, lineBreak: false,
+      })
       // Items
-      let cy = startY + labelH + 8
-      items.forEach(it => {
-        this.doc.fontSize(itemFontSize).fillColor(b.color).text('▸', x, cy, { width: 10, lineBreak: false })
+      let cy = startY + labelH + headerGap
+      items.forEach((it, idx) => {
         this.doc.fontSize(itemFontSize).fillColor(C.body)
         const itemH = this.doc.heightOfString(it, { width: textW, lineGap: itemLineGap })
-        this.doc.text(it, x + bulletW, cy, { width: textW, lineGap: itemLineGap })
-        cy += itemH + 4
+        // Triangulo desenhado a primitives (▸ nao existe na fonte default)
+        const tx = x + 2, ty = cy + 3
+        this.doc.polygon([tx, ty], [tx + 4, ty + 3], [tx, ty + 6]).fill(b.color)
+        this.doc.fillColor(C.body).text(it, x + bulletW, cy, { width: textW, lineGap: itemLineGap })
+        cy += itemH + (idx < items.length - 1 ? itemSpacing : 0)
       })
     })
 
-    this.y = startY + blockH + 8
+    this.y = startY + blockH + 10
     return this
   }
 
@@ -277,8 +323,8 @@ class DocBuilder {
   // definidas — caso contrário a coluna 'Riscos' do bloco anterior basta.
   riscosMitigacao() {
     const im = this.imovel || {}
-    const riscos = String(im.riscos || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean)
-    const mitig  = String(im.mitigacao_riscos || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+    const riscos = parseListItems(im.riscos)
+    const mitig  = parseListItems(im.mitigacao_riscos)
     if (mitig.length === 0) return this
 
     const n = Math.max(riscos.length, mitig.length)
@@ -288,25 +334,31 @@ class DocBuilder {
     this.header('ANÁLISE DE RISCO E MITIGAÇÃO')
     const colR = Math.floor((CW - 12) * 0.42)
     const colM = CW - 12 - colR
-    const padX = 8, padY = 6, gap = 12
+    const padX = 10, padY = 7, gap = 12
 
-    // Cabeçalho
+    // Cabecalho
     this.ensure(24)
     this.doc.rect(ML, this.y, CW, 22).fill(C.headerBg)
-    this.doc.fontSize(7.5).fillColor(C.gold).text('RISCO', ML + padX, this.y + padY, { width: colR - padX, lineBreak: false })
-    this.doc.fontSize(7.5).fillColor(C.gold).text('ESTRATÉGIA DE MITIGAÇÃO', ML + colR + gap, this.y + padY, { width: colM, lineBreak: false })
+    this.doc.fontSize(7.5).fillColor(C.gold).text('RISCO', ML + padX, this.y + padY, { width: colR - padX, characterSpacing: 1, lineBreak: false })
+    this.doc.fontSize(7.5).fillColor(C.gold).text('ESTRATÉGIA DE MITIGAÇÃO', ML + colR + gap, this.y + padY, { width: colM, characterSpacing: 1, lineBreak: false })
     this.y += 24
 
     pairs.forEach(({ r, m }) => {
       this.doc.fontSize(8.5)
-      const hR = this.doc.heightOfString(r, { width: colR - padX * 2, lineGap: 2 })
-      const hM = this.doc.heightOfString(m, { width: colM - padX, lineGap: 2 })
+      const hR = this.doc.heightOfString(r, { width: colR - padX * 2 - 6, lineGap: 3 })
+      const hM = this.doc.heightOfString(m, { width: colM - padX - 14, lineGap: 3 })
       const rowH = Math.max(hR, hM) + padY * 2
       this.ensure(rowH + 1)
-      this.doc.fontSize(8.5).fillColor(C.red).text('▸', ML, this.y + padY, { width: 8, lineBreak: false })
-      this.doc.fontSize(8.5).fillColor(C.body).text(r, ML + padX, this.y + padY, { width: colR - padX * 2, lineGap: 2 })
-      this.doc.fontSize(8.5).fillColor(C.green).text('→', ML + colR, this.y + padY, { width: 10, lineBreak: false })
-      this.doc.fontSize(8.5).fillColor(C.body).text(m, ML + colR + gap, this.y + padY, { width: colM - padX, lineGap: 2 })
+      // Triangulo vermelho (risco)
+      const tx1 = ML + 2, ty1 = this.y + padY + 2
+      this.doc.polygon([tx1, ty1], [tx1 + 4, ty1 + 3], [tx1, ty1 + 6]).fill(C.red)
+      this.doc.fillColor(C.body).fontSize(8.5).text(r, ML + padX, this.y + padY, { width: colR - padX * 2 - 6, lineGap: 3 })
+      // Seta verde (mitigacao) — desenhada com primitives (-> nao renderiza)
+      const ax = ML + colR + 2, ay = this.y + padY + 4
+      this.doc.lineWidth(1.2).strokeColor(C.green)
+      this.doc.moveTo(ax, ay).lineTo(ax + 7, ay).stroke()
+      this.doc.polygon([ax + 5, ay - 2.5], [ax + 8.5, ay], [ax + 5, ay + 2.5]).fill(C.green)
+      this.doc.fillColor(C.body).fontSize(8.5).text(m, ML + colR + gap, this.y + padY, { width: colM - padX - 14, lineGap: 3 })
       this.doc.rect(ML, this.y + rowH - 0.5, CW, 0.3).fill(C.border)
       this.y += rowH
     })
@@ -440,7 +492,9 @@ class DocBuilder {
     this.ensure(24)
     this.doc.roundedRect(ML + 2, this.y + 2, 14, 14, 3).lineWidth(0.5).stroke(C.border)
     if (checked) {
-      this.doc.fontSize(10).fillColor(C.green).text('✓', ML + 4, this.y + 1, { lineBreak: false })
+      // Check desenhado a primitives (✓ nao renderiza na fonte default)
+      this.doc.lineWidth(1.4).strokeColor(C.green)
+      this.doc.moveTo(ML + 5, this.y + 9).lineTo(ML + 8, this.y + 12).lineTo(ML + 13, this.y + 6).stroke()
     }
     this.doc.fontSize(9).fillColor(C.body).text(text, ML + 24, this.y + 3, { width: CW - 30 })
     this.y = Math.max(this.y + 22, this.doc.y + 4)
@@ -527,7 +581,9 @@ class DocBuilder {
     this.doc.fontSize(9)
     const h = this.doc.heightOfString(String(text || ''), { width: CW - 14, lineGap: 3 })
     this.ensure(h + 8)
-    this.doc.fillColor(C.gold).text('▸', ML, this.y, { width: 10, lineBreak: false })
+    // Triangulo desenhado a primitives (▸ nao existe na fonte default)
+    const tx = ML + 1, ty = this.y + 3
+    this.doc.polygon([tx, ty], [tx + 4, ty + 3], [tx, ty + 6]).fill(C.gold)
     this.doc.fillColor(C.body).text(String(text || ''), ML + 14, this.y, { width: CW - 14, lineGap: 3 })
     this.y += h + 4
     return this
