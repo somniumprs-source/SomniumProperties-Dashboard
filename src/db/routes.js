@@ -27,6 +27,7 @@ import { ensureLabels, organizeMessage, organizeBatch, autoOrganize, isConfigure
 import { exportDepartment } from './excelExport.js'
 import { scrapePhotosFromLink } from './linkScraper.js'
 import { generateDocx, getAvailableTypes } from './docxGenerator.js'
+import { runEstudoLocalizacao } from '../lib/estudoLocalizacao.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.resolve(__dirname, '../../public/uploads/despesas')
@@ -2513,6 +2514,27 @@ router.post('/imoveis/:id/distancias', async (req, res) => {
     res.json(payload)
   } catch (e) {
     console.error('[distancias]', e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ── Estudo de localização auto: Distance Matrix + composição SVG + upload Supabase + UPDATE localizacao_imagem
+router.post('/imoveis/:id/estudo-localizacao', async (req, res) => {
+  try {
+    if (!supabaseStorage) return res.status(500).json({ error: 'Supabase Storage não configurado' })
+    const r = await runEstudoLocalizacao({
+      pool,
+      supabaseStorage,
+      imovelId: req.params.id,
+      destinos: req.body?.destinos,
+      mode: req.body?.mode || 'driving',
+      highlights: Array.isArray(req.body?.highlights) ? req.body.highlights : [],
+      destaque: req.body?.destaque || null,
+      origem: req.body?.origem || null,
+    })
+    res.json(r)
+  } catch (e) {
+    console.error('[estudo-localizacao]', e)
     res.status(500).json({ error: e.message })
   }
 })

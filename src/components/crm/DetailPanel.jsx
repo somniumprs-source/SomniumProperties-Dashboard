@@ -171,7 +171,16 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
   })
   const [mode, setMode] = useState(imovel.pois_distancias?.mode || 'driving')
   const [calculando, setCalculando] = useState(false)
+  const [gerando, setGerando] = useState(false)
   const [resultado, setResultado] = useState(imovel.pois_distancias || null)
+  const [destaque, setDestaque] = useState(imovel.pois_distancias?.destaque || '')
+  const [hl1Titulo, setHl1Titulo] = useState(imovel.pois_distancias?.highlights?.[0]?.titulo || '')
+  const [hl1Desc, setHl1Desc] = useState(imovel.pois_distancias?.highlights?.[0]?.descricao || '')
+  const [hl1Badge, setHl1Badge] = useState(imovel.pois_distancias?.highlights?.[0]?.badge || '')
+  const [hl1Sub, setHl1Sub] = useState(imovel.pois_distancias?.highlights?.[0]?.subtitulo || '')
+  const [hl2Titulo, setHl2Titulo] = useState(imovel.pois_distancias?.highlights?.[1]?.titulo || '')
+  const [hl2Desc, setHl2Desc] = useState(imovel.pois_distancias?.highlights?.[1]?.descricao || '')
+  const [hl2Sub, setHl2Sub] = useState(imovel.pois_distancias?.highlights?.[1]?.subtitulo || '')
 
   function setDestino(i, patch) {
     setDestinos(prev => prev.map((d, idx) => idx === i ? { ...d, ...patch } : d))
@@ -200,6 +209,28 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
       toast(`${j.resultados.length} distâncias calculadas`, 'success')
     } catch (e) { toast('Erro: ' + e.message, 'error') }
     setCalculando(false)
+  }
+
+  async function gerarImagem() {
+    const validos = destinos.filter(d => d.endereco?.trim())
+    if (validos.length === 0 && !resultado?.resultados?.length) {
+      toast('Adiciona destinos ou corre "Calcular distâncias" antes', 'error'); return
+    }
+    setGerando(true)
+    try {
+      const highlights = []
+      if (hl1Titulo.trim()) highlights.push({ titulo: hl1Titulo, descricao: hl1Desc, badge: hl1Badge || null, subtitulo: hl1Sub, accent: 'gold' })
+      if (hl2Titulo.trim()) highlights.push({ titulo: hl2Titulo, descricao: hl2Desc, subtitulo: hl2Sub, accent: 'red' })
+      const r = await apiFetch(`/api/crm/imoveis/${imovel.id}/estudo-localizacao`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ origem, mode, destinos: validos.length > 0 ? validos : undefined, highlights, destaque: destaque || null }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Erro ao gerar imagem')
+      await onUpdate()
+      toast('Imagem gerada e gravada na tab Pontos & Riscos', 'success')
+    } catch (e) { toast('Erro: ' + e.message, 'error') }
+    setGerando(false)
   }
 
   const MODES = [
@@ -268,14 +299,59 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
           ))}
           {destinos.length === 0 && <p className="text-xs text-gray-400 text-center py-3">Sem pontos de interesse — clica em "Adicionar"</p>}
         </div>
-        <div className="flex justify-end mt-4">
-          <button type="button" onClick={calcular} disabled={calculando}
+        <div className="flex justify-end gap-2 mt-4">
+          <button type="button" onClick={calcular} disabled={calculando || gerando}
+            className="px-4 py-2 text-sm font-semibold rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+            {calculando ? 'A calcular…' : 'Calcular distâncias'}
+          </button>
+          <button type="button" onClick={gerarImagem} disabled={calculando || gerando}
             className="px-4 py-2 text-sm font-semibold rounded-lg text-white disabled:opacity-50"
             style={{ backgroundColor: '#C9A84C' }}>
-            {calculando ? 'A calcular…' : 'Calcular distâncias'}
+            {gerando ? 'A gerar imagem…' : '🎨 Gerar imagem do estudo'}
           </button>
         </div>
       </div>
+
+      {/* Opções da imagem (destaque + highlights) */}
+      <details className="rounded-xl border border-gray-200 bg-white">
+        <summary className="px-4 py-3 text-xs font-semibold text-gray-700 cursor-pointer select-none">
+          ✨ Opções da imagem (destaque + highlights)
+        </summary>
+        <div className="p-4 pt-0 space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-gray-700 block mb-1">★ Destacar ponto (gold)</label>
+            <select value={destaque} onChange={e => setDestaque(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+              <option value="">— sem destaque —</option>
+              {destinos.filter(d => d.categoria?.trim()).map((d, i) => (
+                <option key={i} value={d.categoria}>{d.icone} {d.categoria}</option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="border border-yellow-200 rounded-lg p-3 space-y-2 bg-yellow-50/30">
+              <p className="text-[11px] font-bold text-yellow-800 uppercase tracking-wide">Highlight 1 (gold)</p>
+              <input type="text" value={hl1Titulo} onChange={e => setHl1Titulo(e.target.value)} placeholder="Título (ex: 🚌 SMTUC à porta)"
+                className="w-full px-3 py-1.5 rounded border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+              <input type="text" value={hl1Desc} onChange={e => setHl1Desc(e.target.value)} placeholder="Descrição"
+                className="w-full px-3 py-1.5 rounded border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+              <input type="text" value={hl1Badge} onChange={e => setHl1Badge(e.target.value)} placeholder="Badge curto (ex: 5)"
+                className="w-full px-3 py-1.5 rounded border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+              <input type="text" value={hl1Sub} onChange={e => setHl1Sub(e.target.value)} placeholder="Sub-texto"
+                className="w-full px-3 py-1.5 rounded border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+            </div>
+            <div className="border border-red-200 rounded-lg p-3 space-y-2 bg-red-50/30">
+              <p className="text-[11px] font-bold text-red-800 uppercase tracking-wide">Highlight 2 (red)</p>
+              <input type="text" value={hl2Titulo} onChange={e => setHl2Titulo(e.target.value)} placeholder="Título (ex: 🛡️ GNR em frente)"
+                className="w-full px-3 py-1.5 rounded border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-red-300" />
+              <input type="text" value={hl2Desc} onChange={e => setHl2Desc(e.target.value)} placeholder="Descrição"
+                className="w-full px-3 py-1.5 rounded border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-red-300" />
+              <input type="text" value={hl2Sub} onChange={e => setHl2Sub(e.target.value)} placeholder="Sub-texto"
+                className="w-full px-3 py-1.5 rounded border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-red-300" />
+            </div>
+          </div>
+        </div>
+      </details>
 
       {/* Resultados */}
       {resultado?.resultados?.length > 0 && (
