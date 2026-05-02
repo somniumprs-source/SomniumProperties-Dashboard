@@ -11,9 +11,11 @@
 
 import { Resvg } from '@resvg/resvg-js'
 
-// Largura alvo do PNG: ~3x oversample face ao espaco util da pagina A4
-// (CW≈515pt @ 72dpi). Garante nitidez sem inflar demais o ficheiro.
-const PNG_TARGET_WIDTH = 1600
+// Largura alvo do PNG: ~4x oversample face ao espaco util da pagina A4
+// (CW≈495pt @ 72dpi). Importante para a pagina LOCALIZACAO do dossier,
+// onde a imagem ocupa toda a content width — texto da tabela de POIs e
+// cards de highlights tem que ficar legivel sem zoom.
+const PNG_TARGET_WIDTH = 2000
 
 export function rasterizarSvgParaPng(svg, { largura = PNG_TARGET_WIDTH } = {}) {
   return new Resvg(svg, {
