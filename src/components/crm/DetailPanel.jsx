@@ -40,11 +40,13 @@ function PontosRiscosTab({ imovel, endpoint, id, onUpdate, toast }) {
     { key: 'pontos_fortes', label: 'Pontos fortes', color: 'emerald', icon: '✅' },
     { key: 'pontos_fracos', label: 'Pontos fracos', color: 'amber', icon: '⚠️' },
     { key: 'riscos', label: 'Riscos', color: 'rose', icon: '🚨' },
+    { key: 'mitigacao_riscos', label: 'Mitigação de riscos', color: 'sky', icon: '🛡️' },
   ]
   const [valores, setValores] = useState({
     pontos_fortes: imovel.pontos_fortes || '',
     pontos_fracos: imovel.pontos_fracos || '',
     riscos: imovel.riscos || '',
+    mitigacao_riscos: imovel.mitigacao_riscos || '',
   })
   const [localizacao, setLocalizacao] = useState(imovel.localizacao_imagem || null)
   const [uploading, setUploading] = useState(false)
@@ -98,7 +100,7 @@ function PontosRiscosTab({ imovel, endpoint, id, onUpdate, toast }) {
           Um por linha. Aparece no relatório enviado ao investidor. Auto-guarda ao sair do campo.
         </p>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {CAMPOS.map(c => (
           <div key={c.key} className="rounded-xl border border-gray-200 p-4 bg-white">
             <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 mb-2">

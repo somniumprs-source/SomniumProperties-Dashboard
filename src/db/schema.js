@@ -50,6 +50,7 @@ db.exec(`
     pontos_fortes TEXT,
     pontos_fracos TEXT,
     riscos TEXT,
+    mitigacao_riscos TEXT,
     localizacao_imagem TEXT,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now')),

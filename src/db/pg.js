@@ -420,6 +420,7 @@ export async function initSchema() {
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS pontos_fortes TEXT;
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS pontos_fracos TEXT;
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS riscos TEXT;
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS mitigacao_riscos TEXT;
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS localizacao_imagem TEXT;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
