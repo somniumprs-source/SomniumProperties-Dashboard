@@ -33,11 +33,13 @@ const ICONE_PARA_SECCAO = {
   '🛒': 'comercio', '🛍️': 'comercio', '🚒': 'comercio', '🍽️': 'comercio', '☕': 'comercio',
 }
 
+// Cor por categoria — usado no badge antes do nome (substitui emojis
+// que o Resvg nao consegue rasterizar sem a fonte de emojis do sistema).
 const SECCOES = {
-  acessos: { titulo: '🛣️  ACESSOS' },
-  saude_universidade: { titulo: '🎓  UNIV. & SAÚDE' },
-  lazer: { titulo: '🌳  LAZER & CULTURA' },
-  comercio: { titulo: '🛒  COMÉRCIO & SERVIÇOS' },
+  acessos:            { titulo: 'ACESSOS',              cor: '#3B6EA8' },
+  saude_universidade: { titulo: 'UNIV. & SAÚDE',        cor: '#2D6A2D' },
+  lazer:              { titulo: 'LAZER & CULTURA',      cor: '#8B5A2B' },
+  comercio:           { titulo: 'COMÉRCIO & SERVIÇOS',  cor: '#C9A84C' },
 }
 
 function categorizar(r) {
@@ -168,12 +170,21 @@ export async function fetchStaticSatelliteMap({ origem, destinos, paths = [], ap
 }
 
 // ── Composer SVG ─────────────────────────────────────────────────
+// Tema Somnium "light": fundo cream, accents gold, texto preto. Em linha
+// com o resto do dossier de investidor (DocBuilder em pdfImovelDocs.js).
 
 const W = 1200
-const HEADER_H = 162   // header (100) + gold strip (6) + address bar (56)
+const HEADER_H = 156   // header (96) + gold strip (4) + address bar (56)
 const MAP_H = 640
-const TABLE_BLOCK_H = 380  // tabela + cards
-const FOOTER_H = 90
+const TABLE_BLOCK_H = 460  // tabela + cards (cards alargados)
+const FOOTER_H = 80
+
+// Tokens de cor alinhados com pdfImovelDocs.js (DocBuilder)
+const T = {
+  bg: '#f7f6f2', body: '#0d0d0d', muted: '#888888',
+  border: '#e0ddd5', light: '#f0efe9', gold: '#C9A84C', goldDark: '#B8923D',
+  green: '#2d6a2d', red: '#8b2020', white: '#FFFFFF',
+}
 
 export function composeEstudoSvg({
   imovelNome,
@@ -216,35 +227,36 @@ export function composeEstudoSvg({
       <text x="${mapW/2}" y="${mapH/2}" text-anchor="middle" font-size="18" fill="#8B2A2A" font-weight="700">⚠️ Mapa satélite não disponível</text>
       <text x="${mapW/2}" y="${mapH/2 + 30}" text-anchor="middle" font-size="13" fill="#444">Activar "Maps Static API" no Google Cloud + adicionar à API restrictions da chave</text>`
 
-  // Legenda dos pinos numerados 1..9 (canto superior esquerdo do mapa)
+  // Legenda dos pinos numerados 1..9 (canto superior esquerdo do mapa).
+  // Bloco com fundo branco semi-opaco em vez do preto antigo, alinhado
+  // com o tema light do dossier.
   const legendaPins = pinsLegenda.map((r, i) => {
     const y = 16 + i * 18
     const isDest = destaque && r.categoria && r.categoria.toLowerCase().includes(destaque.toLowerCase())
     return `
-      <circle cx="20" cy="${y}" r="9" fill="${isDest ? '#C9A84C' : '#111111'}" stroke="#FFFFFF" stroke-width="1.2"/>
-      <text x="20" y="${y + 3}" text-anchor="middle" font-size="10" fill="#FFFFFF" font-weight="800">${isDest ? '★' : (i + 1)}</text>
-      <text x="36" y="${y + 4}" font-size="11" fill="#FFFFFF" font-weight="600" style="paint-order:stroke fill;stroke:#000;stroke-width:2.4">${escapeXml((r.categoria || '').slice(0, 26))}</text>
+      <circle cx="20" cy="${y}" r="9" fill="${isDest ? T.gold : '#1a1a1a'}" stroke="${T.white}" stroke-width="1.2"/>
+      <text x="20" y="${y + 3.5}" text-anchor="middle" font-size="10" fill="${T.white}" font-weight="800">${isDest ? '*' : (i + 1)}</text>
+      <text x="36" y="${y + 4}" font-size="11" fill="${T.body}" font-weight="600">${escapeXml((r.categoria || '').slice(0, 26))}</text>
     `
   }).join('')
 
-  // ----- Highlights row (opcional) -----
-  const highlightsH = highlights.length > 0 ? 180 : 0
+  // ----- Highlights row (opcional) — cards light com gold accent -----
+  const highlightsH = highlights.length > 0 ? 160 : 0
   const highlightsSvg = highlights.length === 0 ? '' : `
     <g transform="translate(50, ${HEADER_H + 33 + MAP_H + 20})">
       ${highlights.slice(0, 2).map((h, i) => {
-        const accent = h.accent === 'red' ? '#8B2A2A' : '#C9A84C'
-        const titleFill = h.accent === 'red' ? '#FFFFFF' : '#0d0d0d'
+        const accent = h.accent === 'red' ? T.red : T.gold
         const x = i * 560
         return `<g transform="translate(${x}, 0)">
-          <rect width="540" height="140" rx="10" fill="#FFFFFF" stroke="${accent}" stroke-width="2.5" filter="url(#shadow)"/>
-          <rect width="540" height="40" rx="10" fill="${accent}"/>
-          <rect y="30" width="540" height="10" fill="${accent}"/>
-          <text x="20" y="27" font-size="20" fill="${titleFill}" font-weight="700">${escapeXml(h.titulo || '')}</text>
-          <text x="20" y="70" font-size="13" fill="#444" font-weight="500">${escapeXml(h.descricao || '')}</text>
+          <rect width="540" height="130" rx="6" fill="${T.white}" stroke="${T.border}" stroke-width="1"/>
+          <rect width="6" height="130" rx="3" fill="${accent}"/>
+          <text x="22" y="32" font-size="18" fill="${T.body}" font-weight="700">${escapeXml(h.titulo || '')}</text>
+          <line x1="22" y1="42" x2="80" y2="42" stroke="${T.gold}" stroke-width="2"/>
+          <text x="22" y="64" font-size="13" fill="#444" font-weight="500">${escapeXml(h.descricao || '')}</text>
           ${(() => {
             const badges = Array.isArray(h.badge) ? h.badge.filter(Boolean) : (h.badge ? [String(h.badge)] : [])
             if (badges.length === 0) {
-              return `<text x="20" y="106" font-size="13" fill="#0d0d0d" font-weight="700">${escapeXml(h.subtitulo || '')}</text>`
+              return `<text x="22" y="100" font-size="13" fill="${T.body}" font-weight="700">${escapeXml(h.subtitulo || '')}</text>`
             }
             const widths = badges.map(b => Math.max(46, b.length * 11 + 18))
             const totalW = widths.reduce((a, w) => a + w, 0) + (badges.length - 1) * 6
@@ -252,35 +264,35 @@ export function composeEstudoSvg({
             const boxes = badges.map((b, i) => {
               const w = widths[i]
               const fs = b.length > 4 ? 14 : 18
-              const el = `<g transform="translate(${xOff}, 0)"><rect width="${w}" height="36" rx="6" fill="#0d0d0d"/><text x="${w/2}" y="${b.length > 4 ? 23 : 25}" text-anchor="middle" font-size="${fs}" fill="#C9A84C" font-weight="800">${escapeXml(b)}</text></g>`
+              const el = `<g transform="translate(${xOff}, 0)"><rect width="${w}" height="32" rx="4" fill="${T.body}"/><text x="${w/2}" y="${b.length > 4 ? 21 : 22}" text-anchor="middle" font-size="${fs}" fill="${T.gold}" font-weight="800">${escapeXml(b)}</text></g>`
               xOff += w + 6
               return el
             }).join('')
             return `
-              <g transform="translate(20, 88)">${boxes}</g>
-              <text x="${20 + totalW + 12}" y="121" font-size="11" fill="#888" font-style="italic">${escapeXml(h.subtitulo || '')}</text>`
+              <g transform="translate(22, 82)">${boxes}</g>
+              <text x="${22 + totalW + 12}" y="103" font-size="11" fill="${T.muted}" font-style="italic">${escapeXml(h.subtitulo || '')}</text>`
           })()}
         </g>`
       }).join('')}
     </g>`
 
-  // ----- Tabela principais -----
+  // ----- Tabela principais — cabecalho dark, body light alternado -----
   const tableY = HEADER_H + 33 + MAP_H + 20 + highlightsH + (highlightsH > 0 ? 30 : 0)
   const tabelaSvg = `
     <g transform="translate(50, ${tableY})">
-      <text x="0" y="0" font-size="18" fill="#0d0d0d" font-weight="700">Distâncias e tempos de carro</text>
-      <line x1="0" y1="10" x2="540" y2="10" stroke="#C9A84C" stroke-width="2"/>
+      <text x="0" y="0" font-size="18" fill="${T.body}" font-weight="700">Distâncias e tempos de carro</text>
+      <line x1="0" y1="10" x2="540" y2="10" stroke="${T.gold}" stroke-width="2"/>
       <g transform="translate(0, 30)">
-        <rect width="540" height="32" rx="4" fill="#0d0d0d"/>
-        <text x="20" y="21" font-size="11" fill="#C9A84C" font-weight="700" letter-spacing="1">#</text>
-        <text x="60" y="21" font-size="11" fill="#C9A84C" font-weight="700" letter-spacing="1">PONTO DE INTERESSE</text>
-        <text x="400" y="21" font-size="11" fill="#C9A84C" font-weight="700" letter-spacing="1" text-anchor="end">DISTÂNCIA</text>
-        <text x="510" y="21" font-size="11" fill="#C9A84C" font-weight="700" letter-spacing="1" text-anchor="end">CARRO</text>
+        <rect width="540" height="32" rx="4" fill="${T.body}"/>
+        <text x="20" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1">#</text>
+        <text x="60" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1">PONTO DE INTERESSE</text>
+        <text x="400" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1" text-anchor="end">DISTÂNCIA</text>
+        <text x="510" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1" text-anchor="end">CARRO</text>
       </g>
-      <g transform="translate(0, 70)" font-size="13" fill="#0d0d0d">
+      <g transform="translate(0, 70)" font-size="13" fill="${T.body}">
         ${principais.map((r, i) => {
           const yRow = i * 34
-          const fill = i % 2 === 0 ? '#F7F3E9' : '#FFFFFF'
+          const fill = i % 2 === 0 ? T.light : T.white
           return `<rect x="0" y="${yRow}" width="540" height="34" fill="${fill}"/>
                   <text x="20" y="${yRow + 22}" font-weight="700">${i + 1}</text>
                   <text x="60" y="${yRow + 22}" font-weight="600">${escapeXml((r.categoria || r.endereco || '').slice(0, 35))}</text>
@@ -290,32 +302,51 @@ export function composeEstudoSvg({
       </g>
     </g>`
 
-  // ----- Cards por secção -----
+  // ----- Cards por secção — 2x2, header gold light, sem overlap -----
+  // Largura/altura calibradas para cabidos: card 260x210, nome ate 22
+  // chars, valor compacto (km · h/min) alinhado a direita com folga de
+  // 110px reservados para a coluna de valores.
+  const CARD_W = 260
+  const CARD_H = 210
+  const CARD_GAP_X = 20
+  const CARD_GAP_Y = 18
+  const NOME_MAX = 22
   const cardsSvg = `
     <g transform="translate(610, ${tableY})">
-      <text x="0" y="0" font-size="18" fill="#0d0d0d" font-weight="700">Pontos fortes da localização</text>
-      <line x1="0" y1="10" x2="540" y2="10" stroke="#C9A84C" stroke-width="2"/>
+      <text x="0" y="0" font-size="18" fill="${T.body}" font-weight="700">Pontos fortes da localização</text>
+      <line x1="0" y1="10" x2="540" y2="10" stroke="${T.gold}" stroke-width="2"/>
       ${['acessos', 'saude_universidade', 'lazer', 'comercio'].map((sec, idx) => {
-        const xCard = (idx % 2) * 280
-        const yCard = 35 + Math.floor(idx / 2) * 180
+        const xCard = (idx % 2) * (CARD_W + CARD_GAP_X)
+        const yCard = 30 + Math.floor(idx / 2) * (CARD_H + CARD_GAP_Y)
         const items = grupos[sec].slice(0, 6)
         if (items.length === 0) return ''
+        const colorBar = SECCOES[sec].cor
         const linhas = items.map((r, i) => {
-          const y = 48 + i * 20
+          const y = 50 + i * 24
           const isDestaque = destaque && r.categoria && r.categoria.toLowerCase().includes(destaque.toLowerCase())
-          const colTxt = isDestaque ? '#B8923D' : '#333'
-          const colVal = isDestaque ? '#B8923D' : '#0d0d0d'
-          const w = isDestaque ? '700' : '600'
+          const colTxt = isDestaque ? T.goldDark : T.body
+          const colVal = isDestaque ? T.goldDark : T.body
+          const wTxt = isDestaque ? '700' : '500'
           const wVal = isDestaque ? '800' : '700'
-          const prefix = isDestaque ? '★ ' : ''
-          return `<text x="14" y="${y}" font-weight="${w}" fill="${colTxt}">${escapeXml(prefix + (r.categoria || '').slice(0, 28))}</text>
-                  <text x="246" y="${y}" text-anchor="end" font-weight="${wVal}" fill="${colVal}">${escapeXml(r.distancia_texto || fmtKm(r.distancia_metros))} · ${escapeXml(r.duracao_texto || fmtMin(r.duracao_segundos))}</text>`
+          const nome = (r.categoria || '').slice(0, NOME_MAX)
+          // Valor compacto: prefere fmtMin (curto: "1h50") ao texto Google
+          // ("1 hora 50 minutos") para evitar overflow no card de 260px.
+          const distancia = r.distancia_texto || fmtKm(r.distancia_metros)
+          const duracao = fmtMin(r.duracao_segundos)
+          const valor = `${distancia} · ${duracao}`
+          return `
+            ${isDestaque ? `<polygon points="6,${y - 8} 10,${y - 5} 6,${y - 2}" fill="${T.gold}"/>` : ''}
+            <text x="14" y="${y}" font-weight="${wTxt}" fill="${colTxt}">${escapeXml(nome)}</text>
+            <text x="${CARD_W - 14}" y="${y}" text-anchor="end" font-weight="${wVal}" fill="${colVal}">${escapeXml(valor)}</text>`
         }).join('')
         return `<g transform="translate(${xCard}, ${yCard})">
-          <rect width="260" height="170" rx="8" fill="#FFFFFF" stroke="#E0D5B5" stroke-width="1.5"/>
-          <rect width="260" height="28" rx="8" fill="#0d0d0d"/>
-          <rect y="18" width="260" height="10" fill="#0d0d0d"/>
-          <text x="14" y="20" font-size="13" fill="#C9A84C" font-weight="700">${escapeXml(SECCOES[sec].titulo)}</text>
+          <rect width="${CARD_W}" height="${CARD_H}" rx="6" fill="${T.white}" stroke="${T.border}" stroke-width="1"/>
+          <!-- Header light com barra colorida e label dark -->
+          <rect width="${CARD_W}" height="32" rx="6" fill="${T.light}"/>
+          <rect y="20" width="${CARD_W}" height="12" fill="${T.light}"/>
+          <rect width="4" height="32" fill="${colorBar}"/>
+          <text x="14" y="21" font-size="12" fill="${T.body}" font-weight="700" letter-spacing="1.2">${escapeXml(SECCOES[sec].titulo)}</text>
+          <line x1="0" y1="32" x2="${CARD_W}" y2="32" stroke="${T.border}" stroke-width="1"/>
           <g font-size="11">${linhas}</g>
         </g>`
       }).join('')}
@@ -328,38 +359,47 @@ export function composeEstudoSvg({
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${totalH}" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
   <defs>
-    <linearGradient id="goldGrad" x1="0" y1="0" x2="1" y2="1">
+    <linearGradient id="goldGrad" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0%" stop-color="#D4B560"/><stop offset="100%" stop-color="#B8923D"/>
     </linearGradient>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.15"/></filter>
-    <filter id="shadowSm" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-opacity="0.25"/></filter>
-    <pattern id="mapBg" width="40" height="40" patternUnits="userSpaceOnUse"><rect width="40" height="40" fill="#F7F3E9"/><circle cx="2" cy="2" r="0.8" fill="#E5DCC3"/></pattern>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.10"/></filter>
   </defs>
 
-  <!-- Header -->
-  <rect x="0" y="0" width="${W}" height="100" fill="#0d0d0d"/>
-  <rect x="0" y="100" width="${W}" height="6" fill="url(#goldGrad)"/>
-  <text x="50" y="48" font-size="13" letter-spacing="6" fill="#C9A84C" font-weight="600">SOMNIUM PROPERTIES</text>
-  <text x="50" y="82" font-size="28" fill="#FFFFFF" font-weight="700">Estudo de Localização</text>
-  <text x="${W - 50}" y="48" font-size="11" letter-spacing="2" fill="#888" font-weight="500" text-anchor="end">RELATÓRIO DE INVESTIDOR</text>
-  <text x="${W - 50}" y="82" font-size="13" fill="#C9A84C" font-weight="600" text-anchor="end">${escapeXml(freguesia || imovelNome || '')}</text>
-  <rect x="0" y="106" width="${W}" height="56" fill="#1a1a1a"/>
-  <text x="50" y="142" font-size="18" fill="#FFFFFF" font-weight="600">📍 ${escapeXml(morada || '')}</text>
+  <!-- Fundo geral cream (alinhado com C.bg do dossier) -->
+  <rect x="0" y="0" width="${W}" height="${totalH}" fill="${T.bg}"/>
+
+  <!-- Header light: linha gold no topo + bloco com titulo -->
+  <rect x="0" y="0" width="${W}" height="4" fill="url(#goldGrad)"/>
+  <rect x="0" y="4" width="${W}" height="92" fill="${T.bg}"/>
+  <text x="50" y="40" font-size="11" letter-spacing="5" fill="${T.muted}" font-weight="600">SOMNIUM PROPERTIES</text>
+  <text x="50" y="74" font-size="28" fill="${T.body}" font-weight="700">Estudo de Localização</text>
+  <text x="${W - 50}" y="40" font-size="10" letter-spacing="2" fill="${T.muted}" font-weight="500" text-anchor="end">RELATÓRIO DE INVESTIDOR</text>
+  <text x="${W - 50}" y="74" font-size="13" fill="${T.gold}" font-weight="600" text-anchor="end">${escapeXml(freguesia || imovelNome || '')}</text>
+  <line x1="50" y1="92" x2="${W - 50}" y2="92" stroke="${T.gold}" stroke-width="1"/>
+
+  <!-- Address bar light com pin vectorial -->
+  <rect x="50" y="100" width="${W - 100}" height="48" rx="4" fill="${T.light}" stroke="${T.border}" stroke-width="1"/>
+  <!-- Pin (gota): drop shape + circle interior -->
+  <g transform="translate(72, 113)">
+    <path d="M 0 8 C 0 3.6 3.6 0 8 0 C 12.4 0 16 3.6 16 8 C 16 14 8 22 8 22 C 8 22 0 14 0 8 Z" fill="${T.gold}"/>
+    <circle cx="8" cy="8" r="3" fill="${T.white}"/>
+  </g>
+  <text x="98" y="130" font-size="15" fill="${T.body}" font-weight="600">${escapeXml(morada || '')}</text>
 
   <!-- Mapa satélite -->
   <g transform="translate(50, ${HEADER_H + 33})">
     ${mapaSvg}
-    <!-- Bloco de legenda numerada (sobreposto, esquerda) -->
+    <!-- Bloco de legenda numerada: fundo branco semi-opaco + sombra -->
     <g transform="translate(14, 14)">
-      <rect width="240" height="${pinsLegenda.length * 18 + 16}" rx="6" fill="#000000" opacity="0.55"/>
+      <rect width="240" height="${pinsLegenda.length * 18 + 16}" rx="6" fill="${T.white}" opacity="0.94" stroke="${T.border}" stroke-width="0.5"/>
       ${legendaPins}
     </g>
-    <!-- Marcador do imóvel na legenda (canto inferior esquerdo) -->
+    <!-- Marcador do imóvel: pill branca com pin gold -->
     <g transform="translate(14, ${mapH - 38})">
-      <rect width="180" height="26" rx="4" fill="#000000" opacity="0.6"/>
-      <circle cx="20" cy="13" r="9" fill="#C9A84C" stroke="#FFFFFF" stroke-width="1.5"/>
-      <text x="20" y="17" text-anchor="middle" font-size="10" fill="#0d0d0d" font-weight="800">I</text>
-      <text x="36" y="17" font-size="11" fill="#FFFFFF" font-weight="700">Imóvel</text>
+      <rect width="180" height="26" rx="13" fill="${T.white}" opacity="0.94" stroke="${T.border}" stroke-width="0.5"/>
+      <circle cx="20" cy="13" r="9" fill="${T.gold}" stroke="${T.white}" stroke-width="1.5"/>
+      <text x="20" y="17" text-anchor="middle" font-size="10" fill="${T.body}" font-weight="800">I</text>
+      <text x="36" y="17.5" font-size="11" fill="${T.body}" font-weight="700">Imóvel</text>
     </g>
   </g>
 
@@ -367,15 +407,14 @@ export function composeEstudoSvg({
   ${tabelaSvg}
   ${cardsSvg}
 
-  <!-- Footer -->
+  <!-- Footer light -->
   <g transform="translate(0, ${footerY})">
-    <rect x="0" y="0" width="${W}" height="${FOOTER_H}" fill="#0d0d0d"/>
-    <rect x="0" y="0" width="${W}" height="6" fill="url(#goldGrad)"/>
-    <text x="50" y="36" font-size="11" fill="#C9A84C" font-weight="700" letter-spacing="3">SOMNIUM PROPERTIES</text>
-    <text x="50" y="56" font-size="10" fill="#888">Estudo de localização · gerado para apresentação a investidor</text>
-    <text x="50" y="74" font-size="9" fill="#666" font-style="italic">Distâncias e tempos calculados em modo de condução.</text>
-    <text x="${W - 50}" y="56" font-size="10" fill="#888" text-anchor="end">Coimbra · Portugal</text>
-    <text x="${W - 50}" y="74" font-size="9" fill="#666" font-style="italic" text-anchor="end">${escapeXml(imovelNome || '')}</text>
+    <line x1="50" y1="0" x2="${W - 50}" y2="0" stroke="${T.gold}" stroke-width="1"/>
+    <text x="50" y="32" font-size="10" fill="${T.muted}" font-weight="700" letter-spacing="2.5">SOMNIUM PROPERTIES</text>
+    <text x="50" y="50" font-size="9" fill="${T.muted}">Estudo de localização · gerado para apresentação a investidor</text>
+    <text x="50" y="66" font-size="9" fill="${T.muted}" font-style="italic">Distâncias e tempos calculados em modo de condução.</text>
+    <text x="${W - 50}" y="32" font-size="9" fill="${T.muted}" text-anchor="end">Coimbra · Portugal</text>
+    <text x="${W - 50}" y="50" font-size="9" fill="${T.muted}" font-style="italic" text-anchor="end">${escapeXml(imovelNome || '')}</text>
   </g>
 </svg>`
 }
