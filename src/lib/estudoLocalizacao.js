@@ -10,6 +10,10 @@
  */
 
 import { Resvg } from '@resvg/resvg-js'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // Largura alvo do PNG: ~4x oversample face ao espaco util da pagina A4
 // (CW≈495pt @ 72dpi). Importante para a pagina LOCALIZACAO do dossier,
@@ -17,10 +21,25 @@ import { Resvg } from '@resvg/resvg-js'
 // cards de highlights tem que ficar legivel sem zoom.
 const PNG_TARGET_WIDTH = 2000
 
+// Fontes Inter empacotadas no repo (public/fonts/*.ttf). Garantem render
+// consistente em qualquer plataforma — em particular no Render (Linux,
+// sem fontes sans-serif por defeito) onde de outra forma o Resvg cai
+// num monospace courier-like que destoa do tema do dossier.
+const FONTS_DIR = path.resolve(__dirname, '../../public/fonts')
+const INTER_FILES = [
+  path.join(FONTS_DIR, 'Inter-Regular.ttf'),
+  path.join(FONTS_DIR, 'Inter-SemiBold.ttf'),
+  path.join(FONTS_DIR, 'Inter-Bold.ttf'),
+]
+
 export function rasterizarSvgParaPng(svg, { largura = PNG_TARGET_WIDTH } = {}) {
   return new Resvg(svg, {
     fitTo: { mode: 'width', value: largura },
-    font: { loadSystemFonts: true },
+    font: {
+      fontFiles: INTER_FILES,
+      loadSystemFonts: false,
+      defaultFontFamily: 'Inter',
+    },
   }).render().asPng()
 }
 
@@ -357,7 +376,7 @@ export function composeEstudoSvg({
   const footerY = totalH - FOOTER_H
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${totalH}" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${totalH}" font-family="Inter, sans-serif">
   <defs>
     <linearGradient id="goldGrad" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0%" stop-color="#D4B560"/><stop offset="100%" stop-color="#B8923D"/>
