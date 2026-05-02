@@ -271,6 +271,49 @@ class DocBuilder {
     return this
   }
 
+  // Tabela "Risco → Estratégia de mitigação". Empareja linha-a-linha o
+  // conteúdo de im.riscos com im.mitigacao_riscos. Linhas extra de qualquer
+  // dos lados ficam isoladas (sem par). Só renderiza se houver mitigações
+  // definidas — caso contrário a coluna 'Riscos' do bloco anterior basta.
+  riscosMitigacao() {
+    const im = this.imovel || {}
+    const riscos = String(im.riscos || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+    const mitig  = String(im.mitigacao_riscos || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+    if (mitig.length === 0) return this
+
+    const n = Math.max(riscos.length, mitig.length)
+    const pairs = []
+    for (let i = 0; i < n; i++) pairs.push({ r: riscos[i] || '—', m: mitig[i] || '—' })
+
+    this.header('ANÁLISE DE RISCO E MITIGAÇÃO')
+    const colR = Math.floor((CW - 12) * 0.42)
+    const colM = CW - 12 - colR
+    const padX = 8, padY = 6, gap = 12
+
+    // Cabeçalho
+    this.ensure(24)
+    this.doc.rect(ML, this.y, CW, 22).fill(C.headerBg)
+    this.doc.fontSize(7.5).fillColor(C.gold).text('RISCO', ML + padX, this.y + padY, { width: colR - padX, lineBreak: false })
+    this.doc.fontSize(7.5).fillColor(C.gold).text('ESTRATÉGIA DE MITIGAÇÃO', ML + colR + gap, this.y + padY, { width: colM, lineBreak: false })
+    this.y += 24
+
+    pairs.forEach(({ r, m }) => {
+      this.doc.fontSize(8.5)
+      const hR = this.doc.heightOfString(r, { width: colR - padX * 2, lineGap: 2 })
+      const hM = this.doc.heightOfString(m, { width: colM - padX, lineGap: 2 })
+      const rowH = Math.max(hR, hM) + padY * 2
+      this.ensure(rowH + 1)
+      this.doc.fontSize(8.5).fillColor(C.red).text('▸', ML, this.y + padY, { width: 8, lineBreak: false })
+      this.doc.fontSize(8.5).fillColor(C.body).text(r, ML + padX, this.y + padY, { width: colR - padX * 2, lineGap: 2 })
+      this.doc.fontSize(8.5).fillColor(C.green).text('→', ML + colR, this.y + padY, { width: 10, lineBreak: false })
+      this.doc.fontSize(8.5).fillColor(C.body).text(m, ML + colR + gap, this.y + padY, { width: colM - padX, lineGap: 2 })
+      this.doc.rect(ML, this.y + rowH - 0.5, CW, 0.3).fill(C.border)
+      this.y += rowH
+    })
+    this.y += 4
+    return this
+  }
+
   // Imagem de localização (print Google Maps). Aceita imgData previamente
   // carregado via fetchLocalizacaoImagem() ou tenta path local.
   localizacao() {
@@ -1241,6 +1284,7 @@ function renderDossierInvestidor(b, im, a) {
   // do imóvel (fotos+localização) e antes dos números financeiros.
   if (im.localizacao_imagem || im._localizacaoImgData) { b.newPage(); b.localizacao() }
   if (im.pontos_fortes || im.pontos_fracos || im.riscos) { b.pontosFortesFracosRiscos() }
+  if (im.mitigacao_riscos) { b.space(4); b.riscosMitigacao() }
   b.space(4)
 
   b.header('NÚMEROS DO NEGÓCIO')
@@ -1469,10 +1513,11 @@ function renderRelatorioInvestimento(b, im, an) {
 
   // Localização + pros/contras/riscos numa página dedicada antes da
   // análise financeira, depois da identificação do imóvel.
-  if (im.localizacao_imagem || im._localizacaoImgData || im.pontos_fortes || im.pontos_fracos || im.riscos) {
+  if (im.localizacao_imagem || im._localizacaoImgData || im.pontos_fortes || im.pontos_fracos || im.riscos || im.mitigacao_riscos) {
     b.newPage()
     b.localizacao()
     b.pontosFortesFracosRiscos()
+    if (im.mitigacao_riscos) { b.space(4); b.riscosMitigacao() }
     b.newPage()
   }
 
@@ -1766,10 +1811,11 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
   ])
 
   // Localização + pontos fortes/fracos/riscos antes do disclaimer
-  if (im.localizacao_imagem || im.pontos_fortes || im.pontos_fracos || im.riscos) {
+  if (im.localizacao_imagem || im.pontos_fortes || im.pontos_fracos || im.riscos || im.mitigacao_riscos) {
     b.newPage()
     b.localizacao()
     b.pontosFortesFracosRiscos()
+    if (im.mitigacao_riscos) { b.space(4); b.riscosMitigacao() }
   }
 
   b.space(6)
