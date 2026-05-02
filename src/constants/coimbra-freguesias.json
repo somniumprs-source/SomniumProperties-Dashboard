@@ -1,0 +1,199 @@
+{
+  "distrito": "Coimbra",
+  "concelhos": {
+    "Arganil": [
+      "Arganil",
+      "Benfeita",
+      "Celavisa",
+      "Cepos e Teixeira",
+      "Cerdeira e Moura da Serra",
+      "Coja e Barril de Alva",
+      "Folques",
+      "Pomares",
+      "Pombeiro da Beira",
+      "Sarzedo",
+      "São Martinho da Cortiça",
+      "Secarias",
+      "Vila Cova de Alva e Anseriz"
+    ],
+    "Cantanhede": [
+      "Ançã",
+      "Cadima",
+      "Cantanhede e Pocariça",
+      "Cordinhã",
+      "Covões e Camarneira",
+      "Febres",
+      "Murtede",
+      "Ourentã",
+      "Outil",
+      "Portunhos e Outil",
+      "Sanguinheira",
+      "São Caetano",
+      "Sepins e Bolho",
+      "Tocha",
+      "Vilamar e Corticeiro de Cima"
+    ],
+    "Coimbra": [
+      "Almalaguês",
+      "Antanhol",
+      "Assafarge e Antanhol",
+      "Brasfemes",
+      "Castelo Viegas",
+      "Ceira",
+      "Cernache",
+      "Eiras e São Paulo de Frades",
+      "Santa Clara e Castelo Viegas",
+      "Santo António dos Olivais",
+      "Sé Nova, Santa Cruz, Almedina e São Bartolomeu",
+      "São João do Campo",
+      "São Martinho de Árvore e Lamarosa",
+      "São Martinho do Bispo e Ribeira de Frades",
+      "São Silvestre",
+      "Souselas e Botão",
+      "Taveiro, Ameal e Arzila",
+      "Torre de Vilela",
+      "Torres do Mondego",
+      "Trouxemil e Torre de Vilela"
+    ],
+    "Condeixa-a-Nova": [
+      "Anobra",
+      "Belide",
+      "Bem da Fé",
+      "Condeixa-a-Velha e Condeixa-a-Nova",
+      "Ega",
+      "Furadouro",
+      "Sebal e Belide",
+      "Vila Seca e Bem da Fé",
+      "Zambujal"
+    ],
+    "Figueira da Foz": [
+      "Alhadas",
+      "Alqueidão",
+      "Bom Sucesso",
+      "Buarcos e São Julião",
+      "Ferreira-a-Nova",
+      "Lavos",
+      "Maiorca",
+      "Marinha das Ondas",
+      "Moinhos da Gândara",
+      "Paião",
+      "Quiaios",
+      "Santana",
+      "São Pedro",
+      "Tavarede",
+      "Vila Verde"
+    ],
+    "Góis": [
+      "Alvares",
+      "Cadafaz e Colmeal",
+      "Góis",
+      "Vila Nova do Ceira"
+    ],
+    "Lousã": [
+      "Foz de Arouce e Casal de Ermio",
+      "Gândaras",
+      "Lousã e Vilarinho",
+      "Serpins"
+    ],
+    "Mira": [
+      "Carapelhos",
+      "Mira",
+      "Praia de Mira",
+      "Seixo"
+    ],
+    "Miranda do Corvo": [
+      "Lamas",
+      "Miranda do Corvo",
+      "Rio de Vide",
+      "Semide e Rio Vide",
+      "Vila Nova"
+    ],
+    "Montemor-o-Velho": [
+      "Abrunheira, Verride e Vila Nova da Barca",
+      "Arazede",
+      "Carapinheira",
+      "Ereira",
+      "Gatões",
+      "Liceia",
+      "Meãs do Campo",
+      "Montemor-o-Velho e Gatões",
+      "Pereira",
+      "Santo Varão",
+      "Seixo de Gatões",
+      "Tentúgal"
+    ],
+    "Oliveira do Hospital": [
+      "Aldeia das Dez",
+      "Avô",
+      "Bobadela",
+      "Ervedal e Vila Franca da Beira",
+      "Lagares da Beira",
+      "Lagos da Beira e Lajeosa",
+      "Lourosa",
+      "Meruge",
+      "Nogueira do Cravo",
+      "Oliveira do Hospital e São Paio de Gramaços",
+      "Penalva de Alva e São Sebastião da Feira",
+      "Santa Ovaia e Vila Pouca da Beira",
+      "São Gião",
+      "Seixo da Beira",
+      "Travanca de Lagos"
+    ],
+    "Pampilhosa da Serra": [
+      "Cabril",
+      "Dornelas do Zêzere",
+      "Fajão-Vidual",
+      "Janeiro de Cima e Bogas de Cima",
+      "Pampilhosa da Serra",
+      "Pessegueiro",
+      "Portela do Fojo-Machio",
+      "Unhais-o-Velho"
+    ],
+    "Penacova": [
+      "Carvalho",
+      "Figueira de Lorvão",
+      "Friúmes e Paradela",
+      "Lorvão",
+      "Oliveira do Mondego e Travanca do Mondego",
+      "Penacova",
+      "Sazes do Lorvão",
+      "São Pedro de Alva e São Paio de Mondego"
+    ],
+    "Penela": [
+      "Cumeeira",
+      "Espinhal",
+      "Podentes",
+      "São Miguel, Santa Eufémia e Rabaçal"
+    ],
+    "Soure": [
+      "Alfarelos",
+      "Degracias e Pombalinho",
+      "Figueiró do Campo",
+      "Gesteira e Brunhós",
+      "Granja do Ulmeiro",
+      "Samuel",
+      "Soure",
+      "Tapéus",
+      "Vila Nova de Anços",
+      "Vinha da Rainha"
+    ],
+    "Tábua": [
+      "Candosa",
+      "Carapinha",
+      "Covas e Vila Nova de Oliveirinha",
+      "Espariz e Sinde",
+      "Midões",
+      "Mouronho",
+      "Pinheiro de Coja e Meda de Mouros",
+      "Póvoa de Midões",
+      "São João da Boa Vista",
+      "Tábua e Carapinha"
+    ],
+    "Vila Nova de Poiares": [
+      "Arrifana",
+      "Lavegadas",
+      "Poiares (Santo André)",
+      "São Miguel de Poiares"
+    ]
+  }
+}

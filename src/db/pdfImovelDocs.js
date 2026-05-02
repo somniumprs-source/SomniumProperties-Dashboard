@@ -762,29 +762,97 @@ function renderStressTests(b, a, opts = {}) {
 // ══════════════════════════════════════════════════════════════
 
 function renderFichaImovel(b, im) {
-  const fotos = parseFotos(im)
-  b.inlineData([{ label: 'Estado', value: (im.estado || '').replace(/^\d+-/, '') }, { label: 'Data', value: FDATE(im.data_adicionado) }, { label: 'Origem', value: im.origem }])
-  b.space(4)
-  if (fotos.length > 0) b.photos(fotos)
-  b.header('INFORMAÇÃO GERAL')
-  b.simpleTable([
-    { label: 'Tipologia', value: im.tipologia }, { label: 'Zona', value: im.zona },
-    { label: 'Consultor', value: im.nome_consultor }, { label: 'Modelo de Negócio', value: im.modelo_negocio },
-    { label: 'Link', value: im.link }, { label: 'Área Útil', value: im.area_util ? `${im.area_util} m²` : '—' },
-    { label: 'Área Bruta', value: im.area_bruta ? `${im.area_bruta} m²` : '—' },
+  const M2 = v => (v == null || v === '' ? '—' : `${v} m²`)
+  const NUM = v => (v == null || v === '' ? '—' : String(v))
+  const ARR = v => (Array.isArray(v) && v.length ? v.join(', ') : '—')
+  const precoM2 = (im.ask_price && im.area_bruta) ? Math.round(im.ask_price / im.area_bruta) : null
+
+  b.inlineData([
+    { label: 'REF', value: im.ref_interna || im.id?.slice(0, 8) },
+    { label: 'Estado', value: (im.estado || '').replace(/^\d+-/, '') },
+    { label: 'Adicionado', value: FDATE(im.data_adicionado) },
   ])
-  b.space(4)
-  b.header('VALORES')
+  b.space(6)
+
+  // 1. IDENTIFICAÇÃO REGISTRAL
+  b.header('1. IDENTIFICAÇÃO REGISTRAL')
+  b.simpleTable([
+    { label: 'Designação', value: im.nome },
+    { label: 'Morada', value: im.morada },
+    { label: 'Freguesia', value: im.freguesia },
+    { label: 'Concelho', value: im.concelho },
+    { label: 'Distrito', value: im.distrito || 'Coimbra' },
+    { label: 'Coordenadas', value: (im.coordenadas_lat && im.coordenadas_lng) ? `${im.coordenadas_lat}, ${im.coordenadas_lng}` : '—' },
+    { label: 'Artigo Matricial', value: im.artigo_matricial },
+    { label: 'Descrição Predial', value: im.descricao_predial },
+    { label: 'Fração', value: im.fracao },
+    { label: 'Regime de Propriedade', value: im.regime_propriedade },
+  ])
+  b.space(6)
+
+  // 2. CARACTERIZAÇÃO FÍSICA
+  b.header('2. CARACTERIZAÇÃO FÍSICA')
+  b.simpleTable([
+    { label: 'Tipologia', value: im.tipologia },
+    { label: 'Área Bruta Privativa (ABP)', value: M2(im.area_bruta) },
+    { label: 'Área Bruta Dependente (ABD)', value: M2(im.area_bruta_dependente) },
+    { label: 'Andar', value: im.andar },
+    { label: 'Nº Pisos do Prédio', value: NUM(im.numero_pisos_predio) },
+    { label: 'Tipo de Prédio', value: im.predio_tipo },
+    { label: 'Elevador', value: im.tem_elevador },
+    { label: 'Ano de Construção', value: NUM(im.ano_construcao) },
+    { label: 'Classificação Reg. Urbana (CRU)', value: im.cru },
+    { label: 'Licença de Utilização', value: im.licenca_utilizacao },
+  ])
+  b.space(6)
+
+  // 3. SITUAÇÃO LEGAL E FISCAL
+  b.header('3. SITUAÇÃO LEGAL E FISCAL')
+  b.simpleTable([
+    { label: 'Certificado Energético', value: im.certificado_energetico },
+    { label: 'Nº CE', value: im.numero_ce },
+    { label: 'VPT (Valor Patrimonial Tributário)', value: EUR(im.vpt) },
+    { label: 'IMI Anual', value: EUR(im.imi_anual) },
+    { label: 'Condomínio Mensal (anunciado)', value: EUR(im.condominio_mensal_anunciado) },
+    { label: 'Ónus / Encargos', value: ARR(im.onus_registados) },
+  ])
+  b.space(6)
+
+  // 4. PROPRIETÁRIO E CAPTAÇÃO
+  b.header('4. PROPRIETÁRIO E CAPTAÇÃO')
+  b.simpleTable([
+    { label: 'Proprietário', value: im.proprietario_nome },
+    { label: 'NIF', value: im.proprietario_nif },
+    { label: 'Contacto', value: im.proprietario_contacto },
+    { label: 'Motivo de Venda Declarado', value: im.motivo_venda_declarado },
+    { label: 'Data do Anúncio', value: FDATE(im.data_anuncio) },
+    { label: 'Tempo no Mercado (dias)', value: NUM(im.tempo_no_mercado_dias) },
+    { label: 'Origem', value: im.origem },
+    { label: 'Tipo de Oportunidade', value: im.tipo_oportunidade },
+    { label: 'Modelo de Negócio', value: im.modelo_negocio },
+    { label: 'Data de Captação', value: FDATE(im.data_adicionado) },
+    { label: 'Consultor', value: im.nome_consultor },
+    { label: 'Link Anúncio', value: im.link },
+  ])
+  b.space(6)
+  b.header('PREÇO DE AQUISIÇÃO')
   b.bigNumbers([
-    { label: 'Ask Price', value: EUR(im.ask_price) },
-    { label: 'Valor Proposta', value: EUR(im.valor_proposta) },
-    { label: 'VVR', value: EUR(im.valor_venda_remodelado) },
+    { label: 'Preço Pedido', value: EUR(im.ask_price) },
+    { label: '€/m² ABP', value: precoM2 ? EUR(precoM2) : '—' },
+    { label: 'ABP', value: M2(im.area_bruta) },
   ])
-  b.simpleTable([
-    { label: 'Custo Estimado Obra', value: EUR(im.custo_estimado_obra) },
-    { label: 'ROI', value: PCT(im.roi) }, { label: 'ROI Anualizado', value: PCT(im.roi_anualizado) },
-  ])
-  if (im.notas) { b.space(4); b.header('NOTAS'); b.text(im.notas) }
+  b.space(6)
+
+  // 5. ANÁLISE PRELIMINAR
+  if (im.pontos_fortes || im.pontos_fracos || im.riscos || im.mitigacao_riscos) {
+    b.header('5. ANÁLISE PRELIMINAR')
+    if (im.pontos_fortes) { b.subheader('Pontos Fortes'); b.text(im.pontos_fortes); b.space(4) }
+    if (im.pontos_fracos) { b.subheader('Pontos Fracos'); b.text(im.pontos_fracos); b.space(4) }
+    if (im.riscos) { b.subheader('Riscos'); b.text(im.riscos); b.space(4) }
+    if (im.mitigacao_riscos) { b.subheader('Mitigação de Riscos'); b.text(im.mitigacao_riscos); b.space(4) }
+  }
+
+  if (im.notas) { b.space(4); b.header('NOTAS INTERNAS'); b.text(im.notas) }
 }
 
 function renderFichaVisita(b, im) {
@@ -806,9 +874,8 @@ function renderFichaVisita(b, im) {
 
   b.header('ÁREAS E CARACTERÍSTICAS')
   b.simpleTable([
-    { label: 'Área Útil', value: im.area_util ? `${im.area_util} m²` : '—' },
     { label: 'Área Bruta', value: im.area_bruta ? `${im.area_bruta} m²` : '—' },
-    { label: 'Preço por m² (Ask)', value: im.ask_price && im.area_util ? EUR(Math.round(im.ask_price / im.area_util)) + '/m²' : '—' },
+    { label: 'Preço por m² (Ask)', value: im.ask_price && im.area_bruta ? EUR(Math.round(im.ask_price / im.area_bruta)) + '/m²' : '—' },
   ])
   b.space(4)
 
@@ -1014,9 +1081,8 @@ function renderFichaVisita(b, im) {
   )
   b.space(2)
   b.simpleTable([
-    { label: 'Área Útil Anunciada', value: im.area_util ? `${im.area_util} m²` : '—' },
-    { label: 'Área Útil Medida / Estimada', value: '__________ m²' },
     { label: 'Área Bruta Anunciada', value: im.area_bruta ? `${im.area_bruta} m²` : '—' },
+    { label: 'Área Bruta Medida / Estimada', value: '__________ m²' },
     { label: 'Discrepância', value: '□ Sim  □ Não' },
   ])
   b.space(4)
@@ -1677,7 +1743,7 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
 
   b.header('SOBRE O PROJECTO')
   const tipoDesc = im.tipologia ? `um ${im.tipologia}` : 'um imóvel'
-  const areaDesc = im.area_bruta ? ` com uma área bruta de ${im.area_bruta} m²` : (im.area_util ? ` com uma área útil de ${im.area_util} m²` : '')
+  const areaDesc = im.area_bruta ? ` com uma área bruta de ${im.area_bruta} m²` : ''
   const zonaDesc = im.zona ? ` na zona de ${im.zona}, Coimbra` : ' em Coimbra'
   b.textBlock(
     `O projecto consiste na aquisição, remodelação integral e revenda de ${tipoDesc}${areaDesc}, localizado${zonaDesc}. ` +
@@ -1689,7 +1755,7 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
   b.simpleTable([
     { label: 'Localização', value: im.zona ? `Zona de ${im.zona}, Coimbra` : 'Coimbra, Portugal' },
     { label: 'Tipologia', value: im.tipologia || '—' },
-    { label: 'Área Bruta Privativa', value: im.area_bruta ? `${im.area_bruta} m²` : (im.area_util ? `${im.area_util} m²` : '—') },
+    { label: 'Área Bruta Privativa', value: im.area_bruta ? `${im.area_bruta} m²` : '—' },
     { label: 'Modelo de Negócio', value: im.modelo_negocio || 'CAEP 50/50' },
     { label: 'Prazo Estimado', value: `${meses} meses` },
   ])
