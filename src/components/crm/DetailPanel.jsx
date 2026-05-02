@@ -35,6 +35,61 @@ export const MOTIVOS_NAO_INTERESSA_PADRAO = [
   'Imóvel com ónus / problemas legais',
 ]
 
+function PontosRiscosTab({ imovel, endpoint, id, onUpdate, toast }) {
+  const CAMPOS = [
+    { key: 'pontos_fortes', label: 'Pontos fortes', color: 'emerald', icon: '✅' },
+    { key: 'pontos_fracos', label: 'Pontos fracos', color: 'amber', icon: '⚠️' },
+    { key: 'riscos', label: 'Riscos', color: 'rose', icon: '🚨' },
+  ]
+  const [valores, setValores] = useState({
+    pontos_fortes: imovel.pontos_fortes || '',
+    pontos_fracos: imovel.pontos_fracos || '',
+    riscos: imovel.riscos || '',
+  })
+
+  async function saveCampo(key) {
+    const v = valores[key]
+    if ((v || '') === (imovel[key] || '')) return
+    try {
+      const r = await apiFetch(`/api/crm/${endpoint}/${id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [key]: v }),
+      })
+      if (!r.ok) throw new Error(await r.text())
+      await onUpdate()
+      toast('Guardado', 'success')
+    } catch (err) { toast('Erro: ' + err.message, 'error') }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-sm font-bold text-neutral-800">Pontos & Riscos do imóvel</h3>
+        <p className="text-xs text-neutral-400 mt-0.5">
+          Um por linha. Aparece no relatório enviado ao investidor. Auto-guarda ao sair do campo.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {CAMPOS.map(c => (
+          <div key={c.key} className="rounded-xl border border-gray-200 p-4 bg-white">
+            <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 mb-2">
+              <span>{c.icon}</span>{c.label}
+            </label>
+            <textarea
+              value={valores[c.key]}
+              onChange={e => setValores(prev => ({ ...prev, [c.key]: e.target.value }))}
+              onBlur={() => saveCampo(c.key)}
+              rows={8}
+              placeholder={`Um ${c.label.toLowerCase()} por linha…`}
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function MotivoNaoInteressaInline({ motivoActual, onSave }) {
   const partes = (motivoActual || '').split(/;\s*/).map(s => s.trim()).filter(Boolean)
   const padraoSet = new Set(MOTIVOS_NAO_INTERESSA_PADRAO)
@@ -392,6 +447,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
     { key: 'whatsapp', label: 'WhatsApp', icon: '📱', show: type === 'Consultores' },
     { key: 'interacoes', label: `Interacções (${data?.interacoes?.length ?? 0})`, icon: '💬', show: type === 'Consultores' },
     { key: 'checklist', label: 'Checklist', icon: '📋', show: type === 'Imóveis' },
+    { key: 'pontos_riscos', label: 'Pontos & Riscos', icon: '⚖️', show: type === 'Imóveis' },
     { key: 'analise', label: 'Análise Financeira', icon: '📊', show: type === 'Imóveis' },
     { key: 'relatorios_imovel', label: 'Documentos', icon: '📄', show: type === 'Imóveis' },
     { key: 'documentos', label: `Documentos (${data?.documentos?.length ?? 0})`, icon: '📎', show: type === 'Investidores' },
@@ -498,6 +554,11 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
 
       ) : type === 'Imóveis' && activeTab === 'checklist' ? (
         <ChecklistTab imovel={data} onUpdate={loadData} />
+
+      ) : type === 'Imóveis' && activeTab === 'pontos_riscos' ? (
+        <div className="p-4 sm:p-6">
+          <PontosRiscosTab imovel={data} endpoint={endpoint} id={id} onUpdate={loadData} toast={toast} />
+        </div>
 
       ) : type === 'Imóveis' && activeTab === 'analise' ? (
         <div className="p-4 sm:p-6">
@@ -622,31 +683,8 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                     className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
                 </div>
                 <div className="col-span-2 md:col-span-3">
-                  <label className="text-xs text-gray-400 block mb-1">Motivo Não Interessa</label>
-                  <textarea value={form.motivo_nao_interessa || ''} onChange={e => setField('motivo_nao_interessa', e.target.value)} rows={2}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
-                </div>
-                <div className="col-span-2 md:col-span-3">
                   <label className="text-xs text-gray-400 block mb-1">Notas</label>
                   <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={4}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
-                </div>
-                <div className="col-span-2 md:col-span-3">
-                  <label className="text-xs text-gray-400 block mb-1">Pontos fortes</label>
-                  <textarea value={form.pontos_fortes || ''} onChange={e => setField('pontos_fortes', e.target.value)} rows={3}
-                    placeholder="Um por linha. Aparece no relatório enviado ao investidor."
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
-                </div>
-                <div className="col-span-2 md:col-span-3">
-                  <label className="text-xs text-gray-400 block mb-1">Pontos fracos</label>
-                  <textarea value={form.pontos_fracos || ''} onChange={e => setField('pontos_fracos', e.target.value)} rows={3}
-                    placeholder="Um por linha. Aparece no relatório enviado ao investidor."
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
-                </div>
-                <div className="col-span-2 md:col-span-3">
-                  <label className="text-xs text-gray-400 block mb-1">Riscos</label>
-                  <textarea value={form.riscos || ''} onChange={e => setField('riscos', e.target.value)} rows={3}
-                    placeholder="Um por linha. Aparece no relatório enviado ao investidor."
                     className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
                 </div>
                 <div className="col-span-2 md:col-span-3">
@@ -748,9 +786,6 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                   </div>
                 )}
                 {data.notas && <div className="col-span-2 md:col-span-3"><Field label="Notas" value={data.notas} /></div>}
-                {data.pontos_fortes && <div className="col-span-2 md:col-span-3"><Field label="Pontos fortes" value={data.pontos_fortes} /></div>}
-                {data.pontos_fracos && <div className="col-span-2 md:col-span-3"><Field label="Pontos fracos" value={data.pontos_fracos} /></div>}
-                {data.riscos && <div className="col-span-2 md:col-span-3"><Field label="Riscos" value={data.riscos} /></div>}
                 {data.localizacao_imagem && (
                   <div className="col-span-2 md:col-span-3">
                     <p className="text-xs text-gray-400 mb-1">Localização</p>
