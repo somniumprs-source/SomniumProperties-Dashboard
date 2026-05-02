@@ -4,9 +4,23 @@
  * Pipeline:
  *  1. Distance Matrix API (Google) — distâncias e tempos a partir da morada do imóvel
  *  2. Composição de SVG branded Somnium (mapa radial + tabela + cards por secção)
- *  3. Upload para Supabase Storage (bucket Imoveis)
- *  4. UPDATE imoveis.localizacao_imagem + pois_distancias
+ *  3. Rasterização SVG → PNG (PDFKit não aceita SVG)
+ *  4. Upload para Supabase Storage (bucket Imoveis)
+ *  5. UPDATE imoveis.localizacao_imagem + pois_distancias
  */
+
+import { Resvg } from '@resvg/resvg-js'
+
+// Largura alvo do PNG: ~3x oversample face ao espaco util da pagina A4
+// (CW≈515pt @ 72dpi). Garante nitidez sem inflar demais o ficheiro.
+const PNG_TARGET_WIDTH = 1600
+
+export function rasterizarSvgParaPng(svg, { largura = PNG_TARGET_WIDTH } = {}) {
+  return new Resvg(svg, {
+    fitTo: { mode: 'width', value: largura },
+    font: { loadSystemFonts: true },
+  }).render().asPng()
+}
 
 // ── Categorização & helpers ──────────────────────────────────────
 
@@ -418,12 +432,15 @@ export async function runEstudoLocalizacao({ pool, supabaseStorage, imovelId, de
     mapaPngBase64,
   })
 
-  // 3. Upload Supabase Storage
-  const filename = `localizacao_estudo_auto_${Date.now()}.svg`
+  // 4. Rasterizar SVG → PNG (PDFKit nao aceita SVG)
+  const pngBuffer = rasterizarSvgParaPng(svg)
+
+  // 5. Upload Supabase Storage
+  const filename = `localizacao_estudo_auto_${Date.now()}.png`
   const storagePath = `imoveis/${imovelId}/${filename}`
   const { error: upErr } = await supabaseStorage.storage
     .from('Imoveis')
-    .upload(storagePath, Buffer.from(svg, 'utf8'), { contentType: 'image/svg+xml', upsert: true })
+    .upload(storagePath, pngBuffer, { contentType: 'image/png', upsert: true })
   if (upErr) throw new Error(`Supabase Storage: ${upErr.message}`)
   const { data: urlData } = supabaseStorage.storage.from('Imoveis').getPublicUrl(storagePath)
   const publicUrl = urlData.publicUrl

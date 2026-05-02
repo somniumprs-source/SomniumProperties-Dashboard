@@ -19,6 +19,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",
     "@notionhq/client": "^2.2.15",
+    "@resvg/resvg-js": "^2.6.2",
     "@supabase/supabase-js": "^2.103.0",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.18",
