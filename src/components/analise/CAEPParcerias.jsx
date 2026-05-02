@@ -127,7 +127,7 @@ export function CAEPParcerias({ analise, onUpdate }) {
                     <p className={`font-mono font-semibold ${result.lucro_liquido >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                       {EUR(result.lucro_liquido)}
                     </p>
-                    <p className="text-gray-400 mt-1">ROI: {PCT(result.roi)} · RA: {PCT(result.retorno_anualizado)}</p>
+                    <p className="text-gray-400 mt-1">ROI: {PCT(result.roi)} · CoC: {PCT(result.cash_on_cash)} · RA: {PCT(result.retorno_anualizado)}</p>
                   </div>
                 )}
               </div>
