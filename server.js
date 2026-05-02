@@ -1156,7 +1156,7 @@ app.get('/api/financeiro/conta-corrente', async (req, res) => {
       }
     }
 
-    // Saídas: despesas com timing Único ou Registado (pagamentos reais)
+    // Saídas: despesas Único + Registado (pagamentos efectivos já registados)
     for (const d of despesasAll) {
       if (['Único', 'Registado'].includes(d.timing) && d.data) {
         const valor = d.custoMensal || d.custoAnual || 0
@@ -1168,6 +1168,76 @@ app.get('/api/financeiro/conta-corrente', async (req, res) => {
             valor,
             data: d.data,
           })
+        }
+      }
+    }
+
+    // Saídas projectadas: subscrições Mensalmente/Anual debitadas automaticamente
+    // (não obriga o user a registar manualmente cada mês — projecta-se a partir
+    // da data base da despesa, replicando o mesmo dia-do-mês todos os meses)
+    const hoje = new Date()
+    const hojeStr = hoje.toISOString().slice(0, 10)
+
+    // Dedupe: se já existe Registado para (movimento, ano-mes) salta a projecção
+    const registadasJaContadas = new Set()
+    for (const d of despesasAll) {
+      if (d.timing === 'Registado' && d.data) {
+        registadasJaContadas.add(`${d.movimento}|${d.data.slice(0, 7)}`)
+      }
+    }
+
+    for (const d of despesasAll) {
+      if (!d.data) continue
+      const baseDt = new Date(d.data)
+      if (isNaN(baseDt)) continue
+      const diaPagamento = baseDt.getDate()
+
+      if (d.timing === 'Mensalmente') {
+        const valor = d.custoMensal || 0
+        if (valor <= 0) continue
+        const cursor = new Date(baseDt.getFullYear(), baseDt.getMonth(), 1)
+        const fimIter = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
+        while (cursor <= fimIter) {
+          const ano = cursor.getFullYear()
+          const mes = cursor.getMonth() + 1
+          const ultimoDiaMes = new Date(ano, mes, 0).getDate()
+          const dia = Math.min(diaPagamento, ultimoDiaMes)
+          const dataMov = `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`
+          if (dataMov >= d.data && dataMov <= hojeStr) {
+            const key = `${d.movimento}|${dataMov.slice(0, 7)}`
+            if (!registadasJaContadas.has(key)) {
+              movimentos.push({
+                tipo: 'saida',
+                descricao: d.movimento,
+                categoria: d.categoria,
+                valor,
+                data: dataMov,
+                projetado: true,
+              })
+            }
+          }
+          cursor.setMonth(cursor.getMonth() + 1)
+        }
+      } else if (d.timing === 'Anual') {
+        const valor = d.custoAnual || d.custoMensal || 0
+        if (valor <= 0) continue
+        const cursor = new Date(baseDt)
+        while (cursor <= hoje) {
+          const dataMov = cursor.toISOString().slice(0, 10)
+          if (dataMov >= d.data && dataMov <= hojeStr) {
+            const key = `${d.movimento}|${dataMov.slice(0, 7)}`
+            if (!registadasJaContadas.has(key)) {
+              movimentos.push({
+                tipo: 'saida',
+                descricao: d.movimento,
+                categoria: d.categoria,
+                valor,
+                data: dataMov,
+                projetado: true,
+              })
+            }
+          }
+          cursor.setFullYear(cursor.getFullYear() + 1)
         }
       }
     }
