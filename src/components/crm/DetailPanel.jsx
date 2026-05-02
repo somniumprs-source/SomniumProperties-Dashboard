@@ -386,11 +386,15 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
   }, [activeTab])
 
   async function saveEdit() {
-    // Validação: imóvel em Follow Up exige motivo (Não Interessa preenche-se inline na tab Detalhe)
+    // Validação: Follow Up e Não Interessa exigem motivo antes de guardar
     if (type === 'Imóveis') {
       const est = (form.estado || '').replace(/^\d+-\s*/, '').trim()
       if (/follow ?up/i.test(est) && !(form.motivo_follow_up || '').trim()) {
         toast('Indica o "Motivo Follow Up" antes de guardar', 'error')
+        return false
+      }
+      if (/n[ãa]o interessa/i.test(est) && !(form.motivo_nao_interessa || '').trim()) {
+        toast('Indica o "Motivo Não Interessa" antes de guardar', 'error')
         return false
       }
     }
@@ -660,6 +664,15 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
               {editing ? <>
                 <EF label="Nome" field="nome" form={form} set={setField} />
                 <EF label="Estado" field="estado" form={form} set={setField} type="select" options={['Pré-aprovação','Adicionado','Chamada Não Atendida','Pendentes','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa']} />
+                {(/n[ãa]o interessa/i.test(form.estado || '')) && (
+                  <div className="col-span-2 md:col-span-3 -mt-1 mb-1 rounded-xl border border-red-200 bg-red-50/40 p-3">
+                    <MotivoNaoInteressaChips
+                      value={form.motivo_nao_interessa || ''}
+                      onChange={v => setField('motivo_nao_interessa', v)}
+                    />
+                    <p className="text-[11px] text-red-500 mt-1">⚠ Selecciona pelo menos um motivo (ou escreve nas notas) antes de guardar.</p>
+                  </div>
+                )}
                 <EF label="Ask Price (€)" field="ask_price" form={form} set={setField} type="number" />
                 <EF label="Valor Proposta (€)" field="valor_proposta" form={form} set={setField} type="number" />
                 <EF label="VVR (€)" field="valor_venda_remodelado" form={form} set={setField} type="number" />
@@ -686,14 +699,6 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                   <textarea value={form.motivo_follow_up || ''} onChange={e => setField('motivo_follow_up', e.target.value)} rows={2}
                     className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
                 </div>
-                {(/n[ãa]o interessa/i.test(form.estado || '')) && (
-                  <div className="col-span-2 md:col-span-3">
-                    <MotivoNaoInteressaChips
-                      value={form.motivo_nao_interessa || ''}
-                      onChange={v => setField('motivo_nao_interessa', v)}
-                    />
-                  </div>
-                )}
                 <div className="col-span-2 md:col-span-3">
                   <label className="text-xs text-gray-400 block mb-1">Notas</label>
                   <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={4}
