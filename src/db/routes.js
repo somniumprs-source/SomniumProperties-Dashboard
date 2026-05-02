@@ -21,6 +21,7 @@ import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } f
 import { syncForms, isConfigured as formsConfigured } from './formsSync.js'
 import { createImovelFolder, moveImovelFolder, uploadDocToFolder, isConfigured as driveConfigured } from './driveSync.js'
 import { generateDoc, getDocsForEstado } from './pdfImovelDocs.js'
+import { onImovelCreated, listDocumentos, persistDocumento } from './documentLifecycle.js'
 import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
 import { generateMeetingPDF } from './pdfMeetingReport.js'
 import { ensureLabels, organizeMessage, organizeBatch, autoOrganize, isConfigured as gmailConfigured } from './gmailSync.js'
@@ -161,6 +162,8 @@ crudRoutes('/imoveis', Imoveis, {
     if (driveConfigured()) {
       await createImovelFolder(item.id, item.nome || 'Sem nome', item.estado || 'Adicionado')
     }
+    // Auto-gerar Ficha do Imóvel v1 (persiste em disco + documentos_imovel)
+    onImovelCreated(item).catch(e => console.error('[docs] onCreate ficha:', e.message))
     // Auto-scrape fotos do link do anuncio
     if (item.link && item.link.startsWith('http')) {
       scrapePhotosFromLink(item.link, item.id).then(async (photos) => {
@@ -237,6 +240,42 @@ crudRoutes('/imoveis', Imoveis, {
       }
     } catch (e) { console.error('[checklist] Erro auto-complete:', e.message) }
   },
+})
+
+// ── Listagem dos documentos persistidos do imóvel ───────────
+router.get('/imoveis/:id/documentos-persistidos', async (req, res) => {
+  try { res.json(await listDocumentos(req.params.id)) }
+  catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Regenerar (cria nova versão e persiste) ─────────────────
+router.post('/imoveis/:id/documentos/:tipo/regenerar', async (req, res) => {
+  try {
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+    let analise = null
+    try { const { rows: [a] } = await pool.query('SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1', [imovel.id]); analise = a } catch {}
+    const out = await persistDocumento(imovel, req.params.tipo, { trigger: 'manual:regenerar', generatedBy: req.user?.email || 'manual', analise })
+    if (!out) return res.status(400).json({ error: 'Tipo inválido' })
+    res.json(out)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Lookups (dropdowns dinâmicos) ───────────────────────────
+router.get('/lookups/:categoria', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT valor, ordem FROM lookups WHERE categoria = $1 AND ativo = true ORDER BY ordem, valor', [req.params.categoria])
+    res.json(r.rows.map(x => x.valor))
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/lookups', async (_req, res) => {
+  try {
+    const r = await pool.query("SELECT categoria, valor, ordem FROM lookups WHERE ativo = true ORDER BY categoria, ordem, valor")
+    const out = {}
+    r.rows.forEach(x => { (out[x.categoria] ||= []).push(x.valor) })
+    res.json(out)
+  } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 // ── Documento PDF por fase do imóvel ─────────────────────────

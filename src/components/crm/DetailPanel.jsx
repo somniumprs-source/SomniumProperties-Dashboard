@@ -2,7 +2,7 @@
  * Painel de detalhe para Imóveis, Investidores, Consultores.
  * Mostra: campos editáveis + relações + timeline + tarefas + reuniões.
  */
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
@@ -15,7 +15,23 @@ import { FicheirosTab } from './FicheirosTab.jsx'
 import { ChecklistTab } from './ChecklistTab.jsx'
 import { DocumentosInvestidorTab } from './DocumentosInvestidorTab.jsx'
 import { ImovelInteracoesSection } from './ImovelInteracoesSection.jsx'
+import { Combobox } from '../ui/Combobox.jsx'
+import freguesiasData from '../../constants/coimbra-freguesias.json'
 import { supabase } from '../../lib/supabase.js'
+
+// Hook simples — carrega lookups uma vez e mantém em memória
+const __lookupsCache = { data: null, promise: null }
+function useLookups() {
+  const [data, setData] = useState(__lookupsCache.data)
+  useEffect(() => {
+    if (__lookupsCache.data) return
+    if (!__lookupsCache.promise) {
+      __lookupsCache.promise = apiFetch('/api/crm/lookups').then(r => r.json()).then(d => { __lookupsCache.data = d; return d })
+    }
+    __lookupsCache.promise.then(setData)
+  }, [])
+  return data || {}
+}
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 
@@ -982,7 +998,6 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                 <EF label="Tipologia" field="tipologia" form={form} set={setField} />
                 <EF label="ABP — Área Bruta Privativa (m²)" field="area_bruta" form={form} set={setField} type="number" />
                 <EF label="ABD — Área Bruta Dependente (m²)" field="area_bruta_dependente" form={form} set={setField} type="number" />
-                <EF label="Área Útil (m²)" field="area_util" form={form} set={setField} type="number" />
                 <EF label="Zona" field="zona" form={form} set={setField} />
                 <EF label="Modelo de Negócio" field="modelo_negocio" form={form} set={setField} type="select" options={['Wholesaling','Fix & Flip','CAEP','Mediação']} />
                 <EF label="Origem" field="origem" form={form} set={setField} type="select" options={['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro']} />
@@ -1006,6 +1021,10 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                   <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={4}
                     className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
                 </div>
+
+                {/* ── Identificação Documental (Ficha do Imóvel) ── */}
+                <FichaImovelFields form={form} setField={setField} />
+
                 <div className="col-span-2 md:col-span-3">
                   <label className="text-xs text-gray-400 block mb-1">Imagem de localização (print do Google Maps)</label>
                   {form.localizacao_imagem ? (
@@ -1076,7 +1095,6 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                 <Field label="Link" value={data.link ? <a href={data.link} target="_blank" rel="noopener noreferrer" className="text-[#C9A84C] hover:underline truncate block">{data.link === 'OFF MARKET' ? 'OFF MARKET' : 'Ver anúncio'}</a> : '—'} />
                 <Field label="ABP" value={data.area_bruta > 0 ? `${data.area_bruta} m²` : '—'} />
                 <Field label="ABD" value={data.area_bruta_dependente > 0 ? `${data.area_bruta_dependente} m²` : '—'} />
-                <Field label="Área Útil" value={data.area_util > 0 ? `${data.area_util} m²` : '—'} />
                 <Field label="Data Adicionado" value={data.data_adicionado} />
                 <Field label="Data Chamada" value={data.data_chamada} />
                 <Field label="Data Visita" value={data.data_visita} />
@@ -2346,6 +2364,157 @@ function MiniField({ label, value, highlight }) {
     <div className={`px-2 py-1.5 rounded-lg ${highlight ? 'bg-yellow-50 border border-yellow-200' : 'bg-white border border-gray-100'}`}>
       <p className="text-[10px] text-gray-400 uppercase">{label}</p>
       <p className={`text-xs font-semibold ${highlight ? 'text-yellow-700' : 'text-gray-800'}`}>{value}</p>
+    </div>
+  )
+}
+
+// ── Secção Ficha do Imóvel — caracterização documental ──
+function FichaImovelFields({ form, setField }) {
+  const [open, setOpen] = useState(false)
+  const lookups = useLookups()
+  const concelhos = Object.keys(freguesiasData?.concelhos || {})
+  const freguesias = useMemo(() => {
+    const c = form.concelho
+    if (c && freguesiasData?.concelhos?.[c]) return freguesiasData.concelhos[c]
+    return Object.values(freguesiasData?.concelhos || {}).flat()
+  }, [form.concelho])
+
+  const onusList = Array.isArray(form.onus_registados) ? form.onus_registados : []
+  const toggleOnus = v => {
+    const set = new Set(onusList)
+    if (set.has(v)) set.delete(v); else set.add(v)
+    setField('onus_registados', Array.from(set))
+  }
+
+  return (
+    <div className="col-span-2 md:col-span-3 mt-2 border border-gray-200 rounded-xl bg-gray-50/50">
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-xl">
+        <span>📋 Identificação Documental — Ficha do Imóvel</span>
+        {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+      </button>
+      {open && (
+        <div className="p-4 pt-0 space-y-4">
+          {/* 1. Identificação Registral */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">1. Identificação Registral</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <EF label="REF Interna" field="ref_interna" form={form} set={setField} />
+              <Combobox label="Concelho" value={form.concelho} onChange={v => setField('concelho', v)} options={concelhos} placeholder="Coimbra…" />
+              <Combobox label="Freguesia" value={form.freguesia} onChange={v => setField('freguesia', v)} options={freguesias} placeholder="Pesquisar freguesia…" />
+              <EF label="Distrito" field="distrito" form={form} set={setField} />
+              <EF label="Artigo Matricial" field="artigo_matricial" form={form} set={setField} />
+              <EF label="Descrição Predial" field="descricao_predial" form={form} set={setField} />
+              <EF label="Fração" field="fracao" form={form} set={setField} />
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Regime de Propriedade</label>
+                <select value={form.regime_propriedade || ''} onChange={e => setField('regime_propriedade', e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+                  <option value="">—</option>
+                  {(lookups.regime_propriedade || []).map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <EF label="Lat" field="coordenadas_lat" form={form} set={setField} type="number" />
+              <EF label="Lng" field="coordenadas_lng" form={form} set={setField} type="number" />
+            </div>
+          </div>
+
+          {/* 2. Caracterização Física */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">2. Caracterização Física</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <EF label="Área Útil (m²)" field="area_util" form={form} set={setField} type="number" />
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Andar</label>
+                <select value={form.andar || ''} onChange={e => setField('andar', e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+                  <option value="">—</option>
+                  {(lookups.andar || []).map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <EF label="Nº Pisos do Prédio" field="numero_pisos_predio" form={form} set={setField} type="number" />
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Tipo de Prédio</label>
+                <select value={form.predio_tipo || ''} onChange={e => setField('predio_tipo', e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+                  <option value="">—</option>
+                  {(lookups.predio_tipo || []).map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Elevador</label>
+                <select value={form.tem_elevador || ''} onChange={e => setField('tem_elevador', e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+                  <option value="">—</option>
+                  {(lookups.tem_elevador || []).map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <EF label="Ano de Construção" field="ano_construcao" form={form} set={setField} type="number" />
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">CRU</label>
+                <select value={form.cru || ''} onChange={e => setField('cru', e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+                  <option value="">—</option>
+                  {(lookups.cru || []).map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <EF label="Licença de Utilização" field="licenca_utilizacao" form={form} set={setField} />
+            </div>
+          </div>
+
+          {/* 3. Situação Legal e Fiscal */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">3. Situação Legal e Fiscal</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Certificado Energético</label>
+                <select value={form.certificado_energetico || ''} onChange={e => setField('certificado_energetico', e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+                  <option value="">—</option>
+                  {(lookups.certificado_energetico || []).map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <EF label="Nº CE" field="numero_ce" form={form} set={setField} />
+              <EF label="VPT (€)" field="vpt" form={form} set={setField} type="number" />
+              <EF label="IMI Anual (€)" field="imi_anual" form={form} set={setField} type="number" />
+              <EF label="Condomínio Mensal (€)" field="condominio_mensal_anunciado" form={form} set={setField} type="number" />
+            </div>
+            <div className="mt-3">
+              <p className="text-xs text-gray-400 mb-1">Ónus / Encargos</p>
+              <div className="flex flex-wrap gap-2">
+                {(lookups.onus_registados || []).map(o => {
+                  const active = onusList.includes(o)
+                  return (
+                    <button type="button" key={o} onClick={() => toggleOnus(o)}
+                      className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${active ? 'bg-yellow-100 border-yellow-300 text-yellow-800' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                    >{o}</button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* 4. Proprietário e Captação */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">4. Proprietário e Captação</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <EF label="Proprietário" field="proprietario_nome" form={form} set={setField} />
+              <EF label="NIF" field="proprietario_nif" form={form} set={setField} />
+              <EF label="Contacto" field="proprietario_contacto" form={form} set={setField} />
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Motivo Venda Declarado</label>
+                <select value={form.motivo_venda_declarado || ''} onChange={e => setField('motivo_venda_declarado', e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+                  <option value="">—</option>
+                  {(lookups.motivo_venda || []).map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <EF label="Data do Anúncio" field="data_anuncio" form={form} set={setField} type="date" />
+              <EF label="Tempo no Mercado (dias)" field="tempo_no_mercado_dias" form={form} set={setField} type="number" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
