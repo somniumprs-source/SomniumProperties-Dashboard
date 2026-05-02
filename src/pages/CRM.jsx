@@ -800,11 +800,10 @@ export function CRM() {
 
   async function handleMove(id, newColumn) {
     if (!kanbanConfig) return
-    // Imóveis: capturar motivo (e data) ao mover para qualquer Follow Up / Não interessa
+    // Imóveis: capturar motivo (e data) ao mover para Follow Up. "Não interessa" preenche-se na tab Detalhe.
     const isFollowUpCol = newColumn === 'Follow UP' || newColumn === 'Follow Up' || newColumn === 'Follow Up após proposta'
-    const isNaoInteressaCol = newColumn === 'Não interessa' || newColumn === 'Nao interessa'
-    if (tab === 'Imóveis' && (isFollowUpCol || isNaoInteressaCol)) {
-      setMoveModal({ id, newColumn, type: isFollowUpCol ? 'follow_up' : 'nao_interessa' })
+    if (tab === 'Imóveis' && isFollowUpCol) {
+      setMoveModal({ id, newColumn, type: 'follow_up' })
       return
     }
     await persistMove(id, newColumn)

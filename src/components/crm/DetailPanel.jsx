@@ -378,15 +378,11 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
   }, [activeTab])
 
   async function saveEdit() {
-    // Validação: imóvel em Follow Up / Não interessa exige motivo
+    // Validação: imóvel em Follow Up exige motivo (Não Interessa preenche-se inline na tab Detalhe)
     if (type === 'Imóveis') {
       const est = (form.estado || '').replace(/^\d+-\s*/, '').trim()
       if (/follow ?up/i.test(est) && !(form.motivo_follow_up || '').trim()) {
         toast('Indica o "Motivo Follow Up" antes de guardar', 'error')
-        return false
-      }
-      if (/n[ãa]o interessa/i.test(est) && !(form.motivo_nao_interessa || '').trim()) {
-        toast('Indica o "Motivo Não Interessa" antes de guardar', 'error')
         return false
       }
     }
