@@ -336,7 +336,7 @@ router.get('/imoveis/:id/relatorio-investidor', async (req, res) => {
     const nome = (imovel.nome || 'imovel').replace(/[^a-zA-Z0-9À-ú ]/g, '').replace(/\s+/g, '_')
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `inline; filename="Dossier_Investimento_${nome}.pdf"`)
-    const doc = generateCompiledReport(imovel, analise || null, seccoes)
+    const doc = await generateCompiledReport(imovel, analise || null, seccoes)
     doc.pipe(res)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })

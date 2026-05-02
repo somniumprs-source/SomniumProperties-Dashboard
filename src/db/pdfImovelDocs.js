@@ -2137,17 +2137,29 @@ const COMPILAVEL_TO_GENERATOR = {
   stress_tests: 'relatorio_stress',
 }
 
+// Seccoes que mostram a imagem de localizacao (precisam preload async)
+const SECCOES_COM_LOCALIZACAO = new Set([
+  'dossier_investidor', 'proposta_investimento_anonima', 'investimento',
+])
+
 // Gera um PDF compilado para investidor. Quando ha apenas uma
 // seccao, devolve o gerador completo (com a sua capa especifica).
 // Para multiplas, faz capa "Dossier" + render inline de cada
 // seccao via RENDERERS, separadas por newPage.
-export function generateCompiledReport(imovel, analise, seccoes = []) {
+export async function generateCompiledReport(imovel, analise, seccoes = []) {
+  // 1-seccao: delega no generateDoc (async, ja faz preloadLocalizacao
+  // para tipos investidor) — capa especifica + comportamento consistente.
   if (seccoes.length === 1) {
     const tipo = COMPILAVEL_TO_GENERATOR[seccoes[0]] || seccoes[0]
-    if (GENERATORS[tipo]) return GENERATORS[tipo](imovel, analise)
+    if (GENERATORS[tipo]) return generateDoc(tipo, imovel, analise)
   }
 
-  const b = new DocBuilder('Dossier de Investimento', imovel.zona || '', imovel)
+  // Multi-seccao: pre-carrega localizacao se alguma seccao a usa, para
+  // que o renderer sincrono ja receba o buffer de imagem em memoria.
+  const precisaLocalizacao = seccoes.some(s => SECCOES_COM_LOCALIZACAO.has(s))
+  const im = precisaLocalizacao ? await preloadLocalizacao(imovel) : imovel
+
+  const b = new DocBuilder('Dossier de Investimento', im.zona || '', im)
   const an = analise || {}
   let hasContent = false
   for (const seccao of seccoes) {
@@ -2155,7 +2167,7 @@ export function generateCompiledReport(imovel, analise, seccoes = []) {
     if (!render) continue
     if (hasContent) b.newPage()
     hasContent = true
-    render(b, imovel, an)
+    render(b, im, an)
   }
   if (!hasContent) b.text('Nenhuma secção com dados disponíveis para compilar.')
   b.disclaimer()
