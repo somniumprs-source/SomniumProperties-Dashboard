@@ -679,7 +679,10 @@ function ContaCorrenteTab({ conta }) {
                 {[...movimentos].reverse().map((m, i) => (
                   <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
                     <td className="py-2 px-3 text-xs text-gray-500 whitespace-nowrap">{m.data}</td>
-                    <td className="py-2 px-3 font-medium text-gray-800">{m.descricao}</td>
+                    <td className="py-2 px-3 font-medium text-gray-800">
+                      {m.descricao}
+                      {m.projetado && <span className="ml-2 text-[10px] text-gray-400 font-normal">(auto)</span>}
+                    </td>
                     <td className="py-2 px-3 text-xs text-gray-500">{m.categoria || '—'}</td>
                     <td className="py-2 px-3 text-right font-mono text-green-600">
                       {m.tipo === 'entrada' ? EUR(m.valor) : ''}
