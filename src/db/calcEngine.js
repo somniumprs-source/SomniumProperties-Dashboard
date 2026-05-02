@@ -375,7 +375,12 @@ export function calcCAEP(inputs, caepConfig) {
     }
 
     const lucroLiq = round2(lucro - impostos)
-    const roi = capital > 0 ? round2((lucroLiq / capital) * 100) : 0
+    // Convencao do codebase (ver calcAnalise):
+    //   ROI         = lucro bruto / capital × 100  (retorno do periodo, antes de impostos)
+    //   Cash-on-Cash= lucro liquido / capital × 100  (retorno liquido do capital)
+    //   RA          = Cash-on-Cash anualizado
+    const roi = capital > 0 ? round2((lucro / capital) * 100) : 0
+    const cashOnCash = capital > 0 ? round2((lucroLiq / capital) * 100) : 0
     const ra = capital > 0 && meses > 0
       ? round2((Math.pow(1 + lucroLiq / capital, 12 / meses) - 1) * 100)
       : 0
@@ -389,6 +394,7 @@ export function calcCAEP(inputs, caepConfig) {
       impostos,
       lucro_liquido: lucroLiq,
       roi,
+      cash_on_cash: cashOnCash,
       retorno_anualizado: ra,
     }
   })

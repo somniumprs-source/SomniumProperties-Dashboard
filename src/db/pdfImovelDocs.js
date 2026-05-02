@@ -1512,8 +1512,16 @@ function renderDossierInvestidor(b, im, a) {
     if (caep.investidores && caep.investidores.length > 0) {
       b.space(4)
       b.colTable(
-        [['Investidor', 140], ['Capital', 90], ['%', 60], ['Lucro', 70], ['ROI', 60], ['RA', 60]],
-        caep.investidores.map((inv, i) => ({ _values: [inv.nome || `Inv. ${i+1}`, EUR(inv.capital), PCT(inv.perc), EUR(inv.lucro), PCT(inv.roi), PCT(inv.ra)] }))
+        [['Investidor', 120], ['Capital', 75], ['%', 45], ['Lucro Líq.', 70], ['ROI', 50], ['CoC', 50], ['RA', 50]],
+        caep.investidores.map((inv, i) => ({ _values: [
+          inv.nome || `Inv. ${i+1}`,
+          EUR(inv.capital),
+          PCT(inv.perc_lucro ?? inv.perc),
+          EUR(inv.lucro_liquido ?? inv.lucro),
+          PCT(inv.roi),
+          PCT(inv.cash_on_cash),
+          PCT(inv.retorno_anualizado ?? inv.ra),
+        ] }))
       )
     }
     b.space(4)
