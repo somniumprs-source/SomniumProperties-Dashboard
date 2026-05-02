@@ -98,6 +98,12 @@ function isPng(buf) { return buf.length >= 4 && buf[0] === 0x89 && buf[1] === 0x
 // JPEG magic: FF D8 FF
 function isJpeg(buf) { return buf.length >= 3 && buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF }
 
+// Le dimensoes do header PNG (IHDR chunk: bytes 16-19 width, 20-23 height, big-endian).
+function pngDimensions(buf) {
+  if (!isPng(buf) || buf.length < 24) return null
+  return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) }
+}
+
 // Garante que o buffer e PNG ou JPEG (formatos aceites pelo PDFKit).
 // Se for SVG (legacy estudo de localizacao), rasteriza on-the-fly.
 function normalizarImagemParaPdf(buf) {
@@ -366,43 +372,56 @@ class DocBuilder {
     return this
   }
 
-  // Imagem de localização (print Google Maps). Aceita imgData previamente
-  // carregado via fetchLocalizacaoImagem() ou tenta path local.
+  // Imagem de localizacao (estudo composto: mapa satelite + cards + tabela
+  // de POIs). Renderiza a imagem ao tamanho natural maximizado: largura
+  // CW completa, altura conforme aspect ratio real do PNG, encolhendo se
+  // ultrapassar o espaco vertical disponivel ate ao fundo da pagina. O
+  // SVG do estudo ja tem o seu proprio cabecalho — nao adicionamos um
+  // header redundante.
   localizacao() {
     const im = this.imovel || {}
     const url = im.localizacao_imagem
     const cached = im._localizacaoImgData
     if (!url && !cached) return this
-    const imgW = CW
-    const imgH = imgW * 0.55
-    this.header('LOCALIZAÇÃO')
-    this.ensure(imgH + 12)
+
     let imgData = cached || null
     if (!imgData && url && !url.startsWith('http')) {
       const localPath = path.resolve(__dirname, '../..', 'public', url.replace(/^\//, ''))
-      if (existsSync(localPath)) {
-        try { imgData = readFileSync(localPath) } catch {}
-      }
+      if (existsSync(localPath)) { try { imgData = readFileSync(localPath) } catch {} }
     }
-    if (imgData) {
-      let drawn = false
-      this.doc.save()
-      try {
-        this.doc.roundedRect(ML, this.y, imgW, imgH, 4).clip()
-        this.doc.image(imgData, ML, this.y, { width: imgW, height: imgH, fit: [imgW, imgH], align: 'center', valign: 'center' })
-        drawn = true
-      } catch {
-        // PDFKit so aceita PNG/JPEG. Se imgData for SVG ou formato exotico
-        // (ex.: legacy estudo .svg), cair no fallback sem derrubar o PDF.
-      }
-      this.doc.restore()
-      if (drawn) {
-        this.doc.roundedRect(ML, this.y, imgW, imgH, 4).lineWidth(0.5).stroke(C.border)
-        this.y += imgH + 8
-      } else {
-        this.note('Imagem de localização não disponível neste momento.')
-      }
+    if (!imgData) {
+      this.header('LOCALIZAÇÃO')
+      this.note('Imagem de localização não disponível neste momento.')
+      return this
+    }
+
+    // Aspect ratio real (h/w). Fallback ~1.4 cobre o estudo padrao quando
+    // nao temos um PNG (improvavel — preloadLocalizacao normaliza tudo).
+    const dims = pngDimensions(imgData)
+    const ratio = dims ? dims.h / dims.w : 1.4
+
+    // Caixa: largura CW, altura natural, encolhe se nao couber na pagina.
+    const availH = PH - this.y - 50
+    let drawW = CW
+    let drawH = drawW * ratio
+    if (drawH > availH) { drawH = availH; drawW = drawH / ratio }
+    const x = ML + (CW - drawW) / 2
+
+    let drawn = false
+    this.doc.save()
+    try {
+      this.doc.roundedRect(x, this.y, drawW, drawH, 4).clip()
+      this.doc.image(imgData, x, this.y, { width: drawW, height: drawH })
+      drawn = true
+    } catch {
+      // PDFKit recusou o buffer (formato nao suportado e nao normalizado)
+    }
+    this.doc.restore()
+    if (drawn) {
+      this.doc.roundedRect(x, this.y, drawW, drawH, 4).lineWidth(0.5).stroke(C.border)
+      this.y += drawH + 8
     } else {
+      this.header('LOCALIZAÇÃO')
       this.note('Imagem de localização não disponível neste momento.')
     }
     return this
