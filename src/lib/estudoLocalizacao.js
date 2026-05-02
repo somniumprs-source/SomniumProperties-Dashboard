@@ -99,6 +99,37 @@ export async function callDistanceMatrix({ origem, destinos, mode = 'driving', a
   return { origem_resolvida: j.origin_addresses?.[0] || origem, resultados }
 }
 
+// ── Static Satellite Map ─────────────────────────────────────────
+
+export async function fetchStaticSatelliteMap({ origem, destinos, apiKey, w = 640, h = 360, scale = 2 }) {
+  if (!apiKey) throw new Error('GOOGLE_MAPS_API_KEY não configurada')
+  const url = new URL('https://maps.googleapis.com/maps/api/staticmap')
+  url.searchParams.set('size', `${w}x${h}`)
+  url.searchParams.set('scale', String(scale))
+  url.searchParams.set('maptype', 'hybrid') // satélite + labels e estradas
+  url.searchParams.set('language', 'pt')
+  url.searchParams.set('region', 'pt')
+  // Imóvel — pin gold com label "I"
+  url.searchParams.append('markers', `color:0xC9A84C|size:mid|label:I|${origem}`)
+  // Destinos — pretos numerados (Static Maps suporta labels A-Z, 0-9 — usamos 1..9 para os 9 mais perto)
+  destinos.slice(0, 9).forEach((d, i) => {
+    url.searchParams.append('markers', `color:0x111111|size:mid|label:${i + 1}|${d.endereco}`)
+  })
+  url.searchParams.set('key', apiKey)
+
+  const r = await fetch(url.toString())
+  if (!r.ok) {
+    const txt = await r.text().catch(() => '')
+    throw new Error(`Static Maps: HTTP ${r.status} — ${txt.slice(0, 240) || 'sem detalhe'}. Confirma que activaste "Maps Static API" no Google Cloud e adicionaste à API restrictions da chave.`)
+  }
+  const ct = r.headers.get('content-type') || ''
+  if (!ct.startsWith('image/')) {
+    const txt = await r.text().catch(() => '')
+    throw new Error(`Static Maps devolveu não-imagem (${ct}): ${txt.slice(0, 240)}`)
+  }
+  return Buffer.from(await r.arrayBuffer()).toString('base64')
+}
+
 // ── Composer SVG ─────────────────────────────────────────────────
 
 const W = 1200
@@ -115,67 +146,49 @@ export function composeEstudoSvg({
   highlights = [],
   destaque = null,    // categoria/string a marcar como ★ gold
   modo = 'driving',
+  mapaPngBase64 = null, // imagem satélite Google Static Maps
 }) {
   const ok = resultados.filter(r => r.status === 'OK')
                        .sort((a, b) => (a.distancia_metros ?? Infinity) - (b.distancia_metros ?? Infinity))
-  const maxKm = Math.max(...ok.map(r => (r.distancia_metros || 0) / 1000), 1)
 
   // top 7 para tabela
   const principais = ok.slice(0, 7)
   // agrupar todos por secção
   const grupos = { acessos: [], saude_universidade: [], lazer: [], comercio: [] }
   ok.forEach(r => { const sec = categorizar(r); if (grupos[sec]) grupos[sec].push(r) })
-  // dentro de cada secção sort by distance ascending
   Object.values(grupos).forEach(arr => arr.sort((a, b) => a.distancia_metros - b.distancia_metros))
 
-  // ----- Mapa radial -----
-  // Property pin centro-baixo. Pins distribuídos por golden-angle, raio ∝ log(km).
+  // ----- Mapa satélite (Google Static Maps) -----
   const mapW = 1100, mapH = MAP_H
-  const cx = mapW / 2, cy = mapH / 2 + 20
-  const maxR = 240
-  const logMax = Math.log10(maxKm + 1)
-  const pinPos = (km, idx) => {
-    const rNorm = Math.log10((km || 0) + 1) / logMax
-    const r = Math.max(40, rNorm * maxR)
-    const angle = ((idx * 137.508) - 90) * Math.PI / 180
-    return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) }
-  }
 
-  // Anéis a desenhar: 1, 2, 5, 10, 25, 50, 100 km — só os que cabem
-  const ringKm = [1, 2, 5, 10, 25, 50, 100, 200].filter(k => k <= maxKm * 1.2)
-  const ringsSvg = ringKm.map(k => {
-    const r = Math.log10(k + 1) / logMax * maxR
-    return `<circle cx="${cx}" cy="${cy}" r="${r.toFixed(1)}" fill="none" stroke="#D9CFA7" stroke-width="1" stroke-dasharray="3 4" opacity="0.6"/>
-            <text x="${cx + r}" y="${cy - 4}" font-size="9" fill="#9A8A4F" font-weight="600" text-anchor="middle">${k} km</text>`
+  // Lista de pinos para legenda (1..9, matching markers no PNG)
+  const pinsLegenda = ok.slice(0, 9)
+
+  const mapaSvg = mapaPngBase64
+    ? `
+      <defs>
+        <clipPath id="mapClip"><rect x="0" y="0" width="${mapW}" height="${mapH}" rx="8"/></clipPath>
+      </defs>
+      <image x="0" y="0" width="${mapW}" height="${mapH}" preserveAspectRatio="xMidYMid slice"
+             clip-path="url(#mapClip)" href="data:image/png;base64,${mapaPngBase64}"/>
+      <!-- Atribuição -->
+      <rect x="${mapW - 150}" y="${mapH - 24}" width="138" height="18" rx="3" fill="#000000" opacity="0.5"/>
+      <text x="${mapW - 12}" y="${mapH - 10}" font-size="10" fill="#FFFFFF" text-anchor="end" font-weight="600">Imagem: Google Maps</text>`
+    : `
+      <rect x="0" y="0" width="${mapW}" height="${mapH}" rx="8" fill="#FAEAEA" stroke="#C97070" stroke-width="2"/>
+      <text x="${mapW/2}" y="${mapH/2}" text-anchor="middle" font-size="18" fill="#8B2A2A" font-weight="700">⚠️ Mapa satélite não disponível</text>
+      <text x="${mapW/2}" y="${mapH/2 + 30}" text-anchor="middle" font-size="13" fill="#444">Activar "Maps Static API" no Google Cloud + adicionar à API restrictions da chave</text>`
+
+  // Legenda dos pinos numerados 1..9 (canto superior esquerdo do mapa)
+  const legendaPins = pinsLegenda.map((r, i) => {
+    const y = 16 + i * 18
+    const isDest = destaque && r.categoria && r.categoria.toLowerCase().includes(destaque.toLowerCase())
+    return `
+      <circle cx="20" cy="${y}" r="9" fill="${isDest ? '#C9A84C' : '#111111'}" stroke="#FFFFFF" stroke-width="1.2"/>
+      <text x="20" y="${y + 3}" text-anchor="middle" font-size="10" fill="#FFFFFF" font-weight="800">${isDest ? '★' : (i + 1)}</text>
+      <text x="36" y="${y + 4}" font-size="11" fill="#FFFFFF" font-weight="600" style="paint-order:stroke fill;stroke:#000;stroke-width:2.4">${escapeXml((r.categoria || '').slice(0, 26))}</text>
+    `
   }).join('')
-
-  // Pins
-  const pinsSvg = ok.map((r, i) => {
-    const { x, y } = pinPos((r.distancia_metros || 0) / 1000, i)
-    const isDestaque = destaque && r.categoria && r.categoria.toLowerCase().includes(destaque.toLowerCase())
-    const idxNum = i + 1
-    const fill = isDestaque ? '#C9A84C' : '#0d0d0d'
-    const stroke = isDestaque ? '#0d0d0d' : 'none'
-    const strokeW = isDestaque ? 2 : 0
-    const radius = isDestaque ? 16 : 13
-    const labelOffsetY = -22
-    return `<g>
-      <line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#C9A84C" stroke-width="0.8" stroke-dasharray="2 3" opacity="0.4"/>
-      <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}" filter="url(#shadowSm)"/>
-      <text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="middle" font-size="${isDestaque ? 11 : 12}" fill="${isDestaque ? '#0d0d0d' : '#FFFFFF'}" font-weight="800">${isDestaque ? '★' : idxNum}</text>
-      <text x="${x.toFixed(1)}" y="${(y + labelOffsetY).toFixed(1)}" text-anchor="middle" font-size="10" fill="#0d0d0d" font-weight="700">${escapeXml((r.categoria || '').slice(0, 22))}</text>
-      <text x="${x.toFixed(1)}" y="${(y - labelOffsetY).toFixed(1)}" text-anchor="middle" font-size="9" fill="#555" font-weight="600">${escapeXml(r.distancia_texto || fmtKm(r.distancia_metros))} · ${escapeXml(r.duracao_texto || fmtMin(r.duracao_segundos))}</text>
-    </g>`
-  }).join('')
-
-  // Property pin
-  const imovelPin = `
-    <g transform="translate(${cx}, ${cy})">
-      <circle r="32" fill="url(#goldGrad)" stroke="#0d0d0d" stroke-width="3" filter="url(#shadow)"/>
-      <path d="M0,-18 L5,-5 L19,-5 L8,3 L12,16 L0,8 L-12,16 L-8,3 L-19,-5 L-5,-5 Z" fill="#0d0d0d"/>
-      <rect x="-115" y="-72" width="230" height="34" rx="4" fill="#0d0d0d" filter="url(#shadowSm)"/>
-      <text y="-50" text-anchor="middle" font-size="12" fill="#C9A84C" font-weight="700">IMÓVEL · ${escapeXml((imovelNome || '').slice(0, 30))}</text>
-    </g>`
 
   // ----- Highlights row (opcional) -----
   const highlightsH = highlights.length > 0 ? 180 : 0
@@ -284,25 +297,21 @@ export function composeEstudoSvg({
   <rect x="0" y="106" width="${W}" height="56" fill="#1a1a1a"/>
   <text x="50" y="142" font-size="18" fill="#FFFFFF" font-weight="600">📍 ${escapeXml(morada || '')}</text>
 
-  <!-- Mapa radial -->
+  <!-- Mapa satélite -->
   <g transform="translate(50, ${HEADER_H + 33})">
-    <rect width="${mapW}" height="${mapH}" rx="8" fill="url(#mapBg)" stroke="#E0D5B5" stroke-width="1"/>
-    <g transform="translate(${mapW - 70}, 50)">
-      <circle r="22" fill="#FFFFFF" stroke="#C9A84C" stroke-width="1.5"/>
-      <path d="M0,-16 L4,0 L0,16 L-4,0 Z" fill="#0d0d0d"/>
-      <text y="-26" text-anchor="middle" font-size="10" font-weight="700" fill="#0d0d0d">N</text>
+    ${mapaSvg}
+    <!-- Bloco de legenda numerada (sobreposto, esquerda) -->
+    <g transform="translate(14, 14)">
+      <rect width="240" height="${pinsLegenda.length * 18 + 16}" rx="6" fill="#000000" opacity="0.55"/>
+      ${legendaPins}
     </g>
-    <g transform="translate(20, 30)">
-      <rect width="280" height="36" rx="4" fill="#FFFFFF" stroke="#E0D5B5" stroke-width="1"/>
-      <circle cx="22" cy="18" r="9" fill="url(#goldGrad)" stroke="#0d0d0d" stroke-width="1.5"/>
-      <text x="38" y="22" font-size="11" fill="#0d0d0d" font-weight="600">Imóvel</text>
-      ${destaque ? '<circle cx="100" cy="18" r="8" fill="#C9A84C" stroke="#0d0d0d" stroke-width="1.5"/><text x="113" y="22" font-size="11" fill="#0d0d0d" font-weight="600">Destaque</text>' : ''}
-      <circle cx="${destaque ? 180 : 100}" cy="18" r="8" fill="#0d0d0d"/>
-      <text x="${destaque ? 193 : 113}" y="22" font-size="11" fill="#0d0d0d" font-weight="600">Pontos · # = nº na tabela</text>
+    <!-- Marcador do imóvel na legenda (canto inferior esquerdo) -->
+    <g transform="translate(14, ${mapH - 38})">
+      <rect width="180" height="26" rx="4" fill="#000000" opacity="0.6"/>
+      <circle cx="20" cy="13" r="9" fill="#C9A84C" stroke="#FFFFFF" stroke-width="1.5"/>
+      <text x="20" y="17" text-anchor="middle" font-size="10" fill="#0d0d0d" font-weight="800">I</text>
+      <text x="36" y="17" font-size="11" fill="#FFFFFF" font-weight="700">Imóvel</text>
     </g>
-    ${ringsSvg}
-    ${pinsSvg}
-    ${imovelPin}
   </g>
 
   ${highlightsSvg}
@@ -350,7 +359,15 @@ export async function runEstudoLocalizacao({ pool, supabaseStorage, imovelId, de
   // 1. Distance Matrix
   const { origem_resolvida, resultados } = await callDistanceMatrix({ origem, destinos: destinosUsar, mode, apiKey })
 
-  // 2. Compose SVG
+  // 2. Static Map satélite (top 9 mais próximos como markers numerados)
+  const okOrdenados = resultados.filter(r => r.status === 'OK').sort((a, b) => (a.distancia_metros ?? Infinity) - (b.distancia_metros ?? Infinity))
+  const mapaPngBase64 = await fetchStaticSatelliteMap({
+    origem: origem_resolvida || origem,
+    destinos: okOrdenados,
+    apiKey,
+  })
+
+  // 3. Compose SVG
   const { freguesia, codigoPostal } = parseFreguesia(origem_resolvida)
   const svg = composeEstudoSvg({
     imovelNome: imovel.nome,
@@ -360,6 +377,7 @@ export async function runEstudoLocalizacao({ pool, supabaseStorage, imovelId, de
     highlights,
     destaque,
     modo: mode,
+    mapaPngBase64,
   })
 
   // 3. Upload Supabase Storage
