@@ -90,31 +90,27 @@ function PontosRiscosTab({ imovel, endpoint, id, onUpdate, toast }) {
   )
 }
 
-export function MotivoNaoInteressaInline({ motivoActual, onSave }) {
-  const partes = (motivoActual || '').split(/;\s*/).map(s => s.trim()).filter(Boolean)
+export function MotivoNaoInteressaChips({ value, onChange }) {
+  const partes = (value || '').split(/;\s*/).map(s => s.trim()).filter(Boolean)
   const padraoSet = new Set(MOTIVOS_NAO_INTERESSA_PADRAO)
-  const initialSelected = partes.filter(p => padraoSet.has(p))
-  const initialNotas = partes.filter(p => !padraoSet.has(p)).join('; ')
-
-  const [selected, setSelected] = useState(new Set(initialSelected))
-  const [notas, setNotas] = useState(initialNotas)
+  const selected = new Set(partes.filter(p => padraoSet.has(p)))
+  const notasIniciais = partes.filter(p => !padraoSet.has(p)).join('; ')
+  const [notas, setNotas] = useState(notasIniciais)
 
   function build(novosSel, novasNotas) {
-    return [...novosSel, novasNotas.trim()].filter(Boolean).join('; ')
+    return [...novosSel, (novasNotas || '').trim()].filter(Boolean).join('; ')
   }
 
   function toggle(m) {
     const novos = new Set(selected)
     if (novos.has(m)) novos.delete(m)
     else novos.add(m)
-    setSelected(novos)
-    onSave(build(novos, notas))
+    onChange(build(novos, notas))
   }
 
-  function saveNotas() {
-    const combined = build(selected, notas)
-    if (combined === (motivoActual || '')) return
-    onSave(combined)
+  function onNotasChange(e) {
+    setNotas(e.target.value)
+    onChange(build(selected, e.target.value))
   }
 
   return (
@@ -138,13 +134,25 @@ export function MotivoNaoInteressaInline({ motivoActual, onSave }) {
       </div>
       <textarea
         value={notas}
-        onChange={e => setNotas(e.target.value)}
-        onBlur={saveNotas}
+        onChange={onNotasChange}
         rows={2}
         placeholder="Outras notas (opcional)…"
         className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
       />
     </>
+  )
+}
+
+export function MotivoNaoInteressaInline({ motivoActual, onSave }) {
+  const [valor, setValor] = useState(motivoActual || '')
+  return (
+    <MotivoNaoInteressaChips
+      value={valor}
+      onChange={(v) => {
+        setValor(v)
+        onSave(v)
+      }}
+    />
   )
 }
 
@@ -678,6 +686,14 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                   <textarea value={form.motivo_follow_up || ''} onChange={e => setField('motivo_follow_up', e.target.value)} rows={2}
                     className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
                 </div>
+                {(/n[ãa]o interessa/i.test(form.estado || '')) && (
+                  <div className="col-span-2 md:col-span-3">
+                    <MotivoNaoInteressaChips
+                      value={form.motivo_nao_interessa || ''}
+                      onChange={v => setField('motivo_nao_interessa', v)}
+                    />
+                  </div>
+                )}
                 <div className="col-span-2 md:col-span-3">
                   <label className="text-xs text-gray-400 block mb-1">Notas</label>
                   <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={4}
