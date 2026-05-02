@@ -46,6 +46,8 @@ function PontosRiscosTab({ imovel, endpoint, id, onUpdate, toast }) {
     pontos_fracos: imovel.pontos_fracos || '',
     riscos: imovel.riscos || '',
   })
+  const [localizacao, setLocalizacao] = useState(imovel.localizacao_imagem || null)
+  const [uploading, setUploading] = useState(false)
 
   async function saveCampo(key) {
     const v = valores[key]
@@ -59,6 +61,33 @@ function PontosRiscosTab({ imovel, endpoint, id, onUpdate, toast }) {
       await onUpdate()
       toast('Guardado', 'success')
     } catch (err) { toast('Erro: ' + err.message, 'error') }
+  }
+
+  async function uploadLocalizacao(file) {
+    if (!file) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('imagem', file)
+      const r = await apiFetch(`/api/crm/imoveis/${id}/localizacao`, { method: 'POST', body: fd })
+      if (!r.ok) throw new Error(await r.text())
+      const j = await r.json()
+      setLocalizacao(j.localizacao_imagem)
+      await onUpdate()
+      toast('Imagem carregada', 'success')
+    } catch (err) { toast('Erro ao carregar: ' + err.message, 'error') }
+    setUploading(false)
+  }
+
+  async function removerLocalizacao() {
+    if (!confirm('Remover imagem de localização?')) return
+    try {
+      const r = await apiFetch(`/api/crm/imoveis/${id}/localizacao`, { method: 'DELETE' })
+      if (!r.ok) throw new Error(await r.text())
+      setLocalizacao(null)
+      await onUpdate()
+      toast('Imagem removida', 'success')
+    } catch (err) { toast('Erro ao remover: ' + err.message, 'error') }
   }
 
   return (
@@ -85,6 +114,40 @@ function PontosRiscosTab({ imovel, endpoint, id, onUpdate, toast }) {
             />
           </div>
         ))}
+      </div>
+
+      <div className="rounded-xl border border-gray-200 p-4 bg-white">
+        <div className="flex items-center gap-2 mb-2">
+          <span>🗺️</span>
+          <h4 className="text-xs font-semibold text-gray-700">Localização (print do Google Maps)</h4>
+        </div>
+        <p className="text-xs text-neutral-400 mb-3">
+          Aparece no relatório enviado ao investidor. JPG, PNG ou WEBP até 15MB.
+        </p>
+        {localizacao ? (
+          <div className="flex items-start gap-3 flex-wrap">
+            <img src={localizacao} alt="Localização" className="w-80 max-w-full h-auto rounded-lg border border-gray-200" />
+            <div className="flex flex-col gap-2">
+              <label className={`text-xs px-3 py-1.5 rounded-md bg-yellow-50 border border-yellow-200 text-yellow-800 hover:bg-yellow-100 cursor-pointer text-center ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                {uploading ? 'A carregar…' : 'Substituir'}
+                <input type="file" accept="image/*" className="hidden" disabled={uploading}
+                  onChange={e => uploadLocalizacao(e.target.files?.[0])} />
+              </label>
+              <button type="button" onClick={removerLocalizacao}
+                className="text-xs px-3 py-1.5 rounded-md bg-red-50 border border-red-200 text-red-700 hover:bg-red-100">
+                Remover
+              </button>
+            </div>
+          </div>
+        ) : (
+          <label className={`flex items-center justify-center gap-2 px-4 py-6 rounded-lg border-2 border-dashed border-gray-300 hover:border-yellow-400 hover:bg-yellow-50/50 cursor-pointer transition-colors ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+            <span className="text-sm text-gray-500">
+              {uploading ? 'A carregar…' : 'Clique para carregar print do Google Maps'}
+            </span>
+            <input type="file" accept="image/*" className="hidden" disabled={uploading}
+              onChange={e => uploadLocalizacao(e.target.files?.[0])} />
+          </label>
+        )}
       </div>
     </div>
   )
