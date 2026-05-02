@@ -50,9 +50,19 @@ function parseListItems(text) {
         prev = cur
         cur = cur.replace(QUOTE_LIKE_RE, '').replace(BULLET_RE, '').replace(NUMBERING_RE, '').trim()
       }
+      // Fallback agressivo: qualquer caractere remanescente que nao seja
+      // letra/digito unicode (apanha variantes exoticas — U+275B, U+275C,
+      // U+201F, modifier letters, etc. — que escapem ao char class fixo).
+      cur = cur.replace(/^[^\p{L}\p{N}]+/u, '').trim()
       return cur
     })
     .filter(Boolean)
+}
+
+// Limpa um campo multi-linha mantendo as quebras de linha — usado por
+// renderers que mostram pontos_fortes/fracos como texto corrido.
+function cleanMultilineText(text) {
+  return parseListItems(text).join('\n')
 }
 
 // Parse fotos JSON from imovel — only images, max 6 for PDF
@@ -955,10 +965,10 @@ function renderFichaImovel(b, im) {
   // 5. ANÁLISE PRELIMINAR
   if (im.pontos_fortes || im.pontos_fracos || im.riscos || im.mitigacao_riscos) {
     b.header('5. ANÁLISE PRELIMINAR')
-    if (im.pontos_fortes) { b.subheader('Pontos Fortes'); b.text(im.pontos_fortes); b.space(4) }
-    if (im.pontos_fracos) { b.subheader('Pontos Fracos'); b.text(im.pontos_fracos); b.space(4) }
-    if (im.riscos) { b.subheader('Riscos'); b.text(im.riscos); b.space(4) }
-    if (im.mitigacao_riscos) { b.subheader('Mitigação de Riscos'); b.text(im.mitigacao_riscos); b.space(4) }
+    if (im.pontos_fortes) { b.subheader('Pontos Fortes'); b.text(cleanMultilineText(im.pontos_fortes)); b.space(4) }
+    if (im.pontos_fracos) { b.subheader('Pontos Fracos'); b.text(cleanMultilineText(im.pontos_fracos)); b.space(4) }
+    if (im.riscos) { b.subheader('Riscos'); b.text(cleanMultilineText(im.riscos)); b.space(4) }
+    if (im.mitigacao_riscos) { b.subheader('Mitigação de Riscos'); b.text(cleanMultilineText(im.mitigacao_riscos)); b.space(4) }
   }
 
   if (im.notas) { b.space(4); b.header('NOTAS INTERNAS'); b.text(im.notas) }
