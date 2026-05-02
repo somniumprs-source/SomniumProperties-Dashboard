@@ -70,6 +70,46 @@ function escapeXml(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+// Remove emojis e variation selectors no inicio (e.g. "🚌 SMTUC" → "SMTUC").
+// Inter nao tem glifos para emojis, deixariam caixas de fallback.
+function stripLeadingEmoji(s) {
+  if (!s) return ''
+  return String(s).replace(/^(?:\p{Extended_Pictographic}|️|‍|\s)+/u, '').trim()
+}
+
+// Trunca por numero de chars com ellipsis.
+function ellide(s, max) {
+  const t = String(s ?? '')
+  return t.length > max ? t.slice(0, max - 1).trim() + '…' : t
+}
+
+// Quebra texto em linhas pelo numero maximo de chars por linha
+// (palavra-aware). Devolve array com no maximo `maxLinhas` linhas
+// — se ultrapassar, ultima linha e ellided.
+function quebrarLinhas(text, maxChars, maxLinhas = 2) {
+  const t = String(text ?? '').trim()
+  if (!t) return []
+  if (t.length <= maxChars) return [t]
+  const palavras = t.split(/\s+/)
+  const linhas = []
+  let cur = ''
+  for (const w of palavras) {
+    const tentativa = cur ? `${cur} ${w}` : w
+    if (tentativa.length > maxChars) {
+      if (cur) linhas.push(cur)
+      cur = w
+      if (linhas.length >= maxLinhas) break
+    } else {
+      cur = tentativa
+    }
+  }
+  if (cur && linhas.length < maxLinhas) linhas.push(cur)
+  if (linhas.length === maxLinhas && palavras.length > linhas.join(' ').split(/\s+/).length) {
+    linhas[maxLinhas - 1] = ellide(linhas[maxLinhas - 1], maxChars)
+  }
+  return linhas
+}
+
 function fmtKm(metros) {
   if (metros == null) return '—'
   if (metros >= 100000) return `${Math.round(metros / 1000)} km`
@@ -260,22 +300,43 @@ export function composeEstudoSvg({
   }).join('')
 
   // ----- Highlights row (opcional) — cards light com gold accent -----
-  const highlightsH = highlights.length > 0 ? 160 : 0
+  // Cada card 540 wide. A 13px Inter (~7.5px/char) cabe ~62 chars de
+  // descricao por linha; acima quebra em 2 linhas. Para simetria visual
+  // os 2 cards ficam com altura maxima do mais alto.
+  const HIGHLIGHT_W = 540
+  const DESC_MAX_CHARS = 62
+  const hData = highlights.slice(0, 2).map(h => {
+    const descLinhas = quebrarLinhas(h.descricao || '', DESC_MAX_CHARS, 2)
+    return {
+      h,
+      titulo: stripLeadingEmoji(h.titulo || ''),
+      subtitulo: stripLeadingEmoji(h.subtitulo || ''),
+      descLinhas,
+    }
+  })
+  const maxDescLinhas = Math.max(1, ...hData.map(d => d.descLinhas.length))
+  const cardH = 130 + (maxDescLinhas > 1 ? 16 : 0)
+  const badgeY = maxDescLinhas > 1 ? 98 : 82
+  const subY = maxDescLinhas > 1 ? 119 : 103
+  const highlightsH = highlights.length > 0 ? cardH + 20 : 0
   const highlightsSvg = highlights.length === 0 ? '' : `
     <g transform="translate(50, ${HEADER_H + 33 + MAP_H + 20})">
-      ${highlights.slice(0, 2).map((h, i) => {
+      ${hData.map(({ h, titulo, subtitulo, descLinhas }, i) => {
         const accent = h.accent === 'red' ? T.red : T.gold
         const x = i * 560
+        const descSvg = descLinhas.map((l, k) =>
+          `<tspan x="22" dy="${k === 0 ? 0 : 16}">${escapeXml(l)}</tspan>`
+        ).join('')
         return `<g transform="translate(${x}, 0)">
-          <rect width="540" height="130" rx="6" fill="${T.white}" stroke="${T.border}" stroke-width="1"/>
-          <rect width="6" height="130" rx="3" fill="${accent}"/>
-          <text x="22" y="32" font-size="18" fill="${T.body}" font-weight="700">${escapeXml(h.titulo || '')}</text>
+          <rect width="${HIGHLIGHT_W}" height="${cardH}" rx="6" fill="${T.white}" stroke="${T.border}" stroke-width="1"/>
+          <rect width="6" height="${cardH}" rx="3" fill="${accent}"/>
+          <text x="22" y="32" font-size="18" fill="${T.body}" font-weight="700">${escapeXml(titulo)}</text>
           <line x1="22" y1="42" x2="80" y2="42" stroke="${T.gold}" stroke-width="2"/>
-          <text x="22" y="64" font-size="13" fill="#444" font-weight="500">${escapeXml(h.descricao || '')}</text>
+          <text x="22" y="64" font-size="13" fill="#444" font-weight="500">${descSvg}</text>
           ${(() => {
             const badges = Array.isArray(h.badge) ? h.badge.filter(Boolean) : (h.badge ? [String(h.badge)] : [])
             if (badges.length === 0) {
-              return `<text x="22" y="100" font-size="13" fill="${T.body}" font-weight="700">${escapeXml(h.subtitulo || '')}</text>`
+              return `<text x="22" y="${badgeY + 18}" font-size="13" fill="${T.body}" font-weight="700">${escapeXml(subtitulo)}</text>`
             }
             const widths = badges.map(b => Math.max(46, b.length * 11 + 18))
             const totalW = widths.reduce((a, w) => a + w, 0) + (badges.length - 1) * 6
@@ -288,8 +349,8 @@ export function composeEstudoSvg({
               return el
             }).join('')
             return `
-              <g transform="translate(22, 82)">${boxes}</g>
-              <text x="${22 + totalW + 12}" y="103" font-size="11" fill="${T.muted}" font-style="italic">${escapeXml(h.subtitulo || '')}</text>`
+              <g transform="translate(22, ${badgeY})">${boxes}</g>
+              <text x="${22 + totalW + 12}" y="${subY}" font-size="11" fill="${T.muted}" font-style="italic">${escapeXml(subtitulo)}</text>`
           })()}
         </g>`
       }).join('')}
@@ -321,15 +382,16 @@ export function composeEstudoSvg({
       </g>
     </g>`
 
-  // ----- Cards por secção — 2x2, header gold light, sem overlap -----
-  // Largura/altura calibradas para cabidos: card 260x210, nome ate 22
-  // chars, valor compacto (km · h/min) alinhado a direita com folga de
-  // 110px reservados para a coluna de valores.
+  // ----- Cards por secção — 2x2, header light com barra colorida -----
+  // Card 260x210. A 11px Inter (~6.0px/char) cabem ~21 chars na coluna
+  // do nome (~127px) com 105px reservados para valor + 14px padding cada
+  // lado. Truncamos a 19 chars + ellipsis para folga visual confortavel.
   const CARD_W = 260
   const CARD_H = 210
   const CARD_GAP_X = 20
   const CARD_GAP_Y = 18
-  const NOME_MAX = 22
+  const NOME_MAX = 19
+  const VALOR_X = CARD_W - 14
   const cardsSvg = `
     <g transform="translate(610, ${tableY})">
       <text x="0" y="0" font-size="18" fill="${T.body}" font-weight="700">Pontos fortes da localização</text>
@@ -347,16 +409,16 @@ export function composeEstudoSvg({
           const colVal = isDestaque ? T.goldDark : T.body
           const wTxt = isDestaque ? '700' : '500'
           const wVal = isDestaque ? '800' : '700'
-          const nome = (r.categoria || '').slice(0, NOME_MAX)
+          const nome = ellide(r.categoria || '', NOME_MAX)
           // Valor compacto: prefere fmtMin (curto: "1h50") ao texto Google
-          // ("1 hora 50 minutos") para evitar overflow no card de 260px.
+          // ("1 hora 50 minutos") para evitar overflow no card.
           const distancia = r.distancia_texto || fmtKm(r.distancia_metros)
           const duracao = fmtMin(r.duracao_segundos)
           const valor = `${distancia} · ${duracao}`
           return `
             ${isDestaque ? `<polygon points="6,${y - 8} 10,${y - 5} 6,${y - 2}" fill="${T.gold}"/>` : ''}
             <text x="14" y="${y}" font-weight="${wTxt}" fill="${colTxt}">${escapeXml(nome)}</text>
-            <text x="${CARD_W - 14}" y="${y}" text-anchor="end" font-weight="${wVal}" fill="${colVal}">${escapeXml(valor)}</text>`
+            <text x="${VALOR_X}" y="${y}" text-anchor="end" font-weight="${wVal}" fill="${colVal}">${escapeXml(valor)}</text>`
         }).join('')
         return `<g transform="translate(${xCard}, ${yCard})">
           <rect width="${CARD_W}" height="${CARD_H}" rx="6" fill="${T.white}" stroke="${T.border}" stroke-width="1"/>
