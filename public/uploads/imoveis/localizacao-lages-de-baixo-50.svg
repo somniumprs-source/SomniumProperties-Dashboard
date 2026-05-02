@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1780" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1820" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
   <defs>
     <linearGradient id="goldGrad" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#D4B560"/>
@@ -27,10 +27,10 @@
   <text x="50" y="48" font-size="13" letter-spacing="6" fill="#C9A84C" font-weight="600">SOMNIUM PROPERTIES</text>
   <text x="50" y="82" font-size="28" fill="#FFFFFF" font-weight="700">Estudo de Localização</text>
   <text x="1150" y="48" font-size="11" letter-spacing="2" fill="#888" font-weight="500" text-anchor="end">RELATÓRIO DE INVESTIDOR</text>
-  <text x="1150" y="82" font-size="13" fill="#C9A84C" font-weight="600" text-anchor="end">Coimbra · Antanhol</text>
+  <text x="1150" y="82" font-size="13" fill="#C9A84C" font-weight="600" text-anchor="end">Coimbra · Santa Clara</text>
 
   <rect x="0" y="106" width="1200" height="56" fill="#1a1a1a"/>
-  <text x="50" y="142" font-size="20" fill="#FFFFFF" font-weight="600">📍 Rua Principal Lages de Baixo, n.º 50 — Antanhol, Coimbra</text>
+  <text x="50" y="142" font-size="20" fill="#FFFFFF" font-weight="600">📍 Estr. Principal Lages de Baixo, n.º 50 — 3040-267 Santa Clara, Coimbra</text>
 
   <!-- MAP -->
   <g transform="translate(50, 195)">
@@ -40,50 +40,121 @@
       <path d="M0,-16 L4,0 L0,16 L-4,0 Z" fill="#0d0d0d"/>
       <text x="0" y="-26" text-anchor="middle" font-size="10" font-weight="700" fill="#0d0d0d">N</text>
     </g>
-    <path d="M 1000,30 C 920,120 800,200 700,290 C 620,360 540,400 460,440 C 380,480 280,510 180,560 C 110,595 60,615 20,640"
-          fill="none" stroke="url(#riverGrad)" stroke-width="28" stroke-linecap="round" opacity="0.85"/>
-    <path d="M 1000,30 C 920,120 800,200 700,290 C 620,360 540,400 460,440 C 380,480 280,510 180,560 C 110,595 60,615 20,640"
+
+    <!-- Rio Mondego: NE → SW (corre paralelo, separa Santa Clara/oeste de Centro/leste) -->
+    <path d="M 950,30 C 870,140 770,250 660,340 C 560,420 460,470 360,520 C 250,575 140,610 20,640"
+          fill="none" stroke="url(#riverGrad)" stroke-width="32" stroke-linecap="round" opacity="0.85"/>
+    <path d="M 950,30 C 870,140 770,250 660,340 C 560,420 460,470 360,520 C 250,575 140,610 20,640"
           fill="none" stroke="#5B96C2" stroke-width="2" stroke-dasharray="2 4" opacity="0.5"/>
-    <text x="290" y="525" font-size="12" fill="#3B6B8E" font-style="italic" font-weight="600" transform="rotate(-22 290 525)">Rio Mondego</text>
-    <path d="M 1060,80 L 1010,180 L 990,300 L 1000,460 L 1020,580" fill="none" stroke="#A0A0A0" stroke-width="3" stroke-dasharray="8 4"/>
-    <text x="1045" y="320" font-size="11" fill="#666" font-weight="700" transform="rotate(85 1045 320)">A1 · IP3</text>
-    <path d="M 220,580 L 280,520 L 360,470 L 460,440" fill="none" stroke="#B0A77E" stroke-width="2.5"/>
-    <text x="260" y="555" font-size="10" fill="#7A6F4E" font-weight="600">EN1 / IC2</text>
-    <line x1="380" y1="475" x2="395" y2="455" stroke="#888" stroke-width="3"/>
-    <line x1="280" y1="525" x2="295" y2="505" stroke="#888" stroke-width="3"/>
-    <text x="305" y="500" font-size="9" fill="#666" font-style="italic">Pontes</text>
-    <text x="540" y="395" font-size="13" fill="#666" font-weight="700" letter-spacing="2" opacity="0.6">CENTRO</text>
+    <text x="380" y="555" font-size="13" fill="#3B6B8E" font-style="italic" font-weight="600" transform="rotate(-22 380 555)">Rio Mondego</text>
 
-    <g transform="translate(390, 470)"><line x1="0" y1="0" x2="-200" y2="135" stroke="#C9A84C" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.5"/><circle r="14" fill="#0d0d0d" filter="url(#shadowSm)"/><text y="4" text-anchor="middle" font-size="13" fill="#FFFFFF" font-weight="700">1</text><text x="0" y="-22" text-anchor="middle" font-size="11" fill="#0d0d0d" font-weight="700">Lidl Santa Clara</text></g>
-    <g transform="translate(540, 280)"><line x1="0" y1="0" x2="-350" y2="325" stroke="#C9A84C" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.5"/><circle r="14" fill="#0d0d0d" filter="url(#shadowSm)"/><text y="4" text-anchor="middle" font-size="13" fill="#FFFFFF" font-weight="700">2</text><text x="0" y="-22" text-anchor="middle" font-size="11" fill="#0d0d0d" font-weight="700">Hospital Geral · Covões</text></g>
-    <g transform="translate(465, 360)"><line x1="0" y1="0" x2="-275" y2="245" stroke="#C9A84C" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.5"/><circle r="14" fill="#0d0d0d" filter="url(#shadowSm)"/><text y="4" text-anchor="middle" font-size="13" fill="#FFFFFF" font-weight="700">3</text><text x="32" y="2" font-size="11" fill="#0d0d0d" font-weight="700">Parque Verde</text></g>
-    <g transform="translate(495, 340)"><line x1="0" y1="0" x2="-305" y2="265" stroke="#C9A84C" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.4"/><circle r="14" fill="#0d0d0d" filter="url(#shadowSm)"/><text y="4" text-anchor="middle" font-size="13" fill="#FFFFFF" font-weight="700">4</text><text x="0" y="32" text-anchor="middle" font-size="11" fill="#0d0d0d" font-weight="700">Hotel Astória · Portagem</text></g>
-    <g transform="translate(680, 340)"><line x1="0" y1="0" x2="-490" y2="265" stroke="#C9A84C" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.4"/><circle r="14" fill="#0d0d0d" filter="url(#shadowSm)"/><text y="4" text-anchor="middle" font-size="13" fill="#FFFFFF" font-weight="700">5</text><text x="22" y="2" font-size="11" fill="#0d0d0d" font-weight="700">Coimbra Shopping</text></g>
-    <g transform="translate(720, 165)"><line x1="0" y1="0" x2="-530" y2="440" stroke="#C9A84C" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.5"/><circle r="14" fill="#0d0d0d" filter="url(#shadowSm)"/><text y="4" text-anchor="middle" font-size="13" fill="#FFFFFF" font-weight="700">6</text><text x="0" y="-22" text-anchor="middle" font-size="11" fill="#0d0d0d" font-weight="700">CHUC · Polo III Saúde</text></g>
-    <g transform="translate(820, 200)"><line x1="0" y1="0" x2="-630" y2="405" stroke="#C9A84C" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.5"/><circle r="14" fill="#0d0d0d" filter="url(#shadowSm)"/><text y="4" text-anchor="middle" font-size="13" fill="#FFFFFF" font-weight="700">7</text><text x="0" y="-22" text-anchor="middle" font-size="11" fill="#0d0d0d" font-weight="700">Fórum Coimbra</text></g>
+    <!-- A1 / IP3 (corredor leste, longe) -->
+    <path d="M 1080,80 L 1040,200 L 1030,360 L 1040,500 L 1060,580" fill="none" stroke="#A0A0A0" stroke-width="3" stroke-dasharray="8 4"/>
+    <text x="1065" y="320" font-size="11" fill="#666" font-weight="700" transform="rotate(85 1065 320)">A1 · IP3</text>
 
-    <g transform="translate(190, 605)">
-      <circle r="28" fill="url(#goldGrad)" stroke="#0d0d0d" stroke-width="3" filter="url(#shadow)"/>
-      <path d="M0,-16 L4.7,-4.9 L16.6,-4.9 L7,2 L10.7,13.5 L0,6.5 L-10.7,13.5 L-7,2 L-16.6,-4.9 L-4.7,-4.9 Z" fill="#0d0d0d"/>
-      <rect x="-95" y="-66" width="190" height="34" rx="4" fill="#0d0d0d" filter="url(#shadowSm)"/>
-      <text y="-44" text-anchor="middle" font-size="13" fill="#C9A84C" font-weight="700">IMÓVEL · Lages de Baixo 50</text>
+    <!-- Pontes (ligações leste–oeste) -->
+    <line x1="380" y1="510" x2="395" y2="490" stroke="#888" stroke-width="3"/>
+    <line x1="450" y1="475" x2="465" y2="455" stroke="#888" stroke-width="3"/>
+    <text x="395" y="455" font-size="9" fill="#666" font-style="italic">Ponte Sta Isabel</text>
+    <text x="475" y="445" font-size="9" fill="#666" font-style="italic">P. Pedro e Inês</text>
+
+    <!-- Etiqueta CENTRO -->
+    <text x="640" y="280" font-size="14" fill="#666" font-weight="700" letter-spacing="3" opacity="0.55">CENTRO HISTÓRICO</text>
+    <text x="170" y="430" font-size="13" fill="#666" font-weight="700" letter-spacing="2" opacity="0.6">SANTA CLARA</text>
+
+    <!-- DESTINOS — posições reflectem geografia real -->
+    <!-- 1 Lidl Santa Clara · 2,3 km (oeste, perto do imóvel) -->
+    <g transform="translate(280, 470)">
+      <circle r="14" fill="#0d0d0d" filter="url(#shadowSm)"/>
+      <text y="4" text-anchor="middle" font-size="13" fill="#FFFFFF" font-weight="700">1</text>
+      <text x="0" y="-22" text-anchor="middle" font-size="11" fill="#0d0d0d" font-weight="700">Lidl Santa Clara</text>
+      <text x="0" y="32" text-anchor="middle" font-size="10" fill="#555" font-weight="600">2,3 km · 3 min</text>
     </g>
 
-    <g transform="translate(40, 605)">
-      <line x1="0" y1="0" x2="80" y2="0" stroke="#0d0d0d" stroke-width="2"/>
+    <!-- 2 Hotel Astória / Portagem · 2,3 km (leste, ponte adiante) -->
+    <g transform="translate(490, 415)">
+      <circle r="14" fill="#0d0d0d" filter="url(#shadowSm)"/>
+      <text y="4" text-anchor="middle" font-size="13" fill="#FFFFFF" font-weight="700">2</text>
+      <text x="0" y="-22" text-anchor="middle" font-size="11" fill="#0d0d0d" font-weight="700">Hotel Astória · Portagem</text>
+      <text x="0" y="32" text-anchor="middle" font-size="10" fill="#555" font-weight="600">2,3 km · 4 min</text>
+    </g>
+
+    <!-- 3 Parque Verde · 3,4 km (margem, na zona ribeirinha) -->
+    <g transform="translate(420, 480)">
+      <circle r="14" fill="#0d0d0d" filter="url(#shadowSm)"/>
+      <text y="4" text-anchor="middle" font-size="13" fill="#FFFFFF" font-weight="700">3</text>
+      <text x="32" y="2" font-size="11" fill="#0d0d0d" font-weight="700">Parque Verde</text>
+      <text x="32" y="16" font-size="10" fill="#555" font-weight="600">3,4 km · 6 min</text>
+    </g>
+
+    <!-- 4 Coimbra Shopping / Solum · 3,6 km (leste sul) -->
+    <g transform="translate(660, 470)">
+      <circle r="14" fill="#0d0d0d" filter="url(#shadowSm)"/>
+      <text y="4" text-anchor="middle" font-size="13" fill="#FFFFFF" font-weight="700">4</text>
+      <text x="22" y="2" font-size="11" fill="#0d0d0d" font-weight="700">Coimbra Shopping</text>
+      <text x="22" y="16" font-size="10" fill="#555" font-weight="600">3,6 km · 6 min</text>
+    </g>
+
+    <!-- 5 Fórum Coimbra · 3,8 km (leste norte) -->
+    <g transform="translate(720, 230)">
+      <circle r="14" fill="#0d0d0d" filter="url(#shadowSm)"/>
+      <text y="4" text-anchor="middle" font-size="13" fill="#FFFFFF" font-weight="700">5</text>
+      <text x="0" y="-22" text-anchor="middle" font-size="11" fill="#0d0d0d" font-weight="700">Fórum Coimbra</text>
+      <text x="0" y="32" text-anchor="middle" font-size="10" fill="#555" font-weight="600">3,8 km · 6 min</text>
+    </g>
+
+    <!-- 6 Hospital Geral / Covões · 6,1 km (oeste norte, mesmo lado) -->
+    <g transform="translate(440, 250)">
+      <circle r="14" fill="#0d0d0d" filter="url(#shadowSm)"/>
+      <text y="4" text-anchor="middle" font-size="13" fill="#FFFFFF" font-weight="700">6</text>
+      <text x="0" y="-22" text-anchor="middle" font-size="11" fill="#0d0d0d" font-weight="700">Hospital Geral · Covões</text>
+      <text x="0" y="32" text-anchor="middle" font-size="10" fill="#555" font-weight="600">6,1 km · 9 min</text>
+    </g>
+
+    <!-- 7 CHUC / HUC · 6,4 km (leste norte, polo III) -->
+    <g transform="translate(820, 165)">
+      <circle r="14" fill="#0d0d0d" filter="url(#shadowSm)"/>
+      <text y="4" text-anchor="middle" font-size="13" fill="#FFFFFF" font-weight="700">7</text>
+      <text x="0" y="-22" text-anchor="middle" font-size="11" fill="#0d0d0d" font-weight="700">CHUC · Polo III Saúde</text>
+      <text x="0" y="32" text-anchor="middle" font-size="10" fill="#555" font-weight="600">6,4 km · 9 min</text>
+    </g>
+
+    <!-- DESTAQUE Quinta das Lágrimas (1,3 km — super perto) -->
+    <g transform="translate(260, 555)">
+      <circle r="16" fill="#C9A84C" stroke="#0d0d0d" stroke-width="2.5" filter="url(#shadowSm)"/>
+      <text y="5" text-anchor="middle" font-size="11" fill="#0d0d0d" font-weight="800">★</text>
+      <rect x="-90" y="22" width="180" height="38" rx="4" fill="#C9A84C" filter="url(#shadowSm)"/>
+      <text x="0" y="38" text-anchor="middle" font-size="11" fill="#0d0d0d" font-weight="800">Quinta das Lágrimas</text>
+      <text x="0" y="52" text-anchor="middle" font-size="10" fill="#0d0d0d" font-weight="700">1,3 km · 2 min ✨</text>
+    </g>
+
+    <!-- IMÓVEL (estrela gold grande) -->
+    <g transform="translate(180, 590)">
+      <circle r="32" fill="url(#goldGrad)" stroke="#0d0d0d" stroke-width="3" filter="url(#shadow)"/>
+      <path d="M0,-18 L5,-5 L19,-5 L8,3 L12,16 L0,8 L-12,16 L-8,3 L-19,-5 L-5,-5 Z" fill="#0d0d0d"/>
+      <rect x="-105" y="-72" width="210" height="34" rx="4" fill="#0d0d0d" filter="url(#shadowSm)"/>
+      <text y="-50" text-anchor="middle" font-size="13" fill="#C9A84C" font-weight="700">IMÓVEL · Lages de Baixo 50</text>
+    </g>
+
+    <!-- Escala -->
+    <g transform="translate(900, 605)">
+      <line x1="0" y1="0" x2="120" y2="0" stroke="#0d0d0d" stroke-width="2"/>
       <line x1="0" y1="-4" x2="0" y2="4" stroke="#0d0d0d" stroke-width="2"/>
-      <line x1="40" y1="-3" x2="40" y2="3" stroke="#0d0d0d" stroke-width="1.5"/>
-      <line x1="80" y1="-4" x2="80" y2="4" stroke="#0d0d0d" stroke-width="2"/>
+      <line x1="60" y1="-3" x2="60" y2="3" stroke="#0d0d0d" stroke-width="1.5"/>
+      <line x1="120" y1="-4" x2="120" y2="4" stroke="#0d0d0d" stroke-width="2"/>
       <text x="0" y="18" font-size="10" fill="#444" font-weight="600">0</text>
-      <text x="40" y="18" font-size="10" fill="#444" text-anchor="middle">2 km</text>
-      <text x="80" y="18" font-size="10" fill="#444" text-anchor="end">4</text>
+      <text x="60" y="18" font-size="10" fill="#444" text-anchor="middle">2 km</text>
+      <text x="120" y="18" font-size="10" fill="#444" text-anchor="end">4</text>
     </g>
-    <g transform="translate(870, 600)">
-      <rect width="220" height="32" rx="4" fill="#FFFFFF" stroke="#E0D5B5" stroke-width="1"/>
-      <circle cx="20" cy="16" r="8" fill="url(#goldGrad)" stroke="#0d0d0d" stroke-width="1.5"/>
-      <text x="35" y="20" font-size="11" fill="#0d0d0d" font-weight="600">Imóvel</text>
-      <circle cx="100" cy="16" r="7" fill="#0d0d0d"/>
-      <text x="115" y="20" font-size="11" fill="#0d0d0d" font-weight="600">Pontos de interesse</text>
+    <!-- Legenda -->
+    <g transform="translate(20, 30)">
+      <rect width="280" height="36" rx="4" fill="#FFFFFF" stroke="#E0D5B5" stroke-width="1"/>
+      <circle cx="22" cy="18" r="9" fill="url(#goldGrad)" stroke="#0d0d0d" stroke-width="1.5"/>
+      <text x="38" y="22" font-size="11" fill="#0d0d0d" font-weight="600">Imóvel</text>
+      <circle cx="100" cy="18" r="8" fill="#C9A84C" stroke="#0d0d0d" stroke-width="1.5"/>
+      <text x="113" y="22" font-size="11" fill="#0d0d0d" font-weight="600">Destaque</text>
+      <circle cx="180" cy="18" r="8" fill="#0d0d0d"/>
+      <text x="193" y="22" font-size="11" fill="#0d0d0d" font-weight="600">Pontos de interesse</text>
     </g>
   </g>
 
@@ -121,8 +192,9 @@
 
   <!-- DISTANCES TABLE -->
   <g transform="translate(50, 1050)">
-    <text x="0" y="0" font-size="18" fill="#0d0d0d" font-weight="700">Distâncias e tempos de carro</text>
+    <text x="0" y="0" font-size="18" fill="#0d0d0d" font-weight="700">Distâncias e tempos sem trânsito</text>
     <line x1="0" y1="10" x2="540" y2="10" stroke="#C9A84C" stroke-width="2"/>
+    <text x="540" y="-2" font-size="10" fill="#888" text-anchor="end" font-style="italic">via Google Distance Matrix</text>
     <g transform="translate(0, 30)">
       <rect width="540" height="32" rx="4" fill="#0d0d0d"/>
       <text x="20" y="21" font-size="11" fill="#C9A84C" font-weight="700" letter-spacing="1">#</text>
@@ -131,17 +203,17 @@
       <text x="510" y="21" font-size="11" fill="#C9A84C" font-weight="700" letter-spacing="1" text-anchor="end">CARRO</text>
     </g>
     <g transform="translate(0, 70)" font-size="13" fill="#0d0d0d">
-      <rect x="0" y="0" width="540" height="34" fill="#F7F3E9"/><text x="20" y="22" font-weight="700">1</text><text x="60" y="22" font-weight="600">Lidl Santa Clara</text><text x="400" y="22" text-anchor="end" font-weight="700">3,5 km</text><text x="510" y="22" text-anchor="end" font-weight="700">7 min</text>
-      <rect x="0" y="34" width="540" height="34" fill="#FFFFFF"/><text x="20" y="56" font-weight="700">2</text><text x="60" y="56" font-weight="600">Hospital Geral · Covões</text><text x="400" y="56" text-anchor="end" font-weight="700">5,0 km</text><text x="510" y="56" text-anchor="end" font-weight="700">10 min</text>
-      <rect x="0" y="68" width="540" height="34" fill="#F7F3E9"/><text x="20" y="90" font-weight="700">3</text><text x="60" y="90" font-weight="600">Parque Verde do Mondego</text><text x="400" y="90" text-anchor="end" font-weight="700">6,0 km</text><text x="510" y="90" text-anchor="end" font-weight="700">12 min</text>
-      <rect x="0" y="102" width="540" height="34" fill="#FFFFFF"/><text x="20" y="124" font-weight="700">4</text><text x="60" y="124" font-weight="600">Hotel Astória · Portagem</text><text x="400" y="124" text-anchor="end" font-weight="700">7,0 km</text><text x="510" y="124" text-anchor="end" font-weight="700">14 min</text>
-      <rect x="0" y="136" width="540" height="34" fill="#F7F3E9"/><text x="20" y="158" font-weight="700">5</text><text x="60" y="158" font-weight="600">Coimbra Shopping · Solum</text><text x="400" y="158" text-anchor="end" font-weight="700">6,2 km</text><text x="510" y="158" text-anchor="end" font-weight="700">12 min</text>
-      <rect x="0" y="170" width="540" height="34" fill="#FFFFFF"/><text x="20" y="192" font-weight="700">6</text><text x="60" y="192" font-weight="600">CHUC · Polo III da Saúde</text><text x="400" y="192" text-anchor="end" font-weight="700">9,0 km</text><text x="510" y="192" text-anchor="end" font-weight="700">17 min</text>
-      <rect x="0" y="204" width="540" height="34" fill="#F7F3E9"/><text x="20" y="226" font-weight="700">7</text><text x="60" y="226" font-weight="600">Fórum Coimbra</text><text x="400" y="226" text-anchor="end" font-weight="700">10,0 km</text><text x="510" y="226" text-anchor="end" font-weight="700">18 min</text>
+      <rect x="0" y="0" width="540" height="34" fill="#F7F3E9"/><text x="20" y="22" font-weight="700">1</text><text x="60" y="22" font-weight="600">Lidl Santa Clara</text><text x="400" y="22" text-anchor="end" font-weight="700">2,3 km</text><text x="510" y="22" text-anchor="end" font-weight="700">3 min</text>
+      <rect x="0" y="34" width="540" height="34" fill="#FFFFFF"/><text x="20" y="56" font-weight="700">2</text><text x="60" y="56" font-weight="600">Hotel Astória · Portagem</text><text x="400" y="56" text-anchor="end" font-weight="700">2,3 km</text><text x="510" y="56" text-anchor="end" font-weight="700">4 min</text>
+      <rect x="0" y="68" width="540" height="34" fill="#F7F3E9"/><text x="20" y="90" font-weight="700">3</text><text x="60" y="90" font-weight="600">Parque Verde do Mondego</text><text x="400" y="90" text-anchor="end" font-weight="700">3,4 km</text><text x="510" y="90" text-anchor="end" font-weight="700">6 min</text>
+      <rect x="0" y="102" width="540" height="34" fill="#FFFFFF"/><text x="20" y="124" font-weight="700">4</text><text x="60" y="124" font-weight="600">Coimbra Shopping · Solum</text><text x="400" y="124" text-anchor="end" font-weight="700">3,6 km</text><text x="510" y="124" text-anchor="end" font-weight="700">6 min</text>
+      <rect x="0" y="136" width="540" height="34" fill="#F7F3E9"/><text x="20" y="158" font-weight="700">5</text><text x="60" y="158" font-weight="600">Fórum Coimbra</text><text x="400" y="158" text-anchor="end" font-weight="700">3,8 km</text><text x="510" y="158" text-anchor="end" font-weight="700">6 min</text>
+      <rect x="0" y="170" width="540" height="34" fill="#FFFFFF"/><text x="20" y="192" font-weight="700">6</text><text x="60" y="192" font-weight="600">Hospital Geral · Covões</text><text x="400" y="192" text-anchor="end" font-weight="700">6,1 km</text><text x="510" y="192" text-anchor="end" font-weight="700">9 min</text>
+      <rect x="0" y="204" width="540" height="34" fill="#F7F3E9"/><text x="20" y="226" font-weight="700">7</text><text x="60" y="226" font-weight="600">CHUC · Polo III da Saúde</text><text x="400" y="226" text-anchor="end" font-weight="700">6,4 km</text><text x="510" y="226" text-anchor="end" font-weight="700">9 min</text>
     </g>
   </g>
 
-  <!-- STRATEGIC POINTS WITH DISTANCES -->
+  <!-- STRATEGIC POINTS -->
   <g transform="translate(610, 1050)">
     <text x="0" y="0" font-size="18" fill="#0d0d0d" font-weight="700">Pontos fortes da localização</text>
     <line x1="0" y1="10" x2="540" y2="10" stroke="#C9A84C" stroke-width="2"/>
@@ -152,12 +224,11 @@
       <rect y="18" width="260" height="10" fill="#0d0d0d"/>
       <text x="14" y="20" font-size="13" fill="#C9A84C" font-weight="700">🛣️  ACESSOS</text>
       <g font-size="11" fill="#333">
-        <text x="14" y="48" font-weight="600">A1 · Coimbra Sul</text><text x="246" y="48" text-anchor="end" font-weight="700" fill="#0d0d0d">4,0 km · 5 min</text>
-        <text x="14" y="68" font-weight="600">IC2 / EN1</text><text x="246" y="68" text-anchor="end" font-weight="700" fill="#0d0d0d">0,3 km · 1 min</text>
-        <text x="14" y="88" font-weight="600">Estação Coimbra-B</text><text x="246" y="88" text-anchor="end" font-weight="700" fill="#0d0d0d">7,5 km · 10 min</text>
-        <text x="14" y="108" font-weight="600">Estação Coimbra-A</text><text x="246" y="108" text-anchor="end" font-weight="700" fill="#0d0d0d">7,0 km · 14 min</text>
-        <text x="14" y="128" font-weight="600">Aeroporto Sá Carneiro</text><text x="246" y="128" text-anchor="end" font-weight="700" fill="#0d0d0d">115 km · 1h05</text>
-        <text x="14" y="148" font-weight="600">Aeroporto Lisboa</text><text x="246" y="148" text-anchor="end" font-weight="700" fill="#0d0d0d">210 km · 2h00</text>
+        <text x="14" y="48" font-weight="600">A1 · Coimbra Sul</text><text x="246" y="48" text-anchor="end" font-weight="700" fill="#0d0d0d">12,2 km · 12 min</text>
+        <text x="14" y="68" font-weight="600">Estação Coimbra-A</text><text x="246" y="68" text-anchor="end" font-weight="700" fill="#0d0d0d">2,5 km · 5 min</text>
+        <text x="14" y="88" font-weight="600">Estação Coimbra-B</text><text x="246" y="88" text-anchor="end" font-weight="700" fill="#0d0d0d">5,2 km · 8 min</text>
+        <text x="14" y="108" font-weight="600">Aeroporto Sá Carneiro</text><text x="246" y="108" text-anchor="end" font-weight="700" fill="#0d0d0d">134 km · 1h21</text>
+        <text x="14" y="128" font-weight="600">Aeroporto Lisboa</text><text x="246" y="128" text-anchor="end" font-weight="700" fill="#0d0d0d">194 km · 1h50</text>
       </g>
     </g>
 
@@ -167,12 +238,12 @@
       <rect y="18" width="260" height="10" fill="#0d0d0d"/>
       <text x="14" y="20" font-size="13" fill="#C9A84C" font-weight="700">🎓  UNIV. &amp; SAÚDE</text>
       <g font-size="11" fill="#333">
-        <text x="14" y="48" font-weight="600">UC · Polo I (Alta · UNESCO)</text><text x="246" y="48" text-anchor="end" font-weight="700" fill="#0d0d0d">7,0 km · 14 min</text>
-        <text x="14" y="68" font-weight="600">UC · Polo III (Medicina)</text><text x="246" y="68" text-anchor="end" font-weight="700" fill="#0d0d0d">9,0 km · 17 min</text>
-        <text x="14" y="88" font-weight="600">CHUC · HUC</text><text x="246" y="88" text-anchor="end" font-weight="700" fill="#0d0d0d">8,5 km · 16 min</text>
-        <text x="14" y="108" font-weight="600">IPO Coimbra</text><text x="246" y="108" text-anchor="end" font-weight="700" fill="#0d0d0d">6,5 km · 13 min</text>
-        <text x="14" y="128" font-weight="600">Maternidade Bissaya Barreto</text><text x="246" y="128" text-anchor="end" font-weight="700" fill="#0d0d0d">8,0 km · 16 min</text>
-        <text x="14" y="148" font-weight="600">USF / Centro Saúde Antanhol</text><text x="246" y="148" text-anchor="end" font-weight="700" fill="#0d0d0d">2,0 km · 5 min</text>
+        <text x="14" y="48" font-weight="600">UC · Polo I (Alta · UNESCO)</text><text x="246" y="48" text-anchor="end" font-weight="700" fill="#0d0d0d">5,3 km · 13 min</text>
+        <text x="14" y="68" font-weight="600">UC · Polo III (Saúde)</text><text x="246" y="68" text-anchor="end" font-weight="700" fill="#0d0d0d">5,3 km · 13 min</text>
+        <text x="14" y="88" font-weight="600">CHUC · HUC</text><text x="246" y="88" text-anchor="end" font-weight="700" fill="#0d0d0d">6,4 km · 9 min</text>
+        <text x="14" y="108" font-weight="600">IPO Coimbra</text><text x="246" y="108" text-anchor="end" font-weight="700" fill="#0d0d0d">7,5 km · 11 min</text>
+        <text x="14" y="128" font-weight="600">Maternidade Bissaya Barreto</text><text x="246" y="128" text-anchor="end" font-weight="700" fill="#0d0d0d">7,0 km · 11 min</text>
+        <text x="14" y="148" font-weight="600">USF Antanhol</text><text x="246" y="148" text-anchor="end" font-weight="700" fill="#0d0d0d">3,3 km · 7 min</text>
       </g>
     </g>
 
@@ -182,12 +253,10 @@
       <rect y="18" width="260" height="10" fill="#0d0d0d"/>
       <text x="14" y="20" font-size="13" fill="#C9A84C" font-weight="700">🌳  LAZER &amp; CULTURA</text>
       <g font-size="11" fill="#333">
-        <text x="14" y="48" font-weight="600">Mata Nacional Choupal</text><text x="246" y="48" text-anchor="end" font-weight="700" fill="#0d0d0d">8,0 km · 15 min</text>
-        <text x="14" y="68" font-weight="600">Praia fluvial Açude-Ponte</text><text x="246" y="68" text-anchor="end" font-weight="700" fill="#0d0d0d">6,5 km · 13 min</text>
-        <text x="14" y="88" font-weight="600">Quinta das Lágrimas</text><text x="246" y="88" text-anchor="end" font-weight="700" fill="#0d0d0d">5,0 km · 10 min</text>
-        <text x="14" y="108" font-weight="600">Estádio Cidade de Coimbra</text><text x="246" y="108" text-anchor="end" font-weight="700" fill="#0d0d0d">6,0 km · 11 min</text>
-        <text x="14" y="128" font-weight="600">Centro histórico (Sé Velha)</text><text x="246" y="128" text-anchor="end" font-weight="700" fill="#0d0d0d">7,5 km · 15 min</text>
-        <text x="14" y="148" font-weight="600">Convento Santa Clara-a-Velha</text><text x="246" y="148" text-anchor="end" font-weight="700" fill="#0d0d0d">5,5 km · 11 min</text>
+        <text x="14" y="48" font-weight="700" fill="#B8923D">★ Quinta das Lágrimas</text><text x="246" y="48" text-anchor="end" font-weight="800" fill="#B8923D">1,3 km · 2 min</text>
+        <text x="14" y="68" font-weight="600">Praia fluvial Açude-Ponte</text><text x="246" y="68" text-anchor="end" font-weight="700" fill="#0d0d0d">3,6 km · 6 min</text>
+        <text x="14" y="88" font-weight="600">Mata Nacional Choupal</text><text x="246" y="88" text-anchor="end" font-weight="700" fill="#0d0d0d">5,0 km · 9 min</text>
+        <text x="14" y="108" font-weight="600">Estádio Cidade de Coimbra</text><text x="246" y="108" text-anchor="end" font-weight="700" fill="#0d0d0d">5,4 km · 9 min</text>
       </g>
     </g>
 
@@ -197,24 +266,22 @@
       <rect y="18" width="260" height="10" fill="#0d0d0d"/>
       <text x="14" y="20" font-size="13" fill="#C9A84C" font-weight="700">🛒  COMÉRCIO &amp; SERVIÇOS</text>
       <g font-size="11" fill="#333">
-        <text x="14" y="48" font-weight="600">Lidl Santa Clara</text><text x="246" y="48" text-anchor="end" font-weight="700" fill="#0d0d0d">3,5 km · 7 min</text>
-        <text x="14" y="68" font-weight="600">Continente Coimbra Shopping</text><text x="246" y="68" text-anchor="end" font-weight="700" fill="#0d0d0d">6,2 km · 12 min</text>
-        <text x="14" y="88" font-weight="600">Comércio local Antanhol</text><text x="246" y="88" text-anchor="end" font-weight="700" fill="#0d0d0d">1,5 km · 4 min</text>
-        <text x="14" y="108" font-weight="600">Pingo Doce Solum</text><text x="246" y="108" text-anchor="end" font-weight="700" fill="#0d0d0d">5,5 km · 11 min</text>
-        <text x="14" y="128" font-weight="600">Farmácia mais próxima</text><text x="246" y="128" text-anchor="end" font-weight="700" fill="#0d0d0d">1,2 km · 3 min</text>
-        <text x="14" y="148" font-weight="600">Bombeiros Antanhol</text><text x="246" y="148" text-anchor="end" font-weight="700" fill="#0d0d0d">2,5 km · 6 min</text>
+        <text x="14" y="48" font-weight="600">Lidl Santa Clara</text><text x="246" y="48" text-anchor="end" font-weight="700" fill="#0d0d0d">2,3 km · 3 min</text>
+        <text x="14" y="68" font-weight="600">Continente Coimbra Shopping</text><text x="246" y="68" text-anchor="end" font-weight="700" fill="#0d0d0d">3,6 km · 6 min</text>
+        <text x="14" y="88" font-weight="600">Pingo Doce Solum</text><text x="246" y="88" text-anchor="end" font-weight="700" fill="#0d0d0d">5,0 km · 8 min</text>
+        <text x="14" y="108" font-weight="600">Bombeiros Antanhol</text><text x="246" y="108" text-anchor="end" font-weight="700" fill="#0d0d0d">5,2 km · 7 min</text>
       </g>
     </g>
   </g>
 
   <!-- FOOTER -->
-  <g transform="translate(0, 1690)">
+  <g transform="translate(0, 1730)">
     <rect x="0" y="0" width="1200" height="90" fill="#0d0d0d"/>
     <rect x="0" y="0" width="1200" height="6" fill="url(#goldGrad)"/>
     <text x="50" y="36" font-size="11" fill="#C9A84C" font-weight="700" letter-spacing="3">SOMNIUM PROPERTIES</text>
     <text x="50" y="56" font-size="10" fill="#888">Estudo de localização · gerado para apresentação a investidor</text>
-    <text x="50" y="74" font-size="9" fill="#666" font-style="italic">Distâncias e tempos estimados (rotas conhecidas, ±5–10% vs. trânsito real). Para valores oficiais activar Distance Matrix API.</text>
+    <text x="50" y="74" font-size="9" fill="#666" font-style="italic">Distâncias e tempos: Google Distance Matrix API · valores sem trânsito (free-flow). Modo: condução.</text>
     <text x="1150" y="56" font-size="10" fill="#888" text-anchor="end">Coimbra · Portugal</text>
-    <text x="1150" y="74" font-size="9" fill="#666" font-style="italic" text-anchor="end">v1 · Lages de Baixo nº 50</text>
+    <text x="1150" y="74" font-size="9" fill="#666" font-style="italic" text-anchor="end">v2 · valores reais · Lages de Baixo nº 50</text>
   </g>
 </svg>
