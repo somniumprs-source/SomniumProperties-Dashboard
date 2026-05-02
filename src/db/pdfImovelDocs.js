@@ -30,20 +30,28 @@ const FDATE = d => { if (!d) return '—'; try { return new Date(d).toLocaleDate
 const NOW = () => new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' })
 
 // Limpa items de listas multi-linha (pontos_fortes, riscos, etc.):
-// remove backticks/aspas residuais, numeracao "1." / "1)" e bullets
-// pre-existentes ("•", "-", "*"). Devolve array de strings nao-vazias.
+// remove qualquer combinacao de backticks/aspas (ASCII e variantes
+// unicode tipo U+2018/U+02CB, frequentemente auto-substituidos por
+// editores), numeracao "1." / "1)" e bullets pre-existentes (•, ▸, *,
+// -, en/em dash). Aplica os passes em loop ate estabilizar para apanhar
+// padroes intercalados (`` `1.\`Zona ``, `` ``1)\`Zona ``, etc.).
+const QUOTE_LIKE_RE = /^[`´ʻ-ʽˊˋ‘’“”'"\s]+/
+const BULLET_RE = /^[•▸▪◦*\-–—]+\s*/
+const NUMBERING_RE = /^\d+\s*[.)]\s*/
+
 function parseListItems(text) {
   if (!text) return []
   return String(text)
     .split(/\r?\n/)
-    .map(s => s
-      .trim()
-      .replace(/^[`'"\s]+/, '')
-      .replace(/^[•▸▪◦*\-]+\s*/, '')
-      .replace(/^\d+\s*[.)]\s*/, '')
-      .replace(/^[`'"\s]+/, '')
-      .trim()
-    )
+    .map(s => {
+      let cur = s.trim()
+      let prev = ''
+      while (cur !== prev) {
+        prev = cur
+        cur = cur.replace(QUOTE_LIKE_RE, '').replace(BULLET_RE, '').replace(NUMBERING_RE, '').trim()
+      }
+      return cur
+    })
     .filter(Boolean)
 }
 
@@ -294,8 +302,12 @@ class DocBuilder {
     })
     const blockH = Math.max(...colHeights.map(c => c.h))
 
+    // Anti-orfao: garantir espaco para header + bloco antes de desenhar
+    // o titulo. Caso contrario o titulo ficaria sozinho no fundo de uma
+    // pagina e o conteudo das colunas saltaria para a seguinte.
+    const headerH = 32
+    this.ensure(headerH + blockH + 8)
     this.header('PONTOS FORTES, PONTOS FRACOS E RISCOS')
-    this.ensure(blockH + 6)
     const startY = this.y
 
     blocks.forEach((b, i) => {
@@ -337,10 +349,21 @@ class DocBuilder {
     const pairs = []
     for (let i = 0; i < n; i++) pairs.push({ r: riscos[i] || '—', m: mitig[i] || '—' })
 
-    this.header('ANÁLISE DE RISCO E MITIGAÇÃO')
     const colR = Math.floor((CW - 12) * 0.42)
     const colM = CW - 12 - colR
     const padX = 10, padY = 7, gap = 12
+
+    // Anti-orfao: estimar altura da primeira linha (par) + cabecalho da
+    // tabela + header de seccao para garantir que o titulo nao fica
+    // sozinho no fundo de uma pagina. Calcula com a primeira linha.
+    this.doc.fontSize(8.5)
+    const hR0 = this.doc.heightOfString(pairs[0]?.r || '—', { width: colR - padX * 2 - 6, lineGap: 3 })
+    const hM0 = this.doc.heightOfString(pairs[0]?.m || '—', { width: colM - padX - 14, lineGap: 3 })
+    const firstRowH = Math.max(hR0, hM0) + padY * 2
+    const headerSeccaoH = 32, tableHeaderH = 24
+    this.ensure(headerSeccaoH + tableHeaderH + firstRowH + 8)
+
+    this.header('ANÁLISE DE RISCO E MITIGAÇÃO')
 
     // Cabecalho
     this.ensure(24)
