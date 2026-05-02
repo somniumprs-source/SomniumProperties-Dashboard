@@ -101,7 +101,24 @@ export async function callDistanceMatrix({ origem, destinos, mode = 'driving', a
 
 // ── Static Satellite Map ─────────────────────────────────────────
 
-export async function fetchStaticSatelliteMap({ origem, destinos, apiKey, w = 640, h = 360, scale = 2 }) {
+export async function fetchRoutePolyline({ origem, destino, apiKey, mode = 'driving' }) {
+  if (!apiKey || !origem || !destino) return null
+  const url = new URL('https://maps.googleapis.com/maps/api/directions/json')
+  url.searchParams.set('origin', origem)
+  url.searchParams.set('destination', destino)
+  url.searchParams.set('mode', mode)
+  url.searchParams.set('region', 'pt')
+  url.searchParams.set('language', 'pt')
+  url.searchParams.set('key', apiKey)
+  try {
+    const r = await fetch(url.toString())
+    const j = await r.json()
+    if (j.status !== 'OK') return null
+    return j.routes?.[0]?.overview_polyline?.points || null
+  } catch { return null }
+}
+
+export async function fetchStaticSatelliteMap({ origem, destinos, paths = [], apiKey, w = 640, h = 360, scale = 2 }) {
   if (!apiKey) throw new Error('GOOGLE_MAPS_API_KEY não configurada')
   const url = new URL('https://maps.googleapis.com/maps/api/staticmap')
   url.searchParams.set('size', `${w}x${h}`)
@@ -109,6 +126,10 @@ export async function fetchStaticSatelliteMap({ origem, destinos, apiKey, w = 64
   url.searchParams.set('maptype', 'hybrid') // satélite + labels e estradas
   url.searchParams.set('language', 'pt')
   url.searchParams.set('region', 'pt')
+  // Rotas (paths) — desenhadas PRIMEIRO para ficarem por baixo dos markers
+  paths.forEach(p => {
+    if (p) url.searchParams.append('path', `color:0xC9A84CFF|weight:4|enc:${p}`)
+  })
   // Imóvel — pin gold com label "I"
   url.searchParams.append('markers', `color:0xC9A84C|size:mid|label:I|${origem}`)
   // Destinos — pretos numerados (Static Maps suporta labels A-Z, 0-9 — usamos 1..9 para os 9 mais perto)
@@ -359,11 +380,16 @@ export async function runEstudoLocalizacao({ pool, supabaseStorage, imovelId, de
   // 1. Distance Matrix
   const { origem_resolvida, resultados } = await callDistanceMatrix({ origem, destinos: destinosUsar, mode, apiKey })
 
-  // 2. Static Map satélite (top 9 mais próximos como markers numerados)
+  // 2. Static Map satélite + rotas reais (Directions API para top 9 destinos)
   const okOrdenados = resultados.filter(r => r.status === 'OK').sort((a, b) => (a.distancia_metros ?? Infinity) - (b.distancia_metros ?? Infinity))
+  const top9 = okOrdenados.slice(0, 9)
+  const paths = await Promise.all(top9.map(d =>
+    fetchRoutePolyline({ origem: origem_resolvida || origem, destino: d.endereco, apiKey, mode })
+  ))
   const mapaPngBase64 = await fetchStaticSatelliteMap({
     origem: origem_resolvida || origem,
     destinos: okOrdenados,
+    paths,
     apiKey,
   })
 
