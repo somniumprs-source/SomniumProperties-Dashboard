@@ -11,7 +11,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const LOGO_PATH = path.resolve(__dirname, '../public/logo-transparent.png')
+const LOGO_PATH = path.resolve(__dirname, '../public/logo-dark.png')
 const OUTPUT_DIR = path.resolve(__dirname, 'output')
 mkdirSync(OUTPUT_DIR, { recursive: true })
 const OUTPUT = path.join(OUTPUT_DIR, 'Analise_Custo_Obra_Santa_Clara.pdf')

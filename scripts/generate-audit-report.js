@@ -10,7 +10,7 @@ import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
-const LOGO = path.resolve(ROOT, 'public/logo-transparent.png')
+const LOGO = path.resolve(ROOT, 'public/logo-dark.png')
 const OUT = '/tmp/auditoria-relatorios-somnium.pdf'
 
 const C = {
