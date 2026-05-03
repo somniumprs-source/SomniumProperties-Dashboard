@@ -699,7 +699,7 @@ def main(argv: list[str]) -> int:
     week_label = data.get("semana_label") or week_label
     data_geracao = data.get("data_geracao") or datetime.now().strftime("%Y-%m-%d")
 
-    output_dir = ROOT / "scripts" / "output"
+    output_dir = ROOT / "Relatorios" / week_label
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"relatorio-whatsapp-semanal-{week_label}.pdf"
 

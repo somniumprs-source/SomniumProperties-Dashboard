@@ -47,10 +47,11 @@ LINE_PATTERNS = [
     re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{2,4}),\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*-\s*(.*)$"),
 ]
 
-# Anexos: "AUD-20260501-WA0001.opus (file attached)" ou "<adjunto: AUD-...>".
+# Anexos: "<anexo: 00000018-AUDIO-...opus>" (iOS pt), "<adjunto: ...>",
+# "<attached: ...>" (Android en) e "AUD-20260501-WA0001.opus (file attached)".
 ATTACHMENT_PATTERNS = [
-    re.compile(r"<(?:attached|anexado|adjunto):\s*([^>]+)>", re.IGNORECASE),
-    re.compile(r"([\w\-\.]+\.(?:opus|m4a|mp3|wav|jpg|jpeg|png|heic|webp|mp4|mov|pdf))\s*\((?:file attached|ficheiro anexado|arquivo anexado)\)", re.IGNORECASE),
+    re.compile(r"<(?:anexo|attached|anexado|adjunto):\s*([^>]+)>", re.IGNORECASE),
+    re.compile(r"([\w\-\.]+\.(?:opus|m4a|mp3|wav|ogg|jpg|jpeg|png|heic|webp|mp4|mov|pdf))\s*\((?:file attached|ficheiro anexado|arquivo anexado)\)", re.IGNORECASE),
 ]
 
 
