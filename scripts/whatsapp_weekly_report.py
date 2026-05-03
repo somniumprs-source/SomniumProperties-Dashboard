@@ -2,15 +2,24 @@
 """
 Relatorio Semanal de Comunicacoes WhatsApp — Somnium Properties.
 
-Le um ficheiro JSON estruturado (gerado pelo Claude apos sintese dos exports .txt)
-e renderiza um PDF empresarial com layout identico ao dos restantes relatorios
-do dashboard (pdfMeetingReport.js, pdfImovelDocs.js).
+Le um ficheiro JSON estruturado (gerado pelo Claude apos sintese dos exports +
+transcricoes Whisper) e renderiza um PDF empresarial com layout identico ao dos
+restantes relatorios do dashboard (pdfMeetingReport.js, pdfImovelDocs.js).
 
 Uso:
-    python scripts/whatsapp_weekly_report.py inputs/whatsapp/2026-05-03/
+    python scripts/whatsapp_weekly_report.py 2026-W18
 
-Espera encontrar `.summary.json` na pasta indicada.
-Output: scripts/output/relatorio-whatsapp-semanal-YYYY-MM-DD.pdf
+Estrutura de inputs esperada:
+    inputs/whatsapp/<chat>/<YYYY-Www>/_chat.txt
+    inputs/whatsapp/<chat>/<YYYY-Www>/_audios.json   (gerado por whatsapp_transcribe.py)
+    inputs/whatsapp/<chat>/<YYYY-Www>/AUD-*.opus / IMG-*.jpg / ...
+    inputs/whatsapp/<YYYY-Www>_summary.json          (escrito pelo Claude)
+
+Output: scripts/output/relatorio-whatsapp-semanal-<YYYY-Www>.pdf
+
+O JSON global `<YYYY-Www>_summary.json` define a sintese editorial. Os ficheiros
+de imagem e audio referenciados sao resolvidos automaticamente na pasta semanal
+de cada chat.
 """
 
 from __future__ import annotations
@@ -45,7 +54,10 @@ PT = 50      # top margin
 PB = 60      # bottom margin
 CW = PW - 2 * ML
 
-LOGO_PATH = Path(__file__).resolve().parent.parent / "public" / "logo-transparent.png"
+ROOT = Path(__file__).resolve().parent.parent
+LOGO_PATH = ROOT / "public" / "logo-transparent.png"
+
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".heic", ".webp"}
 
 CONVERSA_LABELS = {
     "ceo": "CEO",
@@ -288,14 +300,14 @@ def render_capa(c: canvas.Canvas, data: dict) -> None:
     eyebrow = "R E L A T O R I O   S E M A N A L   D E   C O M U N I C A C O E S"
     c.drawCentredString(PW / 2, PH - 295, eyebrow)
 
-    # Titulo (periodo)
+    # Titulo (semana label ou numero)
     periodo = data.get("periodo", {})
-    titulo = f"Semana {data.get('semana_num', '—')}"
+    titulo = data.get("semana_label") or f"Semana {data.get('semana_num', '—')}"
     c.setFillColor(WHITE)
     c.setFont("Helvetica-Bold", 28)
     c.drawCentredString(PW / 2, PH - 350, titulo)
 
-    # Subtitulo: datas
+    # Subtitulo: datas (Seg a Dom)
     subt = f"{periodo.get('inicio', '—')}  a  {periodo.get('fim', '—')}"
     c.setFillColor(MUTED)
     c.setFont("Helvetica", 11)
@@ -303,13 +315,17 @@ def render_capa(c: canvas.Canvas, data: dict) -> None:
 
     # Stats curtas
     totais = data.get("totais", {})
-    stats = (
-        f"{totais.get('conversas_activas', 0)} conversas activas · "
-        f"{totais.get('mensagens', 0)} mensagens analisadas"
-    )
+    bits = [
+        f"{totais.get('conversas_activas', 0)} conversas activas",
+        f"{totais.get('mensagens', 0)} mensagens",
+    ]
+    if totais.get("audios"):
+        bits.append(f"{totais['audios']} audios")
+    if totais.get("imagens"):
+        bits.append(f"{totais['imagens']} imagens")
     c.setFillColor(HexColor("#888888"))
     c.setFont("Helvetica", 9)
-    c.drawCentredString(PW / 2, PH - 405, stats)
+    c.drawCentredString(PW / 2, PH - 405, " · ".join(bits))
 
     # Footer da capa
     c.setFillColor(DARK)
@@ -324,9 +340,13 @@ def render_capa(c: canvas.Canvas, data: dict) -> None:
     c.drawCentredString(PW / 2, 35, "SOMNIUM PROPERTIES · CONFIDENCIAL")
     c.setFillColor(HexColor("#666666"))
     c.setFont("Helvetica", 7)
-    ano = data.get("data_geracao", "")[:4] or datetime.now().strftime("%Y")
-    semana = str(data.get("semana_num", "00")).zfill(2)
-    ref = f"Ref. WSP-RPT-{ano}-W{semana} · {data.get('data_geracao', datetime.now().strftime('%Y-%m-%d'))}"
+    label = data.get("semana_label", "")
+    if label and "-W" in label:
+        ano, sem = label.split("-W", 1)
+    else:
+        ano = data.get("data_geracao", "")[:4] or datetime.now().strftime("%Y")
+        sem = str(data.get("semana_num", "00")).zfill(2)
+    ref = f"Ref. WSP-RPT-{ano}-W{sem} · {data.get('data_geracao', datetime.now().strftime('%Y-%m-%d'))}"
     c.drawCentredString(PW / 2, 20, ref)
 
 
@@ -407,8 +427,8 @@ def render_indice(c: canvas.Canvas, data: dict, page_map: dict[str, int]) -> Non
     render_footer(c)
 
 
-def render_conversa(c: canvas.Canvas, conv_id: str, conv: dict | None) -> None:
-    """Pagina(s) por conversa."""
+def render_conversa(c: canvas.Canvas, conv_id: str, conv: dict | None, week_label: str | None = None) -> None:
+    """Pagina(s) por conversa. Se `week_label` for dado, resolve imagens/audios na pasta semanal."""
     c.showPage()
     label = CONVERSA_LABELS[conv_id]
     y = PH - PT
@@ -420,6 +440,12 @@ def render_conversa(c: canvas.Canvas, conv_id: str, conv: dict | None) -> None:
         c.drawString(ML, y - 12, "Sem mensagens neste periodo (export em falta ou conversa vazia).")
         render_footer(c)
         return
+
+    week_dir = None
+    if week_label:
+        candidate = ROOT / "inputs" / "whatsapp" / conv_id / week_label
+        if candidate.exists():
+            week_dir = candidate
 
     # Bloco metadata 2 col
     meta = [
@@ -480,12 +506,108 @@ def render_conversa(c: canvas.Canvas, conv_id: str, conv: dict | None) -> None:
     if prox:
         y = page_break(c, y, 60)
         y = sec(c, "Proximos passos", y)
-        # Bloco com barra gold a esquerda
         c.setFillColor(GOLD)
         c.rect(ML, y - 50, 3, 50, stroke=0, fill=1)
-        wrap_text(c, ML + 14, y, CW - 20, prox, 9, leading=13, color=BODY)
+        y = wrap_text(c, ML + 14, y, CW - 20, prox, 9, leading=13, color=BODY) - 8
+
+    # Audios transcritos
+    audios = conv.get("audios", [])
+    if audios:
+        y = page_break(c, y, 80)
+        y = sec(c, f"Audios transcritos ({len(audios)})", y)
+        for a in audios[:8]:
+            y = page_break(c, y, 40)
+            label = a.get("autor") or a.get("file", "audio")
+            duracao = a.get("duracao") or (f"{a.get('duration_s', 0):.0f}s" if a.get("duration_s") else "—")
+            # Linha header pequena
+            c.setFillColor(MUTED)
+            c.setFont("Helvetica-Bold", 7)
+            c.drawString(ML, y - 9, f"{label.upper()[:50]}  ·  {duracao}")
+            y -= 12
+            # Texto da transcricao com barra lateral gold
+            txt = a.get("transcricao", "").strip() or "(transcricao indisponivel)"
+            txt_y_start = y
+            new_y = wrap_text(c, ML + 12, y, CW - 18, txt, 9, leading=12, color=BODY)
+            bar_h = max(14, txt_y_start - new_y)
+            c.setFillColor(GOLD)
+            c.rect(ML, new_y, 3, bar_h, stroke=0, fill=1)
+            y = new_y - 8
+
+    # Imagens partilhadas
+    imagens = _resolve_images(conv, week_dir)
+    if imagens:
+        y = page_break(c, y, 220)
+        y = sec(c, f"Imagens partilhadas ({len(imagens)})", y)
+        y = _render_image_grid(c, y, imagens[:6])
 
     render_footer(c)
+
+
+def _resolve_images(conv: dict, week_dir: Path | None) -> list[Path]:
+    """Resolve caminhos de imagens. Aceita: lista de strings, lista de dicts {file},
+    ou se nada for fornecido tenta listar imagens na pasta semanal."""
+    out: list[Path] = []
+    explicit = conv.get("imagens", [])
+    if explicit:
+        for item in explicit:
+            name = item if isinstance(item, str) else item.get("file")
+            if not name or not week_dir:
+                continue
+            p = week_dir / name
+            if p.exists():
+                out.append(p)
+        return out
+    if week_dir:
+        for p in sorted(week_dir.iterdir()):
+            if p.suffix.lower() in IMAGE_EXTS:
+                out.append(p)
+    return out
+
+
+def _render_image_grid(c: canvas.Canvas, y: float, images: list[Path]) -> float:
+    """Grid 3x2 de imagens com legenda."""
+    if not images:
+        return y
+    cols = 3
+    gap = 8
+    cell_w = (CW - gap * (cols - 1)) / cols
+    cell_h = cell_w * 0.75  # 4:3 aspect
+    rows = (len(images) + cols - 1) // cols
+    for r in range(rows):
+        if y - cell_h - 18 < PB:
+            render_footer(c)
+            c.showPage()
+            y = PH - PT
+        for col in range(cols):
+            idx = r * cols + col
+            if idx >= len(images):
+                break
+            x = ML + col * (cell_w + gap)
+            img_path = images[idx]
+            try:
+                c.drawImage(
+                    str(img_path),
+                    x,
+                    y - cell_h,
+                    width=cell_w,
+                    height=cell_h,
+                    preserveAspectRatio=True,
+                    anchor="c",
+                    mask="auto",
+                )
+            except Exception:
+                # placeholder cinzento
+                c.setFillColor(LIGHT_GRAY)
+                c.rect(x, y - cell_h, cell_w, cell_h, stroke=0, fill=1)
+                c.setFillColor(MUTED)
+                c.setFont("Helvetica", 7)
+                c.drawString(x + 4, y - cell_h + 4, img_path.name[:30])
+            # legenda pequena
+            c.setFillColor(MUTED)
+            c.setFont("Helvetica", 7)
+            c.drawString(x + 2, y - cell_h - 10, img_path.name[:40])
+        y -= cell_h + 18
+    return y
 
 
 def render_anexo(c: canvas.Canvas, data: dict) -> None:
@@ -553,31 +675,39 @@ def render_anexo(c: canvas.Canvas, data: dict) -> None:
 
 def main(argv: list[str]) -> int:
     if len(argv) < 2:
-        print("Uso: python whatsapp_weekly_report.py <pasta_inputs>", file=sys.stderr)
+        print("Uso: python whatsapp_weekly_report.py <YYYY-Www>", file=sys.stderr)
+        print("Exemplo: python whatsapp_weekly_report.py 2026-W18", file=sys.stderr)
         return 1
 
-    inputs_dir = Path(argv[1]).resolve()
-    summary_path = inputs_dir / ".summary.json"
+    arg = argv[1].strip()
+    # Aceitar tambem caminho legacy: inputs/whatsapp/<YYYY-Www>_summary.json
+    week_label = arg
+    inputs_root = ROOT / "inputs" / "whatsapp"
+    summary_path = inputs_root / f"{week_label}_summary.json"
     if not summary_path.exists():
-        print(f"Erro: nao encontrei {summary_path}", file=sys.stderr)
-        return 2
+        # fallback: caminho directo
+        p = Path(arg)
+        if p.exists() and p.is_file():
+            summary_path = p
+            week_label = data_label_from_summary(summary_path)
+        else:
+            print(f"Erro: nao encontrei {summary_path}", file=sys.stderr)
+            print("Tens de criar este JSON com a sintese editorial da semana.", file=sys.stderr)
+            return 2
 
     data = json.loads(summary_path.read_text(encoding="utf-8"))
+    week_label = data.get("semana_label") or week_label
     data_geracao = data.get("data_geracao") or datetime.now().strftime("%Y-%m-%d")
 
-    output_dir = Path(__file__).resolve().parent / "output"
+    output_dir = ROOT / "scripts" / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / f"relatorio-whatsapp-semanal-{data_geracao}.pdf"
+    output_path = output_dir / f"relatorio-whatsapp-semanal-{week_label}.pdf"
 
     c = canvas.Canvas(str(output_path), pagesize=A4)
-    c.setTitle(f"Relatorio Semanal Comunicacoes — Semana {data.get('semana_num', '—')}")
+    c.setTitle(f"Relatorio Semanal Comunicacoes — {week_label}")
     c.setAuthor("Somnium Properties")
     c.setSubject("Relatorio Semanal de Comunicacoes WhatsApp")
 
-    # Paginas: 1) capa, 2) sumario, 3) indice, 4..N) conversas, N+1) anexo
-    # Para o indice precisamos dos numeros de pagina das conversas — fazemos pre-calculo
-    # simples: cada conversa comeca numa pagina nova; assumir media de 2 paginas por
-    # conversa pode falhar. Solucao: passagem dupla. Primeiro calcular paginas reais.
     page_map = _precompute_pages(data)
 
     render_capa(c, data)
@@ -586,7 +716,7 @@ def main(argv: list[str]) -> int:
 
     conversas = {x["id"]: x for x in data.get("conversas", [])}
     for conv_id in CONVERSA_ORDER:
-        render_conversa(c, conv_id, conversas.get(conv_id))
+        render_conversa(c, conv_id, conversas.get(conv_id), week_label=week_label)
 
     render_anexo(c, data)
     c.save()
@@ -595,26 +725,42 @@ def main(argv: list[str]) -> int:
     return 0
 
 
-def _precompute_pages(data: dict) -> dict[str, int]:
-    """Estimativa simples de pagina de inicio de cada conversa.
+def data_label_from_summary(p: Path) -> str:
+    try:
+        d = json.loads(p.read_text(encoding="utf-8"))
+        return d.get("semana_label") or "semana"
+    except Exception:
+        return "semana"
 
-    Capa=1, Sumario=2, Indice=3. Cada conversa comeca pelo menos 1 pagina.
-    Se a conversa tem >5 accoes ou >6 topicos, assume 2 paginas.
+
+def _precompute_pages(data: dict) -> dict[str, int]:
+    """Estimativa de pagina de inicio de cada conversa.
+
+    Capa=1, Sumario=2, Indice=3. Cada conversa ocupa N paginas dependendo de:
+    accoes, topicos, decisoes, cross_ref_crm, audios, imagens.
     """
-    page = 4  # primeira conversa
+    page = 4
     out: dict[str, int] = {}
     conversas = {x["id"]: x for x in data.get("conversas", [])}
     for cid in CONVERSA_ORDER:
         out[cid] = page
         conv = conversas.get(cid, {}) or {}
+        if not conv.get("mensagens"):
+            page += 1
+            continue
         accoes = len(conv.get("accoes", []))
         topicos = len(conv.get("topicos", []))
         decisoes = len(conv.get("decisoes", []))
-        # Heuristica
+        n_audios = len(conv.get("audios", []))
+        n_imagens = len(conv.get("imagens", []))
+        extra = 0
         if accoes > 5 or topicos > 6 or decisoes > 5 or conv.get("cross_ref_crm"):
-            page += 2
-        else:
-            page += 1
+            extra += 1
+        if n_audios > 3:
+            extra += 1
+        if n_imagens > 0:
+            extra += 1  # grid de imagens consome pagina
+        page += 1 + extra
     return out
 
 
