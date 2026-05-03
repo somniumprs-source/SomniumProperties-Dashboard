@@ -7,9 +7,9 @@ import { readFileSync, existsSync } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { rasterizarSvgParaPng } from '../lib/estudoLocalizacao.js'
+import { LOGO_BLACK_PNG } from './logoBlack.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const LOGO_PATH = path.resolve(__dirname, '../../public/logo-transparent.png')
 const STRESS_DIR = path.resolve(__dirname, '../../public/uploads/stress_tests')
 
 // Design tokens (reference: Proposta de Investimento Somnium)
@@ -83,14 +83,10 @@ const ESTADO_DOC_MAP = {
   'Criar Proposta ao Proprietário':  ['proposta_formal'],
   'Enviar proposta ao Proprietário': ['proposta_formal'],
   'Em negociação':                   ['resumo_negociacao'],
-  'Proposta aceite':                 ['resumo_acordo'],
   'Enviar proposta ao investidor':   ['dossier_investidor', 'proposta_investimento_anonima'],
   'Follow Up após proposta':         ['ficha_follow_up'],
   'Follow UP':                       ['ficha_follow_up'],
-  'Wholesaling':                     ['ficha_cedencia'],
-  'CAEP':                            ['ficha_acompanhamento_obra'],
-  'Fix and Flip':                    ['ficha_acompanhamento_obra'],
-  'Não interessa':                   ['ficha_descarte'],
+  'Descartado':                      ['ficha_descarte'],
 }
 
 export function getDocsForEstado(estado) { return ESTADO_DOC_MAP[estado] || [] }
@@ -104,10 +100,7 @@ const DOC_LABELS = {
   dossier_investidor: 'Dossier de Investimento',
   proposta_investimento_anonima: 'Proposta de Investimento (Anónima)',
   resumo_negociacao: 'Resumo de Negociação',
-  resumo_acordo: 'Resumo de Acordo',
   ficha_follow_up: 'Ficha de Follow Up',
-  ficha_cedencia: 'Ficha de Cedência',
-  ficha_acompanhamento_obra: 'Acompanhamento de Obra',
   ficha_descarte: 'Ficha de Descarte',
 }
 
@@ -192,7 +185,7 @@ class DocBuilder {
     if (this.style === 'investor') {
       // Capa estilo CIM institucional: barra dark topo, hero box central, term-sheet snippet
       d.rect(0, 0, PW, 6).fill(C.black)
-      try { d.image(readFileSync(LOGO_PATH), (PW - 130) / 2, 70, { width: 130 }) } catch {}
+      try { d.image(LOGO_BLACK_PNG, (PW - 130) / 2, 70, { width: 130 }) } catch {}
       d.fontSize(8).fillColor(C.muted).text('SOMNIUM PROPERTIES', ML, 180, { width: CW, align: 'center', characterSpacing: 2.5, lineBreak: false })
       d.fontSize(8).fillColor(C.muted).text('Real Estate Value-Add  ·  Coimbra', ML, 194, { width: CW, align: 'center', lineBreak: false })
       d.rect(ML + 80, 220, CW - 160, 0.5).fill(C.gold)
@@ -235,7 +228,7 @@ class DocBuilder {
 
     // Capa default
     d.rect(0, 0, PW, 6).fill(C.gold)
-    try { d.image(readFileSync(LOGO_PATH), (PW - 160) / 2, 140, { width: 160 }) } catch {}
+    try { d.image(LOGO_BLACK_PNG, (PW - 160) / 2, 140, { width: 160 }) } catch {}
     d.rect(PW / 2 - 30, 310, 60, 1.5).fill(C.gold)
     d.fontSize(28).fillColor(C.body).text(title, ML, 340, { width: CW, align: 'center' })
     const sub = [im.nome, im.zona].filter(Boolean).join(' · ').toUpperCase()
@@ -261,13 +254,13 @@ class DocBuilder {
     this.doc.addPage({ size: 'A4', margin: 0 })
     const d = this.doc
     if (this.style === 'investor') {
-      try { d.image(readFileSync(LOGO_PATH), ML, 18, { height: 16 }) } catch {}
+      try { d.image(LOGO_BLACK_PNG, ML, 18, { height: 16 }) } catch {}
       d.fontSize(7).fillColor(C.muted).text(this.title || 'Relatório de Investimento', ML, 22, { width: CW, align: 'right', lineBreak: false })
       d.rect(ML, 42, CW, 1).fill(C.gold)
       d.rect(ML, PH - 42, CW, 0.4).fill(C.gold)
       d.fontSize(6.5).fillColor(C.muted).text(`Confidencial · Somnium Properties · ${NOW()}`, ML, PH - 35, { width: CW, align: 'center', lineBreak: false })
     } else {
-      try { d.image(readFileSync(LOGO_PATH), ML, 15, { height: 22 }) } catch {}
+      try { d.image(LOGO_BLACK_PNG, ML, 15, { height: 22 }) } catch {}
       d.rect(ML, 45, CW, 1.5).fill(C.gold)
       d.rect(ML, PH - 45, CW, 0.5).fill(C.gold)
     }
@@ -1582,35 +1575,6 @@ function renderResumoNegociacao(b, im) {
   b.metric('Ponto de situação da negociação', '________________')
 }
 
-function renderResumoAcordo(b, im) {
-  b.header('TERMOS ACORDADOS')
-  b.bigNumbers([{ label: 'Valor Final de Compra', value: EUR(im.valor_proposta || im.ask_price) }])
-  b.simpleTable([
-    { label: 'Data Proposta Aceite', value: FDATE(im.data_proposta_aceite) },
-    { label: 'Consultor', value: im.nome_consultor },
-  ])
-  b.space(4)
-  b.header('CONDIÇÕES DO CPCV')
-  b.simpleTable([
-    { label: 'Sinal', value: '________________' },
-    { label: 'Prazo para escritura', value: '________________' },
-    { label: 'Condições suspensivas', value: '________________' },
-    { label: 'Penalizações', value: '________________' },
-  ])
-  b.space(4)
-  b.header('TIMELINE')
-  b.simpleTable([
-    { label: 'Data CPCV', value: '________________' }, { label: 'Data Escritura', value: '________________' },
-    { label: 'Início Obra', value: '________________' }, { label: 'Conclusão Obra', value: '________________' },
-    { label: 'Data Prevista Venda', value: '________________' },
-  ])
-  b.space(4)
-  b.header('PASSOS LEGAIS')
-  b.simpleTable([
-    'Validação documental', 'Licenciamento (se necessário)', 'Aprovação bancária (se financiado)', 'Assinatura CPCV', 'Escritura',
-  ].map(p => ({ label: `□  ${p}`, value: '' })))
-}
-
 function renderFichaFollowUp(b, im) {
   b.header('ESTADO ACTUAL')
   b.simpleTable([
@@ -1625,64 +1589,6 @@ function renderFichaFollowUp(b, im) {
   b.simpleTable([1, 2, 3, 4, 5].map(i => ({ label: `□  Ação ${i}`, value: '' })))
   b.inlineData([{ label: 'Data próximo contacto', value: '________________' }, { label: 'Data limite decisão', value: '________________' }])
   b.metric('Notas', '________________')
-}
-
-function renderFichaCedencia(b, im) {
-  b.header('DADOS DO NEGÓCIO')
-  b.simpleTable([
-    { label: 'Imóvel', value: im.nome }, { label: 'Zona', value: im.zona },
-  ])
-  b.bigNumbers([{ label: 'Valor de Entrada (compra)', value: EUR(im.valor_proposta || im.ask_price) }])
-  b.simpleTable([
-    { label: 'Valor de Saída (cedência)', value: '________________' },
-    { label: 'Margem', value: '________________' },
-  ])
-  b.space(4)
-  b.header('COMPRADOR / CESSIONÁRIO')
-  b.simpleTable([
-    { label: 'Nome', value: '________________' }, { label: 'Contacto', value: '________________' },
-    { label: 'Email', value: '________________' }, { label: 'Capital confirmado', value: '________________' },
-    { label: 'Data prevista cedência', value: '________________' },
-  ])
-  b.space(4)
-  b.header('CONDIÇÕES DA CEDÊNCIA')
-  b.metric('Termos e condições acordados', '________________')
-}
-
-function renderFichaAcompanhamentoObra(b, im) {
-  b.header('DADOS DO PROJECTO')
-  b.simpleTable([
-    { label: 'Imóvel', value: im.nome }, { label: 'Zona', value: im.zona },
-    { label: 'Modelo', value: im.modelo_negocio || 'CAEP' }, { label: 'Custo Estimado', value: EUR(im.custo_estimado_obra) },
-    { label: 'Data Início Obra', value: '________________' }, { label: 'Data Prevista Conclusão', value: '________________' },
-  ])
-  b.space(4)
-  b.header('EMPREITEIRO')
-  b.simpleTable([
-    { label: 'Nome / Empresa', value: '________________' }, { label: 'Contacto', value: '________________' },
-    { label: 'Orçamento acordado', value: '________________' }, { label: 'Prazo acordado', value: '________________' },
-  ])
-  b.space(4)
-
-  for (let sem = 1; sem <= 4; sem++) {
-    b.header(`SEMANA ${sem}`)
-    b.simpleTable([
-      { label: 'Data', value: '________________' }, { label: 'Custos semana', value: '________________' },
-      { label: 'Trabalhos realizados', value: '________________' },
-      { label: 'Custos acumulados', value: '________________' }, { label: 'Problemas', value: '________________' },
-      { label: 'Próximos trabalhos', value: '________________' },
-    ])
-    b.space(4)
-  }
-
-  b.header('DESVIOS AO ORÇAMENTO')
-  b.simpleTable([
-    { label: 'Orçamento inicial', value: EUR(im.custo_estimado_obra) },
-    { label: 'Custos reais acumulados', value: '________________' },
-    { label: 'Desvio (€)', value: '________________' },
-    { label: 'Desvio (%)', value: '________________' },
-    { label: 'Justificação do desvio', value: '________________' },
-  ])
 }
 
 function renderRelatorioInvestimento(b, im, an) {
@@ -2122,30 +2028,9 @@ const GENERATORS = {
     return b.end()
   },
 
-  resumo_acordo: (im) => {
-    const b = new DocBuilder('Resumo de Acordo', im.zona || '', im)
-    renderResumoAcordo(b, im)
-    b.disclaimer()
-    return b.end()
-  },
-
   ficha_follow_up: (im) => {
     const b = new DocBuilder('Ficha de Follow Up', im.zona || '', im)
     renderFichaFollowUp(b, im)
-    b.disclaimer()
-    return b.end()
-  },
-
-  ficha_cedencia: (im) => {
-    const b = new DocBuilder('Ficha de Cedência de Posição', im.zona || '', im)
-    renderFichaCedencia(b, im)
-    b.disclaimer()
-    return b.end()
-  },
-
-  ficha_acompanhamento_obra: (im) => {
-    const b = new DocBuilder('Acompanhamento de Obra', im.zona || '', im)
-    renderFichaAcompanhamentoObra(b, im)
     b.disclaimer()
     return b.end()
   },
@@ -2232,10 +2117,7 @@ const RENDERERS = {
   dossier_investidor: renderDossierInvestidor,
   proposta_investimento_anonima: renderPropostaInvestimentoAnonima,
   resumo_negociacao: renderResumoNegociacao,
-  resumo_acordo: renderResumoAcordo,
   ficha_follow_up: renderFichaFollowUp,
-  ficha_cedencia: renderFichaCedencia,
-  ficha_acompanhamento_obra: renderFichaAcompanhamentoObra,
   ficha_descarte: renderFichaDescarte,
   // Aliases compativeis com o formato antigo
   investimento: renderRelatorioInvestimento,
