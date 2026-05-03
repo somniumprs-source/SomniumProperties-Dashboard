@@ -151,13 +151,42 @@ async function preloadLocalizacao(imovel) {
   return imovel
 }
 
+// Pré-carrega a foto principal do imóvel (URL Supabase ou path local) e
+// devolve novo objecto com `_heroFotoData` (Buffer) injectado. A foto principal
+// é a marcada com `cover: true`, ou senão a primeira da lista filtrada.
+async function preloadHeroFoto(imovel) {
+  const fotos = parseFotos(imovel)
+  if (fotos.length === 0) return imovel
+  const main = fotos.find(f => f.cover) || fotos[0]
+  const url = main?.path
+  if (!url) return imovel
+  try {
+    let buf = null
+    if (url.startsWith('http')) {
+      const r = await fetch(url)
+      if (!r.ok) return imovel
+      buf = Buffer.from(await r.arrayBuffer())
+    } else {
+      const localPath = path.resolve(__dirname, '../..', 'public', url.replace(/^\//, ''))
+      if (existsSync(localPath)) buf = readFileSync(localPath)
+    }
+    if (buf && (isPng(buf) || isJpeg(buf))) {
+      return { ...imovel, _heroFotoData: buf }
+    }
+  } catch { /* ignore — renderer omite foto */ }
+  return imovel
+}
+
 export async function generateDoc(tipo, imovel, analise = null) {
   const fn = GENERATORS[tipo]
   if (!fn) return null
   // Tipos investidor precisam da imagem de localização pré-carregada
   // (Supabase URL exige fetch async; o resto do render é síncrono).
   const investidor = ['relatorio_investimento', 'dossier_investidor', 'proposta_investimento_anonima']
-  const im = investidor.includes(tipo) ? await preloadLocalizacao(imovel) : imovel
+  const comFotoHero = ['ficha_imovel', ...investidor]
+  let im = imovel
+  if (investidor.includes(tipo)) im = await preloadLocalizacao(im)
+  if (comFotoHero.includes(tipo)) im = await preloadHeroFoto(im)
   return fn(im, analise)
 }
 
@@ -693,6 +722,7 @@ class DocBuilder {
 
   // Professional table — warm header, generous rows (reference style)
   // Cada linha é verificada individualmente para evitar overflow auto-paginado.
+  // row.link → torna o valor clicável (sublinhado, cor gold)
   simpleTable(rows) {
     rows.forEach(row => {
       const isTotal = row.total
@@ -700,7 +730,11 @@ class DocBuilder {
       this.ensure(rowH + 1)
       if (isTotal) this.doc.rect(ML, this.y, CW, 24).fill(C.totalBg)
       this.doc.fontSize(isTotal ? 9.5 : 8.5).fillColor(C.body).text(row.label || '', ML + 10, this.y + 6, { width: 310, lineBreak: false })
-      this.doc.fontSize(isTotal ? 9.5 : 8.5).fillColor(isTotal ? C.gold : C.body).text(String(row.value || '—'), ML + 320, this.y + 6, { width: CW - 330, align: 'right', lineBreak: false })
+      const valSize = isTotal ? 9.5 : 8.5
+      const valColor = row.link ? C.gold : (isTotal ? C.gold : C.body)
+      const valOpts = { width: CW - 330, align: 'right', lineBreak: false }
+      if (row.link) { valOpts.link = row.link; valOpts.underline = true }
+      this.doc.fontSize(valSize).fillColor(valColor).text(String(row.value || '—'), ML + 320, this.y + 6, valOpts)
       this.doc.rect(ML, this.y + (isTotal ? 24 : 22), CW, 0.3).fill(C.border)
       this.y += rowH
     })
@@ -886,20 +920,45 @@ function renderFichaImovel(b, im) {
   ])
   b.space(6)
 
+  // FOTO PRINCIPAL — hero 16:9 no topo (apenas se carregada)
+  if (im._heroFotoData) {
+    const w = CW
+    const h = Math.round(w * 9 / 16)
+    b.ensure(h + 10)
+    b.doc.save()
+    b.doc.roundedRect(ML, b.y, w, h, 6).clip()
+    b.doc.image(im._heroFotoData, ML, b.y, { fit: [w, h], align: 'center', valign: 'center' })
+    b.doc.restore()
+    b.doc.roundedRect(ML, b.y, w, h, 6).lineWidth(0.5).stroke(C.border)
+    b.y += h + 10
+  }
+
   // 1. IDENTIFICAÇÃO REGISTRAL
   b.header('1. IDENTIFICAÇÃO REGISTRAL')
-  b.simpleTable([
+  const mapsLink = (im.coordenadas_lat && im.coordenadas_lng)
+    ? `https://www.google.com/maps/search/?api=1&query=${im.coordenadas_lat},${im.coordenadas_lng}`
+    : (im.morada ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(im.morada)}` : null)
+  const coordsTxt = (im.coordenadas_lat && im.coordenadas_lng)
+    ? `${im.coordenadas_lat}, ${im.coordenadas_lng}`
+    : (mapsLink ? 'Abrir Google Maps' : '—')
+  const rows1 = [
     { label: 'Designação', value: im.nome },
     { label: 'Morada', value: im.morada },
     { label: 'Freguesia', value: im.freguesia },
     { label: 'Concelho', value: im.concelho },
-    { label: 'Distrito', value: im.distrito || 'Coimbra' },
-    { label: 'Coordenadas', value: (im.coordenadas_lat && im.coordenadas_lng) ? `${im.coordenadas_lat}, ${im.coordenadas_lng}` : '—' },
+  ]
+  // Distrito apenas quando ≠ Coimbra (default da operação)
+  if (im.distrito && im.distrito !== 'Coimbra') {
+    rows1.push({ label: 'Distrito', value: im.distrito })
+  }
+  rows1.push({ label: 'Localização', value: coordsTxt, link: mapsLink || undefined })
+  rows1.push(
     { label: 'Artigo Matricial', value: im.artigo_matricial },
     { label: 'Descrição Predial', value: im.descricao_predial },
     { label: 'Fração', value: im.fracao },
     { label: 'Regime de Propriedade', value: im.regime_propriedade },
-  ])
+  )
+  b.simpleTable(rows1)
   b.space(6)
 
   // 2. CARACTERIZAÇÃO FÍSICA
@@ -956,12 +1015,22 @@ function renderFichaImovel(b, im) {
   b.space(6)
 
   // 5. ANÁLISE PRELIMINAR
-  if (im.pontos_fortes || im.pontos_fracos || im.riscos || im.mitigacao_riscos) {
+  if (im.tese_investimento || im.pontos_fortes || im.pontos_fracos || im.riscos || im.mitigacao_riscos) {
     b.header('5. ANÁLISE PRELIMINAR')
+    if (im.tese_investimento) {
+      b.subheader('Tese de Investimento')
+      b.text(cleanMultilineText(im.tese_investimento))
+      b.space(6)
+    }
     if (im.pontos_fortes) { b.subheader('Pontos Fortes'); b.text(cleanMultilineText(im.pontos_fortes)); b.space(4) }
     if (im.pontos_fracos) { b.subheader('Pontos Fracos'); b.text(cleanMultilineText(im.pontos_fracos)); b.space(4) }
-    if (im.riscos) { b.subheader('Riscos'); b.text(cleanMultilineText(im.riscos)); b.space(4) }
-    if (im.mitigacao_riscos) { b.subheader('Mitigação de Riscos'); b.text(cleanMultilineText(im.mitigacao_riscos)); b.space(4) }
+    // Riscos & Mitigação: tabela emparelhada (substitui blocos soltos).
+    // Fallback: se houver riscos sem mitigação, usa subheader simples.
+    if (im.riscos && im.mitigacao_riscos) {
+      b.riscosMitigacao()
+    } else if (im.riscos) {
+      b.subheader('Riscos'); b.text(cleanMultilineText(im.riscos)); b.space(4)
+    }
   }
 
   if (im.notas) { b.space(4); b.header('NOTAS INTERNAS'); b.text(im.notas) }
