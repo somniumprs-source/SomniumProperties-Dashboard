@@ -53,12 +53,14 @@ export const MOTIVOS_NAO_INTERESSA_PADRAO = [
 
 function PontosRiscosTab({ imovel, endpoint, id, onUpdate, toast }) {
   const CAMPOS = [
+    { key: 'tese_investimento', label: 'Tese de investimento', color: 'indigo', icon: '🎯' },
     { key: 'pontos_fortes', label: 'Pontos fortes', color: 'emerald', icon: '✅' },
     { key: 'pontos_fracos', label: 'Pontos fracos', color: 'amber', icon: '⚠️' },
     { key: 'riscos', label: 'Riscos', color: 'rose', icon: '🚨' },
     { key: 'mitigacao_riscos', label: 'Mitigação de riscos', color: 'sky', icon: '🛡️' },
   ]
   const [valores, setValores] = useState({
+    tese_investimento: imovel.tese_investimento || '',
     pontos_fortes: imovel.pontos_fortes || '',
     pontos_fracos: imovel.pontos_fracos || '',
     riscos: imovel.riscos || '',
@@ -485,10 +487,7 @@ const DOC_LABELS = {
   dossier_investidor: 'Dossier de Investimento',
   proposta_investimento_anonima: 'Proposta de Investimento (Anónima)',
   resumo_negociacao: 'Resumo Negociação',
-  resumo_acordo: 'Resumo Acordo',
   ficha_follow_up: 'Ficha Follow-Up',
-  ficha_cedencia: 'Ficha Cedência',
-  ficha_acompanhamento_obra: 'Ficha Acompanhamento Obra',
   ficha_descarte: 'Ficha de Descarte',
 }
 const ESTADO_DOCS = {
@@ -496,11 +495,10 @@ const ESTADO_DOCS = {
   'Necessidade de Visita': ['ficha_visita'],
   'Estudo de VVR': ['analise_rentabilidade', 'estudo_comparaveis'],
   'Criar Proposta ao Proprietário': ['proposta_formal'], 'Enviar proposta ao Proprietário': ['proposta_formal'],
-  'Em negociação': ['resumo_negociacao'], 'Proposta aceite': ['resumo_acordo'],
+  'Em negociação': ['resumo_negociacao'],
   'Enviar proposta ao investidor': ['dossier_investidor', 'proposta_investimento_anonima'],
   'Follow Up após proposta': ['ficha_follow_up'], 'Follow UP': ['ficha_follow_up'],
-  'Wholesaling': ['ficha_cedencia'], 'CAEP': ['ficha_acompanhamento_obra'], 'Fix and Flip': ['ficha_acompanhamento_obra'],
-  'Não interessa': ['ficha_descarte'],
+  'Descartado': ['ficha_descarte'],
 }
 
 // ── Sub-abas por fase da pipeline (estados com mesmos docs agrupados) ──
@@ -518,8 +516,6 @@ const FASE_TABS = [
     docs: [{ tipo: 'proposta_formal', label: 'Proposta ao Proprietário', compilavel: 'proposta_formal' }] },
   { key: 'negociacao',   label: 'Negociação',          estados: ['Em negociação'],
     docs: [{ tipo: 'resumo_negociacao', label: 'Resumo de Negociação', compilavel: 'resumo_negociacao' }] },
-  { key: 'aceite',       label: 'Proposta Aceite',     estados: ['Proposta aceite'],
-    docs: [{ tipo: 'resumo_acordo', label: 'Resumo de Acordo', compilavel: 'resumo_acordo' }] },
   { key: 'investidor',   label: 'Investidor',          estados: ['Enviar proposta ao investidor'],
     docs: [
       { tipo: 'dossier_investidor',            label: 'Dossier de Investimento',            compilavel: 'dossier_investidor' },
@@ -527,11 +523,7 @@ const FASE_TABS = [
     ] },
   { key: 'followup',     label: 'Follow Up',           estados: ['Follow Up após proposta', 'Follow UP'],
     docs: [{ tipo: 'ficha_follow_up', label: 'Ficha de Follow Up', compilavel: 'ficha_follow_up' }] },
-  { key: 'wholesaling',  label: 'Wholesaling',         estados: ['Wholesaling'],
-    docs: [{ tipo: 'ficha_cedencia', label: 'Ficha de Cedência', compilavel: 'ficha_cedencia' }] },
-  { key: 'obra',         label: 'CAEP / Fix & Flip',   estados: ['CAEP', 'Fix and Flip'],
-    docs: [{ tipo: 'ficha_acompanhamento_obra', label: 'Acompanhamento de Obra', compilavel: 'ficha_acompanhamento_obra' }] },
-  { key: 'descarte',     label: 'Descartado',          estados: ['Não interessa', 'Nao interessa', 'Descartado'],
+  { key: 'descarte',     label: 'Descartado',          estados: ['Descartado'],
     docs: [{ tipo: 'ficha_descarte', label: 'Ficha de Descarte', compilavel: 'ficha_descarte' }] },
 ]
 
