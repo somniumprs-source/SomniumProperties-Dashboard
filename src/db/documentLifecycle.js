@@ -1,25 +1,43 @@
-// Lifecycle dos documentos automáticos por imóvel
-// Gera PDF, escreve em /public/uploads/documentos/{imovel_id}/{tipo}_{slug}[_vN].pdf
-// e regista em documentos_imovel.
+// Lifecycle dos documentos automáticos por imóvel.
+// Persistência em Supabase Storage (bucket "Documentos") — sobrevive a deploys
+// no Render (filesystem efémero).
 //
 // Política de persistência:
-//   - frozen=false (documento "vivo", ex: Ficha do Imóvel) → 1 só ficheiro por
-//     (imovel, tipo). Cada geração faz overwrite no disco e UPDATE in-place na
+//   - frozen=false (documento "vivo", ex: Ficha do Imóvel) → 1 só objecto por
+//     (imovel, tipo). Cada geração faz upsert no bucket e UPDATE in-place na
 //     BD (incrementa `version` para auditoria mas mantém o mesmo `pdf_path`).
 //   - frozen=true  (Dossier enviado, NDA assinado, Proposta enviada, etc.) →
-//     histórico imutável. Cada geração cria novo ficheiro `{tipo}_{slug}_v{N}.pdf`
+//     histórico imutável. Cada geração cria novo objecto `{tipo}_{slug}_v{N}.pdf`
 //     e nova linha em documentos_imovel.
 //
-// Hooks suportados:
+// Hooks:
 //   - imoveis.onCreate         → gera Ficha do Imóvel
 //   - imoveis.onUpdate(estado) → regenera documentos da fase
-//   - manual                   → forçar nova geração (reaproveita política acima)
-import fs from 'node:fs'
-import path from 'node:path'
+//   - manual                   → POST /api/crm/imoveis/:id/documentos/:tipo/regenerar
+import { createClient } from '@supabase/supabase-js'
 import { generateDoc } from './pdfImovelDocs.js'
 import pool from './pg.js'
 
-const DOC_ROOT = path.join(process.cwd(), 'public', 'uploads', 'documentos')
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.supabase.co'
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
+const supabase = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null
+const BUCKET = 'Documentos'
+
+let bucketEnsured = false
+async function ensureBucket() {
+  if (bucketEnsured || !supabase) return
+  try {
+    const { data: buckets } = await supabase.storage.listBuckets()
+    const exists = (buckets || []).some(b => b.name === BUCKET)
+    if (!exists) {
+      await supabase.storage.createBucket(BUCKET, { public: true })
+      console.log(`[docs] bucket "${BUCKET}" criado`)
+    }
+    bucketEnsured = true
+  } catch (e) {
+    console.error('[docs] ensureBucket:', e.message)
+  }
+}
 
 async function streamToBuffer(doc) {
   const chunks = []
@@ -39,37 +57,56 @@ function slugify(s) {
     .slice(0, 60) || 'imovel'
 }
 
+async function uploadToStorage(storagePath, buf) {
+  if (!supabase) throw new Error('Supabase Storage não configurado (SUPABASE_SERVICE_KEY ausente)')
+  await ensureBucket()
+  const { error } = await supabase.storage.from(BUCKET).upload(storagePath, buf, {
+    contentType: 'application/pdf',
+    upsert: true,
+  })
+  if (error) throw new Error(`storage upload: ${error.message}`)
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(storagePath)
+  return data.publicUrl
+}
+
+function storagePathFromUrl(url) {
+  if (!url) return null
+  const m = url.match(/\/storage\/v1\/object\/public\/Documentos\/(.+)$/)
+  return m ? m[1] : null
+}
+
+async function removeFromStorage(url) {
+  const p = storagePathFromUrl(url)
+  if (!p || !supabase) return
+  try { await supabase.storage.from(BUCKET).remove([p]) } catch {}
+}
+
 export async function persistDocumento(imovel, tipo, { trigger, generatedBy = 'system', frozen = false, analise = null } = {}) {
   const pdfDoc = await generateDoc(tipo, imovel, analise)
   if (!pdfDoc) return null
 
   const buf = await streamToBuffer(pdfDoc)
   const slug = slugify(imovel.nome || imovel.ref_interna || imovel.id)
-  const dir = path.join(DOC_ROOT, imovel.id)
-  fs.mkdirSync(dir, { recursive: true })
 
   if (frozen) {
-    // Histórico imutável: bump version, novo ficheiro
     const r = await pool.query(
       `SELECT COALESCE(MAX(version), 0) + 1 AS v FROM documentos_imovel WHERE imovel_id = $1 AND tipo = $2`,
       [imovel.id, tipo]
     )
     const version = Number(r.rows[0].v)
-    const fileName = `${tipo}_${slug}_v${version}.pdf`
-    fs.writeFileSync(path.join(dir, fileName), buf)
-    const pdfPath = `/uploads/documentos/${imovel.id}/${fileName}`
+    const storagePath = `${imovel.id}/${tipo}_${slug}_v${version}.pdf`
+    const url = await uploadToStorage(storagePath, buf)
     await pool.query(
       `INSERT INTO documentos_imovel (imovel_id, tipo, version, pdf_path, pdf_size_bytes, frozen, trigger_event, generated_by, snapshot_data)
        VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8)`,
-      [imovel.id, tipo, version, pdfPath, buf.length, trigger || null, generatedBy, imovel]
+      [imovel.id, tipo, version, url, buf.length, trigger || null, generatedBy, imovel]
     )
-    return { tipo, version, pdfPath, sizeBytes: buf.length, frozen: true }
+    return { tipo, version, pdfPath: url, sizeBytes: buf.length, frozen: true }
   }
 
-  // Vivo: 1 só ficheiro por (imovel, tipo). Overwrite + UPDATE in-place se já existir.
-  const fileName = `${tipo}_${slug}.pdf`
-  const pdfPath = `/uploads/documentos/${imovel.id}/${fileName}`
-  fs.writeFileSync(path.join(dir, fileName), buf)
+  // Vivo: 1 só ficheiro por (imovel, tipo). Upsert no bucket + UPDATE in-place.
+  const storagePath = `${imovel.id}/${tipo}_${slug}.pdf`
+  const url = await uploadToStorage(storagePath, buf)
 
   const existing = await pool.query(
     `SELECT id, version, pdf_path FROM documentos_imovel
@@ -80,10 +117,9 @@ export async function persistDocumento(imovel, tipo, { trigger, generatedBy = 's
 
   if (existing.rows.length > 0) {
     const old = existing.rows[0]
-    // Se o nome do imóvel mudou, o ficheiro antigo fica órfão — apaga.
-    if (old.pdf_path && old.pdf_path !== pdfPath) {
-      const oldAbs = path.join(process.cwd(), 'public', old.pdf_path.replace(/^\//, ''))
-      try { if (fs.existsSync(oldAbs)) fs.unlinkSync(oldAbs) } catch {}
+    // Se o slug mudou (renomearam o imóvel), apaga o objecto antigo
+    if (old.pdf_path && old.pdf_path !== url) {
+      await removeFromStorage(old.pdf_path)
     }
     const newVersion = Number(old.version) + 1
     await pool.query(
@@ -92,17 +128,17 @@ export async function persistDocumento(imovel, tipo, { trigger, generatedBy = 's
               trigger_event = $4, generated_by = $5, snapshot_data = $6,
               generated_at = now()
         WHERE id = $7`,
-      [newVersion, pdfPath, buf.length, trigger || null, generatedBy, imovel, old.id]
+      [newVersion, url, buf.length, trigger || null, generatedBy, imovel, old.id]
     )
-    return { tipo, version: newVersion, pdfPath, sizeBytes: buf.length, frozen: false, replaced: true }
+    return { tipo, version: newVersion, pdfPath: url, sizeBytes: buf.length, frozen: false, replaced: true }
   }
 
   await pool.query(
     `INSERT INTO documentos_imovel (imovel_id, tipo, version, pdf_path, pdf_size_bytes, frozen, trigger_event, generated_by, snapshot_data)
      VALUES ($1, $2, 1, $3, $4, false, $5, $6, $7)`,
-    [imovel.id, tipo, pdfPath, buf.length, trigger || null, generatedBy, imovel]
+    [imovel.id, tipo, url, buf.length, trigger || null, generatedBy, imovel]
   )
-  return { tipo, version: 1, pdfPath, sizeBytes: buf.length, frozen: false, replaced: false }
+  return { tipo, version: 1, pdfPath: url, sizeBytes: buf.length, frozen: false, replaced: false }
 }
 
 // ── Hooks por evento ─────────────────────────────────
