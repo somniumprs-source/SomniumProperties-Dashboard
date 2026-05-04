@@ -8,6 +8,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { rasterizarSvgParaPng } from '../lib/estudoLocalizacao.js'
 import { LOGO_BLACK_PNG } from './logoBlack.js'
+import { calcMetricsExtra, MULT, EUR_M2, RACIO, PCT_DEC, EUR_S, colorMargem, colorPositivo } from './calcMetricsExtra.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const STRESS_DIR = path.resolve(__dirname, '../../public/uploads/stress_tests')
@@ -699,7 +700,7 @@ class DocBuilder {
       if (isTotal) this.doc.rect(ML, this.y, CW, 24).fill(C.totalBg)
       this.doc.fontSize(isTotal ? 9.5 : 8.5).fillColor(C.body).text(row.label || '', ML + 10, this.y + 6, { width: 310, lineBreak: false })
       const valSize = isTotal ? 9.5 : 8.5
-      const valColor = row.link ? C.gold : (isTotal ? C.gold : C.body)
+      const valColor = row.color || (row.link ? C.gold : (isTotal ? C.gold : C.body))
       const valOpts = { width: CW - 330, align: 'right', lineBreak: false }
       if (row.link) { valOpts.link = row.link; valOpts.underline = true }
       this.doc.fontSize(valSize).fillColor(valColor).text(String(row.value || '—'), ML + 320, this.y + 6, valOpts)
@@ -1361,12 +1362,19 @@ function renderAnaliseRentabilidade(b, im, a) {
   const compra = a.compra || im.valor_proposta || im.ask_price || 0
   const obra = a.obra_com_iva || a.obra || im.custo_estimado_obra || 0
   const vvr = a.vvr || im.valor_venda_remodelado || 0
+  const m = calcMetricsExtra(a, im)
 
   b.header('RESUMO DO INVESTIMENTO')
   b.bigNumbers([
     { label: 'Capital Necessário', value: EUR(a.capital_necessario || compra + obra) },
     { label: 'Lucro Líquido', value: EUR(a.lucro_liquido) },
-    { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
+    { label: 'MOIC', value: MULT(m.moic), sub: 'Múltiplo do capital' },
+  ])
+  b.space(2)
+  b.bigNumbers([
+    { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado), sub: 'Simples' },
+    { label: 'TIR', value: PCT_DEC(m.tir_anual), sub: 'Valor temporal do dinheiro' },
+    { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash) },
   ])
   b.space(4)
 
@@ -1380,6 +1388,8 @@ function renderAnaliseRentabilidade(b, im, a) {
     { label: 'Escritura', value: EUR(a.escritura) },
     { label: 'CPCV Compra', value: EUR(a.cpcv_compra) },
     { label: 'Due Diligence', value: EUR(a.due_diligence) },
+    { label: 'Preço de Aquisição por m²', value: EUR_M2(m.aquisicao_m2) },
+    { label: 'Custo Total por m²', value: EUR_M2(m.custo_total_m2) },
     { label: 'Total Aquisição', value: EUR(a.total_aquisicao), total: true },
   ])
   b.space(4)
@@ -1425,6 +1435,7 @@ function renderAnaliseRentabilidade(b, im, a) {
     { label: 'VVR', value: EUR(vvr) },
     { label: 'Comissão %', value: PCT(a.comissao_perc) },
     { label: 'Comissão com IVA', value: EUR(a.comissao_com_iva) },
+    { label: 'Valor de Venda por m²', value: EUR_M2(m.vvr_m2) },
     { label: 'Total Custos Venda', value: EUR(a.total_venda), total: true },
   ])
   b.space(4)
@@ -1432,12 +1443,20 @@ function renderAnaliseRentabilidade(b, im, a) {
   b.header('F. FISCALIDADE')
   const fiscRows = [
     { label: 'Regime', value: a.regime_fiscal || '—' },
-    { label: 'Impostos', value: EUR(a.impostos) },
   ]
-  if (a.regime_fiscal === 'Empresa') {
-    fiscRows.push({ label: 'Derrama Municipal', value: PCT(a.derrama_perc) })
+  if (a.regime_fiscal === 'Empresa' && m.fiscal && m.fiscal.total_irc != null) {
+    fiscRows.push({ label: 'IRC Base (15% até 50k + 19% acima)', value: EUR(m.fiscal.irc_base) })
+    fiscRows.push({ label: `Derrama Municipal (${PCT(a.derrama_perc)})`, value: EUR(m.fiscal.derrama_eur) })
+    fiscRows.push({ label: 'Total IRC', value: EUR(m.fiscal.total_irc) })
     fiscRows.push({ label: '% Distribuição Dividendos', value: PCT(a.perc_dividendos) })
-    fiscRows.push({ label: 'Retenção Dividendos', value: EUR(a.retencao_dividendos) })
+    fiscRows.push({ label: 'Retenção Dividendos (28%)', value: EUR(m.fiscal.dividendos_eur) })
+    fiscRows.push({ label: 'Carga Fiscal Total', value: EUR(a.impostos), total: true })
+    fiscRows.push({ label: 'Taxa Efectiva sobre Lucro Bruto', value: PCT_DEC(m.fiscal.taxa_efectiva) })
+  } else {
+    fiscRows.push({ label: 'Impostos', value: EUR(a.impostos), total: true })
+    if (m.fiscal && m.fiscal.taxa_efectiva != null) {
+      fiscRows.push({ label: 'Taxa Efectiva sobre Lucro Bruto', value: PCT_DEC(m.fiscal.taxa_efectiva) })
+    }
   }
   b.simpleTable(fiscRows)
   b.space(4)
@@ -1448,15 +1467,99 @@ function renderAnaliseRentabilidade(b, im, a) {
     { label: 'Impostos', value: EUR(a.impostos) },
     { label: 'Lucro Líquido', value: EUR(a.lucro_liquido) },
   ])
+  const spreadValue = m.spread_pct != null
+    ? `${EUR_S(m.spread_eur)}  (${PCT_DEC(m.spread_pct)})`
+    : EUR_S(m.spread_eur)
   b.simpleTable([
     { label: 'Retorno Total', value: PCT(a.retorno_total) },
     { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
     { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash) },
     { label: 'Break-Even', value: EUR(a.break_even) },
+    { label: 'Spread de Valorização (VVR − Compra − Obra)', value: spreadValue, color: colorPositivo(m.spread_eur) },
+    { label: 'Lucro Líquido por Mês', value: m.lucro_mensal != null ? `${EUR_S(m.lucro_mensal)}/mês` : '—' },
+    { label: 'Margem sobre Custo Total', value: PCT_DEC(m.margem_custo_total), color: colorMargem(m.margem_custo_total) },
+    { label: 'Rácio Risco / Retorno (por 1€ arriscado)', value: RACIO(m.racio_risco_retorno) },
   ])
   b.space(4)
 
-  renderStressTests(b, a, { title: 'H. TESTES DE STRESS' })
+  if (m.has_financiamento) {
+    b.header('G.1 ALAVANCAGEM')
+    b.simpleTable([
+      { label: 'LTV (Loan-to-Value)', value: PCT_DEC(m.ltv) },
+      { label: 'LTC (Loan-to-Cost)', value: PCT_DEC(m.ltc) },
+      { label: 'TIR Não-Alavancada', value: PCT_DEC(m.tir_anual) },
+      { label: 'TIR Alavancada', value: PCT_DEC(m.tir_alavancada), color: colorPositivo(m.tir_alavancada) },
+    ])
+    b.space(4)
+  }
+
+  // ── H. ANÁLISE DE RISCO E SENSIBILIDADE ─────────────────────
+  b.header('H. ANÁLISE DE RISCO E SENSIBILIDADE')
+
+  const margemSegVVRStr = m.margem_seg_vvr != null ? PCT_DEC(m.margem_seg_vvr) : '—'
+  const margemSegObraStr = m.margem_seg_obra != null ? PCT_DEC(m.margem_seg_obra) : '—'
+  const prazoMaxStr = m.prazo_max_meses != null
+    ? `${m.prazo_max_meses} meses (mais ${m.meses_extra} do que o previsto)`
+    : '—'
+
+  b.simpleTable([
+    { label: 'Break-Even VVR (preço mínimo de venda)', value: EUR(m.break_even_vvr) },
+    { label: '   Margem de Segurança VVR', value: margemSegVVRStr, color: colorPositivo(m.margem_seg_vvr) },
+    { label: 'Break-Even Custo de Obra (custo máximo)', value: EUR(m.break_even_obra) },
+    { label: '   Margem de Segurança Obra', value: margemSegObraStr, color: colorPositivo(m.margem_seg_obra) },
+    { label: 'Prazo Máximo de Detenção (antes de prejuízo)', value: prazoMaxStr },
+  ])
+  b.space(4)
+
+  // Tabela contingência obra
+  const contRows = []
+  if (m.contingencia_10) {
+    contRows.push({ _values: [
+      'Obra +10%',
+      EUR_S(m.contingencia_10.lucro_liquido),
+      PCT_DEC(m.contingencia_10.roi),
+    ] })
+  }
+  if (m.contingencia_20) {
+    contRows.push({ _values: [
+      'Obra +20%',
+      EUR_S(m.contingencia_20.lucro_liquido),
+      PCT_DEC(m.contingencia_20.roi),
+    ] })
+  }
+  if (contRows.length > 0) {
+    b.note('Contingência de Obra — impacto no resultado se a obra ultrapassar o orçamento.')
+    b.colTable(
+      [['Cenário', 140], ['Lucro Líquido', 180], ['ROI s/ Capital', 175]],
+      contRows
+    )
+    b.space(4)
+  }
+
+  // Tabela sensibilidade VVR
+  if (Array.isArray(m.sensibilidade_vvr) && m.sensibilidade_vvr.length > 0) {
+    b.note('Sensibilidade VVR — variação do valor de venda e impacto no Lucro Líquido e ROI.')
+    const sensRows = m.sensibilidade_vvr.map(s => {
+      const isBase = s.delta === 0
+      const label = s.delta === 0 ? 'VVR Base' : (s.delta > 0 ? `VVR +${(s.delta * 100).toFixed(0)}%` : `VVR ${(s.delta * 100).toFixed(0)}%`)
+      const llColor = isBase ? '#8C6A30' : colorPositivo(s.lucro_liquido)
+      return {
+        _values: [
+          label,
+          EUR_S(s.vvr),
+          { value: EUR_S(s.lucro_liquido), color: llColor },
+          { value: PCT_DEC(s.roi), color: llColor },
+        ],
+      }
+    })
+    b.colTable(
+      [['Cenário', 110], ['VVR', 130], ['Lucro Líquido', 130], ['ROI s/ Capital', 125]],
+      sensRows
+    )
+    b.space(4)
+  }
+
+  renderStressTests(b, a, { title: 'I. TESTES DE STRESS' })
 }
 
 function renderEstudoComparaveis(b, im, a) {
