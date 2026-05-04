@@ -14,7 +14,10 @@ const EUR = v => {
   return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v)
 }
 
-function NumInput({ value, onChange, sufixo, placeholder }) {
+function NumInput({ value, onChange, sufixo, placeholder, tipoFiscal }) {
+  const cor = tipoFiscal === 'material' ? 'border-blue-300 bg-blue-50/30'
+            : tipoFiscal === 'mo' ? 'border-green-300 bg-green-50/30'
+            : 'border-gray-300'
   return (
     <div className="flex items-center gap-1">
       <input
@@ -22,12 +25,23 @@ function NumInput({ value, onChange, sufixo, placeholder }) {
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
         placeholder={placeholder}
-        className="w-24 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:border-gray-500"
+        className={`w-24 px-2 py-1 text-sm border rounded focus:outline-none focus:border-gray-500 ${cor}`}
         step="any"
       />
       {sufixo && <span className="text-xs text-gray-400 whitespace-nowrap">{sufixo}</span>}
     </div>
   )
+}
+
+function FiscalBadge({ tipo }) {
+  if (!tipo) return null
+  const map = {
+    material: { txt: 'Mat.', cls: 'bg-blue-100 text-blue-700 border-blue-200', tip: 'Material — taxa do regime' },
+    mo:       { txt: 'MO',   cls: 'bg-green-100 text-green-700 border-green-200', tip: 'Mão-de-obra — taxa do regime' },
+  }
+  const m = map[tipo]
+  if (!m) return null
+  return <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${m.cls}`} title={m.tip}>{m.txt}</span>
 }
 
 function SelectInput({ value, onChange, opcoes }) {
@@ -46,10 +60,13 @@ function Field({ campo, value, onChange, suporta_singular, valorSingular, onSing
   const isSel = Array.isArray(campo.opcoes)
   return (
     <div className="flex items-center justify-between gap-3 py-1">
-      <label className="text-sm text-gray-700 flex-1">{campo.label}</label>
+      <label className="text-sm text-gray-700 flex-1 flex items-center gap-1.5">
+        {campo.label}
+        <FiscalBadge tipo={campo.tipo_fiscal} />
+      </label>
       {isSel
         ? <SelectInput value={value} onChange={onChange} opcoes={campo.opcoes} />
-        : <NumInput value={value} onChange={onChange} sufixo={campo.sufixo} placeholder={campo.placeholder} />
+        : <NumInput value={value} onChange={onChange} sufixo={campo.sufixo} placeholder={campo.placeholder} tipoFiscal={campo.tipo_fiscal} />
       }
       {suporta_singular && campo.acompanha_singular && (
         <label className="flex items-center gap-1 text-xs text-gray-500" title="Prestador singular (cat. B IRS)?">
@@ -78,10 +95,13 @@ function PisoRow({ piso, valores, onChange, campos }) {
           const isSel = Array.isArray(c.opcoes)
           return (
             <div key={c.key} className="flex items-center justify-between gap-3">
-              <label className="text-xs text-gray-600 flex-1">{c.label}</label>
+              <label className="text-xs text-gray-600 flex-1 flex items-center gap-1">
+                {c.label}
+                <FiscalBadge tipo={c.tipo_fiscal} />
+              </label>
               {isSel
                 ? <SelectInput value={valores?.[c.key]} onChange={(v) => onChange({ ...valores, [c.key]: v })} opcoes={c.opcoes} />
-                : <NumInput value={valores?.[c.key]} onChange={(v) => onChange({ ...valores, [c.key]: v })} sufixo={c.sufixo} placeholder={c.placeholder} />
+                : <NumInput value={valores?.[c.key]} onChange={(v) => onChange({ ...valores, [c.key]: v })} sufixo={c.sufixo} placeholder={c.placeholder} tipoFiscal={c.tipo_fiscal} />
               }
             </div>
           )
@@ -218,7 +238,8 @@ export function SeccaoCard({ seccao, dados, pisos, onChange, calc, regimeIvaDefa
             <div className="border-t border-gray-100 pt-3 space-y-1.5">
               {linhas.map((l, i) => (
                 <div key={i} className="flex items-baseline justify-between gap-2 text-xs">
-                  <div className="flex-1 truncate">
+                  <div className="flex-1 truncate flex items-center gap-1">
+                    <FiscalBadge tipo={l.tipo === 'material' || l.tipo === 'mo' ? l.tipo : null} />
                     <span className="text-gray-700">{l.descricao}</span>
                     {l.formula && <span className="text-gray-400 ml-1">· {l.formula}</span>}
                   </div>

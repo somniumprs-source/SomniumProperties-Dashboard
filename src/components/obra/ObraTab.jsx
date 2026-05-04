@@ -200,6 +200,34 @@ export function ObraTab({ imovelId, imovelNome }) {
         />
       ))}
 
+      {/* Decomposição fiscal por tipo */}
+      <div className="bg-white border-2 border-gray-300 rounded-xl p-4 my-4">
+        <h3 className="text-sm font-semibold text-gray-800 mb-3 uppercase tracking-wide">Decomposição por tipo</h3>
+        <div className="space-y-1 text-sm">
+          {t.por_tipo.material.base > 0 && <LinhaTipo cor="blue" label="Material" tipo={t.por_tipo.material} />}
+          {t.por_tipo.mo.base > 0       && <LinhaTipo cor="green" label="Mão-de-obra" tipo={t.por_tipo.mo} mostraAutoliq />}
+          {t.por_tipo.servicos.base > 0 && <LinhaTipo cor="amber" label="Serviços auxiliares" tipo={t.por_tipo.servicos} mostraAutoliq />}
+          {t.por_tipo.honorarios.base > 0 && <LinhaTipo cor="purple" label="Honorários (23%)" tipo={t.por_tipo.honorarios} mostraRetencoes />}
+          {t.por_tipo.taxas.base > 0    && <LinhaTipo cor="gray" label="Taxas (sem IVA)" tipo={t.por_tipo.taxas} />}
+          {t.por_tipo.isento.base > 0   && <LinhaTipo cor="gray" label="Isento (seguros)" tipo={t.por_tipo.isento} />}
+          {t.por_tipo.misto.base > 0    && <LinhaTipo cor="gray" label="Misto (não decomposto)" tipo={t.por_tipo.misto} />}
+        </div>
+        <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between text-sm">
+          <span className="text-gray-600">Rácio material / empreitada</span>
+          <span className={`font-semibold ${
+            t.beneficio_perdido ? 'text-red-600' :
+            (regime === 'habitacao' && t.racio_material > 15) ? 'text-amber-600' :
+            'text-gray-800'
+          }`}>{t.racio_material}%{regime === 'habitacao' ? ' / 20%' : ''}</span>
+        </div>
+        {t.beneficio_perdido && (
+          <p className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2 flex items-start gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            Verba 2.32 violada — benefício de 6% perdido. Sistema recalculou tudo a 23%.
+          </p>
+        )}
+      </div>
+
       {/* Quadro fiscal */}
       <div className="bg-white border-2 border-gray-300 rounded-xl p-4 my-4">
         <h3 className="text-sm font-semibold text-gray-800 mb-3 uppercase tracking-wide">Resumo fiscal</h3>
@@ -235,6 +263,27 @@ function Linha({ label, valor, destaque }) {
     <div className={`flex items-center justify-between ${destaque ? 'bg-gray-50 px-2 py-1 rounded font-semibold text-gray-900' : 'text-gray-700'}`}>
       <span>{label}</span>
       <span>{EUR(valor)}</span>
+    </div>
+  )
+}
+
+function LinhaTipo({ label, tipo, cor = 'gray', mostraAutoliq, mostraRetencoes }) {
+  const corMap = {
+    blue:   'bg-blue-50 text-blue-700 border-blue-200',
+    green:  'bg-green-50 text-green-700 border-green-200',
+    amber:  'bg-amber-50 text-amber-700 border-amber-200',
+    purple: 'bg-purple-50 text-purple-700 border-purple-200',
+    gray:   'bg-gray-50 text-gray-600 border-gray-200',
+  }
+  return (
+    <div className="flex items-center justify-between gap-2 py-0.5">
+      <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded border ${corMap[cor]}`}>{label}</span>
+      <div className="flex-1 text-right text-xs text-gray-500">
+        Base: <span className="text-gray-800">{EUR(tipo.base)}</span>
+        {tipo.iva > 0 && <> · IVA: <span className="text-gray-800">{EUR(tipo.iva)}</span></>}
+        {mostraAutoliq && tipo.autoliq > 0 && <> · autoliq.: <span className="text-amber-700">{EUR(tipo.autoliq)}</span></>}
+        {mostraRetencoes && tipo.retencoes > 0 && <> · retenções: <span className="text-red-700">-{EUR(tipo.retencoes)}</span></>}
+      </div>
     </div>
   )
 }
