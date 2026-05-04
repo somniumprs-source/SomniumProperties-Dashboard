@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<title>Aba Obra — Mockup</title>
+<style>
+  :root {
+    --gold: #C9A84C;
+    --black: #0d0d0d;
+    --gray-50: #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-300: #d1d5db;
+    --gray-400: #9ca3af;
+    --gray-500: #6b7280;
+    --gray-600: #4b5563;
+    --gray-700: #374151;
+    --gray-800: #1f2937;
+    --gray-900: #111827;
+    --blue-50: #eff6ff;
+    --blue-100: #dbeafe;
+    --blue-300: #93c5fd;
+    --blue-500: #3b82f6;
+    --blue-700: #1d4ed8;
+    --green-50: #f0fdf4;
+    --green-100: #dcfce7;
+    --green-300: #86efac;
+    --green-700: #15803d;
+    --amber-50: #fffbeb;
+    --amber-100: #fef3c7;
+    --amber-200: #fde68a;
+    --amber-700: #b45309;
+    --red-50: #fef2f2;
+    --red-200: #fecaca;
+    --red-600: #dc2626;
+    --red-700: #b91c1c;
+    --purple-50: #faf5ff;
+    --purple-100: #f3e8ff;
+    --purple-200: #e9d5ff;
+    --purple-700: #7e22ce;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: var(--gray-50);
+    color: var(--gray-800);
+  }
+  .frame { width: 1200px; padding: 20px; background: white; }
+  .obra-tab { background: var(--gray-50); padding: 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--gray-200); }
+
+  /* HEADER */
+  .header {
+    background: white;
+    border-bottom: 1px solid var(--gray-200);
+    padding: 20px 24px;
+  }
+  .header-top {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 16px; gap: 16px;
+  }
+  .header-meta { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gray-400); }
+  .header-meta .saving-ok { color: #16a34a; margin-left: 8px; }
+  .header h2 { font-size: 22px; font-weight: 700; color: var(--gray-900); margin: 4px 0 0 0; }
+  .header-tags { margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .badge-regime {
+    background: rgba(201, 168, 76, 0.13); color: var(--black);
+    font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+  }
+  .header-tags .meta-info { font-size: 11px; color: var(--gray-500); }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; font-size: 12px; font-weight: 500; border-radius: 8px; cursor: pointer; border: none; }
+  .btn-secondary { background: white; border: 1px solid var(--gray-200); color: var(--gray-600); }
+  .btn-primary { background: var(--black); color: var(--gold); border: 1px solid rgba(201, 168, 76, 0.2); }
+  .btn-icon { width: 14px; height: 14px; }
+
+  /* KPIs */
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .kpi { padding: 10px 14px; border-radius: 8px; }
+  .kpi-light { background: var(--gray-50); border: 1px solid var(--gray-200); }
+  .kpi-dark { background: var(--black); }
+  .kpi-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .kpi-light .kpi-label { color: var(--gray-500); }
+  .kpi-dark .kpi-label { color: var(--gold); opacity: 0.7; }
+  .kpi-value { font-size: 18px; font-weight: 700; margin-top: 2px; }
+  .kpi-light .kpi-value { color: var(--gray-900); }
+  .kpi-dark .kpi-value { color: var(--gold); }
+
+  /* Chips */
+  .chips { display: flex; gap: 6px; overflow-x: auto; margin-top: 14px; padding-bottom: 4px; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+  .chip-active { background: var(--gray-900); color: white; }
+  .chip-active .dot { font-size: 9px; opacity: 0.7; }
+  .chip-inactive { background: var(--gray-100); color: var(--gray-500); }
+
+  /* Body */
+  .body { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+
+  /* Card genérico */
+  .card { background: white; border: 1px solid var(--gray-200); border-radius: 12px; padding: 16px; }
+  .card-2x { border: 2px solid var(--gray-300); }
+  .card h3 { font-size: 11px; font-weight: 600; color: var(--gray-700); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 12px 0; }
+
+  /* Pisos */
+  .pisos-card { }
+  .piso-row { display: flex; align-items: center; gap: 8px; padding: 8px; background: var(--gray-50); border-radius: 8px; margin-bottom: 6px; }
+  .piso-nome { width: 110px; font-size: 13px; font-weight: 500; color: var(--gray-700); }
+  .input-num, .input-text {
+    padding: 6px 10px; font-size: 13px; border: 1px solid var(--gray-300); border-radius: 4px;
+    background: white; outline: none;
+  }
+  .input-num.w-24 { width: 96px; }
+  .input-text.flex-1 { flex: 1; }
+  .piso-add {
+    display: flex; gap: 8px; align-items: center; padding-top: 12px;
+    border-top: 1px solid var(--gray-100); margin-top: 8px;
+  }
+
+  /* Secção (cartão colapsável) */
+  .seccao { background: white; border: 1px solid var(--gray-200); border-radius: 12px; overflow: hidden; }
+  .seccao-header {
+    display: flex; justify-content: space-between; align-items: center; padding: 16px;
+    cursor: pointer; user-select: none;
+  }
+  .seccao-header:hover { background: var(--gray-50); }
+  .seccao-icon { font-size: 20px; }
+  .seccao-info h4 { margin: 0; font-size: 14px; font-weight: 600; color: var(--gray-800); }
+  .seccao-info span { font-size: 11px; color: var(--gray-400); display: block; margin-top: 2px; }
+  .seccao-total { font-size: 16px; font-weight: 700; color: var(--gray-900); }
+  .seccao-body { padding: 16px; border-top: 1px solid var(--gray-100); display: flex; flex-direction: column; gap: 16px; }
+
+  .badge-fiscal {
+    font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 500; border: 1px solid;
+    margin-left: 6px; display: inline-block; vertical-align: middle;
+  }
+  .badge-mat { background: var(--blue-100); color: var(--blue-700); border-color: var(--blue-300); }
+  .badge-mo { background: var(--green-100); color: var(--green-700); border-color: var(--green-300); }
+
+  /* Override fiscal */
+  .fiscal-override {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+    padding: 8px 12px; background: var(--gray-50); border-radius: 6px; font-size: 11px; color: var(--gray-600);
+  }
+  .fiscal-override label { display: flex; align-items: center; gap: 6px; }
+  .fiscal-override select { padding: 2px 6px; border: 1px solid var(--gray-300); border-radius: 3px; background: white; }
+
+  /* Pisos detail */
+  .pisos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .piso-card { border: 1px solid var(--gray-200); border-radius: 6px; padding: 10px; background: rgba(249,250,251,0.4); }
+  .piso-card-head { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 12px; }
+  .piso-card-head .nome { font-weight: 600; color: var(--gray-700); }
+  .piso-card-head .area { font-size: 10px; color: var(--gray-400); }
+  .piso-field { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+  .piso-field label { flex: 1; font-size: 11px; color: var(--gray-600); display: flex; align-items: center; }
+  .piso-field .input-num { width: 80px; padding: 4px 8px; }
+  .piso-field .sufixo { font-size: 10px; color: var(--gray-400); width: 48px; }
+
+  .input-num.mat { border-color: var(--blue-300); background: rgba(239, 246, 255, 0.3); }
+  .input-num.mo { border-color: var(--green-300); background: rgba(240, 253, 244, 0.3); }
+
+  /* Tabela linhas livres */
+  .linhas-livres { border: 1px solid var(--gray-200); border-radius: 8px; overflow: hidden; }
+  .linhas-livres-header {
+    background: var(--gray-50); padding: 10px 14px; border-bottom: 1px solid var(--gray-200);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .linhas-livres-header .titulo { font-size: 11px; font-weight: 600; color: var(--gray-700); text-transform: uppercase; letter-spacing: 0.05em; }
+  .btn-add-linha {
+    display: inline-flex; gap: 4px; align-items: center; font-size: 11px; font-weight: 500;
+    padding: 4px 10px; border-radius: 4px; color: var(--gold); border: 1px solid rgba(201, 168, 76, 0.4); background: white;
+  }
+  .linhas-livres table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .linhas-livres thead { background: var(--gray-50); border-bottom: 1px solid var(--gray-200); color: var(--gray-500); }
+  .linhas-livres th { text-align: left; font-weight: 500; padding: 6px 4px; }
+  .linhas-livres td { padding: 4px; border-bottom: 1px solid var(--gray-100); }
+  .linhas-livres td input, .linhas-livres td select {
+    width: 100%; padding: 4px 6px; font-size: 11px; border: 1px solid var(--gray-300); border-radius: 3px;
+  }
+  .linhas-livres td input.mat { border-color: var(--blue-300); }
+  .linhas-livres td input.mo { border-color: var(--green-300); }
+  .linhas-livres td.center { text-align: center; }
+
+  .seccao-resumo { background: var(--gray-50); border-radius: 6px; padding: 10px 14px; font-size: 11px; color: var(--gray-500); display: flex; gap: 16px; flex-wrap: wrap; }
+  .seccao-resumo strong { color: var(--gray-800); font-weight: 600; }
+  .seccao-resumo .total-final { margin-left: auto; }
+  .seccao-resumo .total-final strong { font-size: 14px; color: var(--gray-900); }
+
+  /* Decomposição por tipo */
+  .decomposicao .row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+  .tag {
+    font-size: 10px; font-weight: 600; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; border: 1px solid;
+    white-space: nowrap; min-width: 100px; text-align: center;
+  }
+  .tag.blue { background: var(--blue-50); color: var(--blue-700); border-color: var(--blue-100); }
+  .tag.green { background: var(--green-50); color: var(--green-700); border-color: var(--green-100); }
+  .tag.amber { background: var(--amber-50); color: var(--amber-700); border-color: var(--amber-100); }
+  .tag.purple { background: var(--purple-50); color: var(--purple-700); border-color: var(--purple-100); }
+  .tag.gray { background: var(--gray-50); color: var(--gray-600); border-color: var(--gray-200); }
+  .decomposicao .desc { flex: 1; text-align: right; font-size: 12px; color: var(--gray-500); }
+  .decomposicao .desc strong { color: var(--gray-800); font-weight: 600; }
+  .decomposicao .racio { display: flex; justify-content: space-between; padding-top: 12px; border-top: 1px solid var(--gray-100); margin-top: 8px; font-size: 14px; }
+  .racio-valor { font-weight: 600; color: var(--gray-800); }
+
+  /* Resumo fiscal */
+  .resumo-row { display: flex; justify-content: space-between; padding: 4px 8px; font-size: 13px; color: var(--gray-700); }
+  .resumo-row.destaque { background: var(--gray-50); padding: 6px 8px; border-radius: 4px; font-weight: 600; color: var(--gray-900); }
+
+  /* Total sticky */
+  .total-sticky {
+    background: var(--black); border-top: 2px solid var(--gold);
+    padding: 14px 24px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .total-sticky-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em; color: var(--gold); }
+  .total-sticky-sub { font-size: 10px; color: var(--gray-400); margin-top: 2px; }
+  .total-sticky-valor { font-size: 26px; font-weight: 700; color: var(--gold); }
+
+  /* Aviso */
+  .aviso { display: flex; gap: 8px; padding: 12px; border-radius: 8px; font-size: 12px; align-items: flex-start; border: 1px solid; }
+  .aviso-icon { width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px; }
+  .aviso-amber { background: var(--amber-50); border-color: var(--amber-200); color: var(--amber-700); }
+  .aviso-red { background: var(--red-50); border-color: var(--red-200); color: var(--red-700); }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- 1. HEADER + KPIs + CHIPS -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="frame" id="shot-header">
+  <div class="obra-tab">
+    <div class="header">
+      <div class="header-top">
+        <div>
+          <div class="header-meta">Orçamento de obra <span class="saving-ok">● Guardado</span></div>
+          <h2>T3 Marco dos Pereiros</h2>
+          <div class="header-tags">
+            <span class="badge-regime">Reabilitação ARU (Verba 2.27 — 6%)</span>
+            <span class="meta-info">2 pisos · 8/17 secções preenchidas</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary">⚙️ Definições</button>
+          <button class="btn btn-primary">📄 Exportar PDF</button>
+        </div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi kpi-light">
+          <div class="kpi-label">Base</div>
+          <div class="kpi-value">71.450 €</div>
+        </div>
+        <div class="kpi kpi-light">
+          <div class="kpi-label">IVA liquidado</div>
+          <div class="kpi-value">4.287 €</div>
+        </div>
+        <div class="kpi kpi-light">
+          <div class="kpi-label">A pagar</div>
+          <div class="kpi-value">75.737 €</div>
+        </div>
+        <div class="kpi kpi-dark">
+          <div class="kpi-label">Total bruto</div>
+          <div class="kpi-value">75.737 €</div>
+        </div>
+      </div>
+
+      <div class="chips">
+        <span class="chip chip-active">🔨 Demolições <span class="dot">●</span></span>
+        <span class="chip chip-inactive">♻️ RCD</span>
+        <span class="chip chip-inactive">🏗️ Estrutura</span>
+        <span class="chip chip-active">⚡ Eletricidade <span class="dot">●</span></span>
+        <span class="chip chip-inactive">🔆 AVAC</span>
+        <span class="chip chip-active">⬜ Pavimento <span class="dot">●</span></span>
+        <span class="chip chip-active">◾ Pladur <span class="dot">●</span></span>
+        <span class="chip chip-inactive">🧊 Isolamento</span>
+        <span class="chip chip-active">🪟 Caixilharias <span class="dot">●</span></span>
+        <span class="chip chip-active">💨 VMC <span class="dot">●</span></span>
+        <span class="chip chip-active">🎨 Pintura <span class="dot">●</span></span>
+        <span class="chip chip-active">🚿 CB <span class="dot">●</span></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- 2. PISOS + DEFINIÇÕES -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="frame" id="shot-pisos">
+  <div class="obra-tab">
+    <div class="body">
+      <div class="card">
+        <h3>Definições</h3>
+        <div style="margin-bottom: 12px;">
+          <label style="font-size: 11px; font-weight: 600; color: var(--gray-700); text-transform: uppercase; letter-spacing: 0.05em;">Regime fiscal</label>
+          <select style="margin-top: 6px; width: 100%; padding: 8px 12px; font-size: 13px; border: 1px solid var(--gray-300); border-radius: 6px; background: white;">
+            <option>Reabilitação ARU (Verba 2.27 — 6%)</option>
+          </select>
+          <p style="font-size: 11px; color: var(--gray-500); margin: 4px 0 0 0;">Define o IVA por defeito da MO. Materiais ficam a 23% por defeito mas podem ser editados linha a linha.</p>
+        </div>
+        <div>
+          <label style="font-size: 11px; font-weight: 600; color: var(--gray-700); text-transform: uppercase; letter-spacing: 0.05em;">BDI — Imprevistos e margem</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 6px;">
+            <div style="display: flex; align-items: center; gap: 8px;"><input class="input-num" style="width: 100%;" value="10"><span style="font-size: 11px; color: var(--gray-500);">% imprev.</span></div>
+            <div style="display: flex; align-items: center; gap: 8px;"><input class="input-num" style="width: 100%;" value="5"><span style="font-size: 11px; color: var(--gray-500);">% margem</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card pisos-card">
+        <h3 style="margin-bottom: 12px;">Pisos do imóvel</h3>
+        <div class="piso-row">
+          <span class="piso-nome">R/C</span>
+          <input class="input-num w-24" value="55">
+          <span style="font-size: 11px; color: var(--gray-400);">m² (ABP)</span>
+          <input class="input-text flex-1" value="2 quartos + sala + cozinha + CB">
+          <span style="cursor: pointer; color: var(--gray-400);">🗑</span>
+        </div>
+        <div class="piso-row">
+          <span class="piso-nome">1º Andar</span>
+          <input class="input-num w-24" value="95">
+          <span style="font-size: 11px; color: var(--gray-400);">m² (ABP)</span>
+          <input class="input-text flex-1" value="3 quartos + sala + cozinha + 2 CB">
+          <span style="cursor: pointer; color: var(--gray-400);">🗑</span>
+        </div>
+        <div class="piso-add">
+          <input class="input-text" style="width: 144px;" placeholder="Nome (ex: R/C)">
+          <input class="input-num w-24" placeholder="Área m²">
+          <button class="btn" style="background: var(--gold); color: var(--black); font-weight: 500;">+ Adicionar piso</button>
+        </div>
+      </div>
+
+      <div class="aviso aviso-amber">
+        <span class="aviso-icon">⚠️</span>
+        <span><strong>Verba 2.27 (Reabilitação Urbana):</strong> aplica-se a TODA a empreitada (material + MO) à taxa reduzida 6%, desde que cumpridos os requisitos — imóvel em ARU, certificação municipal/IHRU, declaração do dono da obra ao empreiteiro. Honorários (projecto, TRO, fiscalização) continuam a 23%.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- 3. SECÇÃO ABERTA (Pavimento) com inputs guiados + linhas livres -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="frame" id="shot-seccao">
+  <div class="obra-tab">
+    <div class="body">
+      <div class="seccao">
+        <div class="seccao-header">
+          <div style="display: flex; gap: 12px; align-items: center;">
+            <span class="seccao-icon">⬜</span>
+            <div class="seccao-info">
+              <h4>Pavimento</h4>
+              <span>4 linhas · 2 linhas custom</span>
+            </div>
+          </div>
+          <div style="display: flex; gap: 12px; align-items: center;">
+            <span class="seccao-total">12.430 €</span>
+            <span style="color: var(--gray-400);">▴</span>
+          </div>
+        </div>
+        <div class="seccao-body">
+          <div class="fiscal-override">
+            <span style="font-weight: 500;">Override secção:</span>
+            <label>IVA <select><option>Default (6%)</option></select></label>
+            <label><input type="checkbox" checked> Autoliquidação MO</label>
+          </div>
+
+          <div class="pisos-grid">
+            <div class="piso-card">
+              <div class="piso-card-head">
+                <span class="nome">R/C</span>
+                <span class="area">55 m²</span>
+              </div>
+              <div class="piso-field">
+                <label>Tipo</label>
+                <select style="padding: 4px 8px; font-size: 11px; border: 1px solid var(--gray-300); border-radius: 3px;"><option>mosaico</option></select>
+              </div>
+              <div class="piso-field">
+                <label>€/m² material <span class="badge-fiscal badge-mat">Mat.</span></label>
+                <input class="input-num mat" value="31">
+                <span class="sufixo">€/m²</span>
+              </div>
+              <div class="piso-field">
+                <label>€/m² MO <span class="badge-fiscal badge-mo">MO</span></label>
+                <input class="input-num mo" value="25">
+                <span class="sufixo">€/m²</span>
+              </div>
+            </div>
+            <div class="piso-card">
+              <div class="piso-card-head">
+                <span class="nome">1º Andar</span>
+                <span class="area">95 m²</span>
+              </div>
+              <div class="piso-field">
+                <label>Tipo</label>
+                <select style="padding: 4px 8px; font-size: 11px; border: 1px solid var(--gray-300); border-radius: 3px;"><option>flutuante</option></select>
+              </div>
+              <div class="piso-field">
+                <label>€/m² material <span class="badge-fiscal badge-mat">Mat.</span></label>
+                <input class="input-num mat" value="35">
+                <span class="sufixo">€/m²</span>
+              </div>
+              <div class="piso-field">
+                <label>€/m² MO <span class="badge-fiscal badge-mo">MO</span></label>
+                <input class="input-num mo" value="22">
+                <span class="sufixo">€/m²</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="linhas-livres">
+            <div class="linhas-livres-header">
+              <span class="titulo">Linhas livres</span>
+              <button class="btn-add-linha">+ Adicionar linha</button>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="min-width: 200px;">Descrição</th>
+                  <th>Qtd</th>
+                  <th>Unid.</th>
+                  <th>€/un mat <span class="badge-fiscal badge-mat">Mat.</span></th>
+                  <th>IVA mat</th>
+                  <th>€/un MO <span class="badge-fiscal badge-mo">MO</span></th>
+                  <th>IVA MO</th>
+                  <th>Auto.</th>
+                  <th>Ret. IRS</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><input value="Recuperar soalho zona nobre"></td>
+                  <td><input value="30"></td>
+                  <td><select><option>m²</option></select></td>
+                  <td><input class="mat" value="8"></td>
+                  <td><select><option>23%</option></select></td>
+                  <td><input class="mo" value="28"></td>
+                  <td><select><option>6%</option></select></td>
+                  <td class="center"><input type="checkbox" checked></td>
+                  <td><select><option>0%</option></select></td>
+                  <td class="center" style="color: var(--gray-400);">🗑</td>
+                </tr>
+                <tr>
+                  <td><input value="Cantaria histórica recuperação"></td>
+                  <td><input value="1"></td>
+                  <td><select><option>vg</option></select></td>
+                  <td><input class="mat" value="600"></td>
+                  <td><select><option>23%</option></select></td>
+                  <td><input class="mo" value="1200"></td>
+                  <td><select><option>6%</option></select></td>
+                  <td class="center"><input type="checkbox"></td>
+                  <td><select><option>11.5%</option></select></td>
+                  <td class="center" style="color: var(--gray-400);">🗑</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="seccao-resumo">
+            <span>Base: <strong>11.840 €</strong></span>
+            <span>IVA liquidado: <strong>590 €</strong></span>
+            <span>Autoliq.: <strong style="color: var(--amber-700);">50 €</strong></span>
+            <span>Retenções: <strong style="color: var(--red-700);">-138 €</strong></span>
+            <span class="total-final">Total: <strong>12.430 €</strong></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- 4. DECOMPOSIÇÃO POR TIPO + RESUMO FISCAL -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="frame" id="shot-fiscal">
+  <div class="obra-tab">
+    <div class="body">
+      <div class="card decomposicao">
+        <h3>Decomposição por tipo fiscal</h3>
+        <div class="row">
+          <span class="tag blue">Material</span>
+          <div class="desc">Base <strong>32.450 €</strong> · IVA <strong>1.947 €</strong></div>
+        </div>
+        <div class="row">
+          <span class="tag green">Mão-de-obra</span>
+          <div class="desc">Base <strong>27.100 €</strong> · IVA <strong>1.626 €</strong> · autoliq. <strong style="color: var(--amber-700);">450 €</strong></div>
+        </div>
+        <div class="row">
+          <span class="tag amber">Serviços</span>
+          <div class="desc">Base <strong>4.106 €</strong> · IVA <strong>246 €</strong></div>
+        </div>
+        <div class="row">
+          <span class="tag purple">Honorários (23%)</span>
+          <div class="desc">Base <strong>5.000 €</strong> · IVA <strong>1.150 €</strong> · ret. <strong style="color: var(--red-700);">-1.250 €</strong></div>
+        </div>
+        <div class="row">
+          <span class="tag gray">Taxas (sem IVA)</span>
+          <div class="desc">Base <strong>800 €</strong></div>
+        </div>
+        <div class="row">
+          <span class="tag gray">Isento (seguros)</span>
+          <div class="desc">Base <strong>600 €</strong></div>
+        </div>
+        <div class="racio">
+          <span style="color: var(--gray-600);">Rácio material / empreitada</span>
+          <span class="racio-valor">50.4%</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Resumo fiscal</h3>
+        <div class="resumo-row"><span>Base obra (com BDI)</span><span>64.250 €</span></div>
+        <div class="resumo-row"><span>Base licenciamento</span><span>6.400 €</span></div>
+        <div class="resumo-row destaque"><span>Base total</span><span>70.650 €</span></div>
+        <div class="resumo-row"><span>IVA liquidado</span><span>4.969 €</span></div>
+        <div class="resumo-row destaque"><span>Bruto fiscal</span><span>75.619 €</span></div>
+        <div class="resumo-row"><span>(-) IVA autoliquidado p/ adquirente</span><span>-450 €</span></div>
+        <div class="resumo-row"><span>(-) Retenções IRS a entregar AT</span><span>-1.250 €</span></div>
+        <div class="resumo-row destaque"><span>= Total a pagar a prestadores</span><span>73.919 €</span></div>
+      </div>
+    </div>
+    <div class="total-sticky">
+      <div>
+        <div class="total-sticky-label">Total bruto fiscal</div>
+        <div class="total-sticky-sub">Sincroniza com custo_estimado_obra</div>
+      </div>
+      <div class="total-sticky-valor">75.619 €</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- 5. AVISO REGRA 20% (perda do benefício Verba 2.32) -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="frame" id="shot-aviso">
+  <div class="obra-tab">
+    <div class="body">
+      <div class="aviso aviso-red">
+        <span class="aviso-icon">⚠️</span>
+        <span><strong>Verba 2.32 violada:</strong> materiais representam 27.4% da base da empreitada (limite 20%). O sistema recalculou tudo a 23% (perda do benefício). Para manter a taxa reduzida, reduza a fracção de material ou exclua linhas para outro orçamento.</span>
+      </div>
+      <div class="card decomposicao" style="border-color: var(--red-200);">
+        <h3>Decomposição por tipo fiscal</h3>
+        <div class="row">
+          <span class="tag blue">Material</span>
+          <div class="desc">Base <strong>22.100 €</strong> · IVA <strong style="color: var(--red-700);">5.083 €</strong> (23% — recalc.)</div>
+        </div>
+        <div class="row">
+          <span class="tag green">Mão-de-obra</span>
+          <div class="desc">Base <strong>54.250 €</strong> · IVA <strong style="color: var(--red-700);">12.477 €</strong> (23% — recalc.)</div>
+        </div>
+        <div class="racio">
+          <span style="color: var(--gray-600);">Rácio material / empreitada</span>
+          <span class="racio-valor" style="color: var(--red-600);">27.4% / 20%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
