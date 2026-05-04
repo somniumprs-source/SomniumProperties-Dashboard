@@ -681,11 +681,18 @@ export async function initSchema() {
         reuniao_ids TEXT,                   -- JSON array de IDs reunioes incluidas
         conteudo_json TEXT,                 -- JSON estruturado do relatorio
         notas TEXT,
+        pdf_original_path TEXT,             -- caminho para PDF importado (se nao gerado pelo template)
         created_at TEXT DEFAULT (NOW()::TEXT),
         updated_at TEXT DEFAULT (NOW()::TEXT)
       );
       CREATE INDEX IF NOT EXISTS idx_relatorios_semanais_semana ON relatorios_semanais(semana_iso);
       CREATE INDEX IF NOT EXISTS idx_relatorios_semanais_data ON relatorios_semanais(data_inicio DESC);
+
+      -- Migration: adicionar pdf_original_path se ja existir tabela
+      DO $$ BEGIN
+        ALTER TABLE relatorios_semanais ADD COLUMN IF NOT EXISTS pdf_original_path TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
     `)
 
     // Bootstrap: garantir que somniumprs@gmail.com (owner) existe como admin
