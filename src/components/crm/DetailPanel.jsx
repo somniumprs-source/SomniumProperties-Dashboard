@@ -8,6 +8,7 @@ import { apiFetch } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { PartilharAcesso } from '../PartilharAcesso.jsx'
 import { AnaliseTab } from '../analise/AnaliseTab.jsx'
+import { ObraTab } from '../obra/ObraTab.jsx'
 import { InteracoesTab } from './InteracoesTab.jsx'
 import { FollowUpsSection } from './FollowUpsSection.jsx'
 import { WhatsAppTab } from './WhatsAppTab.jsx'
@@ -761,6 +762,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
     { key: 'checklist', label: 'Checklist', icon: '📋', show: type === 'Imóveis' },
     { key: 'pontos_riscos', label: 'Pontos & Riscos', icon: '⚖️', show: type === 'Imóveis' },
     { key: 'localizacao', label: 'Localização', icon: '📍', show: type === 'Imóveis' },
+    { key: 'obra', label: 'Obra', icon: '🏗️', show: type === 'Imóveis' },
     { key: 'analise', label: 'Análise Financeira', icon: '📊', show: type === 'Imóveis' },
     { key: 'relatorios_imovel', label: 'Documentos', icon: '📄', show: type === 'Imóveis' },
     { key: 'documentos', label: `Documentos (${data?.documentos?.length ?? 0})`, icon: '📎', show: type === 'Investidores' },
@@ -877,6 +879,9 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
         <div className="p-4 sm:p-6">
           <LocalizacaoTab imovel={data} onUpdate={loadData} toast={toast} />
         </div>
+
+      ) : type === 'Imóveis' && activeTab === 'obra' ? (
+        <ObraTab imovelId={data.id} imovelNome={data.nome} />
 
       ) : type === 'Imóveis' && activeTab === 'analise' ? (
         <div className="p-4 sm:p-6">
