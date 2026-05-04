@@ -661,14 +661,29 @@ export async function initSchema() {
         seccoes       jsonb DEFAULT '{}'::jsonb,
         notas         text,
         iva_perc      real DEFAULT 23,
+        regime_fiscal text DEFAULT 'normal',
+        bdi           jsonb DEFAULT '{}'::jsonb,
         total_obra            real DEFAULT 0,
         total_licenciamento   real DEFAULT 0,
         total_geral           real DEFAULT 0,
+        total_iva               real DEFAULT 0,
+        total_iva_autoliquidado real DEFAULT 0,
+        total_retencoes_irs     real DEFAULT 0,
+        total_a_pagar           real DEFAULT 0,
         criado_por    text,
         created_at    timestamptz DEFAULT NOW(),
         updated_at    timestamptz DEFAULT NOW()
       );
       CREATE INDEX IF NOT EXISTS idx_orcamentos_obra_imovel ON orcamentos_obra(imovel_id);
+      DO $$ BEGIN
+        ALTER TABLE orcamentos_obra ADD COLUMN IF NOT EXISTS regime_fiscal text DEFAULT 'normal';
+        ALTER TABLE orcamentos_obra ADD COLUMN IF NOT EXISTS bdi jsonb DEFAULT '{}'::jsonb;
+        ALTER TABLE orcamentos_obra ADD COLUMN IF NOT EXISTS total_iva real DEFAULT 0;
+        ALTER TABLE orcamentos_obra ADD COLUMN IF NOT EXISTS total_iva_autoliquidado real DEFAULT 0;
+        ALTER TABLE orcamentos_obra ADD COLUMN IF NOT EXISTS total_retencoes_irs real DEFAULT 0;
+        ALTER TABLE orcamentos_obra ADD COLUMN IF NOT EXISTS total_a_pagar real DEFAULT 0;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
 
       -- Relatorios semanais administracao (gerados a partir de reunioes "Reuniao Semanal")
       CREATE TABLE IF NOT EXISTS relatorios_semanais (

@@ -5,7 +5,8 @@
  *   GET  /imoveis/:imovelId/orcamento-obra/pdf
  *
  * O PUT recalcula totais com calcOrcamentoObra() e propaga
- * total_geral para imoveis.custo_estimado_obra.
+ * total_geral para imoveis.custo_estimado_obra. Suporta regime
+ * fiscal (normal/aru/habitacao/rjru) e BDI (imprevistos + margem).
  */
 import { Router } from 'express'
 import pool from './pg.js'
@@ -29,16 +30,21 @@ router.get('/imoveis/:imovelId/orcamento-obra', async (req, res) => {
     )
 
     if (!orcamento) {
-      // Sem registo ainda: devolve estrutura vazia (não cria linha)
       return res.json({
         imovel_id: req.params.imovelId,
         pisos: [],
         seccoes: {},
         notas: '',
         iva_perc: 23,
+        regime_fiscal: 'normal',
+        bdi: { imprevistos_perc: 0, margem_perc: 0 },
         total_obra: 0,
         total_licenciamento: 0,
         total_geral: 0,
+        total_iva: 0,
+        total_iva_autoliquidado: 0,
+        total_retencoes_irs: 0,
+        total_a_pagar: 0,
         existe: false,
       })
     }
@@ -58,44 +64,58 @@ router.put('/imoveis/:imovelId/orcamento-obra', async (req, res) => {
     const pisos   = Array.isArray(body.pisos) ? body.pisos : []
     const seccoes = body.seccoes && typeof body.seccoes === 'object' ? body.seccoes : {}
     const ivaPerc = Number.isFinite(Number(body.iva_perc)) ? Number(body.iva_perc) : 23
+    const regimeFiscal = ['normal', 'aru', 'habitacao', 'rjru'].includes(body.regime_fiscal) ? body.regime_fiscal : 'normal'
+    const bdi = body.bdi && typeof body.bdi === 'object' ? body.bdi : {}
     const notas   = body.notas ?? ''
     const criadoPor = body.criado_por ?? null
 
-    const { total_obra, total_licenciamento, total_geral } = calcOrcamentoObra({
-      pisos, seccoes, iva_perc: ivaPerc,
+    const calc = calcOrcamentoObra({
+      pisos, seccoes, iva_perc: ivaPerc, regime_fiscal: regimeFiscal, bdi,
     })
+    const t = calc.totais
 
     const now = new Date().toISOString()
 
-    // Upsert
     const { rows: [saved] } = await pool.query(
       `INSERT INTO orcamentos_obra
-         (imovel_id, pisos, seccoes, notas, iva_perc, total_obra, total_licenciamento, total_geral, criado_por, created_at, updated_at)
-       VALUES ($1, $2::jsonb, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $10)
+         (imovel_id, pisos, seccoes, notas, iva_perc, regime_fiscal, bdi,
+          total_obra, total_licenciamento, total_geral,
+          total_iva, total_iva_autoliquidado, total_retencoes_irs, total_a_pagar,
+          criado_por, created_at, updated_at)
+       VALUES ($1, $2::jsonb, $3::jsonb, $4, $5, $6, $7::jsonb,
+               $8, $9, $10,
+               $11, $12, $13, $14,
+               $15, $16, $16)
        ON CONFLICT (imovel_id) DO UPDATE SET
          pisos = EXCLUDED.pisos,
          seccoes = EXCLUDED.seccoes,
          notas = EXCLUDED.notas,
          iva_perc = EXCLUDED.iva_perc,
+         regime_fiscal = EXCLUDED.regime_fiscal,
+         bdi = EXCLUDED.bdi,
          total_obra = EXCLUDED.total_obra,
          total_licenciamento = EXCLUDED.total_licenciamento,
          total_geral = EXCLUDED.total_geral,
+         total_iva = EXCLUDED.total_iva,
+         total_iva_autoliquidado = EXCLUDED.total_iva_autoliquidado,
+         total_retencoes_irs = EXCLUDED.total_retencoes_irs,
+         total_a_pagar = EXCLUDED.total_a_pagar,
          criado_por = COALESCE(EXCLUDED.criado_por, orcamentos_obra.criado_por),
          updated_at = EXCLUDED.updated_at
        RETURNING *`,
-      [imovelId, JSON.stringify(pisos), JSON.stringify(seccoes), notas, ivaPerc,
-       total_obra, total_licenciamento, total_geral, criadoPor, now]
+      [imovelId, JSON.stringify(pisos), JSON.stringify(seccoes), notas, ivaPerc, regimeFiscal, JSON.stringify(bdi),
+       calc.total_obra, calc.total_licenciamento, calc.total_geral,
+       t.iva_geral, t.iva_autoliquidado, t.retencoes_irs, t.a_pagar,
+       criadoPor, now]
     )
 
-    // Propagar para o imóvel: total_geral substitui custo_estimado_obra.
-    // Se houver análise activa, esta também escreve no campo no PUT seguinte;
-    // o último a guardar vence (comportamento aceite na primeira iteração).
+    // Propagar total_geral (bruto fiscal) para o imóvel.
     await pool.query(
       'UPDATE imoveis SET custo_estimado_obra = $1, updated_at = $2 WHERE id = $3',
-      [total_geral, now, imovelId]
+      [calc.total_geral, now, imovelId]
     )
 
-    res.json({ ...saved, existe: true })
+    res.json({ ...saved, calc, existe: true })
   } catch (e) {
     console.error('[orcamento-obra] PUT erro:', e)
     res.status(400).json({ error: e.message })
