@@ -106,7 +106,7 @@ function calcPenalizacaoAmortizacao(valorFinanciado, tipoTaxa) {
   return round2(valorFinanciado * taxa)
 }
 
-function calcIRC(lucroTributavel, derramaPerc) {
+export function calcIRC(lucroTributavel, derramaPerc) {
   if (lucroTributavel <= 0) return { irc: 0, derrama: 0, total: 0 }
   const base1 = Math.min(lucroTributavel, IRC_LIMIAR)
   const base2 = Math.max(lucroTributavel - IRC_LIMIAR, 0)
