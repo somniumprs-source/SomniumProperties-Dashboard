@@ -953,7 +953,6 @@ const FICHA_CAMPOS_CRITICOS = [
   'proprietario_nome', 'proprietario_nif', 'proprietario_contacto',
   'motivo_venda_declarado', 'data_anuncio', 'origem', 'tipo_oportunidade',
   'modelo_negocio', 'ask_price',
-  'tese_investimento', 'pontos_fortes', 'pontos_fracos', 'riscos', 'mitigacao_riscos',
 ]
 function fichaCompletude(im) {
   let filled = 0
@@ -1077,34 +1076,6 @@ function renderFichaImovel(b, im) {
     { label: 'ABP', value: M2(im.area_bruta) },
   ])
   b.space(6)
-
-  // 5. ANÁLISE PRELIMINAR (subsecções numeradas, todas como subheader)
-  if (im.tese_investimento || im.pontos_fortes || im.pontos_fracos || im.riscos || im.mitigacao_riscos) {
-    b.header('5. ANÁLISE PRELIMINAR')
-    if (im.tese_investimento) {
-      b.subheader('5.1 Tese de Investimento')
-      b.text(cleanMultilineText(im.tese_investimento))
-      b.space(6)
-    }
-    if (im.pontos_fortes) {
-      b.subheader('5.2 Pontos Fortes')
-      b.text(cleanMultilineText(im.pontos_fortes))
-      b.space(4)
-    }
-    if (im.pontos_fracos) {
-      b.subheader('5.3 Pontos Fracos')
-      b.text(cleanMultilineText(im.pontos_fracos))
-      b.space(4)
-    }
-    if (im.riscos && im.mitigacao_riscos) {
-      b.subheader('5.4 Riscos e Mitigação')
-      b.riscosMitigacao({ skipHeader: true })
-    } else if (im.riscos) {
-      b.subheader('5.4 Riscos')
-      b.text(cleanMultilineText(im.riscos))
-      b.space(4)
-    }
-  }
 
   if (im.notas) { b.space(4); b.header('NOTAS INTERNAS'); b.text(im.notas) }
 
