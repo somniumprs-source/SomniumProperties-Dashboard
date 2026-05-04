@@ -833,25 +833,96 @@ function linhasLicenciamento(s) {
   return out
 }
 
+// ── Linhas livres editáveis (custom) ────────────────────────
+// Permite ao utilizador adicionar linhas em qualquer secção com
+// descrição, quantidade, unidade, preço unitário, taxa IVA e flags.
+// Estrutura por linha:
+//   {
+//     id: string (uuid local),
+//     descricao: string,
+//     qtd: number,
+//     unidade: string ('un' | 'm²' | 'm' | 'h' | 'dias' | ...),
+//     mat_eur_un: number,    // €/un material
+//     mat_iva: 0|6|13|23,    // IVA do material (default 23)
+//     mo_eur_un: number,     // €/un mão-de-obra
+//     mo_iva: 0|6|13|23,     // IVA da MO (default 6 em ARU/Hab, 23 normal)
+//     autoliq_mo: bool,
+//     retencao_irs: 0|11.5|25,
+//     tipo_override?: 'material'|'mo'|'servicos'|'honorarios'|'taxas'|'isento',
+//   }
+function linhasCustom(s, regime) {
+  const arr = Array.isArray(s?.custom_lines) ? s.custom_lines : []
+  const out = []
+  const tMOdef = taxaPorDefeito(regime)
+  for (const c of arr) {
+    const qtd = num(c.qtd)
+    if (qtd <= 0) continue
+    const desc = c.descricao || 'Linha custom'
+    const baseMat = qtd * num(c.mat_eur_un)
+    const baseMO  = qtd * num(c.mo_eur_un)
+    const taxaMat = c.mat_iva != null ? num(c.mat_iva) : 23
+    const taxaMO  = c.mo_iva  != null ? num(c.mo_iva)  : tMOdef
+    const auto = !!c.autoliq_mo
+    const ret = num(c.retencao_irs)
+    if (baseMat > 0) {
+      out.push(linha({
+        descricao: `${desc} — material`,
+        base: baseMat, taxa_iva: taxaMat,
+        formula: `${qtd} ${c.unidade || 'un'} × ${num(c.mat_eur_un)} €/${c.unidade || 'un'}`,
+        tipo: c.tipo_override === 'servicos' ? 'servicos' : 'material',
+      }))
+    }
+    if (baseMO > 0) {
+      out.push(linha({
+        descricao: `${desc} — mão-de-obra`,
+        base: baseMO, taxa_iva: taxaMO,
+        autoliquidacao: auto, retencao_irs: ret,
+        formula: `${qtd} ${c.unidade || 'un'} × ${num(c.mo_eur_un)} €/${c.unidade || 'un'}`,
+        tipo: c.tipo_override === 'servicos' ? 'servicos' :
+              c.tipo_override === 'honorarios' ? 'honorarios' : 'mo',
+      }))
+    }
+    // Linha simples (só uma componente, sem mat/MO split)
+    if (baseMat === 0 && baseMO === 0) {
+      const baseUni = qtd * num(c.eur_un)
+      if (baseUni > 0) {
+        out.push(linha({
+          descricao: desc,
+          base: baseUni, taxa_iva: c.iva != null ? num(c.iva) : tMOdef,
+          autoliquidacao: auto, retencao_irs: ret,
+          formula: `${qtd} ${c.unidade || 'un'} × ${num(c.eur_un)} €/${c.unidade || 'un'}`,
+          tipo: c.tipo_override || 'misto',
+        }))
+      }
+    }
+  }
+  return out
+}
+
+// ── Wrapper que junta linhas resolvidas + custom ────────────
+function comCustom(resolverFn) {
+  return (s, p, r) => [...(resolverFn(s, p, r) || []), ...linhasCustom(s, r)]
+}
+
 // ── Mapeamento secção → função ──────────────────────────────
 const RESOLVERS = {
-  demolicoes:    (s, p, r) => linhasDemolicoes(s, r),
-  rcd:           (s, p, r) => linhasRCD(s, r),
-  estrutura:     (s, p, r) => linhasEstrutura(s, r),
-  eletricidade:  (s, p, r) => linhasEletricidade(s, p, r),
-  avac:          (s, p, r) => linhasAvac(s, r),
-  pavimento:     (s, p, r) => linhasPavimento(s, p, r),
-  pladur:        (s, p, r) => linhasPladur(s, p, r),
-  isolamento:    (s, p, r) => linhasIsolamento(s, r),
-  caixilharias:  (s, p, r) => linhasCaixilharias(s, p, r),
-  vmc:           (s, p, r) => linhasVmc(s, p, r),
-  pintura:       (s, p, r) => linhasPintura(s, p, r),
-  casas_banho:   (s, p, r) => linhasCasasBanho(s, r),
-  portas:        (s, p, r) => linhasPortas(s, r),
-  cozinhas:      (s, p, r) => linhasCozinhas(s, r),
-  capoto:        (s, p, r) => linhasCapoto(s, r),
-  cobertura:     (s, p, r) => linhasCobertura(s, r),
-  licenciamento: (s)       => linhasLicenciamento(s),
+  demolicoes:    comCustom((s, p, r) => linhasDemolicoes(s, r)),
+  rcd:           comCustom((s, p, r) => linhasRCD(s, r)),
+  estrutura:     comCustom((s, p, r) => linhasEstrutura(s, r)),
+  eletricidade:  comCustom((s, p, r) => linhasEletricidade(s, p, r)),
+  avac:          comCustom((s, p, r) => linhasAvac(s, r)),
+  pavimento:     comCustom((s, p, r) => linhasPavimento(s, p, r)),
+  pladur:        comCustom((s, p, r) => linhasPladur(s, p, r)),
+  isolamento:    comCustom((s, p, r) => linhasIsolamento(s, r)),
+  caixilharias:  comCustom((s, p, r) => linhasCaixilharias(s, p, r)),
+  vmc:           comCustom((s, p, r) => linhasVmc(s, p, r)),
+  pintura:       comCustom((s, p, r) => linhasPintura(s, p, r)),
+  casas_banho:   comCustom((s, p, r) => linhasCasasBanho(s, r)),
+  portas:        comCustom((s, p, r) => linhasPortas(s, r)),
+  cozinhas:      comCustom((s, p, r) => linhasCozinhas(s, r)),
+  capoto:        comCustom((s, p, r) => linhasCapoto(s, r)),
+  cobertura:     comCustom((s, p, r) => linhasCobertura(s, r)),
+  licenciamento: comCustom((s)       => linhasLicenciamento(s)),
 }
 
 // ── Constantes exportadas ───────────────────────────────────
