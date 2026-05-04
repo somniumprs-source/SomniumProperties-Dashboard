@@ -1511,29 +1511,6 @@ function renderAnaliseRentabilidade(b, im, a) {
   ])
   b.space(4)
 
-  // Tabela sensibilidade VVR
-  if (Array.isArray(m.sensibilidade_vvr) && m.sensibilidade_vvr.length > 0) {
-    b.note('Sensibilidade VVR — variação do valor de venda e impacto no Lucro Líquido e ROI.')
-    const sensRows = m.sensibilidade_vvr.map(s => {
-      const isBase = s.delta === 0
-      const label = s.delta === 0 ? 'VVR Base' : (s.delta > 0 ? `VVR +${(s.delta * 100).toFixed(0)}%` : `VVR ${(s.delta * 100).toFixed(0)}%`)
-      const llColor = isBase ? '#8C6A30' : colorPositivo(s.lucro_liquido)
-      return {
-        _values: [
-          label,
-          EUR_S(s.vvr),
-          { value: EUR_S(s.lucro_liquido), color: llColor },
-          { value: PCT_DEC(s.roi), color: llColor },
-        ],
-      }
-    })
-    b.colTable(
-      [['Cenário', 110], ['VVR', 130], ['Lucro Líquido', 130], ['ROI s/ Capital', 125]],
-      sensRows
-    )
-    b.space(4)
-  }
-
   renderStressTests(b, a, { title: 'I. TESTES DE STRESS' })
 }
 
