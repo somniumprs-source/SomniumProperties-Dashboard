@@ -25,7 +25,7 @@ export function CalculadoraForm({ analise, onUpdate }) {
   // Só Aquisição e Venda abertos por defeito
   const [openSections, setOpenSections] = useState({
     aquisicao: true, financiamento: false, obra: false,
-    detencao: false, venda: true, fiscal: false,
+    detencao: false, venda: true, fiscal: false, exit_alt: false,
   })
 
   useEffect(() => {
@@ -97,6 +97,18 @@ export function CalculadoraForm({ analise, onUpdate }) {
           <Toggle label="Ampliação (IVA 23%)" field="ampliacao" value={form.ampliacao} onChange={handleChange} />
           <Input label="Licenciamento" field="licenciamento" value={form.licenciamento} onChange={handleChange} placeholder="0" />
         </div>
+        {(form.pmo_perc > 0) && (
+          <div className="mt-3 pl-3 border-l-2" style={{ borderColor: GOLD + '60' }}>
+            <div className="text-xs text-gray-500 mb-2">Desagregação do PMO (opcional — mostra detalhe no relatório):</div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <Input label="Arquitectura %" field="pmo_arq_perc" value={form.pmo_arq_perc} onChange={handleChange} step="0.5" placeholder="0" />
+              <Input label="Fiscalização %" field="pmo_fisc_perc" value={form.pmo_fisc_perc} onChange={handleChange} step="0.5" placeholder="0" />
+              <Input label="Coord. Segurança %" field="pmo_seg_obra_perc" value={form.pmo_seg_obra_perc} onChange={handleChange} step="0.5" placeholder="0" />
+              <Input label="Outros %" field="pmo_outros_perc" value={form.pmo_outros_perc} onChange={handleChange} step="0.5" placeholder="0" />
+            </div>
+            <PMOValidation form={form} />
+          </div>
+        )}
         <CalcRow items={[
           { label: 'IVA Obra', value: analise.iva_obra },
           { label: 'Obra c/ IVA', value: analise.obra_com_iva, bold: true },
@@ -162,6 +174,41 @@ export function CalculadoraForm({ analise, onUpdate }) {
           ...(form.regime_fiscal === 'Empresa' ? [{ label: 'Retenção Dividendos', value: analise.retencao_dividendos }] : []),
         ]} />
       </Section>
+
+      {/* Exit Alternativo (arrendamento) */}
+      <Section title="Exit Alternativo" tag="K" open={openSections.exit_alt} onToggle={() => toggleSection('exit_alt')}
+        summary={form.renda_mensal > 0 ? `${EUR(form.renda_mensal)}/mês` : 'Não preenchido'}
+        hint="Análise de arrendamento como saída alternativa">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <Input label="Renda Mensal Estimada" field="renda_mensal" value={form.renda_mensal} onChange={handleChange} placeholder="Ex: 750" />
+          <Input label="Vacancy %" field="vacancy_pct" value={form.vacancy_pct} onChange={handleChange} step="0.5" placeholder="5" />
+          <Input label="Custos Gestão %" field="gestao_arr_pct" value={form.gestao_arr_pct} onChange={handleChange} step="0.5" placeholder="8" />
+        </div>
+        <div className="mt-2 text-xs text-gray-400">
+          Activa a secção "K. Exit Alternativo" no relatório PDF.
+        </div>
+      </Section>
+    </div>
+  )
+}
+
+function PMOValidation({ form }) {
+  const total = parseFloat(form.pmo_perc) || 0
+  const soma = (parseFloat(form.pmo_arq_perc) || 0)
+    + (parseFloat(form.pmo_fisc_perc) || 0)
+    + (parseFloat(form.pmo_seg_obra_perc) || 0)
+    + (parseFloat(form.pmo_outros_perc) || 0)
+  if (soma === 0) return null
+  if (Math.abs(soma - total) > 0.1) {
+    return (
+      <div className="mt-2 text-xs" style={{ color: '#8B1A1A' }}>
+        ⚠ Soma dos sub-campos ({soma.toFixed(1)}%) não corresponde ao PMO total ({total.toFixed(1)}%).
+      </div>
+    )
+  }
+  return (
+    <div className="mt-2 text-xs" style={{ color: '#1B5E20' }}>
+      ✓ Desagregação válida ({soma.toFixed(1)}% = PMO total).
     </div>
   )
 }

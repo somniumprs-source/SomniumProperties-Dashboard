@@ -48,6 +48,11 @@ function calcTIR(equity, lucroLiq, meses) {
   return Math.pow(1 + r, 12) - 1
 }
 
+function clamp(v, lo, hi) {
+  if (!isFinite(v)) return lo
+  return Math.max(lo, Math.min(hi, v))
+}
+
 export function calcMetricsExtra(a, im = {}) {
   const compra = safeNum(a.compra) || safeNum(im.valor_proposta) || safeNum(im.ask_price)
   const obra = safeNum(a.obra)
@@ -57,6 +62,7 @@ export function calcMetricsExtra(a, im = {}) {
   const cap = safeNum(a.capital_necessario)
   const lb = safeNum(a.lucro_bruto)
   const ll = safeNum(a.lucro_liquido)
+  const rt = safeNum(a.retorno_total)
   const totalAq = safeNum(a.total_aquisicao)
   const totalDet = safeNum(a.total_detencao)
   const totalVen = safeNum(a.total_venda)
@@ -74,6 +80,14 @@ export function calcMetricsExtra(a, im = {}) {
   const impostos = safeNum(a.impostos)
   const retencaoDiv = safeNum(a.retencao_dividendos)
   const area = safeNum(im.area_bruta)
+  const pmoPerc = safeNum(a.pmo_perc)
+  const pmoArq = safeNum(a.pmo_arq_perc)
+  const pmoFisc = safeNum(a.pmo_fisc_perc)
+  const pmoSeg = safeNum(a.pmo_seg_obra_perc)
+  const pmoOutros = safeNum(a.pmo_outros_perc)
+  const rendaMensal = safeNum(a.renda_mensal)
+  const vacancyPct = a.vacancy_pct != null ? safeNum(a.vacancy_pct) : 5
+  const gestaoArrPct = a.gestao_arr_pct != null ? safeNum(a.gestao_arr_pct) : 8
 
   const custoTotal = cap + valorFin
   const custoFinanciamento = Math.max(custoTotal - totalAq - obraComIva - licen - totalDet - totalVen, 0)
@@ -170,6 +184,100 @@ export function calcMetricsExtra(a, im = {}) {
     }
   }
 
+  // ── PMO Breakdown ────────────────────────────────────────────
+  const pmoSoma = pmoArq + pmoFisc + pmoSeg + pmoOutros
+  const obraValor = obraComIva > 0 ? obraComIva : obra
+  function pmoEur(pct) { return obraValor > 0 ? obraValor * (pct / 100) : 0 }
+  const pmoBreakdown = pmoSoma > 0 ? {
+    total_perc: pmoPerc,
+    soma_breakdown: pmoSoma,
+    arq: { perc: pmoArq, eur: pmoEur(pmoArq) },
+    fisc: { perc: pmoFisc, eur: pmoEur(pmoFisc) },
+    seg: { perc: pmoSeg, eur: pmoEur(pmoSeg) },
+    outros: { perc: pmoOutros, eur: pmoEur(pmoOutros) },
+    valido: Math.abs(pmoSoma - pmoPerc) <= 0.1,
+  } : null
+
+  // ── Sensibilidade ao Prazo de Detenção ────────────────────────
+  const prazos = [6, 9, 12, 18, 24]
+  const custoMensalDet = seguroMensal + condominioMensal + (compra * (taxaImi / 100)) / 12
+  const raBaseSimples_pp = meses > 0 ? (rt / meses) * 12 : 0
+  const sensibilidadePrazo = prazos.map(prazoAlt => {
+    const custosExtra = Math.max(0, (prazoAlt - meses) * custoMensalDet)
+    const llAjust = ll - custosExtra
+    const raSimples_pp = prazoAlt > 0 ? (rt / prazoAlt) * 12 : 0
+    const delta_pp = raSimples_pp - raBaseSimples_pp
+    const premio_pp = raSimples_pp - 3.5
+    return {
+      prazo: prazoAlt,
+      lucro_liquido: llAjust,
+      ra_simples_pp: raSimples_pp,
+      delta_pp,
+      premio_pp,
+      is_base: prazoAlt === meses,
+    }
+  })
+
+  // ── Exit Alternativo (Arrendamento) ──────────────────────────
+  let exitArrendamento = null
+  if (rendaMensal > 0) {
+    const vac = vacancyPct / 100
+    const gest = gestaoArrPct / 100
+    const rendaAnualBruta = rendaMensal * 12
+    const rendaAnualLiq = rendaAnualBruta * (1 - vac) * (1 - gest)
+    const rendaNetaMensal = rendaMensal * (1 - vac) * (1 - gest)
+    const yieldBruto = vvr > 0 ? rendaAnualBruta / vvr : null
+    const yieldLiquido = vvr > 0 ? rendaAnualLiq / vvr : null
+    const yieldCusto = cap > 0 ? rendaAnualLiq / cap : null
+    const cobertura = rendaNetaMensal > custoMensalDet
+    const folga = rendaNetaMensal - custoMensalDet
+    const lucroPerdidoMes = meses > 0 ? ll / meses : null
+    const beArrendamento = rendaNetaMensal > 0 && lucroPerdidoMes != null
+      ? Math.ceil(Math.abs(lucroPerdidoMes) / rendaNetaMensal)
+      : null
+    const taxaTributacao = regime === 'Empresa' ? 0.25 : 0.28
+    const impostoRenda = rendaAnualLiq * taxaTributacao
+    const rendaPosImp = rendaAnualLiq - impostoRenda
+    exitArrendamento = {
+      renda_mensal: rendaMensal,
+      vacancy_pct: vacancyPct,
+      gestao_pct: gestaoArrPct,
+      renda_anual_bruta: rendaAnualBruta,
+      renda_anual_liq: rendaAnualLiq,
+      renda_neta_mensal: rendaNetaMensal,
+      yield_bruto: yieldBruto,
+      yield_liquido: yieldLiquido,
+      yield_custo: yieldCusto,
+      cobertura_ok: cobertura,
+      custo_mensal_det: custoMensalDet,
+      folga,
+      be_arrendamento: beArrendamento,
+      taxa_tributacao: taxaTributacao,
+      imposto_anual: impostoRenda,
+      renda_pos_imposto: rendaPosImp,
+    }
+  }
+
+  // ── Score de Risco Somnium ───────────────────────────────────
+  const scoreVVR = clamp(((margemSegVVR ?? 0) / 0.30) * 100, 0, 100)
+  const scoreMargem = clamp(((margemCusto ?? 0) - 0.15) / 0.15 * 100, 0, 100)
+  const scoreObra = clamp(((margemSegObra ?? 0) / 1.0) * 100, 0, 100)
+  const scorePrazo = clamp((1 - Math.max(0, (meses - 6)) / 12) * 100, 0, 100)
+  const scoreTotal = Math.round(0.35 * scoreVVR + 0.25 * scoreMargem + 0.20 * scoreObra + 0.20 * scorePrazo)
+  const scoreNivel = scoreTotal >= 70 ? 'BAIXO RISCO' : scoreTotal >= 50 ? 'RISCO MODERADO' : 'RISCO ELEVADO'
+  const scoreCor = scoreTotal >= 70 ? '#1B5E20' : scoreTotal >= 50 ? '#8C6A30' : '#8B1A1A'
+  const scoreRisco = {
+    total: scoreTotal,
+    nivel: scoreNivel,
+    cor: scoreCor,
+    componentes: {
+      vvr: { pts: Math.round(scoreVVR), peso: 35 },
+      margem: { pts: Math.round(scoreMargem), peso: 25 },
+      obra: { pts: Math.round(scoreObra), peso: 20 },
+      prazo: { pts: Math.round(scorePrazo), peso: 20 },
+    },
+  }
+
   return {
     moic,
     tir_anual: tirAnual,
@@ -195,8 +303,13 @@ export function calcMetricsExtra(a, im = {}) {
     contingencia_20: impactoObra(0.20),
     sensibilidade_vvr: sensibilidadeVvr,
     fiscal,
+    pmo_breakdown: pmoBreakdown,
+    sensibilidade_prazo: sensibilidadePrazo,
+    exit_arrendamento: exitArrendamento,
+    score_risco: scoreRisco,
     has_area: area > 0,
     has_financiamento: percFin > 0,
+    has_renda: rendaMensal > 0,
   }
 }
 
