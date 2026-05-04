@@ -163,13 +163,48 @@ export function generateOrcamentoObraPDF(imovel, orcamentoRow, stream) {
     y += 8
   }
 
+  // ── Decomposição por tipo ──────────────────────────────────
+  y = checkPage(doc, y, 200)
+  doc.rect(50, y, 500, 28).fill(LIGHT)
+  doc.fontSize(10).fillColor(BLACK).text('DECOMPOSIÇÃO POR TIPO', 60, y + 9)
+  y += 34
+
+  const t = calc.totais
+  const tipos = [
+    ['Material', t.por_tipo.material],
+    ['Mão-de-obra', t.por_tipo.mo],
+    ['Serviços auxiliares', t.por_tipo.servicos],
+    ['Honorários (23%)', t.por_tipo.honorarios],
+    ['Taxas (sem IVA)', t.por_tipo.taxas],
+    ['Isento (seguros)', t.por_tipo.isento],
+    ['Misto (não decomposto)', t.por_tipo.misto],
+  ]
+  for (const [label, dados] of tipos) {
+    if (!dados || dados.base <= 0) continue
+    y = checkPage(doc, y, 14)
+    doc.fontSize(9).fillColor(BLACK).text(label, 60, y)
+    const detalhe = `Base ${EUR(dados.base)}${dados.iva ? ' · IVA ' + EUR(dados.iva) : ''}${dados.autoliq ? ' · autoliq. ' + EUR(dados.autoliq) : ''}${dados.retencoes ? ' · retenções -' + EUR(dados.retencoes) : ''}`
+    doc.fontSize(8).fillColor(GRAY).text(detalhe, 50, y + 1, { width: 490, align: 'right' })
+    y += 14
+  }
+  // Rácio material
+  y += 4
+  const racioColor = t.beneficio_perdido ? RED : (regime === 'habitacao' && t.racio_material > 15 ? '#b45309' : GRAY)
+  doc.fontSize(9).fillColor(racioColor)
+     .text(`Rácio material/empreitada: ${t.racio_material}%${regime === 'habitacao' ? ' (limite Verba 2.32 = 20%)' : ''}`, 60, y)
+  y += 14
+  if (t.beneficio_perdido) {
+    doc.fontSize(8).fillColor(RED).text('⚠ Verba 2.32 violada — benefício 6% perdido, recalculado a 23%.', 60, y)
+    y += 14
+  }
+  y += 8
+
   // ── Quadro fiscal final ────────────────────────────────────
   y = checkPage(doc, y, 200)
   doc.rect(50, y, 500, 32).fill(LIGHT)
   doc.fontSize(11).fillColor(BLACK).text('RESUMO FISCAL', 60, y + 11)
   y += 38
 
-  const t = calc.totais
   const linhasFiscais = [
     ['Base tributável (obra)',                  t.base_obra_com_bdi],
     ['Base tributável (licenciamento)',         t.base_licenciamento],
