@@ -41,31 +41,31 @@ export function generateMeetingPDF(reuniao, analise, investidor) {
     : '—'
 
   let y = PT
-  let pageNum = 0
 
-  function addPage() {
-    doc.addPage({ size: 'A4', margins: { top: PT, bottom: PB, left: ML, right: ML } })
-    pageNum++
-    y = PT
-    drawFooter()
+  // Centra texto numa coordenada Y sem usar `width` (que dispara LineWrapper
+  // e causa pageBreak automatico quando se desenha fora da content area).
+  function centeredText(text, fy, fontSize, font, color, opts = {}) {
+    doc.fontSize(fontSize).font(font).fillColor(color)
+    const w = doc.widthOfString(text, { characterSpacing: opts.characterSpacing || 0 })
+    doc.text(text, (PW - w) / 2, fy, { lineBreak: false, characterSpacing: opts.characterSpacing || 0 })
   }
 
   function drawFooter() {
     const fy = PH - PB + 30
-    doc.fontSize(7).fillColor(GOLD).font('Helvetica-Bold')
-      .text('SOMNIUM PROPERTIES', ML, fy, { width: CW, align: 'center', characterSpacing: 1.5, lineBreak: false })
-    doc.fontSize(7).fillColor(MUTED).font('Helvetica')
-      .text('Excelência em Investimento Imobiliário', ML, fy + 10, { width: CW, align: 'center', lineBreak: false })
-    doc.fontSize(6.5).fillColor(LIGHT).font('Helvetica-Oblique')
-      .text('Documento Confidencial — Uso Interno Somnium Properties', ML, fy + 22, { width: CW, align: 'center', lineBreak: false })
+    centeredText('SOMNIUM PROPERTIES', fy, 7, 'Helvetica-Bold', GOLD, { characterSpacing: 1.5 })
+    centeredText('Excelência em Investimento Imobiliário', fy + 10, 7, 'Helvetica', MUTED)
+    centeredText('Documento Confidencial — Uso Interno Somnium Properties', fy + 22, 6.5, 'Helvetica-Oblique', LIGHT)
   }
 
+  // Quando pdfkit cria nova pagina (manual ou autopaging), reset y + footer
+  doc.on('pageAdded', () => { y = PT; drawFooter() })
+
   function needPage(needed) {
-    if (y + needed > PH - PB - 50) addPage()
+    if (y + needed > PH - PB - 50) doc.addPage({ size: 'A4', margins: { top: PT, bottom: PB, left: ML, right: ML } })
   }
 
   // ─── Page 1 ────────────────────────────────────────────────────
-  addPage()
+  doc.addPage({ size: 'A4', margins: { top: PT, bottom: PB, left: ML, right: ML } })
 
   // Header box institucional
   drawHeader('Relatório de Reunião', `Análise Estratégica — ${investName}`, dataStr)
