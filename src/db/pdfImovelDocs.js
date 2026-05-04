@@ -338,7 +338,8 @@ class DocBuilder {
   // conteúdo de im.riscos com im.mitigacao_riscos. Linhas extra de qualquer
   // dos lados ficam isoladas (sem par). Só renderiza se houver mitigações
   // definidas — caso contrário a coluna 'Riscos' do bloco anterior basta.
-  riscosMitigacao() {
+  // opts.skipHeader=true → não desenha o header de secção (caller já o emitiu como subheader)
+  riscosMitigacao(opts = {}) {
     const im = this.imovel || {}
     const riscos = parseListItems(im.riscos)
     const mitig  = parseListItems(im.mitigacao_riscos)
@@ -359,10 +360,10 @@ class DocBuilder {
     const hR0 = this.doc.heightOfString(pairs[0]?.r || '—', { width: colR - padX * 2 - 6, lineGap: 3 })
     const hM0 = this.doc.heightOfString(pairs[0]?.m || '—', { width: colM - padX - 14, lineGap: 3 })
     const firstRowH = Math.max(hR0, hM0) + padY * 2
-    const headerSeccaoH = 32, tableHeaderH = 24
+    const headerSeccaoH = opts.skipHeader ? 0 : 32, tableHeaderH = 24
     this.ensure(headerSeccaoH + tableHeaderH + firstRowH + 8)
 
-    this.header('ANÁLISE DE RISCO E MITIGAÇÃO')
+    if (!opts.skipHeader) this.header('ANÁLISE DE RISCO E MITIGAÇÃO')
 
     // Cabecalho
     this.ensure(24)
@@ -782,6 +783,46 @@ class DocBuilder {
     return this
   }
 
+  // Linha com 2 pares label/valor lado a lado (cada par ocupa metade da largura).
+  // Útil quando dois campos são complementares e devem ser lidos juntos.
+  splitRow(left, right) {
+    const rowH = 22
+    this.ensure(rowH + 1)
+    const halfW = CW / 2
+    const labelW = 95
+    const valW = halfW - labelW - 20
+    this.doc.fontSize(8.5)
+    // Esquerda
+    this.doc.fillColor(C.body).text(left.label || '', ML + 10, this.y + 6, { width: labelW, lineBreak: false })
+    const lOpts = { width: valW, align: 'right', lineBreak: false }
+    if (left.link) { lOpts.link = left.link; lOpts.underline = true }
+    this.doc.fillColor(left.link ? C.gold : C.body).text(String(left.value || '—'), ML + 10 + labelW, this.y + 6, lOpts)
+    // Direita
+    this.doc.fillColor(C.body).text(right.label || '', ML + halfW + 10, this.y + 6, { width: labelW, lineBreak: false })
+    const rOpts = { width: valW, align: 'right', lineBreak: false }
+    if (right.link) { rOpts.link = right.link; rOpts.underline = true }
+    this.doc.fillColor(right.link ? C.gold : C.body).text(String(right.value || '—'), ML + halfW + 10 + labelW, this.y + 6, rOpts)
+    this.doc.rect(ML, this.y + rowH, CW, 0.3).fill(C.border)
+    this.y += rowH
+    return this
+  }
+
+  // Carimbo "Ficha gerada em <data> · Versão N" antes do disclaimer.
+  // Lê de this.imovel._version e this.imovel._generatedAt (injectados em persistDocumento).
+  versionStamp() {
+    const im = this.imovel || {}
+    if (!im._version) return this
+    const dt = im._generatedAt ? new Date(im._generatedAt) : new Date()
+    const dateStr = dt.toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' })
+    const txt = `Ficha gerada em ${dateStr} · Versão ${im._version}`
+    this.doc.fontSize(7).fillColor(C.muted)
+    const h = this.doc.heightOfString(txt, { width: CW })
+    this.ensure(h + 6)
+    this.doc.text(txt, ML, this.y, { width: CW, align: 'right' })
+    this.y += h + 4
+    return this
+  }
+
   disclaimer() {
     const txt = 'Este documento é preparado para fins informativos e não constitui aconselhamento financeiro ou fiscal. Os valores são estimativas e podem variar. Somnium Properties — Confidencial.'
     this.doc.fontSize(6.5)
@@ -874,16 +915,42 @@ function renderStressTests(b, a, opts = {}) {
 // generateCompiledReport chama-as inline para combinar seccoes.
 // ══════════════════════════════════════════════════════════════
 
+// Campos críticos para "completude" da Ficha — apenas os que devem ser
+// preenchidos antes da Ficha ser considerada pronta para apresentar/enviar.
+const FICHA_CAMPOS_CRITICOS = [
+  'nome', 'morada', 'freguesia', 'concelho',
+  'artigo_matricial', 'descricao_predial', 'fracao', 'regime_propriedade',
+  'tipologia', 'area_bruta', 'andar', 'predio_tipo', 'tem_elevador', 'ano_construcao',
+  'certificado_energetico', 'vpt', 'imi_anual',
+  'proprietario_nome', 'proprietario_nif', 'proprietario_contacto',
+  'motivo_venda_declarado', 'data_anuncio', 'origem', 'tipo_oportunidade',
+  'modelo_negocio', 'ask_price',
+  'tese_investimento', 'pontos_fortes', 'pontos_fracos', 'riscos', 'mitigacao_riscos',
+]
+function fichaCompletude(im) {
+  let filled = 0
+  for (const k of FICHA_CAMPOS_CRITICOS) {
+    const v = im?.[k]
+    if (v == null) continue
+    if (Array.isArray(v) && v.length === 0) continue
+    if (typeof v === 'string' && v.trim() === '') continue
+    filled++
+  }
+  return { filled, total: FICHA_CAMPOS_CRITICOS.length }
+}
+
 function renderFichaImovel(b, im) {
   const M2 = v => (v == null || v === '' ? '—' : `${v} m²`)
   const NUM = v => (v == null || v === '' ? '—' : String(v))
   const ARR = v => (Array.isArray(v) && v.length ? v.join(', ') : '—')
   const precoM2 = (im.ask_price && im.area_bruta) ? Math.round(im.ask_price / im.area_bruta) : null
+  const comp = fichaCompletude(im)
 
   b.inlineData([
     { label: 'REF', value: im.ref_interna || im.id?.slice(0, 8) },
     { label: 'Estado', value: (im.estado || '').replace(/^\d+-/, '') },
     { label: 'Adicionado', value: FDATE(im.data_adicionado) },
+    { label: 'Completude', value: `${comp.filled}/${comp.total}` },
   ])
   b.space(6)
 
@@ -902,23 +969,20 @@ function renderFichaImovel(b, im) {
 
   // 1. IDENTIFICAÇÃO REGISTRAL
   b.header('1. IDENTIFICAÇÃO REGISTRAL')
+  // Link Maps: prefere coordenadas (mais preciso); fallback para morada
   const mapsLink = (im.coordenadas_lat && im.coordenadas_lng)
     ? `https://www.google.com/maps/search/?api=1&query=${im.coordenadas_lat},${im.coordenadas_lng}`
     : (im.morada ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(im.morada)}` : null)
-  const coordsTxt = (im.coordenadas_lat && im.coordenadas_lng)
-    ? `${im.coordenadas_lat}, ${im.coordenadas_lng}`
-    : (mapsLink ? 'Abrir Google Maps' : '—')
   const rows1 = [
     { label: 'Designação', value: im.nome },
-    { label: 'Morada', value: im.morada },
+    // Morada é a própria linha clicável (sem duplicar com Coordenadas)
+    { label: 'Morada', value: im.morada || '—', link: im.morada ? mapsLink : undefined },
     { label: 'Freguesia', value: im.freguesia },
     { label: 'Concelho', value: im.concelho },
   ]
-  // Distrito apenas quando ≠ Coimbra (default da operação)
   if (im.distrito && im.distrito !== 'Coimbra') {
     rows1.push({ label: 'Distrito', value: im.distrito })
   }
-  rows1.push({ label: 'Localização', value: coordsTxt, link: mapsLink || undefined })
   rows1.push(
     { label: 'Artigo Matricial', value: im.artigo_matricial },
     { label: 'Descrição Predial', value: im.descricao_predial },
@@ -965,12 +1029,17 @@ function renderFichaImovel(b, im) {
     { label: 'Motivo de Venda Declarado', value: im.motivo_venda_declarado },
     { label: 'Data do Anúncio', value: FDATE(im.data_anuncio) },
     { label: 'Tempo no Mercado (dias)', value: NUM(im.tempo_no_mercado_dias) },
-    { label: 'Origem', value: im.origem },
-    { label: 'Tipo de Oportunidade', value: im.tipo_oportunidade },
+  ])
+  // Origem + Tipo de Oportunidade lado a lado (campos complementares: canal e natureza)
+  b.splitRow(
+    { label: 'Origem', value: im.origem || '—' },
+    { label: 'Tipo de Oportunidade', value: im.tipo_oportunidade || '—' },
+  )
+  b.simpleTable([
     { label: 'Modelo de Negócio', value: im.modelo_negocio },
     { label: 'Data de Captação', value: FDATE(im.data_adicionado) },
     { label: 'Consultor', value: im.nome_consultor },
-    { label: 'Link Anúncio', value: im.link },
+    { label: 'Link Anúncio', value: im.link, link: im.link?.startsWith('http') ? im.link : undefined },
   ])
   b.space(6)
   b.header('PREÇO DE AQUISIÇÃO')
@@ -981,26 +1050,39 @@ function renderFichaImovel(b, im) {
   ])
   b.space(6)
 
-  // 5. ANÁLISE PRELIMINAR
+  // 5. ANÁLISE PRELIMINAR (subsecções numeradas, todas como subheader)
   if (im.tese_investimento || im.pontos_fortes || im.pontos_fracos || im.riscos || im.mitigacao_riscos) {
     b.header('5. ANÁLISE PRELIMINAR')
     if (im.tese_investimento) {
-      b.subheader('Tese de Investimento')
+      b.subheader('5.1 Tese de Investimento')
       b.text(cleanMultilineText(im.tese_investimento))
       b.space(6)
     }
-    if (im.pontos_fortes) { b.subheader('Pontos Fortes'); b.text(cleanMultilineText(im.pontos_fortes)); b.space(4) }
-    if (im.pontos_fracos) { b.subheader('Pontos Fracos'); b.text(cleanMultilineText(im.pontos_fracos)); b.space(4) }
-    // Riscos & Mitigação: tabela emparelhada (substitui blocos soltos).
-    // Fallback: se houver riscos sem mitigação, usa subheader simples.
+    if (im.pontos_fortes) {
+      b.subheader('5.2 Pontos Fortes')
+      b.text(cleanMultilineText(im.pontos_fortes))
+      b.space(4)
+    }
+    if (im.pontos_fracos) {
+      b.subheader('5.3 Pontos Fracos')
+      b.text(cleanMultilineText(im.pontos_fracos))
+      b.space(4)
+    }
     if (im.riscos && im.mitigacao_riscos) {
-      b.riscosMitigacao()
+      b.subheader('5.4 Riscos e Mitigação')
+      b.riscosMitigacao({ skipHeader: true })
     } else if (im.riscos) {
-      b.subheader('Riscos'); b.text(cleanMultilineText(im.riscos)); b.space(4)
+      b.subheader('5.4 Riscos')
+      b.text(cleanMultilineText(im.riscos))
+      b.space(4)
     }
   }
 
   if (im.notas) { b.space(4); b.header('NOTAS INTERNAS'); b.text(im.notas) }
+
+  // Stamp final: data de geração + versão (se foram injectados pelo lifecycle)
+  b.space(6)
+  b.versionStamp()
 }
 
 function renderFichaVisita(b, im) {
