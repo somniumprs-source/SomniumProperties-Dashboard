@@ -761,12 +761,12 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
 
   // Tabs dinâmicos por tipo
   const tabs = [
-    { key: 'detalhe', label: type === 'Imóveis' ? 'Ficha do imóvel' : type === 'Investidores' ? 'Ficha do investidor' : type === 'Consultores' ? 'Ficha do consultor' : 'Detalhe', icon: '📋', show: true },
+    { key: 'detalhe', label: type === 'Imóveis' ? 'Imóvel' : type === 'Investidores' ? 'Ficha do investidor' : type === 'Consultores' ? 'Ficha do consultor' : 'Detalhe', icon: '📋', show: true },
     { key: 'ficheiros', label: 'Ficheiros', icon: '📷', show: type === 'Imóveis' },
     { key: 'whatsapp', label: 'WhatsApp', icon: '📱', show: type === 'Consultores' },
     { key: 'interacoes', label: `Interacções (${data?.interacoes?.length ?? 0})`, icon: '💬', show: type === 'Consultores' },
     { key: 'checklist', label: 'Checklist', icon: '📋', show: type === 'Imóveis' },
-    { key: 'pontos_riscos', label: 'Pontos & Riscos', icon: '⚖️', show: type === 'Imóveis' },
+    { key: 'pontos_riscos', label: 'Pontos & Riscos', icon: '⚖️', show: false },
     { key: 'localizacao', label: 'Localização', icon: '📍', show: type === 'Imóveis' },
     { key: 'obra', label: 'Obra', icon: '🏗️', show: type === 'Imóveis' },
     { key: 'analise', label: 'Análise Financeira', icon: '📊', show: type === 'Imóveis' },
@@ -2373,7 +2373,7 @@ function MiniField({ label, value, highlight }) {
 
 // ── Secção Ficha do Imóvel — caracterização documental ──
 function FichaImovelFields({ form, setField }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const lookups = useLookups()
   const concelhos = Object.keys(freguesiasData?.concelhos || {})
   const freguesias = useMemo(() => {
@@ -2393,7 +2393,7 @@ function FichaImovelFields({ form, setField }) {
     <div className="col-span-2 md:col-span-3 mt-2 border border-gray-200 rounded-xl bg-gray-50/50">
       <button type="button" onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-xl">
-        <span>📋 Identificação Documental — Ficha do Imóvel</span>
+        <span>📋 Ficha do Imóvel — secções alinhadas ao PDF</span>
         {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
       </button>
       {open && (
@@ -2514,6 +2514,50 @@ function FichaImovelFields({ form, setField }) {
               </div>
               <EF label="Data do Anúncio" field="data_anuncio" form={form} set={setField} type="date" />
               <EF label="Tempo no Mercado (dias)" field="tempo_no_mercado_dias" form={form} set={setField} type="number" />
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Tipo de Oportunidade</label>
+                <select value={form.tipo_oportunidade || ''} onChange={e => setField('tipo_oportunidade', e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+                  <option value="">—</option>
+                  {(lookups.tipo_oportunidade || ['Off-Market','Market']).map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* 5. Análise Preliminar (alinhado ao PDF) */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">5. Análise Preliminar</p>
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">🎯 Tese de Investimento (1 parágrafo executivo)</label>
+                <textarea value={form.tese_investimento || ''} onChange={e => setField('tese_investimento', e.target.value)} rows={3}
+                  placeholder="Por que este imóvel — ângulo de criação de valor, modelo, exit, upside..."
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">✅ Pontos Fortes (uma linha por ponto)</label>
+                  <textarea value={form.pontos_fortes || ''} onChange={e => setField('pontos_fortes', e.target.value)} rows={5}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">⚠️ Pontos Fracos (uma linha por ponto)</label>
+                  <textarea value={form.pontos_fracos || ''} onChange={e => setField('pontos_fracos', e.target.value)} rows={5}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">🚨 Riscos (uma linha por risco)</label>
+                  <textarea value={form.riscos || ''} onChange={e => setField('riscos', e.target.value)} rows={5}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">🛡️ Mitigação (mesma ordem dos riscos)</label>
+                  <textarea value={form.mitigacao_riscos || ''} onChange={e => setField('mitigacao_riscos', e.target.value)} rows={5}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                </div>
+              </div>
+              <p className="text-[11px] text-neutral-500">Riscos e Mitigação emparelham-se na mesma ordem para a tabela do PDF.</p>
             </div>
           </div>
         </div>
