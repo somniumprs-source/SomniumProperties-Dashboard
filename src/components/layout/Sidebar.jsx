@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { LayoutDashboard, TrendingUp, Database, Bell, Clock, BarChart3, Menu, X, LogOut, Briefcase, Shield } from 'lucide-react'
+import { LayoutDashboard, TrendingUp, Database, Bell, Clock, BarChart3, Menu, X, LogOut, Briefcase, Shield, ScrollText } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { apiFetch } from '../../lib/api.js'
 
@@ -12,6 +12,7 @@ const nav = [
   { to: '/operacoes',          label: 'Operações',  Icon: Clock, badgeKey: 'tarefas', area: 'operacoes' },
   { to: '/metricas',           label: 'Métricas',   Icon: BarChart3, area: 'metricas' },
   { to: '/alertas',            label: 'Alertas',    Icon: Bell, badgeKey: 'alertas', area: 'alertas' },
+  { to: '/relatorios-admin',   label: 'Relatórios Administração', Icon: ScrollText, area: 'relatorios-admin' },
   { to: '/admin/utilizadores', label: 'Utilizadores', Icon: Shield, area: 'admin' },
 ]
 
