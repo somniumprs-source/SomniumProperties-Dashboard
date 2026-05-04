@@ -91,21 +91,27 @@ function PontosRiscosTab({ imovel, endpoint, id, onUpdate, toast }) {
         </p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        {CAMPOS.map(c => (
-          <div key={c.key} className="rounded-xl border border-gray-200 p-4 bg-white">
-            <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 mb-2">
-              <span>{c.icon}</span>{c.label}
-            </label>
-            <textarea
-              value={valores[c.key]}
-              onChange={e => setValores(prev => ({ ...prev, [c.key]: e.target.value }))}
-              onBlur={() => saveCampo(c.key)}
-              rows={8}
-              placeholder={`Um ${c.label.toLowerCase()} por linha…`}
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
-            />
-          </div>
-        ))}
+        {CAMPOS.map(c => {
+          const hint = c.key === 'riscos' || c.key === 'mitigacao_riscos'
+            ? 'Uma linha por risco. Os Riscos e a Mitigação emparelham-se na mesma ordem para a tabela do PDF.'
+            : null
+          return (
+            <div key={c.key} className="rounded-xl border border-gray-200 p-4 bg-white">
+              <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 mb-2">
+                <span>{c.icon}</span>{c.label}
+              </label>
+              <textarea
+                value={valores[c.key]}
+                onChange={e => setValores(prev => ({ ...prev, [c.key]: e.target.value }))}
+                onBlur={() => saveCampo(c.key)}
+                rows={8}
+                placeholder={`Um ${c.label.toLowerCase()} por linha…`}
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
+              />
+              {hint && <p className="text-[11px] text-neutral-500 mt-1.5">{hint}</p>}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

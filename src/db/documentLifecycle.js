@@ -82,24 +82,46 @@ async function removeFromStorage(url) {
 }
 
 export async function persistDocumento(imovel, tipo, { trigger, generatedBy = 'system', frozen = false, analise = null } = {}) {
-  const pdfDoc = await generateDoc(tipo, imovel, analise)
-  if (!pdfDoc) return null
-
-  const buf = await streamToBuffer(pdfDoc)
   const slug = slugify(imovel.nome || imovel.ref_interna || imovel.id)
+  const generatedAt = new Date()
 
+  // Calcular version ANTES de gerar o PDF, para que o renderer possa
+  // imprimir o stamp "Ficha gerada em X · Versão N" no documento.
+  let version, existingId, existingPath
   if (frozen) {
     const r = await pool.query(
       `SELECT COALESCE(MAX(version), 0) + 1 AS v FROM documentos_imovel WHERE imovel_id = $1 AND tipo = $2`,
       [imovel.id, tipo]
     )
-    const version = Number(r.rows[0].v)
+    version = Number(r.rows[0].v)
+  } else {
+    const existing = await pool.query(
+      `SELECT id, version, pdf_path FROM documentos_imovel
+        WHERE imovel_id = $1 AND tipo = $2 AND frozen = false
+        ORDER BY version DESC LIMIT 1`,
+      [imovel.id, tipo]
+    )
+    if (existing.rows.length > 0) {
+      existingId = existing.rows[0].id
+      existingPath = existing.rows[0].pdf_path
+      version = Number(existing.rows[0].version) + 1
+    } else {
+      version = 1
+    }
+  }
+
+  const imForRender = { ...imovel, _version: version, _generatedAt: generatedAt.toISOString() }
+  const pdfDoc = await generateDoc(tipo, imForRender, analise)
+  if (!pdfDoc) return null
+  const buf = await streamToBuffer(pdfDoc)
+
+  if (frozen) {
     const storagePath = `${imovel.id}/${tipo}_${slug}_v${version}.pdf`
     const url = await uploadToStorage(storagePath, buf)
     await pool.query(
-      `INSERT INTO documentos_imovel (imovel_id, tipo, version, pdf_path, pdf_size_bytes, frozen, trigger_event, generated_by, snapshot_data)
-       VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8)`,
-      [imovel.id, tipo, version, url, buf.length, trigger || null, generatedBy, imovel]
+      `INSERT INTO documentos_imovel (imovel_id, tipo, version, pdf_path, pdf_size_bytes, frozen, trigger_event, generated_by, snapshot_data, generated_at)
+       VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8, $9)`,
+      [imovel.id, tipo, version, url, buf.length, trigger || null, generatedBy, imovel, generatedAt]
     )
     return { tipo, version, pdfPath: url, sizeBytes: buf.length, frozen: true }
   }
@@ -108,35 +130,23 @@ export async function persistDocumento(imovel, tipo, { trigger, generatedBy = 's
   const storagePath = `${imovel.id}/${tipo}_${slug}.pdf`
   const url = await uploadToStorage(storagePath, buf)
 
-  const existing = await pool.query(
-    `SELECT id, version, pdf_path FROM documentos_imovel
-      WHERE imovel_id = $1 AND tipo = $2 AND frozen = false
-      ORDER BY version DESC LIMIT 1`,
-    [imovel.id, tipo]
-  )
-
-  if (existing.rows.length > 0) {
-    const old = existing.rows[0]
-    // Se o slug mudou (renomearam o imóvel), apaga o objecto antigo
-    if (old.pdf_path && old.pdf_path !== url) {
-      await removeFromStorage(old.pdf_path)
-    }
-    const newVersion = Number(old.version) + 1
+  if (existingId) {
+    if (existingPath && existingPath !== url) await removeFromStorage(existingPath)
     await pool.query(
       `UPDATE documentos_imovel
           SET version = $1, pdf_path = $2, pdf_size_bytes = $3,
               trigger_event = $4, generated_by = $5, snapshot_data = $6,
-              generated_at = now()
-        WHERE id = $7`,
-      [newVersion, url, buf.length, trigger || null, generatedBy, imovel, old.id]
+              generated_at = $7
+        WHERE id = $8`,
+      [version, url, buf.length, trigger || null, generatedBy, imovel, generatedAt, existingId]
     )
-    return { tipo, version: newVersion, pdfPath: url, sizeBytes: buf.length, frozen: false, replaced: true }
+    return { tipo, version, pdfPath: url, sizeBytes: buf.length, frozen: false, replaced: true }
   }
 
   await pool.query(
-    `INSERT INTO documentos_imovel (imovel_id, tipo, version, pdf_path, pdf_size_bytes, frozen, trigger_event, generated_by, snapshot_data)
-     VALUES ($1, $2, 1, $3, $4, false, $5, $6, $7)`,
-    [imovel.id, tipo, url, buf.length, trigger || null, generatedBy, imovel]
+    `INSERT INTO documentos_imovel (imovel_id, tipo, version, pdf_path, pdf_size_bytes, frozen, trigger_event, generated_by, snapshot_data, generated_at)
+     VALUES ($1, $2, 1, $3, $4, false, $5, $6, $7, $8)`,
+    [imovel.id, tipo, url, buf.length, trigger || null, generatedBy, imovel, generatedAt]
   )
   return { tipo, version: 1, pdfPath: url, sizeBytes: buf.length, frozen: false, replaced: false }
 }
