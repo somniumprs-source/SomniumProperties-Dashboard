@@ -37,6 +37,8 @@ router.get('/imoveis/:imovelId/orcamento-obra', async (req, res) => {
         notas: '',
         iva_perc: 23,
         regime_fiscal: 'normal',
+        zona_aru: false,
+        tipo_obra: 'remodelacao',
         bdi: { imprevistos_perc: 0, margem_perc: 0 },
         total_obra: 0,
         total_licenciamento: 0,
@@ -64,13 +66,17 @@ router.put('/imoveis/:imovelId/orcamento-obra', async (req, res) => {
     const pisos   = Array.isArray(body.pisos) ? body.pisos : []
     const seccoes = body.seccoes && typeof body.seccoes === 'object' ? body.seccoes : {}
     const ivaPerc = Number.isFinite(Number(body.iva_perc)) ? Number(body.iva_perc) : 23
-    const regimeFiscal = ['normal', 'aru', 'habitacao', 'rjru'].includes(body.regime_fiscal) ? body.regime_fiscal : 'normal'
+    // v4: zona_aru + tipo_obra são os flags principais. regime_fiscal mantido para retrocompat.
+    const zonaAru = !!body.zona_aru
+    const tipoObra = ['remodelacao', 'construcao_nova'].includes(body.tipo_obra) ? body.tipo_obra : 'remodelacao'
+    // Derivar regime_fiscal espelhando os flags (legacy mantém).
+    const regimeFiscal = zonaAru ? 'aru' : 'normal'
     const bdi = body.bdi && typeof body.bdi === 'object' ? body.bdi : {}
     const notas   = body.notas ?? ''
     const criadoPor = body.criado_por ?? null
 
     const calc = calcOrcamentoObra({
-      pisos, seccoes, iva_perc: ivaPerc, regime_fiscal: regimeFiscal, bdi,
+      pisos, seccoes, iva_perc: ivaPerc, zona_aru: zonaAru, tipo_obra: tipoObra, bdi,
     })
     const t = calc.totais
 
@@ -78,20 +84,22 @@ router.put('/imoveis/:imovelId/orcamento-obra', async (req, res) => {
 
     const { rows: [saved] } = await pool.query(
       `INSERT INTO orcamentos_obra
-         (imovel_id, pisos, seccoes, notas, iva_perc, regime_fiscal, bdi,
+         (imovel_id, pisos, seccoes, notas, iva_perc, regime_fiscal, zona_aru, tipo_obra, bdi,
           total_obra, total_licenciamento, total_geral,
           total_iva, total_iva_autoliquidado, total_retencoes_irs, total_a_pagar,
           criado_por, created_at, updated_at)
-       VALUES ($1, $2::jsonb, $3::jsonb, $4, $5, $6, $7::jsonb,
-               $8, $9, $10,
-               $11, $12, $13, $14,
-               $15, $16, $16)
+       VALUES ($1, $2::jsonb, $3::jsonb, $4, $5, $6, $7, $8, $9::jsonb,
+               $10, $11, $12,
+               $13, $14, $15, $16,
+               $17, $18, $18)
        ON CONFLICT (imovel_id) DO UPDATE SET
          pisos = EXCLUDED.pisos,
          seccoes = EXCLUDED.seccoes,
          notas = EXCLUDED.notas,
          iva_perc = EXCLUDED.iva_perc,
          regime_fiscal = EXCLUDED.regime_fiscal,
+         zona_aru = EXCLUDED.zona_aru,
+         tipo_obra = EXCLUDED.tipo_obra,
          bdi = EXCLUDED.bdi,
          total_obra = EXCLUDED.total_obra,
          total_licenciamento = EXCLUDED.total_licenciamento,
@@ -103,7 +111,7 @@ router.put('/imoveis/:imovelId/orcamento-obra', async (req, res) => {
          criado_por = COALESCE(EXCLUDED.criado_por, orcamentos_obra.criado_por),
          updated_at = EXCLUDED.updated_at
        RETURNING *`,
-      [imovelId, JSON.stringify(pisos), JSON.stringify(seccoes), notas, ivaPerc, regimeFiscal, JSON.stringify(bdi),
+      [imovelId, JSON.stringify(pisos), JSON.stringify(seccoes), notas, ivaPerc, regimeFiscal, zonaAru, tipoObra, JSON.stringify(bdi),
        calc.total_obra, calc.total_licenciamento, calc.total_geral,
        t.iva_geral, t.iva_autoliquidado, t.retencoes_irs, t.a_pagar,
        criadoPor, now]

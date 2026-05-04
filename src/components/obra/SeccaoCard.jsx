@@ -1,18 +1,20 @@
 /**
- * Cartão de secção do orçamento (v3 — layout tabular + linhas livres).
+ * Cartão de secção do orçamento (v4 — simplificado).
  *
- * Cada secção mostra:
- *   1. Cabeçalho colapsável com nome + subtotal
- *   2. Inputs guiados (campos pré-definidos da secção, organizados em
- *      grelha legível com badges de tipo fiscal)
- *   3. Tabela de "linhas livres" — completamente editável: descrição,
- *      qtd, unidade, €/un material, IVA mat, €/un MO, IVA MO, autoliq,
- *      retenção. Botão "+ Adicionar linha" e remover.
- *   4. Resumo da secção (base / IVA / autoliq / retenções / total)
+ * Removido:
+ *   - FiscalOverride por secção (decisão fiscal está no topo da aba)
+ *   - Selectors "IVA mat" e "IVA MO" por linha (taxa derivada do regime)
+ *
+ * Adicionado:
+ *   - Bloco MO compacto (dias × €/dia) no topo do body, em todas as
+ *     secções marcadas com `has_mo: true` na config
+ *
+ * Cada secção mostra: campos guiados (por piso e fixos) + tabela editável
+ * de linhas livres + resumo da secção.
  */
 import { useState } from 'react'
 import { ChevronDown, ChevronUp, AlertTriangle, Plus, Trash2 } from 'lucide-react'
-import { TAXAS_IVA, RETENCOES_IRS } from './seccoesConfig.js'
+import { RETENCOES_IRS } from './seccoesConfig.js'
 
 const GOLD = '#C9A84C'
 
@@ -76,10 +78,52 @@ function FiscalBadge({ tipo }) {
   const map = {
     material: { txt: 'Mat.', cls: 'bg-blue-100 text-blue-700 border-blue-200' },
     mo:       { txt: 'MO',   cls: 'bg-green-100 text-green-700 border-green-200' },
+    taxas:    { txt: 'Taxa', cls: 'bg-gray-100 text-gray-700 border-gray-200' },
   }
   const m = map[tipo]
   if (!m) return null
   return <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium shrink-0 ${m.cls}`}>{m.txt}</span>
+}
+
+// ── Bloco MO (dias × €/dia) ─────────────────────────────────
+function MOBlock({ dados, onChange, defaultEurDia = 147.5 }) {
+  const setDias = (v) => onChange({ ...(dados || {}), dias_mo: v })
+  const setEurDia = (v) => onChange({ ...(dados || {}), eur_dia_mo: v })
+  const setAuto = (v) => onChange({ ...(dados || {}), autoliq_mo: v })
+
+  const dias = Number(dados?.dias_mo) || 0
+  const eurDia = Number(dados?.eur_dia_mo) || 0
+  const total = dias * eurDia
+
+  return (
+    <div className="rounded-lg border border-green-200 bg-green-50/40 p-3">
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="text-xs font-semibold text-green-800 inline-flex items-center gap-1">
+          <FiscalBadge tipo="mo" /> Mão-de-obra da secção
+        </span>
+        <div className="flex items-center gap-1.5">
+          <NumIn value={dados?.dias_mo} onChange={setDias} w="w-16" />
+          <span className="text-xs text-gray-500">dias ×</span>
+          <NumIn value={dados?.eur_dia_mo} onChange={setEurDia} w="w-20" placeholder={String(defaultEurDia)} />
+          <span className="text-xs text-gray-500">€/dia</span>
+        </div>
+        {total > 0 && (
+          <span className="text-xs text-gray-600 ml-auto">
+            = <strong className="text-gray-900">{EUR(total)}</strong>
+          </span>
+        )}
+        <label className="flex items-center gap-1 text-[11px] text-gray-600 ml-2">
+          <input
+            type="checkbox"
+            checked={!!dados?.autoliq_mo}
+            onChange={(e) => setAuto(e.target.checked)}
+            className="w-3 h-3"
+          />
+          Autoliquidação
+        </label>
+      </div>
+    </div>
+  )
 }
 
 // ── Bloco "Inputs guiados" ─────────────────────────────────
@@ -96,7 +140,7 @@ function CamposPiso({ piso, valores, onChange, campos }) {
           return (
             <div key={c.key} className="flex items-center gap-2">
               <label className="text-[11px] text-gray-600 flex-1 flex items-center gap-1 truncate">
-                <span className="truncate" title={c.label}>{c.label}</span>
+                <span className="truncate" title={c.label || c.key}>{c.label || c.key}</span>
                 <FiscalBadge tipo={c.tipo_fiscal} />
               </label>
               {isSel
@@ -140,20 +184,12 @@ function CampoFixo({ campo, value, onChange, valorSingular, onSingularChange }) 
   )
 }
 
-// ── Tabela de linhas livres ────────────────────────────────
-function LinhasLivresTabela({ linhas, onChange, regimeIvaDefault }) {
+// ── Tabela de linhas livres (sem selectors IVA) ────────────
+function LinhasLivresTabela({ linhas, onChange }) {
   const adicionar = () => {
     onChange([...linhas, {
-      id: uid(),
-      descricao: '',
-      qtd: 1,
-      unidade: 'un',
-      mat_eur_un: 0,
-      mat_iva: 23,
-      mo_eur_un: 0,
-      mo_iva: regimeIvaDefault,
-      autoliq_mo: false,
-      retencao_irs: 0,
+      id: uid(), descricao: '', qtd: 1, unidade: 'un',
+      mat_eur_un: 0, mo_eur_un: 0, autoliq_mo: false, retencao_irs: 0,
     }])
   }
   const remover = (id) => onChange(linhas.filter(l => l.id !== id))
@@ -173,7 +209,7 @@ function LinhasLivresTabela({ linhas, onChange, regimeIvaDefault }) {
       </div>
 
       {linhas.length === 0 ? (
-        <p className="text-xs text-gray-400 text-center py-4 italic">Sem linhas adicionais. Use o botão acima para adicionar.</p>
+        <p className="text-xs text-gray-400 text-center py-4 italic">Sem linhas adicionais.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
@@ -182,70 +218,47 @@ function LinhasLivresTabela({ linhas, onChange, regimeIvaDefault }) {
                 <th className="text-left font-medium px-2 py-1.5 min-w-[200px]">Descrição</th>
                 <th className="text-left font-medium px-1 py-1.5 w-16">Qtd</th>
                 <th className="text-left font-medium px-1 py-1.5 w-16">Unid.</th>
-                <th className="text-left font-medium px-1 py-1.5 w-20" title="€/unidade material">
+                <th className="text-left font-medium px-1 py-1.5 w-24">
                   <span className="inline-flex items-center gap-1">€/un mat <FiscalBadge tipo="material" /></span>
                 </th>
-                <th className="text-left font-medium px-1 py-1.5 w-16">IVA mat</th>
-                <th className="text-left font-medium px-1 py-1.5 w-20">
+                <th className="text-left font-medium px-1 py-1.5 w-24">
                   <span className="inline-flex items-center gap-1">€/un MO <FiscalBadge tipo="mo" /></span>
                 </th>
-                <th className="text-left font-medium px-1 py-1.5 w-16">IVA MO</th>
                 <th className="text-left font-medium px-1 py-1.5 w-12" title="MO em autoliquidação">Auto.</th>
                 <th className="text-left font-medium px-1 py-1.5 w-20">Ret. IRS</th>
                 <th className="w-8"></th>
               </tr>
             </thead>
             <tbody>
-              {linhas.map(l => {
-                const totalLinha = (Number(l.qtd) || 0) *
-                  ((Number(l.mat_eur_un) || 0) * (1 + (Number(l.mat_iva) || 0) / 100) +
-                   (Number(l.mo_eur_un) || 0) * (1 + (l.autoliq_mo ? 0 : (Number(l.mo_iva) || 0)) / 100))
-                return (
-                  <tr key={l.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                    <td className="px-2 py-1">
-                      <TextIn value={l.descricao} onChange={(v) => editar(l.id, { descricao: v })} placeholder="Descrição" w="w-full" />
-                    </td>
-                    <td className="px-1 py-1">
-                      <NumIn value={l.qtd} onChange={(v) => editar(l.id, { qtd: v })} w="w-14" />
-                    </td>
-                    <td className="px-1 py-1">
-                      <SelectIn value={l.unidade} onChange={(v) => editar(l.id, { unidade: v })} opcoes={['un','m²','m','m³','h','dias','vg','kg']} w="w-14" />
-                    </td>
-                    <td className="px-1 py-1">
-                      <NumIn value={l.mat_eur_un} onChange={(v) => editar(l.id, { mat_eur_un: v })} tipoFiscal="material" w="w-20" />
-                    </td>
-                    <td className="px-1 py-1">
-                      <SelectIn value={l.mat_iva} onChange={(v) => editar(l.id, { mat_iva: v })} opcoes={TAXAS_IVA.map(t => ({ value: t, label: `${t}%` }))} w="w-16" />
-                    </td>
-                    <td className="px-1 py-1">
-                      <NumIn value={l.mo_eur_un} onChange={(v) => editar(l.id, { mo_eur_un: v })} tipoFiscal="mo" w="w-20" />
-                    </td>
-                    <td className="px-1 py-1">
-                      <SelectIn value={l.mo_iva} onChange={(v) => editar(l.id, { mo_iva: v })} opcoes={TAXAS_IVA.map(t => ({ value: t, label: `${t}%` }))} w="w-16" />
-                    </td>
-                    <td className="px-1 py-1 text-center">
-                      <input
-                        type="checkbox"
-                        checked={!!l.autoliq_mo}
-                        onChange={(e) => editar(l.id, { autoliq_mo: e.target.checked })}
-                        className="w-3 h-3"
-                      />
-                    </td>
-                    <td className="px-1 py-1">
-                      <SelectIn value={l.retencao_irs} onChange={(v) => editar(l.id, { retencao_irs: v })} opcoes={RETENCOES_IRS.map(r => ({ value: r.key, label: r.key + '%' }))} w="w-20" />
-                    </td>
-                    <td className="px-1 py-1 text-right">
-                      <button
-                        onClick={() => remover(l.id)}
-                        className="text-gray-400 hover:text-red-500 p-1"
-                        title="Remover linha"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
+              {linhas.map(l => (
+                <tr key={l.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                  <td className="px-2 py-1">
+                    <TextIn value={l.descricao} onChange={(v) => editar(l.id, { descricao: v })} placeholder="Descrição" w="w-full" />
+                  </td>
+                  <td className="px-1 py-1"><NumIn value={l.qtd} onChange={(v) => editar(l.id, { qtd: v })} w="w-14" /></td>
+                  <td className="px-1 py-1">
+                    <SelectIn value={l.unidade} onChange={(v) => editar(l.id, { unidade: v })} opcoes={['un','m²','m','m³','h','dias','vg','kg']} w="w-14" />
+                  </td>
+                  <td className="px-1 py-1"><NumIn value={l.mat_eur_un} onChange={(v) => editar(l.id, { mat_eur_un: v })} tipoFiscal="material" w="w-20" /></td>
+                  <td className="px-1 py-1"><NumIn value={l.mo_eur_un} onChange={(v) => editar(l.id, { mo_eur_un: v })} tipoFiscal="mo" w="w-20" /></td>
+                  <td className="px-1 py-1 text-center">
+                    <input
+                      type="checkbox"
+                      checked={!!l.autoliq_mo}
+                      onChange={(e) => editar(l.id, { autoliq_mo: e.target.checked })}
+                      className="w-3 h-3"
+                    />
+                  </td>
+                  <td className="px-1 py-1">
+                    <SelectIn value={l.retencao_irs} onChange={(v) => editar(l.id, { retencao_irs: v })} opcoes={RETENCOES_IRS.map(r => ({ value: r.key, label: r.key + '%' }))} w="w-20" />
+                  </td>
+                  <td className="px-1 py-1 text-right">
+                    <button onClick={() => remover(l.id)} className="text-gray-400 hover:text-red-500 p-1" title="Remover">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -254,40 +267,9 @@ function LinhasLivresTabela({ linhas, onChange, regimeIvaDefault }) {
   )
 }
 
-// ── Override fiscal opcional por secção ────────────────────
-function FiscalOverride({ dados, regimeIvaDefault, onChange, suportaAutoliq }) {
-  return (
-    <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-gray-50 rounded-md text-[11px] text-gray-600">
-      <span className="font-medium">Override secção:</span>
-      <label className="flex items-center gap-1.5">
-        IVA
-        <select
-          value={dados?.iva_override ?? ''}
-          onChange={(e) => onChange({ ...dados, iva_override: e.target.value === '' ? null : Number(e.target.value) })}
-          className="px-1.5 py-0.5 border border-gray-300 rounded bg-white"
-        >
-          <option value="">Default ({regimeIvaDefault}%)</option>
-          {TAXAS_IVA.map(t => <option key={t} value={t}>{t}%</option>)}
-        </select>
-      </label>
-      {suportaAutoliq && (
-        <label className="flex items-center gap-1.5" title="Autoliquidação MO (CIVA art 2º nº1 al. j)">
-          <input
-            type="checkbox"
-            checked={!!dados?.autoliquidacao}
-            onChange={(e) => onChange({ ...dados, autoliquidacao: e.target.checked })}
-            className="w-3 h-3"
-          />
-          Autoliquidação MO
-        </label>
-      )}
-    </div>
-  )
-}
-
 // ── Componente principal ───────────────────────────────────
-export function SeccaoCard({ seccao, dados, pisos, onChange, calc, regimeIvaDefault, defaultAberto }) {
-  const [aberto, setAberto] = useState(!!defaultAberto)
+export function SeccaoCard({ seccao, dados, pisos, onChange, calc }) {
+  const [aberto, setAberto] = useState(false)
   const subtotal = calc?.subtotal_bruto ?? 0
   const linhas = calc?.linhas || []
   const haAutoliq = linhas.some(l => l.autoliquidacao)
@@ -306,7 +288,6 @@ export function SeccaoCard({ seccao, dados, pisos, onChange, calc, regimeIvaDefa
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl mb-3 overflow-hidden">
-      {/* Header */}
       <button
         onClick={() => setAberto(!aberto)}
         className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
@@ -316,9 +297,7 @@ export function SeccaoCard({ seccao, dados, pisos, onChange, calc, regimeIvaDefa
           <div className="text-left min-w-0">
             <h4 className="text-sm font-semibold text-gray-800 truncate">{seccao.label}</h4>
             <span className="text-[11px] text-gray-400">
-              {linhas.length > 0
-                ? `${linhas.length} linha${linhas.length > 1 ? 's' : ''}`
-                : 'Por preencher'}
+              {linhas.length > 0 ? `${linhas.length} linha${linhas.length > 1 ? 's' : ''}` : 'Por preencher'}
               {haAutoliq && ' · autoliquidação'}
               {customLines.length > 0 && ` · ${customLines.length} linha${customLines.length > 1 ? 's' : ''} custom`}
             </span>
@@ -332,24 +311,25 @@ export function SeccaoCard({ seccao, dados, pisos, onChange, calc, regimeIvaDefa
         </div>
       </button>
 
-      {/* Body */}
       {aberto && (
         <div className="p-4 border-t border-gray-100 space-y-4">
           {semPisos && (
             <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-              <span>Adicione pelo menos um piso no topo do separador para preencher os campos por piso.</span>
+              <span>Adicione pelo menos um piso no topo do separador.</span>
             </div>
           )}
 
-          <FiscalOverride
-            dados={dados}
-            regimeIvaDefault={regimeIvaDefault}
-            onChange={onChange}
-            suportaAutoliq={seccao.suporta_autoliq}
-          />
+          {/* Bloco MO da secção (dias × €/dia) */}
+          {seccao.has_mo && (
+            <MOBlock
+              dados={dados}
+              onChange={onChange}
+              defaultEurDia={seccao.mo_default_eur_dia}
+            />
+          )}
 
-          {/* Inputs guiados — por piso */}
+          {/* Por piso */}
           {(seccao.tipo === 'por_piso' || seccao.tipo === 'mixto') && pisos.length > 0 && seccao.campos_piso && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {pisos.map(p => (
@@ -364,7 +344,7 @@ export function SeccaoCard({ seccao, dados, pisos, onChange, calc, regimeIvaDefa
             </div>
           )}
 
-          {/* Inputs guiados — fixos */}
+          {/* Campos fixos */}
           {seccao.campos && seccao.campos.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
               {seccao.campos.map(c => (
@@ -385,11 +365,7 @@ export function SeccaoCard({ seccao, dados, pisos, onChange, calc, regimeIvaDefa
           )}
 
           {/* Tabela de linhas livres */}
-          <LinhasLivresTabela
-            linhas={customLines}
-            onChange={setCustomLines}
-            regimeIvaDefault={regimeIvaDefault}
-          />
+          <LinhasLivresTabela linhas={customLines} onChange={setCustomLines} />
 
           {/* Resumo da secção */}
           {linhas.length > 0 && (
@@ -404,7 +380,6 @@ export function SeccaoCard({ seccao, dados, pisos, onChange, calc, regimeIvaDefa
             </div>
           )}
 
-          {/* Notas */}
           <textarea
             value={dados?.notas || ''}
             onChange={(e) => setNotas(e.target.value)}
