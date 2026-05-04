@@ -16,6 +16,7 @@ const Operacoes   = lazy(() => import('./pages/Operacoes.jsx').then(m => ({ defa
 const Metricas    = lazy(() => import('./pages/Metricas.jsx').then(m => ({ default: m.Metricas })))
 const Projectos   = lazy(() => import('./pages/Projectos.jsx').then(m => ({ default: m.Projectos })))
 const Utilizadores = lazy(() => import('./pages/Utilizadores.jsx').then(m => ({ default: m.Utilizadores })))
+const RelatoriosAdmin = lazy(() => import('./pages/RelatoriosAdmin.jsx').then(m => ({ default: m.RelatoriosAdmin })))
 
 function PageFallback() {
   return (
@@ -53,6 +54,7 @@ function AppRoutes() {
             <Route path="/operacoes" element={<ErrorBoundary><Operacoes /></ErrorBoundary>} />
             <Route path="/metricas" element={<ErrorBoundary><Metricas /></ErrorBoundary>} />
             <Route path="/alertas" element={<ErrorBoundary><Alertas /></ErrorBoundary>} />
+            <Route path="/relatorios-admin" element={<ErrorBoundary><RelatoriosAdmin /></ErrorBoundary>} />
             <Route path="/admin/utilizadores" element={<ErrorBoundary><Utilizadores /></ErrorBoundary>} />
             {/* Redirects de páginas removidas */}
             <Route path="/comercial" element={<Navigate to="/crm" replace />} />

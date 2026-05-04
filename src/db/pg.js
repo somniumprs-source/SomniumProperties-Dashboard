@@ -652,6 +652,23 @@ export async function initSchema() {
       );
       CREATE INDEX IF NOT EXISTS idx_acessos_user ON acessos(user_id);
       CREATE INDEX IF NOT EXISTS idx_acessos_entidade ON acessos(entidade, entidade_id);
+
+      -- Relatorios semanais administracao (gerados a partir de reunioes "Reuniao Semanal")
+      CREATE TABLE IF NOT EXISTS relatorios_semanais (
+        id TEXT PRIMARY KEY,
+        semana_iso TEXT NOT NULL,           -- ex: '2026-W18'
+        data_inicio TEXT NOT NULL,          -- ISO date (segunda-feira)
+        data_fim TEXT NOT NULL,             -- ISO date (domingo)
+        titulo TEXT NOT NULL,
+        subtitulo TEXT,
+        reuniao_ids TEXT,                   -- JSON array de IDs reunioes incluidas
+        conteudo_json TEXT,                 -- JSON estruturado do relatorio
+        notas TEXT,
+        created_at TEXT DEFAULT (NOW()::TEXT),
+        updated_at TEXT DEFAULT (NOW()::TEXT)
+      );
+      CREATE INDEX IF NOT EXISTS idx_relatorios_semanais_semana ON relatorios_semanais(semana_iso);
+      CREATE INDEX IF NOT EXISTS idx_relatorios_semanais_data ON relatorios_semanais(data_inicio DESC);
     `)
 
     // Bootstrap: garantir que somniumprs@gmail.com (owner) existe como admin

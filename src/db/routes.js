@@ -2590,4 +2590,76 @@ router.get('/imoveis/:id/distancias', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// ── Relatorios Semanais Administracao ──────────────────────────────
+router.get('/relatorios-semanais', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, semana_iso, data_inicio, data_fim, titulo, subtitulo, reuniao_ids, notas, created_at, updated_at FROM relatorios_semanais ORDER BY data_inicio DESC'
+    )
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/relatorios-semanais/:id', async (req, res) => {
+  try {
+    const { rows: [r] } = await pool.query('SELECT * FROM relatorios_semanais WHERE id = $1', [req.params.id])
+    if (!r) return res.status(404).json({ error: 'Relatório não encontrado' })
+    res.json(r)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/relatorios-semanais/:id/pdf', async (req, res) => {
+  try {
+    const { rows: [r] } = await pool.query('SELECT * FROM relatorios_semanais WHERE id = $1', [req.params.id])
+    if (!r) return res.status(404).json({ error: 'Relatório não encontrado' })
+    const { generateRelatorioSemanalPDF } = await import('./pdfRelatorioSemanal.js')
+    const fname = `Relatorio_Semanal_${r.semana_iso}.pdf`
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `inline; filename="${fname}"`)
+    const doc = generateRelatorioSemanalPDF(r)
+    doc.pipe(res)
+  } catch (e) {
+    console.error('[relatorios-semanais/pdf]', e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+router.post('/relatorios-semanais/gerar', async (req, res) => {
+  try {
+    const { gerarRelatorioSemanal } = await import('./relatorioSemanalAggregator.js')
+    const { semana_iso, data_inicio, data_fim, regenerar } = req.body || {}
+    const result = await gerarRelatorioSemanal({ semana_iso, data_inicio, data_fim, regenerar })
+    res.json(result)
+  } catch (e) {
+    console.error('[relatorios-semanais/gerar]', e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+router.delete('/relatorios-semanais/:id', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query('DELETE FROM relatorios_semanais WHERE id = $1', [req.params.id])
+    if (rowCount === 0) return res.status(404).json({ error: 'Não encontrado' })
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.put('/relatorios-semanais/:id', async (req, res) => {
+  try {
+    const { titulo, subtitulo, conteudo_json, notas } = req.body || {}
+    const sets = ['updated_at = $1']
+    const params = [new Date().toISOString()]
+    if (titulo !== undefined) { params.push(titulo); sets.push(`titulo = $${params.length}`) }
+    if (subtitulo !== undefined) { params.push(subtitulo); sets.push(`subtitulo = $${params.length}`) }
+    if (conteudo_json !== undefined) {
+      params.push(typeof conteudo_json === 'string' ? conteudo_json : JSON.stringify(conteudo_json))
+      sets.push(`conteudo_json = $${params.length}`)
+    }
+    if (notas !== undefined) { params.push(notas); sets.push(`notas = $${params.length}`) }
+    params.push(req.params.id)
+    await pool.query(`UPDATE relatorios_semanais SET ${sets.join(', ')} WHERE id = $${params.length}`, params)
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 export default router
