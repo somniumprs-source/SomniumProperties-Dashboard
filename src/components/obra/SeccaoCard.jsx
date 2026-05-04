@@ -27,8 +27,8 @@ function uid() { return 'l_' + Math.random().toString(36).slice(2, 10) }
 
 // ── Inputs ──────────────────────────────────────────────────
 function NumIn({ value, onChange, placeholder, w = 'w-20', tipoFiscal }) {
-  const cor = tipoFiscal === 'material' ? 'border-blue-300 focus:border-blue-500'
-            : tipoFiscal === 'mo' ? 'border-green-300 focus:border-green-500'
+  const cor = tipoFiscal === 'material' ? 'border-sky-300 focus:border-sky-500'
+            : tipoFiscal === 'mo' ? 'border-blue-400 focus:border-blue-600 bg-blue-50/30'
             : 'border-gray-300 focus:border-gray-500'
   return (
     <input
@@ -76,8 +76,8 @@ function SelectIn({ value, onChange, opcoes, w = 'w-20' }) {
 function FiscalBadge({ tipo }) {
   if (!tipo) return null
   const map = {
-    material: { txt: 'Mat.', cls: 'bg-blue-100 text-blue-700 border-blue-200' },
-    mo:       { txt: 'MO',   cls: 'bg-green-100 text-green-700 border-green-200' },
+    material: { txt: 'Mat.', cls: 'bg-sky-100 text-sky-700 border-sky-200' },
+    mo:       { txt: 'MO',   cls: 'bg-blue-100 text-blue-800 border-blue-300' },
     taxas:    { txt: 'Taxa', cls: 'bg-gray-100 text-gray-700 border-gray-200' },
   }
   const m = map[tipo]
@@ -96,10 +96,10 @@ function MOBlock({ dados, onChange, defaultEurDia = 147.5 }) {
   const total = dias * eurDia
 
   return (
-    <div className="rounded-lg border border-green-200 bg-green-50/40 p-3">
+    <div className="rounded-lg border border-blue-300 bg-blue-50/50 p-3">
       <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-xs font-semibold text-green-800 inline-flex items-center gap-1">
-          <FiscalBadge tipo="mo" /> Mão-de-obra da secção
+        <span className="text-xs font-semibold text-blue-800 inline-flex items-center gap-1">
+          <FiscalBadge tipo="mo" /> Mão-de-obra da secção (sempre por dia)
         </span>
         <div className="flex items-center gap-1.5">
           <NumIn value={dados?.dias_mo} onChange={setDias} w="w-16" />
