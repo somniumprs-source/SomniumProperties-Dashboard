@@ -35,7 +35,10 @@ const num = (v) => {
 const round2 = (n) => Math.round(n * 100) / 100
 
 // ── Construtor de linha normalizada ─────────────────────────
-function linha({ descricao, base, taxa_iva = 23, autoliquidacao = false, retencao_irs = 0, capitalizavel = true, verba_iva, formula }) {
+function linha({ descricao, base, taxa_iva = 23, autoliquidacao = false, retencao_irs = 0, capitalizavel = true, verba_iva, formula, tipo = 'misto' }) {
+  // tipo: 'material' (sempre 23%), 'mo' (taxa do regime / autoliquidação),
+  //       'misto' (linha agregada que não foi separada), 'taxa' (sem IVA),
+  //       'isento' (sem IVA), 'singular_servico' (honorários singulares)
   const b = num(base)
   const t = num(taxa_iva)
   const iva = round2(b * t / 100)
@@ -43,6 +46,7 @@ function linha({ descricao, base, taxa_iva = 23, autoliquidacao = false, retenca
   return {
     descricao,
     formula,
+    tipo,
     base: round2(b),
     taxa_iva: t,
     iva,
@@ -51,11 +55,37 @@ function linha({ descricao, base, taxa_iva = 23, autoliquidacao = false, retenca
     retencao_valor: ret,
     capitalizavel: capitalizavel !== false,
     verba_iva,
-    // Total efectivo a pagar ao prestador (sem IVA se autoliq, líquido de retenção)
     valor_pagar: round2(b - ret + (autoliquidacao ? 0 : iva)),
-    // Total bruto fiscal (sempre inclui IVA, mesmo que autoliquidado para o adquirente)
     valor_bruto: round2(b + iva),
   }
+}
+
+// Helper para criar par material+MO a partir de um valor agregado
+// (split via percentagem material — default 50%) ou a partir de
+// inputs separados (preferível). MO segue regime do orçamento.
+function pareMatMO({ descricao, base_material, base_mo, taxa_mo, autoliq_mo, formula_material, formula_mo }) {
+  const linhas = []
+  if (num(base_material) > 0) {
+    linhas.push(linha({
+      descricao: `${descricao} — material`,
+      base: num(base_material),
+      taxa_iva: 23,                  // material: sempre 23%
+      autoliquidacao: false,
+      formula: formula_material,
+      tipo: 'material',
+    }))
+  }
+  if (num(base_mo) > 0) {
+    linhas.push(linha({
+      descricao: `${descricao} — mão-de-obra`,
+      base: num(base_mo),
+      taxa_iva: num(taxa_mo),        // MO: taxa do regime (6% ARU, 23% normal)
+      autoliquidacao: !!autoliq_mo,
+      formula: formula_mo,
+      tipo: 'mo',
+    }))
+  }
+  return linhas
 }
 
 // ── Helper: se taxa_iva da linha não definida, usa default do regime ──
