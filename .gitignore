@@ -13,4 +13,7 @@ public/uploads/despesas/*
 .claude/settings.local.json
 relatorio-agente.html
 inputs/whatsapp/
-Relatorios/
+Relatorios/*
+!Relatorios/RelatoriosSemanais/
+Relatorios/RelatoriosSemanais/*
+!Relatorios/RelatoriosSemanais/*.pdf
