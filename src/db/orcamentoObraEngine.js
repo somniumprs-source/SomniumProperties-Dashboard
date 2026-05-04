@@ -593,6 +593,21 @@ const RESOLVERS = {
   licenciamento: (s)       => linhasLicenciamento(s),
 }
 
+export const REGIMES_FISCAIS = [
+  { key: 'normal',     label: 'Normal (23% generalizado)',                     iva_default: 23 },
+  { key: 'aru',        label: 'Reabilitação ARU (Verba 2.27 — 6%)',            iva_default: 6 },
+  { key: 'habitacao',  label: 'Habitação (Verba 2.32 — 6% c/ regra 20%)',      iva_default: 6 },
+  { key: 'rjru',       label: 'RJRU (DL 53/2014) — IMT/IMI s/ alterar IVA',    iva_default: 23 },
+]
+
+export const TAXAS_IVA = [0, 6, 13, 23]
+
+export const RETENCOES_IRS = [
+  { key: 0,    label: 'Nenhuma' },
+  { key: 11.5, label: '11,5% (sub-empreiteiro construção civil)' },
+  { key: 25,   label: '25% (serviços categoria B)' },
+]
+
 export const SECCOES_OBRA = [
   'demolicoes', 'rcd', 'estrutura', 'eletricidade', 'avac', 'pavimento',
   'pladur', 'isolamento', 'caixilharias', 'vmc', 'pintura',
@@ -694,6 +709,26 @@ export function calcOrcamentoObra(orcamento) {
 }
 
 export const SECCOES_ORDEM = [...SECCOES_OBRA, ...SECCOES_EXTRA]
+
+export const SECCOES_LABELS = {
+  demolicoes:    'Demolições e limpeza',
+  rcd:           'RCD — Resíduos (DL 102-D/2020)',
+  estrutura:     'Estrutura (lajes, vigas, pilares)',
+  eletricidade:  'Eletricidade e canalização',
+  avac:          'AVAC / Solar / AQS',
+  pavimento:     'Pavimento',
+  pladur:        'Pladur tetos',
+  isolamento:    'Isolamento térmico/acústico',
+  caixilharias:  'Caixilharias',
+  vmc:           'Sistema VMC',
+  pintura:       'Pintura',
+  casas_banho:   'Casas de banho',
+  portas:        'Portas',
+  cozinhas:      'Cozinhas',
+  capoto:        'Capoto / ETICS exterior',
+  cobertura:     'Cobertura',
+  licenciamento: 'Licenciamento, fiscalização e seguros',
+}
 
 // ── Validação aritmética (avisos UI) ────────────────────────
 export function validarOrcamento(orcamento) {

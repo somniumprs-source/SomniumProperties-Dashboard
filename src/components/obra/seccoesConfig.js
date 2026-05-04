@@ -14,20 +14,7 @@
  *   'cobertura_detalhada', 'licenciamento_completo'
  */
 
-export const REGIMES_FISCAIS = [
-  { key: 'normal',     label: 'Normal (23% generalizado)',         iva_default: 23 },
-  { key: 'aru',        label: 'Reabilitação ARU (Verba 2.27 — 6%)', iva_default: 6 },
-  { key: 'habitacao',  label: 'Habitação (Verba 2.32 — 6% c/ regra 20%)', iva_default: 6 },
-  { key: 'rjru',       label: 'RJRU (DL 53/2014) — IMT/IMI s/ alterar IVA', iva_default: 23 },
-]
-
-export const TAXAS_IVA = [0, 6, 13, 23]
-
-export const RETENCOES_IRS = [
-  { key: 0,    label: 'Nenhuma' },
-  { key: 11.5, label: '11,5% (sub-empreiteiro construção civil)' },
-  { key: 25,   label: '25% (serviços categoria B)' },
-]
+export { REGIMES_FISCAIS, TAXAS_IVA, RETENCOES_IRS } from '../../db/orcamentoObraEngine.js'
 
 export const SECCOES = [
   {
