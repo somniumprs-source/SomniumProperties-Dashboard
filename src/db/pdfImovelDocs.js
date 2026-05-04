@@ -1511,31 +1511,6 @@ function renderAnaliseRentabilidade(b, im, a) {
   ])
   b.space(4)
 
-  // Tabela contingência obra
-  const contRows = []
-  if (m.contingencia_10) {
-    contRows.push({ _values: [
-      'Obra +10%',
-      EUR_S(m.contingencia_10.lucro_liquido),
-      PCT_DEC(m.contingencia_10.roi),
-    ] })
-  }
-  if (m.contingencia_20) {
-    contRows.push({ _values: [
-      'Obra +20%',
-      EUR_S(m.contingencia_20.lucro_liquido),
-      PCT_DEC(m.contingencia_20.roi),
-    ] })
-  }
-  if (contRows.length > 0) {
-    b.note('Contingência de Obra — impacto no resultado se a obra ultrapassar o orçamento.')
-    b.colTable(
-      [['Cenário', 140], ['Lucro Líquido', 180], ['ROI s/ Capital', 175]],
-      contRows
-    )
-    b.space(4)
-  }
-
   // Tabela sensibilidade VVR
   if (Array.isArray(m.sensibilidade_vvr) && m.sensibilidade_vvr.length > 0) {
     b.note('Sensibilidade VVR — variação do valor de venda e impacto no Lucro Líquido e ROI.')
