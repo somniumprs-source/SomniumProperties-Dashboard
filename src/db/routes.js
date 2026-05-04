@@ -2612,10 +2612,26 @@ router.get('/relatorios-semanais/:id/pdf', async (req, res) => {
   try {
     const { rows: [r] } = await pool.query('SELECT * FROM relatorios_semanais WHERE id = $1', [req.params.id])
     if (!r) return res.status(404).json({ error: 'Relatório não encontrado' })
-    const { generateRelatorioSemanalPDF } = await import('./pdfRelatorioSemanal.js')
+
     const fname = `Relatorio_Semanal_${r.semana_iso}.pdf`
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `inline; filename="${fname}"`)
+
+    // Se ha PDF original importado e existe no disco, servir directamente
+    if (r.pdf_original_path) {
+      const path = (await import('path')).default
+      const fs = (await import('fs')).default
+      const fileURLToPath = (await import('url')).fileURLToPath
+      const __dirname = path.dirname(fileURLToPath(import.meta.url))
+      const ROOT = path.resolve(__dirname, '../..')
+      const abs = path.isAbsolute(r.pdf_original_path) ? r.pdf_original_path : path.join(ROOT, r.pdf_original_path)
+      if (fs.existsSync(abs)) {
+        return fs.createReadStream(abs).pipe(res)
+      }
+      console.warn('[relatorios-semanais/pdf] pdf_original_path nao existe:', abs, '— fallback para template')
+    }
+
+    const { generateRelatorioSemanalPDF } = await import('./pdfRelatorioSemanal.js')
     const doc = generateRelatorioSemanalPDF(r)
     doc.pipe(res)
   } catch (e) {
