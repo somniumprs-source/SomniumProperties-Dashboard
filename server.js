@@ -74,7 +74,9 @@ try {
   app.use('/api/crm', crmRoutes)
   const { default: analiseRoutes } = await import('./src/db/analiseRoutes.js')
   app.use('/api/crm', analiseRoutes)
-  console.log('[crm] API CRM + Análises montada em /api/crm (PostgreSQL)')
+  const { default: orcamentoObraRoutes } = await import('./src/db/orcamentoObraRoutes.js')
+  app.use('/api/crm', orcamentoObraRoutes)
+  console.log('[crm] API CRM + Análises + Orçamento Obra montada em /api/crm (PostgreSQL)')
   // Filtros por área (admin passa sempre; em dev sem Supabase passa sempre)
   // Bloqueios por role desactivados — qualquer utilizador autenticado vê tudo.
   // (Roles continuam como labels na tabela users, mas sem enforcement no backend.)
@@ -4086,6 +4088,24 @@ try {
           }
           if (invFill > 0) console.log(`[fireflies] Auto-fill: ${invFill} investidores actualizados`)
           if (consFill > 0) console.log(`[fireflies] Auto-fill: ${consFill} consultores actualizados`)
+
+          // Auto-gerar/actualizar Relatorios Semanais Administracao se houver
+          // novas reunioes "Reuniao Semanal" entre as importadas
+          const { rows: novasSemanais } = await pgPool.query(
+            "SELECT 1 FROM reunioes WHERE titulo ILIKE '%reuni%semanal%' AND created_at >= NOW() - INTERVAL '20 minutes' LIMIT 1"
+          )
+          if (novasSemanais.length > 0) {
+            try {
+              const { autoGerarRelatoriosSemanaisPendentes } = await import('./src/db/relatorioSemanalAggregator.js')
+              const rs = await autoGerarRelatoriosSemanaisPendentes()
+              if (rs.criados > 0 || rs.actualizados > 0) {
+                console.log(`[fireflies] Relatorios Semanais: ${rs.criados} criados, ${rs.actualizados} actualizados (~EUR ${rs.custoEur})`)
+              }
+              for (const e of rs.erros) console.warn(`[fireflies] Erro relatorio ${e.semana}: ${e.erro}`)
+            } catch (e) {
+              console.error('[fireflies] Auto-relatorios semanais erro:', e.message)
+            }
+          }
         }
       } catch (e) {
         console.error('[fireflies] Auto-sync erro:', e.message)
