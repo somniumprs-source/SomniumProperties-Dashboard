@@ -188,7 +188,7 @@ Quando um consultor partilha um imóvel, precisas de recolher os seguintes dados
 2. Tipologia (T0, T1, T2, T3, moradia, prédio, terreno)
 3. Preço pedido (asking price)
 4. Estado de conservação (precisa de obras? totais ou parciais?)
-5. Área útil (m²)
+5. Área bruta (m²)
 6. Ano de construção (aproximado)
 7. Situação do proprietário (motivação de venda — herança, emigração, divórcio, problemas financeiros, lar)
 8. Margem de negociação (o proprietário aceita propostas abaixo do pedido?)
@@ -741,7 +741,7 @@ ${urgente ? '⚠️ URGÊNCIA DETECTADA — prioridade máxima' : ''}
         ].filter(Boolean).join('\n')
 
         await pool.query(
-          `INSERT INTO imoveis (id, nome, estado, nome_consultor, origem, tipo_oportunidade, link, tipologia, zona, ask_price, area_util, notas, created_at, updated_at, data_adicionado)
+          `INSERT INTO imoveis (id, nome, estado, nome_consultor, origem, tipo_oportunidade, link, tipologia, zona, ask_price, area_bruta, notas, created_at, updated_at, data_adicionado)
            VALUES ($1, $2, 'Pré-aprovação', $3, 'Consultor', $4, $5, $6, $7, $8, $9, $10, $11, $11, $12)`,
           [
             imovelId, nomeImovel, consultor.nome,

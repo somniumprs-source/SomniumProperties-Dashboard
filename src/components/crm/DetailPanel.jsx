@@ -755,7 +755,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
 
   // Tabs dinâmicos por tipo
   const tabs = [
-    { key: 'detalhe', label: 'Detalhe', icon: '📋', show: true },
+    { key: 'detalhe', label: type === 'Imóveis' ? 'Ficha do imóvel' : type === 'Investidores' ? 'Ficha do investidor' : type === 'Consultores' ? 'Ficha do consultor' : 'Detalhe', icon: '📋', show: true },
     { key: 'ficheiros', label: 'Ficheiros', icon: '📷', show: type === 'Imóveis' },
     { key: 'whatsapp', label: 'WhatsApp', icon: '📱', show: type === 'Consultores' },
     { key: 'interacoes', label: `Interacções (${data?.interacoes?.length ?? 0})`, icon: '💬', show: type === 'Consultores' },

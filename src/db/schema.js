@@ -29,7 +29,6 @@ db.exec(`
     valor_venda_remodelado REAL DEFAULT 0,
     roi REAL,
     roi_anualizado REAL,
-    area_util REAL,
     area_bruta REAL,
     origem TEXT,
     zona TEXT,

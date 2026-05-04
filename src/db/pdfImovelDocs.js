@@ -211,60 +211,27 @@ class DocBuilder {
     const im = this.imovel
     d.addPage({ size: 'A4', margins: { top: 0, bottom: 0, left: 0, right: 0 } })
 
-    if (this.style === 'investor') {
-      // Capa estilo CIM institucional: barra dark topo, hero box central, term-sheet snippet
-      d.rect(0, 0, PW, 6).fill(C.black)
-      try { d.image(LOGO_BLACK_PNG, (PW - 130) / 2, 70, { width: 130 }) } catch {}
-      d.fontSize(8).fillColor(C.muted).text('SOMNIUM PROPERTIES', ML, 180, { width: CW, align: 'center', characterSpacing: 2.5, lineBreak: false })
-      d.fontSize(8).fillColor(C.muted).text('Real Estate Value-Add  ·  Coimbra', ML, 194, { width: CW, align: 'center', lineBreak: false })
-      d.rect(ML + 80, 220, CW - 160, 0.5).fill(C.gold)
-
-      d.fontSize(7).fillColor(C.muted).text('CONFIDENCIAL', ML + 30, 240, { width: 200, characterSpacing: 1.5, lineBreak: false })
-      d.fontSize(7).fillColor(C.muted).text(`Emitido em ${NOW()}`, PW - ML - 230, 240, { width: 200, align: 'right', lineBreak: false })
-
-      d.fontSize(28).fillColor(C.body).text(title, ML, 290, { width: CW, align: 'center', lineBreak: false })
-      const sub = [im.nome, im.zona].filter(Boolean).join(' · ').toUpperCase()
-      if (sub) d.fontSize(10).fillColor(C.gold).text(sub, ML, 340, { width: CW, align: 'center', characterSpacing: 2, lineBreak: false })
-
-      // Hero box (KPIs centrais) — desenhado AQUI dentro da capa, não na página seguinte
-      if (this.heroItems && this.heroItems.length > 0) {
-        const items = this.heroItems
-        const heroY = 400, heroH = 130
-        d.roundedRect(ML + 30, heroY, CW - 60, heroH, 6).lineWidth(1).stroke(C.black)
-        d.rect(ML + 30, heroY, CW - 60, 4).fill(C.gold)
-        if (items.length === 1) {
-          d.fontSize(36).fillColor(C.body).text(items[0].value, ML + 30, heroY + 22, { width: CW - 60, align: 'center', lineBreak: false })
-          d.fontSize(8).fillColor(C.muted).text((items[0].label || '').toUpperCase(), ML + 30, heroY + 70, { width: CW - 60, align: 'center', characterSpacing: 2, lineBreak: false })
-          if (items[0].sub) d.fontSize(8).fillColor(C.muted).text(items[0].sub, ML + 30, heroY + 100, { width: CW - 60, align: 'center', lineBreak: false })
-        } else {
-          const colW = (CW - 60) / items.length
-          items.forEach((h, i) => {
-            const x = ML + 30 + i * colW
-            if (i > 0) d.rect(x, heroY + 20, 0.5, 90).fill(C.border)
-            d.fontSize(7).fillColor(C.muted).text((h.label || '').toUpperCase(), x + 10, heroY + 28, { width: colW - 20, characterSpacing: 1, align: 'center', lineBreak: false })
-            d.fontSize(22).fillColor(C.body).text(String(h.value), x + 10, heroY + 48, { width: colW - 20, align: 'center', lineBreak: false })
-            if (h.sub) d.fontSize(7).fillColor(C.muted).text(h.sub, x + 10, heroY + 88, { width: colW - 20, align: 'center', lineBreak: false })
-          })
-        }
-      }
-
-      d.rect(ML + 80, 670, CW - 160, 0.5).fill(C.gold)
-      d.fontSize(8).fillColor(C.muted).text('Somnium Properties · Investimento Imobiliário', ML, 690, { width: CW, align: 'center', characterSpacing: 2, lineBreak: false })
-      d.fontSize(7).fillColor(C.muted).text(`Documento Confidencial · ${NOW()}`, ML, 706, { width: CW, align: 'center', lineBreak: false })
-      d.rect(0, PH - 6, PW, 6).fill(C.gold)
-      return
-    }
-
-    // Capa default
+    // Capa unificada — logo 480px, bloco centrado vertical entre barra superior e footer
+    // (estilo investor passou a usar a mesma capa; hero box já não é desenhado aqui)
     d.rect(0, 0, PW, 6).fill(C.gold)
-    try { d.image(LOGO_BLACK_PNG, (PW - 160) / 2, 140, { width: 160 }) } catch {}
-    d.rect(PW / 2 - 30, 310, 60, 1.5).fill(C.gold)
-    d.fontSize(28).fillColor(C.body).text(title, ML, 340, { width: CW, align: 'center' })
+    const LW = 450
+    const LH = LW / (1516 / 614)        // ≈ 194.4 (proporção real do logo-dark.png)
+    const BLOCK_H = LH + 35 + 1.5 + 25 + 37 + 15 + 13 + 12 + 13 + 25 + 0.5 + 15 + 12
+    const LY = 6 + ((PH - 65 - 6) - BLOCK_H) / 2
+    try { d.image(LOGO_BLACK_PNG, (PW - LW) / 2, LY, { width: LW }) } catch {}
+    const accent1Y = LY + LH + 35
+    const titleY   = accent1Y + 1.5 + 25
+    const subY     = titleY + 37 + 15
+    const subtitleY = subY + 13 + 12
+    const accent2Y = subtitleY + 13 + 25
+    const dateY    = accent2Y + 0.5 + 15
+    d.rect(PW / 2 - 30, accent1Y, 60, 1.5).fill(C.gold)
+    d.fontSize(28).fillColor(C.body).text(title, ML, titleY, { width: CW, align: 'center' })
     const sub = [im.nome, im.zona].filter(Boolean).join(' · ').toUpperCase()
-    if (sub) d.fontSize(10).fillColor(C.gold).text(sub, ML, 390, { width: CW, align: 'center', characterSpacing: 1.5 })
-    if (subtitle) d.fontSize(10).fillColor(C.muted).text(subtitle + ' · Coimbra · Portugal', ML, 415, { width: CW, align: 'center' })
-    d.rect(ML + 80, 450, CW - 160, 0.5).fill(C.gold)
-    d.fontSize(9).fillColor(C.muted).text(NOW(), ML, 465, { width: CW, align: 'center' })
+    if (sub) d.fontSize(10).fillColor(C.gold).text(sub, ML, subY, { width: CW, align: 'center', characterSpacing: 1.5 })
+    if (subtitle) d.fontSize(10).fillColor(C.muted).text(subtitle + ' · Coimbra · Portugal', ML, subtitleY, { width: CW, align: 'center' })
+    d.rect(ML + 80, accent2Y, CW - 160, 0.5).fill(C.gold)
+    d.fontSize(9).fillColor(C.muted).text(NOW(), ML, dateY, { width: CW, align: 'center' })
     d.rect(ML, PH - 65, CW, 0.5).fill(C.gold)
     d.fontSize(7).fillColor(C.muted).text('Somnium Properties · Investimento Imobiliário', ML, PH - 52, { width: CW, align: 'center' })
     d.fontSize(7).fillColor(C.muted).text(`Documento Confidencial · ${NOW()}`, ML, PH - 40, { width: CW, align: 'center' })

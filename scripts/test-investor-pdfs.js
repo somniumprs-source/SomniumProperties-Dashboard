@@ -15,7 +15,7 @@ await client.end()
 
 // Simular conteúdo dos campos novos para validar render
 im.pontos_fortes = 'Off-market via referência directa\nIMT zero (isenção Lei 56/2023)\nMargem 19,9% antes de break-even\n€/m² alinhado com mediana, não P90'
-im.pontos_fracos = 'Áreas (área útil/bruta) não confirmadas\nAmostra de comparáveis com CV de 23,6%\nSem financiamento bancário previsto'
+im.pontos_fracos = 'Áreas (bruta) não confirmadas\nAmostra de comparáveis com CV de 23,6%\nSem financiamento bancário previsto'
 im.riscos = 'Atraso de obra >6 meses reduz RA significativamente\nCondições de venda do mercado podem deteriorar\nDependência de empreiteiro único'
 im.localizacao_imagem = null  // nenhuma para já — testa sem imagem
 
