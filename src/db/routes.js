@@ -2636,6 +2636,18 @@ router.post('/relatorios-semanais/gerar', async (req, res) => {
   }
 })
 
+router.post('/relatorios-semanais/auto-gerar', async (req, res) => {
+  try {
+    const { autoGerarRelatoriosSemanaisPendentes } = await import('./relatorioSemanalAggregator.js')
+    const apenas_pendentes = req.body?.apenas_pendentes ?? req.query?.apenas_pendentes === 'true'
+    const r = await autoGerarRelatoriosSemanaisPendentes({ apenas_pendentes: !!apenas_pendentes })
+    res.json(r)
+  } catch (e) {
+    console.error('[relatorios-semanais/auto-gerar]', e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
 router.delete('/relatorios-semanais/:id', async (req, res) => {
   try {
     const { rowCount } = await pool.query('DELETE FROM relatorios_semanais WHERE id = $1', [req.params.id])

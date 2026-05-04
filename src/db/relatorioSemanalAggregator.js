@@ -71,6 +71,47 @@ export async function gerarRelatorioSemanal({ semana_iso, data_inicio, data_fim,
   }
 }
 
+/**
+ * Auto-geracao em lote: para cada semana ISO com reunioes "Reuniao Semanal",
+ * cria ou regenera o relatorio correspondente. Usado pelo auto-sync Fireflies
+ * e pelo botao "Sincronizar Fireflies" da pagina Relatorios Administracao.
+ */
+export async function autoGerarRelatoriosSemanaisPendentes({ apenas_pendentes = false } = {}) {
+  const { rows: semanas } = await pool.query(`
+    SELECT to_char(data::timestamp, 'IYYY-"W"IW') AS semana_iso,
+           MIN(data) AS primeira_reuniao
+    FROM reunioes
+    WHERE titulo ILIKE '%reuni%semanal%'
+    GROUP BY to_char(data::timestamp, 'IYYY-"W"IW')
+    ORDER BY MIN(data) DESC
+  `)
+
+  let criados = 0, actualizados = 0
+  const erros = []
+  for (const s of semanas) {
+    if (apenas_pendentes) {
+      const { rows: [exists] } = await pool.query(
+        'SELECT 1 FROM relatorios_semanais WHERE semana_iso = $1', [s.semana_iso]
+      )
+      if (exists) continue
+    }
+    try {
+      const r = await gerarRelatorioSemanal({ semana_iso: s.semana_iso, regenerar: true })
+      if (r.status === 'created') criados++
+      else if (r.status === 'regenerated') actualizados++
+    } catch (e) {
+      erros.push({ semana: s.semana_iso, erro: e.message })
+    }
+  }
+  return {
+    semanasProcessadas: semanas.length,
+    criados,
+    actualizados,
+    custoEur: Number(((criados + actualizados) * 0.10).toFixed(2)),
+    erros,
+  }
+}
+
 // ─── Claude aggregation ─────────────────────────────────────────────
 async function aggregateWithClaude(reunioes, range) {
   const Anthropic = (await import('@anthropic-ai/sdk')).default

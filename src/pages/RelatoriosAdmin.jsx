@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Header } from '../components/layout/Header.jsx'
-import { FileDown, Sparkles, Trash2, Calendar, Loader2, Plus, RefreshCw } from 'lucide-react'
+import { FileDown, Sparkles, Trash2, Calendar, Loader2, Plus, RefreshCw, Zap } from 'lucide-react'
 import { apiFetch, getToken } from '../lib/api.js'
 
 const GOLD = '#C9A84C'
@@ -31,6 +31,8 @@ export function RelatoriosAdmin() {
   const [relatorios, setRelatorios] = useState([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncStatus, setSyncStatus] = useState(null)
   const [error, setError] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ semana_iso: currentSemanaIso(), regenerar: false })
@@ -74,6 +76,26 @@ export function RelatoriosAdmin() {
     setGenerating(false)
   }
 
+  async function sincronizarFireflies() {
+    setSyncing(true)
+    setError(null)
+    setSyncStatus(null)
+    try {
+      const r = await apiFetch('/api/crm/relatorios-semanais/auto-gerar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apenas_pendentes: false }),
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error || 'Erro ao sincronizar')
+      setSyncStatus(`${data.criados} criados · ${data.actualizados} actualizados · €${data.custoEur.toFixed(2)} (${data.semanasProcessadas} semanas)`)
+      await load()
+    } catch (e) {
+      setError(e.message)
+    }
+    setSyncing(false)
+  }
+
   async function abrirPdf(id) {
     const token = await getToken()
     window.open(`/api/crm/relatorios-semanais/${id}/pdf?token=${token}`, '_blank')
@@ -103,15 +125,33 @@ export function RelatoriosAdmin() {
             <h2 className="text-lg font-semibold text-neutral-800 dark:text-neutral-100">Relatórios Semanais</h2>
             <p className="text-sm text-neutral-500 dark:text-neutral-400">Gerados a partir de reuniões com título "Reunião Semanal"</p>
           </div>
-          <button
-            onClick={() => setShowForm(s => !s)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all"
-            style={{ backgroundColor: GOLD, color: '#0d0d0d' }}
-          >
-            <Plus className="w-4 h-4" />
-            Gerar relatório
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={sincronizarFireflies}
+              disabled={syncing}
+              title="Cria/actualiza relatórios de todas as semanas com reuniões 'Reunião Semanal'"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition-all disabled:opacity-50"
+              style={{ borderColor: GOLD, color: GOLD }}
+            >
+              {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              {syncing ? 'A sincronizar...' : 'Sincronizar Fireflies'}
+            </button>
+            <button
+              onClick={() => setShowForm(s => !s)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all"
+              style={{ backgroundColor: GOLD, color: '#0d0d0d' }}
+            >
+              <Plus className="w-4 h-4" />
+              Gerar relatório
+            </button>
+          </div>
         </div>
+
+        {syncStatus && (
+          <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-900 p-3 text-sm text-emerald-700 dark:text-emerald-300">
+            Sincronização concluída: {syncStatus}
+          </div>
+        )}
 
         {/* Form */}
         {showForm && (
