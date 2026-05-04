@@ -908,6 +908,33 @@ function renderStressTests(b, a, opts = {}) {
       st.upside.map(s => ({ _values: [s.label, s.descricao || '', EUR(s.lucro_liquido), EUR(s.delta), PCT(s.retorno_anualizado)] }))
     )
   }
+
+  // Sub-tabela: Sensibilidade ao Prazo de Detenção
+  const m = opts.metrics
+  if (m && Array.isArray(m.sensibilidade_prazo) && m.sensibilidade_prazo.length > 0) {
+    b.space(6)
+    b.subheader('Sensibilidade ao Prazo de Detenção')
+    const rows = m.sensibilidade_prazo.map(s => {
+      const ra = s.ra_simples_pp
+      const cor = s.is_base ? '#8C6A30' : (ra > 20 ? '#1B5E20' : (ra < 5 ? '#8B1A1A' : C.body))
+      const label = `${s.prazo} meses${s.is_base ? ' (base)' : ''}`
+      const sinal = s.premio_pp >= 0 ? '+' : ''
+      return {
+        _values: [
+          { value: label, color: cor },
+          { value: EUR(s.lucro_liquido), color: cor },
+          { value: ra.toFixed(1) + '%', color: cor },
+          { value: s.is_base ? '—' : (s.delta_pp.toFixed(1) + ' pp'), color: cor },
+          { value: sinal + s.premio_pp.toFixed(1) + ' pp', color: cor },
+        ],
+      }
+    })
+    b.colTable(
+      [['Prazo', 100], ['Lucro Líquido', 110], ['RA Simples', 80], ['Delta vs Base', 95], ['Prémio s/ DP', 85]],
+      rows
+    )
+    b.note('O Retorno Anualizado é sensível ao prazo de detenção. O lucro absoluto mantém-se estável; o que varia é a eficiência temporal do capital. Referência: Depósito a Prazo Portugal ~3,5% a.a. · OT Portugal 2 anos ~3,0% a.a.')
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1358,11 +1385,131 @@ function renderFichaVisita(b, im) {
   b.input('Próximos passos', '', { tall: true })
 }
 
+function renderResumoExecutivo(b, im, a, m) {
+  const compra = a.compra || im.valor_proposta || im.ask_price || 0
+  const obra = a.obra_com_iva || a.obra || im.custo_estimado_obra || 0
+  const vvr = a.vvr || im.valor_venda_remodelado || 0
+
+  b.header('RESUMO EXECUTIVO')
+
+  // Tese de investimento
+  const teseTexto = im.tese_investimento ||
+    `Aquisição e reabilitação de ${im.tipologia || 'imóvel'} em ${im.zona || im.concelho || 'localização a definir'}, com venda após obra. Capital necessário: ${EUR(a.capital_necessario)}. Retorno líquido estimado: ${EUR(a.lucro_liquido)} em ${a.meses || 0} meses (RA: ${PCT(a.retorno_anualizado)}).`
+
+  // Caixa preta com tese
+  const teseH = b.doc.heightOfString(teseTexto, { width: CW - 24, lineGap: 3 })
+  const boxH = teseH + 28
+  b.ensure(boxH + 6)
+  b.doc.rect(ML, b.y, CW, boxH).fill(C.black)
+  b.doc.rect(ML, b.y, 4, boxH).fill(C.gold)
+  b.doc.fontSize(7).fillColor(C.gold).text('TESE DE INVESTIMENTO', ML + 14, b.y + 8, { width: CW - 24, characterSpacing: 1, lineBreak: false })
+  b.doc.fontSize(9).fillColor('#f0efe9').text(teseTexto, ML + 14, b.y + 22, { width: CW - 24, lineGap: 3 })
+  b.y += boxH + 8
+
+  // Hero 6 KPIs (3+3)
+  b.bigNumbers([
+    { label: 'Capital Necessário', value: EUR(a.capital_necessario || compra + obra) },
+    { label: 'Lucro Líquido', value: EUR(a.lucro_liquido) },
+    { label: 'MOIC', value: MULT(m.moic) },
+  ])
+  b.space(2)
+  b.bigNumbers([
+    { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
+    { label: 'TIR', value: PCT_DEC(m.tir_anual) },
+    { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash) },
+  ])
+  b.space(8)
+
+  // Estratégia de Saída
+  b.subheader('Estratégia de Saída')
+  const exitLabel = m.has_renda
+    ? `Arrendamento (~${EUR_S(m.exit_arrendamento.renda_mensal)}/mês · yield ${PCT_DEC(m.exit_arrendamento.yield_liquido)})`
+    : 'Não definido'
+  const prazoMaxLabel = m.prazo_max_meses != null ? `${m.prazo_max_meses} meses` : '—'
+  b.simpleTable([
+    { label: 'Tipo de Operação', value: 'Flip (Reabilitação + Venda)' },
+    { label: 'Prazo Estimado', value: `${a.meses || 0} meses` },
+    { label: 'Exit Alternativo', value: exitLabel },
+    { label: 'Prazo Máximo (antes de prejuízo)', value: prazoMaxLabel },
+  ])
+  b.space(6)
+
+  // Riscos
+  b.subheader('Principais Riscos')
+  const riscos = []
+  if (m.margem_seg_vvr != null) {
+    const cor = m.margem_seg_vvr < 0.10 ? C.red : (m.margem_seg_vvr < 0.20 ? '#8C6A30' : C.green)
+    riscos.push({ label: '⚠  Mercado', value: `Break-even VVR ${EUR(m.break_even_vvr)} · margem ${PCT_DEC(m.margem_seg_vvr)}`, color: cor })
+  }
+  if (m.margem_seg_obra != null) {
+    const cor = m.margem_seg_obra < 0.20 ? C.red : (m.margem_seg_obra < 0.50 ? '#8C6A30' : C.green)
+    riscos.push({ label: '⚠  Obra', value: `Break-even obra ${EUR(m.break_even_obra)} · margem ${PCT_DEC(m.margem_seg_obra)}`, color: cor })
+  }
+  const sens12 = (m.sensibilidade_prazo || []).find(s => s.prazo === 12)
+  if (sens12) {
+    riscos.push({ label: '⚠  Prazo', value: `RA cai para ${sens12.ra_simples_pp.toFixed(1)}% se demorar 12 meses` })
+  }
+  if (riscos.length === 0) riscos.push({ label: '—', value: 'Não foi possível derivar riscos com os dados actuais' })
+  b.simpleTable(riscos)
+  b.space(6)
+
+  // Mitigantes
+  b.subheader('Principais Mitigantes')
+  const mitigantes = [
+    { label: '✓  VVR', value: 'Suportado por estudo de comparáveis (anexo)', color: C.green },
+    { label: '✓  Obra', value: 'Orçamentada com base em histórico de execução', color: C.green },
+  ]
+  if (m.has_renda && m.exit_arrendamento?.cobertura_ok) {
+    mitigantes.push({ label: '✓  Exit Alt.', value: `Arrendamento cobre custos de detenção (folga ${EUR_S(m.exit_arrendamento.folga)}/mês)`, color: C.green })
+  }
+  b.simpleTable(mitigantes)
+  b.space(8)
+
+  // Score de Risco Somnium
+  b.subheader('Score de Risco Somnium')
+  const sr = m.score_risco
+  if (sr) {
+    b.ensure(110)
+    const yStart = b.y
+    // Número grande à esquerda
+    b.doc.fontSize(48).fillColor(sr.cor).text(String(sr.total), ML, yStart, { width: 110, align: 'left', lineBreak: false })
+    b.doc.fontSize(10).fillColor(C.muted).text('/ 100', ML + 70, yStart + 24, { lineBreak: false })
+    b.doc.fontSize(11).fillColor(sr.cor).text(sr.nivel, ML, yStart + 56, { width: 140, lineBreak: false, characterSpacing: 0.5 })
+
+    // Barras à direita
+    const barX = ML + 180
+    const barW = CW - 180
+    const labels = [
+      { label: 'Margem VVR', pts: sr.componentes.vvr.pts, peso: sr.componentes.vvr.peso },
+      { label: 'Margem Custo', pts: sr.componentes.margem.pts, peso: sr.componentes.margem.peso },
+      { label: 'Margem Obra', pts: sr.componentes.obra.pts, peso: sr.componentes.obra.peso },
+      { label: 'Prazo', pts: sr.componentes.prazo.pts, peso: sr.componentes.prazo.peso },
+    ]
+    let yBar = yStart + 4
+    for (const c of labels) {
+      b.doc.fontSize(7.5).fillColor(C.body).text(c.label, barX, yBar, { width: 90, lineBreak: false })
+      b.doc.fontSize(7).fillColor(C.muted).text(`${c.pts} pts · ${c.peso}%`, barX + barW - 70, yBar, { width: 70, align: 'right', lineBreak: false })
+      // Barra
+      const trackY = yBar + 12
+      const trackW = barW - 4
+      b.doc.rect(barX, trackY, trackW, 5).fill('#EDEAE0')
+      b.doc.rect(barX, trackY, trackW * (c.pts / 100), 5).fill(C.gold)
+      yBar += 24
+    }
+    b.y = yStart + 110
+  }
+
+  b.newPage()
+}
+
 function renderAnaliseRentabilidade(b, im, a) {
   const compra = a.compra || im.valor_proposta || im.ask_price || 0
   const obra = a.obra_com_iva || a.obra || im.custo_estimado_obra || 0
   const vvr = a.vvr || im.valor_venda_remodelado || 0
   const m = calcMetricsExtra(a, im)
+
+  renderResumoExecutivo(b, im, a, m)
+
 
   b.header('RESUMO DO INVESTIMENTO')
   b.bigNumbers([
@@ -1410,15 +1557,28 @@ function renderAnaliseRentabilidade(b, im, a) {
   }
 
   b.header('C. CUSTOS DE OBRA')
-  b.simpleTable([
+  const obraRows = [
     { label: 'Obra', value: EUR(a.obra) },
-    { label: 'PMO %', value: PCT(a.pmo_perc) },
+    { label: 'PMO Total (Project Management & Overhead)', value: PCT(a.pmo_perc) },
+  ]
+  if (m.pmo_breakdown) {
+    const p = m.pmo_breakdown
+    if (p.arq.perc > 0) obraRows.push({ label: '   └ Projecto de Arquitectura', value: `${PCT(p.arq.perc)} · ${EUR(p.arq.eur)}` })
+    if (p.fisc.perc > 0) obraRows.push({ label: '   └ Fiscalização / Gestão de Obra', value: `${PCT(p.fisc.perc)} · ${EUR(p.fisc.eur)}` })
+    if (p.seg.perc > 0) obraRows.push({ label: '   └ Coordenação de Segurança', value: `${PCT(p.seg.perc)} · ${EUR(p.seg.eur)}` })
+    if (p.outros.perc > 0) obraRows.push({ label: '   └ Outros Custos de Gestão', value: `${PCT(p.outros.perc)} · ${EUR(p.outros.eur)}` })
+  }
+  obraRows.push(
     { label: 'ARU', value: a.aru ? 'Sim' : 'Não' },
     { label: 'Ampliação', value: a.ampliacao ? 'Sim' : 'Não' },
     { label: 'IVA Obra', value: EUR(a.iva_obra) },
     { label: 'Obra com IVA', value: EUR(a.obra_com_iva) },
     { label: 'Licenciamento', value: EUR(a.licenciamento) },
-  ])
+  )
+  b.simpleTable(obraRows)
+  if (!m.pmo_breakdown && a.pmo_perc > 0) {
+    b.note('PMO inclui projecto, fiscalização e coordenação de obra — desagregação disponível mediante pedido.')
+  }
   b.space(4)
 
   b.header('D. CUSTOS DE DETENÇÃO')
@@ -1511,7 +1671,80 @@ function renderAnaliseRentabilidade(b, im, a) {
   ])
   b.space(4)
 
-  renderStressTests(b, a, { title: 'I. TESTES DE STRESS' })
+  renderStressTests(b, a, { title: 'I. TESTES DE STRESS', metrics: m })
+
+  renderExitAlternativo(b, im, a, m)
+}
+
+function renderExitAlternativo(b, im, a, m) {
+  b.space(8)
+  b.header('K. EXIT ALTERNATIVO — ANÁLISE DE ARRENDAMENTO')
+
+  if (!m.exit_arrendamento) {
+    b.note('Introduza renda mensal estimada na ficha financeira (secção "Exit Alternativo") para activar esta análise.')
+    return
+  }
+
+  const e = m.exit_arrendamento
+  const regime = a.regime_fiscal || 'Empresa'
+
+  // Caixa de contexto
+  const ctxTexto = 'Caso o imóvel não seja vendido no prazo previsto, o arrendamento constitui uma estratégia de exit alternativa. A análise abaixo quantifica a viabilidade desta opção.'
+  const ctxH = b.doc.heightOfString(ctxTexto, { width: CW - 24, lineGap: 3 })
+  b.ensure(ctxH + 22)
+  b.doc.rect(ML, b.y, CW, ctxH + 16).fill('#f5f3ee')
+  b.doc.rect(ML, b.y, 3, ctxH + 16).fill(C.gold)
+  b.doc.fontSize(8.5).fillColor(C.body).text(ctxTexto, ML + 12, b.y + 8, { width: CW - 24, lineGap: 3 })
+  b.y += ctxH + 22
+
+  b.subheader('Premissas de Arrendamento')
+  b.simpleTable([
+    { label: 'Renda Mensal Estimada', value: EUR(e.renda_mensal) },
+    { label: 'Vacancy / Desocupação', value: PCT(e.vacancy_pct) },
+    { label: 'Custos de Gestão', value: PCT(e.gestao_pct) },
+    { label: 'Renda Mensal Líquida', value: EUR_S(e.renda_neta_mensal), total: true },
+  ])
+  b.space(4)
+
+  b.subheader('Métricas de Yield')
+  b.simpleTable([
+    { label: 'Yield Bruto (sobre VVR)', value: PCT_DEC(e.yield_bruto) },
+    { label: 'Yield Líquido (sobre VVR)', value: PCT_DEC(e.yield_liquido) },
+    { label: 'Yield sobre Custo Total', value: PCT_DEC(e.yield_custo) },
+  ])
+  b.space(4)
+
+  b.subheader('Fiscalidade do Arrendamento')
+  b.simpleTable([
+    { label: `Regime: ${regime} · Taxa autónoma`, value: PCT(e.taxa_tributacao * 100) },
+    { label: 'Imposto Anual Estimado', value: EUR(e.imposto_anual) },
+    { label: 'Renda Anual Pós-Imposto', value: EUR(e.renda_pos_imposto), total: true },
+  ])
+  b.space(4)
+
+  b.subheader('Viabilidade como Exit Alternativo')
+  const coberturaLabel = e.cobertura_ok
+    ? `✓ Sim, com folga de ${EUR_S(e.folga)}/mês`
+    : `✗ Não — défice de ${EUR_S(Math.abs(e.folga))}/mês`
+  b.simpleTable([
+    { label: 'Custo Mensal de Detenção', value: EUR_S(e.custo_mensal_det) + '/mês' },
+    { label: 'Renda Cobre Custos de Detenção?', value: coberturaLabel, color: e.cobertura_ok ? '#1B5E20' : '#8B1A1A' },
+    { label: 'Break-Even de Arrendamento', value: e.be_arrendamento != null ? `${e.be_arrendamento} meses` : '—' },
+  ])
+  b.note('Após o número de meses indicado, o retorno acumulado por arrendamento iguala o lucro perdido por adiar a venda.')
+  b.space(4)
+
+  b.subheader('Comparação de Estratégias')
+  b.colTable(
+    [['Critério', 200], ['Venda (base)', 175], ['Arrendamento', 175]],
+    [
+      { _values: ['Retorno anualizado', PCT(a.retorno_anualizado), PCT_DEC(e.yield_liquido)] },
+      { _values: ['Liquidez', 'Imediata', 'Diferida'] },
+      { _values: ['Capital recuperado', 'Imediato', 'Faseado'] },
+      { _values: ['Risco de mercado', 'Alto', 'Médio'] },
+    ]
+  )
+  b.note('A renda estimada deve ser validada com comparáveis de mercado locais. Tributação ao abrigo do Art.º 94.º CIRC (retenção 25% rendimentos prediais para empresas) ou Art.º 72.º CIRS (28% taxa autónoma para particulares).')
 }
 
 function renderEstudoComparaveis(b, im, a) {

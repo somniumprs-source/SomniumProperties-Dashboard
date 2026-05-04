@@ -345,6 +345,18 @@ export async function initSchema() {
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 
+      -- Migration: PMO breakdown + Exit Alternativo (arrendamento) na tabela analises
+      DO $$ BEGIN
+        ALTER TABLE analises ADD COLUMN IF NOT EXISTS pmo_arq_perc REAL DEFAULT 0;
+        ALTER TABLE analises ADD COLUMN IF NOT EXISTS pmo_fisc_perc REAL DEFAULT 0;
+        ALTER TABLE analises ADD COLUMN IF NOT EXISTS pmo_seg_obra_perc REAL DEFAULT 0;
+        ALTER TABLE analises ADD COLUMN IF NOT EXISTS pmo_outros_perc REAL DEFAULT 0;
+        ALTER TABLE analises ADD COLUMN IF NOT EXISTS renda_mensal REAL DEFAULT 0;
+        ALTER TABLE analises ADD COLUMN IF NOT EXISTS vacancy_pct REAL DEFAULT 5;
+        ALTER TABLE analises ADD COLUMN IF NOT EXISTS gestao_arr_pct REAL DEFAULT 8;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
       -- Migration: adicionar campos GCal à tabela tarefas existente
       DO $$ BEGIN
         ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS gcal_event_id TEXT;

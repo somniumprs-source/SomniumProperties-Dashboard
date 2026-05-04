@@ -32,10 +32,12 @@ const INPUT_FIELDS = new Set([
   'nome', 'compra', 'vpt', 'finalidade', 'escritura', 'cpcv_compra', 'due_diligence',
   'perc_financiamento', 'prazo_anos', 'tan', 'tipo_taxa', 'comissoes_banco', 'hipoteca',
   'modo_obra', 'obra', 'pmo_perc', 'aru', 'ampliacao', 'licenciamento',
+  'pmo_arq_perc', 'pmo_fisc_perc', 'pmo_seg_obra_perc', 'pmo_outros_perc',
   'meses', 'seguro_mensal', 'condominio_mensal', 'utilidades_mensal',
   'n_tranches', 'custo_tranche', 'taxa_imi', 'ligacao_servicos', 'excedente_capital',
   'vvr', 'comissao_perc', 'cpcv_venda', 'cert_energetico', 'home_staging', 'outros_venda',
   'regime_fiscal', 'derrama_perc', 'perc_dividendos', 'ano_aquisicao', 'englobamento', 'taxa_irs_marginal',
+  'renda_mensal', 'vacancy_pct', 'gestao_arr_pct',
   'comparaveis', 'caep', 'criado_por',
 ])
 
