@@ -39,13 +39,20 @@ export function generateOrcamentoObraPDF(imovel, orcamentoRow, stream) {
   const seccoes = parseJson(orcamentoRow.seccoes, {})
   const bdi     = parseJson(orcamentoRow.bdi, {})
   const ivaPerc = num(orcamentoRow.iva_perc ?? 23)
-  const regime  = orcamentoRow.regime_fiscal || 'normal'
+  // v4: zona_aru + tipo_obra; fallback para regime_fiscal antigo
+  const zonaAru = orcamentoRow.zona_aru ?? (
+    orcamentoRow.regime_fiscal === 'aru' || orcamentoRow.regime_fiscal === 'habitacao'
+  )
+  const tipoObra = orcamentoRow.tipo_obra || 'remodelacao'
 
-  const orcamento = { pisos, seccoes, iva_perc: ivaPerc, regime_fiscal: regime, bdi }
+  const orcamento = { pisos, seccoes, iva_perc: ivaPerc, zona_aru: zonaAru, tipo_obra: tipoObra, bdi }
   const calc = calcOrcamentoObra(orcamento)
   const avisos = validarOrcamento(orcamento)
 
-  const regimeMeta = REGIMES_FISCAIS.find(r => r.key === regime) || REGIMES_FISCAIS[0]
+  const regimeLabelStr =
+    `${zonaAru ? 'Zona ARU (Verba 2.27)' : 'Não-ARU'} · ` +
+    `${tipoObra === 'construcao_nova' ? 'Construção nova' : 'Remodelação'} · ` +
+    `Mat. ${calc.taxas.material}% · MO ${calc.taxas.mo}%`
 
   // ── Header ─────────────────────────────────────────────────
   doc.rect(0, 0, doc.page.width, 110).fill(BLACK)
@@ -70,11 +77,10 @@ export function generateOrcamentoObraPDF(imovel, orcamentoRow, stream) {
     y += 18
   }
 
-  // Badge do regime fiscal
-  const regimeLabel = `Regime fiscal: ${regimeMeta.label}`
-  const regimeW = doc.widthOfString(regimeLabel) + 16
+  // Badge do regime fiscal (v4)
+  const regimeW = doc.widthOfString(regimeLabelStr) + 16
   doc.roundedRect(50, y, regimeW, 20, 3).fill(GOLD)
-  doc.fontSize(9).fillColor(BLACK).text(regimeLabel, 58, y + 5)
+  doc.fontSize(9).fillColor(BLACK).text(regimeLabelStr, 58, y + 5)
   y += 32
 
   // ── Pisos ──────────────────────────────────────────────────
@@ -185,16 +191,6 @@ export function generateOrcamentoObraPDF(imovel, orcamentoRow, stream) {
     doc.fontSize(9).fillColor(BLACK).text(label, 60, y)
     const detalhe = `Base ${EUR(dados.base)}${dados.iva ? ' · IVA ' + EUR(dados.iva) : ''}${dados.autoliq ? ' · autoliq. ' + EUR(dados.autoliq) : ''}${dados.retencoes ? ' · retenções -' + EUR(dados.retencoes) : ''}`
     doc.fontSize(8).fillColor(GRAY).text(detalhe, 50, y + 1, { width: 490, align: 'right' })
-    y += 14
-  }
-  // Rácio material
-  y += 4
-  const racioColor = t.beneficio_perdido ? RED : (regime === 'habitacao' && t.racio_material > 15 ? '#b45309' : GRAY)
-  doc.fontSize(9).fillColor(racioColor)
-     .text(`Rácio material/empreitada: ${t.racio_material}%${regime === 'habitacao' ? ' (limite Verba 2.32 = 20%)' : ''}`, 60, y)
-  y += 14
-  if (t.beneficio_perdido) {
-    doc.fontSize(8).fillColor(RED).text('⚠ Verba 2.32 violada — benefício 6% perdido, recalculado a 23%.', 60, y)
     y += 14
   }
   y += 8

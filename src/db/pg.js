@@ -681,6 +681,8 @@ export async function initSchema() {
         ALTER TABLE orcamentos_obra ADD COLUMN IF NOT EXISTS total_iva_autoliquidado real DEFAULT 0;
         ALTER TABLE orcamentos_obra ADD COLUMN IF NOT EXISTS total_retencoes_irs real DEFAULT 0;
         ALTER TABLE orcamentos_obra ADD COLUMN IF NOT EXISTS total_a_pagar real DEFAULT 0;
+        ALTER TABLE orcamentos_obra ADD COLUMN IF NOT EXISTS zona_aru boolean DEFAULT false;
+        ALTER TABLE orcamentos_obra ADD COLUMN IF NOT EXISTS tipo_obra text DEFAULT 'remodelacao';
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 
