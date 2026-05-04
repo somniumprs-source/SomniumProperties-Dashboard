@@ -27,7 +27,6 @@ const IMOVEL_FIELD_CONFIG = {
   'tipologia': { label: 'Tipologia', type: 'text' },
   'zona': { label: 'Zona', type: 'text' },
   'area_bruta': { label: 'Área Bruta (m²)', type: 'number' },
-  'area_util': { label: 'Área Útil (m²)', type: 'number' },
   'area_bruta_dependente': { label: 'ABD (m²)', type: 'number' },
   'valor_proposta': { label: 'Valor Proposta (€)', type: 'number' },
   'valor_venda_remodelado': { label: 'VVR (€)', type: 'number' },

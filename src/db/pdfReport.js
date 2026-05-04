@@ -111,7 +111,6 @@ export function generateImovelPDF(imovel, analise = null) {
     ['Valor Venda Remodelado', EUR(imovel.valor_venda_remodelado)],
     ['ROI', imovel.roi > 0 ? `${imovel.roi}%` : '—'],
     ['ROI Anualizado', imovel.roi_anualizado > 0 ? `${imovel.roi_anualizado}%` : '—'],
-    ['Área Útil', imovel.area_util > 0 ? `${imovel.area_util} m²` : '—'],
     ['Área Bruta', imovel.area_bruta > 0 ? `${imovel.area_bruta} m²` : '—'],
   ].filter(([, v]) => v && v !== '—')
   y = drawFieldGrid(doc, valFields, y, pageWidth)

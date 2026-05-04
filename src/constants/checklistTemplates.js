@@ -15,7 +15,7 @@ export const CHECKLIST_TEMPLATES = {
     { key: 'pre_ask_price', titulo: 'Preencher ask price do anúncio', campo_crm: 'ask_price', categoria: 'Pesquisa de Imóveis', tempo_estimado: 0.1, obrigatoria: true },
     { key: 'pre_tipologia', titulo: 'Preencher tipologia (T0, T1, T2, T3, T4+)', campo_crm: 'tipologia', categoria: 'Pesquisa de Imóveis', tempo_estimado: 0.1, obrigatoria: true },
     { key: 'pre_zona', titulo: 'Preencher zona/freguesia', campo_crm: 'zona', categoria: 'Pesquisa de Imóveis', tempo_estimado: 0.1, obrigatoria: true },
-    { key: 'pre_areas', titulo: 'Preencher áreas do anúncio (área bruta e área útil)', campo_crm: 'area_bruta, area_util', categoria: 'Pesquisa de Imóveis', tempo_estimado: 0.1, obrigatoria: true },
+    { key: 'pre_areas', titulo: 'Preencher áreas do anúncio (área bruta e ABD)', campo_crm: 'area_bruta, area_bruta_dependente', categoria: 'Pesquisa de Imóveis', tempo_estimado: 0.1, obrigatoria: true },
     { key: 'pre_screening', titulo: 'Fazer pré-screening: calcular preço/m2 e comparar com média da zona', campo_crm: 'notas', categoria: 'Pesquisa de Imóveis', tempo_estimado: 0.25, obrigatoria: false },
     { key: 'pre_caderneta', titulo: 'Consultar Caderneta Predial Urbana online (Portal das Finanças)', campo_crm: 'notas', categoria: 'Pesquisa de Imóveis', tempo_estimado: 0.25, obrigatoria: false },
   ],
@@ -55,7 +55,7 @@ export const CHECKLIST_TEMPLATES = {
   'Visita Marcada': [
     { key: 'vm_visita', titulo: 'Realizar a visita presencial ao imóvel', campo_crm: 'data_visita', categoria: 'Visita', tempo_estimado: 1.5, obrigatoria: true },
     { key: 'vm_fotos', titulo: 'Fotografar: fachada, entrada, sala, cozinha, quartos, WC, varandas, garagem (mín. 15 fotos)', campo_crm: 'fotos', categoria: 'Visita', tempo_estimado: 0.5, obrigatoria: true },
-    { key: 'vm_medir', titulo: 'Medir áreas reais com fita métrica: sala, quartos, cozinha, WC', campo_crm: 'area_util, area_bruta', categoria: 'Visita', tempo_estimado: 0.25, obrigatoria: true },
+    { key: 'vm_medir', titulo: 'Medir áreas reais com fita métrica: sala, quartos, cozinha, WC', campo_crm: 'area_bruta', categoria: 'Visita', tempo_estimado: 0.25, obrigatoria: true },
     { key: 'vm_ficha', titulo: 'Preencher ficha de visita: cobertura (1-5), humidades, caixilharia, canalização, electricidade, fachada', campo_crm: 'notas', categoria: 'Visita', tempo_estimado: 0.25, obrigatoria: true },
     { key: 'vm_custo_obra', titulo: 'Estimar custo de obra com base na inspecção (valor preliminar)', campo_crm: 'custo_estimado_obra', categoria: 'Estudo de Mercado', tempo_estimado: 0.5, obrigatoria: true },
     { key: 'vm_abd', titulo: 'Confirmar área bruta dependente (varandas, terraços, arrecadações)', campo_crm: 'area_bruta_dependente', categoria: 'Visita', tempo_estimado: 0.1, obrigatoria: false },

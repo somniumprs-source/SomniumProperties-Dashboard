@@ -77,7 +77,7 @@ const MAPPERS = {
       custo_estimado_obra: num(pr['Custo Estimado de Obra']),
       valor_venda_remodelado: num(pr['Valor de Venda Remodelado']),
       roi: num(pr['ROI']), roi_anualizado: num(pr['ROI Anualizado']),
-      area_util: num(pr['Área Util']), area_bruta: num(pr['Área Bruta']),
+      area_bruta: num(pr['Área Bruta']),
       origem: sel(pr['Origem']),
       zona: zonaMulti[0] ?? zonaLegacy ?? null,
       zonas: JSON.stringify(zonaMulti.length > 0 ? zonaMulti : zonaLegacy ? [zonaLegacy] : []),

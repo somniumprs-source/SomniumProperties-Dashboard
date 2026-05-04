@@ -241,7 +241,7 @@ async function main() {
     const estadoName = p['Estado']?.status?.name ?? ''
     const origemName = p['Origem']?.select?.name ?? ''
     const askPrice = p['Ask Price']?.number ?? p['Ask Price (€)']?.number ?? null
-    const area = p['Área Util']?.number ?? p['Área Bruta']?.number ?? null
+    const area = p['Área Bruta']?.number ?? null
     const createdTime = row.created_time
 
     // ── Identify TEMPLATE row ──────────────────────────────────────────────
