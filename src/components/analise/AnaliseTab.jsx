@@ -52,7 +52,7 @@ const SUB_TABS = [
 const GOLD = '#C9A84C'
 const BLACK = '#1A1A1A'
 
-export function AnaliseTab({ imovelId, imovelNome }) {
+export function AnaliseTab({ imovelId, imovelNome, imovel }) {
   const {
     analises, selected, loading, saving,
     select, criar, guardar, guardarAgora, activar, duplicar, apagar,
@@ -219,7 +219,7 @@ export function AnaliseTab({ imovelId, imovelNome }) {
               <StressTests analise={selected} />
             )}
             {subTab === 'Comparáveis' && (
-              <Comparaveis analise={selected} onUpdate={guardarAgora} />
+              <Comparaveis analise={selected} imovel={imovel} onUpdate={guardarAgora} />
             )}
             {subTab === 'CAEP' && (
               <CAEPParcerias analise={selected} onUpdate={guardarAgora} />
