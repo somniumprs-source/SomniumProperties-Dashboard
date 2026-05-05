@@ -2122,8 +2122,10 @@ app.get('/api/operacoes/historico', async (req, res) => {
 // ════════════════════════════════════════════════════════════════
 app.get('/api/kpis', async (req, res) => {
   try {
-    const base = 'http://localhost:3001'
-    const safe = url => fetch(url).then(r => r.json()).catch(() => ({}))
+    const base = `http://127.0.0.1:${process.env.PORT ?? 3001}`
+    const auth = req.headers.authorization
+    const headers = auth ? { Authorization: auth } : {}
+    const safe = url => fetch(url, { headers }).then(r => r.json()).catch(() => ({}))
     const [financeiro, comercial, marketing, operacoes, cashflow, analises] = await Promise.all([
       safe(`${base}/api/kpis/financeiro`),
       safe(`${base}/api/kpis/comercial`),

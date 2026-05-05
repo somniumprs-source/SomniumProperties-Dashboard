@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { TrendingUp, Database, Clock, Calculator } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { DepartmentSection } from '../components/dashboard/DepartmentSection.jsx'
@@ -7,6 +7,8 @@ import { KPISkeleton } from '../components/ui/Skeleton.jsx'
 import { apiFetch } from '../lib/api.js'
 import { EUR, statusColor } from '../constants.js'
 
+const REFRESH_INTERVAL_MS = 30_000
+
 const formatEur = EUR
 const statusFromValue = statusColor
 
@@ -14,18 +16,60 @@ const PULSE_COLOR = { excelente: '#22c55e', bom: '#C9A84C', 'atenção': '#f59e0
 const PULSE_BG = { excelente: 'rgba(34,197,94,0.1)', bom: 'rgba(201,168,76,0.1)', 'atenção': 'rgba(245,158,11,0.1)', 'crítico': 'rgba(239,68,68,0.1)' }
 
 export function Dashboard() {
-  const { kpis, loading, error, refresh } = useKPIs()
+  const { kpis, loading, error, refresh: refreshKpis } = useKPIs()
   const [pulse, setPulse] = useState(null)
   const [metricas, setMetricas] = useState(null)
+  const [lastRefresh, setLastRefresh] = useState(null)
+  const inFlightRef = useRef(false)
 
-  useEffect(() => {
-    apiFetch('/api/weekly-pulse').then(r => r.json()).then(setPulse).catch(() => {})
-    apiFetch('/api/metricas').then(r => r.json()).then(setMetricas).catch(() => {})
+  const refreshPulseMetricas = useCallback(async () => {
+    try {
+      const [pRes, mRes] = await Promise.all([
+        apiFetch('/api/weekly-pulse'),
+        apiFetch('/api/metricas'),
+      ])
+      if (pRes.ok) setPulse(await pRes.json())
+      if (mRes.ok) setMetricas(await mRes.json())
+    } catch { /* offline / network — manter ultima leitura */ }
   }, [])
 
-  const updatedAt = kpis?.updatedAt
-    ? new Date(kpis.updatedAt).toLocaleString('pt-PT')
-    : null
+  const refreshAll = useCallback(async () => {
+    if (inFlightRef.current) return
+    inFlightRef.current = true
+    try {
+      await Promise.all([refreshKpis(), refreshPulseMetricas()])
+      setLastRefresh(Date.now())
+    } finally {
+      inFlightRef.current = false
+    }
+  }, [refreshKpis, refreshPulseMetricas])
+
+  // Fetch inicial de pulse/metricas (kpis ja vai pelo useKPIs).
+  useEffect(() => {
+    refreshPulseMetricas().then(() => setLastRefresh(Date.now()))
+  }, [refreshPulseMetricas])
+
+  // Polling, visibilidade do tab, foco da janela e evento global de mutacao.
+  useEffect(() => {
+    const interval = setInterval(refreshAll, REFRESH_INTERVAL_MS)
+    const onVisible = () => { if (!document.hidden) refreshAll() }
+    const onMutation = () => refreshAll()
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    window.addEventListener('somnium:refresh', onMutation)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+      window.removeEventListener('somnium:refresh', onMutation)
+    }
+  }, [refreshAll])
+
+  const updatedAt = lastRefresh
+    ? new Date(lastRefresh).toLocaleTimeString('pt-PT')
+    : kpis?.updatedAt
+      ? new Date(kpis.updatedAt).toLocaleString('pt-PT')
+      : null
 
   const finKpis = kpis?.financeiro
   const comKpis = kpis?.comercial
@@ -87,7 +131,7 @@ export function Dashboard() {
       <Header
         title="Dashboard Central"
         subtitle={updatedAt ? `Última atualização: ${updatedAt}` : 'A carregar dados...'}
-        onRefresh={refresh}
+        onRefresh={refreshAll}
         loading={loading}
       />
       <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
