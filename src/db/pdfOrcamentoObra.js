@@ -31,9 +31,8 @@ const parseJson = (v, fb) => {
   try { return JSON.parse(v) } catch { return fb }
 }
 
-export function generateOrcamentoObraPDF(imovel, orcamentoRow, stream) {
+export function generateOrcamentoObraPDF(imovel, orcamentoRow) {
   const doc = new PDFDocument({ size: 'A4', margins: { top: 40, bottom: 50, left: 50, right: 50 } })
-  doc.pipe(stream)
 
   const pisos   = parseJson(orcamentoRow.pisos, [])
   const seccoes = parseJson(orcamentoRow.seccoes, {})
@@ -243,6 +242,7 @@ export function generateOrcamentoObraPDF(imovel, orcamentoRow, stream) {
            50, footerY + 4, { align: 'center', width: doc.page.width - 100 })
 
   doc.end()
+  return doc
 }
 
 // ── Helpers ────────────────────────────────────────────────
