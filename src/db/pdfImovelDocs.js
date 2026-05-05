@@ -1787,188 +1787,409 @@ function renderEstruturaCAEP(b, im, a, m) {
   b.note('A distribuição efectiva depende do contrato CAEP assinado entre as partes. Valores indicativos baseados nos parâmetros introduzidos na ficha financeira.')
 }
 
-function renderEstudoComparaveis(b, im, a) {
-  b.header('IMÓVEL EM ANÁLISE')
-  b.simpleTable([
-    { label: 'Imóvel', value: im.nome }, { label: 'Zona', value: im.zona },
-    { label: 'Tipologia', value: im.tipologia }, { label: 'VVR Estimado', value: EUR(a.vvr || im.valor_venda_remodelado) },
-  ])
-  b.space(4)
+// Coeficiente de ajuste de area usado em Comparaveis.jsx (mantido em 0,25)
+const AREA_FACTOR_PDF = '0,25'
 
+function calcDesvioPadrao(arr) {
+  if (!Array.isArray(arr) || arr.length < 2) return 0
+  const n = arr.length
+  const media = arr.reduce((s, v) => s + v, 0) / n
+  const variance = arr.reduce((s, v) => s + (v - media) ** 2, 0) / n
+  return Math.sqrt(variance)
+}
+
+function gerarConclusaoAuto({ n, mediana, vvrAdoptado, delta, posTexto, minM2, maxM2, precoM2Vvr, descontoNeg, dataRecolha, fonteDados }) {
+  const partes = []
+  partes.push(`Com base em ${n} comparáveis recolhidos${dataRecolha ? ` em ${dataRecolha}` : ''}${fonteDados ? ` (fonte: ${fonteDados})` : ''}, o VVR adoptado de ${EUR(vvrAdoptado)} posiciona-se ${posTexto.toLowerCase()} face à mediana ajustada (${EUR(mediana)}).`)
+  if (precoM2Vvr && minM2 && maxM2) {
+    partes.push(`O preço de ${Math.round(precoM2Vvr).toLocaleString('pt-PT')} €/m² está contido no intervalo observado (${Math.round(minM2).toLocaleString('pt-PT')} €/m² a ${Math.round(maxM2).toLocaleString('pt-PT')} €/m²).`)
+  }
+  if (descontoNeg) {
+    partes.push(`Preços são de oferta; aplicar desconto negocial estimado de ${descontoNeg}% para preço de transacção efectiva.`)
+  }
+  return partes.join(' ')
+}
+
+function drawPosVisualBar(b, { min, max, mediana, media, vvr, posCor }) {
+  const trackY = b.y + 24
+  const trackH = 14
+  const trackW = CW
+  const trackX = ML
+  // Track
+  b.doc.rect(trackX, trackY, trackW, trackH).fill('#EDEAE0')
+  // Helper para mapear valor -> x
+  const range = max - min
+  const xFor = (v) => {
+    if (range <= 0) return trackX + trackW / 2
+    return trackX + ((v - min) / range) * trackW
+  }
+  // Linha tracejada cinza na media
+  if (media > 0 && media >= min && media <= max) {
+    const xMedia = xFor(media)
+    b.doc.save()
+    b.doc.lineWidth(0.7).strokeColor('#999999').dash(2, { space: 2 })
+    b.doc.moveTo(xMedia, trackY - 4).lineTo(xMedia, trackY + trackH + 4).stroke()
+    b.doc.undash()
+    b.doc.fontSize(7).fillColor('#999999').text('Méd.', xMedia - 12, trackY + trackH + 6, { width: 24, align: 'center', lineBreak: false })
+    b.doc.restore()
+  }
+  // Linha solida dourada na mediana
+  if (mediana > 0 && mediana >= min && mediana <= max) {
+    const xMed = xFor(mediana)
+    b.doc.lineWidth(1.5).strokeColor(C.gold)
+    b.doc.moveTo(xMed, trackY - 6).lineTo(xMed, trackY + trackH + 6).stroke()
+    b.doc.fontSize(7).fillColor(C.gold).text('Med.', xMed - 12, trackY - 14, { width: 24, align: 'center', lineBreak: false })
+  }
+  // Diamante VVR
+  if (vvr > 0) {
+    let xVvr
+    if (vvr < min) xVvr = trackX + 8
+    else if (vvr > max) xVvr = trackX + trackW - 8
+    else xVvr = xFor(vvr)
+    const cy = trackY + trackH / 2
+    const r = 8
+    b.doc.save()
+    b.doc.fillColor(posCor)
+      .moveTo(xVvr, cy - r)
+      .lineTo(xVvr + r, cy)
+      .lineTo(xVvr, cy + r)
+      .lineTo(xVvr - r, cy)
+      .closePath().fill()
+    b.doc.restore()
+    // Label VVR acima
+    b.doc.fontSize(7.5).fillColor(posCor).text(`VVR: ${EUR(vvr)}`, xVvr - 50, trackY - 22, { width: 100, align: 'center', lineBreak: false })
+  }
+  // Labels Min / Max nas extremidades
+  b.doc.fontSize(7).fillColor(C.muted)
+  b.doc.text(`Min: ${EUR(min)}`, trackX, trackY + trackH + 6, { width: 80, lineBreak: false })
+  b.doc.text(`Max: ${EUR(max)}`, trackX + trackW - 80, trackY + trackH + 6, { width: 80, align: 'right', lineBreak: false })
+  b.y = trackY + trackH + 28
+}
+
+function renderEstudoComparaveis(b, im, a) {
   // Leitura tolerante: array legacy ou objecto novo {meta, tipologias}
   let comps = a.comparaveis || []
   if (typeof comps === 'string') try { comps = JSON.parse(comps) } catch { comps = [] }
-  const meta = (!Array.isArray(comps) && comps && typeof comps === 'object' && comps.meta) ? comps.meta : null
+  const meta = (!Array.isArray(comps) && comps && typeof comps === 'object' && comps.meta) ? comps.meta : {}
   const tipologias = Array.isArray(comps) ? comps : (comps?.tipologias || [])
+  const m = calcMetricsExtra(a, im)
+  const areaAlvo = parseFloat(im.area_bruta) || (tipologias[0]?.area) || 0
+  const descontoNeg = meta.desconto_negocial_pct != null ? meta.desconto_negocial_pct : 5
 
-  // Bloco de Metodologia (apenas se houver meta novo)
-  if (meta) {
-    b.header('METODOLOGIA DO ESTUDO')
-    b.simpleTable([
-      { label: 'Fonte dos Dados', value: meta.fonte_dados || '—' },
-      { label: 'Tipo de Preço', value: meta.tipo_preco || '—' },
-      { label: 'Desconto Negocial Estimado', value: meta.desconto_negocial_pct != null ? `${meta.desconto_negocial_pct}%` : '—' },
-      { label: 'Raio de Pesquisa', value: meta.raio_pesquisa_km != null ? `${meta.raio_pesquisa_km} km` : '—' },
-      { label: 'Data de Recolha', value: meta.data_recolha || '—' },
-    ])
-    if (meta.metodologia) {
-      b.space(2)
-      b.note(meta.metodologia)
-    }
-    b.space(4)
+  // Recolher todos os comparaveis validos com computacoes
+  const compsCalc = []
+  tipologias.forEach((tip) => {
+    if (!tip) return
+    const items = tip.comparaveis || []
+    items.forEach((c, idx) => {
+      if (!c || (!c.preco && !c.area)) return
+      if (c.preco <= 0 || c.area <= 0) return
+      const precoM2Bruto = c.preco / c.area
+      // Ajustes desagregados (somar todos)
+      let ajEstado = 0, ajPiso = 0, ajElev = 0, ajGar = 0, ajArea = 0, ajOutros = 0
+      if (c.ajustes && typeof c.ajustes === 'object') {
+        ajEstado = parseFloat(c.ajustes.estado_pct) || 0
+        ajPiso = parseFloat(c.ajustes.piso_pct) || (parseFloat(c.ajustes.loc) || 0)
+        ajElev = parseFloat(c.ajustes.elevador_pct) || 0
+        ajGar = parseFloat(c.ajustes.garagem_pct) || 0
+        ajArea = parseFloat(c.ajustes.area) || 0
+        ajOutros = (parseFloat(c.ajustes.idade) || 0) + (parseFloat(c.ajustes.conserv) || 0) + (parseFloat(c.ajustes.outros) || 0) + (parseFloat(c.ajustes.neg) || 0)
+      }
+      const ajTotal = ajEstado + ajPiso + ajElev + ajGar + ajArea + ajOutros
+      const precoM2Aj = precoM2Bruto * (1 + ajTotal / 100)
+      const vvrEst = areaAlvo > 0 ? precoM2Aj * areaAlvo : 0
+      const precoTransac = c.preco * (1 - descontoNeg / 100)
+      compsCalc.push({
+        ...c,
+        _idx: idx,
+        _tipArea: tip.area,
+        precoM2Bruto, precoM2Aj, vvrEst, precoTransac,
+        ajEstado, ajPiso, ajElev, ajGar, ajArea, ajOutros, ajTotal,
+      })
+    })
+  })
 
-    if (meta.alvo_atributos) {
-      b.subheader('Atributos do Imóvel Alvo')
-      b.simpleTable([
-        { label: 'Tipologia', value: im.tipologia || '—' },
-        { label: 'Área Útil', value: im.area_bruta ? `${im.area_bruta} m²` : '—' },
-        { label: 'Estado Esperado após Obra', value: meta.alvo_atributos.estado || 'Reabilitado (após obra)' },
-        { label: 'Piso', value: meta.alvo_atributos.piso || '—' },
-        { label: 'Elevador', value: meta.alvo_atributos.elevador ? 'Sim' : 'Não' },
-        { label: 'Garagem / Estacionamento', value: meta.alvo_atributos.garagem ? 'Sim' : 'Não' },
-      ])
-      b.space(4)
-    }
+  // Sumario estatistico
+  const m2sAjust = compsCalc.map(c => c.precoM2Aj)
+  const vvrs = compsCalc.map(c => c.vvrEst).filter(v => v > 0)
+  const sortedM2 = [...m2sAjust].sort((x, y) => x - y)
+  const sortedVvr = [...vvrs].sort((x, y) => x - y)
+  const n = compsCalc.length
+  const mediaM2 = n > 0 ? m2sAjust.reduce((s, v) => s + v, 0) / n : 0
+  const medianaM2 = sortedM2.length > 0 ? (sortedM2.length % 2 === 0 ? (sortedM2[sortedM2.length / 2 - 1] + sortedM2[sortedM2.length / 2]) / 2 : sortedM2[Math.floor(sortedM2.length / 2)]) : 0
+  const minM2 = sortedM2[0] || 0
+  const maxM2 = sortedM2[sortedM2.length - 1] || 0
+  const desvio = calcDesvioPadrao(m2sAjust)
+  const mediaVvr = vvrs.length > 0 ? vvrs.reduce((s, v) => s + v, 0) / vvrs.length : 0
+  const medianaVvr = sortedVvr.length > 0 ? (sortedVvr.length % 2 === 0 ? (sortedVvr[sortedVvr.length / 2 - 1] + sortedVvr[sortedVvr.length / 2]) / 2 : sortedVvr[Math.floor(sortedVvr.length / 2)]) : 0
+  const minVvr = sortedVvr[0] || 0
+  const maxVvr = sortedVvr[sortedVvr.length - 1] || 0
+
+  const vvrAdoptado = parseFloat(a.vvr) || parseFloat(im.valor_venda_remodelado) || 0
+  const precoM2Vvr = areaAlvo > 0 && vvrAdoptado > 0 ? vvrAdoptado / areaAlvo : 0
+  const deltaMediana = medianaVvr > 0 && vvrAdoptado > 0 ? ((vvrAdoptado / medianaVvr) - 1) * 100 : null
+  const deltaMedia = mediaVvr > 0 && vvrAdoptado > 0 ? ((vvrAdoptado / mediaVvr) - 1) * 100 : null
+  let posTexto = '—', posCor = C.body
+  if (deltaMediana != null) {
+    if (deltaMediana < -5) { posTexto = 'Conservador (abaixo da mediana)'; posCor = '#1B5E20' }
+    else if (deltaMediana <= 5) { posTexto = 'Alinhado com a mediana'; posCor = C.gold }
+    else if (deltaMediana <= 15) { posTexto = 'Moderadamente acima da mediana'; posCor = C.gold }
+    else { posTexto = 'Acima do intervalo de mercado'; posCor = '#8B1A1A' }
   }
 
-  // Acumulador para Resumo Estatistico global
-  const allVVRs = []
+  // ─────────────────────────────────────────────────────────
+  // PAGINA 2 — SUMARIO EXECUTIVO
+  // ─────────────────────────────────────────────────────────
+  b.header('SUMÁRIO EXECUTIVO')
 
-  if (tipologias.length > 0) {
-    for (let t = 0; t < tipologias.length; t++) {
-      const tip = tipologias[t]
-      if (!tip) continue
-      const tipLabel = tip.tipologia || tip.label || `Tipologia ${t + 1}`
-      b.header(`TIPOLOGIA: ${tipLabel.toUpperCase()}`)
+  // Caixa preta com Conclusao
+  let conclusao = (meta.conclusao_estudo || '').trim()
+  if (!conclusao && n > 0) {
+    conclusao = gerarConclusaoAuto({
+      n, mediana: medianaVvr, vvrAdoptado, delta: deltaMediana, posTexto,
+      minM2, maxM2, precoM2Vvr, descontoNeg,
+      dataRecolha: meta.data_recolha, fonteDados: meta.fonte_dados,
+    })
+  }
+  if (conclusao) {
+    const conclH = b.doc.heightOfString(conclusao, { width: CW - 28, lineGap: 3 })
+    const boxH = conclH + 30
+    b.ensure(boxH + 6)
+    b.doc.rect(ML, b.y, CW, boxH).fill(C.black)
+    b.doc.rect(ML, b.y, 4, boxH).fill(C.gold)
+    b.doc.fontSize(7).fillColor(C.gold).text('CONCLUSÃO DO ESTUDO', ML + 14, b.y + 8, { width: CW - 28, characterSpacing: 1, lineBreak: false })
+    b.doc.fontSize(9).fillColor('#f0efe9').text(conclusao, ML + 14, b.y + 22, { width: CW - 28, lineGap: 3 })
+    b.y += boxH + 8
+  }
 
-      if (tip.area || tip.renda || tip.yield_bruta) {
-        b.simpleTable([
-          { label: 'Área (m²)', value: tip.area },
-          { label: 'Renda Mensal', value: EUR(tip.renda) },
-          { label: 'Yield Bruta', value: PCT(tip.yield_bruta) },
-          { label: 'VVR pelo Rendimento', value: EUR(tip.vvr_rendimento) },
-        ])
-        b.space(4)
-      }
+  // Grid 4 KPIs hero
+  if (n > 0) {
+    b.bigNumbers([
+      { label: 'Mediana VVR Est.', value: EUR(medianaVvr), sub: '(Mediana dos VVR estimados ajustados dos comparáveis)' },
+      { label: 'Intervalo de Mercado', value: `${Math.round(minM2).toLocaleString('pt-PT')}–${Math.round(maxM2).toLocaleString('pt-PT')} €/m²`, sub: '(Min. e máx. €/m² ajustado)' },
+      { label: 'VVR Adoptado', value: EUR(vvrAdoptado), sub: deltaMediana != null ? `(${deltaMediana >= 0 ? '+' : ''}${deltaMediana.toFixed(1)}% vs. mediana)` : '(Valor de Venda de Referência)' },
+      { label: 'Preço/m² VVR', value: precoM2Vvr ? `${Math.round(precoM2Vvr).toLocaleString('pt-PT')} €/m²` : '—', sub: '(Preço por m² implícito no VVR adoptado)' },
+    ])
+    b.space(4)
+  }
 
-      if (tip.vvr_alvo) {
-        b.bigNumbers([{ label: 'VVR Alvo', value: EUR(tip.vvr_alvo) }])
-        b.space(4)
-      }
+  // A. Imovel em Analise
+  b.header('A. IMÓVEL EM ANÁLISE')
+  const alvoAtr = meta.alvo_atributos || {}
+  b.simpleTable([
+    { label: 'Referência do Imóvel', value: im.nome || '—' },
+    { label: 'Zona / Município', value: [im.zona, im.concelho].filter(Boolean).join(' · ') || '—' },
+    { label: 'Tipologia', value: im.tipologia || '—' },
+    { label: 'Área Útil (m²)', value: areaAlvo ? `${areaAlvo} m²` : '—' },
+    { label: 'Estado após Intervenção (Condição esperada na venda)', value: alvoAtr.estado || 'Reabilitado (após obra)' },
+    { label: 'Piso', value: alvoAtr.piso || '—' },
+    { label: 'Elevador', value: alvoAtr.elevador ? 'Sim' : 'Não' },
+    { label: 'Garagem / Estacionamento', value: alvoAtr.garagem ? 'Sim' : 'Não' },
+    { label: 'VVR Adoptado (Valor de Venda de Referência — preço alvo de saída)', value: EUR(vvrAdoptado), total: true },
+    { label: 'Preço de Venda Alvo por m²', value: precoM2Vvr ? `${Math.round(precoM2Vvr).toLocaleString('pt-PT')} €/m²` : '—' },
+  ])
+  b.space(4)
 
-      const items = tip.comparaveis || tip.items || []
-      if (items.length > 0) {
-        // Tabela principal com colunas standard
-        b.colTable(
-          [['Comparável', 110], ['Área', 50], ['Preço', 65], ['€/m²', 60], ['Ajuste', 50], ['€/m² Aj.', 55], ['VVR Est.', 55]],
-          items.filter(c => c && (c.preco > 0 || c.area > 0)).map((c, i) => {
-            const eurM2 = c.area > 0 ? Math.round((c.preco || c.preco_anuncio || 0) / c.area) : '—'
-            // Calcular ajuste total tolerando schema antigo (ajuste_total) ou novo (somar c.ajustes)
-            let ajTotal = 0
-            if (c.ajustes && typeof c.ajustes === 'object') {
-              ajTotal = Object.values(c.ajustes).reduce((s, v) => s + (parseFloat(v) || 0), 0)
-            } else if (c.ajuste_total != null) {
-              ajTotal = parseFloat(c.ajuste_total) || 0
-            }
-            const eurM2Aj = typeof eurM2 === 'number' ? Math.round(eurM2 * (1 + ajTotal / 100)) : '—'
-            const vvrEst = typeof eurM2Aj === 'number' && tip.area ? eurM2Aj * tip.area : '—'
-            if (typeof vvrEst === 'number') allVVRs.push(vvrEst)
-            return { _values: [
-              c.descricao || c.notas || c.zona || `Comp. ${i + 1}`,
-              c.area ? `${c.area}m²` : '—',
-              EUR(c.preco || c.preco_anuncio),
-              typeof eurM2 === 'number' ? `€${eurM2}` : '—',
-              ajTotal ? `${ajTotal > 0 ? '+' : ''}${ajTotal.toFixed(1)}%` : '0%',
-              typeof eurM2Aj === 'number' ? `€${eurM2Aj}` : '—',
-              typeof vvrEst === 'number' ? EUR(vvrEst) : '—',
-            ] }
-          })
-        )
+  // B. Analise de Rendimento — Exit Arrendamento
+  b.header('B. ANÁLISE DE RENDIMENTO — EXIT ARRENDAMENTO (Activar se exit alternativo à venda)')
+  const tipComRenda = tipologias.find(t => t && t.renda > 0) || tipologias[0] || {}
+  const rendaMensal = parseFloat(tipComRenda.renda) || 0
+  const yieldBruta = parseFloat(tipComRenda.yield) || 0
+  const vvrPorRendimento = (rendaMensal > 0 && yieldBruta > 0) ? (rendaMensal * 12 / (yieldBruta / 100)) : 0
+  b.simpleTable([
+    { label: 'Renda Mensal Estimada (Valor de mercado de arrendamento na zona)', value: rendaMensal > 0 ? EUR(rendaMensal) : '—' },
+    { label: 'Yield Bruta (Renda anual / VVR — rendimento bruto de arrendamento)', value: yieldBruta > 0 ? `${yieldBruta.toFixed(2)}%` : '—' },
+    { label: 'VVR pelo Rendimento (VVR implícito pela yield de mercado na zona)', value: vvrPorRendimento > 0 ? EUR(vvrPorRendimento) : '—' },
+  ])
+  if (rendaMensal === 0) {
+    b.note('Preencher esta secção quando o exit alternativo de arrendamento for analisado. Requer estudo de rendas comparáveis na zona.')
+  }
+  b.space(4)
 
-        // Tabela de atributos (apenas para schema novo)
-        const itemsComAtributos = items.filter(c => c && (c.estado || c.piso || c.elevador != null || c.garagem != null || c.dias_mercado != null))
-        if (itemsComAtributos.length > 0) {
-          b.space(2)
-          b.subheader('Atributos por Comparável')
-          b.colTable(
-            [['Ref.', 50], ['Estado', 145], ['Piso', 90], ['Elev.', 50], ['Gar.', 50], ['Dias Merc.', 60]],
-            items.filter(c => c && (c.preco > 0 || c.area > 0)).map((c, i) => ({
-              _values: [
-                `Comp. ${i + 1}`,
-                c.estado || '—',
-                c.piso || '—',
-                c.elevador === true ? 'Sim' : (c.elevador === false ? 'Não' : '—'),
-                c.garagem === true ? 'Sim' : (c.garagem === false ? 'Não' : '—'),
-                c.dias_mercado != null ? `${c.dias_mercado} d` : '—',
-              ],
-            }))
-          )
-        }
+  // ─────────────────────────────────────────────────────────
+  // PAGINA 3 — METODOLOGIA E COMPARAVEIS
+  // ─────────────────────────────────────────────────────────
+  b.newPage()
+  b.header('METODOLOGIA E COMPARÁVEIS')
 
-        const validVVRs = items.filter(c => c.vvr_estimado > 0).map(c => c.vvr_estimado)
-        if (validVVRs.length > 0) {
-          const media = Math.round(validVVRs.reduce((a, b) => a + b, 0) / validVVRs.length)
-          b.space(4)
-          b.metric('Média VVR Comparáveis', EUR(media), { total: true })
-        }
-      }
-      b.space(4)
+  // C. Metodologia
+  b.subheader('C. Metodologia de Avaliação')
+  b.simpleTable([
+    { label: 'Fonte dos Dados (Portal ou registo de onde foram extraídos os preços)', value: meta.fonte_dados || '—' },
+    { label: 'Tipo de Preço (Oferta de venda vs. transacção efectiva escriturada)', value: meta.tipo_preco || '—' },
+    { label: 'Desconto Negocial Estimado (Redução média entre oferta e transacção)', value: descontoNeg != null ? `${descontoNeg}%` : '—' },
+    { label: 'Data de Recolha dos Dados', value: meta.data_recolha || '—' },
+    { label: 'Raio de Pesquisa (Distância máxima ao imóvel alvo)', value: meta.raio_pesquisa_km != null ? `${meta.raio_pesquisa_km} km` : '—' },
+    { label: 'Número de Comparáveis Válidos', value: String(n) },
+    { label: 'Ajustes Aplicados', value: 'Área, estado, piso, elevador, garagem' },
+  ])
+  if (meta.metodologia) {
+    b.space(2)
+    b.note(meta.metodologia)
+  }
+  b.space(4)
+
+  // D. Grelha de Ajustes Qualitativos
+  b.subheader('D. Grelha de Ajustes Qualitativos (Lógica de ajuste aplicada a cada atributo)')
+  b.colTable(
+    [['Atributo', 90], ['Direcção do Ajuste', 200], ['Lógica', 175]],
+    [
+      { _values: ['Estado de Conservação', 'Comp. pior que alvo: +% | Comp. igual ou melhor: 0% ou −%', 'Alvo será reabilitado — comp. em pior estado subestima o VVR'] },
+      { _values: ['Piso', 'Cave/RC: +% vs andar | Andar alto: −%', 'Cave penaliza preço; andares altos premiam'] },
+      { _values: ['Elevador', 'Comp. com elevador e alvo sem: −%', 'Remover o atributo premium do comparável'] },
+      { _values: ['Garagem', 'Comp. com garagem e alvo sem: −%', 'Remover valor de garagem do comparável'] },
+      { _values: ['Área', `Calculado automaticamente (diferença % × coef. ${AREA_FACTOR_PDF})`, 'Fracções menores tendem a ter preço/m² mais alto'] },
+    ]
+  )
+  b.space(4)
+
+  // E. Tabela de Comparaveis Ajustados
+  b.subheader('E. Tabela de Comparáveis Ajustados')
+  if (n > 0) {
+    const rowsE = compsCalc.map((c, i) => {
+      const id = `Comp. ${String.fromCharCode(65 + i)}${c.descricao ? ' ' + c.descricao : ''}`
+      return { _values: [
+        id,
+        `${c.area} m²`,
+        EUR(c.preco),
+        `${Math.round(c.precoM2Bruto).toLocaleString('pt-PT')} €/m²`,
+        { value: `${c.ajTotal >= 0 ? '+' : ''}${c.ajTotal.toFixed(1)}%`, color: c.ajTotal >= 0 ? '#1B5E20' : '#8B1A1A' },
+        `${Math.round(c.precoM2Aj).toLocaleString('pt-PT')} €/m²`,
+        EUR(c.vvrEst),
+        EUR(c.precoTransac),
+      ] }
+    })
+    // Linha MEDIA
+    rowsE.push({ _total: true, _values: ['MÉDIA', '—', '—', `${Math.round(m2sAjust.reduce((s,v)=>s+v,0)/n*0+ (n>0 ? compsCalc.reduce((s,c)=>s+c.precoM2Bruto,0)/n : 0)).toLocaleString('pt-PT')} €/m²`, '—', `${Math.round(mediaM2).toLocaleString('pt-PT')} €/m²`, EUR(mediaVvr), '—'] })
+    rowsE.push({ _total: true, _values: ['MEDIANA', '—', '—', '—', '—', `${Math.round(medianaM2).toLocaleString('pt-PT')} €/m²`, EUR(medianaVvr), '—'] })
+    if (vvrAdoptado > 0) {
+      rowsE.push({ _total: true, _values: ['VVR ADOPTADO', '—', '—', '—', { value: deltaMediana != null ? `${deltaMediana >= 0 ? '+' : ''}${deltaMediana.toFixed(1)}% vs. med.` : '—', color: posCor }, precoM2Vvr ? `${Math.round(precoM2Vvr).toLocaleString('pt-PT')} €/m²` : '—', EUR(vvrAdoptado), '—'] })
     }
-
-    // Bloco final de Resumo Estatistico (agregado sobre todas as tipologias)
-    if (allVVRs.length >= 2) {
-      const sorted = [...allVVRs].sort((x, y) => x - y)
-      const n = sorted.length
-      const media = Math.round(sorted.reduce((s, v) => s + v, 0) / n)
-      const mediana = n % 2 === 0 ? Math.round((sorted[n / 2 - 1] + sorted[n / 2]) / 2) : sorted[Math.floor(n / 2)]
-      const min = sorted[0]
-      const max = sorted[n - 1]
-      const vvrAdoptado = parseFloat(a.vvr) || parseFloat(im.valor_venda_remodelado) || 0
-
-      b.header('RESUMO ESTATÍSTICO')
-      b.bigNumbers([
-        { label: 'Comparáveis', value: String(n), sub: '(amostra agregada)' },
-        { label: 'Média VVR', value: EUR(media), sub: '(média aritmética)' },
-        { label: 'Mediana VVR', value: EUR(mediana), sub: '(valor central)' },
-        { label: 'Mínimo VVR', value: EUR(min), sub: '(valor mais baixo)' },
-        { label: 'Máximo VVR', value: EUR(max), sub: '(valor mais alto)' },
-      ])
-      b.space(4)
-
-      if (vvrAdoptado > 0 && mediana > 0) {
-        const delta = ((vvrAdoptado / mediana) - 1) * 100
-        let posTexto, posCor
-        if (delta < -5) { posTexto = 'Conservador (abaixo da mediana)'; posCor = '#1B5E20' }
-        else if (delta <= 5) { posTexto = 'Alinhado com a mediana'; posCor = C.gold }
-        else if (delta <= 15) { posTexto = 'Moderadamente acima da mediana'; posCor = C.gold }
-        else { posTexto = 'Acima do intervalo de mercado'; posCor = '#8B1A1A' }
-
-        b.simpleTable([
-          { label: 'VVR Adoptado pela Somnium', value: EUR(vvrAdoptado) },
-          { label: 'Diferencial vs. Mediana', value: `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%`, color: posCor },
-          { label: 'Posicionamento', value: posTexto, color: posCor, total: true },
-        ])
-        b.space(4)
-      }
-    }
+    b.colTable(
+      [['Comparável', 110], ['Área', 38], ['Preço Oferta', 60], ['€/m² Bruto', 55], ['Aj. Total', 50], ['€/m² Aj.', 55], ['VVR Est.', 60], ['Transac. -' + descontoNeg + '%', 62]],
+      rowsE
+    )
+    b.space(2)
+    b.note(`Ajuste de área calculado automaticamente com coeficiente ${AREA_FACTOR_PDF}. Ajustes de estado, piso, elevador e garagem inseridos manualmente. Preço de transacção estimado com desconto negocial de ${descontoNeg}% sobre preço de oferta.`)
   } else {
+    b.note('Sem comparáveis preenchidos nesta análise.')
+  }
+  b.space(4)
+
+  // ─────────────────────────────────────────────────────────
+  // PAGINA 5+ — FICHAS INDIVIDUAIS
+  // ─────────────────────────────────────────────────────────
+  if (n > 0) {
+    b.newPage()
+    b.header('FICHAS INDIVIDUAIS DOS COMPARÁVEIS')
+    b.note('Detalhe de cada comparável com atributos, ajustes aplicados e posicionamento face ao imóvel em análise.')
+    b.space(4)
+
+    compsCalc.forEach((c, i) => {
+      const letra = String.fromCharCode(65 + i)
+      const subtitulo = c.descricao || c.notas || ''
+      // Header do card
+      b.ensure(28)
+      b.doc.rect(ML, b.y, CW, 24).fill(C.black)
+      b.doc.fontSize(10).fillColor(C.white).text(`Comp. ${letra}`, ML + 12, b.y + 7, { width: 200, lineBreak: false })
+      if (subtitulo) {
+        b.doc.fontSize(8.5).fillColor(C.muted).text(subtitulo, ML + 12, b.y + 7, { width: CW - 24, align: 'right', lineBreak: false })
+      }
+      b.y += 28
+
+      // Render como duas tabelas lado a lado seria complexo; usa simpleTable em sequencia
+      const valid = (v, suffix = '') => v != null && v !== '' ? (suffix ? `${v}${suffix}` : v) : '—'
+      b.simpleTable([
+        { label: 'Área Útil', value: c.area ? `${c.area} m²` : '—' },
+        { label: 'Preço de Oferta (Preço anunciado no portal)', value: EUR(c.preco) },
+        { label: 'Preço/m² Bruto (Sem ajuste)', value: `${Math.round(c.precoM2Bruto).toLocaleString('pt-PT')} €/m²` },
+        { label: 'Estado de Conservação', value: c.estado || '—' },
+        { label: 'Piso', value: c.piso || '—' },
+        { label: 'Elevador', value: c.elevador === true ? 'Sim' : (c.elevador === false ? 'Não' : '—') },
+        { label: 'Garagem / Estacionamento', value: c.garagem === true ? 'Sim' : (c.garagem === false ? 'Não' : '—') },
+        { label: 'Dias em Mercado (Tempo de absorção observado)', value: c.dias_mercado != null ? `${c.dias_mercado} dias` : '—' },
+        { label: 'Ajuste Estado (+ se comp pior que alvo reabilitado)', value: `${c.ajEstado >= 0 ? '+' : ''}${c.ajEstado.toFixed(1)}%`, color: c.ajEstado === 0 ? C.body : (c.ajEstado > 0 ? '#1B5E20' : '#8B1A1A') },
+        { label: 'Ajuste Piso (+ se alvo está em cave vs. andar)', value: `${c.ajPiso >= 0 ? '+' : ''}${c.ajPiso.toFixed(1)}%`, color: c.ajPiso === 0 ? C.body : (c.ajPiso > 0 ? '#1B5E20' : '#8B1A1A') },
+        { label: 'Ajuste Elevador (− se comp tem elevador e alvo não)', value: `${c.ajElev >= 0 ? '+' : ''}${c.ajElev.toFixed(1)}%`, color: c.ajElev === 0 ? C.body : (c.ajElev > 0 ? '#1B5E20' : '#8B1A1A') },
+        { label: 'Ajuste Garagem (− se comp tem garagem e alvo não)', value: `${c.ajGar >= 0 ? '+' : ''}${c.ajGar.toFixed(1)}%`, color: c.ajGar === 0 ? C.body : (c.ajGar > 0 ? '#1B5E20' : '#8B1A1A') },
+        { label: 'Ajuste Área (Calculado auto — efeito dimensão)', value: `${c.ajArea >= 0 ? '+' : ''}${c.ajArea.toFixed(1)}%`, color: c.ajArea === 0 ? C.body : (c.ajArea > 0 ? '#1B5E20' : '#8B1A1A') },
+        { label: 'AJUSTE TOTAL', value: `${c.ajTotal >= 0 ? '+' : ''}${c.ajTotal.toFixed(1)}%`, color: c.ajTotal >= 0 ? '#1B5E20' : '#8B1A1A', total: true },
+        { label: 'Preço/m² Ajustado (Após todos os ajustes)', value: `${Math.round(c.precoM2Aj).toLocaleString('pt-PT')} €/m²`, total: true },
+        { label: `VVR Estimado (para ${areaAlvo} m²) — Preço/m² aj. × área alvo`, value: EUR(c.vvrEst), total: true },
+      ])
+      if (c.notas && c.notas !== c.descricao) {
+        b.space(1)
+        b.note(`Notas: ${c.notas}`)
+      }
+      b.space(6)
+    })
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // PAGINA FINAL — ANALISE ESTATISTICA
+  // ─────────────────────────────────────────────────────────
+  if (n >= 2) {
+    b.newPage()
+    b.header('ANÁLISE ESTATÍSTICA E POSICIONAMENTO DO VVR')
+
+    // F. Estatisticas
+    b.subheader('F. Estatísticas dos Comparáveis Ajustados')
+    b.simpleTable([
+      { label: 'Número de Comparáveis Válidos', value: String(n) },
+      { label: 'Média Preço/m² Ajustado (Média aritmética dos preços/m² ajustados)', value: `${Math.round(mediaM2).toLocaleString('pt-PT')} €/m²` },
+      { label: 'Mediana Preço/m² Ajustado (Valor central — menos sensível a extremos)', value: `${Math.round(medianaM2).toLocaleString('pt-PT')} €/m²` },
+      { label: 'Mínimo Preço/m² Ajustado', value: `${Math.round(minM2).toLocaleString('pt-PT')} €/m²` },
+      { label: 'Máximo Preço/m² Ajustado', value: `${Math.round(maxM2).toLocaleString('pt-PT')} €/m²` },
+      { label: 'Desvio Padrão Preço/m² (Dispersão dos comparáveis — menor = mais homogéneo)', value: `${Math.round(desvio).toLocaleString('pt-PT')} €/m²` },
+      { label: `Média VVR Estimado (para ${areaAlvo} m²)`, value: EUR(mediaVvr) },
+      { label: `Mediana VVR Estimado (para ${areaAlvo} m²)`, value: EUR(medianaVvr) },
+      { label: `Intervalo VVR Estimado (para ${areaAlvo} m²)`, value: `${EUR(minVvr)} a ${EUR(maxVvr)}` },
+    ])
+    b.space(4)
+
+    // G. Posicionamento do VVR Adoptado
+    b.subheader('G. Posicionamento do VVR Adoptado')
+    const margemSegPct = m.margem_seg_vvr != null ? `${(m.margem_seg_vvr * 100).toFixed(1)}% (ver relatório de rentabilidade)` : '— (analisar no relatório de rentabilidade)'
+    const precoTransacEquiv = vvrAdoptado * (1 - descontoNeg / 100)
+    b.simpleTable([
+      { label: 'VVR Adoptado (Preço de saída definido para o negócio)', value: EUR(vvrAdoptado), color: C.gold, total: true },
+      { label: 'Preço/m² Implícito no VVR', value: precoM2Vvr ? `${Math.round(precoM2Vvr).toLocaleString('pt-PT')} €/m²` : '—' },
+      { label: 'Posicionamento (Face à distribuição dos comparáveis ajustados)', value: posTexto, color: posCor, total: true },
+      { label: 'VVR vs. Média dos Comparáveis (Diferença percentual face à média)', value: deltaMedia != null ? `${deltaMedia >= 0 ? '+' : ''}${deltaMedia.toFixed(1)}%` : '—', color: deltaMedia != null && deltaMedia < 0 ? '#1B5E20' : '#8B1A1A' },
+      { label: 'VVR vs. Mediana dos Comparáveis (indicador principal)', value: deltaMediana != null ? `${deltaMediana >= 0 ? '+' : ''}${deltaMediana.toFixed(1)}%` : '—', color: posCor, total: true },
+      { label: 'Margem de Segurança VVR (% de desconto antes de prejuízo)', value: margemSegPct },
+      { label: 'Desconto Negocial Estimado (% redução esperada entre oferta e transacção)', value: `${descontoNeg}%` },
+      { label: `Preço de Transacção Equivalente (VVR ajustado com desconto de ${descontoNeg}%)`, value: EUR(precoTransacEquiv) },
+    ])
+    b.space(6)
+
+    // H. Posicionamento Visual
+    b.subheader('H. Posicionamento Visual — VVR no Intervalo de Mercado')
+    if (minVvr > 0 && maxVvr > 0 && vvrAdoptado > 0) {
+      drawPosVisualBar(b, { min: minVvr, max: maxVvr, mediana: medianaVvr, media: mediaVvr, vvr: vvrAdoptado, posCor })
+      b.space(2)
+      b.note('Diamante colorido = VVR adoptado. Linha sólida dourada = mediana. Linha tracejada cinzenta = média. Verde = posicionamento conservador. Dourado = alinhado com mediana. Vermelho = acima do intervalo.')
+    } else {
+      b.note('Posicionamento visual indisponível: dados insuficientes.')
+    }
+    b.space(4)
+  }
+
+  // Footer
+  if (tipologias.length === 0) {
     for (let i = 1; i <= 5; i++) {
       b.header(`COMPARÁVEL ${i}`)
       b.simpleTable([
         { label: 'Endereço / Zona', value: '________________' }, { label: 'Tipologia', value: '________________' },
         { label: 'Área (m²)', value: '________________' }, { label: 'Valor de Venda', value: '________________' },
         { label: 'Valor por m²', value: '________________' }, { label: 'Data de Venda', value: '________________' },
-        { label: 'Fonte', value: '________________' }, { label: 'Ajuste %', value: '________________' },
       ])
-      b.metric('Notas', '________________')
       b.space(4)
     }
-    b.header('CONCLUSÃO')
-    b.metric('Análise comparativa e valor de mercado estimado', '________________')
   }
 
   b.space(4)
-  b.text('Nota: Os valores apresentados são estimativas baseadas em comparáveis de mercado e podem não reflectir o valor exacto de transacção. A Somnium Properties recomenda validação com avaliação profissional certificada.', { size: 7, color: C.muted })
+  b.text('Os valores apresentados são estimativas baseadas em comparáveis de mercado e podem não reflectir o valor exacto de transacção. A Somnium Properties recomenda validação com avaliação profissional certificada. Este documento é preparado para fins informativos e não constitui aconselhamento financeiro ou fiscal. Somnium Properties — Confidencial.', { size: 7, color: C.muted })
 }
 
 function renderPropostaFormal(b, im) {

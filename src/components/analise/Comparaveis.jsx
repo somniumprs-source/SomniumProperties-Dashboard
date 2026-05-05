@@ -21,6 +21,7 @@ const DEFAULT_META = {
   data_recolha: '',
   raio_pesquisa_km: 5,
   metodologia: '',
+  conclusao_estudo: '',
   alvo_atributos: { estado: 'Reabilitado (após obra)', piso: 'R/C', elevador: false, garagem: false },
 }
 
@@ -319,6 +320,13 @@ export function Comparaveis({ analise, imovel, onUpdate }) {
                 <span className="text-gray-500">Notas de Metodologia</span>
                 <textarea value={meta.metodologia} onChange={e => updateMeta('metodologia', e.target.value)} rows={2}
                   className="w-full mt-0.5 border rounded px-2 py-1 text-sm" placeholder="Observações sobre a recolha, critérios de selecção..." />
+              </label>
+              <label className="block text-xs">
+                <span className="text-gray-500">Conclusão do Estudo</span>
+                <textarea value={meta.conclusao_estudo} onChange={e => updateMeta('conclusao_estudo', e.target.value)} rows={3}
+                  className="w-full mt-0.5 border rounded px-2 py-1 text-sm"
+                  placeholder="Deixe vazio para gerar automaticamente a partir dos dados (mediana, intervalo, posicionamento, desconto negocial)." />
+                <span className="text-[10px] text-gray-400 italic">Aparece em destaque no topo do PDF (caixa preta).</span>
               </label>
             </div>
 
