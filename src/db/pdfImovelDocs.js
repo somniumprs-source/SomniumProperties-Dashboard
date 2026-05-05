@@ -1378,19 +1378,20 @@ function renderResumoExecutivo(b, im, a, m) {
   b.y += boxH + 8
 
   // Hero KPIs — grid 3x3 (9 metricas com nome completo)
-  const paybackLabel = (() => {
-    const p = m.payback_meses
-    if (p == null || !isFinite(p)) return '—'
-    if (p < 12) return `${p.toFixed(1)} meses`
-    const anos = Math.floor(p / 12)
-    const meses = Math.round(p - anos * 12)
-    return meses > 0 ? `${anos}a ${meses}m` : `${anos} anos`
+  const tempoLabel = (() => {
+    const meses = parseFloat(a.meses)
+    if (!isFinite(meses) || meses <= 0) return '—'
+    if (meses < 12) return `${meses} meses`
+    const anos = Math.floor(meses / 12)
+    const restoMeses = Math.round(meses - anos * 12)
+    return restoMeses > 0 ? `${anos}a ${restoMeses}m` : `${anos} anos`
   })()
   const cooLabel = (() => {
-    const v = m.custo_oportunidade_pp
-    if (v == null || !isFinite(v)) return '—'
-    const sign = v >= 0 ? '+' : ''
-    return `${sign}${v.toFixed(1)} pp`
+    const ra = parseFloat(a.retorno_anualizado)
+    if (!isFinite(ra) || ra <= 0) return '—'
+    const mult = ra / 3.5
+    if (!isFinite(mult)) return '—'
+    return `${mult.toFixed(1)}x`
   })()
   b.bigNumbers([
     { label: 'Capital Necessário', value: EUR(a.capital_necessario || compra + obra), sub: '(Capital próprio + financiamento bancário)' },
@@ -1405,9 +1406,9 @@ function renderResumoExecutivo(b, im, a, m) {
   ])
   b.space(2)
   b.bigNumbers([
-    { label: 'ROE sem Alavancagem', value: PCT_DEC(m.roe_sem_alav), sub: '(Retorno sobre Capital Próprio — sem efeito de financiamento)' },
-    { label: 'Payback Period', value: paybackLabel, sub: '(Tempo necessário para recuperar o capital investido)' },
-    { label: 'Custo de Oportunidade', value: cooLabel, sub: '(Diferença entre RA e taxa de depósito a prazo de 3,5%)' },
+    { label: 'ROI', value: PCT_DEC(m.roe_sem_alav), sub: '(Return on Investment — retorno sobre o capital total empregue)' },
+    { label: 'Tempo de Permanência do Capital', value: tempoLabel, sub: '(Período em que o capital está alocado ao projecto)' },
+    { label: 'Custo de Oportunidade', value: cooLabel, sub: '(Quantas vezes o RA supera um depósito a prazo a 3,5%)' },
   ])
   b.space(8)
 
