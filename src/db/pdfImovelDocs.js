@@ -663,7 +663,18 @@ class DocBuilder {
   // KPI grid — thin bordered cells, like the reference document
   bigNumbers(items) {
     const colW = CW / items.length
-    // Pre-calculate cell height: label (1 line ~12px) + value (1 line ~22px) + sub (multilinha 7pt lineGap 2)
+    // Auto-shrink value font size se o texto for largo demais para o slot
+    const fitValue = (text) => {
+      const maxW = colW - 20
+      let size = 16
+      while (size >= 10) {
+        const w = this.doc.fontSize(size).widthOfString(String(text || ''))
+        if (w <= maxW) return size
+        size -= 1
+      }
+      return 10
+    }
+    // Pre-calcular alturas: label (1 linha ~12) + value (1 linha ~22) + sub (multilinha)
     let maxSubH = 0
     items.forEach(item => {
       if (item.sub) {
@@ -678,7 +689,8 @@ class DocBuilder {
       const x = ML + i * colW
       if (i > 0) this.doc.rect(x, this.y, 0.5, cellH).fill(C.border)
       this.doc.fontSize(7).fillColor(C.muted).text((item.label || '').toUpperCase(), x + 10, this.y + 8, { width: colW - 20, lineBreak: false, characterSpacing: 0.3 })
-      this.doc.fontSize(16).fillColor(C.body).text(String(item.value || '—'), x + 10, this.y + 22, { width: colW - 20, lineBreak: false })
+      const valSize = fitValue(item.value)
+      this.doc.fontSize(valSize).fillColor(C.body).text(String(item.value || '—'), x + 10, this.y + 22, { width: colW - 20, lineBreak: false })
       if (item.sub) this.doc.fontSize(7).fillColor(C.muted).text(item.sub, x + 10, this.y + 42, { width: colW - 20, lineGap: 2 })
     })
     this.y += cellH + 6
@@ -1918,7 +1930,8 @@ function renderEstudoComparaveis(b, im, a) {
         { label: 'Comparáveis', value: String(n), sub: '(amostra agregada)' },
         { label: 'Média VVR', value: EUR(media), sub: '(média aritmética)' },
         { label: 'Mediana VVR', value: EUR(mediana), sub: '(valor central)' },
-        { label: 'Intervalo', value: `${EUR(min)} – ${EUR(max)}`, sub: '(min – max)' },
+        { label: 'Mínimo VVR', value: EUR(min), sub: '(valor mais baixo)' },
+        { label: 'Máximo VVR', value: EUR(max), sub: '(valor mais alto)' },
       ])
       b.space(4)
 
