@@ -663,18 +663,31 @@ class DocBuilder {
   // KPI grid — thin bordered cells, like the reference document
   bigNumbers(items) {
     const colW = CW / items.length
-    // Auto-shrink value font size se o texto for largo demais para o slot
-    const fitValue = (text) => {
+    // Suporta `value` em string ou array de linhas (forca quebra), e `valueColor` opcional por item
+    const valueLines = (item) => {
+      if (Array.isArray(item.value)) return item.value.map(v => String(v))
+      return [String(item.value || '—')]
+    }
+    // Auto-shrink se texto largo, considerando wrap em multiplas linhas
+    const fitSize = (line) => {
       const maxW = colW - 20
       let size = 16
       while (size >= 10) {
-        const w = this.doc.fontSize(size).widthOfString(String(text || ''))
+        const w = this.doc.fontSize(size).widthOfString(line)
         if (w <= maxW) return size
         size -= 1
       }
       return 10
     }
-    // Pre-calcular alturas: label (1 linha ~12) + value (1 linha ~22) + sub (multilinha)
+    // Pre-calcular dimensoes
+    let maxValueH = 22
+    items.forEach(item => {
+      const lines = valueLines(item)
+      const baseSize = lines.length > 1 ? 14 : 16
+      const sizes = lines.map(l => Math.min(baseSize, fitSize(l)))
+      const totalH = sizes.reduce((s, sz) => s + sz + 2, 0)
+      if (totalH > maxValueH) maxValueH = totalH
+    })
     let maxSubH = 0
     items.forEach(item => {
       if (item.sub) {
@@ -682,16 +695,26 @@ class DocBuilder {
         if (h > maxSubH) maxSubH = h
       }
     })
-    const cellH = Math.max(50, 38 + maxSubH + 6)
+    const cellH = Math.max(50, 16 + maxValueH + 4 + maxSubH + 8)
     this.ensure(cellH + 6)
     this.doc.rect(ML, this.y, CW, cellH).lineWidth(0.5).stroke(C.border)
     items.forEach((item, i) => {
       const x = ML + i * colW
       if (i > 0) this.doc.rect(x, this.y, 0.5, cellH).fill(C.border)
       this.doc.fontSize(7).fillColor(C.muted).text((item.label || '').toUpperCase(), x + 10, this.y + 8, { width: colW - 20, lineBreak: false, characterSpacing: 0.3 })
-      const valSize = fitValue(item.value)
-      this.doc.fontSize(valSize).fillColor(C.body).text(String(item.value || '—'), x + 10, this.y + 22, { width: colW - 20, lineBreak: false })
-      if (item.sub) this.doc.fontSize(7).fillColor(C.muted).text(item.sub, x + 10, this.y + 42, { width: colW - 20, lineGap: 2 })
+      const lines = valueLines(item)
+      const baseSize = lines.length > 1 ? 14 : 16
+      const valColor = item.valueColor || C.body
+      let yLine = this.y + 22
+      lines.forEach((ln) => {
+        const sz = Math.min(baseSize, fitSize(ln))
+        this.doc.fontSize(sz).fillColor(valColor).text(ln, x + 10, yLine, { width: colW - 20, lineBreak: false })
+        yLine += sz + 2
+      })
+      if (item.sub) {
+        const subY = this.y + 16 + maxValueH + 4
+        this.doc.fontSize(7).fillColor(C.muted).text(item.sub, x + 10, subY, { width: colW - 20, lineGap: 2 })
+      }
     })
     this.y += cellH + 6
     return this
@@ -727,6 +750,42 @@ class DocBuilder {
       this.doc.rect(ML, this.y + (isTotal ? 24 : 22), CW, 0.3).fill(C.border)
       this.y += rowH
     })
+    this.y += 4
+    return this
+  }
+
+  // Two-column rows — duas listas de pares label/valor renderizadas lado a lado.
+  // Util para fichas individuais: atributos esquerda, ajustes direita.
+  // Cada row: { label, value, color?, total? }. total: true ⇒ fundo destacado + bold + dourado.
+  twoColRows(leftRows, rightRows) {
+    const colW = CW / 2
+    const labelW = colW * 0.58
+    const valueW = colW * 0.42 - 12
+    const max = Math.max(leftRows.length, rightRows.length)
+    const renderHalf = (row, x0, y0, total) => {
+      if (!row) return
+      const labelX = x0 + 8
+      const valueX = x0 + 8 + labelW
+      const fontSize = total ? 9 : 8.5
+      const labelColor = total ? C.body : C.body
+      const valColor = row.color || (total ? C.gold : C.body)
+      this.doc.fontSize(fontSize).fillColor(labelColor).text(row.label || '', labelX, y0 + 6, { width: labelW - 4, lineBreak: false })
+      this.doc.fontSize(fontSize).fillColor(valColor).text(String(row.value || '—'), valueX, y0 + 6, { width: valueW, align: 'right', lineBreak: false })
+    }
+    for (let i = 0; i < max; i++) {
+      const left = leftRows[i]
+      const right = rightRows[i]
+      const isTotal = (left?.total || right?.total)
+      const rowH = isTotal ? 24 : 20
+      this.ensure(rowH + 1)
+      if (isTotal) this.doc.rect(ML, this.y, CW, rowH).fill(C.totalBg)
+      // Linha vertical separadora central
+      this.doc.rect(ML + colW, this.y + 2, 0.4, rowH - 4).fill(C.border)
+      renderHalf(left, ML, this.y, left?.total)
+      renderHalf(right, ML + colW, this.y, right?.total)
+      this.doc.rect(ML, this.y + rowH - 0.3, CW, 0.3).fill(C.border)
+      this.y += rowH
+    }
     this.y += 4
     return this
   }
@@ -1966,8 +2025,8 @@ function renderEstudoComparaveis(b, im, a) {
   if (n > 0) {
     b.bigNumbers([
       { label: 'Mediana VVR Est.', value: EUR(medianaVvr), sub: '(Mediana dos VVR estimados ajustados dos comparáveis)' },
-      { label: 'Intervalo de Mercado', value: `${Math.round(minM2).toLocaleString('pt-PT')}–${Math.round(maxM2).toLocaleString('pt-PT')} €/m²`, sub: '(Min. e máx. €/m² ajustado)' },
-      { label: 'VVR Adoptado', value: EUR(vvrAdoptado), sub: deltaMediana != null ? `(${deltaMediana >= 0 ? '+' : ''}${deltaMediana.toFixed(1)}% vs. mediana)` : '(Valor de Venda de Referência)' },
+      { label: 'Intervalo de Mercado', value: [`${Math.round(minM2).toLocaleString('pt-PT')} €/m²`, `a ${Math.round(maxM2).toLocaleString('pt-PT')} €/m²`], sub: '(Min. e máx. €/m² ajustado)' },
+      { label: 'VVR Adoptado', value: EUR(vvrAdoptado), valueColor: posCor, sub: deltaMediana != null ? `${deltaMediana >= 0 ? '+' : ''}${deltaMediana.toFixed(1)}% vs. mediana` : '(Valor de Venda de Referência escolhido)' },
       { label: 'Preço/m² VVR', value: precoM2Vvr ? `${Math.round(precoM2Vvr).toLocaleString('pt-PT')} €/m²` : '—', sub: '(Preço por m² implícito no VVR adoptado)' },
     ])
     b.space(4)
@@ -2085,38 +2144,46 @@ function renderEstudoComparaveis(b, im, a) {
     b.note('Detalhe de cada comparável com atributos, ajustes aplicados e posicionamento face ao imóvel em análise.')
     b.space(4)
 
+    const pctStr = (v) => `${v >= 0 ? '+' : ''}${(v || 0).toFixed(1)}%`
+    const signColor = (v) => v === 0 ? C.body : (v > 0 ? '#1B5E20' : '#8B1A1A')
+
     compsCalc.forEach((c, i) => {
       const letra = String.fromCharCode(65 + i)
       const subtitulo = c.descricao || c.notas || ''
-      // Header do card
+      // Header do card preto: titulo a esquerda + subtitulo a direita (sem overlap)
       b.ensure(28)
       b.doc.rect(ML, b.y, CW, 24).fill(C.black)
-      b.doc.fontSize(10).fillColor(C.white).text(`Comp. ${letra}`, ML + 12, b.y + 7, { width: 200, lineBreak: false })
+      b.doc.fontSize(10).fillColor(C.white).text(`Comp. ${letra}`, ML + 12, b.y + 7, { width: 180, lineBreak: false })
       if (subtitulo) {
-        b.doc.fontSize(8.5).fillColor(C.muted).text(subtitulo, ML + 12, b.y + 7, { width: CW - 24, align: 'right', lineBreak: false })
+        const subX = ML + 200
+        const subW = CW - 200 - 12
+        b.doc.fontSize(8.5).fillColor('#9b8a4d').text(subtitulo, subX, b.y + 8, { width: subW, align: 'right', lineBreak: false })
       }
       b.y += 28
 
-      // Render como duas tabelas lado a lado seria complexo; usa simpleTable em sequencia
-      const valid = (v, suffix = '') => v != null && v !== '' ? (suffix ? `${v}${suffix}` : v) : '—'
-      b.simpleTable([
+      // 2 colunas lado a lado: atributos esquerda / ajustes direita com totais destacados
+      const leftRows = [
         { label: 'Área Útil', value: c.area ? `${c.area} m²` : '—' },
-        { label: 'Preço de Oferta (Preço anunciado no portal)', value: EUR(c.preco) },
+        { label: 'Preço de Oferta', value: EUR(c.preco) },
         { label: 'Preço/m² Bruto (Sem ajuste)', value: `${Math.round(c.precoM2Bruto).toLocaleString('pt-PT')} €/m²` },
         { label: 'Estado de Conservação', value: c.estado || '—' },
         { label: 'Piso', value: c.piso || '—' },
         { label: 'Elevador', value: c.elevador === true ? 'Sim' : (c.elevador === false ? 'Não' : '—') },
         { label: 'Garagem / Estacionamento', value: c.garagem === true ? 'Sim' : (c.garagem === false ? 'Não' : '—') },
-        { label: 'Dias em Mercado (Tempo de absorção observado)', value: c.dias_mercado != null ? `${c.dias_mercado} dias` : '—' },
-        { label: 'Ajuste Estado (+ se comp pior que alvo reabilitado)', value: `${c.ajEstado >= 0 ? '+' : ''}${c.ajEstado.toFixed(1)}%`, color: c.ajEstado === 0 ? C.body : (c.ajEstado > 0 ? '#1B5E20' : '#8B1A1A') },
-        { label: 'Ajuste Piso (+ se alvo está em cave vs. andar)', value: `${c.ajPiso >= 0 ? '+' : ''}${c.ajPiso.toFixed(1)}%`, color: c.ajPiso === 0 ? C.body : (c.ajPiso > 0 ? '#1B5E20' : '#8B1A1A') },
-        { label: 'Ajuste Elevador (− se comp tem elevador e alvo não)', value: `${c.ajElev >= 0 ? '+' : ''}${c.ajElev.toFixed(1)}%`, color: c.ajElev === 0 ? C.body : (c.ajElev > 0 ? '#1B5E20' : '#8B1A1A') },
-        { label: 'Ajuste Garagem (− se comp tem garagem e alvo não)', value: `${c.ajGar >= 0 ? '+' : ''}${c.ajGar.toFixed(1)}%`, color: c.ajGar === 0 ? C.body : (c.ajGar > 0 ? '#1B5E20' : '#8B1A1A') },
-        { label: 'Ajuste Área (Calculado auto — efeito dimensão)', value: `${c.ajArea >= 0 ? '+' : ''}${c.ajArea.toFixed(1)}%`, color: c.ajArea === 0 ? C.body : (c.ajArea > 0 ? '#1B5E20' : '#8B1A1A') },
-        { label: 'AJUSTE TOTAL', value: `${c.ajTotal >= 0 ? '+' : ''}${c.ajTotal.toFixed(1)}%`, color: c.ajTotal >= 0 ? '#1B5E20' : '#8B1A1A', total: true },
-        { label: 'Preço/m² Ajustado (Após todos os ajustes)', value: `${Math.round(c.precoM2Aj).toLocaleString('pt-PT')} €/m²`, total: true },
-        { label: `VVR Estimado (para ${areaAlvo} m²) — Preço/m² aj. × área alvo`, value: EUR(c.vvrEst), total: true },
-      ])
+        { label: 'Dias em Mercado', value: c.dias_mercado != null ? `${c.dias_mercado} dias` : '—' },
+      ]
+      const rightRows = [
+        { label: 'Ajuste Estado (+ comp pior que alvo)', value: pctStr(c.ajEstado), color: signColor(c.ajEstado) },
+        { label: 'Ajuste Piso (+ alvo em cave vs. andar)', value: pctStr(c.ajPiso), color: signColor(c.ajPiso) },
+        { label: 'Ajuste Elevador (− comp tem e alvo não)', value: pctStr(c.ajElev), color: signColor(c.ajElev) },
+        { label: 'Ajuste Garagem (− comp tem e alvo não)', value: pctStr(c.ajGar), color: signColor(c.ajGar) },
+        { label: 'Ajuste Área (auto — efeito dimensão)', value: pctStr(c.ajArea), color: signColor(c.ajArea) },
+        { label: 'AJUSTE TOTAL', value: pctStr(c.ajTotal), color: signColor(c.ajTotal), total: true },
+        { label: 'Preço/m² Ajustado', value: `${Math.round(c.precoM2Aj).toLocaleString('pt-PT')} €/m²`, total: true },
+        { label: `VVR Estimado (${areaAlvo} m²)`, value: EUR(c.vvrEst), total: true },
+      ]
+      b.twoColRows(leftRows, rightRows)
+
       if (c.notas && c.notas !== c.descricao) {
         b.space(1)
         b.note(`Notas: ${c.notas}`)
