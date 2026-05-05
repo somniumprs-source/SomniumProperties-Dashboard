@@ -1393,21 +1393,21 @@ function renderResumoExecutivo(b, im, a, m) {
     return `${sign}${v.toFixed(1)} pp`
   })()
   b.bigNumbers([
-    { label: 'Capital Necessário', value: EUR(a.capital_necessario || compra + obra), sub: 'Capital próprio + financiado' },
-    { label: 'Lucro Líquido', value: EUR(a.lucro_liquido), sub: 'Após impostos' },
-    { label: 'MOIC', value: MULT(m.moic), sub: 'Múltiplo do Capital Investido' },
+    { label: 'Capital Necessário', value: EUR(a.capital_necessario || compra + obra), sub: '(Capital próprio + financiamento bancário)' },
+    { label: 'Lucro Líquido', value: EUR(a.lucro_liquido), sub: '(Resultado final após IRC, derrama e dividendos)' },
+    { label: 'MOIC', value: MULT(m.moic), sub: '(Múltiplo do capital investido — quanto recebe por cada €)' },
   ])
   b.space(2)
   b.bigNumbers([
-    { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado), sub: 'RA simples' },
-    { label: 'TIR', value: PCT_DEC(m.tir_anual), sub: 'Taxa Interna de Rentabilidade' },
-    { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash), sub: 'Lucro / Capital empregue' },
+    { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado), sub: '(RA simples — retorno total convertido para base anual)' },
+    { label: 'TIR', value: PCT_DEC(m.tir_anual), sub: '(Taxa Interna de Rentabilidade — considera valor temporal do dinheiro)' },
+    { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash), sub: '(Lucro líquido / capital empregue no projecto)' },
   ])
   b.space(2)
   b.bigNumbers([
-    { label: 'ROE sem Alavancagem', value: PCT_DEC(m.roe_sem_alav), sub: 'Retorno sobre Capital Próprio' },
-    { label: 'Payback Period', value: paybackLabel, sub: 'Recuperação do capital' },
-    { label: 'Custo de Oportunidade', value: cooLabel, sub: 'vs depósito a prazo (3,5%)' },
+    { label: 'ROE sem Alavancagem', value: PCT_DEC(m.roe_sem_alav), sub: '(Retorno sobre Capital Próprio — sem efeito de financiamento)' },
+    { label: 'Payback Period', value: paybackLabel, sub: '(Tempo necessário para recuperar o capital investido)' },
+    { label: 'Custo de Oportunidade', value: cooLabel, sub: '(Diferença entre RA e taxa de depósito a prazo de 3,5%)' },
   ])
   b.space(8)
 
