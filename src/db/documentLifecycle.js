@@ -58,7 +58,18 @@ function slugify(s) {
 }
 
 async function uploadToStorage(storagePath, buf) {
-  if (!supabase) throw new Error('Supabase Storage não configurado (SUPABASE_SERVICE_KEY ausente)')
+  if (!supabase) {
+    // Fallback dev: escreve em disco local sob Relatorios/Storage/<storagePath>.
+    const fs = await import('fs')
+    const path = await import('path')
+    const url = await import('url')
+    const __dir = path.dirname(url.fileURLToPath(import.meta.url))
+    const root = path.resolve(__dir, '../..')
+    const abs = path.join(root, 'Relatorios', 'Storage', storagePath)
+    await fs.promises.mkdir(path.dirname(abs), { recursive: true })
+    await fs.promises.writeFile(abs, buf)
+    return `local://${path.relative(root, abs)}`
+  }
   await ensureBucket()
   const { error } = await supabase.storage.from(BUCKET).upload(storagePath, buf, {
     contentType: 'application/pdf',
@@ -79,6 +90,31 @@ async function removeFromStorage(url) {
   const p = storagePathFromUrl(url)
   if (!p || !supabase) return
   try { await supabase.storage.from(BUCKET).remove([p]) } catch {}
+}
+
+// Pipes um PDFKit doc para `res` (download/inline para o cliente) e, em paralelo,
+// guarda a última versão. Vai para Supabase Storage se SUPABASE_SERVICE_KEY existir;
+// senão escreve em disco no caminho local indicado (fallback de dev).
+// Falhas na persistência não interrompem a resposta — apenas log.
+export function streamPdfToResAndPersist(pdfDoc, res, { storagePath, localPath } = {}) {
+  const chunks = []
+  pdfDoc.on('data', c => chunks.push(c))
+  pdfDoc.on('end', async () => {
+    try {
+      const buf = Buffer.concat(chunks)
+      if (supabase && storagePath) {
+        await uploadToStorage(storagePath, buf)
+      } else if (localPath) {
+        const fs = await import('fs')
+        const path = await import('path')
+        await fs.promises.mkdir(path.dirname(localPath), { recursive: true })
+        await fs.promises.writeFile(localPath, buf)
+      }
+    } catch (e) {
+      console.error('[docs] persistência da última versão falhou:', storagePath || localPath, e.message)
+    }
+  })
+  pdfDoc.pipe(res)
 }
 
 export async function persistDocumento(imovel, tipo, { trigger, generatedBy = 'system', frozen = false, analise = null } = {}) {
@@ -123,7 +159,7 @@ export async function persistDocumento(imovel, tipo, { trigger, generatedBy = 's
        VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8, $9)`,
       [imovel.id, tipo, version, url, buf.length, trigger || null, generatedBy, imovel, generatedAt]
     )
-    return { tipo, version, pdfPath: url, sizeBytes: buf.length, frozen: true }
+    return { tipo, version, pdfPath: url, sizeBytes: buf.length, frozen: true, buffer: buf }
   }
 
   // Vivo: 1 só ficheiro por (imovel, tipo). Upsert no bucket + UPDATE in-place.
@@ -140,7 +176,7 @@ export async function persistDocumento(imovel, tipo, { trigger, generatedBy = 's
         WHERE id = $8`,
       [version, url, buf.length, trigger || null, generatedBy, imovel, generatedAt, existingId]
     )
-    return { tipo, version, pdfPath: url, sizeBytes: buf.length, frozen: false, replaced: true }
+    return { tipo, version, pdfPath: url, sizeBytes: buf.length, frozen: false, replaced: true, buffer: buf }
   }
 
   await pool.query(
@@ -148,7 +184,7 @@ export async function persistDocumento(imovel, tipo, { trigger, generatedBy = 's
      VALUES ($1, $2, 1, $3, $4, false, $5, $6, $7, $8)`,
     [imovel.id, tipo, url, buf.length, trigger || null, generatedBy, imovel, generatedAt]
   )
-  return { tipo, version: 1, pdfPath: url, sizeBytes: buf.length, frozen: false, replaced: false }
+  return { tipo, version: 1, pdfPath: url, sizeBytes: buf.length, frozen: false, replaced: false, buffer: buf }
 }
 
 // ── Hooks por evento ─────────────────────────────────

@@ -12,6 +12,12 @@ import { Router } from 'express'
 import pool from './pg.js'
 import { calcOrcamentoObra } from './orcamentoObraEngine.js'
 import { generateOrcamentoObraPDF } from './pdfOrcamentoObra.js'
+import { streamPdfToResAndPersist } from './documentLifecycle.js'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const REPO_ROOT = path.resolve(__dirname, '../..')
 
 const router = Router()
 
@@ -145,7 +151,11 @@ router.get('/imoveis/:imovelId/orcamento-obra/pdf', async (req, res) => {
     const safeNome = String(imovel.nome || 'imovel').replace(/[^a-z0-9]+/gi, '_').slice(0, 40)
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `inline; filename="orcamento_obra_${safeNome}.pdf"`)
-    generateOrcamentoObraPDF(imovel, orcamento, res)
+    const doc = generateOrcamentoObraPDF(imovel, orcamento)
+    streamPdfToResAndPersist(doc, res, {
+      storagePath: `orcamentos-obra/${imovel.id}.pdf`,
+      localPath: path.join(REPO_ROOT, 'Relatorios', 'OrcamentosObra', `${imovel.id}.pdf`),
+    })
   } catch (e) {
     console.error('[orcamento-obra] PDF erro:', e)
     res.status(500).json({ error: e.message })

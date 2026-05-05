@@ -21,7 +21,7 @@ import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } f
 import { syncForms, isConfigured as formsConfigured } from './formsSync.js'
 import { createImovelFolder, moveImovelFolder, uploadDocToFolder, isConfigured as driveConfigured } from './driveSync.js'
 import { generateDoc, getDocsForEstado } from './pdfImovelDocs.js'
-import { onImovelCreated, listDocumentos, persistDocumento } from './documentLifecycle.js'
+import { onImovelCreated, listDocumentos, persistDocumento, streamPdfToResAndPersist } from './documentLifecycle.js'
 import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
 import { generateMeetingPDF } from './pdfMeetingReport.js'
 import { ensureLabels, organizeMessage, organizeBatch, autoOrganize, isConfigured as gmailConfigured } from './gmailSync.js'
@@ -33,6 +33,7 @@ import { runEstudoLocalizacao } from '../lib/estudoLocalizacao.js'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.resolve(__dirname, '../../public/uploads/despesas')
 const imoveisUploadsDir = path.resolve(__dirname, '../../public/uploads/imoveis')
+const REPO_ROOT = path.resolve(__dirname, '../..')
 
 // Garantir que a pasta de uploads de imóveis existe
 import { mkdirSync } from 'fs'
@@ -198,15 +199,16 @@ crudRoutes('/imoveis', Imoveis, {
       if (driveConfigured()) {
         await moveImovelFolder(item.id, body.estado)
       }
-      // Gerar documentos da fase e upload ao Drive
+      // Gerar documentos da fase: persistir em Supabase Storage + DB e upload ao Drive
       const docs = getDocsForEstado(body.estado)
       for (const tipo of docs) {
         try {
           let analise = null
           try { const { rows: [a] } = await pool.query('SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1', [item.id]); analise = a } catch {}
-          const pdfDoc = await generateDoc(tipo, item, analise)
-          if (pdfDoc && driveConfigured()) {
-            await uploadDocToFolder(item.id, pdfDoc, `${tipo}.pdf`)
+          await persistDocumento(item, tipo, { trigger: `estado:${body.estado}`, generatedBy: req.user?.email || 'system', analise })
+          if (driveConfigured()) {
+            const pdfDoc = await generateDoc(tipo, item, analise)
+            if (pdfDoc) await uploadDocToFolder(item.id, pdfDoc, `${tipo}.pdf`)
           }
         } catch (e) { console.error(`[docs] Erro ${tipo}:`, e.message) }
       }
@@ -290,13 +292,17 @@ router.get('/imoveis/:id/documento/:tipo', async (req, res) => {
       analise = a
     } catch {}
 
-    const doc = await generateDoc(req.params.tipo, imovel, analise)
-    if (!doc) return res.status(400).json({ error: 'Tipo de documento inválido' })
+    const out = await persistDocumento(imovel, req.params.tipo, {
+      trigger: 'view:documento',
+      generatedBy: req.user?.email || 'system',
+      analise,
+    })
+    if (!out) return res.status(400).json({ error: 'Tipo de documento inválido' })
 
     const nome = (imovel.nome || 'doc').replace(/[^a-zA-Z0-9À-ú ]/g, '').replace(/\s+/g, '_')
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `inline; filename="${req.params.tipo}_${nome}.pdf"`)
-    doc.pipe(res)
+    res.end(out.buffer)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -316,7 +322,10 @@ router.get('/imoveis/:id/relatorio', async (req, res) => {
     res.setHeader('Content-Disposition', `inline; filename="Relatorio_${nome}.pdf"`)
 
     const doc = generateImovelPDF(imovel, analise || null)
-    doc.pipe(res)
+    streamPdfToResAndPersist(doc, res, {
+      storagePath: `imoveis/${imovel.id}/relatorio.pdf`,
+      localPath: path.join(REPO_ROOT, 'Relatorios', 'Imoveis', `${imovel.id}_relatorio.pdf`),
+    })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
@@ -337,7 +346,10 @@ router.get('/imoveis/:id/relatorio-investidor', async (req, res) => {
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `inline; filename="Dossier_Investimento_${nome}.pdf"`)
     const doc = await generateCompiledReport(imovel, analise || null, seccoes)
-    doc.pipe(res)
+    streamPdfToResAndPersist(doc, res, {
+      storagePath: `imoveis/${imovel.id}/dossier_investimento.pdf`,
+      localPath: path.join(REPO_ROOT, 'Relatorios', 'Imoveis', `${imovel.id}_dossier_investimento.pdf`),
+    })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -931,7 +943,10 @@ router.get('/reunioes/:id/relatorio', async (req, res) => {
     res.setHeader('Content-Disposition', `inline; filename="Relatorio_Reuniao_${nome}.pdf"`)
 
     const doc = generateMeetingPDF(reuniao, analise, investidor)
-    doc.pipe(res)
+    streamPdfToResAndPersist(doc, res, {
+      storagePath: `reunioes/${reuniao.id}/relatorio.pdf`,
+      localPath: path.join(REPO_ROOT, 'Relatorios', 'Reunioes', `${reuniao.id}_relatorio.pdf`),
+    })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
@@ -2633,7 +2648,10 @@ router.get('/relatorios-semanais/:id/pdf', async (req, res) => {
 
     const { generateRelatorioSemanalPDF } = await import('./pdfRelatorioSemanal.js')
     const doc = generateRelatorioSemanalPDF(r)
-    doc.pipe(res)
+    streamPdfToResAndPersist(doc, res, {
+      storagePath: `relatorios-semanais/${r.semana_iso}.pdf`,
+      localPath: path.join(REPO_ROOT, 'Relatorios', 'RelatoriosSemanais', `${r.semana_iso}.pdf`),
+    })
   } catch (e) {
     console.error('[relatorios-semanais/pdf]', e)
     res.status(500).json({ error: e.message })
