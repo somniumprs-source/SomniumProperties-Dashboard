@@ -662,18 +662,26 @@ class DocBuilder {
 
   // KPI grid — thin bordered cells, like the reference document
   bigNumbers(items) {
-    this.ensure(56)
     const colW = CW / items.length
-    // Draw border around all cells
-    this.doc.rect(ML, this.y, CW, 50).lineWidth(0.5).stroke(C.border)
+    // Pre-calculate cell height: label (1 line ~12px) + value (1 line ~22px) + sub (multilinha 7pt lineGap 2)
+    let maxSubH = 0
+    items.forEach(item => {
+      if (item.sub) {
+        const h = this.doc.fontSize(7).heightOfString(item.sub, { width: colW - 20, lineGap: 2 })
+        if (h > maxSubH) maxSubH = h
+      }
+    })
+    const cellH = Math.max(50, 38 + maxSubH + 6)
+    this.ensure(cellH + 6)
+    this.doc.rect(ML, this.y, CW, cellH).lineWidth(0.5).stroke(C.border)
     items.forEach((item, i) => {
       const x = ML + i * colW
-      if (i > 0) this.doc.rect(x, this.y, 0.5, 50).fill(C.border)
+      if (i > 0) this.doc.rect(x, this.y, 0.5, cellH).fill(C.border)
       this.doc.fontSize(7).fillColor(C.muted).text((item.label || '').toUpperCase(), x + 10, this.y + 8, { width: colW - 20, lineBreak: false, characterSpacing: 0.3 })
       this.doc.fontSize(16).fillColor(C.body).text(String(item.value || '—'), x + 10, this.y + 22, { width: colW - 20, lineBreak: false })
-      if (item.sub) this.doc.fontSize(7).fillColor(C.muted).text(item.sub, x + 10, this.y + 40, { width: colW - 20, lineBreak: false })
+      if (item.sub) this.doc.fontSize(7).fillColor(C.muted).text(item.sub, x + 10, this.y + 42, { width: colW - 20, lineGap: 2 })
     })
-    this.y += 56
+    this.y += cellH + 6
     return this
   }
 
