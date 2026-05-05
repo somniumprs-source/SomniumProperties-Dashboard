@@ -1783,12 +1783,48 @@ function renderEstudoComparaveis(b, im, a) {
   ])
   b.space(4)
 
+  // Leitura tolerante: array legacy ou objecto novo {meta, tipologias}
   let comps = a.comparaveis || []
   if (typeof comps === 'string') try { comps = JSON.parse(comps) } catch { comps = [] }
+  const meta = (!Array.isArray(comps) && comps && typeof comps === 'object' && comps.meta) ? comps.meta : null
+  const tipologias = Array.isArray(comps) ? comps : (comps?.tipologias || [])
 
-  if (Array.isArray(comps) && comps.length > 0) {
-    for (let t = 0; t < comps.length; t++) {
-      const tip = comps[t]
+  // Bloco de Metodologia (apenas se houver meta novo)
+  if (meta) {
+    b.header('METODOLOGIA DO ESTUDO')
+    b.simpleTable([
+      { label: 'Fonte dos Dados', value: meta.fonte_dados || '—' },
+      { label: 'Tipo de Preço', value: meta.tipo_preco || '—' },
+      { label: 'Desconto Negocial Estimado', value: meta.desconto_negocial_pct != null ? `${meta.desconto_negocial_pct}%` : '—' },
+      { label: 'Raio de Pesquisa', value: meta.raio_pesquisa_km != null ? `${meta.raio_pesquisa_km} km` : '—' },
+      { label: 'Data de Recolha', value: meta.data_recolha || '—' },
+    ])
+    if (meta.metodologia) {
+      b.space(2)
+      b.note(meta.metodologia)
+    }
+    b.space(4)
+
+    if (meta.alvo_atributos) {
+      b.subheader('Atributos do Imóvel Alvo')
+      b.simpleTable([
+        { label: 'Tipologia', value: im.tipologia || '—' },
+        { label: 'Área Útil', value: im.area_bruta ? `${im.area_bruta} m²` : '—' },
+        { label: 'Estado Esperado após Obra', value: meta.alvo_atributos.estado || 'Reabilitado (após obra)' },
+        { label: 'Piso', value: meta.alvo_atributos.piso || '—' },
+        { label: 'Elevador', value: meta.alvo_atributos.elevador ? 'Sim' : 'Não' },
+        { label: 'Garagem / Estacionamento', value: meta.alvo_atributos.garagem ? 'Sim' : 'Não' },
+      ])
+      b.space(4)
+    }
+  }
+
+  // Acumulador para Resumo Estatistico global
+  const allVVRs = []
+
+  if (tipologias.length > 0) {
+    for (let t = 0; t < tipologias.length; t++) {
+      const tip = tipologias[t]
       if (!tip) continue
       const tipLabel = tip.tipologia || tip.label || `Tipologia ${t + 1}`
       b.header(`TIPOLOGIA: ${tipLabel.toUpperCase()}`)
@@ -1810,24 +1846,52 @@ function renderEstudoComparaveis(b, im, a) {
 
       const items = tip.comparaveis || tip.items || []
       if (items.length > 0) {
+        // Tabela principal com colunas standard
         b.colTable(
-          [['Comparável', 120], ['Área', 55], ['Preço', 70], ['€/m²', 70], ['Ajuste', 55], ['€/m² Aj.', 60], ['VVR Est.', 55]],
-          items.map((c, i) => {
+          [['Comparável', 110], ['Área', 50], ['Preço', 65], ['€/m²', 60], ['Ajuste', 50], ['€/m² Aj.', 55], ['VVR Est.', 55]],
+          items.filter(c => c && (c.preco > 0 || c.area > 0)).map((c, i) => {
             const eurM2 = c.area > 0 ? Math.round((c.preco || c.preco_anuncio || 0) / c.area) : '—'
-            const ajTotal = (c.ajuste_total || 0)
+            // Calcular ajuste total tolerando schema antigo (ajuste_total) ou novo (somar c.ajustes)
+            let ajTotal = 0
+            if (c.ajustes && typeof c.ajustes === 'object') {
+              ajTotal = Object.values(c.ajustes).reduce((s, v) => s + (parseFloat(v) || 0), 0)
+            } else if (c.ajuste_total != null) {
+              ajTotal = parseFloat(c.ajuste_total) || 0
+            }
             const eurM2Aj = typeof eurM2 === 'number' ? Math.round(eurM2 * (1 + ajTotal / 100)) : '—'
             const vvrEst = typeof eurM2Aj === 'number' && tip.area ? eurM2Aj * tip.area : '—'
+            if (typeof vvrEst === 'number') allVVRs.push(vvrEst)
             return { _values: [
-              c.notas || c.zona || `Comp. ${i+1}`,
+              c.descricao || c.notas || c.zona || `Comp. ${i + 1}`,
               c.area ? `${c.area}m²` : '—',
               EUR(c.preco || c.preco_anuncio),
               typeof eurM2 === 'number' ? `€${eurM2}` : '—',
-              ajTotal ? `${ajTotal > 0 ? '+' : ''}${ajTotal}%` : '0%',
+              ajTotal ? `${ajTotal > 0 ? '+' : ''}${ajTotal.toFixed(1)}%` : '0%',
               typeof eurM2Aj === 'number' ? `€${eurM2Aj}` : '—',
               typeof vvrEst === 'number' ? EUR(vvrEst) : '—',
             ] }
           })
         )
+
+        // Tabela de atributos (apenas para schema novo)
+        const itemsComAtributos = items.filter(c => c && (c.estado || c.piso || c.elevador != null || c.garagem != null || c.dias_mercado != null))
+        if (itemsComAtributos.length > 0) {
+          b.space(2)
+          b.subheader('Atributos por Comparável')
+          b.colTable(
+            [['Ref.', 50], ['Estado', 145], ['Piso', 90], ['Elev.', 50], ['Gar.', 50], ['Dias Merc.', 60]],
+            items.filter(c => c && (c.preco > 0 || c.area > 0)).map((c, i) => ({
+              _values: [
+                `Comp. ${i + 1}`,
+                c.estado || '—',
+                c.piso || '—',
+                c.elevador === true ? 'Sim' : (c.elevador === false ? 'Não' : '—'),
+                c.garagem === true ? 'Sim' : (c.garagem === false ? 'Não' : '—'),
+                c.dias_mercado != null ? `${c.dias_mercado} d` : '—',
+              ],
+            }))
+          )
+        }
 
         const validVVRs = items.filter(c => c.vvr_estimado > 0).map(c => c.vvr_estimado)
         if (validVVRs.length > 0) {
@@ -1837,6 +1901,42 @@ function renderEstudoComparaveis(b, im, a) {
         }
       }
       b.space(4)
+    }
+
+    // Bloco final de Resumo Estatistico (agregado sobre todas as tipologias)
+    if (allVVRs.length >= 2) {
+      const sorted = [...allVVRs].sort((x, y) => x - y)
+      const n = sorted.length
+      const media = Math.round(sorted.reduce((s, v) => s + v, 0) / n)
+      const mediana = n % 2 === 0 ? Math.round((sorted[n / 2 - 1] + sorted[n / 2]) / 2) : sorted[Math.floor(n / 2)]
+      const min = sorted[0]
+      const max = sorted[n - 1]
+      const vvrAdoptado = parseFloat(a.vvr) || parseFloat(im.valor_venda_remodelado) || 0
+
+      b.header('RESUMO ESTATÍSTICO')
+      b.bigNumbers([
+        { label: 'Comparáveis', value: String(n), sub: '(amostra agregada)' },
+        { label: 'Média VVR', value: EUR(media), sub: '(média aritmética)' },
+        { label: 'Mediana VVR', value: EUR(mediana), sub: '(valor central)' },
+        { label: 'Intervalo', value: `${EUR(min)} – ${EUR(max)}`, sub: '(min – max)' },
+      ])
+      b.space(4)
+
+      if (vvrAdoptado > 0 && mediana > 0) {
+        const delta = ((vvrAdoptado / mediana) - 1) * 100
+        let posTexto, posCor
+        if (delta < -5) { posTexto = 'Conservador (abaixo da mediana)'; posCor = '#1B5E20' }
+        else if (delta <= 5) { posTexto = 'Alinhado com a mediana'; posCor = C.gold }
+        else if (delta <= 15) { posTexto = 'Moderadamente acima da mediana'; posCor = C.gold }
+        else { posTexto = 'Acima do intervalo de mercado'; posCor = '#8B1A1A' }
+
+        b.simpleTable([
+          { label: 'VVR Adoptado pela Somnium', value: EUR(vvrAdoptado) },
+          { label: 'Diferencial vs. Mediana', value: `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%`, color: posCor },
+          { label: 'Posicionamento', value: posTexto, color: posCor, total: true },
+        ])
+        b.space(4)
+      }
     }
   } else {
     for (let i = 1; i <= 5; i++) {

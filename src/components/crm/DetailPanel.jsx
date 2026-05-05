@@ -891,7 +891,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
 
       ) : type === 'Imóveis' && activeTab === 'analise' ? (
         <div className="p-4 sm:p-6">
-          <AnaliseTab imovelId={data.id} imovelNome={data.nome} />
+          <AnaliseTab imovelId={data.id} imovelNome={data.nome} imovel={data} />
         </div>
 
       /* Ficheiros do imóvel (fotos + documentos + Drive) */
