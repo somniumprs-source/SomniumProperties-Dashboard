@@ -460,9 +460,12 @@ class DocBuilder {
 
   // Section header — bold uppercase + gold underline (no numbering)
   header(title) {
-    this.ensure(28)
-    this.doc.fontSize(11).fillColor(C.body).text(title.toUpperCase(), ML, this.y, { width: CW, characterSpacing: 0.3, lineBreak: false })
-    this.y += 14
+    const upper = (title || '').toUpperCase()
+    this.doc.fontSize(11)
+    const titleH = this.doc.heightOfString(upper, { width: CW, characterSpacing: 0.3 })
+    this.ensure(titleH + 14)
+    this.doc.fillColor(C.body).text(upper, ML, this.y, { width: CW, characterSpacing: 0.3 })
+    this.y += titleH + 3
     this.doc.rect(ML, this.y, CW, 1.5).fill(C.gold)
     this.y += 10
     return this
@@ -470,9 +473,12 @@ class DocBuilder {
 
   // Sub-header (lighter, smaller)
   subheader(title) {
-    this.ensure(22)
-    this.doc.fontSize(9.5).fillColor(C.body).text(title.toUpperCase(), ML, this.y, { width: CW, characterSpacing: 0.3, lineBreak: false })
-    this.y += 12
+    const upper = (title || '').toUpperCase()
+    this.doc.fontSize(9.5)
+    const titleH = this.doc.heightOfString(upper, { width: CW, characterSpacing: 0.3 })
+    this.ensure(titleH + 12)
+    this.doc.fillColor(C.body).text(upper, ML, this.y, { width: CW, characterSpacing: 0.3 })
+    this.y += titleH + 2
     this.doc.rect(ML, this.y, 40, 1).fill(C.gold)
     this.y += 8
     return this
@@ -738,16 +744,22 @@ class DocBuilder {
   simpleTable(rows) {
     rows.forEach(row => {
       const isTotal = row.total
-      const rowH = isTotal ? 26 : 22
+      const fontSize = isTotal ? 9.5 : 8.5
+      const labelW = 310
+      const valueW = CW - 330
+      this.doc.fontSize(fontSize)
+      const labelH = this.doc.heightOfString(row.label || '', { width: labelW })
+      const valueH = this.doc.heightOfString(String(row.value || '—'), { width: valueW })
+      const contentH = Math.max(labelH, valueH)
+      const rowH = Math.max(isTotal ? 26 : 22, contentH + 12)
       this.ensure(rowH + 1)
-      if (isTotal) this.doc.rect(ML, this.y, CW, 24).fill(C.totalBg)
-      this.doc.fontSize(isTotal ? 9.5 : 8.5).fillColor(C.body).text(row.label || '', ML + 10, this.y + 6, { width: 310, lineBreak: false })
-      const valSize = isTotal ? 9.5 : 8.5
+      if (isTotal) this.doc.rect(ML, this.y, CW, rowH).fill(C.totalBg)
+      this.doc.fontSize(fontSize).fillColor(C.body).text(row.label || '', ML + 10, this.y + 6, { width: labelW })
       const valColor = row.color || (row.link ? C.gold : (isTotal ? C.gold : C.body))
-      const valOpts = { width: CW - 330, align: 'right', lineBreak: false }
+      const valOpts = { width: valueW, align: 'right' }
       if (row.link) { valOpts.link = row.link; valOpts.underline = true }
-      this.doc.fontSize(valSize).fillColor(valColor).text(String(row.value || '—'), ML + 320, this.y + 6, valOpts)
-      this.doc.rect(ML, this.y + (isTotal ? 24 : 22), CW, 0.3).fill(C.border)
+      this.doc.fontSize(fontSize).fillColor(valColor).text(String(row.value || '—'), ML + 320, this.y + 6, valOpts)
+      this.doc.rect(ML, this.y + rowH - 0.3, CW, 0.3).fill(C.border)
       this.y += rowH
     })
     this.y += 4
@@ -757,29 +769,37 @@ class DocBuilder {
   // Two-column rows — duas listas de pares label/valor renderizadas lado a lado.
   // Util para fichas individuais: atributos esquerda, ajustes direita.
   // Cada row: { label, value, color?, total? }. total: true ⇒ fundo destacado + bold + dourado.
+  // Altura de cada linha calculada dinamicamente conforme texto (suporta wrap).
   twoColRows(leftRows, rightRows) {
     const colW = CW / 2
     const labelW = colW * 0.58
     const valueW = colW * 0.42 - 12
     const max = Math.max(leftRows.length, rightRows.length)
+    const measure = (row, total) => {
+      if (!row) return 0
+      const fs = total ? 9 : 8.5
+      this.doc.fontSize(fs)
+      const lh = this.doc.heightOfString(row.label || '', { width: labelW - 4 })
+      const vh = this.doc.heightOfString(String(row.value || '—'), { width: valueW })
+      return Math.max(lh, vh)
+    }
     const renderHalf = (row, x0, y0, total) => {
       if (!row) return
       const labelX = x0 + 8
       const valueX = x0 + 8 + labelW
       const fontSize = total ? 9 : 8.5
-      const labelColor = total ? C.body : C.body
       const valColor = row.color || (total ? C.gold : C.body)
-      this.doc.fontSize(fontSize).fillColor(labelColor).text(row.label || '', labelX, y0 + 6, { width: labelW - 4, lineBreak: false })
-      this.doc.fontSize(fontSize).fillColor(valColor).text(String(row.value || '—'), valueX, y0 + 6, { width: valueW, align: 'right', lineBreak: false })
+      this.doc.fontSize(fontSize).fillColor(C.body).text(row.label || '', labelX, y0 + 6, { width: labelW - 4 })
+      this.doc.fontSize(fontSize).fillColor(valColor).text(String(row.value || '—'), valueX, y0 + 6, { width: valueW, align: 'right' })
     }
     for (let i = 0; i < max; i++) {
       const left = leftRows[i]
       const right = rightRows[i]
       const isTotal = (left?.total || right?.total)
-      const rowH = isTotal ? 24 : 20
+      const contentH = Math.max(measure(left, isTotal), measure(right, isTotal))
+      const rowH = Math.max(isTotal ? 24 : 20, contentH + 12)
       this.ensure(rowH + 1)
       if (isTotal) this.doc.rect(ML, this.y, CW, rowH).fill(C.totalBg)
-      // Linha vertical separadora central
       this.doc.rect(ML + colW, this.y + 2, 0.4, rowH - 4).fill(C.border)
       renderHalf(left, ML, this.y, left?.total)
       renderHalf(right, ML + colW, this.y, right?.total)
@@ -792,6 +812,7 @@ class DocBuilder {
 
   // Column table — warm gray header with gold labels (reference style)
   // Cada linha verificada individualmente para evitar overflow auto-paginado.
+  // Altura de cada linha calculada dinamicamente conforme conteudo (suporta wrap).
   colTable(headers, rows) {
     this.ensure(24)
     this.doc.rect(ML, this.y, CW, 22).fill(C.headerBg)
@@ -801,21 +822,34 @@ class DocBuilder {
       x += w
     }
     this.y += 24
+    const measureRow = (vals, isTotal) => {
+      let maxH = 0
+      const fs = isTotal ? 9 : 8.5
+      this.doc.fontSize(fs)
+      for (let i = 0; i < vals.length; i++) {
+        const cell = vals[i]
+        const val = cell?.value !== undefined ? cell.value : cell
+        const h = this.doc.heightOfString(String(val || '—'), { width: headers[i][1] })
+        if (h > maxH) maxH = h
+      }
+      return maxH
+    }
     rows.forEach(row => {
       const isTotal = row._total
-      const rowH = isTotal ? 26 : 24
-      this.ensure(rowH + 1)
-      if (isTotal) this.doc.rect(ML, this.y, CW, 24).fill(C.totalBg)
-      x = ML + 8
       const vals = row._values || row
+      const contentH = measureRow(vals, isTotal)
+      const rowH = Math.max(isTotal ? 26 : 24, contentH + 12)
+      this.ensure(rowH + 1)
+      if (isTotal) this.doc.rect(ML, this.y, CW, rowH).fill(C.totalBg)
+      x = ML + 8
       for (let i = 0; i < vals.length; i++) {
         const cell = vals[i]
         const val = cell?.value !== undefined ? cell.value : cell
         const clr = cell?.color || C.body
-        this.doc.fontSize(isTotal ? 9 : 8.5).fillColor(clr).text(String(val || '—'), x, this.y + 6, { width: headers[i][1], lineBreak: false })
+        this.doc.fontSize(isTotal ? 9 : 8.5).fillColor(clr).text(String(val || '—'), x, this.y + 6, { width: headers[i][1] })
         x += headers[i][1]
       }
-      this.doc.rect(ML, this.y + (isTotal ? 24 : 22), CW, 0.3).fill(C.border)
+      this.doc.rect(ML, this.y + rowH - 0.3, CW, 0.3).fill(C.border)
       this.y += rowH
     })
     this.y += 4
@@ -1672,7 +1706,7 @@ function renderAnaliseRentabilidade(b, im, a) {
     { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
     { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash) },
     { label: 'Break-Even', value: EUR(a.break_even) },
-    { label: 'Spread de Valorização (VVR − Compra − Obra)', value: spreadValue, color: colorPositivo(m.spread_eur) },
+    { label: 'Spread de Valorização (VVR - Compra - Obra)', value: spreadValue, color: colorPositivo(m.spread_eur) },
     { label: 'Lucro Líquido por Mês', value: m.lucro_mensal != null ? `${EUR_S(m.lucro_mensal)}/mês` : '—' },
     { label: 'Margem sobre Custo Total', value: PCT_DEC(m.margem_custo_total), color: colorMargem(m.margem_custo_total) },
     { label: 'Rácio Risco / Retorno (por 1€ arriscado)', value: RACIO(m.racio_risco_retorno) },
@@ -2093,10 +2127,10 @@ function renderEstudoComparaveis(b, im, a) {
   b.colTable(
     [['Atributo', 90], ['Direcção do Ajuste', 200], ['Lógica', 175]],
     [
-      { _values: ['Estado de Conservação', 'Comp. pior que alvo: +% | Comp. igual ou melhor: 0% ou −%', 'Alvo será reabilitado — comp. em pior estado subestima o VVR'] },
-      { _values: ['Piso', 'Cave/RC: +% vs andar | Andar alto: −%', 'Cave penaliza preço; andares altos premiam'] },
-      { _values: ['Elevador', 'Comp. com elevador e alvo sem: −%', 'Remover o atributo premium do comparável'] },
-      { _values: ['Garagem', 'Comp. com garagem e alvo sem: −%', 'Remover valor de garagem do comparável'] },
+      { _values: ['Estado de Conservação', 'Comp. pior que alvo: +% | Comp. igual ou melhor: 0% ou -%', 'Alvo será reabilitado — comp. em pior estado subestima o VVR'] },
+      { _values: ['Piso', 'Cave/RC: +% vs andar | Andar alto: -%', 'Cave penaliza preço; andares altos premiam'] },
+      { _values: ['Elevador', 'Comp. com elevador e alvo sem: -%', 'Remover o atributo premium do comparável'] },
+      { _values: ['Garagem', 'Comp. com garagem e alvo sem: -%', 'Remover valor de garagem do comparável'] },
       { _values: ['Área', `Calculado automaticamente (diferença % × coef. ${AREA_FACTOR_PDF})`, 'Fracções menores tendem a ter preço/m² mais alto'] },
     ]
   )
@@ -2173,11 +2207,11 @@ function renderEstudoComparaveis(b, im, a) {
         { label: 'Dias em Mercado', value: c.dias_mercado != null ? `${c.dias_mercado} dias` : '—' },
       ]
       const rightRows = [
-        { label: 'Ajuste Estado (+ comp pior que alvo)', value: pctStr(c.ajEstado), color: signColor(c.ajEstado) },
-        { label: 'Ajuste Piso (+ alvo em cave vs. andar)', value: pctStr(c.ajPiso), color: signColor(c.ajPiso) },
-        { label: 'Ajuste Elevador (− comp tem e alvo não)', value: pctStr(c.ajElev), color: signColor(c.ajElev) },
-        { label: 'Ajuste Garagem (− comp tem e alvo não)', value: pctStr(c.ajGar), color: signColor(c.ajGar) },
-        { label: 'Ajuste Área (auto — efeito dimensão)', value: pctStr(c.ajArea), color: signColor(c.ajArea) },
+        { label: 'Ajuste Estado', value: pctStr(c.ajEstado), color: signColor(c.ajEstado) },
+        { label: 'Ajuste Piso', value: pctStr(c.ajPiso), color: signColor(c.ajPiso) },
+        { label: 'Ajuste Elevador', value: pctStr(c.ajElev), color: signColor(c.ajElev) },
+        { label: 'Ajuste Garagem', value: pctStr(c.ajGar), color: signColor(c.ajGar) },
+        { label: 'Ajuste Área (auto)', value: pctStr(c.ajArea), color: signColor(c.ajArea) },
         { label: 'AJUSTE TOTAL', value: pctStr(c.ajTotal), color: signColor(c.ajTotal), total: true },
         { label: 'Preço/m² Ajustado', value: `${Math.round(c.precoM2Aj).toLocaleString('pt-PT')} €/m²`, total: true },
         { label: `VVR Estimado (${areaAlvo} m²)`, value: EUR(c.vvrEst), total: true },
