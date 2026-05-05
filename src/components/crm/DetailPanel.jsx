@@ -14,6 +14,7 @@ import { FollowUpsSection } from './FollowUpsSection.jsx'
 import { WhatsAppTab } from './WhatsAppTab.jsx'
 import { FicheirosTab } from './FicheirosTab.jsx'
 import { ChecklistTab } from './ChecklistTab.jsx'
+import { VisitasTab } from './VisitasTab.jsx'
 import { DocumentosInvestidorTab } from './DocumentosInvestidorTab.jsx'
 import { ImovelInteracoesSection } from './ImovelInteracoesSection.jsx'
 import { Combobox } from '../ui/Combobox.jsx'
@@ -767,6 +768,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
     { key: 'obra', label: 'Obra', icon: '🏗️', show: type === 'Imóveis' },
     { key: 'localizacao', label: 'Localização', icon: '📍', show: type === 'Imóveis' },
     { key: 'pontos_riscos', label: 'Pontos & Riscos', icon: '⚖️', show: type === 'Imóveis' },
+    { key: 'visitas', label: 'Visitas', icon: '🚪', show: type === 'Imóveis' },
     { key: 'relatorios_imovel', label: 'Documentos', icon: '📄', show: type === 'Imóveis' },
     { key: 'checklist', label: 'Checklist', icon: '📋', show: type === 'Imóveis' },
     { key: 'whatsapp', label: 'WhatsApp', icon: '📱', show: type === 'Consultores' },
@@ -875,6 +877,9 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
 
       ) : type === 'Imóveis' && activeTab === 'checklist' ? (
         <ChecklistTab imovel={data} onUpdate={loadData} />
+
+      ) : type === 'Imóveis' && activeTab === 'visitas' ? (
+        <VisitasTab imovelId={data.id} onUpdate={loadData} />
 
       ) : type === 'Imóveis' && activeTab === 'pontos_riscos' ? (
         <div className="p-4 sm:p-6">

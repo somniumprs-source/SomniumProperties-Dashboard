@@ -13,8 +13,9 @@ import { createClient } from '@supabase/supabase-js'
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.supabase.co'
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
 const supabaseStorage = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null
-import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, ConsultorFollowups, DocumentosInvestidor, getDashboardStats } from './crud.js'
+import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, ConsultorFollowups, DocumentosInvestidor, Visitas, getDashboardStats } from './crud.js'
 import pool from './pg.js'
+import { getVisitasEnriquecidas, syncDataVisitaDerivada } from './queries.js'
 import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
@@ -539,6 +540,50 @@ router.put('/negocios/:id/confirmar-pagamento', async (req, res) => {
 crudRoutes('/despesas', Despesas)
 crudRoutes('/tarefas', Tarefas)
 crudRoutes('/consultor-interacoes', ConsultorInteracoes)
+
+// ── Visitas — CRUD com sync de imoveis.data_visita ───────────
+// Cada mutacao (create/update/delete) re-sincroniza o campo derivado
+// imoveis.data_visita = MAX(data_hora) WHERE estado='realizada' AND <= NOW().
+router.get('/visitas', async (req, res) => {
+  try {
+    const items = await getVisitasEnriquecidas({ imovelId: req.query.imovel_id })
+    res.json(items)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/imoveis/:id/visitas', async (req, res) => {
+  try {
+    const items = await getVisitasEnriquecidas({ imovelId: req.params.id })
+    res.json(items)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/visitas', async (req, res) => {
+  try {
+    const item = await Visitas.create(req.body)
+    await syncDataVisitaDerivada(item.imovel_id)
+    res.status(201).json(item)
+  } catch (e) { res.status(400).json({ error: e.message }) }
+})
+
+router.put('/visitas/:id', async (req, res) => {
+  try {
+    const item = await Visitas.update(req.params.id, req.body)
+    if (!item) return res.status(404).json({ error: 'Não encontrado' })
+    await syncDataVisitaDerivada(item.imovel_id)
+    res.json(item)
+  } catch (e) { res.status(400).json({ error: e.message }) }
+})
+
+router.delete('/visitas/:id', async (req, res) => {
+  try {
+    const existing = await Visitas.getById(req.params.id)
+    if (!existing) return res.status(404).json({ error: 'Não encontrado' })
+    await Visitas.delete(req.params.id)
+    await syncDataVisitaDerivada(existing.imovel_id)
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
 
 // ── Histórico de follow-ups por consultor ───────────────────
 router.get('/consultores/:id/followups', async (req, res) => {

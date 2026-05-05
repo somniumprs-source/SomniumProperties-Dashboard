@@ -922,6 +922,7 @@ function mapConsultor(p) {
 // Importa queries que lêem da DB local em vez do Notion
 import {
   getNegócios, getDespesas, getImóveis, getInvestidores, getConsultores, getTarefas,
+  getVisitas,
   round2 as round2PG,
 } from './src/db/queries.js'
 
@@ -2145,12 +2146,13 @@ app.get('/api/kpis', async (req, res) => {
 // ════════════════════════════════════════════════════════════════
 app.get('/api/weekly-pulse', async (req, res) => {
   try {
-    const [imoveis, investidores, consultoresRaw, negocios, despesas] = await Promise.all([
+    const [imoveis, investidores, consultoresRaw, negocios, despesas, visitas] = await Promise.all([
       getImóveis().catch(() => []),
       getInvestidores(),
       getConsultores().catch(() => []),
       getNegócios(),
       getDespesas(),
+      getVisitas().catch(() => []),
     ])
     const now = new Date()
     const wDay = now.getDay()
@@ -2164,7 +2166,9 @@ app.get('/api/weekly-pulse', async (req, res) => {
     // Atividades da semana
     const imoveisAdicionados = imoveis.filter(i => inWeek(i.dataAdicionado)).length
     const chamadasFeitas = imoveis.filter(i => inWeek(i.dataChamada)).length
-    const visitasFeitas = imoveis.filter(i => inWeek(i.dataVisita)).length
+    // Visitas: contar da tabela 'visitas' (multiplas por imovel, com estado).
+    // So conta as marcadas como 'realizada' que ja aconteceram.
+    const visitasFeitas = visitas.filter(v => v.estado === 'realizada' && inWeek(v.dataHora)).length
     const propostasEnviadas = imoveis.filter(i => inWeek(i.dataProposta)).length
     const dealsFechados = negocios.filter(n => inWeek(n.dataVenda) || inWeek(n.dataCompra)).length
 
@@ -2453,12 +2457,13 @@ function avg(arr) {
 
 app.get('/api/metricas', async (req, res) => {
   try {
-    const [imoveis, negocios, investidores, consultoresRaw, despesas] = await Promise.all([
+    const [imoveis, negocios, investidores, consultoresRaw, despesas, visitas] = await Promise.all([
       getImóveis().catch(() => []),
       getNegócios(),
       getInvestidores(),
       getConsultores().catch(() => []),
       getDespesas().catch(() => []),
+      getVisitas().catch(() => []),
     ])
 
     const { ano, month } = getMesAtual()
@@ -3129,8 +3134,11 @@ app.get('/api/metricas', async (req, res) => {
     const imAddMes = imoveisDoMes.length
     const imChamadasSemana = imoveis.filter(i => isThisWeek(i.dataChamada)).length
     const imChamadasMes = imoveis.filter(i => isMonth(i.dataChamada, ano, month)).length
-    const imVisitasSemana = imoveis.filter(i => isThisWeek(i.dataVisita)).length
-    const imVisitasMes = imoveis.filter(i => isMonth(i.dataVisita, ano, month)).length
+    // Visitas: contar da tabela 'visitas' (nao do campo derivado data_visita)
+    // — so 'realizadas' que ja aconteceram, multiplas por imovel.
+    const visitasRealizadas = visitas.filter(v => v.estado === 'realizada' && new Date(v.dataHora) <= now)
+    const imVisitasSemana = visitasRealizadas.filter(v => isThisWeek(v.dataHora)).length
+    const imVisitasMes = visitasRealizadas.filter(v => isMonth(v.dataHora, ano, month)).length
     const imEstudosMes = imoveis.filter(i => isMonth(i.dataEstudoMercado, ano, month)).length
     const imPropostasMes = imoveis.filter(i => isMonth(i.dataProposta, ano, month)).length
     const imFollowUpAtivos = imoveis.filter(i => i.estado === 'Follow UP').length
