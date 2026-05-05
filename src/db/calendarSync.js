@@ -182,8 +182,8 @@ export async function pullGCalToTarefas(gcal, calendarId, { days = 30 } = {}) {
         }
 
         // Criar nova tarefa a partir do evento
-        const id = (await import('crypto')).then(m => m.randomUUID())
-        const uuid = await id
+        const { randomUUID } = await import('crypto')
+        const uuid = randomUUID()
         const nowStr = new Date().toISOString()
         const horas = inicio && fim ? Math.max(0, (new Date(fim) - new Date(inicio)) / 3600000) : 0
         const funcMatch = descricao.match(/Funcion[aá]rio:\s*(.+)/i)
@@ -250,13 +250,12 @@ export async function pushAllTarefas(gcal, calendarId, { sinceDate } = {}) {
 }
 
 /**
- * @deprecated — mantido apenas como escape hatch manual. GCal é espelho (push-only).
- * Sincronização bidirecional desligada para evitar que eventos criados no GCal
- * criem tarefas na app.
+ * Push + pull num único call. Usado pelo /api/calendar/sync e pelo auto-sync (15 min).
  */
 export async function fullSync(gcal, calendarId, options = {}) {
   const push = await pushAllTarefas(gcal, calendarId, options)
-  return { push: { synced: push.created + push.updated }, pull: { created: 0, updated: 0, skipped: 0 } }
+  const pull = await pullGCalToTarefas(gcal, calendarId, { days: options.days ?? 30 })
+  return { push, pull }
 }
 
 // ── Helpers ─────────────────────────────────────────────────
