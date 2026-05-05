@@ -89,10 +89,19 @@ export function Comparaveis({ analise, imovel, onUpdate }) {
   const [expandedAdj, setExpandedAdj] = useState(() => new Set())
 
   useEffect(() => {
-    const obj = parseAndMigrate(analise?.comparaveis)
+    const raw = analise?.comparaveis
+    const wasLegacy = (typeof raw === 'string' ? (() => {
+      try { return Array.isArray(JSON.parse(raw || '[]')) } catch { return false }
+    })() : Array.isArray(raw))
+    const obj = parseAndMigrate(raw)
     setMeta(obj.meta)
     setTipologias(obj.tipologias)
     setTipCount(obj.tipologias.length)
+    // Auto-persistir se a estrutura veio do formato legacy (array) - garante que o
+    // backend PDF passa a ler como objecto novo com meta na proxima geracao.
+    if (wasLegacy && analise?.id) {
+      onUpdate({ comparaveis: JSON.stringify({ _version: 2, meta: obj.meta, tipologias: obj.tipologias }) })
+    }
   }, [analise?.id])
 
   const persist = (nextMeta, nextTipologias) => {
