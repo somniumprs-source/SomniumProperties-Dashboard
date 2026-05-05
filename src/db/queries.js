@@ -148,4 +148,70 @@ export async function getTarefas() {
   }))
 }
 
+// ── Visitas ────────────────────────────────────────────────────
+function mapVisita(r) {
+  return {
+    id: r.id,
+    imovelId: r.imovel_id,
+    dataHora: r.data_hora instanceof Date ? r.data_hora.toISOString() : r.data_hora,
+    estado: r.estado,
+    investidorId: r.investidor_id,
+    consultorId: r.consultor_id,
+    resultado: r.resultado,
+    notas: r.notas,
+    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at,
+    updatedAt: r.updated_at instanceof Date ? r.updated_at.toISOString() : r.updated_at,
+  }
+}
+
+export async function getVisitas({ imovelId } = {}) {
+  const params = []
+  let where = ''
+  if (imovelId) { params.push(imovelId); where = `WHERE imovel_id = $1` }
+  const { rows } = await pool.query(`SELECT * FROM visitas ${where} ORDER BY data_hora DESC`, params)
+  return rows.map(mapVisita)
+}
+
+export async function getVisitasEnriquecidas({ imovelId } = {}) {
+  const params = []
+  let where = ''
+  if (imovelId) { params.push(imovelId); where = `WHERE v.imovel_id = $1` }
+  const { rows } = await pool.query(`
+    SELECT v.*,
+           inv.nome AS investidor_nome,
+           con.nome AS consultor_nome,
+           im.nome AS imovel_nome
+      FROM visitas v
+      LEFT JOIN investidores inv ON inv.id = v.investidor_id
+      LEFT JOIN consultores con  ON con.id = v.consultor_id
+      LEFT JOIN imoveis im       ON im.id  = v.imovel_id
+      ${where}
+      ORDER BY v.data_hora DESC
+  `, params)
+  return rows.map(r => ({
+    ...mapVisita(r),
+    investidorNome: r.investidor_nome,
+    consultorNome: r.consultor_nome,
+    imovelNome: r.imovel_nome,
+  }))
+}
+
+/**
+ * Mantem imoveis.data_visita = data da ultima visita realizada (data_hora <= NOW()).
+ * Chamado em todas as mutacoes de visitas. Idempotente.
+ */
+export async function syncDataVisitaDerivada(imovelId) {
+  if (!imovelId) return
+  const { rows } = await pool.query(
+    `SELECT MAX(data_hora) AS d FROM visitas
+       WHERE imovel_id = $1 AND estado = 'realizada' AND data_hora <= NOW()`,
+    [imovelId]
+  )
+  const ultima = rows[0]?.d
+  await pool.query(
+    `UPDATE imoveis SET data_visita = $1, updated_at = NOW()::TEXT WHERE id = $2`,
+    [ultima ? new Date(ultima).toISOString().slice(0, 10) : null, imovelId]
+  )
+}
+
 export { round2 }

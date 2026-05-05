@@ -721,6 +721,46 @@ export async function initSchema() {
         ALTER TABLE relatorios_semanais ADD COLUMN IF NOT EXISTS pdf_original_path TEXT;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
+
+      -- ════════════════════════════════════════════════════════════════
+      -- VISITAS (entidade propria) — substitui o campo unico imoveis.data_visita
+      -- Permite multiplas visitas por imovel, com estado (agendada/realizada/
+      -- cancelada), investidor opcional e historico completo. O campo
+      -- imoveis.data_visita continua a existir mas passa a ser derivado:
+      -- = MAX(data_hora) WHERE estado='realizada' AND data_hora <= NOW()
+      -- mantido em sync pela API ao mutar visitas.
+      -- ════════════════════════════════════════════════════════════════
+      CREATE TABLE IF NOT EXISTS visitas (
+        id TEXT PRIMARY KEY,
+        imovel_id TEXT NOT NULL REFERENCES imoveis(id) ON DELETE CASCADE,
+        data_hora TIMESTAMPTZ NOT NULL,
+        estado TEXT NOT NULL DEFAULT 'agendada',
+        investidor_id TEXT REFERENCES investidores(id) ON DELETE SET NULL,
+        consultor_id TEXT REFERENCES consultores(id) ON DELETE SET NULL,
+        resultado TEXT,
+        notas TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_visitas_imovel ON visitas(imovel_id);
+      CREATE INDEX IF NOT EXISTS idx_visitas_data ON visitas(data_hora DESC);
+      CREATE INDEX IF NOT EXISTS idx_visitas_estado ON visitas(estado);
+
+      -- Backfill idempotente: para cada imovel com data_visita preenchida e
+      -- SEM visitas registadas, criar uma. Datas no passado -> realizada;
+      -- datas no futuro -> agendada. So corre uma vez por imovel.
+      DO $$ BEGIN
+        INSERT INTO visitas (id, imovel_id, data_hora, estado, notas, created_at, updated_at)
+        SELECT gen_random_uuid()::text, i.id, i.data_visita::TIMESTAMPTZ,
+               CASE WHEN i.data_visita::TIMESTAMPTZ <= NOW() THEN 'realizada' ELSE 'agendada' END,
+               'Importado automaticamente de imoveis.data_visita',
+               NOW(), NOW()
+        FROM imoveis i
+        WHERE i.data_visita IS NOT NULL AND TRIM(i.data_visita) <> ''
+          AND NOT EXISTS (SELECT 1 FROM visitas v WHERE v.imovel_id = i.id);
+      EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'Backfill visitas falhou: %', SQLERRM;
+      END $$;
     `)
 
     // Bootstrap: garantir que somniumprs@gmail.com (owner) existe como admin
