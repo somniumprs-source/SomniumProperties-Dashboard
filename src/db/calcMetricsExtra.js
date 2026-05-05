@@ -104,6 +104,11 @@ export function calcMetricsExtra(a, im = {}) {
   const lucroMensal = meses > 0 ? ll / meses : null
   const racio = cap > 0 ? ll / cap : null
 
+  const roeSemAlav = cap > 0 ? ll / cap : null
+  const paybackMeses = lucroMensal && lucroMensal > 0 ? cap / lucroMensal : null
+  const raSimplesAnual_pp = meses > 0 ? (rt / meses) * 12 : 0
+  const custoOportunidadePp = raSimplesAnual_pp - 3.5
+
   const margemCusto = custoTotal > 0 ? lb / custoTotal : null
 
   const aquisicaoM2 = area > 0 ? compra / area : null
@@ -284,6 +289,9 @@ export function calcMetricsExtra(a, im = {}) {
     tir_alavancada: tirAlavancada,
     lucro_mensal: lucroMensal,
     racio_risco_retorno: racio,
+    roe_sem_alav: roeSemAlav,
+    payback_meses: paybackMeses,
+    custo_oportunidade_pp: custoOportunidadePp,
     custo_total_eur: custoTotal,
     margem_custo_total: margemCusto,
     aquisicao_m2: aquisicaoM2,

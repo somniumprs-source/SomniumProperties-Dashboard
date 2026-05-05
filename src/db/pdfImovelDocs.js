@@ -1377,17 +1377,37 @@ function renderResumoExecutivo(b, im, a, m) {
   b.doc.fontSize(9).fillColor('#f0efe9').text(teseTexto, ML + 14, b.y + 22, { width: CW - 24, lineGap: 3 })
   b.y += boxH + 8
 
-  // Hero 6 KPIs (3+3)
+  // Hero KPIs — grid 3x3 (9 metricas com nome completo)
+  const paybackLabel = (() => {
+    const p = m.payback_meses
+    if (p == null || !isFinite(p)) return '—'
+    if (p < 12) return `${p.toFixed(1)} meses`
+    const anos = Math.floor(p / 12)
+    const meses = Math.round(p - anos * 12)
+    return meses > 0 ? `${anos}a ${meses}m` : `${anos} anos`
+  })()
+  const cooLabel = (() => {
+    const v = m.custo_oportunidade_pp
+    if (v == null || !isFinite(v)) return '—'
+    const sign = v >= 0 ? '+' : ''
+    return `${sign}${v.toFixed(1)} pp`
+  })()
   b.bigNumbers([
-    { label: 'Capital Necessário', value: EUR(a.capital_necessario || compra + obra) },
-    { label: 'Lucro Líquido', value: EUR(a.lucro_liquido) },
-    { label: 'MOIC', value: MULT(m.moic) },
+    { label: 'Capital Necessário', value: EUR(a.capital_necessario || compra + obra), sub: 'Capital próprio + financiado' },
+    { label: 'Lucro Líquido', value: EUR(a.lucro_liquido), sub: 'Após impostos' },
+    { label: 'MOIC', value: MULT(m.moic), sub: 'Múltiplo do Capital Investido' },
   ])
   b.space(2)
   b.bigNumbers([
-    { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
-    { label: 'TIR', value: PCT_DEC(m.tir_anual) },
-    { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash) },
+    { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado), sub: 'RA simples' },
+    { label: 'TIR', value: PCT_DEC(m.tir_anual), sub: 'Taxa Interna de Rentabilidade' },
+    { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash), sub: 'Lucro / Capital empregue' },
+  ])
+  b.space(2)
+  b.bigNumbers([
+    { label: 'ROE sem Alavancagem', value: PCT_DEC(m.roe_sem_alav), sub: 'Retorno sobre Capital Próprio' },
+    { label: 'Payback Period', value: paybackLabel, sub: 'Recuperação do capital' },
+    { label: 'Custo de Oportunidade', value: cooLabel, sub: 'vs depósito a prazo (3,5%)' },
   ])
   b.space(8)
 
@@ -1436,40 +1456,6 @@ function renderResumoExecutivo(b, im, a, m) {
   b.simpleTable(mitigantes)
   b.space(8)
 
-  // Score de Risco Somnium
-  b.subheader('Score de Risco Somnium')
-  const sr = m.score_risco
-  if (sr) {
-    b.ensure(110)
-    const yStart = b.y
-    // Número grande à esquerda
-    b.doc.fontSize(48).fillColor(sr.cor).text(String(sr.total), ML, yStart, { width: 110, align: 'left', lineBreak: false })
-    b.doc.fontSize(10).fillColor(C.muted).text('/ 100', ML + 70, yStart + 24, { lineBreak: false })
-    b.doc.fontSize(11).fillColor(sr.cor).text(sr.nivel, ML, yStart + 56, { width: 140, lineBreak: false, characterSpacing: 0.5 })
-
-    // Barras à direita
-    const barX = ML + 180
-    const barW = CW - 180
-    const labels = [
-      { label: 'Margem VVR', pts: sr.componentes.vvr.pts, peso: sr.componentes.vvr.peso },
-      { label: 'Margem Custo', pts: sr.componentes.margem.pts, peso: sr.componentes.margem.peso },
-      { label: 'Margem Obra', pts: sr.componentes.obra.pts, peso: sr.componentes.obra.peso },
-      { label: 'Prazo', pts: sr.componentes.prazo.pts, peso: sr.componentes.prazo.peso },
-    ]
-    let yBar = yStart + 4
-    for (const c of labels) {
-      b.doc.fontSize(7.5).fillColor(C.body).text(c.label, barX, yBar, { width: 90, lineBreak: false })
-      b.doc.fontSize(7).fillColor(C.muted).text(`${c.pts} pts · ${c.peso}%`, barX + barW - 70, yBar, { width: 70, align: 'right', lineBreak: false })
-      // Barra
-      const trackY = yBar + 12
-      const trackW = barW - 4
-      b.doc.rect(barX, trackY, trackW, 5).fill('#EDEAE0')
-      b.doc.rect(barX, trackY, trackW * (c.pts / 100), 5).fill(C.gold)
-      yBar += 24
-    }
-    b.y = yStart + 110
-  }
-
   b.newPage()
 }
 
@@ -1499,9 +1485,9 @@ function renderAnaliseRentabilidade(b, im, a) {
   b.header('A. CUSTOS DE AQUISIÇÃO')
   b.simpleTable([
     { label: 'Valor de Compra', value: EUR(compra) },
-    { label: 'VPT', value: EUR(a.vpt) },
+    { label: 'VPT — Valor Patrimonial Tributário', value: EUR(a.vpt) },
     { label: 'Finalidade', value: (a.finalidade || '').replace(/_/g, ' ') },
-    { label: 'IMT', value: EUR(a.imt) },
+    { label: 'IMT — Imp. Mun. sobre Transmissões', value: EUR(a.imt) },
     { label: 'Imposto de Selo', value: EUR(a.imposto_selo) },
     { label: 'Escritura', value: EUR(a.escritura) },
     { label: 'CPCV Compra', value: EUR(a.cpcv_compra) },
@@ -1518,11 +1504,11 @@ function renderAnaliseRentabilidade(b, im, a) {
       { label: '% Financiamento', value: PCT(a.perc_financiamento) },
       { label: 'Valor Financiado', value: EUR(a.valor_financiado) },
       { label: 'Prazo', value: `${a.prazo_anos || 30} anos` },
-      { label: 'TAN', value: PCT(a.tan) },
+      { label: 'TAN — Taxa Anual Nominal', value: PCT(a.tan) },
       { label: 'Tipo Taxa', value: a.tipo_taxa },
       { label: 'Prestação Mensal', value: EUR(a.prestacao_mensal) },
       { label: 'Comissões Bancárias', value: EUR(a.comissoes_banco) },
-      { label: 'IS Financiamento', value: EUR(a.is_financiamento) },
+      { label: 'IS — Imposto de Selo do Financiamento', value: EUR(a.is_financiamento) },
     ])
     b.space(4)
   }
@@ -1563,7 +1549,7 @@ function renderAnaliseRentabilidade(b, im, a) {
 
   b.header('E. VENDA')
   b.simpleTable([
-    { label: 'VVR', value: EUR(vvr) },
+    { label: 'VVR — Valor de Venda de Referência', value: EUR(vvr) },
     { label: 'Comissão %', value: PCT(a.comissao_perc) },
     { label: 'Comissão com IVA', value: EUR(a.comissao_com_iva) },
     { label: 'Valor de Venda por m²', value: EUR_M2(m.vvr_m2) },
@@ -1645,11 +1631,12 @@ function renderAnaliseRentabilidade(b, im, a) {
   renderStressTests(b, a, { title: 'I. TESTES DE STRESS', metrics: m })
 
   renderExitAlternativo(b, im, a, m)
+  renderEstruturaCAEP(b, im, a, m)
 }
 
 function renderExitAlternativo(b, im, a, m) {
   b.space(8)
-  b.header('K. EXIT ALTERNATIVO — ANÁLISE DE ARRENDAMENTO')
+  b.header('J. EXIT ALTERNATIVO — ANÁLISE DE ARRENDAMENTO')
 
   if (!m.exit_arrendamento) {
     b.note('Introduza renda mensal estimada na ficha financeira (secção "Exit Alternativo") para activar esta análise.')
@@ -1716,6 +1703,67 @@ function renderExitAlternativo(b, im, a, m) {
     ]
   )
   b.note('A renda estimada deve ser validada com comparáveis de mercado locais. Tributação ao abrigo do Art.º 94.º CIRC (retenção 25% rendimentos prediais para empresas) ou Art.º 72.º CIRS (28% taxa autónoma para particulares).')
+}
+
+function renderEstruturaCAEP(b, im, a, m) {
+  b.space(8)
+  b.header('K. ESTRUTURA CAEP — ASSOCIAÇÃO EM PARTICIPAÇÃO')
+
+  // Caixa explicativa
+  const ctxTexto = 'CAEP (Contrato de Associação em Participação) é uma estrutura jurídica que permite captar capital de investidor mantendo a Somnium Properties como gestora exclusiva do projecto. Distribuição de resultados conforme contrato.'
+  const ctxH = b.doc.heightOfString(ctxTexto, { width: CW - 24, lineGap: 3 })
+  b.ensure(ctxH + 22)
+  b.doc.rect(ML, b.y, CW, ctxH + 16).fill('#f5f3ee')
+  b.doc.rect(ML, b.y, 3, ctxH + 16).fill(C.gold)
+  b.doc.fontSize(8.5).fillColor(C.body).text(ctxTexto, ML + 12, b.y + 8, { width: CW - 24, lineGap: 3 })
+  b.y += ctxH + 22
+
+  const caepCampos = [
+    a.caep_capital_somnium,
+    a.caep_capital_investidor,
+    a.caep_distribuicao_perc,
+    a.caep_hurdle_rate,
+    a.caep_waterfall_descricao,
+  ]
+  const caepAtivo = a.caep_ativo === true || caepCampos.some(v => v != null && v !== '')
+
+  if (!caepAtivo) {
+    b.note('Estrutura CAEP não aplicável a este negócio. Para activar, preencher os campos CAEP na ficha financeira (capital Somnium, capital investidor, % distribuição, hurdle rate e waterfall).')
+    return
+  }
+
+  // Calculo lucro distribuivel: lucro liquido apos IRC+Derrama, antes de retencao de dividendos
+  const lucroLiq = parseFloat(a.lucro_liquido) || 0
+  const retencaoDiv = parseFloat(a.retencao_dividendos) || 0
+  const lucroDistribuivel = lucroLiq + retencaoDiv
+
+  b.subheader('Estrutura de Capital')
+  b.simpleTable([
+    { label: 'Capital Somnium Properties', value: a.caep_capital_somnium != null ? EUR(a.caep_capital_somnium) : 'A definir' },
+    { label: 'Capital Investidor', value: a.caep_capital_investidor != null ? EUR(a.caep_capital_investidor) : 'A definir' },
+    { label: '% Distribuição ao Investidor', value: a.caep_distribuicao_perc != null ? PCT(a.caep_distribuicao_perc) : 'A definir' },
+    { label: 'Hurdle Rate', value: a.caep_hurdle_rate != null ? PCT(a.caep_hurdle_rate) : 'A definir' },
+  ])
+  b.space(4)
+
+  b.subheader('Resultado Distribuível')
+  b.simpleTable([
+    { label: 'Lucro Líquido (após IRC + Derrama)', value: EUR(lucroDistribuivel), total: true },
+    { label: '   Retenção de Dividendos (28%)', value: EUR(retencaoDiv) },
+    { label: 'Lucro Distribuível Final', value: EUR(lucroLiq), total: true },
+  ])
+  b.space(4)
+
+  if (a.caep_waterfall_descricao) {
+    b.subheader('Estrutura Waterfall')
+    const wfH = b.doc.heightOfString(a.caep_waterfall_descricao, { width: CW - 24, lineGap: 3 })
+    b.ensure(wfH + 18)
+    b.doc.rect(ML, b.y, CW, wfH + 14).fill(C.bg)
+    b.doc.fontSize(8.5).fillColor(C.body).text(a.caep_waterfall_descricao, ML + 12, b.y + 7, { width: CW - 24, lineGap: 3 })
+    b.y += wfH + 20
+  }
+
+  b.note('A distribuição efectiva depende do contrato CAEP assinado entre as partes. Valores indicativos baseados nos parâmetros introduzidos na ficha financeira.')
 }
 
 function renderEstudoComparaveis(b, im, a) {
