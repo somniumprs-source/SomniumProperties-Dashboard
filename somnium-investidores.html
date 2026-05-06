@@ -1307,6 +1307,7 @@ function goStep(n) {
 }
 
 async function submitForm() {
+  const btn = document.querySelector('#fs2 .btn-submit');
   const nome    = document.getElementById('f_nome').value.trim();
   const email   = document.getElementById('f_email').value.trim();
   const tel     = document.getElementById('f_tel').value.trim();
@@ -1320,23 +1321,8 @@ async function submitForm() {
   if (!retorno) { shake(document.getElementById('f_retorno')); document.getElementById('f_retorno').focus(); return; }
   if (!roi)     { shake(document.getElementById('f_roi')); document.getElementById('f_roi').focus(); return; }
 
-  // Preparar mensagem WhatsApp (usada como fallback / paralelo)
-  const lines = [
-    '*Somnium Properties · Nova Candidatura*',
-    '',
-    `*Nome:* ${nome || '-'}`,
-    `*Email:* ${email || '-'}`,
-    tel ? `*Telemóvel:* ${tel}` : null,
-    '',
-    `*Experiência:* ${exp || '-'}`,
-    `*Capital disponível:* ${cap || '-'}`,
-    '',
-    `*Equipa de obras / Empreiteiro:* ${sel['p_equipa'] || '-'}`,
-    `*Retorno total pretendido:* ${retorno || '-'}`,
-    `*ROI anualizado pretendido:* ${roi || '-'}`,
-  ].filter(Boolean).join('\n');
+  if (btn) { btn.disabled = true; btn.innerHTML = 'A enviar…'; }
 
-  // Enviar para CRM (não bloqueia WhatsApp se falhar)
   const payload = {
     nome, email, telemovel: tel,
     experiencia: exp,
@@ -1346,21 +1332,21 @@ async function submitForm() {
     roi_anualizado: roi,
     _hp: hp,
   };
+
   try {
-    await fetch(SOMNIUM_API + '/api/webhook/landing-lead', {
+    const r = await fetch(SOMNIUM_API + '/api/webhook/landing-lead', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-      keepalive: true,
     });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    document.getElementById('formBody').style.display = 'none';
+    document.getElementById('formOk').style.display   = 'block';
   } catch (e) {
-    console.warn('[landing] erro a enviar para CRM, prosseguindo com WhatsApp', e);
+    console.error('[landing] erro a enviar candidatura:', e);
+    if (btn) { btn.disabled = false; btn.innerHTML = 'Tentar novamente'; }
+    alert('Não conseguimos enviar a sua candidatura. Por favor tente novamente daqui a alguns minutos ou contacte-nos directamente pelo WhatsApp.');
   }
-
-  // Abrir WhatsApp e mostrar confirmação
-  window.open('https://wa.me/351930642708?text=' + encodeURIComponent(lines), '_blank');
-  document.getElementById('formBody').style.display = 'none';
-  document.getElementById('formOk').style.display   = 'block';
 }
 </script>
 </body>
