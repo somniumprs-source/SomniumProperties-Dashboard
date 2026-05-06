@@ -321,6 +321,21 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
 .num-d{font-size:12px;color:var(--soft);margin-top:6px;line-height:1.5}
 .num-foot{font-size:11.5px;color:var(--soft);margin-top:18px;text-align:center;line-height:1.6}
 
+/* PROJETO EM CURSO */
+.proj-wrap{display:grid;grid-template-columns:1fr 1.05fr;gap:48px;align-items:center}
+.proj-images{display:grid;grid-template-columns:1fr;gap:14px}
+.proj-img{position:relative;border-radius:10px;overflow:hidden;background:var(--bg-warm);box-shadow:0 1px 2px rgba(0,0,0,.04),0 12px 32px rgba(13,13,13,.08);height:240px}
+.proj-img img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .6s ease}
+.proj-img:hover img{transform:scale(1.03)}
+.proj-img-fallback{display:flex;align-items:center;justify-content:center}
+.proj-img-fallback::before{content:'Foto do projeto · guardar em assets/landing/';position:absolute;color:var(--muted);font-size:12px;text-align:center;padding:20px;letter-spacing:.05em;font-family:var(--sans)}
+.proj-img-fallback img{display:none}
+.proj-img-tag{position:absolute;bottom:12px;left:12px;background:rgba(13,13,13,.85);color:var(--gold);padding:6px 12px;border-radius:99px;font-size:10.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;backdrop-filter:blur(6px)}
+.proj-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.proj-meta-item{background:var(--bg-2);padding:14px 12px;text-align:center}
+.proj-meta-l{font-size:9.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.proj-meta-v{font-size:13.5px;font-weight:600;color:var(--dark)}
+
 /* GUARANTEES */
 .guar-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px}
 .guar-card{background:var(--bg-2);border:1px solid var(--line);padding:22px 24px;border-radius:8px;display:flex;gap:16px;align-items:flex-start;transition:all .2s}
@@ -365,6 +380,8 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
   .why-side{position:static}
   .stack-wrap{grid-template-columns:1fr;gap:36px}
   .stack-side{position:static}
+  .proj-wrap{grid-template-columns:1fr;gap:36px}
+  .proj-images{grid-template-columns:1fr 1fr}
   .numbers-grid{grid-template-columns:repeat(2,1fr)}
   .comp-row{grid-template-columns:1.2fr 1fr 1fr;font-size:12px}
   .comp-cell:nth-child(2),.comp-cell:nth-child(3){display:none}
@@ -392,6 +409,8 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
   .guar-grid{grid-template-columns:1fr}
   .stack-card{padding:28px}
   .stack-card-num{font-size:46px}
+  .proj-images{grid-template-columns:1fr}
+  .proj-meta{grid-template-columns:repeat(2,1fr)}
 }
 @media(max-width:540px){
   .proc-grid{grid-template-columns:1fr}
@@ -981,7 +1000,7 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
           <div class="stat-box"><div class="stat-v">12–18%</div><div class="stat-l">TIR-alvo*</div></div>
           <div class="stat-box"><div class="stat-v">12–18m</div><div class="stat-l">Prazo típico</div></div>
           <div class="stat-box"><div class="stat-v">25 K€</div><div class="stat-l">Ticket mínimo</div></div>
-          <div class="stat-box"><div class="stat-v">Coimbra</div><div class="stat-l">Foco geográfico</div></div>
+          <div class="stat-box"><div class="stat-v">20%</div><div class="stat-l">ROI alvo (projeto actual)</div></div>
         </div>
         <p class="stats-disclaim">*Retorno-alvo por projeto, definido em contrato CAEP. Investimento sujeito a risco de mercado. Resultados passados não garantem resultados futuros.</p>
       </div>
@@ -993,32 +1012,77 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
 <section class="sec-warm">
   <div class="sec-warm-wrap">
     <div class="sec-hdr" style="margin:0 auto 32px;text-align:center;max-width:600px">
-      <span class="sec-eye" style="margin-left:auto;margin-right:auto">Números a confirmar com dados reais</span>
-      <h2 class="sec-title">A operação <em>em números.</em></h2>
+      <span class="sec-eye" style="margin-left:auto;margin-right:auto">A operação em números</span>
+      <h2 class="sec-title">Onde estamos <em>hoje.</em></h2>
     </div>
     <div class="numbers-grid">
       <div class="num-card">
-        <div class="num-v">[X]</div>
-        <div class="num-l">Projetos concluídos</div>
-        <div class="num-d">Desde a fundação</div>
+        <div class="num-v">1</div>
+        <div class="num-l">Projeto em curso</div>
+        <div class="num-d">Reabilitação · Coimbra</div>
       </div>
       <div class="num-card">
-        <div class="num-v">[Y]</div>
-        <div class="num-l">Investidores actuais</div>
-        <div class="num-d">Parcerias activas</div>
+        <div class="num-v">20%</div>
+        <div class="num-l">ROI alvo</div>
+        <div class="num-d">Cenário base contratual</div>
       </div>
       <div class="num-card">
-        <div class="num-v">[Z] M€</div>
+        <div class="num-v">3</div>
+        <div class="num-l">Vagas próx. trimestre</div>
+        <div class="num-d">Captação aberta</div>
+      </div>
+      <div class="num-card">
+        <div class="num-v" style="font-size:24px;letter-spacing:.04em">Sob NDA</div>
         <div class="num-l">Capital movimentado</div>
-        <div class="num-d">Em projetos sob gestão</div>
-      </div>
-      <div class="num-card">
-        <div class="num-v">[W]%</div>
-        <div class="num-l">TIR média realizada</div>
-        <div class="num-d">Projetos fechados</div>
+        <div class="num-d">Disponível em reunião</div>
       </div>
     </div>
-    <p class="num-foot">Dados auditados internamente. Disponíveis em detalhe na primeira reunião, sob NDA.</p>
+    <p class="num-foot">Estamos a iniciar a captação para o próximo projeto. Dados detalhados partilhados em reunião sob acordo de confidencialidade.</p>
+  </div>
+</section>
+
+<!-- PROJETO EM CURSO · FOTOS -->
+<section class="sec">
+  <div class="proj-wrap">
+    <div class="proj-images">
+      <div class="proj-img">
+        <img src="assets/landing/projeto-1-img1.jpg" alt="Projeto Somnium em curso · Sala em fase de demolição interior" loading="lazy" onerror="this.parentElement.classList.add('proj-img-fallback')" />
+        <div class="proj-img-tag">Em curso · Fase 1</div>
+      </div>
+      <div class="proj-img">
+        <img src="assets/landing/projeto-1-img2.jpg" alt="Projeto Somnium em curso · Demolição em curso pela equipa de obra" loading="lazy" onerror="this.parentElement.classList.add('proj-img-fallback')" />
+        <div class="proj-img-tag">Equipa em obra</div>
+      </div>
+    </div>
+
+    <div class="proj-copy">
+      <span class="sec-eye">Projeto actual</span>
+      <h2 class="sec-title" style="margin-bottom:16px">O nosso primeiro projeto<br>está <em>em obra.</em></h2>
+      <p style="font-size:14.5px;color:var(--muted);line-height:1.75;margin-bottom:14px">
+        Reabilitação integral de imóvel em Coimbra. Demolição interior em curso, seguida de reconfiguração de espaços, instalações novas e acabamentos. <strong style="color:var(--dark)">Exit por venda em 12-18 meses</strong>, conforme contrato CAEP.
+      </p>
+      <p style="font-size:14.5px;color:var(--muted);line-height:1.75;margin-bottom:24px">
+        A captação para o próximo projeto está aberta. Em reunião partilhamos os números detalhados deste projeto sob NDA, e os critérios técnicos do próximo.
+      </p>
+      <div class="proj-meta">
+        <div class="proj-meta-item">
+          <div class="proj-meta-l">Localização</div>
+          <div class="proj-meta-v">Coimbra</div>
+        </div>
+        <div class="proj-meta-item">
+          <div class="proj-meta-l">Modelo</div>
+          <div class="proj-meta-v">CAEP</div>
+        </div>
+        <div class="proj-meta-item">
+          <div class="proj-meta-l">Prazo</div>
+          <div class="proj-meta-v">12-18 meses</div>
+        </div>
+        <div class="proj-meta-item">
+          <div class="proj-meta-l">Estado</div>
+          <div class="proj-meta-v" style="color:var(--warn)">Demolição</div>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -1136,9 +1200,9 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
 
 <!-- SCARCITY STRIP -->
 <section class="scarcity-strip">
-  <div class="scarcity-pulse">Vagas limitadas</div>
+  <div class="scarcity-pulse">3 vagas para o próximo trimestre</div>
   <div class="scarcity-text">
-    Aceitamos um número limitado de novos parceiros por trimestre, para garantir <strong>profundidade no acompanhamento</strong> de cada projeto.
+    Aceitamos no máximo <strong>3 parceiros por trimestre</strong>, para garantir profundidade no acompanhamento de cada projeto.
   </div>
 </section>
 
