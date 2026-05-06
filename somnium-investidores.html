@@ -270,6 +270,21 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
 .ft-legal{font-size:11.5px;color:var(--muted);line-height:1.6;max-width:560px;text-align:right}
 .ft-legal strong{color:var(--text)}
 
+/* WHATSAPP FLOATING BUTTON */
+.wa-fab{position:fixed;bottom:24px;right:24px;z-index:200;display:flex;align-items:center;gap:0;background:#25D366;color:#fff;border-radius:99px;padding:14px;text-decoration:none;box-shadow:0 6px 20px rgba(37,211,102,.35),0 2px 6px rgba(0,0,0,.12);transition:all .25s ease;overflow:hidden;max-width:56px}
+.wa-fab:hover{background:#1ebe57;max-width:240px;padding:14px 20px 14px 14px;box-shadow:0 10px 28px rgba(37,211,102,.45),0 4px 10px rgba(0,0,0,.18)}
+.wa-fab svg{flex-shrink:0;width:28px;height:28px}
+.wa-fab-text{font-size:13.5px;font-weight:600;white-space:nowrap;margin-left:0;opacity:0;transform:translateX(-8px);transition:opacity .2s ease,transform .25s ease,margin-left .25s ease}
+.wa-fab:hover .wa-fab-text{opacity:1;transform:translateX(0);margin-left:10px}
+.wa-fab::before{content:'';position:absolute;inset:0;border-radius:99px;box-shadow:0 0 0 0 rgba(37,211,102,.5);animation:waPulse 2.4s ease-out infinite;pointer-events:none}
+@keyframes waPulse{0%{box-shadow:0 0 0 0 rgba(37,211,102,.45)}70%{box-shadow:0 0 0 18px rgba(37,211,102,0)}100%{box-shadow:0 0 0 0 rgba(37,211,102,0)}}
+@media(max-width:540px){
+  .wa-fab{bottom:18px;right:18px;padding:12px}
+  .wa-fab svg{width:24px;height:24px}
+  .wa-fab:hover{max-width:56px;padding:12px}
+  .wa-fab-text{display:none}
+}
+
 /* RESPONSIVE */
 @media(max-width:1024px){
   .dash-wrap{grid-template-columns:1fr;gap:42px}
@@ -449,7 +464,7 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
 
       <div class="wa-fallback">
         <p>Prefere contactar diretamente?</p>
-        <a href="https://wa.me/351XXXXXXXXX" target="_blank" rel="noopener" class="wa-link">
+        <a href="https://wa.me/351930642708" target="_blank" rel="noopener" class="wa-link">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a5 5 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.122.55 4.116 1.513 5.849L0 24l6.335-1.497A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.8 9.8 0 0 1-5.003-1.367l-.356-.213-3.76.888.918-3.669-.233-.376A9.78 9.78 0 0 1 2.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/></svg>
           Falar no WhatsApp
         </a>
@@ -796,7 +811,7 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
       Preencher o formulário
       <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 10h10M11 6l4 4-4 4"/></svg>
     </a>
-    <a href="https://wa.me/351XXXXXXXXX?text=Ol%C3%A1%2C%20tenho%20interesse%20em%20investir%20com%20a%20Somnium%20Properties." target="_blank" rel="noopener" class="btn-cta2">
+    <a href="https://wa.me/351930642708?text=Ol%C3%A1%2C%20tenho%20interesse%20em%20investir%20com%20a%20Somnium%20Properties." target="_blank" rel="noopener" class="btn-cta2">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a5 5 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.122.55 4.116 1.513 5.849L0 24l6.335-1.497A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.8 9.8 0 0 1-5.003-1.367l-.356-.213-3.76.888.918-3.669-.233-.376A9.78 9.78 0 0 1 2.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/></svg>
       Falar no WhatsApp
     </a>
@@ -817,6 +832,12 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
     Esta página tem caráter informativo. Os valores apresentados são referenciais e não constituem oferta de produto financeiro regulado.
   </div>
 </footer>
+
+<!-- WHATSAPP FAB -->
+<a class="wa-fab" href="https://wa.me/351930642708?text=Ol%C3%A1%2C%20tenho%20interesse%20em%20investir%20com%20a%20Somnium%20Properties." target="_blank" rel="noopener" aria-label="Falar no WhatsApp">
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a5 5 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.122.55 4.116 1.513 5.849L0 24l6.335-1.497A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.8 9.8 0 0 1-5.003-1.367l-.356-.213-3.76.888.918-3.669-.233-.376A9.78 9.78 0 0 1 2.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/></svg>
+  <span class="wa-fab-text">Fale connosco</span>
+</a>
 
 <script>
 const sel = {};
@@ -910,7 +931,7 @@ function submitForm() {
     `*ROI anualizado pretendido:* ${roi || '-'}`,
   ].filter(Boolean).join('\n');
 
-  window.open('https://wa.me/351XXXXXXXXX?text=' + encodeURIComponent(lines), '_blank');
+  window.open('https://wa.me/351930642708?text=' + encodeURIComponent(lines), '_blank');
   document.getElementById('formBody').style.display = 'none';
   document.getElementById('formOk').style.display   = 'block';
 }
