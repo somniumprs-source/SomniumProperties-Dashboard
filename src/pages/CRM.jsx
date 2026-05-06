@@ -710,7 +710,7 @@ export function CRM() {
       },
     },
     'Investidores': {
-      columns: ['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor em espera','Investidor em parceria'],
+      columns: ['Pendente de Aprovação','Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor em espera','Investidor em parceria'],
       groupField: 'status',
       renderCard: (item) => {
         const tipo = item.tipo_principal || 'Passivo'

@@ -82,6 +82,133 @@ try {
   // (Roles continuam como labels na tabela users, mas sem enforcement no backend.)
   console.log('[users] Camadas de acesso activas')
 
+  // ── Landing Page Webhook · Captura de leads de investidores ─
+  {
+    const { Investidores } = await import('./src/db/crud.js')
+    const { default: pgPool } = await import('./src/db/pg.js')
+    const { sendEmail } = await import('./src/db/emailService.js')
+
+    // Anti-spam: 5 submissões por IP/hora
+    const landingRateLimit = rateLimit({
+      windowMs: 60 * 60 * 1000,
+      max: 5,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: { ok: false, error: 'Demasiadas submissões. Tente mais tarde.' },
+    })
+
+    app.post('/api/webhook/landing-lead', landingRateLimit, async (req, res) => {
+      try {
+        const body = req.body || {}
+        // Honeypot: se o campo "_hp" vier preenchido, descarta silenciosamente
+        if (body._hp) return res.json({ ok: true, action: 'ignored' })
+
+        const nome = (body.nome || '').trim()
+        const email = (body.email || '').trim()
+        const telemovel = (body.telemovel || '').trim()
+        if (!nome || !email) {
+          return res.status(400).json({ ok: false, error: 'Nome e email são obrigatórios' })
+        }
+
+        const parseNum = (v) => {
+          if (v == null) return null
+          const n = parseFloat(String(v).replace(/[^\d.,]/g, '').replace(',', '.'))
+          return isNaN(n) ? null : n
+        }
+        const capitalNum = parseNum(body.capital)
+        const retornoNum = parseNum(body.retorno_total)
+        const roiNum     = parseNum(body.roi_anualizado)
+
+        const today = new Date().toISOString().slice(0, 10)
+        const submissaoNotas = [
+          `Submissão Landing Page · ${new Date().toLocaleString('pt-PT')}`,
+          `Experiência: ${body.experiencia || '-'}`,
+          `Empreiteiro disponível: ${body.empreiteiro || '-'}`,
+          `Retorno total pretendido: ${body.retorno_total || '-'}`,
+          `ROI anualizado pretendido: ${body.roi_anualizado || '-'}`,
+        ].join('\n')
+
+        let action = 'created'
+        let investidorId = null
+
+        // Match por telemóvel (apenas se fornecido)
+        if (telemovel) {
+          const { rows } = await pgPool.query(
+            'SELECT id, status, notas FROM investidores WHERE telemovel = $1 LIMIT 1',
+            [telemovel]
+          )
+          if (rows.length > 0) {
+            action = 'updated'
+            investidorId = rows[0].id
+            const existingNotas = rows[0].notas || ''
+            const novasNotas = existingNotas
+              ? `${existingNotas}\n\n--- Nova submissão Landing Page ---\n${submissaoNotas}`
+              : submissaoNotas
+            await Investidores.update(rows[0].id, {
+              nome,
+              email,
+              capital_min: capitalNum,
+              capital_max: capitalNum,
+              roi_investidor: retornoNum,
+              roi_anualizado_investidor: roiNum,
+              origem: 'Landing Page',
+              status: rows[0].status, // mantém status existente
+              notas: novasNotas,
+              data_ultimo_contacto: today,
+            })
+          }
+        }
+
+        if (action === 'created') {
+          const created = await Investidores.create({
+            nome,
+            email,
+            telemovel: telemovel || null,
+            status: 'Pendente de Aprovação',
+            origem: 'Landing Page',
+            capital_min: capitalNum,
+            capital_max: capitalNum,
+            roi_investidor: retornoNum,
+            roi_anualizado_investidor: roiNum,
+            notas: submissaoNotas,
+            data_ultimo_contacto: today,
+          })
+          investidorId = created.id
+        }
+
+        // Email de notificação para somniumprs@gmail.com
+        const emailHtml = `
+          <div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;color:#1a1a1a;">
+            <div style="border-top:3px solid #C9A84C;padding-top:18px;margin-bottom:18px;">
+              <h2 style="margin:0 0 4px;font-size:20px;font-weight:600;">Nova candidatura</h2>
+              <p style="margin:0;color:#888;font-size:13px;">Landing Page · Investidores</p>
+            </div>
+            <p style="font-size:14px;color:#444;margin-bottom:18px;">${action === 'created' ? '<strong>Novo lead criado</strong> no CRM com status <em>Pendente de Aprovação</em>.' : '<strong>Lead existente actualizado</strong> (match por telemóvel).'}</p>
+            <table style="border-collapse:collapse;font-size:14px;width:100%;">
+              <tr><td style="padding:8px 14px 8px 0;color:#888;width:160px;">Nome</td><td style="font-weight:600;">${nome}</td></tr>
+              <tr><td style="padding:8px 14px 8px 0;color:#888;">Email</td><td>${email}</td></tr>
+              <tr><td style="padding:8px 14px 8px 0;color:#888;">Telemóvel</td><td>${telemovel || '-'}</td></tr>
+              <tr><td style="padding:8px 14px 8px 0;color:#888;">Experiência</td><td>${body.experiencia || '-'}</td></tr>
+              <tr><td style="padding:8px 14px 8px 0;color:#888;">Capital disponível</td><td>${body.capital || '-'}</td></tr>
+              <tr><td style="padding:8px 14px 8px 0;color:#888;">Empreiteiro disponível</td><td>${body.empreiteiro || '-'}</td></tr>
+              <tr><td style="padding:8px 14px 8px 0;color:#888;">Retorno total pretendido</td><td>${body.retorno_total || '-'}</td></tr>
+              <tr><td style="padding:8px 14px 8px 0;color:#888;">ROI anualizado pretendido</td><td>${body.roi_anualizado || '-'}</td></tr>
+            </table>
+            <hr style="margin:24px 0;border:0;border-top:1px solid #eee;">
+            <p style="font-size:12px;color:#999;margin:0;">Submissão automática via formulário da landing page Somnium Properties.<br>Acesso ao CRM: <a href="https://somniumproperties-dashboard.onrender.com" style="color:#C9A84C;">Dashboard</a></p>
+          </div>
+        `
+        sendEmail(`Somnium · Nova candidatura: ${nome}`, emailHtml).catch(e => console.error('[landing-lead] erro email:', e.message))
+
+        res.json({ ok: true, action, id: investidorId })
+      } catch (e) {
+        console.error('[landing-lead] erro:', e)
+        res.status(500).json({ ok: false, error: 'Erro ao processar pedido' })
+      }
+    })
+    console.log('[crm] Webhook landing-lead montado em POST /api/webhook/landing-lead')
+  }
+
   // ── WhatsApp Webhook (Twilio) ───────────────────────────────
   try {
     const { receiveWhatsAppMessage, isConfigured: waConfigured } = await import('./src/db/whatsappAgent.js')
@@ -4621,8 +4748,25 @@ app.get('/api/alertas', async (req, res) => {
     const now = new Date()
     const alerts = []
 
+    // ── Investidores Pendentes de Aprovação (qualquer momento, sempre que existirem) ──
+    for (const inv of investidores) {
+      if (inv.status !== 'Pendente de Aprovação') continue
+      const created = inv.created_at ? new Date(inv.created_at) : null
+      const horas = created ? Math.floor((now - created) / 3600000) : null
+      const tempoLabel = horas == null ? '' : horas < 1 ? 'agora' : horas < 24 ? `há ${horas}h` : `há ${Math.floor(horas/24)}d`
+      alerts.push({
+        tipo: 'pendente_aprovacao',
+        severidade: horas == null ? 'aviso' : horas > 48 ? 'critico' : 'aviso',
+        entidade: inv.nome,
+        mensagem: `Investidor pendente de aprovação${tempoLabel ? ' · entrou ' + tempoLabel : ''}`,
+        status: inv.status,
+        id: inv.id,
+      })
+    }
+
     // ── Investidores sem contacto >7 dias ──
     for (const inv of investidores) {
+      if (inv.status === 'Pendente de Aprovação') continue
       const diasSem = inv.diasSemContacto ?? (() => {
         const ultima = inv.dataUltimoContacto ?? inv.dataReuniao ?? inv.dataPrimeiroContacto
         if (!ultima) return null

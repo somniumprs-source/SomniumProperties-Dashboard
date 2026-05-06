@@ -513,6 +513,7 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
             <span class="fcheck-box"></span>
             <span class="fcheck-text">Autorizo a Somnium Properties a contactar-me e a tratar os meus dados, conforme a <a href="#" onclick="event.preventDefault()">política de privacidade</a>.</span>
           </label>
+          <input type="text" id="f_hp" name="_hp" autocomplete="off" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px;top:-9999px;opacity:0;height:0;width:0" />
           <div class="fnav">
             <span></span>
             <button class="btn-next" onclick="goStep(1)">
@@ -1241,6 +1242,7 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
 </a>
 
 <script>
+const SOMNIUM_API = 'https://somniumproperties-dashboard.onrender.com';
 const sel = {};
 let cur = 0;
 
@@ -1304,7 +1306,7 @@ function goStep(n) {
   document.getElementById('formulario').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-function submitForm() {
+async function submitForm() {
   const nome    = document.getElementById('f_nome').value.trim();
   const email   = document.getElementById('f_email').value.trim();
   const tel     = document.getElementById('f_tel').value.trim();
@@ -1312,11 +1314,13 @@ function submitForm() {
   const cap     = document.getElementById('f_capital').value.trim();
   const retorno = document.getElementById('f_retorno').value.trim();
   const roi     = document.getElementById('f_roi').value.trim();
+  const hp      = document.getElementById('f_hp').value;
 
   if (!sel['p_equipa']) { shakePills('p_equipa'); return; }
   if (!retorno) { shake(document.getElementById('f_retorno')); document.getElementById('f_retorno').focus(); return; }
   if (!roi)     { shake(document.getElementById('f_roi')); document.getElementById('f_roi').focus(); return; }
 
+  // Preparar mensagem WhatsApp (usada como fallback / paralelo)
   const lines = [
     '*Somnium Properties · Nova Candidatura*',
     '',
@@ -1332,6 +1336,28 @@ function submitForm() {
     `*ROI anualizado pretendido:* ${roi || '-'}`,
   ].filter(Boolean).join('\n');
 
+  // Enviar para CRM (não bloqueia WhatsApp se falhar)
+  const payload = {
+    nome, email, telemovel: tel,
+    experiencia: exp,
+    capital: cap,
+    empreiteiro: sel['p_equipa'] || '',
+    retorno_total: retorno,
+    roi_anualizado: roi,
+    _hp: hp,
+  };
+  try {
+    await fetch(SOMNIUM_API + '/api/webhook/landing-lead', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    });
+  } catch (e) {
+    console.warn('[landing] erro a enviar para CRM, prosseguindo com WhatsApp', e);
+  }
+
+  // Abrir WhatsApp e mostrar confirmação
   window.open('https://wa.me/351930642708?text=' + encodeURIComponent(lines), '_blank');
   document.getElementById('formBody').style.display = 'none';
   document.getElementById('formOk').style.display   = 'block';

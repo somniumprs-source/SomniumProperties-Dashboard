@@ -1082,9 +1082,9 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
               {editing ? <>
                 <EF label="Nome" field="nome" form={form} set={setField} />
                 <EF label="Tipo" field="tipo_principal" form={form} set={setField} type="select" options={['Passivo','Ativo']} />
-                <EF label="Status" field="status" form={form} set={setField} type="select" options={['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor em espera','Investidor em parceria']} />
+                <EF label="Status" field="status" form={form} set={setField} type="select" options={['Pendente de Aprovação','Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor em espera','Investidor em parceria']} />
                 <EF label="Classificação" field="classificacao" form={form} set={setField} type="select" options={['A','B','C','D']} />
-                <EF label="Origem" field="origem" form={form} set={setField} type="select" options={['Skool','Grupos Whatsapp','Referenciação','LinkedIn','Google Forms','Outro']} />
+                <EF label="Origem" field="origem" form={form} set={setField} type="select" options={['Landing Page','Skool','Grupos Whatsapp','Referenciação','LinkedIn','Google Forms','Outro']} />
                 <EF label="Capital Min (€)" field="capital_min" form={form} set={setField} type="number" />
                 <EF label="Capital Max (€)" field="capital_max" form={form} set={setField} type="number" />
                 <EF label="Telemóvel" field="telemovel" form={form} set={setField} />
