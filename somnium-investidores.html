@@ -371,30 +371,19 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
           <div class="step-dot" id="d2"></div>
         </div>
 
-        <!-- PASSO 1 -->
+        <!-- PASSO 1 · Identificação -->
         <div class="fstep active" id="fs0">
-          <div class="frow">
-            <div class="fgroup">
-              <label class="flabel" for="f_nome">Nome completo</label>
-              <input class="finput" id="f_nome" type="text" placeholder="O seu nome" autocomplete="name" />
-            </div>
-            <div class="fgroup">
-              <label class="flabel" for="f_tel">Telemóvel / WhatsApp</label>
-              <input class="finput" id="f_tel" type="tel" placeholder="+351 9XX XXX XXX" autocomplete="tel" />
-            </div>
+          <div class="fgroup">
+            <label class="flabel" for="f_nome">Nome <span style="color:var(--danger)">*</span></label>
+            <input class="finput" id="f_nome" type="text" placeholder="O seu nome" autocomplete="name" />
           </div>
           <div class="fgroup">
-            <label class="flabel" for="f_email">Email (opcional)</label>
+            <label class="flabel" for="f_email">Email <span style="color:var(--danger)">*</span></label>
             <input class="finput" id="f_email" type="email" placeholder="email@exemplo.com" autocomplete="email" />
           </div>
           <div class="fgroup">
-            <label class="flabel">Qual é o seu perfil?</label>
-            <div class="fpills" id="p_perfil">
-              <button type="button" class="fpill" data-v="Residente em Portugal">Residente em Portugal</button>
-              <button type="button" class="fpill" data-v="Emigrante / não-residente">Emigrante</button>
-              <button type="button" class="fpill" data-v="Investidor profissional">Profissional</button>
-              <button type="button" class="fpill" data-v="Outro">Outro</button>
-            </div>
+            <label class="flabel" for="f_tel">Telemóvel</label>
+            <input class="finput" id="f_tel" type="tel" placeholder="+351 9XX XXX XXX" autocomplete="tel" />
           </div>
           <label class="fcheck">
             <input type="checkbox" id="f_rgpd" />
@@ -410,36 +399,22 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
           </div>
         </div>
 
-        <!-- PASSO 2 -->
+        <!-- PASSO 2 · Perfil de atuação -->
         <div class="fstep" id="fs1">
           <div class="fgroup">
-            <label class="flabel" for="f_capital">Capital disponível</label>
-            <select class="fselect" id="f_capital">
-              <option value="">Selecionar intervalo</option>
-              <option value="25k–50k">25 000 € a 50 000 €</option>
-              <option value="50k–100k">50 000 € a 100 000 €</option>
-              <option value="100k–200k">100 000 € a 200 000 €</option>
-              <option value="200k–500k">200 000 € a 500 000 €</option>
-              <option value="500k+">Mais de 500 000 €</option>
-            </select>
-          </div>
-          <div class="fgroup">
-            <label class="flabel">Prazo de disponibilidade</label>
-            <div class="fpills" id="p_prazo">
-              <button type="button" class="fpill" data-v="Disponível agora">Agora</button>
-              <button type="button" class="fpill" data-v="1 a 3 meses">1 a 3 meses</button>
-              <button type="button" class="fpill" data-v="3 a 6 meses">3 a 6 meses</button>
-              <button type="button" class="fpill" data-v="Mais de 6 meses">+ 6 meses</button>
+            <label class="flabel">Zona de atuação <span style="color:var(--danger)">*</span></label>
+            <div class="fpills" id="p_zona">
+              <button type="button" class="fpill" data-v="Coimbra">Coimbra</button>
+              <button type="button" class="fpill" data-v="Vila Nova de Gaia">Vila Nova de Gaia</button>
             </div>
           </div>
           <div class="fgroup">
-            <label class="flabel" for="f_caep">Conhece o modelo CAEP?</label>
-            <select class="fselect" id="f_caep">
-              <option value="">Selecionar</option>
-              <option value="Sim, em detalhe">Sim, conheço em detalhe</option>
-              <option value="Já ouvi falar">Já ouvi falar</option>
-              <option value="Não, gostaria de saber mais">Não, gostaria de saber mais</option>
-            </select>
+            <label class="flabel" for="f_exp">Experiência em investimentos imobiliários <span style="color:var(--danger)">*</span></label>
+            <input class="finput" id="f_exp" type="text" placeholder="Ex.: 2 projetos concluídos, ou nenhuma" />
+          </div>
+          <div class="fgroup">
+            <label class="flabel" for="f_capital">Capital disponível <span style="color:var(--danger)">*</span></label>
+            <input class="finput" id="f_capital" type="text" placeholder="Ex.: 75 000 €" inputmode="numeric" />
           </div>
           <div class="fnav">
             <button class="btn-back" onclick="goStep(0)">Voltar</button>
@@ -450,30 +425,24 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
           </div>
         </div>
 
-        <!-- PASSO 3 -->
+        <!-- PASSO 3 · Objetivos -->
         <div class="fstep" id="fs2">
           <div class="fgroup">
-            <label class="flabel">O que procura com este investimento?</label>
-            <div class="fpills" id="p_motiv" style="margin-bottom:10px">
-              <button type="button" class="fpill" data-v="Rentabilizar capital parado">Rentabilizar capital</button>
-              <button type="button" class="fpill" data-v="Alternativa a depósitos a prazo">Alternativa a depósitos</button>
-              <button type="button" class="fpill" data-v="Diversificar carteira">Diversificar carteira</button>
-              <button type="button" class="fpill" data-v="Rendimento recorrente">Rendimento recorrente</button>
-              <button type="button" class="fpill" data-v="Outro">Outro</button>
+            <label class="flabel">Equipa de obras / Empreiteiro disponível <span style="color:var(--danger)">*</span></label>
+            <div class="fpills" id="p_equipa">
+              <button type="button" class="fpill" data-v="Sim">Sim</button>
+              <button type="button" class="fpill" data-v="Não">Não</button>
             </div>
-            <textarea class="ftextarea" id="f_motiv" placeholder="Pode detalhar (opcional)…"></textarea>
           </div>
-          <div class="fgroup">
-            <label class="flabel" for="f_origem">Como nos conheceu? (opcional)</label>
-            <select class="fselect" id="f_origem">
-              <option value="">Selecionar</option>
-              <option value="Recomendação">Recomendação</option>
-              <option value="Instagram">Instagram</option>
-              <option value="LinkedIn">LinkedIn</option>
-              <option value="Google">Pesquisa Google</option>
-              <option value="Evento">Evento ou apresentação</option>
-              <option value="Outro">Outro</option>
-            </select>
+          <div class="frow">
+            <div class="fgroup">
+              <label class="flabel" for="f_retorno">Retorno total pretendido (%) <span style="color:var(--danger)">*</span></label>
+              <input class="finput" id="f_retorno" type="text" placeholder="Ex.: 25%" inputmode="decimal" />
+            </div>
+            <div class="fgroup">
+              <label class="flabel" for="f_roi">ROI anualizado pretendido (%) <span style="color:var(--danger)">*</span></label>
+              <input class="finput" id="f_roi" type="text" placeholder="Ex.: 15%" inputmode="decimal" />
+            </div>
           </div>
           <div class="fnav">
             <button class="btn-back" onclick="goStep(1)">Voltar</button>
@@ -884,13 +853,22 @@ function shake(el) {
   setTimeout(() => { el.style.borderColor = orig; el.style.boxShadow = ''; }, 1500);
 }
 
+function shakePills(id) {
+  const g = document.getElementById(id);
+  if (!g) return;
+  g.style.transition = 'transform .08s';
+  g.style.transform = 'translateX(-4px)';
+  setTimeout(() => { g.style.transform = 'translateX(4px)'; }, 80);
+  setTimeout(() => { g.style.transform = ''; }, 160);
+}
+
 function goStep(n) {
   if (n === 1) {
-    const nome = document.getElementById('f_nome');
-    const tel  = document.getElementById('f_tel');
-    const rgpd = document.getElementById('f_rgpd');
-    if (!nome.value.trim()) { shake(nome); nome.focus(); return; }
-    if (!tel.value.trim())  { shake(tel); tel.focus(); return; }
+    const nome  = document.getElementById('f_nome');
+    const email = document.getElementById('f_email');
+    const rgpd  = document.getElementById('f_rgpd');
+    if (!nome.value.trim())  { shake(nome); nome.focus(); return; }
+    if (!email.value.trim()) { shake(email); email.focus(); return; }
     if (!rgpd.checked) {
       const box = rgpd.nextElementSibling;
       box.style.borderColor = 'var(--danger)';
@@ -898,6 +876,11 @@ function goStep(n) {
       setTimeout(() => { box.style.borderColor = ''; box.style.boxShadow = ''; }, 1500);
       return;
     }
+  }
+  if (n === 2) {
+    if (!sel['p_zona'])                                   { shakePills('p_zona'); return; }
+    if (!document.getElementById('f_exp').value.trim())   { shake(document.getElementById('f_exp')); document.getElementById('f_exp').focus(); return; }
+    if (!document.getElementById('f_capital').value.trim()){ shake(document.getElementById('f_capital')); document.getElementById('f_capital').focus(); return; }
   }
   document.getElementById('fs' + cur).classList.remove('active');
   cur = n;
@@ -907,28 +890,32 @@ function goStep(n) {
 }
 
 function submitForm() {
-  const nome   = document.getElementById('f_nome').value.trim();
-  const tel    = document.getElementById('f_tel').value.trim();
-  const email  = document.getElementById('f_email').value.trim();
-  const cap    = document.getElementById('f_capital').value;
-  const caep   = document.getElementById('f_caep').value;
-  const mot    = document.getElementById('f_motiv').value.trim();
-  const origem = document.getElementById('f_origem').value;
+  const nome    = document.getElementById('f_nome').value.trim();
+  const email   = document.getElementById('f_email').value.trim();
+  const tel     = document.getElementById('f_tel').value.trim();
+  const exp     = document.getElementById('f_exp').value.trim();
+  const cap     = document.getElementById('f_capital').value.trim();
+  const retorno = document.getElementById('f_retorno').value.trim();
+  const roi     = document.getElementById('f_roi').value.trim();
+
+  if (!sel['p_equipa']) { shakePills('p_equipa'); return; }
+  if (!retorno) { shake(document.getElementById('f_retorno')); document.getElementById('f_retorno').focus(); return; }
+  if (!roi)     { shake(document.getElementById('f_roi')); document.getElementById('f_roi').focus(); return; }
 
   const lines = [
     '*Somnium Properties · Nova Candidatura*',
     '',
     `*Nome:* ${nome || '-'}`,
-    `*Telemóvel:* ${tel || '-'}`,
-    email  ? `*Email:* ${email}` : null,
-    `*Perfil:* ${sel['p_perfil'] || '-'}`,
+    `*Email:* ${email || '-'}`,
+    tel ? `*Telemóvel:* ${tel}` : null,
     '',
-    `*Capital:* ${cap || '-'}`,
-    `*Prazo:* ${sel['p_prazo'] || '-'}`,
-    `*Conhecimento CAEP:* ${caep || '-'}`,
+    `*Zona de atuação:* ${sel['p_zona'] || '-'}`,
+    `*Experiência:* ${exp || '-'}`,
+    `*Capital disponível:* ${cap || '-'}`,
     '',
-    `*Motivação:* ${sel['p_motiv'] || '-'}${mot ? ' — ' + mot : ''}`,
-    origem ? `*Origem:* ${origem}` : null,
+    `*Equipa de obras / Empreiteiro:* ${sel['p_equipa'] || '-'}`,
+    `*Retorno total pretendido:* ${retorno || '-'}`,
+    `*ROI anualizado pretendido:* ${roi || '-'}`,
   ].filter(Boolean).join('\n');
 
   window.open('https://wa.me/351XXXXXXXXX?text=' + encodeURIComponent(lines), '_blank');
