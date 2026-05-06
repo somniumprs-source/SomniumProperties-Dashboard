@@ -270,6 +270,79 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
 .ft-legal{font-size:11.5px;color:var(--muted);line-height:1.6;max-width:560px;text-align:right}
 .ft-legal strong{color:var(--text)}
 
+/* TRUST STRIP */
+.trust-strip{padding:32px 56px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--bg-2)}
+.trust-strip-wrap{max-width:1280px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:32px;flex-wrap:wrap}
+.trust-strip-label{font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);flex-shrink:0}
+.trust-logos{display:flex;align-items:center;gap:36px;flex-wrap:wrap}
+.trust-logo{font-family:var(--serif);font-size:14px;font-weight:500;color:var(--soft);font-style:italic;letter-spacing:.04em;opacity:.7}
+
+/* COMPARISON TABLE */
+.comp-table{margin-top:8px;background:var(--bg-2);border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.comp-row{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1.2fr;gap:0;border-bottom:1px solid var(--line-soft)}
+.comp-row:last-child{border-bottom:none}
+.comp-row.head{background:var(--bg-warm)}
+.comp-cell{padding:16px 18px;font-size:13px;color:var(--text);display:flex;align-items:center;border-right:1px solid var(--line-soft)}
+.comp-cell:last-child{border-right:none}
+.comp-cell.lbl{font-weight:600;color:var(--dark)}
+.comp-cell.head{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.comp-cell.head.us{color:var(--gold);background:var(--gold-bg)}
+.comp-cell.us{background:rgba(201,168,76,.06);font-weight:600;color:var(--dark)}
+.comp-cell svg{flex-shrink:0;margin-right:6px}
+.comp-good{color:var(--ok)}
+.comp-mid{color:var(--warn)}
+.comp-bad{color:var(--danger)}
+
+/* VALUE STACK */
+.stack-wrap{display:grid;grid-template-columns:1fr 1.1fr;gap:48px;align-items:start}
+.stack-side{position:sticky;top:90px}
+.stack-card{background:var(--dark);color:#fff;padding:32px;border-radius:10px;text-align:center}
+.stack-card-eye{font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin-bottom:12px}
+.stack-card-title{font-family:var(--serif);font-size:26px;font-weight:500;color:#fff;margin-bottom:18px;line-height:1.25}
+.stack-card-em{font-style:italic;color:var(--gold)}
+.stack-card-divider{width:36px;height:1px;background:var(--gold);margin:0 auto 18px;opacity:.5}
+.stack-card-num{font-family:var(--serif);font-size:54px;font-weight:500;color:var(--gold);line-height:1;letter-spacing:-.02em}
+.stack-card-num small{display:block;font-size:11px;font-weight:500;color:rgba(255,255,255,.55);letter-spacing:.14em;text-transform:uppercase;margin-top:8px;font-style:normal;font-family:var(--sans)}
+.stack-card-foot{font-size:12px;color:rgba(255,255,255,.6);margin-top:18px;line-height:1.55}
+.stack-list{display:flex;flex-direction:column;gap:10px}
+.stack-item{display:flex;gap:14px;align-items:flex-start;padding:14px 18px;background:var(--bg-2);border:1px solid var(--line);border-radius:8px;transition:all .2s}
+.stack-item:hover{border-color:var(--gold);transform:translateX(2px)}
+.stack-check{flex-shrink:0;width:22px;height:22px;background:var(--gold-bg);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--gold);margin-top:1px}
+.stack-content{flex:1}
+.stack-t{font-size:14px;font-weight:600;color:var(--dark);margin-bottom:2px}
+.stack-d{font-size:12.5px;color:var(--muted);line-height:1.55}
+
+/* NUMBERS / SOCIAL PROOF */
+.numbers-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:8px}
+.num-card{background:var(--bg-2);border:1px solid var(--line);padding:28px 24px;border-radius:10px;text-align:center;transition:all .2s}
+.num-card:hover{border-color:var(--gold);transform:translateY(-2px)}
+.num-v{font-family:var(--serif);font-size:42px;font-weight:500;color:var(--gold);line-height:1;letter-spacing:-.015em}
+.num-l{font-size:11.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:8px}
+.num-d{font-size:12px;color:var(--soft);margin-top:6px;line-height:1.5}
+.num-foot{font-size:11.5px;color:var(--soft);margin-top:18px;text-align:center;line-height:1.6}
+
+/* GUARANTEES */
+.guar-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px}
+.guar-card{background:var(--bg-2);border:1px solid var(--line);padding:22px 24px;border-radius:8px;display:flex;gap:16px;align-items:flex-start;transition:all .2s}
+.guar-card:hover{border-color:var(--gold)}
+.guar-num{flex-shrink:0;width:36px;height:36px;background:var(--gold);color:var(--dark);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-weight:600;font-size:16px;font-style:italic}
+.guar-t{font-size:14px;font-weight:600;color:var(--dark);margin-bottom:5px;letter-spacing:-.005em}
+.guar-d{font-size:13px;color:var(--muted);line-height:1.55}
+
+/* SCARCITY STRIP */
+.scarcity-strip{background:var(--gold-bg);border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:20px 56px;display:flex;align-items:center;justify-content:center;gap:24px;flex-wrap:wrap;text-align:center}
+.scarcity-pulse{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--dark)}
+.scarcity-pulse::before{content:'';width:8px;height:8px;background:var(--gold);border-radius:50%;animation:scarcityPulse 1.8s ease-in-out infinite;box-shadow:0 0 0 0 rgba(201,168,76,.5)}
+@keyframes scarcityPulse{0%,100%{box-shadow:0 0 0 0 rgba(201,168,76,.5)}50%{box-shadow:0 0 0 6px rgba(201,168,76,0)}}
+.scarcity-text{font-size:13px;color:var(--text);max-width:540px}
+.scarcity-text strong{color:var(--dark);font-weight:600}
+
+/* QUOTE — fundadores foto */
+.why-sig-row{display:flex;align-items:center;gap:14px}
+.why-sig-avatars{display:flex}
+.why-sig-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--gold) 0%,var(--gold-light) 100%);color:var(--dark);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-weight:600;font-size:14px;border:2px solid var(--dark);flex-shrink:0}
+.why-sig-avatar+.why-sig-avatar{margin-left:-12px}
+
 /* WHATSAPP FLOATING BUTTON */
 .wa-fab{position:fixed;bottom:24px;right:24px;z-index:200;display:flex;align-items:center;gap:0;background:#25D366;color:#fff;border-radius:99px;padding:14px;text-decoration:none;box-shadow:0 6px 20px rgba(37,211,102,.35),0 2px 6px rgba(0,0,0,.12);transition:all .25s ease;overflow:hidden;max-width:56px}
 .wa-fab:hover{background:#1ebe57;max-width:240px;padding:14px 20px 14px 14px;box-shadow:0 10px 28px rgba(37,211,102,.45),0 4px 10px rgba(0,0,0,.18)}
@@ -290,6 +363,11 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
   .dash-wrap{grid-template-columns:1fr;gap:42px}
   .why-grid{grid-template-columns:1fr;gap:36px}
   .why-side{position:static}
+  .stack-wrap{grid-template-columns:1fr;gap:36px}
+  .stack-side{position:static}
+  .numbers-grid{grid-template-columns:repeat(2,1fr)}
+  .comp-row{grid-template-columns:1.2fr 1fr 1fr;font-size:12px}
+  .comp-cell:nth-child(2),.comp-cell:nth-child(3){display:none}
 }
 @media(max-width:960px){
   nav{padding:14px 22px}
@@ -308,12 +386,20 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
   .ft-legal{text-align:center}
   .form-card{padding:24px 20px}
   .frow{grid-template-columns:1fr}
+  .trust-strip{padding:24px 22px}
+  .trust-logos{gap:24px}
+  .scarcity-strip{padding:18px 22px;flex-direction:column;gap:10px}
+  .guar-grid{grid-template-columns:1fr}
+  .stack-card{padding:28px}
+  .stack-card-num{font-size:46px}
 }
 @media(max-width:540px){
   .proc-grid{grid-template-columns:1fr}
   .stats-grid{grid-template-columns:1fr 1fr}
   .mock-grid{grid-template-columns:1fr 1fr}
   .mock-hero-value{font-size:38px}
+  .numbers-grid{grid-template-columns:1fr 1fr}
+  .num-v{font-size:32px}
 }
 </style>
 </head>
@@ -328,33 +414,34 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
     </div>
   </a>
   <div class="nav-links">
-    <a href="#processo" class="nav-link">Processo</a>
-    <a href="#acompanhamento" class="nav-link">Acompanhamento</a>
     <a href="#modelos" class="nav-link">Modelos</a>
+    <a href="#acompanhamento" class="nav-link">Acompanhamento</a>
+    <a href="#processo" class="nav-link">Processo</a>
     <a href="#faq" class="nav-link">FAQ</a>
-    <a href="#formulario" class="nav-btn">Quero investir</a>
+    <a href="#formulario" class="nav-btn">Marcar reunião</a>
   </div>
 </nav>
 
 <!-- HERO -->
 <section class="hero" id="inicio">
   <div class="hero-left">
-    <span class="eyebrow">Região de Coimbra · Investimento com Método</span>
+    <span class="eyebrow">Região de Coimbra · Vagas Limitadas</span>
     <h1 class="hero-title">
-      Capital com método.<br>
-      Retorno com <em>contrato.</em>
+      Multiplique o seu capital em<br>
+      12-18 meses, sem gerir<br>
+      <em>uma só obra.</em>
     </h1>
     <p class="hero-body">
-      Investimos em imóveis na região de Coimbra com critérios técnicos definidos, contratos CAEP por projeto e gestão integral da operação. Se tem capital disponível e quer um retorno mensurável (sem gerir obras, sem burocracia) preencha o formulário e marcamos uma conversa.
+      Investimento imobiliário com retorno definido por contrato. Tickets a partir de <strong style="color:var(--dark)">25 000 €</strong>. Equipa, plataforma e gestão integral incluídas. Aceitamos um número limitado de parceiros por trimestre para garantir profundidade no acompanhamento.
     </p>
     <div class="trust-row">
       <div class="trust-item">
         <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 12l2 2 4-4"/><rect x="3" y="3" width="14" height="14" rx="2"/></svg>
-        Contrato por projeto
+        Contrato CAEP por projeto
       </div>
       <div class="trust-item">
         <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><path d="M10 6v4l3 2"/></svg>
-        Retorno definido à partida
+        TIR-alvo 12-18%
       </div>
       <div class="trust-item">
         <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 7h14M3 12h9"/><circle cx="16" cy="14" r="3"/></svg>
@@ -474,28 +561,95 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
   </div>
 </section>
 
-<!-- IDENTIFICAÇÃO -->
+<!-- TRUST STRIP -->
+<section class="trust-strip">
+  <div class="trust-strip-wrap">
+    <div class="trust-strip-label">Operação suportada por</div>
+    <div class="trust-logos">
+      <span class="trust-logo">Banco parceiro</span>
+      <span class="trust-logo">Sociedade de Advogados</span>
+      <span class="trust-logo">Contabilista Certificado</span>
+      <span class="trust-logo">Empresa de Construção</span>
+    </div>
+  </div>
+</section>
+
+<!-- IDENTIFICAÇÃO · 3 AVATARES ESPECÍFICOS -->
 <section class="sec-warm">
   <div class="sec-warm-wrap">
-    <div class="sec-hdr" style="margin:0 auto 32px;text-align:center;max-width:560px">
+    <div class="sec-hdr" style="margin:0 auto 32px;text-align:center;max-width:580px">
       <span class="sec-eye" style="margin-left:auto;margin-right:auto">Quem trabalha connosco</span>
       <h2 class="sec-title">Este modelo é para si <em>se…</em></h2>
     </div>
     <div class="id-grid">
       <div class="id-card">
-        <div class="id-n">01 / Capital parado</div>
-        <p class="id-txt">Tem poupanças em depósito a prazo e quer um retorno acima da inflação, com ativo subjacente real.</p>
+        <div class="id-n">01 / O profissional dos 50</div>
+        <p class="id-txt">Tem 100K-300K em depósitos a render abaixo da inflação. Quer entrar em imobiliário, mas a hipótese de gerir inquilinos a 200 km de casa é exactamente zero.</p>
       </div>
       <div class="id-card">
-        <div class="id-n">02 / Sem operacional</div>
-        <p class="id-txt">Quer entrar em imobiliário sem lidar com obras, inquilinos, fiscalidade ou decisões do dia-a-dia.</p>
+        <div class="id-n">02 / O emigrante</div>
+        <p class="id-txt">Está a viver fora e quer trazer capital para Portugal com retorno acima da bolsa. Não pode acompanhar obras à distância. Precisa de relatórios em PDF que abre num voo.</p>
       </div>
       <div class="id-card">
-        <div class="id-n">03 / Com contrato</div>
-        <p class="id-txt">Procura um parceiro com método. Retorno e prazo definidos antes de transferir, não promessas.</p>
+        <div class="id-n">03 / O empresário cansado</div>
+        <p class="id-txt">Já tem imobiliário no portefólio. Está farto de fix &amp; flips de 18 meses que se transformam em 30. Quer um parceiro com contrato que execute, não que prometa.</p>
       </div>
     </div>
   </div>
+</section>
+
+<!-- TABELA COMPARATIVA -->
+<section class="sec">
+  <div class="sec-hdr" style="margin:0 auto 32px;text-align:center;max-width:600px">
+    <span class="sec-eye" style="margin-left:auto;margin-right:auto">Onde vale a pena pôr o seu capital</span>
+    <h2 class="sec-title">A comparação <em>honesta.</em></h2>
+    <p class="sec-lede" style="margin-left:auto;margin-right:auto;text-align:center">Cada alternativa tem méritos. Mostramos as nossas e as dos outros. Decida com a informação à frente.</p>
+  </div>
+  <div class="comp-table">
+    <div class="comp-row head">
+      <div class="comp-cell head"></div>
+      <div class="comp-cell head">Depósito a prazo</div>
+      <div class="comp-cell head">Bolsa (PSI)</div>
+      <div class="comp-cell head">Crowdfunding imo.</div>
+      <div class="comp-cell head us">Somnium CAEP</div>
+    </div>
+    <div class="comp-row">
+      <div class="comp-cell lbl">Retorno-alvo</div>
+      <div class="comp-cell"><span class="comp-bad">2-3%</span></div>
+      <div class="comp-cell"><span class="comp-mid">5-8% (volátil)</span></div>
+      <div class="comp-cell"><span class="comp-mid">5-8%</span></div>
+      <div class="comp-cell us"><span class="comp-good">12-18%</span></div>
+    </div>
+    <div class="comp-row">
+      <div class="comp-cell lbl">Activo subjacente</div>
+      <div class="comp-cell"><span class="comp-bad">Não</span></div>
+      <div class="comp-cell"><span class="comp-bad">Não</span></div>
+      <div class="comp-cell"><span class="comp-mid">Indireto</span></div>
+      <div class="comp-cell us"><span class="comp-good">Imóvel registado</span></div>
+    </div>
+    <div class="comp-row">
+      <div class="comp-cell lbl">Transparência da operação</div>
+      <div class="comp-cell"><span class="comp-mid">Padronizada</span></div>
+      <div class="comp-cell"><span class="comp-mid">Pública</span></div>
+      <div class="comp-cell"><span class="comp-bad">Limitada</span></div>
+      <div class="comp-cell us"><span class="comp-good">Total (plataforma)</span></div>
+    </div>
+    <div class="comp-row">
+      <div class="comp-cell lbl">Liquidez</div>
+      <div class="comp-cell"><span class="comp-good">Alta</span></div>
+      <div class="comp-cell"><span class="comp-good">Alta</span></div>
+      <div class="comp-cell"><span class="comp-bad">Baixa</span></div>
+      <div class="comp-cell us"><span class="comp-mid">Cláusulas saída</span></div>
+    </div>
+    <div class="comp-row">
+      <div class="comp-cell lbl">Esforço do investidor</div>
+      <div class="comp-cell"><span class="comp-good">Zero</span></div>
+      <div class="comp-cell"><span class="comp-bad">Alto (decisões)</span></div>
+      <div class="comp-cell"><span class="comp-good">Baixo</span></div>
+      <div class="comp-cell us"><span class="comp-good">Zero</span></div>
+    </div>
+  </div>
+  <p class="stats-disclaim" style="margin-top:14px;text-align:center">Valores indicativos baseados em dados públicos de mercado (BdP, CMVM) e em retornos-alvo Somnium definidos por contrato CAEP.</p>
 </section>
 
 <!-- ACOMPANHAMENTO PROFISSIONAL (DASHBOARD) -->
@@ -682,9 +836,99 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
   </div>
 </section>
 
-<!-- PORQUE SOMNIUM -->
+<!-- VALUE STACK -->
 <section class="sec-warm">
   <div class="sec-warm-wrap">
+    <div class="sec-hdr" style="margin:0 auto 36px;text-align:center;max-width:600px">
+      <span class="sec-eye" style="margin-left:auto;margin-right:auto">O que recebe ao investir</span>
+      <h2 class="sec-title">Cada parceria <em>inclui.</em></h2>
+      <p class="sec-lede" style="margin-left:auto;margin-right:auto;text-align:center">Tudo o que recebe está descrito antes de transferir um euro. Sem extras, sem fees escondidas.</p>
+    </div>
+    <div class="stack-wrap">
+      <div class="stack-list">
+        <div class="stack-item">
+          <span class="stack-check"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 10l3 3 7-7"/></svg></span>
+          <div class="stack-content">
+            <div class="stack-t">Análise técnica completa do imóvel</div>
+            <div class="stack-d">Avaliação técnica, fiscal, legal e comparáveis de mercado antes de qualquer apresentação.</div>
+          </div>
+        </div>
+        <div class="stack-item">
+          <span class="stack-check"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 10l3 3 7-7"/></svg></span>
+          <div class="stack-content">
+            <div class="stack-t">Stress tests com 3 cenários</div>
+            <div class="stack-d">Cenário-base, optimista e adverso. Sabe o pior caso antes de assinar.</div>
+          </div>
+        </div>
+        <div class="stack-item">
+          <span class="stack-check"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 10l3 3 7-7"/></svg></span>
+          <div class="stack-content">
+            <div class="stack-t">Contrato CAEP redigido por advogado</div>
+            <div class="stack-d">Cláusulas de retorno, prazo, base de cálculo e saída antecipada. Pode ser revisto pelo seu advogado.</div>
+          </div>
+        </div>
+        <div class="stack-item">
+          <span class="stack-check"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 10l3 3 7-7"/></svg></span>
+          <div class="stack-content">
+            <div class="stack-t">Acesso 24/7 à plataforma de acompanhamento</div>
+            <div class="stack-d">TIR projetada e atual, MOIC, capital alocado e cash-flow ao vivo. Os mesmos números que a equipa interna.</div>
+          </div>
+        </div>
+        <div class="stack-item">
+          <span class="stack-check"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 10l3 3 7-7"/></svg></span>
+          <div class="stack-content">
+            <div class="stack-t">Relatório PDF em cada marco contratual</div>
+            <div class="stack-d">Documento institucional com fotografias, métricas atualizadas e justificação de cada decisão.</div>
+          </div>
+        </div>
+        <div class="stack-item">
+          <span class="stack-check"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 10l3 3 7-7"/></svg></span>
+          <div class="stack-content">
+            <div class="stack-t">Reuniões trimestrais de acompanhamento</div>
+            <div class="stack-d">Presencial ou videochamada. Revisão do projeto, próximos passos, ajustes contratuais se aplicáveis.</div>
+          </div>
+        </div>
+        <div class="stack-item">
+          <span class="stack-check"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 10l3 3 7-7"/></svg></span>
+          <div class="stack-content">
+            <div class="stack-t">Gestão integral da operação</div>
+            <div class="stack-d">Aquisição, licenciamento, obra, fiscalidade e venda. O investidor recebe relatórios, não geste.</div>
+          </div>
+        </div>
+        <div class="stack-item">
+          <span class="stack-check"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 10l3 3 7-7"/></svg></span>
+          <div class="stack-content">
+            <div class="stack-t">Distribuição automática de lucros</div>
+            <div class="stack-d">Apuramento e transferência via SPV ou estrutura definida em contrato. Sem fricção fiscal ou administrativa.</div>
+          </div>
+        </div>
+        <div class="stack-item">
+          <span class="stack-check"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 10l3 3 7-7"/></svg></span>
+          <div class="stack-content">
+            <div class="stack-t">Saída flexível com cláusulas pré-acordadas</div>
+            <div class="stack-d">Em participações parciais, cessão de posição é possível mediante autorização das partes.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stack-side">
+        <div class="stack-card">
+          <div class="stack-card-eye">Resumo da parceria</div>
+          <div class="stack-card-title">Tudo incluído.<br><span class="stack-card-em">Sem extras.</span></div>
+          <div class="stack-card-divider"></div>
+          <div class="stack-card-num">12-18<small>% TIR-alvo</small></div>
+          <div class="stack-card-foot">9 elementos contratuais. Uma única parceria. Tickets a partir de 25 000 €.<br><br><a href="#formulario" class="btn-cta1" style="display:inline-flex;margin-top:8px">Quero saber mais
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 10h10M11 6l4 4-4 4"/></svg>
+          </a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PORQUE SOMNIUM -->
+<section class="sec">
+  <div style="max-width:1280px;margin:0 auto">
     <div class="why-grid">
       <div>
         <span class="sec-eye">Porque a Somnium</span>
@@ -725,7 +969,13 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
         <div class="why-quote">
           <div class="why-qm">"</div>
           <p class="why-qt">Não vendemos sonhos. Apresentamos números, contratos e projetos concretos, porque é isso que nós próprios exigiríamos como investidores.</p>
-          <p class="why-sig">Luís Gouveia<small>Sócio-fundador · Somnium Properties</small></p>
+          <div class="why-sig-row">
+            <div class="why-sig-avatars">
+              <div class="why-sig-avatar" title="Alexandre Mendes">AM</div>
+              <div class="why-sig-avatar" title="João Abreu">JA</div>
+            </div>
+            <p class="why-sig" style="margin:0">Alexandre Mendes &amp; João Abreu<small>Sócios-fundadores · Somnium Properties</small></p>
+          </div>
         </div>
         <div class="stats-grid">
           <div class="stat-box"><div class="stat-v">12–18%</div><div class="stat-l">TIR-alvo*</div></div>
@@ -736,6 +986,39 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
         <p class="stats-disclaim">*Retorno-alvo por projeto, definido em contrato CAEP. Investimento sujeito a risco de mercado. Resultados passados não garantem resultados futuros.</p>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- NÚMEROS / SOCIAL PROOF -->
+<section class="sec-warm">
+  <div class="sec-warm-wrap">
+    <div class="sec-hdr" style="margin:0 auto 32px;text-align:center;max-width:600px">
+      <span class="sec-eye" style="margin-left:auto;margin-right:auto">Números a confirmar com dados reais</span>
+      <h2 class="sec-title">A operação <em>em números.</em></h2>
+    </div>
+    <div class="numbers-grid">
+      <div class="num-card">
+        <div class="num-v">[X]</div>
+        <div class="num-l">Projetos concluídos</div>
+        <div class="num-d">Desde a fundação</div>
+      </div>
+      <div class="num-card">
+        <div class="num-v">[Y]</div>
+        <div class="num-l">Investidores actuais</div>
+        <div class="num-d">Parcerias activas</div>
+      </div>
+      <div class="num-card">
+        <div class="num-v">[Z] M€</div>
+        <div class="num-l">Capital movimentado</div>
+        <div class="num-d">Em projetos sob gestão</div>
+      </div>
+      <div class="num-card">
+        <div class="num-v">[W]%</div>
+        <div class="num-l">TIR média realizada</div>
+        <div class="num-d">Projetos fechados</div>
+      </div>
+    </div>
+    <p class="num-foot">Dados auditados internamente. Disponíveis em detalhe na primeira reunião, sob NDA.</p>
   </div>
 </section>
 
@@ -765,7 +1048,53 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
   </div>
 </section>
 
-<!-- FAQ -->
+<!-- O NOSSO COMPROMISSO · GARANTIAS -->
+<section class="sec">
+  <div class="sec-hdr" style="margin:0 auto 36px;text-align:center;max-width:600px">
+    <span class="sec-eye" style="margin-left:auto;margin-right:auto">O nosso compromisso</span>
+    <h2 class="sec-title">Cinco compromissos. <em>Por escrito.</em></h2>
+    <p class="sec-lede" style="margin-left:auto;margin-right:auto;text-align:center">Reduzimos o risco de dizer "sim" antes mesmo de o pedirmos. Aqui está o que prometemos a cada parceiro.</p>
+  </div>
+  <div class="guar-grid">
+    <div class="guar-card">
+      <div class="guar-num">1</div>
+      <div>
+        <div class="guar-t">Primeira reunião sem custos</div>
+        <div class="guar-d">Sem fees, sem compromisso, sem pressão. Se a operação não fizer sentido para si, não há porquê forçar.</div>
+      </div>
+    </div>
+    <div class="guar-card">
+      <div class="guar-num">2</div>
+      <div>
+        <div class="guar-t">NDA assinado antes de partilhar</div>
+        <div class="guar-d">Nenhum projeto específico é exposto sem confidencialidade prévia. A informação que partilhamos é confidencial nos dois sentidos.</div>
+      </div>
+    </div>
+    <div class="guar-card">
+      <div class="guar-num">3</div>
+      <div>
+        <div class="guar-t">Visita ao imóvel antes de transferir</div>
+        <div class="guar-d">Vê o ativo subjacente, com a nossa equipa técnica, antes de qualquer movimento financeiro. Sem fotografia bonita a substituir realidade.</div>
+      </div>
+    </div>
+    <div class="guar-card">
+      <div class="guar-num">4</div>
+      <div>
+        <div class="guar-t">Contrato revisto pelo seu advogado</div>
+        <div class="guar-d">Insistimos. Não aceite a nossa minuta sem revisão independente. Pagamos custas próprias, vocês pagam as vossas.</div>
+      </div>
+    </div>
+    <div class="guar-card" style="grid-column:1 / -1">
+      <div class="guar-num">5</div>
+      <div>
+        <div class="guar-t">Relatórios mensais garantidos</div>
+        <div class="guar-d">Comprometemo-nos a entregar um relatório por mês durante a vida do projeto. Se falharmos um relatório sem justificação, devolvemos a fee de gestão proporcional desse mês. Está no contrato.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ · REORDENADO POR IMPACTO -->
 <section class="sec-warm">
   <div class="sec-warm-wrap" id="faq">
     <div class="sec-hdr" style="margin:0 auto 36px;text-align:center;max-width:560px">
@@ -775,40 +1104,52 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
     <div class="faq-list">
       <details class="faq-item">
         <summary class="faq-q">Como é garantido o capital investido?</summary>
-        <div class="faq-a">O capital tem como ativo subjacente um imóvel real, registado e sujeito a due diligence jurídica e fiscal. O contrato CAEP define os direitos do investidor sobre o ativo e os mecanismos de garantia. Não existe garantia bancária do retorno (o investimento imobiliário tem risco de mercado), mas existe garantia patrimonial real, transparência total e contrato vinculativo.</div>
+        <div class="faq-a">O capital tem como ativo subjacente um imóvel real, registado e sujeito a due diligence jurídica e fiscal. O contrato CAEP define os direitos do investidor sobre o ativo e os mecanismos de garantia. Não existe garantia bancária do retorno (o investimento imobiliário tem risco de mercado), mas existe garantia patrimonial real, transparência total e contrato vinculativo. Todos os números relativos ao projeto estão visíveis na plataforma.</div>
       </details>
       <details class="faq-item">
-        <summary class="faq-q">Qual é a fiscalidade para o investidor?</summary>
-        <div class="faq-a">Depende do regime escolhido (pessoa singular, sociedade, SPV próprio). Apresentamos as opções fiscais aplicáveis em reunião e recomendamos validação com contabilista certificado antes da formalização.</div>
+        <summary class="faq-q">Como sei que não me vão enganar?</summary>
+        <div class="faq-a">Antes de assinar: NDA mútuo, due diligence partilhada, visita ao imóvel, contrato revisto pelo seu advogado. Durante o projeto: acesso 24/7 à plataforma com os mesmos números que a equipa interna. Após o projeto: distribuição automática via SPV. A confiança constrói-se com prova, não com palavras.</div>
       </details>
       <details class="faq-item">
         <summary class="faq-q">Posso sair antes do prazo do projeto?</summary>
-        <div class="faq-a">Cada contrato CAEP inclui cláusulas de saída antecipada com condições e penalizações específicas. Em participações parciais é por vezes possível ceder a posição a outro parceiro mediante autorização das partes.</div>
+        <div class="faq-a">Cada contrato CAEP inclui cláusulas de saída antecipada com condições específicas e penalizações pré-acordadas. Em participações parciais é por vezes possível ceder a posição a outro parceiro mediante autorização das partes. Tudo formalizado no contrato.</div>
       </details>
       <details class="faq-item">
-        <summary class="faq-q">O que acontece se o projeto demorar mais?</summary>
-        <div class="faq-a">Os contratos preveem mecanismos de revisão de prazo e impacto no retorno. Em projetos com atraso material, é convocada reunião e revistos os pressupostos. Tem acesso ao mesmo dashboard que a equipa interna usa.</div>
+        <summary class="faq-q">Qual é a fiscalidade para o investidor?</summary>
+        <div class="faq-a">Depende do regime escolhido (pessoa singular, sociedade, SPV próprio). Apresentamos as opções fiscais aplicáveis em reunião e recomendamos validação com contabilista certificado antes da formalização. Trabalhamos com modelos que otimizam a tributação consoante o perfil.</div>
       </details>
       <details class="faq-item">
         <summary class="faq-q">Em quanto tempo recebo o retorno?</summary>
-        <div class="faq-a">Tipicamente 12 a 18 meses, dependendo do modelo (CAEP, fix &amp; flip ou wholesaling) e da fase do imóvel à entrada. Em alguns casos com arrendamento intermédio, há rendimento mensal antes do exit.</div>
+        <div class="faq-a">Tipicamente 12 a 18 meses, dependendo do modelo (CAEP, fix &amp; flip ou wholesaling) e da fase do imóvel à entrada. Em alguns casos com arrendamento intermédio, há rendimento mensal antes do exit. Os marcos contratuais estão visíveis na plataforma.</div>
+      </details>
+      <details class="faq-item">
+        <summary class="faq-q">O que acontece se o projeto demorar mais?</summary>
+        <div class="faq-a">Os contratos preveem mecanismos de revisão de prazo e impacto no retorno. Em projetos com atraso material, é convocada reunião e revistos os pressupostos. Tem acesso ao mesmo dashboard que a equipa interna usa. Sem surpresas tardias.</div>
       </details>
       <details class="faq-item">
         <summary class="faq-q">Tenho de me comprometer com vários projetos?</summary>
-        <div class="faq-a">Não. Cada CAEP é por projeto e independente. A maioria dos parceiros começa com um projeto, valida a experiência e diversifica progressivamente.</div>
+        <div class="faq-a">Não. Cada CAEP é por projeto e independente. A maioria dos parceiros começa com um projeto, valida a experiência e diversifica progressivamente. Sem subscrições, sem mínimos anuais.</div>
       </details>
     </div>
   </div>
 </section>
 
+<!-- SCARCITY STRIP -->
+<section class="scarcity-strip">
+  <div class="scarcity-pulse">Vagas limitadas</div>
+  <div class="scarcity-text">
+    Aceitamos um número limitado de novos parceiros por trimestre, para garantir <strong>profundidade no acompanhamento</strong> de cada projeto.
+  </div>
+</section>
+
 <!-- CTA FINAL -->
 <section class="cta-sec">
-  <span class="cta-eye">Próximo passo</span>
-  <h2 class="cta-title">Uma conversa, <em>sem compromisso.</em></h2>
-  <p class="cta-sub">Preencha o formulário ou fale connosco diretamente. Resposta em menos de 24 horas.</p>
+  <span class="cta-eye">Marque a sua reunião</span>
+  <h2 class="cta-title">Marque a sua reunião<br>de <em>alinhamento.</em></h2>
+  <p class="cta-sub">Sem custos. Sem compromisso. Sob NDA, se preferir. Resposta em menos de 24 horas.</p>
   <div class="cta-btns">
     <a href="#formulario" class="btn-cta1">
-      Preencher o formulário
+      Marcar reunião agora
       <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 10h10M11 6l4 4-4 4"/></svg>
     </a>
     <a href="https://wa.me/351930642708?text=Ol%C3%A1%2C%20tenho%20interesse%20em%20investir%20com%20a%20Somnium%20Properties." target="_blank" rel="noopener" class="btn-cta2">
