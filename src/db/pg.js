@@ -556,8 +556,11 @@ export async function initSchema() {
       END $$;
       CREATE INDEX IF NOT EXISTS idx_investidores_tipo ON investidores(tipo_principal);
 
-      -- Migration: renomear status "Investidor classificado" → "Investidor em espera"
-      UPDATE investidores SET status = 'Investidor em espera' WHERE status = 'Investidor classificado';
+      -- Migration: consolidar estados legacy ("Investidor classificado", "Investidor em espera",
+      -- "Acesso a Off-Market", "Investidor Activo") nos estados actuais.
+      UPDATE investidores SET status = 'Investidor Qualificado em Carteira'
+        WHERE status IN ('Investidor classificado', 'Investidor em espera', 'Acesso a Off-Market');
+      UPDATE investidores SET status = 'Investidor Ativo' WHERE status = 'Investidor Activo';
 
       -- Migration: campos do Google Forms que antes iam para notas
       DO $$ BEGIN

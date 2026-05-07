@@ -360,18 +360,24 @@ export const FUNIL_IMOVEIS = [
 ]
 
 export const FUNIL_INVESTIDORES = [
+  'Pendente de Aprovação',
   'Potencial Investidor', 'Potencial',
   'Marcar call', 'Marcar Call',
   'Call marcada', 'Call Marcada',
   'Follow Up',
-  'Investidor em espera', 'Classificado',
+  'Investidor Qualificado em Carteira', 'Investidor em espera', 'Classificado',
+  'Negociação de Deal',
   'Investidor em parceria', 'Em Parceria',
+  'Investidor Ativo',
 ]
 
 export const FUNIL_INV_LABEL = {
-  'Potencial Investidor':    'Potencial',
-  'Marcar call':             'Marcar Call',
-  'Call marcada':            'Call Marcada',
-  'Investidor em espera': 'Classificado',
-  'Investidor em parceria':  'Em Parceria',
+  'Potencial Investidor':                'Potencial',
+  'Marcar call':                         'Marcar Call',
+  'Call marcada':                        'Call Marcada',
+  'Investidor Qualificado em Carteira':  'Em Carteira',
+  'Investidor em espera':                'Em Carteira',
+  'Investidor em parceria':              'Em Parceria',
+  'Negociação de Deal':                  'Em Deal',
+  'Investidor Ativo':                    'Ativo',
 }

@@ -2587,7 +2587,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                     <div className="space-y-1 text-xs text-green-800">
                       <p>1. Preencher o Scorecard com base nas respostas (botão abaixo)</p>
                       <p>2. Enviar resumo por email ao investidor dentro de 24h</p>
-                      <p>3. Actualizar status no CRM para "Follow Up" ou "Investidor em espera"</p>
+                      <p>3. Actualizar status no CRM para "Follow Up" ou "Investidor Qualificado em Carteira"</p>
                       <p>4. Se Classe A/B: agendar apresentação de oportunidade</p>
                     </div>
                   </div>

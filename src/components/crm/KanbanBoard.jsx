@@ -32,13 +32,20 @@ const COLUMN_COLORS = {
   'Em andamento':     { bg: 'bg-blue-50',    border: 'border-blue-200',   header: 'bg-blue-100 text-blue-700' },
   'Atrasada':         { bg: 'bg-red-50',     border: 'border-red-200',    header: 'bg-red-100 text-red-700' },
   'Concluida':        { bg: 'bg-green-50',   border: 'border-green-200',  header: 'bg-green-100 text-green-700' },
-  // Investidores
-  'Potencial Investidor': { bg: 'bg-gray-50',  border: 'border-gray-200', header: 'bg-gray-100 text-gray-700' },
-  'Marcar call':      { bg: 'bg-yellow-50',  border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-700' },
-  'Call marcada':     { bg: 'bg-blue-50',    border: 'border-blue-200',   header: 'bg-blue-100 text-blue-700' },
-  'Follow Up':        { bg: 'bg-orange-50',  border: 'border-orange-200', header: 'bg-orange-100 text-orange-700' },
-  'Investidor em espera': { bg: 'bg-indigo-50', border: 'border-indigo-200', header: 'bg-indigo-100 text-indigo-700' },
-  'Investidor em parceria':  { bg: 'bg-green-50',  border: 'border-green-200',  header: 'bg-green-100 text-green-700' },
+  // Investidores — pipeline comum
+  'Pendente de Aprovação': { bg: 'bg-amber-50',  border: 'border-amber-200',  header: 'bg-amber-100 text-amber-700' },
+  'Potencial Investidor':  { bg: 'bg-gray-50',   border: 'border-gray-200',   header: 'bg-gray-100 text-gray-700' },
+  'Marcar call':           { bg: 'bg-yellow-50', border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-700' },
+  'Call marcada':          { bg: 'bg-blue-50',   border: 'border-blue-200',   header: 'bg-blue-100 text-blue-700' },
+  'Follow Up':             { bg: 'bg-orange-50', border: 'border-orange-200', header: 'bg-orange-100 text-orange-700' },
+  'Investidor Qualificado em Carteira': { bg: 'bg-indigo-50', border: 'border-indigo-200', header: 'bg-indigo-100 text-indigo-700' },
+  'Investidor em parceria': { bg: 'bg-green-50', border: 'border-green-200',  header: 'bg-green-100 text-green-700' },
+  // Investidores — funil Activo
+  'Negociação de Deal':    { bg: 'bg-purple-50', border: 'border-purple-200', header: 'bg-purple-100 text-purple-700' },
+  'Investidor Ativo':      { bg: 'bg-green-50',  border: 'border-green-200',  header: 'bg-green-100 text-green-700' },
+  // Investidores — terminais
+  'Não qualificado':       { bg: 'bg-red-50',    border: 'border-red-200',    header: 'bg-red-100 text-red-700' },
+  'Inactivo':              { bg: 'bg-gray-50',   border: 'border-gray-200',   header: 'bg-gray-100 text-gray-500' },
   // Consultores
   'Cold Call':              { bg: 'bg-gray-50',    border: 'border-gray-200',   header: 'bg-gray-100 text-gray-700' },
   'Follow up':              { bg: 'bg-yellow-50',  border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-700' },
