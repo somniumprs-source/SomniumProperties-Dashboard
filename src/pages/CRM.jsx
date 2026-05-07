@@ -7,7 +7,10 @@ import { TabKPIs } from '../components/crm/TabKPIs.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { KanbanSkeleton, TableSkeleton } from '../components/ui/Skeleton.jsx'
 import { EmptyState } from '../components/ui/EmptyState.jsx'
-import { Building2, Users, UserCheck, Briefcase, HardHat, ChevronLeft, ChevronRight, Phone, MessageCircle, Wallet, AlertTriangle, Clock as Clock3 } from 'lucide-react'
+import { Building2, Users, UserCheck, Briefcase, HardHat, ChevronLeft, ChevronRight, Phone, MessageCircle, Wallet, AlertTriangle, Clock as Clock3, Plus } from 'lucide-react'
+import { Tabs } from '../components/ui/Tabs.jsx'
+import { Button } from '../components/ui/Button.jsx'
+import { KpiCard } from '../components/ui/KpiCard.jsx'
 import { MultiSelect } from '../components/ui/MultiSelect.jsx'
 import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
 import { apiFetch } from '../lib/api.js'
@@ -967,35 +970,39 @@ export function CRM() {
         {/* Stats banner */}
         {stats && (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3">
-            {Object.entries(stats).map(([k, v]) => (
-              <div key={k} className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm text-center">
-                <p className="text-lg font-bold text-gray-900">{v.total}</p>
-                <p className="text-xs text-gray-400 capitalize">{k}</p>
-              </div>
-            ))}
+            {Object.entries(stats).map(([k, v]) => {
+              const ICONS = { imoveis: Building2, investidores: Users, consultores: UserCheck, negocios: Briefcase, despesas: Wallet }
+              const TONES = { imoveis: 'indigo', investidores: 'gold', consultores: 'green', negocios: 'amber', despesas: 'red' }
+              const Icon = ICONS[k.toLowerCase()] || Building2
+              const tone = TONES[k.toLowerCase()] || 'gray'
+              const label = k.charAt(0).toUpperCase() + k.slice(1)
+              return <KpiCard key={k} icon={Icon} label={label} value={v.total} tone={tone} size="md" />
+            })}
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="flex gap-0.5 sm:gap-1 border-b border-gray-200 bg-white relative z-10 rounded-t-xl px-1 sm:px-2 pt-2 overflow-x-auto">
-          {TABS.map(t => (
-            <button key={t} onClick={() => {
+        {/* Tabs principais — segmented control */}
+        <div className="flex justify-center sm:justify-start py-2">
+          <Tabs
+            value={tab}
+            onChange={t => {
               setTab(t)
               setSearch('')
               setDetail(null, { replace: true })
               setEditing(null)
               // Filtros são tab-específicos (cada tab usa colunas diferentes na BD).
-              // Mantê-los entre tabs causa 500 (ex.: tipo_principal de Investidores aplicado a Imóveis).
               if (t !== tab) setFilters({})
-              // Reset view se ficou num estado invalido para a nova tab
               const followupsOnlyConsultores = view === 'followups' && t !== 'Consultores'
               const relatorioOnlyCertasTabs = view === 'relatorio' && t !== 'Consultores' && t !== 'Investidores'
               if (followupsOnlyConsultores || relatorioOnlyCertasTabs) setView('kanban')
             }}
-              className={`px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap ${
-                tab === t ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600' : 'text-gray-500 hover:text-gray-700'
-              }`}>{t}</button>
-          ))}
+            items={[
+              { key: 'Imóveis',      label: 'Imóveis',      icon: Building2 },
+              { key: 'Investidores', label: 'Investidores', icon: Users },
+              { key: 'Consultores',  label: 'Consultores',  icon: UserCheck },
+              { key: 'Empreiteiros', label: 'Empreiteiros', icon: HardHat },
+            ]}
+          />
         </div>
 
         {/* KPIs integrados */}
@@ -1004,16 +1011,15 @@ export function CRM() {
         {/* Sub-tabs Investidores: Passivo / Ativo */}
         {tab === 'Investidores' && (
           <div className="flex items-center gap-3">
-            <div className="flex rounded-xl overflow-hidden border border-gray-200 shadow-sm">
-              <button onClick={() => { setInvSubTab('Passivo'); setDetail(null, { replace: true }) }}
-                className={`px-5 py-2.5 text-sm font-semibold transition-all ${invSubTab === 'Passivo' ? 'bg-violet-600 text-white' : 'bg-white text-gray-500 hover:bg-violet-50 hover:text-violet-600'}`}>
-                Passivos
-              </button>
-              <button onClick={() => { setInvSubTab('Ativo'); setDetail(null, { replace: true }) }}
-                className={`px-5 py-2.5 text-sm font-semibold transition-all border-l border-gray-200 ${invSubTab === 'Ativo' ? 'bg-orange-600 text-white' : 'bg-white text-gray-500 hover:bg-orange-50 hover:text-orange-600'}`}>
-                Ativos
-              </button>
-            </div>
+            <Tabs
+              size="sm"
+              value={invSubTab}
+              onChange={v => { setInvSubTab(v); setDetail(null, { replace: true }) }}
+              items={[
+                { key: 'Passivo', label: 'Passivos' },
+                { key: 'Ativo',   label: 'Ativos' },
+              ]}
+            />
             <span className="text-xs text-gray-400">{data.length} investidor{data.length !== 1 ? 'es' : ''}</span>
           </div>
         )}
@@ -1053,9 +1059,7 @@ export function CRM() {
                 )}
               </div>
             )}
-            <button onClick={() => setEditing({})} className="px-3 sm:px-4 py-2 bg-indigo-600 text-white text-xs sm:text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors whitespace-nowrap">
-              + Novo
-            </button>
+            <Button onClick={() => setEditing({})} icon={Plus}>Novo</Button>
             <a href={`/api/crm/backup?download=true`} className="hidden sm:block px-3 py-2 bg-gray-100 text-gray-600 text-xs font-medium rounded-xl hover:bg-gray-200 transition-colors">
               Backup
             </a>
