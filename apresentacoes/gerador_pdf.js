@@ -5,6 +5,7 @@ const PDFDocument = require("pdfkit");
 const fs = require("fs");
 
 const LOGO_DARK = "/home/user/SomniumProperties-Dashboard/public/logo-dark.png";
+const LOGO_TRANSPARENT = "/home/user/SomniumProperties-Dashboard/public/logo-transparent.png";
 
 const C = {
   gold: "#C9A84C",
@@ -135,11 +136,11 @@ function slide1() {
   dotPattern(W - 180, 70, 10, 6, 16);
   dotPattern(40, H - 150, 10, 6, 16);
 
-  // Logo centrado
+  // Logo centrado (transparent — sem fundo branco)
   const logoW = 360;
   const logoH = logoW * (614 / 1516);
   const blockTop = (H - (logoH + 130)) / 2;
-  doc.image(LOGO_DARK, (W - logoW) / 2, blockTop, { width: logoW });
+  doc.image(LOGO_TRANSPARENT, (W - logoW) / 2, blockTop, { width: logoW });
 
   // Accent rule longo
   const accent1Y = blockTop + logoH + 32;
@@ -384,8 +385,8 @@ function slide5() {
 
   const cards = [
     { t: "Cenário Base", v: "0%", desc: "Plano ideal", cost: "Conservador", ret: "Sem buffer", color: C.green, soft: C.greenSoft },
-    { t: "Stress Moderado", v: "−10%", desc: "VVR", cost: "+10% Custo Obra", ret: "+3 meses retenção", color: C.gold, soft: C.amberSoft },
-    { t: "Stress Severo", v: "−20%", desc: "VVR", cost: "+20% Custo Obra", ret: "+6 meses retenção", color: C.red, soft: C.redSoft },
+    { t: "Stress Moderado", v: "-10%", desc: "VVR", cost: "+10% Custo Obra", ret: "+3 meses retenção", color: C.gold, soft: C.amberSoft },
+    { t: "Stress Severo", v: "-20%", desc: "VVR", cost: "+20% Custo Obra", ret: "+6 meses retenção", color: C.red, soft: C.redSoft },
   ];
   const cy = 158, ch = 240, gap = 22;
   const cw = (CW - 2 * gap) / 3;
@@ -534,27 +535,42 @@ function slide7() {
 function slide8() {
   lightChrome("Alinhamento de Interesses (CAEP)", "60% Investidor  ·  40% Somnium Properties", 8);
 
-  // Visualização: dois círculos sobrepostos
-  const vy = 140, vh = 200;
+  // Visualização: dois círculos lado a lado, sem sobreposição com texto
   const vCenterX = W / 2;
-  const r1 = 100; // investidor (maior)
-  const r2 = 82;  // somnium (menor — proporcional ao 40%)
-  // Esq: investidor
-  filledCircle(vCenterX - r1 + 25, vy + 100, r1, C.goldFaint);
-  strokedCircle(vCenterX - r1 + 25, vy + 100, r1, C.gold, 1.5);
-  // Dir: somnium (sobreposto)
-  filledCircle(vCenterX + r2 - 25, vy + 100, r2, C.gold);
+  const r1 = 78;          // raio investidor (60%)
+  const r2 = 64;          // raio somnium (40%) - proporcional
+  const cy = 220;
+  const cx1 = vCenterX - 92; // centro circulo investidor
+  const cx2 = vCenterX + 92; // centro circulo somnium
 
-  txt("60%", vCenterX - r1 - 30, vy + 60, 90, { font: FONT_B, size: 56, color: C.body, align: "center" });
-  txt("Investidor", vCenterX - r1 - 30, vy + 132, 90, { font: FONT_B, size: 12, color: C.body, align: "center" });
-  txt("Passivo  ·  Capital", vCenterX - r1 - 30, vy + 154, 90, { font: FONT_I, size: 9, color: C.muted, align: "center" });
+  // Investidor (cream com border gold)
+  filledCircle(cx1, cy, r1, C.goldFaint);
+  strokedCircle(cx1, cy, r1, C.gold, 1.5);
+  // Numero centrado verticalmente — y baseline ajustado
+  txt("60%", cx1 - r1, cy - 22, r1 * 2, { font: FONT_B, size: 44, color: C.body, align: "center" });
 
-  txt("40%", vCenterX + 8, vy + 70, 90, { font: FONT_B, size: 48, color: C.white, align: "center" });
-  txt("Somnium Properties", vCenterX + 8, vy + 132, 90, { font: FONT_B, size: 11, color: C.white, align: "center" });
-  txt("Gestão · Execução · Risco", vCenterX + 8, vy + 154, 90, { font: FONT_I, size: 8, color: C.bgWarm, align: "center" });
+  // Somnium (gold solido)
+  filledCircle(cx2, cy, r2, C.gold);
+  txt("40%", cx2 - r2, cy - 18, r2 * 2, { font: FONT_B, size: 36, color: C.white, align: "center" });
+
+  // Labels FORA dos circulos (abaixo)
+  const labelY = cy + r1 + 20;
+  // Investidor label
+  filledRect(cx1 - 24, labelY, 48, 1.5, C.gold);
+  txt("INVESTIDOR PASSIVO", cx1 - 100, labelY + 8, 200,
+    { font: FONT_B, size: 11, color: C.body, align: "center", charSpacing: 2 });
+  txt("Alocação de Capital", cx1 - 100, labelY + 26, 200,
+    { font: FONT_I, size: 9, color: C.muted, align: "center" });
+
+  // Somnium label
+  filledRect(cx2 - 24, labelY, 48, 1.5, C.gold);
+  txt("SOMNIUM PROPERTIES", cx2 - 100, labelY + 8, 200,
+    { font: FONT_B, size: 11, color: C.body, align: "center", charSpacing: 2 });
+  txt("Gestão  ·  Execução  ·  Risco Técnico", cx2 - 100, labelY + 26, 200,
+    { font: FONT_I, size: 9, color: C.muted, align: "center" });
 
   // Bottom: Modelo CAEP card
-  const by = vy + vh + 30;
+  const by = labelY + 64;
   filledRoundRect(ML, by, CW, 110, 7, C.totalBg);
   strokedRoundRect(ML, by, CW, 110, 7, C.gold, 1.5);
   filledRect(ML, by, 4, 110, C.gold);
@@ -617,7 +633,7 @@ function slide10() {
   const logoW = 280;
   const logoH = logoW * (614 / 1516);
   const blockTop = 72;
-  doc.image(LOGO_DARK, (W - logoW) / 2, blockTop, { width: logoW });
+  doc.image(LOGO_TRANSPARENT, (W - logoW) / 2, blockTop, { width: logoW });
 
   const accent1Y = blockTop + logoH + 30;
   filledRect(ML + 140, accent1Y, CW - 280, 0.6, C.gold);
