@@ -20,6 +20,7 @@ import { ImovelInteracoesSection } from './ImovelInteracoesSection.jsx'
 import { Combobox } from '../ui/Combobox.jsx'
 import freguesiasData from '../../constants/coimbra-freguesias.json'
 import { supabase } from '../../lib/supabase.js'
+import { CLASS_COLOR, INV_STATUS, INV_STATUS_COLOR, ORIGENS_INVESTIDORES, fmtDate, fmtDateRelative } from '../../constants.js'
 
 // Hook simples — carrega lookups uma vez e mantém em memória
 const __lookupsCache = { data: null, promise: null }
@@ -775,8 +776,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
     { key: 'interacoes', label: `Interacções (${data?.interacoes?.length ?? 0})`, icon: '💬', show: type === 'Consultores' },
     { key: 'documentos', label: `Documentos (${data?.documentos?.length ?? 0})`, icon: '📎', show: type === 'Investidores' },
     { key: 'relatorios', label: `Reuniões (${reunioes.length})`, icon: '📄', show: (type === 'Investidores' || type === 'Consultores') },
-    { key: 'scorecard', label: 'Scorecard', icon: '🎯', show: type === 'Investidores' },
-    { key: 'classificacao', label: 'Classificação', icon: '📈', show: type === 'Investidores' },
+    { key: 'avaliacao', label: 'Avaliação', icon: '🎯', show: type === 'Investidores' },
   ].filter(t => t.show)
 
   return (
@@ -923,17 +923,9 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
           <RelatoriosTab reunioes={reunioes} investidorNome={data.nome} />
         </div>
 
-      /* Scorecard Discovery Call (Investidores) */
-      ) : type === 'Investidores' && activeTab === 'scorecard' ? (
-        <div className="p-4 sm:p-6">
-          <ScorecardTab investidorId={data.id} investidorNome={data.nome} tipoInvestidor={(() => { try { const t = JSON.parse(data.tipo_investidor || '[]'); return t.includes('Ativo') ? 'Ativo' : 'Passivo' } catch { return 'Passivo' } })()} onUpdate={loadData} />
-        </div>
-
-      /* Histórico de Classificação (Investidores) */
-      ) : type === 'Investidores' && activeTab === 'classificacao' ? (
-        <div className="p-4 sm:p-6">
-          <ClassificacaoTab investidorId={data.id} investidorNome={data.nome} classificacaoActual={data.classificacao} pontuacaoActual={data.pontuacao} />
-        </div>
+      /* Avaliação (Investidores) — fundir Scorecard + Histórico de Classificação */
+      ) : type === 'Investidores' && activeTab === 'avaliacao' ? (
+        <AvaliacaoTab data={data} onUpdate={loadData} />
 
       ) : (
       /* Detalhe tab */
@@ -1079,102 +1071,22 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
               })()}
             </>}
             {type === 'Investidores' && <>
-              {editing ? <>
-                <EF label="Nome" field="nome" form={form} set={setField} />
-                <EF label="Tipo" field="tipo_principal" form={form} set={setField} type="select" options={['Passivo','Ativo']} />
-                <EF label="Status" field="status" form={form} set={setField} type="select" options={['Pendente de Aprovação','Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor em espera','Investidor em parceria']} />
-                <EF label="Classificação" field="classificacao" form={form} set={setField} type="select" options={['A','B','C','D']} />
-                <EF label="Origem" field="origem" form={form} set={setField} type="select" options={['Landing Page','Skool','Grupos Whatsapp','Referenciação','LinkedIn','Google Forms','Outro']} />
-                <EF label="Capital Min (€)" field="capital_min" form={form} set={setField} type="number" />
-                <EF label="Capital Max (€)" field="capital_max" form={form} set={setField} type="number" />
-                <EF label="Telemóvel" field="telemovel" form={form} set={setField} />
-                <EF label="Email" field="email" form={form} set={setField} />
-                <EF label="Perfil Risco" field="perfil_risco" form={form} set={setField} type="select" options={['Conservador','Moderado','Agressivo']} />
-                <EF label="Montante Investido (€)" field="montante_investido" form={form} set={setField} type="number" />
-                <EF label="ROI Pretendido" field="roi_pretendido" form={form} set={setField} />
-                <EF label="Experiência Imobiliária" field="experiencia_imobiliario" form={form} set={setField} />
-                <EF label="Localização Preferida" field="localizacao_preferida" form={form} set={setField} />
-                <EF label="Tipo Imóvel Preferido" field="tipo_imovel_preferido" form={form} set={setField} />
-                <EF label="Equipa de Obras" field="equipa_obras" form={form} set={setField} />
-                <EF label="Origem do Capital" field="origem_capital" form={form} set={setField} type="select" options={['Poupança pessoal','Actividade empresarial','Venda de activo','Herança','Outro']} />
-                <EF label="Preferência de Contacto" field="preferencia_contacto" form={form} set={setField} type="select" options={['WhatsApp','Chamada','Email','Presencial']} />
-                <EF label="Próxima Ação Data" field="data_proxima_acao" form={form} set={setField} type="date" />
-                <EF label="Motivo Não Aprovação" field="motivo_nao_aprovacao" form={form} set={setField} />
-                <EF label="Motivo Inatividade" field="motivo_inatividade" form={form} set={setField} />
-                <div>
-                  <p className="text-xs text-gray-400 mb-1">NDA Assinado</p>
-                  <input type="checkbox" checked={!!form.nda_assinado} onChange={e => setField('nda_assinado', e.target.checked ? 1 : 0)}
-                    className="w-5 h-5 rounded border-gray-300 text-yellow-600" />
-                </div>
-                <EF label="1º Contacto" field="data_primeiro_contacto" form={form} set={setField} type="date" />
-                <EF label="Data Reunião" field="data_reuniao" form={form} set={setField} type="date" />
-                <EF label="Último Contacto" field="data_ultimo_contacto" form={form} set={setField} type="date" />
-                <EF label="Data Follow Up" field="data_follow_up" form={form} set={setField} type="date" />
-                <EF label="Próxima Ação" field="proxima_acao" form={form} set={setField} />
-                <div className="col-span-2 md:col-span-3">
-                  <label className="text-xs text-gray-400 block mb-1">Notas</label>
-                  <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={4}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
-                </div>
-              </> : <>
-                {/* Tipo Investidor — destaque */}
-                <div className="col-span-2 md:col-span-3">
-                  {(() => {
-                    const tipo = data.tipo_principal || 'Passivo'
-                    const isAtivo = tipo === 'Ativo'
-                    const outroTipo = isAtivo ? 'Passivo' : 'Ativo'
-                    return (
-                      <div className={`flex items-center justify-between rounded-lg border p-3 ${isAtivo ? 'bg-orange-50 border-orange-200' : 'bg-violet-50 border-violet-200'}`}>
-                        <div className="flex items-center gap-3">
-                          <span className={`text-lg font-black ${isAtivo ? 'text-orange-700' : 'text-violet-700'}`}>
-                            Investidor {tipo}
-                          </span>
-                          {data.duplicado_de && <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">Perfil duplo</span>}
-                        </div>
-                        <button onClick={async () => {
-                          if (!confirm(`Criar perfil ${outroTipo} para ${data.nome}?`)) return
-                          try {
-                            const r = await apiFetch(`/api/crm/investidores/${data.id}/duplicar`, {
-                              method: 'POST', headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ tipo_principal: outroTipo }),
-                            })
-                            const result = await r.json()
-                            if (result.ok) { alert(`Perfil ${outroTipo} criado: ${result.nome}`) }
-                            else { alert(result.error || 'Erro ao duplicar') }
-                          } catch (e) { alert('Erro: ' + e.message) }
-                        }}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
-                            isAtivo ? 'border-violet-300 text-violet-700 hover:bg-violet-100' : 'border-orange-300 text-orange-700 hover:bg-orange-100'
-                          }`}>
-                          + Criar perfil {outroTipo}
-                        </button>
-                      </div>
-                    )
-                  })()}
-                </div>
-                <Field label="Status" value={data.status} />
-                <Field label="Classificação" value={data.classificacao} />
-                <Field label="Pontuação" value={data.pontuacao} />
-                <Field label="Origem" value={data.origem} />
-                <Field label="Capital Min" value={data.capital_min > 0 ? EUR(data.capital_min) : '—'} />
-                <Field label="Capital Max" value={data.capital_max > 0 ? EUR(data.capital_max) : '—'} />
-                <Field label="Telemóvel" value={data.telemovel} />
-                <Field label="Email" value={data.email} />
-                <Field label="Perfil Risco" value={data.perfil_risco} />
-                <Field label="Estratégia" value={(() => { try { return JSON.parse(data.estrategia || '[]').join(', ') } catch { return data.estrategia || '—' } })()} />
-                <Field label="NDA" value={data.nda_assinado ? 'Sim' : 'Não'} />
-                <Field label="ROI Pretendido" value={data.roi_pretendido} />
-                <Field label="Experiência" value={data.experiencia_imobiliario} />
-                <Field label="Localização" value={data.localizacao_preferida} />
-                <Field label="Tipo Imóvel" value={data.tipo_imovel_preferido} />
-                <Field label="Equipa Obras" value={data.equipa_obras} />
-                <Field label="Origem Capital" value={data.origem_capital} />
-                <Field label="Pref. Contacto" value={data.preferencia_contacto} />
-                <Field label="1º Contacto" value={data.data_primeiro_contacto} />
-                <Field label="Último Contacto" value={data.data_ultimo_contacto} />
-                <Field label="Reunião" value={data.data_reuniao} />
-                <Field label="Próxima Ação" value={data.proxima_acao} />
-              </>}
+              {!editing && <InvestidorHero data={data} onCriarPerfilDuplo={async (outroTipo) => {
+                if (!confirm(`Criar perfil ${outroTipo} para ${data.nome}?`)) return
+                try {
+                  const r = await apiFetch(`/api/crm/investidores/${data.id}/duplicar`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tipo_principal: outroTipo }),
+                  })
+                  const result = await r.json()
+                  if (result.ok) { alert(`Perfil ${outroTipo} criado: ${result.nome}`) }
+                  else { alert(result.error || 'Erro ao duplicar') }
+                } catch (e) { alert('Erro: ' + e.message) }
+              }} />}
+              {!editing && <InvestidorProximoPasso data={data} />}
+              {editing
+                ? <InvestidorEditSections data={data} form={form} setField={setField} />
+                : <InvestidorReadSections data={data} />}
             </>}
             {type === 'Consultores' && <>
               {editing ? <>
@@ -1980,6 +1892,345 @@ function ImovelReadSections({ data }) {
   </>
 }
 
+// ── Investidor: constantes e helpers ─────────────────────────
+const INV_ROI_OPTS = ['<10%', '10–15%', '15–20%', '20–25%', '>25%']
+const INV_EXPERIENCIA_OPTS = ['Nenhuma', '1–2 negócios', '3–10 negócios', '>10 negócios']
+const INV_TIPO_IMOVEL_OPTS = ['T0', 'T1', 'T2', 'T3+', 'Apartamento', 'Moradia', 'Edifício', 'Comercial', 'Terreno', 'Ruína', 'Indiferente']
+const INV_DISTRITOS_OPTS = ['Aveiro','Beja','Braga','Bragança','Castelo Branco','Coimbra','Évora','Faro','Guarda','Leiria','Lisboa','Portalegre','Porto','Santarém','Setúbal','Viana do Castelo','Vila Real','Viseu','Açores','Madeira']
+const INV_EQUIPA_OBRAS_OPTS = ['Própria', 'Da Somnium', 'Indiferente', 'Sem opinião']
+const INV_ESTRATEGIA_OPTS = ['Wholesaling', 'CAEP', 'Fix & Flip', 'Mediação', 'Cedência de posição', 'Arrendamento']
+const INV_PERFIL_RISCO_OPTS = ['Conservador', 'Moderado', 'Agressivo']
+const INV_ORIGEM_CAPITAL_OPTS = ['Poupança pessoal','Actividade empresarial','Venda de activo','Herança','Outro']
+const INV_PREF_CONTACTO_OPTS = ['WhatsApp','Chamada','Email','Presencial']
+
+function parseJsonArray(raw) {
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw
+  try { const v = JSON.parse(raw); return Array.isArray(v) ? v : [] } catch { return [] }
+}
+
+// Multi-select por chips. Guarda como JSON array.
+function MultiChips({ label, field, form, set, options }) {
+  const selected = parseJsonArray(form[field])
+  const toggle = (v) => {
+    const next = selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]
+    set(field, JSON.stringify(next))
+  }
+  return (
+    <div className="col-span-2 md:col-span-3">
+      <p className="text-xs text-gray-400 mb-1.5">{label}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map(o => {
+          const active = selected.includes(o)
+          return (
+            <button key={o} type="button" onClick={() => toggle(o)}
+              className={`text-xs px-2.5 py-1 rounded-full border transition ${active ? 'bg-yellow-100 border-yellow-300 text-yellow-900' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+              {o}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function Toggle({ label, field, form, set }) {
+  const on = !!form[field]
+  return (
+    <div>
+      <p className="text-xs text-gray-400 mb-1">{label}</p>
+      <button type="button" onClick={() => set(field, on ? 0 : 1)}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${on ? 'bg-green-500' : 'bg-gray-300'}`}>
+        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${on ? 'translate-x-6' : 'translate-x-1'}`} />
+      </button>
+      <span className="ml-2 text-xs text-gray-500">{on ? 'Sim' : 'Não'}</span>
+    </div>
+  )
+}
+
+function InvClassBadge({ cls }) {
+  if (!cls) return <span className="text-xs text-gray-300">—</span>
+  return <span className={`w-6 h-6 rounded-full inline-flex items-center justify-center text-xs font-bold text-white ${CLASS_COLOR[cls] ?? 'bg-gray-400'}`}>{cls}</span>
+}
+
+// Hero card do investidor — visível em modo leitura.
+// Substitui o banner duplo de tipo + a linha de cabeçalho de campos.
+function InvestidorHero({ data, onCriarPerfilDuplo }) {
+  const tipo = data.tipo_principal || 'Passivo'
+  const isAtivo = tipo === 'Ativo'
+  const outroTipo = isAtivo ? 'Passivo' : 'Ativo'
+  const tipoColor = isAtivo ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-violet-100 text-violet-700 border-violet-200'
+  const statusColor = INV_STATUS_COLOR[data.status] || 'bg-gray-100 text-gray-600'
+  const iniciais = (data.nome || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase()).join('') || '?'
+  const [menuOpen, setMenuOpen] = useState(false)
+  const tel = (data.telemovel || '').replace(/\s+/g, '')
+  const phoneIntl = tel.startsWith('+') ? tel : (tel.startsWith('00') ? '+' + tel.slice(2) : (tel.length === 9 ? '+351' + tel : tel))
+  const proximaPassada = data.data_proxima_acao && data.data_proxima_acao.slice(0, 10) < new Date().toISOString().slice(0, 10)
+  return (
+    <div className="col-span-2 md:col-span-3 rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 p-4">
+      <div className="flex items-start gap-3">
+        <div className="w-12 h-12 rounded-full bg-[#0d0d0d] text-[#C9A84C] flex items-center justify-center text-lg font-bold shrink-0">
+          {iniciais}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-lg font-bold text-gray-800 truncate">{data.nome}</h3>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${tipoColor}`}>{tipo}</span>
+            <InvClassBadge cls={data.classificacao} />
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusColor}`}>{data.status || '—'}</span>
+            {!!data.nda_assinado && <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">NDA ✓</span>}
+            {proximaPassada && <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold">⏰ Atrasado</span>}
+            {data.duplicado_de && <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">Perfil duplo</span>}
+          </div>
+          <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500 flex-wrap">
+            {data.telemovel && <span>📞 {data.telemovel}</span>}
+            {data.email && <span className="truncate">✉ {data.email}</span>}
+            {data.origem && <span>· Origem: {data.origem}</span>}
+          </div>
+          {/* Acções rápidas */}
+          <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+            {phoneIntl && <a href={`tel:${phoneIntl}`} className="text-xs px-2.5 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1">📞 Ligar</a>}
+            {phoneIntl && <a href={`https://wa.me/${phoneIntl.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-xs px-2.5 py-1 rounded-lg border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 inline-flex items-center gap-1">💬 WhatsApp</a>}
+            {data.email && <a href={`mailto:${data.email}`} className="text-xs px-2.5 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1">✉ Email</a>}
+          </div>
+        </div>
+        <div className="relative shrink-0">
+          <button type="button" onClick={() => setMenuOpen(o => !o)}
+            className="w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 inline-flex items-center justify-center" title="Mais acções">⋮</button>
+          {menuOpen && (
+            <div className="absolute right-0 mt-1 w-52 rounded-lg border border-gray-200 bg-white shadow-lg z-10">
+              <button type="button" onClick={() => { setMenuOpen(false); onCriarPerfilDuplo(outroTipo) }}
+                className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">+ Criar perfil {outroTipo}</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Card "Próximo passo" — une proxima_acao + data_proxima_acao
+function InvestidorProximoPasso({ data }) {
+  if (!data.proxima_acao && !data.data_proxima_acao) return null
+  const dataIso = (data.data_proxima_acao || '').slice(0, 10)
+  const today = new Date().toISOString().slice(0, 10)
+  const atrasado = dataIso && dataIso < today
+  return (
+    <div className={`col-span-2 md:col-span-3 rounded-xl border p-3 ${atrasado ? 'border-red-200 bg-red-50/40' : 'border-yellow-200 bg-yellow-50/40'}`}>
+      <div className="flex items-center gap-2">
+        <span>📌</span>
+        <p className="text-xs uppercase tracking-wide text-gray-500">Próximo passo</p>
+      </div>
+      <div className="mt-1 flex items-baseline gap-2 flex-wrap">
+        <p className="text-sm font-semibold text-gray-800">{data.proxima_acao || '—'}</p>
+        {dataIso && <p className={`text-xs ${atrasado ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>{fmtDate(dataIso)} {atrasado ? '(atrasado)' : `· ${fmtDateRelative(dataIso)}`}</p>}
+      </div>
+    </div>
+  )
+}
+
+// Timeline simples — 5 datas chave em ordem cronológica.
+function InvestidorTimeline({ data }) {
+  const eventos = [
+    { key: '1º contacto', date: data.data_primeiro_contacto, icon: '👋' },
+    { key: 'Reunião', date: data.data_reuniao, icon: '🤝' },
+    { key: 'Último contacto', date: data.data_ultimo_contacto, icon: '📞' },
+    { key: 'Follow-up', date: data.data_follow_up, icon: '🔁' },
+    { key: 'Próxima acção', date: data.data_proxima_acao, icon: '📌' },
+  ].filter(e => e.date).sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+  if (eventos.length === 0) return <p className="col-span-2 md:col-span-3 text-xs text-gray-400">Sem eventos registados</p>
+  return (
+    <div className="col-span-2 md:col-span-3 relative pl-4">
+      <span className="absolute left-1.5 top-2 bottom-2 w-px bg-gray-200" />
+      {eventos.map((e, i) => (
+        <div key={i} className="relative flex items-baseline gap-3 py-1.5">
+          <span className="absolute -left-3 w-3 h-3 rounded-full bg-[#C9A84C] border-2 border-white" />
+          <span className="text-sm">{e.icon}</span>
+          <span className="text-sm text-gray-700">{e.key}</span>
+          <span className="text-xs text-gray-400 ml-auto">{fmtDate(e.date)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Bloco editável — 6 secções colapsáveis.
+function InvestidorEditSections({ data, form, setField }) {
+  const sec = {
+    identificacao: ['nome','tipo_principal','status','classificacao','origem','data_primeiro_contacto'],
+    capital:       ['capital_min','capital_max','estrategia','perfil_risco','roi_pretendido','origem_capital','montante_investido'],
+    preferencias:  ['tipo_imovel_preferido','localizacao_preferida','experiencia_imobiliario','equipa_obras'],
+    contacto:      ['telemovel','email','preferencia_contacto','nda_assinado'],
+    timeline:      ['data_primeiro_contacto','data_reuniao','data_ultimo_contacto','data_follow_up','data_proxima_acao','proxima_acao'],
+    bloqueios:     ['motivo_nao_aprovacao','motivo_inatividade'],
+  }
+  const temBloqueios = !!(data.motivo_nao_aprovacao || data.motivo_inatividade)
+  return <>
+    {/* 1. Identificação & Status */}
+    <Section icon="📋" title="Identificação & Status" fields={sec.identificacao} form={form} defaultOpen>
+      <EF label="Nome" field="nome" form={form} set={setField} />
+      <EF label="Tipo" field="tipo_principal" form={form} set={setField} type="select" options={['Passivo','Ativo']} />
+      <EF label="Status" field="status" form={form} set={setField} type="select" options={INV_STATUS} />
+      <EF label="Classificação" field="classificacao" form={form} set={setField} type="select" options={['A','B','C','D']} />
+      <EF label="Origem" field="origem" form={form} set={setField} type="select" options={ORIGENS_INVESTIDORES} />
+      <EF label="1º Contacto" field="data_primeiro_contacto" form={form} set={setField} type="date" />
+    </Section>
+
+    {/* 2. Capital & Estratégia */}
+    <Section icon="💼" title="Capital & Estratégia" fields={sec.capital} form={form} defaultOpen>
+      <EF label="Capital Min (€)" field="capital_min" form={form} set={setField} type="number" />
+      <EF label="Capital Max (€)" field="capital_max" form={form} set={setField} type="number" />
+      <EF label="Perfil Risco" field="perfil_risco" form={form} set={setField} type="select" options={INV_PERFIL_RISCO_OPTS} />
+      <EF label="ROI Pretendido" field="roi_pretendido" form={form} set={setField} type="select" options={INV_ROI_OPTS} />
+      <EF label="Origem Capital" field="origem_capital" form={form} set={setField} type="select" options={INV_ORIGEM_CAPITAL_OPTS} />
+      <EF label="Montante Investido (€)" field="montante_investido" form={form} set={setField} type="number" />
+      <MultiChips label="Estratégia" field="estrategia" form={form} set={setField} options={INV_ESTRATEGIA_OPTS} />
+    </Section>
+
+    {/* 3. Preferências de Investimento */}
+    <Section icon="🏠" title="Preferências de Investimento" fields={sec.preferencias} form={form} defaultOpen>
+      <MultiChips label="Tipo de Imóvel" field="tipo_imovel_preferido" form={form} set={setField} options={INV_TIPO_IMOVEL_OPTS} />
+      <MultiChips label="Localização Preferida" field="localizacao_preferida" form={form} set={setField} options={INV_DISTRITOS_OPTS} />
+      <EF label="Experiência" field="experiencia_imobiliario" form={form} set={setField} type="select" options={INV_EXPERIENCIA_OPTS} />
+      <EF label="Equipa de Obras" field="equipa_obras" form={form} set={setField} type="select" options={INV_EQUIPA_OBRAS_OPTS} />
+    </Section>
+
+    {/* 4. Contacto & NDA */}
+    <Section icon="📞" title="Contacto & NDA" fields={sec.contacto} form={form}>
+      <EF label="Telemóvel" field="telemovel" form={form} set={setField} />
+      <EF label="Email" field="email" form={form} set={setField} />
+      <EF label="Preferência de Contacto" field="preferencia_contacto" form={form} set={setField} type="select" options={INV_PREF_CONTACTO_OPTS} />
+      <Toggle label="NDA Assinado" field="nda_assinado" form={form} set={setField} />
+    </Section>
+
+    {/* 5. Timeline */}
+    <Section icon="🕐" title="Timeline" fields={sec.timeline} form={form} defaultOpen>
+      <EF label="1º Contacto" field="data_primeiro_contacto" form={form} set={setField} type="date" />
+      <EF label="Data Reunião" field="data_reuniao" form={form} set={setField} type="date" />
+      <EF label="Último Contacto" field="data_ultimo_contacto" form={form} set={setField} type="date" />
+      <EF label="Data Follow Up" field="data_follow_up" form={form} set={setField} type="date" />
+      <EF label="Próxima Ação Data" field="data_proxima_acao" form={form} set={setField} type="date" />
+      <EF label="Próxima Ação" field="proxima_acao" form={form} set={setField} />
+    </Section>
+
+    {/* 6. Notas */}
+    <Section icon="📝" title="Notas" fields={['notas']} form={form} defaultOpen>
+      <div className="col-span-2 md:col-span-3">
+        <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={5}
+          className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+      </div>
+    </Section>
+
+    {/* 7. Bloqueios — só se já tem dados ou se status sugere */}
+    {(temBloqueios || form.motivo_nao_aprovacao || form.motivo_inatividade) && (
+      <Section icon="⚠" title="Bloqueios / Excepções" fields={sec.bloqueios} form={form} defaultOpen>
+        <EF label="Motivo Não Aprovação" field="motivo_nao_aprovacao" form={form} set={setField} />
+        <EF label="Motivo Inatividade" field="motivo_inatividade" form={form} set={setField} />
+      </Section>
+    )}
+  </>
+}
+
+// Bloco de leitura — espelho das 6 secções.
+function InvestidorReadSections({ data }) {
+  const estrategia = parseJsonArray(data.estrategia)
+  const tipoImovel = parseJsonArray(data.tipo_imovel_preferido)
+  const localizacao = parseJsonArray(data.localizacao_preferida)
+  const sec = {
+    identificacao: ['nome','tipo_principal','status','classificacao','origem','data_primeiro_contacto'],
+    capital:       ['capital_min','capital_max','estrategia','perfil_risco','roi_pretendido','origem_capital','montante_investido'],
+    preferencias:  ['tipo_imovel_preferido','localizacao_preferida','experiencia_imobiliario','equipa_obras'],
+    contacto:      ['telemovel','email','preferencia_contacto','nda_assinado'],
+    timeline:      ['data_primeiro_contacto','data_reuniao','data_ultimo_contacto','data_follow_up','data_proxima_acao','proxima_acao'],
+    bloqueios:     ['motivo_nao_aprovacao','motivo_inatividade'],
+  }
+  return <>
+    {/* 1. Identificação */}
+    <Section icon="📋" title="Identificação & Status" fields={sec.identificacao} form={data} defaultOpen>
+      <Field label="Status" value={data.status} />
+      <div>
+        <p className="text-xs text-gray-400">Classificação</p>
+        <div className="text-sm font-medium text-gray-800 flex items-center gap-2">
+          <InvClassBadge cls={data.classificacao} />
+          {data.pontuacao > 0 && <span className="text-xs text-gray-500">({data.pontuacao} pts)</span>}
+        </div>
+      </div>
+      <Field label="Origem" value={data.origem} />
+      <Field label="1º Contacto" value={data.data_primeiro_contacto ? fmtDate(data.data_primeiro_contacto) : '—'} />
+    </Section>
+
+    {/* 2. Capital & Estratégia */}
+    <Section icon="💼" title="Capital & Estratégia" fields={sec.capital} form={data} defaultOpen>
+      <Field label="Capital Min" value={data.capital_min > 0 ? `€${Number(data.capital_min).toLocaleString('pt-PT')}` : '—'} />
+      <Field label="Capital Max" value={data.capital_max > 0 ? `€${Number(data.capital_max).toLocaleString('pt-PT')}` : '—'} />
+      <Field label="Perfil Risco" value={data.perfil_risco} />
+      <Field label="ROI Pretendido" value={data.roi_pretendido} />
+      <Field label="Origem Capital" value={data.origem_capital} />
+      <Field label="Montante Investido" value={data.montante_investido > 0 ? `€${Number(data.montante_investido).toLocaleString('pt-PT')}` : '—'} />
+      <div className="col-span-2 md:col-span-3">
+        <p className="text-xs text-gray-400 mb-1">Estratégia</p>
+        {estrategia.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {estrategia.map(s => <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700">{s}</span>)}
+          </div>
+        ) : <p className="text-sm text-gray-400">—</p>}
+      </div>
+    </Section>
+
+    {/* 3. Preferências */}
+    <Section icon="🏠" title="Preferências de Investimento" fields={sec.preferencias} form={data} defaultOpen>
+      <div className="col-span-2 md:col-span-3">
+        <p className="text-xs text-gray-400 mb-1">Tipo de Imóvel</p>
+        {tipoImovel.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {tipoImovel.map(s => <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-yellow-50 border border-yellow-100 text-yellow-800">{s}</span>)}
+          </div>
+        ) : <p className="text-sm text-gray-400">{data.tipo_imovel_preferido || '—'}</p>}
+      </div>
+      <div className="col-span-2 md:col-span-3">
+        <p className="text-xs text-gray-400 mb-1">Localização</p>
+        {localizacao.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {localizacao.map(s => <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-blue-50 border border-blue-100 text-blue-700">{s}</span>)}
+          </div>
+        ) : <p className="text-sm text-gray-400">{data.localizacao_preferida || '—'}</p>}
+      </div>
+      <Field label="Experiência" value={data.experiencia_imobiliario} />
+      <Field label="Equipa Obras" value={data.equipa_obras} />
+    </Section>
+
+    {/* 4. Contacto */}
+    <Section icon="📞" title="Contacto & NDA" fields={sec.contacto} form={data}>
+      <Field label="Telemóvel" value={data.telemovel} />
+      <Field label="Email" value={data.email} />
+      <Field label="Pref. Contacto" value={data.preferencia_contacto} />
+      <Field label="NDA" value={data.nda_assinado ? '✓ Assinado' : 'Não'} />
+    </Section>
+
+    {/* 5. Timeline */}
+    <Section icon="🕐" title="Timeline" fields={sec.timeline} form={data} defaultOpen>
+      <InvestidorTimeline data={data} />
+    </Section>
+
+    {/* 6. Notas */}
+    {data.notas && (
+      <Section icon="📝" title="Notas" fields={['notas']} form={data} defaultOpen>
+        <div className="col-span-2 md:col-span-3">
+          <p className="text-sm text-gray-700 whitespace-pre-line">{data.notas}</p>
+        </div>
+      </Section>
+    )}
+
+    {/* 7. Bloqueios — só se preenchido */}
+    {(data.motivo_nao_aprovacao || data.motivo_inatividade) && (
+      <Section icon="⚠" title="Bloqueios / Excepções" fields={sec.bloqueios} form={data} defaultOpen>
+        {data.motivo_nao_aprovacao && <Field label="Motivo Não Aprovação" value={data.motivo_nao_aprovacao} />}
+        {data.motivo_inatividade && <Field label="Motivo Inatividade" value={data.motivo_inatividade} />}
+      </Section>
+    )}
+  </>
+}
+
 // ── Scorecard Tab (Discovery Call — SOP 2) ────────────────────
 const CRITERIOS_INFO = {
   c1: { label: 'Capacidade Financeira', icon: '💰' },
@@ -2114,6 +2365,35 @@ const CLASSE_CORES = {
   B: { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300', bar: 'bg-blue-500' },
   C: { bg: 'bg-yellow-100', text: 'text-yellow-800', border: 'border-yellow-300', bar: 'bg-yellow-500' },
   D: { bg: 'bg-red-100', text: 'text-red-800', border: 'border-red-300', bar: 'bg-red-500' },
+}
+
+// Wrapper que une Scorecard (avaliação SOP 2) e Histórico de Classificação numa
+// única tab, com sub-tabs internos.
+function AvaliacaoTab({ data, onUpdate }) {
+  const [sub, setSub] = useState('scorecard')
+  const tipoInvestidor = (() => { try { const t = JSON.parse(data.tipo_investidor || '[]'); return t.includes('Ativo') ? 'Ativo' : 'Passivo' } catch { return 'Passivo' } })()
+  return (
+    <div>
+      <div className="flex border-b border-gray-200 px-4 sm:px-6 pt-3" style={{ backgroundColor: '#FAFAF7' }}>
+        {[
+          { key: 'scorecard', label: 'Scorecard', icon: '🎯' },
+          { key: 'historico',  label: 'Histórico', icon: '📈' },
+        ].map(s => (
+          <button key={s.key} onClick={() => setSub(s.key)}
+            className="relative px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap"
+            style={{ color: sub === s.key ? '#1A1A1A' : '#9ca3af' }}>
+            <span className="mr-1.5">{s.icon}</span>{s.label}
+            {sub === s.key && <span className="absolute bottom-0 left-0 right-0 h-0.5" style={{ backgroundColor: '#C9A84C' }} />}
+          </button>
+        ))}
+      </div>
+      <div className="p-4 sm:p-6">
+        {sub === 'scorecard'
+          ? <ScorecardTab investidorId={data.id} investidorNome={data.nome} tipoInvestidor={tipoInvestidor} onUpdate={onUpdate} />
+          : <ClassificacaoTab investidorId={data.id} investidorNome={data.nome} classificacaoActual={data.classificacao} pontuacaoActual={data.pontuacao} />}
+      </div>
+    </div>
+  )
 }
 
 function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }) {

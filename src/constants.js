@@ -53,11 +53,12 @@ export const IMOVEL_ESTADO_COLOR = {
 
 // ── Investidores — Status ────────────────────────────────────
 export const INV_STATUS = [
-  'Potencial Investidor', 'Marcar call', 'Call marcada',
+  'Pendente de Aprovação', 'Potencial Investidor', 'Marcar call', 'Call marcada',
   'Follow Up', 'Investidor em espera', 'Investidor em parceria',
 ]
 
 export const INV_STATUS_COLOR = {
+  'Pendente de Aprovação':   'bg-amber-100 text-amber-700',
   'Potencial Investidor':    'bg-gray-100 text-gray-600',
   'Marcar call':             'bg-yellow-100 text-yellow-700',
   'Call marcada':            'bg-blue-100 text-blue-700',
@@ -119,7 +120,7 @@ export const CLASS_COLOR = { A: 'bg-green-500', B: 'bg-blue-500', C: 'bg-yellow-
 
 // ── Origens ──────────────────────────────────────────────────
 export const ORIGENS_IMOVEIS = ['Idealista', 'Imovirtual', 'Supercasa', 'Consultor', 'Referência', 'Outro']
-export const ORIGENS_INVESTIDORES = ['Skool', 'Grupos Whatsapp', 'Referenciação', 'LinkedIn', 'Outro']
+export const ORIGENS_INVESTIDORES = ['Landing Page', 'Skool', 'Grupos Whatsapp', 'Referenciação', 'LinkedIn', 'Eventos Networking', 'Outro']
 export const MODELOS_NEGOCIO = ['Wholesaling', 'Fix & Flip', 'CAEP', 'Mediação']
 
 // ── Despesas — Categorias ────────────────────────────────────

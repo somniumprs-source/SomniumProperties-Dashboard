@@ -1512,7 +1512,7 @@ const FIELD_DEFS = {
     { key: 'tipo_principal', label: 'Tipo de Investidor', type: 'select', options: ['Passivo','Ativo'], required: true },
     { key: 'status', label: 'Status', type: 'select', options: ['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor em espera','Investidor em parceria'] },
     { key: 'classificacao', label: 'Classificação', type: 'select', options: ['A','B','C','D'] },
-    { key: 'origem', label: 'Origem', type: 'select', options: ['Skool','Grupos Whatsapp','Referenciação','LinkedIn','Google Forms','Outro'] },
+    { key: 'origem', label: 'Origem', type: 'select', options: ['Landing Page','Skool','Grupos Whatsapp','Referenciação','LinkedIn','Eventos Networking','Outro'] },
     { key: 'telemovel', label: 'Telemóvel', type: 'tel' },
     { key: 'email', label: 'Email', type: 'email' },
     { key: 'capital_min', label: 'Capital Mínimo (€)', type: 'number' },

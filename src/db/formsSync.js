@@ -6,6 +6,7 @@ import { google } from 'googleapis'
 import pool from './pg.js'
 import { Investidores } from './crud.js'
 import { getGoogleAuth, isGoogleConfigured } from './googleAuth.js'
+import { mapRoi, mapExperiencia, mapTipoImovel, mapLocalizacao, mapEquipa } from './investidorMappers.js'
 
 const SHEET_ID = process.env.GOOGLE_FORMS_SHEET_ID || '1NxsPoLBwLuoCh6SvBOrr_sph8BugwJPuZ4vihriIA1s'
 
@@ -45,14 +46,15 @@ export async function syncForms() {
     const telemovel = (row[3] || '').trim()
     const prefContacto = (row[4] || '').trim()
     const estrategia = parseEstrategia(row[5])
-    const tipoImovel = (row[6] || '').trim()
-    const localizacao = (row[7] || '').trim()
-    const equipaObras = (row[8] || '').trim()
-    const roi = (row[9] || '').trim()
+    const tipoImovel = mapTipoImovel(row[6])
+    const localizacao = mapLocalizacao(row[7])
+    const equipaObras = mapEquipa(row[8])
+    const roi = mapRoi(row[9])
     const { capital_min, capital_max } = parseCapital(row[10])
     const roiAnualizado = (row[11] || '').trim()
     const tipoInvestidor = parseTipoInvestidor(row[12])
-    const experiencia = (row[13] || '').trim()
+    const experiencia = mapExperiencia(row[13])
+    const origem = parseOrigem(row[14])
     const timestamp = (row[0] || '').trim()
 
     // Verificar duplicados por nome, email OU telefone
@@ -77,7 +79,7 @@ export async function syncForms() {
     const { rows: candidates } = await pool.query(
       `SELECT id, nome, email, telemovel, capital_min, capital_max, estrategia, tipo_investidor, tipo_principal,
               preferencia_contacto, tipo_imovel_preferido, localizacao_preferida, equipa_obras,
-              roi_pretendido, experiencia_imobiliario, perfil_risco, notas
+              roi_pretendido, experiencia_imobiliario, perfil_risco, origem, notas
        FROM investidores
        WHERE ${conditions.join('\n          OR ')}
        LIMIT 1`,
@@ -104,6 +106,7 @@ export async function syncForms() {
       if (!existing.equipa_obras && equipaObras && equipaObras !== 'Não') updates.equipa_obras = equipaObras
       if (!existing.roi_pretendido && roi && roi !== '.') updates.roi_pretendido = roi
       if (!existing.experiencia_imobiliario && experiencia) updates.experiencia_imobiliario = experiencia
+      if (!existing.origem && origem) updates.origem = origem
       if (!existing.perfil_risco) {
         const perfil = derivarPerfilRisco(roi, roiAnualizado)
         if (perfil) updates.perfil_risco = perfil
@@ -120,9 +123,9 @@ export async function syncForms() {
       const data = {
         nome,
         status: 'Potencial Investidor',
-        origem: 'Google Forms',
         data_primeiro_contacto: parseTimestamp(timestamp),
       }
+      if (origem) data.origem = origem
       if (email) data.email = email
       if (telemovel) data.telemovel = telemovel
       if (capital_min) data.capital_min = capital_min
@@ -193,6 +196,28 @@ function parseEstrategia(raw) {
   if (s.includes('arrend')) strategies.push('Arrendamento')
   if (strategies.length === 0) strategies.push(raw.trim())
   return JSON.stringify(strategies)
+}
+
+const ORIGENS_CANONICAS = ['Skool', 'Grupos Whatsapp', 'Referenciação', 'LinkedIn', 'Eventos Networking', 'Outro']
+
+function normalizeOrigem(s) {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+}
+
+function parseOrigem(raw) {
+  if (!raw) return null
+  const norm = normalizeOrigem(raw)
+  if (!norm) return null
+  for (const canon of ORIGENS_CANONICAS) {
+    if (normalizeOrigem(canon) === norm) return canon
+  }
+  // Tolerar variações comuns
+  if (norm.includes('whats')) return 'Grupos Whatsapp'
+  if (norm.includes('referenc') || norm.includes('indica')) return 'Referenciação'
+  if (norm.includes('linkedin')) return 'LinkedIn'
+  if (norm.includes('skool')) return 'Skool'
+  if (norm.includes('event') || norm.includes('network')) return 'Eventos Networking'
+  return null
 }
 
 function parseTipoInvestidor(raw) {
