@@ -3,7 +3,7 @@
  * Mostra: campos editáveis + relações + timeline + tarefas + reuniões.
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall } from 'lucide-react'
+import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, RefreshCw, MoreVertical, TrendingUp, Wallet, Target, Hourglass, AlertTriangle } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { PartilharAcesso } from '../PartilharAcesso.jsx'
@@ -1083,7 +1083,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                   else { alert(result.error || 'Erro ao duplicar') }
                 } catch (e) { alert('Erro: ' + e.message) }
               }} />}
-              {!editing && <InvestidorProximoPasso data={data} />}
+              {!editing && <InvestidorProximoPasso data={data} onUpdate={loadData} />}
               {editing
                 ? <InvestidorEditSections data={data} form={form} setField={setField} />
                 : <InvestidorReadSections data={data} />}
@@ -1953,103 +1953,340 @@ function InvClassBadge({ cls }) {
   return <span className={`w-6 h-6 rounded-full inline-flex items-center justify-center text-xs font-bold text-white ${CLASS_COLOR[cls] ?? 'bg-gray-400'}`}>{cls}</span>
 }
 
+// Format compacto de € (€100k, €2.5M)
+function eurCompact(v) {
+  if (!v && v !== 0) return '—'
+  const n = Number(v)
+  if (n >= 1_000_000) return `€${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`
+  if (n >= 1_000) return `€${Math.round(n / 1000)}k`
+  return `€${n}`
+}
+
+// Posição do estado actual dentro do funil aplicável (ignora terminais).
+function pipelinePosition(status, tipo) {
+  const list = invStatusFor(tipo).filter(s => s !== 'Não qualificado' && s !== 'Inactivo')
+  const idx = list.indexOf(status)
+  if (idx === -1) return null
+  return { idx: idx + 1, total: list.length }
+}
+
 // Hero card do investidor — visível em modo leitura.
-// Substitui o banner duplo de tipo + a linha de cabeçalho de campos.
 function InvestidorHero({ data, onCriarPerfilDuplo }) {
   const tipo = data.tipo_principal || 'Passivo'
   const isAtivo = tipo === 'Ativo'
   const outroTipo = isAtivo ? 'Passivo' : 'Ativo'
-  const tipoColor = isAtivo ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-violet-100 text-violet-700 border-violet-200'
+  const tipoBg = isAtivo ? 'from-orange-500 to-amber-600' : 'from-violet-500 to-purple-600'
+  const tipoText = isAtivo ? 'text-orange-700 bg-orange-100 border-orange-200' : 'text-violet-700 bg-violet-100 border-violet-200'
   const statusColor = INV_STATUS_COLOR[data.status] || 'bg-gray-100 text-gray-600'
   const iniciais = (data.nome || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase()).join('') || '?'
   const [menuOpen, setMenuOpen] = useState(false)
   const tel = (data.telemovel || '').replace(/\s+/g, '')
   const phoneIntl = tel.startsWith('+') ? tel : (tel.startsWith('00') ? '+' + tel.slice(2) : (tel.length === 9 ? '+351' + tel : tel))
-  const proximaPassada = data.data_proxima_acao && data.data_proxima_acao.slice(0, 10) < new Date().toISOString().slice(0, 10)
+  const proxIso = (data.data_proxima_acao || '').slice(0, 10)
+  const today = new Date().toISOString().slice(0, 10)
+  const proximaPassada = proxIso && proxIso < today
+  const isTerminal = data.status === 'Inactivo' || data.status === 'Não qualificado'
+
+  // Days in pipeline (since first contact or created_at)
+  const startDate = data.data_primeiro_contacto || (data.created_at || '').slice(0, 10)
+  const diasPipeline = startDate ? Math.max(0, Math.floor((Date.now() - new Date(startDate)) / 86400000)) : null
+
+  // Capital range compact
+  const capRange = (data.capital_min > 0 && data.capital_max > 0)
+    ? `${eurCompact(data.capital_min)}–${eurCompact(data.capital_max)}`
+    : data.capital_max > 0 ? `até ${eurCompact(data.capital_max)}`
+    : data.capital_min > 0 ? `desde ${eurCompact(data.capital_min)}`
+    : null
+
+  const pos = pipelinePosition(data.status, tipo)
+  const score = Number(data.pontuacao || 0)
+
   return (
-    <div className="col-span-2 md:col-span-3 rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 p-4">
-      <div className="flex items-start gap-3">
-        <div className="w-12 h-12 rounded-full bg-[#0d0d0d] text-[#C9A84C] flex items-center justify-center text-lg font-bold shrink-0">
-          {iniciais}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-lg font-bold text-gray-800 truncate">{data.nome}</h3>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${tipoColor}`}>{tipo}</span>
-            <InvClassBadge cls={data.classificacao} />
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusColor}`}>{data.status || '—'}</span>
-            {!!data.nda_assinado && <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">NDA ✓</span>}
-            {proximaPassada && <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold">⏰ Atrasado</span>}
-            {data.duplicado_de && <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">Perfil duplo</span>}
+    <div className="col-span-2 md:col-span-3 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      {/* Topo */}
+      <div className="p-4 sm:p-5">
+        <div className="flex items-start gap-4">
+          {/* Avatar */}
+          <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${tipoBg} text-white flex items-center justify-center text-xl font-bold shrink-0 shadow-sm`}>
+            {iniciais}
           </div>
-          <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500 flex-wrap">
-            {data.telemovel && <span>📞 {data.telemovel}</span>}
-            {data.email && <span className="truncate">✉ {data.email}</span>}
-            {data.origem && <span>· Origem: {data.origem}</span>}
-          </div>
-          {/* Acções rápidas */}
-          <div className="flex items-center gap-1.5 mt-3 flex-wrap">
-            {phoneIntl && <a href={`tel:${phoneIntl}`} className="text-xs px-2.5 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1">📞 Ligar</a>}
-            {phoneIntl && <a href={`https://wa.me/${phoneIntl.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-xs px-2.5 py-1 rounded-lg border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 inline-flex items-center gap-1">💬 WhatsApp</a>}
-            {data.email && <a href={`mailto:${data.email}`} className="text-xs px-2.5 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1">✉ Email</a>}
-          </div>
-        </div>
-        <div className="relative shrink-0">
-          <button type="button" onClick={() => setMenuOpen(o => !o)}
-            className="w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 inline-flex items-center justify-center" title="Mais acções">⋮</button>
-          {menuOpen && (
-            <div className="absolute right-0 mt-1 w-52 rounded-lg border border-gray-200 bg-white shadow-lg z-10">
-              <button type="button" onClick={() => { setMenuOpen(false); onCriarPerfilDuplo(outroTipo) }}
-                className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">+ Criar perfil {outroTipo}</button>
+
+          {/* Info principal */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-xl font-bold text-gray-900 truncate">{data.nome}</h3>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${tipoText}`}>{tipo}</span>
+              <InvClassBadge cls={data.classificacao} />
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusColor}`}>{data.status || '—'}</span>
+              {!!data.nda_assinado && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium inline-flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> NDA
+                </span>
+              )}
+              {proximaPassada && !isTerminal && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold inline-flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" /> Atrasado
+                </span>
+              )}
+              {data.duplicado_de && <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">Perfil duplo</span>}
             </div>
+            <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 flex-wrap">
+              {data.telemovel && <span className="inline-flex items-center gap-1"><Phone className="w-3 h-3" /> {data.telemovel}</span>}
+              {data.email && <span className="inline-flex items-center gap-1 truncate"><Mail className="w-3 h-3" /> {data.email}</span>}
+              {data.origem && <span className="text-gray-400">· {data.origem}</span>}
+            </div>
+          </div>
+
+          {/* Kebab */}
+          <div className="relative shrink-0">
+            <button type="button" onClick={() => setMenuOpen(o => !o)}
+              className="w-9 h-9 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 inline-flex items-center justify-center" title="Mais acções">
+              <MoreVertical className="w-4 h-4" />
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 mt-1 w-52 rounded-lg border border-gray-200 bg-white shadow-lg z-10">
+                <button type="button" onClick={() => { setMenuOpen(false); onCriarPerfilDuplo(outroTipo) }}
+                  className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">+ Criar perfil {outroTipo}</button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Mini-KPIs */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
+          <KpiTile icon={Wallet}  label="Capital" value={capRange || '—'}  tone="indigo" />
+          <KpiTile icon={Target}  label="ROI desejado" value={data.roi_pretendido || '—'} tone="amber" />
+          <KpiTile icon={Hourglass} label="Na pipeline" value={diasPipeline != null ? `${diasPipeline}d` : '—'} tone="slate" />
+          <KpiTile icon={TrendingUp} label="Score" value={score > 0 ? `${score}/100` : '—'} tone="green" extra={
+            score > 0 ? (
+              <div className="mt-1 h-1 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-emerald-400 to-green-500 transition-all" style={{ width: `${Math.min(100, score)}%` }} />
+              </div>
+            ) : null
+          } />
+        </div>
+
+        {/* Acções rápidas */}
+        <div className="flex items-center gap-2 mt-4 flex-wrap">
+          {phoneIntl && (
+            <a href={`tel:${phoneIntl}`} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1.5">
+              <Phone className="w-3.5 h-3.5" /> Ligar
+            </a>
+          )}
+          {phoneIntl && (
+            <a href={`https://wa.me/${phoneIntl.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-xs px-3 py-1.5 rounded-lg border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 inline-flex items-center gap-1.5">
+              <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+            </a>
+          )}
+          {data.email && (
+            <a href={`mailto:${data.email}`} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1.5">
+              <Mail className="w-3.5 h-3.5" /> Email
+            </a>
           )}
         </div>
       </div>
+
+      {/* Faixa de progresso da pipeline */}
+      {pos && !isTerminal && (
+        <div className="px-4 sm:px-5 pb-3">
+          <div className="flex items-center gap-2 text-[10px] text-gray-400 uppercase tracking-wide mb-1">
+            <span>Pipeline {tipo.toLowerCase()}</span>
+            <span className="ml-auto font-mono text-gray-500">{pos.idx}/{pos.total}</span>
+          </div>
+          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-full rounded-full transition-all" style={{ width: `${(pos.idx / pos.total) * 100}%`, backgroundColor: '#C9A84C' }} />
+          </div>
+        </div>
+      )}
+      {isTerminal && (
+        <div className="px-4 sm:px-5 py-2 bg-gray-50 border-t border-gray-100 text-[11px] text-gray-500 flex items-center gap-2">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          {data.status === 'Inactivo' ? 'Investidor marcado como inactivo.' : 'Investidor não qualificado.'}
+          {data.motivo_inatividade && <span className="text-gray-400">· {data.motivo_inatividade}</span>}
+          {data.motivo_nao_aprovacao && <span className="text-gray-400">· {data.motivo_nao_aprovacao}</span>}
+        </div>
+      )}
     </div>
   )
 }
 
-// Card "Próximo passo" — une proxima_acao + data_proxima_acao
-function InvestidorProximoPasso({ data }) {
+// Mini-card de KPI usado no Hero
+function KpiTile({ icon: Icon, label, value, tone, extra }) {
+  const tones = {
+    indigo: 'bg-indigo-50 text-indigo-700 border-indigo-100',
+    amber:  'bg-amber-50 text-amber-700 border-amber-100',
+    slate:  'bg-slate-50 text-slate-700 border-slate-100',
+    green:  'bg-emerald-50 text-emerald-700 border-emerald-100',
+  }
+  return (
+    <div className={`rounded-xl border p-2.5 ${tones[tone] || 'bg-gray-50 border-gray-100 text-gray-700'}`}>
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide opacity-70">
+        <Icon className="w-3 h-3" /> {label}
+      </div>
+      <p className="text-sm font-bold mt-0.5 truncate">{value}</p>
+      {extra}
+    </div>
+  )
+}
+
+// Pequeno calendário visual ("12 MAI") usado em cards.
+function MiniDate({ iso }) {
+  const meses = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ']
+  const [y, m, d] = (iso || '').slice(0, 10).split('-')
+  return (
+    <div className="w-12 h-14 rounded-lg border border-gray-200 bg-white shadow-sm flex flex-col overflow-hidden shrink-0">
+      <div className="bg-[#0d0d0d] text-[#C9A84C] text-[9px] text-center font-semibold py-0.5 tracking-wider">{meses[parseInt(m, 10) - 1] || '—'}</div>
+      <div className="flex-1 flex items-center justify-center text-lg font-bold text-gray-800">{d || '?'}</div>
+    </div>
+  )
+}
+
+// Card "Próximo passo" — accionável.
+function InvestidorProximoPasso({ data, onUpdate }) {
   if (!data.proxima_acao && !data.data_proxima_acao) return null
   const dataIso = (data.data_proxima_acao || '').slice(0, 10)
   const today = new Date().toISOString().slice(0, 10)
   const atrasado = dataIso && dataIso < today
+  const diasAte = dataIso ? Math.floor((new Date(dataIso) - new Date(today)) / 86400000) : null
+  const acao = (data.proxima_acao || '').toLowerCase()
+  const ActionIcon = acao.includes('call') || acao.includes('lig') ? Phone
+                   : acao.includes('email') || acao.includes('envia') ? Mail
+                   : acao.includes('reuni') ? Calendar
+                   : acao.includes('whats') ? MessageCircle
+                   : Target
+
+  const [reagendarOpen, setReagendarOpen] = useState(false)
+  const [novaData, setNovaData] = useState(dataIso || today)
+  const [busy, setBusy] = useState(false)
+
+  async function reagendar() {
+    if (!novaData || busy) return
+    setBusy(true)
+    try {
+      const r = await apiFetch(`/api/crm/investidores/${data.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data_proxima_acao: novaData }),
+      })
+      if (!r.ok) throw new Error(await r.text())
+      setReagendarOpen(false)
+      onUpdate?.()
+    } catch (e) { alert('Erro: ' + e.message) }
+    finally { setBusy(false) }
+  }
+
+  async function concluir() {
+    if (busy) return
+    if (!confirm(`Marcar como concluído: "${data.proxima_acao}"?`)) return
+    setBusy(true)
+    try {
+      const r = await apiFetch(`/api/crm/investidores/${data.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          proxima_acao: null,
+          data_proxima_acao: null,
+          data_ultimo_contacto: today,
+        }),
+      })
+      if (!r.ok) throw new Error(await r.text())
+      onUpdate?.()
+    } catch (e) { alert('Erro: ' + e.message) }
+    finally { setBusy(false) }
+  }
+
+  const cor = atrasado ? 'border-red-200 bg-red-50' : 'border-yellow-200 bg-yellow-50/60'
+  const corBadge = atrasado ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-800'
+
   return (
-    <div className={`col-span-2 md:col-span-3 rounded-xl border p-3 ${atrasado ? 'border-red-200 bg-red-50/40' : 'border-yellow-200 bg-yellow-50/40'}`}>
-      <div className="flex items-center gap-2">
-        <span>📌</span>
-        <p className="text-xs uppercase tracking-wide text-gray-500">Próximo passo</p>
+    <div className={`col-span-2 md:col-span-3 rounded-2xl border p-4 ${cor}`}>
+      <div className="flex items-center gap-3">
+        <div className="w-12 h-12 rounded-xl bg-white border border-gray-200 flex items-center justify-center shrink-0 shadow-sm">
+          <ActionIcon className="w-5 h-5 text-gray-600" />
+        </div>
+        {dataIso && <MiniDate iso={dataIso} />}
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-0.5">Próximo passo</p>
+          <p className="text-sm font-bold text-gray-900 truncate">{data.proxima_acao || '—'}</p>
+          {dataIso && (
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${corBadge}`}>
+                {atrasado
+                  ? `${Math.abs(diasAte)}d atrasado`
+                  : diasAte === 0 ? 'Hoje' : diasAte === 1 ? 'Amanhã' : `Em ${diasAte}d`}
+              </span>
+              <span className="text-[11px] text-gray-500">{fmtDate(dataIso)}</span>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button onClick={concluir} disabled={busy}
+            className="text-xs px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 inline-flex items-center gap-1.5 shadow-sm">
+            <Check className="w-3.5 h-3.5" /> Concluir
+          </button>
+          <button onClick={() => setReagendarOpen(o => !o)} disabled={busy}
+            className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 inline-flex items-center gap-1.5">
+            <RefreshCw className="w-3.5 h-3.5" /> Reagendar
+          </button>
+        </div>
       </div>
-      <div className="mt-1 flex items-baseline gap-2 flex-wrap">
-        <p className="text-sm font-semibold text-gray-800">{data.proxima_acao || '—'}</p>
-        {dataIso && <p className={`text-xs ${atrasado ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>{fmtDate(dataIso)} {atrasado ? '(atrasado)' : `· ${fmtDateRelative(dataIso)}`}</p>}
-      </div>
+      {reagendarOpen && (
+        <div className="mt-3 pt-3 border-t border-yellow-200 flex items-center gap-2">
+          <input type="date" value={novaData} onChange={e => setNovaData(e.target.value)}
+            className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white" />
+          <button onClick={reagendar} disabled={busy || !novaData}
+            className="text-xs px-3 py-1.5 rounded-lg bg-yellow-600 text-white hover:bg-yellow-700 disabled:opacity-50">
+            Guardar
+          </button>
+          <button onClick={() => setReagendarOpen(false)}
+            className="text-xs px-2.5 py-1.5 rounded-lg text-gray-500 hover:bg-gray-100">Cancelar</button>
+        </div>
+      )}
     </div>
   )
 }
 
-// Timeline simples — 5 datas chave em ordem cronológica.
+// Timeline cronológica enriquecida — eventos chave com ícone, gap em dias e estado (passado/hoje/futuro).
 function InvestidorTimeline({ data }) {
+  const today = new Date().toISOString().slice(0, 10)
   const eventos = [
-    { key: '1º contacto', date: data.data_primeiro_contacto, icon: '👋' },
-    { key: 'Reunião', date: data.data_reuniao, icon: '🤝' },
-    { key: 'Último contacto', date: data.data_ultimo_contacto, icon: '📞' },
-    { key: 'Follow-up', date: data.data_follow_up, icon: '🔁' },
-    { key: 'Próxima acção', date: data.data_proxima_acao, icon: '📌' },
+    { key: '1º contacto',     date: data.data_primeiro_contacto, Icon: Users },
+    { key: 'Reunião',         date: data.data_reuniao,           Icon: Calendar },
+    { key: 'Último contacto', date: data.data_ultimo_contacto,   Icon: PhoneCall },
+    { key: 'Follow-up',       date: data.data_follow_up,         Icon: RefreshCw },
+    { key: 'Próxima acção',   date: data.data_proxima_acao,      Icon: Target },
   ].filter(e => e.date).sort((a, b) => (a.date || '').localeCompare(b.date || ''))
-  if (eventos.length === 0) return <p className="col-span-2 md:col-span-3 text-xs text-gray-400">Sem eventos registados</p>
+  if (eventos.length === 0) {
+    return <p className="col-span-2 md:col-span-3 text-xs text-gray-400 italic">Sem eventos registados</p>
+  }
   return (
-    <div className="col-span-2 md:col-span-3 relative pl-4">
-      <span className="absolute left-1.5 top-2 bottom-2 w-px bg-gray-200" />
-      {eventos.map((e, i) => (
-        <div key={i} className="relative flex items-baseline gap-3 py-1.5">
-          <span className="absolute -left-3 w-3 h-3 rounded-full bg-[#C9A84C] border-2 border-white" />
-          <span className="text-sm">{e.icon}</span>
-          <span className="text-sm text-gray-700">{e.key}</span>
-          <span className="text-xs text-gray-400 ml-auto">{fmtDate(e.date)}</span>
-        </div>
-      ))}
+    <div className="col-span-2 md:col-span-3 relative pl-2">
+      <span className="absolute left-4 top-2 bottom-2 w-px bg-gradient-to-b from-[#C9A84C] via-gray-200 to-gray-100" />
+      {eventos.map((e, i) => {
+        const iso = (e.date || '').slice(0, 10)
+        const future = iso > today
+        const isToday = iso === today
+        const past = iso < today
+        const prev = i > 0 ? eventos[i - 1].date.slice(0, 10) : null
+        const gap = prev ? Math.floor((new Date(iso) - new Date(prev)) / 86400000) : null
+        const dotColor = future ? 'bg-yellow-500' : isToday ? 'bg-[#C9A84C]' : 'bg-gray-300'
+        const Icon = e.Icon
+        return (
+          <div key={i} className="relative flex items-start gap-3 py-2">
+            <div className={`absolute left-2.5 top-3 w-3 h-3 rounded-full ${dotColor} border-2 border-white shadow-sm`} />
+            <div className={`ml-8 flex-1 rounded-lg border p-2.5 ${future ? 'bg-yellow-50/40 border-yellow-100' : isToday ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100'}`}>
+              <div className="flex items-center gap-2">
+                <Icon className={`w-3.5 h-3.5 ${future ? 'text-yellow-700' : 'text-gray-500'}`} />
+                <span className="text-sm font-medium text-gray-800">{e.key}</span>
+                <span className="ml-auto text-[11px] font-mono text-gray-500">{fmtDate(iso)}</span>
+              </div>
+              <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-400">
+                <span>{fmtDateRelative(iso)}</span>
+                {gap != null && gap > 0 && <span>· {gap}d depois do anterior</span>}
+                {isToday && <span className="text-amber-700 font-semibold">· Hoje</span>}
+              </div>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

@@ -7,7 +7,7 @@ import { TabKPIs } from '../components/crm/TabKPIs.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { KanbanSkeleton, TableSkeleton } from '../components/ui/Skeleton.jsx'
 import { EmptyState } from '../components/ui/EmptyState.jsx'
-import { Building2, Users, UserCheck, Briefcase, HardHat, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Building2, Users, UserCheck, Briefcase, HardHat, ChevronLeft, ChevronRight, Phone, MessageCircle, Wallet, AlertTriangle, Clock as Clock3 } from 'lucide-react'
 import { MultiSelect } from '../components/ui/MultiSelect.jsx'
 import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
 import { apiFetch } from '../lib/api.js'
@@ -716,18 +716,79 @@ export function CRM() {
       groupField: 'status',
       renderCard: (item) => {
         const tipo = item.tipo_principal || 'Passivo'
-        const tipoColor = tipo === 'Ativo' ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-violet-100 text-violet-700 border-violet-200'
+        const tipoBg = tipo === 'Ativo' ? 'from-orange-500 to-amber-600' : 'from-violet-500 to-purple-600'
+        const iniciais = (item.nome || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase()).join('') || '?'
+        // Capital compacto
+        const capCompact = (() => {
+          const v = item.capital_max
+          if (!v) return null
+          if (v >= 1_000_000) return `€${(v / 1_000_000).toFixed(v % 1_000_000 === 0 ? 0 : 1)}M`
+          if (v >= 1_000) return `€${Math.round(v / 1000)}k`
+          return `€${v}`
+        })()
+        // Dias parado no estado actual (usa updated_at como proxy)
+        const updIso = item.updated_at ? new Date(item.updated_at) : null
+        const diasParado = updIso ? Math.floor((Date.now() - updIso) / 86400000) : null
+        // Próxima acção atrasada
+        const proxIso = (item.data_proxima_acao || '').slice(0, 10)
+        const today = new Date().toISOString().slice(0, 10)
+        const atrasado = proxIso && proxIso < today
+        // Telefone para WhatsApp
+        const tel = (item.telemovel || '').replace(/\s+/g, '')
+        const phoneIntl = tel.startsWith('+') ? tel : (tel.startsWith('00') ? '+' + tel.slice(2) : (tel.length === 9 ? '+351' + tel : tel))
+
         return (
-          <div>
-            <div className="flex items-center gap-1.5 mb-1">
-              <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-semibold ${tipoColor}`}>{tipo === 'Ativo' ? 'A' : 'P'}</span>
-              <ClassBadge cls={item.classificacao} />
-              <p className="text-sm font-semibold text-gray-800 truncate">{item.nome}</p>
+          <div className="group relative">
+            <div className="flex items-start gap-2">
+              <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${tipoBg} text-white flex items-center justify-center text-[10px] font-bold shrink-0`}>
+                {iniciais}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1 mb-0.5">
+                  <ClassBadge cls={item.classificacao} />
+                  <p className="text-sm font-semibold text-gray-800 truncate">{item.nome}</p>
+                </div>
+                <p className="text-[11px] text-gray-500 truncate">{item.origem ?? '—'}</p>
+              </div>
             </div>
-            <p className="text-xs text-gray-500">{item.origem ?? '—'}</p>
-            {item.capital_max > 0 && <p className="text-xs font-mono text-indigo-600 mt-1">até {EUR(item.capital_max)}</p>}
-            {item.telemovel && <p className="text-xs text-gray-400 mt-0.5">{item.telemovel}</p>}
-            {item.duplicado_de && <p className="text-[9px] text-gray-300 mt-0.5">Perfil duplo</p>}
+
+            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+              {capCompact && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-mono inline-flex items-center gap-1">
+                  <Wallet className="w-2.5 h-2.5" /> {capCompact}
+                </span>
+              )}
+              {atrasado && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-red-50 text-red-700 font-medium inline-flex items-center gap-1">
+                  <AlertTriangle className="w-2.5 h-2.5" /> atrasado
+                </span>
+              )}
+              {!atrasado && diasParado != null && diasParado >= 14 && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-yellow-50 text-yellow-700 font-medium inline-flex items-center gap-1">
+                  <Clock3 className="w-2.5 h-2.5" /> {diasParado}d
+                </span>
+              )}
+              {!!item.nda_assinado && (
+                <span className="text-[9px] px-1 py-0.5 rounded bg-green-50 text-green-700 font-semibold">NDA</span>
+              )}
+              {item.duplicado_de && <span className="text-[9px] text-gray-300">duplo</span>}
+            </div>
+
+            {/* Hover: acções rápidas */}
+            <div className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition flex gap-1">
+              {phoneIntl && (
+                <a href={`tel:${phoneIntl}`} onClick={e => e.stopPropagation()}
+                  className="w-6 h-6 rounded-md bg-white border border-gray-200 shadow-sm hover:bg-gray-50 inline-flex items-center justify-center text-gray-600" title="Ligar">
+                  <Phone className="w-3 h-3" />
+                </a>
+              )}
+              {phoneIntl && (
+                <a href={`https://wa.me/${phoneIntl.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                  className="w-6 h-6 rounded-md bg-green-50 border border-green-200 shadow-sm hover:bg-green-100 inline-flex items-center justify-center text-green-700" title="WhatsApp">
+                  <MessageCircle className="w-3 h-3" />
+                </a>
+              )}
+            </div>
           </div>
         )
       },
@@ -923,6 +984,9 @@ export function CRM() {
               setSearch('')
               setDetail(null, { replace: true })
               setEditing(null)
+              // Filtros são tab-específicos (cada tab usa colunas diferentes na BD).
+              // Mantê-los entre tabs causa 500 (ex.: tipo_principal de Investidores aplicado a Imóveis).
+              if (t !== tab) setFilters({})
               // Reset view se ficou num estado invalido para a nova tab
               const followupsOnlyConsultores = view === 'followups' && t !== 'Consultores'
               const relatorioOnlyCertasTabs = view === 'relatorio' && t !== 'Consultores' && t !== 'Investidores'
