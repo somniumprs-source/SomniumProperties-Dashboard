@@ -59,6 +59,22 @@ function cleanFormData(data) {
   return cleaned
 }
 
+// ── Cache de colunas por tabela ──────────────────────────────
+// Sanitiza filtros vindos do URL: chaves que não existam na tabela
+// são silenciosamente descartadas (em vez de gerar SQL invalido + 500).
+// Caso típico: a UI deixa filtros de outra tab no URL ao trocar de separador.
+const _columnsCache = new Map()
+async function getColumns(table) {
+  if (_columnsCache.has(table)) return _columnsCache.get(table)
+  const { rows } = await pool.query(
+    `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1`,
+    [table]
+  )
+  const set = new Set(rows.map(r => r.column_name))
+  _columnsCache.set(table, set)
+  return set
+}
+
 // ── Generic CRUD factory ─────────────────────────────────────
 function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at DESC' } = {}) {
   return {
@@ -66,8 +82,9 @@ function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at 
       let query = `SELECT * FROM ${table}`
       const params = []
       if (filter) {
+        const cols = await getColumns(table)
         const conditions = Object.entries(filter)
-          .filter(([, v]) => v !== undefined && v !== null && v !== '')
+          .filter(([k, v]) => v !== undefined && v !== null && v !== '' && cols.has(k))
         if (conditions.length > 0) {
           const where = conditions.map(([k, v], i) => { params.push(v); return `${k} = $${i + 1}` })
           query += ` WHERE ${where.join(' AND ')}`
