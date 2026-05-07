@@ -43,7 +43,7 @@ export function Filters({ tab, filters, onChange }) {
         </select>
         <select value={filters.origem ?? ''} onChange={e => set('origem', e.target.value)} className={selectClass}>
           <option value="">Todas as origens</option>
-          {['Skool','Grupos Whatsapp','Referenciação','LinkedIn','Google Forms','Outro'].map(o =>
+          {['Landing Page','Skool','Grupos Whatsapp','Referenciação','LinkedIn','Eventos Networking','Outro'].map(o =>
             <option key={o} value={o}>{o}</option>
           )}
         </select>
