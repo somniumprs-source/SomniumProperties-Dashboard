@@ -1412,9 +1412,8 @@ router.post('/auto-task', async (req, res) => {
         'Investidor Qualificado em Carteira': 'Procurar deal compatível para {name}',
         'Investidor em parceria':             'Preparar onboarding de {name}',
         // Activo
-        'Acesso a Off-Market':                'Enviar primeiros deals off-market a {name}',
         'Negociação de Deal':                 'Acompanhar negociação de deal com {name}',
-        'Investidor Activo':                  'Preparar próximo deal para {name}',
+        'Investidor Ativo':                   'Preparar próximo deal para {name}',
       },
       consultores: {
         'Follow up':          'Follow-up com consultor {name}',
@@ -1786,7 +1785,7 @@ router.get('/relatorio/investidores', async (req, res) => {
     const { rows: reunioes } = await pool.query("SELECT id, entidade_id, data, duracao_min FROM reunioes WHERE entidade_tipo = 'investidores'")
     const now = new Date()
 
-    const statusOrder = ['Pendente de Aprovação','Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor Qualificado em Carteira','Acesso a Off-Market','Negociação de Deal','Investidor em parceria','Investidor Activo','Não qualificado','Inactivo']
+    const statusOrder = ['Pendente de Aprovação','Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor Qualificado em Carteira','Negociação de Deal','Investidor em parceria','Investidor Ativo','Não qualificado','Inactivo']
 
     const report = {
       gerado_em: now.toISOString(),
@@ -1831,7 +1830,7 @@ router.get('/relatorio/investidores', async (req, res) => {
       if (minhasReunioes.length === 0) report.alertas.sem_reuniao++
       if (!capitalMax) report.alertas.sem_capital++
       if (!inv.classificacao) report.alertas.sem_classificacao++
-      if (!inv.nda_assinado && ['Investidor Qualificado em Carteira','Investidor em parceria','Acesso a Off-Market','Negociação de Deal','Investidor Activo'].includes(status)) report.alertas.nda_pendente++
+      if (!inv.nda_assinado && ['Investidor Qualificado em Carteira','Investidor em parceria','Negociação de Deal','Investidor Ativo'].includes(status)) report.alertas.nda_pendente++
 
       // Métricas
       if (capitalMax > 0) { somaCapital += capitalMax; comCapital++ }
@@ -1839,7 +1838,7 @@ router.get('/relatorio/investidores', async (req, res) => {
       report.metricas_globais.capital_investido += montante
       if (minhasReunioes.length > 0) report.metricas_globais.com_reuniao++
       if (inv.nda_assinado) report.metricas_globais.com_nda++
-      if (status === 'Investidor em parceria' || status === 'Investidor Activo') report.metricas_globais.em_parceria++
+      if (status === 'Investidor em parceria' || status === 'Investidor Ativo') report.metricas_globais.em_parceria++
 
       let estrategias = []
       try { estrategias = JSON.parse(inv.estrategia || '[]') } catch {}
@@ -2026,16 +2025,16 @@ router.post('/scorecards', async (req, res) => {
         avaliador || 'Sistema', fonte || 'manual', now]
     )
 
-    // Buscar classificação anterior + tipo do investidor
-    const { rows: [inv] } = await pool.query('SELECT classificacao, pontuacao, tipo_principal FROM investidores WHERE id = $1', [investidor_id])
+    // Buscar classificação anterior do investidor
+    const { rows: [inv] } = await pool.query('SELECT classificacao, pontuacao FROM investidores WHERE id = $1', [investidor_id])
 
-    // Auto-promoção: estado qualificado depende do tipo (Passivo → Carteira; Ativo → Off-Market).
-    const proximoEstado = inv?.tipo_principal === 'Ativo' ? 'Acesso a Off-Market' : 'Investidor Qualificado em Carteira'
+    // Auto-promoção: scorecard guardado durante "Call marcada" ou "Follow Up"
+    // promove para "Investidor Qualificado em Carteira" (independente do tipo).
     await pool.query(
       `UPDATE investidores SET classificacao = $1, pontuacao = $2,
-        status = CASE WHEN status IN ('Call marcada','Follow Up') THEN $4 ELSE status END,
-        updated_at = $3 WHERE id = $5`,
-      [classificacao, ponderado, now, proximoEstado, investidor_id]
+        status = CASE WHEN status IN ('Call marcada','Follow Up') THEN 'Investidor Qualificado em Carteira' ELSE status END,
+        updated_at = $3 WHERE id = $4`,
+      [classificacao, ponderado, now, investidor_id]
     )
 
     // Registar no histórico de classificação
