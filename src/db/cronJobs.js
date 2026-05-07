@@ -379,6 +379,26 @@ async function runReclassificacaoInvestidores() {
   }
 }
 
+// ── JOB 5: Auto-Inactivo (diário 07:00) ─────────────────────
+// Passa investidores em "Follow Up" sem actividade > 90d para "Inactivo".
+async function runAutoInactivoInvestidores() {
+  console.log('[cron] Auto-Inactivo investidores — a correr')
+  try {
+    const { rowCount } = await pool.query(
+      `UPDATE investidores SET
+         status = 'Inactivo',
+         motivo_inatividade = COALESCE(NULLIF(motivo_inatividade, ''), 'Sem actividade há mais de 90 dias'),
+         updated_at = NOW()::TEXT
+       WHERE status = 'Follow Up'
+         AND COALESCE(data_ultimo_contacto, data_primeiro_contacto, created_at)
+             < TO_CHAR(NOW() - INTERVAL '90 days', 'YYYY-MM-DD')`
+    )
+    console.log(`[cron] Auto-Inactivo: ${rowCount} investidores movidos para Inactivo`)
+  } catch (e) {
+    console.error('[cron] Erro auto-Inactivo:', e.message)
+  }
+}
+
 // ── Registar jobs ───────────────────────────────────────────
 export function startCronJobs() {
   // Follow-up diário às 08:00
@@ -396,7 +416,11 @@ export function startCronJobs() {
   // Reclassificação semanal investidores Domingos às 10:00
   cron.schedule('0 10 * * 0', runReclassificacaoInvestidores, { timezone: TIMEZONE })
   console.log('[cron] Reclassificação investidores registada → Domingos 10:00 Europe/Lisbon')
+
+  // Auto-Inactivo investidores diário às 07:00
+  cron.schedule('0 7 * * *', runAutoInactivoInvestidores, { timezone: TIMEZONE })
+  console.log('[cron] Auto-Inactivo investidores registado → 07:00 Europe/Lisbon')
 }
 
 // Exports para execução manual via API
-export { runFollowUp, runRelatorioDiario, runRelatorioSemanal, runReclassificacaoInvestidores, REACTIVATION_TEMPLATE }
+export { runFollowUp, runRelatorioDiario, runRelatorioSemanal, runReclassificacaoInvestidores, runAutoInactivoInvestidores, REACTIVATION_TEMPLATE }

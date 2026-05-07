@@ -52,19 +52,41 @@ export const IMOVEL_ESTADO_COLOR = {
 }
 
 // ── Investidores — Status ────────────────────────────────────
-export const INV_STATUS = [
+// Pipeline Passivo (capital em CAEP/Wholesaling — não opera deals)
+export const INV_STATUS_PASSIVO = [
   'Pendente de Aprovação', 'Potencial Investidor', 'Marcar call', 'Call marcada',
-  'Follow Up', 'Investidor em espera', 'Investidor em parceria',
+  'Follow Up', 'Investidor Qualificado em Carteira', 'Investidor em parceria',
+  'Não qualificado', 'Inactivo',
 ]
 
+// Pipeline Activo (compra deals connosco)
+export const INV_STATUS_ATIVO = [
+  'Pendente de Aprovação', 'Potencial Investidor', 'Marcar call', 'Call marcada',
+  'Follow Up', 'Acesso a Off-Market', 'Negociação de Deal', 'Investidor Activo',
+  'Não qualificado', 'Inactivo',
+]
+
+// União usada para filtros gerais. Mantida como `INV_STATUS` por compatibilidade.
+export const INV_STATUS = [...new Set([...INV_STATUS_PASSIVO, ...INV_STATUS_ATIVO])]
+
+// Devolve a lista de estados aplicável conforme o tipo_principal.
+export function invStatusFor(tipo) {
+  return tipo === 'Ativo' ? INV_STATUS_ATIVO : INV_STATUS_PASSIVO
+}
+
 export const INV_STATUS_COLOR = {
-  'Pendente de Aprovação':   'bg-amber-100 text-amber-700',
-  'Potencial Investidor':    'bg-gray-100 text-gray-600',
-  'Marcar call':             'bg-yellow-100 text-yellow-700',
-  'Call marcada':            'bg-blue-100 text-blue-700',
-  'Follow Up':               'bg-orange-100 text-orange-700',
-  'Investidor em espera': 'bg-indigo-100 text-indigo-700',
-  'Investidor em parceria':  'bg-green-100 text-green-700',
+  'Pendente de Aprovação':              'bg-amber-100 text-amber-700',
+  'Potencial Investidor':               'bg-gray-100 text-gray-600',
+  'Marcar call':                        'bg-yellow-100 text-yellow-700',
+  'Call marcada':                       'bg-blue-100 text-blue-700',
+  'Follow Up':                          'bg-orange-100 text-orange-700',
+  'Investidor Qualificado em Carteira': 'bg-indigo-100 text-indigo-700',
+  'Investidor em parceria':             'bg-green-100 text-green-700',
+  'Acesso a Off-Market':                'bg-cyan-100 text-cyan-700',
+  'Negociação de Deal':                 'bg-purple-100 text-purple-700',
+  'Investidor Activo':                  'bg-green-100 text-green-700',
+  'Não qualificado':                    'bg-red-100 text-red-700',
+  'Inactivo':                           'bg-gray-100 text-gray-500',
 }
 
 // ── Consultores — Estatutos ──────────────────────────────────

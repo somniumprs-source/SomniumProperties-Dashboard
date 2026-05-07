@@ -1553,20 +1553,28 @@ const FUNIL_IMOVEIS = [
 
 // Funil do investidor — suporta nomes antigos e novos do Notion
 const FUNIL_INVESTIDORES = [
+  'Pendente de Aprovação',
   'Potencial Investidor', 'Potencial',
   'Marcar call', 'Marcar Call',
   'Call marcada', 'Call Marcada',
   'Follow Up',
-  'Investidor em espera', 'Classificado',
+  'Investidor Qualificado em Carteira', 'Investidor em espera', 'Classificado',
+  'Acesso a Off-Market',
+  'Negociação de Deal',
   'Investidor em parceria', 'Em Parceria',
+  'Investidor Activo',
 ]
 // Labels bonitos para o funil (colapsa old→new)
 const FUNIL_INV_LABEL = {
-  'Potencial Investidor':    'Potencial',
-  'Marcar call':             'Marcar Call',
-  'Call marcada':            'Call Marcada',
-  'Investidor em espera': 'Classificado',
-  'Investidor em parceria':  'Em Parceria',
+  'Potencial Investidor':                'Potencial',
+  'Marcar call':                         'Marcar Call',
+  'Call marcada':                        'Call Marcada',
+  'Investidor Qualificado em Carteira':  'Em Carteira',
+  'Investidor em espera':                'Em Carteira',
+  'Investidor em parceria':              'Em Parceria',
+  'Acesso a Off-Market':                 'Off-Market',
+  'Negociação de Deal':                  'Em Deal',
+  'Investidor Activo':                   'Activo',
 }
 
 app.get('/api/kpis/comercial', async (req, res) => {
@@ -1959,7 +1967,7 @@ app.get('/api/comercial/metricas-temporais', async (req, res) => {
       .sort((a,b) => b.total - a.total)
 
     // ── Investidores ──────────────────────────────────────────
-    const INV_PARCERIA = new Set(['Investidor em parceria','Em Parceria','Investidor Ativo'])
+    const INV_PARCERIA = new Set(['Investidor em parceria','Em Parceria','Investidor Activo','Investidor Ativo'])
     const emParceria   = investidores.filter(i => INV_PARCERIA.has(i.status))
 
     const invSemContacto60 = investidores
@@ -4765,19 +4773,39 @@ app.get('/api/alertas', async (req, res) => {
     }
 
     // ── Investidores sem contacto >7 dias ──
+    const ESTADOS_TERMINAIS = new Set(['Inactivo', 'Não qualificado'])
+    const ESTADOS_PARCERIA = new Set(['Investidor em parceria', 'Em Parceria', 'Investidor Activo', 'Investidor Ativo'])
     for (const inv of investidores) {
       if (inv.status === 'Pendente de Aprovação') continue
+      if (ESTADOS_TERMINAIS.has(inv.status)) continue
       const diasSem = inv.diasSemContacto ?? (() => {
         const ultima = inv.dataUltimoContacto ?? inv.dataReuniao ?? inv.dataPrimeiroContacto
         if (!ultima) return null
         return Math.floor((now - new Date(ultima)) / 86400000)
       })()
-      if (diasSem != null && diasSem > 7 && !['Investidor em parceria', 'Em Parceria'].includes(inv.status)) {
+      if (diasSem != null && diasSem > 7 && !ESTADOS_PARCERIA.has(inv.status)) {
         alerts.push({
           tipo: 'inatividade_investidor',
           severidade: diasSem > 30 ? 'critico' : diasSem > 14 ? 'aviso' : 'info',
           entidade: inv.nome,
           mensagem: `${diasSem} dias sem contacto`,
+          status: inv.status,
+          id: inv.id,
+        })
+      }
+    }
+
+    // ── Investidores marcados Inactivos recentemente (cron diário) ──
+    for (const inv of investidores) {
+      if (inv.status !== 'Inactivo') continue
+      const upd = inv.updatedAt || inv.updated_at
+      const diasDesdeMudanca = upd ? Math.floor((now - new Date(upd)) / 86400000) : null
+      if (diasDesdeMudanca != null && diasDesdeMudanca <= 7) {
+        alerts.push({
+          tipo: 'investidor_inactivo_recente',
+          severidade: 'aviso',
+          entidade: inv.nome,
+          mensagem: `Marcado Inactivo${diasDesdeMudanca === 0 ? ' hoje' : ` há ${diasDesdeMudanca}d`} · ${inv.motivoInatividade || inv.motivo_inatividade || 'sem motivo'}`,
           status: inv.status,
           id: inv.id,
         })

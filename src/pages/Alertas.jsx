@@ -15,6 +15,8 @@ const SEV_DOT = {
 }
 const TIPO_LABEL = {
   inatividade_investidor:        'Investidor inativo',
+  investidor_inactivo_recente:   'Investidor → Inactivo (auto)',
+  pendente_aprovacao:            'Lead pendente',
   followup_consultor:            'Follow-up atrasado',
   imovel_parado:                 'Imóvel parado',
   consultor_sem_contacto_48h:    'Consultor sem 1º contacto',
@@ -201,6 +203,37 @@ export function Alertas() {
             )}
           </div>
         </div>
+
+        {/* Investidores Inactivos (auto) */}
+        {(() => {
+          const inactivos = (alertas?.alertas ?? []).filter(a => a.tipo === 'investidor_inactivo_recente')
+          if (inactivos.length === 0) return null
+          return (
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-gray-700">
+                  Investidores movidos para Inactivo (últimos 7 dias)
+                </h2>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium">{inactivos.length}</span>
+              </div>
+              <p className="text-xs text-gray-400 mb-3">A cron diária passa Follow Ups parados &gt; 90 dias para Inactivo automaticamente. Revê e reactiva se for caso.</p>
+              <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
+                {inactivos.map((a, i) => (
+                  <div key={i} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg border border-gray-100 hover:bg-gray-50">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{a.entidade}</p>
+                      <p className="text-xs text-gray-500 truncate">{a.mensagem}</p>
+                    </div>
+                    <a href={`/crm?tab=Investidores&detail=${a.id}`}
+                      className="text-xs px-2.5 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shrink-0">
+                      Abrir ficha
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Campos em Falta */}
         {alertas?.camposEmFalta?.length > 0 && (
