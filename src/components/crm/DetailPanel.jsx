@@ -20,7 +20,7 @@ import { ImovelInteracoesSection } from './ImovelInteracoesSection.jsx'
 import { Combobox } from '../ui/Combobox.jsx'
 import freguesiasData from '../../constants/coimbra-freguesias.json'
 import { supabase } from '../../lib/supabase.js'
-import { CLASS_COLOR, INV_STATUS, INV_STATUS_COLOR, ORIGENS_INVESTIDORES, fmtDate, fmtDateRelative } from '../../constants.js'
+import { CLASS_COLOR, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, ORIGENS_INVESTIDORES, fmtDate, fmtDateRelative } from '../../constants.js'
 
 // Hook simples — carrega lookups uma vez e mantém em memória
 const __lookupsCache = { data: null, promise: null }
@@ -2070,7 +2070,7 @@ function InvestidorEditSections({ data, form, setField }) {
     <Section icon="📋" title="Identificação & Status" fields={sec.identificacao} form={form} defaultOpen>
       <EF label="Nome" field="nome" form={form} set={setField} />
       <EF label="Tipo" field="tipo_principal" form={form} set={setField} type="select" options={['Passivo','Ativo']} />
-      <EF label="Status" field="status" form={form} set={setField} type="select" options={INV_STATUS} />
+      <EF label="Status" field="status" form={form} set={setField} type="select" options={invStatusFor(form.tipo_principal)} />
       <EF label="Classificação" field="classificacao" form={form} set={setField} type="select" options={['A','B','C','D']} />
       <EF label="Origem" field="origem" form={form} set={setField} type="select" options={ORIGENS_INVESTIDORES} />
       <EF label="1º Contacto" field="data_primeiro_contacto" form={form} set={setField} type="date" />

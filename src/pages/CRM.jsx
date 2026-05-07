@@ -9,7 +9,7 @@ import { KanbanSkeleton, TableSkeleton } from '../components/ui/Skeleton.jsx'
 import { EmptyState } from '../components/ui/EmptyState.jsx'
 import { Building2, Users, UserCheck, Briefcase, HardHat, ChevronLeft, ChevronRight } from 'lucide-react'
 import { MultiSelect } from '../components/ui/MultiSelect.jsx'
-import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS_COLOR, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
+import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
 import { apiFetch } from '../lib/api.js'
 import { useUnreadCounts } from '../hooks/useUnreadCounts.js'
 import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
@@ -710,7 +710,9 @@ export function CRM() {
       },
     },
     'Investidores': {
-      columns: ['Pendente de Aprovação','Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor em espera','Investidor em parceria'],
+      // Colunas dependem do sub-tab (Passivo vs Ativo). Estados terminais
+      // (Não qualificado, Inactivo) ficam fora do kanban diário — vê-los na vista tabela.
+      columns: (invSubTab === 'Ativo' ? INV_STATUS_ATIVO : INV_STATUS_PASSIVO).filter(s => s !== 'Não qualificado' && s !== 'Inactivo'),
       groupField: 'status',
       renderCard: (item) => {
         const tipo = item.tipo_principal || 'Passivo'
