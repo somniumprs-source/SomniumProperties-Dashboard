@@ -1559,10 +1559,9 @@ const FUNIL_INVESTIDORES = [
   'Call marcada', 'Call Marcada',
   'Follow Up',
   'Investidor Qualificado em Carteira', 'Investidor em espera', 'Classificado',
-  'Acesso a Off-Market',
   'Negociação de Deal',
   'Investidor em parceria', 'Em Parceria',
-  'Investidor Activo',
+  'Investidor Ativo',
 ]
 // Labels bonitos para o funil (colapsa old→new)
 const FUNIL_INV_LABEL = {
@@ -1572,9 +1571,8 @@ const FUNIL_INV_LABEL = {
   'Investidor Qualificado em Carteira':  'Em Carteira',
   'Investidor em espera':                'Em Carteira',
   'Investidor em parceria':              'Em Parceria',
-  'Acesso a Off-Market':                 'Off-Market',
   'Negociação de Deal':                  'Em Deal',
-  'Investidor Activo':                   'Activo',
+  'Investidor Ativo':                    'Ativo',
 }
 
 app.get('/api/kpis/comercial', async (req, res) => {
@@ -1967,7 +1965,7 @@ app.get('/api/comercial/metricas-temporais', async (req, res) => {
       .sort((a,b) => b.total - a.total)
 
     // ── Investidores ──────────────────────────────────────────
-    const INV_PARCERIA = new Set(['Investidor em parceria','Em Parceria','Investidor Activo','Investidor Ativo'])
+    const INV_PARCERIA = new Set(['Investidor em parceria','Em Parceria','Investidor Ativo'])
     const emParceria   = investidores.filter(i => INV_PARCERIA.has(i.status))
 
     const invSemContacto60 = investidores
@@ -4774,7 +4772,7 @@ app.get('/api/alertas', async (req, res) => {
 
     // ── Investidores sem contacto >7 dias ──
     const ESTADOS_TERMINAIS = new Set(['Inactivo', 'Não qualificado'])
-    const ESTADOS_PARCERIA = new Set(['Investidor em parceria', 'Em Parceria', 'Investidor Activo', 'Investidor Ativo'])
+    const ESTADOS_PARCERIA = new Set(['Investidor em parceria', 'Em Parceria', 'Investidor Ativo'])
     for (const inv of investidores) {
       if (inv.status === 'Pendente de Aprovação') continue
       if (ESTADOS_TERMINAIS.has(inv.status)) continue

@@ -62,7 +62,7 @@ export const INV_STATUS_PASSIVO = [
 // Pipeline Activo (compra deals connosco)
 export const INV_STATUS_ATIVO = [
   'Pendente de Aprovação', 'Potencial Investidor', 'Marcar call', 'Call marcada',
-  'Follow Up', 'Acesso a Off-Market', 'Negociação de Deal', 'Investidor Activo',
+  'Follow Up', 'Investidor Qualificado em Carteira', 'Negociação de Deal', 'Investidor Ativo',
   'Não qualificado', 'Inactivo',
 ]
 
@@ -82,9 +82,8 @@ export const INV_STATUS_COLOR = {
   'Follow Up':                          'bg-orange-100 text-orange-700',
   'Investidor Qualificado em Carteira': 'bg-indigo-100 text-indigo-700',
   'Investidor em parceria':             'bg-green-100 text-green-700',
-  'Acesso a Off-Market':                'bg-cyan-100 text-cyan-700',
   'Negociação de Deal':                 'bg-purple-100 text-purple-700',
-  'Investidor Activo':                  'bg-green-100 text-green-700',
+  'Investidor Ativo':                  'bg-green-100 text-green-700',
   'Não qualificado':                    'bg-red-100 text-red-700',
   'Inactivo':                           'bg-gray-100 text-gray-500',
 }
