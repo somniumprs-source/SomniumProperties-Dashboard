@@ -2619,16 +2619,17 @@ app.get('/api/metricas', async (req, res) => {
       'Investidor em parceria','Em Parceria','Investidor Ativo',
     ])
     const ESTADOS_PROPOSTA_INV = new Set([
-      'Investidor em espera','Classificado','Qualificado',
+      'Investidor Qualificado em Carteira','Investidor em espera','Classificado','Qualificado',
       'Em Qualificacao','Em Qualificação',
-      'Proposta Enviada','Em Negociacao','Em Negociação',
-      'Investidor em parceria','Em Parceria',
+      'Proposta Enviada','Em Negociacao','Em Negociação','Negociação de Deal',
+      'Investidor em parceria','Em Parceria','Investidor Ativo',
     ])
     const ESTADOS_PIPELINE_INV = new Set([
+      'Pendente de Aprovação',
       'Potencial','Potencial Investidor',
       'Marcar Call','Marcar call',
       'Call Marcada','Call marcada',
-      'Follow Up','Classificado','Investidor em espera',
+      'Follow Up','Classificado','Investidor em espera','Investidor Qualificado em Carteira',
     ])
 
     const imoveisAtivos      = imoveis.filter(i => !ESTADOS_NEGATIVOS_SET.has(i.estado))
@@ -4922,8 +4923,10 @@ app.get('/api/alertas', async (req, res) => {
       const missing = []
       if (!inv.dataPrimeiroContacto) missing.push('Data Primeiro Contacto')
       if (!inv.origem) missing.push('Origem')
-      if (inv.classificacao.length === 0 && ['Investidor em espera', 'Investidor em parceria', 'Em Parceria'].includes(inv.status)) missing.push('Classificação')
-      if (['Investidor em parceria', 'Em Parceria'].includes(inv.status) && inv.montanteInvestido === 0) missing.push('Montante Investido')
+      const QUALIFICADOS = ['Investidor Qualificado em Carteira','Investidor em espera','Investidor em parceria','Em Parceria','Negociação de Deal','Investidor Ativo']
+      const PARCERIA = ['Investidor em parceria','Em Parceria','Investidor Ativo']
+      if (inv.classificacao.length === 0 && QUALIFICADOS.includes(inv.status)) missing.push('Classificação')
+      if (PARCERIA.includes(inv.status) && inv.montanteInvestido === 0) missing.push('Montante Investido')
       if (missing.length > 0) camposEmFalta.push({ db: 'Investidores', nome: inv.nome, campos: missing, id: inv.id })
     }
 
@@ -5346,7 +5349,12 @@ app.post('/api/automation/auto-dates', async (req, res) => {
     const updated = []
 
     // Investidores: preencher Data de Último Contacto baseado em status avançado
-    const INV_AVANCADOS = new Set(['Follow Up', 'Investidor em espera', 'Investidor em parceria', 'Em Parceria', 'Call marcada', 'Call Marcada'])
+    const INV_AVANCADOS = new Set([
+      'Follow Up', 'Call marcada', 'Call Marcada',
+      'Investidor Qualificado em Carteira', 'Investidor em espera',
+      'Negociação de Deal', 'Investidor Ativo',
+      'Investidor em parceria', 'Em Parceria',
+    ])
     for (const inv of investidores) {
       const props = {}
       // Se tem reunião marcada mas não tem Data Reunião → não preencher (precisa ser data real)

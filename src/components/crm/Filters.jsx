@@ -1,6 +1,8 @@
 /**
  * Filtros dinâmicos por tab.
  */
+import { invStatusFor } from '../../constants.js'
+
 export function Filters({ tab, filters, onChange }) {
   function set(key, value) {
     onChange({ ...filters, [key]: value || undefined })
@@ -33,7 +35,7 @@ export function Filters({ tab, filters, onChange }) {
       {tab === 'Investidores' && <>
         <select value={filters.status ?? ''} onChange={e => set('status', e.target.value)} className={selectClass}>
           <option value="">Todos os status</option>
-          {['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor em espera','Investidor em parceria'].map(o =>
+          {invStatusFor(filters.tipo_principal).map(o =>
             <option key={o} value={o}>{o}</option>
           )}
         </select>

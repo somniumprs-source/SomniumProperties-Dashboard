@@ -9,7 +9,7 @@ import { KanbanSkeleton, TableSkeleton } from '../components/ui/Skeleton.jsx'
 import { EmptyState } from '../components/ui/EmptyState.jsx'
 import { Building2, Users, UserCheck, Briefcase, HardHat, ChevronLeft, ChevronRight } from 'lucide-react'
 import { MultiSelect } from '../components/ui/MultiSelect.jsx'
-import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
+import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
 import { apiFetch } from '../lib/api.js'
 import { useUnreadCounts } from '../hooks/useUnreadCounts.js'
 import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
@@ -1019,8 +1019,10 @@ export function CRM() {
               </div>
               <div className="flex-1 overflow-y-auto">
                 {[...data].sort((a, b) => {
-                  const order = ['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor em espera','Investidor em parceria']
-                  return (order.indexOf(a.status) - order.indexOf(b.status)) || (a.nome || '').localeCompare(b.nome || '')
+                  // Estados desconhecidos vão para o fim (não para o topo).
+                  const ai = INV_STATUS.indexOf(a.status); const bi = INV_STATUS.indexOf(b.status)
+                  const ax = ai === -1 ? Infinity : ai; const bx = bi === -1 ? Infinity : bi
+                  return (ax - bx) || (a.nome || '').localeCompare(b.nome || '')
                 }).map((inv, idx, sorted) => {
                   const isActive = inv.id === detail
                   const prevInv = idx > 0 ? sorted[idx - 1] : null
@@ -1512,7 +1514,7 @@ const FIELD_DEFS = {
   'Investidores': [
     { key: 'nome', label: 'Nome', type: 'text', required: true },
     { key: 'tipo_principal', label: 'Tipo de Investidor', type: 'select', options: ['Passivo','Ativo'], required: true },
-    { key: 'status', label: 'Status', type: 'select', options: ['Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor em espera','Investidor em parceria'] },
+    { key: 'status', label: 'Status', type: 'select', options: INV_STATUS },
     { key: 'classificacao', label: 'Classificação', type: 'select', options: ['A','B','C','D'] },
     { key: 'origem', label: 'Origem', type: 'select', options: ['Landing Page','Skool','Grupos Whatsapp','Referenciação','LinkedIn','Eventos Networking','Outro'] },
     { key: 'telemovel', label: 'Telemóvel', type: 'tel' },
