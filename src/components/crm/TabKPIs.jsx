@@ -47,9 +47,9 @@ export function TabKPIs({ tab }) {
   return (
     <div className="flex gap-2 overflow-x-auto pb-1">
       {items.map((item, i) => (
-        <div key={i} className="bg-white rounded-lg border border-gray-200 px-3 py-2 min-w-fit shadow-sm">
-          <p className={`text-sm font-bold ${item.color ?? 'text-gray-900'}`}>{item.value}</p>
-          <p className="text-xs text-gray-400 truncate">{item.label}</p>
+        <div key={i} className="bg-white rounded-xl border border-gray-200 px-3.5 py-2.5 min-w-fit">
+          <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold truncate">{item.label}</p>
+          <p className={`text-base font-bold ${item.color ?? 'text-gray-900'}`}>{item.value}</p>
         </div>
       ))}
     </div>

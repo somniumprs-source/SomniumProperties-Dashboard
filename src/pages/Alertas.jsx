@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { Header } from '../components/layout/Header.jsx'
 import { apiFetch } from '../lib/api.js'
 import { EUR, PCT } from '../constants.js'
+import { Button } from '../components/ui/Button.jsx'
+import { KpiCard } from '../components/ui/KpiCard.jsx'
+import { Bell, AlertTriangle, AlertCircle, Info, FileWarning } from 'lucide-react'
 
 const SEV_STYLE = {
   critico: 'bg-red-100 text-red-700 border-red-200',
@@ -116,18 +119,11 @@ export function Alertas() {
 
         {/* Resumo */}
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
-          {[
-            { label: 'Total Alertas', value: resumo.total ?? '—', color: 'text-gray-900' },
-            { label: 'Cr\u00edticos', value: resumo.criticos ?? '—', color: 'text-red-600' },
-            { label: 'Avisos', value: resumo.avisos ?? '—', color: 'text-yellow-600' },
-            { label: 'Info', value: resumo.info ?? '—', color: 'text-blue-500' },
-            { label: 'Campos Incompletos', value: resumo.camposIncompletos ?? '—', color: 'text-orange-500' },
-          ].map(item => (
-            <div key={item.label} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-              <p className="text-xs text-gray-400 uppercase tracking-wide">{item.label}</p>
-              <p className={`text-2xl font-bold mt-1 ${item.color}`}>{item.value}</p>
-            </div>
-          ))}
+          <KpiCard icon={Bell}          label="Total Alertas"      value={resumo.total ?? '—'}             tone="gray" />
+          <KpiCard icon={AlertTriangle} label="Críticos"           value={resumo.criticos ?? '—'}          tone="red" />
+          <KpiCard icon={AlertCircle}   label="Avisos"             value={resumo.avisos ?? '—'}            tone="amber" />
+          <KpiCard icon={Info}          label="Info"               value={resumo.info ?? '—'}              tone="blue" />
+          <KpiCard icon={FileWarning}   label="Campos Incompletos" value={resumo.camposIncompletos ?? '—'} tone="amber" />
         </div>
 
         {/* Automações */}
