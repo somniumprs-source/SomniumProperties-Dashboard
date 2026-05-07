@@ -3,7 +3,7 @@
  * Mostra: campos editáveis + relações + timeline + tarefas + reuniões.
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, RefreshCw, MoreVertical, TrendingUp, Wallet, Target, Hourglass, AlertTriangle } from 'lucide-react'
+import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, RefreshCw, MoreVertical, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { PartilharAcesso } from '../PartilharAcesso.jsx'
