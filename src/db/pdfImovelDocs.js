@@ -2603,7 +2603,22 @@ function renderDossierInvestidor(b, im, a) {
   if (im.mitigacao_riscos) { b.space(4); b.riscosMitigacao() }
   b.space(4)
 
-  b.header('NÚMEROS DO NEGÓCIO')
+  // Estudo de Comparáveis — fundamenta o VVR usado nos números abaixo.
+  // Só renderiza se houver comparáveis preenchidos (caso contrário a
+  // função imprime "Sem dados…" — evitamos isso).
+  let __comps = a.comparaveis
+  if (typeof __comps === 'string') { try { __comps = JSON.parse(__comps || '[]') } catch { __comps = [] } }
+  const __compsArr = Array.isArray(__comps) ? __comps : (__comps?.items || [])
+  if (__compsArr.length > 0) {
+    b.newPage()
+    b.header('ESTUDO DE MERCADO — VALORES DE VENDA COMPARÁVEIS')
+    renderRelatorioComparaveis(b, im, a)
+    b.space(4)
+  }
+
+  // Resumo executivo do dossier — MOIC e Payback em destaque para o
+  // investidor antes do deep-dive financeiro.
+  b.header('RESUMO DO NEGÓCIO')
   b.bigNumbers([
     { label: 'Capital Necessário', value: EUR(deal.capital_necessario) },
     { label: 'Lucro Líquido', value: EUR(deal.lucro_liquido) },
@@ -2614,118 +2629,15 @@ function renderDossierInvestidor(b, im, a) {
     { label: 'MOIC (Equity Multiple)', value: formatMOIC(deal.moic), sub: '(Capital + Lucro) / Capital' },
     { label: 'Payback', value: formatPayback(deal.payback_meses), sub: 'Recuperacao integral no exit' },
   ])
-  b.space(4)
+  b.space(6)
 
-  b.header('DECOMPOSIÇÃO DE CUSTOS')
-  b.simpleTable([
-    { label: 'Compra', value: EUR(compra) },
-    { label: 'IMT + IS + Escritura', value: EUR((deal.imt || 0) + (deal.imposto_selo || 0) + (deal.escritura || 0)) },
-    { label: 'Total Aquisição', value: EUR(deal.total_aquisicao), total: true },
-    { label: 'Obra com IVA', value: EUR(deal.obra_com_iva ?? obra) },
-    { label: 'Custos Detenção', value: EUR(deal.total_detencao) },
-    { label: 'VVR (conservador)', value: EUR(vvr) },
-    { label: 'Comissão Venda', value: EUR(deal.comissao_com_iva) },
-    { label: `Impostos (${deal.regime_fiscal})`, value: EUR(deal.impostos) },
-  ])
-  b.space(4)
-
-  // ── Orçamento de Obra detalhado ──────────────────────────────
-  // Preferir o orçamento detalhado preenchido na aba "Obra"
-  // (orcamentos_obra). Fallback aos agregados da análise quando o
-  // orçamento ainda não foi preenchido.
-  const orcamento = im._orcamento
-  if (orcamento && orcamento.calc) {
-    renderOrcamentoObraDetalhado(b, orcamento)
-  } else {
-    const obraBase = parseFloat(a.obra) || 0
-    const ivaObra = parseFloat(a.iva_obra) || 0
-    const obraComIva = parseFloat(a.obra_com_iva) || obraBase
-    const pmoPerc = parseFloat(a.pmo_perc) || 0
-    const licenciamento = parseFloat(a.licenciamento) || 0
-    const regimeIva = a.aru
-      ? 'ARU — 6% sobre toda a obra'
-      : a.ampliacao
-        ? 'Ampliação — 23% sobre toda a obra'
-        : `Normal — Mão-de-obra (${pmoPerc}%) a 6% + Materiais (${Math.max(0, 100 - pmoPerc)}%) a 23%`
-
-    if (obraBase > 0 || obraComIva > 0) {
-      b.header('ORÇAMENTO DE OBRA')
-      const orcRows = [
-        { label: 'Custo base de obra (s/ IVA)', value: EUR(obraBase) },
-        { label: 'Modo de cálculo', value: (a.modo_obra === 'fixo' ? 'Fixo (valor final do empreiteiro)' : 'Calculado (PMO + IVA)') },
-        { label: 'Peso PMO (mão-de-obra)', value: PCT(pmoPerc) },
-      ]
-      const pmoBreakdown = []
-      if (a.pmo_arq_perc) pmoBreakdown.push({ label: '   · Arquitetura', value: PCT(a.pmo_arq_perc) })
-      if (a.pmo_fisc_perc) pmoBreakdown.push({ label: '   · Fiscalização', value: PCT(a.pmo_fisc_perc) })
-      if (a.pmo_seg_obra_perc) pmoBreakdown.push({ label: '   · Segurança em obra', value: PCT(a.pmo_seg_obra_perc) })
-      if (a.pmo_outros_perc) pmoBreakdown.push({ label: '   · Outros', value: PCT(a.pmo_outros_perc) })
-      orcRows.push(...pmoBreakdown)
-      orcRows.push({ label: 'Regime de IVA aplicável', value: regimeIva })
-      orcRows.push({ label: 'IVA da obra', value: EUR(ivaObra) })
-      if (licenciamento > 0) orcRows.push({ label: 'Licenciamento', value: EUR(licenciamento) })
-      orcRows.push({ label: 'Total Obra com IVA', value: EUR(obraComIva), total: true })
-      b.simpleTable(orcRows)
-      b.space(4)
-    }
-  }
-
-  b.header('RESULTADO')
-  b.simpleTable([
-    { label: 'Lucro Bruto', value: EUR(deal.lucro_bruto) },
-    { label: 'Impostos', value: EUR(deal.impostos) },
-    { label: 'Lucro Líquido', value: EUR(deal.lucro_liquido), total: true },
-    { label: 'Retorno Total', value: PCT(deal.retorno_total) },
-    { label: 'Retorno Anualizado', value: PCT(deal.retorno_anualizado) },
-    { label: 'Cash-on-Cash', value: PCT(deal.cash_on_cash) },
-    { label: 'MOIC (Equity Multiple)', value: formatMOIC(deal.moic) },
-    { label: 'Payback', value: formatPayback(deal.payback_meses) },
-  ])
-  b.space(4)
-
-  let caep = a.caep
-  if (typeof caep === 'string') try { caep = JSON.parse(caep) } catch { caep = null }
-  if (caep) {
-    b.header('ESTRUTURA CAEP')
-    b.inlineData([{ label: '% Somnium', value: PCT(caep.perc_somnium || 40) }, { label: 'Base Distribuição', value: caep.base_distribuicao || 'Lucro bruto' }])
-    if (caep.investidores && caep.investidores.length > 0) {
-      b.space(4)
-      b.colTable(
-        [['Investidor', 120], ['Capital', 75], ['%', 45], ['Lucro Líq.', 70], ['ROI', 50], ['CoC', 50], ['RA', 50]],
-        caep.investidores.map((inv, i) => ({ _values: [
-          inv.nome || `Inv. ${i+1}`,
-          EUR(inv.capital),
-          PCT(inv.perc_lucro ?? inv.perc),
-          EUR(inv.lucro_liquido ?? inv.lucro),
-          PCT(inv.roi),
-          PCT(inv.cash_on_cash),
-          PCT(inv.retorno_anualizado ?? inv.ra),
-        ] }))
-      )
-    }
-    b.space(4)
-  } else {
-    b.header('MODELO DE PARCERIA')
-    b.simpleTable([
-      { label: 'Investidor(es) passivo(s)', value: '50% do lucro' },
-      { label: 'Somnium Properties', value: '50% (gestão operacional + obra)' },
-      { label: 'Documentação', value: 'Acesso total via Google Drive' },
-      { label: 'Relatórios', value: 'Semanais de obra com fotos e vídeos' },
-      { label: 'Comunicação', value: 'Canal dedicado via Slack' },
-    ])
-    b.space(4)
-  }
-
-  renderStressTests(b, a)
-
-  b.header('TRANSPARÊNCIA E COMUNICAÇÃO')
-  b.simpleTable([
-    { label: 'Google Drive exclusivo com toda a documentação do negócio', value: '' },
-    { label: 'Canal Slack dedicado para comunicação em tempo real', value: '' },
-    { label: 'Relatórios semanais de obra com fotos e vídeos', value: '' },
-    { label: 'Acesso a orçamentos, faturas e contratos', value: '' },
-    { label: 'Acesso vitalício aos documentos do negócio', value: '' },
-  ])
+  // Análise de Rentabilidade integral — inclui custos detalhados (aquisicao,
+  // financiamento, obra com PMO, detencao, venda, fiscalidade), resultado,
+  // alavancagem, risco e sensibilidade, stress tests, exit alternativo e
+  // estrutura CAEP. Reusa a mesma renderizacao do PDF standalone para garantir
+  // que os numeros batem certo entre os dois documentos.
+  b.newPage()
+  renderAnaliseRentabilidade(b, im, a)
 
   // Pressupostos e glossario partilhados (mesma funcao chamada pela Anonima)
   renderAssumptionsAndGlossary(b, deal)
@@ -3090,15 +3002,6 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
     ])
   }
   b.space(4)
-
-  b.header('TRANSPARÊNCIA E COMUNICAÇÃO')
-  b.simpleTable([
-    { label: 'Google Drive exclusivo com toda a documentação do negócio', value: '' },
-    { label: 'Canal Slack dedicado para comunicação em tempo real', value: '' },
-    { label: 'Relatórios semanais de obra com fotos e vídeos', value: '' },
-    { label: 'Acesso a orçamentos, facturas e contratos', value: '' },
-    { label: 'Acesso vitalício aos documentos do negócio', value: '' },
-  ])
 
   // Localização + pontos fortes/fracos/riscos antes do disclaimer
   if (im.localizacao_imagem || im.pontos_fortes || im.pontos_fracos || im.riscos || im.mitigacao_riscos) {
