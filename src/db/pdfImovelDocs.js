@@ -135,6 +135,29 @@ function normalizarImagemParaPdf(buf) {
   return null
 }
 
+// Helper: fetch com timeout abortavel. Producao em Render fica vulneravel
+// a fetches que demoram >60s (rede lenta para Supabase, etc.); sem timeout
+// o gerador de PDF hangs ate o browser desistir, devolvendo "nada acontece".
+// Falha silenciosa retorna null — caller faz fallback.
+async function fetchWithTimeout(url, timeoutMs = 8000) {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  try {
+    const r = await fetch(url, { signal: ctrl.signal })
+    if (!r.ok) return null
+    return Buffer.from(await r.arrayBuffer())
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      console.warn(`[pdf-preload] fetch abortado apos ${timeoutMs}ms: ${url.slice(0, 80)}...`)
+    } else {
+      console.warn(`[pdf-preload] fetch falhou: ${url.slice(0, 80)}... (${e.message})`)
+    }
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 // Pré-carrega imagem de localização (URL Supabase ou path local) e
 // devolve novo objecto imóvel com `_localizacaoImgData` (Buffer) injectado.
 // Aceita SVG legacy: rasteriza para PNG antes de entregar ao renderer.
@@ -145,9 +168,8 @@ async function preloadLocalizacao(imovel) {
   try {
     let buf = null
     if (url.startsWith('http')) {
-      const r = await fetch(url)
-      if (!r.ok) return imovel
-      buf = Buffer.from(await r.arrayBuffer())
+      buf = await fetchWithTimeout(url)
+      if (!buf) return imovel
     } else {
       const localPath = path.resolve(__dirname, '../..', 'public', url.replace(/^\//, ''))
       if (existsSync(localPath)) buf = readFileSync(localPath)
@@ -171,9 +193,8 @@ async function preloadAlfredoImagem(analise) {
   try {
     let buf = null
     if (url.startsWith('http')) {
-      const r = await fetch(url)
-      if (!r.ok) return analise
-      buf = Buffer.from(await r.arrayBuffer())
+      buf = await fetchWithTimeout(url)
+      if (!buf) return analise
     } else {
       const localPath = path.resolve(__dirname, '../..', 'public', url.replace(/^\//, ''))
       if (existsSync(localPath)) buf = readFileSync(localPath)
@@ -196,9 +217,8 @@ async function preloadHeroFoto(imovel) {
   try {
     let buf = null
     if (url.startsWith('http')) {
-      const r = await fetch(url)
-      if (!r.ok) return imovel
-      buf = Buffer.from(await r.arrayBuffer())
+      buf = await fetchWithTimeout(url)
+      if (!buf) return imovel
     } else {
       const localPath = path.resolve(__dirname, '../..', 'public', url.replace(/^\//, ''))
       if (existsSync(localPath)) buf = readFileSync(localPath)
