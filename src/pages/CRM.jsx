@@ -7,7 +7,7 @@ import { TabKPIs } from '../components/crm/TabKPIs.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { KanbanSkeleton, TableSkeleton } from '../components/ui/Skeleton.jsx'
 import { EmptyState } from '../components/ui/EmptyState.jsx'
-import { Building2, Users, UserCheck, Briefcase, HardHat, ChevronLeft, ChevronRight, Phone, MessageCircle, Wallet, AlertTriangle, Clock as Clock3, Plus } from 'lucide-react'
+import { Building2, Users, UserCheck, HardHat, ChevronLeft, ChevronRight, Phone, MessageCircle, Wallet, AlertTriangle, Clock as Clock3, Plus } from 'lucide-react'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { KpiCard } from '../components/ui/KpiCard.jsx'
@@ -17,7 +17,7 @@ import { apiFetch } from '../lib/api.js'
 import { useUnreadCounts } from '../hooks/useUnreadCounts.js'
 import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
 
-const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Empreiteiros']
+const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Construtores']
 
 // Progresso checklist por imóvel (cache local)
 let checklistProgressCache = {}
@@ -592,7 +592,7 @@ export function CRM() {
 
   const toast = useToast()
   const searchTimer = useRef(null)
-  const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores', 'Empreiteiros': 'empreiteiros' }[tab]
+  const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores', 'Construtores': 'empreiteiros' }[tab]
 
   // Garantir filtro tipo_principal sincronizado para investidores.
   // useMemo estabiliza referencia entre renders — sem isto, o load (useCallback)
@@ -825,7 +825,7 @@ export function CRM() {
         )
       },
     },
-    'Empreiteiros': {
+    'Construtores': {
       columns: ['Qualificado','Em avaliação','Rejeitado','Inativo'],
       groupField: 'estado',
       renderCard: (item) => (
@@ -967,42 +967,36 @@ export function CRM() {
       <Header title="CRM" subtitle="Gestão de dados — Base de dados local" onRefresh={load} loading={loading} breadcrumbs={breadcrumbs} />
       <div className="p-4 sm:p-6 flex flex-col gap-3 sm:gap-4">
 
-        {/* Stats banner */}
-        {stats && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3">
-            {Object.entries(stats).map(([k, v]) => {
-              const ICONS = { imoveis: Building2, investidores: Users, consultores: UserCheck, negocios: Briefcase, despesas: Wallet }
-              const TONES = { imoveis: 'indigo', investidores: 'gold', consultores: 'green', negocios: 'amber', despesas: 'red' }
-              const Icon = ICONS[k.toLowerCase()] || Building2
-              const tone = TONES[k.toLowerCase()] || 'gray'
-              const label = k.charAt(0).toUpperCase() + k.slice(1)
-              return <KpiCard key={k} icon={Icon} label={label} value={v.total} tone={tone} size="md" />
-            })}
+        {/* Pipelines — 4 cards centrados que actuam como tabs */}
+        <div className="flex justify-center">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 w-full max-w-5xl">
+            {[
+              { key: 'Imóveis',      icon: Building2, tone: 'indigo', statsKey: 'imoveis' },
+              { key: 'Investidores', icon: Users,     tone: 'gold',   statsKey: 'investidores' },
+              { key: 'Consultores',  icon: UserCheck, tone: 'green',  statsKey: 'consultores' },
+              { key: 'Construtores', icon: HardHat,   tone: 'amber',  statsKey: null },
+            ].map(t => (
+              <KpiCard
+                key={t.key}
+                icon={t.icon}
+                label={t.key}
+                value={t.statsKey ? (stats?.[t.statsKey]?.total ?? '—') : '—'}
+                tone={t.tone}
+                size="md"
+                active={tab === t.key}
+                onClick={() => {
+                  setTab(t.key)
+                  setSearch('')
+                  setDetail(null, { replace: true })
+                  setEditing(null)
+                  if (t.key !== tab) setFilters({})
+                  const followupsOnlyConsultores = view === 'followups' && t.key !== 'Consultores'
+                  const relatorioOnlyCertasTabs = view === 'relatorio' && t.key !== 'Consultores' && t.key !== 'Investidores'
+                  if (followupsOnlyConsultores || relatorioOnlyCertasTabs) setView('kanban')
+                }}
+              />
+            ))}
           </div>
-        )}
-
-        {/* Tabs principais — segmented control */}
-        <div className="flex justify-center sm:justify-start py-2">
-          <Tabs
-            value={tab}
-            onChange={t => {
-              setTab(t)
-              setSearch('')
-              setDetail(null, { replace: true })
-              setEditing(null)
-              // Filtros são tab-específicos (cada tab usa colunas diferentes na BD).
-              if (t !== tab) setFilters({})
-              const followupsOnlyConsultores = view === 'followups' && t !== 'Consultores'
-              const relatorioOnlyCertasTabs = view === 'relatorio' && t !== 'Consultores' && t !== 'Investidores'
-              if (followupsOnlyConsultores || relatorioOnlyCertasTabs) setView('kanban')
-            }}
-            items={[
-              { key: 'Imóveis',      label: 'Imóveis',      icon: Building2 },
-              { key: 'Investidores', label: 'Investidores', icon: Users },
-              { key: 'Consultores',  label: 'Consultores',  icon: UserCheck },
-              { key: 'Empreiteiros', label: 'Empreiteiros', icon: HardHat },
-            ]}
-          />
         </div>
 
         {/* KPIs integrados */}
@@ -1081,10 +1075,6 @@ export function CRM() {
           <div className="flex gap-4" style={{ minHeight: '70vh' }}>
             {/* Lista compacta à esquerda */}
             <div className="w-72 shrink-0 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
-              <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
-                <input type="text" placeholder="Filtrar..." value={searchInput} onChange={e => handleSearch(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300" />
-              </div>
               <div className="flex-1 overflow-y-auto">
                 {[...data].sort((a, b) => {
                   // Estados desconhecidos vão para o fim (não para o topo).
@@ -1172,7 +1162,7 @@ export function CRM() {
           {/* Kanban View */}
           {!loading && editing === null && view === 'kanban' && kanbanConfig && data.length === 0 && (
             <EmptyState
-              icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Empreiteiros': HardHat }[tab] || Building2}
+              icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Construtores': HardHat }[tab] || Building2}
               title={`Sem ${tab.toLowerCase()}`}
               description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
             />
@@ -1221,7 +1211,7 @@ export function CRM() {
           {/* Table View */}
           {!loading && editing === null && (view === 'table' || !hasKanban) && data.length === 0 && (
             <EmptyState
-              icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Empreiteiros': HardHat }[tab] || Building2}
+              icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Construtores': HardHat }[tab] || Building2}
               title={`Sem ${tab.toLowerCase()}`}
               description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
             />
@@ -1234,7 +1224,7 @@ export function CRM() {
                 {tab === 'Consultores' && <ConsultoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
                 {tab === 'Negócios' && <NegociosTable data={data} onEdit={setEditing} onDelete={handleDelete}
                   onViewImovel={(imovelId) => { setTab('Imóveis'); setTimeout(() => setDetail(imovelId), 100) }} />}
-                {tab === 'Empreiteiros' && <GenericTable data={data} onEdit={setEditing} onDelete={handleDelete}
+                {tab === 'Construtores' && <GenericTable data={data} onEdit={setEditing} onDelete={handleDelete}
                   columns={['nome','empresa','estado','zona','especializacao','score','custo_medio_m2']}
                   labels={{ nome:'Nome', empresa:'Empresa', estado:'Estado', zona:'Zona', especializacao:'Especialização', score:'Score', custo_medio_m2:'Custo/m²' }} />}
               </div>
@@ -1632,7 +1622,7 @@ const FIELD_DEFS = {
     { key: 'motivo_descontinuacao', label: 'Motivo Descontinuação', type: 'text' },
     { key: 'notas', label: 'Notas', type: 'textarea' },
   ],
-  'Empreiteiros': [
+  'Construtores': [
     { key: 'nome', label: 'Nome', type: 'text', required: true },
     { key: 'empresa', label: 'Empresa', type: 'text' },
     { key: 'estado', label: 'Estado', type: 'select', options: ['Qualificado','Em avaliação','Rejeitado','Inativo'] },
