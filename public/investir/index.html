@@ -303,6 +303,13 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
 .num-d{font-size:12px;color:var(--soft);margin-top:6px;line-height:1.5}
 .num-foot{font-size:11.5px;color:var(--soft);margin-top:18px;text-align:center;line-height:1.6}
 
+/* CTA INLINE — após value stack */
+.cta-inline{padding:48px 56px;max-width:1280px;margin:0 auto}
+.cta-inline-wrap{max-width:920px;margin:0 auto;background:var(--gold-soft);border:1px solid var(--gold);border-radius:12px;padding:32px 36px;display:flex;align-items:center;justify-content:space-between;gap:32px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(201,168,76,.08)}
+.cta-inline-eye{font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--gold-deep);margin-bottom:6px}
+.cta-inline-title{font-family:var(--serif);font-size:26px;font-weight:500;color:var(--dark);line-height:1.2;letter-spacing:-.005em;margin-bottom:6px}
+.cta-inline-sub{font-size:13.5px;color:var(--muted);line-height:1.5;margin:0}
+
 /* PROJETO EM CURSO */
 .proj-wrap{display:grid;grid-template-columns:1fr 1.05fr;gap:48px;align-items:center}
 .proj-images{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -376,6 +383,10 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
   .trust-logos{gap:18px;flex-wrap:wrap}
   .trust-logo{font-size:13px}
   .scarcity-strip{padding:16px 18px;flex-direction:column;gap:10px;text-align:center}
+  .cta-inline{padding:32px 18px}
+  .cta-inline-wrap{flex-direction:column;align-items:stretch;text-align:center;padding:28px 22px;gap:18px}
+  .cta-inline-title{font-size:22px}
+  .cta-inline-wrap .btn-cta1{justify-content:center}
   .guar-grid{grid-template-columns:1fr}
   .stack-card{padding:24px}
   .stack-card-num{font-size:42px}
@@ -928,6 +939,21 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
         </div>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- CTA INLINE · após Value Stack -->
+<section class="cta-inline">
+  <div class="cta-inline-wrap">
+    <div>
+      <p class="cta-inline-eye">Próximo passo</p>
+      <h3 class="cta-inline-title">Pronto para receber tudo isto?</h3>
+      <p class="cta-inline-sub">Reunião de alinhamento sem compromisso. Resposta em menos de 24 horas.</p>
+    </div>
+    <a href="#formulario" class="btn-cta1">
+      Marcar reunião
+      <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 10h10M11 6l4 4-4 4"/></svg>
+    </a>
   </div>
 </section>
 
