@@ -11,6 +11,10 @@ import { LOGO_BLACK_PNG } from './logoBlack.js'
 import { calcMetricsExtra, MULT, EUR_M2, RACIO, PCT_DEC, EUR_S, colorMargem, colorPositivo } from './calcMetricsExtra.js'
 import pool from './pg.js'
 import { calcOrcamentoObra, SECCOES_ORDEM, SECCOES_OBRA, SECCOES_LABELS } from './orcamentoObraEngine.js'
+import { resolveDealData } from './dossier/dataResolver.js'
+import { computeMOIC, computePayback, formatMOIC, formatPayback } from './dossier/metrics.js'
+import { renderAssumptionsAndGlossary } from './dossier/sections/assumptionsGlossary.js'
+import { computeContentHash, shortHash } from './dossier/contentHash.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const STRESS_DIR = path.resolve(__dirname, '../../public/uploads/stress_tests')
@@ -251,7 +255,21 @@ export async function generateDoc(tipo, imovel, analise = null) {
 
 class DocBuilder {
   constructor(title, subtitle, imovel, opts = {}) {
-    this.doc = new PDFDocument({ size: 'A4', autoFirstPage: false, bufferPages: true })
+    // Metadata do PDF — Title/Author/Subject/Keywords/Producer.
+    // Para a Anonima, o GENERATOR ja sobrescreve `imovel.nome` para
+    // 'OPORTUNIDADE DE INVESTIMENTO' antes de chamar o construtor, pelo
+    // que `imovel.nome` aqui ja vem stripped — seguro usar no Subject.
+    const im = imovel || {}
+    const metaSubjectName = im.nome || 'Imovel'
+    const info = {
+      Title: String(title || 'Documento Somnium'),
+      Author: 'Somnium Properties',
+      Subject: `${title} — ${metaSubjectName}`,
+      Keywords: ['Somnium Properties', 'Investimento Imobiliario', title].filter(Boolean).join(', '),
+      Producer: 'Somnium CRM',
+      Creator: 'Somnium CRM',
+    }
+    this.doc = new PDFDocument({ size: 'A4', autoFirstPage: false, bufferPages: true, info })
     this.y = 0
     this.imovel = imovel
     this.style = opts.style || 'default'
@@ -1003,6 +1021,50 @@ class DocBuilder {
     this.y += 6
     this.doc.fillColor(C.muted).text(txt, ML, this.y, { width: CW, lineGap: 2 })
     this.y += h + 4
+    return this
+  }
+
+  // Footer aplicado a todas as paginas — chamada UMA VEZ antes de end().
+  // Le metadata injectada pelo persistDocumento em this.imovel:
+  //   _version, _generatedAt, _documentId, _tipoLabel, _pdfHashShort.
+  // Se nada estiver injectado (geracao on-demand sem persistencia), faz no-op.
+  applyFooter() {
+    const im = this.imovel || {}
+    const version = im._version
+    const docId = im._documentId
+    const hash = im._pdfHashShort
+    const label = im._tipoLabel || this.title || 'Documento'
+    const generatedAt = im._generatedAt ? new Date(im._generatedAt) : new Date()
+    const dateStr = generatedAt.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' })
+
+    // Sem versao nem id, nao ha footer util — sair em silencio.
+    if (!version && !docId && !hash) return this
+
+    try {
+      const range = this.doc.bufferedPageRange()
+      const total = range.count
+      // Footer ocupa ~10pt acima da linha gold ja desenhada por newPage()
+      // (em PH - 45). Escrevemos a 1pt abaixo da linha, dentro da margem
+      // existente. O texto e cinza claro, fontsize 6 — discreto mas legivel.
+      for (let i = 0; i < total; i++) {
+        const pageIndex = range.start + i
+        this.doc.switchToPage(pageIndex)
+        const parts = [
+          label,
+          version ? `v${version}` : null,
+          dateStr,
+          docId ? `ID ${docId}` : null,
+          `Pag ${i + 1}/${total}`,
+          hash ? `Hash ${hash}` : null,
+        ].filter(Boolean)
+        const text = parts.join(' · ')
+        this.doc.fontSize(6).fillColor(C.muted)
+          .text(text, ML, PH - 32, { width: CW, align: 'center', lineBreak: false })
+      }
+    } catch {
+      // bufferedPageRange so funciona com bufferPages: true — ja activado
+      // no construtor. Se mesmo assim falhar, nao bloquear a geracao.
+    }
     return this
   }
 
@@ -2521,15 +2583,16 @@ function renderOrcamentoObraDetalhado(b, orc) {
 
 function renderDossierInvestidor(b, im, a) {
   const fotos = parseFotos(im)
-  const compra = a.compra || im.valor_proposta || im.ask_price || 0
-  const obra = a.obra_com_iva || a.obra || im.custo_estimado_obra || 0
-  const vvr = a.vvr || im.valor_venda_remodelado || 0
+  const deal = resolveDealData(im, a)
+  const compra = deal.compra ?? 0
+  const obra = deal.obra_com_iva ?? deal.obra ?? 0
+  const vvr = deal.vvr ?? 0
 
   b.header('OPORTUNIDADE DE INVESTIMENTO')
   b.simpleTable([
     { label: 'Imóvel', value: im.nome }, { label: 'Zona', value: im.zona },
     { label: 'Tipologia', value: im.tipologia }, { label: 'Modelo', value: im.modelo_negocio || 'CAEP 50/50' },
-    { label: 'Prazo Estimado', value: a.meses ? `${a.meses} meses` : '—' },
+    { label: 'Prazo Estimado', value: deal.meses ? `${deal.meses} meses` : '—' },
   ])
   if (fotos.length > 0) { b.space(4); b.photos(fotos, 'O IMÓVEL') }
   b.space(4)
@@ -2542,22 +2605,27 @@ function renderDossierInvestidor(b, im, a) {
 
   b.header('NÚMEROS DO NEGÓCIO')
   b.bigNumbers([
-    { label: 'Capital Necessário', value: EUR(a.capital_necessario || compra + obra) },
-    { label: 'Lucro Líquido', value: EUR(a.lucro_liquido) },
-    { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
+    { label: 'Capital Necessário', value: EUR(deal.capital_necessario) },
+    { label: 'Lucro Líquido', value: EUR(deal.lucro_liquido) },
+    { label: 'Retorno Anualizado', value: PCT(deal.retorno_anualizado) },
+  ])
+  b.space(2)
+  b.bigNumbers([
+    { label: 'MOIC (Equity Multiple)', value: formatMOIC(deal.moic), sub: '(Capital + Lucro) / Capital' },
+    { label: 'Payback', value: formatPayback(deal.payback_meses), sub: 'Recuperacao integral no exit' },
   ])
   b.space(4)
 
   b.header('DECOMPOSIÇÃO DE CUSTOS')
   b.simpleTable([
     { label: 'Compra', value: EUR(compra) },
-    { label: 'IMT + IS + Escritura', value: EUR((a.imt || 0) + (a.imposto_selo || 0) + (a.escritura || 0)) },
-    { label: 'Total Aquisição', value: EUR(a.total_aquisicao), total: true },
-    { label: 'Obra com IVA', value: EUR(a.obra_com_iva || obra) },
-    { label: 'Custos Detenção', value: EUR(a.total_detencao) },
+    { label: 'IMT + IS + Escritura', value: EUR((deal.imt || 0) + (deal.imposto_selo || 0) + (deal.escritura || 0)) },
+    { label: 'Total Aquisição', value: EUR(deal.total_aquisicao), total: true },
+    { label: 'Obra com IVA', value: EUR(deal.obra_com_iva ?? obra) },
+    { label: 'Custos Detenção', value: EUR(deal.total_detencao) },
     { label: 'VVR (conservador)', value: EUR(vvr) },
-    { label: 'Comissão Venda', value: EUR(a.comissao_com_iva) },
-    { label: `Impostos (${a.regime_fiscal || 'Empresa'})`, value: EUR(a.impostos) },
+    { label: 'Comissão Venda', value: EUR(deal.comissao_com_iva) },
+    { label: `Impostos (${deal.regime_fiscal})`, value: EUR(deal.impostos) },
   ])
   b.space(4)
 
@@ -2604,12 +2672,14 @@ function renderDossierInvestidor(b, im, a) {
 
   b.header('RESULTADO')
   b.simpleTable([
-    { label: 'Lucro Bruto', value: EUR(a.lucro_bruto) },
-    { label: 'Impostos', value: EUR(a.impostos) },
-    { label: 'Lucro Líquido', value: EUR(a.lucro_liquido), total: true },
-    { label: 'Retorno Total', value: PCT(a.retorno_total) },
-    { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
-    { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash) },
+    { label: 'Lucro Bruto', value: EUR(deal.lucro_bruto) },
+    { label: 'Impostos', value: EUR(deal.impostos) },
+    { label: 'Lucro Líquido', value: EUR(deal.lucro_liquido), total: true },
+    { label: 'Retorno Total', value: PCT(deal.retorno_total) },
+    { label: 'Retorno Anualizado', value: PCT(deal.retorno_anualizado) },
+    { label: 'Cash-on-Cash', value: PCT(deal.cash_on_cash) },
+    { label: 'MOIC (Equity Multiple)', value: formatMOIC(deal.moic) },
+    { label: 'Payback', value: formatPayback(deal.payback_meses) },
   ])
   b.space(4)
 
@@ -2656,6 +2726,9 @@ function renderDossierInvestidor(b, im, a) {
     { label: 'Acesso a orçamentos, faturas e contratos', value: '' },
     { label: 'Acesso vitalício aos documentos do negócio', value: '' },
   ])
+
+  // Pressupostos e glossario partilhados (mesma funcao chamada pela Anonima)
+  renderAssumptionsAndGlossary(b, deal)
 
   b.space(4)
   b.text('Os valores apresentados são estimativas conservadoras baseadas em análise de mercado e podem variar. A Somnium Properties utiliza stress tests automáticos em todos os negócios para protecção do investidor. Investimento imobiliário envolve risco de capital.', { size: 7, color: C.muted })
@@ -2859,25 +2932,31 @@ function renderRelatorioStress(b, im, an) {
 }
 
 function renderPropostaInvestimentoAnonima(b, im, a) {
-  const compra = a.compra || im.valor_proposta || im.ask_price || 0
-  const obra = a.obra_com_iva || a.obra || im.custo_estimado_obra || 0
-  const vvr = a.vvr || im.valor_venda_remodelado || 0
-  const meses = a.meses || 6
-  const capitalNecessario = a.capital_necessario || (compra + obra)
+  const deal = resolveDealData(im, a)
+  const compra = deal.compra ?? 0
+  const obra = deal.obra_com_iva ?? deal.obra ?? 0
+  const vvr = deal.vvr ?? 0
+  const meses = deal.meses || 6
+  const capitalNecessario = deal.capital_necessario ?? (compra + obra)
 
   b.header('SUMÁRIO EXECUTIVO')
   b.bigNumbers([
-    { label: 'Valor de Aquisição', value: EUR(compra), sub: a.perc_financiamento ? `${a.perc_financiamento}% financiado` : '100% capitais próprios' },
+    { label: 'Valor de Aquisição', value: EUR(compra), sub: deal.perc_financiamento > 0 ? `${deal.perc_financiamento}% financiado` : '100% capitais próprios' },
     { label: 'Valor de Venda Alvo', value: EUR(vvr) },
-    { label: 'Retorno Total', value: PCT(a.retorno_total), sub: 'lucro bruto / total investido' },
-    { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado), sub: `base ${meses} meses` },
+    { label: 'Retorno Total', value: PCT(deal.retorno_total), sub: 'lucro bruto / total investido' },
+    { label: 'Retorno Anualizado', value: PCT(deal.retorno_anualizado), sub: `base ${meses} meses` },
   ])
   b.space(2)
   b.bigNumbers([
-    { label: 'Lucro Bruto Estimado', value: EUR(a.lucro_bruto), sub: 'antes de impostos' },
-    { label: 'Lucro Líquido', value: EUR(a.lucro_liquido), sub: `${a.regime_fiscal || 'IRC'} sobre lucro` },
+    { label: 'Lucro Bruto Estimado', value: EUR(deal.lucro_bruto), sub: 'antes de impostos' },
+    { label: 'Lucro Líquido', value: EUR(deal.lucro_liquido), sub: `${deal.regime_fiscal} sobre lucro` },
     { label: 'Total Investido', value: EUR(capitalNecessario), sub: 'aquisição + obra + custos' },
     { label: 'Prazo de Retenção', value: `${meses} meses`, sub: 'da compra à escritura de venda' },
+  ])
+  b.space(2)
+  b.bigNumbers([
+    { label: 'MOIC (Equity Multiple)', value: formatMOIC(deal.moic), sub: '(Capital + Lucro) / Capital' },
+    { label: 'Payback', value: formatPayback(deal.payback_meses), sub: 'Recuperacao integral no exit' },
   ])
   b.space(6)
 
@@ -2943,12 +3022,12 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
   b.subheader('Estrutura de Custos')
   b.simpleTable([
     { label: 'Valor de Compra', value: EUR(compra) },
-    { label: 'IMT + Imposto de Selo', value: EUR((a.imt || 0) + (a.imposto_selo || 0)) },
-    { label: 'Escritura + Registos + CPCV', value: EUR((a.escritura || 0) + (a.cpcv_compra || 0)) },
-    { label: 'Total Custos de Aquisição', value: EUR(a.total_aquisicao), total: true },
+    { label: 'IMT + Imposto de Selo', value: EUR((deal.imt || 0) + (deal.imposto_selo || 0)) },
+    { label: 'Escritura + Registos + CPCV', value: EUR((deal.escritura || 0) + (parseFloat(a.cpcv_compra) || 0)) },
+    { label: 'Total Custos de Aquisição', value: EUR(deal.total_aquisicao), total: true },
     { label: 'Obra + IVA', value: EUR(obra) },
-    { label: `Manutenção (${meses} meses)`, value: EUR(a.total_detencao) },
-    { label: 'Comissão Imobiliária', value: EUR(a.comissao_com_iva) },
+    { label: `Manutenção (${meses} meses)`, value: EUR(deal.total_detencao) },
+    { label: 'Comissão Imobiliária', value: EUR(deal.comissao_com_iva) },
     { label: 'Total Investido', value: EUR(capitalNecessario), total: true },
   ])
   b.space(6)
@@ -2956,20 +3035,25 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
   b.subheader('Retornos')
   b.simpleTable([
     { label: 'Valor de Venda Alvo', value: EUR(vvr) },
-    { label: 'Lucro Estimado (Bruto)', value: EUR(a.lucro_bruto), total: true },
-    { label: `Impostos (${a.regime_fiscal || 'IRC'})`, value: EUR(a.impostos) },
-    { label: 'Lucro Estimado Líquido', value: EUR(a.lucro_liquido), total: true },
+    { label: 'Lucro Estimado (Bruto)', value: EUR(deal.lucro_bruto), total: true },
+    { label: `Impostos (${deal.regime_fiscal})`, value: EUR(deal.impostos) },
+    { label: 'Lucro Estimado Líquido', value: EUR(deal.lucro_liquido), total: true },
   ])
   b.space(4)
 
   b.bigNumbers([
-    { label: 'Retorno Total', value: PCT(a.retorno_total) },
-    { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash) },
-    { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
+    { label: 'Retorno Total', value: PCT(deal.retorno_total) },
+    { label: 'Cash-on-Cash', value: PCT(deal.cash_on_cash) },
+    { label: 'Retorno Anualizado', value: PCT(deal.retorno_anualizado) },
+  ])
+  b.space(2)
+  b.bigNumbers([
+    { label: 'MOIC (Equity Multiple)', value: formatMOIC(deal.moic) },
+    { label: 'Payback', value: formatPayback(deal.payback_meses) },
   ])
   b.space(4)
 
-  b.note(`Pressupostos: ${a.perc_financiamento ? `Financiamento ${a.perc_financiamento}%` : '100% capitais próprios'} · Regime fiscal: ${a.regime_fiscal || 'Empresa'} · Prazo: ${meses} meses`)
+  b.note(`Pressupostos: ${deal.perc_financiamento > 0 ? `Financiamento ${deal.perc_financiamento}%` : '100% capitais próprios'} · Regime fiscal: ${deal.regime_fiscal} · Prazo: ${meses} meses`)
 
   renderStressTests(b, a, { newPage: true })
 
@@ -3023,6 +3107,9 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
     b.pontosFortesFracosRiscos()
     if (im.mitigacao_riscos) { b.space(4); b.riscosMitigacao() }
   }
+
+  // Pressupostos e glossario partilhados (mesma funcao chamada pelo Dossier)
+  renderAssumptionsAndGlossary(b, deal)
 
   b.space(6)
   b.note('Os valores apresentados são estimativas conservadoras baseadas em análise de mercado e podem variar. A Somnium Properties utiliza stress tests automáticos em todos os negócios para protecção do investidor. Investimento imobiliário envolve risco de capital.')
@@ -3082,6 +3169,7 @@ const GENERATORS = {
     const b = new DocBuilder('Ficha do Imóvel', im.zona || '', im)
     renderFichaImovel(b, im)
     b.disclaimer()
+    b.applyFooter()
     return b.end()
   },
 
@@ -3089,6 +3177,7 @@ const GENERATORS = {
     const b = new DocBuilder('Ficha de Visita', `${im.zona || ''} · ${im.tipologia || ''}`, im)
     renderFichaVisita(b, im)
     b.disclaimer()
+    b.applyFooter()
     return b.end()
   },
 
@@ -3096,6 +3185,7 @@ const GENERATORS = {
     const b = new DocBuilder('Análise de Rentabilidade', im.zona || '', im)
     renderAnaliseRentabilidade(b, im, analise || {})
     b.disclaimer()
+    b.applyFooter()
     return b.end()
   },
 
@@ -3103,6 +3193,7 @@ const GENERATORS = {
     const b = new DocBuilder('Estudo de Mercado — Comparáveis', im.zona || '', im)
     renderEstudoComparaveis(b, im, analise || {})
     b.disclaimer()
+    b.applyFooter()
     return b.end()
   },
 
@@ -3110,6 +3201,7 @@ const GENERATORS = {
     const b = new DocBuilder('Proposta ao Proprietário', im.zona || '', im)
     renderPropostaFormal(b, im)
     b.disclaimer()
+    b.applyFooter()
     return b.end()
   },
 
@@ -3125,6 +3217,7 @@ const GENERATORS = {
     })
     renderDossierInvestidor(b, im, a)
     b.disclaimer()
+    b.applyFooter()
     return b.end()
   },
 
@@ -3132,6 +3225,7 @@ const GENERATORS = {
     const b = new DocBuilder('Resumo de Negociação', im.zona || '', im)
     renderResumoNegociacao(b, im)
     b.disclaimer()
+    b.applyFooter()
     return b.end()
   },
 
@@ -3139,6 +3233,7 @@ const GENERATORS = {
     const b = new DocBuilder('Ficha de Follow Up', im.zona || '', im)
     renderFichaFollowUp(b, im)
     b.disclaimer()
+    b.applyFooter()
     return b.end()
   },
 
@@ -3158,6 +3253,7 @@ const GENERATORS = {
     })
     renderRelatorioInvestimento(b, im, a)
     b.disclaimer()
+    b.applyFooter()
     return b.end()
   },
 
@@ -3165,6 +3261,7 @@ const GENERATORS = {
     const b = new DocBuilder('Estudo de Mercado', im.zona || '', im)
     renderRelatorioComparaveis(b, im, an)
     b.disclaimer()
+    b.applyFooter()
     return b.end()
   },
 
@@ -3172,6 +3269,7 @@ const GENERATORS = {
     const b = new DocBuilder('Parceria CAEP — Distribuição de Lucro', im.zona || '', im)
     renderRelatorioCaep(b, im, an)
     b.disclaimer()
+    b.applyFooter()
     return b.end()
   },
 
@@ -3179,6 +3277,7 @@ const GENERATORS = {
     const b = new DocBuilder('Análise de Risco', im.zona || '', im)
     renderRelatorioStress(b, im, an)
     b.disclaimer()
+    b.applyFooter()
     return b.end()
   },
 
@@ -3199,6 +3298,7 @@ const GENERATORS = {
     })
     renderPropostaInvestimentoAnonima(b, im, a)
     b.disclaimer()
+    b.applyFooter()
     return b.end()
   },
 
@@ -3206,6 +3306,7 @@ const GENERATORS = {
     const b = new DocBuilder('Ficha de Descarte', im.zona || '', im)
     renderFichaDescarte(b, im)
     b.disclaimer()
+    b.applyFooter()
     return b.end()
   },
 }
@@ -3284,6 +3385,7 @@ export async function generateCompiledReport(imovel, analise, seccoes = []) {
   }
   if (!hasContent) b.text('Nenhuma secção com dados disponíveis para compilar.')
   b.disclaimer()
+  b.applyFooter()
   return b.end()
 }
 

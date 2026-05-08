@@ -16,7 +16,33 @@
 //   - manual                   → POST /api/crm/imoveis/:id/documentos/:tipo/regenerar
 import { createClient } from '@supabase/supabase-js'
 import { generateDoc } from './pdfImovelDocs.js'
+import { resolveDealData } from './dossier/dataResolver.js'
+import { computeContentHash, shortHash } from './dossier/contentHash.js'
 import pool from './pg.js'
+
+// Labels usados pelo footer dos PDFs — espelha DOC_LABELS em pdfImovelDocs.js
+// (mantido aqui para evitar dependencia circular).
+const TIPO_LABELS = {
+  ficha_imovel: 'Ficha do Imovel',
+  ficha_visita: 'Ficha de Visita',
+  analise_rentabilidade: 'Analise de Rentabilidade',
+  estudo_comparaveis: 'Estudo de Comparaveis',
+  proposta_formal: 'Proposta ao Proprietario',
+  dossier_investidor: 'Dossier de Investimento',
+  proposta_investimento_anonima: 'Proposta de Investimento',
+  resumo_negociacao: 'Resumo de Negociacao',
+  ficha_follow_up: 'Ficha de Follow Up',
+  ficha_descarte: 'Ficha de Descarte',
+  relatorio_investimento: 'Analise de Investimento',
+  relatorio_comparaveis: 'Estudo de Mercado',
+  relatorio_caep: 'Parceria CAEP',
+  relatorio_stress: 'Analise de Risco',
+}
+
+function shortDocId(imovelId, tipo, version) {
+  const idPart = String(imovelId || '').replace(/-/g, '').slice(0, 8) || '00000000'
+  return `${idPart}-${tipo}-v${version}`
+}
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.supabase.co'
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
@@ -146,7 +172,25 @@ export async function persistDocumento(imovel, tipo, { trigger, generatedBy = 's
     }
   }
 
-  const imForRender = { ...imovel, _version: version, _generatedAt: generatedAt.toISOString() }
+  // Hash SHA-256 dos campos financeiros canonicos — tamper-evidence.
+  // Calculado antes do render para que o footer mostre os primeiros 12 chars.
+  let pdfHashShort = ''
+  try {
+    const deal = resolveDealData(imovel, analise)
+    const fullHash = computeContentHash(deal, version)
+    pdfHashShort = shortHash(fullHash)
+  } catch (e) {
+    console.warn('[docs] hash do conteudo falhou:', e.message)
+  }
+
+  const imForRender = {
+    ...imovel,
+    _version: version,
+    _generatedAt: generatedAt.toISOString(),
+    _documentId: shortDocId(imovel.id, tipo, version),
+    _tipoLabel: TIPO_LABELS[tipo] || tipo,
+    _pdfHashShort: pdfHashShort,
+  }
   const pdfDoc = await generateDoc(tipo, imForRender, analise)
   if (!pdfDoc) return null
   const buf = await streamToBuffer(pdfDoc)
