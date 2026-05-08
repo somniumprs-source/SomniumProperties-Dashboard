@@ -6,9 +6,10 @@
  * Ajustes automáticos: Negociação (-desconto_negocial%) e Área (proporcional à diferença de m²).
  * Ajustes manuais: Localização, Idade, Conservação, Outros + 4 desagregados (Estado, Piso, Elevador, Garagem).
  */
-import { useState, useEffect, useMemo } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { ChevronDown, ChevronRight, Upload, Trash2 } from 'lucide-react'
 import { EUR } from '../../constants.js'
+import { apiFetch } from '../../lib/api.js'
 
 const PISO_OPCOES = ['Cave', 'R/C', '1.º Andar', '2.º Andar', '3.º Andar', '4.º Andar ou superior', 'Último Andar', 'Duplex', 'Outro']
 const ESTADO_OPCOES = ['Novo / Excelente estado', 'Reabilitado / Remodelado', 'Bom estado (usado)', 'Estado razoável (precisa de pequenas obras)', 'Degradado (precisa de obras de fundo)', 'Ruína / Para demolir']
@@ -88,6 +89,8 @@ export function Comparaveis({ analise, imovel, onUpdate }) {
   const [metaExpanded, setMetaExpanded] = useState(true)
   const [expandedAttrs, setExpandedAttrs] = useState(() => new Set())
   const [expandedAdj, setExpandedAdj] = useState(() => new Set())
+  const [uploadingAlfredo, setUploadingAlfredo] = useState(false)
+  const alfredoInputRef = useRef(null)
 
   useEffect(() => {
     const raw = analise?.comparaveis

@@ -5,11 +5,13 @@
 import { Router } from 'express'
 import { randomUUID } from 'crypto'
 import { mkdirSync } from 'fs'
+import { readFile, unlink } from 'fs/promises'
 import multer from 'multer'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import pool from './pg.js'
 import { calcAnalise, calcStressTests, calcCAEP, quickCheck } from './calcEngine.js'
+import { uploadImovel, supabaseStorage } from './routes.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const stressDir = path.resolve(__dirname, '../../public/uploads/stress_tests')
@@ -267,6 +269,80 @@ router.get('/analises/:id/stress', async (req, res) => {
 router.post('/analises/:id/stress-screenshot', uploadStress.single('screenshot'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Ficheiro não recebido' })
   res.json({ ok: true, path: `/uploads/stress_tests/${req.params.id}.png` })
+})
+
+// ── Upload imagem do estudo de mercado externo (Alfredo) ────
+// Guardada em meta.alfredo_imagem dentro do JSONB analises.comparaveis
+router.post('/analises/:id/alfredo-imagem', uploadImovel.single('imagem'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Nenhum ficheiro válido (JPG, PNG, WEBP até 15MB)' })
+    const { rows: [analise] } = await pool.query('SELECT * FROM analises WHERE id = $1', [req.params.id])
+    if (!analise) return res.status(404).json({ error: 'Análise não encontrada' })
+
+    let filePath = `/uploads/imoveis/${req.file.filename}`
+    if (supabaseStorage) {
+      const storagePath = `imoveis/${analise.imovel_id}/alfredo_${req.file.filename}`
+      const fileBuffer = await readFile(req.file.path)
+      const { error } = await supabaseStorage.storage
+        .from('Imoveis')
+        .upload(storagePath, fileBuffer, { contentType: req.file.mimetype, upsert: true })
+      if (!error) {
+        const { data: urlData } = supabaseStorage.storage.from('Imoveis').getPublicUrl(storagePath)
+        filePath = urlData.publicUrl
+        await unlink(req.file.path).catch(() => {})
+      }
+    }
+
+    // Mergir filePath em meta.alfredo_imagem (preservar tipologias e restantes meta)
+    const raw = analise.comparaveis
+    let parsed
+    try { parsed = typeof raw === 'string' ? JSON.parse(raw || 'null') : raw } catch { parsed = null }
+    let next
+    if (Array.isArray(parsed)) {
+      next = { _version: 2, meta: { alfredo_imagem: filePath }, tipologias: parsed }
+    } else if (parsed && typeof parsed === 'object') {
+      next = { ...parsed, _version: 2, meta: { ...(parsed.meta || {}), alfredo_imagem: filePath }, tipologias: parsed.tipologias || [] }
+    } else {
+      next = { _version: 2, meta: { alfredo_imagem: filePath }, tipologias: [] }
+    }
+    await pool.query(
+      'UPDATE analises SET comparaveis = $1, updated_at = $2 WHERE id = $3',
+      [JSON.stringify(next), new Date().toISOString(), req.params.id]
+    )
+    res.json({ ok: true, alfredo_imagem: filePath })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/analises/:id/alfredo-imagem', async (req, res) => {
+  try {
+    const { rows: [analise] } = await pool.query('SELECT * FROM analises WHERE id = $1', [req.params.id])
+    if (!analise) return res.status(404).json({ error: 'Análise não encontrada' })
+
+    const raw = analise.comparaveis
+    let parsed
+    try { parsed = typeof raw === 'string' ? JSON.parse(raw || 'null') : raw } catch { parsed = null }
+    const url = (parsed && !Array.isArray(parsed) && parsed.meta) ? parsed.meta.alfredo_imagem : null
+
+    if (url && supabaseStorage && url.includes('supabase.co/storage/')) {
+      const match = url.match(/\/storage\/v1\/object\/public\/Imoveis\/(.+)$/)
+      if (match) await supabaseStorage.storage.from('Imoveis').remove([match[1]]).catch(() => {})
+    }
+
+    let next
+    if (Array.isArray(parsed)) {
+      next = { _version: 2, meta: {}, tipologias: parsed }
+    } else if (parsed && typeof parsed === 'object') {
+      const { alfredo_imagem, ...metaRest } = parsed.meta || {}
+      next = { ...parsed, _version: 2, meta: metaRest, tipologias: parsed.tipologias || [] }
+    } else {
+      next = { _version: 2, meta: {}, tipologias: [] }
+    }
+    await pool.query(
+      'UPDATE analises SET comparaveis = $1, updated_at = $2 WHERE id = $3',
+      [JSON.stringify(next), new Date().toISOString(), req.params.id]
+    )
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 // ── Quick Check ──────────────────────────────────────────────

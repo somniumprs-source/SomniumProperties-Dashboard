@@ -13,6 +13,7 @@ import { createClient } from '@supabase/supabase-js'
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.supabase.co'
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
 const supabaseStorage = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null
+export { supabaseStorage }
 import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, ConsultorFollowups, DocumentosInvestidor, Visitas, getDashboardStats } from './crud.js'
 import pool from './pg.js'
 import { getVisitasEnriquecidas, syncDataVisitaDerivada } from './queries.js'
@@ -71,6 +72,7 @@ const uploadImovel = multer({
     cb(null, allowed.test(path.extname(file.originalname)))
   },
 })
+export { uploadImovel }
 
 const router = Router()
 
