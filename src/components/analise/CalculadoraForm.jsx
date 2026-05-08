@@ -90,29 +90,53 @@ export function CalculadoraForm({ analise, onUpdate }) {
       <Section title="Obra" tag="C" open={openSections.obra} onToggle={() => toggleSection('obra')}
         summary={analise.obra_com_iva > 0 ? EUR(analise.obra_com_iva) : 'Sem obra'}
         hint="Custos de remodelação e IVA">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <Input label="Custo da Obra (s/ IVA)" field="obra" value={form.obra} onChange={handleChange} placeholder="Ex: 30000" />
-          <Input label="% Mão-de-obra" field="pmo_perc" value={form.pmo_perc} onChange={handleChange} step="5" placeholder="65" />
-          <Toggle label="Zona ARU (IVA 6%)" field="aru" value={form.aru} onChange={handleChange} />
-          <Toggle label="Ampliação (IVA 23%)" field="ampliacao" value={form.ampliacao} onChange={handleChange} />
-          <Input label="Licenciamento" field="licenciamento" value={form.licenciamento} onChange={handleChange} placeholder="0" />
+        <div className="mb-3">
+          <Select label="Modo de cálculo" field="modo_obra" value={form.modo_obra || 'calculado'}
+            options={[
+              { value: 'calculado', label: 'Calculado (orçamento + PMO % + IVA)' },
+              { value: 'fixo', label: 'Valor fixo do empreiteiro / gestor de obra' },
+            ]} onChange={handleChange} />
         </div>
-        {(form.pmo_perc > 0) && (
-          <div className="mt-3 pl-3 border-l-2" style={{ borderColor: GOLD + '60' }}>
-            <div className="text-xs text-gray-500 mb-2">Desagregação do PMO (opcional — mostra detalhe no relatório):</div>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <Input label="Arquitectura %" field="pmo_arq_perc" value={form.pmo_arq_perc} onChange={handleChange} step="0.5" placeholder="0" />
-              <Input label="Fiscalização %" field="pmo_fisc_perc" value={form.pmo_fisc_perc} onChange={handleChange} step="0.5" placeholder="0" />
-              <Input label="Coord. Segurança %" field="pmo_seg_obra_perc" value={form.pmo_seg_obra_perc} onChange={handleChange} step="0.5" placeholder="0" />
-              <Input label="Outros %" field="pmo_outros_perc" value={form.pmo_outros_perc} onChange={handleChange} step="0.5" placeholder="0" />
+        {form.modo_obra === 'fixo' ? (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <Input label="Valor final (c/ IVA, do empreiteiro)" field="obra" value={form.obra} onChange={handleChange} placeholder="Ex: 36900" />
+              <Input label="Licenciamento" field="licenciamento" value={form.licenciamento} onChange={handleChange} placeholder="0" />
             </div>
-            <PMOValidation form={form} />
-          </div>
+            <div className="mt-2 text-xs text-gray-400">
+              Valor usado tal e qual — sem IVA computado, sem PMO % nem regimes ARU/Ampliação.
+            </div>
+            <CalcRow items={[
+              { label: 'Obra (valor fixo)', value: analise.obra_com_iva, bold: true },
+            ]} />
+          </>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <Input label="Custo da Obra (s/ IVA)" field="obra" value={form.obra} onChange={handleChange} placeholder="Ex: 30000" />
+              <Input label="% Mão-de-obra" field="pmo_perc" value={form.pmo_perc} onChange={handleChange} step="5" placeholder="65" />
+              <Toggle label="Zona ARU (IVA 6%)" field="aru" value={form.aru} onChange={handleChange} />
+              <Toggle label="Ampliação (IVA 23%)" field="ampliacao" value={form.ampliacao} onChange={handleChange} />
+              <Input label="Licenciamento" field="licenciamento" value={form.licenciamento} onChange={handleChange} placeholder="0" />
+            </div>
+            {(form.pmo_perc > 0) && (
+              <div className="mt-3 pl-3 border-l-2" style={{ borderColor: GOLD + '60' }}>
+                <div className="text-xs text-gray-500 mb-2">Desagregação do PMO (opcional — mostra detalhe no relatório):</div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <Input label="Arquitectura %" field="pmo_arq_perc" value={form.pmo_arq_perc} onChange={handleChange} step="0.5" placeholder="0" />
+                  <Input label="Fiscalização %" field="pmo_fisc_perc" value={form.pmo_fisc_perc} onChange={handleChange} step="0.5" placeholder="0" />
+                  <Input label="Coord. Segurança %" field="pmo_seg_obra_perc" value={form.pmo_seg_obra_perc} onChange={handleChange} step="0.5" placeholder="0" />
+                  <Input label="Outros %" field="pmo_outros_perc" value={form.pmo_outros_perc} onChange={handleChange} step="0.5" placeholder="0" />
+                </div>
+                <PMOValidation form={form} />
+              </div>
+            )}
+            <CalcRow items={[
+              { label: 'IVA Obra', value: analise.iva_obra },
+              { label: 'Obra c/ IVA', value: analise.obra_com_iva, bold: true },
+            ]} />
+          </>
         )}
-        <CalcRow items={[
-          { label: 'IVA Obra', value: analise.iva_obra },
-          { label: 'Obra c/ IVA', value: analise.obra_com_iva, bold: true },
-        ]} />
       </Section>
 
       {/* D. Custos de Detenção */}

@@ -156,6 +156,7 @@ export function calcAnalise(inputs) {
   const aru = !!i.aru
   const ampliacao = !!i.ampliacao
   const licenciamento = parseFloat(i.licenciamento) || 0
+  const modoObra = i.modo_obra || 'calculado'
 
   const meses = Math.max(parseInt(i.meses) || 6, 1)
   const seguroMensal = parseFloat(i.seguro_mensal) || 0
@@ -198,7 +199,11 @@ export function calcAnalise(inputs) {
   )
 
   // ── C. Obra ───────────────────────────────────────────────
-  const { iva: ivaObra, obraComIva } = calcIVA(obra, pmoPerc, aru, ampliacao)
+  // Modo 'fixo': valor final do empreiteiro/PMO usado tal e qual (sem IVA computado).
+  // Modo 'calculado' (default): obra + PMO% + IVA conforme regime ARU/Ampliação.
+  const { iva: ivaObra, obraComIva } = modoObra === 'fixo'
+    ? { iva: 0, obraComIva: round2(obra) }
+    : calcIVA(obra, pmoPerc, aru, ampliacao)
 
   // ── D. Detenção ───────────────────────────────────────────
   const imiProporcional = round2(vpt * (taxaImi / 100) * (meses / 12))
