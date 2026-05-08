@@ -154,6 +154,32 @@ async function preloadLocalizacao(imovel) {
   return imovel
 }
 
+// Pré-carrega a captura do estudo de mercado externo (Alfredo) guardada em
+// `analise.comparaveis.meta.alfredo_imagem`. Devolve nova analise com
+// `_alfredoImgData` (Buffer PNG/JPEG) injectado. Se a URL falhar, devolve
+// a analise original — o renderer omite a seccao silenciosamente.
+async function preloadAlfredoImagem(analise) {
+  if (!analise) return analise
+  let raw = analise.comparaveis
+  if (typeof raw === 'string') { try { raw = JSON.parse(raw || 'null') } catch { raw = null } }
+  const url = (raw && !Array.isArray(raw) && raw.meta) ? raw.meta.alfredo_imagem : null
+  if (!url) return analise
+  try {
+    let buf = null
+    if (url.startsWith('http')) {
+      const r = await fetch(url)
+      if (!r.ok) return analise
+      buf = Buffer.from(await r.arrayBuffer())
+    } else {
+      const localPath = path.resolve(__dirname, '../..', 'public', url.replace(/^\//, ''))
+      if (existsSync(localPath)) buf = readFileSync(localPath)
+    }
+    const png = normalizarImagemParaPdf(buf)
+    if (png) return { ...analise, _alfredoImgData: png }
+  } catch { /* ignore — renderer omite */ }
+  return analise
+}
+
 // Pré-carrega a foto principal do imóvel (URL Supabase ou path local) e
 // devolve novo objecto com `_heroFotoData` (Buffer) injectado. A foto principal
 // é a marcada com `cover: true`, ou senão a primeira da lista filtrada.
@@ -211,10 +237,12 @@ export async function generateDoc(tipo, imovel, analise = null) {
   // os agregados da analise activa.
   const comOrcamentoObra = ['dossier_investidor', 'proposta_investimento_anonima']
   let im = imovel
+  let an = analise
   if (investidor.includes(tipo)) im = await preloadLocalizacao(im)
   if (comFotoHero.includes(tipo)) im = await preloadHeroFoto(im)
   if (comOrcamentoObra.includes(tipo)) im = await preloadOrcamentoObra(im)
-  return fn(im, analise)
+  if (tipo === 'estudo_comparaveis') an = await preloadAlfredoImagem(an)
+  return fn(im, an)
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2162,6 +2190,44 @@ function renderEstudoComparaveis(b, im, a) {
   )
   b.space(4)
 
+  // Estudo de Mercado de Referencia (Alfredo) — fonte externa
+  if (a._alfredoImgData) {
+    const buf = a._alfredoImgData
+    const dims = pngDimensions(buf)
+    const ratio = dims ? dims.h / dims.w : 0.7
+    // Reservar espaco para subheader + imagem + nota; mudar de pagina se nao couber
+    let drawW = CW
+    let drawH = drawW * ratio
+    const maxH = PH - 50 - 70 // altura util da pagina
+    if (drawH > maxH * 0.8) {
+      // Forcar pagina propria se imagem for muito alta
+      b.newPage()
+    } else {
+      b.ensure(drawH + 60)
+    }
+    b.subheader('Estudo de Mercado de Referência (fonte externa — Alfredo)')
+    const availH = PH - b.y - 70
+    if (drawH > availH) { drawH = availH; drawW = drawH / ratio }
+    const x = ML + (CW - drawW) / 2
+    let drawn = false
+    b.doc.save()
+    try {
+      b.doc.roundedRect(x, b.y, drawW, drawH, 4).clip()
+      b.doc.image(buf, x, b.y, { width: drawW, height: drawH })
+      drawn = true
+    } catch { /* PDFKit recusou — omitir */ }
+    b.doc.restore()
+    if (drawn) {
+      b.doc.roundedRect(x, b.y, drawW, drawH, 4).lineWidth(0.5).stroke(C.border)
+      b.y += drawH + 8
+      const dataRecolha = meta.data_recolha ? FDATE(meta.data_recolha) : null
+      b.note(dataRecolha
+        ? `Captura do estudo de mercado externo recolhido em ${dataRecolha}. Validação independente da metodologia interna apresentada acima.`
+        : 'Captura do estudo de mercado externo. Validação independente da metodologia interna apresentada acima.')
+      b.space(4)
+    }
+  }
+
   // E. Tabela de Comparaveis Ajustados
   b.subheader('E. Tabela de Comparáveis Ajustados')
   if (n > 0) {
@@ -2194,6 +2260,39 @@ function renderEstudoComparaveis(b, im, a) {
     b.note('Sem comparáveis preenchidos nesta análise.')
   }
   b.space(4)
+
+  // F. Anuncios dos Comparaveis (links externos clicaveis)
+  const compsComLink = compsCalc.filter(c => c.link && /^https?:\/\//i.test(String(c.link).trim()))
+  if (compsComLink.length > 0) {
+    b.ensure(60)
+    b.subheader('F. Anúncios dos Comparáveis (links externos)')
+    b.doc.fontSize(8).fillColor(C.muted).text('Carregue em cada link para abrir o anúncio original no portal de origem.', ML, b.y, { width: CW, lineGap: 2 })
+    b.y = b.doc.y + 6
+    compsComLink.forEach((c) => {
+      const idx = compsCalc.indexOf(c)
+      const letra = String.fromCharCode(65 + idx)
+      const url = String(c.link).trim()
+      const linhaH = 16
+      b.ensure(linhaH + 4)
+      // Identificador a negrito
+      b.doc.fontSize(8.5).fillColor(C.body).text(`Comp. ${letra}`, ML, b.y, { width: 60, lineBreak: false, continued: false })
+      // Resumo (preco · area)
+      const resumo = `${EUR(c.preco)} · ${c.area} m²`
+      b.doc.fontSize(8).fillColor(C.muted).text(resumo, ML + 60, b.y, { width: 110, lineBreak: false })
+      // URL clicavel a dourado
+      const urlX = ML + 175
+      const urlW = CW - 175
+      b.doc.fontSize(8).fillColor(C.gold).text(url, urlX, b.y, {
+        width: urlW,
+        lineBreak: false,
+        ellipsis: true,
+        underline: true,
+        link: url,
+      })
+      b.y += linhaH
+    })
+    b.space(4)
+  }
 
   // ─────────────────────────────────────────────────────────
   // PAGINA 5+ — FICHAS INDIVIDUAIS
@@ -2259,8 +2358,8 @@ function renderEstudoComparaveis(b, im, a) {
     b.newPage()
     b.header('ANÁLISE ESTATÍSTICA E POSICIONAMENTO DO VVR')
 
-    // F. Estatisticas
-    b.subheader('F. Estatísticas dos Comparáveis Ajustados')
+    // G. Estatisticas
+    b.subheader('G. Estatísticas dos Comparáveis Ajustados')
     b.simpleTable([
       { label: 'Número de Comparáveis Válidos', value: String(n) },
       { label: 'Média Preço/m² Ajustado (Média aritmética dos preços/m² ajustados)', value: `${Math.round(mediaM2).toLocaleString('pt-PT')} €/m²` },
@@ -2274,8 +2373,8 @@ function renderEstudoComparaveis(b, im, a) {
     ])
     b.space(4)
 
-    // G. Posicionamento do VVR Adoptado
-    b.subheader('G. Posicionamento do VVR Adoptado')
+    // H. Posicionamento do VVR Adoptado
+    b.subheader('H. Posicionamento do VVR Adoptado')
     const margemSegPct = m.margem_seg_vvr != null ? `${(m.margem_seg_vvr * 100).toFixed(1)}% (ver relatório de rentabilidade)` : '— (analisar no relatório de rentabilidade)'
     const precoTransacEquiv = vvrAdoptado * (1 - descontoNeg / 100)
     b.simpleTable([
@@ -2290,8 +2389,8 @@ function renderEstudoComparaveis(b, im, a) {
     ])
     b.space(6)
 
-    // H. Posicionamento Visual
-    b.subheader('H. Posicionamento Visual — VVR no Intervalo de Mercado')
+    // I. Posicionamento Visual
+    b.subheader('I. Posicionamento Visual — VVR no Intervalo de Mercado')
     if (minVvr > 0 && maxVvr > 0 && vvrAdoptado > 0) {
       drawPosVisualBar(b, { min: minVvr, max: maxVvr, mediana: medianaVvr, media: mediaVvr, vvr: vvrAdoptado, posCor })
       b.space(2)

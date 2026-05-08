@@ -262,6 +262,46 @@ export function Comparaveis({ analise, imovel, onUpdate }) {
   const AJUSTE_LABELS = { neg: 'Neg.', area: 'Área', loc: 'Loc.', idade: 'Idade', conserv: 'Conserv.', outros: 'Outros' }
   const AUTO_FIELDS = new Set(['neg', 'area'])
 
+  const uploadAlfredo = async (file) => {
+    if (!file || !analise?.id) return
+    setUploadingAlfredo(true)
+    try {
+      const fd = new FormData()
+      fd.append('imagem', file)
+      const r = await apiFetch(`/api/crm/analises/${analise.id}/alfredo-imagem`, { method: 'POST', body: fd })
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        alert(`Erro: ${err.error || r.statusText}`)
+        return
+      }
+      const { alfredo_imagem } = await r.json()
+      const nextMeta = { ...meta, alfredo_imagem }
+      setMeta(nextMeta)
+    } finally {
+      setUploadingAlfredo(false)
+      if (alfredoInputRef.current) alfredoInputRef.current.value = ''
+    }
+  }
+
+  const removeAlfredo = async () => {
+    if (!analise?.id) return
+    if (!confirm('Remover captura do estudo de mercado?')) return
+    setUploadingAlfredo(true)
+    try {
+      const r = await apiFetch(`/api/crm/analises/${analise.id}/alfredo-imagem`, { method: 'DELETE' })
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        alert(`Erro: ${err.error || r.statusText}`)
+        return
+      }
+      const nextMeta = { ...meta }
+      delete nextMeta.alfredo_imagem
+      setMeta(nextMeta)
+    } finally {
+      setUploadingAlfredo(false)
+    }
+  }
+
   const toggleAttrs = (key) => {
     const next = new Set(expandedAttrs)
     next.has(key) ? next.delete(key) : next.add(key)
@@ -286,7 +326,8 @@ export function Comparaveis({ analise, imovel, onUpdate }) {
           <span className="text-xs text-gray-400">— Metodologia + Atributos do Imóvel Alvo</span>
         </button>
         {metaExpanded && (
-          <div className="px-4 pb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="px-4 pb-4 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Coluna 1 - Metodologia */}
             <div className="space-y-2">
               <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Metodologia</h4>
@@ -377,6 +418,40 @@ export function Comparaveis({ analise, imovel, onUpdate }) {
                 </label>
               </div>
             </div>
+          </div>
+
+          {/* Captura do Estudo de Mercado (Alfredo) */}
+          <div className="border-t border-gray-200 pt-3">
+            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Estudo de Mercado de Referência</h4>
+            <p className="text-[11px] text-gray-400 mb-2">Captura de ecrã do estudo do Alfredo (ou outra fonte externa). Aparece no PDF antes da tabela de comparáveis ajustados.</p>
+            {meta.alfredo_imagem ? (
+              <div className="flex items-start gap-3">
+                <img src={meta.alfredo_imagem} alt="Estudo Alfredo"
+                  className="rounded border border-gray-200 max-h-48 object-contain bg-white" />
+                <div className="flex flex-col gap-2">
+                  <button type="button" disabled={uploadingAlfredo}
+                    onClick={() => alfredoInputRef.current?.click()}
+                    className="text-xs px-3 py-1.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-50 inline-flex items-center gap-1.5">
+                    <Upload size={12} /> Substituir
+                  </button>
+                  <button type="button" disabled={uploadingAlfredo}
+                    onClick={removeAlfredo}
+                    className="text-xs px-3 py-1.5 rounded bg-red-50 hover:bg-red-100 text-red-600 disabled:opacity-50 inline-flex items-center gap-1.5">
+                    <Trash2 size={12} /> Remover
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" disabled={uploadingAlfredo || !analise?.id}
+                onClick={() => alfredoInputRef.current?.click()}
+                className="text-xs px-3 py-2 rounded border-2 border-dashed border-gray-300 hover:border-[#C9A84C] hover:bg-white text-gray-500 disabled:opacity-50 inline-flex items-center gap-2">
+                <Upload size={14} /> {uploadingAlfredo ? 'A carregar...' : 'Carregar imagem (JPG, PNG, WEBP — máx. 15MB)'}
+              </button>
+            )}
+            <input ref={alfredoInputRef} type="file" accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) uploadAlfredo(f) }} />
+          </div>
           </div>
         )}
       </div>
