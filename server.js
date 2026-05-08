@@ -13,6 +13,8 @@ app.use(cors())
 app.use(express.json())
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500, standardHeaders: true, legacyHeaders: false }))
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')))
+// Landing page de captação de investidores (servida estaticamente)
+app.use('/investir', express.static(path.join(__dirname, 'public/investir')))
 
 // ── Auth middleware (Supabase JWT) ────────────────────────────
 import { createClient } from '@supabase/supabase-js'
@@ -5504,8 +5506,9 @@ app.post('/api/automation/run-all', async (req, res) => {
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, 'dist')))
   app.get('/{*splat}', (req, res, next) => {
-    // Não interceptar rotas /api
+    // Não interceptar rotas /api nem a landing /investir (servidas por outros middlewares)
     if (req.path.startsWith('/api')) return next()
+    if (req.path.startsWith('/investir')) return next()
     res.sendFile(path.join(__dirname, 'dist', 'index.html'))
   })
 }
