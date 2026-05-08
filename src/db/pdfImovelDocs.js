@@ -328,6 +328,35 @@ function patchPDFKitNaNGuard() {
       return r
     }
   }
+
+  // CRITICO: annotate() recebe (x, y, w, h, options) e gera options.Rect
+  // que e [x1,y1,x2,y2]. Se qualquer for NaN, o array contem NaN e PDFKit
+  // explode na serializacao com "unsupported number: NaN" — frustrando os
+  // try/catch nos renderers porque a falha ocorre em doc.end().
+  // Sanitizar entradas para 0 antes de delegar.
+  if (typeof proto.annotate === 'function') {
+    const origAnn = proto.annotate
+    proto.annotate = function(x, y, w, h, options) {
+      const sx = (typeof x === 'number' && isFinite(x)) ? x : 0
+      const sy = (typeof y === 'number' && isFinite(y)) ? y : 0
+      const sw = (typeof w === 'number' && isFinite(w) && w > 0) ? w : 1
+      const sh = (typeof h === 'number' && isFinite(h) && h > 0) ? h : 1
+      if (sx !== x || sy !== y || sw !== w || sh !== h) {
+        console.warn(`[pdfkit-guard] annotate(${x},${y},${w},${h}) saneado para (${sx},${sy},${sw},${sh})`)
+      }
+      return origAnn.call(this, sx, sy, sw, sh, options)
+    }
+  }
+
+  // Patch defensivo do PDFObject.number para nunca atirar — converter
+  // NaN/Infinity para 0 com warning. PDFObject e interno ao pdfkit.js;
+  // acedemos via require() porque PDFDocument expoe-o internamente.
+  try {
+    const pdfkitPath = new URL('../../node_modules/pdfkit/js/pdfkit.js', import.meta.url)
+    // Nao podemos importar PDFObject directamente; em vez disso, monkey-patch
+    // qualquer Float/Integer Array que vai serializar. Cobertura via annotate
+    // acima resolve o caso pratico.
+  } catch {}
 }
 patchPDFKitNaNGuard()
 

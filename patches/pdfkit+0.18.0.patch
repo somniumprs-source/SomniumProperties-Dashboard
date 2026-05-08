@@ -1,0 +1,15 @@
+diff --git a/node_modules/pdfkit/js/pdfkit.js b/node_modules/pdfkit/js/pdfkit.js
+index f7b3199..72dbc8f 100644
+--- a/node_modules/pdfkit/js/pdfkit.js
++++ b/node_modules/pdfkit/js/pdfkit.js
+@@ -159,7 +159,9 @@ class PDFObject {
+     if (n > -1e21 && n < 1e21) {
+       return Math.round(n * 1e6) / 1e6;
+     }
+-    throw new Error(`unsupported number: ${n}`);
++    // Patch Somnium: nao crashar em NaN/Infinity. Converter para 0.
++    try { console.warn(`[pdfkit-guard] PDFObject.number(${n}) -> 0`); } catch (e) {}
++    return 0;
+   }
+ }
+ 
