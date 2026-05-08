@@ -301,6 +301,33 @@ function patchPDFKitNaNGuard() {
   wrapPositional(proto, 'lineWidth', [0])
   wrapPositional(proto, 'translate', [0, 1])
   wrapPositional(proto, 'scale', [0, 1])
+
+  // heightOfString e widthOfString podem retornar NaN para strings com
+  // chars que a fonte nao suporta. Wrappar para devolver fallback.
+  if (typeof proto.heightOfString === 'function') {
+    const origH = proto.heightOfString
+    proto.heightOfString = function(text, opts) {
+      const safeText = (text == null) ? '' : String(text)
+      const r = origH.call(this, safeText, opts)
+      if (typeof r !== 'number' || !isFinite(r)) {
+        console.warn(`[pdfkit-guard] heightOfString devolveu valor invalido (${r}) para "${safeText.slice(0,30)}" — usando fallback 12`)
+        return 12 // fallback razoavel para uma linha de texto
+      }
+      return r
+    }
+  }
+  if (typeof proto.widthOfString === 'function') {
+    const origW = proto.widthOfString
+    proto.widthOfString = function(text, opts) {
+      const safeText = (text == null) ? '' : String(text)
+      const r = origW.call(this, safeText, opts)
+      if (typeof r !== 'number' || !isFinite(r)) {
+        console.warn(`[pdfkit-guard] widthOfString devolveu valor invalido (${r}) para "${safeText.slice(0,30)}" — usando fallback 50`)
+        return 50
+      }
+      return r
+    }
+  }
 }
 patchPDFKitNaNGuard()
 
@@ -2686,7 +2713,7 @@ function renderDossierInvestidor(b, im, a) {
       b.space(4)
     }
   } catch (e) {
-    console.error('[dossier] estudo de comparaveis falhou:', e.message)
+    console.error('[dossier] estudo de comparaveis falhou:', e.message, '\n', e.stack?.split('\n').slice(0,5).join('\n'))
   }
 
   // Resumo executivo do dossier — MOIC e Payback em destaque para o
@@ -2715,8 +2742,8 @@ function renderDossierInvestidor(b, im, a) {
     b.newPage()
     renderAnaliseRentabilidade(b, im, a)
   } catch (e) {
-    console.error('[dossier] analise de rentabilidade falhou:', e.message, e.stack?.split('\n').slice(0,5).join('\n'))
-    b.note(`Detalhe da analise de rentabilidade indisponivel para este negocio (motivo tecnico). Contacte a Somnium Properties para versao completa.`)
+    console.error('[dossier] analise de rentabilidade falhou:', e.message, '\n', e.stack?.split('\n').slice(0,5).join('\n'))
+    b.note(`Detalhe da analise de rentabilidade indisponivel para este negocio. Erro tecnico registado nos logs do servidor.`)
   }
 
   // Pressupostos e glossario partilhados (mesma funcao chamada pela Anonima)
