@@ -2604,15 +2604,15 @@ function renderDossierInvestidor(b, im, a) {
   b.space(4)
 
   // Estudo de Comparáveis — fundamenta o VVR usado nos números abaixo.
-  // Só renderiza se houver comparáveis preenchidos (caso contrário a
-  // função imprime "Sem dados…" — evitamos isso).
+  // Só renderiza se houver comparáveis preenchidos com preço e área válidos.
+  // O shape pode ser um array (legacy) ou {meta, tipologias} (novo).
   let __comps = a.comparaveis
-  if (typeof __comps === 'string') { try { __comps = JSON.parse(__comps || '[]') } catch { __comps = [] } }
-  const __compsArr = Array.isArray(__comps) ? __comps : (__comps?.items || [])
-  if (__compsArr.length > 0) {
+  if (typeof __comps === 'string') { try { __comps = JSON.parse(__comps || 'null') } catch { __comps = null } }
+  const __tipologias = Array.isArray(__comps) ? __comps : (__comps?.tipologias || [])
+  const __hasValid = __tipologias.some(t => (t?.comparaveis || []).some(c => parseFloat(c?.preco) > 0 && parseFloat(c?.area) > 0))
+  if (__hasValid) {
     b.newPage()
-    b.header('ESTUDO DE MERCADO — VALORES DE VENDA COMPARÁVEIS')
-    renderRelatorioComparaveis(b, im, a)
+    renderEstudoComparaveis(b, im, a)
     b.space(4)
   }
 
@@ -2640,10 +2640,8 @@ function renderDossierInvestidor(b, im, a) {
   renderAnaliseRentabilidade(b, im, a)
 
   // Pressupostos e glossario partilhados (mesma funcao chamada pela Anonima)
+  // Renderizam numa pagina dedicada e isolada, no fim do dossier.
   renderAssumptionsAndGlossary(b, deal)
-
-  b.space(4)
-  b.text('Os valores apresentados são estimativas conservadoras baseadas em análise de mercado e podem variar. A Somnium Properties utiliza stress tests automáticos em todos os negócios para protecção do investidor. Investimento imobiliário envolve risco de capital.', { size: 7, color: C.muted })
 }
 
 function renderResumoNegociacao(b, im) {

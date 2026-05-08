@@ -1,6 +1,10 @@
 // Pagina partilhada "Pressupostos e Glossario" — chamada pelo Dossier de
 // Investimento e pela Proposta Anonima. Garante que ambos os documentos
 // mostram exactamente os mesmos pressupostos e definicoes.
+//
+// Layout compacto: cabe numa unica pagina A4. Pressupostos em tabela,
+// glossario em duas listas de definicoes inline (label seguido de "—"
+// e descricao curta).
 
 const PCT_DEFAULT = '—'
 
@@ -13,11 +17,11 @@ function regimeIvaLabel(deal) {
   if (deal.aru) return 'ARU — 6% sobre toda a obra'
   if (deal.ampliacao) return 'Ampliacao — 23% sobre toda a obra'
   const pmo = parseFloat(deal.pmo_perc) || 65
-  return `Normal — Mao-de-obra (${pmo}%) a 6% + Materiais a 23%`
+  return `Normal — MO (${pmo}%) a 6% + Materiais a 23%`
 }
 
 function modoObraLabel(deal) {
-  if (deal.modo_obra === 'fixo') return 'Fixo (valor final do empreiteiro)'
+  if (deal.modo_obra === 'fixo') return 'Fixo (empreiteiro)'
   return 'Calculado (PMO + IVA)'
 }
 
@@ -27,12 +31,15 @@ function financiamentoLabel(deal) {
   return `${p}% financiado · ${100 - p}% capitais proprios`
 }
 
-// Renderiza a seccao no DocBuilder. Comeca em nova pagina para garantir
-// que o glossario nao fica partido a meio.
+// Renderiza a seccao numa pagina dedicada e isolada no fim do PDF.
+// Layout escolhido para caber em UMA pagina A4 (sem overflow para a seguinte):
+//   - PRESSUPOSTOS: tabela compacta
+//   - GLOSSARIO: rotulos+definicoes em paragrafos `note` (font 7.5pt)
 export function renderAssumptionsAndGlossary(b, deal) {
   if (!b || !deal) return
 
   b.newPage()
+
   b.header('PRESSUPOSTOS DO ESTUDO')
   b.simpleTable([
     { label: 'Regime fiscal (SPV)', value: deal.regime_fiscal || 'Empresa' },
@@ -43,36 +50,37 @@ export function renderAssumptionsAndGlossary(b, deal) {
     { label: 'Modo de calculo da obra', value: modoObraLabel(deal) },
     { label: 'Comissao de venda assumida', value: pctOrDash(deal.comissao_perc) },
   ])
-  b.space(6)
+  b.space(8)
 
   b.header('GLOSSARIO E FORMULAS')
-  b.space(2)
-
-  b.subheader('Indicadores financeiros')
-  b.simpleTable([
-    { label: 'Capital Necessario', value: 'Compra + IMT + IS + Escritura + Obra com IVA + Detencao + Comissao Venda' },
-    { label: 'Lucro Bruto', value: 'VVR − Capital Necessario' },
-    { label: 'Lucro Liquido', value: 'Lucro Bruto − Impostos (regime SPV)' },
-    { label: 'Retorno Total', value: 'Lucro Liquido / Capital Necessario' },
-    { label: 'Retorno Anualizado', value: '((1 + Retorno Total) ^ (12 / meses)) − 1' },
-    { label: 'MOIC (Equity Multiple)', value: '(Capital + Lucro Liquido) / Capital' },
-    { label: 'Cash-on-Cash', value: 'Lucro Liquido / Capital efectivamente desembolsado' },
-    { label: 'Payback', value: 'Prazo ate recuperacao integral do capital (no exit do deal)' },
-  ])
-  b.space(6)
-
-  b.subheader('Acronimos do dominio imobiliario')
-  b.simpleTable([
-    { label: 'CAEP', value: 'Contrato de Associacao em Participacao' },
-    { label: 'ARU', value: 'Area de Reabilitacao Urbana (regime IVA reduzido a 6%)' },
-    { label: 'IMT / IS', value: 'Imposto Municipal sobre Transmissoes / Imposto do Selo' },
-    { label: 'PMO', value: 'Peso da Mao-de-Obra no custo total da obra' },
-    { label: 'BDI', value: 'Beneficios e Despesas Indirectas (margem do construtor)' },
-    { label: 'VVR', value: 'Valor de Venda Remodelado (estimativa de venda apos obra)' },
-    { label: 'VPT', value: 'Valor Patrimonial Tributario (referencia para IMT/IMI)' },
-    { label: 'CPCV', value: 'Contrato Promessa de Compra e Venda' },
-  ])
   b.space(4)
 
-  b.note('Os pressupostos acima reflectem a configuracao actual da analise. Numeros sao calculados de forma uniforme em todos os documentos investidor (Dossier, Proposta Anonima, Analise de Rentabilidade, Relatorio CAEP).')
+  // Indicadores financeiros (texto compacto, fonte 7.5pt)
+  const indicadores = [
+    'Capital Necessario — Compra + IMT + IS + Escritura + Obra com IVA + Detencao + Comissao Venda.',
+    'Lucro Bruto — VVR − Capital Necessario.',
+    'Lucro Liquido — Lucro Bruto − Impostos do regime fiscal aplicavel.',
+    'Retorno Total — Lucro Liquido / Capital Necessario.',
+    'Retorno Anualizado — ((1 + Retorno Total) ^ (12 / meses)) − 1.',
+    'MOIC (Equity Multiple) — (Capital + Lucro Liquido) / Capital. Multiplo de bolso do investidor.',
+    'Cash-on-Cash — Lucro Liquido / Capital efectivamente desembolsado.',
+    'Payback — Prazo ate recuperacao integral do capital. No modelo de capital unico, e o proprio prazo do deal.',
+  ]
+  b.subheader('Indicadores financeiros')
+  for (const linha of indicadores) b.note(linha)
+  b.space(6)
+
+  // Acronimos imobiliarios
+  const acronimos = [
+    'CAEP — Contrato de Associacao em Participacao.',
+    'ARU — Area de Reabilitacao Urbana (regime IVA reduzido a 6%).',
+    'IMT / IS — Imposto Municipal sobre Transmissoes / Imposto do Selo.',
+    'PMO — Peso da Mao-de-Obra no custo total da obra.',
+    'BDI — Beneficios e Despesas Indirectas (margem do empreiteiro).',
+    'VVR — Valor de Venda Remodelado (estimativa de venda apos obra).',
+    'VPT — Valor Patrimonial Tributario (referencia para IMT/IMI).',
+    'CPCV — Contrato Promessa de Compra e Venda.',
+  ]
+  b.subheader('Acronimos do dominio imobiliario')
+  for (const linha of acronimos) b.note(linha)
 }

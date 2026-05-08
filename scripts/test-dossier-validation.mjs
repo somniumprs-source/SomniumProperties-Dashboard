@@ -179,6 +179,21 @@ const analiseMock = {
     base:   { lucro_liquido: 32000, retorno_anualizado: 28 },
     melhor: { lucro_liquido: 48000, retorno_anualizado: 45 },
   },
+  // Comparaveis com shape novo {meta, tipologias} para testar deteccao
+  comparaveis: {
+    meta: { desconto_negocial_pct: 5 },
+    tipologias: [
+      {
+        tipologia: 'T2',
+        area: 75,
+        comparaveis: [
+          { preco: 240000, area: 70, ajustes: { estado_pct: -5, piso_pct: 2 } },
+          { preco: 260000, area: 80, ajustes: { estado_pct: 0, piso_pct: 0 } },
+          { preco: 245000, area: 72, ajustes: { estado_pct: -3, idade: -2 } },
+        ],
+      },
+    ],
+  },
 }
 
 let resolved
@@ -501,6 +516,14 @@ test('Dossier menciona MOIC nos big numbers', () => {
 })
 test('Dossier menciona Payback', () => {
   assert.ok(dossierText.includes('Payback'), 'Dossier nao tem Payback')
+})
+test('Dossier inclui Estudo de Comparaveis (SUMARIO EXECUTIVO)', () => {
+  // renderEstudoComparaveis comeca com "SUMÁRIO EXECUTIVO"
+  assert.ok(dossierText.includes('SUM') && dossierText.includes('EXECUTIVO'),
+    'Dossier nao tem SUMARIO EXECUTIVO dos comparaveis')
+})
+test('Dossier inclui Analise de Rentabilidade integral (CUSTOS DE AQUISICAO)', () => {
+  assert.ok(dossierText.includes('CUSTOS DE AQUISI'), 'Dossier nao tem CUSTOS DE AQUISICAO')
 })
 test('Dossier menciona PRESSUPOSTOS (seccao do glossario)', () => {
   assert.ok(dossierText.includes('PRESSUPOSTOS'), 'Dossier nao tem PRESSUPOSTOS')
