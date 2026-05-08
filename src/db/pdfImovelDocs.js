@@ -253,6 +253,57 @@ export async function generateDoc(tipo, imovel, analise = null) {
 // LAYOUT SYSTEM — Professional, mobile-friendly
 // ══════════════════════════════════════════════════════════════
 
+// Patch PDFDocument para neutralizar NaN/Infinity em coordenadas e
+// dimensoes, antes que cheguem ao buffer interno e expludam em doc.end().
+// PDFKit so valida numeros na serializacao final, pelo que sem este guard
+// um unico calculo errado num renderer deita abaixo o PDF inteiro.
+let __pdfkitPatched = false
+function patchPDFKitNaNGuard() {
+  if (__pdfkitPatched) return
+  __pdfkitPatched = true
+  const num = v => (typeof v === 'number' && !isFinite(v)) ? 0 : v
+  const wrapPositional = (proto, method, knownNumericIndices) => {
+    if (typeof proto[method] !== 'function') return
+    const orig = proto[method]
+    proto[method] = function(...args) {
+      let dirty = false
+      for (const i of knownNumericIndices) {
+        if (i < args.length && typeof args[i] === 'number' && !isFinite(args[i])) {
+          dirty = true; args[i] = 0
+        }
+      }
+      // Sanear opts.width/height/x/y se ultimo arg for objecto
+      const last = args[args.length - 1]
+      if (last && typeof last === 'object' && !Array.isArray(last)) {
+        for (const k of ['width', 'height', 'x', 'y', 'lineGap', 'characterSpacing', 'indent']) {
+          if (typeof last[k] === 'number' && !isFinite(last[k])) {
+            dirty = true; last[k] = 0
+          }
+        }
+        if (Array.isArray(last.fit)) {
+          last.fit = last.fit.map(v => (typeof v === 'number' && !isFinite(v)) ? 0 : v)
+        }
+      }
+      if (dirty) console.warn(`[pdfkit-guard] ${method} recebeu NaN/Infinity — saneado para 0`)
+      return orig.apply(this, args)
+    }
+  }
+  const proto = PDFDocument.prototype
+  // Drawing primitives (x,y,w,h) e variantes
+  wrapPositional(proto, 'rect', [0, 1, 2, 3])
+  wrapPositional(proto, 'roundedRect', [0, 1, 2, 3, 4])
+  wrapPositional(proto, 'circle', [0, 1, 2])
+  wrapPositional(proto, 'moveTo', [0, 1])
+  wrapPositional(proto, 'lineTo', [0, 1])
+  wrapPositional(proto, 'image', [1, 2])
+  wrapPositional(proto, 'text', [1, 2])
+  wrapPositional(proto, 'fontSize', [0])
+  wrapPositional(proto, 'lineWidth', [0])
+  wrapPositional(proto, 'translate', [0, 1])
+  wrapPositional(proto, 'scale', [0, 1])
+}
+patchPDFKitNaNGuard()
+
 class DocBuilder {
   constructor(title, subtitle, imovel, opts = {}) {
     // Metadata do PDF — Title/Author/Subject/Keywords/Producer.
