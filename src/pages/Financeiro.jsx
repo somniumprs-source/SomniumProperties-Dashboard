@@ -6,6 +6,7 @@ import {
 import { Upload, X, FileText, Image, Trash2, Plus, ChevronDown, ChevronUp, Check } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { KPICard } from '../components/dashboard/KPICard.jsx'
+import { Tabs } from '../components/ui/Tabs.jsx'
 import { apiFetch } from '../lib/api.js'
 import { useUrlState } from '../hooks/useUrlState.js'
 
@@ -158,17 +159,13 @@ export function Financeiro() {
         notionUrl="https://www.notion.so/333c6d45a01f81dc9cb4d12a999e28ed" />
 
       {/* Tabs */}
-      <div className="px-4 sm:px-6 pt-4 flex gap-0.5 sm:gap-1 border-b border-gray-200 bg-white sticky top-0 z-10 overflow-x-auto">
-        {TABS.map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap ${
-              tab === t
-                ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}>
-            {t}
-          </button>
-        ))}
+      <div className="px-4 sm:px-6 pt-3 bg-white sticky top-0 z-10">
+        <Tabs
+          variant="underline"
+          value={tab}
+          onChange={setTab}
+          items={TABS.map(t => ({ key: t, label: t }))}
+        />
       </div>
 
       <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
@@ -218,7 +215,7 @@ export function Financeiro() {
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex flex-col gap-1">
                 <span className="text-xs text-gray-400 uppercase tracking-wide">Negócios Ativos</span>
-                <span className="text-2xl font-bold text-indigo-600">{kpis?.negóciosAtivos ?? '—'}</span>
+                <span className="text-2xl font-bold" style={{ color: '#C9A84C' }}>{kpis?.negóciosAtivos ?? '—'}</span>
                 <span className="text-xs text-gray-400">{kpis?.negociosPendentes ?? 0} com pagamento pendente</span>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex flex-col gap-1">

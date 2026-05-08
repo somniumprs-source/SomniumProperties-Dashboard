@@ -4,6 +4,8 @@ import { PageSkeleton } from '../components/ui/Skeleton.jsx'
 import { apiFetch } from '../lib/api.js'
 import { useUrlState } from '../hooks/useUrlState.js'
 import { EUR, PCT, NUM } from '../constants.js'
+import { Tabs } from '../components/ui/Tabs.jsx'
+import { Button } from '../components/ui/Button.jsx'
 
 const HRS = v => v == null ? '—' : `${Number(v).toFixed(1)}h`
 const GOLD = '#C9A84C'
@@ -355,20 +357,19 @@ export function Operacoes() {
     <>
       <Header title="Operações" subtitle="Tarefas · Calendário · Horas · Eficiência" onRefresh={loadAll} loading={loading} />
 
-      <div className="px-4 sm:px-6 pt-4 border-b border-gray-200 bg-white sticky top-0 z-10">
+      <div className="px-4 sm:px-6 pt-3 bg-white sticky top-0 z-10">
         <div className="flex items-center gap-2 sm:gap-4">
-          <div className="flex gap-0.5 sm:gap-1 overflow-x-auto pb-px flex-1">
-            {TABS.map(t => (
-              <button key={t.id} onClick={() => setTab(t.id)}
-                className={`px-3 py-2 text-xs font-medium rounded-t-lg whitespace-nowrap transition-colors ${tab === t.id ? 'text-yellow-700 border-b-2' : 'text-gray-500 hover:text-gray-700'}`}
-                style={tab === t.id ? { borderColor: GOLD, backgroundColor: '#fefce8' } : {}}>
-                {t.label}
-              </button>
-            ))}
+          <div className="flex-1 min-w-0">
+            <Tabs
+              variant="underline"
+              value={tab}
+              onChange={setTab}
+              items={TABS.map(t => ({ key: t.id, label: t.label }))}
+            />
           </div>
-          <button onClick={syncNotion} disabled={syncing} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 shrink-0">
+          <Button variant="secondary" size="sm" onClick={syncNotion} disabled={syncing}>
             {syncing ? 'Sync...' : 'Sync Notion'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -451,10 +452,9 @@ export function Operacoes() {
                     className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">
                     {viewMode === 'list' ? 'Board' : 'Lista'}
                   </button>
-                  <button onClick={() => { setShowForm(true); setEditingTask(null) }}
-                    className="px-4 py-2 text-sm font-medium rounded-lg text-white" style={{ backgroundColor: GOLD }}>
+                  <Button onClick={() => { setShowForm(true); setEditingTask(null) }}>
                     + Nova Tarefa
-                  </button>
+                  </Button>
                 </div>
               </div>
 

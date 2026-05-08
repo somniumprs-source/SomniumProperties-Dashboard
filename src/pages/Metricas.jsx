@@ -4,6 +4,7 @@ import { PageSkeleton } from '../components/ui/Skeleton.jsx'
 import { apiFetch } from '../lib/api.js'
 import { useUrlState } from '../hooks/useUrlState.js'
 import { EUR, PCT, DAYS, NUM, RATIO } from '../constants.js'
+import { Tabs } from '../components/ui/Tabs.jsx'
 
 const GOLD = '#C9A84C'
 const TABS = [
@@ -211,20 +212,13 @@ export function Metricas() {
         onRefresh={load} loading={loading} />
 
       {/* Tab bar */}
-      <div className="px-4 sm:px-6 pt-4 border-b border-gray-200 bg-white sticky top-0 z-10">
-        <div className="flex gap-1 overflow-x-auto pb-px">
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className={`px-3 py-2 text-xs font-medium rounded-t-lg whitespace-nowrap transition-colors ${
-                tab === t.id
-                  ? 'text-yellow-700 border-b-2'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-              style={tab === t.id ? { borderColor: GOLD, backgroundColor: '#fefce8' } : {}}>
-              {t.label}
-            </button>
-          ))}
-        </div>
+      <div className="px-4 sm:px-6 pt-3 bg-white sticky top-0 z-10">
+        <Tabs
+          variant="underline"
+          value={tab}
+          onChange={setTab}
+          items={TABS.map(t => ({ key: t.id, label: t.label }))}
+        />
       </div>
 
       <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
@@ -636,8 +630,8 @@ export function Metricas() {
                       <div key={f.fase} className="flex items-center gap-3">
                         <span className="text-xs text-gray-500 w-24 sm:w-40 text-right shrink-0">{f.fase}</span>
                         <div className="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden">
-                          <div className="h-full rounded-full bg-indigo-400 flex items-center px-3"
-                            style={{ width: `${Math.max(5, Math.round(f.dias / (im.fases[0]?.dias || 1) * 100))}%` }}>
+                          <div className="h-full rounded-full flex items-center px-3"
+                            style={{ width: `${Math.max(5, Math.round(f.dias / (im.fases[0]?.dias || 1) * 100))}%`, backgroundColor: '#C9A84C' }}>
                             <span className="text-white text-xs font-bold">{DAYS(f.dias)}</span>
                           </div>
                         </div>

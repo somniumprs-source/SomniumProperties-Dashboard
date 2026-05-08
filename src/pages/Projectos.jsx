@@ -3,6 +3,7 @@ import { X, Trash2, Plus, Filter, ArrowUpDown, ChevronDown, ChevronUp, Check } f
 import { Header } from '../components/layout/Header.jsx'
 import { apiFetch } from '../lib/api.js'
 import { useUrlState } from '../hooks/useUrlState.js'
+import { Button } from '../components/ui/Button.jsx'
 import { PartilharAcesso } from '../components/PartilharAcesso.jsx'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
@@ -129,9 +130,7 @@ export function Projectos() {
 
         {/* Toolbar */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <button onClick={() => setEditing({})} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors">
-            <Plus className="w-4 h-4" /> Novo Projecto
-          </button>
+          <Button icon={Plus} onClick={() => setEditing({})}>Novo Projecto</Button>
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-gray-400" />
             <select value={filterCat} onChange={e => setFilterCat(e.target.value)} className="text-xs border rounded-lg px-2 py-1.5">
@@ -518,15 +517,15 @@ function ProjectoForm({ item, onSave, onCancel }) {
       </div>
 
       <div className="flex gap-3 mt-4">
-        <button onClick={() => {
+        <Button size="lg" onClick={() => {
           const autoFields = pagamentos.length > 0
             ? { lucro_real: totalRecebido, pagamento_em_falta: pagamentos.some(p => !p.recebido) ? 1 : 0 }
             : {}
           onSave({ ...f, ...autoFields })
-        }} disabled={!f.movimento?.trim()} className="px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 disabled:opacity-40">
+        }} disabled={!f.movimento?.trim()}>
           {isNew ? 'Criar' : 'Guardar'}
-        </button>
-        <button onClick={onCancel} className="px-5 py-2 bg-gray-100 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-200">Cancelar</button>
+        </Button>
+        <Button variant="ghost" size="lg" onClick={onCancel}>Cancelar</Button>
       </div>
     </div>
   )
