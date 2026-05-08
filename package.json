@@ -9,6 +9,8 @@
   "scripts": {
     "dev": "concurrently \"node server.js\" \"vite\"",
     "server": "node server.js",
+    "sync-landing": "node scripts/sync-landing.mjs",
+    "prebuild": "node scripts/sync-landing.mjs",
     "build": "vite build",
     "start": "npm run build && NODE_ENV=production node server.js",
     "preview": "vite preview",
