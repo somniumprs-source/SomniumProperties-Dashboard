@@ -2236,8 +2236,10 @@ function renderEstudoComparaveis(b, im, a) {
   if (n > 0) {
     const rowsE = compsCalc.map((c, i) => {
       const id = `Comp. ${String.fromCharCode(65 + i)}${c.descricao ? ' ' + c.descricao : ''}`
+      const link = c.link && /^https?:\/\//i.test(String(c.link).trim()) ? String(c.link).trim() : null
+      const idCell = link ? { value: id, link, color: C.gold } : id
       return { _values: [
-        id,
+        idCell,
         `${c.area} m²`,
         EUR(c.preco),
         `${Math.round(c.precoM2Bruto).toLocaleString('pt-PT')} €/m²`,
@@ -2312,8 +2314,9 @@ function renderEstudoComparaveis(b, im, a) {
     compsCalc.forEach((c, i) => {
       const letra = String.fromCharCode(65 + i)
       const subtitulo = c.descricao || c.notas || ''
+      const linkValido = c.link && /^https?:\/\//i.test(String(c.link).trim()) ? String(c.link).trim() : null
       // Header do card preto: titulo a esquerda + subtitulo a direita (sem overlap)
-      b.ensure(28)
+      b.ensure(28 + (linkValido ? 14 : 0))
       b.doc.rect(ML, b.y, CW, 24).fill(C.black)
       b.doc.fontSize(10).fillColor(C.white).text(`Comp. ${letra}`, ML + 12, b.y + 7, { width: 180, lineBreak: false })
       if (subtitulo) {
@@ -2322,6 +2325,11 @@ function renderEstudoComparaveis(b, im, a) {
         b.doc.fontSize(8.5).fillColor('#9b8a4d').text(subtitulo, subX, b.y + 8, { width: subW, align: 'right', lineBreak: false })
       }
       b.y += 28
+      if (linkValido) {
+        b.doc.fontSize(8).fillColor(C.muted).text('Anúncio: ', ML + 12, b.y, { lineBreak: false, continued: true })
+        b.doc.fillColor(C.gold).text(linkValido, { lineBreak: false, link: linkValido, underline: true })
+        b.y += 12
+      }
 
       // 2 colunas lado a lado: atributos esquerda / ajustes direita com totais destacados
       const leftRows = [
