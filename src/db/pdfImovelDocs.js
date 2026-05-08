@@ -2606,14 +2606,19 @@ function renderDossierInvestidor(b, im, a) {
   // Estudo de Comparáveis — fundamenta o VVR usado nos números abaixo.
   // Só renderiza se houver comparáveis preenchidos com preço e área válidos.
   // O shape pode ser um array (legacy) ou {meta, tipologias} (novo).
-  let __comps = a.comparaveis
-  if (typeof __comps === 'string') { try { __comps = JSON.parse(__comps || 'null') } catch { __comps = null } }
-  const __tipologias = Array.isArray(__comps) ? __comps : (__comps?.tipologias || [])
-  const __hasValid = __tipologias.some(t => (t?.comparaveis || []).some(c => parseFloat(c?.preco) > 0 && parseFloat(c?.area) > 0))
-  if (__hasValid) {
-    b.newPage()
-    renderEstudoComparaveis(b, im, a)
-    b.space(4)
+  // Wrapped em try/catch para nunca quebrar o Dossier completo.
+  try {
+    let __comps = a.comparaveis
+    if (typeof __comps === 'string') { try { __comps = JSON.parse(__comps || 'null') } catch { __comps = null } }
+    const __tipologias = Array.isArray(__comps) ? __comps : (__comps?.tipologias || [])
+    const __hasValid = __tipologias.some(t => (t?.comparaveis || []).some(c => parseFloat(c?.preco) > 0 && parseFloat(c?.area) > 0))
+    if (__hasValid) {
+      b.newPage()
+      renderEstudoComparaveis(b, im, a)
+      b.space(4)
+    }
+  } catch (e) {
+    console.error('[dossier] estudo de comparaveis falhou:', e.message)
   }
 
   // Resumo executivo do dossier — MOIC e Payback em destaque para o
@@ -2636,12 +2641,23 @@ function renderDossierInvestidor(b, im, a) {
   // alavancagem, risco e sensibilidade, stress tests, exit alternativo e
   // estrutura CAEP. Reusa a mesma renderizacao do PDF standalone para garantir
   // que os numeros batem certo entre os dois documentos.
-  b.newPage()
-  renderAnaliseRentabilidade(b, im, a)
+  // Wrapped em try/catch — se algum sub-renderer falhar (ex: NaN num metric),
+  // nao deita abaixo todo o Dossier; renderiza o que conseguiu ate la.
+  try {
+    b.newPage()
+    renderAnaliseRentabilidade(b, im, a)
+  } catch (e) {
+    console.error('[dossier] analise de rentabilidade falhou:', e.message, e.stack?.split('\n').slice(0,5).join('\n'))
+    b.note(`Detalhe da analise de rentabilidade indisponivel para este negocio (motivo tecnico). Contacte a Somnium Properties para versao completa.`)
+  }
 
   // Pressupostos e glossario partilhados (mesma funcao chamada pela Anonima)
   // Renderizam numa pagina dedicada e isolada, no fim do dossier.
-  renderAssumptionsAndGlossary(b, deal)
+  try {
+    renderAssumptionsAndGlossary(b, deal)
+  } catch (e) {
+    console.error('[dossier] glossario falhou:', e.message)
+  }
 }
 
 function renderResumoNegociacao(b, im) {
@@ -3116,7 +3132,16 @@ const GENERATORS = {
         { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
       ],
     })
-    renderDossierInvestidor(b, im, a)
+    try {
+      renderDossierInvestidor(b, im, a)
+    } catch (e) {
+      console.error('[GENERATORS.dossier_investidor] falhou:', e.message, '\n', e.stack)
+      // Fallback: emitir um aviso no PDF em vez de crash 500
+      try {
+        b.header('AVISO')
+        b.note(`Nao foi possivel gerar todas as seccoes deste Dossier devido a um erro tecnico (${e.message}). Contacte a Somnium Properties para a versao completa.`)
+      } catch {}
+    }
     b.disclaimer()
     b.applyFooter()
     return b.end()

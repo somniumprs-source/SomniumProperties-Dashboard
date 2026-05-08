@@ -263,7 +263,10 @@ router.post('/imoveis/:id/documentos/:tipo/regenerar', async (req, res) => {
     const out = await persistDocumento(imovel, req.params.tipo, { trigger: 'manual:regenerar', generatedBy: req.user?.email || 'manual', analise })
     if (!out) return res.status(400).json({ error: 'Tipo inválido' })
     res.json(out)
-  } catch (e) { res.status(500).json({ error: e.message }) }
+  } catch (e) {
+    console.error(`[regenerar ${req.params.tipo} imovel=${req.params.id}] FALHOU:`, e.message, '\n', e.stack)
+    res.status(500).json({ error: e.message })
+  }
 })
 
 // ── Lookups (dropdowns dinâmicos) ───────────────────────────
@@ -306,7 +309,10 @@ router.get('/imoveis/:id/documento/:tipo', async (req, res) => {
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `inline; filename="${req.params.tipo}_${nome}.pdf"`)
     res.end(out.buffer)
-  } catch (e) { res.status(500).json({ error: e.message }) }
+  } catch (e) {
+    console.error(`[documento ${req.params.tipo} imovel=${req.params.id}] FALHOU:`, e.message, '\n', e.stack)
+    res.status(500).json({ error: e.message })
+  }
 })
 
 // ── Relatório PDF do imóvel ──────────────────────────────────
@@ -353,7 +359,10 @@ router.get('/imoveis/:id/relatorio-investidor', async (req, res) => {
       storagePath: `imoveis/${imovel.id}/dossier_investimento.pdf`,
       localPath: path.join(REPO_ROOT, 'Relatorios', 'Imoveis', `${imovel.id}_dossier_investimento.pdf`),
     })
-  } catch (e) { res.status(500).json({ error: e.message }) }
+  } catch (e) {
+    console.error(`[relatorio-investidor imovel=${req.params.id}] FALHOU:`, e.message, '\n', e.stack)
+    res.status(500).json({ error: e.message })
+  }
 })
 
 crudRoutes('/investidores', Investidores)
