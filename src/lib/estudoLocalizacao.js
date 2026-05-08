@@ -19,7 +19,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // (CW≈495pt @ 72dpi). Importante para a pagina LOCALIZACAO do dossier,
 // onde a imagem ocupa toda a content width — texto da tabela de POIs e
 // cards de highlights tem que ficar legivel sem zoom.
-const PNG_TARGET_WIDTH = 2000
+// 1100px e suficiente para PDF impresso a A4 (~600x842pt). 2000px era
+// overkill — gerava PNG ~5MB que tornava o PDF total ~6MB e o request
+// timeout em Render. 1100px da PNG ~1.3MB com qualidade visual mantida.
+const PNG_TARGET_WIDTH = 1100
 
 // Fontes Inter empacotadas no repo (public/fonts/*.ttf). Garantem render
 // consistente em qualquer plataforma — em particular no Render (Linux,
