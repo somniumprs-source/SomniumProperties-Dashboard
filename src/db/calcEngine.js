@@ -250,9 +250,13 @@ export function calcAnalise(inputs) {
     ? round2((Math.pow(1 + lucroBruto / capitalNecessario, 12 / meses) - 1) * 100)
     : 0
   const cashOnCash = capitalNecessario > 0 ? round2((lucroLiquido / capitalNecessario) * 100) : 0
+  // Break-even VVR: VVR mínimo para LB ≥ 0.
+  // A comissão de venda é variável com VVR; tem de ser excluída dos custos fixos
+  // antes de absorver no divisor (1 − comissão_efectiva), caso contrário é contada duas vezes.
+  const custosFixosVenda = round2(custoTotal - comissaoComIva)
   const breakEven = comissaoPerc > 0
-    ? round2(custoTotal / (1 - (comissaoPerc / 100) * 1.23))
-    : custoTotal
+    ? round2(custosFixosVenda / (1 - (comissaoPerc / 100) * 1.23))
+    : custosFixosVenda
 
   return {
     // Calculados A — Aquisição

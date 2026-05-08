@@ -9,6 +9,8 @@ import { fileURLToPath } from 'url'
 import { rasterizarSvgParaPng } from '../lib/estudoLocalizacao.js'
 import { LOGO_BLACK_PNG } from './logoBlack.js'
 import { calcMetricsExtra, MULT, EUR_M2, RACIO, PCT_DEC, EUR_S, colorMargem, colorPositivo } from './calcMetricsExtra.js'
+import pool from './pg.js'
+import { calcOrcamentoObra, SECCOES_ORDEM, SECCOES_OBRA, SECCOES_LABELS } from './orcamentoObraEngine.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const STRESS_DIR = path.resolve(__dirname, '../../public/uploads/stress_tests')
@@ -178,6 +180,25 @@ async function preloadHeroFoto(imovel) {
   return imovel
 }
 
+// Carrega o orçamento detalhado da aba "Obra" (orcamentos_obra) e
+// devolve o resultado já calculado por calcOrcamentoObra. Devolve
+// null se não existir ou falhar — os renderers fazem fallback aos
+// agregados da análise.
+async function preloadOrcamentoObra(im) {
+  if (!im?.id || im._orcamento !== undefined) return im
+  try {
+    const { rows: [orc] } = await pool.query(
+      'SELECT * FROM orcamentos_obra WHERE imovel_id = $1', [im.id]
+    )
+    if (!orc) return { ...im, _orcamento: null }
+    const calc = calcOrcamentoObra(orc)
+    return { ...im, _orcamento: { ...orc, calc } }
+  } catch (e) {
+    console.error('[pdfImovelDocs] preloadOrcamentoObra falhou:', e.message)
+    return { ...im, _orcamento: null }
+  }
+}
+
 export async function generateDoc(tipo, imovel, analise = null) {
   const fn = GENERATORS[tipo]
   if (!fn) return null
@@ -185,9 +206,14 @@ export async function generateDoc(tipo, imovel, analise = null) {
   // (Supabase URL exige fetch async; o resto do render é síncrono).
   const investidor = ['relatorio_investimento', 'dossier_investidor', 'proposta_investimento_anonima']
   const comFotoHero = ['ficha_imovel', ...investidor]
+  // Tipos que mostram o orçamento de obra detalhado consomem o que
+  // foi preenchido na aba "Obra" (orcamentos_obra) — e não apenas
+  // os agregados da analise activa.
+  const comOrcamentoObra = ['dossier_investidor', 'proposta_investimento_anonima']
   let im = imovel
   if (investidor.includes(tipo)) im = await preloadLocalizacao(im)
   if (comFotoHero.includes(tipo)) im = await preloadHeroFoto(im)
+  if (comOrcamentoObra.includes(tipo)) im = await preloadOrcamentoObra(im)
   return fn(im, analise)
 }
 
@@ -2313,6 +2339,76 @@ function renderPropostaFormal(b, im) {
   b.metric('Fundamentos da proposta (comparáveis, estado, obra necessária)', '________________')
 }
 
+// Renderiza o detalhe do orçamento da aba "Obra" no dossier de
+// investidor: secções com subtotal bruto (base + IVA liquidado),
+// BDI, licenciamento e total geral. O bruto fiscal corresponde ao
+// total que o investidor irá efectivamente desembolsar (incluindo
+// IVA autoliquidado, que é IVA que entra na sua contabilidade).
+function renderOrcamentoObraDetalhado(b, orc) {
+  const calc = orc.calc
+  const totais = calc.totais
+  b.header('ORÇAMENTO DE OBRA — DETALHE POR SECÇÃO')
+
+  const seccoesRows = []
+  for (const key of SECCOES_ORDEM) {
+    const s = calc.seccoes?.[key]
+    if (!s || !s.subtotal_bruto) continue
+    seccoesRows.push({ label: SECCOES_LABELS[key] || key, value: EUR(s.subtotal_bruto) })
+  }
+
+  if (seccoesRows.length > 0) {
+    b.simpleTable(seccoesRows)
+    b.space(4)
+  } else {
+    b.text('Orçamento de obra ainda sem linhas preenchidas na aba Obra.', { size: 9, color: C.muted })
+    b.space(4)
+  }
+
+  // Subtotais e BDI
+  const baseObraSemBdi = totais.base_obra ?? 0
+  const baseObraComBdi = totais.base_obra_com_bdi ?? 0
+  const ivaObra = totais.iva_obra ?? 0
+  const baseLic = totais.base_licenciamento ?? 0
+  const ivaLic = totais.iva_extra ?? 0
+  const ivaAutoliq = totais.iva_autoliquidado ?? 0
+  const retencoes = totais.retencoes_irs ?? 0
+  const bdiImprev = calc.bdi?.imprevistos_base ?? 0
+  const bdiMargem = calc.bdi?.margem_base ?? 0
+
+  const resumoRows = [
+    { label: 'Base de obra (sem BDI)', value: EUR(baseObraSemBdi) },
+  ]
+  if (bdiImprev > 0) resumoRows.push({ label: `Imprevistos (${calc.bdi.imprevistos_perc}%)`, value: EUR(bdiImprev) })
+  if (bdiMargem > 0) resumoRows.push({ label: `Margem do empreiteiro (${calc.bdi.margem_perc}%)`, value: EUR(bdiMargem) })
+  if (baseObraComBdi !== baseObraSemBdi) resumoRows.push({ label: 'Base de obra c/ BDI', value: EUR(baseObraComBdi), total: true })
+  if (ivaObra > 0) resumoRows.push({ label: 'IVA da obra (liquidado)', value: EUR(ivaObra) })
+  if (baseLic > 0) resumoRows.push({ label: 'Licenciamento, fiscalização e seguros', value: EUR(baseLic) })
+  if (ivaLic > 0) resumoRows.push({ label: 'IVA do licenciamento', value: EUR(ivaLic) })
+  resumoRows.push({ label: 'TOTAL ORÇAMENTO (bruto fiscal)', value: EUR(calc.total_geral), total: true })
+  if (ivaAutoliq > 0) resumoRows.push({ label: '(-) IVA autoliquidado p/ adquirente', value: EUR(ivaAutoliq) })
+  if (retencoes > 0) resumoRows.push({ label: '(-) Retenções IRS a entregar à AT', value: EUR(retencoes) })
+  if (totais.a_pagar != null && (ivaAutoliq > 0 || retencoes > 0)) {
+    resumoRows.push({ label: 'Total a pagar a prestadores', value: EUR(totais.a_pagar), total: true })
+  }
+
+  b.simpleTable(resumoRows)
+
+  // Regime fiscal aplicado (zona ARU + tipo de obra)
+  const regimeLabels = []
+  if (calc.zona_aru) regimeLabels.push('Zona ARU (Verba 2.27 CIVA — material a 6%)')
+  if (calc.tipo_obra === 'remodelacao') regimeLabels.push('Remodelação (mão-de-obra a 6%)')
+  if (calc.tipo_obra === 'construcao_nova') regimeLabels.push('Construção nova (mão-de-obra a 23%)')
+  if (regimeLabels.length > 0) {
+    b.space(2)
+    b.text(`Regime fiscal: ${regimeLabels.join(' · ')}`, { size: 8, color: C.muted })
+  }
+  if (orc.notas) {
+    b.space(2)
+    b.text(`Notas do orçamento: ${orc.notas}`, { size: 8, color: C.muted })
+  }
+  b.space(4)
+}
+
 function renderDossierInvestidor(b, im, a) {
   const fotos = parseFotos(im)
   const compra = a.compra || im.valor_proposta || im.ask_price || 0
@@ -2348,12 +2444,53 @@ function renderDossierInvestidor(b, im, a) {
     { label: 'IMT + IS + Escritura', value: EUR((a.imt || 0) + (a.imposto_selo || 0) + (a.escritura || 0)) },
     { label: 'Total Aquisição', value: EUR(a.total_aquisicao), total: true },
     { label: 'Obra com IVA', value: EUR(a.obra_com_iva || obra) },
-    { label: 'Custos Detenção', value: EUR(a.total_manutencao) },
+    { label: 'Custos Detenção', value: EUR(a.total_detencao) },
     { label: 'VVR (conservador)', value: EUR(vvr) },
     { label: 'Comissão Venda', value: EUR(a.comissao_com_iva) },
     { label: `Impostos (${a.regime_fiscal || 'Empresa'})`, value: EUR(a.impostos) },
   ])
   b.space(4)
+
+  // ── Orçamento de Obra detalhado ──────────────────────────────
+  // Preferir o orçamento detalhado preenchido na aba "Obra"
+  // (orcamentos_obra). Fallback aos agregados da análise quando o
+  // orçamento ainda não foi preenchido.
+  const orcamento = im._orcamento
+  if (orcamento && orcamento.calc) {
+    renderOrcamentoObraDetalhado(b, orcamento)
+  } else {
+    const obraBase = parseFloat(a.obra) || 0
+    const ivaObra = parseFloat(a.iva_obra) || 0
+    const obraComIva = parseFloat(a.obra_com_iva) || obraBase
+    const pmoPerc = parseFloat(a.pmo_perc) || 0
+    const licenciamento = parseFloat(a.licenciamento) || 0
+    const regimeIva = a.aru
+      ? 'ARU — 6% sobre toda a obra'
+      : a.ampliacao
+        ? 'Ampliação — 23% sobre toda a obra'
+        : `Normal — Mão-de-obra (${pmoPerc}%) a 6% + Materiais (${Math.max(0, 100 - pmoPerc)}%) a 23%`
+
+    if (obraBase > 0 || obraComIva > 0) {
+      b.header('ORÇAMENTO DE OBRA')
+      const orcRows = [
+        { label: 'Custo base de obra (s/ IVA)', value: EUR(obraBase) },
+        { label: 'Modo de cálculo', value: (a.modo_obra === 'fixo' ? 'Fixo (valor final do empreiteiro)' : 'Calculado (PMO + IVA)') },
+        { label: 'Peso PMO (mão-de-obra)', value: PCT(pmoPerc) },
+      ]
+      const pmoBreakdown = []
+      if (a.pmo_arq_perc) pmoBreakdown.push({ label: '   · Arquitetura', value: PCT(a.pmo_arq_perc) })
+      if (a.pmo_fisc_perc) pmoBreakdown.push({ label: '   · Fiscalização', value: PCT(a.pmo_fisc_perc) })
+      if (a.pmo_seg_obra_perc) pmoBreakdown.push({ label: '   · Segurança em obra', value: PCT(a.pmo_seg_obra_perc) })
+      if (a.pmo_outros_perc) pmoBreakdown.push({ label: '   · Outros', value: PCT(a.pmo_outros_perc) })
+      orcRows.push(...pmoBreakdown)
+      orcRows.push({ label: 'Regime de IVA aplicável', value: regimeIva })
+      orcRows.push({ label: 'IVA da obra', value: EUR(ivaObra) })
+      if (licenciamento > 0) orcRows.push({ label: 'Licenciamento', value: EUR(licenciamento) })
+      orcRows.push({ label: 'Total Obra com IVA', value: EUR(obraComIva), total: true })
+      b.simpleTable(orcRows)
+      b.space(4)
+    }
+  }
 
   b.header('RESULTADO')
   b.simpleTable([
@@ -2400,15 +2537,6 @@ function renderDossierInvestidor(b, im, a) {
   }
 
   renderStressTests(b, a)
-
-  b.header('ESTRATÉGIA DE SAÍDA')
-  b.simpleTable([
-    { label: '1. Exclusividade 15 dias para consultor original', value: '' },
-    { label: '2. Top 2-3 consultores de Coimbra', value: '' },
-    { label: '3. Ajuste de preço (-5%) após 2 meses sem venda', value: '' },
-    { label: '4. Plano B: conversão para arrendamento (estudantes)', value: '' },
-  ])
-  b.space(4)
 
   b.header('TRANSPARÊNCIA E COMUNICAÇÃO')
   b.simpleTable([
@@ -3009,6 +3137,12 @@ const SECCOES_COM_LOCALIZACAO = new Set([
   'dossier_investidor', 'proposta_investimento_anonima', 'investimento',
 ])
 
+// Seccoes que mostram o orçamento detalhado (precisam preload do
+// orcamentos_obra, vide preloadOrcamentoObra).
+const SECCOES_COM_ORCAMENTO_OBRA = new Set([
+  'dossier_investidor', 'proposta_investimento_anonima',
+])
+
 // Gera um PDF compilado para investidor. Quando ha apenas uma
 // seccao, devolve o gerador completo (com a sua capa especifica).
 // Para multiplas, faz capa "Dossier" + render inline de cada
@@ -3024,7 +3158,9 @@ export async function generateCompiledReport(imovel, analise, seccoes = []) {
   // Multi-seccao: pre-carrega localizacao se alguma seccao a usa, para
   // que o renderer sincrono ja receba o buffer de imagem em memoria.
   const precisaLocalizacao = seccoes.some(s => SECCOES_COM_LOCALIZACAO.has(s))
-  const im = precisaLocalizacao ? await preloadLocalizacao(imovel) : imovel
+  const precisaOrcamento = seccoes.some(s => SECCOES_COM_ORCAMENTO_OBRA.has(s))
+  let im = precisaLocalizacao ? await preloadLocalizacao(imovel) : imovel
+  if (precisaOrcamento) im = await preloadOrcamentoObra(im)
 
   const b = new DocBuilder('Dossier de Investimento', im.zona || '', im)
   const an = analise || {}

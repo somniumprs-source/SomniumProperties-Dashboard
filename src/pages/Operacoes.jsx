@@ -6,6 +6,7 @@ import { useUrlState } from '../hooks/useUrlState.js'
 import { EUR, PCT, NUM } from '../constants.js'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { Button } from '../components/ui/Button.jsx'
+import { KpiCard } from '../components/ui/KpiCard.jsx'
 
 const HRS = v => v == null ? '—' : `${Number(v).toFixed(1)}h`
 const GOLD = '#C9A84C'
@@ -38,13 +39,8 @@ const CAT_COLORS = ['#6366f1','#f59e0b','#ef4444','#10b981','#8b5cf6','#ec4899',
 
 // ── Components ──────────────────────────────────────────────────
 function M({ label, value, sub, highlight = false, warn = false }) {
-  return (
-    <div className={`rounded-xl border p-4 flex flex-col gap-1 shadow-sm ${highlight ? 'border-yellow-300 bg-yellow-50' : warn ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white'}`}>
-      <span className="text-[11px] text-gray-400 uppercase tracking-wide leading-tight">{label}</span>
-      <span className={`text-xl font-bold ${highlight ? 'text-yellow-700' : warn ? 'text-red-600' : 'text-gray-900'}`}>{value}</span>
-      {sub && <span className="text-xs text-gray-400 leading-tight">{sub}</span>}
-    </div>
-  )
+  const tone = warn ? 'red' : highlight ? 'gold' : 'gray'
+  return <KpiCard label={label} value={value} sub={sub} tone={tone} size="sm" />
 }
 
 function SectionTitle({ children }) {
