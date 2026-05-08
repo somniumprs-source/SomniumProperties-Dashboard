@@ -321,7 +321,24 @@ class DocBuilder {
       Creator: 'Somnium CRM',
     }
     this.doc = new PDFDocument({ size: 'A4', autoFirstPage: false, bufferPages: true, info })
-    this.y = 0
+    // Setter sanitizador de this.y: se algum renderer escrever NaN/Infinity,
+    // converter para o topo da pagina (60). Caso contrario, qualquer operacao
+    // tipo `this.y += NaN` corrompe o cursor para sempre, e o resto do PDF
+    // desenha-se em (0,0) → pagina branca. Esta proteccao quebra a cadeia.
+    let _y = 0
+    Object.defineProperty(this, 'y', {
+      get: () => _y,
+      set: (v) => {
+        if (typeof v !== 'number' || !isFinite(v)) {
+          console.warn(`[docbuilder] this.y recebeu valor invalido (${v}) — repondo para 60`)
+          _y = 60
+        } else {
+          _y = v
+        }
+      },
+      enumerable: true,
+      configurable: false,
+    })
     this.imovel = imovel
     this.style = opts.style || 'default'
     this.title = title
