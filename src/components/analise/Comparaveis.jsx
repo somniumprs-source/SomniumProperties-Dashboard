@@ -420,40 +420,45 @@ export function Comparaveis({ analise, imovel, onUpdate }) {
             </div>
           </div>
 
-          {/* Captura do Estudo de Mercado (Alfredo) */}
-          <div className="border-t border-gray-200 pt-3">
-            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Estudo de Mercado de Referência</h4>
-            <p className="text-[11px] text-gray-400 mb-2">Captura de ecrã do estudo do Alfredo (ou outra fonte externa). Aparece no PDF antes da tabela de comparáveis ajustados.</p>
-            {meta.alfredo_imagem ? (
-              <div className="flex items-start gap-3">
-                <img src={meta.alfredo_imagem} alt="Estudo Alfredo"
-                  className="rounded border border-gray-200 max-h-48 object-contain bg-white" />
-                <div className="flex flex-col gap-2">
-                  <button type="button" disabled={uploadingAlfredo}
-                    onClick={() => alfredoInputRef.current?.click()}
-                    className="text-xs px-3 py-1.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-50 inline-flex items-center gap-1.5">
-                    <Upload size={12} /> Substituir
-                  </button>
-                  <button type="button" disabled={uploadingAlfredo}
-                    onClick={removeAlfredo}
-                    className="text-xs px-3 py-1.5 rounded bg-red-50 hover:bg-red-100 text-red-600 disabled:opacity-50 inline-flex items-center gap-1.5">
-                    <Trash2 size={12} /> Remover
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button type="button" disabled={uploadingAlfredo || !analise?.id}
-                onClick={() => alfredoInputRef.current?.click()}
-                className="text-xs px-3 py-2 rounded border-2 border-dashed border-gray-300 hover:border-[#C9A84C] hover:bg-white text-gray-500 disabled:opacity-50 inline-flex items-center gap-2">
-                <Upload size={14} /> {uploadingAlfredo ? 'A carregar...' : 'Carregar imagem (JPG, PNG, WEBP — máx. 15MB)'}
-              </button>
-            )}
-            <input ref={alfredoInputRef} type="file" accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) uploadAlfredo(f) }} />
-          </div>
           </div>
         )}
+      </div>
+
+      {/* Cartao Captura do Estudo de Mercado (Alfredo) — sempre visivel */}
+      <div className="rounded-xl border-2 border-[#C9A84C]/40 bg-[#FAF7EE] p-4">
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-800">Estudo de Mercado de Referência (Alfredo)</h3>
+            <p className="text-[11px] text-gray-500 mt-0.5">Captura de ecrã do estudo externo. Aparece no PDF antes da tabela de comparáveis ajustados.</p>
+          </div>
+        </div>
+        {meta.alfredo_imagem ? (
+          <div className="flex items-start gap-3">
+            <img src={meta.alfredo_imagem} alt="Estudo Alfredo"
+              className="rounded border border-gray-200 max-h-56 object-contain bg-white" />
+            <div className="flex flex-col gap-2">
+              <button type="button" disabled={uploadingAlfredo}
+                onClick={() => alfredoInputRef.current?.click()}
+                className="text-xs px-3 py-1.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-50 inline-flex items-center gap-1.5">
+                <Upload size={12} /> Substituir
+              </button>
+              <button type="button" disabled={uploadingAlfredo}
+                onClick={removeAlfredo}
+                className="text-xs px-3 py-1.5 rounded bg-red-50 hover:bg-red-100 text-red-600 disabled:opacity-50 inline-flex items-center gap-1.5">
+                <Trash2 size={12} /> Remover
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button type="button" disabled={uploadingAlfredo || !analise?.id}
+            onClick={() => alfredoInputRef.current?.click()}
+            className="w-full text-xs px-4 py-4 rounded border-2 border-dashed border-[#C9A84C]/60 hover:border-[#C9A84C] hover:bg-white text-gray-600 disabled:opacity-50 inline-flex items-center justify-center gap-2 font-semibold">
+            <Upload size={16} /> {uploadingAlfredo ? 'A carregar...' : (analise?.id ? 'Carregar captura do estudo (JPG, PNG, WEBP — máx. 15MB)' : 'Guarde a análise primeiro para activar este upload')}
+          </button>
+        )}
+        <input ref={alfredoInputRef} type="file" accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; if (f) uploadAlfredo(f) }} />
       </div>
 
       {/* Barra de acções */}

@@ -900,7 +900,10 @@ class DocBuilder {
         const cell = vals[i]
         const val = cell?.value !== undefined ? cell.value : cell
         const clr = cell?.color || C.body
-        this.doc.fontSize(isTotal ? 9 : 8.5).fillColor(clr).text(String(val || '—'), x, this.y + 6, { width: headers[i][1] })
+        const link = cell?.link
+        const opts = { width: headers[i][1] }
+        if (link) { opts.link = link; opts.underline = true }
+        this.doc.fontSize(isTotal ? 9 : 8.5).fillColor(clr).text(String(val || '—'), x, this.y + 6, opts)
         x += headers[i][1]
       }
       this.doc.rect(ML, this.y + rowH - 0.3, CW, 0.3).fill(C.border)
