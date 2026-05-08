@@ -303,6 +303,29 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
 .num-d{font-size:12px;color:var(--soft);margin-top:6px;line-height:1.5}
 .num-foot{font-size:11.5px;color:var(--soft);margin-top:18px;text-align:center;line-height:1.6}
 
+/* TESTEMUNHO */
+.testimonial-sec{padding:64px 56px;max-width:1280px;margin:0 auto}
+.testimonial-card{max-width:760px;margin:0 auto;background:var(--bg-2);border:1px solid var(--line);border-radius:12px;padding:42px 48px;position:relative;box-shadow:0 1px 2px rgba(0,0,0,.04),0 12px 32px rgba(13,13,13,.05)}
+.testimonial-card::before{content:'"';position:absolute;top:-8px;left:32px;font-family:var(--serif);font-size:96px;color:var(--gold);line-height:1;font-style:italic;opacity:.85}
+.testimonial-eye{display:inline-flex;align-items:center;gap:9px;font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin-bottom:16px;margin-left:60px}
+.testimonial-eye::before{content:'';display:block;width:22px;height:1px;background:var(--gold)}
+.testimonial-text{font-family:var(--serif);font-size:21px;font-weight:400;font-style:italic;color:var(--dark);line-height:1.5;margin:0 0 28px;letter-spacing:-.005em}
+.testimonial-meta{display:flex;align-items:center;gap:14px;padding-top:22px;border-top:1px solid var(--line-soft)}
+.testimonial-avatar{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--gold) 0%,var(--gold-light) 100%);color:var(--dark);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-weight:600;font-size:15px;flex-shrink:0;letter-spacing:.02em}
+.testimonial-id{display:flex;flex-direction:column;line-height:1.3}
+.testimonial-name{font-size:14px;font-weight:600;color:var(--dark);display:inline-flex;align-items:baseline;gap:4px}
+.testimonial-name-blur{filter:blur(5px);user-select:none;font-weight:600;color:var(--dark);cursor:not-allowed}
+.testimonial-role{font-size:12px;color:var(--muted);font-weight:500;margin-top:2px}
+.testimonial-privacy{font-size:11px;color:var(--soft);margin-left:auto;font-style:italic}
+@media(max-width:540px){
+  .testimonial-sec{padding:48px 18px}
+  .testimonial-card{padding:32px 24px}
+  .testimonial-card::before{font-size:72px;top:0;left:18px}
+  .testimonial-eye{margin-left:48px}
+  .testimonial-text{font-size:18px}
+  .testimonial-privacy{display:none}
+}
+
 /* CTA INLINE — após value stack */
 .cta-inline{padding:48px 56px;max-width:1280px;margin:0 auto}
 .cta-inline-wrap{max-width:920px;margin:0 auto;background:var(--gold-soft);border:1px solid var(--gold);border-radius:12px;padding:32px 36px;display:flex;align-items:center;justify-content:space-between;gap:32px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(201,168,76,.08)}
@@ -446,11 +469,10 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
 <!-- HERO -->
 <section class="hero" id="inicio">
   <div class="hero-left">
-    <span class="eyebrow">Região de Coimbra · Vagas Limitadas</span>
+    <span class="eyebrow">Coimbra · 3 vagas para o próximo trimestre</span>
     <h1 class="hero-title">
-      Multiplique o seu capital em<br>
-      6-12 meses, sem gerir<br>
-      <em>uma só obra.</em>
+      Coloque o seu capital a trabalhar a <em>mais de 17%</em> ao ano.<br>
+      Em imobiliário real. Sem gerir nada.
     </h1>
     <p class="hero-body">
       Investimento imobiliário com retorno definido por contrato. Tickets a partir de <strong style="color:var(--dark)">25 000 €</strong>. Equipa, plataforma e gestão integral incluídas. Aceitamos um número limitado de parceiros por trimestre para garantir profundidade no acompanhamento.
@@ -485,7 +507,7 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
       </div>
 
       <div id="formBody">
-        <div class="form-title">Quero ser contactado</div>
+        <div class="form-title">Marcar reunião</div>
         <div class="form-sub">2 minutos · Sem compromisso · Informação confidencial</div>
 
         <div class="step-bar">
@@ -517,7 +539,7 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
           <div class="fnav">
             <span></span>
             <button class="btn-next" onclick="goStep(1)">
-              Continuar
+              Próximo
               <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 10h10M11 6l4 4-4 4"/></svg>
             </button>
           </div>
@@ -536,7 +558,7 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
           <div class="fnav">
             <button class="btn-back" onclick="goStep(0)">Voltar</button>
             <button class="btn-next" onclick="goStep(2)">
-              Continuar
+              Próximo
               <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 10h10M11 6l4 4-4 4"/></svg>
             </button>
           </div>
@@ -796,6 +818,21 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
   </div>
 </section>
 
+<!-- CTA INLINE · após Processo -->
+<section class="cta-inline">
+  <div class="cta-inline-wrap">
+    <div>
+      <p class="cta-inline-eye">Próximo passo</p>
+      <h3 class="cta-inline-title">4 passos. Comece pelo primeiro hoje.</h3>
+      <p class="cta-inline-sub">Preencha o formulário e marcamos a reunião nas próximas 24 horas.</p>
+    </div>
+    <a href="#formulario" class="btn-cta1">
+      Marcar reunião
+      <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 10h10M11 6l4 4-4 4"/></svg>
+    </a>
+  </div>
+</section>
+
 <!-- MODELOS -->
 <section class="sec" id="modelos">
   <div class="sec-hdr">
@@ -848,6 +885,22 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
         <li><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 10l3 3 7-7"/></svg>Análise de rentabilidade e comparáveis fornecidos</li>
       </ul>
       <p class="model-tag">Para investidores autónomos · Controlo total</p>
+    </div>
+  </div>
+</section>
+
+<!-- TESTEMUNHO -->
+<section class="testimonial-sec">
+  <div class="testimonial-card">
+    <span class="testimonial-eye">Investidor activo</span>
+    <p class="testimonial-text">Excelente parceria com o João e o Alexandre, marcada por profissionalismo e boa comunicação. Uma colaboração eficiente e de grande qualidade, que recomendo a quem procura confiança, transparência e competência.</p>
+    <div class="testimonial-meta">
+      <div class="testimonial-avatar" aria-hidden="true">FM</div>
+      <div class="testimonial-id">
+        <span class="testimonial-name">Fernando <span class="testimonial-name-blur" title="Nome ocultado por privacidade">Morais</span></span>
+        <span class="testimonial-role">Investidor · 2026</span>
+      </div>
+      <span class="testimonial-privacy">Identidade protegida por privacidade</span>
     </div>
   </div>
 </section>
@@ -1159,6 +1212,21 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
         <div class="guar-d">Comprometemo-nos a entregar um relatório por mês durante a vida do projeto. Se falharmos um relatório sem justificação, devolvemos a fee de gestão proporcional desse mês. Está no contrato.</div>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- CTA INLINE · após Garantias -->
+<section class="cta-inline">
+  <div class="cta-inline-wrap">
+    <div>
+      <p class="cta-inline-eye">Sem compromisso</p>
+      <h3 class="cta-inline-title">5 compromissos. Custos zero até assinar.</h3>
+      <p class="cta-inline-sub">Reunião sem fees. NDA antes de partilhar. Visita ao imóvel. Decisão sua.</p>
+    </div>
+    <a href="#formulario" class="btn-cta1">
+      Marcar reunião
+      <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 10h10M11 6l4 4-4 4"/></svg>
+    </a>
   </div>
 </section>
 
