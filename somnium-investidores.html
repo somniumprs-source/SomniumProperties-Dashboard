@@ -39,21 +39,11 @@ img{max-width:100%;height:auto}
 a{color:inherit}
 button{font:inherit}
 
-/* NAV */
-nav{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:18px 56px;background:rgba(251,250,246,.85);backdrop-filter:blur(10px);border-bottom:1px solid var(--line-soft)}
-.logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--dark)}
+/* LOGO MARK · usado no footer */
 .logo-mark{width:30px;height:30px;background:var(--dark);color:var(--gold);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-weight:500;font-size:17px;border-radius:4px;letter-spacing:0}
-.logo-txt{display:flex;flex-direction:column;line-height:1.1}
-.logo-txt strong{font-size:14px;font-weight:600;letter-spacing:.01em;color:var(--dark)}
-.logo-txt small{font-size:9.5px;font-weight:500;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-top:2px}
-.nav-links{display:flex;align-items:center;gap:30px}
-.nav-link{font-size:13px;font-weight:500;color:var(--text);text-decoration:none;transition:color .15s}
-.nav-link:hover{color:var(--gold)}
-.nav-btn{font-family:var(--sans);font-size:12px;font-weight:600;color:#fff;background:var(--dark);padding:10px 18px;text-decoration:none;border-radius:var(--radius);transition:background .18s,transform .15s}
-.nav-btn:hover{background:#000;transform:translateY(-1px)}
 
 /* HERO */
-.hero{padding:80px 56px 64px;display:grid;grid-template-columns:1.05fr 1fr;align-items:start;gap:56px;max-width:1280px;margin:0 auto}
+.hero{padding:48px 56px 64px;display:grid;grid-template-columns:1.05fr 1fr;align-items:start;gap:56px;max-width:1280px;margin:0 auto}
 .hero-left{padding-top:24px}
 .eyebrow{display:inline-flex;align-items:center;gap:9px;font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);background:var(--gold-bg);padding:6px 12px;border-radius:99px;margin-bottom:24px}
 .eyebrow::before{content:'';width:6px;height:6px;background:var(--gold);border-radius:50%}
@@ -365,10 +355,7 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
   .comp-cell:nth-child(2),.comp-cell:nth-child(3){display:none}
 }
 @media(max-width:960px){
-  nav{padding:14px 18px}
-  .nav-links{gap:12px}
-  .nav-link{display:none}
-  .hero{grid-template-columns:1fr;padding:84px 18px 36px;gap:30px}
+  .hero{grid-template-columns:1fr;padding:32px 18px 36px;gap:30px}
   .hero-left{order:2;padding-top:0}
   .hero-right{order:1}
   .hero-title{font-size:clamp(32px,8vw,48px)}
@@ -405,10 +392,7 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
   .cta-title{font-size:clamp(28px,7vw,40px)}
 }
 @media(max-width:540px){
-  nav{padding:12px 16px}
-  .logo-txt strong{font-size:13px}
-  .logo-txt small{font-size:8.5px;letter-spacing:.22em}
-  .hero{padding:78px 16px 32px}
+  .hero{padding:28px 16px 32px}
   .hero-title{font-size:clamp(30px,8.5vw,42px);line-height:1.1}
   .hero-body{font-size:14px}
   .sec,.sec-warm-wrap{padding:48px 16px}
@@ -447,22 +431,6 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
 </head>
 <body>
 
-<nav>
-  <a href="#inicio" class="logo">
-    <div class="logo-mark">S</div>
-    <div class="logo-txt">
-      <strong>Somnium Properties</strong>
-      <small>Investimento Imobiliário</small>
-    </div>
-  </a>
-  <div class="nav-links">
-    <a href="#modelos" class="nav-link">Modelos</a>
-    <a href="#acompanhamento" class="nav-link">Acompanhamento</a>
-    <a href="#processo" class="nav-link">Processo</a>
-    <a href="#faq" class="nav-link">FAQ</a>
-    <a href="#formulario" class="nav-btn">Marcar reunião</a>
-  </div>
-</nav>
 
 <!-- HERO -->
 <section class="hero" id="inicio">
