@@ -287,10 +287,32 @@ router.get('/lookups', async (_req, res) => {
 })
 
 // ── Documento PDF por fase do imóvel ─────────────────────────
+//
+// Estratégia: se já existe pdf_path persistido, redireccionar para a URL
+// Supabase (instantaneo). Só gera o PDF quando ainda não existe, evitando
+// que o request hang em Render para imoveis com imagens grandes (ex.
+// localizacao SVG rasterizada → PNG ~5MB → PDF ~6MB → upload demora >100s
+// na infra de Render → timeout 502 ao cliente).
+//
+// Para forçar regeneração, usar POST /imoveis/:id/documentos/:tipo/regenerar.
 router.get('/imoveis/:id/documento/:tipo', async (req, res) => {
   try {
     const imovel = await Imoveis.getById(req.params.id)
     if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+
+    // Tentar primeiro o PDF persistido (frozen=false: vivo; frozen=true: ultima versao)
+    try {
+      const { rows: [doc] } = await pool.query(
+        `SELECT pdf_path FROM documentos_imovel
+           WHERE imovel_id = $1 AND tipo = $2
+           ORDER BY frozen DESC, version DESC LIMIT 1`,
+        [imovel.id, req.params.tipo]
+      )
+      if (doc?.pdf_path && /^https?:\/\//i.test(doc.pdf_path)) {
+        // Redirect 302 — browser segue para Supabase Storage directamente
+        return res.redirect(302, doc.pdf_path)
+      }
+    } catch (e) { /* cai para geracao */ }
 
     let analise = null
     try {
