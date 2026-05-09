@@ -20,6 +20,12 @@ const REGIMES = [
   { value: 'Particular', label: 'Particular (IRS)' },
 ]
 
+const CATEGORIAS_IRS = [
+  { value: 'G', label: 'Cat. G — Mais-Valia (deal pontual)' },
+  { value: 'B-simplificado', label: 'Cat. B — Simplificado (vendas × 0,15)' },
+  { value: 'B-organizada', label: 'Cat. B — Contabilidade Organizada' },
+]
+
 export function CalculadoraForm({ analise, onUpdate }) {
   const [form, setForm] = useState({})
   // Só Aquisição e Venda abertos por defeito
@@ -188,11 +194,24 @@ export function CalculadoraForm({ analise, onUpdate }) {
             <Input label="Derrama Municipal %" field="derrama_perc" value={form.derrama_perc} onChange={handleChange} step="0.5" placeholder="1.5" />
             <Input label="% Distribuição Dividendos" field="perc_dividendos" value={form.perc_dividendos} onChange={handleChange} step="10" placeholder="100" />
           </> : <>
+            <Select label="Categoria IRS" field="categoria_irs" value={form.categoria_irs || 'G'} options={CATEGORIAS_IRS} onChange={handleChange} />
             <Input label="Ano de Aquisição" field="ano_aquisicao" value={form.ano_aquisicao} onChange={handleChange} step="1" placeholder="2026" />
-            <Toggle label="Englobamento IRS" field="englobamento" value={form.englobamento} onChange={handleChange} />
-            {form.englobamento && <Input label="Taxa IRS Marginal %" field="taxa_irs_marginal" value={form.taxa_irs_marginal} onChange={handleChange} step="1" placeholder="28" />}
+            {(form.categoria_irs || 'G') === 'G' ? <>
+              <Toggle label="Englobamento IRS" field="englobamento" value={form.englobamento} onChange={handleChange} />
+              {form.englobamento && <Input label="Taxa IRS Marginal %" field="taxa_irs_marginal" value={form.taxa_irs_marginal} onChange={handleChange} step="1" placeholder="28" />}
+            </> : <>
+              <Input label="Taxa IRS Marginal %" field="taxa_irs_marginal" value={form.taxa_irs_marginal} onChange={handleChange} step="1" placeholder="28" />
+            </>}
           </>}
         </div>
+        {form.regime_fiscal === 'Particular' && (
+          <div className="mt-2 text-xs text-gray-400 leading-relaxed">
+            <strong>Cat. G</strong>: mais-valia ocasional — 50% × 28% (autónoma) ou × marginal (englobada). Art. 43.º n.º 2 CIRS.<br />
+            <strong>Cat. B simplificado</strong>: actividade habitual de revenda — base = VVR × 0,15 (Art. 31.º), tributada à marginal IRS.<br />
+            <strong>Cat. B organizada</strong>: contabilidade organizada — base = lucro bruto × marginal IRS.<br />
+            Em dúvida, consultar o contabilista. A AT pode reclassificar Cat. G→B em caso de habitualidade.
+          </div>
+        )}
         <CalcRow items={[
           { label: 'Impostos', value: analise.impostos, bold: true },
           ...(form.regime_fiscal === 'Empresa' ? [{ label: 'Retenção Dividendos', value: analise.retencao_dividendos }] : []),

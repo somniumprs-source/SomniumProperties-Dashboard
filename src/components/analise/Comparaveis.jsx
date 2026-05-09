@@ -4,7 +4,7 @@
  * Compatível com formato antigo (array flat de tipologias).
  *
  * Ajustes automáticos: Negociação (-desconto_negocial%) e Área (proporcional à diferença de m²).
- * Ajustes manuais: Localização, Idade, Conservação, Outros + 4 desagregados (Estado, Piso, Elevador, Garagem).
+ * Ajustes manuais: Localização, Idade, Conservação, Outros + 3 desagregados (Piso, Elevador, Garagem).
  */
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { ChevronDown, ChevronRight, Upload, Trash2 } from 'lucide-react'
@@ -30,7 +30,7 @@ const EMPTY_COMP = {
   preco: 0, area: 0, notas: '', link: '',
   descricao: '', estado: '', piso: '',
   elevador: false, garagem: false, dias_mercado: null,
-  ajustes: { neg: -5, area: 0, loc: 0, idade: 0, conserv: 0, outros: 0, estado_pct: 0, piso_pct: 0, elevador_pct: 0, garagem_pct: 0 },
+  ajustes: { neg: -5, area: 0, loc: 0, idade: 0, conserv: 0, outros: 0, piso_pct: 0, elevador_pct: 0, garagem_pct: 0 },
 }
 const EMPTY_TIP = { tipologia: 'T2', area: 0, renda: 0, yield: 0, comparaveis: Array(5).fill(null).map(() => ({ ...EMPTY_COMP, ajustes: { ...EMPTY_COMP.ajustes } })) }
 
@@ -685,12 +685,7 @@ export function Comparaveis({ analise, imovel, onUpdate }) {
 
                     {/* Accordion: Ajustes desagregados */}
                     {adjOpen && (
-                      <div className="ml-8 mr-2 mt-1 p-3 bg-gray-50 rounded-md grid grid-cols-1 md:grid-cols-4 gap-2 text-xs">
-                        <label title="+ : comparável em pior estado que o alvo reabilitado → VVR sobe.&#10;− : comparável em melhor estado → VVR desce.&#10;Ex: comparável degradado vs. alvo reabilitado → +5% a +15%.">
-                          <span className="text-gray-500">Ajuste Estado (%)</span>
-                          <input type="number" step="0.5" value={comp.ajustes?.estado_pct ?? 0} onChange={e => updateComp(tIdx, cIdx, 'ajuste_estado_pct', parseFloat(e.target.value) || 0)}
-                            className="w-full mt-0.5 border rounded px-2 py-1 font-mono" />
-                        </label>
+                      <div className="ml-8 mr-2 mt-1 p-3 bg-gray-50 rounded-md grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
                         <label title="+ : comparável em piso menos valorizado e alvo em piso mais alto → VVR sobe.&#10;− : comparável em andar e alvo em cave → VVR desce.&#10;Ex: alvo em cave, comp. em 1.º andar → +3% a +8%.">
                           <span className="text-gray-500">Ajuste Piso (%)</span>
                           <input type="number" step="0.5" value={comp.ajustes?.piso_pct ?? 0} onChange={e => updateComp(tIdx, cIdx, 'ajuste_piso_pct', parseFloat(e.target.value) || 0)}

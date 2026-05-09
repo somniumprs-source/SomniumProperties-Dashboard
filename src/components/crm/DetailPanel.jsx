@@ -606,11 +606,16 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-neutral-700">{d.label}</p>
               </div>
-              <a href={`/api/crm/imoveis/${imovelId}/documento/${d.tipo}`} target="_blank" rel="noopener noreferrer"
-                onClick={e => e.stopPropagation()}
+              <button type="button"
+                onClick={async e => {
+                  e.stopPropagation()
+                  const token = await getToken()
+                  const url = `/api/crm/imoveis/${imovelId}/documento/${d.tipo}${token ? `?token=${token}` : ''}`
+                  window.open(url, '_blank')
+                }}
                 className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors shrink-0 opacity-50 group-hover:opacity-100">
                 Abrir
-              </a>
+              </button>
             </div>
           )
         })}
@@ -627,11 +632,16 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
           <p className="text-xs text-neutral-400 mt-0.5">O dossier compilado inclui capa profissional e índice</p>
         </div>
         {compilarUrl ? (
-          <a href={compilarUrl} target="_blank" rel="noopener noreferrer"
+          <button type="button"
+            onClick={async () => {
+              const token = await getToken()
+              const url = `${compilarUrl}${token ? `&token=${token}` : ''}`
+              window.open(url, '_blank')
+            }}
             className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl text-white shadow-sm hover:shadow transition-all"
             style={{ backgroundColor: '#C9A84C' }}>
             <FileDown className="w-4 h-4" /> Gerar Dossier
-          </a>
+          </button>
         ) : (
           <span className="px-5 py-2.5 text-sm text-neutral-400 rounded-xl bg-neutral-200/50">Gerar Dossier</span>
         )}

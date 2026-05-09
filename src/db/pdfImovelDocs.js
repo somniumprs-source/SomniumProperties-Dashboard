@@ -2334,16 +2334,16 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
       if (c.preco <= 0 || c.area <= 0) return
       const precoM2Bruto = c.preco / c.area
       // Ajustes desagregados (somar todos)
-      let ajEstado = 0, ajPiso = 0, ajElev = 0, ajGar = 0, ajArea = 0, ajOutros = 0
+      let ajPiso = 0, ajElev = 0, ajGar = 0, ajArea = 0, ajConserv = 0, ajOutros = 0
       if (c.ajustes && typeof c.ajustes === 'object') {
-        ajEstado = parseFloat(c.ajustes.estado_pct) || 0
         ajPiso = parseFloat(c.ajustes.piso_pct) || (parseFloat(c.ajustes.loc) || 0)
         ajElev = parseFloat(c.ajustes.elevador_pct) || 0
         ajGar = parseFloat(c.ajustes.garagem_pct) || 0
         ajArea = parseFloat(c.ajustes.area) || 0
-        ajOutros = (parseFloat(c.ajustes.idade) || 0) + (parseFloat(c.ajustes.conserv) || 0) + (parseFloat(c.ajustes.outros) || 0) + (parseFloat(c.ajustes.neg) || 0)
+        ajConserv = parseFloat(c.ajustes.conserv) || 0
+        ajOutros = (parseFloat(c.ajustes.idade) || 0) + (parseFloat(c.ajustes.outros) || 0) + (parseFloat(c.ajustes.neg) || 0)
       }
-      const ajTotal = ajEstado + ajPiso + ajElev + ajGar + ajArea + ajOutros
+      const ajTotal = ajPiso + ajElev + ajGar + ajArea + ajConserv + ajOutros
       const precoM2Aj = precoM2Bruto * (1 + ajTotal / 100)
       const vvrEst = areaAlvo > 0 ? precoM2Aj * areaAlvo : 0
       const precoTransac = c.preco * (1 - descontoNeg / 100)
@@ -2352,7 +2352,7 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
         _idx: idx,
         _tipArea: tip.area,
         precoM2Bruto, precoM2Aj, vvrEst, precoTransac,
-        ajEstado, ajPiso, ajElev, ajGar, ajArea, ajOutros, ajTotal,
+        ajPiso, ajElev, ajGar, ajArea, ajConserv, ajOutros, ajTotal,
       })
     })
   })
@@ -2650,7 +2650,7 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
         { label: 'Dias em Mercado', value: c.dias_mercado != null ? `${c.dias_mercado} dias` : '—' },
       ]
       const rightRows = [
-        { label: 'Ajuste Estado', value: pctStr(c.ajEstado), color: signColor(c.ajEstado) },
+        { label: 'Ajuste Conservação', value: pctStr(c.ajConserv), color: signColor(c.ajConserv) },
         { label: 'Ajuste Piso', value: pctStr(c.ajPiso), color: signColor(c.ajPiso) },
         { label: 'Ajuste Elevador', value: pctStr(c.ajElev), color: signColor(c.ajElev) },
         { label: 'Ajuste Garagem', value: pctStr(c.ajGar), color: signColor(c.ajGar) },

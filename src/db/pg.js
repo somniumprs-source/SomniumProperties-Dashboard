@@ -357,6 +357,14 @@ export async function initSchema() {
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 
+      -- Migration: categoria_irs (Cat. G | B-simplificado | B-organizada).
+      -- Aplica-se quando regime_fiscal='Particular'. Default 'G' (mais-valia).
+      DO $$ BEGIN
+        ALTER TABLE analises ADD COLUMN IF NOT EXISTS categoria_irs TEXT DEFAULT 'G';
+        UPDATE analises SET categoria_irs = 'G' WHERE regime_fiscal = 'Particular' AND categoria_irs IS NULL;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
       -- Migration: adicionar campos GCal à tabela tarefas existente
       DO $$ BEGIN
         ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS gcal_event_id TEXT;

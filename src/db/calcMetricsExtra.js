@@ -14,15 +14,37 @@ function safeNum(v) {
   return isFinite(n) ? n : 0
 }
 
-function lucroLiqFor(lb, regime, derramaPerc, percDiv) {
-  if (lb <= 0) return lb
+// Calcula impostos de uma iteração (usado em break-even VVR/Obra e sensibilidades).
+// Tem de ser consistente com calcEngine.calcAnalise — para Particular Cat. G,
+// o imposto depende de VVR e da obra/comissão (porque entram na base dedutível Art. 51.º).
+// Para isso, opts traz a parte FIXA da base dedutível (compra + IS + IMT + escritura
+// + cpcv compra + cpcv venda) e adicionamos obra+comissão da iteração.
+function calcImpostosIter(regime, lb, vvr, obraComIva, comissaoComIva, opts) {
   if (regime === 'Empresa') {
-    const { total: irc } = calcIRC(lb, derramaPerc)
-    const aposIRC = Math.max(lb - irc, 0)
-    const retencao = aposIRC * (percDiv / 100) * DIVIDENDOS_RETENCAO
-    return lb - irc - retencao
+    const lbPositive = Math.max(lb, 0)
+    if (lbPositive === 0) return 0
+    const { total: irc } = calcIRC(lbPositive, opts.derramaPerc)
+    const aposIRC = Math.max(lbPositive - irc, 0)
+    return irc + aposIRC * (opts.percDiv / 100) * DIVIDENDOS_RETENCAO
   }
-  return lb * (1 - IRS_TAXA_AUTONOMA)
+  // Particular
+  const cat = opts.categoria || 'G'
+  const taxaMarginal = opts.taxaMarginal || 0
+  if (cat === 'B-organizada') {
+    return Math.max(lb, 0) * (taxaMarginal > 0 ? taxaMarginal / 100 : IRS_TAXA_AUTONOMA)
+  }
+  if (cat === 'B-simplificado') {
+    return Math.max(vvr, 0) * 0.15 * (taxaMarginal > 0 ? taxaMarginal / 100 : IRS_TAXA_AUTONOMA)
+  }
+  // Cat. G — Art. 43.º n.º 2 (50%) sobre mais-valia, autónoma 28% ou marginal englobada.
+  const baseDed = (opts.baseDedutivelFixa || 0) + Math.max(obraComIva, 0) + Math.max(comissaoComIva, 0)
+  const mv = Math.max(vvr - baseDed, 0)
+  const taxa = (opts.englobamento && taxaMarginal > 0) ? taxaMarginal / 100 : IRS_TAXA_AUTONOMA
+  return mv * 0.5 * taxa
+}
+
+function lucroLiqFor(lb, regime, vvr, obraComIva, comissaoComIva, opts) {
+  return lb - calcImpostosIter(regime, lb, vvr, obraComIva, comissaoComIva, opts)
 }
 
 function calcTIR(equity, lucroLiq, meses) {
@@ -96,6 +118,19 @@ export function calcMetricsExtra(a, im = {}) {
   const custoExcVenda = totalAq + obraComIva + licen + totalDet + custoFinanciamento + fixedSaleCosts
   const custoExcObra = totalAq + licen + totalDet + custoFinanciamento + totalVen
 
+  // Para iterações fiscais (break-even, sensibilidades) — passa-se a parte FIXA da
+  // base dedutível Cat. G; o resto (obra, comissão) é ajustado por iteração.
+  const baseDedutivelFixa = safeNum(a.compra) + safeNum(a.imposto_selo) + safeNum(a.imt)
+    + safeNum(a.escritura) + safeNum(a.cpcv_compra) + safeNum(a.cpcv_venda)
+  const fiscalOpts = {
+    derramaPerc,
+    percDiv,
+    categoria: a.categoria_irs || 'G',
+    taxaMarginal: safeNum(a.taxa_irs_marginal),
+    englobamento: !!a.englobamento,
+    baseDedutivelFixa,
+  }
+
   const moic = cap > 0 ? 1 + ll / cap : null
   const tirAnual = calcTIR(cap, ll, meses)
   const equityReal = cap - valorFin
@@ -130,7 +165,7 @@ export function calcMetricsExtra(a, im = {}) {
     for (let v = start; v <= max; v += passo) {
       const com = v * comissaoPerc / 100 * 1.23
       const lbV = v - (custoExcVenda + com)
-      const llV = lucroLiqFor(lbV, regime, derramaPerc, percDiv)
+      const llV = lucroLiqFor(lbV, regime, v, obraComIva, com, fiscalOpts)
       if (llV >= 0) { beVVR = Math.round(v); break }
     }
   }
@@ -143,7 +178,7 @@ export function calcMetricsExtra(a, im = {}) {
     for (let o = 0; o <= vvr; o += passo) {
       const oCI = o * (1 + ivaPct)
       const lbO = vvr - (custoExcObra + oCI)
-      const llO = lucroLiqFor(lbO, regime, derramaPerc, percDiv)
+      const llO = lucroLiqFor(lbO, regime, vvr, oCI, comissaoComIva, fiscalOpts)
       if (llO <= 0) { beObra = Math.round(o); break }
     }
   }
@@ -158,7 +193,8 @@ export function calcMetricsExtra(a, im = {}) {
     if (obraComIva <= 0) return null
     const incremento = obraComIva * deltaPct
     const lbNew = lb - incremento
-    const llNew = lucroLiqFor(lbNew, regime, derramaPerc, percDiv)
+    const obraNew = obraComIva + incremento
+    const llNew = lucroLiqFor(lbNew, regime, vvr, obraNew, comissaoComIva, fiscalOpts)
     const roi = cap > 0 ? llNew / cap : null
     return { delta: deltaPct, lucro_liquido: llNew, roi }
   }
@@ -168,7 +204,7 @@ export function calcMetricsExtra(a, im = {}) {
     const vvrAdj = vvr * (1 + d)
     const comissaoAdj = vvrAdj * comissaoPerc / 100 * 1.23
     const lbAdj = vvrAdj - (custoExcVenda + comissaoAdj)
-    const llAdj = lucroLiqFor(lbAdj, regime, derramaPerc, percDiv)
+    const llAdj = lucroLiqFor(lbAdj, regime, vvrAdj, obraComIva, comissaoAdj, fiscalOpts)
     const roiAdj = cap > 0 ? llAdj / cap : null
     return { delta: d, vvr: vvrAdj, lucro_liquido: llAdj, roi: roiAdj }
   })

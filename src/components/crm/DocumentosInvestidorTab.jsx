@@ -4,7 +4,7 @@
  */
 import { useState } from 'react'
 import { FileText, Plus, Trash2, ExternalLink } from 'lucide-react'
-import { apiFetch } from '../../lib/api.js'
+import { apiFetch, getToken } from '../../lib/api.js'
 import { fmtDate } from '../../constants.js'
 
 const TIPO_LABELS = {
@@ -130,15 +130,18 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
               </div>
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 {doc.imovel_id && (
-                  <a
-                    href={`/api/crm/imoveis/${doc.imovel_id}/relatorio-investidor`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const token = await getToken()
+                      const url = `/api/crm/imoveis/${doc.imovel_id}/relatorio-investidor${token ? `?token=${token}` : ''}`
+                      window.open(url, '_blank')
+                    }}
                     className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600"
                     title="Abrir PDF"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
+                  </button>
                 )}
                 <button
                   onClick={() => handleDelete(doc.id)}

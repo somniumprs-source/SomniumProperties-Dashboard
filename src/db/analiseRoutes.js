@@ -38,7 +38,7 @@ const INPUT_FIELDS = new Set([
   'meses', 'seguro_mensal', 'condominio_mensal', 'utilidades_mensal',
   'n_tranches', 'custo_tranche', 'taxa_imi', 'ligacao_servicos', 'excedente_capital',
   'vvr', 'comissao_perc', 'cpcv_venda', 'cert_energetico', 'home_staging', 'outros_venda',
-  'regime_fiscal', 'derrama_perc', 'perc_dividendos', 'ano_aquisicao', 'englobamento', 'taxa_irs_marginal',
+  'regime_fiscal', 'categoria_irs', 'derrama_perc', 'perc_dividendos', 'ano_aquisicao', 'englobamento', 'taxa_irs_marginal',
   'renda_mensal', 'vacancy_pct', 'gestao_arr_pct',
   'comparaveis', 'caep', 'criado_por',
 ])

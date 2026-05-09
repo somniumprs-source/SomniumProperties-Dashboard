@@ -120,15 +120,52 @@ function calcRetencaoDividendos(lucroLiquido, percDividendos) {
   return round2(dividendos * DIVIDENDOS_RETENCAO)
 }
 
-function calcIRS(maisValia, anoAquisicao, englobamento, taxaMarginal) {
+// IRS — três categorias possíveis para regime Particular:
+//
+//   G — Mais-valias (Cat. G, Art. 10.º + Art. 43.º n.º 2 CIRS).
+//       Base = mais-valia (VVR − custos dedutíveis Art. 51.º), tributada em 50%
+//       à taxa autónoma (28%) ou englobada à marginal. Aplica-se a deals pontuais.
+//
+//   B-simplificado — Cat. B em regime simplificado (Art. 31.º CIRS).
+//       Base = VVR × 0,15 (coef. vendas de mercadorias / imóveis em revenda).
+//       Tributada à taxa marginal IRS (englobamento obrigatório).
+//
+//   B-organizada — Cat. B com contabilidade organizada.
+//       Base = lucro contabilístico (LB neste motor). Marginal IRS.
+//
+// A escolha entre G e B depende da habitualidade da actividade — decisão fiscal,
+// não derivável do imóvel. Faz-se via campo categoria_irs (default 'G').
+const COEF_B_VENDAS = 0.15
+const IRS_TAXA_AUTONOMA_MV = 0.28
+
+function calcIRSCatG(maisValia, englobamento, taxaMarginal) {
   if (maisValia <= 0) return 0
-  // Exclusão: 50% se adquirido antes de 2023
-  const exclusao = (anoAquisicao && anoAquisicao < 2023) ? 0.5 : 0
-  const base = maisValia * (1 - exclusao)
-  if (englobamento && taxaMarginal > 0) {
-    return round2(base * (taxaMarginal / 100))
+  // Art. 43.º n.º 2 CIRS — saldo das mais-valias considerado em 50% para residentes (sempre).
+  const base = maisValia * 0.5
+  if (englobamento && taxaMarginal > 0) return round2(base * (taxaMarginal / 100))
+  return round2(base * IRS_TAXA_AUTONOMA_MV)
+}
+
+function calcIRSCatBSimplificado(vvr, taxaMarginal) {
+  if (vvr <= 0) return 0
+  const base = vvr * COEF_B_VENDAS
+  const taxa = taxaMarginal > 0 ? (taxaMarginal / 100) : IRS_TAXA_AUTONOMA_MV
+  return round2(base * taxa)
+}
+
+function calcIRSCatBOrganizada(lucroBruto, taxaMarginal) {
+  if (lucroBruto <= 0) return 0
+  const taxa = taxaMarginal > 0 ? (taxaMarginal / 100) : IRS_TAXA_AUTONOMA_MV
+  return round2(lucroBruto * taxa)
+}
+
+export function calcIRS({ categoria, maisValia, vvr, lucroBruto, englobamento, taxaMarginal }) {
+  switch (categoria) {
+    case 'B-simplificado': return calcIRSCatBSimplificado(vvr, taxaMarginal)
+    case 'B-organizada':   return calcIRSCatBOrganizada(lucroBruto, taxaMarginal)
+    case 'G':
+    default:               return calcIRSCatG(maisValia, englobamento, taxaMarginal)
   }
-  return round2(base * 0.28)  // taxa autónoma 28%
 }
 
 // ── Cálculo principal ────────────────────────────────────────
@@ -176,6 +213,7 @@ export function calcAnalise(inputs) {
   const outrosVenda = parseFloat(i.outros_venda) || 0
 
   const regimeFiscal = i.regime_fiscal || 'Empresa'
+  const categoriaIrs = i.categoria_irs || 'G'  // só relevante quando regime=Particular
   const derramaPerc = isNaN(parseFloat(i.derrama_perc)) ? 1.5 : parseFloat(i.derrama_perc)
   const percDividendos = isNaN(parseFloat(i.perc_dividendos)) ? 100 : parseFloat(i.perc_dividendos)
   const anoAquisicao = parseInt(i.ano_aquisicao) || new Date().getFullYear()
@@ -235,11 +273,19 @@ export function calcAnalise(inputs) {
     retencaoDividendos = calcRetencaoDividendos(lucroAposIRC, percDividendos)
     impostos = round2(totalIRC + retencaoDividendos)
   } else {
-    // Particular — IRS sobre mais-valias
-    // Base dedutível (Art.51 CIRS): compra + IS + IMT + escritura + CPCV + obra + comissão + CPCV venda
+    // Particular — IRS (Cat. G ou Cat. B). Dispatch via categoriaIrs.
+    // Base dedutível Cat. G (Art. 51.º CIRS): compra + IS + IMT + escritura + CPCV
+    //   compra/venda + obra (com IVA) + comissão (com IVA).
     const baseDedutivel = compra + impostoSelo + imt + escritura + cpcvCompra + obraComIva + comissaoComIva + cpcvVenda
     const maisValia = Math.max(vvr - baseDedutivel, 0)
-    impostos = calcIRS(maisValia, anoAquisicao, englobamento, taxaIrsMarginal)
+    impostos = calcIRS({
+      categoria: categoriaIrs,
+      maisValia,
+      vvr,
+      lucroBruto,
+      englobamento,
+      taxaMarginal: taxaIrsMarginal,
+    })
   }
 
   const lucroLiquido = round2(lucroBruto - impostos)
