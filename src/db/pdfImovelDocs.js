@@ -1373,7 +1373,7 @@ function renderStressTests(b, a, opts = {}) {
   // Sub-tabela: Sensibilidade ao Prazo de Detenção
   const m = opts.metrics
   if (m && Array.isArray(m.sensibilidade_prazo) && m.sensibilidade_prazo.length > 0) {
-    b.space(6)
+    b.space(3)
     b.subheader('Sensibilidade ao Prazo de Detenção')
     const rows = m.sensibilidade_prazo.map(s => {
       const ra = s.ra_simples_pp
@@ -1440,7 +1440,7 @@ function renderFichaImovel(b, im) {
     { label: 'Adicionado', value: FDATE(im.data_adicionado) },
     { label: 'Completude', value: `${comp.filled}/${comp.total}` },
   ])
-  b.space(6)
+  b.space(3)
 
   // FOTO PRINCIPAL — hero 16:9 no topo (apenas se carregada)
   if (im._heroFotoData) {
@@ -1478,7 +1478,7 @@ function renderFichaImovel(b, im) {
     { label: 'Regime de Propriedade', value: im.regime_propriedade },
   )
   b.simpleTable(rows1)
-  b.space(6)
+  b.space(3)
 
   // 2. CARACTERIZAÇÃO FÍSICA
   b.header('2. CARACTERIZAÇÃO FÍSICA')
@@ -1494,7 +1494,7 @@ function renderFichaImovel(b, im) {
     { label: 'Classificação Reg. Urbana (CRU)', value: im.cru },
     { label: 'Licença de Utilização', value: im.licenca_utilizacao },
   ])
-  b.space(6)
+  b.space(3)
 
   // 3. SITUAÇÃO LEGAL E FISCAL
   b.header('3. SITUAÇÃO LEGAL E FISCAL')
@@ -1506,7 +1506,7 @@ function renderFichaImovel(b, im) {
     { label: 'Condomínio Mensal (anunciado)', value: EUR(im.condominio_mensal_anunciado) },
     { label: 'Ónus / Encargos', value: ARR(im.onus_registados) },
   ])
-  b.space(6)
+  b.space(3)
 
   // 4. PROPRIETÁRIO E CAPTAÇÃO
   b.header('4. PROPRIETÁRIO E CAPTAÇÃO')
@@ -1529,19 +1529,19 @@ function renderFichaImovel(b, im) {
     { label: 'Consultor', value: im.nome_consultor },
     { label: 'Link Anúncio', value: im.link, link: im.link?.startsWith('http') ? im.link : undefined },
   ])
-  b.space(6)
+  b.space(3)
   b.header('PREÇO DE AQUISIÇÃO')
   b.bigNumbers([
     { label: 'Preço Pedido', value: EUR(im.ask_price) },
     { label: '€/m² ABP', value: precoM2 ? EUR(precoM2) : '—' },
     { label: 'ABP', value: M2(im.area_bruta) },
   ])
-  b.space(6)
+  b.space(3)
 
   if (im.notas) { b.space(4); b.header('NOTAS INTERNAS'); b.text(im.notas) }
 
   // Stamp final: data de geração + versão (se foram injectados pelo lifecycle)
-  b.space(6)
+  b.space(3)
   b.versionStamp()
 }
 
@@ -1871,7 +1871,7 @@ function renderResumoExecutivo(b, im, a, m) {
     { label: 'Tempo de Permanência do Capital', value: tempoLabel, sub: '(Período em que o capital está alocado ao projecto)' },
     { label: 'Custo de Oportunidade', value: cooLabel, sub: '(Quantas vezes o RA supera um depósito a prazo a 3,5%)' },
   ])
-  b.space(8)
+  b.space(4)
 
   // Estratégia de Saída
   b.subheader('Estratégia de Saída')
@@ -1885,7 +1885,7 @@ function renderResumoExecutivo(b, im, a, m) {
     { label: 'Exit Alternativo', value: exitLabel },
     { label: 'Prazo Máximo (antes de prejuízo)', value: prazoMaxLabel },
   ])
-  b.space(6)
+  b.space(3)
 
   // Riscos
   b.subheader('Principais Riscos')
@@ -1904,7 +1904,7 @@ function renderResumoExecutivo(b, im, a, m) {
   }
   if (riscos.length === 0) riscos.push({ label: '—', value: 'Não foi possível derivar riscos com os dados actuais' })
   b.simpleTable(riscos)
-  b.space(6)
+  b.space(3)
 
   // Mitigantes
   b.subheader('Principais Mitigantes')
@@ -1916,7 +1916,7 @@ function renderResumoExecutivo(b, im, a, m) {
     mitigantes.push({ label: '✓  Exit Alt.', value: `Arrendamento cobre custos de detenção (folga ${EUR_S(m.exit_arrendamento.folga)}/mês)`, color: C.green })
   }
   b.simpleTable(mitigantes)
-  b.space(8)
+  b.space(4)
 
   b.newPage()
 }
@@ -2104,7 +2104,7 @@ function renderAnaliseRentabilidade(b, im, a, opts = {}) {
 }
 
 function renderExitAlternativo(b, im, a, m) {
-  b.space(8)
+  b.space(4)
   b.header('J. EXIT ALTERNATIVO — ANÁLISE DE ARRENDAMENTO')
 
   if (!m.exit_arrendamento) {
@@ -2175,7 +2175,7 @@ function renderExitAlternativo(b, im, a, m) {
 }
 
 function renderEstruturaCAEP(b, im, a, m) {
-  b.space(8)
+  b.space(4)
   b.header('K. ESTRUTURA CAEP — ASSOCIAÇÃO EM PARTICIPAÇÃO')
 
   // Caixa explicativa
@@ -2574,6 +2574,8 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
 
   // ─────────────────────────────────────────────────────────
   // LINKS DOS ANUNCIOS (modo urlsOnly: lista compacta sem fichas)
+  // Layout 2-linhas por comparavel: linha 1 e identificador (Comp. A · €Y · Z m²),
+  // linha 2 e o URL clicavel completo (com wrap se URL muito longo).
   // ─────────────────────────────────────────────────────────
   if (n > 0 && opts.urlsOnly) {
     const compsComLink = compsCalc.filter(c => c.link && /^https?:\/\//i.test(String(c.link).trim()))
@@ -2585,13 +2587,22 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
         const idx = compsCalc.indexOf(c)
         const letra = String.fromCharCode(65 + idx)
         const url = String(c.link).trim()
-        b.ensure(16)
-        b.doc.fontSize(8.5).fillColor(C.body).text(`Comp. ${letra}`, ML, b.y, { width: 60, lineBreak: false, continued: true })
-        b.doc.fontSize(8).fillColor(C.gold)
-          .text(url, { width: CW - 60, lineBreak: false, link: url, underline: true, ellipsis: true })
-        b.y += 14
+        const resumo = `Comp. ${letra} · ${EUR(c.preco)} · ${c.area} m²`
+        // Medir altura do URL para reservar espaco antes de desenhar
+        b.doc.fontSize(7.5)
+        const urlH = b.doc.heightOfString(url, { width: CW, lineGap: 1 })
+        const totalH = 14 + urlH + 10
+        b.ensure(totalH)
+        // Linha 1: identificador
+        b.doc.fontSize(8.5).fillColor(C.body)
+          .text(resumo, ML, b.y, { width: CW, lineBreak: false })
+        b.y += 12
+        // Linha 2: URL clicavel (com wrap permitido para URLs longos)
+        b.doc.fontSize(7.5).fillColor(C.gold)
+          .text(url, ML, b.y, { width: CW, link: url, underline: true, lineGap: 1 })
+        b.y += urlH + 8
       })
-      b.space(4)
+      b.space(2)
     }
   }
 
@@ -2654,7 +2665,7 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
         b.space(1)
         b.note(`Notas: ${c.notas}`)
       }
-      b.space(6)
+      b.space(3)
     })
   }
 
@@ -2694,7 +2705,7 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
       { label: 'Desconto Negocial Estimado (% redução esperada entre oferta e transacção)', value: `${descontoNeg}%` },
       { label: `Preço de Transacção Equivalente (VVR ajustado com desconto de ${descontoNeg}%)`, value: EUR(precoTransacEquiv) },
     ])
-    b.space(6)
+    b.space(3)
 
     // I. Posicionamento Visual
     b.subheader('I. Posicionamento Visual — VVR no Intervalo de Mercado')
@@ -2829,7 +2840,7 @@ function renderDossierInvestidor(b, im, a) {
     { label: 'Tipologia', value: im.tipologia }, { label: 'Modelo', value: im.modelo_negocio || 'CAEP 50/50' },
     { label: 'Prazo Estimado', value: deal.meses ? `${deal.meses} meses` : '—' },
   ])
-  b.space(6)
+  b.space(3)
 
   // SUMÁRIO EXECUTIVO — KPIs de investimento em destaque, logo no inicio.
   // Substitui o "RESUMO DO INVESTIMENTO" que estava no meio do dossier.
@@ -2851,22 +2862,22 @@ function renderDossierInvestidor(b, im, a) {
   ])
   b.space(4)
 
-  if (fotos.length > 0) { b.space(4); b.photos(fotos, 'O IMÓVEL') }
-  b.space(4)
-  // Pros/contras/riscos
-  if (im.localizacao_imagem || im._localizacaoImgData) { b.newPage(); b.localizacao() }
+  if (fotos.length > 0) { b.space(2); b.photos(fotos, 'O IMÓVEL') }
+  b.space(2)
+  // Localizacao: so renderiza se imagem preloaded com sucesso.
+  // (Se URL existe mas preload SVG falhou, NAO criar pagina vazia.)
+  if (im._localizacaoImgData) { b.newPage(); b.localizacao() }
   if (im.pontos_fortes || im.pontos_fracos || im.riscos) { b.pontosFortesFracosRiscos() }
-  if (im.mitigacao_riscos) { b.space(4); b.riscosMitigacao() }
-  b.space(4)
+  if (im.mitigacao_riscos) { b.space(2); b.riscosMitigacao() }
 
-  // Estudo de Comparáveis — modo urlsOnly em vez de fichas individuais.
+  // Estudo de Comparáveis — modo urlsOnly. Sem newPage explicito: o header()
+  // dentro de renderEstudoComparaveis tem anti-orfao e fara newPage se necessario.
   try {
     let __comps = a.comparaveis
     if (typeof __comps === 'string') { try { __comps = JSON.parse(__comps || 'null') } catch { __comps = null } }
     const __tipologias = Array.isArray(__comps) ? __comps : (__comps?.tipologias || [])
     const __hasValid = __tipologias.some(t => (t?.comparaveis || []).some(c => parseFloat(c?.preco) > 0 && parseFloat(c?.area) > 0))
     if (__hasValid) {
-      b.newPage()
       renderEstudoComparaveis(b, im, a, {
         skipImovelEmAnalise: true,
         skipExitArrendamento: true,
@@ -2874,17 +2885,13 @@ function renderDossierInvestidor(b, im, a) {
         skipFichasIndividuais: true,
         urlsOnly: true,
       })
-      b.space(4)
     }
   } catch (e) {
     console.error('[dossier] estudo de comparaveis falhou:', e.message, '\n', e.stack?.split('\n').slice(0,5).join('\n'))
   }
 
-  // Análise de Rentabilidade integral — skip Resumo Executivo (duplicava
-  // OPORTUNIDADE / PONTOS FORTES) e RESUMO DO INVESTIMENTO (duplicava o
-  // SUMARIO EXECUTIVO no topo do Dossier).
+  // Análise de Rentabilidade integral — sem newPage explicito.
   try {
-    b.newPage()
     renderAnaliseRentabilidade(b, im, a, {
       skipResumoExecutivo: true,
       skipResumoInvestimento: true,
@@ -2957,7 +2964,7 @@ function renderRelatorioInvestimento(b, im, an) {
     { label: 'Prazo', value: `${an.meses || 6} meses` },
     { label: 'Regime', value: an.regime_fiscal || 'Empresa' },
   ])
-  b.space(8)
+  b.space(4)
 
   // Localização + pros/contras/riscos numa página dedicada antes da
   // análise financeira, depois da identificação do imóvel.
@@ -2983,7 +2990,7 @@ function renderRelatorioInvestimento(b, im, an) {
     { label: `Comissão venda (${an.comissao_perc || 2.5}%)`, value: EUR(an.comissao_com_iva) },
     { label: 'Total Investimento', value: EUR(an.capital_necessario), total: true },
   ])
-  b.space(6)
+  b.space(3)
 
   b.header('RESULTADO')
   b.simpleTable([
@@ -2994,7 +3001,7 @@ function renderRelatorioInvestimento(b, im, an) {
     { label: 'Retenção dividendos', value: EUR(an.retencao_dividendos) },
     { label: 'Lucro Líquido', value: EUR(an.lucro_liquido), total: true },
   ])
-  b.space(6)
+  b.space(3)
 
   b.header('MÉTRICAS DE RETORNO')
   b.bigNumbers([
@@ -3011,7 +3018,7 @@ function renderRelatorioComparaveis(b, im, an) {
   if (!parsed.length) { b.text('Sem dados de comparáveis registados.'); return }
 
   b.inlineData([{ label: 'Imóvel', value: im.nome }, { label: 'Zona', value: im.zona }])
-  b.space(6)
+  b.space(3)
 
   for (const tip of parsed) {
     const items = tip.comparaveis || []
@@ -3059,7 +3066,7 @@ function renderRelatorioCaep(b, im, an) {
     { label: 'Estrutura', value: 'Associação em Participação' },
     { label: 'Base', value: parsed.base_distribuicao === 'liquido' ? 'Lucro Líquido (após IRC)' : 'Lucro Bruto' },
   ])
-  b.space(6)
+  b.space(3)
 
   b.header('CAPITAL DA OPERAÇÃO')
   b.bigNumbers([
@@ -3078,7 +3085,7 @@ function renderRelatorioCaep(b, im, an) {
         { _values: ['', 'Total captado', '', EUR(captado), `${cobertura}%`], _total: true },
       ]
     )
-    b.space(6)
+    b.space(3)
 
     b.header('DISTRIBUIÇÃO DO LUCRO')
     b.colTable(
@@ -3127,7 +3134,7 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
     { label: 'MOIC (Equity Multiple)', value: formatMOIC(deal.moic), sub: '(Capital + Lucro) / Capital' },
     { label: 'Payback', value: formatPayback(deal.payback_meses), sub: 'Recuperacao integral no exit' },
   ])
-  b.space(6)
+  b.space(3)
 
   b.header('SOBRE O PROJECTO')
   const tipoDesc = im.tipologia ? `um ${im.tipologia}` : 'um imóvel'
@@ -3147,7 +3154,7 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
     { label: 'Modelo de Negócio', value: im.modelo_negocio || 'CAEP 50/50' },
     { label: 'Prazo Estimado', value: `${meses} meses` },
   ])
-  b.space(6)
+  b.space(3)
 
   let comps = a.comparaveis
   if (typeof comps === 'string') try { comps = JSON.parse(comps || '[]') } catch { comps = [] }
@@ -3182,7 +3189,7 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
           return { _values: [`${i + 1}`, EUR(c.preco), `${c.area}m²`, `${Math.round(c.preco / c.area)}`, `${aj.neg || 0}%`, `${aj.loc || 0}%`, `${aj.idade || 0}%`, `${ajTotal >= 0 ? '+' : ''}${ajTotal}%`] }
         })
       )
-      b.space(8)
+      b.space(4)
     }
   }
 
@@ -3199,7 +3206,7 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
     { label: 'Comissão Imobiliária', value: EUR(deal.comissao_com_iva) },
     { label: 'Total Investido', value: EUR(capitalNecessario), total: true },
   ])
-  b.space(6)
+  b.space(3)
 
   b.subheader('Retornos')
   b.simpleTable([
@@ -3271,7 +3278,7 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
   // Pressupostos e glossario partilhados (mesma funcao chamada pelo Dossier)
   renderAssumptionsAndGlossary(b, deal)
 
-  b.space(6)
+  b.space(3)
   b.note('Os valores apresentados são estimativas conservadoras baseadas em análise de mercado e podem variar. A Somnium Properties utiliza stress tests automáticos em todos os negócios para protecção do investidor. Investimento imobiliário envolve risco de capital.')
 }
 
