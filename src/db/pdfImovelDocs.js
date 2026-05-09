@@ -397,10 +397,7 @@ class DocBuilder {
       Creator: 'Somnium CRM',
     }
     this.doc = new PDFDocument({ size: 'A4', autoFirstPage: false, bufferPages: true, info })
-    // Setter sanitizador de this.y: se algum renderer escrever NaN/Infinity,
-    // converter para o topo da pagina (60). Caso contrario, qualquer operacao
-    // tipo `this.y += NaN` corrompe o cursor para sempre, e o resto do PDF
-    // desenha-se em (0,0) → pagina branca. Esta proteccao quebra a cadeia.
+    // Setter sanitizador de this.y
     let _y = 0
     Object.defineProperty(this, 'y', {
       get: () => _y,
@@ -419,7 +416,18 @@ class DocBuilder {
     this.style = opts.style || 'default'
     this.title = title
     this.heroItems = opts.heroItems || null
+    // Sections collection para indice (TOC). Activado apenas para tipos
+    // que beneficiam de TOC (Dossier de Investimento e investidor relatorios).
+    this._sections = opts.withIndex ? [] : null
+    this._tocPageIndex = null
     this._drawCover(title, subtitle)
+    if (this._sections) {
+      // Reservar pagina para TOC (sera preenchida no fim via applyIndex)
+      this.newPage()
+      const range = this.doc.bufferedPageRange()
+      this._tocPageIndex = range.start + range.count - 1
+      // Marcador minimo (sera limpo no applyIndex)
+    }
     this.newPage()
   }
 
@@ -675,11 +683,22 @@ class DocBuilder {
   }
 
   // Section header — bold uppercase + gold underline (no numbering)
+  // Anti-orfao: ensure() reserva espaco para header + minimo 80pt de conteudo
+  // antes — se nao couber, salta para nova pagina antes de desenhar o titulo.
+  // Evita "titulo no fim de uma pagina + conteudo na pagina seguinte".
   header(title) {
     const upper = (title || '').toUpperCase()
     this.doc.fontSize(11)
     const titleH = this.doc.heightOfString(upper, { width: CW, characterSpacing: 0.3 })
-    this.ensure(titleH + 14)
+    this.ensure(titleH + 14 + 80) // +80pt = minimo de 1-3 linhas de conteudo
+    // Registar seccao para o indice (page numbers)
+    if (this._sections) {
+      try {
+        const range = this.doc.bufferedPageRange()
+        const currentPageIndex = range.start + range.count - 1
+        this._sections.push({ title, pageIndex: currentPageIndex, level: 1 })
+      } catch {}
+    }
     this.doc.fillColor(C.body).text(upper, ML, this.y, { width: CW, characterSpacing: 0.3 })
     this.y += titleH + 3
     this.doc.rect(ML, this.y, CW, 1.5).fill(C.gold)
@@ -687,12 +706,12 @@ class DocBuilder {
     return this
   }
 
-  // Sub-header (lighter, smaller)
+  // Sub-header (lighter, smaller). Anti-orfao igual ao header.
   subheader(title) {
     const upper = (title || '').toUpperCase()
     this.doc.fontSize(9.5)
     const titleH = this.doc.heightOfString(upper, { width: CW, characterSpacing: 0.3 })
-    this.ensure(titleH + 12)
+    this.ensure(titleH + 12 + 60)
     this.doc.fillColor(C.body).text(upper, ML, this.y, { width: CW, characterSpacing: 0.3 })
     this.y += titleH + 2
     this.doc.rect(ML, this.y, 40, 1).fill(C.gold)
@@ -1165,6 +1184,65 @@ class DocBuilder {
     this.y += 6
     this.doc.fillColor(C.muted).text(txt, ML, this.y, { width: CW, lineGap: 2 })
     this.y += h + 4
+    return this
+  }
+
+  // Indice (TOC) — preenche a pagina reservada apos a capa com a lista de
+  // seccoes registadas via header(). Chamada antes de applyFooter() / end().
+  // No-op se a opcao withIndex nao foi activada no construtor.
+  applyIndex() {
+    if (!this._sections || this._tocPageIndex == null) return this
+    if (this._sections.length === 0) return this
+    try {
+      // Deduplicar pelos titulos (alguns headers repetem-se em sub-renderers)
+      const seen = new Set()
+      const unique = []
+      for (const s of this._sections) {
+        if (!s || !s.title) continue
+        const key = s.title.trim().toUpperCase()
+        if (seen.has(key)) continue
+        seen.add(key)
+        unique.push(s)
+      }
+      this.doc.switchToPage(this._tocPageIndex)
+      const d = this.doc
+      const x = ML
+      let y = 70
+      // Titulo
+      d.fontSize(18).fillColor(C.body).text('ÍNDICE', x, y, { width: CW, lineBreak: false })
+      y += 30
+      d.rect(x, y, CW, 1.5).fill(C.gold)
+      y += 24
+      // Calcular paginas livres (max 30 entradas para nao overflow)
+      const items = unique.slice(0, 30)
+      const lineGap = 8
+      for (const s of items) {
+        d.fontSize(10).fillColor(C.body)
+        const titleStr = (s.title || '').toString()
+        const pageStr = String((s.pageIndex || 0) + 1)
+        const titleW = CW - 40
+        const titleMax = titleW * 0.85
+        // Title
+        d.text(titleStr, x, y, { width: titleMax, lineBreak: false, ellipsis: true })
+        // Page number (right-aligned)
+        d.text(pageStr, x + CW - 30, y, { width: 25, align: 'right', lineBreak: false })
+        // Linha dotted via dash() — eficiente (1 stroke vs centenas de rects)
+        const titleActualW = Math.min(d.widthOfString(titleStr), titleMax)
+        const dotsStartX = x + titleActualW + 6
+        const dotsEndX = x + CW - 36
+        if (dotsEndX > dotsStartX + 4) {
+          d.save()
+          d.lineWidth(0.6).strokeColor(C.muted).dash(1, { space: 2 })
+          d.moveTo(dotsStartX, y + 7).lineTo(dotsEndX, y + 7).stroke()
+          d.undash()
+          d.restore()
+        }
+        y += 12 + lineGap
+        if (y > PH - 80) break
+      }
+    } catch (e) {
+      console.warn('[docbuilder] applyIndex falhou:', e.message, '\n', e.stack)
+    }
     return this
   }
 
@@ -1857,6 +1935,10 @@ function renderAnaliseRentabilidade(b, im, a) {
     { label: 'TIR', value: PCT_DEC(m.tir_anual), sub: 'Valor temporal do dinheiro' },
     { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash) },
   ])
+  b.space(2)
+  b.bigNumbers([
+    { label: 'Payback', value: a.meses ? `${a.meses} meses` : '—', sub: 'Recuperacao integral no exit' },
+  ])
   b.space(4)
 
   b.header('A. CUSTOS DE AQUISIÇÃO')
@@ -2472,39 +2554,6 @@ function renderEstudoComparaveis(b, im, a) {
   }
   b.space(4)
 
-  // F. Anuncios dos Comparaveis (links externos clicaveis)
-  const compsComLink = compsCalc.filter(c => c.link && /^https?:\/\//i.test(String(c.link).trim()))
-  if (compsComLink.length > 0) {
-    b.ensure(60)
-    b.subheader('F. Anúncios dos Comparáveis (links externos)')
-    b.doc.fontSize(8).fillColor(C.muted).text('Carregue em cada link para abrir o anúncio original no portal de origem.', ML, b.y, { width: CW, lineGap: 2 })
-    b.y = b.doc.y + 6
-    compsComLink.forEach((c) => {
-      const idx = compsCalc.indexOf(c)
-      const letra = String.fromCharCode(65 + idx)
-      const url = String(c.link).trim()
-      const linhaH = 16
-      b.ensure(linhaH + 4)
-      // Identificador a negrito
-      b.doc.fontSize(8.5).fillColor(C.body).text(`Comp. ${letra}`, ML, b.y, { width: 60, lineBreak: false, continued: false })
-      // Resumo (preco · area)
-      const resumo = `${EUR(c.preco)} · ${c.area} m²`
-      b.doc.fontSize(8).fillColor(C.muted).text(resumo, ML + 60, b.y, { width: 110, lineBreak: false })
-      // URL clicavel a dourado
-      const urlX = ML + 175
-      const urlW = CW - 175
-      b.doc.fontSize(8).fillColor(C.gold).text(url, urlX, b.y, {
-        width: urlW,
-        lineBreak: false,
-        ellipsis: true,
-        underline: true,
-        link: url,
-      })
-      b.y += linhaH
-    })
-    b.space(4)
-  }
-
   // ─────────────────────────────────────────────────────────
   // PAGINA 5+ — FICHAS INDIVIDUAIS
   // ─────────────────────────────────────────────────────────
@@ -2765,28 +2814,10 @@ function renderDossierInvestidor(b, im, a) {
     console.error('[dossier] estudo de comparaveis falhou:', e.message, '\n', e.stack?.split('\n').slice(0,5).join('\n'))
   }
 
-  // Resumo executivo do dossier — MOIC e Payback em destaque para o
-  // investidor antes do deep-dive financeiro.
-  b.header('RESUMO DO NEGÓCIO')
-  b.bigNumbers([
-    { label: 'Capital Necessário', value: EUR(deal.capital_necessario) },
-    { label: 'Lucro Líquido', value: EUR(deal.lucro_liquido) },
-    { label: 'Retorno Anualizado', value: PCT(deal.retorno_anualizado) },
-  ])
-  b.space(2)
-  b.bigNumbers([
-    { label: 'MOIC (Equity Multiple)', value: formatMOIC(deal.moic), sub: '(Capital + Lucro) / Capital' },
-    { label: 'Payback', value: formatPayback(deal.payback_meses), sub: 'Recuperacao integral no exit' },
-  ])
-  b.space(6)
-
-  // Análise de Rentabilidade integral — inclui custos detalhados (aquisicao,
-  // financiamento, obra com PMO, detencao, venda, fiscalidade), resultado,
-  // alavancagem, risco e sensibilidade, stress tests, exit alternativo e
-  // estrutura CAEP. Reusa a mesma renderizacao do PDF standalone para garantir
-  // que os numeros batem certo entre os dois documentos.
-  // Wrapped em try/catch — se algum sub-renderer falhar (ex: NaN num metric),
-  // nao deita abaixo todo o Dossier; renderiza o que conseguiu ate la.
+  // Análise de Rentabilidade integral — inclui Resumo do Investimento (com
+  // MOIC + Payback adicionados), custos detalhados, fiscalidade, alavancagem,
+  // risco/sensibilidade, stress tests, exit alternativo e estrutura CAEP.
+  // Sem prefixo "RESUMO DO NEGÓCIO" para evitar duplicacao.
   try {
     b.newPage()
     renderAnaliseRentabilidade(b, im, a)
@@ -3270,6 +3301,7 @@ const GENERATORS = {
     const a = analise || {}
     const b = new DocBuilder('Dossier de Investimento', `Oportunidade · ${im.zona || ''}`, im, {
       style: 'investor',
+      withIndex: true,
       heroItems: [
         { label: 'Capital Necessário', value: EUR(a.capital_necessario), sub: a.meses ? `Hold ${a.meses} meses` : '' },
         { label: 'Lucro Líquido',      value: EUR(a.lucro_liquido) },
@@ -3280,13 +3312,13 @@ const GENERATORS = {
       renderDossierInvestidor(b, im, a)
     } catch (e) {
       console.error('[GENERATORS.dossier_investidor] falhou:', e.message, '\n', e.stack)
-      // Fallback: emitir um aviso no PDF em vez de crash 500
       try {
         b.header('AVISO')
         b.note(`Nao foi possivel gerar todas as seccoes deste Dossier devido a um erro tecnico (${e.message}). Contacte a Somnium Properties para a versao completa.`)
       } catch {}
     }
     b.disclaimer()
+    b.applyIndex()
     b.applyFooter()
     return b.end()
   },
