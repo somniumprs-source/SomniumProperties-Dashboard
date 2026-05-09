@@ -1914,13 +1914,20 @@ function renderResumoExecutivo(b, im, a, m) {
   b.newPage()
 }
 
-function renderAnaliseRentabilidade(b, im, a) {
+function renderAnaliseRentabilidade(b, im, a, opts = {}) {
   const compra = a.compra || im.valor_proposta || im.ask_price || 0
   const obra = a.obra_com_iva || a.obra || im.custo_estimado_obra || 0
   const vvr = a.vvr || im.valor_venda_remodelado || 0
   const m = calcMetricsExtra(a, im)
 
-  renderResumoExecutivo(b, im, a, m)
+  // Skip Resumo Executivo quando chamado do Dossier — duplicaria com:
+  //   - OPORTUNIDADE DE INVESTIMENTO (tese)
+  //   - PONTOS FORTES/FRACOS/RISCOS (riscos/mitigantes auto-derivados)
+  //   - J. EXIT ALTERNATIVO (estrategia saida)
+  //   - RESUMO DO INVESTIMENTO logo a seguir (9 vs 7 KPIs sobrepostos)
+  if (!opts.skipResumoExecutivo) {
+    renderResumoExecutivo(b, im, a, m)
+  }
 
 
   b.header('RESUMO DO INVESTIMENTO')
@@ -2304,7 +2311,7 @@ function drawPosVisualBar(b, { min, max, mediana, media, vvr, posCor }) {
   b.y = trackY + trackH + 28
 }
 
-function renderEstudoComparaveis(b, im, a) {
+function renderEstudoComparaveis(b, im, a, opts = {}) {
   // Leitura tolerante: array legacy ou objecto novo {meta, tipologias}
   let comps = a.comparaveis || []
   if (typeof comps === 'string') try { comps = JSON.parse(comps) } catch { comps = [] }
@@ -2411,38 +2418,43 @@ function renderEstudoComparaveis(b, im, a) {
     b.space(4)
   }
 
-  // A. Imovel em Analise
-  b.header('A. IMÓVEL EM ANÁLISE')
-  const alvoAtr = meta.alvo_atributos || {}
-  b.simpleTable([
-    { label: 'Referência do Imóvel', value: im.nome || '—' },
-    { label: 'Zona / Município', value: [im.zona, im.concelho].filter(Boolean).join(' · ') || '—' },
-    { label: 'Tipologia', value: im.tipologia || '—' },
-    { label: 'Área Útil (m²)', value: areaAlvo ? `${areaAlvo} m²` : '—' },
-    { label: 'Estado após Intervenção (Condição esperada na venda)', value: alvoAtr.estado || 'Reabilitado (após obra)' },
-    { label: 'Piso', value: alvoAtr.piso || '—' },
-    { label: 'Elevador', value: alvoAtr.elevador ? 'Sim' : 'Não' },
-    { label: 'Garagem / Estacionamento', value: alvoAtr.garagem ? 'Sim' : 'Não' },
-    { label: 'VVR Adoptado (Valor de Venda de Referência — preço alvo de saída)', value: EUR(vvrAdoptado), total: true },
-    { label: 'Preço de Venda Alvo por m²', value: precoM2Vvr ? `${Math.round(precoM2Vvr).toLocaleString('pt-PT')} €/m²` : '—' },
-  ])
-  b.space(4)
-
-  // B. Analise de Rendimento — Exit Arrendamento
-  b.header('B. ANÁLISE DE RENDIMENTO — EXIT ARRENDAMENTO (Activar se exit alternativo à venda)')
-  const tipComRenda = tipologias.find(t => t && t.renda > 0) || tipologias[0] || {}
-  const rendaMensal = parseFloat(tipComRenda.renda) || 0
-  const yieldBruta = parseFloat(tipComRenda.yield) || 0
-  const vvrPorRendimento = (rendaMensal > 0 && yieldBruta > 0) ? (rendaMensal * 12 / (yieldBruta / 100)) : 0
-  b.simpleTable([
-    { label: 'Renda Mensal Estimada (Valor de mercado de arrendamento na zona)', value: rendaMensal > 0 ? EUR(rendaMensal) : '—' },
-    { label: 'Yield Bruta (Renda anual / VVR — rendimento bruto de arrendamento)', value: yieldBruta > 0 ? `${yieldBruta.toFixed(2)}%` : '—' },
-    { label: 'VVR pelo Rendimento (VVR implícito pela yield de mercado na zona)', value: vvrPorRendimento > 0 ? EUR(vvrPorRendimento) : '—' },
-  ])
-  if (rendaMensal === 0) {
-    b.note('Preencher esta secção quando o exit alternativo de arrendamento for analisado. Requer estudo de rendas comparáveis na zona.')
+  // A. Imovel em Analise — skip quando chamado do Dossier (duplica OPORTUNIDADE)
+  if (!opts.skipImovelEmAnalise) {
+    b.header('A. IMÓVEL EM ANÁLISE')
+    const alvoAtr = meta.alvo_atributos || {}
+    b.simpleTable([
+      { label: 'Referência do Imóvel', value: im.nome || '—' },
+      { label: 'Zona / Município', value: [im.zona, im.concelho].filter(Boolean).join(' · ') || '—' },
+      { label: 'Tipologia', value: im.tipologia || '—' },
+      { label: 'Área Útil (m²)', value: areaAlvo ? `${areaAlvo} m²` : '—' },
+      { label: 'Estado após Intervenção (Condição esperada na venda)', value: alvoAtr.estado || 'Reabilitado (após obra)' },
+      { label: 'Piso', value: alvoAtr.piso || '—' },
+      { label: 'Elevador', value: alvoAtr.elevador ? 'Sim' : 'Não' },
+      { label: 'Garagem / Estacionamento', value: alvoAtr.garagem ? 'Sim' : 'Não' },
+      { label: 'VVR Adoptado (Valor de Venda de Referência — preço alvo de saída)', value: EUR(vvrAdoptado), total: true },
+      { label: 'Preço de Venda Alvo por m²', value: precoM2Vvr ? `${Math.round(precoM2Vvr).toLocaleString('pt-PT')} €/m²` : '—' },
+    ])
+    b.space(4)
   }
-  b.space(4)
+
+  // B. Analise de Rendimento — Exit Arrendamento — skip quando do Dossier
+  // (J. EXIT ALTERNATIVO da Analise de Rentabilidade ja faz analise completa)
+  if (!opts.skipExitArrendamento) {
+    b.header('B. ANÁLISE DE RENDIMENTO — EXIT ARRENDAMENTO (Activar se exit alternativo à venda)')
+    const tipComRenda = tipologias.find(t => t && t.renda > 0) || tipologias[0] || {}
+    const rendaMensal = parseFloat(tipComRenda.renda) || 0
+    const yieldBruta = parseFloat(tipComRenda.yield) || 0
+    const vvrPorRendimento = (rendaMensal > 0 && yieldBruta > 0) ? (rendaMensal * 12 / (yieldBruta / 100)) : 0
+    b.simpleTable([
+      { label: 'Renda Mensal Estimada (Valor de mercado de arrendamento na zona)', value: rendaMensal > 0 ? EUR(rendaMensal) : '—' },
+      { label: 'Yield Bruta (Renda anual / VVR — rendimento bruto de arrendamento)', value: yieldBruta > 0 ? `${yieldBruta.toFixed(2)}%` : '—' },
+      { label: 'VVR pelo Rendimento (VVR implícito pela yield de mercado na zona)', value: vvrPorRendimento > 0 ? EUR(vvrPorRendimento) : '—' },
+    ])
+    if (rendaMensal === 0) {
+      b.note('Preencher esta secção quando o exit alternativo de arrendamento for analisado. Requer estudo de rendas comparáveis na zona.')
+    }
+    b.space(4)
+  }
 
   // ─────────────────────────────────────────────────────────
   // PAGINA 3 — METODOLOGIA E COMPARAVEIS
@@ -2796,10 +2808,8 @@ function renderDossierInvestidor(b, im, a) {
   if (im.mitigacao_riscos) { b.space(4); b.riscosMitigacao() }
   b.space(4)
 
-  // Estudo de Comparáveis — fundamenta o VVR usado nos números abaixo.
-  // Só renderiza se houver comparáveis preenchidos com preço e área válidos.
-  // O shape pode ser um array (legacy) ou {meta, tipologias} (novo).
-  // Wrapped em try/catch para nunca quebrar o Dossier completo.
+  // Estudo de Comparáveis — fundamenta o VVR. Skip seccoes A (Imóvel em Análise)
+  // e B (Exit Arrendamento) que duplicam OPORTUNIDADE e J. EXIT ALTERNATIVO.
   try {
     let __comps = a.comparaveis
     if (typeof __comps === 'string') { try { __comps = JSON.parse(__comps || 'null') } catch { __comps = null } }
@@ -2807,20 +2817,20 @@ function renderDossierInvestidor(b, im, a) {
     const __hasValid = __tipologias.some(t => (t?.comparaveis || []).some(c => parseFloat(c?.preco) > 0 && parseFloat(c?.area) > 0))
     if (__hasValid) {
       b.newPage()
-      renderEstudoComparaveis(b, im, a)
+      renderEstudoComparaveis(b, im, a, { skipImovelEmAnalise: true, skipExitArrendamento: true })
       b.space(4)
     }
   } catch (e) {
     console.error('[dossier] estudo de comparaveis falhou:', e.message, '\n', e.stack?.split('\n').slice(0,5).join('\n'))
   }
 
-  // Análise de Rentabilidade integral — inclui Resumo do Investimento (com
-  // MOIC + Payback adicionados), custos detalhados, fiscalidade, alavancagem,
-  // risco/sensibilidade, stress tests, exit alternativo e estrutura CAEP.
-  // Sem prefixo "RESUMO DO NEGÓCIO" para evitar duplicacao.
+  // Análise de Rentabilidade integral — Resumo Executivo skipped (duplicaria
+  // com OPORTUNIDADE, PONTOS FORTES/RISCOS e RESUMO DO INVESTIMENTO).
+  // Mantém: Resumo Investimento, Custos detalhados, Fiscalidade, Alavancagem,
+  // Risco/Sensibilidade, Stress, Exit Alternativo, CAEP.
   try {
     b.newPage()
-    renderAnaliseRentabilidade(b, im, a)
+    renderAnaliseRentabilidade(b, im, a, { skipResumoExecutivo: true })
   } catch (e) {
     console.error('[dossier] analise de rentabilidade falhou:', e.message, '\n', e.stack?.split('\n').slice(0,5).join('\n'))
     b.note(`Detalhe da analise de rentabilidade indisponivel para este negocio. Erro tecnico registado nos logs do servidor.`)
