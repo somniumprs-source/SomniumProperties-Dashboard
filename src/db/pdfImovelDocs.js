@@ -682,16 +682,15 @@ class DocBuilder {
     return this
   }
 
-  // Section header — bold uppercase + gold underline (no numbering)
-  // Anti-orfao: ensure() reserva espaco para header + minimo 80pt de conteudo
-  // antes — se nao couber, salta para nova pagina antes de desenhar o titulo.
-  // Evita "titulo no fim de uma pagina + conteudo na pagina seguinte".
+  // Section header — destaque corporativo: barra dourada vertical a esquerda
+  // + titulo em uppercase bold maior + linha dourada inferior em toda a
+  // largura. Mais peso visual que o header anterior (font 11 -> 14, com bold).
+  // Anti-orfao: reserva espaco para header + minimo 80pt de conteudo.
   header(title) {
     const upper = (title || '').toUpperCase()
-    this.doc.fontSize(11)
-    const titleH = this.doc.heightOfString(upper, { width: CW, characterSpacing: 0.3 })
-    this.ensure(titleH + 14 + 80) // +80pt = minimo de 1-3 linhas de conteudo
-    // Registar seccao para o indice (page numbers)
+    this.doc.font('Helvetica-Bold').fontSize(14)
+    const titleH = this.doc.heightOfString(upper, { width: CW - 12, characterSpacing: 0.5 })
+    this.ensure(titleH + 22 + 80)
     if (this._sections) {
       try {
         const range = this.doc.bufferedPageRange()
@@ -699,10 +698,17 @@ class DocBuilder {
         this._sections.push({ title, pageIndex: currentPageIndex, level: 1 })
       } catch {}
     }
-    this.doc.fillColor(C.body).text(upper, ML, this.y, { width: CW, characterSpacing: 0.3 })
-    this.y += titleH + 3
+    // Barra dourada vertical (3pt) a esquerda
+    this.doc.rect(ML, this.y - 1, 3, titleH + 4).fill(C.gold)
+    // Titulo
+    this.doc.font('Helvetica-Bold').fontSize(14).fillColor(C.body)
+      .text(upper, ML + 12, this.y, { width: CW - 12, characterSpacing: 0.5 })
+    this.y += titleH + 6
+    // Linha dourada inferior toda a largura
     this.doc.rect(ML, this.y, CW, 1.5).fill(C.gold)
-    this.y += 10
+    this.y += 14
+    // Reset font para nao afectar conteudo seguinte
+    this.doc.font('Helvetica').fontSize(9)
     return this
   }
 
@@ -2050,15 +2056,11 @@ function renderAnaliseRentabilidade(b, im, a, opts = {}) {
     { label: 'Impostos', value: EUR(a.impostos) },
     { label: 'Lucro Líquido', value: EUR(a.lucro_liquido) },
   ])
-  const spreadValue = m.spread_pct != null
-    ? `${EUR_S(m.spread_eur)}  (${PCT_DEC(m.spread_pct)})`
-    : EUR_S(m.spread_eur)
   b.simpleTable([
     { label: 'Retorno Total', value: PCT(a.retorno_total) },
     { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado) },
     { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash) },
     { label: 'Break-Even', value: EUR(a.break_even) },
-    { label: 'Spread de Valorização (VVR - Compra - Obra)', value: spreadValue, color: colorPositivo(m.spread_eur) },
     { label: 'Lucro Líquido por Mês', value: m.lucro_mensal != null ? `${EUR_S(m.lucro_mensal)}/mês` : '—' },
     { label: 'Margem sobre Custo Total', value: PCT_DEC(m.margem_custo_total), color: colorMargem(m.margem_custo_total) },
     { label: 'Rácio Risco / Retorno (por 1€ arriscado)', value: RACIO(m.racio_risco_retorno) },
@@ -2081,16 +2083,12 @@ function renderAnaliseRentabilidade(b, im, a, opts = {}) {
 
   const margemSegVVRStr = m.margem_seg_vvr != null ? PCT_DEC(m.margem_seg_vvr) : '—'
   const margemSegObraStr = m.margem_seg_obra != null ? PCT_DEC(m.margem_seg_obra) : '—'
-  const prazoMaxStr = m.prazo_max_meses != null
-    ? `${m.prazo_max_meses} meses (mais ${m.meses_extra} do que o previsto)`
-    : '—'
 
   b.simpleTable([
     { label: 'Break-Even VVR (preço mínimo de venda)', value: EUR(m.break_even_vvr) },
     { label: '   Margem de Segurança VVR', value: margemSegVVRStr, color: colorPositivo(m.margem_seg_vvr) },
     { label: 'Break-Even Custo de Obra (custo máximo)', value: EUR(m.break_even_obra) },
     { label: '   Margem de Segurança Obra', value: margemSegObraStr, color: colorPositivo(m.margem_seg_obra) },
-    { label: 'Prazo Máximo de Detenção (antes de prejuízo)', value: prazoMaxStr },
   ])
   b.space(4)
 
@@ -2385,37 +2383,41 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
   // ─────────────────────────────────────────────────────────
   // PAGINA 2 — SUMARIO EXECUTIVO
   // ─────────────────────────────────────────────────────────
-  b.header('SUMÁRIO EXECUTIVO')
+  // Sumario Executivo do Estudo (skip quando chamado do Dossier — duplica
+  // RESUMO DO INVESTIMENTO da Analise de Rentabilidade).
+  if (!opts.skipSumarioExecutivo) {
+    b.header('SUMÁRIO EXECUTIVO')
 
-  // Caixa preta com Conclusao
-  let conclusao = (meta.conclusao_estudo || '').trim()
-  if (!conclusao && n > 0) {
-    conclusao = gerarConclusaoAuto({
-      n, mediana: medianaVvr, vvrAdoptado, delta: deltaMediana, posTexto,
-      minM2, maxM2, precoM2Vvr, descontoNeg,
-      dataRecolha: meta.data_recolha, fonteDados: meta.fonte_dados,
-    })
-  }
-  if (conclusao) {
-    const conclH = b.doc.heightOfString(conclusao, { width: CW - 28, lineGap: 3 })
-    const boxH = conclH + 30
-    b.ensure(boxH + 6)
-    b.doc.rect(ML, b.y, CW, boxH).fill(C.black)
-    b.doc.rect(ML, b.y, 4, boxH).fill(C.gold)
-    b.doc.fontSize(7).fillColor(C.gold).text('CONCLUSÃO DO ESTUDO', ML + 14, b.y + 8, { width: CW - 28, characterSpacing: 1, lineBreak: false })
-    b.doc.fontSize(9).fillColor('#f0efe9').text(conclusao, ML + 14, b.y + 22, { width: CW - 28, lineGap: 3 })
-    b.y += boxH + 8
-  }
+    // Caixa preta com Conclusao
+    let conclusao = (meta.conclusao_estudo || '').trim()
+    if (!conclusao && n > 0) {
+      conclusao = gerarConclusaoAuto({
+        n, mediana: medianaVvr, vvrAdoptado, delta: deltaMediana, posTexto,
+        minM2, maxM2, precoM2Vvr, descontoNeg,
+        dataRecolha: meta.data_recolha, fonteDados: meta.fonte_dados,
+      })
+    }
+    if (conclusao) {
+      const conclH = b.doc.heightOfString(conclusao, { width: CW - 28, lineGap: 3 })
+      const boxH = conclH + 30
+      b.ensure(boxH + 6)
+      b.doc.rect(ML, b.y, CW, boxH).fill(C.black)
+      b.doc.rect(ML, b.y, 4, boxH).fill(C.gold)
+      b.doc.fontSize(7).fillColor(C.gold).text('CONCLUSÃO DO ESTUDO', ML + 14, b.y + 8, { width: CW - 28, characterSpacing: 1, lineBreak: false })
+      b.doc.fontSize(9).fillColor('#f0efe9').text(conclusao, ML + 14, b.y + 22, { width: CW - 28, lineGap: 3 })
+      b.y += boxH + 8
+    }
 
-  // Grid 4 KPIs hero
-  if (n > 0) {
-    b.bigNumbers([
-      { label: 'Mediana VVR Est.', value: EUR(medianaVvr), sub: '(Mediana dos VVR estimados ajustados dos comparáveis)' },
-      { label: 'Intervalo de Mercado', value: [`${Math.round(minM2).toLocaleString('pt-PT')} €/m²`, `a ${Math.round(maxM2).toLocaleString('pt-PT')} €/m²`], sub: '(Min. e máx. €/m² ajustado)' },
-      { label: 'VVR Adoptado', value: EUR(vvrAdoptado), valueColor: posCor, sub: deltaMediana != null ? `${deltaMediana >= 0 ? '+' : ''}${deltaMediana.toFixed(1)}% vs. mediana` : '(Valor de Venda de Referência escolhido)' },
-      { label: 'Preço/m² VVR', value: precoM2Vvr ? `${Math.round(precoM2Vvr).toLocaleString('pt-PT')} €/m²` : '—', sub: '(Preço por m² implícito no VVR adoptado)' },
-    ])
-    b.space(4)
+    // Grid 4 KPIs hero
+    if (n > 0) {
+      b.bigNumbers([
+        { label: 'Mediana VVR Est.', value: EUR(medianaVvr), sub: '(Mediana dos VVR estimados ajustados dos comparáveis)' },
+        { label: 'Intervalo de Mercado', value: [`${Math.round(minM2).toLocaleString('pt-PT')} €/m²`, `a ${Math.round(maxM2).toLocaleString('pt-PT')} €/m²`], sub: '(Min. e máx. €/m² ajustado)' },
+        { label: 'VVR Adoptado', value: EUR(vvrAdoptado), valueColor: posCor, sub: deltaMediana != null ? `${deltaMediana >= 0 ? '+' : ''}${deltaMediana.toFixed(1)}% vs. mediana` : '(Valor de Venda de Referência escolhido)' },
+        { label: 'Preço/m² VVR', value: precoM2Vvr ? `${Math.round(precoM2Vvr).toLocaleString('pt-PT')} €/m²` : '—', sub: '(Preço por m² implícito no VVR adoptado)' },
+      ])
+      b.space(4)
+    }
   }
 
   // A. Imovel em Analise — skip quando chamado do Dossier (duplica OPORTUNIDADE)
@@ -2465,7 +2467,6 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
   // C. Metodologia
   b.subheader('C. Metodologia de Avaliação')
   b.simpleTable([
-    { label: 'Fonte dos Dados (Portal ou registo de onde foram extraídos os preços)', value: meta.fonte_dados || '—' },
     { label: 'Tipo de Preço (Oferta de venda vs. transacção efectiva escriturada)', value: meta.tipo_preco || '—' },
     { label: 'Desconto Negocial Estimado (Redução média entre oferta e transacção)', value: descontoNeg != null ? `${descontoNeg}%` : '—' },
     { label: 'Data de Recolha dos Dados', value: meta.data_recolha || '—' },
@@ -2567,9 +2568,9 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
   b.space(4)
 
   // ─────────────────────────────────────────────────────────
-  // PAGINA 5+ — FICHAS INDIVIDUAIS
+  // PAGINA 5+ — FICHAS INDIVIDUAIS — skip quando do Dossier
   // ─────────────────────────────────────────────────────────
-  if (n > 0) {
+  if (n > 0 && !opts.skipFichasIndividuais) {
     b.newPage()
     b.header('FICHAS INDIVIDUAIS DOS COMPARÁVEIS')
     b.note('Detalhe de cada comparável com atributos, ajustes aplicados e posicionamento face ao imóvel em análise.')
@@ -2817,7 +2818,12 @@ function renderDossierInvestidor(b, im, a) {
     const __hasValid = __tipologias.some(t => (t?.comparaveis || []).some(c => parseFloat(c?.preco) > 0 && parseFloat(c?.area) > 0))
     if (__hasValid) {
       b.newPage()
-      renderEstudoComparaveis(b, im, a, { skipImovelEmAnalise: true, skipExitArrendamento: true })
+      renderEstudoComparaveis(b, im, a, {
+        skipImovelEmAnalise: true,
+        skipExitArrendamento: true,
+        skipSumarioExecutivo: true,
+        skipFichasIndividuais: true,
+      })
       b.space(4)
     }
   } catch (e) {

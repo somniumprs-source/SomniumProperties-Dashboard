@@ -517,10 +517,12 @@ test('Dossier menciona MOIC nos big numbers', () => {
 test('Dossier menciona Payback', () => {
   assert.ok(dossierText.includes('Payback'), 'Dossier nao tem Payback')
 })
-test('Dossier inclui Estudo de Comparaveis (SUMARIO EXECUTIVO)', () => {
-  // renderEstudoComparaveis comeca com "SUMÁRIO EXECUTIVO"
-  assert.ok(dossierText.includes('SUM') && dossierText.includes('EXECUTIVO'),
-    'Dossier nao tem SUMARIO EXECUTIVO dos comparaveis')
+test('Dossier inclui Estudo de Comparaveis (METODOLOGIA)', () => {
+  // Sumario Executivo de comparaveis foi removido por design (duplicava
+  // RESUMO DO INVESTIMENTO da Analise). Validar pela presenca da seccao
+  // METODOLOGIA E COMPARAVEIS que e mantida.
+  assert.ok(dossierText.includes('METODOLOGIA'),
+    'Dossier nao tem METODOLOGIA E COMPARAVEIS')
 })
 test('Dossier inclui Analise de Rentabilidade integral (CUSTOS DE AQUISICAO)', () => {
   assert.ok(dossierText.includes('CUSTOS DE AQUISI'), 'Dossier nao tem CUSTOS DE AQUISICAO')
