@@ -682,15 +682,17 @@ class DocBuilder {
     return this
   }
 
-  // Section header — destaque corporativo: barra dourada vertical a esquerda
-  // + titulo em uppercase bold maior + linha dourada inferior em toda a
-  // largura. Mais peso visual que o header anterior (font 11 -> 14, com bold).
-  // Anti-orfao: reserva espaco para header + minimo 80pt de conteudo.
+  // Section header — caixa preta com texto a dourado (estilo stamp corporativo).
+  // Maior peso visual: bloco solido com padding generoso, texto Bold 14pt em
+  // dourado, characterSpacing alargado. Anti-orfao: reserva header + 80pt.
   header(title) {
     const upper = (title || '').toUpperCase()
+    const padX = 14
+    const padY = 9
     this.doc.font('Helvetica-Bold').fontSize(14)
-    const titleH = this.doc.heightOfString(upper, { width: CW - 12, characterSpacing: 0.5 })
-    this.ensure(titleH + 22 + 80)
+    const titleH = this.doc.heightOfString(upper, { width: CW - padX * 2, characterSpacing: 0.6 })
+    const boxH = titleH + padY * 2
+    this.ensure(boxH + 8 + 80)
     if (this._sections) {
       try {
         const range = this.doc.bufferedPageRange()
@@ -698,17 +700,16 @@ class DocBuilder {
         this._sections.push({ title, pageIndex: currentPageIndex, level: 1 })
       } catch {}
     }
-    // Barra dourada vertical (3pt) a esquerda
-    this.doc.rect(ML, this.y - 1, 3, titleH + 4).fill(C.gold)
-    // Titulo
-    this.doc.font('Helvetica-Bold').fontSize(14).fillColor(C.body)
-      .text(upper, ML + 12, this.y, { width: CW - 12, characterSpacing: 0.5 })
-    this.y += titleH + 6
-    // Linha dourada inferior toda a largura
-    this.doc.rect(ML, this.y, CW, 1.5).fill(C.gold)
-    this.y += 14
-    // Reset font para nao afectar conteudo seguinte
-    this.doc.font('Helvetica').fontSize(9)
+    // Caixa preta solida
+    this.doc.rect(ML, this.y, CW, boxH).fill(C.black)
+    // Faixa dourada fina a esquerda (5pt) — accent
+    this.doc.rect(ML, this.y, 5, boxH).fill(C.gold)
+    // Titulo em dourado
+    this.doc.font('Helvetica-Bold').fontSize(14).fillColor(C.gold)
+      .text(upper, ML + padX, this.y + padY, { width: CW - padX * 2, characterSpacing: 0.6, lineBreak: false })
+    this.y += boxH + 12
+    // Reset
+    this.doc.font('Helvetica').fontSize(9).fillColor(C.body)
     return this
   }
 
@@ -1936,23 +1937,27 @@ function renderAnaliseRentabilidade(b, im, a, opts = {}) {
   }
 
 
-  b.header('RESUMO DO INVESTIMENTO')
-  b.bigNumbers([
-    { label: 'Capital Necessário', value: EUR(a.capital_necessario || compra + obra) },
-    { label: 'Lucro Líquido', value: EUR(a.lucro_liquido) },
-    { label: 'MOIC', value: MULT(m.moic), sub: 'Múltiplo do capital' },
-  ])
-  b.space(2)
-  b.bigNumbers([
-    { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado), sub: 'Simples' },
-    { label: 'TIR', value: PCT_DEC(m.tir_anual), sub: 'Valor temporal do dinheiro' },
-    { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash) },
-  ])
-  b.space(2)
-  b.bigNumbers([
-    { label: 'Payback', value: a.meses ? `${a.meses} meses` : '—', sub: 'Recuperacao integral no exit' },
-  ])
-  b.space(4)
+  // Resumo do Investimento — skip quando chamado do Dossier (esta no
+  // SUMÁRIO EXECUTIVO no topo do Dossier).
+  if (!opts.skipResumoInvestimento) {
+    b.header('RESUMO DO INVESTIMENTO')
+    b.bigNumbers([
+      { label: 'Capital Necessário', value: EUR(a.capital_necessario || compra + obra) },
+      { label: 'Lucro Líquido', value: EUR(a.lucro_liquido) },
+      { label: 'MOIC', value: MULT(m.moic), sub: 'Múltiplo do capital' },
+    ])
+    b.space(2)
+    b.bigNumbers([
+      { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado), sub: 'Simples' },
+      { label: 'TIR', value: PCT_DEC(m.tir_anual), sub: 'Valor temporal do dinheiro' },
+      { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash) },
+    ])
+    b.space(2)
+    b.bigNumbers([
+      { label: 'Payback', value: a.meses ? `${a.meses} meses` : '—', sub: 'Recuperacao integral no exit' },
+    ])
+    b.space(4)
+  }
 
   b.header('A. CUSTOS DE AQUISIÇÃO')
   b.simpleTable([
@@ -2568,6 +2573,29 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
   b.space(4)
 
   // ─────────────────────────────────────────────────────────
+  // LINKS DOS ANUNCIOS (modo urlsOnly: lista compacta sem fichas)
+  // ─────────────────────────────────────────────────────────
+  if (n > 0 && opts.urlsOnly) {
+    const compsComLink = compsCalc.filter(c => c.link && /^https?:\/\//i.test(String(c.link).trim()))
+    if (compsComLink.length > 0) {
+      b.header('LINKS DOS ANÚNCIOS')
+      b.note('Carregue em cada link para abrir o anúncio original do comparável no portal de origem.')
+      b.space(2)
+      compsComLink.forEach((c) => {
+        const idx = compsCalc.indexOf(c)
+        const letra = String.fromCharCode(65 + idx)
+        const url = String(c.link).trim()
+        b.ensure(16)
+        b.doc.fontSize(8.5).fillColor(C.body).text(`Comp. ${letra}`, ML, b.y, { width: 60, lineBreak: false, continued: true })
+        b.doc.fontSize(8).fillColor(C.gold)
+          .text(url, { width: CW - 60, lineBreak: false, link: url, underline: true, ellipsis: true })
+        b.y += 14
+      })
+      b.space(4)
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────
   // PAGINA 5+ — FICHAS INDIVIDUAIS — skip quando do Dossier
   // ─────────────────────────────────────────────────────────
   if (n > 0 && !opts.skipFichasIndividuais) {
@@ -2790,6 +2818,7 @@ function renderOrcamentoObraDetalhado(b, orc) {
 function renderDossierInvestidor(b, im, a) {
   const fotos = parseFotos(im)
   const deal = resolveDealData(im, a)
+  const m = calcMetricsExtra(a, im)
   const compra = deal.compra ?? 0
   const obra = deal.obra_com_iva ?? deal.obra ?? 0
   const vvr = deal.vvr ?? 0
@@ -2800,17 +2829,37 @@ function renderDossierInvestidor(b, im, a) {
     { label: 'Tipologia', value: im.tipologia }, { label: 'Modelo', value: im.modelo_negocio || 'CAEP 50/50' },
     { label: 'Prazo Estimado', value: deal.meses ? `${deal.meses} meses` : '—' },
   ])
+  b.space(6)
+
+  // SUMÁRIO EXECUTIVO — KPIs de investimento em destaque, logo no inicio.
+  // Substitui o "RESUMO DO INVESTIMENTO" que estava no meio do dossier.
+  b.header('SUMÁRIO EXECUTIVO')
+  b.bigNumbers([
+    { label: 'Capital Necessário', value: EUR(deal.capital_necessario) },
+    { label: 'Lucro Líquido', value: EUR(deal.lucro_liquido) },
+    { label: 'MOIC', value: formatMOIC(deal.moic), sub: 'Múltiplo do capital' },
+  ])
+  b.space(2)
+  b.bigNumbers([
+    { label: 'Retorno Anualizado', value: PCT(deal.retorno_anualizado), sub: 'Simples' },
+    { label: 'TIR', value: PCT_DEC(m.tir_anual), sub: 'Valor temporal do dinheiro' },
+    { label: 'Cash-on-Cash', value: PCT(deal.cash_on_cash) },
+  ])
+  b.space(2)
+  b.bigNumbers([
+    { label: 'Payback', value: formatPayback(deal.payback_meses), sub: 'Recuperacao integral no exit' },
+  ])
+  b.space(4)
+
   if (fotos.length > 0) { b.space(4); b.photos(fotos, 'O IMÓVEL') }
   b.space(4)
-  // Pros/contras/riscos sempre numa secção dedicada após a apresentação visual
-  // do imóvel (fotos+localização) e antes dos números financeiros.
+  // Pros/contras/riscos
   if (im.localizacao_imagem || im._localizacaoImgData) { b.newPage(); b.localizacao() }
   if (im.pontos_fortes || im.pontos_fracos || im.riscos) { b.pontosFortesFracosRiscos() }
   if (im.mitigacao_riscos) { b.space(4); b.riscosMitigacao() }
   b.space(4)
 
-  // Estudo de Comparáveis — fundamenta o VVR. Skip seccoes A (Imóvel em Análise)
-  // e B (Exit Arrendamento) que duplicam OPORTUNIDADE e J. EXIT ALTERNATIVO.
+  // Estudo de Comparáveis — modo urlsOnly em vez de fichas individuais.
   try {
     let __comps = a.comparaveis
     if (typeof __comps === 'string') { try { __comps = JSON.parse(__comps || 'null') } catch { __comps = null } }
@@ -2823,6 +2872,7 @@ function renderDossierInvestidor(b, im, a) {
         skipExitArrendamento: true,
         skipSumarioExecutivo: true,
         skipFichasIndividuais: true,
+        urlsOnly: true,
       })
       b.space(4)
     }
@@ -2830,13 +2880,15 @@ function renderDossierInvestidor(b, im, a) {
     console.error('[dossier] estudo de comparaveis falhou:', e.message, '\n', e.stack?.split('\n').slice(0,5).join('\n'))
   }
 
-  // Análise de Rentabilidade integral — Resumo Executivo skipped (duplicaria
-  // com OPORTUNIDADE, PONTOS FORTES/RISCOS e RESUMO DO INVESTIMENTO).
-  // Mantém: Resumo Investimento, Custos detalhados, Fiscalidade, Alavancagem,
-  // Risco/Sensibilidade, Stress, Exit Alternativo, CAEP.
+  // Análise de Rentabilidade integral — skip Resumo Executivo (duplicava
+  // OPORTUNIDADE / PONTOS FORTES) e RESUMO DO INVESTIMENTO (duplicava o
+  // SUMARIO EXECUTIVO no topo do Dossier).
   try {
     b.newPage()
-    renderAnaliseRentabilidade(b, im, a, { skipResumoExecutivo: true })
+    renderAnaliseRentabilidade(b, im, a, {
+      skipResumoExecutivo: true,
+      skipResumoInvestimento: true,
+    })
   } catch (e) {
     console.error('[dossier] analise de rentabilidade falhou:', e.message, '\n', e.stack?.split('\n').slice(0,5).join('\n'))
     b.note(`Detalhe da analise de rentabilidade indisponivel para este negocio. Erro tecnico registado nos logs do servidor.`)
