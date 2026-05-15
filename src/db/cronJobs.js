@@ -399,6 +399,55 @@ async function runAutoInactivoInvestidores() {
   }
 }
 
+// ── JOB 6: Arquivar relatório mensal de obra (dia 1, 06:00) ──
+async function runArquivoRelatoriosObra() {
+  console.log('[cron] Arquivo mensal de relatórios de obra — a correr')
+  try {
+    const { generateRelatorioAcompanhamento } = await import('./pdfProjectoFixFlip.js')
+    const fs = await import('fs')
+    const path = await import('path')
+    const { fileURLToPath } = await import('url')
+    const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+    // Projectos Fix and Flip activos (não vendidos)
+    const { rows: negocios } = await pool.query(
+      `SELECT * FROM negocios WHERE categoria = 'Fix and Flip' AND (fase IS NULL OR fase <> 'Vendido')`
+    )
+
+    const dirBase = path.resolve(__dirname, '../../public/uploads/relatorios-obra')
+    fs.mkdirSync(dirBase, { recursive: true })
+    const mesIso = new Date().toISOString().slice(0, 7) // YYYY-MM
+
+    let gerados = 0
+    for (const negocio of negocios) {
+      try {
+        const { rows: fases } = await pool.query('SELECT * FROM projeto_fases WHERE negocio_id = $1 ORDER BY ordem', [negocio.id])
+        if (fases.length === 0) continue
+        const faseIds = fases.map(f => f.id)
+        const { rows: tarefas } = await pool.query('SELECT * FROM projeto_tarefas WHERE fase_id = ANY($1)', [faseIds])
+        const { rows: fotos } = await pool.query('SELECT * FROM projeto_fotos WHERE negocio_id = $1', [negocio.id])
+        let imovel = null
+        if (negocio.imovel_id) {
+          const { rows } = await pool.query('SELECT * FROM imoveis WHERE id = $1', [negocio.imovel_id])
+          imovel = rows[0] || null
+        }
+        const orcAlocado = fases.reduce((s, f) => s + (Number(f.orcamento_alocado) || 0), 0)
+        const custoReal = fases.reduce((s, f) => s + (Number(f.custo_real) || 0), 0)
+        const percGlobal = Math.round(fases.reduce((s, f) => s + (Number(f.perc_execucao) || 0), 0) / fases.length)
+
+        const doc = generateRelatorioAcompanhamento({ negocio, imovel, fases, tarefas, fotos, percGlobal, orcAlocado, custoReal })
+        const safeNome = negocio.movimento.replace(/[^\w]/g, '_').slice(0, 60)
+        const filePath = path.join(dirBase, `${negocio.id}__${mesIso}__${safeNome}.pdf`)
+        const stream = fs.createWriteStream(filePath)
+        doc.pipe(stream)
+        await new Promise((resolve, reject) => { stream.on('finish', resolve); stream.on('error', reject); doc.end() })
+        gerados++
+      } catch (e) { console.error(`[cron arquivo-obra] ${negocio.id}:`, e.message) }
+    }
+    console.log(`[cron] Arquivo mensal de obra: ${gerados} relatórios gerados em ${dirBase}`)
+  } catch (e) { console.error('[cron] Erro arquivo-obra:', e.message) }
+}
+
 // ── Registar jobs ───────────────────────────────────────────
 export function startCronJobs() {
   // Follow-up diário às 08:00
@@ -420,7 +469,11 @@ export function startCronJobs() {
   // Auto-Inactivo investidores diário às 07:00
   cron.schedule('0 7 * * *', runAutoInactivoInvestidores, { timezone: TIMEZONE })
   console.log('[cron] Auto-Inactivo investidores registado → 07:00 Europe/Lisbon')
+
+  // Arquivo mensal de relatórios de obra — Dia 1 de cada mês às 06:00
+  cron.schedule('0 6 1 * *', runArquivoRelatoriosObra, { timezone: TIMEZONE })
+  console.log('[cron] Arquivo mensal de relatórios de obra registado → Dia 1 06:00 Europe/Lisbon')
 }
 
 // Exports para execução manual via API
-export { runFollowUp, runRelatorioDiario, runRelatorioSemanal, runReclassificacaoInvestidores, runAutoInactivoInvestidores, REACTIVATION_TEMPLATE }
+export { runFollowUp, runRelatorioDiario, runRelatorioSemanal, runReclassificacaoInvestidores, runAutoInactivoInvestidores, runArquivoRelatoriosObra, REACTIVATION_TEMPLATE }

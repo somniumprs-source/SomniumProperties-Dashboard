@@ -193,6 +193,61 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_docsinv_investidor ON documentos_investidor(investidor_id);
 
+  -- Projeto Fix and Flip: fases de obra
+  CREATE TABLE IF NOT EXISTS projeto_fases (
+    id TEXT PRIMARY KEY,
+    negocio_id TEXT NOT NULL,
+    fase_key TEXT NOT NULL,       -- aquisicao | projeto_licenca | demolicoes | estrutura_especialidades | acabamentos | exterior_fecho | comercializacao | vendido
+    nome TEXT NOT NULL,
+    ordem INTEGER NOT NULL,
+    estado TEXT DEFAULT 'pendente', -- pendente | em_curso | concluida | bloqueada
+    perc_execucao INTEGER DEFAULT 0,
+    data_inicio_prevista TEXT,
+    data_fim_prevista TEXT,
+    data_inicio_real TEXT,
+    data_fim_real TEXT,
+    orcamento_alocado REAL DEFAULT 0,
+    custo_real REAL DEFAULT 0,
+    responsavel TEXT,
+    notas TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (negocio_id) REFERENCES negocios(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_projeto_fases_negocio ON projeto_fases(negocio_id);
+  CREATE INDEX IF NOT EXISTS idx_projeto_fases_estado ON projeto_fases(estado);
+
+  -- Tarefas por fase
+  CREATE TABLE IF NOT EXISTS projeto_tarefas (
+    id TEXT PRIMARY KEY,
+    fase_id TEXT NOT NULL,
+    descricao TEXT NOT NULL,
+    ordem INTEGER DEFAULT 0,
+    concluida INTEGER DEFAULT 0,
+    responsavel TEXT,
+    deadline TEXT,
+    notas TEXT,
+    concluida_em TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (fase_id) REFERENCES projeto_fases(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_projeto_tarefas_fase ON projeto_tarefas(fase_id);
+
+  -- Fotos por fase
+  CREATE TABLE IF NOT EXISTS projeto_fotos (
+    id TEXT PRIMARY KEY,
+    fase_id TEXT NOT NULL,
+    negocio_id TEXT NOT NULL,
+    url TEXT NOT NULL,
+    legenda TEXT,
+    tipo TEXT DEFAULT 'durante', -- antes | durante | depois
+    ordem INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (fase_id) REFERENCES projeto_fases(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_projeto_fotos_fase ON projeto_fotos(fase_id);
+  CREATE INDEX IF NOT EXISTS idx_projeto_fotos_negocio ON projeto_fotos(negocio_id);
+
   -- Audit log (para backup e recovery)
   CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

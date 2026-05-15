@@ -15,6 +15,8 @@ const CRM         = lazy(() => import('./pages/CRM.jsx').then(m => ({ default: m
 const Operacoes   = lazy(() => import('./pages/Operacoes.jsx').then(m => ({ default: m.Operacoes })))
 const Metricas    = lazy(() => import('./pages/Metricas.jsx').then(m => ({ default: m.Metricas })))
 const Projectos   = lazy(() => import('./pages/Projectos.jsx').then(m => ({ default: m.Projectos })))
+const ProjectoDetalhe = lazy(() => import('./pages/ProjectoDetalhe.jsx').then(m => ({ default: m.ProjectoDetalhe })))
+const InvestidorProjeto = lazy(() => import('./pages/InvestidorProjeto.jsx').then(m => ({ default: m.InvestidorProjeto })))
 const Utilizadores = lazy(() => import('./pages/Utilizadores.jsx').then(m => ({ default: m.Utilizadores })))
 const RelatoriosAdmin = lazy(() => import('./pages/RelatoriosAdmin.jsx').then(m => ({ default: m.RelatoriosAdmin })))
 
@@ -40,6 +42,19 @@ function AppRoutes() {
     )
   }
 
+  // Rota pública para investidores (sem login) — verificar antes do guard
+  if (window.location.pathname.startsWith('/investidor/')) {
+    return (
+      <ChunkErrorBoundary>
+        <Suspense fallback={<PageFallback />}>
+          <Routes>
+            <Route path="/investidor/projeto/:token" element={<InvestidorProjeto />} />
+          </Routes>
+        </Suspense>
+      </ChunkErrorBoundary>
+    )
+  }
+
   if (!isAuthenticated) return <Login />
 
   return (
@@ -50,6 +65,7 @@ function AppRoutes() {
             <Route index element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
             <Route path="/crm" element={<ErrorBoundary><CRM /></ErrorBoundary>} />
             <Route path="/projectos" element={<ErrorBoundary><Projectos /></ErrorBoundary>} />
+            <Route path="/projectos/:id" element={<ErrorBoundary><ProjectoDetalhe /></ErrorBoundary>} />
             <Route path="/financeiro" element={<ErrorBoundary><Financeiro /></ErrorBoundary>} />
             <Route path="/operacoes" element={<ErrorBoundary><Operacoes /></ErrorBoundary>} />
             <Route path="/metricas" element={<ErrorBoundary><Metricas /></ErrorBoundary>} />

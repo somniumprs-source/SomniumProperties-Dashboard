@@ -31,6 +31,13 @@ import { exportDepartment } from './excelExport.js'
 import { scrapePhotosFromLink } from './linkScraper.js'
 import { generateDocx, getAvailableTypes } from './docxGenerator.js'
 import { runEstudoLocalizacao } from '../lib/estudoLocalizacao.js'
+import { FASES_FIX_FLIP } from './fasesFixFlip.js'
+import {
+  generateFichaAcompanhamento,
+  generateRelatorioAcompanhamento,
+  generateMemoriaDescritiva,
+  generateRelatorioSaida,
+} from './pdfProjectoFixFlip.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.resolve(__dirname, '../../public/uploads/despesas')
@@ -530,7 +537,45 @@ router.get('/consultores/enriched', async (req, res) => {
 })
 
 crudRoutes('/consultores', Consultores)
-crudRoutes('/negocios', Negocios)
+
+// ── Negocios: auto-criar fases de obra quando categoria=Fix and Flip ──
+async function criarFasesFixFlip(negocioId) {
+  const { rows: existentes } = await pool.query(
+    'SELECT id FROM projeto_fases WHERE negocio_id = $1 LIMIT 1',
+    [negocioId]
+  )
+  if (existentes.length > 0) return  // idempotente
+
+  for (let i = 0; i < FASES_FIX_FLIP.length; i++) {
+    const fase = FASES_FIX_FLIP[i]
+    const faseId = randomUUID()
+    await pool.query(
+      `INSERT INTO projeto_fases (id, negocio_id, fase_key, nome, ordem, estado)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [faseId, negocioId, fase.key, fase.nome, i, i === 0 ? 'em_curso' : 'pendente']
+    )
+    for (let j = 0; j < fase.tarefas.length; j++) {
+      await pool.query(
+        `INSERT INTO projeto_tarefas (id, fase_id, descricao, ordem) VALUES ($1, $2, $3, $4)`,
+        [randomUUID(), faseId, fase.tarefas[j], j]
+      )
+    }
+  }
+}
+
+crudRoutes('/negocios', Negocios, {
+  onCreate: async (item) => {
+    if (item.categoria === 'Fix and Flip') {
+      await criarFasesFixFlip(item.id).catch(e => console.error('[fases] auto-criar:', e.message))
+    }
+  },
+  onUpdate: async (item, body) => {
+    // Se categoria mudou para Fix and Flip, criar fases (idempotente)
+    if (body.categoria === 'Fix and Flip') {
+      await criarFasesFixFlip(item.id).catch(e => console.error('[fases] auto-criar update:', e.message))
+    }
+  },
+})
 
 // ── Confirmar pagamento de tranche ──────────────────────────
 router.put('/negocios/:id/confirmar-pagamento', async (req, res) => {
@@ -2794,6 +2839,435 @@ router.put('/relatorios-semanais/:id', async (req, res) => {
     await pool.query(`UPDATE relatorios_semanais SET ${sets.join(', ')} WHERE id = $${params.length}`, params)
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ════════════════════════════════════════════════════════════════
+// PROJETOS FIX AND FLIP — Fases, Tarefas, Fotos
+// ════════════════════════════════════════════════════════════════
+
+// GET fases + tarefas + contagem de fotos de um negócio
+router.get('/projetos/:negocioId/fases', async (req, res) => {
+  try {
+    const { rows: fases } = await pool.query(
+      `SELECT * FROM projeto_fases WHERE negocio_id = $1 ORDER BY ordem`,
+      [req.params.negocioId]
+    )
+    const ids = fases.map(f => f.id)
+    let tarefas = []
+    let fotosCounts = {}
+    if (ids.length > 0) {
+      const { rows: tarefasRows } = await pool.query(
+        `SELECT * FROM projeto_tarefas WHERE fase_id = ANY($1) ORDER BY ordem`,
+        [ids]
+      )
+      tarefas = tarefasRows
+      const { rows: fotosRows } = await pool.query(
+        `SELECT fase_id, COUNT(*)::int AS c FROM projeto_fotos WHERE fase_id = ANY($1) GROUP BY fase_id`,
+        [ids]
+      )
+      fotosCounts = Object.fromEntries(fotosRows.map(r => [r.fase_id, r.c]))
+    }
+    const enriched = fases.map(f => {
+      const fts = tarefas.filter(t => t.fase_id === f.id)
+      const concluidas = fts.filter(t => t.concluida).length
+      const total = fts.length
+      const percTarefas = total > 0 ? Math.round((concluidas / total) * 100) : 0
+      return {
+        ...f,
+        tarefas: fts,
+        tarefas_total: total,
+        tarefas_concluidas: concluidas,
+        perc_tarefas: percTarefas,
+        fotos_count: fotosCounts[f.id] || 0,
+      }
+    })
+    res.json({ fases: enriched })
+  } catch (e) { console.error('[projetos/fases]', e.message); res.status(500).json({ error: e.message }) }
+})
+
+// POST: forçar criação de fases (caso negócio já exista sem elas)
+router.post('/projetos/:negocioId/fases/inicializar', async (req, res) => {
+  try {
+    await criarFasesFixFlip(req.params.negocioId)
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// PUT fase (estado, datas, %, orçamento, notas)
+router.put('/projetos/fases/:faseId', async (req, res) => {
+  try {
+    const allowed = ['estado', 'perc_execucao', 'data_inicio_prevista', 'data_fim_prevista', 'data_inicio_real', 'data_fim_real', 'orcamento_alocado', 'custo_real', 'responsavel', 'notas']
+    const sets = []
+    const params = []
+    for (const k of allowed) {
+      if (req.body[k] !== undefined) {
+        params.push(req.body[k])
+        sets.push(`${k} = $${params.length}`)
+      }
+    }
+    if (sets.length === 0) return res.status(400).json({ error: 'Sem campos para atualizar' })
+    sets.push(`updated_at = NOW()`)
+    params.push(req.params.faseId)
+    const { rows } = await pool.query(
+      `UPDATE projeto_fases SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`,
+      params
+    )
+    if (!rows.length) return res.status(404).json({ error: 'Fase não encontrada' })
+    res.json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// POST nova tarefa numa fase
+router.post('/projetos/fases/:faseId/tarefas', async (req, res) => {
+  try {
+    const { descricao, responsavel, deadline, notas } = req.body || {}
+    if (!descricao?.trim()) return res.status(400).json({ error: 'descricao obrigatória' })
+    const { rows: maxOrdem } = await pool.query('SELECT COALESCE(MAX(ordem), -1) AS m FROM projeto_tarefas WHERE fase_id = $1', [req.params.faseId])
+    const id = randomUUID()
+    const { rows } = await pool.query(
+      `INSERT INTO projeto_tarefas (id, fase_id, descricao, ordem, responsavel, deadline, notas)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [id, req.params.faseId, descricao.trim(), maxOrdem[0].m + 1, responsavel || null, deadline || null, notas || null]
+    )
+    res.status(201).json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// PUT tarefa (toggle concluída, editar campos)
+router.put('/projetos/tarefas/:tarefaId', async (req, res) => {
+  try {
+    const allowed = ['descricao', 'concluida', 'responsavel', 'deadline', 'notas']
+    const sets = []
+    const params = []
+    for (const k of allowed) {
+      if (req.body[k] !== undefined) {
+        params.push(req.body[k])
+        sets.push(`${k} = $${params.length}`)
+      }
+    }
+    if (req.body.concluida !== undefined) {
+      params.push(req.body.concluida ? new Date().toISOString() : null)
+      sets.push(`concluida_em = $${params.length}`)
+    }
+    if (sets.length === 0) return res.status(400).json({ error: 'Sem campos' })
+    params.push(req.params.tarefaId)
+    const { rows } = await pool.query(
+      `UPDATE projeto_tarefas SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`,
+      params
+    )
+    if (!rows.length) return res.status(404).json({ error: 'Tarefa não encontrada' })
+    res.json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/projetos/tarefas/:tarefaId', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM projeto_tarefas WHERE id = $1', [req.params.tarefaId])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Fotos: upload e listagem ────────────────────────────────
+const projetoFotosDir = path.resolve(__dirname, '../../public/uploads/projetos')
+try { mkdirSync(projetoFotosDir, { recursive: true }) } catch {}
+const projetoFotosStorage = multer.diskStorage({
+  destination: projetoFotosDir,
+  filename: (req, file, cb) => cb(null, `${randomUUID()}${path.extname(file.originalname)}`),
+})
+const uploadFoto = multer({
+  storage: projetoFotosStorage,
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => cb(null, /\.(jpg|jpeg|png|webp|heic)$/i.test(path.extname(file.originalname))),
+})
+
+router.get('/projetos/:negocioId/fotos', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT pf.*, f.fase_key, f.nome AS fase_nome, f.ordem AS fase_ordem
+       FROM projeto_fotos pf
+       JOIN projeto_fases f ON pf.fase_id = f.id
+       WHERE pf.negocio_id = $1
+       ORDER BY f.ordem, pf.created_at`,
+      [req.params.negocioId]
+    )
+    res.json({ fotos: rows })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/projetos/fases/:faseId/fotos', uploadFoto.array('fotos', 20), async (req, res) => {
+  try {
+    const { rows: faseRows } = await pool.query('SELECT negocio_id FROM projeto_fases WHERE id = $1', [req.params.faseId])
+    if (!faseRows.length) return res.status(404).json({ error: 'Fase não encontrada' })
+    const negocioId = faseRows[0].negocio_id
+    const tipo = req.body?.tipo || 'durante'
+    const legenda = req.body?.legenda || ''
+    const inserted = []
+    for (const file of (req.files || [])) {
+      const id = randomUUID()
+      const url = `/uploads/projetos/${file.filename}`
+      const { rows } = await pool.query(
+        `INSERT INTO projeto_fotos (id, fase_id, negocio_id, url, legenda, tipo)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+        [id, req.params.faseId, negocioId, url, legenda, tipo]
+      )
+      inserted.push(rows[0])
+    }
+    res.status(201).json({ fotos: inserted })
+  } catch (e) { console.error('[projetos/fotos] upload', e.message); res.status(500).json({ error: e.message }) }
+})
+
+router.put('/projetos/fotos/:fotoId', async (req, res) => {
+  try {
+    const allowed = ['legenda', 'tipo', 'ordem']
+    const sets = []
+    const params = []
+    for (const k of allowed) {
+      if (req.body[k] !== undefined) {
+        params.push(req.body[k])
+        sets.push(`${k} = $${params.length}`)
+      }
+    }
+    if (sets.length === 0) return res.status(400).json({ error: 'Sem campos' })
+    params.push(req.params.fotoId)
+    const { rows } = await pool.query(
+      `UPDATE projeto_fotos SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`,
+      params
+    )
+    if (!rows.length) return res.status(404).json({ error: 'Foto não encontrada' })
+    res.json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/projetos/fotos/:fotoId', async (req, res) => {
+  try {
+    const { rows } = await pool.query('DELETE FROM projeto_fotos WHERE id = $1 RETURNING url', [req.params.fotoId])
+    if (rows[0]?.url) {
+      const filePath = path.resolve(__dirname, '../..', rows[0].url.replace(/^\//, ''))
+      unlink(filePath).catch(() => {})
+    }
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Helper: carregar dados completos do projeto ───────────────
+async function loadProjetoCompleto(negocioId) {
+  const { rows: negRows } = await pool.query('SELECT * FROM negocios WHERE id = $1', [negocioId])
+  if (!negRows.length) return null
+  const negocio = negRows[0]
+
+  let imovel = null
+  if (negocio.imovel_id) {
+    const { rows } = await pool.query('SELECT * FROM imoveis WHERE id = $1', [negocio.imovel_id])
+    imovel = rows[0] || null
+  }
+
+  const { rows: fases } = await pool.query(
+    'SELECT * FROM projeto_fases WHERE negocio_id = $1 ORDER BY ordem', [negocioId]
+  )
+  const faseIds = fases.map(f => f.id)
+  const tarefas = faseIds.length > 0
+    ? (await pool.query('SELECT * FROM projeto_tarefas WHERE fase_id = ANY($1) ORDER BY ordem', [faseIds])).rows
+    : []
+  const fotos = faseIds.length > 0
+    ? (await pool.query(
+        `SELECT pf.*, f.fase_key, f.nome AS fase_nome FROM projeto_fotos pf
+         JOIN projeto_fases f ON pf.fase_id = f.id
+         WHERE pf.negocio_id = $1 ORDER BY f.ordem, pf.created_at`,
+        [negocioId]
+      )).rows
+    : []
+
+  let orcamento = null
+  if (negocio.imovel_id) {
+    const { rows } = await pool.query('SELECT * FROM orcamentos_obra WHERE imovel_id = $1 LIMIT 1', [negocio.imovel_id]).catch(() => ({ rows: [] }))
+    orcamento = rows?.[0] || null
+    if (orcamento?.seccoes && typeof orcamento.seccoes === 'string') {
+      try { orcamento.seccoes = JSON.parse(orcamento.seccoes) } catch {}
+    }
+  }
+
+  const orcAlocado = fases.reduce((s, f) => s + (Number(f.orcamento_alocado) || 0), 0)
+  const custoReal = fases.reduce((s, f) => s + (Number(f.custo_real) || 0), 0)
+  const percGlobal = fases.length > 0
+    ? Math.round(fases.reduce((s, f) => s + (Number(f.perc_execucao) || 0), 0) / fases.length)
+    : 0
+
+  return { negocio, imovel, fases, tarefas, fotos, orcamento, orcAlocado, custoReal, percGlobal }
+}
+
+// ── PDFs: Ficha de Acompanhamento (por fase) ────────────────
+router.get('/projetos/:negocioId/pdf/ficha/:faseId', async (req, res) => {
+  try {
+    const data = await loadProjetoCompleto(req.params.negocioId)
+    if (!data) return res.status(404).json({ error: 'Projecto não encontrado' })
+    const fase = data.fases.find(f => f.id === req.params.faseId)
+    if (!fase) return res.status(404).json({ error: 'Fase não encontrada' })
+    const tarefas = data.tarefas.filter(t => t.fase_id === fase.id)
+    const fotos = data.fotos.filter(f => f.fase_id === fase.id)
+
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `inline; filename="ficha-${fase.fase_key}-${data.negocio.movimento.replace(/[^\w]/g, '_')}.pdf"`)
+    const doc = generateFichaAcompanhamento({ negocio: data.negocio, imovel: data.imovel, fase, tarefas, fotos })
+    doc.pipe(res)
+  } catch (e) { console.error('[pdf/ficha]', e.message); res.status(500).json({ error: e.message }) }
+})
+
+// ── PDF: Relatório de Acompanhamento (executivo) ────────────
+router.get('/projetos/:negocioId/pdf/relatorio', async (req, res) => {
+  try {
+    const data = await loadProjetoCompleto(req.params.negocioId)
+    if (!data) return res.status(404).json({ error: 'Projecto não encontrado' })
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `inline; filename="relatorio-obra-${data.negocio.movimento.replace(/[^\w]/g, '_')}.pdf"`)
+    const doc = generateRelatorioAcompanhamento(data)
+    doc.pipe(res)
+  } catch (e) { console.error('[pdf/relatorio]', e.message); res.status(500).json({ error: e.message }) }
+})
+
+// ── PDF: Memória Descritiva de Acabamentos ──────────────────
+router.get('/projetos/:negocioId/pdf/memoria', async (req, res) => {
+  try {
+    const data = await loadProjetoCompleto(req.params.negocioId)
+    if (!data) return res.status(404).json({ error: 'Projecto não encontrado' })
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `inline; filename="memoria-acabamentos-${data.negocio.movimento.replace(/[^\w]/g, '_')}.pdf"`)
+    const doc = generateMemoriaDescritiva(data)
+    doc.pipe(res)
+  } catch (e) { console.error('[pdf/memoria]', e.message); res.status(500).json({ error: e.message }) }
+})
+
+// ── PDF: Relatório de Saída CAEP ────────────────────────────
+router.get('/projetos/:negocioId/pdf/saida', async (req, res) => {
+  try {
+    const data = await loadProjetoCompleto(req.params.negocioId)
+    if (!data) return res.status(404).json({ error: 'Projecto não encontrado' })
+    // Carregar investidores associados (se houver)
+    let investidores = []
+    let invIds = []
+    try { invIds = typeof data.negocio.investidor_ids === 'string' ? JSON.parse(data.negocio.investidor_ids || '[]') : (data.negocio.investidor_ids || []) } catch {}
+    if (invIds.length > 0) {
+      const { rows } = await pool.query('SELECT id, nome FROM investidores WHERE id = ANY($1)', [invIds])
+      const capitalPorInv = (Number(data.negocio.capital_total) || 0) / invIds.length
+      investidores = rows.map(r => ({ id: r.id, nome: r.nome, capital: capitalPorInv }))
+    }
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `inline; filename="saida-caep-${data.negocio.movimento.replace(/[^\w]/g, '_')}.pdf"`)
+    const doc = generateRelatorioSaida({ ...data, investidores })
+    doc.pipe(res)
+  } catch (e) { console.error('[pdf/saida]', e.message); res.status(500).json({ error: e.message }) }
+})
+
+// ── Mover negócio entre fases do Kanban (drag&drop) ─────────
+router.put('/projetos/:negocioId/mover-fase', async (req, res) => {
+  try {
+    const { faseKey } = req.body
+    if (!faseKey) return res.status(400).json({ error: 'faseKey obrigatório' })
+    // Garantir que as fases existem
+    const { rows: fases } = await pool.query(
+      'SELECT id, fase_key, ordem FROM projeto_fases WHERE negocio_id = $1 ORDER BY ordem',
+      [req.params.negocioId]
+    )
+    if (fases.length === 0) return res.status(400).json({ error: 'Negócio sem fases. Inicializa primeiro.' })
+
+    const novaFase = fases.find(f => f.fase_key === faseKey)
+    if (!novaFase) return res.status(400).json({ error: 'Fase inválida' })
+
+    // Marcar todas as fases anteriores como concluídas (100%), a nova como em_curso, e as seguintes como pendentes
+    for (const f of fases) {
+      let estado, perc
+      if (f.ordem < novaFase.ordem) { estado = 'concluida'; perc = 100 }
+      else if (f.ordem === novaFase.ordem) { estado = 'em_curso'; perc = Math.max(1, Math.min(99, 50)) }
+      else { estado = 'pendente'; perc = 0 }
+      await pool.query(
+        `UPDATE projeto_fases SET estado = $1,
+           perc_execucao = CASE WHEN $2 = 100 THEN 100 WHEN $2 = 0 THEN 0 ELSE perc_execucao END,
+           ${f.ordem === novaFase.ordem ? 'data_inicio_real = COALESCE(data_inicio_real, $4),' : ''}
+           updated_at = NOW()
+         WHERE id = $3`,
+        f.ordem === novaFase.ordem
+          ? [estado, perc, f.id, new Date().toISOString().slice(0, 10)]
+          : [estado, perc, f.id]
+      )
+    }
+    res.json({ ok: true, faseKey })
+  } catch (e) { console.error('[mover-fase]', e.message); res.status(500).json({ error: e.message }) }
+})
+
+// ════════════════════════════════════════════════════════════════
+// MODO INVESTIDOR — link público partilhável (sem login)
+// ════════════════════════════════════════════════════════════════
+// Schema lazy (inline para evitar mais migrations)
+;(async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS projeto_share_tokens (
+        token TEXT PRIMARY KEY,
+        negocio_id TEXT NOT NULL,
+        modo TEXT DEFAULT 'investidor',
+        ativo BOOLEAN DEFAULT true,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        expira_em TIMESTAMPTZ,
+        ultima_visita TIMESTAMPTZ,
+        visitas INTEGER DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS idx_share_negocio ON projeto_share_tokens(negocio_id);
+    `)
+  } catch (e) { console.error('[schema share_tokens]', e.message) }
+})()
+
+// Gerar / obter token de partilha
+router.post('/projetos/:negocioId/share', async (req, res) => {
+  try {
+    const { rows: existing } = await pool.query(
+      'SELECT token FROM projeto_share_tokens WHERE negocio_id = $1 AND ativo = true LIMIT 1',
+      [req.params.negocioId]
+    )
+    if (existing.length > 0) return res.json({ token: existing[0].token })
+    const token = randomUUID().replace(/-/g, '')
+    await pool.query(
+      `INSERT INTO projeto_share_tokens (token, negocio_id) VALUES ($1, $2)`,
+      [token, req.params.negocioId]
+    )
+    res.status(201).json({ token })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/projetos/:negocioId/share', async (req, res) => {
+  try {
+    await pool.query('UPDATE projeto_share_tokens SET ativo = false WHERE negocio_id = $1', [req.params.negocioId])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Vista agregada por negócio (para o detalhe da página)
+router.get('/projetos/:negocioId/resumo', async (req, res) => {
+  try {
+    const { rows: negRows } = await pool.query('SELECT * FROM negocios WHERE id = $1', [req.params.negocioId])
+    if (!negRows.length) return res.status(404).json({ error: 'Negócio não encontrado' })
+    const negocio = negRows[0]
+
+    const { rows: fases } = await pool.query(
+      `SELECT id, fase_key, nome, ordem, estado, perc_execucao, data_inicio_prevista, data_fim_prevista,
+              data_inicio_real, data_fim_real, orcamento_alocado, custo_real
+       FROM projeto_fases WHERE negocio_id = $1 ORDER BY ordem`,
+      [req.params.negocioId]
+    )
+
+    let imovel = null
+    if (negocio.imovel_id) {
+      const { rows: imRows } = await pool.query('SELECT id, nome, zona, tipologia, fotos FROM imoveis WHERE id = $1', [negocio.imovel_id])
+      imovel = imRows[0] || null
+    }
+
+    const orcAlocado = fases.reduce((s, f) => s + (Number(f.orcamento_alocado) || 0), 0)
+    const custoReal = fases.reduce((s, f) => s + (Number(f.custo_real) || 0), 0)
+    const percGlobal = fases.length > 0
+      ? Math.round(fases.reduce((s, f) => s + (Number(f.perc_execucao) || 0), 0) / fases.length)
+      : 0
+    const faseAtual = fases.find(f => f.estado === 'em_curso') || fases.find(f => f.estado === 'pendente') || fases[fases.length - 1]
+
+    res.json({ negocio, imovel, fases, orcAlocado, custoReal, percGlobal, faseAtual })
+  } catch (e) { console.error('[projetos/resumo]', e.message); res.status(500).json({ error: e.message }) }
 })
 
 export default router

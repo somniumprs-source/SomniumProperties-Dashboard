@@ -772,6 +772,58 @@ export async function initSchema() {
       EXCEPTION WHEN OTHERS THEN
         RAISE NOTICE 'Backfill visitas falhou: %', SQLERRM;
       END $$;
+      -- ════════════════════════════════════════════════════════════════
+      -- PROJETO FIX AND FLIP: fases de obra, tarefas, fotos
+      -- ════════════════════════════════════════════════════════════════
+      CREATE TABLE IF NOT EXISTS projeto_fases (
+        id TEXT PRIMARY KEY,
+        negocio_id TEXT NOT NULL REFERENCES negocios(id) ON DELETE CASCADE,
+        fase_key TEXT NOT NULL,
+        nome TEXT NOT NULL,
+        ordem INTEGER NOT NULL,
+        estado TEXT DEFAULT 'pendente',
+        perc_execucao INTEGER DEFAULT 0,
+        data_inicio_prevista TEXT,
+        data_fim_prevista TEXT,
+        data_inicio_real TEXT,
+        data_fim_real TEXT,
+        orcamento_alocado REAL DEFAULT 0,
+        custo_real REAL DEFAULT 0,
+        responsavel TEXT,
+        notas TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_projeto_fases_negocio ON projeto_fases(negocio_id);
+      CREATE INDEX IF NOT EXISTS idx_projeto_fases_estado ON projeto_fases(estado);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_projeto_fases_unique ON projeto_fases(negocio_id, fase_key);
+
+      CREATE TABLE IF NOT EXISTS projeto_tarefas (
+        id TEXT PRIMARY KEY,
+        fase_id TEXT NOT NULL REFERENCES projeto_fases(id) ON DELETE CASCADE,
+        descricao TEXT NOT NULL,
+        ordem INTEGER DEFAULT 0,
+        concluida INTEGER DEFAULT 0,
+        responsavel TEXT,
+        deadline TEXT,
+        notas TEXT,
+        concluida_em TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_projeto_tarefas_fase ON projeto_tarefas(fase_id);
+
+      CREATE TABLE IF NOT EXISTS projeto_fotos (
+        id TEXT PRIMARY KEY,
+        fase_id TEXT NOT NULL REFERENCES projeto_fases(id) ON DELETE CASCADE,
+        negocio_id TEXT NOT NULL,
+        url TEXT NOT NULL,
+        legenda TEXT,
+        tipo TEXT DEFAULT 'durante',
+        ordem INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_projeto_fotos_fase ON projeto_fotos(fase_id);
+      CREATE INDEX IF NOT EXISTS idx_projeto_fotos_negocio ON projeto_fotos(negocio_id);
     `)
 
     // Bootstrap: garantir que somniumprs@gmail.com (owner) existe como admin

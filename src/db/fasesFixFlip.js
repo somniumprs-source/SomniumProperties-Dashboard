@@ -1,0 +1,157 @@
+/**
+ * Templates profissionais de fases e tarefas para projetos Fix and Flip.
+ * Usados na auto-criação quando um negócio é criado com categoria = "Fix and Flip".
+ * Ordem reflete sequência real de obra de reabilitação em Portugal (ARU/IVA 6%).
+ */
+
+export const FASES_FIX_FLIP = [
+  {
+    key: 'aquisicao',
+    nome: 'Aquisição',
+    icon: '🔑',
+    cor: '#6366f1',
+    descricao: 'Escritura, registos, levantamento, fotos do estado inicial',
+    tarefas: [
+      'Escritura de compra e venda',
+      'Registo predial e fiscal',
+      'Pagamento IMT/IS e taxas',
+      'Levantamento dimensional do imóvel',
+      'Fotografias do estado zero (todas as divisões)',
+      'Pedido de plantas ao arquivo municipal',
+      'Verificação de certificado energético existente',
+    ],
+  },
+  {
+    key: 'projeto_licenca',
+    nome: 'Projeto & Licença',
+    icon: '📐',
+    cor: '#0ea5e9',
+    descricao: 'Arquitetura, especialidades, comunicação prévia/licença',
+    tarefas: [
+      'Contratar arquitetura (proposta + ARU se aplicável)',
+      'Projeto de arquitetura aprovado pelo cliente',
+      'Projetos de especialidades (térmico, acústico, eléctrico, ITED, gás, AQS)',
+      'Submeter pedido na câmara (comunicação prévia ou licença)',
+      'Pagamento de taxas municipais',
+      'Designação do TRO (Técnico Responsável de Obra)',
+      'Alvará/aceitação emitido',
+      'Apresentar livro de obra',
+    ],
+  },
+  {
+    key: 'demolicoes',
+    nome: 'Demolições',
+    icon: '🔨',
+    cor: '#ef4444',
+    descricao: 'Estaleiro, picagens, RCD, limpezas',
+    tarefas: [
+      'Montagem de estaleiro (vedação, contentor WC, sinalização, placa)',
+      'Ligações provisórias (água + luz)',
+      'Plano de gestão de RCD (DL 102-D/2020)',
+      'Picagem de paredes e tetos',
+      'Demolição de divisórias',
+      'Remoção de pavimentos antigos',
+      'Remoção de canalizações e cablagens obsoletas',
+      'Transporte de entulho por operador licenciado (guias)',
+      'Limpeza geral pós-demolição',
+    ],
+  },
+  {
+    key: 'estrutura_especialidades',
+    nome: 'Estrutura & Especialidades',
+    icon: '⚡',
+    cor: '#f59e0b',
+    descricao: 'Tosco, alvenarias, eléctrica, canalização, AVAC, gás, ITED',
+    tarefas: [
+      'Reforço/alterações estruturais (lajes, vigas, pilares)',
+      'Alvenarias novas e remates',
+      'Rede eléctrica completa + quadro',
+      'Rede de águas (fria, AQS, esgotos)',
+      'Pré-instalação AVAC (splits) e VMC',
+      'Rede de gás (se aplicável)',
+      'Pré-instalação ITED (rede dados)',
+      'Isolamentos térmicos e acústicos (REH)',
+      'Impermeabilizações (terraços, WC, muros)',
+      'Ensaio de pressão de águas',
+    ],
+  },
+  {
+    key: 'acabamentos',
+    nome: 'Acabamentos',
+    icon: '🎨',
+    cor: '#10b981',
+    descricao: 'Rebocos, betonilhas, pladur, pavimentos, WC, cozinhas, pinturas',
+    tarefas: [
+      'Rebocos e estuques',
+      'Betonilhas de regularização',
+      'Pladur de tetos',
+      'Aplicação de pavimentos',
+      'Cerâmicos e louças em casas de banho',
+      'Móveis e bancada de cozinha + electrodomésticos',
+      'Carpintarias (rodapés, aros, roupeiros)',
+      'Portas interiores',
+      'Serralharias interiores',
+      'Pintura interior (preparação + acabamento)',
+    ],
+  },
+  {
+    key: 'exterior_fecho',
+    nome: 'Exterior & Fecho',
+    icon: '🏠',
+    cor: '#8b5cf6',
+    descricao: 'Capoto, cobertura, caixilharias, ensaios, licença utilização',
+    tarefas: [
+      'Capoto / ETICS exterior',
+      'Cobertura (estrutura + telha + remates)',
+      'Caixilharias exteriores',
+      'Pintura exterior',
+      'Serralharias exteriores (gradeamentos, guardas, portões)',
+      'Ensaios finais (gás, água, eléctrica, infiltrometria)',
+      'Certificação energética final (SCE)',
+      'Ficha Técnica da Habitação (FTH)',
+      'Telas finais (as-built)',
+      'Vistoria final da câmara',
+      'Licença de utilização emitida',
+      'Limpeza pós-obra',
+    ],
+  },
+  {
+    key: 'comercializacao',
+    nome: 'Comercialização',
+    icon: '📣',
+    cor: '#ec4899',
+    descricao: 'Staging, fotos profissionais, marketing, mediação',
+    tarefas: [
+      'Home staging (mobiliário/decoração)',
+      'Sessão fotográfica profissional',
+      'Tour virtual / vídeo',
+      'Memória descritiva de acabamentos',
+      'Listing em portais (Idealista, Imovirtual, Casa Sapo)',
+      'Plano de marketing digital',
+      'Visitas e qualificação de propostas',
+      'Negociação e CPCV',
+    ],
+  },
+  {
+    key: 'vendido',
+    nome: 'Vendido',
+    icon: '✅',
+    cor: '#22c55e',
+    descricao: 'Escritura, distribuição CAEP, relatório final',
+    tarefas: [
+      'Escritura de venda',
+      'Liquidação de despesas pendentes (empreiteiros, fornecedores)',
+      'Reconciliação financeira final',
+      'Cálculo de TIR realizada',
+      'Distribuição de capital + lucro a investidores CAEP',
+      'Relatório de saída para investidores',
+      'Arquivo do dossier completo',
+    ],
+  },
+]
+
+export const FASE_KEYS = FASES_FIX_FLIP.map(f => f.key)
+
+export function getFaseConfig(key) {
+  return FASES_FIX_FLIP.find(f => f.key === key)
+}
