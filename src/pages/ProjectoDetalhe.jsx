@@ -126,8 +126,13 @@ export function ProjectoDetalhe() {
     : fotos.filter(f => f.fracao_id === fracaoSel || (fracaoSel === '__comum__' && !f.fracao_id))
 
   async function inicializarFases() {
-    if (!confirm('Criar as 8 fases de obra Fix and Flip para este projecto?')) return
-    await apiFetch(`/api/crm/projetos/${id}/fases/inicializar`, { method: 'POST' })
+    if (!confirm('Criar as 8 fases de obra para este projecto?')) return
+    const r = await apiFetch(`/api/crm/projetos/${id}/fases/inicializar`, { method: 'POST' })
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}))
+      alert('Erro ao inicializar fases: ' + (e.error || `HTTP ${r.status}`))
+      return
+    }
     load()
   }
 
@@ -178,7 +183,7 @@ export function ProjectoDetalhe() {
             <ArrowLeft className="w-3.5 h-3.5" /> Voltar a Projectos
           </Link>
           <div className="flex items-center gap-2">
-            {!isReadOnly && semFases && negocio.categoria === 'Fix and Flip' && (
+            {!isReadOnly && semFases && (
               <Button size="sm" icon={Plus} onClick={inicializarFases}>Inicializar fases de obra</Button>
             )}
             {!isReadOnly && !semFases && (
@@ -440,7 +445,7 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
   async function adicionarDespesa(e) {
     e?.preventDefault()
     if (!novaDespesa.movimento.trim() || !novaDespesa.valor) return
-    await apiFetch(`/api/crm/projetos/${negocioId}/despesas`, {
+    const r = await apiFetch(`/api/crm/projetos/${negocioId}/despesas`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         fase_id: fase.id,
@@ -450,6 +455,11 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
         categoria: novaDespesa.categoria,
       }),
     })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao adicionar despesa: ${err.error || r.status}`, 'error', 3500)
+      return
+    }
     setNovaDespesa({ movimento: '', valor: '', data: '', categoria: 'Material' })
     loadDespesas()
     onChange() // refresh fases (custo_real atualizado no backend)
@@ -457,7 +467,12 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
 
   async function apagarDespesa(id) {
     if (!confirm('Apagar esta despesa?')) return
-    await apiFetch(`/api/crm/projetos/despesas/${id}`, { method: 'DELETE' })
+    const r = await apiFetch(`/api/crm/projetos/despesas/${id}`, { method: 'DELETE' })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao apagar despesa: ${err.error || r.status}`, 'error', 3500)
+      return
+    }
     loadDespesas()
     onChange()
   }
@@ -465,10 +480,15 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
   const custoTotalDespesas = despesas.reduce((s, d) => s + (Number(d.custo_mensal) || 0), 0)
 
   async function setEstado(estado) {
-    await apiFetch(`/api/crm/projetos/fases/${fase.id}`, {
+    const r = await apiFetch(`/api/crm/projetos/fases/${fase.id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ estado, ...(estado === 'em_curso' && !fase.data_inicio_real ? { data_inicio_real: new Date().toISOString().slice(0, 10) } : {}), ...(estado === 'concluida' ? { data_fim_real: new Date().toISOString().slice(0, 10), perc_execucao: 100 } : {}) }),
     })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao mudar estado: ${err.error || r.status}`, 'error', 3500)
+      return
+    }
     onChange()
   }
   async function setCampo(campo, valor) {
@@ -481,24 +501,39 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
     onChange()
   }
   async function toggleTarefa(t) {
-    await apiFetch(`/api/crm/projetos/tarefas/${t.id}`, {
+    const r = await apiFetch(`/api/crm/projetos/tarefas/${t.id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ concluida: t.concluida ? 0 : 1 }),
     })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao actualizar tarefa: ${err.error || r.status}`, 'error', 3500)
+      return
+    }
     onChange()
   }
   async function adicionarTarefa() {
     if (!novaTarefa.trim()) return
-    await apiFetch(`/api/crm/projetos/fases/${fase.id}/tarefas`, {
+    const r = await apiFetch(`/api/crm/projetos/fases/${fase.id}/tarefas`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ descricao: novaTarefa.trim() }),
     })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao adicionar tarefa: ${err.error || r.status}`, 'error', 3500)
+      return
+    }
     setNovaTarefa('')
     onChange()
   }
   async function apagarTarefa(t) {
     if (!confirm(`Apagar tarefa "${t.descricao}"?`)) return
-    await apiFetch(`/api/crm/projetos/tarefas/${t.id}`, { method: 'DELETE' })
+    const r = await apiFetch(`/api/crm/projetos/tarefas/${t.id}`, { method: 'DELETE' })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao apagar tarefa: ${err.error || r.status}`, 'error', 3500)
+      return
+    }
     onChange()
   }
 
@@ -574,9 +609,13 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
             </div>
             <div>
               <label className="text-[10px] text-gray-500 uppercase tracking-wide block mb-1">% Execução</label>
-              <input type="number" min={0} max={100} value={fase.perc_execucao || 0}
-                onBlur={e => setCampo('perc_execucao', parseInt(e.target.value) || 0)}
-                onChange={e => setCampo('perc_execucao', parseInt(e.target.value) || 0)}
+              <input type="number" min={0} max={100}
+                key={`perc-${fase.id}-${fase.perc_execucao ?? 0}`}
+                defaultValue={fase.perc_execucao || 0}
+                onBlur={e => {
+                  const v = Math.max(0, Math.min(100, parseInt(e.target.value) || 0))
+                  if (v !== (fase.perc_execucao || 0)) setCampo('perc_execucao', v)
+                }}
                 className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white" />
             </div>
             <div>
@@ -703,6 +742,7 @@ function TabOrcamento({ imovel }) {
 // TAB: FATURAÇÃO (tranches do negócio)
 // ════════════════════════════════════════════════════════════════
 function TabFaturacao({ negocio, onChange, readOnly }) {
+  const toast = useToast()
   let pags = []
   try { pags = typeof negocio.pagamentos_faseados === 'string' ? JSON.parse(negocio.pagamentos_faseados || '[]') : (negocio.pagamentos_faseados || []) } catch {}
   const total = pags.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
@@ -714,10 +754,15 @@ function TabFaturacao({ negocio, onChange, readOnly }) {
 
   async function confirmar(idx) {
     if (!confirm(`Confirmar recebimento desta tranche?`)) return
-    await apiFetch(`/api/crm/negocios/${negocio.id}/confirmar-pagamento`, {
+    const r = await apiFetch(`/api/crm/negocios/${negocio.id}/confirmar-pagamento`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ trancheIndex: idx }),
     })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao confirmar pagamento: ${err.error || r.status}`, 'error', 3500)
+      return
+    }
     onChange()
   }
 
@@ -731,21 +776,25 @@ function TabFaturacao({ negocio, onChange, readOnly }) {
       data: novaT.data || '',
       recebido: false,
     }]
-    await apiFetch(`/api/crm/negocios/${negocio.id}`, {
+    const r = await apiFetch(`/api/crm/negocios/${negocio.id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pagamentos_faseados: JSON.stringify(novasPags), pagamento_em_falta: 1 }),
     })
-    setNovaT({ descricao: '', valor: '', data: '' })
     setSaving(false)
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao adicionar tranche: ${err.error || r.status}`, 'error', 3500)
+      return
+    }
+    setNovaT({ descricao: '', valor: '', data: '' })
     onChange()
   }
 
   async function apagarTranche(idx) {
     if (!confirm(`Apagar a tranche "${pags[idx].descricao || `Tranche ${idx + 1}`}"?`)) return
     const novasPags = pags.filter((_, i) => i !== idx)
-    const novoTotal = novasPags.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
     const novoRecebido = novasPags.filter(p => p.recebido).reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
-    await apiFetch(`/api/crm/negocios/${negocio.id}`, {
+    const r = await apiFetch(`/api/crm/negocios/${negocio.id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         pagamentos_faseados: JSON.stringify(novasPags),
@@ -753,6 +802,11 @@ function TabFaturacao({ negocio, onChange, readOnly }) {
         pagamento_em_falta: novasPags.some(p => !p.recebido) ? 1 : 0,
       }),
     })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao apagar tranche: ${err.error || r.status}`, 'error', 3500)
+      return
+    }
     onChange()
   }
 
@@ -841,7 +895,12 @@ function TabFotos({ negocioId, fases, fotos, onChange, readOnly }) {
   }
   async function apagarFoto(fotoId) {
     if (!confirm('Apagar esta foto?')) return
-    await apiFetch(`/api/crm/projetos/fotos/${fotoId}`, { method: 'DELETE' })
+    const r = await apiFetch(`/api/crm/projetos/fotos/${fotoId}`, { method: 'DELETE' })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      alert('Erro ao apagar foto: ' + (err.error || `HTTP ${r.status}`))
+      return
+    }
     onChange()
   }
 
@@ -982,7 +1041,12 @@ function TabDocumentos({ negocio, fases, readOnly }) {
   }
   async function apagarDoc(id) {
     if (!confirm('Apagar este documento?')) return
-    await apiFetch(`/api/crm/projetos/documentos/${id}`, { method: 'DELETE' })
+    const r = await apiFetch(`/api/crm/projetos/documentos/${id}`, { method: 'DELETE' })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      alert('Erro ao apagar documento: ' + (err.error || `HTTP ${r.status}`))
+      return
+    }
     load()
   }
 
@@ -1099,6 +1163,7 @@ function TabDocumentos({ negocio, fases, readOnly }) {
 // TAB: INVESTIDORES
 // ════════════════════════════════════════════════════════════════
 function TabInvestidores({ negocio, readOnly }) {
+  const toast = useToast()
   const [lista, setLista] = useState([])
   const [todosInvestidores, setTodosInvestidores] = useState([])
   const [investidorSel, setInvestidorSel] = useState('')
@@ -1127,7 +1192,7 @@ function TabInvestidores({ negocio, readOnly }) {
   async function adicionar(e) {
     e?.preventDefault()
     if (!investidorSel || !novoCapital) return
-    await apiFetch(`/api/crm/projetos/${negocio.id}/investidores`, {
+    const r = await apiFetch(`/api/crm/projetos/${negocio.id}/investidores`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         investidor_id: investidorSel,
@@ -1135,19 +1200,34 @@ function TabInvestidores({ negocio, readOnly }) {
         percentagem: parseFloat(novaPerc) || 0,
       }),
     })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao adicionar investidor: ${err.error || r.status}`, 'error', 3500)
+      return
+    }
     setInvestidorSel(''); setNovoCapital(''); setNovaPerc('')
     load()
   }
   async function apagar(linkId) {
     if (!confirm('Remover este investidor do projeto?')) return
-    await apiFetch(`/api/crm/projetos/investidores/${linkId}`, { method: 'DELETE' })
+    const r = await apiFetch(`/api/crm/projetos/investidores/${linkId}`, { method: 'DELETE' })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao remover investidor: ${err.error || r.status}`, 'error', 3500)
+      return
+    }
     load()
   }
   async function editar(linkId, campo, valor) {
-    await apiFetch(`/api/crm/projetos/investidores/${linkId}`, {
+    const r = await apiFetch(`/api/crm/projetos/investidores/${linkId}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ [campo]: valor }),
     })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao actualizar investidor: ${err.error || r.status}`, 'error', 3500)
+      return
+    }
     load()
   }
 
@@ -1288,6 +1368,7 @@ function FracaoChips({ fracoes, fracaoSel, setFracaoSel }) {
 }
 
 function TabFracoes({ negocioId, fracoes, onChange, readOnly, fasesComuns }) {
+  const toast = useToast()
   const [editing, setEditing] = useState(null)
   const [showForm, setShowForm] = useState(false)
 
@@ -1305,7 +1386,12 @@ function TabFracoes({ negocioId, fracoes, onChange, readOnly, fasesComuns }) {
   }
   async function apagar(id, nome) {
     if (!confirm(`Apagar fração "${nome}"? Fases/fotos/despesas dessa fração ficarão como "comuns ao prédio".`)) return
-    await apiFetch(`/api/crm/projetos/fracoes/${id}`, { method: 'DELETE' })
+    const r = await apiFetch(`/api/crm/projetos/fracoes/${id}`, { method: 'DELETE' })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao apagar fração: ${err.error || r.status}`, 'error', 3500)
+      return
+    }
     onChange()
   }
 
@@ -1654,6 +1740,7 @@ function KpiBox({ label, value, cor, accent }) {
 // P4.1 — TAB HISTÓRICO (AUDIT LOG)
 // ════════════════════════════════════════════════════════════════
 function ComentariosFase({ faseId, readOnly }) {
+  const toast = useToast()
   const [comentarios, setComentarios] = useState([])
   const [texto, setTexto] = useState("")
   async function load() {
@@ -1664,16 +1751,26 @@ function ComentariosFase({ faseId, readOnly }) {
   async function enviar(e) {
     e?.preventDefault()
     if (!texto.trim()) return
-    await apiFetch(`/api/crm/projetos/fases/${faseId}/comentarios`, {
+    const r = await apiFetch(`/api/crm/projetos/fases/${faseId}/comentarios`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ texto: texto.trim() }),
     })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao enviar comentário: ${err.error || r.status}`, 'error', 3500)
+      return
+    }
     setTexto("")
     load()
   }
   async function apagar(id) {
     if (!confirm("Apagar comentário?")) return
-    await apiFetch(`/api/crm/projetos/comentarios/${id}`, { method: "DELETE" })
+    const r = await apiFetch(`/api/crm/projetos/comentarios/${id}`, { method: "DELETE" })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao apagar comentário: ${err.error || r.status}`, 'error', 3500)
+      return
+    }
     load()
   }
   return (
