@@ -25,7 +25,8 @@ router.get('/', async (req, res) => {
     }
     const { rows } = await pool.query(
       `SELECT id, titulo, departamento, versao, drive_url, drive_file_id,
-              created_at, updated_at, updated_by
+              created_at, updated_at, updated_by,
+              LEFT(conteudo_md, 400) AS conteudo_md_preview
          FROM sops ${where}
          ORDER BY departamento, titulo`,
       params
