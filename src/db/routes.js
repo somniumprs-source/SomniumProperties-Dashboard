@@ -41,6 +41,7 @@ import {
   generateRelatorioSaida,
 } from './pdfProjectoFixFlip.js'
 import { gerarResumoProjeto, invalidarCacheAi, isConfigured as aiConfigured } from './projetoAiAssistant.js'
+import { audit, descreverMudanca } from './projetoAuditLog.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.resolve(__dirname, '../../public/uploads/despesas')
@@ -2988,6 +2989,17 @@ router.put('/projetos/fases/:faseId', async (req, res) => {
       notificarInvestidoresMudancaFase(rows[0].negocio_id, rows[0].fase_key).catch(() => {})
     }
 
+    // Audit log
+    const user = await resolveCrmUser(req).catch(() => null)
+    for (const k of Object.keys(req.body)) {
+      audit({
+        negocioId: rows[0].negocio_id, entidade: 'fase', entidadeId: rows[0].id,
+        acao: 'update', campo: k, valorDepois: req.body[k],
+        descricao: `Fase "${rows[0].nome}": ${k} = ${req.body[k]}`,
+        user,
+      })
+    }
+
     res.json(rows[0])
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -3281,6 +3293,15 @@ router.put('/projetos/:negocioId/mover-fase', async (req, res) => {
     // Notificação assíncrona aos investidores (best-effort)
     notificarInvestidoresMudancaFase(req.params.negocioId, faseKey).catch(() => {})
 
+    // Audit log
+    const user = await resolveCrmUser(req).catch(() => null)
+    audit({
+      negocioId: req.params.negocioId, entidade: 'negocio', entidadeId: req.params.negocioId,
+      acao: 'status_change', campo: 'fase_atual', valorDepois: faseKey,
+      descricao: `Projecto movido para fase "${faseKey}"`,
+      user,
+    })
+
     res.json({ ok: true, faseKey })
   } catch (e) { console.error('[mover-fase]', e.message); res.status(500).json({ error: e.message }) }
 })
@@ -3300,8 +3321,9 @@ async function notificarInvestidoresMudancaFase(negocioId, novaFaseKey) {
     if (invIds.length === 0) return
 
     const { rows: invs } = await pool.query(
-      'SELECT id, nome, email FROM investidores WHERE id = ANY($1) AND email IS NOT NULL AND email <> $2',
-      [invIds, '']
+      `SELECT id, nome, email, telemovel, canal_notificacao FROM investidores
+       WHERE id = ANY($1) AND (canal_notificacao IS NULL OR canal_notificacao <> 'nenhum')`,
+      [invIds]
     )
     if (invs.length === 0) return
 
@@ -3343,11 +3365,25 @@ async function notificarInvestidoresMudancaFase(negocioId, novaFaseKey) {
       </div>
     `
 
+    const textoWhatsApp = `🏗️ *Somnium Properties*\n\n${negocio.movimento}: nova fase iniciada\n\n${faseIcon} *${faseNome}*\n\nConsulta o cronograma e fotos no portal: ${link}`
+
+    let envios = { email: 0, whatsapp: 0 }
     for (const inv of invs) {
-      sendEmail(subject, html, { to: inv.email })
-        .catch(e => console.error(`[notif-fase] ${inv.email}:`, e.message))
+      const canal = inv.canal_notificacao || 'email'
+      if ((canal === 'email' || canal === 'ambos') && inv.email) {
+        sendEmail(subject, html, { to: inv.email })
+          .then(() => envios.email++)
+          .catch(e => console.error(`[notif-fase] email ${inv.email}:`, e.message))
+      }
+      if ((canal === 'whatsapp' || canal === 'ambos') && inv.telemovel) {
+        try {
+          const { sendWhatsApp } = await import('./whatsappAgent.js')
+          await sendWhatsApp(inv.telemovel, textoWhatsApp)
+          envios.whatsapp++
+        } catch (e) { console.error(`[notif-fase] whatsapp ${inv.telemovel}:`, e.message) }
+      }
     }
-    console.log(`[notif-fase] ${negocio.movimento} → ${faseNome}: enviado a ${invs.length} investidor(es)`)
+    console.log(`[notif-fase] ${negocio.movimento} → ${faseNome}: email=${envios.email}, whatsapp=${envios.whatsapp}`)
   } catch (e) { console.error('[notif-fase]', e.message) }
 }
 
@@ -3443,13 +3479,15 @@ router.get('/projetos/:negocioId/despesas', async (req, res) => {
 
 router.post('/projetos/:negocioId/despesas', async (req, res) => {
   try {
-    const { fase_id, movimento, valor, data, categoria, notas } = req.body || {}
+    const { fase_id, fracao_id, movimento, valor, data, categoria, fornecedor, notas, comprovativo_url, comprovativo_nome } = req.body || {}
     if (!movimento?.trim()) return res.status(400).json({ error: 'movimento obrigatório' })
     const id = randomUUID()
     const { rows } = await pool.query(
-      `INSERT INTO despesas (id, movimento, categoria, custo_mensal, custo_anual, timing, data, notas, negocio_id, fase_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [id, movimento.trim(), categoria || 'Obra', Number(valor) || 0, 0, 'Único', data || null, notas || null, req.params.negocioId, fase_id || null]
+      `INSERT INTO despesas (id, movimento, categoria, custo_mensal, custo_anual, timing, data, notas, negocio_id, fase_id, fracao_id, fornecedor, comprovativo_url, comprovativo_nome)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+      [id, movimento.trim(), categoria || 'Obra', Number(valor) || 0, 0, 'Único', data || null, notas || null,
+       req.params.negocioId, fase_id || null, fracao_id || null,
+       fornecedor || null, comprovativo_url || null, comprovativo_nome || null]
     )
     // Recalcular custo_real da fase
     if (fase_id) {
@@ -3458,8 +3496,42 @@ router.post('/projetos/:negocioId/despesas', async (req, res) => {
         [fase_id]
       )
     }
+    // Audit
+    const user = await resolveCrmUser(req).catch(() => null)
+    audit({
+      negocioId: req.params.negocioId, entidade: 'despesa', entidadeId: id,
+      acao: 'create', valorDepois: `${movimento.trim()} (${Number(valor) || 0}€)`,
+      descricao: `Despesa registada: ${movimento.trim()} — ${Number(valor) || 0}€${fornecedor ? ` · ${fornecedor}` : ''}`,
+      user,
+    })
     res.status(201).json(rows[0])
   } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Upload de comprovativo (factura/recibo) — separado para suportar multipart
+const projetoCompDir = path.resolve(__dirname, '../../public/uploads/comprovativos')
+try { mkdirSync(projetoCompDir, { recursive: true }) } catch {}
+const projetoCompStorage = multer.diskStorage({
+  destination: projetoCompDir,
+  filename: (req, file, cb) => cb(null, `${randomUUID()}${path.extname(file.originalname)}`),
+})
+const uploadComprovativo = multer({
+  storage: projetoCompStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => cb(null, /\.(pdf|jpg|jpeg|png|webp|heic)$/i.test(path.extname(file.originalname))),
+})
+
+router.post('/projetos/despesas/:despesaId/comprovativo', uploadComprovativo.single('comprovativo'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Sem ficheiro' })
+    const url = `/uploads/comprovativos/${req.file.filename}`
+    const { rows } = await pool.query(
+      `UPDATE despesas SET comprovativo_url = $1, comprovativo_nome = $2 WHERE id = $3 RETURNING *`,
+      [url, req.file.originalname, req.params.despesaId]
+    )
+    if (!rows.length) return res.status(404).json({ error: 'Despesa não encontrada' })
+    res.json(rows[0])
+  } catch (e) { console.error('[comprovativo]', e.message); res.status(500).json({ error: e.message }) }
 })
 
 router.delete('/projetos/despesas/:despesaId', async (req, res) => {
@@ -3629,6 +3701,219 @@ router.delete('/projetos/fracoes/:fracaoId', async (req, res) => {
     await pool.query('UPDATE projeto_fotos SET fracao_id = NULL WHERE fracao_id = $1', [req.params.fracaoId])
     await pool.query('UPDATE despesas SET fracao_id = NULL WHERE fracao_id = $1', [req.params.fracaoId])
     await pool.query('DELETE FROM projeto_fracoes WHERE id = $1', [req.params.fracaoId])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── P4.5: Export Excel completo do projecto ─────────────────
+router.get('/projetos/:negocioId/export-excel', async (req, res) => {
+  try {
+    const { exportProjetoExcel } = await import('./projetoExcelExport.js')
+    const result = await exportProjetoExcel(req.params.negocioId)
+    if (!result) return res.status(404).json({ error: 'Projecto não encontrado' })
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`)
+    await result.workbook.xlsx.write(res)
+    res.end()
+  } catch (e) { console.error('[export-excel]', e.message); res.status(500).json({ error: e.message }) }
+})
+
+// ── P4.7: Forecast de tesouraria do projecto ────────────────
+router.get('/projetos/:negocioId/forecast', async (req, res) => {
+  try {
+    const { rows: negs } = await pool.query('SELECT * FROM negocios WHERE id = $1', [req.params.negocioId])
+    if (!negs.length) return res.status(404).json({ error: 'Projecto não encontrado' })
+    const negocio = negs[0]
+
+    const { rows: fases } = await pool.query(
+      `SELECT * FROM projeto_fases WHERE negocio_id = $1 ORDER BY ordem`, [req.params.negocioId]
+    )
+
+    // Outflow previsto: para cada fase não concluída, o restante do orçamento (orcamento - custo_real)
+    // distribuído pelo período entre data_inicio_prevista e data_fim_prevista
+    const outflows = []
+    for (const f of fases) {
+      if (f.estado === 'concluida') continue
+      const orc = Number(f.orcamento_alocado) || 0
+      const gasto = Number(f.custo_real) || 0
+      const restante = Math.max(0, orc - gasto)
+      if (restante === 0) continue
+      const dataFim = f.data_fim_prevista || negocio.data_estimada_venda || new Date().toISOString().slice(0, 10)
+      outflows.push({
+        data: dataFim,
+        descricao: `Outflow previsto: ${f.nome}`,
+        valor: -restante,
+        tipo: 'despesa_prevista',
+      })
+    }
+
+    // Inflow: tranches não recebidas
+    let pags = []
+    try { pags = typeof negocio.pagamentos_faseados === 'string' ? JSON.parse(negocio.pagamentos_faseados || '[]') : (negocio.pagamentos_faseados || []) } catch {}
+    const inflows = pags.filter(p => !p.recebido).map(p => ({
+      data: p.data || negocio.data_estimada_venda || new Date().toISOString().slice(0, 10),
+      descricao: `Tranche: ${p.descricao || 'Pagamento'}`,
+      valor: Number(p.valor) || 0,
+      tipo: 'tranche_prevista',
+    }))
+
+    // Inflow: venda esperada (se data_venda ainda não houve)
+    if (!negocio.data_venda && negocio.data_estimada_venda && (Number(negocio.lucro_estimado) || 0) > 0) {
+      const totalTranches = pags.reduce((s, p) => s + (Number(p.valor) || 0), 0)
+      const lucroEsp = Number(negocio.lucro_estimado) || 0
+      const valorVenda = lucroEsp + (Number(negocio.capital_total) || 0) + (Number(negocio.custo_real_obra) || 0)
+      const naoCobertoPorTranches = Math.max(0, valorVenda - totalTranches)
+      if (naoCobertoPorTranches > 0) {
+        inflows.push({
+          data: negocio.data_estimada_venda,
+          descricao: 'Venda esperada (líquido de tranches definidas)',
+          valor: naoCobertoPorTranches,
+          tipo: 'venda_prevista',
+        })
+      }
+    }
+
+    // Combinar e ordenar por data
+    const eventos = [...outflows, ...inflows].sort((a, b) => (a.data || '').localeCompare(b.data || ''))
+
+    // Saldo acumulado
+    let saldo = 0
+    const cashflow = eventos.map(e => {
+      saldo += e.valor
+      return { ...e, saldo_acumulado: saldo }
+    })
+
+    // KPIs agregados
+    const totalOut = outflows.reduce((s, e) => s + Math.abs(e.valor), 0)
+    const totalIn = inflows.reduce((s, e) => s + e.valor, 0)
+    const saldoFinal = totalIn - totalOut
+
+    res.json({
+      eventos: cashflow,
+      totais: { outflow: totalOut, inflow: totalIn, saldo_previsto: saldoFinal },
+    })
+  } catch (e) { console.error('[forecast]', e.message); res.status(500).json({ error: e.message }) }
+})
+
+// ── P4.8: IA preditiva — análise de atrasos e recomendações ─
+// Usa Claude Sonnet para analisar TODOS os projectos activos e sinalizar
+// os que estão em risco de atraso baseado em padrões (data prevista vs progresso)
+router.get('/projetos/portfolio/ia-predicoes', async (req, res) => {
+  try {
+    if (!aiConfigured()) return res.status(503).json({ error: 'AI não configurada' })
+    const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY
+    const Anthropic = (await import('@anthropic-ai/sdk')).default
+    const client = new Anthropic({ apiKey: ANTHROPIC_KEY })
+
+    // Carregar projectos activos com dados resumidos
+    const { rows: projectos } = await pool.query(
+      `SELECT n.id, n.movimento, n.categoria, n.data_compra, n.data_estimada_venda
+       FROM negocios n
+       WHERE n.categoria = 'Fix and Flip' AND (n.fase IS NULL OR n.fase <> 'Vendido')`
+    )
+
+    const contextos = []
+    for (const p of projectos) {
+      const { rows: fases } = await pool.query(
+        `SELECT nome, estado, perc_execucao, data_fim_prevista FROM projeto_fases
+         WHERE negocio_id = $1 ORDER BY ordem`, [p.id]
+      )
+      if (fases.length === 0) continue
+      contextos.push({
+        id: p.id,
+        nome: p.movimento,
+        venda_estimada: p.data_estimada_venda,
+        fases: fases.map(f => `${f.nome}: ${f.estado} ${f.perc_execucao || 0}% ${f.data_fim_prevista ? `(prev. ${f.data_fim_prevista})` : ''}`),
+      })
+    }
+
+    if (contextos.length === 0) return res.json({ predicoes: [] })
+
+    const prompt = `És um consultor de obra experiente. Analisa o estado destes projectos Fix and Flip e identifica os que estão em RISCO de atraso ou desvio orçamental significativo.
+
+Hoje é ${new Date().toLocaleDateString('pt-PT')}.
+
+PROJECTOS:
+${contextos.map(c => `\n--- ${c.nome} (venda esperada ${c.venda_estimada || '—'}) ---\n${c.fases.join('\n')}`).join('\n')}
+
+Devolve JSON estrito:
+{
+  "predicoes": [
+    { "projeto_id": "id-do-projecto", "projeto_nome": "nome", "risco": "alto"|"medio"|"baixo", "razao": "1 frase curta", "acao_recomendada": "1 acção concreta" }
+  ]
+}
+
+Regras:
+- Considera "alto" risco quando há fase em curso com data prevista a menos de 30 dias mas <50% executada, ou venda esperada nos próximos 60 dias com obra incompleta.
+- "medio" se há sinais preocupantes mas ainda há margem.
+- Apenas inclui projectos onde haja efectivamente risco. NÃO listes projectos saudáveis.
+- Máximo 10 entradas. Devolve APENAS o JSON, sem texto à volta.`
+
+    const t0 = Date.now()
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: prompt }],
+    })
+    const text = response.content[0]?.text || '{}'
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    let parsed
+    try { parsed = JSON.parse(jsonMatch ? jsonMatch[0] : text) }
+    catch { return res.status(500).json({ error: 'Resposta IA inválida' }) }
+
+    res.json({
+      predicoes: parsed.predicoes || [],
+      gerado_em: new Date().toISOString(),
+      ms: Date.now() - t0,
+      modelo: 'claude-sonnet-4-6',
+      total_analisados: contextos.length,
+    })
+  } catch (e) { console.error('[ia-predicoes]', e.message); res.status(500).json({ error: e.message }) }
+})
+
+// ── P4.1: GET audit log do projecto ──────────────────────────
+router.get('/projetos/:negocioId/audit', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500)
+    const { rows } = await pool.query(
+      `SELECT * FROM projeto_audit WHERE negocio_id = $1 ORDER BY created_at DESC LIMIT $2`,
+      [req.params.negocioId, limit]
+    )
+    res.json({ eventos: rows })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── P4.3: Comentários por fase ───────────────────────────────
+router.get('/projetos/fases/:faseId/comentarios', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM projeto_comentarios WHERE fase_id = $1 ORDER BY created_at ASC`,
+      [req.params.faseId]
+    )
+    res.json({ comentarios: rows })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/projetos/fases/:faseId/comentarios', async (req, res) => {
+  try {
+    const { texto } = req.body || {}
+    if (!texto?.trim()) return res.status(400).json({ error: 'texto obrigatório' })
+    const { rows: faseRows } = await pool.query('SELECT negocio_id FROM projeto_fases WHERE id = $1', [req.params.faseId])
+    if (!faseRows.length) return res.status(404).json({ error: 'Fase não encontrada' })
+    const user = await resolveCrmUser(req).catch(() => null)
+    const id = randomUUID()
+    const { rows } = await pool.query(
+      `INSERT INTO projeto_comentarios (id, fase_id, negocio_id, autor_id, autor_nome, texto)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [id, req.params.faseId, faseRows[0].negocio_id, user?.id || null, user?.nome || user?.email || 'Sistema', texto.trim()]
+    )
+    res.status(201).json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/projetos/comentarios/:comentarioId', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM projeto_comentarios WHERE id = $1', [req.params.comentarioId])
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })

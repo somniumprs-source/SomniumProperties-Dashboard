@@ -835,6 +835,46 @@ export async function initSchema() {
       -- Tipo do projecto: 'fracao_unica' (default) ou 'predio' (com várias frações + áreas comuns)
       ALTER TABLE negocios ADD COLUMN IF NOT EXISTS tipo_projeto TEXT DEFAULT 'fracao_unica';
 
+      -- P4: comprovativos em despesas (factura/recibo) + categoria mais rica
+      ALTER TABLE despesas ADD COLUMN IF NOT EXISTS comprovativo_url TEXT;
+      ALTER TABLE despesas ADD COLUMN IF NOT EXISTS comprovativo_nome TEXT;
+      ALTER TABLE despesas ADD COLUMN IF NOT EXISTS fornecedor TEXT;
+
+      -- P4.1: Audit log do projecto (histórico de alterações em fases, tarefas, despesas, etc.)
+      CREATE TABLE IF NOT EXISTS projeto_audit (
+        id TEXT PRIMARY KEY,
+        negocio_id TEXT NOT NULL,
+        entidade TEXT NOT NULL,           -- fase | tarefa | foto | documento | despesa | investidor | fracao | negocio
+        entidade_id TEXT,
+        acao TEXT NOT NULL,                -- create | update | delete | status_change
+        campo TEXT,                        -- nome do campo alterado (para updates)
+        valor_antes TEXT,
+        valor_depois TEXT,
+        descricao TEXT,                    -- texto livre human-readable
+        user_id TEXT,
+        user_nome TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_projeto_audit_negocio ON projeto_audit(negocio_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_projeto_audit_entidade ON projeto_audit(entidade, entidade_id);
+
+      -- P4.3: Comentários por fase (thread interno da equipa)
+      CREATE TABLE IF NOT EXISTS projeto_comentarios (
+        id TEXT PRIMARY KEY,
+        fase_id TEXT REFERENCES projeto_fases(id) ON DELETE CASCADE,
+        negocio_id TEXT NOT NULL,
+        autor_id TEXT,
+        autor_nome TEXT,
+        texto TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_projeto_comentarios_fase ON projeto_comentarios(fase_id, created_at DESC);
+
+      -- P4.4: Preferência de canal de notificação por investidor
+      ALTER TABLE investidores ADD COLUMN IF NOT EXISTS canal_notificacao TEXT DEFAULT 'email';
+      -- valores: 'email' | 'whatsapp' | 'ambos' | 'nenhum'
+
       -- Frações dentro de um projecto (prédios com várias frações)
       CREATE TABLE IF NOT EXISTS projeto_fracoes (
         id TEXT PRIMARY KEY,

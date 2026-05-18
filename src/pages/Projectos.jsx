@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Plus, Filter, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle, TrendingUp, Briefcase, Calendar as CalendarIcon } from 'lucide-react'
+import { Plus, Filter, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle, TrendingUp, Briefcase, Calendar as CalendarIcon, Search, Sparkles } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { apiFetch } from '../lib/api.js'
 import { Button } from '../components/ui/Button.jsx'
@@ -47,7 +47,11 @@ export function Projectos() {
   const [editing, setEditing] = useState(null)
   const [view, setView] = useState('kanban')  // 'kanban' | 'lista'
   const [filterCat, setFilterCat] = useState(isInvestidor ? '' : 'Fix and Flip')
+  const [search, setSearch] = useState('')
+  const [filterAtraso, setFilterAtraso] = useState(false)
   const [portfolio, setPortfolio] = useState(null)
+  const [predicoes, setPredicoes] = useState(null)
+  const [predicoesLoading, setPredicoesLoading] = useState(false)
 
   async function load() {
     setLoading(true); setError(null)
@@ -140,8 +144,14 @@ export function Projectos() {
   // Para admin: usar negociosLista (com KPIs financeiros). Para investidor: usar projectos directo.
   const lista = useMemo(() => isReadOnly ? projectos : (kpis?.negociosLista ?? []), [kpis, projectos, isReadOnly])
   const filtered = useMemo(
-    () => lista.filter(n => !filterCat || n.categoria === filterCat),
-    [lista, filterCat]
+    () => {
+      const term = search.trim().toLowerCase()
+      return lista
+        .filter(n => !filterCat || n.categoria === filterCat)
+        .filter(n => !filterAtraso || (fasesPorNegocio[n.id]?.diasAtrasoMax || 0) > 0)
+        .filter(n => !term || (n.movimento || '').toLowerCase().includes(term) || (n.imovelNome || '').toLowerCase().includes(term))
+    },
+    [lista, filterCat, search, filterAtraso, fasesPorNegocio]
   )
 
   // Agrupa por coluna Kanban
@@ -185,7 +195,16 @@ export function Projectos() {
               </button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Pesquisar..." className="pl-8 pr-2.5 py-1.5 text-xs border rounded-lg bg-white w-44" />
+            </div>
+            <button onClick={() => setFilterAtraso(!filterAtraso)}
+              className={`text-xs px-2.5 py-1.5 rounded-lg border inline-flex items-center gap-1 ${filterAtraso ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+              <AlertTriangle className="w-3 h-3" /> Só atrasados
+            </button>
             <Filter className="w-4 h-4 text-gray-400" />
             <select value={filterCat} onChange={e => setFilterCat(e.target.value)} className="text-xs border rounded-lg px-2 py-1.5 bg-white">
               <option value="">Todas categorias</option>
@@ -199,9 +218,23 @@ export function Projectos() {
         {/* Portfolio overview — KPIs Fix and Flip agregados */}
         {portfolio?.totais && (
           <div className="bg-gradient-to-br from-[#0d0d0d] to-[#1f1f1f] rounded-2xl p-5 text-white shadow-md">
-            <div className="flex items-center gap-2 mb-4">
-              <Briefcase className="w-4 h-4" style={{ color: '#C9A84C' }} />
-              <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#C9A84C' }}>Portfolio Fix and Flip</h2>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Briefcase className="w-4 h-4" style={{ color: '#C9A84C' }} />
+                <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#C9A84C' }}>Portfolio Fix and Flip</h2>
+              </div>
+              {!isReadOnly && (
+                <button onClick={async () => {
+                  setPredicoesLoading(true)
+                  try {
+                    const r = await apiFetch('/api/crm/projetos/portfolio/ia-predicoes')
+                    if (r.ok) setPredicoes(await r.json())
+                  } finally { setPredicoesLoading(false) }
+                }}
+                  className="text-[10px] uppercase tracking-wider text-[#C9A84C] hover:text-white inline-flex items-center gap-1.5 bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-lg border border-[#C9A84C]/30">
+                  <Sparkles className="w-3 h-3" /> {predicoesLoading ? 'A analisar...' : 'Análise IA'}
+                </button>
+              )}
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
               <PortfolioKpi label="Projectos activos" value={portfolio.totais.ativos_ff} sub={`de ${portfolio.totais.total_ff} total`} />
@@ -210,6 +243,29 @@ export function Projectos() {
               <PortfolioKpi label="Lucro realizado" value={EUR(portfolio.totais.lucro_real_total)} green />
               <PortfolioKpi label="Em curso" value={portfolio.fases?.em_curso || 0} sub="fases activas" />
             </div>
+            {predicoes?.predicoes?.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-white/10">
+                <p className="text-[10px] uppercase tracking-wider text-[#C9A84C] mb-2 flex items-center gap-1.5">
+                  <Sparkles className="w-3 h-3" /> Riscos identificados pela IA ({predicoes.predicoes.length})
+                </p>
+                <div className="space-y-1.5">
+                  {predicoes.predicoes.map((p, i) => {
+                    const corRisco = p.risco === 'alto' ? 'bg-red-500/20 border-red-400/40' : p.risco === 'medio' ? 'bg-yellow-500/20 border-yellow-400/40' : 'bg-gray-500/20 border-gray-400/40'
+                    return (
+                      <Link key={i} to={`/projectos/${p.projeto_id}`} className={`block rounded-lg p-2.5 border ${corRisco} hover:opacity-80`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-xs font-semibold text-white">{p.projeto_nome} <span className="text-[10px] uppercase ml-1 opacity-80">{p.risco}</span></p>
+                            <p className="text-[10px] text-gray-300 mt-0.5">{p.razao}</p>
+                            <p className="text-[10px] text-[#C9A84C] mt-1">→ {p.acao_recomendada}</p>
+                          </div>
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
             {(portfolio.topAtrasos?.length > 0 || portfolio.distribuicaoFases?.length > 0) && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5 pt-5 border-t border-white/10">
                 {portfolio.topAtrasos?.length > 0 && (
@@ -346,12 +402,12 @@ function KanbanBoard({ colunas, cardsPorColuna, fasesInfo, onCardClick, onMoveCa
 
   return (
     <div className="overflow-x-auto pb-4 -mx-4 sm:-mx-6 px-4 sm:px-6">
-      <div className="flex gap-3 min-w-max">
+      <div className="flex flex-col sm:flex-row gap-3 sm:min-w-max">
         {colunas.map(col => {
           const cards = cardsPorColuna[col.key] || []
           const isOver = overCol === col.key
           return (
-            <div key={col.key} className="w-72 flex-shrink-0"
+            <div key={col.key} className="w-full sm:w-72 sm:flex-shrink-0"
               onDragOver={onDragOver(col.key)}
               onDragLeave={() => overCol === col.key && setOverCol(null)}
               onDrop={onDrop(col.key)}>

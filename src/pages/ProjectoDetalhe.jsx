@@ -4,6 +4,7 @@ import {
   ArrowLeft, Calendar, CheckCircle2, Circle, Plus, Trash2, Upload, X,
   Building2, Wallet, ImageIcon, FileText, Users, BarChart3, ChevronRight,
   FileDown, AlertTriangle, Sparkles, RefreshCw, Home, Layers,
+  History, MessageSquare, TrendingUp, FileSpreadsheet,
 } from 'lucide-react'
 import { apiFetch, getToken } from '../lib/api.js'
 import { Header } from '../components/layout/Header.jsx'
@@ -46,9 +47,11 @@ const TABS_BASE = [
   { key: 'fases',        label: 'Fases & Tarefas',  icon: CheckCircle2 },
   { key: 'orcamento',    label: 'Orçamento',        icon: Wallet },
   { key: 'faturacao',    label: 'Faturação',        icon: Wallet },
+  { key: 'forecast',     label: 'Forecast',         icon: TrendingUp },
   { key: 'fotos',        label: 'Fotos',            icon: ImageIcon },
   { key: 'documentos',   label: 'Documentos',       icon: FileText },
   { key: 'investidores', label: 'Investidores',     icon: Users },
+  { key: 'historico',    label: 'Histórico',        icon: History },
 ]
 
 const FRACAO_ESTADO_COR = {
@@ -167,6 +170,10 @@ export function ProjectoDetalhe() {
             {!isReadOnly && !semFases && (
               <SyncGCalButton negocioId={id} />
             )}
+            <a href={`/api/crm/projetos/${id}/export-excel`} download
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50">
+              <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
+            </a>
             {!isReadOnly && <PartilharAcesso entidade="negocio" entidadeId={id} nome={negocio.movimento} />}
             {!isReadOnly && (
               <Button size="sm" variant="destructive" icon={Trash2}
@@ -239,9 +246,11 @@ export function ProjectoDetalhe() {
             {tab === 'fases' && <TabFases fases={fasesFiltradas} onChange={load} readOnly={isReadOnly} negocioId={id} />}
             {tab === 'orcamento' && <TabOrcamento imovel={imovel} />}
             {tab === 'faturacao' && <TabFaturacao negocio={negocio} onChange={load} readOnly={isReadOnly} />}
+            {tab === 'forecast' && <TabForecast negocioId={id} />}
             {tab === 'fotos' && <TabFotos negocioId={id} fases={fasesFiltradas} fotos={fotosFiltradas} onChange={load} readOnly={isReadOnly} fracaoSel={fracaoSel} />}
             {tab === 'documentos' && <TabDocumentos negocio={negocio} fases={fases} readOnly={isReadOnly} />}
             {tab === 'investidores' && <TabInvestidores negocio={negocio} readOnly={isReadOnly} />}
+            {tab === 'historico' && <TabHistorico negocioId={id} />}
           </div>
         </div>
       </div>
@@ -819,6 +828,9 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
               rows={2} placeholder="Anotações, riscos, decisões..."
               className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 bg-white" />
           </div>
+
+          {/* P4.3 — Thread de comentários */}
+          <ComentariosFase faseId={fase.id} readOnly={readOnly} />
         </div>
       )}
     </div>
@@ -1731,3 +1743,176 @@ function FracaoForm({ fracao, onSave, onCancel, fasesComunsCount }) {
     </div>
   )
 }
+
+// ════════════════════════════════════════════════════════════════
+// P4.7 — TAB FORECAST DE TESOURARIA
+// ════════════════════════════════════════════════════════════════
+function TabForecast({ negocioId }) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    apiFetch(`/api/crm/projetos/${negocioId}/forecast`)
+      .then(r => r.ok ? r.json() : null)
+      .then(setData)
+      .finally(() => setLoading(false))
+  }, [negocioId])
+
+  if (loading) return <p className="text-sm text-gray-400 py-8 text-center">A calcular forecast…</p>
+  if (!data) return <p className="text-sm text-gray-500 py-8 text-center">Sem dados.</p>
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        <KpiBox label="Outflow previsto" value={EUR(data.totais.outflow)} cor="#ef4444" />
+        <KpiBox label="Inflow previsto" value={EUR(data.totais.inflow)} cor="#22c55e" />
+        <KpiBox label="Saldo previsto" value={EUR(data.totais.saldo_previsto)} cor={data.totais.saldo_previsto >= 0 ? "#22c55e" : "#ef4444"} accent />
+      </div>
+      {data.eventos.length === 0 ? (
+        <p className="text-sm text-gray-400 py-4 text-center">Sem eventos previstos (define datas previstas nas fases e tranches).</p>
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr className="text-[10px] uppercase tracking-wider text-gray-500">
+                <th className="text-left px-3 py-2">Data</th>
+                <th className="text-left px-3 py-2">Descrição</th>
+                <th className="text-right px-3 py-2">Valor</th>
+                <th className="text-right px-3 py-2">Saldo acum.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.eventos.map((e, i) => (
+                <tr key={i} className="border-t border-gray-100">
+                  <td className="px-3 py-2 text-xs text-gray-600">{e.data}</td>
+                  <td className="px-3 py-2 text-xs text-gray-800">{e.descricao}</td>
+                  <td className={`px-3 py-2 text-right text-xs font-mono ${e.valor >= 0 ? "text-green-600" : "text-red-600"}`}>{EUR(e.valor)}</td>
+                  <td className={`px-3 py-2 text-right text-xs font-mono font-semibold ${e.saldo_acumulado >= 0 ? "text-gray-700" : "text-red-700"}`}>{EUR(e.saldo_acumulado)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function KpiBox({ label, value, cor, accent }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-3">
+      <p className="text-[10px] uppercase tracking-wider text-gray-400">{label}</p>
+      <p className={`text-lg font-mono font-bold mt-0.5`} style={{ color: cor }}>{value}</p>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
+// P4.1 — TAB HISTÓRICO (AUDIT LOG)
+// ════════════════════════════════════════════════════════════════
+const AUDIT_ICONS = {
+  fase: "🎯", tarefa: "✓", foto: "📷", documento: "📄", despesa: "💰",
+  investidor: "👤", fracao: "🏠", negocio: "📋",
+}
+const AUDIT_ACAO_LABEL = {
+  create: "Criou", update: "Atualizou", delete: "Apagou", status_change: "Mudou estado",
+}
+
+function TabHistorico({ negocioId }) {
+  const [eventos, setEventos] = useState([])
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    apiFetch(`/api/crm/projetos/${negocioId}/audit?limit=200`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setEventos(d?.eventos || []))
+      .finally(() => setLoading(false))
+  }, [negocioId])
+
+  if (loading) return <p className="text-sm text-gray-400 py-8 text-center">A carregar…</p>
+  if (eventos.length === 0) return <p className="text-sm text-gray-400 py-8 text-center">Sem actividade registada.</p>
+
+  return (
+    <div className="space-y-2">
+      {eventos.map(e => (
+        <div key={e.id} className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-100">
+          <span className="text-base flex-shrink-0">{AUDIT_ICONS[e.entidade] || "•"}</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-gray-800">
+              <span className="font-semibold">{AUDIT_ACAO_LABEL[e.acao] || e.acao}</span>
+              <span className="text-gray-500"> · {e.descricao || `${e.entidade} ${e.entidade_id}`}</span>
+            </p>
+            <div className="flex items-center gap-2 mt-0.5">
+              {e.user_nome && <span className="text-[10px] text-gray-400">por {e.user_nome}</span>}
+              <span className="text-[10px] text-gray-400">{new Date(e.created_at).toLocaleString("pt-PT")}</span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
+// P4.3 — COMENTÁRIOS POR FASE (usado dentro do FaseAccordion)
+// ════════════════════════════════════════════════════════════════
+function ComentariosFase({ faseId, readOnly }) {
+  const [comentarios, setComentarios] = useState([])
+  const [texto, setTexto] = useState("")
+  async function load() {
+    const r = await apiFetch(`/api/crm/projetos/fases/${faseId}/comentarios`)
+    if (r.ok) setComentarios((await r.json()).comentarios || [])
+  }
+  useEffect(() => { load() }, [faseId])
+  async function enviar(e) {
+    e?.preventDefault()
+    if (!texto.trim()) return
+    await apiFetch(`/api/crm/projetos/fases/${faseId}/comentarios`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texto: texto.trim() }),
+    })
+    setTexto("")
+    load()
+  }
+  async function apagar(id) {
+    if (!confirm("Apagar comentário?")) return
+    await apiFetch(`/api/crm/projetos/comentarios/${id}`, { method: "DELETE" })
+    load()
+  }
+  return (
+    <div>
+      <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">Comentários ({comentarios.length})</p>
+      <div className="space-y-1.5 mb-2">
+        {comentarios.length === 0 && <p className="text-[11px] text-gray-400 italic">Sem comentários.</p>}
+        {comentarios.map(c => (
+          <div key={c.id} className="group flex items-start gap-2 bg-white rounded-lg p-2 border border-gray-100">
+            <div className="w-6 h-6 rounded-full bg-[#C9A84C] text-[#0d0d0d] flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+              {(c.autor_nome || "?").slice(0, 2).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs font-semibold text-gray-700">{c.autor_nome}</span>
+                <span className="text-[9px] text-gray-400">{new Date(c.created_at).toLocaleString("pt-PT")}</span>
+              </div>
+              <p className="text-xs text-gray-700 whitespace-pre-wrap mt-0.5">{c.texto}</p>
+            </div>
+            {!readOnly && (
+              <button onClick={() => apagar(c.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500">
+                <Trash2 className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      {!readOnly && (
+        <form onSubmit={enviar} className="flex gap-2">
+          <input value={texto} onChange={e => setTexto(e.target.value)}
+            placeholder="Escreve um comentário..." className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 bg-white" />
+          <button type="submit" disabled={!texto.trim()}
+            className="px-3 py-1.5 text-xs rounded-lg bg-[#0d0d0d] text-[#C9A84C] hover:bg-[#1a1a1a] disabled:bg-gray-200 disabled:text-gray-400">
+            Enviar
+          </button>
+        </form>
+      )}
+    </div>
+  )
+}
+

@@ -70,7 +70,7 @@ function isUrgent(text) {
 }
 
 // ── Enviar WhatsApp via Twilio (com retry) ─────────────────
-async function sendWhatsApp(to, body) {
+export async function sendWhatsApp(to, body) {
   if (!TWILIO_SID || !TWILIO_TOKEN || !TWILIO_NUMBER) {
     console.warn('[whatsapp] Twilio não configurado')
     return { ok: false, error: 'Twilio não configurado' }
