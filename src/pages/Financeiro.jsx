@@ -198,7 +198,7 @@ export function Financeiro() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex flex-col gap-1">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-4 shadow-xs flex flex-col gap-1">
                 <span className="text-xs text-gray-400 uppercase tracking-wide">Runway</span>
                 <span className={`text-2xl font-bold ${runwayColor}`}>{runwayLabel}</span>
                 <div className="w-full bg-gray-100 rounded-full h-2 mt-1">
@@ -206,19 +206,19 @@ export function Financeiro() {
                     style={{ width: `${Math.min(100, ((runwayMeses || 0) / 24) * 100)}%` }} />
                 </div>
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex flex-col gap-1">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-4 shadow-xs flex flex-col gap-1">
                 <span className="text-xs text-gray-400 uppercase tracking-wide">YTD Resultado</span>
                 <span className={`text-2xl font-bold ${(kpis?.ytd?.resultado ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {EUR(kpis?.ytd?.resultado)}
                 </span>
                 <span className="text-xs text-gray-400">Real {EUR(kpis?.ytd?.real)} − Desp. {EUR(kpis?.ytd?.despesas)}</span>
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex flex-col gap-1">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-4 shadow-xs flex flex-col gap-1">
                 <span className="text-xs text-gray-400 uppercase tracking-wide">Negócios Ativos</span>
                 <span className="text-2xl font-bold" style={{ color: '#C9A84C' }}>{kpis?.negóciosAtivos ?? '—'}</span>
                 <span className="text-xs text-gray-400">{kpis?.negociosPendentes ?? 0} com pagamento pendente</span>
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex flex-col gap-1">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-4 shadow-xs flex flex-col gap-1">
                 <span className="text-xs text-gray-400 uppercase tracking-wide">Concentração de Risco</span>
                 <span className={`text-2xl font-bold ${(kpis?.concentracao ?? 0) > 60 ? 'text-red-600' : (kpis?.concentracao ?? 0) > 40 ? 'text-yellow-600' : 'text-green-600'}`}>
                   {kpis?.concentracao ?? 0}%
@@ -249,7 +249,7 @@ export function Financeiro() {
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                 <h2 className="text-sm font-semibold text-gray-700 mb-4">Faturação por Categoria</h2>
                 {categoriasPie.length > 0 ? (
                   <ResponsiveContainer width="100%" height={200}>
@@ -266,7 +266,7 @@ export function Financeiro() {
                 ) : <EmptyState />}
               </div>
 
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                 <h2 className="text-sm font-semibold text-gray-700 mb-4">Negócios por Fase</h2>
                 {porFaseData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={200}>
@@ -286,7 +286,7 @@ export function Financeiro() {
 
             {/* Análises de Rentabilidade */}
             {analises?.total > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                 <h2 className="text-sm font-semibold text-gray-700 mb-4">Pipeline de Análises (calculadora integrada)</h2>
                 <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
                   <div className="bg-green-50 rounded-lg p-3 text-center">
@@ -359,7 +359,7 @@ export function Financeiro() {
             </div>
 
             {/* Todas as despesas cronologicamente */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
               <h2 className="text-sm font-semibold text-gray-700 mb-4">Todas as Despesas</h2>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
@@ -410,21 +410,21 @@ export function Financeiro() {
         {tab === 'Tesouraria' && (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-4 shadow-xs">
                 <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">A Receber</span>
                 <span className="text-2xl font-bold text-yellow-600">{EUR(cashflow?.lucroPendente)}</span>
                 <span className="text-xs text-gray-400 block mt-1">{pendentes.length} negócios pendentes</span>
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-4 shadow-xs">
                 <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Faturação Real</span>
                 <span className="text-2xl font-bold text-green-600">{EUR(cashflow?.lucroRecebido)}</span>
                 <span className="text-xs text-gray-400 block mt-1">{recebidos.length} negócios fechados</span>
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-4 shadow-xs">
                 <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Burn Rate / Mês</span>
                 <span className="text-2xl font-bold text-red-500">{EUR(cashflow?.burnRate)}</span>
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-4 shadow-xs">
                 <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Runway</span>
                 <span className={`text-2xl font-bold ${runwayColor}`}>{runwayLabel}</span>
               </div>
@@ -432,7 +432,7 @@ export function Financeiro() {
 
             {/* Aging de Pagamentos */}
             {aging && aging.summary?.some(b => b.count > 0) && (
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                 <h2 className="text-sm font-semibold text-gray-700 mb-4">Aging de Pagamentos</h2>
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                   {aging.summary.map((b, i) => (
@@ -462,7 +462,7 @@ export function Financeiro() {
             <TesourariaPagamentos pendentes={pendentes} confirmarPagamento={confirmarPagamento} />
 
             {recebidos.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                 <h2 className="text-sm font-semibold text-gray-700 mb-3">Pagamentos Recebidos</h2>
                 <table className="min-w-full text-sm">
                   <thead>
@@ -493,21 +493,21 @@ export function Financeiro() {
         {tab === 'P&L' && projecao && (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-4 shadow-xs">
                 <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Faturação Expectável</span>
                 <span className="text-2xl font-bold text-indigo-600">{EUR(projecao.pl.receitaEstimada)}</span>
                 <span className="text-xs text-gray-400 block mt-1">Total expectável</span>
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-4 shadow-xs">
                 <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Faturação Real</span>
                 <span className={`text-2xl font-bold ${projecao.pl.receitaReal > 0 ? 'text-green-600' : 'text-gray-400'}`}>{EUR(projecao.pl.receitaReal)}</span>
                 <span className="text-xs text-gray-400 block mt-1">Já recebido</span>
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-4 shadow-xs">
                 <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Despesas ({projecao.pl.mesesDecorridos} meses)</span>
                 <span className="text-2xl font-bold text-red-500">{EUR(projecao.pl.despesasAteAgora)}</span>
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-4 shadow-xs">
                 <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Resultado Líquido</span>
                 <span className={`text-2xl font-bold ${projecao.pl.resultadoLiquido >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {EUR(projecao.pl.resultadoLiquido)}
@@ -516,7 +516,7 @@ export function Financeiro() {
             </div>
 
             {/* Margem Operacional */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
               <h2 className="text-sm font-semibold text-gray-700 mb-3">Margem Operacional</h2>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
@@ -540,7 +540,7 @@ export function Financeiro() {
             </div>
 
             {/* Break-even */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
               <h2 className="text-sm font-semibold text-gray-700 mb-3">Break-Even</h2>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
                 <div>
@@ -560,7 +560,7 @@ export function Financeiro() {
             </div>
 
             {/* Projeção Cash Flow */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
               <h2 className="text-sm font-semibold text-gray-700 mb-4">Cash Flow Projetado — próximos 12 meses</h2>
               <ResponsiveContainer width="100%" height={280}>
                 <ComposedChart data={projecao.projecao}>
@@ -578,7 +578,7 @@ export function Financeiro() {
             </div>
 
             {/* Tabela projeção */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
               <h2 className="text-sm font-semibold text-gray-700 mb-3">Detalhe Mensal</h2>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-xs">
@@ -636,7 +636,7 @@ function ContaCorrenteTab({ conta }) {
   return (
     <>
       {/* Saldo actual */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-6 shadow-xs">
         <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Saldo Conta Somnium Properties</span>
         <span className={`text-3xl font-bold ${saldo >= 0 ? 'text-green-600' : 'text-red-600'}`}>{EUR(saldo)}</span>
         {conta?.dataInicio && <span className="text-xs text-gray-400 block mt-1">desde {conta.dataInicio}</span>}
@@ -657,7 +657,7 @@ function ContaCorrenteTab({ conta }) {
       </div>
 
       {/* Extrato */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
         <h2 className="text-sm font-semibold text-gray-700 mb-4">Extrato</h2>
         {movimentos.length > 0 ? (
           <div className="overflow-x-auto">
@@ -718,7 +718,7 @@ function TesourariaPagamentos({ pendentes, confirmarPagamento }) {
 
   if (!comTranches.length && !semTranches.length) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Pagamentos</h2>
         <p className="text-xs text-gray-400 text-center py-6">Sem pagamentos pendentes</p>
       </div>
@@ -802,7 +802,7 @@ function TesourariaPagamentos({ pendentes, confirmarPagamento }) {
       })}
 
       {semTranches.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
           <h3 className="text-xs text-gray-400 uppercase tracking-wide mb-3">Negócios sem tranches definidas</h3>
           <NegociosTable rows={semTranches} emptyMsg="" />
         </div>
@@ -820,30 +820,30 @@ function RentabilidadeTab({ rent }) {
     <>
       {/* KPIs de topo */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-4 shadow-xs">
           <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Ciclo Médio</span>
           <span className="text-2xl font-bold text-indigo-600">{rent.cicloMedio != null ? `${rent.cicloMedio} dias` : '—'}</span>
           <span className="text-xs text-gray-400 block mt-1">Adicionado → Proposta aceite ({rent.cicloCount} imóveis)</span>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-4 shadow-xs">
           <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Faturação Total</span>
           <span className="text-2xl font-bold text-green-600">{EUR(rent.totalPipeline)}</span>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-4 shadow-xs">
           <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Concentração de Risco</span>
           <span className={`text-2xl font-bold ${rent.concentracao > 60 ? 'text-red-600' : rent.concentracao > 40 ? 'text-yellow-600' : 'text-green-600'}`}>
             {rent.concentracao}%
           </span>
           <span className="text-xs text-gray-400 block mt-1 truncate">{rent.topDeal || '—'}</span>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-4 shadow-xs">
           <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Modelos Ativos</span>
           <span className="text-2xl font-bold text-gray-800">{rent.modelos?.length ?? 0}</span>
         </div>
       </div>
 
       {/* Margem por Modelo */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
         <h2 className="text-sm font-semibold text-gray-700 mb-4">Margem por Modelo de Negócio</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
           {(rent.modelos || []).map(m => (
@@ -876,7 +876,7 @@ function RentabilidadeTab({ rent }) {
 
       {/* Rentabilidade por Consultor */}
       {(rent.consultores || []).length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
           <h2 className="text-sm font-semibold text-gray-700 mb-3">Rentabilidade por Consultor</h2>
           <table className="min-w-full text-sm">
             <thead>
@@ -905,7 +905,7 @@ function RentabilidadeTab({ rent }) {
 
       {/* ROI por Investidor */}
       {(rent.investidores || []).length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
           <h2 className="text-sm font-semibold text-gray-700 mb-3">ROI por Investidor</h2>
           <table className="min-w-full text-sm">
             <thead>

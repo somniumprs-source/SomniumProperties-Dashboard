@@ -238,7 +238,7 @@ export function Metricas() {
 
             {/* Pipeline summaries */}
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                 <h3 className="text-sm font-semibold text-gray-700 mb-3">Pipeline 1 — Imóveis</h3>
                 <div className="flex flex-col gap-2 text-sm">
                   <Row label="Leads no pipeline" value={NUM(p1?.funil?.[0]?.value)} />
@@ -248,7 +248,7 @@ export function Metricas() {
                   <Row label="Taxa de descarte" value={PCT(p1?.taxaDescarte)} />
                 </div>
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                 <h3 className="text-sm font-semibold text-gray-700 mb-3">Pipeline 2 — Negócios</h3>
                 <div className="flex flex-col gap-2 text-sm">
                   <Row label="Total negócios" value={NUM(p2?.totalDeals)} />
@@ -258,7 +258,7 @@ export function Metricas() {
                   <Row label="% c/ capital passivo" value={PCT(p2?.pctDealsCapitalPassivo)} />
                 </div>
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                 <h3 className="text-sm font-semibold text-gray-700 mb-3">Pipeline 3 — Investidores</h3>
                 <div className="flex flex-col gap-2 text-sm">
                   <Row label="Capital captado" value={EUR(p3?.capitalCaptado)} />
@@ -271,7 +271,7 @@ export function Metricas() {
             </div>
 
             {/* Transversal */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
               <h3 className="text-sm font-semibold text-gray-700 mb-4">Métricas Transversais</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                 <M label="Deal Flow / Capital" value={tr?.ratioDealFlowCapital != null ? `${tr.ratioDealFlowCapital}×` : '—'}
@@ -283,7 +283,7 @@ export function Metricas() {
             </div>
 
             {/* Diagnóstico */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
               <h3 className="text-sm font-semibold text-gray-700 mb-4">Diagnóstico Estratégico</h3>
               <div className="flex flex-col gap-4">
                 <Diagnostico label="Bottleneck: Imóveis vs Capital" value={tr?.ratioDealFlowCapital}
@@ -334,7 +334,7 @@ export function Metricas() {
               {caep.lucroEstVsReal?.length > 0 && (
                 <>
                   <SectionTitle>CAEP — Estimado vs Real</SectionTitle>
-                  <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
+                  <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
                     <table className="min-w-[700px] w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
@@ -372,7 +372,7 @@ export function Metricas() {
           return (
             <>
               <SectionTitle>Funil Imóveis — Taxa de Conversão</SectionTitle>
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                 <Funil steps={[
                   { label: `Adicionados (${im.totais.leads})`, value: im.totais.leads },
                   { label: `Chamadas (${im.totais.chamadas})`, value: im.totais.chamadas },
@@ -396,7 +396,7 @@ export function Metricas() {
               )}
 
               <SectionTitle>Funil Investidores — Taxa de Conversão</SectionTitle>
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                 <Funil steps={[
                   { label: `Contactados (${inv.totais.contactos})`, value: inv.totais.contactos },
                   { label: `Reunião (${inv.totais.reunioes})`, value: inv.totais.reunioes },
@@ -413,7 +413,7 @@ export function Metricas() {
               </div>
 
               <SectionTitle>Funil Consultores — Taxa de Conversão</SectionTitle>
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                 <Funil steps={[
                   { label: `Contactados (${cons.totais.contactos})`, value: cons.totais.contactos },
                   { label: `Com call (${cons.totais.calls})`, value: cons.totais.calls },
@@ -467,7 +467,7 @@ export function Metricas() {
               {cons.rankingValor?.length > 0 && (
                 <>
                   <SectionTitle>Ranking de Valor por Consultor</SectionTitle>
-                  <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
+                  <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
                     <table className="min-w-[700px] w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
@@ -520,7 +520,7 @@ export function Metricas() {
               {tk.margem.porNegocio?.length > 0 && (
                 <>
                   <SectionTitle>Margens por Negócio</SectionTitle>
-                  <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
+                  <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
                     <table className="min-w-[700px] w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
@@ -623,7 +623,7 @@ export function Metricas() {
               )}
 
               {im.fases?.length > 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                   <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Todas as Fases (ordenadas por demora)</h3>
                   <div className="flex flex-col gap-2">
                     {im.fases.map(f => (
@@ -666,11 +666,11 @@ export function Metricas() {
             <>
               <SectionTitle>Imóveis — Motivos de Descarte</SectionTitle>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
-                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                   <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Top Motivos de Descarte</h3>
                   <MotivoList items={im.todosPorPct} emptyMsg="Preenche 'Motivo Descarte' nos imóveis descartados" />
                 </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                   <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Fase de Descarte</h3>
                   <MotivoList items={im.faseMediaDescarte} emptyMsg="Sem dados de fase de descarte" />
                 </div>
@@ -679,11 +679,11 @@ export function Metricas() {
 
               <SectionTitle>Investidores — Motivos</SectionTitle>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
-                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                   <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Motivos de Não Aprovação</h3>
                   <MotivoList items={inv.motivosNaoAprovacao} emptyMsg="Preenche 'Motivo Não Aprovação' nos investidores" />
                 </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                   <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Motivos de Inatividade</h3>
                   <MotivoList items={inv.motivosInatividade} emptyMsg="Preenche 'Motivo Inatividade' nos investidores" />
                 </div>
@@ -691,7 +691,7 @@ export function Metricas() {
 
               <SectionTitle>Consultores — Descontinuação</SectionTitle>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
-                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                   <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Motivos de Descontinuação</h3>
                   <MotivoList items={cons.motivosDescontinuacao} emptyMsg="Preenche 'Motivo Descontinuação' nos consultores" />
                 </div>
@@ -755,7 +755,7 @@ export function Metricas() {
                 <M label="Meta LTV / investidor" value={EUR(inv.metaLTV)} sub="≥ 25.000€ por investidor" />
               </div>
               {inv.porInvestidor?.length > 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
                   <table className="min-w-[700px] w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
@@ -792,7 +792,7 @@ export function Metricas() {
                 <M label="Meta LTV / consultor" value={EUR(cons.metaLTV)} sub="≥ 8.000€ por consultor ativo" />
               </div>
               {cons.top5?.length > 0 ? (
-                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
                   <table className="min-w-[700px] w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
@@ -892,7 +892,7 @@ export function Metricas() {
 
               <SectionTitle>Deal Qualification Score</SectionTitle>
               {av.dealQualification?.length > 0 ? (
-                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
                   <table className="min-w-[700px] w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
@@ -924,7 +924,7 @@ export function Metricas() {
 
               <SectionTitle>Win/Loss por Fonte</SectionTitle>
               {av.winLossBySource?.length > 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
                   <table className="min-w-[700px] w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
@@ -965,7 +965,7 @@ export function Metricas() {
 
               <SectionTitle>Performance por Zona</SectionTitle>
               {av.zonaPerformance?.length > 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
                   <table className="min-w-[700px] w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
@@ -999,7 +999,7 @@ export function Metricas() {
 
               <SectionTitle>CPA por Cohort Mensal</SectionTitle>
               {av.cacCohort?.length > 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
                   <table className="min-w-[700px] w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
@@ -1034,7 +1034,7 @@ export function Metricas() {
               {av.reFinancials?.length > 0 && (
                 <>
                   <SectionTitle>Metricas RE — Cash-on-Cash, IRR, Equity Multiple</SectionTitle>
-                  <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
+                  <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
                     <table className="min-w-[700px] w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
@@ -1097,7 +1097,7 @@ export function Metricas() {
             <>
               {/* Weekly Activity Score */}
               {wa && (
-                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-700">Actividade Semanal</h3>
                     <span className={`text-2xl font-bold ${wa.score >= 70 ? 'text-green-600' : wa.score >= 40 ? 'text-yellow-600' : 'text-red-500'}`}>
@@ -1154,7 +1154,7 @@ export function Metricas() {
               {/* OKR Cards */}
               <div className="flex flex-col gap-5">
                 {okrs.map((okr, oi) => (
-                  <div key={okr.id} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                  <div key={okr.id} className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
                         <span className="text-xs px-2 py-0.5 bg-gray-100 rounded text-gray-500">{okr.trimestre}</span>

@@ -12,7 +12,7 @@
  */
 
 const TONE = {
-  gold:   { iconBg: 'bg-[#C9A84C]/15', iconText: 'text-[#a0832d]', accent: 'text-[#0d0d0d]' },
+  gold:   { iconBg: 'bg-brand-gold/15', iconText: 'text-[#a0832d]', accent: 'text-brand-dark' },
   indigo: { iconBg: 'bg-indigo-50',    iconText: 'text-indigo-600', accent: 'text-indigo-700' },
   green:  { iconBg: 'bg-emerald-50',   iconText: 'text-emerald-600', accent: 'text-emerald-700' },
   red:    { iconBg: 'bg-red-50',       iconText: 'text-red-600', accent: 'text-red-700' },
@@ -32,7 +32,7 @@ export function KpiCard({ icon: Icon, label, value, sub, tone = 'gray', size = '
   const s = SIZE_CONF[size] || SIZE_CONF.md
   const interactive = !!onClick
   const activeClass = active
-    ? 'bg-[#0d0d0d] border-[#0d0d0d] shadow-md'
+    ? 'bg-brand-dark border-brand-dark shadow-md'
     : 'bg-white border-gray-200'
   const hoverClass = interactive && !active
     ? 'cursor-pointer hover:border-gray-300 hover:shadow-sm transition'
@@ -42,12 +42,12 @@ export function KpiCard({ icon: Icon, label, value, sub, tone = 'gray', size = '
       onClick={onClick}
       className={`rounded-xl border ${s.card} flex items-center gap-3 ${activeClass} ${hoverClass} ${className}`}>
       {Icon && (
-        <div className={`${s.icon} rounded-xl ${active ? 'bg-[#C9A84C]/15 text-[#C9A84C]' : `${t.iconBg} ${t.iconText}`} flex items-center justify-center shrink-0`}>
+        <div className={`${s.icon} rounded-xl ${active ? 'bg-brand-gold/15 text-brand-gold' : `${t.iconBg} ${t.iconText}`} flex items-center justify-center shrink-0`}>
           <Icon className={s.iconSize} />
         </div>
       )}
       <div className="min-w-0 flex-1">
-        {label && <p className={`${s.label} uppercase tracking-wide font-semibold truncate ${active ? 'text-[#C9A84C]' : 'text-gray-400'}`}>{label}</p>}
+        {label && <p className={`${s.label} uppercase tracking-wide font-semibold truncate ${active ? 'text-brand-gold' : 'text-gray-400'}`}>{label}</p>}
         <p className={`${s.value} font-bold leading-tight truncate ${active ? 'text-white' : t.accent}`}>{value ?? '—'}</p>
         {sub && <p className={`text-[11px] truncate mt-0.5 ${active ? 'text-gray-400' : 'text-gray-400'}`}>{sub}</p>}
       </div>

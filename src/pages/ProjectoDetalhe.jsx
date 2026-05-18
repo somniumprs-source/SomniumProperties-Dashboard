@@ -170,7 +170,7 @@ export function ProjectoDetalhe() {
 
         {/* Voltar + ações topo */}
         <div className="flex items-center justify-between gap-2">
-          <Link to="/projectos" className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-[#C9A84C]">
+          <Link to="/projectos" className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-brand-gold">
             <ArrowLeft className="w-3.5 h-3.5" /> Voltar a Projectos
           </Link>
           <div className="flex items-center gap-2">
@@ -367,11 +367,11 @@ function AiResumoCard({ negocioId }) {
 
   if (!data && !loading && !error) {
     return (
-      <div className="rounded-2xl border-2 border-dashed border-[#C9A84C]/50 p-4 text-center bg-gradient-to-br from-[#0d0d0d]/5 to-[#C9A84C]/5">
-        <Sparkles className="w-5 h-5 mx-auto text-[#C9A84C] mb-1.5" />
+      <div className="rounded-2xl border-2 border-dashed border-brand-gold/50 p-4 text-center bg-gradient-to-br from-[#0d0d0d]/5 to-[#C9A84C]/5">
+        <Sparkles className="w-5 h-5 mx-auto text-brand-gold mb-1.5" />
         <p className="text-xs text-gray-600 mb-2">Pede uma análise rápida deste projeto à IA Somnium</p>
         <button onClick={() => carregar(false)}
-          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#0d0d0d] text-[#C9A84C] text-xs font-medium hover:bg-[#1a1a1a]">
+          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-brand-dark text-brand-gold text-xs font-medium hover:bg-brand-dark-light">
           <Sparkles className="w-3.5 h-3.5" /> Gerar resumo IA
         </button>
       </div>
@@ -399,7 +399,7 @@ function AiResumoCard({ negocioId }) {
     <div className={`rounded-2xl border-2 ${sinalCor.border} ${sinalCor.bg} p-4`}>
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-[#C9A84C]" />
+          <Sparkles className="w-4 h-4 text-brand-gold" />
           <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Resumo IA</p>
           <span className={`w-2 h-2 rounded-full ${sinalCor.dot}`} />
           <span className={`text-[10px] font-bold uppercase ${sinalCor.text}`}>{data.sinal}</span>
@@ -429,7 +429,7 @@ function AiResumoCard({ negocioId }) {
           <ul className="space-y-1">
             {data.proximos_passos.map((p, i) => (
               <li key={i} className="text-xs text-gray-700 flex items-start gap-1.5">
-                <span className="text-[#C9A84C] font-bold">→</span>
+                <span className="text-brand-gold font-bold">→</span>
                 <span>{p}</span>
               </li>
             ))}
@@ -840,7 +840,7 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
               <input type="date" value={novaDespesa.data} onChange={e => setNovaDespesa({ ...novaDespesa, data: e.target.value })}
                 className="col-span-3 px-2 py-1 text-xs rounded-lg border border-gray-200 bg-white" />
               <button type="submit" disabled={!novaDespesa.movimento.trim() || !novaDespesa.valor}
-                className="col-span-2 px-2 py-1 rounded-lg bg-[#0d0d0d] text-[#C9A84C] text-xs disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1">
+                className="col-span-2 px-2 py-1 rounded-lg bg-brand-dark text-brand-gold text-xs disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1">
                 <Plus className="w-3 h-3" /> Add
               </button>
             </form>
@@ -872,7 +872,7 @@ function TabOrcamento({ imovel }) {
       <p className="text-sm text-gray-600">O orçamento detalhado de obra (25 secções, IVA reduzido ARU, MO por dia, retenções IRS) está ligado ao imóvel <strong>{imovel.nome}</strong>.</p>
       <div className="flex gap-2">
         <Link to={`/crm?imovelId=${imovel.id}&tab=obra`}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0d0d0d] text-[#C9A84C] text-sm font-medium hover:bg-[#1a1a1a]">
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-brand-dark text-brand-gold text-sm font-medium hover:bg-brand-dark-light">
           <Building2 className="w-4 h-4" /> Abrir orçamento no CRM
         </Link>
       </div>
@@ -980,7 +980,7 @@ function TabFaturacao({ negocio, onChange, readOnly }) {
           <input type="date" value={novaT.data} onChange={e => setNovaT({ ...novaT, data: e.target.value })}
             className="sm:col-span-3 px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white" />
           <button type="submit" disabled={!novaT.descricao.trim() || !novaT.valor || saving}
-            className="sm:col-span-1 px-3 py-1.5 rounded-lg bg-[#0d0d0d] text-[#C9A84C] text-sm hover:bg-[#1a1a1a] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center justify-center">
+            className="sm:col-span-1 px-3 py-1.5 rounded-lg bg-brand-dark text-brand-gold text-sm hover:bg-brand-dark-light disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center justify-center">
             <Plus className="w-4 h-4" />
           </button>
         </div>
@@ -1046,7 +1046,7 @@ function TabFotos({ negocioId, fases, fotos, onChange, readOnly }) {
           </div>
           <div className="self-end">
             <input ref={fileRef} type="file" multiple accept="image/*" onChange={upload} disabled={uploading || !faseSel} className="hidden" id="upload-fotos" />
-            <label htmlFor="upload-fotos" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0d0d0d] text-[#C9A84C] text-sm font-medium hover:bg-[#1a1a1a] cursor-pointer">
+            <label htmlFor="upload-fotos" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-brand-dark text-brand-gold text-sm font-medium hover:bg-brand-dark-light cursor-pointer">
               <Upload className="w-4 h-4" /> {uploading ? 'A enviar...' : 'Carregar fotos'}
             </label>
           </div>
@@ -1196,7 +1196,7 @@ function TabDocumentos({ negocio, fases, readOnly }) {
               </select>
               <button onClick={() => faseFichaSel && abrirPDF(`/api/crm/projetos/${negocio.id}/pdf/ficha/${faseFichaSel}`)}
                 disabled={!faseFichaSel}
-                className="px-3 py-1.5 text-xs rounded-lg bg-[#0d0d0d] text-[#C9A84C] hover:bg-[#1a1a1a] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center gap-1.5">
+                className="px-3 py-1.5 text-xs rounded-lg bg-brand-dark text-brand-gold hover:bg-brand-dark-light disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center gap-1.5">
                 <FileDown className="w-3.5 h-3.5" /> Gerar
               </button>
             </div>
@@ -1208,7 +1208,7 @@ function TabDocumentos({ negocio, fases, readOnly }) {
                 <p className="text-[11px] text-gray-500 mt-0.5">{t.desc}</p>
               </div>
               <button onClick={() => abrirPDF(t.url)}
-                className="px-3 py-1.5 text-xs rounded-lg bg-[#0d0d0d] text-[#C9A84C] hover:bg-[#1a1a1a] inline-flex items-center gap-1.5">
+                className="px-3 py-1.5 text-xs rounded-lg bg-brand-dark text-brand-gold hover:bg-brand-dark-light inline-flex items-center gap-1.5">
                 <FileDown className="w-3.5 h-3.5" /> Gerar
               </button>
             </div>
@@ -1234,7 +1234,7 @@ function TabDocumentos({ negocio, fases, readOnly }) {
             <input ref={fileRef} type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,image/*"
               onChange={uploadDocs} disabled={uploading} className="hidden" id="upload-doc" />
             <label htmlFor="upload-doc"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0d0d0d] text-[#C9A84C] text-sm font-medium hover:bg-[#1a1a1a] cursor-pointer whitespace-nowrap">
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-brand-dark text-brand-gold text-sm font-medium hover:bg-brand-dark-light cursor-pointer whitespace-nowrap">
               <Upload className="w-4 h-4" /> {uploading ? 'A enviar...' : 'Carregar'}
             </label>
           </div>
@@ -1252,7 +1252,7 @@ function TabDocumentos({ negocio, fases, readOnly }) {
                 <div key={doc.id} className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-200 bg-white group">
                   <FileText className="w-5 h-5 text-gray-400 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <a href={doc.url} target="_blank" rel="noreferrer" className="text-sm font-medium text-gray-800 hover:text-[#C9A84C] truncate block">{doc.nome}</a>
+                    <a href={doc.url} target="_blank" rel="noreferrer" className="text-sm font-medium text-gray-800 hover:text-brand-gold truncate block">{doc.nome}</a>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide text-white"
                         style={{ background: tipoConfig.cor }}>{tipoConfig.label}</span>
@@ -1347,7 +1347,7 @@ function TabInvestidores({ negocio, readOnly }) {
         <div className="space-y-2">
           {lista.map(l => (
             <div key={l.id} className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 bg-white group">
-              <div className="w-8 h-8 rounded-full bg-[#C9A84C] text-[#0d0d0d] flex items-center justify-center font-bold text-xs flex-shrink-0">
+              <div className="w-8 h-8 rounded-full bg-brand-gold text-brand-dark flex items-center justify-center font-bold text-xs flex-shrink-0">
                 {(l.investidor_nome || '?').slice(0, 2).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
@@ -1404,7 +1404,7 @@ function TabInvestidores({ negocio, readOnly }) {
             <input type="number" step="0.1" value={novaPerc} onChange={e => setNovaPerc(e.target.value)}
               placeholder="%" className="col-span-2 px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white" />
             <button type="submit" disabled={!investidorSel || !novoCapital}
-              className="col-span-2 px-3 py-1.5 rounded-lg bg-[#0d0d0d] text-[#C9A84C] text-sm disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1">
+              className="col-span-2 px-3 py-1.5 rounded-lg bg-brand-dark text-brand-gold text-sm disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1">
               <Plus className="w-4 h-4" /> Add
             </button>
           </div>
@@ -1429,7 +1429,7 @@ function FracaoChips({ fracoes, fracaoSel, setFracaoSel }) {
     return (
       <button key={fr.id} onClick={() => setFracaoSel(fr.id)}
         className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap inline-flex items-center gap-1.5 border ${
-          sel ? 'bg-[#0d0d0d] text-[#C9A84C] border-[#0d0d0d]' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
+          sel ? 'bg-brand-dark text-brand-gold border-brand-dark' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
         }`}>
         {cat && <span>{cat.icon}</span>}
         <span className="font-semibold">{fr.nome}</span>
@@ -1437,7 +1437,7 @@ function FracaoChips({ fracoes, fracaoSel, setFracaoSel }) {
         {fr.tipologia && <span className="text-gray-500">{fr.tipologia}</span>}
         {fr.andar && <span className="text-gray-400">·</span>}
         {fr.andar && <span className="text-gray-500">{fr.andar}</span>}
-        <span className={`ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold ${sel ? 'bg-white/10 text-[#C9A84C]' : `${cor.bg} ${cor.text}`}`}>
+        <span className={`ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold ${sel ? 'bg-white/10 text-brand-gold' : `${cor.bg} ${cor.text}`}`}>
           {Math.round(Number(fr.perc_global) || 0)}%
         </span>
       </button>
@@ -1448,7 +1448,7 @@ function FracaoChips({ fracoes, fracaoSel, setFracaoSel }) {
     <div className="flex items-center gap-2 overflow-x-auto pb-1">
       <button onClick={() => setFracaoSel(null)}
         className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap inline-flex items-center gap-1.5 border ${
-          fracaoSel === null ? 'bg-[#0d0d0d] text-[#C9A84C] border-[#0d0d0d]' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+          fracaoSel === null ? 'bg-brand-dark text-brand-gold border-brand-dark' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
         }`}>
         <Home className="w-3 h-3" /> Prédio inteiro
       </button>
@@ -1616,7 +1616,7 @@ function FracaoCard({ fracao: fr, readOnly, onEdit, onDelete }) {
       {!readOnly && (
         <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity">
           <button onClick={onEdit}
-            className="text-[11px] px-2 py-1 text-gray-600 hover:text-[#C9A84C]">Editar</button>
+            className="text-[11px] px-2 py-1 text-gray-600 hover:text-brand-gold">Editar</button>
           <button onClick={onDelete}
             className="text-[11px] px-2 py-1 text-gray-600 hover:text-red-500">Apagar</button>
         </div>
@@ -1648,21 +1648,21 @@ function FracaoForm({ fracao, onSave, onCancel, fasesComunsCount }) {
   }
 
   return (
-    <div className="bg-white rounded-xl border-2 border-[#C9A84C] p-4 shadow-md">
+    <div className="bg-white rounded-xl border-2 border-brand-gold p-4 shadow-md">
       <h3 className="text-sm font-semibold text-gray-700 mb-3">{isNew ? 'Nova entidade' : 'Editar entidade'}</h3>
 
       {/* Selector de tipo */}
       <div className="mb-4">
         <label className="text-[10px] text-gray-500 uppercase tracking-wider block mb-1.5">Tipo</label>
         <div className="grid grid-cols-2 gap-2">
-          <label className={`flex items-start gap-2 p-2.5 rounded-lg cursor-pointer border-2 ${f.tipo === 'fracao' ? 'border-[#C9A84C] bg-[#C9A84C]/5' : 'border-gray-200'}`}>
+          <label className={`flex items-start gap-2 p-2.5 rounded-lg cursor-pointer border-2 ${f.tipo === 'fracao' ? 'border-brand-gold bg-brand-gold/5' : 'border-gray-200'}`}>
             <input type="radio" name="tipo" value="fracao" checked={f.tipo === 'fracao'} onChange={() => set('tipo', 'fracao')} className="mt-0.5 accent-[#C9A84C]" />
             <div>
               <p className="text-sm font-semibold text-gray-800">Fração</p>
               <p className="text-[10px] text-gray-500">Apartamento vendável</p>
             </div>
           </label>
-          <label className={`flex items-start gap-2 p-2.5 rounded-lg cursor-pointer border-2 ${f.tipo === 'area_comum' ? 'border-[#C9A84C] bg-[#C9A84C]/5' : 'border-gray-200'}`}>
+          <label className={`flex items-start gap-2 p-2.5 rounded-lg cursor-pointer border-2 ${f.tipo === 'area_comum' ? 'border-brand-gold bg-brand-gold/5' : 'border-gray-200'}`}>
             <input type="radio" name="tipo" value="area_comum" checked={f.tipo === 'area_comum'} onChange={() => set('tipo', 'area_comum')} className="mt-0.5 accent-[#C9A84C]" />
             <div>
               <p className="text-sm font-semibold text-gray-800">Área comum</p>
@@ -1679,7 +1679,7 @@ function FracaoForm({ fracao, onSave, onCancel, fasesComunsCount }) {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
             {CATEGORIAS_COMUM.map(c => (
               <button key={c.key} type="button" onClick={() => selectCategoria(c.key)}
-                className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs border ${f.categoria_comum === c.key ? 'border-[#C9A84C] bg-[#C9A84C]/10 text-[#0d0d0d]' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs border ${f.categoria_comum === c.key ? 'border-brand-gold bg-brand-gold/10 text-brand-dark' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
                 <span>{c.icon}</span> {c.label}
               </button>
             ))}
@@ -1754,7 +1754,7 @@ function FracaoForm({ fracao, onSave, onCancel, fasesComunsCount }) {
       </div>
 
       {isNew && fasesComunsCount > 0 && (
-        <p className="text-[11px] text-[#C9A84C] mt-3 bg-[#0d0d0d] px-3 py-2 rounded-lg">
+        <p className="text-[11px] text-brand-gold mt-3 bg-brand-dark px-3 py-2 rounded-lg">
           ✨ Ao criar esta fração, serão duplicadas as {fasesComunsCount} fases existentes do prédio (com tarefas-template) para esta fração.
         </p>
       )}
@@ -1909,7 +1909,7 @@ function ComentariosFase({ faseId, readOnly }) {
         {comentarios.length === 0 && <p className="text-[11px] text-gray-400 italic">Sem comentários.</p>}
         {comentarios.map(c => (
           <div key={c.id} className="group flex items-start gap-2 bg-white rounded-lg p-2 border border-gray-100">
-            <div className="w-6 h-6 rounded-full bg-[#C9A84C] text-[#0d0d0d] flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+            <div className="w-6 h-6 rounded-full bg-brand-gold text-brand-dark flex items-center justify-center text-[10px] font-bold flex-shrink-0">
               {(c.autor_nome || "?").slice(0, 2).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
@@ -1932,7 +1932,7 @@ function ComentariosFase({ faseId, readOnly }) {
           <input value={texto} onChange={e => setTexto(e.target.value)}
             placeholder="Escreve um comentário..." className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 bg-white" />
           <button type="submit" disabled={!texto.trim()}
-            className="px-3 py-1.5 text-xs rounded-lg bg-[#0d0d0d] text-[#C9A84C] hover:bg-[#1a1a1a] disabled:bg-gray-200 disabled:text-gray-400">
+            className="px-3 py-1.5 text-xs rounded-lg bg-brand-dark text-brand-gold hover:bg-brand-dark-light disabled:bg-gray-200 disabled:text-gray-400">
             Enviar
           </button>
         </form>

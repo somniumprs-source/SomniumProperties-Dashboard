@@ -143,36 +143,32 @@ export function Dashboard() {
 
         {loading && !error && <KPISkeleton count={8} />}
 
-        {/* Banner + Weekly Pulse */}
-        <div className="rounded-2xl px-4 sm:px-7 py-4 sm:py-6 flex flex-col sm:flex-row sm:items-center sm:justify-between overflow-hidden relative gap-4"
-          style={{ backgroundColor: '#0d0d0d', boxShadow: '0 2px 12px rgba(0,0,0,0.12)', border: '1px solid #1a1a1a' }}>
-          <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-2xl"
-            style={{ background: 'linear-gradient(90deg, #C9A84C, #E8D08A, #C9A84C)' }} />
-          <div className="relative z-10">
-            <p className="text-xs font-semibold uppercase tracking-widest mb-1.5" style={{ color: '#C9A84C' }}>
-              Dashboard Empresarial
-            </p>
-            <h2 className="text-white text-xl font-bold tracking-tight">Visão Geral do Negócio</h2>
-            <p className="text-sm mt-1" style={{ color: '#666' }}>Todos os departamentos em tempo real</p>
-          </div>
-          <div className="hidden sm:flex items-center gap-4 sm:gap-8 relative z-10">
-            {pulse && (
-              <div className="text-center">
-                <p className="text-3xl font-bold" style={{ color: PULSE_COLOR[pulse.status] ?? '#C9A84C' }}>{pulse.score}</p>
-                <p className="text-xs mt-0.5 uppercase font-semibold" style={{ color: PULSE_COLOR[pulse.status] ?? '#555' }}>{pulse.status}</p>
+        {/* Banner principal — refinado em linha com Projetos */}
+        <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 text-white shadow-lg bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700">
+          <div className="absolute top-0 right-0 w-72 h-72 bg-brand-gold/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+          <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-brand-gold to-transparent" />
+
+          <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <p className="text-overline uppercase tracking-widest font-semibold text-brand-gold mb-1.5">Dashboard Empresarial</p>
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Visão Geral do Negócio</h2>
+              <p className="text-sm mt-1 text-white/60">Todos os departamentos em tempo real</p>
+            </div>
+            <div className="hidden sm:flex items-center gap-7">
+              {pulse && (
+                <div className="text-right">
+                  <p className="text-3xl font-bold font-mono" style={{ color: PULSE_COLOR[pulse.status] ?? '#C9A84C' }}>{pulse.score}</p>
+                  <p className="text-overline mt-0.5 uppercase tracking-widest font-semibold" style={{ color: PULSE_COLOR[pulse.status] ?? '#888' }}>{pulse.status}</p>
+                </div>
+              )}
+              <div className="text-right">
+                <p className="text-2xl font-bold font-mono text-brand-gold">{loading ? '...' : 'Online'}</p>
+                <p className="text-overline mt-0.5 uppercase tracking-widest font-semibold text-white/40">Estado</p>
               </div>
-            )}
-            {[
-              { label: 'Estado', value: loading ? '...' : 'Online' },
-            ].map(item => (
-              <div key={item.label} className="text-center">
-                <p className="text-2xl font-bold" style={{ color: '#C9A84C' }}>{item.value}</p>
-                <p className="text-xs mt-0.5" style={{ color: '#555' }}>{item.label}</p>
-              </div>
-            ))}
-          </div>
-          <div className="absolute right-6 top-1/2 -translate-y-1/2 opacity-5 pointer-events-none">
-            <img src="/logo-transparent.png" alt="" className="w-auto" style={{ height: 48 }} />
+            </div>
+            <div className="absolute right-6 top-1/2 -translate-y-1/2 opacity-5 pointer-events-none">
+              <img src="/logo-transparent.png" alt="" className="w-auto" style={{ height: 48 }} />
+            </div>
           </div>
         </div>
 
@@ -193,7 +189,7 @@ export function Dashboard() {
                 { label: 'Propostas', value: pulse.atividades.propostasEnviadas, good: true },
                 { label: 'Deals', value: pulse.atividades.dealsFechados, good: true },
               ].map(item => (
-                <div key={item.label} className="bg-white rounded-lg p-2 shadow-sm">
+                <div key={item.label} className="bg-white dark:bg-neutral-900 rounded-lg p-2.5 shadow-xs border border-gray-100 dark:border-neutral-800">
                   <p className="text-lg font-bold text-gray-900">{item.value}</p>
                   <p className="text-xs text-gray-500">{item.label}</p>
                 </div>

@@ -67,7 +67,7 @@ export function ImovelInteracoesSection({ imovelId, consultores, onUpdate }) {
     } catch {}
   }
 
-  const inputClass = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/30'
+  const inputClass = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-gold/30'
 
   return (
     <div>
@@ -75,7 +75,7 @@ export function ImovelInteracoesSection({ imovelId, consultores, onUpdate }) {
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-2 w-full text-left mb-2"
       >
-        <MessageSquare className="w-4 h-4 text-[#C9A84C]" />
+        <MessageSquare className="w-4 h-4 text-brand-gold" />
         <span className="text-xs text-gray-400 uppercase tracking-wide">
           Notas de Contacto ({interacoes.length})
         </span>
@@ -87,7 +87,7 @@ export function ImovelInteracoesSection({ imovelId, consultores, onUpdate }) {
           {/* Botao adicionar */}
           <button
             onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[#C9A84C] text-white hover:bg-[#b8973f] transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-gold text-white hover:bg-[#b8973f] transition-colors"
           >
             <Plus className="w-3.5 h-3.5" /> Registar Contacto
           </button>
@@ -131,7 +131,7 @@ export function ImovelInteracoesSection({ imovelId, consultores, onUpdate }) {
               </div>
               <div className="flex gap-2">
                 <button type="submit" disabled={saving || !form.notas?.trim()}
-                  className="px-4 py-2 text-white text-xs font-medium rounded-lg bg-[#C9A84C] hover:bg-[#b8973f] transition-colors disabled:opacity-50">
+                  className="px-4 py-2 text-white text-xs font-medium rounded-lg bg-brand-gold hover:bg-[#b8973f] transition-colors disabled:opacity-50">
                   {saving ? 'A gravar...' : 'Registar'}
                 </button>
                 <button type="button" onClick={() => setShowForm(false)}

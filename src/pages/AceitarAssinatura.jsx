@@ -37,16 +37,16 @@ export function AceitarAssinatura() {
   }
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0d0d0d]">
+    <div className="min-h-screen flex items-center justify-center bg-brand-dark">
       <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#C9A84C', borderTopColor: 'transparent' }} />
     </div>
   )
 
   if (error || !data) return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0d0d0d] text-center px-6">
+    <div className="min-h-screen flex items-center justify-center bg-brand-dark text-center px-6">
       <div>
         <AlertTriangle className="w-10 h-10 mx-auto text-red-400 mb-3" />
-        <p className="text-[#C9A84C] text-2xl font-bold mb-2">Link inválido</p>
+        <p className="text-brand-gold text-2xl font-bold mb-2">Link inválido</p>
         <p className="text-gray-400 text-sm">{error || 'O pedido de assinatura não foi encontrado.'}</p>
       </div>
     </div>
@@ -54,11 +54,11 @@ export function AceitarAssinatura() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-[#0d0d0d] text-white">
+      <header className="bg-brand-dark text-white">
         <div className="max-w-3xl mx-auto px-6 py-6 flex items-center gap-3">
           <img src="/logo-transparent.png" alt="Somnium" className="h-10" />
           <div>
-            <p className="text-[#C9A84C] font-bold text-lg leading-tight">SOMNIUM PROPERTIES</p>
+            <p className="text-brand-gold font-bold text-lg leading-tight">SOMNIUM PROPERTIES</p>
             <p className="text-[10px] uppercase tracking-wider text-gray-400">Aceitação de Documento</p>
           </div>
         </div>
@@ -84,8 +84,8 @@ export function AceitarAssinatura() {
           ) : (
             <>
               <div className="flex items-start gap-4 mb-6">
-                <div className="w-12 h-12 rounded-lg bg-[#C9A84C]/10 flex items-center justify-center flex-shrink-0">
-                  <FileText className="w-6 h-6 text-[#C9A84C]" />
+                <div className="w-12 h-12 rounded-lg bg-brand-gold/10 flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-6 h-6 text-brand-gold" />
                 </div>
                 <div>
                   <h1 className="text-xl font-bold text-gray-800">Pedido de aceitação</h1>
@@ -124,7 +124,7 @@ export function AceitarAssinatura() {
 
               <div className="mt-6 flex justify-end gap-3">
                 <button onClick={aceitar} disabled={aceitando}
-                  className="px-6 py-3 rounded-xl bg-[#0d0d0d] text-[#C9A84C] font-semibold text-sm hover:bg-[#1a1a1a] disabled:opacity-50">
+                  className="px-6 py-3 rounded-xl bg-brand-dark text-brand-gold font-semibold text-sm hover:bg-brand-dark-light disabled:opacity-50">
                   {aceitando ? 'A registar...' : 'Aceito e confirmo'}
                 </button>
               </div>

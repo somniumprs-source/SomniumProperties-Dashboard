@@ -30,12 +30,12 @@ export function Tabs({ items, value, onChange, size = 'md', variant = 'segmented
               onClick={() => !it.disabled && onChange(it.key)}
               disabled={it.disabled}
               className={`relative inline-flex items-center font-medium whitespace-nowrap transition-colors disabled:opacity-40 ${SIZES_SEG[size] || SIZES_SEG.md} ${
-                active ? 'text-[#0d0d0d]' : 'text-gray-500 hover:text-gray-800'
+                active ? 'text-brand-dark' : 'text-gray-500 hover:text-gray-800'
               }`}>
               {Icon && <Icon className={`${ICON_SIZES[size]} shrink-0`} />}
               <span>{it.label}</span>
               {it.count != null && (
-                <span className={`ml-1 px-1.5 py-0.5 text-[10px] rounded-full font-semibold ${active ? 'bg-[#0d0d0d] text-[#C9A84C]' : 'bg-gray-100 text-gray-600'}`}>{it.count}</span>
+                <span className={`ml-1 px-1.5 py-0.5 text-[10px] rounded-full font-semibold ${active ? 'bg-brand-dark text-brand-gold' : 'bg-gray-100 text-gray-600'}`}>{it.count}</span>
               )}
               {active && <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full" style={{ backgroundColor: '#C9A84C' }} />}
             </button>
@@ -58,13 +58,13 @@ export function Tabs({ items, value, onChange, size = 'md', variant = 'segmented
             disabled={it.disabled}
             className={`inline-flex items-center justify-center font-semibold rounded-lg transition-all whitespace-nowrap disabled:opacity-40 ${fluid ? 'flex-1' : ''} ${SIZES_SEG[size] || SIZES_SEG.md} ${
               active
-                ? 'bg-[#0d0d0d] text-[#C9A84C] shadow-sm'
+                ? 'bg-brand-dark text-brand-gold shadow-sm'
                 : 'bg-transparent text-gray-600 hover:text-gray-900 hover:bg-white/60'
             }`}>
             {Icon && <Icon className={`${ICON_SIZES[size]} shrink-0`} />}
             <span>{it.label}</span>
             {it.count != null && (
-              <span className={`ml-0.5 px-1.5 py-0.5 text-[10px] rounded-full font-semibold ${active ? 'bg-[#C9A84C]/20 text-[#C9A84C]' : 'bg-gray-200 text-gray-600'}`}>{it.count}</span>
+              <span className={`ml-0.5 px-1.5 py-0.5 text-[10px] rounded-full font-semibold ${active ? 'bg-brand-gold/20 text-brand-gold' : 'bg-gray-200 text-gray-600'}`}>{it.count}</span>
             )}
           </button>
         )

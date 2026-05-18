@@ -425,7 +425,7 @@ export function Comparaveis({ analise, imovel, onUpdate }) {
       </div>
 
       {/* Cartao Captura do Estudo de Mercado (Alfredo) — sempre visivel */}
-      <div className="rounded-xl border-2 border-[#C9A84C]/40 bg-[#FAF7EE] p-4">
+      <div className="rounded-xl border-2 border-brand-gold/40 bg-[#FAF7EE] p-4">
         <div className="flex items-start justify-between gap-3 mb-2">
           <div>
             <h3 className="text-sm font-semibold text-gray-800">Estudo de Mercado de Referência (Alfredo)</h3>
@@ -452,7 +452,7 @@ export function Comparaveis({ analise, imovel, onUpdate }) {
         ) : (
           <button type="button" disabled={uploadingAlfredo || !analise?.id}
             onClick={() => alfredoInputRef.current?.click()}
-            className="w-full text-xs px-4 py-4 rounded border-2 border-dashed border-[#C9A84C]/60 hover:border-[#C9A84C] hover:bg-white text-gray-600 disabled:opacity-50 inline-flex items-center justify-center gap-2 font-semibold">
+            className="w-full text-xs px-4 py-4 rounded border-2 border-dashed border-brand-gold/60 hover:border-brand-gold hover:bg-white text-gray-600 disabled:opacity-50 inline-flex items-center justify-center gap-2 font-semibold">
             <Upload size={16} /> {uploadingAlfredo ? 'A carregar...' : (analise?.id ? 'Carregar captura do estudo (JPG, PNG, WEBP — máx. 15MB)' : 'Guarde a análise primeiro para activar este upload')}
           </button>
         )}
@@ -565,7 +565,7 @@ export function Comparaveis({ analise, imovel, onUpdate }) {
                       <span className="col-span-1 text-gray-300 font-semibold">
                         {comp.link ? (
                           <a href={comp.link} target="_blank" rel="noopener noreferrer"
-                            className="text-[#C9A84C] hover:underline cursor-pointer">{cIdx + 1}</a>
+                            className="text-brand-gold hover:underline cursor-pointer">{cIdx + 1}</a>
                         ) : (cIdx + 1)}
                       </span>
                       <div className="col-span-2">
@@ -744,7 +744,7 @@ export function Comparaveis({ analise, imovel, onUpdate }) {
             <div className="px-4 pb-4 flex flex-col sm:flex-row items-center justify-between gap-2">
               <div className="text-xs text-gray-500">
                 VVR Adoptado <strong className="font-mono text-gray-700">{EUR(stats.vvrAdoptado)}</strong> vs. Mediana
-                <span className={`ml-2 font-mono font-semibold ${stats.delta < 0 ? 'text-green-600' : stats.delta > 5 ? 'text-red-600' : 'text-[#C9A84C]'}`}>
+                <span className={`ml-2 font-mono font-semibold ${stats.delta < 0 ? 'text-green-600' : stats.delta > 5 ? 'text-red-600' : 'text-brand-gold'}`}>
                   {stats.delta >= 0 ? '+' : ''}{stats.delta.toFixed(1)}%
                 </span>
               </div>

@@ -333,7 +333,7 @@ export function Projectos() {
             </div>
             {predicoes?.predicoes?.length > 0 && (
               <div className="mt-4 pt-4 border-t border-white/10">
-                <p className="text-[10px] uppercase tracking-wider text-[#C9A84C] mb-2 flex items-center gap-1.5">
+                <p className="text-[10px] uppercase tracking-wider text-brand-gold mb-2 flex items-center gap-1.5">
                   <Sparkles className="w-3 h-3" /> Riscos identificados pela IA ({predicoes.predicoes.length})
                 </p>
                 <div className="space-y-1.5">
@@ -345,7 +345,7 @@ export function Projectos() {
                           <div>
                             <p className="text-xs font-semibold text-white">{p.projeto_nome} <span className="text-[10px] uppercase ml-1 opacity-80">{p.risco}</span></p>
                             <p className="text-[10px] text-gray-300 mt-0.5">{p.razao}</p>
-                            <p className="text-[10px] text-[#C9A84C] mt-1">→ {p.acao_recomendada}</p>
+                            <p className="text-[10px] text-brand-gold mt-1">→ {p.acao_recomendada}</p>
                           </div>
                         </div>
                       </Link>

@@ -623,7 +623,7 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
 
       {/* Barra fixa em baixo — gerar dossier */}
       <div className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
-        selectedDocs.length > 0 ? 'border-[#C9A84C] bg-[#faf8f2]' : 'border-neutral-200 bg-neutral-50'
+        selectedDocs.length > 0 ? 'border-brand-gold bg-[#faf8f2]' : 'border-neutral-200 bg-neutral-50'
       }`}>
         <div>
           <p className="text-sm font-bold text-neutral-800">
@@ -790,7 +790,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
   ].filter(t => t.show)
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs overflow-hidden">
       {/* Header */}
       <div className="px-4 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3" style={{ backgroundColor: '#0d0d0d' }}>
         <button onClick={attemptClose} disabled={saving}
@@ -1822,7 +1822,7 @@ function ImovelReadSections({ data }) {
       <Field label="Nome" value={data.nome} />
       <Field label="Estado" value={data.estado?.replace(/^\d+-/, '')} />
       <Field label="REF Interna" value={data.ref_interna} />
-      <Field label="Link" value={data.link ? <a href={data.link} target="_blank" rel="noopener noreferrer" className="text-[#C9A84C] hover:underline truncate block">{data.link === 'OFF MARKET' ? 'OFF MARKET' : 'Ver anúncio'}</a> : '—'} />
+      <Field label="Link" value={data.link ? <a href={data.link} target="_blank" rel="noopener noreferrer" className="text-brand-gold hover:underline truncate block">{data.link === 'OFF MARKET' ? 'OFF MARKET' : 'Ver anúncio'}</a> : '—'} />
       <Field label="Tipo de Oportunidade" value={data.tipo_oportunidade} />
       <Field label="Origem (Canal)" value={data.origem} />
       <Field label="Consultor" value={data.nome_consultor} />
@@ -2145,7 +2145,7 @@ function MiniDate({ iso }) {
   const [y, m, d] = (iso || '').slice(0, 10).split('-')
   return (
     <div className="w-12 h-14 rounded-lg border border-gray-200 bg-white shadow-sm flex flex-col overflow-hidden shrink-0">
-      <div className="bg-[#0d0d0d] text-[#C9A84C] text-[9px] text-center font-semibold py-0.5 tracking-wider">{meses[parseInt(m, 10) - 1] || '—'}</div>
+      <div className="bg-brand-dark text-brand-gold text-[9px] text-center font-semibold py-0.5 tracking-wider">{meses[parseInt(m, 10) - 1] || '—'}</div>
       <div className="flex-1 flex items-center justify-center text-lg font-bold text-gray-800">{d || '?'}</div>
     </div>
   )
@@ -2277,7 +2277,7 @@ function InvestidorTimeline({ data }) {
         const past = iso < today
         const prev = i > 0 ? eventos[i - 1].date.slice(0, 10) : null
         const gap = prev ? Math.floor((new Date(iso) - new Date(prev)) / 86400000) : null
-        const dotColor = future ? 'bg-yellow-500' : isToday ? 'bg-[#C9A84C]' : 'bg-gray-300'
+        const dotColor = future ? 'bg-yellow-500' : isToday ? 'bg-brand-gold' : 'bg-gray-300'
         const Icon = e.Icon
         return (
           <div key={i} className="relative flex items-start gap-3 py-2">
@@ -2709,7 +2709,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
         </div>
         <div className="flex gap-2">
           <button onClick={() => { setShowScript(!showScript); setScriptStep(0) }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${showScript ? 'bg-[#0d0d0d] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${showScript ? 'bg-brand-dark text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
             {showScript ? 'Fechar Script' : 'Script da Call'}
           </button>
           {!creating && !showScript && (
@@ -2730,17 +2730,17 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
         const stepLabels = ['Introdução', ...criterioKeys.map(c => CRITERIOS_INFO[c].label), 'Fecho e Próximos Passos']
 
         return (
-          <div className="rounded-xl border-2 border-[#C9A84C] overflow-hidden" style={{ backgroundColor: '#faf8f2' }}>
+          <div className="rounded-xl border-2 border-brand-gold overflow-hidden" style={{ backgroundColor: '#faf8f2' }}>
             {/* Script header + tipo selector */}
             <div className="px-5 py-3 border-b border-[#C9A84C33] flex items-center justify-between" style={{ backgroundColor: '#0d0d0d' }}>
               <div className="flex items-center gap-3">
                 <span className="text-white text-sm font-bold">Script Discovery Call</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#C9A84C] text-black font-medium">{investidorNome}</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold text-black font-medium">{investidorNome}</span>
               </div>
               <div className="flex gap-1">
                 {['Passivo', 'Ativo'].map(t => (
                   <button key={t} onClick={() => setTipo(t)}
-                    className={`px-2 py-1 rounded text-[10px] font-medium transition ${tipo === t ? 'bg-[#C9A84C] text-black' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}>
+                    className={`px-2 py-1 rounded text-[10px] font-medium transition ${tipo === t ? 'bg-brand-gold text-black' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}>
                     {t}
                   </button>
                 ))}
@@ -2752,7 +2752,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
               {stepLabels.map((label, i) => (
                 <button key={i} onClick={() => setScriptStep(i)}
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-medium whitespace-nowrap transition ${
-                    scriptStep === i ? 'bg-[#0d0d0d] text-white' : 'bg-white text-gray-500 hover:bg-gray-100'
+                    scriptStep === i ? 'bg-brand-dark text-white' : 'bg-white text-gray-500 hover:bg-gray-100'
                   }`}>
                   {i > 0 && i < totalSteps - 1 ? `${i}. ` : ''}{label}
                 </button>
@@ -2779,7 +2779,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                     <div className="flex items-center gap-2">
                       <span className="text-lg">{CRITERIOS_INFO[ck].icon}</span>
                       <h4 className="text-sm font-bold text-gray-800">{bloco.label}</h4>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#C9A84C22] text-[#C9A84C] font-medium">Critério {scriptStep}/5</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#C9A84C22] text-brand-gold font-medium">Critério {scriptStep}/5</span>
                     </div>
 
                     {/* Contexto */}
@@ -2792,9 +2792,9 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                     <div className="space-y-3">
                       <p className="text-[10px] uppercase text-gray-400 font-semibold tracking-wide">Perguntas a fazer</p>
                       {bloco.perguntas.map((p, i) => (
-                        <div key={i} className="rounded-lg bg-white border border-gray-200 hover:border-[#C9A84C] transition overflow-hidden">
+                        <div key={i} className="rounded-lg bg-white border border-gray-200 hover:border-brand-gold transition overflow-hidden">
                           <div className="flex gap-3 items-start p-3 pb-2">
-                            <span className="text-xs font-bold text-[#C9A84C] shrink-0 mt-0.5">{i + 1}.</span>
+                            <span className="text-xs font-bold text-brand-gold shrink-0 mt-0.5">{i + 1}.</span>
                             <p className="text-sm text-gray-800 leading-relaxed font-medium">"{p.pergunta.replace(/\[Nome\]/g, investidorNome.split(' ')[0])}"</p>
                           </div>
                           <div className="px-3 pb-3 pl-8">
@@ -2877,7 +2877,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
           <div className="flex gap-2">
             {['Passivo', 'Ativo'].map(t => (
               <button key={t} onClick={() => setTipo(t)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tipo === t ? 'bg-[#0d0d0d] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tipo === t ? 'bg-brand-dark text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                 {t}
               </button>
             ))}
@@ -2910,7 +2910,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                     {[1, 2, 3, 4, 5].map(v => (
                       <button key={v} onClick={() => setForm(f => ({ ...f, [`${c}_score`]: v }))}
                         className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${
-                          score === v ? 'bg-[#0d0d0d] text-white shadow-sm' : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                          score === v ? 'bg-brand-dark text-white shadow-sm' : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600'
                         }`}>
                         {v}
                       </button>
@@ -2919,7 +2919,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
 
                   {/* Rubrica description */}
                   {rubricaDesc && (
-                    <p className="text-xs text-[#C9A84C] font-medium mb-2">{rubricaDesc}</p>
+                    <p className="text-xs text-brand-gold font-medium mb-2">{rubricaDesc}</p>
                   )}
 
                   {/* Notas */}
@@ -2996,7 +2996,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                   <div className="flex items-center gap-2">
                     <span className={`text-lg font-black ${cores.text}`}>Classe {sc.classificacao}</span>
                     <span className="text-xs text-gray-500">{sc.pontuacao_ponderada}/100 pts</span>
-                    {idx === 0 && <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#0d0d0d] text-white font-medium">Actual</span>}
+                    {idx === 0 && <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-dark text-white font-medium">Actual</span>}
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-gray-500">{new Date(sc.created_at).toLocaleDateString('pt-PT')}</p>

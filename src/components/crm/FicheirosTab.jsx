@@ -124,7 +124,7 @@ export function FicheirosTab({ imovelId, driveFolderId }) {
             Fotografias
             {galleryPhotos.length > 0 && (
               <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full ${
-                section === 'fotos' ? 'bg-[#C9A84C] text-white' : 'bg-neutral-200 text-neutral-500'
+                section === 'fotos' ? 'bg-brand-gold text-white' : 'bg-neutral-200 text-neutral-500'
               }`}>{galleryPhotos.length}</span>
             )}
           </button>
@@ -198,7 +198,7 @@ export function FicheirosTab({ imovelId, driveFolderId }) {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1.5">
             {galleryPhotos.map((foto, idx) => (
               <div key={foto.id + '-' + idx}
-                className="group relative aspect-square rounded-xl overflow-hidden bg-neutral-100 cursor-pointer ring-0 hover:ring-2 hover:ring-[#C9A84C]/50 transition-all"
+                className="group relative aspect-square rounded-xl overflow-hidden bg-neutral-100 cursor-pointer ring-0 hover:ring-2 hover:ring-brand-gold/50 transition-all"
                 onClick={() => setLightbox(idx)}>
                 <img
                   src={foto.source === 'local' ? foto.url : (foto.thumbnailLink || foto.url)}
@@ -242,7 +242,7 @@ export function FicheirosTab({ imovelId, driveFolderId }) {
             ))}
 
             {/* Add more button */}
-            <div className="aspect-square rounded-xl border-2 border-dashed border-neutral-200 flex flex-col items-center justify-center cursor-pointer hover:border-[#C9A84C] hover:bg-[#faf8f2] transition-colors"
+            <div className="aspect-square rounded-xl border-2 border-dashed border-neutral-200 flex flex-col items-center justify-center cursor-pointer hover:border-brand-gold hover:bg-[#faf8f2] transition-colors"
               onClick={() => fileInputRef.current?.click()}>
               <Plus className="w-6 h-6 text-neutral-300 mb-1" />
               <span className="text-[10px] text-neutral-400 font-medium">Adicionar</span>

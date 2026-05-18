@@ -127,7 +127,7 @@ export function Alertas() {
         </div>
 
         {/* Automações */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
           <h2 className="text-sm font-semibold text-gray-700 mb-4">Automações</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {[
@@ -172,7 +172,7 @@ export function Alertas() {
         </div>
 
         {/* Alertas */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
           <h2 className="text-sm font-semibold text-gray-700 mb-4">
             Alertas Ativos ({alertas?.alertas?.length ?? 0})
           </h2>
@@ -205,7 +205,7 @@ export function Alertas() {
           const inactivos = (alertas?.alertas ?? []).filter(a => a.tipo === 'investidor_inactivo_recente')
           if (inactivos.length === 0) return null
           return (
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold text-gray-700">
                   Investidores movidos para Inactivo (últimos 7 dias)
@@ -233,7 +233,7 @@ export function Alertas() {
 
         {/* Campos em Falta */}
         {alertas?.camposEmFalta?.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
             <h2 className="text-sm font-semibold text-gray-700 mb-4">
               Campos Obrigatórios em Falta ({alertas.camposEmFalta.length})
             </h2>
@@ -269,7 +269,7 @@ export function Alertas() {
         )}
 
         {/* Data Health */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-gray-700">Higiene de Dados</h2>
             {health?.scoreGlobal != null && (
@@ -307,7 +307,7 @@ export function Alertas() {
         </div>
 
         {/* ── Backups ────────────────────────── */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-gray-700">Backups</h2>
             <button onClick={createBackup} disabled={backupLoading}
@@ -346,7 +346,7 @@ export function Alertas() {
         </div>
 
         {/* ── Histórico de Alterações ─────────── */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
           <h2 className="text-sm font-semibold text-gray-700 mb-4">Histórico de Alterações (últimas 30)</h2>
           {auditLog.length > 0 ? (
             <div className="overflow-x-auto">

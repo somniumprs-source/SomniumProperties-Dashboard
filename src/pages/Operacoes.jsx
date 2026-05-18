@@ -389,7 +389,7 @@ export function Operacoes() {
               <M label="Horas / deal" value={k?.horasPorDeal != null ? HRS(k.horasPorDeal) : '—'} />
               <M label="Custo / deal (com horas)" value={k?.custoPorDeal != null ? EUR(k.custoPorDeal) : '—'} />
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
               <h3 className="text-sm font-semibold text-gray-700 mb-4">Estado das Tarefas</h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                 <div className="text-center"><span className="text-2xl font-bold text-gray-400">{r.statusTarefas.aFazer}</span><p className="text-xs text-gray-400 mt-1">A fazer</p></div>
@@ -398,7 +398,7 @@ export function Operacoes() {
                 <div className="text-center"><span className="text-2xl font-bold text-red-500">{r.statusTarefas.atrasada}</span><p className="text-xs text-gray-400 mt-1">Atrasadas</p></div>
               </div>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
               <h3 className="text-sm font-semibold text-gray-700 mb-4">Distribuição de Tempo</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                 <M label="Prospeção" value={HRS(k?.horasProspeção)} sub={k?.pctProspeção != null ? `${PCT(k.pctProspeção)} do total` : ''} />
@@ -407,7 +407,7 @@ export function Operacoes() {
                 <M label="Gestão & Admin" value={HRS(k?.horasGestão)} sub={k?.pctGestão != null ? `${PCT(k.pctGestão)} do total` : ''} />
               </div>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
               <h3 className="text-sm font-semibold text-gray-700 mb-4">Estrutura de Custos Real</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <M label="Custo de horas (15EUR/h)" value={EUR(r.custoHorasTotal)} sub={`${HRS(r.totalHoras)} x 15EUR`} />
@@ -535,7 +535,7 @@ export function Operacoes() {
 
             {/* List View — para todos os filtros incluindo arquivo */}
             {(viewMode === 'list' || taskFilter === 'arquivo') && (
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs overflow-hidden">
                 {taskFilter === 'arquivo' && (
                   <div className="px-4 py-3 bg-green-50 border-b border-green-100 text-xs text-green-700">
                     Arquivo — tarefas concluídas. Seleciona e apaga as que já não precisas.
@@ -612,7 +612,7 @@ export function Operacoes() {
             {calEvents.length > 0 && (
               <>
                 <SectionTitle>Próximos Eventos (Google Calendar)</SectionTitle>
-                <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                   <div className="flex flex-col gap-2">
                     {calEvents.slice(0, 15).map((e, i) => (
                       <a key={i} href={e.link} target="_blank" rel="noreferrer"
@@ -640,11 +640,11 @@ export function Operacoes() {
         {tab === 'horas' && data?.meses && (
           <>
             <SectionTitle>Horas por Mes</SectionTitle>
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
               <HBar items={data.meses.map(m => ({ label: `${MES_LABEL[m.mes.slice(5)] || m.mes.slice(5)} ${m.mes.slice(0,4)}`, horas: m.horas, tarefas: m.tarefas }))} labelKey="label" colorFn={() => '#6366f1'} />
             </div>
             <SectionTitle>Detalhe Mensal</SectionTitle>
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
               <table className="min-w-[600px] w-full text-sm">
                 <thead><tr className="border-b border-gray-100 text-xs text-gray-400 uppercase"><th className="text-left py-2 px-3">Mes</th><th className="text-right py-2 px-3">Horas</th><th className="text-right py-2 px-3">Tarefas</th><th className="text-right py-2 px-3">Custo</th><th className="text-right py-2 px-3">h/sem</th></tr></thead>
                 <tbody>
@@ -668,11 +668,11 @@ export function Operacoes() {
         {tab === 'categorias' && data?.categorias && (
           <>
             <SectionTitle>Tempo por Tipo de Atividade</SectionTitle>
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
               <HBar items={data.categorias.map(c => ({ label: c.categoria, horas: c.horas, tarefas: c.tarefas }))} labelKey="label" colorFn={(_, i) => CAT_COLORS[i % CAT_COLORS.length]} />
             </div>
             <SectionTitle>Detalhe</SectionTitle>
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
               <table className="min-w-[700px] w-full text-sm">
                 <thead><tr className="border-b border-gray-100 text-xs text-gray-400 uppercase"><th className="text-left py-2 px-3">Atividade</th><th className="text-right py-2 px-3">Horas</th><th className="text-right py-2 px-3">%</th><th className="text-right py-2 px-3">Tarefas</th><th className="text-right py-2 px-3">h/tarefa</th><th className="text-right py-2 px-3">Custo</th></tr></thead>
                 <tbody>
@@ -698,7 +698,7 @@ export function Operacoes() {
             <SectionTitle>Performance por Funcionário</SectionTitle>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
               {data.funcionarios.map(f => (
-                <div key={f.nome} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                <div key={f.nome} className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-700">{f.nome}</h3>
                     <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium">{HRS(f.horas)}</span>
@@ -748,7 +748,7 @@ export function Operacoes() {
               <M label="% em Relacional" value={PCT(k.pctRelacional)} sub={HRS(k.horasRelacional)} />
               <M label="% em Gestão/Admin" value={PCT(k.pctGestão)} sub={HRS(k.horasGestão)} warn={k.pctGestão > 40} />
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
               <h3 className="text-sm font-semibold text-gray-700 mb-4">Diagnóstico</h3>
               <div className="flex flex-col gap-4">
                 <div className="p-4 bg-gray-50 rounded-xl">

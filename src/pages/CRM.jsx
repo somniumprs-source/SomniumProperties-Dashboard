@@ -126,7 +126,7 @@ function RelatorioConsultores() {
       </div>
 
       {/* Distribuição por classe */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs p-4">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Distribuição por Classe</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {['A', 'B', 'C', 'D'].map(cl => (
@@ -150,7 +150,7 @@ function RelatorioConsultores() {
 
       {/* Top 5 */}
       {report.top5?.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs p-4">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Top 5 Consultores</h3>
           <div className="space-y-2">
             {report.top5.map((c, i) => (
@@ -176,7 +176,7 @@ function RelatorioConsultores() {
         const grupo = report.consultores_detalhados.filter(c => c.classe === cl)
         if (grupo.length === 0) return null
         return (
-          <div key={cl} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div key={cl} className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs overflow-hidden">
             <div className={`px-4 py-2 ${classeColor[cl]} flex items-center justify-between`}>
               <span className="text-xs font-semibold uppercase">Classe {cl} — {classeLabel[cl]} ({grupo.length})</span>
             </div>
@@ -269,7 +269,7 @@ function RelatorioInvestidores() {
       </div>
 
       {/* Distribuição por classificação */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs p-4">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Distribuição por Classificação</h3>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {['A', 'B', 'C', 'D', 'Sem classificação'].map(cl => (
@@ -291,7 +291,7 @@ function RelatorioInvestidores() {
       </div>
 
       {/* Pipeline por status */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs p-4">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Pipeline por Status</h3>
         <div className="space-y-2">
           {Object.entries(report.por_status).filter(([,c]) => c > 0).map(([status, count]) => {
@@ -313,7 +313,7 @@ function RelatorioInvestidores() {
 
       {/* Top 5 por capital */}
       {report.top5?.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs p-4">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Top 5 Investidores (por capital)</h3>
           <div className="space-y-2">
             {report.top5.map((inv, i) => (
@@ -335,7 +335,7 @@ function RelatorioInvestidores() {
       )}
 
       {/* Alertas */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs p-4">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Alertas</h3>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           {[
@@ -1074,7 +1074,7 @@ export function CRM() {
         {tab === 'Investidores' && detail ? (
           <div className="flex gap-4" style={{ minHeight: '70vh' }}>
             {/* Lista compacta à esquerda */}
-            <div className="w-72 shrink-0 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+            <div className="w-72 shrink-0 bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs overflow-hidden flex flex-col">
               <div className="flex-1 overflow-y-auto">
                 {[...data].sort((a, b) => {
                   // Estados desconhecidos vão para o fim (não para o topo).
@@ -1217,7 +1217,7 @@ export function CRM() {
             />
           )}
           {!loading && editing === null && (view === 'table' || !hasKanban) && data.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs overflow-hidden">
               <div className="overflow-x-auto -webkit-overflow-scrolling-touch">
                 {tab === 'Imóveis' && <ImoveisTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} onConsultorClick={navigateToConsultor} />}
                 {tab === 'Investidores' && <InvestidoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
@@ -1463,7 +1463,7 @@ function NegociosTable({ data, onEdit, onDelete, onViewImovel }) {
           <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
             onClick={() => r.imovel_id && onViewImovel?.(r.imovel_id)}>
             <td className="py-3 px-3">
-              <span className={`font-medium ${r.imovel_id ? 'text-[#C9A84C] hover:underline' : 'text-gray-800'}`}>
+              <span className={`font-medium ${r.imovel_id ? 'text-brand-gold hover:underline' : 'text-gray-800'}`}>
                 {r.movimento}
               </span>
               {r.imovel_id && <span className="text-[10px] text-gray-300 ml-1.5">→ ver imóvel</span>}
@@ -1704,7 +1704,7 @@ function FormPanel({ tab, item, onSave, onCancel }) {
   const inputClass = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+    <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-6 shadow-xs">
       <h2 className="text-sm font-semibold text-gray-700 mb-4">{isNew ? 'Novo Registo' : 'Editar Registo'}</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {fields.map(f => (

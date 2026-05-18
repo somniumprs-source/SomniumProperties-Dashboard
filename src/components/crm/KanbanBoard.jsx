@@ -150,7 +150,7 @@ export function KanbanBoard({ columns, items, groupField, renderCard, onMove, on
                   onDragStart={e => handleDragStart(e, item)}
                   onDragEnd={handleDragEnd}
                   onClick={() => onCardClick?.(item.id)}
-                  className={`bg-white rounded-lg border border-gray-200 p-3 shadow-sm cursor-pointer hover:shadow-md hover:border-indigo-300 transition-all group/card relative ${
+                  className={`bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-800 p-3 shadow-xs cursor-pointer hover:shadow-md hover:border-indigo-300 transition-all group/card relative ${
                     dragging === item.id ? 'opacity-50 cursor-grabbing' : ''
                   }`}
                 >
