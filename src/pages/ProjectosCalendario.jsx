@@ -31,9 +31,14 @@ function getMonthMatrix(year, month) {
 }
 
 const FASE_COR = {
-  aquisicao: '#6366f1', projeto_licenca: '#0ea5e9', demolicoes: '#ef4444',
-  estrutura_especialidades: '#f59e0b', acabamentos: '#10b981', exterior_fecho: '#8b5cf6',
-  comercializacao: '#ec4899', vendido: '#22c55e',
+  aquisicao: '#475569',
+  projeto_licenca: '#1F4E5F',
+  demolicoes: '#7C2D40',
+  estrutura_especialidades: '#5F4D20',
+  acabamentos: '#C9A84C',
+  exterior_fecho: '#D5B65A',
+  comercializacao: '#866B2D',
+  vendido: '#0d0d0d',
 }
 
 export function ProjectosCalendario() {

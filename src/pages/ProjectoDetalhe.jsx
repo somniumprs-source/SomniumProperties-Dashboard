@@ -22,9 +22,14 @@ const GOLD = '#C9A84C'
 const BLACK = '#0d0d0d'
 
 const FASE_COR = {
-  aquisicao: '#6366f1', projeto_licenca: '#0ea5e9', demolicoes: '#ef4444',
-  estrutura_especialidades: '#f59e0b', acabamentos: '#10b981', exterior_fecho: '#8b5cf6',
-  comercializacao: '#ec4899', vendido: '#22c55e',
+  aquisicao: '#475569',                  // slate (cálculo)
+  projeto_licenca: '#1F4E5F',            // teal escuro (técnico)
+  demolicoes: '#7C2D40',                 // vinho (transformação)
+  estrutura_especialidades: '#5F4D20',   // gold-800 (base)
+  acabamentos: '#C9A84C',                // brand gold (brilho)
+  exterior_fecho: '#D5B65A',             // gold-400 (final)
+  comercializacao: '#866B2D',            // gold-700 (venda)
+  vendido: '#0d0d0d',                    // brand dark (sucesso)
 }
 const FASE_ICON = {
   aquisicao: '🔑', projeto_licenca: '📐', demolicoes: '🔨', estrutura_especialidades: '⚡',

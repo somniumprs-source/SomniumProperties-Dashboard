@@ -28,16 +28,16 @@ const MODELOS_NEGOCIO = [
   { key: 'Wholesalling',           nome: 'Wholesalling',         icon: '⚡', desc: 'Finder fee' },
 ]
 
-// Fases do Kanban (alinhadas com fasesFixFlip.js no backend)
+// Fases do Kanban — paleta sofisticada Somnium (gold + dark + acentos elegantes)
 const FASES_KANBAN = [
-  { key: 'aquisicao',                nome: 'Aquisição',                  icon: '🔑', cor: '#6366f1' },
-  { key: 'projeto_licenca',          nome: 'Projeto & Licença',          icon: '📐', cor: '#0ea5e9' },
-  { key: 'demolicoes',               nome: 'Demolições',                 icon: '🔨', cor: '#ef4444' },
-  { key: 'estrutura_especialidades', nome: 'Estrutura & Especialidades', icon: '⚡', cor: '#f59e0b' },
-  { key: 'acabamentos',              nome: 'Acabamentos',                icon: '🎨', cor: '#10b981' },
-  { key: 'exterior_fecho',           nome: 'Exterior & Fecho',           icon: '🏠', cor: '#8b5cf6' },
-  { key: 'comercializacao',          nome: 'Comercialização',            icon: '📣', cor: '#ec4899' },
-  { key: 'vendido',                  nome: 'Vendido',                    icon: '✅', cor: '#22c55e' },
+  { key: 'aquisicao',                nome: 'Aquisição',                  icon: '🔑', cor: '#475569' },  // slate (cálculo)
+  { key: 'projeto_licenca',          nome: 'Projeto & Licença',          icon: '📐', cor: '#1F4E5F' },  // teal escuro (técnico)
+  { key: 'demolicoes',               nome: 'Demolições',                 icon: '🔨', cor: '#7C2D40' },  // vinho (transformação)
+  { key: 'estrutura_especialidades', nome: 'Estrutura & Especialidades', icon: '⚡', cor: '#5F4D20' },  // gold-800 (base)
+  { key: 'acabamentos',              nome: 'Acabamentos',                icon: '🎨', cor: '#C9A84C' },  // brand gold (brilho)
+  { key: 'exterior_fecho',           nome: 'Exterior & Fecho',           icon: '🏠', cor: '#D5B65A' },  // gold-400 (final)
+  { key: 'comercializacao',          nome: 'Comercialização',            icon: '📣', cor: '#866B2D' },  // gold-700 (venda)
+  { key: 'vendido',                  nome: 'Vendido',                    icon: '✅', cor: '#0d0d0d' },  // brand dark (sucesso)
 ]
 
 // Mapa fase-macro do CRM legacy → coluna Kanban (para projetos não-Fix&Flip)
