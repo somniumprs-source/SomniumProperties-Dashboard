@@ -134,7 +134,7 @@ function PartilharModal({ entidade, entidadeId, nome, onClose }) {
                     checked={tem}
                     disabled={busy === p.id}
                     onChange={() => tem ? revoke(p) : grant(p)}
-                    className="w-4 h-4 accent-[#C9A84C]" />
+                    className="w-4 h-4 accent-brand-gold" />
                   <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
                     style={{ backgroundColor: p.cor || '#C9A84C' }}>
                     {p.iniciais}

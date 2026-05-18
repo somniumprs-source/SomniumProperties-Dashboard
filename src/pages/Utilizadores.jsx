@@ -442,7 +442,7 @@ function InviteForm({ onClose, onCreated }) {
               <input type="radio" name="method" value={opt.id}
                 checked={form.method === opt.id}
                 onChange={() => setForm({ ...form, method: opt.id })}
-                className="mt-0.5 accent-[#C9A84C]" />
+                className="mt-0.5 accent-brand-gold" />
               <div>
                 <p className="text-xs text-white font-medium">{opt.label}</p>
                 <p className="text-[10px] text-gray-500">{opt.hint}</p>

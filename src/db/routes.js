@@ -50,6 +50,13 @@ const aiRateLimit = rateLimit({
   message: { error: 'Demasiados pedidos de IA. Aguarda 1 minuto.' },
 })
 
+// Rate limit para uploads (proteção disco / abuse)
+const uploadRateLimit = rateLimit({
+  windowMs: 60 * 1000, max: 30,
+  standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Demasiados uploads. Aguarda 1 minuto.' },
+})
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.resolve(__dirname, '../../public/uploads/despesas')
 const imoveisUploadsDir = path.resolve(__dirname, '../../public/uploads/imoveis')
@@ -873,7 +880,7 @@ router.post('/imoveis/:id/scrape-fotos', async (req, res) => {
 })
 
 // ── Upload de fotos para imóveis ─────────────────────────────
-router.post('/imoveis/:id/fotos', uploadImovel.array('fotos', 20), async (req, res) => {
+router.post('/imoveis/:id/fotos', uploadRateLimit, uploadImovel.array('fotos', 20), async (req, res) => {
   try {
     if (!req.files?.length) return res.status(400).json({ error: 'Nenhum ficheiro válido (JPG, PNG, WEBP até 15MB)' })
     const imovel = await Imoveis.getById(req.params.id)
@@ -931,7 +938,7 @@ router.put('/imoveis/:id/fotos/:fotoId/mover', async (req, res) => {
 })
 
 // ── Upload da imagem de localização (Google Maps print) ─────
-router.post('/imoveis/:id/localizacao', uploadImovel.single('imagem'), async (req, res) => {
+router.post('/imoveis/:id/localizacao', uploadRateLimit, uploadImovel.single('imagem'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Nenhum ficheiro válido (JPG, PNG, WEBP até 15MB)' })
     const imovel = await Imoveis.getById(req.params.id)
@@ -1054,7 +1061,7 @@ router.get('/imoveis/:id/drive-files', async (req, res) => {
 })
 
 // ── Upload de documentos para despesas ───────────────────────
-router.post('/despesas/:id/upload', upload.single('file'), async (req, res) => {
+router.post('/despesas/:id/upload', uploadRateLimit, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Ficheiro inválido (PDF, JPG, PNG até 10MB)' })
     const { id } = req.params
@@ -3143,7 +3150,7 @@ router.get('/projetos/:negocioId/fotos', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-router.post('/projetos/fases/:faseId/fotos', uploadFoto.array('fotos', 20), async (req, res) => {
+router.post('/projetos/fases/:faseId/fotos', uploadRateLimit, uploadFoto.array('fotos', 20), async (req, res) => {
   try {
     const { rows: faseRows } = await pool.query('SELECT negocio_id FROM projeto_fases WHERE id = $1', [req.params.faseId])
     if (!faseRows.length) return res.status(404).json({ error: 'Fase não encontrada' })
@@ -3494,7 +3501,7 @@ router.get('/projetos/:negocioId/documentos', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-router.post('/projetos/:negocioId/documentos', uploadDoc.array('files', 10), async (req, res) => {
+router.post('/projetos/:negocioId/documentos', uploadRateLimit, uploadDoc.array('files', 10), async (req, res) => {
   try {
     const { faseId, tipo, notas } = req.body
     const inserted = []
@@ -3601,7 +3608,7 @@ const uploadComprovativo = multer({
   fileFilter: (req, file, cb) => cb(null, /\.(pdf|jpg|jpeg|png|webp|heic)$/i.test(path.extname(file.originalname))),
 })
 
-router.post('/projetos/despesas/:despesaId/comprovativo', uploadComprovativo.single('comprovativo'), async (req, res) => {
+router.post('/projetos/despesas/:despesaId/comprovativo', uploadRateLimit, uploadComprovativo.single('comprovativo'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Sem ficheiro' })
     const url = `/uploads/comprovativos/${req.file.filename}`

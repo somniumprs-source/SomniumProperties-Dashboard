@@ -2269,7 +2269,7 @@ function InvestidorTimeline({ data }) {
   }
   return (
     <div className="col-span-2 md:col-span-3 relative pl-2">
-      <span className="absolute left-4 top-2 bottom-2 w-px bg-gradient-to-b from-[#C9A84C] via-gray-200 to-gray-100" />
+      <span className="absolute left-4 top-2 bottom-2 w-px bg-gradient-to-b from-brand-gold via-gray-200 to-gray-100" />
       {eventos.map((e, i) => {
         const iso = (e.date || '').slice(0, 10)
         const future = iso > today
