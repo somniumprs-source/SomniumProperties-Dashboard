@@ -632,7 +632,7 @@ function ListaProjetos({ projectos, fasesInfo, onCardClick }) {
 // ════════════════════════════════════════════════════════════════
 // FORM (criar/editar projeto)
 // ════════════════════════════════════════════════════════════════
-function ProjectoForm({ item, onSave, onCancel }) {
+export function ProjectoForm({ item, onSave, onCancel }) {
   const isNew = !item.id
   const [f, setF] = useState({
     movimento: '', categoria: 'Fix and Flip', fase: 'Fase de obras',

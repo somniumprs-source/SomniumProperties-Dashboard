@@ -4,8 +4,9 @@ import {
   ArrowLeft, Calendar, CheckCircle2, Circle, Plus, Trash2, Upload, X,
   Building2, Wallet, ImageIcon, FileText, Users, BarChart3, ChevronRight,
   FileDown, AlertTriangle, Sparkles, RefreshCw, Home, Layers,
-  History, MessageSquare, TrendingUp, FileSpreadsheet,
+  History, MessageSquare, TrendingUp, FileSpreadsheet, Pencil,
 } from 'lucide-react'
+import { ProjectoForm } from './Projectos.jsx'
 import { apiFetch, getToken } from '../lib/api.js'
 import { Header } from '../components/layout/Header.jsx'
 import { Button } from '../components/ui/Button.jsx'
@@ -94,6 +95,8 @@ export function ProjectoDetalhe() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [tab, setTab] = useState('resumo')
+  const [editing, setEditing] = useState(false)
+  const [savingEdit, setSavingEdit] = useState(false)
 
   async function load() {
     setLoading(true); setError(null)
@@ -186,6 +189,9 @@ export function ProjectoDetalhe() {
             </a>
             {!isReadOnly && <PartilharAcesso entidade="negocio" entidadeId={id} nome={negocio.movimento} />}
             {!isReadOnly && (
+              <Button size="sm" variant="ghost" icon={Pencil} onClick={() => setEditing(true)}>Editar</Button>
+            )}
+            {!isReadOnly && (
               <Button size="sm" variant="destructive" icon={Trash2}
                 onClick={async () => {
                   if (!confirm(`Apagar o projecto "${negocio.movimento}"? Esta acção apaga também fases, tarefas e fotos. Não pode ser revertida.`)) return
@@ -200,6 +206,31 @@ export function ProjectoDetalhe() {
             )}
           </div>
         </div>
+
+        {/* Form de edição inline */}
+        {editing && (
+          <ProjectoForm
+            item={negocio}
+            onSave={async (form) => {
+              setSavingEdit(true)
+              try {
+                const r = await apiFetch(`/api/crm/negocios/${id}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(form),
+                })
+                if (!r.ok) {
+                  const err = await r.json().catch(() => ({}))
+                  alert(err.error || `Erro ${r.status}`)
+                  return
+                }
+                setEditing(false)
+                load()
+              } finally { setSavingEdit(false) }
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        )}
 
         {/* Chips de frações (só para projectos tipo 'predio') */}
         {isPredio && fracoes.length > 0 && (
@@ -367,7 +398,7 @@ function AiResumoCard({ negocioId }) {
 
   if (!data && !loading && !error) {
     return (
-      <div className="rounded-2xl border-2 border-dashed border-brand-gold/50 p-4 text-center bg-gradient-to-br from-[#0d0d0d]/5 to-[#C9A84C]/5">
+      <div className="rounded-2xl border-2 border-dashed border-brand-gold/50 p-4 text-center bg-gradient-to-br from-brand-dark/5 to-brand-gold/5">
         <Sparkles className="w-5 h-5 mx-auto text-brand-gold mb-1.5" />
         <p className="text-xs text-gray-600 mb-2">Pede uma análise rápida deste projeto à IA Somnium</p>
         <button onClick={() => carregar(false)}
@@ -943,7 +974,7 @@ function TabFaturacao({ negocio, onChange, readOnly }) {
         <>
           <div className="flex items-center gap-3">
             <div className="flex-1 bg-gray-100 rounded-full h-2.5">
-              <div className="h-full rounded-full bg-gradient-to-r from-[#C9A84C] to-green-500" style={{ width: `${pct}%` }} />
+              <div className="h-full rounded-full bg-gradient-to-r from-brand-gold to-green-500" style={{ width: `${pct}%` }} />
             </div>
             <span className="text-sm font-mono font-semibold text-gray-700">{EUR(recebido)} / {EUR(total)}</span>
           </div>
@@ -1587,7 +1618,7 @@ function FracaoCard({ fracao: fr, readOnly, onEdit, onDelete }) {
           <span className="font-mono font-bold text-gray-700">{perc}%</span>
         </div>
         <div className="w-full bg-gray-100 rounded-full h-1.5">
-          <div className="h-full rounded-full bg-gradient-to-r from-[#C9A84C] to-[#0d0d0d]" style={{ width: `${perc}%` }} />
+          <div className="h-full rounded-full bg-gradient-to-r from-brand-gold to-brand-dark" style={{ width: `${perc}%` }} />
         </div>
         <p className="text-[10px] text-gray-400 mt-0.5">{fr.num_fases} fase{fr.num_fases !== 1 ? 's' : ''}</p>
       </div>
@@ -1656,14 +1687,14 @@ function FracaoForm({ fracao, onSave, onCancel, fasesComunsCount }) {
         <label className="text-[10px] text-gray-500 uppercase tracking-wider block mb-1.5">Tipo</label>
         <div className="grid grid-cols-2 gap-2">
           <label className={`flex items-start gap-2 p-2.5 rounded-lg cursor-pointer border-2 ${f.tipo === 'fracao' ? 'border-brand-gold bg-brand-gold/5' : 'border-gray-200'}`}>
-            <input type="radio" name="tipo" value="fracao" checked={f.tipo === 'fracao'} onChange={() => set('tipo', 'fracao')} className="mt-0.5 accent-[#C9A84C]" />
+            <input type="radio" name="tipo" value="fracao" checked={f.tipo === 'fracao'} onChange={() => set('tipo', 'fracao')} className="mt-0.5 accent-brand-gold" />
             <div>
               <p className="text-sm font-semibold text-gray-800">Fração</p>
               <p className="text-[10px] text-gray-500">Apartamento vendável</p>
             </div>
           </label>
           <label className={`flex items-start gap-2 p-2.5 rounded-lg cursor-pointer border-2 ${f.tipo === 'area_comum' ? 'border-brand-gold bg-brand-gold/5' : 'border-gray-200'}`}>
-            <input type="radio" name="tipo" value="area_comum" checked={f.tipo === 'area_comum'} onChange={() => set('tipo', 'area_comum')} className="mt-0.5 accent-[#C9A84C]" />
+            <input type="radio" name="tipo" value="area_comum" checked={f.tipo === 'area_comum'} onChange={() => set('tipo', 'area_comum')} className="mt-0.5 accent-brand-gold" />
             <div>
               <p className="text-sm font-semibold text-gray-800">Área comum</p>
               <p className="text-[10px] text-gray-500">Fachada, telhado, jardim, escadas…</p>
