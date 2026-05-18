@@ -12,7 +12,7 @@ const nav = [
   { to: '/operacoes',          label: 'Operações',  Icon: Clock, badgeKey: 'tarefas', area: 'operacoes' },
   { to: '/metricas',           label: 'Métricas',   Icon: BarChart3, area: 'metricas' },
   { to: '/alertas',            label: 'Alertas',    Icon: Bell, badgeKey: 'alertas', area: 'alertas' },
-  { to: '/relatorios-admin',   label: 'Relatórios Administração', Icon: ScrollText, area: 'relatorios-admin' },
+  { to: '/administracao',      label: 'Administração', Icon: ScrollText, area: 'administracao' },
   { to: '/admin/utilizadores', label: 'Utilizadores', Icon: Shield, area: 'admin' },
 ]
 

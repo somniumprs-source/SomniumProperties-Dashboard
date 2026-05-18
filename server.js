@@ -78,7 +78,9 @@ try {
   app.use('/api/crm', analiseRoutes)
   const { default: orcamentoObraRoutes } = await import('./src/db/orcamentoObraRoutes.js')
   app.use('/api/crm', orcamentoObraRoutes)
-  console.log('[crm] API CRM + Análises + Orçamento Obra montada em /api/crm (PostgreSQL)')
+  const { default: sopRoutes } = await import('./src/db/sopRoutes.js')
+  app.use('/api/sops', sopRoutes)
+  console.log('[crm] API CRM + Análises + Orçamento Obra + SOPs montada (PostgreSQL)')
   // Filtros por área (admin passa sempre; em dev sem Supabase passa sempre)
   // Bloqueios por role desactivados — qualquer utilizador autenticado vê tudo.
   // (Roles continuam como labels na tabela users, mas sem enforcement no backend.)

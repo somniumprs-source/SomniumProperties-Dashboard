@@ -20,6 +20,8 @@ const ProjectosCalendario = lazy(() => import('./pages/ProjectosCalendario.jsx')
 const AceitarAssinatura = lazy(() => import('./pages/AceitarAssinatura.jsx').then(m => ({ default: m.AceitarAssinatura })))
 const Utilizadores = lazy(() => import('./pages/Utilizadores.jsx').then(m => ({ default: m.Utilizadores })))
 const RelatoriosAdmin = lazy(() => import('./pages/RelatoriosAdmin.jsx').then(m => ({ default: m.RelatoriosAdmin })))
+const Administracao = lazy(() => import('./pages/Administracao.jsx').then(m => ({ default: m.Administracao })))
+const AdministracaoSOP = lazy(() => import('./pages/AdministracaoSOP.jsx').then(m => ({ default: m.AdministracaoSOP })))
 
 function PageFallback() {
   return (
@@ -72,9 +74,14 @@ function AppRoutes() {
             <Route path="/operacoes" element={<ErrorBoundary><Operacoes /></ErrorBoundary>} />
             <Route path="/metricas" element={<ErrorBoundary><Metricas /></ErrorBoundary>} />
             <Route path="/alertas" element={<ErrorBoundary><Alertas /></ErrorBoundary>} />
-            <Route path="/relatorios-admin" element={<ErrorBoundary><RelatoriosAdmin /></ErrorBoundary>} />
+            <Route path="/administracao" element={<ErrorBoundary><Administracao /></ErrorBoundary>}>
+              <Route index element={<Navigate to="sop" replace />} />
+              <Route path="relatorios" element={<RelatoriosAdmin />} />
+              <Route path="sop" element={<AdministracaoSOP />} />
+            </Route>
             <Route path="/admin/utilizadores" element={<ErrorBoundary><Utilizadores /></ErrorBoundary>} />
-            {/* Redirects de páginas removidas */}
+            {/* Redirects de páginas removidas / renomeadas */}
+            <Route path="/relatorios-admin" element={<Navigate to="/administracao/relatorios" replace />} />
             <Route path="/comercial" element={<Navigate to="/crm" replace />} />
             <Route path="/marketing" element={<Navigate to="/crm" replace />} />
           </Route>

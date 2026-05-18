@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Header } from '../components/layout/Header.jsx'
 import { FileDown, Sparkles, Trash2, Calendar, Loader2, Plus, RefreshCw, Zap } from 'lucide-react'
 import { apiFetch, getToken } from '../lib/api.js'
 
@@ -110,16 +109,8 @@ export function RelatoriosAdmin() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-neutral-50 dark:bg-neutral-950 min-h-screen">
-      <Header
-        title="Relatórios Administração"
-        subtitle="Sínteses executivas semanais geradas a partir das reuniões internas"
-        onRefresh={load}
-        loading={loading}
-      />
-
-      <main className="flex-1 px-4 sm:px-7 py-5 sm:py-7 max-w-7xl w-full mx-auto">
-        {/* Action bar */}
+    <>
+      {/* Action bar */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
           <div>
             <h2 className="text-lg font-semibold text-neutral-800 dark:text-neutral-100">Relatórios Semanais</h2>
@@ -324,7 +315,6 @@ export function RelatoriosAdmin() {
             })}
           </div>
         )}
-      </main>
-    </div>
+    </>
   )
 }

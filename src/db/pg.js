@@ -996,6 +996,26 @@ export async function initSchema() {
       CREATE INDEX IF NOT EXISTS idx_despesas_fase ON despesas(fase_id);
       CREATE INDEX IF NOT EXISTS idx_despesas_negocio_fase ON despesas(negocio_id, fase_id);
 
+      -- ════════════════════════════════════════════════════════════════
+      -- SOPs (Standard Operating Procedures): biblioteca por departamento
+      -- com edição Markdown inline e import opcional do Google Drive.
+      -- ════════════════════════════════════════════════════════════════
+      CREATE TABLE IF NOT EXISTS sops (
+        id            SERIAL PRIMARY KEY,
+        departamento  TEXT NOT NULL CHECK (departamento IN ('comercial','financeiro','administrativo','geral')),
+        titulo        TEXT NOT NULL,
+        conteudo_md   TEXT NOT NULL DEFAULT '',
+        versao        INT  NOT NULL DEFAULT 1,
+        drive_file_id TEXT UNIQUE,
+        drive_url     TEXT,
+        created_at    TIMESTAMPTZ DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ DEFAULT NOW(),
+        created_by    TEXT,
+        updated_by    TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_sops_departamento ON sops(departamento);
+      CREATE INDEX IF NOT EXISTS idx_sops_updated ON sops(updated_at DESC);
+
       -- F2.8: multi-investidor por projecto com capital e % individuais
       CREATE TABLE IF NOT EXISTS projeto_investidores (
         id TEXT PRIMARY KEY,

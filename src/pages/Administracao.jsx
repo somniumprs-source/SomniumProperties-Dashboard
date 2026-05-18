@@ -1,0 +1,41 @@
+import { Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { FileText, BookOpen } from 'lucide-react'
+import { Header } from '../components/layout/Header.jsx'
+import { Tabs } from '../components/ui/Tabs.jsx'
+
+const TABS = [
+  { key: 'sop',        label: 'SOP',                icon: BookOpen },
+  { key: 'relatorios', label: 'Relatórios Reuniões', icon: FileText },
+]
+
+const SUBTITLES = {
+  sop:        'Procedimentos operacionais por departamento',
+  relatorios: 'Sínteses executivas semanais geradas a partir das reuniões internas',
+}
+
+export function Administracao() {
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  const seg = location.pathname.split('/')[2] || 'sop'
+  const active = TABS.some(t => t.key === seg) ? seg : 'sop'
+
+  return (
+    <div className="flex-1 flex flex-col bg-neutral-50 dark:bg-neutral-950 min-h-screen">
+      <Header title="Administração" subtitle={SUBTITLES[active]} />
+
+      <div className="bg-white dark:bg-neutral-900 px-4 sm:px-7 border-b border-neutral-200 dark:border-neutral-800">
+        <Tabs
+          variant="underline"
+          items={TABS}
+          value={active}
+          onChange={(key) => navigate(`/administracao/${key}`)}
+        />
+      </div>
+
+      <main className="flex-1 px-4 sm:px-7 py-5 sm:py-7 max-w-7xl w-full mx-auto">
+        <Outlet />
+      </main>
+    </div>
+  )
+}
