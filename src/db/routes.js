@@ -2896,6 +2896,10 @@ router.post('/projetos/:negocioId/fases/inicializar', async (req, res) => {
 // PUT fase (estado, datas, %, orçamento, notas)
 router.put('/projetos/fases/:faseId', async (req, res) => {
   try {
+    // Capturar estado anterior para detectar transição em_curso → notificar
+    const { rows: antes } = await pool.query('SELECT estado, fase_key, negocio_id FROM projeto_fases WHERE id = $1', [req.params.faseId])
+    const estadoAntes = antes[0]?.estado
+
     const allowed = ['estado', 'perc_execucao', 'data_inicio_prevista', 'data_fim_prevista', 'data_inicio_real', 'data_fim_real', 'orcamento_alocado', 'custo_real', 'responsavel', 'notas']
     const sets = []
     const params = []
@@ -2913,6 +2917,12 @@ router.put('/projetos/fases/:faseId', async (req, res) => {
       params
     )
     if (!rows.length) return res.status(404).json({ error: 'Fase não encontrada' })
+
+    // Notificar se mudou para "em_curso" (e antes não era)
+    if (req.body.estado === 'em_curso' && estadoAntes !== 'em_curso') {
+      notificarInvestidoresMudancaFase(rows[0].negocio_id, rows[0].fase_key).catch(() => {})
+    }
+
     res.json(rows[0])
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -3189,6 +3199,9 @@ router.put('/projetos/:negocioId/mover-fase', async (req, res) => {
           : [estado, perc, f.id]
       )
     }
+    // Notificação assíncrona aos investidores (best-effort)
+    notificarInvestidoresMudancaFase(req.params.negocioId, faseKey).catch(() => {})
+
     res.json({ ok: true, faseKey })
   } catch (e) { console.error('[mover-fase]', e.message); res.status(500).json({ error: e.message }) }
 })
@@ -3211,24 +3224,127 @@ router.put('/projetos/:negocioId/mover-fase', async (req, res) => {
         visitas INTEGER DEFAULT 0
       );
       CREATE INDEX IF NOT EXISTS idx_share_negocio ON projeto_share_tokens(negocio_id);
+      ALTER TABLE projeto_share_tokens ADD COLUMN IF NOT EXISTS pin TEXT;
     `)
   } catch (e) { console.error('[schema share_tokens]', e.message) }
 })()
 
-// Gerar / obter token de partilha
+// ── Notificar investidores quando uma fase muda ──────────────
+async function notificarInvestidoresMudancaFase(negocioId, novaFaseKey) {
+  try {
+    const { sendEmail, isConfigured: emailOK } = await import('./emailService.js')
+    if (!emailOK()) return
+
+    const { rows: negs } = await pool.query('SELECT * FROM negocios WHERE id = $1', [negocioId])
+    if (!negs.length) return
+    const negocio = negs[0]
+
+    let invIds = []
+    try { invIds = typeof negocio.investidor_ids === 'string' ? JSON.parse(negocio.investidor_ids || '[]') : (negocio.investidor_ids || []) } catch {}
+    if (invIds.length === 0) return
+
+    const { rows: invs } = await pool.query(
+      'SELECT id, nome, email FROM investidores WHERE id = ANY($1) AND email IS NOT NULL AND email <> $2',
+      [invIds, '']
+    )
+    if (invs.length === 0) return
+
+    const faseConfig = FASES_FIX_FLIP.find(f => f.key === novaFaseKey)
+    const faseNome = faseConfig?.nome || novaFaseKey
+    const faseIcon = faseConfig?.icon || '🛠️'
+
+    // Obter ou gerar token de share
+    const { rows: tokenRows } = await pool.query(
+      'SELECT token FROM projeto_share_tokens WHERE negocio_id = $1 AND ativo = true LIMIT 1',
+      [negocioId]
+    )
+    let token = tokenRows[0]?.token
+    if (!token) {
+      token = randomUUID().replace(/-/g, '')
+      const pin = String(Math.floor(1000 + Math.random() * 9000))
+      await pool.query(
+        'INSERT INTO projeto_share_tokens (token, negocio_id, pin) VALUES ($1, $2, $3)',
+        [token, negocioId, pin]
+      )
+    }
+    const baseUrl = process.env.PUBLIC_URL || 'https://somniumproperties-dashboard.onrender.com'
+    const link = `${baseUrl}/investidor/projeto/${token}`
+
+    const subject = `${faseIcon} ${negocio.movimento}: nova fase de obra — ${faseNome}`
+    const html = `
+      <div style="font-family: -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; background: #ffffff;">
+        <div style="background: #0d0d0d; padding: 24px; border-radius: 12px; color: white; text-align: center;">
+          <p style="color: #C9A84C; font-size: 11px; letter-spacing: 1px; margin: 0; text-transform: uppercase;">SOMNIUM PROPERTIES</p>
+          <h1 style="color: #C9A84C; margin: 8px 0 0; font-size: 22px;">${negocio.movimento}</h1>
+        </div>
+        <div style="padding: 24px 0;">
+          <p style="font-size: 15px; color: #1f2937; line-height: 1.6;">
+            Tem uma atualização do projeto <strong>${negocio.movimento}</strong>.
+          </p>
+          <div style="background: #f9fafb; border-left: 3px solid #C9A84C; padding: 16px; border-radius: 8px; margin: 16px 0;">
+            <p style="margin: 0; color: #6b7280; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Nova fase iniciada</p>
+            <p style="margin: 6px 0 0; font-size: 18px; font-weight: bold; color: #0d0d0d;">${faseIcon} ${faseNome}</p>
+          </div>
+          <p style="font-size: 14px; color: #6b7280;">
+            Pode consultar o cronograma completo, fotos do progresso e o relatório detalhado no link abaixo.
+          </p>
+          <p style="text-align: center; margin: 28px 0;">
+            <a href="${link}" style="background: #0d0d0d; color: #C9A84C; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block;">Ver projeto</a>
+          </p>
+          <p style="font-size: 11px; color: #9ca3af; text-align: center;">
+            Link confidencial. Não partilhar.
+          </p>
+        </div>
+        <div style="border-top: 1px solid #e5e7eb; padding-top: 12px; text-align: center;">
+          <p style="font-size: 10px; color: #9ca3af; margin: 0;">Somnium Properties · ${new Date().toLocaleDateString('pt-PT')}</p>
+        </div>
+      </div>
+    `
+
+    for (const inv of invs) {
+      sendEmail(subject, html, { to: inv.email })
+        .catch(e => console.error(`[notif-fase] ${inv.email}:`, e.message))
+    }
+    console.log(`[notif-fase] ${negocio.movimento} → ${faseNome}: enviado a ${invs.length} investidor(es)`)
+  } catch (e) { console.error('[notif-fase]', e.message) }
+}
+
+// Gerar / obter token de partilha (com PIN de 4 dígitos)
 router.post('/projetos/:negocioId/share', async (req, res) => {
   try {
     const { rows: existing } = await pool.query(
-      'SELECT token FROM projeto_share_tokens WHERE negocio_id = $1 AND ativo = true LIMIT 1',
+      'SELECT token, pin FROM projeto_share_tokens WHERE negocio_id = $1 AND ativo = true LIMIT 1',
       [req.params.negocioId]
     )
-    if (existing.length > 0) return res.json({ token: existing[0].token })
+    if (existing.length > 0) {
+      // Garantir que PIN existe (tokens antigos pré-feature)
+      if (!existing[0].pin) {
+        const pin = String(Math.floor(1000 + Math.random() * 9000))
+        await pool.query('UPDATE projeto_share_tokens SET pin = $1 WHERE token = $2', [pin, existing[0].token])
+        return res.json({ token: existing[0].token, pin })
+      }
+      return res.json({ token: existing[0].token, pin: existing[0].pin })
+    }
     const token = randomUUID().replace(/-/g, '')
+    const pin = String(Math.floor(1000 + Math.random() * 9000))
     await pool.query(
-      `INSERT INTO projeto_share_tokens (token, negocio_id) VALUES ($1, $2)`,
-      [token, req.params.negocioId]
+      `INSERT INTO projeto_share_tokens (token, negocio_id, pin) VALUES ($1, $2, $3)`,
+      [token, req.params.negocioId, pin]
     )
-    res.status(201).json({ token })
+    res.status(201).json({ token, pin })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Regenerar PIN sem mudar token
+router.post('/projetos/:negocioId/share/regenerar-pin', async (req, res) => {
+  try {
+    const pin = String(Math.floor(1000 + Math.random() * 9000))
+    const { rows } = await pool.query(
+      `UPDATE projeto_share_tokens SET pin = $1 WHERE negocio_id = $2 AND ativo = true RETURNING token`,
+      [pin, req.params.negocioId]
+    )
+    if (!rows.length) return res.status(404).json({ error: 'Sem link activo' })
+    res.json({ token: rows[0].token, pin })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 

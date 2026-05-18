@@ -26,22 +26,81 @@ export function InvestidorProjeto() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [precisaPin, setPrecisaPin] = useState(false)
+  const [pin, setPin] = useState('')
+  const [pinError, setPinError] = useState(null)
+
+  function carregar(pinTentativa) {
+    setLoading(true); setError(null); setPinError(null)
+    const url = `/api/public/projetos/${token}${pinTentativa ? `?pin=${pinTentativa}` : ''}`
+    return fetch(url)
+      .then(async r => {
+        if (r.ok) return r.json()
+        const err = await r.json().catch(() => ({}))
+        if (err.precisaPin) { setPrecisaPin(true); throw new Error('pin') }
+        throw new Error(err.error || 'Erro')
+      })
+      .then(d => {
+        setData(d)
+        if (pinTentativa) {
+          try { localStorage.setItem(`projeto-pin:${token}`, pinTentativa) } catch {}
+        }
+        setPrecisaPin(false)
+      })
+      .catch(e => {
+        if (e.message === 'pin') {
+          // Limpa PIN guardado se estava errado
+          try { localStorage.removeItem(`projeto-pin:${token}`) } catch {}
+          if (pinTentativa) setPinError('PIN incorrecto')
+        } else {
+          setError(e.message)
+        }
+      })
+      .finally(() => setLoading(false))
+  }
 
   useEffect(() => {
-    fetch(`/api/public/projetos/${token}`)
-      .then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(new Error(e.error || 'Erro'))))
-      .then(setData)
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false))
+    const guardado = (() => { try { return localStorage.getItem(`projeto-pin:${token}`) } catch { return null } })()
+    carregar(guardado)
   }, [token])
 
-  if (loading) {
+  function submeterPin(e) {
+    e.preventDefault()
+    if (!pin || pin.length !== 4) { setPinError('PIN tem 4 dígitos'); return }
+    carregar(pin)
+  }
+
+  if (loading && !precisaPin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0d0d0d]">
         <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#C9A84C', borderTopColor: 'transparent' }} />
       </div>
     )
   }
+
+  if (precisaPin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0d0d0d] px-6">
+        <form onSubmit={submeterPin} className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center">
+          <img src="/logo-transparent.png" alt="Somnium" className="h-12 mx-auto mb-4 brightness-0" />
+          <h1 className="text-lg font-bold text-gray-800 mb-1">Acesso protegido</h1>
+          <p className="text-xs text-gray-500 mb-5">Introduz o PIN de 4 dígitos que recebeste para aceder ao projeto.</p>
+          <input
+            type="text" inputMode="numeric" autoFocus maxLength={4}
+            value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
+            placeholder="••••"
+            className="w-full text-center text-3xl font-mono font-bold tracking-[1em] py-3 rounded-xl border-2 border-gray-200 focus:border-[#C9A84C] focus:outline-none mb-3" />
+          {pinError && <p className="text-xs text-red-500 mb-2">{pinError}</p>}
+          <button type="submit"
+            className="w-full py-2.5 rounded-xl bg-[#0d0d0d] text-[#C9A84C] font-semibold text-sm hover:bg-[#1a1a1a] transition-colors">
+            Entrar
+          </button>
+          <p className="text-[10px] text-gray-300 mt-4">Somnium Properties</p>
+        </form>
+      </div>
+    )
+  }
+
   if (error || !data) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0d0d0d] text-center px-6">
@@ -67,7 +126,7 @@ export function InvestidorProjeto() {
               <p className="text-[10px] uppercase tracking-wider text-gray-400">Acompanhamento de Projecto</p>
             </div>
           </div>
-          <a href={`/api/public/projetos/${token}/pdf/relatorio`} target="_blank" rel="noreferrer"
+          <a href={`/api/public/projetos/${token}/pdf/relatorio${(() => { try { const p = localStorage.getItem(`projeto-pin:${token}`); return p ? `?pin=${p}` : '' } catch { return '' } })()}`} target="_blank" rel="noreferrer"
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#C9A84C] text-[#0d0d0d] text-xs font-semibold hover:bg-[#b39440] transition-colors">
             <FileDown className="w-3.5 h-3.5" /> Descarregar PDF
           </a>

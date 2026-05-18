@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Filter, LayoutGrid, List as ListIcon, ChevronRight } from 'lucide-react'
+import { Plus, Filter, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { apiFetch } from '../lib/api.js'
 import { Button } from '../components/ui/Button.jsx'
@@ -64,6 +64,7 @@ export function Projectos() {
   async function loadFases(negocios) {
     const ffNegocios = negocios.filter(n => n.categoria === 'Fix and Flip')
     const result = {}
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
     await Promise.all(ffNegocios.map(async (n) => {
       try {
         const r = await apiFetch(`/api/crm/projetos/${n.id}/fases`)
@@ -72,7 +73,21 @@ export function Projectos() {
         if (!fases || fases.length === 0) return
         const faseAtual = fases.find(f => f.estado === 'em_curso') || fases.find(f => f.estado !== 'concluida') || fases[fases.length - 1]
         const percGlobal = Math.round(fases.reduce((s, f) => s + (Number(f.perc_execucao) || 0), 0) / fases.length)
-        result[n.id] = { faseAtualKey: faseAtual?.fase_key, percGlobal, totalFases: fases.length, concluidas: fases.filter(f => f.estado === 'concluida').length }
+        // Calcular atraso máximo (em dias)
+        let diasAtrasoMax = 0
+        for (const f of fases) {
+          if (f.estado === 'concluida' || !f.data_fim_prevista) continue
+          const fim = new Date(f.data_fim_prevista)
+          const diff = Math.floor((hoje - fim) / 86400000)
+          if (diff > diasAtrasoMax) diasAtrasoMax = diff
+        }
+        result[n.id] = {
+          faseAtualKey: faseAtual?.fase_key,
+          percGlobal,
+          totalFases: fases.length,
+          concluidas: fases.filter(f => f.estado === 'concluida').length,
+          diasAtrasoMax,
+        }
       } catch {}
     }))
     setFasesPorNegocio(result)
@@ -296,6 +311,12 @@ function KanbanCard({ negocio: n, info, onClick, onDragStart, onDragEnd, isDragg
         <span className="w-2 h-2 rounded-full mt-1 flex-shrink-0" style={{ background: CAT_COLORS[n.categoria] ?? '#6366f1' }} title={n.categoria} />
       </div>
       {n.imovelNome && <p className="text-[10px] text-gray-500 truncate mb-1.5">📍 {n.imovelNome}</p>}
+
+      {info?.diasAtrasoMax > 0 && (
+        <div className="mb-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[9px] font-bold">
+          <AlertTriangle className="w-2.5 h-2.5" /> {info.diasAtrasoMax}d atraso
+        </div>
+      )}
 
       {isFF && info && (
         <div className="mb-1.5">

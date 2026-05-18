@@ -31,23 +31,31 @@ function getTransporter() {
  * Envia email.
  * @param {string} subject
  * @param {string} html — corpo HTML
- * @param {string} [text] — corpo texto alternativo
+ * @param {string|object} [textOrOpts] — corpo texto alternativo OU { to, text } para destinatário custom
  * @returns {Promise<{ ok: boolean, messageId?: string, error?: string }>}
  */
-export async function sendEmail(subject, html, text) {
+export async function sendEmail(subject, html, textOrOpts) {
   if (!isConfigured()) {
     console.warn('[email] SMTP não configurado — email não enviado')
     return { ok: false, error: 'SMTP não configurado' }
   }
+  // Suporta forma antiga sendEmail(subject, html, text) e nova sendEmail(subject, html, { to, text })
+  let to = EMAIL_TO
+  let text
+  if (typeof textOrOpts === 'string') text = textOrOpts
+  else if (textOrOpts && typeof textOrOpts === 'object') {
+    to = textOrOpts.to || EMAIL_TO
+    text = textOrOpts.text
+  }
   try {
     const info = await getTransporter().sendMail({
       from: EMAIL_FROM,
-      to: EMAIL_TO,
+      to,
       subject,
       html,
       text: text || html.replace(/<[^>]+>/g, ''),
     })
-    console.log('[email] Enviado:', subject, '→', info.messageId)
+    console.log('[email] Enviado:', subject, '→', to, info.messageId)
     return { ok: true, messageId: info.messageId }
   } catch (e) {
     console.error('[email] Erro:', e.message)

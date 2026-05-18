@@ -12,19 +12,24 @@ import {
 const router = Router()
 
 // Helper: validar token + carregar dados do projeto
-async function validarToken(token) {
+async function validarToken(token, pinFornecido) {
   const { rows } = await pool.query(
     `SELECT * FROM projeto_share_tokens WHERE token = $1 AND ativo = true
      AND (expira_em IS NULL OR expira_em > NOW())`,
     [token]
   )
-  if (!rows.length) return null
+  if (!rows.length) return { erro: 'invalido' }
+  const share = rows[0]
+  // Se o token tem PIN definido, exigir match
+  if (share.pin && share.pin !== pinFornecido) {
+    return { erro: 'pin', precisaPin: true }
+  }
   // Tracking de visitas
   pool.query(
     `UPDATE projeto_share_tokens SET ultima_visita = NOW(), visitas = visitas + 1 WHERE token = $1`,
     [token]
   ).catch(() => {})
-  return rows[0]
+  return { share }
 }
 
 async function loadProjetoPublico(negocioId) {
@@ -105,12 +110,14 @@ async function loadProjetoPublico(negocioId) {
   }
 }
 
-// GET vista pública do projeto
+// GET vista pública do projeto (precisa PIN se definido)
 router.get('/projetos/:token', async (req, res) => {
   try {
-    const share = await validarToken(req.params.token)
-    if (!share) return res.status(404).json({ error: 'Link inválido ou expirado' })
-    const data = await loadProjetoPublico(share.negocio_id)
+    const pin = req.query.pin || req.headers['x-investidor-pin']
+    const v = await validarToken(req.params.token, pin)
+    if (v.erro === 'invalido') return res.status(404).json({ error: 'Link inválido ou expirado' })
+    if (v.erro === 'pin') return res.status(401).json({ error: 'PIN obrigatório', precisaPin: true })
+    const data = await loadProjetoPublico(v.share.negocio_id)
     if (!data) return res.status(404).json({ error: 'Projecto não encontrado' })
     res.set('Cache-Control', 'no-store')
     res.json(data)
@@ -120,8 +127,9 @@ router.get('/projetos/:token', async (req, res) => {
 // PDF público (relatório de acompanhamento)
 router.get('/projetos/:token/pdf/relatorio', async (req, res) => {
   try {
-    const share = await validarToken(req.params.token)
-    if (!share) return res.status(404).send('Link inválido')
+    const v = await validarToken(req.params.token, req.query.pin)
+    if (v.erro) return res.status(401).send('Acesso negado')
+    const share = v.share
     // Carregar dados completos (com nomes de fase/imovel mas sem internos sensíveis)
     const { rows: negRows } = await pool.query('SELECT * FROM negocios WHERE id = $1', [share.negocio_id])
     if (!negRows.length) return res.status(404).send('Não encontrado')

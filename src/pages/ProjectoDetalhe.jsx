@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Calendar, CheckCircle2, Circle, Plus, Trash2, Upload, X,
   Building2, Wallet, ImageIcon, FileText, Users, BarChart3, ChevronRight,
-  FileDown, Share2, Copy, Check,
+  FileDown, Share2, Copy, Check, AlertTriangle,
 } from 'lucide-react'
 import { apiFetch, getToken } from '../lib/api.js'
 import { Header } from '../components/layout/Header.jsx'
@@ -23,6 +23,16 @@ const FASE_ICON = {
   acabamentos: '🎨', exterior_fecho: '🏠', comercializacao: '📣', vendido: '✅',
 }
 const ESTADO_LABEL = { pendente: 'Pendente', em_curso: 'Em curso', concluida: 'Concluída', bloqueada: 'Bloqueada' }
+
+// Calcula se uma fase está em atraso: data_fim_prevista passou e ainda não está concluída.
+function calcularAtraso(fase) {
+  if (!fase || fase.estado === 'concluida') return null
+  if (!fase.data_fim_prevista) return null
+  const fim = new Date(fase.data_fim_prevista)
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
+  const diff = Math.floor((hoje - fim) / 86400000)
+  return diff > 0 ? diff : null
+}
 const ESTADO_COR = {
   pendente: 'bg-gray-100 text-gray-600', em_curso: 'bg-blue-100 text-blue-700',
   concluida: 'bg-green-100 text-green-700', bloqueada: 'bg-red-100 text-red-700',
@@ -88,6 +98,27 @@ export function ProjectoDetalhe() {
       />
 
       <div className="p-4 sm:p-6 space-y-4">
+        {/* Alerta de atrasos */}
+        {(() => {
+          const atrasadas = fases.filter(f => calcularAtraso(f) != null)
+          if (atrasadas.length === 0) return null
+          const dias = atrasadas.map(f => calcularAtraso(f))
+          const max = Math.max(...dias)
+          return (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-red-800">
+                  {atrasadas.length} fase{atrasadas.length > 1 ? 's' : ''} em atraso · até {max} dia{max > 1 ? 's' : ''}
+                </p>
+                <p className="text-xs text-red-600 mt-0.5">
+                  {atrasadas.map(f => f.nome).join(' · ')}
+                </p>
+              </div>
+            </div>
+          )
+        })()}
+
         {/* Voltar + ações topo */}
         <div className="flex items-center justify-between gap-2">
           <Link to="/projectos" className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-[#C9A84C]">
@@ -337,6 +368,7 @@ function GanttFases({ fases, negocio }) {
 function ShareInvestidorButton({ negocioId }) {
   const [open, setOpen] = useState(false)
   const [token, setToken] = useState(null)
+  const [pin, setPin] = useState(null)
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -344,14 +376,18 @@ function ShareInvestidorButton({ negocioId }) {
     setOpen(true)
     setLoading(true)
     const r = await apiFetch(`/api/crm/projetos/${negocioId}/share`, { method: 'POST' })
-    if (r.ok) { const { token } = await r.json(); setToken(token) }
+    if (r.ok) { const j = await r.json(); setToken(j.token); setPin(j.pin) }
     setLoading(false)
+  }
+  async function regenerarPin() {
+    if (!confirm('Gerar novo PIN? O PIN antigo deixa de funcionar.')) return
+    const r = await apiFetch(`/api/crm/projetos/${negocioId}/share/regenerar-pin`, { method: 'POST' })
+    if (r.ok) { const j = await r.json(); setPin(j.pin) }
   }
   async function desativar() {
     if (!confirm('Desactivar o link de partilha? O investidor deixará de ter acesso.')) return
     await apiFetch(`/api/crm/projetos/${negocioId}/share`, { method: 'DELETE' })
-    setToken(null)
-    setOpen(false)
+    setToken(null); setPin(null); setOpen(false)
   }
   function copiar() {
     if (!token) return
@@ -385,10 +421,20 @@ function ShareInvestidorButton({ negocioId }) {
                     {copied ? <><Check className="w-3.5 h-3.5" /> Copiado</> : <><Copy className="w-3.5 h-3.5" /> Copiar</>}
                   </button>
                 </div>
+
+                {pin && (
+                  <div className="mt-4 bg-gradient-to-br from-[#0d0d0d] to-[#1f1f1f] rounded-xl p-4 text-center">
+                    <p className="text-[10px] uppercase tracking-wider text-gray-400">PIN de acesso</p>
+                    <p className="text-3xl font-mono font-bold text-[#C9A84C] tracking-[0.4em] mt-1">{pin}</p>
+                    <p className="text-[10px] text-gray-400 mt-2">Partilha o PIN <strong>separadamente</strong> do link. Investidor precisa de ambos.</p>
+                    <button onClick={regenerarPin} className="text-[10px] text-[#C9A84C] hover:underline mt-2">Gerar novo PIN</button>
+                  </div>
+                )}
+
                 <a href={`/investidor/projeto/${token}`} target="_blank" rel="noreferrer"
                   className="block text-center text-xs text-[#C9A84C] hover:underline mt-3">Abrir vista do investidor →</a>
                 <div className="mt-5 pt-4 border-t border-gray-100 flex justify-between items-center">
-                  <p className="text-[11px] text-gray-400">Pode partilhar este link por email/WhatsApp. Não requer login.</p>
+                  <p className="text-[11px] text-gray-400">Investidores com email cadastrado recebem notificação automática a cada nova fase.</p>
                   <button onClick={desativar} className="text-xs text-red-500 hover:underline">Desactivar link</button>
                 </div>
               </>
@@ -430,6 +476,7 @@ function FaseAccordion({ fase, onChange }) {
   const [novaTarefa, setNovaTarefa] = useState('')
   const cor = FASE_COR[fase.fase_key] || '#6366f1'
   const icon = FASE_ICON[fase.fase_key] || '🛠️'
+  const diasAtraso = calcularAtraso(fase)
 
   async function setEstado(estado) {
     await apiFetch(`/api/crm/projetos/fases/${fase.id}`, {
@@ -479,6 +526,11 @@ function FaseAccordion({ fase, onChange }) {
               <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${ESTADO_COR[fase.estado] || 'bg-gray-100 text-gray-600'}`}>
                 {ESTADO_LABEL[fase.estado] || fase.estado}
               </span>
+              {diasAtraso != null && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 inline-flex items-center gap-1">
+                  <AlertTriangle className="w-2.5 h-2.5" /> {diasAtraso}d atraso
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-3 mt-1">
               <div className="flex-1 max-w-[200px] bg-gray-100 rounded-full h-1.5">
@@ -605,6 +657,9 @@ function TabFaturacao({ negocio, onChange }) {
   const recebido = pags.filter(p => p.recebido).reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
   const pct = total > 0 ? Math.round((recebido / total) * 100) : 0
 
+  const [novaT, setNovaT] = useState({ descricao: '', valor: '', data: '' })
+  const [saving, setSaving] = useState(false)
+
   async function confirmar(idx) {
     if (!confirm(`Confirmar recebimento desta tranche?`)) return
     await apiFetch(`/api/crm/negocios/${negocio.id}/confirmar-pagamento`, {
@@ -614,27 +669,87 @@ function TabFaturacao({ negocio, onChange }) {
     onChange()
   }
 
-  if (pags.length === 0) return <p className="text-sm text-gray-500">Sem tranches definidas. Edita o projecto na lista para adicionar pagamentos faseados.</p>
+  async function adicionarTranche(e) {
+    e?.preventDefault()
+    if (!novaT.descricao.trim() || !novaT.valor) return
+    setSaving(true)
+    const novasPags = [...pags, {
+      descricao: novaT.descricao.trim(),
+      valor: parseFloat(novaT.valor) || 0,
+      data: novaT.data || '',
+      recebido: false,
+    }]
+    await apiFetch(`/api/crm/negocios/${negocio.id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pagamentos_faseados: JSON.stringify(novasPags), pagamento_em_falta: 1 }),
+    })
+    setNovaT({ descricao: '', valor: '', data: '' })
+    setSaving(false)
+    onChange()
+  }
+
+  async function apagarTranche(idx) {
+    if (!confirm(`Apagar a tranche "${pags[idx].descricao || `Tranche ${idx + 1}`}"?`)) return
+    const novasPags = pags.filter((_, i) => i !== idx)
+    const novoTotal = novasPags.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
+    const novoRecebido = novasPags.filter(p => p.recebido).reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
+    await apiFetch(`/api/crm/negocios/${negocio.id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pagamentos_faseados: JSON.stringify(novasPags),
+        lucro_real: Math.round(novoRecebido * 100) / 100,
+        pagamento_em_falta: novasPags.some(p => !p.recebido) ? 1 : 0,
+      }),
+    })
+    onChange()
+  }
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <div className="flex-1 bg-gray-100 rounded-full h-2.5">
-          <div className="h-full rounded-full bg-gradient-to-r from-[#C9A84C] to-green-500" style={{ width: `${pct}%` }} />
-        </div>
-        <span className="text-sm font-mono font-semibold text-gray-700">{EUR(recebido)} / {EUR(total)}</span>
-      </div>
-      {pags.map((p, idx) => (
-        <div key={idx} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${p.recebido ? 'bg-green-50 border-green-100' : 'bg-yellow-50 border-yellow-100'}`}>
-          {p.recebido ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Circle className="w-4 h-4 text-gray-300" />}
-          <div className="flex-1">
-            <p className="text-sm font-medium text-gray-800">{p.descricao || `Tranche ${idx + 1}`}</p>
-            <p className="text-[10px] text-gray-400">{p.data || 'Sem data'}</p>
+      {pags.length > 0 ? (
+        <>
+          <div className="flex items-center gap-3">
+            <div className="flex-1 bg-gray-100 rounded-full h-2.5">
+              <div className="h-full rounded-full bg-gradient-to-r from-[#C9A84C] to-green-500" style={{ width: `${pct}%` }} />
+            </div>
+            <span className="text-sm font-mono font-semibold text-gray-700">{EUR(recebido)} / {EUR(total)}</span>
           </div>
-          <span className="text-sm font-mono font-semibold text-gray-700">{EUR(p.valor)}</span>
-          {!p.recebido && <Button size="sm" variant="success" onClick={() => confirmar(idx)}>Confirmar</Button>}
+          {pags.map((p, idx) => (
+            <div key={idx} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border group ${p.recebido ? 'bg-green-50 border-green-100' : 'bg-yellow-50 border-yellow-100'}`}>
+              {p.recebido ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Circle className="w-4 h-4 text-gray-300" />}
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-800">{p.descricao || `Tranche ${idx + 1}`}</p>
+                <p className="text-[10px] text-gray-400">{p.data || 'Sem data'}</p>
+              </div>
+              <span className="text-sm font-mono font-semibold text-gray-700">{EUR(p.valor)}</span>
+              {!p.recebido && <Button size="sm" variant="success" onClick={() => confirmar(idx)}>Confirmar</Button>}
+              <button onClick={() => apagarTranche(idx)} title="Apagar tranche"
+                className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-opacity">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </>
+      ) : (
+        <p className="text-sm text-gray-500 mb-3">Sem tranches definidas. Adiciona a primeira abaixo.</p>
+      )}
+
+      {/* Form inline: adicionar tranche */}
+      <form onSubmit={adicionarTranche} className="mt-4 pt-4 border-t border-gray-100">
+        <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">Nova tranche</p>
+        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+          <input type="text" value={novaT.descricao} onChange={e => setNovaT({ ...novaT, descricao: e.target.value })}
+            placeholder="Ex: Sinal, 2ª prestação, Final..." className="sm:col-span-5 px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white" />
+          <input type="number" step="0.01" value={novaT.valor} onChange={e => setNovaT({ ...novaT, valor: e.target.value })}
+            placeholder="€" className="sm:col-span-3 px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white font-mono" />
+          <input type="date" value={novaT.data} onChange={e => setNovaT({ ...novaT, data: e.target.value })}
+            className="sm:col-span-3 px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white" />
+          <button type="submit" disabled={!novaT.descricao.trim() || !novaT.valor || saving}
+            className="sm:col-span-1 px-3 py-1.5 rounded-lg bg-[#0d0d0d] text-[#C9A84C] text-sm hover:bg-[#1a1a1a] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center justify-center">
+            <Plus className="w-4 h-4" />
+          </button>
         </div>
-      ))}
+      </form>
     </div>
   )
 }
