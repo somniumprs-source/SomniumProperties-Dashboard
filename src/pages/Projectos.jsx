@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Plus, Filter, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle, TrendingUp, Briefcase, Calendar as CalendarIcon, Search, Sparkles } from 'lucide-react'
+import { Plus, Filter, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle, TrendingUp, Briefcase, Calendar as CalendarIcon, Search, Sparkles, Hammer, Handshake, Home, Zap } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { apiFetch } from '../lib/api.js'
 import { Button } from '../components/ui/Button.jsx'
@@ -19,13 +19,13 @@ const CAT_COLORS = {
 }
 const CATEGORIAS = ['Wholesalling', 'CAEP', 'Mediação Imobiliária', 'Fix and Flip']
 
-// Modelos de negócio com ícone + descrição (para tabs visuais)
+// Modelos de negócio com ícone Lucide profissional + descrição
 const MODELOS_NEGOCIO = [
-  { key: '',                       nome: 'Todos',                icon: '📋', desc: 'Todos os modelos de negócio' },
-  { key: 'Fix and Flip',           nome: 'Fix and Flip',         icon: '🔨', desc: 'Reabilitação completa' },
-  { key: 'CAEP',                   nome: 'CAEP',                 icon: '🤝', desc: 'Contrato de Associação em Participação' },
-  { key: 'Mediação Imobiliária',   nome: 'Mediação',             icon: '🏘️', desc: 'Intermediação' },
-  { key: 'Wholesalling',           nome: 'Wholesalling',         icon: '⚡', desc: 'Finder fee' },
+  { key: '',                       nome: 'Todos',         Icon: LayoutGrid, desc: 'Todos os modelos de negócio' },
+  { key: 'Fix and Flip',           nome: 'Fix and Flip',  Icon: Hammer,     desc: 'Reabilitação completa' },
+  { key: 'CAEP',                   nome: 'CAEP',          Icon: Handshake,  desc: 'Contrato de Associação em Participação' },
+  { key: 'Mediação Imobiliária',   nome: 'Mediação',      Icon: Home,       desc: 'Intermediação imobiliária' },
+  { key: 'Wholesalling',           nome: 'Wholesalling',  Icon: Zap,        desc: 'Finder fee' },
 ]
 
 // Fases do Kanban — paleta sofisticada Somnium (gold + dark + acentos elegantes)
@@ -225,8 +225,12 @@ export function Projectos() {
                 {/* Acento de cor vertical à esquerda */}
                 <span className="absolute left-0 top-0 bottom-0 w-1" style={{ background: ativo ? '#C9A84C' : corCat }} />
 
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <span className="text-2xl leading-none">{m.icon}</span>
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                    ativo ? 'bg-brand-gold/15 border border-brand-gold/30' : 'bg-gray-100 dark:bg-neutral-800 border border-transparent group-hover:border-gray-200 dark:group-hover:border-neutral-700'
+                  }`}>
+                    <m.Icon className={`w-5 h-5 ${ativo ? 'text-brand-gold' : 'text-gray-600 dark:text-neutral-300'}`} strokeWidth={1.75} />
+                  </div>
                   <span className={`text-3xl font-bold leading-none font-mono ${ativo ? 'text-brand-gold' : 'text-gray-900 dark:text-neutral-100'}`}>{contagem}</span>
                 </div>
                 <p className={`text-sm font-semibold leading-tight ${ativo ? 'text-brand-gold' : 'text-gray-900 dark:text-neutral-100'}`}>{m.nome}</p>
