@@ -491,6 +491,7 @@ function ProjectoForm({ item, onSave, onCancel }) {
   const [f, setF] = useState({
     movimento: '', categoria: 'Fix and Flip', fase: 'Fase de obras',
     lucro_estimado: '', data_compra: '', data_estimada_venda: '', notas: '',
+    tipo_projeto: 'fracao_unica',
     ...item,
   })
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
@@ -526,10 +527,40 @@ function ProjectoForm({ item, onSave, onCancel }) {
           <label className="text-xs text-gray-500 block mb-1">Notas</label>
           <textarea value={f.notas ?? ''} onChange={e => set('notas', e.target.value)} rows={2} className={inputClass} />
         </div>
+
+        {f.categoria === 'Fix and Flip' && (
+          <div className="sm:col-span-2 xl:col-span-3">
+            <label className="text-xs text-gray-500 block mb-1">Formato</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label className={`flex items-start gap-2.5 p-3 rounded-lg cursor-pointer border-2 transition-colors ${f.tipo_projeto === 'fracao_unica' ? 'border-[#C9A84C] bg-[#C9A84C]/5' : 'border-gray-200 hover:border-gray-300'}`}>
+                <input type="radio" name="tipo_projeto" value="fracao_unica"
+                  checked={f.tipo_projeto === 'fracao_unica'}
+                  onChange={() => set('tipo_projeto', 'fracao_unica')}
+                  className="mt-0.5 accent-[#C9A84C]" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-gray-800">Fração única</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">1 apartamento/moradia. Cronograma simples sem subdivisões.</p>
+                </div>
+              </label>
+              <label className={`flex items-start gap-2.5 p-3 rounded-lg cursor-pointer border-2 transition-colors ${f.tipo_projeto === 'predio' ? 'border-[#C9A84C] bg-[#C9A84C]/5' : 'border-gray-200 hover:border-gray-300'}`}>
+                <input type="radio" name="tipo_projeto" value="predio"
+                  checked={f.tipo_projeto === 'predio'}
+                  onChange={() => set('tipo_projeto', 'predio')}
+                  className="mt-0.5 accent-[#C9A84C]" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-gray-800">Prédio com várias frações</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">2-10 frações autónomas + áreas comuns (fachada, telhado, escadas…) com cronogramas independentes.</p>
+                </div>
+              </label>
+            </div>
+          </div>
+        )}
       </div>
       {f.categoria === 'Fix and Flip' && isNew && (
         <p className="text-[11px] text-[#C9A84C] mt-3 bg-[#0d0d0d] px-3 py-2 rounded-lg">
-          ✨ Ao criar este projecto, serão geradas automaticamente as 8 fases de obra com tarefas-template.
+          {f.tipo_projeto === 'predio'
+            ? '✨ Ao criar este prédio, serão geradas as 8 fases-base. Depois adicionas as frações e áreas comuns (cada uma com o seu próprio cronograma).'
+            : '✨ Ao criar este projecto, serão geradas as 8 fases de obra com tarefas-template.'}
         </p>
       )}
       <div className="flex gap-3 mt-4">

@@ -566,13 +566,29 @@ async function criarFasesFixFlip(negocioId) {
   )
   if (existentes.length > 0) return  // idempotente
 
+  // Auto-criar uma "Fração Única" se o projecto é fracao_unica (modelo simples)
+  // Para projectos 'predio', as frações são criadas manualmente pelo user
+  const { rows: negRows } = await pool.query('SELECT tipo_projeto FROM negocios WHERE id = $1', [negocioId])
+  const tipoProjeto = negRows[0]?.tipo_projeto || 'fracao_unica'
+
+  let fracaoId = null
+  if (tipoProjeto === 'fracao_unica') {
+    fracaoId = randomUUID()
+    await pool.query(
+      `INSERT INTO projeto_fracoes (id, negocio_id, nome, tipo, ordem)
+       VALUES ($1, $2, $3, 'fracao', 0)
+       ON CONFLICT (negocio_id, nome) DO NOTHING`,
+      [fracaoId, negocioId, 'Fração Única']
+    )
+  }
+
   for (let i = 0; i < FASES_FIX_FLIP.length; i++) {
     const fase = FASES_FIX_FLIP[i]
     const faseId = randomUUID()
     await pool.query(
-      `INSERT INTO projeto_fases (id, negocio_id, fase_key, nome, ordem, estado)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [faseId, negocioId, fase.key, fase.nome, i, i === 0 ? 'em_curso' : 'pendente']
+      `INSERT INTO projeto_fases (id, negocio_id, fracao_id, fase_key, nome, ordem, estado)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [faseId, negocioId, fracaoId, fase.key, fase.nome, i, i === 0 ? 'em_curso' : 'pendente']
     )
     for (let j = 0; j < fase.tarefas.length; j++) {
       await pool.query(
@@ -3538,14 +3554,16 @@ router.get('/projetos/:negocioId/fracoes', async (req, res) => {
 
 router.post('/projetos/:negocioId/fracoes', async (req, res) => {
   try {
-    const { nome, tipologia, andar, area_m2, estado, valor_venda_estimado, data_venda_estimada, notas, duplicarFases } = req.body || {}
+    const { nome, tipo, categoria_comum, tipologia, andar, area_m2, estado, valor_venda_estimado, data_venda_estimada, notas, duplicarFases } = req.body || {}
     if (!nome?.trim()) return res.status(400).json({ error: 'nome obrigatório' })
+    const tipoVal = tipo === 'area_comum' ? 'area_comum' : 'fracao'
     const id = randomUUID()
     const { rows: maxOrdem } = await pool.query('SELECT COALESCE(MAX(ordem), -1) AS m FROM projeto_fracoes WHERE negocio_id = $1', [req.params.negocioId])
     const { rows } = await pool.query(
-      `INSERT INTO projeto_fracoes (id, negocio_id, nome, tipologia, andar, area_m2, estado, valor_venda_estimado, data_venda_estimada, notas, ordem)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-      [id, req.params.negocioId, nome.trim(), tipologia || null, andar || null,
+      `INSERT INTO projeto_fracoes (id, negocio_id, nome, tipo, categoria_comum, tipologia, andar, area_m2, estado, valor_venda_estimado, data_venda_estimada, notas, ordem)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+      [id, req.params.negocioId, nome.trim(), tipoVal, tipoVal === 'area_comum' ? (categoria_comum || null) : null,
+       tipoVal === 'fracao' ? (tipologia || null) : null, andar || null,
        Number(area_m2) || null, estado || 'em_obra', Number(valor_venda_estimado) || 0,
        data_venda_estimada || null, notas || null, maxOrdem[0].m + 1]
     )
@@ -3586,7 +3604,7 @@ router.post('/projetos/:negocioId/fracoes', async (req, res) => {
 
 router.put('/projetos/fracoes/:fracaoId', async (req, res) => {
   try {
-    const allowed = ['nome', 'tipologia', 'andar', 'area_m2', 'estado', 'valor_venda_estimado', 'valor_venda_real', 'data_venda_estimada', 'data_venda_real', 'comprador', 'notas', 'ordem']
+    const allowed = ['nome', 'tipo', 'categoria_comum', 'tipologia', 'andar', 'area_m2', 'estado', 'valor_venda_estimado', 'valor_venda_real', 'data_venda_estimada', 'data_venda_real', 'comprador', 'notas', 'ordem']
     const sets = []
     const params = []
     for (const k of allowed) {

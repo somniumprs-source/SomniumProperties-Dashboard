@@ -832,12 +832,17 @@ export async function initSchema() {
       ALTER TABLE projeto_fases ADD COLUMN IF NOT EXISTS gcal_event_id TEXT;
       ALTER TABLE projeto_tarefas ADD COLUMN IF NOT EXISTS gcal_event_id TEXT;
 
+      -- Tipo do projecto: 'fracao_unica' (default) ou 'predio' (com várias frações + áreas comuns)
+      ALTER TABLE negocios ADD COLUMN IF NOT EXISTS tipo_projeto TEXT DEFAULT 'fracao_unica';
+
       -- Frações dentro de um projecto (prédios com várias frações)
       CREATE TABLE IF NOT EXISTS projeto_fracoes (
         id TEXT PRIMARY KEY,
         negocio_id TEXT NOT NULL REFERENCES negocios(id) ON DELETE CASCADE,
-        nome TEXT NOT NULL,                  -- "Fração A", "Fração B"...
-        tipologia TEXT,                       -- T0, T1, T2, T3, T0+1...
+        nome TEXT NOT NULL,                  -- "Fração A", "Fachada", "Telhado"...
+        tipo TEXT DEFAULT 'fracao',          -- 'fracao' | 'area_comum'
+        categoria_comum TEXT,                 -- só para tipo='area_comum': fachada, telhado, jardim, escadas, elevador, instalacoes, garagem, outro
+        tipologia TEXT,                       -- T0, T1, T2, T3, T0+1... (só frações)
         andar TEXT,                           -- R/C, 1º Andar, 2º Andar, Sótão, Cave
         area_m2 REAL,
         estado TEXT DEFAULT 'em_obra',        -- em_obra | pronto | em_venda | vendido
@@ -852,7 +857,11 @@ export async function initSchema() {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
       CREATE INDEX IF NOT EXISTS idx_projeto_fracoes_negocio ON projeto_fracoes(negocio_id);
+      CREATE INDEX IF NOT EXISTS idx_projeto_fracoes_tipo ON projeto_fracoes(tipo);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_projeto_fracoes_nome ON projeto_fracoes(negocio_id, nome);
+      -- Migration: adicionar colunas tipo/categoria_comum a tabelas pré-existentes
+      ALTER TABLE projeto_fracoes ADD COLUMN IF NOT EXISTS tipo TEXT DEFAULT 'fracao';
+      ALTER TABLE projeto_fracoes ADD COLUMN IF NOT EXISTS categoria_comum TEXT;
 
       -- Ligação opcional fracao_id em fases, fotos, despesas (NULL = comum ao prédio)
       ALTER TABLE projeto_fases ADD COLUMN IF NOT EXISTS fracao_id TEXT;

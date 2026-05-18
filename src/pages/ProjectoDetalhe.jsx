@@ -40,15 +40,15 @@ const ESTADO_COR = {
   concluida: 'bg-green-100 text-green-700', bloqueada: 'bg-red-100 text-red-700',
 }
 
-const TABS = [
-  { key: 'resumo',       label: 'Resumo',          icon: BarChart3 },
-  { key: 'fracoes',      label: 'Frações',         icon: Layers },
-  { key: 'fases',        label: 'Fases & Tarefas', icon: CheckCircle2 },
-  { key: 'orcamento',    label: 'Orçamento',       icon: Wallet },
-  { key: 'faturacao',    label: 'Faturação',       icon: Wallet },
-  { key: 'fotos',        label: 'Fotos',           icon: ImageIcon },
-  { key: 'documentos',   label: 'Documentos',      icon: FileText },
-  { key: 'investidores', label: 'Investidores',    icon: Users },
+const TABS_BASE = [
+  { key: 'resumo',       label: 'Resumo',           icon: BarChart3 },
+  { key: 'fracoes',      label: 'Frações e Áreas',  icon: Layers, predioOnly: true },
+  { key: 'fases',        label: 'Fases & Tarefas',  icon: CheckCircle2 },
+  { key: 'orcamento',    label: 'Orçamento',        icon: Wallet },
+  { key: 'faturacao',    label: 'Faturação',        icon: Wallet },
+  { key: 'fotos',        label: 'Fotos',            icon: ImageIcon },
+  { key: 'documentos',   label: 'Documentos',       icon: FileText },
+  { key: 'investidores', label: 'Investidores',     icon: Users },
 ]
 
 const FRACAO_ESTADO_COR = {
@@ -57,6 +57,17 @@ const FRACAO_ESTADO_COR = {
   em_venda: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Em venda' },
   vendido:  { bg: 'bg-green-100', text: 'text-green-700', label: 'Vendido' },
 }
+
+const CATEGORIAS_COMUM = [
+  { key: 'fachada',     label: 'Fachada',                icon: '🧱' },
+  { key: 'telhado',     label: 'Telhado / Cobertura',    icon: '🏠' },
+  { key: 'jardim',      label: 'Jardim / Pátio',         icon: '🌿' },
+  { key: 'escadas',     label: 'Escadas / Caixa',        icon: '🪜' },
+  { key: 'elevador',    label: 'Elevador',               icon: '🛗' },
+  { key: 'instalacoes', label: 'Instalações verticais',  icon: '⚡' },
+  { key: 'garagem',     label: 'Garagem / Parqueamento', icon: '🚗' },
+  { key: 'outro',       label: 'Outro',                  icon: '📐' },
+]
 
 export function ProjectoDetalhe() {
   const { id } = useParams()
@@ -110,6 +121,8 @@ export function ProjectoDetalhe() {
 
   const { negocio, imovel, percGlobal, custoReal, orcAlocado, faseAtual } = resumo
   const semFases = fases.length === 0
+  const isPredio = negocio.tipo_projeto === 'predio'
+  const TABS = TABS_BASE.filter(t => !t.predioOnly || isPredio)
 
   return (
     <>
@@ -171,8 +184,8 @@ export function ProjectoDetalhe() {
           </div>
         </div>
 
-        {/* Chips de frações */}
-        {fracoes.length > 0 && (
+        {/* Chips de frações (só para projectos tipo 'predio') */}
+        {isPredio && fracoes.length > 0 && (
           <FracaoChips fracoes={fracoes} fracaoSel={fracaoSel} setFracaoSel={setFracaoSel} />
         )}
 
@@ -1368,8 +1381,32 @@ function TabInvestidores({ negocio, readOnly }) {
 // CHIPS DE FRAÇÃO (faixa no topo) + TAB FRAÇÕES
 // ════════════════════════════════════════════════════════════════
 function FracaoChips({ fracoes, fracaoSel, setFracaoSel }) {
-  // Inclui chip "Prédio inteiro" + chip por fração + chip "Áreas comuns"
-  const totalFases = fracoes.reduce((s, f) => s + (Number(f.num_fases) || 0), 0)
+  const fracs = fracoes.filter(f => f.tipo !== 'area_comum')
+  const areas = fracoes.filter(f => f.tipo === 'area_comum')
+
+  function chip(fr) {
+    const sel = fracaoSel === fr.id
+    const cor = FRACAO_ESTADO_COR[fr.estado] || FRACAO_ESTADO_COR.em_obra
+    const isArea = fr.tipo === 'area_comum'
+    const cat = isArea ? CATEGORIAS_COMUM.find(c => c.key === fr.categoria_comum) : null
+    return (
+      <button key={fr.id} onClick={() => setFracaoSel(fr.id)}
+        className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap inline-flex items-center gap-1.5 border ${
+          sel ? 'bg-[#0d0d0d] text-[#C9A84C] border-[#0d0d0d]' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
+        }`}>
+        {cat && <span>{cat.icon}</span>}
+        <span className="font-semibold">{fr.nome}</span>
+        {fr.tipologia && <span className="text-gray-400">·</span>}
+        {fr.tipologia && <span className="text-gray-500">{fr.tipologia}</span>}
+        {fr.andar && <span className="text-gray-400">·</span>}
+        {fr.andar && <span className="text-gray-500">{fr.andar}</span>}
+        <span className={`ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold ${sel ? 'bg-white/10 text-[#C9A84C]' : `${cor.bg} ${cor.text}`}`}>
+          {Math.round(Number(fr.perc_global) || 0)}%
+        </span>
+      </button>
+    )
+  }
+
   return (
     <div className="flex items-center gap-2 overflow-x-auto pb-1">
       <button onClick={() => setFracaoSel(null)}
@@ -1378,31 +1415,18 @@ function FracaoChips({ fracoes, fracaoSel, setFracaoSel }) {
         }`}>
         <Home className="w-3 h-3" /> Prédio inteiro
       </button>
-      <button onClick={() => setFracaoSel('__comum__')}
-        className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap inline-flex items-center gap-1.5 border ${
-          fracaoSel === '__comum__' ? 'bg-[#0d0d0d] text-[#C9A84C] border-[#0d0d0d]' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-        }`}>
-        Áreas comuns
-      </button>
-      {fracoes.map(fr => {
-        const sel = fracaoSel === fr.id
-        const cor = FRACAO_ESTADO_COR[fr.estado] || FRACAO_ESTADO_COR.em_obra
-        return (
-          <button key={fr.id} onClick={() => setFracaoSel(fr.id)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap inline-flex items-center gap-1.5 border ${
-              sel ? 'bg-[#0d0d0d] text-[#C9A84C] border-[#0d0d0d]' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
-            }`}>
-            <span className="font-semibold">{fr.nome}</span>
-            {fr.tipologia && <span className="text-gray-400">·</span>}
-            {fr.tipologia && <span className="text-gray-500">{fr.tipologia}</span>}
-            {fr.andar && <span className="text-gray-400">·</span>}
-            {fr.andar && <span className="text-gray-500">{fr.andar}</span>}
-            <span className={`ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold ${sel ? 'bg-white/10 text-[#C9A84C]' : `${cor.bg} ${cor.text}`}`}>
-              {Math.round(Number(fr.perc_global) || 0)}%
-            </span>
-          </button>
-        )
-      })}
+      {fracs.length > 0 && (
+        <>
+          <span className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold px-1">Frações</span>
+          {fracs.map(chip)}
+        </>
+      )}
+      {areas.length > 0 && (
+        <>
+          <span className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold px-1 ml-2">Áreas comuns</span>
+          {areas.map(chip)}
+        </>
+      )}
     </div>
   )
 }
@@ -1447,63 +1471,117 @@ function TabFracoes({ negocioId, fracoes, onChange, readOnly, fasesComuns }) {
       {fracoes.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
           <Layers className="w-8 h-8 mx-auto text-gray-300 mb-2" />
-          <p className="text-sm text-gray-500">Sem frações criadas.</p>
-          <p className="text-xs text-gray-400 mt-1">Adiciona uma fração para começar a gerir cronograma separado.</p>
+          <p className="text-sm text-gray-500">Sem frações ou áreas criadas.</p>
+          <p className="text-xs text-gray-400 mt-1">Adiciona uma fração (apartamento vendável) ou área comum (fachada, telhado, jardim…) para começar.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {fracoes.map(fr => {
-            const cor = FRACAO_ESTADO_COR[fr.estado] || FRACAO_ESTADO_COR.em_obra
-            const perc = Math.round(Number(fr.perc_global) || 0)
-            const vendaEsp = Number(fr.valor_venda_estimado) || 0
-            const vendaReal = Number(fr.valor_venda_real) || 0
+        <>
+          {/* Grupo: Frações */}
+          {(() => {
+            const fracs = fracoes.filter(f => f.tipo !== 'area_comum')
+            if (fracs.length === 0) return null
             return (
-              <div key={fr.id} className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow group">
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <h3 className="text-base font-bold text-gray-800">{fr.nome}</h3>
-                    <p className="text-xs text-gray-500">
-                      {[fr.tipologia, fr.andar, fr.area_m2 ? `${fr.area_m2} m²` : null].filter(Boolean).join(' · ') || '—'}
-                    </p>
-                  </div>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${cor.bg} ${cor.text}`}>{cor.label}</span>
+              <div className="space-y-2">
+                <h4 className="text-[10px] uppercase tracking-widest text-gray-500 font-semibold flex items-center gap-1.5">
+                  <Layers className="w-3 h-3" /> Frações ({fracs.length})
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {fracs.map(fr => (
+                    <FracaoCard key={fr.id} fracao={fr} readOnly={readOnly}
+                      onEdit={() => { setEditing(fr); setShowForm(true) }}
+                      onDelete={() => apagar(fr.id, fr.nome)} />
+                  ))}
                 </div>
-
-                <div className="my-3">
-                  <div className="flex items-center justify-between text-[10px] text-gray-500 mb-0.5">
-                    <span>Execução</span>
-                    <span className="font-mono font-bold text-gray-700">{perc}%</span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-1.5">
-                    <div className="h-full rounded-full bg-gradient-to-r from-[#C9A84C] to-[#0d0d0d]" style={{ width: `${perc}%` }} />
-                  </div>
-                  <p className="text-[10px] text-gray-400 mt-0.5">{fr.num_fases} fase{fr.num_fases !== 1 ? 's' : ''}</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wider text-gray-400">Venda esperada</p>
-                    <p className="font-mono font-semibold text-indigo-600">{EUR(vendaEsp)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wider text-gray-400">{vendaReal > 0 ? 'Vendido por' : 'Custo até agora'}</p>
-                    <p className={`font-mono font-semibold ${vendaReal > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {EUR(vendaReal > 0 ? vendaReal : Number(fr.custo_total) || 0)}
-                    </p>
-                  </div>
-                </div>
-
-                {!readOnly && (
-                  <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => { setEditing(fr); setShowForm(true) }}
-                      className="text-[11px] px-2 py-1 text-gray-600 hover:text-[#C9A84C]">Editar</button>
-                    <button onClick={() => apagar(fr.id, fr.nome)}
-                      className="text-[11px] px-2 py-1 text-gray-600 hover:text-red-500">Apagar</button>
-                  </div>
-                )}
               </div>
             )
-          })}
+          })()}
+
+          {/* Grupo: Áreas comuns */}
+          {(() => {
+            const areas = fracoes.filter(f => f.tipo === 'area_comum')
+            if (areas.length === 0) return null
+            return (
+              <div className="space-y-2">
+                <h4 className="text-[10px] uppercase tracking-widest text-gray-500 font-semibold flex items-center gap-1.5">
+                  🏛️ Áreas comuns ({areas.length})
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {areas.map(fr => (
+                    <FracaoCard key={fr.id} fracao={fr} readOnly={readOnly}
+                      onEdit={() => { setEditing(fr); setShowForm(true) }}
+                      onDelete={() => apagar(fr.id, fr.nome)} />
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+        </>
+      )}
+    </div>
+  )
+}
+
+function FracaoCard({ fracao: fr, readOnly, onEdit, onDelete }) {
+  const cor = FRACAO_ESTADO_COR[fr.estado] || FRACAO_ESTADO_COR.em_obra
+  const perc = Math.round(Number(fr.perc_global) || 0)
+  const vendaEsp = Number(fr.valor_venda_estimado) || 0
+  const vendaReal = Number(fr.valor_venda_real) || 0
+  const isArea = fr.tipo === 'area_comum'
+  const cat = isArea ? CATEGORIAS_COMUM.find(c => c.key === fr.categoria_comum) : null
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow group">
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex items-start gap-2">
+          {cat && <span className="text-xl mt-0.5">{cat.icon}</span>}
+          <div>
+            <h3 className="text-base font-bold text-gray-800">{fr.nome}</h3>
+            <p className="text-xs text-gray-500">
+              {[fr.tipologia, fr.andar, fr.area_m2 ? `${fr.area_m2} m²` : null].filter(Boolean).join(' · ') || (isArea ? cat?.label : '—')}
+            </p>
+          </div>
+        </div>
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${cor.bg} ${cor.text}`}>{cor.label}</span>
+      </div>
+
+      <div className="my-3">
+        <div className="flex items-center justify-between text-[10px] text-gray-500 mb-0.5">
+          <span>Execução</span>
+          <span className="font-mono font-bold text-gray-700">{perc}%</span>
+        </div>
+        <div className="w-full bg-gray-100 rounded-full h-1.5">
+          <div className="h-full rounded-full bg-gradient-to-r from-[#C9A84C] to-[#0d0d0d]" style={{ width: `${perc}%` }} />
+        </div>
+        <p className="text-[10px] text-gray-400 mt-0.5">{fr.num_fases} fase{fr.num_fases !== 1 ? 's' : ''}</p>
+      </div>
+
+      {!isArea && (
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-gray-400">Venda esperada</p>
+            <p className="font-mono font-semibold text-indigo-600">{EUR(vendaEsp)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-gray-400">{vendaReal > 0 ? 'Vendido por' : 'Custo até agora'}</p>
+            <p className={`font-mono font-semibold ${vendaReal > 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {EUR(vendaReal > 0 ? vendaReal : Number(fr.custo_total) || 0)}
+            </p>
+          </div>
+        </div>
+      )}
+      {isArea && (
+        <div className="text-xs">
+          <p className="text-[10px] uppercase tracking-wider text-gray-400">Custo até agora</p>
+          <p className="font-mono font-semibold text-red-600">{EUR(Number(fr.custo_total) || 0)}</p>
+        </div>
+      )}
+
+      {!readOnly && (
+        <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={onEdit}
+            className="text-[11px] px-2 py-1 text-gray-600 hover:text-[#C9A84C]">Editar</button>
+          <button onClick={onDelete}
+            className="text-[11px] px-2 py-1 text-gray-600 hover:text-red-500">Apagar</button>
         </div>
       )}
     </div>
@@ -1513,33 +1591,85 @@ function TabFracoes({ negocioId, fracoes, onChange, readOnly, fasesComuns }) {
 function FracaoForm({ fracao, onSave, onCancel, fasesComunsCount }) {
   const isNew = !fracao?.id
   const [f, setF] = useState({
-    nome: '', tipologia: '', andar: '', area_m2: '', estado: 'em_obra',
+    nome: '', tipo: 'fracao', categoria_comum: '',
+    tipologia: '', andar: '', area_m2: '', estado: 'em_obra',
     valor_venda_estimado: '', data_venda_estimada: '', notas: '',
     ...fracao,
   })
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const inputClass = "w-full px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white"
+  const isAreaComum = f.tipo === 'area_comum'
+
+  // Auto-preencher nome quando muda categoria comum (se ainda vazio ou for sugestão anterior)
+  function selectCategoria(catKey) {
+    const cat = CATEGORIAS_COMUM.find(c => c.key === catKey)
+    setF(p => ({
+      ...p,
+      categoria_comum: catKey,
+      nome: !p.nome || CATEGORIAS_COMUM.some(c => c.label === p.nome) ? (cat?.label || p.nome) : p.nome,
+    }))
+  }
 
   return (
     <div className="bg-white rounded-xl border-2 border-[#C9A84C] p-4 shadow-md">
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">{isNew ? 'Nova fração' : 'Editar fração'}</h3>
+      <h3 className="text-sm font-semibold text-gray-700 mb-3">{isNew ? 'Nova entidade' : 'Editar entidade'}</h3>
+
+      {/* Selector de tipo */}
+      <div className="mb-4">
+        <label className="text-[10px] text-gray-500 uppercase tracking-wider block mb-1.5">Tipo</label>
+        <div className="grid grid-cols-2 gap-2">
+          <label className={`flex items-start gap-2 p-2.5 rounded-lg cursor-pointer border-2 ${f.tipo === 'fracao' ? 'border-[#C9A84C] bg-[#C9A84C]/5' : 'border-gray-200'}`}>
+            <input type="radio" name="tipo" value="fracao" checked={f.tipo === 'fracao'} onChange={() => set('tipo', 'fracao')} className="mt-0.5 accent-[#C9A84C]" />
+            <div>
+              <p className="text-sm font-semibold text-gray-800">Fração</p>
+              <p className="text-[10px] text-gray-500">Apartamento vendável</p>
+            </div>
+          </label>
+          <label className={`flex items-start gap-2 p-2.5 rounded-lg cursor-pointer border-2 ${f.tipo === 'area_comum' ? 'border-[#C9A84C] bg-[#C9A84C]/5' : 'border-gray-200'}`}>
+            <input type="radio" name="tipo" value="area_comum" checked={f.tipo === 'area_comum'} onChange={() => set('tipo', 'area_comum')} className="mt-0.5 accent-[#C9A84C]" />
+            <div>
+              <p className="text-sm font-semibold text-gray-800">Área comum</p>
+              <p className="text-[10px] text-gray-500">Fachada, telhado, jardim, escadas…</p>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      {/* Categoria comum (só quando tipo=area_comum) */}
+      {isAreaComum && (
+        <div className="mb-4">
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider block mb-1.5">Categoria</label>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+            {CATEGORIAS_COMUM.map(c => (
+              <button key={c.key} type="button" onClick={() => selectCategoria(c.key)}
+                className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs border ${f.categoria_comum === c.key ? 'border-[#C9A84C] bg-[#C9A84C]/10 text-[#0d0d0d]' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                <span>{c.icon}</span> {c.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>
           <label className="text-[10px] text-gray-500 uppercase block mb-1">Nome *</label>
-          <input value={f.nome} onChange={e => set('nome', e.target.value)} placeholder="Ex: Fração A" className={inputClass} />
+          <input value={f.nome} onChange={e => set('nome', e.target.value)}
+            placeholder={isAreaComum ? 'Ex: Fachada principal' : 'Ex: Fração A'} className={inputClass} />
         </div>
+        {!isAreaComum && (
+          <div>
+            <label className="text-[10px] text-gray-500 uppercase block mb-1">Tipologia</label>
+            <select value={f.tipologia || ''} onChange={e => set('tipologia', e.target.value)} className={inputClass}>
+              <option value="">—</option>
+              {['T0', 'T0+1', 'T1', 'T1+1', 'T2', 'T2+1', 'T3', 'T3+1', 'T4', 'T5+'].map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+        )}
         <div>
-          <label className="text-[10px] text-gray-500 uppercase block mb-1">Tipologia</label>
-          <select value={f.tipologia || ''} onChange={e => set('tipologia', e.target.value)} className={inputClass}>
-            <option value="">—</option>
-            {['T0', 'T0+1', 'T1', 'T1+1', 'T2', 'T2+1', 'T3', 'T3+1', 'T4', 'T5+'].map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="text-[10px] text-gray-500 uppercase block mb-1">Andar</label>
+          <label className="text-[10px] text-gray-500 uppercase block mb-1">{isAreaComum ? 'Localização' : 'Andar'}</label>
           <select value={f.andar || ''} onChange={e => set('andar', e.target.value)} className={inputClass}>
             <option value="">—</option>
-            {['Cave', 'R/C', '1º Andar', '2º Andar', '3º Andar', '4º Andar', '5º Andar', 'Sótão'].map(a => <option key={a} value={a}>{a}</option>)}
+            {['Cave', 'R/C', '1º Andar', '2º Andar', '3º Andar', '4º Andar', '5º Andar', 'Sótão', 'Cobertura', 'Exterior'].map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </div>
         <div>
@@ -1552,15 +1682,19 @@ function FracaoForm({ fracao, onSave, onCancel, fasesComunsCount }) {
             {Object.entries(FRACAO_ESTADO_COR).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
         </div>
-        <div>
-          <label className="text-[10px] text-gray-500 uppercase block mb-1">Valor venda esperado (€)</label>
-          <input type="number" step="100" value={f.valor_venda_estimado || ''} onChange={e => set('valor_venda_estimado', e.target.value)} className={inputClass} />
-        </div>
-        <div>
-          <label className="text-[10px] text-gray-500 uppercase block mb-1">Data venda estimada</label>
-          <input type="date" value={f.data_venda_estimada || ''} onChange={e => set('data_venda_estimada', e.target.value)} className={inputClass} />
-        </div>
-        {!isNew && (
+        {!isAreaComum && (
+          <>
+            <div>
+              <label className="text-[10px] text-gray-500 uppercase block mb-1">Valor venda esperado (€)</label>
+              <input type="number" step="100" value={f.valor_venda_estimado || ''} onChange={e => set('valor_venda_estimado', e.target.value)} className={inputClass} />
+            </div>
+            <div>
+              <label className="text-[10px] text-gray-500 uppercase block mb-1">Data venda estimada</label>
+              <input type="date" value={f.data_venda_estimada || ''} onChange={e => set('data_venda_estimada', e.target.value)} className={inputClass} />
+            </div>
+          </>
+        )}
+        {!isNew && !isAreaComum && (
           <>
             <div>
               <label className="text-[10px] text-gray-500 uppercase block mb-1">Valor venda real (€)</label>
