@@ -4182,6 +4182,17 @@ app.post('/api/calendar/pull', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// P3.15 — Push de fases/tarefas de um projecto para o Google Calendar (on-demand)
+app.post('/api/crm/projetos/:negocioId/sync-gcal', async (req, res) => {
+  try {
+    if (!gcal) return res.status(503).json({ error: 'Google Calendar não configurado' })
+    const { pushProjetoToGCal } = await import('./src/db/projetoGcalSync.js')
+    const result = await pushProjetoToGCal({ gcal, calendarId: GCAL_ID, negocioId: req.params.negocioId })
+    if (!result.ok) return res.status(500).json(result)
+    res.json(result)
+  } catch (e) { console.error('[projeto-gcal]', e.message); res.status(500).json({ error: e.message }) }
+})
+
 // Auto-sync bidirecional a cada 15 minutos
 if (gcal) {
   const GCAL_SYNC_INTERVAL = 15 * 60 * 1000

@@ -40,6 +40,7 @@ import {
   generateMemoriaDescritiva,
   generateRelatorioSaida,
 } from './pdfProjectoFixFlip.js'
+import { gerarResumoProjeto, invalidarCacheAi, isConfigured as aiConfigured } from './projetoAiAssistant.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.resolve(__dirname, '../../public/uploads/despesas')
@@ -3514,6 +3515,65 @@ router.delete('/projetos/investidores/:linkId', async (req, res) => {
     await pool.query('DELETE FROM projeto_investidores WHERE id = $1', [req.params.linkId])
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── P3.16 — Calendário: deadlines de fases e tarefas ─────────
+// Devolve todos os eventos relevantes (fases data_fim_prevista, tarefas deadline)
+// filtrados por intervalo [from, to]. Respeita acessos para roles restritos.
+router.get('/projetos/calendario', async (req, res) => {
+  try {
+    const from = req.query.from ? new Date(req.query.from) : new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+    const to = req.query.to ? new Date(req.query.to) : new Date(new Date().getFullYear(), new Date().getMonth() + 2, 0)
+    const fromStr = from.toISOString().slice(0, 10)
+    const toStr = to.toISOString().slice(0, 10)
+
+    const u = await resolveCrmUser(req)
+    const isRestricted = u && RECORD_RESTRICTED_ROLES.has(u.role)
+    const filtro = isRestricted
+      ? `n.id IN (SELECT entidade_id FROM acessos WHERE entidade = 'negocio' AND user_id = $3)`
+      : `1=1`
+    const params = isRestricted ? [fromStr, toStr, u.id] : [fromStr, toStr]
+
+    const { rows: fases } = await pool.query(
+      `SELECT f.id, f.nome AS titulo, f.data_fim_prevista AS data, f.estado, f.fase_key,
+              n.id AS negocio_id, n.movimento AS projeto
+       FROM projeto_fases f
+       JOIN negocios n ON n.id = f.negocio_id
+       WHERE f.data_fim_prevista IS NOT NULL
+         AND f.data_fim_prevista::date BETWEEN $1::date AND $2::date
+         AND ${filtro}`,
+      params
+    )
+    const { rows: tarefas } = await pool.query(
+      `SELECT t.id, t.descricao AS titulo, t.deadline AS data, t.concluida, t.responsavel,
+              f.fase_key, f.nome AS fase,
+              n.id AS negocio_id, n.movimento AS projeto
+       FROM projeto_tarefas t
+       JOIN projeto_fases f ON t.fase_id = f.id
+       JOIN negocios n ON n.id = f.negocio_id
+       WHERE t.deadline IS NOT NULL
+         AND t.deadline::date BETWEEN $1::date AND $2::date
+         AND ${filtro}`,
+      params
+    )
+
+    const eventos = [
+      ...fases.map(f => ({ ...f, tipo: 'fase' })),
+      ...tarefas.map(t => ({ ...t, tipo: 'tarefa' })),
+    ]
+    res.json({ eventos, from: fromStr, to: toStr })
+  } catch (e) { console.error('[calendario]', e.message); res.status(500).json({ error: e.message }) }
+})
+
+// ── P3.18 — AI assistant: resumo do projecto ────────────────
+router.get('/projetos/:negocioId/ai-resumo', async (req, res) => {
+  try {
+    if (!aiConfigured()) return res.status(503).json({ error: 'AI não configurada (ANTHROPIC_API_KEY)' })
+    const ignorarCache = req.query.fresh === '1'
+    const r = await gerarResumoProjeto(req.params.negocioId, { ignorarCache })
+    if (!r.ok) return res.status(500).json({ error: r.error })
+    res.json(r)
+  } catch (e) { console.error('[ai-resumo]', e.message); res.status(500).json({ error: e.message }) }
 })
 
 // ── F2.7 — KPIs agregados de portfolio Fix and Flip ─────────

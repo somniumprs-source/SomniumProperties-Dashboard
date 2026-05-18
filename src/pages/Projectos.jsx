@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Plus, Filter, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle, TrendingUp, Briefcase } from 'lucide-react'
+import { Plus, Filter, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle, TrendingUp, Briefcase, Calendar as CalendarIcon } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { apiFetch } from '../lib/api.js'
 import { Button } from '../components/ui/Button.jsx'
@@ -170,6 +170,10 @@ export function Projectos() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div className="flex items-center gap-2">
             {!isReadOnly && <Button icon={Plus} onClick={() => setEditing({})}>Novo Projecto</Button>}
+            <Link to="/projectos/calendario"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50">
+              <CalendarIcon className="w-3.5 h-3.5" /> Calendário
+            </Link>
             <div className="inline-flex bg-white border border-gray-200 rounded-lg p-0.5">
               <button onClick={() => setView('kanban')}
                 className={`px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${view === 'kanban' ? 'bg-[#0d0d0d] text-[#C9A84C]' : 'text-gray-500 hover:bg-gray-50'}`}>

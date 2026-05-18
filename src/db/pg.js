@@ -828,6 +828,10 @@ export async function initSchema() {
       CREATE INDEX IF NOT EXISTS idx_projeto_fotos_fase ON projeto_fotos(fase_id);
       CREATE INDEX IF NOT EXISTS idx_projeto_fotos_negocio ON projeto_fotos(negocio_id);
 
+      -- P3.15: sync com Google Calendar (event IDs em fases e tarefas)
+      ALTER TABLE projeto_fases ADD COLUMN IF NOT EXISTS gcal_event_id TEXT;
+      ALTER TABLE projeto_tarefas ADD COLUMN IF NOT EXISTS gcal_event_id TEXT;
+
       -- Documentos por fase (PDF, DOCX, imagens diversas)
       CREATE TABLE IF NOT EXISTS projeto_documentos (
         id TEXT PRIMARY KEY,

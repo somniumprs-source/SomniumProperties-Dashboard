@@ -16,6 +16,7 @@ const Operacoes   = lazy(() => import('./pages/Operacoes.jsx').then(m => ({ defa
 const Metricas    = lazy(() => import('./pages/Metricas.jsx').then(m => ({ default: m.Metricas })))
 const Projectos   = lazy(() => import('./pages/Projectos.jsx').then(m => ({ default: m.Projectos })))
 const ProjectoDetalhe = lazy(() => import('./pages/ProjectoDetalhe.jsx').then(m => ({ default: m.ProjectoDetalhe })))
+const ProjectosCalendario = lazy(() => import('./pages/ProjectosCalendario.jsx').then(m => ({ default: m.ProjectosCalendario })))
 const Utilizadores = lazy(() => import('./pages/Utilizadores.jsx').then(m => ({ default: m.Utilizadores })))
 const RelatoriosAdmin = lazy(() => import('./pages/RelatoriosAdmin.jsx').then(m => ({ default: m.RelatoriosAdmin })))
 
@@ -51,6 +52,7 @@ function AppRoutes() {
             <Route index element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
             <Route path="/crm" element={<ErrorBoundary><CRM /></ErrorBoundary>} />
             <Route path="/projectos" element={<ErrorBoundary><Projectos /></ErrorBoundary>} />
+            <Route path="/projectos/calendario" element={<ErrorBoundary><ProjectosCalendario /></ErrorBoundary>} />
             <Route path="/projectos/:id" element={<ErrorBoundary><ProjectoDetalhe /></ErrorBoundary>} />
             <Route path="/financeiro" element={<ErrorBoundary><Financeiro /></ErrorBoundary>} />
             <Route path="/operacoes" element={<ErrorBoundary><Operacoes /></ErrorBoundary>} />

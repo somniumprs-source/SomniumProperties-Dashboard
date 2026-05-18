@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Calendar, CheckCircle2, Circle, Plus, Trash2, Upload, X,
   Building2, Wallet, ImageIcon, FileText, Users, BarChart3, ChevronRight,
-  FileDown, AlertTriangle,
+  FileDown, AlertTriangle, Sparkles, RefreshCw,
 } from 'lucide-react'
 import { apiFetch, getToken } from '../lib/api.js'
 import { Header } from '../components/layout/Header.jsx'
@@ -131,6 +131,9 @@ export function ProjectoDetalhe() {
             {!isReadOnly && semFases && negocio.categoria === 'Fix and Flip' && (
               <Button size="sm" icon={Plus} onClick={inicializarFases}>Inicializar fases de obra</Button>
             )}
+            {!isReadOnly && !semFases && (
+              <SyncGCalButton negocioId={id} />
+            )}
             {!isReadOnly && <PartilharAcesso entidade="negocio" entidadeId={id} nome={negocio.movimento} />}
             {!isReadOnly && (
               <Button size="sm" variant="destructive" icon={Trash2}
@@ -226,6 +229,8 @@ function TabResumo({ resumo, fases }) {
 
   return (
     <div className="space-y-6">
+      <AiResumoCard negocioId={negocio.id} />
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="space-y-3">
           <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Dados do projecto</h3>
@@ -258,6 +263,112 @@ function TabResumo({ resumo, fases }) {
       </div>
 
       {fases.length > 0 && <GanttFases fases={fases} negocio={negocio} />}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
+// AI ASSISTANT — Resumo IA do projecto
+// ════════════════════════════════════════════════════════════════
+function AiResumoCard({ negocioId }) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function carregar(fresh = false) {
+    setLoading(true); setError(null)
+    try {
+      const r = await apiFetch(`/api/crm/projetos/${negocioId}/ai-resumo${fresh ? '?fresh=1' : ''}`)
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}))
+        throw new Error(e.error || `Erro ${r.status}`)
+      }
+      setData(await r.json())
+    } catch (e) { setError(e.message) }
+    finally { setLoading(false) }
+  }
+
+  const sinalCor = {
+    verde:    { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700', dot: 'bg-green-500' },
+    amarelo:  { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-700', dot: 'bg-yellow-500' },
+    vermelho: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', dot: 'bg-red-500' },
+  }[data?.sinal] || { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-700', dot: 'bg-gray-400' }
+
+  if (!data && !loading && !error) {
+    return (
+      <div className="rounded-2xl border-2 border-dashed border-[#C9A84C]/50 p-4 text-center bg-gradient-to-br from-[#0d0d0d]/5 to-[#C9A84C]/5">
+        <Sparkles className="w-5 h-5 mx-auto text-[#C9A84C] mb-1.5" />
+        <p className="text-xs text-gray-600 mb-2">Pede uma análise rápida deste projeto à IA Somnium</p>
+        <button onClick={() => carregar(false)}
+          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#0d0d0d] text-[#C9A84C] text-xs font-medium hover:bg-[#1a1a1a]">
+          <Sparkles className="w-3.5 h-3.5" /> Gerar resumo IA
+        </button>
+      </div>
+    )
+  }
+  if (loading) {
+    return (
+      <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50 text-center">
+        <div className="inline-flex items-center gap-2 text-xs text-gray-500">
+          <RefreshCw className="w-3.5 h-3.5 animate-spin" /> A pensar...
+        </div>
+      </div>
+    )
+  }
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-red-200 p-4 bg-red-50 text-center">
+        <p className="text-xs text-red-700">Erro: {error}</p>
+        <button onClick={() => carregar(false)} className="text-xs text-red-700 underline mt-1">Tentar de novo</button>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`rounded-2xl border-2 ${sinalCor.border} ${sinalCor.bg} p-4`}>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-[#C9A84C]" />
+          <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Resumo IA</p>
+          <span className={`w-2 h-2 rounded-full ${sinalCor.dot}`} />
+          <span className={`text-[10px] font-bold uppercase ${sinalCor.text}`}>{data.sinal}</span>
+        </div>
+        <button onClick={() => carregar(true)} title="Regenerar"
+          className="text-[10px] text-gray-400 hover:text-gray-700 inline-flex items-center gap-1">
+          <RefreshCw className="w-3 h-3" /> Atualizar
+        </button>
+      </div>
+
+      <p className="text-sm text-gray-800 leading-relaxed mb-3">{data.resumo}</p>
+
+      {data.destaques?.length > 0 && (
+        <div className="mb-3">
+          <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1.5">Destaques</p>
+          <div className="flex flex-wrap gap-1.5">
+            {data.destaques.map((d, i) => (
+              <span key={i} className="px-2 py-1 rounded-md bg-white text-xs text-gray-700 border border-gray-200">{d}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {data.proximos_passos?.length > 0 && (
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1.5">Próximos passos sugeridos</p>
+          <ul className="space-y-1">
+            {data.proximos_passos.map((p, i) => (
+              <li key={i} className="text-xs text-gray-700 flex items-start gap-1.5">
+                <span className="text-[#C9A84C] font-bold">→</span>
+                <span>{p}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="text-[9px] text-gray-400 mt-3 text-right">
+        {data.cached ? 'Cache · ' : ''}{data.modelo} · {data.ms}ms
+      </p>
     </div>
   )
 }
@@ -367,6 +478,29 @@ function GanttFases({ fases, negocio }) {
         <span className="flex items-center gap-1.5"><span className="w-0.5 h-3 bg-red-500" /> Hoje</span>
       </div>
     </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
+// Sync para Google Calendar (P3.15)
+// ════════════════════════════════════════════════════════════════
+function SyncGCalButton({ negocioId }) {
+  const [loading, setLoading] = useState(false)
+  async function syncGCal() {
+    if (!confirm('Sincronizar deadlines de fases e tarefas para o Google Calendar?')) return
+    setLoading(true)
+    try {
+      const r = await apiFetch(`/api/crm/projetos/${negocioId}/sync-gcal`, { method: 'POST' })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Erro')
+      alert(`Sync GCal:\nFases criadas: ${j.fasesCriadas}\nFases atualizadas: ${j.fasesAtualizadas}\nTarefas criadas: ${j.tarefasCriadas}\nTarefas atualizadas: ${j.tarefasAtualizadas}${j.erros ? `\nErros: ${j.erros}` : ''}`)
+    } catch (e) { alert('Erro: ' + e.message) }
+    finally { setLoading(false) }
+  }
+  return (
+    <Button size="sm" variant="secondary" icon={Calendar} onClick={syncGCal} disabled={loading}>
+      {loading ? 'A sincronizar...' : 'Sync Calendar'}
+    </Button>
   )
 }
 
