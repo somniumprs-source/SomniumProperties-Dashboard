@@ -35,13 +35,33 @@ export function parseFolderId(input) {
   return null
 }
 
+// O Google Docs exporta imagens como data URIs base64 dentro do markdown — o que
+// inflaciona o tamanho em ordens de magnitude e torna a edição lenta. Substitui
+// cada referência base64 por um placeholder; o documento original mantém-se
+// acessível via "Abrir no Drive".
+export function stripBase64Images(md) {
+  if (!md) return ''
+  const PLACEHOLDER = '_[imagem — ver original no Drive]_'
+  let out = md
+  // Inline:  ![alt](data:image/...;base64,...)
+  out = out.replace(/!\[[^\]]*\]\(data:image\/[a-z0-9+.-]+;base64,[^)]+\)/gi, PLACEHOLDER)
+  // HTML img tags com data URI
+  out = out.replace(/<img[^>]*src=["']data:image\/[^"']+["'][^>]*>/gi, PLACEHOLDER)
+  // Reference-style (estilo Google Docs):  [imageN]: <data:image/...;base64,...>
+  out = out.replace(/^\[[^\]]+\]:\s*<data:image\/[a-z0-9+.-]+;base64,[^>]+>\s*$/gim, '')
+  // …também sem < >
+  out = out.replace(/^\[[^\]]+\]:\s*data:image\/[a-z0-9+.-]+;base64,\S+\s*$/gim, '')
+  return out
+}
+
 async function exportDocAsMarkdown(drive, fileId) {
   try {
     const res = await drive.files.export(
       { fileId, mimeType: 'text/markdown' },
       { responseType: 'text' }
     )
-    return typeof res.data === 'string' ? res.data : String(res.data || '')
+    const raw = typeof res.data === 'string' ? res.data : String(res.data || '')
+    return stripBase64Images(raw)
   } catch (e) {
     if (e?.code === 400 || e?.response?.status === 400) {
       const fallback = await drive.files.export(
