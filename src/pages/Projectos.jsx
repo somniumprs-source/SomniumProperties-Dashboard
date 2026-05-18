@@ -19,6 +19,15 @@ const CAT_COLORS = {
 }
 const CATEGORIAS = ['Wholesalling', 'CAEP', 'Mediação Imobiliária', 'Fix and Flip']
 
+// Modelos de negócio com ícone + descrição (para tabs visuais)
+const MODELOS_NEGOCIO = [
+  { key: '',                       nome: 'Todos',                icon: '📋', desc: 'Todos os modelos de negócio' },
+  { key: 'Fix and Flip',           nome: 'Fix and Flip',         icon: '🔨', desc: 'Reabilitação completa' },
+  { key: 'CAEP',                   nome: 'CAEP',                 icon: '🤝', desc: 'Contrato de Associação em Participação' },
+  { key: 'Mediação Imobiliária',   nome: 'Mediação',             icon: '🏘️', desc: 'Intermediação' },
+  { key: 'Wholesalling',           nome: 'Wholesalling',         icon: '⚡', desc: 'Finder fee' },
+]
+
 // Fases do Kanban (alinhadas com fasesFixFlip.js no backend)
 const FASES_KANBAN = [
   { key: 'aquisicao',                nome: 'Aquisição',                  icon: '🔑', cor: '#6366f1' },
@@ -197,6 +206,36 @@ export function Projectos() {
       <div className="p-4 sm:p-6 flex flex-col gap-4">
         {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>}
 
+        {/* Tabs de modelo de negócio — em série no topo */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 sm:-mx-6 px-4 sm:px-6 scrollbar-thin">
+          {MODELOS_NEGOCIO.map(m => {
+            const contagem = m.key === ''
+              ? lista.length
+              : lista.filter(n => n.categoria === m.key).length
+            const ativo = filterCat === m.key
+            const corCat = CAT_COLORS[m.key]
+            return (
+              <button key={m.key || 'todos'} onClick={() => setFilterCat(m.key)}
+                title={m.desc}
+                className={`group relative flex items-center gap-2.5 px-4 py-2.5 rounded-xl whitespace-nowrap transition-all border-2 shadow-xs
+                  ${ativo
+                    ? 'bg-brand-dark border-brand-dark text-brand-gold shadow-md'
+                    : 'bg-white dark:bg-neutral-900 border-gray-200 dark:border-neutral-800 text-gray-700 dark:text-neutral-300 hover:border-gray-300 dark:hover:border-neutral-600 hover:-translate-y-0.5'}`}>
+                <span className="text-lg leading-none">{m.icon}</span>
+                <div className="text-left">
+                  <p className={`text-sm font-semibold leading-tight ${ativo ? 'text-brand-gold' : 'text-gray-900 dark:text-neutral-100'}`}>{m.nome}</p>
+                  <p className={`text-[10px] leading-tight uppercase tracking-widest font-semibold mt-0.5 ${ativo ? 'text-brand-gold/60' : 'text-gray-400 dark:text-neutral-500'}`}>
+                    {contagem} projecto{contagem !== 1 ? 's' : ''}
+                  </p>
+                </div>
+                {corCat && (
+                  <span className="ml-1 w-2 h-2 rounded-full flex-shrink-0" style={{ background: ativo ? '#C9A84C' : corCat }} />
+                )}
+              </button>
+            )
+          })}
+        </div>
+
         {/* Toolbar */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-2 flex-wrap">
@@ -230,10 +269,6 @@ export function Projectos() {
               icon={AlertTriangle}
               onClick={() => setFilterAtraso(!filterAtraso)}
             >Só atrasados</Button>
-            <Select size="sm" value={filterCat} onChange={e => setFilterCat(e.target.value)} className="w-44">
-              <option value="">Todas categorias</option>
-              {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
-            </Select>
           </div>
         </div>
 
