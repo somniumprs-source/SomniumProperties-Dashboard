@@ -28,7 +28,9 @@ router.get('/', async (req, res) => {
               created_at, updated_at, updated_by,
               LEFT(conteudo_md, 400) AS conteudo_md_preview
          FROM sops ${where}
-         ORDER BY departamento, titulo`,
+         ORDER BY
+           COALESCE((SUBSTRING(titulo FROM 'SOP[[:space:]]*([0-9]+)'))::int, 999999),
+           titulo`,
       params
     )
     res.json({ sops: rows })
