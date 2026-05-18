@@ -1029,6 +1029,148 @@ export async function initSchema() {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_projinv_unique ON projeto_investidores(negocio_id, investidor_id);
       CREATE INDEX IF NOT EXISTS idx_projinv_negocio ON projeto_investidores(negocio_id);
       CREATE INDEX IF NOT EXISTS idx_projinv_investidor ON projeto_investidores(investidor_id);
+
+      -- ════════════════════════════════════════════════════════════════
+      -- MULTI-REGIÃO (Coimbra | AMP) — expansão Porto/Gaia
+      -- Cada entidade pertence a UMA região. Investidores podem ter
+      -- preferências em ambas (regioes_preferidas array JSON).
+      -- Backfill 'Coimbra' para dados existentes (estado anterior à
+      -- expansão). Migrations idempotentes.
+      -- ════════════════════════════════════════════════════════════════
+      DO $$ BEGIN
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS regiao TEXT;
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS concelho TEXT;
+        UPDATE imoveis SET regiao = 'Coimbra' WHERE regiao IS NULL;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+      CREATE INDEX IF NOT EXISTS idx_imoveis_regiao ON imoveis(regiao);
+      CREATE INDEX IF NOT EXISTS idx_imoveis_concelho ON imoveis(concelho);
+
+      DO $$ BEGIN
+        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS regioes_preferidas TEXT DEFAULT '["Coimbra"]';
+        UPDATE investidores SET regioes_preferidas = '["Coimbra"]' WHERE regioes_preferidas IS NULL;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
+      DO $$ BEGIN
+        ALTER TABLE consultores ADD COLUMN IF NOT EXISTS regiao TEXT;
+        UPDATE consultores SET regiao = 'Coimbra' WHERE regiao IS NULL;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+      CREATE INDEX IF NOT EXISTS idx_consultores_regiao ON consultores(regiao);
+
+      DO $$ BEGIN
+        ALTER TABLE negocios ADD COLUMN IF NOT EXISTS regiao TEXT;
+        UPDATE negocios SET regiao = 'Coimbra' WHERE regiao IS NULL;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+      CREATE INDEX IF NOT EXISTS idx_negocios_regiao ON negocios(regiao);
+
+      DO $$ BEGIN
+        ALTER TABLE despesas ADD COLUMN IF NOT EXISTS regiao TEXT;
+        ALTER TABLE despesas ADD COLUMN IF NOT EXISTS concelho TEXT;
+        UPDATE despesas SET regiao = 'Coimbra' WHERE regiao IS NULL;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+      CREATE INDEX IF NOT EXISTS idx_despesas_regiao ON despesas(regiao);
+
+      DO $$ BEGIN
+        ALTER TABLE okrs ADD COLUMN IF NOT EXISTS regiao TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+      CREATE INDEX IF NOT EXISTS idx_okrs_regiao ON okrs(regiao);
+
+      DO $$ BEGIN
+        ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS regiao TEXT;
+        UPDATE tarefas SET regiao = 'Coimbra' WHERE regiao IS NULL;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+      CREATE INDEX IF NOT EXISTS idx_tarefas_regiao ON tarefas(regiao);
+
+      DO $$ BEGIN
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS regiao TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
+      DO $$ BEGIN
+        ALTER TABLE visitas ADD COLUMN IF NOT EXISTS regiao TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+      CREATE INDEX IF NOT EXISTS idx_visitas_regiao ON visitas(regiao);
+
+      -- ════════════════════════════════════════════════════════════════
+      -- MERCADO DE REFERÊNCIA — preços médios e tempo de absorção por
+      -- concelho e tipologia. Crítico para wholesaling em AMP (preços
+      -- diferem radicalmente entre concelhos). Popular manualmente ou
+      -- via scraping mensal.
+      -- ════════════════════════════════════════════════════════════════
+      CREATE TABLE IF NOT EXISTS mercado_referencia (
+        id TEXT PRIMARY KEY,
+        regiao TEXT NOT NULL,
+        concelho TEXT NOT NULL,
+        freguesia TEXT,
+        tipologia TEXT,
+        eur_m2_compra REAL,
+        eur_m2_venda REAL,
+        tempo_medio_venda_dias INTEGER,
+        taxa_absorcao_pct REAL,
+        fonte TEXT,
+        data_referencia TEXT,
+        notas TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_mercado_regiao ON mercado_referencia(regiao, concelho);
+      CREATE INDEX IF NOT EXISTS idx_mercado_tipologia ON mercado_referencia(tipologia);
+
+      -- ════════════════════════════════════════════════════════════════
+      -- COMPLIANCE REGIONAL — regras municipais (IMT, IMI, AIMI, ARU)
+      -- por concelho. Usado pelas análises de rentabilidade.
+      -- ════════════════════════════════════════════════════════════════
+      CREATE TABLE IF NOT EXISTS compliance_regional (
+        id TEXT PRIMARY KEY,
+        regiao TEXT NOT NULL,
+        concelho TEXT NOT NULL UNIQUE,
+        imt_perc_base REAL,
+        imi_perc REAL DEFAULT 0.3,
+        aimi_perc REAL,
+        zona_aru BOOLEAN DEFAULT false,
+        notas_legais TEXT,
+        contactos_uteis TEXT,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_compliance_concelho ON compliance_regional(concelho);
+
+      -- ════════════════════════════════════════════════════════════════
+      -- LEAD INTERACTIONS — vista unificada de todas as comunicações
+      -- (WhatsApp, Email, Chamada, Visita, Proposta) com qualquer
+      -- entidade (imovel, investidor, consultor). Para vista Lead 360.
+      -- ════════════════════════════════════════════════════════════════
+      CREATE TABLE IF NOT EXISTS lead_interactions (
+        id TEXT PRIMARY KEY,
+        entidade_tipo TEXT NOT NULL,
+        entidade_id TEXT NOT NULL,
+        canal TEXT NOT NULL,
+        direcao TEXT,
+        assunto TEXT,
+        conteudo TEXT,
+        regiao TEXT,
+        data_hora TIMESTAMPTZ DEFAULT NOW(),
+        utilizador TEXT,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_lead_int_entidade ON lead_interactions(entidade_tipo, entidade_id, data_hora DESC);
+      CREATE INDEX IF NOT EXISTS idx_lead_int_regiao ON lead_interactions(regiao, data_hora DESC);
+      CREATE INDEX IF NOT EXISTS idx_lead_int_canal ON lead_interactions(canal);
+
+      -- Seed compliance básico para arranque (idempotente).
+      INSERT INTO compliance_regional (id, regiao, concelho, imt_perc_base, imi_perc, aimi_perc, zona_aru, notas_legais)
+      VALUES
+        ('compl-coimbra',  'Coimbra', 'Coimbra',          6.0, 0.3, 0.4, true,  'Centro histórico = ARU. Isenção IMT até 6 anos.'),
+        ('compl-porto',    'AMP',     'Porto',            6.0, 0.3, 0.4, true,  'Várias ARUs (Baixa, Bonfim, Cedofeita). Pressão urbanística alta.'),
+        ('compl-gaia',     'AMP',     'Vila Nova de Gaia', 6.0, 0.3, 0.4, true,  'ARU em Santa Marinha e Mafamude. Mercado em forte valorização.')
+      ON CONFLICT (concelho) DO NOTHING;
     `)
 
     // Bootstrap: garantir que somniumprs@gmail.com (owner) existe como admin

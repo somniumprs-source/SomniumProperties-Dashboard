@@ -1,6 +1,40 @@
 // ── Constantes partilhadas ────────────────────────────────────
 // Fonte única de verdade para cores, estados, labels e helpers.
 
+// ── Regiões (multi-região: Coimbra vs AMP) ───────────────────
+// AMP = Área Metropolitana do Porto (Porto + Gaia).
+// Cada entidade (imovel, investidor, consultor, negocio, despesa) pertence a UMA
+// região. Investidores podem ter múltiplas regiões preferidas (array em JSON).
+export const REGIOES = ['Coimbra', 'AMP']
+
+export const REGIAO_LABEL = {
+  Coimbra: 'Coimbra',
+  AMP: 'Área Metropolitana do Porto',
+}
+
+export const REGIAO_LABEL_CURTA = {
+  Coimbra: 'Coimbra',
+  AMP: 'AMP',
+}
+
+export const REGIAO_COR = {
+  Coimbra: '#C9A84C',
+  AMP: '#1f6feb',
+}
+
+export const CONCELHOS_POR_REGIAO = {
+  Coimbra: ['Coimbra', 'Condeixa-a-Nova', 'Mealhada', 'Cantanhede', 'Montemor-o-Velho', 'Penacova', 'Miranda do Corvo', 'Lousã'],
+  AMP: ['Porto', 'Vila Nova de Gaia'],
+}
+
+export function concelhosDe(regiao) {
+  return CONCELHOS_POR_REGIAO[regiao] || []
+}
+
+export function isRegiaoValida(r) {
+  return REGIOES.includes(r)
+}
+
 // ── Formatadores ─────────────────────────────────────────────
 export const EUR = v => {
   if (v === null || v === undefined) return '—'

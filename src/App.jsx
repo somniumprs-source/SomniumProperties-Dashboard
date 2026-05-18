@@ -8,6 +8,8 @@ import { ErrorBoundary } from './components/ui/ErrorBoundary.jsx'
 import { ChunkErrorBoundary } from './components/ui/ChunkErrorBoundary.jsx'
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
 import { ThemeProvider } from './contexts/ThemeContext.jsx'
+import { RegiaoProvider } from './contexts/RegiaoContext.jsx'
+import { RegiaoModal } from './components/RegiaoModal.jsx'
 
 const Financeiro  = lazy(() => import('./pages/Financeiro.jsx').then(m => ({ default: m.Financeiro })))
 const Alertas     = lazy(() => import('./pages/Alertas.jsx').then(m => ({ default: m.Alertas })))
