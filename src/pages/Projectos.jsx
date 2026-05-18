@@ -206,30 +206,47 @@ export function Projectos() {
       <div className="p-4 sm:p-6 flex flex-col gap-4">
         {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>}
 
-        {/* Tabs de modelo de negócio — em série no topo */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 sm:-mx-6 px-4 sm:px-6 scrollbar-thin">
+        {/* Caixas individuais por modelo de negócio — em série no topo, clicáveis */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {MODELOS_NEGOCIO.map(m => {
-            const contagem = m.key === ''
-              ? lista.length
-              : lista.filter(n => n.categoria === m.key).length
+            const projDoModelo = m.key === '' ? lista : lista.filter(n => n.categoria === m.key)
+            const contagem = projDoModelo.length
+            const lucroEsperado = projDoModelo.reduce((s, n) => s + (Number(n.lucroEstimado) || 0), 0)
+            const lucroReal = projDoModelo.reduce((s, n) => s + (Number(n.lucroReal) || 0), 0)
             const ativo = filterCat === m.key
-            const corCat = CAT_COLORS[m.key]
+            const corCat = CAT_COLORS[m.key] || '#C9A84C'
             return (
               <button key={m.key || 'todos'} onClick={() => setFilterCat(m.key)}
                 title={m.desc}
-                className={`group relative flex items-center gap-2.5 px-4 py-2.5 rounded-xl whitespace-nowrap transition-all border-2 shadow-xs
+                className={`group relative text-left p-4 rounded-xl border-2 transition-all overflow-hidden
                   ${ativo
-                    ? 'bg-brand-dark border-brand-dark text-brand-gold shadow-md'
-                    : 'bg-white dark:bg-neutral-900 border-gray-200 dark:border-neutral-800 text-gray-700 dark:text-neutral-300 hover:border-gray-300 dark:hover:border-neutral-600 hover:-translate-y-0.5'}`}>
-                <span className="text-lg leading-none">{m.icon}</span>
-                <div className="text-left">
-                  <p className={`text-sm font-semibold leading-tight ${ativo ? 'text-brand-gold' : 'text-gray-900 dark:text-neutral-100'}`}>{m.nome}</p>
-                  <p className={`text-[10px] leading-tight uppercase tracking-widest font-semibold mt-0.5 ${ativo ? 'text-brand-gold/60' : 'text-gray-400 dark:text-neutral-500'}`}>
-                    {contagem} projecto{contagem !== 1 ? 's' : ''}
-                  </p>
+                    ? 'bg-brand-dark border-brand-dark text-white shadow-lg -translate-y-0.5'
+                    : 'bg-white dark:bg-neutral-900 border-gray-200 dark:border-neutral-800 hover:border-gray-300 dark:hover:border-neutral-600 hover:-translate-y-0.5 hover:shadow-md'}`}>
+                {/* Acento de cor vertical à esquerda */}
+                <span className="absolute left-0 top-0 bottom-0 w-1" style={{ background: ativo ? '#C9A84C' : corCat }} />
+
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <span className="text-2xl leading-none">{m.icon}</span>
+                  <span className={`text-3xl font-bold leading-none font-mono ${ativo ? 'text-brand-gold' : 'text-gray-900 dark:text-neutral-100'}`}>{contagem}</span>
                 </div>
-                {corCat && (
-                  <span className="ml-1 w-2 h-2 rounded-full flex-shrink-0" style={{ background: ativo ? '#C9A84C' : corCat }} />
+                <p className={`text-sm font-semibold leading-tight ${ativo ? 'text-brand-gold' : 'text-gray-900 dark:text-neutral-100'}`}>{m.nome}</p>
+                <p className={`text-[10px] uppercase tracking-widest font-semibold mt-0.5 ${ativo ? 'text-white/60' : 'text-gray-400 dark:text-neutral-500'}`}>
+                  {contagem === 1 ? 'projecto' : 'projectos'}
+                </p>
+
+                {(lucroEsperado > 0 || lucroReal > 0) && (
+                  <div className={`mt-3 pt-2 border-t ${ativo ? 'border-white/10' : 'border-gray-100 dark:border-neutral-800'} space-y-0.5`}>
+                    {lucroEsperado > 0 && (
+                      <p className={`text-[10px] font-mono ${ativo ? 'text-brand-gold/70' : 'text-indigo-600 dark:text-indigo-400'}`}>
+                        {EUR(lucroEsperado)} esperado
+                      </p>
+                    )}
+                    {lucroReal > 0 && (
+                      <p className={`text-[10px] font-mono ${ativo ? 'text-green-300' : 'text-green-600 dark:text-green-400'}`}>
+                        {EUR(lucroReal)} recebido
+                      </p>
+                    )}
+                  </div>
                 )}
               </button>
             )
@@ -368,24 +385,7 @@ export function Projectos() {
           </div>
         )}
 
-        {/* KPIs por categoria — design refinado */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {(kpis?.categorias ?? []).map(c => (
-            <Card key={c.categoria} variant="default" padding="md" hover>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-2 h-2 rounded-full inline-block flex-shrink-0" style={{ background: CAT_COLORS[c.categoria] ?? '#6366f1' }} />
-                <span className="text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold truncate">{c.categoria}</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-neutral-100">
-                {c.count} <span className="text-sm font-normal text-gray-400 dark:text-neutral-500">projecto{c.count !== 1 ? 's' : ''}</span>
-              </p>
-              <div className="mt-2 space-y-0.5">
-                <p className="text-xs text-indigo-600 dark:text-indigo-400 font-mono">{EUR(c.lucroEst)} esperado</p>
-                {c.lucroReal > 0 && <p className="text-[10px] text-green-600 dark:text-green-400 font-mono">{EUR(c.lucroReal)} recebido</p>}
-              </div>
-            </Card>
-          ))}
-        </div>
+        {/* (KPIs por categoria removidos — info agora visível nas caixas de modelo de negócio acima) */}
 
         {view === 'kanban' ? (
           <KanbanBoard
