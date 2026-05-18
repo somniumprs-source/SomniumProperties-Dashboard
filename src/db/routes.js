@@ -3199,14 +3199,28 @@ router.get('/projetos/:negocioId/pdf/saida', async (req, res) => {
   try {
     const data = await loadProjetoCompleto(req.params.negocioId)
     if (!data) return res.status(404).json({ error: 'Projecto não encontrado' })
-    // Carregar investidores associados (se houver)
+
+    // Preferir tabela `projeto_investidores` (capital + % reais).
+    // Fallback: investidor_ids (rateio igualitário).
     let investidores = []
-    let invIds = []
-    try { invIds = typeof data.negocio.investidor_ids === 'string' ? JSON.parse(data.negocio.investidor_ids || '[]') : (data.negocio.investidor_ids || []) } catch {}
-    if (invIds.length > 0) {
-      const { rows } = await pool.query('SELECT id, nome FROM investidores WHERE id = ANY($1)', [invIds])
-      const capitalPorInv = (Number(data.negocio.capital_total) || 0) / invIds.length
-      investidores = rows.map(r => ({ id: r.id, nome: r.nome, capital: capitalPorInv }))
+    const { rows: projInv } = await pool.query(
+      `SELECT pi.capital, pi.percentagem, i.nome
+       FROM projeto_investidores pi
+       JOIN investidores i ON pi.investidor_id = i.id
+       WHERE pi.negocio_id = $1
+       ORDER BY pi.capital DESC`,
+      [req.params.negocioId]
+    )
+    if (projInv.length > 0) {
+      investidores = projInv.map(p => ({ nome: p.nome, capital: Number(p.capital) || 0 }))
+    } else {
+      let invIds = []
+      try { invIds = typeof data.negocio.investidor_ids === 'string' ? JSON.parse(data.negocio.investidor_ids || '[]') : (data.negocio.investidor_ids || []) } catch {}
+      if (invIds.length > 0) {
+        const { rows } = await pool.query('SELECT id, nome FROM investidores WHERE id = ANY($1)', [invIds])
+        const capitalPorInv = (Number(data.negocio.capital_total) || 0) / invIds.length
+        investidores = rows.map(r => ({ id: r.id, nome: r.nome, capital: capitalPorInv }))
+      }
     }
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `inline; filename="saida-caep-${data.negocio.movimento.replace(/[^\w]/g, '_')}.pdf"`)
@@ -3319,6 +3333,250 @@ async function notificarInvestidoresMudancaFase(negocioId, novaFaseKey) {
     console.log(`[notif-fase] ${negocio.movimento} → ${faseNome}: enviado a ${invs.length} investidor(es)`)
   } catch (e) { console.error('[notif-fase]', e.message) }
 }
+
+// ── DOCUMENTOS por fase (PDFs, DOCXs, certificados) ─────────
+const projetoDocsDir = path.resolve(__dirname, '../../public/uploads/projetos-docs')
+try { mkdirSync(projetoDocsDir, { recursive: true }) } catch {}
+const projetoDocsStorage = multer.diskStorage({
+  destination: projetoDocsDir,
+  filename: (req, file, cb) => cb(null, `${randomUUID()}${path.extname(file.originalname)}`),
+})
+const uploadDoc = multer({
+  storage: projetoDocsStorage,
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => cb(null, /\.(pdf|docx?|xlsx?|jpg|jpeg|png|webp|heic)$/i.test(path.extname(file.originalname))),
+})
+
+router.get('/projetos/:negocioId/documentos', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT pd.*, f.fase_key, f.nome AS fase_nome, f.ordem AS fase_ordem
+       FROM projeto_documentos pd
+       LEFT JOIN projeto_fases f ON pd.fase_id = f.id
+       WHERE pd.negocio_id = $1
+       ORDER BY COALESCE(f.ordem, 999), pd.created_at DESC`,
+      [req.params.negocioId]
+    )
+    res.json({ documentos: rows })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/projetos/:negocioId/documentos', uploadDoc.array('files', 10), async (req, res) => {
+  try {
+    const { faseId, tipo, notas } = req.body
+    const inserted = []
+    for (const file of (req.files || [])) {
+      const id = randomUUID()
+      const url = `/uploads/projetos-docs/${file.filename}`
+      const { rows } = await pool.query(
+        `INSERT INTO projeto_documentos (id, fase_id, negocio_id, url, nome, tipo, tamanho, mime, notas)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+        [id, faseId || null, req.params.negocioId, url, file.originalname, tipo || 'outro', file.size, file.mimetype, notas || null]
+      )
+      inserted.push(rows[0])
+    }
+    res.status(201).json({ documentos: inserted })
+  } catch (e) { console.error('[projetos/documentos] upload', e.message); res.status(500).json({ error: e.message }) }
+})
+
+router.put('/projetos/documentos/:docId', async (req, res) => {
+  try {
+    const allowed = ['fase_id', 'tipo', 'nome', 'notas']
+    const sets = []
+    const params = []
+    for (const k of allowed) {
+      if (req.body[k] !== undefined) {
+        params.push(req.body[k])
+        sets.push(`${k} = $${params.length}`)
+      }
+    }
+    if (sets.length === 0) return res.status(400).json({ error: 'Sem campos' })
+    params.push(req.params.docId)
+    const { rows } = await pool.query(`UPDATE projeto_documentos SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`, params)
+    if (!rows.length) return res.status(404).json({ error: 'Documento não encontrado' })
+    res.json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/projetos/documentos/:docId', async (req, res) => {
+  try {
+    const { rows } = await pool.query('DELETE FROM projeto_documentos WHERE id = $1 RETURNING url', [req.params.docId])
+    if (rows[0]?.url) {
+      const filePath = path.resolve(__dirname, '../..', rows[0].url.replace(/^\//, ''))
+      unlink(filePath).catch(() => {})
+    }
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── DESPESAS por fase (F2.6) ────────────────────────────────
+router.get('/projetos/:negocioId/despesas', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT d.*, f.fase_key, f.nome AS fase_nome, f.ordem AS fase_ordem
+       FROM despesas d
+       LEFT JOIN projeto_fases f ON d.fase_id = f.id
+       WHERE d.negocio_id = $1
+       ORDER BY COALESCE(f.ordem, 999), d.data DESC NULLS LAST`,
+      [req.params.negocioId]
+    )
+    res.json({ despesas: rows })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/projetos/:negocioId/despesas', async (req, res) => {
+  try {
+    const { fase_id, movimento, valor, data, categoria, notas } = req.body || {}
+    if (!movimento?.trim()) return res.status(400).json({ error: 'movimento obrigatório' })
+    const id = randomUUID()
+    const { rows } = await pool.query(
+      `INSERT INTO despesas (id, movimento, categoria, custo_mensal, custo_anual, timing, data, notas, negocio_id, fase_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [id, movimento.trim(), categoria || 'Obra', Number(valor) || 0, 0, 'Único', data || null, notas || null, req.params.negocioId, fase_id || null]
+    )
+    // Recalcular custo_real da fase
+    if (fase_id) {
+      await pool.query(
+        `UPDATE projeto_fases SET custo_real = (SELECT COALESCE(SUM(custo_mensal), 0) FROM despesas WHERE fase_id = $1), updated_at = NOW() WHERE id = $1`,
+        [fase_id]
+      )
+    }
+    res.status(201).json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/projetos/despesas/:despesaId', async (req, res) => {
+  try {
+    const { rows } = await pool.query('DELETE FROM despesas WHERE id = $1 RETURNING fase_id', [req.params.despesaId])
+    if (rows[0]?.fase_id) {
+      await pool.query(
+        `UPDATE projeto_fases SET custo_real = (SELECT COALESCE(SUM(custo_mensal), 0) FROM despesas WHERE fase_id = $1), updated_at = NOW() WHERE id = $1`,
+        [rows[0].fase_id]
+      )
+    }
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── INVESTIDORES por projeto (F2.8) ──────────────────────────
+router.get('/projetos/:negocioId/investidores', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT pi.*, i.nome AS investidor_nome, i.email AS investidor_email
+       FROM projeto_investidores pi
+       JOIN investidores i ON pi.investidor_id = i.id
+       WHERE pi.negocio_id = $1
+       ORDER BY pi.capital DESC NULLS LAST`,
+      [req.params.negocioId]
+    )
+    res.json({ investidores: rows })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/projetos/:negocioId/investidores', async (req, res) => {
+  try {
+    const { investidor_id, capital, percentagem, notas } = req.body || {}
+    if (!investidor_id) return res.status(400).json({ error: 'investidor_id obrigatório' })
+    const id = randomUUID()
+    const { rows } = await pool.query(
+      `INSERT INTO projeto_investidores (id, negocio_id, investidor_id, capital, percentagem, notas)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (negocio_id, investidor_id) DO UPDATE
+         SET capital = EXCLUDED.capital, percentagem = EXCLUDED.percentagem, notas = EXCLUDED.notas
+       RETURNING *`,
+      [id, req.params.negocioId, investidor_id, Number(capital) || 0, Number(percentagem) || 0, notas || null]
+    )
+    res.status(201).json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.put('/projetos/investidores/:linkId', async (req, res) => {
+  try {
+    const allowed = ['capital', 'percentagem', 'notas']
+    const sets = []
+    const params = []
+    for (const k of allowed) {
+      if (req.body[k] !== undefined) {
+        params.push(req.body[k])
+        sets.push(`${k} = $${params.length}`)
+      }
+    }
+    if (sets.length === 0) return res.status(400).json({ error: 'Sem campos' })
+    params.push(req.params.linkId)
+    const { rows } = await pool.query(`UPDATE projeto_investidores SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`, params)
+    if (!rows.length) return res.status(404).json({ error: 'Ligação não encontrada' })
+    res.json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/projetos/investidores/:linkId', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM projeto_investidores WHERE id = $1', [req.params.linkId])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── F2.7 — KPIs agregados de portfolio Fix and Flip ─────────
+router.get('/projetos/portfolio/kpis', async (req, res) => {
+  try {
+    const u = await resolveCrmUser(req)
+    const isRestricted = u && RECORD_RESTRICTED_ROLES.has(u.role)
+
+    const filterNegocio = isRestricted
+      ? `n.id IN (SELECT entidade_id FROM acessos WHERE entidade = 'negocio' AND user_id = $1)`
+      : `1=1`
+    const params = isRestricted ? [u.id] : []
+
+    const { rows: stats } = await pool.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE n.categoria = 'Fix and Flip') AS total_ff,
+         COUNT(*) FILTER (WHERE n.categoria = 'Fix and Flip' AND n.fase <> 'Vendido') AS ativos_ff,
+         COALESCE(SUM(n.lucro_estimado) FILTER (WHERE n.categoria = 'Fix and Flip'), 0) AS lucro_estimado_total,
+         COALESCE(SUM(n.lucro_real) FILTER (WHERE n.categoria = 'Fix and Flip'), 0) AS lucro_real_total,
+         COALESCE(SUM(n.capital_total) FILTER (WHERE n.categoria = 'Fix and Flip'), 0) AS capital_total
+       FROM negocios n WHERE ${filterNegocio}`,
+      params
+    )
+
+    // Fases por estado e atrasos
+    const { rows: faseStats } = await pool.query(
+      `SELECT estado, COUNT(*) AS c FROM projeto_fases f
+       JOIN negocios n ON n.id = f.negocio_id
+       WHERE ${filterNegocio}
+       GROUP BY estado`,
+      params
+    )
+    const { rows: atrasos } = await pool.query(
+      `SELECT f.id, f.nome, f.data_fim_prevista, n.id AS negocio_id, n.movimento, n.categoria,
+              (CURRENT_DATE - f.data_fim_prevista::date)::int AS dias_atraso
+       FROM projeto_fases f
+       JOIN negocios n ON n.id = f.negocio_id
+       WHERE f.data_fim_prevista IS NOT NULL
+         AND f.data_fim_prevista::date < CURRENT_DATE
+         AND f.estado <> 'concluida'
+         AND ${filterNegocio}
+       ORDER BY dias_atraso DESC
+       LIMIT 5`,
+      params
+    )
+    // Distribuição por fase actual (em_curso)
+    const { rows: distribuicao } = await pool.query(
+      `SELECT f.fase_key, f.nome, COUNT(*) AS projetos
+       FROM projeto_fases f
+       JOIN negocios n ON n.id = f.negocio_id
+       WHERE f.estado = 'em_curso' AND ${filterNegocio}
+       GROUP BY f.fase_key, f.nome ORDER BY projetos DESC`,
+      params
+    )
+
+    res.json({
+      totais: stats[0],
+      fases: Object.fromEntries(faseStats.map(r => [r.estado, Number(r.c)])),
+      topAtrasos: atrasos,
+      distribuicaoFases: distribuicao,
+    })
+  } catch (e) { console.error('[portfolio/kpis]', e.message); res.status(500).json({ error: e.message }) }
+})
 
 // Vista agregada por negócio (para o detalhe da página)
 router.get('/projetos/:negocioId/resumo', async (req, res) => {

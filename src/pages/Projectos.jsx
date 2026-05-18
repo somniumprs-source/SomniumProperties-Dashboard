@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Plus, Filter, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle } from 'lucide-react'
+import { useNavigate, Link } from 'react-router-dom'
+import { Plus, Filter, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle, TrendingUp, Briefcase } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { apiFetch } from '../lib/api.js'
 import { Button } from '../components/ui/Button.jsx'
@@ -47,6 +47,7 @@ export function Projectos() {
   const [editing, setEditing] = useState(null)
   const [view, setView] = useState('kanban')  // 'kanban' | 'lista'
   const [filterCat, setFilterCat] = useState(isInvestidor ? '' : 'Fix and Flip')
+  const [portfolio, setPortfolio] = useState(null)
 
   async function load() {
     setLoading(true); setError(null)
@@ -119,6 +120,12 @@ export function Projectos() {
 
   useEffect(() => { load() }, [])
   useEffect(() => { if (projectos.length > 0) loadFases(projectos) }, [projectos])
+  useEffect(() => {
+    apiFetch('/api/crm/projetos/portfolio/kpis')
+      .then(r => r.ok ? r.json() : null)
+      .then(setPortfolio)
+      .catch(() => {})
+  }, [])
 
   async function save(form) {
     try {
@@ -185,7 +192,56 @@ export function Projectos() {
 
         {editing !== null && <ProjectoForm item={editing} onSave={save} onCancel={() => setEditing(null)} />}
 
-        {/* KPIs por categoria */}
+        {/* Portfolio overview — KPIs Fix and Flip agregados */}
+        {portfolio?.totais && (
+          <div className="bg-gradient-to-br from-[#0d0d0d] to-[#1f1f1f] rounded-2xl p-5 text-white shadow-md">
+            <div className="flex items-center gap-2 mb-4">
+              <Briefcase className="w-4 h-4" style={{ color: '#C9A84C' }} />
+              <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#C9A84C' }}>Portfolio Fix and Flip</h2>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+              <PortfolioKpi label="Projectos activos" value={portfolio.totais.ativos_ff} sub={`de ${portfolio.totais.total_ff} total`} />
+              <PortfolioKpi label="Capital agregado" value={EUR(portfolio.totais.capital_total)} />
+              <PortfolioKpi label="Lucro esperado" value={EUR(portfolio.totais.lucro_estimado_total)} accent />
+              <PortfolioKpi label="Lucro realizado" value={EUR(portfolio.totais.lucro_real_total)} green />
+              <PortfolioKpi label="Em curso" value={portfolio.fases?.em_curso || 0} sub="fases activas" />
+            </div>
+            {(portfolio.topAtrasos?.length > 0 || portfolio.distribuicaoFases?.length > 0) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5 pt-5 border-t border-white/10">
+                {portfolio.topAtrasos?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-red-300 mb-2 flex items-center gap-1.5"><AlertTriangle className="w-3 h-3" /> Top atrasos</p>
+                    <div className="space-y-1.5">
+                      {portfolio.topAtrasos.slice(0, 3).map(a => (
+                        <Link key={a.id} to={`/projectos/${a.negocio_id}`} className="block bg-red-500/10 hover:bg-red-500/20 rounded-lg px-2.5 py-1.5 transition-colors">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-white">{a.movimento} · {a.nome}</span>
+                            <span className="text-xs font-bold text-red-300">{a.dias_atraso}d</span>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {portfolio.distribuicaoFases?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-1.5"><TrendingUp className="w-3 h-3" /> Distribuição por fase actual</p>
+                    <div className="space-y-1.5">
+                      {portfolio.distribuicaoFases.slice(0, 4).map(d => (
+                        <div key={d.fase_key} className="flex items-center justify-between bg-white/5 rounded-lg px-2.5 py-1.5">
+                          <span className="text-xs text-gray-200">{d.nome}</span>
+                          <span className="text-xs font-bold" style={{ color: '#C9A84C' }}>{d.projetos}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* KPIs por categoria (lista clássica) */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {(kpis?.categorias ?? []).map(c => (
             <div key={c.categoria} className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm">
@@ -239,6 +295,16 @@ export function Projectos() {
 // ════════════════════════════════════════════════════════════════
 // KANBAN
 // ════════════════════════════════════════════════════════════════
+function PortfolioKpi({ label, value, sub, accent, green }) {
+  return (
+    <div>
+      <p className="text-[9px] uppercase tracking-wider text-gray-400">{label}</p>
+      <p className={`text-xl font-mono font-bold mt-0.5 ${accent ? 'text-[#C9A84C]' : green ? 'text-green-400' : 'text-white'}`}>{value}</p>
+      {sub && <p className="text-[10px] text-gray-500 mt-0.5">{sub}</p>}
+    </div>
+  )
+}
+
 function KanbanBoard({ colunas, cardsPorColuna, fasesInfo, onCardClick, onMoveCard, readOnly }) {
   const [dragging, setDragging] = useState(null)         // { negocioId, isFF }
   const [overCol, setOverCol] = useState(null)           // fase_key da coluna sob hover

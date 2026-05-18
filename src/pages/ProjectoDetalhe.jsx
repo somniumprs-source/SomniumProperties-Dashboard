@@ -194,12 +194,12 @@ export function ProjectoDetalhe() {
 
           <div className="p-4 sm:p-6">
             {tab === 'resumo' && <TabResumo resumo={resumo} fases={fases} />}
-            {tab === 'fases' && <TabFases fases={fases} onChange={load} readOnly={isReadOnly} />}
+            {tab === 'fases' && <TabFases fases={fases} onChange={load} readOnly={isReadOnly} negocioId={id} />}
             {tab === 'orcamento' && <TabOrcamento imovel={imovel} />}
             {tab === 'faturacao' && <TabFaturacao negocio={negocio} onChange={load} readOnly={isReadOnly} />}
             {tab === 'fotos' && <TabFotos negocioId={id} fases={fases} fotos={fotos} onChange={load} readOnly={isReadOnly} />}
-            {tab === 'documentos' && <TabDocumentos negocio={negocio} fases={fases} />}
-            {tab === 'investidores' && <TabInvestidores negocio={negocio} />}
+            {tab === 'documentos' && <TabDocumentos negocio={negocio} fases={fases} readOnly={isReadOnly} />}
+            {tab === 'investidores' && <TabInvestidores negocio={negocio} readOnly={isReadOnly} />}
           </div>
         </div>
       </div>
@@ -382,23 +382,62 @@ function Field({ label, value, accent }) {
 // ════════════════════════════════════════════════════════════════
 // TAB: FASES & TAREFAS
 // ════════════════════════════════════════════════════════════════
-function TabFases({ fases, onChange, readOnly }) {
+function TabFases({ fases, onChange, readOnly, negocioId }) {
   if (fases.length === 0) {
     return <p className="text-center text-sm text-gray-400 py-8">Sem fases de obra criadas. Inicializa-as no topo da página.</p>
   }
   return (
     <div className="space-y-3">
-      {fases.map(f => <FaseAccordion key={f.id} fase={f} onChange={onChange} readOnly={readOnly} />)}
+      {fases.map(f => <FaseAccordion key={f.id} fase={f} onChange={onChange} readOnly={readOnly} negocioId={negocioId} />)}
     </div>
   )
 }
 
-function FaseAccordion({ fase, onChange, readOnly }) {
+function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
   const [open, setOpen] = useState(fase.estado === 'em_curso')
   const [novaTarefa, setNovaTarefa] = useState('')
+  const [despesas, setDespesas] = useState([])
+  const [novaDespesa, setNovaDespesa] = useState({ movimento: '', valor: '', data: '', categoria: 'Material' })
   const cor = FASE_COR[fase.fase_key] || '#6366f1'
   const icon = FASE_ICON[fase.fase_key] || '🛠️'
   const diasAtraso = calcularAtraso(fase)
+
+  async function loadDespesas() {
+    if (!negocioId) return
+    const r = await apiFetch(`/api/crm/projetos/${negocioId}/despesas`)
+    if (r.ok) {
+      const { despesas } = await r.json()
+      setDespesas(despesas.filter(d => d.fase_id === fase.id))
+    }
+  }
+  useEffect(() => { if (open) loadDespesas() }, [open, fase.id])
+
+  async function adicionarDespesa(e) {
+    e?.preventDefault()
+    if (!novaDespesa.movimento.trim() || !novaDespesa.valor) return
+    await apiFetch(`/api/crm/projetos/${negocioId}/despesas`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fase_id: fase.id,
+        movimento: novaDespesa.movimento.trim(),
+        valor: parseFloat(novaDespesa.valor) || 0,
+        data: novaDespesa.data || new Date().toISOString().slice(0, 10),
+        categoria: novaDespesa.categoria,
+      }),
+    })
+    setNovaDespesa({ movimento: '', valor: '', data: '', categoria: 'Material' })
+    loadDespesas()
+    onChange() // refresh fases (custo_real atualizado no backend)
+  }
+
+  async function apagarDespesa(id) {
+    if (!confirm('Apagar esta despesa?')) return
+    await apiFetch(`/api/crm/projetos/despesas/${id}`, { method: 'DELETE' })
+    loadDespesas()
+    onChange()
+  }
+
+  const custoTotalDespesas = despesas.reduce((s, d) => s + (Number(d.custo_mensal) || 0), 0)
 
   async function setEstado(estado) {
     await apiFetch(`/api/crm/projetos/fases/${fase.id}`, {
@@ -565,6 +604,39 @@ function FaseAccordion({ fase, onChange, readOnly }) {
                 className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 bg-white" />
               <Button size="sm" icon={Plus} onClick={adicionarTarefa} disabled={!novaTarefa.trim()}>Adicionar</Button>
             </div>
+          </div>
+
+          {/* Despesas detalhadas (F2.6) */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide">Despesas reais ({despesas.length}) · <span className="font-mono text-gray-700">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(custoTotalDespesas)}</span></p>
+            </div>
+            {despesas.length > 0 && (
+              <div className="space-y-1 mb-2">
+                {despesas.map(d => (
+                  <div key={d.id} className="flex items-center gap-2 group bg-white rounded-lg px-2.5 py-1.5 border border-gray-100">
+                    <span className="text-xs text-gray-700 flex-1">{d.movimento}</span>
+                    <span className="text-[10px] text-gray-400">{d.data || '—'}</span>
+                    <span className="text-xs font-mono font-semibold text-red-600">{new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(d.custo_mensal || 0)}</span>
+                    <button onClick={() => apagarDespesa(d.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500">
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <form onSubmit={adicionarDespesa} className="grid grid-cols-12 gap-1.5">
+              <input value={novaDespesa.movimento} onChange={e => setNovaDespesa({ ...novaDespesa, movimento: e.target.value })}
+                placeholder="Ex: Material elétrico" className="col-span-5 px-2 py-1 text-xs rounded-lg border border-gray-200 bg-white" />
+              <input type="number" step="0.01" value={novaDespesa.valor} onChange={e => setNovaDespesa({ ...novaDespesa, valor: e.target.value })}
+                placeholder="€" className="col-span-2 px-2 py-1 text-xs rounded-lg border border-gray-200 bg-white font-mono" />
+              <input type="date" value={novaDespesa.data} onChange={e => setNovaDespesa({ ...novaDespesa, data: e.target.value })}
+                className="col-span-3 px-2 py-1 text-xs rounded-lg border border-gray-200 bg-white" />
+              <button type="submit" disabled={!novaDespesa.movimento.trim() || !novaDespesa.valor}
+                className="col-span-2 px-2 py-1 rounded-lg bg-[#0d0d0d] text-[#C9A84C] text-xs disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1">
+                <Plus className="w-3 h-3" /> Add
+              </button>
+            </form>
           </div>
 
           {/* Notas */}
@@ -821,14 +893,33 @@ function FotosGaleriaPorFase({ fotos, onDelete }) {
 // ════════════════════════════════════════════════════════════════
 // TAB: DOCUMENTOS (placeholder V1 — geração V2)
 // ════════════════════════════════════════════════════════════════
-function TabDocumentos({ negocio, fases }) {
+function TabDocumentos({ negocio, fases, readOnly }) {
   const [faseFichaSel, setFaseFichaSel] = useState(fases[0]?.id || '')
+  const [docs, setDocs] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [faseDoc, setFaseDoc] = useState('')
+  const [tipoDoc, setTipoDoc] = useState('outro')
+  const fileRef = useRef(null)
 
-  const tipos = [
-    { key: 'relatorio', nome: 'Relatório de Acompanhamento de Obra', desc: 'Executivo mensal para investidores: cronograma, orçamento vs real, fotos recentes, próximos passos.', url: `/api/crm/projetos/${negocio.id}/pdf/relatorio` },
-    { key: 'memoria', nome: 'Memória Descritiva de Acabamentos', desc: 'Auto-gerada a partir do orçamento de obra do imóvel (acabamentos, garantias, ensaios) — pré-venda.', url: `/api/crm/projetos/${negocio.id}/pdf/memoria` },
-    { key: 'saida', nome: 'Relatório de Saída / Distribuição CAEP', desc: 'Capital investido vs distribuído por investidor, ROI, TIR anualizada.', url: `/api/crm/projetos/${negocio.id}/pdf/saida` },
+  const TIPOS_DOC = [
+    { key: 'escritura',    label: 'Escritura',     cor: '#0d0d0d' },
+    { key: 'fatura',       label: 'Fatura',        cor: '#ef4444' },
+    { key: 'certificado',  label: 'Certificado',   cor: '#22c55e' },
+    { key: 'licenca',      label: 'Licença',       cor: '#0ea5e9' },
+    { key: 'relatorio',    label: 'Relatório',     cor: '#C9A84C' },
+    { key: 'contrato',     label: 'Contrato',      cor: '#8b5cf6' },
+    { key: 'outro',        label: 'Outro',         cor: '#6b7280' },
   ]
+
+  async function load() {
+    setLoading(true)
+    try {
+      const r = await apiFetch(`/api/crm/projetos/${negocio.id}/documentos`)
+      if (r.ok) setDocs((await r.json()).documentos || [])
+    } finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, [negocio.id])
 
   async function abrirPDF(url) {
     try {
@@ -837,44 +928,140 @@ function TabDocumentos({ negocio, fases }) {
     } catch (e) { alert('Erro: ' + e.message) }
   }
 
-  return (
-    <div className="space-y-3">
-      <p className="text-xs text-gray-500 mb-3">Documentos gerados em PDF com layout institucional Somnium Properties.</p>
+  async function uploadDocs(e) {
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      files.forEach(f => fd.append('files', f))
+      if (faseDoc) fd.append('faseId', faseDoc)
+      fd.append('tipo', tipoDoc)
+      const token = await getToken().catch(() => null)
+      const r = await fetch(`/api/crm/projetos/${negocio.id}/documentos`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      })
+      if (!r.ok) throw new Error('Erro upload')
+      load()
+    } catch (err) { alert(err.message) }
+    finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+  async function apagarDoc(id) {
+    if (!confirm('Apagar este documento?')) return
+    await apiFetch(`/api/crm/projetos/documentos/${id}`, { method: 'DELETE' })
+    load()
+  }
 
-      {/* Ficha por fase */}
-      <div className="p-3 rounded-lg border border-gray-200 bg-gray-50">
-        <div className="flex items-start justify-between gap-3 mb-2">
-          <div className="flex-1">
-            <p className="text-sm font-medium text-gray-800">Ficha de Acompanhamento de Obra</p>
-            <p className="text-[11px] text-gray-500 mt-0.5">1 página A4 por fase. KPIs, % execução, fotos antes/depois, tarefas concluídas.</p>
+  // Auto-gerados (PDFs Somnium)
+  const autoGerados = [
+    { key: 'relatorio', nome: 'Relatório de Acompanhamento', desc: 'Executivo mensal: cronograma, orçamento, fotos recentes.', url: `/api/crm/projetos/${negocio.id}/pdf/relatorio` },
+    { key: 'memoria', nome: 'Memória Descritiva', desc: 'Acabamentos, garantias, ensaios — pré-venda.', url: `/api/crm/projetos/${negocio.id}/pdf/memoria` },
+    { key: 'saida', nome: 'Relatório de Saída / CAEP', desc: 'Capital, distribuição, ROI/TIR.', url: `/api/crm/projetos/${negocio.id}/pdf/saida` },
+  ]
+
+  return (
+    <div className="space-y-6">
+      {/* SECÇÃO 1: PDFs auto-gerados */}
+      <div>
+        <h3 className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">PDFs Somnium (auto-gerados)</h3>
+        <div className="space-y-2">
+          {/* Ficha por fase */}
+          <div className="p-3 rounded-lg border border-gray-200 bg-gray-50">
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-800">Ficha de Acompanhamento de Obra</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">1 página A4 por fase. KPIs, % execução, fotos, tarefas.</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <select value={faseFichaSel} onChange={e => setFaseFichaSel(e.target.value)}
+                className="flex-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs bg-white">
+                <option value="">Escolhe uma fase…</option>
+                {fases.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
+              </select>
+              <button onClick={() => faseFichaSel && abrirPDF(`/api/crm/projetos/${negocio.id}/pdf/ficha/${faseFichaSel}`)}
+                disabled={!faseFichaSel}
+                className="px-3 py-1.5 text-xs rounded-lg bg-[#0d0d0d] text-[#C9A84C] hover:bg-[#1a1a1a] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center gap-1.5">
+                <FileDown className="w-3.5 h-3.5" /> Gerar
+              </button>
+            </div>
           </div>
-        </div>
-        <div className="flex gap-2 mt-2">
-          <select value={faseFichaSel} onChange={e => setFaseFichaSel(e.target.value)}
-            className="flex-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs bg-white">
-            <option value="">Escolhe uma fase…</option>
-            {fases.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
-          </select>
-          <button onClick={() => faseFichaSel && abrirPDF(`/api/crm/projetos/${negocio.id}/pdf/ficha/${faseFichaSel}`)}
-            disabled={!faseFichaSel}
-            className="px-3 py-1.5 text-xs rounded-lg bg-[#0d0d0d] text-[#C9A84C] hover:bg-[#1a1a1a] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center gap-1.5">
-            <FileDown className="w-3.5 h-3.5" /> Gerar PDF
-          </button>
+          {autoGerados.map(t => (
+            <div key={t.key} className="flex items-start justify-between gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-800">{t.nome}</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">{t.desc}</p>
+              </div>
+              <button onClick={() => abrirPDF(t.url)}
+                className="px-3 py-1.5 text-xs rounded-lg bg-[#0d0d0d] text-[#C9A84C] hover:bg-[#1a1a1a] inline-flex items-center gap-1.5">
+                <FileDown className="w-3.5 h-3.5" /> Gerar
+              </button>
+            </div>
+          ))}
         </div>
       </div>
 
-      {tipos.map(t => (
-        <div key={t.key} className="flex items-start justify-between gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
-          <div className="flex-1">
-            <p className="text-sm font-medium text-gray-800">{t.nome}</p>
-            <p className="text-[11px] text-gray-500 mt-0.5">{t.desc}</p>
+      {/* SECÇÃO 2: Documentos uploaded */}
+      <div>
+        <h3 className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">Documentos do projecto ({docs.length})</h3>
+
+        {!readOnly && (
+          <div className="bg-gray-50 rounded-xl p-3 flex flex-col sm:flex-row gap-2 mb-3">
+            <select value={faseDoc} onChange={e => setFaseDoc(e.target.value)}
+              className="sm:flex-1 px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white">
+              <option value="">Sem fase específica</option>
+              {fases.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
+            </select>
+            <select value={tipoDoc} onChange={e => setTipoDoc(e.target.value)}
+              className="px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white">
+              {TIPOS_DOC.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+            </select>
+            <input ref={fileRef} type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,image/*"
+              onChange={uploadDocs} disabled={uploading} className="hidden" id="upload-doc" />
+            <label htmlFor="upload-doc"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0d0d0d] text-[#C9A84C] text-sm font-medium hover:bg-[#1a1a1a] cursor-pointer whitespace-nowrap">
+              <Upload className="w-4 h-4" /> {uploading ? 'A enviar...' : 'Carregar'}
+            </label>
           </div>
-          <button onClick={() => abrirPDF(t.url)}
-            className="px-3 py-1.5 text-xs rounded-lg bg-[#0d0d0d] text-[#C9A84C] hover:bg-[#1a1a1a] inline-flex items-center gap-1.5">
-            <FileDown className="w-3.5 h-3.5" /> Gerar PDF
-          </button>
-        </div>
-      ))}
+        )}
+
+        {loading ? (
+          <p className="text-xs text-gray-400 py-4 text-center">A carregar…</p>
+        ) : docs.length === 0 ? (
+          <p className="text-xs text-gray-400 py-6 text-center">Sem documentos. {!readOnly && 'Faz upload acima.'}</p>
+        ) : (
+          <div className="space-y-1.5">
+            {docs.map(doc => {
+              const tipoConfig = TIPOS_DOC.find(t => t.key === doc.tipo) || TIPOS_DOC[TIPOS_DOC.length - 1]
+              return (
+                <div key={doc.id} className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-200 bg-white group">
+                  <FileText className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <a href={doc.url} target="_blank" rel="noreferrer" className="text-sm font-medium text-gray-800 hover:text-[#C9A84C] truncate block">{doc.nome}</a>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide text-white"
+                        style={{ background: tipoConfig.cor }}>{tipoConfig.label}</span>
+                      {doc.fase_nome && <span className="text-[10px] text-gray-400">{doc.fase_nome}</span>}
+                      {doc.tamanho && <span className="text-[10px] text-gray-400">{(doc.tamanho / 1024).toFixed(0)} KB</span>}
+                      <span className="text-[10px] text-gray-400">{new Date(doc.created_at).toLocaleDateString('pt-PT')}</span>
+                    </div>
+                  </div>
+                  {!readOnly && (
+                    <button onClick={() => apagarDoc(doc.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-opacity">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -882,21 +1069,136 @@ function TabDocumentos({ negocio, fases }) {
 // ════════════════════════════════════════════════════════════════
 // TAB: INVESTIDORES
 // ════════════════════════════════════════════════════════════════
-function TabInvestidores({ negocio }) {
-  let ids = []
-  try { ids = typeof negocio.investidor_ids === 'string' ? JSON.parse(negocio.investidor_ids || '[]') : (negocio.investidor_ids || []) } catch {}
+function TabInvestidores({ negocio, readOnly }) {
+  const [lista, setLista] = useState([])
+  const [todosInvestidores, setTodosInvestidores] = useState([])
+  const [investidorSel, setInvestidorSel] = useState('')
+  const [novoCapital, setNovoCapital] = useState('')
+  const [novaPerc, setNovaPerc] = useState('')
+
+  async function load() {
+    const [r1, r2] = await Promise.all([
+      apiFetch(`/api/crm/projetos/${negocio.id}/investidores`),
+      apiFetch('/api/crm/investidores?limit=500'),
+    ])
+    if (r1.ok) setLista((await r1.json()).investidores || [])
+    if (r2.ok) setTodosInvestidores(((await r2.json()).data || []).filter(i => i.tipo_principal !== 'Inactivo'))
+  }
+  useEffect(() => { load() }, [negocio.id])
+
+  const capitalTotal = lista.reduce((s, l) => s + (Number(l.capital) || 0), 0)
+  const percTotal = lista.reduce((s, l) => s + (Number(l.percentagem) || 0), 0)
+  const lucroEstimado = Number(negocio.lucro_estimado) || 0
+  // Distribuição expectável = capital + parte proporcional do lucro
+  function distribuicao(l) {
+    const pctCapital = capitalTotal > 0 ? (Number(l.capital) || 0) / capitalTotal : 0
+    return (Number(l.capital) || 0) + (lucroEstimado * pctCapital)
+  }
+
+  async function adicionar(e) {
+    e?.preventDefault()
+    if (!investidorSel || !novoCapital) return
+    await apiFetch(`/api/crm/projetos/${negocio.id}/investidores`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        investidor_id: investidorSel,
+        capital: parseFloat(novoCapital) || 0,
+        percentagem: parseFloat(novaPerc) || 0,
+      }),
+    })
+    setInvestidorSel(''); setNovoCapital(''); setNovaPerc('')
+    load()
+  }
+  async function apagar(linkId) {
+    if (!confirm('Remover este investidor do projeto?')) return
+    await apiFetch(`/api/crm/projetos/investidores/${linkId}`, { method: 'DELETE' })
+    load()
+  }
+  async function editar(linkId, campo, valor) {
+    await apiFetch(`/api/crm/projetos/investidores/${linkId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [campo]: valor }),
+    })
+    load()
+  }
+
+  const disponiveis = todosInvestidores.filter(i => !lista.find(l => l.investidor_id === i.id))
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Field label="Nº investidores" value={negocio.n_investidores || ids.length || 0} />
-        <Field label="Capital total" value={EUR(negocio.capital_total)} accent />
-        <Field label="Quota Somnium" value={`${(negocio.quota_somnium || 0)}%`} />
-        <Field label="Categoria" value={negocio.categoria} />
+        <Field label="Investidores" value={lista.length} />
+        <Field label="Capital agregado" value={EUR(capitalTotal)} accent />
+        <Field label="% atribuída" value={`${percTotal.toFixed(1)}%`} />
+        <Field label="Lucro a distribuir" value={EUR(lucroEstimado)} accent />
       </div>
-      {negocio.categoria === 'CAEP' || ids.length > 0 ? (
-        <p className="text-xs text-gray-500 mt-3">Vista detalhada por investidor + distribuições previstas chegam na V2 (ligação a /investidores).</p>
+
+      {lista.length > 0 ? (
+        <div className="space-y-2">
+          {lista.map(l => (
+            <div key={l.id} className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 bg-white group">
+              <div className="w-8 h-8 rounded-full bg-[#C9A84C] text-[#0d0d0d] flex items-center justify-center font-bold text-xs flex-shrink-0">
+                {(l.investidor_nome || '?').slice(0, 2).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-800 truncate">{l.investidor_nome}</p>
+                {l.investidor_email && <p className="text-[10px] text-gray-400 truncate">{l.investidor_email}</p>}
+              </div>
+              <div className="flex gap-3 items-center text-right">
+                <div>
+                  <p className="text-[9px] uppercase tracking-wider text-gray-400">Capital</p>
+                  {readOnly ? (
+                    <p className="text-sm font-mono font-semibold text-gray-700">{EUR(l.capital)}</p>
+                  ) : (
+                    <input type="number" defaultValue={l.capital || 0} onBlur={e => editar(l.id, 'capital', parseFloat(e.target.value) || 0)}
+                      className="w-24 text-right text-sm font-mono px-2 py-0.5 rounded border border-gray-200" />
+                  )}
+                </div>
+                <div>
+                  <p className="text-[9px] uppercase tracking-wider text-gray-400">%</p>
+                  {readOnly ? (
+                    <p className="text-sm font-mono text-gray-600">{Number(l.percentagem).toFixed(1)}%</p>
+                  ) : (
+                    <input type="number" step="0.1" defaultValue={l.percentagem || 0} onBlur={e => editar(l.id, 'percentagem', parseFloat(e.target.value) || 0)}
+                      className="w-14 text-right text-sm px-2 py-0.5 rounded border border-gray-200" />
+                  )}
+                </div>
+                <div>
+                  <p className="text-[9px] uppercase tracking-wider text-gray-400">Distrib. estim.</p>
+                  <p className="text-sm font-mono font-semibold text-green-600">{EUR(distribuicao(l))}</p>
+                </div>
+              </div>
+              {!readOnly && (
+                <button onClick={() => apagar(l.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
       ) : (
-        <p className="text-xs text-gray-500 mt-3">Este projecto não está marcado como CAEP. Para apresentar a investidores passivos, muda a categoria para CAEP.</p>
+        <p className="text-xs text-gray-400 py-4 text-center">Sem investidores ligados ao projeto.</p>
+      )}
+
+      {!readOnly && (
+        <form onSubmit={adicionar} className="mt-4 pt-4 border-t border-gray-100">
+          <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">Adicionar investidor</p>
+          <div className="grid grid-cols-12 gap-2">
+            <select value={investidorSel} onChange={e => setInvestidorSel(e.target.value)}
+              className="col-span-5 px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white">
+              <option value="">Escolhe um investidor…</option>
+              {disponiveis.map(i => <option key={i.id} value={i.id}>{i.nome}</option>)}
+            </select>
+            <input type="number" step="0.01" value={novoCapital} onChange={e => setNovoCapital(e.target.value)}
+              placeholder="Capital €" className="col-span-3 px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white font-mono" />
+            <input type="number" step="0.1" value={novaPerc} onChange={e => setNovaPerc(e.target.value)}
+              placeholder="%" className="col-span-2 px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white" />
+            <button type="submit" disabled={!investidorSel || !novoCapital}
+              className="col-span-2 px-3 py-1.5 rounded-lg bg-[#0d0d0d] text-[#C9A84C] text-sm disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1">
+              <Plus className="w-4 h-4" /> Add
+            </button>
+          </div>
+        </form>
       )}
     </div>
   )

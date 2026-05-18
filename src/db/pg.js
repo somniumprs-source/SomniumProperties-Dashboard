@@ -827,6 +827,44 @@ export async function initSchema() {
       );
       CREATE INDEX IF NOT EXISTS idx_projeto_fotos_fase ON projeto_fotos(fase_id);
       CREATE INDEX IF NOT EXISTS idx_projeto_fotos_negocio ON projeto_fotos(negocio_id);
+
+      -- Documentos por fase (PDF, DOCX, imagens diversas)
+      CREATE TABLE IF NOT EXISTS projeto_documentos (
+        id TEXT PRIMARY KEY,
+        fase_id TEXT REFERENCES projeto_fases(id) ON DELETE CASCADE,
+        negocio_id TEXT NOT NULL,
+        url TEXT NOT NULL,
+        nome TEXT NOT NULL,
+        tipo TEXT DEFAULT 'outro',  -- escritura | fatura | certificado | relatorio | licenca | outro
+        tamanho INTEGER,
+        mime TEXT,
+        notas TEXT,
+        uploaded_by TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_projeto_documentos_fase ON projeto_documentos(fase_id);
+      CREATE INDEX IF NOT EXISTS idx_projeto_documentos_negocio ON projeto_documentos(negocio_id);
+      CREATE INDEX IF NOT EXISTS idx_projeto_documentos_tipo ON projeto_documentos(tipo);
+
+      -- Ligação de despesas a fases (F2.6): coluna fase_id em despesas
+      ALTER TABLE despesas ADD COLUMN IF NOT EXISTS fase_id TEXT;
+      ALTER TABLE despesas ADD COLUMN IF NOT EXISTS negocio_id TEXT;
+      CREATE INDEX IF NOT EXISTS idx_despesas_fase ON despesas(fase_id);
+      CREATE INDEX IF NOT EXISTS idx_despesas_negocio_fase ON despesas(negocio_id, fase_id);
+
+      -- F2.8: multi-investidor por projecto com capital e % individuais
+      CREATE TABLE IF NOT EXISTS projeto_investidores (
+        id TEXT PRIMARY KEY,
+        negocio_id TEXT NOT NULL REFERENCES negocios(id) ON DELETE CASCADE,
+        investidor_id TEXT NOT NULL REFERENCES investidores(id) ON DELETE CASCADE,
+        capital REAL DEFAULT 0,
+        percentagem REAL DEFAULT 0,
+        notas TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_projinv_unique ON projeto_investidores(negocio_id, investidor_id);
+      CREATE INDEX IF NOT EXISTS idx_projinv_negocio ON projeto_investidores(negocio_id);
+      CREATE INDEX IF NOT EXISTS idx_projinv_investidor ON projeto_investidores(investidor_id);
     `)
 
     // Bootstrap: garantir que somniumprs@gmail.com (owner) existe como admin
