@@ -9,6 +9,10 @@ import {
 import { apiFetch, getToken } from '../lib/api.js'
 import { Header } from '../components/layout/Header.jsx'
 import { Button } from '../components/ui/Button.jsx'
+import { Card } from '../components/ui/Card.jsx'
+import { Badge } from '../components/ui/Badge.jsx'
+import { Input, Select, Textarea } from '../components/ui/Input.jsx'
+import { Avatar } from '../components/ui/Avatar.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { PartilharAcesso } from '../components/PartilharAcesso.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
@@ -197,45 +201,58 @@ export function ProjectoDetalhe() {
           <FracaoChips fracoes={fracoes} fracaoSel={fracaoSel} setFracaoSel={setFracaoSel} />
         )}
 
-        {/* Banner do projeto — responsivo */}
-        <div className="rounded-2xl p-4 sm:p-6 text-white shadow-md" style={{ background: `linear-gradient(135deg, ${BLACK} 0%, #1a1a1a 100%)` }}>
-          <div className="flex flex-col sm:flex-row items-start sm:justify-between gap-4">
-            <div>
-              <p className="text-[11px] uppercase tracking-wider opacity-60">{negocio.categoria}</p>
-              <h1 className="text-xl sm:text-2xl font-bold mt-1" style={{ color: GOLD }}>{negocio.movimento}</h1>
-              {imovel?.nome && <p className="text-sm opacity-70 mt-0.5">📍 {imovel.nome} {imovel.zona && `· ${imovel.zona}`}</p>}
+        {/* Banner do projeto — refinado */}
+        <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 text-white shadow-lg bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700">
+          {/* Glow dourado decorativo */}
+          <div className="absolute top-0 right-0 w-72 h-72 bg-brand-gold/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+
+          <div className="relative flex flex-col sm:flex-row items-start sm:justify-between gap-4 mb-5">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge tone="gold" variant="solid" size="sm">{negocio.categoria}</Badge>
+                {negocio.tipo_projeto === 'predio' && <Badge tone="dark" variant="soft" size="sm">Prédio</Badge>}
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-bold mt-2 text-brand-gold truncate">{negocio.movimento}</h1>
+              {imovel?.nome && (
+                <p className="text-sm text-white/70 mt-1 flex items-center gap-1.5">
+                  <span className="opacity-60">📍</span> {imovel.nome}{imovel.zona && ` · ${imovel.zona}`}
+                </p>
+              )}
             </div>
-            <div className="grid grid-cols-2 sm:flex sm:items-center gap-3 sm:gap-6 w-full sm:w-auto">
+            <div className="grid grid-cols-2 sm:flex sm:items-start gap-4 sm:gap-7 w-full sm:w-auto">
               <BannerKpi label="Execução" value={`${percGlobal}%`} />
               <BannerKpi label="Faturação" value={EUR(negocio.lucro_estimado)} />
               <BannerKpi label="Custo obra" value={EUR(custoReal || negocio.custo_real_obra)} />
               {faseAtual && (
-                <div className="sm:text-right col-span-2">
-                  <p className="text-[10px] uppercase tracking-wider opacity-60">Fase actual</p>
-                  <p className="text-sm font-semibold mt-1" style={{ color: GOLD }}>
-                    {FASE_ICON[faseAtual.fase_key]} {faseAtual.nome}
+                <div className="sm:text-right col-span-2 sm:col-span-1">
+                  <p className="text-overline uppercase tracking-widest text-white/50 font-semibold">Fase actual</p>
+                  <p className="text-sm font-semibold mt-1 text-brand-gold truncate">
+                    <span className="mr-1">{FASE_ICON[faseAtual.fase_key]}</span> {faseAtual.nome}
                   </p>
                 </div>
               )}
             </div>
           </div>
           {/* Barra de progresso global */}
-          <div className="mt-4 w-full h-2 rounded-full bg-white/10 overflow-hidden">
-            <div className="h-full rounded-full" style={{ width: `${percGlobal}%`, background: GOLD }} />
+          <div className="relative w-full h-2 rounded-full bg-white/10 overflow-hidden">
+            <div className="h-full rounded-full bg-gradient-to-r from-brand-gold-400 to-brand-gold transition-all duration-500" style={{ width: `${percGlobal}%` }} />
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="flex overflow-x-auto border-b border-gray-100">
+        <Card variant="default" padding="none" className="overflow-hidden">
+          <div className="flex overflow-x-auto border-b border-gray-200 dark:border-neutral-800 bg-gray-50/50 dark:bg-neutral-900/50">
             {TABS.map(t => {
               const Icon = t.icon
+              const active = tab === t.key
               return (
                 <button key={t.key} onClick={() => setTab(t.key)}
-                  className={`px-4 py-3 text-xs font-medium flex items-center gap-1.5 whitespace-nowrap border-b-2 transition-colors ${
-                    tab === t.key ? 'border-[#C9A84C] text-[#0d0d0d]' : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}>
+                  className={`relative px-4 py-3 text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all
+                    ${active
+                      ? 'text-brand-dark dark:text-brand-gold'
+                      : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'}`}>
                   <Icon className="w-3.5 h-3.5" /> {t.label}
+                  {active && <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-brand-gold rounded-t-full" />}
                 </button>
               )
             })}
@@ -253,7 +270,7 @@ export function ProjectoDetalhe() {
             {tab === 'investidores' && <TabInvestidores negocio={negocio} readOnly={isReadOnly} />}
             {tab === 'historico' && <TabHistorico negocioId={id} />}
           </div>
-        </div>
+        </Card>
       </div>
     </>
   )
@@ -261,9 +278,9 @@ export function ProjectoDetalhe() {
 
 function BannerKpi({ label, value }) {
   return (
-    <div className="text-right">
-      <p className="text-[10px] uppercase tracking-wider opacity-60">{label}</p>
-      <p className="text-lg font-mono font-bold mt-0.5">{value}</p>
+    <div className="text-left sm:text-right min-w-0">
+      <p className="text-overline uppercase tracking-widest text-white/50 font-semibold">{label}</p>
+      <p className="text-xl font-mono font-bold mt-1 truncate">{value}</p>
     </div>
   )
 }
@@ -555,9 +572,9 @@ function SyncGCalButton({ negocioId }) {
 
 function Field({ label, value, accent }) {
   return (
-    <div className="flex justify-between items-baseline">
-      <span className="text-xs text-gray-500">{label}</span>
-      <span className={`text-sm font-medium ${accent ? 'text-[#0d0d0d] font-mono' : 'text-gray-700'}`}>{value || '—'}</span>
+    <div className="flex justify-between items-baseline py-1 border-b border-gray-100 dark:border-neutral-800 last:border-0">
+      <span className="text-caption text-gray-500 dark:text-neutral-400">{label}</span>
+      <span className={`text-sm font-medium ${accent ? 'text-gray-900 dark:text-neutral-100 font-mono' : 'text-gray-700 dark:text-neutral-300'}`}>{value || '—'}</span>
     </div>
   )
 }
@@ -662,34 +679,33 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
   }
 
   return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden">
+    <div className={`bg-white dark:bg-neutral-900 border rounded-xl overflow-hidden transition-all ${open ? 'shadow-md border-gray-300 dark:border-neutral-700' : 'border-gray-200 dark:border-neutral-800 shadow-xs'}`}>
       <button onClick={() => setOpen(!open)}
-        className="w-full px-4 py-3 flex items-center justify-between bg-white hover:bg-gray-50 transition-colors">
-        <div className="flex items-center gap-3 flex-1 text-left">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg" style={{ background: `${cor}15` }}>{icon}</div>
-          <div className="flex-1">
+        className="w-full px-4 py-3.5 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-neutral-800/50 transition-colors">
+        <div className="flex items-center gap-3 flex-1 text-left min-w-0">
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center text-lg flex-shrink-0 transition-transform group-hover:scale-105"
+            style={{ background: `${cor}18`, border: `1px solid ${cor}30` }}>{icon}</div>
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-semibold text-gray-800">{fase.nome}</span>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${ESTADO_COR[fase.estado] || 'bg-gray-100 text-gray-600'}`}>
-                {ESTADO_LABEL[fase.estado] || fase.estado}
-              </span>
+              <span className="text-sm font-semibold text-gray-900 dark:text-neutral-100">{fase.nome}</span>
+              <Badge
+                tone={fase.estado === 'concluida' ? 'green' : fase.estado === 'em_curso' ? 'blue' : fase.estado === 'bloqueada' ? 'red' : 'gray'}
+                size="xs">{ESTADO_LABEL[fase.estado] || fase.estado}</Badge>
               {diasAtraso != null && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 inline-flex items-center gap-1">
-                  <AlertTriangle className="w-2.5 h-2.5" /> {diasAtraso}d atraso
-                </span>
+                <Badge tone="red" size="xs" icon={AlertTriangle}>{diasAtraso}d atraso</Badge>
               )}
             </div>
-            <div className="flex items-center gap-3 mt-1">
-              <div className="flex-1 max-w-[200px] bg-gray-100 rounded-full h-1.5">
-                <div className="h-full rounded-full" style={{ width: `${fase.perc_execucao || 0}%`, background: cor }} />
+            <div className="flex items-center gap-3 mt-1.5">
+              <div className="flex-1 max-w-[220px] bg-gray-100 dark:bg-neutral-800 rounded-full h-1.5 overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-300" style={{ width: `${fase.perc_execucao || 0}%`, background: cor }} />
               </div>
-              <span className="text-[10px] text-gray-500 font-mono">{fase.perc_execucao || 0}%</span>
-              <span className="text-[10px] text-gray-400">{fase.tarefas_concluidas}/{fase.tarefas_total} tarefas</span>
-              {fase.fotos_count > 0 && <span className="text-[10px] text-gray-400">📷 {fase.fotos_count}</span>}
+              <span className="text-xs text-gray-700 dark:text-neutral-300 font-mono font-semibold">{fase.perc_execucao || 0}%</span>
+              <span className="text-caption text-gray-400 dark:text-neutral-500">{fase.tarefas_concluidas}/{fase.tarefas_total} tarefas</span>
+              {fase.fotos_count > 0 && <span className="text-caption text-gray-400 dark:text-neutral-500">📷 {fase.fotos_count}</span>}
             </div>
           </div>
         </div>
-        <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`} />
+        <ChevronRight className={`w-4 h-4 text-gray-400 dark:text-neutral-500 transition-transform ${open ? 'rotate-90 text-brand-gold' : ''}`} />
       </button>
 
       {open && readOnly && (

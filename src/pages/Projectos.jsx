@@ -4,6 +4,9 @@ import { Plus, Filter, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle
 import { Header } from '../components/layout/Header.jsx'
 import { apiFetch } from '../lib/api.js'
 import { Button } from '../components/ui/Button.jsx'
+import { Card } from '../components/ui/Card.jsx'
+import { Badge } from '../components/ui/Badge.jsx'
+import { Input, Select } from '../components/ui/Input.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
@@ -195,39 +198,42 @@ export function Projectos() {
         {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>}
 
         {/* Toolbar */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <div className="flex items-center gap-2">
-            {!isReadOnly && <Button icon={Plus} onClick={() => setEditing({})}>Novo Projecto</Button>}
-            <Link to="/projectos/calendario"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50">
-              <CalendarIcon className="w-3.5 h-3.5" /> Calendário
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            {!isReadOnly && <Button variant="primary" icon={Plus} onClick={() => setEditing({})}>Novo Projecto</Button>}
+            <Link to="/projectos/calendario">
+              <Button variant="secondary" size="md" icon={CalendarIcon}>Calendário</Button>
             </Link>
-            <div className="inline-flex bg-white border border-gray-200 rounded-lg p-0.5">
+            <div className="inline-flex bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg p-0.5 shadow-xs">
               <button onClick={() => setView('kanban')}
-                className={`px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${view === 'kanban' ? 'bg-[#0d0d0d] text-[#C9A84C]' : 'text-gray-500 hover:bg-gray-50'}`}>
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${view === 'kanban' ? 'bg-brand-dark text-brand-gold shadow-xs' : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'}`}>
                 <LayoutGrid className="w-3.5 h-3.5" /> Kanban
               </button>
               <button onClick={() => setView('lista')}
-                className={`px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${view === 'lista' ? 'bg-[#0d0d0d] text-[#C9A84C]' : 'text-gray-500 hover:bg-gray-50'}`}>
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${view === 'lista' ? 'bg-brand-dark text-brand-gold shadow-xs' : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'}`}>
                 <ListIcon className="w-3.5 h-3.5" /> Lista
               </button>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-              <input value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="Pesquisar..." className="pl-8 pr-2.5 py-1.5 text-xs border rounded-lg bg-white w-44" />
-            </div>
-            <button onClick={() => setFilterAtraso(!filterAtraso)}
-              className={`text-xs px-2.5 py-1.5 rounded-lg border inline-flex items-center gap-1 ${filterAtraso ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-              <AlertTriangle className="w-3 h-3" /> Só atrasados
-            </button>
-            <Filter className="w-4 h-4 text-gray-400" />
-            <select value={filterCat} onChange={e => setFilterCat(e.target.value)} className="text-xs border rounded-lg px-2 py-1.5 bg-white">
+            <Input
+              size="sm"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Pesquisar... ( / )"
+              prefix={<Search className="w-3.5 h-3.5" />}
+              className="w-48"
+            />
+            <Button
+              variant={filterAtraso ? 'destructive' : 'secondary'}
+              size="sm"
+              icon={AlertTriangle}
+              onClick={() => setFilterAtraso(!filterAtraso)}
+            >Só atrasados</Button>
+            <Select size="sm" value={filterCat} onChange={e => setFilterCat(e.target.value)} className="w-44">
               <option value="">Todas categorias</option>
               {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+            </Select>
           </div>
         </div>
 
@@ -235,11 +241,19 @@ export function Projectos() {
 
         {/* Portfolio overview — KPIs Fix and Flip agregados */}
         {portfolio?.totais && (
-          <div className="bg-gradient-to-br from-[#0d0d0d] to-[#1f1f1f] rounded-2xl p-5 text-white shadow-md">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Briefcase className="w-4 h-4" style={{ color: '#C9A84C' }} />
-                <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#C9A84C' }}>Portfolio Fix and Flip</h2>
+          <div className="relative overflow-hidden bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700 rounded-2xl p-5 sm:p-6 text-white shadow-lg">
+            {/* Acento dourado decorativo */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+
+            <div className="relative flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-brand-gold/15 border border-brand-gold/30 flex items-center justify-center">
+                  <Briefcase className="w-4 h-4 text-brand-gold" />
+                </div>
+                <div>
+                  <h2 className="text-overline uppercase tracking-widest font-semibold text-brand-gold">Portfolio</h2>
+                  <p className="text-sm font-semibold text-white">Fix and Flip · Vista agregada</p>
+                </div>
               </div>
               {!isReadOnly && (
                 <button onClick={async () => {
@@ -249,8 +263,8 @@ export function Projectos() {
                     if (r.ok) setPredicoes(await r.json())
                   } finally { setPredicoesLoading(false) }
                 }}
-                  className="text-[10px] uppercase tracking-wider text-[#C9A84C] hover:text-white inline-flex items-center gap-1.5 bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-lg border border-[#C9A84C]/30">
-                  <Sparkles className="w-3 h-3" /> {predicoesLoading ? 'A analisar...' : 'Análise IA'}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-brand-gold border border-brand-gold/40 bg-brand-gold/5 hover:bg-brand-gold/15 hover:border-brand-gold transition-all shadow-xs">
+                  <Sparkles className="w-3.5 h-3.5" /> {predicoesLoading ? 'A analisar...' : 'Análise IA'}
                 </button>
               )}
             </div>
@@ -319,20 +333,22 @@ export function Projectos() {
           </div>
         )}
 
-        {/* KPIs por categoria (lista clássica) */}
+        {/* KPIs por categoria — design refinado */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {(kpis?.categorias ?? []).map(c => (
-            <div key={c.categoria} className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style={{ background: CAT_COLORS[c.categoria] ?? '#6366f1' }} />
-                <span className="text-[11px] text-gray-500 font-medium truncate">{c.categoria}</span>
+            <Card key={c.categoria} variant="default" padding="md" hover>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-2 h-2 rounded-full inline-block flex-shrink-0" style={{ background: CAT_COLORS[c.categoria] ?? '#6366f1' }} />
+                <span className="text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold truncate">{c.categoria}</span>
               </div>
-              <p className="text-lg font-bold text-gray-900">
-                {c.count} <span className="text-xs font-normal text-gray-400">projecto{c.count !== 1 ? 's' : ''}</span>
+              <p className="text-2xl font-bold text-gray-900 dark:text-neutral-100">
+                {c.count} <span className="text-sm font-normal text-gray-400 dark:text-neutral-500">projecto{c.count !== 1 ? 's' : ''}</span>
               </p>
-              <p className="text-xs text-indigo-600 font-mono">{EUR(c.lucroEst)} expectável</p>
-              {c.lucroReal > 0 && <p className="text-[10px] text-green-600 font-mono">{EUR(c.lucroReal)} recebido</p>}
-            </div>
+              <div className="mt-2 space-y-0.5">
+                <p className="text-xs text-indigo-600 dark:text-indigo-400 font-mono">{EUR(c.lucroEst)} esperado</p>
+                {c.lucroReal > 0 && <p className="text-[10px] text-green-600 dark:text-green-400 font-mono">{EUR(c.lucroReal)} recebido</p>}
+              </div>
+            </Card>
           ))}
         </div>
 
@@ -375,10 +391,10 @@ export function Projectos() {
 // ════════════════════════════════════════════════════════════════
 function PortfolioKpi({ label, value, sub, accent, green }) {
   return (
-    <div>
-      <p className="text-[9px] uppercase tracking-wider text-gray-400">{label}</p>
-      <p className={`text-xl font-mono font-bold mt-0.5 ${accent ? 'text-[#C9A84C]' : green ? 'text-green-400' : 'text-white'}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-500 mt-0.5">{sub}</p>}
+    <div className="min-w-0">
+      <p className="text-overline uppercase tracking-widest text-gray-400 font-semibold">{label}</p>
+      <p className={`text-2xl font-mono font-bold mt-1 truncate ${accent ? 'text-brand-gold' : green ? 'text-green-400' : 'text-white'}`}>{value}</p>
+      {sub && <p className="text-caption text-gray-500 mt-0.5 truncate">{sub}</p>}
     </div>
   )
 }
@@ -429,19 +445,21 @@ function KanbanBoard({ colunas, cardsPorColuna, fasesInfo, onCardClick, onMoveCa
               onDragOver={onDragOver(col.key)}
               onDragLeave={() => overCol === col.key && setOverCol(null)}
               onDrop={onDrop(col.key)}>
-              <div className="rounded-t-xl px-3 py-2.5 flex items-center justify-between"
-                style={{ background: `${col.cor}15`, borderTop: `3px solid ${col.cor}` }}>
-                <div className="flex items-center gap-2">
+              <div className="rounded-t-xl px-3 py-2.5 flex items-center justify-between bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 border-b-0"
+                style={{ borderTop: `3px solid ${col.cor}` }}>
+                <div className="flex items-center gap-2 min-w-0">
                   <span className="text-base">{col.icon}</span>
-                  <span className="text-xs font-semibold text-gray-700">{col.nome}</span>
+                  <span className="text-xs font-semibold text-gray-700 dark:text-neutral-200 truncate">{col.nome}</span>
                 </div>
-                <span className="text-[10px] font-mono bg-white text-gray-500 px-1.5 py-0.5 rounded-full border border-gray-200">{cards.length}</span>
+                <Badge tone="gray" size="xs" className="font-mono">{cards.length}</Badge>
               </div>
               <div className={`rounded-b-xl p-2 min-h-[400px] space-y-2 border-x border-b transition-colors ${
-                isOver ? 'bg-[#C9A84C]/10 border-[#C9A84C]' : 'bg-gray-50 border-gray-200'
+                isOver
+                  ? 'bg-brand-gold/10 border-brand-gold dark:bg-brand-gold/10'
+                  : 'bg-gray-50/50 dark:bg-neutral-900/50 border-gray-200 dark:border-neutral-800'
               }`}>
                 {cards.length === 0 && (
-                  <p className="text-center text-[10px] text-gray-300 py-6">{isOver ? 'Solta aqui' : 'Sem projectos'}</p>
+                  <p className="text-center text-overline text-gray-300 dark:text-neutral-600 py-6 uppercase tracking-widest">{isOver ? 'Soltar aqui' : 'Vazio'}</p>
                 )}
                 {cards.map(n => (
                   <KanbanCard
@@ -473,38 +491,44 @@ function KanbanCard({ negocio: n, info, onClick, onDragStart, onDragEnd, isDragg
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onClick}
-      className={`bg-white rounded-lg border border-gray-200 p-2.5 cursor-pointer hover:shadow-md hover:border-[#C9A84C] transition-all group ${
-        isDragging ? 'opacity-40 scale-95' : ''
-      } ${podeArrastar ? 'cursor-grab active:cursor-grabbing' : ''}`}
-      title={podeArrastar ? 'Arrasta para mover entre fases' : undefined}
+      className={`group relative bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-800 p-3 cursor-pointer
+        hover:shadow-md hover:border-brand-gold/50 hover:-translate-y-0.5
+        transition-all duration-200
+        ${isDragging ? 'opacity-40 scale-95 rotate-1' : ''}
+        ${podeArrastar ? 'cursor-grab active:cursor-grabbing' : ''}`}
+      title={podeArrastar ? 'Arrastar para mover entre fases' : undefined}
     >
-      <div className="flex items-start justify-between gap-1 mb-1.5">
-        <h3 className="text-xs font-semibold text-gray-800 line-clamp-2 flex-1">{n.movimento}</h3>
-        <span className="w-2 h-2 rounded-full mt-1 flex-shrink-0" style={{ background: CAT_COLORS[n.categoria] ?? '#6366f1' }} title={n.categoria} />
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-neutral-100 line-clamp-2 flex-1 leading-snug">{n.movimento}</h3>
+        <span className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ background: CAT_COLORS[n.categoria] ?? '#6366f1' }} title={n.categoria} />
       </div>
-      {n.imovelNome && <p className="text-[10px] text-gray-500 truncate mb-1.5">📍 {n.imovelNome}</p>}
+      {n.imovelNome && (
+        <p className="text-caption text-gray-500 dark:text-neutral-400 truncate mb-2 flex items-center gap-1">
+          <span className="opacity-60">📍</span> {n.imovelNome}
+        </p>
+      )}
 
       {info?.diasAtrasoMax > 0 && (
-        <div className="mb-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[9px] font-bold">
-          <AlertTriangle className="w-2.5 h-2.5" /> {info.diasAtrasoMax}d atraso
+        <div className="mb-2">
+          <Badge tone="red" size="xs" icon={AlertTriangle}>{info.diasAtrasoMax}d atraso</Badge>
         </div>
       )}
 
       {isFF && info && (
-        <div className="mb-1.5">
-          <div className="flex items-center justify-between text-[10px] text-gray-500 mb-0.5">
+        <div className="mb-2">
+          <div className="flex items-center justify-between text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 mb-1">
             <span>{info.concluidas}/{info.totalFases} fases</span>
-            <span className="font-mono font-semibold text-gray-700">{info.percGlobal}%</span>
+            <span className="font-mono font-bold text-gray-700 dark:text-neutral-200 normal-case tracking-normal text-xs">{info.percGlobal}%</span>
           </div>
-          <div className="w-full bg-gray-100 rounded-full h-1.5">
-            <div className="h-full rounded-full bg-gradient-to-r from-[#C9A84C] to-[#0d0d0d]" style={{ width: `${info.percGlobal}%` }} />
+          <div className="w-full bg-gray-100 dark:bg-neutral-800 rounded-full h-1.5 overflow-hidden">
+            <div className="h-full rounded-full bg-gradient-to-r from-brand-gold to-brand-dark transition-all duration-300" style={{ width: `${info.percGlobal}%` }} />
           </div>
         </div>
       )}
 
-      <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-gray-100">
-        <span className="text-[10px] font-mono text-indigo-600 font-semibold">{EUR(n.lucroEstimado)}</span>
-        <ChevronRight className="w-3 h-3 text-gray-300 group-hover:text-[#C9A84C] transition-colors" />
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100 dark:border-neutral-800">
+        <span className="text-xs font-mono font-semibold text-indigo-600 dark:text-indigo-400">{EUR(n.lucroEstimado)}</span>
+        <ChevronRight className="w-3.5 h-3.5 text-gray-300 dark:text-neutral-600 group-hover:text-brand-gold group-hover:translate-x-0.5 transition-all" />
       </div>
     </div>
   )
@@ -515,17 +539,17 @@ function KanbanCard({ negocio: n, info, onClick, onDragStart, onDragEnd, isDragg
 // ════════════════════════════════════════════════════════════════
 function ListaProjetos({ projectos, fasesInfo, onCardClick }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
+    <Card padding="none" className="overflow-x-auto">
       <table className="min-w-full text-sm">
-        <thead>
-          <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
-            <th className="text-left py-2.5 px-3">Projecto</th>
-            <th className="text-left py-2.5 px-3">Categoria</th>
-            <th className="text-left py-2.5 px-3">Imóvel</th>
-            <th className="text-left py-2.5 px-3">Fase actual</th>
-            <th className="text-right py-2.5 px-3">% Execução</th>
-            <th className="text-right py-2.5 px-3">Faturação Esperada</th>
-            <th className="text-right py-2.5 px-3">Faturação Real</th>
+        <thead className="bg-gray-50 dark:bg-neutral-900/50">
+          <tr className="border-b border-gray-200 dark:border-neutral-800">
+            <th className="text-left py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Projecto</th>
+            <th className="text-left py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Categoria</th>
+            <th className="text-left py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Imóvel</th>
+            <th className="text-left py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Fase actual</th>
+            <th className="text-right py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">% Exec.</th>
+            <th className="text-right py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Fat. esperada</th>
+            <th className="text-right py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Fat. real</th>
           </tr>
         </thead>
         <tbody>
@@ -534,26 +558,35 @@ function ListaProjetos({ projectos, fasesInfo, onCardClick }) {
             const faseNome = info?.faseAtualKey
               ? FASES_KANBAN.find(f => f.key === info.faseAtualKey)?.nome
               : n.fase || '—'
+            const cat = n.categoria
+            const corCat = CAT_COLORS[cat] ?? '#6366f1'
             return (
-              <tr key={n.id} onClick={() => onCardClick(n.id)} className="border-b border-gray-50 cursor-pointer hover:bg-gray-50">
-                <td className="py-2 px-3 font-medium text-gray-800">{n.movimento}</td>
-                <td className="py-2 px-3">
-                  <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: (CAT_COLORS[n.categoria] ?? '#6366f1') + '22', color: CAT_COLORS[n.categoria] ?? '#6366f1' }}>{n.categoria}</span>
+              <tr key={n.id} onClick={() => onCardClick(n.id)}
+                className="border-b border-gray-100 dark:border-neutral-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800/50 transition-colors group">
+                <td className="py-2.5 px-4 font-semibold text-gray-900 dark:text-neutral-100">
+                  <span className="flex items-center gap-2">
+                    {n.movimento}
+                    <ChevronRight className="w-3.5 h-3.5 text-gray-300 dark:text-neutral-600 group-hover:text-brand-gold transition-colors opacity-0 group-hover:opacity-100" />
+                  </span>
                 </td>
-                <td className="py-2 px-3 text-xs text-gray-500">{n.imovelNome || '—'}</td>
-                <td className="py-2 px-3 text-xs text-gray-700">{faseNome}</td>
-                <td className="py-2 px-3 text-right text-xs font-mono">{info ? `${info.percGlobal}%` : '—'}</td>
-                <td className="py-2 px-3 text-right font-mono text-indigo-600">{EUR(n.lucroEstimado)}</td>
-                <td className="py-2 px-3 text-right font-mono text-green-600">{n.lucroReal > 0 ? EUR(n.lucroReal) : <span className="text-gray-300">—</span>}</td>
+                <td className="py-2.5 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                    style={{ backgroundColor: corCat + '20', color: corCat }}>{cat}</span>
+                </td>
+                <td className="py-2.5 px-4 text-xs text-gray-500 dark:text-neutral-400">{n.imovelNome || '—'}</td>
+                <td className="py-2.5 px-4 text-xs text-gray-700 dark:text-neutral-300">{faseNome}</td>
+                <td className="py-2.5 px-4 text-right text-xs font-mono text-gray-700 dark:text-neutral-300">{info ? `${info.percGlobal}%` : '—'}</td>
+                <td className="py-2.5 px-4 text-right font-mono text-indigo-600 dark:text-indigo-400 font-semibold">{EUR(n.lucroEstimado)}</td>
+                <td className="py-2.5 px-4 text-right font-mono text-green-600 dark:text-green-400 font-semibold">{n.lucroReal > 0 ? EUR(n.lucroReal) : <span className="text-gray-300 dark:text-neutral-700">—</span>}</td>
               </tr>
             )
           })}
           {!projectos.length && (
-            <tr><td colSpan={7} className="py-8 text-center text-gray-400 text-xs">Sem projectos.</td></tr>
+            <tr><td colSpan={7} className="py-12 text-center text-sm text-gray-400 dark:text-neutral-500">Sem projectos a mostrar.</td></tr>
           )}
         </tbody>
       </table>
-    </div>
+    </Card>
   )
 }
 
@@ -569,61 +602,60 @@ function ProjectoForm({ item, onSave, onCancel }) {
     ...item,
   })
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
-  const inputClass = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#C9A84C]"
 
   return (
-    <div className="bg-white rounded-xl border-2 border-[#C9A84C] p-4 sm:p-6 shadow-md">
-      <h3 className="text-sm font-semibold text-gray-700 mb-4">{isNew ? 'Novo Projecto' : 'Editar Projecto'}</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-        <div className="sm:col-span-2 xl:col-span-1">
-          <label className="text-xs text-gray-500 block mb-1">Nome do Projecto *</label>
-          <input value={f.movimento} onChange={e => set('movimento', e.target.value)} className={inputClass} placeholder="Ex: M3 Eiras" />
-        </div>
-        <div>
-          <label className="text-xs text-gray-500 block mb-1">Categoria</label>
-          <select value={f.categoria} onChange={e => set('categoria', e.target.value)} className={inputClass}>
-            {CATEGORIAS.map(o => <option key={o} value={o}>{o}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="text-xs text-gray-500 block mb-1">Faturação Expectável (€)</label>
-          <input type="number" value={f.lucro_estimado} onChange={e => set('lucro_estimado', +e.target.value)} className={inputClass} />
-        </div>
-        <div>
-          <label className="text-xs text-gray-500 block mb-1">Data Compra</label>
-          <input type="date" value={f.data_compra || ''} onChange={e => set('data_compra', e.target.value)} className={inputClass} />
-        </div>
-        <div>
-          <label className="text-xs text-gray-500 block mb-1">Data Estimada Venda</label>
-          <input type="date" value={f.data_estimada_venda || ''} onChange={e => set('data_estimada_venda', e.target.value)} className={inputClass} />
-        </div>
+    <Card variant="default" padding="lg" className="border-2 border-brand-gold shadow-gold animate-slide-down">
+      <h3 className="text-base font-semibold text-gray-900 dark:text-neutral-100 mb-4 flex items-center gap-2">
+        <span className="w-1 h-5 bg-brand-gold rounded-full" />
+        {isNew ? 'Novo Projecto' : 'Editar Projecto'}
+      </h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <Input
+          label="Nome do Projecto *"
+          value={f.movimento}
+          onChange={e => set('movimento', e.target.value)}
+          placeholder="Ex: M3 Eiras"
+          wrapperClassName="sm:col-span-2 xl:col-span-1"
+        />
+        <Select label="Categoria" value={f.categoria} onChange={e => set('categoria', e.target.value)}>
+          {CATEGORIAS.map(o => <option key={o} value={o}>{o}</option>)}
+        </Select>
+        <Input
+          type="number" label="Faturação Esperada (€)"
+          value={f.lucro_estimado}
+          onChange={e => set('lucro_estimado', +e.target.value)}
+        />
+        <Input type="date" label="Data Compra" value={f.data_compra || ''} onChange={e => set('data_compra', e.target.value)} />
+        <Input type="date" label="Data Estimada Venda" value={f.data_estimada_venda || ''} onChange={e => set('data_estimada_venda', e.target.value)} />
         <div className="sm:col-span-2 xl:col-span-3">
-          <label className="text-xs text-gray-500 block mb-1">Notas</label>
-          <textarea value={f.notas ?? ''} onChange={e => set('notas', e.target.value)} rows={2} className={inputClass} />
+          <label className="block text-overline uppercase tracking-widest font-semibold text-gray-500 dark:text-neutral-400 mb-1.5">Notas</label>
+          <textarea
+            value={f.notas ?? ''} onChange={e => set('notas', e.target.value)} rows={3}
+            className="w-full px-3 py-2 text-sm rounded-lg bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 text-gray-900 dark:text-neutral-100 placeholder:text-gray-400 transition-colors focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/30 focus:outline-none resize-y" />
         </div>
 
         {f.categoria === 'Fix and Flip' && (
           <div className="sm:col-span-2 xl:col-span-3">
-            <label className="text-xs text-gray-500 block mb-1">Formato</label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <label className={`flex items-start gap-2.5 p-3 rounded-lg cursor-pointer border-2 transition-colors ${f.tipo_projeto === 'fracao_unica' ? 'border-[#C9A84C] bg-[#C9A84C]/5' : 'border-gray-200 hover:border-gray-300'}`}>
+            <label className="block text-overline uppercase tracking-widest font-semibold text-gray-500 dark:text-neutral-400 mb-2">Formato</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className={`flex items-start gap-3 p-4 rounded-xl cursor-pointer border-2 transition-all ${f.tipo_projeto === 'fracao_unica' ? 'border-brand-gold bg-brand-gold/5 shadow-xs' : 'border-gray-200 dark:border-neutral-700 hover:border-gray-300 dark:hover:border-neutral-600'}`}>
                 <input type="radio" name="tipo_projeto" value="fracao_unica"
                   checked={f.tipo_projeto === 'fracao_unica'}
                   onChange={() => set('tipo_projeto', 'fracao_unica')}
-                  className="mt-0.5 accent-[#C9A84C]" />
+                  className="mt-1 accent-brand-gold w-4 h-4" />
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-800">Fração única</p>
-                  <p className="text-[11px] text-gray-500 mt-0.5">1 apartamento/moradia. Cronograma simples sem subdivisões.</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-neutral-100">Fração única</p>
+                  <p className="text-caption text-gray-500 dark:text-neutral-400 mt-1 leading-relaxed">1 apartamento ou moradia. Cronograma simples sem subdivisões.</p>
                 </div>
               </label>
-              <label className={`flex items-start gap-2.5 p-3 rounded-lg cursor-pointer border-2 transition-colors ${f.tipo_projeto === 'predio' ? 'border-[#C9A84C] bg-[#C9A84C]/5' : 'border-gray-200 hover:border-gray-300'}`}>
+              <label className={`flex items-start gap-3 p-4 rounded-xl cursor-pointer border-2 transition-all ${f.tipo_projeto === 'predio' ? 'border-brand-gold bg-brand-gold/5 shadow-xs' : 'border-gray-200 dark:border-neutral-700 hover:border-gray-300 dark:hover:border-neutral-600'}`}>
                 <input type="radio" name="tipo_projeto" value="predio"
                   checked={f.tipo_projeto === 'predio'}
                   onChange={() => set('tipo_projeto', 'predio')}
-                  className="mt-0.5 accent-[#C9A84C]" />
+                  className="mt-1 accent-brand-gold w-4 h-4" />
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-800">Prédio com várias frações</p>
-                  <p className="text-[11px] text-gray-500 mt-0.5">2-10 frações autónomas + áreas comuns (fachada, telhado, escadas…) com cronogramas independentes.</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-neutral-100">Prédio com várias frações</p>
+                  <p className="text-caption text-gray-500 dark:text-neutral-400 mt-1 leading-relaxed">2-10 frações autónomas + áreas comuns (fachada, telhado, escadas) com cronogramas independentes.</p>
                 </div>
               </label>
             </div>
@@ -631,18 +663,19 @@ function ProjectoForm({ item, onSave, onCancel }) {
         )}
       </div>
       {f.categoria === 'Fix and Flip' && isNew && (
-        <p className="text-[11px] text-[#C9A84C] mt-3 bg-[#0d0d0d] px-3 py-2 rounded-lg">
-          {f.tipo_projeto === 'predio'
-            ? '✨ Ao criar este prédio, serão geradas as 8 fases-base. Depois adicionas as frações e áreas comuns (cada uma com o seu próprio cronograma).'
-            : '✨ Ao criar este projecto, serão geradas as 8 fases de obra com tarefas-template.'}
-        </p>
+        <div className="mt-4 px-4 py-3 rounded-xl bg-brand-dark text-brand-gold text-caption flex items-start gap-2">
+          <span className="text-base">✨</span>
+          <p>{f.tipo_projeto === 'predio'
+            ? 'Ao criar este prédio, serão geradas as 8 fases-base. Depois adicionas as frações e áreas comuns — cada uma com o seu próprio cronograma.'
+            : 'Ao criar este projecto, serão geradas automaticamente as 8 fases de obra com tarefas-template profissionais.'}</p>
+        </div>
       )}
-      <div className="flex gap-3 mt-4">
+      <div className="flex gap-3 mt-5 pt-4 border-t border-gray-100 dark:border-neutral-800">
         <Button size="lg" onClick={() => onSave(f)} disabled={!f.movimento?.trim()}>
-          {isNew ? 'Criar' : 'Guardar'}
+          {isNew ? 'Criar projecto' : 'Guardar alterações'}
         </Button>
         <Button variant="ghost" size="lg" onClick={onCancel}>Cancelar</Button>
       </div>
-    </div>
+    </Card>
   )
 }

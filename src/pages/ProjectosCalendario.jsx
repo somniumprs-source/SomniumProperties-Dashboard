@@ -6,6 +6,8 @@ import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Briefcase, Calendar as CalendarIcon, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
+import { Card } from '../components/ui/Card.jsx'
+import { Button } from '../components/ui/Button.jsx'
 import { apiFetch } from '../lib/api.js'
 
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
@@ -98,29 +100,28 @@ export function ProjectosCalendario() {
         {/* Toolbar */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-2">
-            <button onClick={() => navegar(-1)} className="p-2 rounded-lg hover:bg-gray-100">
+            <button onClick={() => navegar(-1)} className="p-2 rounded-lg bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors">
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <h2 className="text-base font-semibold text-gray-800 min-w-[180px] text-center">
-              {MESES[month]} {year}
+            <h2 className="text-base font-bold text-gray-900 dark:text-neutral-100 min-w-[200px] text-center">
+              {MESES[month]} <span className="font-normal text-gray-400">{year}</span>
             </h2>
-            <button onClick={() => navegar(1)} className="p-2 rounded-lg hover:bg-gray-100">
+            <button onClick={() => navegar(1)} className="p-2 rounded-lg bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors">
               <ChevronRight className="w-4 h-4" />
             </button>
-            <button onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()) }}
-              className="ml-2 text-xs px-2.5 py-1 rounded-lg border border-gray-200 hover:bg-gray-50">Hoje</button>
+            <Button variant="secondary" size="sm" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()) }}>Hoje</Button>
           </div>
           <div className="flex items-center gap-2">
-            <div className="inline-flex bg-white border border-gray-200 rounded-lg p-0.5">
+            <div className="inline-flex bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg p-0.5 shadow-xs">
               {[{ key: 'todos', label: 'Todos' }, { key: 'fase', label: 'Fases' }, { key: 'tarefa', label: 'Tarefas' }].map(o => (
                 <button key={o.key} onClick={() => setTipoFiltro(o.key)}
-                  className={`px-2.5 py-1 rounded text-xs font-medium ${tipoFiltro === o.key ? 'bg-[#0d0d0d] text-[#C9A84C]' : 'text-gray-500'}`}>
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${tipoFiltro === o.key ? 'bg-brand-dark text-brand-gold shadow-xs' : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'}`}>
                   {o.label}
                 </button>
               ))}
             </div>
-            <Link to="/projectos" className="text-xs text-[#C9A84C] hover:underline inline-flex items-center gap-1">
-              <Briefcase className="w-3.5 h-3.5" /> Voltar
+            <Link to="/projectos">
+              <Button variant="ghost" size="sm" icon={Briefcase}>Voltar</Button>
             </Link>
           </div>
         </div>
@@ -133,25 +134,26 @@ export function ProjectosCalendario() {
         </div>
 
         {/* Calendário */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="grid grid-cols-7 bg-gray-50 border-b border-gray-200">
+        <Card variant="default" padding="none" className="overflow-hidden">
+          <div className="grid grid-cols-7 bg-gray-50 dark:bg-neutral-900/50 border-b border-gray-200 dark:border-neutral-800">
             {DIAS_SEMANA.map(d => (
-              <div key={d} className="px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-gray-500">{d}</div>
+              <div key={d} className="px-2 py-2.5 text-center text-overline font-semibold uppercase tracking-widest text-gray-500 dark:text-neutral-400">{d}</div>
             ))}
           </div>
           <div className="grid grid-cols-7">
             {matrix.flat().map((d, idx) => {
-              if (!d) return <div key={idx} className="min-h-[110px] bg-gray-50 border-r border-b border-gray-100" />
+              if (!d) return <div key={idx} className="min-h-[120px] bg-gray-50 dark:bg-neutral-900/50 border-r border-b border-gray-100 dark:border-neutral-800" />
               const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
               const events = eventosPorDia[key] || []
               const isToday = d.toDateString() === today.toDateString()
               const isPast = d < new Date(today.getFullYear(), today.getMonth(), today.getDate())
               return (
-                <div key={idx} className={`min-h-[110px] border-r border-b border-gray-100 p-1.5 ${isToday ? 'bg-[#C9A84C]/10' : ''}`}>
-                  <p className={`text-[11px] font-semibold mb-1 ${isToday ? 'text-[#0d0d0d]' : isPast ? 'text-gray-400' : 'text-gray-700'}`}>
-                    {d.getDate()}
-                    {isToday && <span className="ml-1 text-[8px] uppercase tracking-wider text-[#C9A84C]">hoje</span>}
-                  </p>
+                <div key={idx} className={`min-h-[120px] border-r border-b border-gray-100 dark:border-neutral-800 p-2 transition-colors ${isToday ? 'bg-brand-gold/10' : 'hover:bg-gray-50 dark:hover:bg-neutral-900/30'}`}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className={`text-xs font-bold ${isToday ? 'inline-flex items-center justify-center w-6 h-6 rounded-full bg-brand-gold text-brand-dark' : isPast ? 'text-gray-400 dark:text-neutral-600' : 'text-gray-700 dark:text-neutral-300'}`}>
+                      {d.getDate()}
+                    </span>
+                  </div>
                   <div className="space-y-1">
                     {events.slice(0, 4).map(e => {
                       const cor = e.tipo === 'fase' ? (FASE_COR[e.fase_key] || '#6b7280') : '#0ea5e9'
@@ -159,26 +161,26 @@ export function ProjectosCalendario() {
                       const isAtraso = isPast && !isConcluido
                       return (
                         <Link key={`${e.tipo}-${e.id}`} to={`/projectos/${e.negocio_id}`}
-                          className={`block px-1.5 py-0.5 rounded text-[9px] truncate transition-colors ${isConcluido ? 'opacity-50 line-through' : ''}`}
+                          className={`block px-1.5 py-1 rounded text-[10px] truncate transition-all hover:translate-x-0.5 ${isConcluido ? 'opacity-50 line-through' : ''}`}
                           style={{
                             background: isAtraso ? '#fee2e2' : `${cor}20`,
                             color: isAtraso ? '#991b1b' : cor,
                             borderLeft: `2px solid ${isAtraso ? '#ef4444' : cor}`,
                           }}
                           title={`${e.projeto} · ${e.titulo}`}>
-                          <span className="font-bold">{e.projeto.split(' ')[0]}</span> · {e.titulo}
+                          <span className="font-semibold">{e.projeto.split(' ')[0]}</span> · {e.titulo}
                         </Link>
                       )
                     })}
                     {events.length > 4 && (
-                      <p className="text-[9px] text-gray-400 pl-1.5">+{events.length - 4} mais</p>
+                      <p className="text-[10px] text-gray-400 dark:text-neutral-500 pl-1.5 font-medium">+{events.length - 4} mais</p>
                     )}
                   </div>
                 </div>
               )
             })}
           </div>
-        </div>
+        </Card>
       </div>
     </>
   )
@@ -186,14 +188,14 @@ export function ProjectosCalendario() {
 
 function KpiCard({ icon: Icon, label, value, cor }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-3 flex items-center gap-3">
-      <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: `${cor}20` }}>
+    <Card variant="default" padding="sm" className="flex items-center gap-3">
+      <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${cor}20`, border: `1px solid ${cor}30` }}>
         <Icon className="w-4 h-4" style={{ color: cor }} />
       </div>
-      <div>
-        <p className="text-[10px] uppercase tracking-wider text-gray-400">{label}</p>
-        <p className="text-lg font-bold text-gray-800">{value}</p>
+      <div className="min-w-0">
+        <p className="text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">{label}</p>
+        <p className="text-xl font-bold text-gray-900 dark:text-neutral-100 truncate">{value}</p>
       </div>
-    </div>
+    </Card>
   )
 }
