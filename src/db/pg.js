@@ -832,6 +832,36 @@ export async function initSchema() {
       ALTER TABLE projeto_fases ADD COLUMN IF NOT EXISTS gcal_event_id TEXT;
       ALTER TABLE projeto_tarefas ADD COLUMN IF NOT EXISTS gcal_event_id TEXT;
 
+      -- Frações dentro de um projecto (prédios com várias frações)
+      CREATE TABLE IF NOT EXISTS projeto_fracoes (
+        id TEXT PRIMARY KEY,
+        negocio_id TEXT NOT NULL REFERENCES negocios(id) ON DELETE CASCADE,
+        nome TEXT NOT NULL,                  -- "Fração A", "Fração B"...
+        tipologia TEXT,                       -- T0, T1, T2, T3, T0+1...
+        andar TEXT,                           -- R/C, 1º Andar, 2º Andar, Sótão, Cave
+        area_m2 REAL,
+        estado TEXT DEFAULT 'em_obra',        -- em_obra | pronto | em_venda | vendido
+        valor_venda_estimado REAL DEFAULT 0,
+        valor_venda_real REAL DEFAULT 0,
+        data_venda_estimada TEXT,
+        data_venda_real TEXT,
+        comprador TEXT,
+        notas TEXT,
+        ordem INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_projeto_fracoes_negocio ON projeto_fracoes(negocio_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_projeto_fracoes_nome ON projeto_fracoes(negocio_id, nome);
+
+      -- Ligação opcional fracao_id em fases, fotos, despesas (NULL = comum ao prédio)
+      ALTER TABLE projeto_fases ADD COLUMN IF NOT EXISTS fracao_id TEXT;
+      ALTER TABLE projeto_fotos ADD COLUMN IF NOT EXISTS fracao_id TEXT;
+      ALTER TABLE despesas ADD COLUMN IF NOT EXISTS fracao_id TEXT;
+      CREATE INDEX IF NOT EXISTS idx_projeto_fases_fracao ON projeto_fases(fracao_id);
+      CREATE INDEX IF NOT EXISTS idx_projeto_fotos_fracao ON projeto_fotos(fracao_id);
+      CREATE INDEX IF NOT EXISTS idx_despesas_fracao ON despesas(fracao_id);
+
       -- Documentos por fase (PDF, DOCX, imagens diversas)
       CREATE TABLE IF NOT EXISTS projeto_documentos (
         id TEXT PRIMARY KEY,

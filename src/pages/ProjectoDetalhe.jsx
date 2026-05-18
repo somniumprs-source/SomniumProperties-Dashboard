@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Calendar, CheckCircle2, Circle, Plus, Trash2, Upload, X,
   Building2, Wallet, ImageIcon, FileText, Users, BarChart3, ChevronRight,
-  FileDown, AlertTriangle, Sparkles, RefreshCw,
+  FileDown, AlertTriangle, Sparkles, RefreshCw, Home, Layers,
 } from 'lucide-react'
 import { apiFetch, getToken } from '../lib/api.js'
 import { Header } from '../components/layout/Header.jsx'
@@ -41,14 +41,22 @@ const ESTADO_COR = {
 }
 
 const TABS = [
-  { key: 'resumo',       label: 'Resumo',        icon: BarChart3 },
+  { key: 'resumo',       label: 'Resumo',          icon: BarChart3 },
+  { key: 'fracoes',      label: 'Frações',         icon: Layers },
   { key: 'fases',        label: 'Fases & Tarefas', icon: CheckCircle2 },
-  { key: 'orcamento',    label: 'Orçamento',     icon: Wallet },
-  { key: 'faturacao',    label: 'Faturação',     icon: Wallet },
-  { key: 'fotos',        label: 'Fotos',         icon: ImageIcon },
-  { key: 'documentos',   label: 'Documentos',    icon: FileText },
-  { key: 'investidores', label: 'Investidores',  icon: Users },
+  { key: 'orcamento',    label: 'Orçamento',       icon: Wallet },
+  { key: 'faturacao',    label: 'Faturação',       icon: Wallet },
+  { key: 'fotos',        label: 'Fotos',           icon: ImageIcon },
+  { key: 'documentos',   label: 'Documentos',      icon: FileText },
+  { key: 'investidores', label: 'Investidores',    icon: Users },
 ]
+
+const FRACAO_ESTADO_COR = {
+  em_obra:  { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Em obra' },
+  pronto:   { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Pronto' },
+  em_venda: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Em venda' },
+  vendido:  { bg: 'bg-green-100', text: 'text-green-700', label: 'Vendido' },
+}
 
 export function ProjectoDetalhe() {
   const { id } = useParams()
@@ -57,6 +65,8 @@ export function ProjectoDetalhe() {
   const [resumo, setResumo] = useState(null)
   const [fases, setFases] = useState([])
   const [fotos, setFotos] = useState([])
+  const [fracoes, setFracoes] = useState([])
+  const [fracaoSel, setFracaoSel] = useState(null)  // null = "Prédio inteiro"
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [tab, setTab] = useState('resumo')
@@ -64,18 +74,28 @@ export function ProjectoDetalhe() {
   async function load() {
     setLoading(true); setError(null)
     try {
-      const [rResumo, rFases, rFotos] = await Promise.all([
+      const [rResumo, rFases, rFotos, rFracoes] = await Promise.all([
         apiFetch(`/api/crm/projetos/${id}/resumo`),
         apiFetch(`/api/crm/projetos/${id}/fases`),
         apiFetch(`/api/crm/projetos/${id}/fotos`),
+        apiFetch(`/api/crm/projetos/${id}/fracoes`),
       ])
       if (!rResumo.ok) throw new Error('Projecto não encontrado')
       setResumo(await rResumo.json())
       if (rFases.ok) setFases((await rFases.json()).fases || [])
       if (rFotos.ok) setFotos((await rFotos.json()).fotos || [])
+      if (rFracoes.ok) setFracoes((await rFracoes.json()).fracoes || [])
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
   }
+
+  // Filtros aplicados pela fração selecionada
+  const fasesFiltradas = fracaoSel === null
+    ? fases
+    : fases.filter(f => f.fracao_id === fracaoSel || (fracaoSel === '__comum__' && !f.fracao_id))
+  const fotosFiltradas = fracaoSel === null
+    ? fotos
+    : fotos.filter(f => f.fracao_id === fracaoSel || (fracaoSel === '__comum__' && !f.fracao_id))
 
   async function inicializarFases() {
     if (!confirm('Criar as 8 fases de obra Fix and Flip para este projecto?')) return
@@ -151,6 +171,11 @@ export function ProjectoDetalhe() {
           </div>
         </div>
 
+        {/* Chips de frações */}
+        {fracoes.length > 0 && (
+          <FracaoChips fracoes={fracoes} fracaoSel={fracaoSel} setFracaoSel={setFracaoSel} />
+        )}
+
         {/* Banner do projeto */}
         <div className="rounded-2xl p-5 sm:p-6 text-white shadow-md" style={{ background: `linear-gradient(135deg, ${BLACK} 0%, #1a1a1a 100%)` }}>
           <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -196,11 +221,12 @@ export function ProjectoDetalhe() {
           </div>
 
           <div className="p-4 sm:p-6">
-            {tab === 'resumo' && <TabResumo resumo={resumo} fases={fases} />}
-            {tab === 'fases' && <TabFases fases={fases} onChange={load} readOnly={isReadOnly} negocioId={id} />}
+            {tab === 'resumo' && <TabResumo resumo={resumo} fases={fasesFiltradas} fracaoSel={fracaoSel} fracoes={fracoes} />}
+            {tab === 'fracoes' && <TabFracoes negocioId={id} fracoes={fracoes} onChange={load} readOnly={isReadOnly} fasesComuns={fases.filter(f => !f.fracao_id)} />}
+            {tab === 'fases' && <TabFases fases={fasesFiltradas} onChange={load} readOnly={isReadOnly} negocioId={id} />}
             {tab === 'orcamento' && <TabOrcamento imovel={imovel} />}
             {tab === 'faturacao' && <TabFaturacao negocio={negocio} onChange={load} readOnly={isReadOnly} />}
-            {tab === 'fotos' && <TabFotos negocioId={id} fases={fases} fotos={fotos} onChange={load} readOnly={isReadOnly} />}
+            {tab === 'fotos' && <TabFotos negocioId={id} fases={fasesFiltradas} fotos={fotosFiltradas} onChange={load} readOnly={isReadOnly} fracaoSel={fracaoSel} />}
             {tab === 'documentos' && <TabDocumentos negocio={negocio} fases={fases} readOnly={isReadOnly} />}
             {tab === 'investidores' && <TabInvestidores negocio={negocio} readOnly={isReadOnly} />}
           </div>
@@ -1334,6 +1360,240 @@ function TabInvestidores({ negocio, readOnly }) {
           </div>
         </form>
       )}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
+// CHIPS DE FRAÇÃO (faixa no topo) + TAB FRAÇÕES
+// ════════════════════════════════════════════════════════════════
+function FracaoChips({ fracoes, fracaoSel, setFracaoSel }) {
+  // Inclui chip "Prédio inteiro" + chip por fração + chip "Áreas comuns"
+  const totalFases = fracoes.reduce((s, f) => s + (Number(f.num_fases) || 0), 0)
+  return (
+    <div className="flex items-center gap-2 overflow-x-auto pb-1">
+      <button onClick={() => setFracaoSel(null)}
+        className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap inline-flex items-center gap-1.5 border ${
+          fracaoSel === null ? 'bg-[#0d0d0d] text-[#C9A84C] border-[#0d0d0d]' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+        }`}>
+        <Home className="w-3 h-3" /> Prédio inteiro
+      </button>
+      <button onClick={() => setFracaoSel('__comum__')}
+        className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap inline-flex items-center gap-1.5 border ${
+          fracaoSel === '__comum__' ? 'bg-[#0d0d0d] text-[#C9A84C] border-[#0d0d0d]' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+        }`}>
+        Áreas comuns
+      </button>
+      {fracoes.map(fr => {
+        const sel = fracaoSel === fr.id
+        const cor = FRACAO_ESTADO_COR[fr.estado] || FRACAO_ESTADO_COR.em_obra
+        return (
+          <button key={fr.id} onClick={() => setFracaoSel(fr.id)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap inline-flex items-center gap-1.5 border ${
+              sel ? 'bg-[#0d0d0d] text-[#C9A84C] border-[#0d0d0d]' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
+            }`}>
+            <span className="font-semibold">{fr.nome}</span>
+            {fr.tipologia && <span className="text-gray-400">·</span>}
+            {fr.tipologia && <span className="text-gray-500">{fr.tipologia}</span>}
+            {fr.andar && <span className="text-gray-400">·</span>}
+            {fr.andar && <span className="text-gray-500">{fr.andar}</span>}
+            <span className={`ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold ${sel ? 'bg-white/10 text-[#C9A84C]' : `${cor.bg} ${cor.text}`}`}>
+              {Math.round(Number(fr.perc_global) || 0)}%
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function TabFracoes({ negocioId, fracoes, onChange, readOnly, fasesComuns }) {
+  const [editing, setEditing] = useState(null)
+  const [showForm, setShowForm] = useState(false)
+
+  async function save(form) {
+    const isNew = !form.id
+    const url = isNew ? `/api/crm/projetos/${negocioId}/fracoes` : `/api/crm/projetos/fracoes/${form.id}`
+    const body = { ...form }
+    if (isNew && fasesComuns.length > 0) body.duplicarFases = true
+    const r = await apiFetch(url, {
+      method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!r.ok) { const e = await r.json().catch(() => ({})); alert(e.error || 'Erro'); return }
+    setEditing(null); setShowForm(false); onChange()
+  }
+  async function apagar(id, nome) {
+    if (!confirm(`Apagar fração "${nome}"? Fases/fotos/despesas dessa fração ficarão como "comuns ao prédio".`)) return
+    await apiFetch(`/api/crm/projetos/fracoes/${id}`, { method: 'DELETE' })
+    onChange()
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-gray-500">
+          Frações do prédio ({fracoes.length}). Cada fração pode ter o seu próprio cronograma de fases, fotos e despesas.
+        </p>
+        {!readOnly && (
+          <Button size="sm" icon={Plus} onClick={() => { setEditing({}); setShowForm(true) }}>
+            Nova fração
+          </Button>
+        )}
+      </div>
+
+      {showForm && <FracaoForm fracao={editing} onSave={save} onCancel={() => { setShowForm(false); setEditing(null) }} fasesComunsCount={fasesComuns.length} />}
+
+      {fracoes.length === 0 ? (
+        <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+          <Layers className="w-8 h-8 mx-auto text-gray-300 mb-2" />
+          <p className="text-sm text-gray-500">Sem frações criadas.</p>
+          <p className="text-xs text-gray-400 mt-1">Adiciona uma fração para começar a gerir cronograma separado.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {fracoes.map(fr => {
+            const cor = FRACAO_ESTADO_COR[fr.estado] || FRACAO_ESTADO_COR.em_obra
+            const perc = Math.round(Number(fr.perc_global) || 0)
+            const vendaEsp = Number(fr.valor_venda_estimado) || 0
+            const vendaReal = Number(fr.valor_venda_real) || 0
+            return (
+              <div key={fr.id} className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow group">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <h3 className="text-base font-bold text-gray-800">{fr.nome}</h3>
+                    <p className="text-xs text-gray-500">
+                      {[fr.tipologia, fr.andar, fr.area_m2 ? `${fr.area_m2} m²` : null].filter(Boolean).join(' · ') || '—'}
+                    </p>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${cor.bg} ${cor.text}`}>{cor.label}</span>
+                </div>
+
+                <div className="my-3">
+                  <div className="flex items-center justify-between text-[10px] text-gray-500 mb-0.5">
+                    <span>Execução</span>
+                    <span className="font-mono font-bold text-gray-700">{perc}%</span>
+                  </div>
+                  <div className="w-full bg-gray-100 rounded-full h-1.5">
+                    <div className="h-full rounded-full bg-gradient-to-r from-[#C9A84C] to-[#0d0d0d]" style={{ width: `${perc}%` }} />
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-0.5">{fr.num_fases} fase{fr.num_fases !== 1 ? 's' : ''}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-400">Venda esperada</p>
+                    <p className="font-mono font-semibold text-indigo-600">{EUR(vendaEsp)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-400">{vendaReal > 0 ? 'Vendido por' : 'Custo até agora'}</p>
+                    <p className={`font-mono font-semibold ${vendaReal > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {EUR(vendaReal > 0 ? vendaReal : Number(fr.custo_total) || 0)}
+                    </p>
+                  </div>
+                </div>
+
+                {!readOnly && (
+                  <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => { setEditing(fr); setShowForm(true) }}
+                      className="text-[11px] px-2 py-1 text-gray-600 hover:text-[#C9A84C]">Editar</button>
+                    <button onClick={() => apagar(fr.id, fr.nome)}
+                      className="text-[11px] px-2 py-1 text-gray-600 hover:text-red-500">Apagar</button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FracaoForm({ fracao, onSave, onCancel, fasesComunsCount }) {
+  const isNew = !fracao?.id
+  const [f, setF] = useState({
+    nome: '', tipologia: '', andar: '', area_m2: '', estado: 'em_obra',
+    valor_venda_estimado: '', data_venda_estimada: '', notas: '',
+    ...fracao,
+  })
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }))
+  const inputClass = "w-full px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white"
+
+  return (
+    <div className="bg-white rounded-xl border-2 border-[#C9A84C] p-4 shadow-md">
+      <h3 className="text-sm font-semibold text-gray-700 mb-3">{isNew ? 'Nova fração' : 'Editar fração'}</h3>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div>
+          <label className="text-[10px] text-gray-500 uppercase block mb-1">Nome *</label>
+          <input value={f.nome} onChange={e => set('nome', e.target.value)} placeholder="Ex: Fração A" className={inputClass} />
+        </div>
+        <div>
+          <label className="text-[10px] text-gray-500 uppercase block mb-1">Tipologia</label>
+          <select value={f.tipologia || ''} onChange={e => set('tipologia', e.target.value)} className={inputClass}>
+            <option value="">—</option>
+            {['T0', 'T0+1', 'T1', 'T1+1', 'T2', 'T2+1', 'T3', 'T3+1', 'T4', 'T5+'].map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-[10px] text-gray-500 uppercase block mb-1">Andar</label>
+          <select value={f.andar || ''} onChange={e => set('andar', e.target.value)} className={inputClass}>
+            <option value="">—</option>
+            {['Cave', 'R/C', '1º Andar', '2º Andar', '3º Andar', '4º Andar', '5º Andar', 'Sótão'].map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-[10px] text-gray-500 uppercase block mb-1">Área (m²)</label>
+          <input type="number" step="0.1" value={f.area_m2 || ''} onChange={e => set('area_m2', e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label className="text-[10px] text-gray-500 uppercase block mb-1">Estado</label>
+          <select value={f.estado} onChange={e => set('estado', e.target.value)} className={inputClass}>
+            {Object.entries(FRACAO_ESTADO_COR).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-[10px] text-gray-500 uppercase block mb-1">Valor venda esperado (€)</label>
+          <input type="number" step="100" value={f.valor_venda_estimado || ''} onChange={e => set('valor_venda_estimado', e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label className="text-[10px] text-gray-500 uppercase block mb-1">Data venda estimada</label>
+          <input type="date" value={f.data_venda_estimada || ''} onChange={e => set('data_venda_estimada', e.target.value)} className={inputClass} />
+        </div>
+        {!isNew && (
+          <>
+            <div>
+              <label className="text-[10px] text-gray-500 uppercase block mb-1">Valor venda real (€)</label>
+              <input type="number" step="100" value={f.valor_venda_real || ''} onChange={e => set('valor_venda_real', e.target.value)} className={inputClass} />
+            </div>
+            <div>
+              <label className="text-[10px] text-gray-500 uppercase block mb-1">Data venda real</label>
+              <input type="date" value={f.data_venda_real || ''} onChange={e => set('data_venda_real', e.target.value)} className={inputClass} />
+            </div>
+            <div className="col-span-2 sm:col-span-3">
+              <label className="text-[10px] text-gray-500 uppercase block mb-1">Comprador</label>
+              <input value={f.comprador || ''} onChange={e => set('comprador', e.target.value)} className={inputClass} />
+            </div>
+          </>
+        )}
+        <div className="col-span-2 sm:col-span-3">
+          <label className="text-[10px] text-gray-500 uppercase block mb-1">Notas</label>
+          <textarea value={f.notas || ''} onChange={e => set('notas', e.target.value)} rows={2} className={inputClass} />
+        </div>
+      </div>
+
+      {isNew && fasesComunsCount > 0 && (
+        <p className="text-[11px] text-[#C9A84C] mt-3 bg-[#0d0d0d] px-3 py-2 rounded-lg">
+          ✨ Ao criar esta fração, serão duplicadas as {fasesComunsCount} fases existentes do prédio (com tarefas-template) para esta fração.
+        </p>
+      )}
+
+      <div className="flex gap-3 mt-4">
+        <Button size="lg" onClick={() => onSave(f)} disabled={!f.nome?.trim()}>
+          {isNew ? 'Criar fração' : 'Guardar'}
+        </Button>
+        <Button variant="ghost" size="lg" onClick={onCancel}>Cancelar</Button>
+      </div>
     </div>
   )
 }
