@@ -32,6 +32,8 @@ import { scrapePhotosFromLink } from './linkScraper.js'
 import { generateDocx, getAvailableTypes } from './docxGenerator.js'
 import { runEstudoLocalizacao } from '../lib/estudoLocalizacao.js'
 import { FASES_FIX_FLIP } from './fasesFixFlip.js'
+import { resolveAppUser, RECORD_RESTRICTED_ROLES } from './userRoutes.js'
+import { createClient } from '@supabase/supabase-js'
 import {
   generateFichaAcompanhamento,
   generateRelatorioAcompanhamento,
@@ -80,6 +82,23 @@ const uploadImovel = multer({
   },
 })
 export { uploadImovel }
+
+// ── Auth helper para CRM (CRM bypassa auth global, mas precisamos para filtros) ──
+const _supabaseCrm = process.env.SUPABASE_SERVICE_KEY
+  ? createClient(process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.supabase.co', process.env.SUPABASE_SERVICE_KEY)
+  : null
+
+async function resolveCrmUser(req) {
+  if (!_supabaseCrm) return null
+  const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token
+  if (!token) return null
+  try {
+    const { data: { user }, error } = await _supabaseCrm.auth.getUser(token)
+    if (error || !user) return null
+    req.user = user
+    return await resolveAppUser(req)
+  } catch { return null }
+}
 
 const router = Router()
 
@@ -2845,6 +2864,35 @@ router.put('/relatorios-semanais/:id', async (req, res) => {
 // PROJETOS FIX AND FLIP — Fases, Tarefas, Fotos
 // ════════════════════════════════════════════════════════════════
 
+// GET lista de projectos filtrada pelos acessos do user logado.
+// Admins/comerciais veem tudo. Investidores/parceiros veem só os
+// projectos onde foram explicitamente adicionados via tabela `acessos`.
+router.get('/projetos/meus', async (req, res) => {
+  try {
+    const u = await resolveCrmUser(req)
+    if (!u) {
+      // Sem user resolvido (dev/sem Supabase ou sem token) — retornar tudo
+      const { rows } = await pool.query(`SELECT n.*, i.nome AS imovel_nome FROM negocios n LEFT JOIN imoveis i ON n.imovel_id = i.id ORDER BY n.created_at DESC LIMIT 200`)
+      return res.json({ data: rows, role: 'admin' })
+    }
+    const isRestricted = RECORD_RESTRICTED_ROLES.has(u.role)
+    if (!isRestricted) {
+      const { rows } = await pool.query(`SELECT n.*, i.nome AS imovel_nome FROM negocios n LEFT JOIN imoveis i ON n.imovel_id = i.id ORDER BY n.created_at DESC LIMIT 200`)
+      return res.json({ data: rows, role: u.role })
+    }
+    // Investidor/parceiro: filtrar pelos acessos
+    const { rows } = await pool.query(
+      `SELECT n.*, i.nome AS imovel_nome FROM negocios n
+       JOIN acessos a ON a.entidade = 'negocio' AND a.entidade_id = n.id
+       LEFT JOIN imoveis i ON n.imovel_id = i.id
+       WHERE a.user_id = $1
+       ORDER BY n.created_at DESC`,
+      [u.id]
+    )
+    res.json({ data: rows, role: u.role })
+  } catch (e) { console.error('[projetos/meus]', e.message); res.status(500).json({ error: e.message }) }
+})
+
 // GET fases + tarefas + contagem de fotos de um negócio
 router.get('/projetos/:negocioId/fases', async (req, res) => {
   try {
@@ -3206,29 +3254,6 @@ router.put('/projetos/:negocioId/mover-fase', async (req, res) => {
   } catch (e) { console.error('[mover-fase]', e.message); res.status(500).json({ error: e.message }) }
 })
 
-// ════════════════════════════════════════════════════════════════
-// MODO INVESTIDOR — link público partilhável (sem login)
-// ════════════════════════════════════════════════════════════════
-// Schema lazy (inline para evitar mais migrations)
-;(async () => {
-  try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS projeto_share_tokens (
-        token TEXT PRIMARY KEY,
-        negocio_id TEXT NOT NULL,
-        modo TEXT DEFAULT 'investidor',
-        ativo BOOLEAN DEFAULT true,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        expira_em TIMESTAMPTZ,
-        ultima_visita TIMESTAMPTZ,
-        visitas INTEGER DEFAULT 0
-      );
-      CREATE INDEX IF NOT EXISTS idx_share_negocio ON projeto_share_tokens(negocio_id);
-      ALTER TABLE projeto_share_tokens ADD COLUMN IF NOT EXISTS pin TEXT;
-    `)
-  } catch (e) { console.error('[schema share_tokens]', e.message) }
-})()
-
 // ── Notificar investidores quando uma fase muda ──────────────
 async function notificarInvestidoresMudancaFase(negocioId, novaFaseKey) {
   try {
@@ -3253,22 +3278,8 @@ async function notificarInvestidoresMudancaFase(negocioId, novaFaseKey) {
     const faseNome = faseConfig?.nome || novaFaseKey
     const faseIcon = faseConfig?.icon || '🛠️'
 
-    // Obter ou gerar token de share
-    const { rows: tokenRows } = await pool.query(
-      'SELECT token FROM projeto_share_tokens WHERE negocio_id = $1 AND ativo = true LIMIT 1',
-      [negocioId]
-    )
-    let token = tokenRows[0]?.token
-    if (!token) {
-      token = randomUUID().replace(/-/g, '')
-      const pin = String(Math.floor(1000 + Math.random() * 9000))
-      await pool.query(
-        'INSERT INTO projeto_share_tokens (token, negocio_id, pin) VALUES ($1, $2, $3)',
-        [token, negocioId, pin]
-      )
-    }
     const baseUrl = process.env.PUBLIC_URL || 'https://somniumproperties-dashboard.onrender.com'
-    const link = `${baseUrl}/investidor/projeto/${token}`
+    const link = `${baseUrl}/projectos/${negocioId}`
 
     const subject = `${faseIcon} ${negocio.movimento}: nova fase de obra — ${faseNome}`
     const html = `
@@ -3308,52 +3319,6 @@ async function notificarInvestidoresMudancaFase(negocioId, novaFaseKey) {
     console.log(`[notif-fase] ${negocio.movimento} → ${faseNome}: enviado a ${invs.length} investidor(es)`)
   } catch (e) { console.error('[notif-fase]', e.message) }
 }
-
-// Gerar / obter token de partilha (com PIN de 4 dígitos)
-router.post('/projetos/:negocioId/share', async (req, res) => {
-  try {
-    const { rows: existing } = await pool.query(
-      'SELECT token, pin FROM projeto_share_tokens WHERE negocio_id = $1 AND ativo = true LIMIT 1',
-      [req.params.negocioId]
-    )
-    if (existing.length > 0) {
-      // Garantir que PIN existe (tokens antigos pré-feature)
-      if (!existing[0].pin) {
-        const pin = String(Math.floor(1000 + Math.random() * 9000))
-        await pool.query('UPDATE projeto_share_tokens SET pin = $1 WHERE token = $2', [pin, existing[0].token])
-        return res.json({ token: existing[0].token, pin })
-      }
-      return res.json({ token: existing[0].token, pin: existing[0].pin })
-    }
-    const token = randomUUID().replace(/-/g, '')
-    const pin = String(Math.floor(1000 + Math.random() * 9000))
-    await pool.query(
-      `INSERT INTO projeto_share_tokens (token, negocio_id, pin) VALUES ($1, $2, $3)`,
-      [token, req.params.negocioId, pin]
-    )
-    res.status(201).json({ token, pin })
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
-
-// Regenerar PIN sem mudar token
-router.post('/projetos/:negocioId/share/regenerar-pin', async (req, res) => {
-  try {
-    const pin = String(Math.floor(1000 + Math.random() * 9000))
-    const { rows } = await pool.query(
-      `UPDATE projeto_share_tokens SET pin = $1 WHERE negocio_id = $2 AND ativo = true RETURNING token`,
-      [pin, req.params.negocioId]
-    )
-    if (!rows.length) return res.status(404).json({ error: 'Sem link activo' })
-    res.json({ token: rows[0].token, pin })
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
-
-router.delete('/projetos/:negocioId/share', async (req, res) => {
-  try {
-    await pool.query('UPDATE projeto_share_tokens SET ativo = false WHERE negocio_id = $1', [req.params.negocioId])
-    res.json({ ok: true })
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
 
 // Vista agregada por negócio (para o detalhe da página)
 router.get('/projetos/:negocioId/resumo', async (req, res) => {

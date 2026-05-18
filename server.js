@@ -25,8 +25,6 @@ const supabaseAdmin = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE
 app.use('/api', async (req, res, next) => {
   // CRM API — usa PostgreSQL directamente, sem auth Supabase (comportamento histórico)
   if (req.path.startsWith('/crm/')) return next()
-  // Modo investidor — partilha pública via token (validada no handler)
-  if (req.path.startsWith('/public/')) return next()
   // Webhook Twilio — validacao feita no handler (X-Twilio-Signature)
   if (req.path.startsWith('/webhook/')) return next()
   // Cron jobs, templates, relatórios, reactivação — protegidos por API key interna
@@ -76,10 +74,6 @@ try {
   // Router CRM — montado DEPOIS dos guards para que estes corram primeiro
   const { default: crmRoutes } = await import('./src/db/routes.js')
   app.use('/api/crm', crmRoutes)
-
-  // ── Modo investidor: rotas públicas validadas por token ──
-  const { default: publicRoutes } = await import('./src/db/publicRoutes.js')
-  app.use('/api/public', publicRoutes)
   const { default: analiseRoutes } = await import('./src/db/analiseRoutes.js')
   app.use('/api/crm', analiseRoutes)
   const { default: orcamentoObraRoutes } = await import('./src/db/orcamentoObraRoutes.js')

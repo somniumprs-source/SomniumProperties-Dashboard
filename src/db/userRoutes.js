@@ -13,7 +13,7 @@ import { Router } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import pool from './pg.js'
 
-export const ROLES = ['admin', 'comercial', 'financeiro', 'operacoes', 'parceiro']
+export const ROLES = ['admin', 'comercial', 'financeiro', 'operacoes', 'parceiro', 'investidor']
 
 export const ROLE_AREAS = {
   admin:      ['dashboard', 'crm', 'projectos', 'financeiro', 'operacoes', 'metricas', 'alertas', 'admin'],
@@ -23,6 +23,9 @@ export const ROLE_AREAS = {
   // Parceiro externo: vê CRM (só tab Imóveis) e Projectos.
   // Dentro destes, só vê os registos partilhados com ele (filtro pela tabela `acessos`).
   parceiro:   ['crm', 'projectos'],
+  // Investidor: só vê Projectos (os projetos onde foi adicionado via tabela `acessos`).
+  // Dentro do projeto vê tudo (cronograma, fotos, documentos), mas read-only.
+  investidor: ['projectos'],
 }
 
 // Sub-módulos dentro de cada área. Usado para filtrar tabs/secções no frontend
@@ -36,11 +39,12 @@ export const ROLE_MODULES = {
   financeiro: ['crm.negocios'],
   operacoes:  [],
   parceiro:   ['crm.imoveis', 'crm.negocios'],
+  investidor: ['crm.negocios'],
 }
 
 // Roles cujo acesso a registos é restrito pela tabela `acessos`.
 // Outros roles (admin, comercial, etc.) vêem tudo.
-export const RECORD_RESTRICTED_ROLES = new Set(['parceiro'])
+export const RECORD_RESTRICTED_ROLES = new Set(['parceiro', 'investidor'])
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.supabase.co'
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''

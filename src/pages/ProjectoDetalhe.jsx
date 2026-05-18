@@ -3,11 +3,13 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Calendar, CheckCircle2, Circle, Plus, Trash2, Upload, X,
   Building2, Wallet, ImageIcon, FileText, Users, BarChart3, ChevronRight,
-  FileDown, Share2, Copy, Check, AlertTriangle,
+  FileDown, AlertTriangle,
 } from 'lucide-react'
 import { apiFetch, getToken } from '../lib/api.js'
 import { Header } from '../components/layout/Header.jsx'
 import { Button } from '../components/ui/Button.jsx'
+import { useAuth } from '../contexts/AuthContext.jsx'
+import { PartilharAcesso } from '../components/PartilharAcesso.jsx'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const GOLD = '#C9A84C'
@@ -51,6 +53,7 @@ const TABS = [
 export function ProjectoDetalhe() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { isReadOnly, isInvestidor } = useAuth()
   const [resumo, setResumo] = useState(null)
   const [fases, setFases] = useState([])
   const [fotos, setFotos] = useState([])
@@ -125,18 +128,23 @@ export function ProjectoDetalhe() {
             <ArrowLeft className="w-3.5 h-3.5" /> Voltar a Projectos
           </Link>
           <div className="flex items-center gap-2">
-            {semFases && negocio.categoria === 'Fix and Flip' && (
+            {!isReadOnly && semFases && negocio.categoria === 'Fix and Flip' && (
               <Button size="sm" icon={Plus} onClick={inicializarFases}>Inicializar fases de obra</Button>
             )}
-            <ShareInvestidorButton negocioId={id} />
-            <Button size="sm" variant="destructive" icon={Trash2}
-              onClick={async () => {
-                if (!confirm(`Apagar o projecto "${negocio.movimento}"? Esta acção apaga também fases, tarefas e fotos. Não pode ser revertida.`)) return
-                const r = await apiFetch(`/api/crm/negocios/${id}`, { method: 'DELETE' })
-                if (r.ok) navigate('/projectos')
-                else alert('Erro ao apagar')
-              }}
-            >Apagar</Button>
+            {!isReadOnly && <PartilharAcesso entidade="negocio" entidadeId={id} nome={negocio.movimento} />}
+            {!isReadOnly && (
+              <Button size="sm" variant="destructive" icon={Trash2}
+                onClick={async () => {
+                  if (!confirm(`Apagar o projecto "${negocio.movimento}"? Esta acção apaga também fases, tarefas e fotos. Não pode ser revertida.`)) return
+                  const r = await apiFetch(`/api/crm/negocios/${id}`, { method: 'DELETE' })
+                  if (r.ok) navigate('/projectos')
+                  else alert('Erro ao apagar')
+                }}
+              >Apagar</Button>
+            )}
+            {isInvestidor && (
+              <span className="text-[10px] uppercase tracking-wider text-gray-400 ml-2">Vista de investidor</span>
+            )}
           </div>
         </div>
 
@@ -186,10 +194,10 @@ export function ProjectoDetalhe() {
 
           <div className="p-4 sm:p-6">
             {tab === 'resumo' && <TabResumo resumo={resumo} fases={fases} />}
-            {tab === 'fases' && <TabFases fases={fases} onChange={load} />}
+            {tab === 'fases' && <TabFases fases={fases} onChange={load} readOnly={isReadOnly} />}
             {tab === 'orcamento' && <TabOrcamento imovel={imovel} />}
-            {tab === 'faturacao' && <TabFaturacao negocio={negocio} onChange={load} />}
-            {tab === 'fotos' && <TabFotos negocioId={id} fases={fases} fotos={fotos} onChange={load} />}
+            {tab === 'faturacao' && <TabFaturacao negocio={negocio} onChange={load} readOnly={isReadOnly} />}
+            {tab === 'fotos' && <TabFotos negocioId={id} fases={fases} fotos={fotos} onChange={load} readOnly={isReadOnly} />}
             {tab === 'documentos' && <TabDocumentos negocio={negocio} fases={fases} />}
             {tab === 'investidores' && <TabInvestidores negocio={negocio} />}
           </div>
@@ -362,92 +370,6 @@ function GanttFases({ fases, negocio }) {
   )
 }
 
-// ════════════════════════════════════════════════════════════════
-// PARTILHA com investidores (link público)
-// ════════════════════════════════════════════════════════════════
-function ShareInvestidorButton({ negocioId }) {
-  const [open, setOpen] = useState(false)
-  const [token, setToken] = useState(null)
-  const [pin, setPin] = useState(null)
-  const [copied, setCopied] = useState(false)
-  const [loading, setLoading] = useState(false)
-
-  async function abrir() {
-    setOpen(true)
-    setLoading(true)
-    const r = await apiFetch(`/api/crm/projetos/${negocioId}/share`, { method: 'POST' })
-    if (r.ok) { const j = await r.json(); setToken(j.token); setPin(j.pin) }
-    setLoading(false)
-  }
-  async function regenerarPin() {
-    if (!confirm('Gerar novo PIN? O PIN antigo deixa de funcionar.')) return
-    const r = await apiFetch(`/api/crm/projetos/${negocioId}/share/regenerar-pin`, { method: 'POST' })
-    if (r.ok) { const j = await r.json(); setPin(j.pin) }
-  }
-  async function desativar() {
-    if (!confirm('Desactivar o link de partilha? O investidor deixará de ter acesso.')) return
-    await apiFetch(`/api/crm/projetos/${negocioId}/share`, { method: 'DELETE' })
-    setToken(null); setPin(null); setOpen(false)
-  }
-  function copiar() {
-    if (!token) return
-    const url = `${window.location.origin}/investidor/projeto/${token}`
-    navigator.clipboard?.writeText(url)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  return (
-    <>
-      <Button size="sm" variant="secondary" icon={Share2} onClick={abrir}>Modo investidor</Button>
-      {open && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-5" onClick={e => e.stopPropagation()}>
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <h3 className="text-base font-semibold text-gray-800">Link para investidor</h3>
-                <p className="text-xs text-gray-500 mt-0.5">Vista limpa (fases, cronograma, fotos). Sem custos internos nem margens.</p>
-              </div>
-              <button onClick={() => setOpen(false)} className="p-1 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
-            </div>
-            {loading ? (
-              <p className="text-sm text-gray-400 py-4 text-center">A gerar link...</p>
-            ) : token ? (
-              <>
-                <div className="flex gap-2 mt-4">
-                  <input readOnly value={`${window.location.origin}/investidor/projeto/${token}`}
-                    className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-xs font-mono bg-gray-50" onClick={e => e.target.select()} />
-                  <button onClick={copiar} className="px-3 py-2 rounded-lg bg-[#0d0d0d] text-[#C9A84C] text-xs font-medium hover:bg-[#1a1a1a] flex items-center gap-1.5">
-                    {copied ? <><Check className="w-3.5 h-3.5" /> Copiado</> : <><Copy className="w-3.5 h-3.5" /> Copiar</>}
-                  </button>
-                </div>
-
-                {pin && (
-                  <div className="mt-4 bg-gradient-to-br from-[#0d0d0d] to-[#1f1f1f] rounded-xl p-4 text-center">
-                    <p className="text-[10px] uppercase tracking-wider text-gray-400">PIN de acesso</p>
-                    <p className="text-3xl font-mono font-bold text-[#C9A84C] tracking-[0.4em] mt-1">{pin}</p>
-                    <p className="text-[10px] text-gray-400 mt-2">Partilha o PIN <strong>separadamente</strong> do link. Investidor precisa de ambos.</p>
-                    <button onClick={regenerarPin} className="text-[10px] text-[#C9A84C] hover:underline mt-2">Gerar novo PIN</button>
-                  </div>
-                )}
-
-                <a href={`/investidor/projeto/${token}`} target="_blank" rel="noreferrer"
-                  className="block text-center text-xs text-[#C9A84C] hover:underline mt-3">Abrir vista do investidor →</a>
-                <div className="mt-5 pt-4 border-t border-gray-100 flex justify-between items-center">
-                  <p className="text-[11px] text-gray-400">Investidores com email cadastrado recebem notificação automática a cada nova fase.</p>
-                  <button onClick={desativar} className="text-xs text-red-500 hover:underline">Desactivar link</button>
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-gray-400 py-4 text-center">Erro a gerar link.</p>
-            )}
-          </div>
-        </div>
-      )}
-    </>
-  )
-}
-
 function Field({ label, value, accent }) {
   return (
     <div className="flex justify-between items-baseline">
@@ -460,18 +382,18 @@ function Field({ label, value, accent }) {
 // ════════════════════════════════════════════════════════════════
 // TAB: FASES & TAREFAS
 // ════════════════════════════════════════════════════════════════
-function TabFases({ fases, onChange }) {
+function TabFases({ fases, onChange, readOnly }) {
   if (fases.length === 0) {
     return <p className="text-center text-sm text-gray-400 py-8">Sem fases de obra criadas. Inicializa-as no topo da página.</p>
   }
   return (
     <div className="space-y-3">
-      {fases.map(f => <FaseAccordion key={f.id} fase={f} onChange={onChange} />)}
+      {fases.map(f => <FaseAccordion key={f.id} fase={f} onChange={onChange} readOnly={readOnly} />)}
     </div>
   )
 }
 
-function FaseAccordion({ fase, onChange }) {
+function FaseAccordion({ fase, onChange, readOnly }) {
   const [open, setOpen] = useState(fase.estado === 'em_curso')
   const [novaTarefa, setNovaTarefa] = useState('')
   const cor = FASE_COR[fase.fase_key] || '#6366f1'
@@ -545,7 +467,36 @@ function FaseAccordion({ fase, onChange }) {
         <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`} />
       </button>
 
-      {open && (
+      {open && readOnly && (
+        <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div><span className="text-[10px] text-gray-500 uppercase block">Início previsto</span><span className="text-gray-700">{fase.data_inicio_prevista || '—'}</span></div>
+            <div><span className="text-[10px] text-gray-500 uppercase block">Fim previsto</span><span className="text-gray-700">{fase.data_fim_prevista || '—'}</span></div>
+            <div><span className="text-[10px] text-gray-500 uppercase block">Início real</span><span className="text-gray-700">{fase.data_inicio_real || '—'}</span></div>
+            <div><span className="text-[10px] text-gray-500 uppercase block">Fim real</span><span className="text-gray-700">{fase.data_fim_real || '—'}</span></div>
+          </div>
+          {fase.tarefas?.length > 0 && (
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">Tarefas ({fase.tarefas_concluidas}/{fase.tarefas_total})</p>
+              <div className="space-y-1.5">
+                {fase.tarefas.map(t => (
+                  <div key={t.id} className="flex items-center gap-2 bg-white rounded-lg px-2.5 py-2 border border-gray-100">
+                    {t.concluida ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Circle className="w-4 h-4 text-gray-300" />}
+                    <span className={`flex-1 text-xs ${t.concluida ? 'line-through text-gray-400' : 'text-gray-700'}`}>{t.descricao}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {fase.notas && (
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Notas</p>
+              <p className="text-xs text-gray-700 bg-white rounded-lg p-2.5 border border-gray-100">{fase.notas}</p>
+            </div>
+          )}
+        </div>
+      )}
+      {open && !readOnly && (
         <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-4">
           {/* Estado + datas + orçamento */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -650,7 +601,7 @@ function TabOrcamento({ imovel }) {
 // ════════════════════════════════════════════════════════════════
 // TAB: FATURAÇÃO (tranches do negócio)
 // ════════════════════════════════════════════════════════════════
-function TabFaturacao({ negocio, onChange }) {
+function TabFaturacao({ negocio, onChange, readOnly }) {
   let pags = []
   try { pags = typeof negocio.pagamentos_faseados === 'string' ? JSON.parse(negocio.pagamentos_faseados || '[]') : (negocio.pagamentos_faseados || []) } catch {}
   const total = pags.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
@@ -722,20 +673,22 @@ function TabFaturacao({ negocio, onChange }) {
                 <p className="text-[10px] text-gray-400">{p.data || 'Sem data'}</p>
               </div>
               <span className="text-sm font-mono font-semibold text-gray-700">{EUR(p.valor)}</span>
-              {!p.recebido && <Button size="sm" variant="success" onClick={() => confirmar(idx)}>Confirmar</Button>}
-              <button onClick={() => apagarTranche(idx)} title="Apagar tranche"
-                className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-opacity">
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              {!readOnly && !p.recebido && <Button size="sm" variant="success" onClick={() => confirmar(idx)}>Confirmar</Button>}
+              {!readOnly && (
+                <button onClick={() => apagarTranche(idx)} title="Apagar tranche"
+                  className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-opacity">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           ))}
         </>
       ) : (
-        <p className="text-sm text-gray-500 mb-3">Sem tranches definidas. Adiciona a primeira abaixo.</p>
+        <p className="text-sm text-gray-500 mb-3">{readOnly ? 'Sem tranches definidas.' : 'Sem tranches definidas. Adiciona a primeira abaixo.'}</p>
       )}
 
       {/* Form inline: adicionar tranche */}
-      <form onSubmit={adicionarTranche} className="mt-4 pt-4 border-t border-gray-100">
+      {!readOnly && <form onSubmit={adicionarTranche} className="mt-4 pt-4 border-t border-gray-100">
         <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">Nova tranche</p>
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
           <input type="text" value={novaT.descricao} onChange={e => setNovaT({ ...novaT, descricao: e.target.value })}
@@ -749,7 +702,7 @@ function TabFaturacao({ negocio, onChange }) {
             <Plus className="w-4 h-4" />
           </button>
         </div>
-      </form>
+      </form>}
     </div>
   )
 }
@@ -757,7 +710,7 @@ function TabFaturacao({ negocio, onChange }) {
 // ════════════════════════════════════════════════════════════════
 // TAB: FOTOS
 // ════════════════════════════════════════════════════════════════
-function TabFotos({ negocioId, fases, fotos, onChange }) {
+function TabFotos({ negocioId, fases, fotos, onChange, readOnly }) {
   const [faseSel, setFaseSel] = useState(fases[0]?.id || null)
   const [tipoSel, setTipoSel] = useState('durante')
   const [uploading, setUploading] = useState(false)
@@ -793,33 +746,35 @@ function TabFotos({ negocioId, fases, fotos, onChange }) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-gray-50 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="flex-1">
-          <label className="text-[10px] text-gray-500 uppercase tracking-wide block mb-1">Fase</label>
-          <select value={faseSel || ''} onChange={e => setFaseSel(e.target.value)} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white">
-            {fases.map(f => <option key={f.id} value={f.id}>{FASE_ICON[f.fase_key]} {f.nome}</option>)}
-          </select>
+      {!readOnly && (
+        <div className="bg-gray-50 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex-1">
+            <label className="text-[10px] text-gray-500 uppercase tracking-wide block mb-1">Fase</label>
+            <select value={faseSel || ''} onChange={e => setFaseSel(e.target.value)} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white">
+              {fases.map(f => <option key={f.id} value={f.id}>{FASE_ICON[f.fase_key]} {f.nome}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] text-gray-500 uppercase tracking-wide block mb-1">Tipo</label>
+            <select value={tipoSel} onChange={e => setTipoSel(e.target.value)} className="px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white">
+              <option value="antes">Antes</option>
+              <option value="durante">Durante</option>
+              <option value="depois">Depois</option>
+            </select>
+          </div>
+          <div className="self-end">
+            <input ref={fileRef} type="file" multiple accept="image/*" onChange={upload} disabled={uploading || !faseSel} className="hidden" id="upload-fotos" />
+            <label htmlFor="upload-fotos" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0d0d0d] text-[#C9A84C] text-sm font-medium hover:bg-[#1a1a1a] cursor-pointer">
+              <Upload className="w-4 h-4" /> {uploading ? 'A enviar...' : 'Carregar fotos'}
+            </label>
+          </div>
         </div>
-        <div>
-          <label className="text-[10px] text-gray-500 uppercase tracking-wide block mb-1">Tipo</label>
-          <select value={tipoSel} onChange={e => setTipoSel(e.target.value)} className="px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white">
-            <option value="antes">Antes</option>
-            <option value="durante">Durante</option>
-            <option value="depois">Depois</option>
-          </select>
-        </div>
-        <div className="self-end">
-          <input ref={fileRef} type="file" multiple accept="image/*" onChange={upload} disabled={uploading || !faseSel} className="hidden" id="upload-fotos" />
-          <label htmlFor="upload-fotos" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0d0d0d] text-[#C9A84C] text-sm font-medium hover:bg-[#1a1a1a] cursor-pointer">
-            <Upload className="w-4 h-4" /> {uploading ? 'A enviar...' : 'Carregar fotos'}
-          </label>
-        </div>
-      </div>
+      )}
 
       {fotos.length === 0 ? (
-        <p className="text-center text-sm text-gray-400 py-12">Sem fotos. Faz upload acima.</p>
+        <p className="text-center text-sm text-gray-400 py-12">{readOnly ? 'Sem fotos disponíveis.' : 'Sem fotos. Faz upload acima.'}</p>
       ) : (
-        <FotosGaleriaPorFase fotos={fotos} onDelete={apagarFoto} />
+        <FotosGaleriaPorFase fotos={fotos} onDelete={readOnly ? null : apagarFoto} />
       )}
     </div>
   )
@@ -847,10 +802,12 @@ function FotosGaleriaPorFase({ fotos, onDelete }) {
                   style={{ background: foto.tipo === 'antes' ? '#ef444499' : foto.tipo === 'depois' ? '#22c55e99' : '#0d0d0d99', color: 'white' }}>
                   {foto.tipo}
                 </div>
-                <button onClick={() => onDelete(foto.id)}
-                  className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 p-1 rounded bg-black/60 text-white hover:bg-red-600 transition-opacity">
-                  <Trash2 className="w-3 h-3" />
-                </button>
+                {onDelete && (
+                  <button onClick={() => onDelete(foto.id)}
+                    className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 p-1 rounded bg-black/60 text-white hover:bg-red-600 transition-opacity">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                )}
                 {foto.legenda && <p className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] p-1 truncate">{foto.legenda}</p>}
               </div>
             ))}

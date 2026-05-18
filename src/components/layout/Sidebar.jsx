@@ -17,11 +17,15 @@ const nav = [
 ]
 
 export function Sidebar() {
-  const { profile, signOut } = useAuth()
+  const { profile, signOut, role, areas } = useAuth()
   const [badges, setBadges] = useState({ alertas: 0, crm: 0, tarefas: 0 })
   const [open, setOpen] = useState(false)
-  // Todos os links visíveis — excepto Utilizadores que só aparece para admin
-  const visibleNav = nav.filter(item => item.area !== 'admin' || profile?.role === 'admin')
+  // Filtro por areas declaradas pelo backend. Admin vê tudo.
+  // Para roles restritos (investidor, parceiro), respeitar `areas`.
+  const visibleNav = nav.filter(item => {
+    if (role === 'admin' || !role) return item.area !== 'admin' || role === 'admin'
+    return areas.includes(item.area)
+  })
 
   useEffect(() => {
     const load = async () => {

@@ -560,8 +560,11 @@ export async function initSchema() {
       DO $$ BEGIN
         ALTER TABLE investidores ADD COLUMN IF NOT EXISTS tipo_principal TEXT DEFAULT 'Passivo';
         ALTER TABLE investidores ADD COLUMN IF NOT EXISTS duplicado_de TEXT;
+        -- user_id: liga investidor à row em `users` (auth via Supabase) — para portal investidor
+        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS user_id TEXT;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
+      CREATE INDEX IF NOT EXISTS idx_investidores_user ON investidores(user_id);
       CREATE INDEX IF NOT EXISTS idx_investidores_tipo ON investidores(tipo_principal);
 
       -- Migration: consolidar estados legacy ("Investidor classificado", "Investidor em espera",

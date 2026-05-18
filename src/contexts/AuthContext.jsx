@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { supabase, authEnabled } from '../lib/supabase.js'
 
 const AuthContext = createContext(null)
@@ -6,22 +6,52 @@ const AuthContext = createContext(null)
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [profile, setProfile] = useState(null)
+
+  const refreshProfile = useCallback(async () => {
+    if (!authEnabled || !supabase) {
+      // Modo dev: assume admin
+      setProfile({
+        id: 'dev', email: 'dev@local', nome: 'Dev',
+        iniciais: 'DV', cor: '#C9A84C',
+        role: 'admin', areas: ['dashboard', 'crm', 'projectos', 'financeiro', 'operacoes', 'metricas', 'alertas', 'admin'],
+        modules: [],
+      })
+      return
+    }
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) { setProfile(null); return }
+      const r = await fetch('/api/users/me', { headers: { Authorization: `Bearer ${session.access_token}` } })
+      if (!r.ok) { setProfile(null); return }
+      const j = await r.json()
+      setProfile({
+        id: j.id, email: j.email, nome: j.nome || j.email?.split('@')[0] || 'Utilizador',
+        iniciais: (j.nome || j.email || '?').slice(0, 2).toUpperCase(),
+        cor: j.cor || '#C9A84C',
+        role: j.role, areas: j.areas || [], modules: j.modules || [],
+      })
+    } catch { setProfile(null) }
+  }, [])
 
   useEffect(() => {
     if (!authEnabled || !supabase) {
       setSession({ user: { email: 'dev', id: 'dev' } })
+      refreshProfile()
       setLoading(false)
       return
     }
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session)
+      if (session) await refreshProfile()
       setLoading(false)
     })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, s) => {
       setSession(s)
+      if (s) await refreshProfile(); else setProfile(null)
     })
     return () => subscription.unsubscribe()
-  }, [])
+  }, [refreshProfile])
 
   async function signIn(email, password) {
     if (!supabase) throw new Error('Auth não configurado')
@@ -32,29 +62,24 @@ export function AuthProvider({ children }) {
   async function signOut() {
     if (supabase) await supabase.auth.signOut()
     setSession(null)
+    setProfile(null)
   }
 
-  // Perfil derivado simplesmente do email da sessão (sem chamar /api/users/me)
-  const profile = session?.user ? {
-    id: session.user.id,
-    email: session.user.email,
-    nome: session.user.email?.split('@')[0] || 'Utilizador',
-    iniciais: (session.user.email || '?').slice(0, 2).toUpperCase(),
-    cor: '#C9A84C',
-    role: 'admin', // sem enforcement frontend
-  } : null
+  const role = profile?.role || null
+  const areas = profile?.areas || []
+  const modules = profile?.modules || []
 
   return (
     <AuthContext.Provider value={{
       session, profile, loading, authEnabled,
       isAuthenticated: !!session,
       hasProfile: !!profile,
-      role: profile?.role || null,
-      areas: [],
-      modules: [],
-      canAccess: () => true,
+      role, areas, modules,
+      isInvestidor: role === 'investidor',
+      isReadOnly: role === 'investidor' || role === 'parceiro',
+      canAccess: (area) => role === 'admin' || areas.includes(area),
       signIn, signOut,
-      refreshProfile: () => {},
+      refreshProfile,
     }}>
       {children}
     </AuthContext.Provider>

@@ -16,7 +16,6 @@ const Operacoes   = lazy(() => import('./pages/Operacoes.jsx').then(m => ({ defa
 const Metricas    = lazy(() => import('./pages/Metricas.jsx').then(m => ({ default: m.Metricas })))
 const Projectos   = lazy(() => import('./pages/Projectos.jsx').then(m => ({ default: m.Projectos })))
 const ProjectoDetalhe = lazy(() => import('./pages/ProjectoDetalhe.jsx').then(m => ({ default: m.ProjectoDetalhe })))
-const InvestidorProjeto = lazy(() => import('./pages/InvestidorProjeto.jsx').then(m => ({ default: m.InvestidorProjeto })))
 const Utilizadores = lazy(() => import('./pages/Utilizadores.jsx').then(m => ({ default: m.Utilizadores })))
 const RelatoriosAdmin = lazy(() => import('./pages/RelatoriosAdmin.jsx').then(m => ({ default: m.RelatoriosAdmin })))
 
@@ -39,19 +38,6 @@ function AppRoutes() {
           <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#C9A84C', borderTopColor: 'transparent' }} />
         </div>
       </div>
-    )
-  }
-
-  // Rota pública para investidores (sem login) — verificar antes do guard
-  if (window.location.pathname.startsWith('/investidor/')) {
-    return (
-      <ChunkErrorBoundary>
-        <Suspense fallback={<PageFallback />}>
-          <Routes>
-            <Route path="/investidor/projeto/:token" element={<InvestidorProjeto />} />
-          </Routes>
-        </Suspense>
-      </ChunkErrorBoundary>
     )
   }
 

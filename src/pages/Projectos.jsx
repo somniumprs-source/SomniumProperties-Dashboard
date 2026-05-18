@@ -4,6 +4,7 @@ import { Plus, Filter, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle
 import { Header } from '../components/layout/Header.jsx'
 import { apiFetch } from '../lib/api.js'
 import { Button } from '../components/ui/Button.jsx'
+import { useAuth } from '../contexts/AuthContext.jsx'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 
@@ -37,6 +38,7 @@ function faseLegacyParaKanban(faseLegacy) {
 
 export function Projectos() {
   const navigate = useNavigate()
+  const { role, isInvestidor, isReadOnly } = useAuth()
   const [kpis, setKpis] = useState(null)
   const [projectos, setProjectos] = useState([])
   const [fasesPorNegocio, setFasesPorNegocio] = useState({})  // negocioId → { faseAtualKey, percGlobal }
@@ -44,19 +46,41 @@ export function Projectos() {
   const [error, setError] = useState(null)
   const [editing, setEditing] = useState(null)
   const [view, setView] = useState('kanban')  // 'kanban' | 'lista'
-  const [filterCat, setFilterCat] = useState('Fix and Flip')
+  const [filterCat, setFilterCat] = useState(isInvestidor ? '' : 'Fix and Flip')
 
   async function load() {
     setLoading(true); setError(null)
     try {
       const safe = (p) => p.then(r => r.ok ? r.json() : null).catch(() => null)
+      // Investidores/parceiros usam endpoint filtrado por acessos
+      const negociosUrl = isReadOnly ? '/api/crm/projetos/meus' : '/api/crm/negocios?limit=200'
       const [k, n] = await Promise.all([
-        safe(apiFetch('/api/kpis/financeiro')),
-        safe(apiFetch('/api/crm/negocios?limit=200')),
+        isInvestidor ? Promise.resolve(null) : safe(apiFetch('/api/kpis/financeiro')),
+        safe(apiFetch(negociosUrl)),
       ])
-      if (!k) throw new Error('Erro ao carregar projectos')
+      if (!isInvestidor && !k) throw new Error('Erro ao carregar projectos')
       setKpis(k)
-      setProjectos(n?.data ?? [])
+      // Normalizar para forma esperada pelo Kanban (com imovelNome, lucroEstimado, etc.)
+      const rawData = n?.data ?? []
+      const negocios = rawData.map(r => ({
+        ...r,
+        imovelNome: r.imovel_nome ?? r.imovelNome,
+        lucroEstimado: r.lucro_estimado ?? r.lucroEstimado,
+        lucroReal: r.lucro_real ?? r.lucroReal,
+      }))
+      setProjectos(negocios)
+      if (isReadOnly && !kpis) {
+        // Construir KPIs minimais a partir da lista (para investidor)
+        const catCount = {}
+        for (const x of negocios) {
+          const c = x.categoria || 'Outros'
+          if (!catCount[c]) catCount[c] = { categoria: c, count: 0, lucroEst: 0, lucroReal: 0 }
+          catCount[c].count++
+          catCount[c].lucroEst += Number(x.lucroEstimado) || 0
+          catCount[c].lucroReal += Number(x.lucroReal) || 0
+        }
+        setKpis({ categorias: Object.values(catCount), negociosLista: negocios })
+      }
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
@@ -106,7 +130,8 @@ export function Projectos() {
     } catch (e) { console.error('[saveProjecto]', e); setError(e.message) }
   }
 
-  const lista = useMemo(() => kpis?.negociosLista ?? [], [kpis])
+  // Para admin: usar negociosLista (com KPIs financeiros). Para investidor: usar projectos directo.
+  const lista = useMemo(() => isReadOnly ? projectos : (kpis?.negociosLista ?? []), [kpis, projectos, isReadOnly])
   const filtered = useMemo(
     () => lista.filter(n => !filterCat || n.categoria === filterCat),
     [lista, filterCat]
@@ -137,7 +162,7 @@ export function Projectos() {
         {/* Toolbar */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Button icon={Plus} onClick={() => setEditing({})}>Novo Projecto</Button>
+            {!isReadOnly && <Button icon={Plus} onClick={() => setEditing({})}>Novo Projecto</Button>}
             <div className="inline-flex bg-white border border-gray-200 rounded-lg p-0.5">
               <button onClick={() => setView('kanban')}
                 className={`px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${view === 'kanban' ? 'bg-[#0d0d0d] text-[#C9A84C]' : 'text-gray-500 hover:bg-gray-50'}`}>
@@ -182,6 +207,7 @@ export function Projectos() {
             colunas={FASES_KANBAN}
             cardsPorColuna={cardsPorColuna}
             fasesInfo={fasesPorNegocio}
+            readOnly={isReadOnly}
             onCardClick={(id) => navigate(`/projectos/${id}`)}
             onMoveCard={async (negocioId, faseKey) => {
               try {
@@ -213,12 +239,13 @@ export function Projectos() {
 // ════════════════════════════════════════════════════════════════
 // KANBAN
 // ════════════════════════════════════════════════════════════════
-function KanbanBoard({ colunas, cardsPorColuna, fasesInfo, onCardClick, onMoveCard }) {
+function KanbanBoard({ colunas, cardsPorColuna, fasesInfo, onCardClick, onMoveCard, readOnly }) {
   const [dragging, setDragging] = useState(null)         // { negocioId, isFF }
   const [overCol, setOverCol] = useState(null)           // fase_key da coluna sob hover
 
   function onDragStart(negocio) {
     return (e) => {
+      if (readOnly) { e.preventDefault(); return }
       const isFF = negocio.categoria === 'Fix and Flip'
       const hasFases = !!fasesInfo[negocio.id]
       if (!isFF || !hasFases) {
@@ -281,6 +308,7 @@ function KanbanBoard({ colunas, cardsPorColuna, fasesInfo, onCardClick, onMoveCa
                     onDragStart={onDragStart(n)}
                     onDragEnd={onDragEnd}
                     isDragging={dragging?.negocioId === n.id}
+                    readOnly={readOnly}
                   />
                 ))}
               </div>
@@ -292,9 +320,9 @@ function KanbanBoard({ colunas, cardsPorColuna, fasesInfo, onCardClick, onMoveCa
   )
 }
 
-function KanbanCard({ negocio: n, info, onClick, onDragStart, onDragEnd, isDragging }) {
+function KanbanCard({ negocio: n, info, onClick, onDragStart, onDragEnd, isDragging, readOnly }) {
   const isFF = n.categoria === 'Fix and Flip'
-  const podeArrastar = isFF && !!info
+  const podeArrastar = !readOnly && isFF && !!info
   return (
     <div
       draggable={podeArrastar}

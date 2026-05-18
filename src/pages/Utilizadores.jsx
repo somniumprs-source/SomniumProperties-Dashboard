@@ -11,6 +11,7 @@ const ROLES = [
   { id: 'financeiro', label: 'Financeiro', desc: 'Financeiro, métricas' },
   { id: 'operacoes',  label: 'Operações',  desc: 'Operações, alertas, métricas' },
   { id: 'parceiro',   label: 'Parceiro',   desc: 'Externo — só vê imóveis/projectos partilhados' },
+  { id: 'investidor', label: 'Investidor', desc: 'Externo — só vê projectos onde foi adicionado' },
 ]
 
 const COR_PALETTE = ['#C9A84C', '#6366f1', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899']
@@ -314,9 +315,32 @@ function LinkModal({ url, note, onClose }) {
 
 function InviteForm({ onClose, onCreated }) {
   const toast = useToast()
-  const [form, setForm] = useState({ email: '', nome: '', role: 'comercial', cor: COR_PALETTE[0], method: 'magic_link', password: '' })
+  const [form, setForm] = useState({ email: '', nome: '', role: 'comercial', cor: COR_PALETTE[0], method: 'magic_link', password: '', investidor_id: '' })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
+  const [investidores, setInvestidores] = useState([])
+
+  // Quando role=investidor, carrega lista de investidores sem user_id ligado
+  useEffect(() => {
+    if (form.role !== 'investidor') { setInvestidores([]); return }
+    apiFetch('/api/crm/investidores?limit=500')
+      .then(r => r.ok ? r.json() : null)
+      .then(j => setInvestidores(j?.data?.filter(i => !i.user_id) || []))
+      .catch(() => {})
+  }, [form.role])
+
+  // Auto-preencher nome/email a partir do investidor selecionado
+  useEffect(() => {
+    if (!form.investidor_id) return
+    const inv = investidores.find(i => i.id === form.investidor_id)
+    if (inv) {
+      setForm(f => ({
+        ...f,
+        nome: f.nome || inv.nome || '',
+        email: f.email || inv.email || '',
+      }))
+    }
+  }, [form.investidor_id])
 
   async function submit(e) {
     e.preventDefault()
@@ -333,6 +357,15 @@ function InviteForm({ onClose, onCreated }) {
       })
       const j = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+
+      // Ligar investidor existente ao user criado (se aplicável)
+      if (form.role === 'investidor' && form.investidor_id && j.user?.id) {
+        await apiFetch(`/api/crm/investidores/${form.investidor_id}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: j.user.id }),
+        }).catch(() => {})
+      }
+
       onCreated(j)
     } catch (e) {
       setError(e.message)
@@ -372,6 +405,21 @@ function InviteForm({ onClose, onCreated }) {
           style={{ border: '1px solid #1a1a1a' }}>
           {ROLES.map(r => <option key={r.id} value={r.id} style={{ backgroundColor: '#111' }}>{r.label} — {r.desc}</option>)}
         </select>
+
+        {form.role === 'investidor' && (
+          <>
+            <label className="block text-[10px] uppercase tracking-widest text-gray-500 mb-1">Ligar a investidor existente (opcional)</label>
+            <select value={form.investidor_id} onChange={e => setForm({ ...form, investidor_id: e.target.value })}
+              className="w-full bg-transparent text-sm text-white px-3 py-2 rounded mb-3 outline-none"
+              style={{ border: '1px solid #1a1a1a' }}>
+              <option value="" style={{ backgroundColor: '#111' }}>— Sem ligação —</option>
+              {investidores.map(i => (
+                <option key={i.id} value={i.id} style={{ backgroundColor: '#111' }}>{i.nome}{i.email ? ` · ${i.email}` : ''}</option>
+              ))}
+            </select>
+            <p className="text-[10px] text-gray-500 mb-3 -mt-2">Sugestão: liga ao registo na lista de Investidores. Auto-preenche nome/email.</p>
+          </>
+        )}
 
         <label className="block text-[10px] uppercase tracking-widest text-gray-500 mb-1">Cor</label>
         <div className="flex gap-2 mb-4">
