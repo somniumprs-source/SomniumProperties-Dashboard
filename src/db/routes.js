@@ -5,7 +5,7 @@ import { Router } from 'express'
 import multer from 'multer'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { randomUUID } from 'crypto'
+import { randomUUID, createHash } from 'crypto'
 import { readFile, unlink } from 'fs/promises'
 import { createClient } from '@supabase/supabase-js'
 
@@ -33,7 +33,6 @@ import { generateDocx, getAvailableTypes } from './docxGenerator.js'
 import { runEstudoLocalizacao } from '../lib/estudoLocalizacao.js'
 import { FASES_FIX_FLIP } from './fasesFixFlip.js'
 import { resolveAppUser, RECORD_RESTRICTED_ROLES } from './userRoutes.js'
-import { createClient } from '@supabase/supabase-js'
 import {
   generateFichaAcompanhamento,
   generateRelatorioAcompanhamento,
@@ -4067,7 +4066,6 @@ Regras:
 // ════════════════════════════════════════════════════════════════
 // F15 — Assinaturas digitais in-house
 // ════════════════════════════════════════════════════════════════
-import { createHash } from 'crypto'
 
 // Criar pedido de assinatura: gera token único, devolve link público
 router.post('/projetos/:negocioId/assinaturas', async (req, res) => {
