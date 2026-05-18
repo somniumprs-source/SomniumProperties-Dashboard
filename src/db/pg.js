@@ -875,6 +875,67 @@ export async function initSchema() {
       ALTER TABLE investidores ADD COLUMN IF NOT EXISTS canal_notificacao TEXT DEFAULT 'email';
       -- valores: 'email' | 'whatsapp' | 'ambos' | 'nenhum'
 
+      -- F15: assinaturas digitais in-house (hash do PDF + aceitação online)
+      CREATE TABLE IF NOT EXISTS projeto_assinaturas (
+        id TEXT PRIMARY KEY,
+        negocio_id TEXT NOT NULL,
+        documento_tipo TEXT NOT NULL,         -- 'saida_caep' | 'relatorio' | outro
+        documento_hash TEXT NOT NULL,         -- SHA-256 do PDF
+        token TEXT NOT NULL UNIQUE,
+        investidor_id TEXT,
+        investidor_nome TEXT,
+        investidor_email TEXT,
+        aceite_em TIMESTAMPTZ,
+        aceite_ip TEXT,
+        aceite_user_agent TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_assinaturas_negocio ON projeto_assinaturas(negocio_id);
+
+      -- F18: analytics do investidor (acessos ao portal)
+      CREATE TABLE IF NOT EXISTS investidor_acessos (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        negocio_id TEXT,
+        pagina TEXT,
+        tab TEXT,
+        ip TEXT,
+        user_agent TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_inv_acessos_user ON investidor_acessos(user_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_inv_acessos_negocio ON investidor_acessos(negocio_id, created_at DESC);
+
+      -- F19: notificações in-app (bell icon)
+      CREATE TABLE IF NOT EXISTS notificacoes (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        tipo TEXT NOT NULL,           -- fase_mudou | tarefa_concluida | venda_concluida | comentario | outro
+        titulo TEXT NOT NULL,
+        mensagem TEXT,
+        link TEXT,
+        lida BOOLEAN DEFAULT false,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_notificacoes_user ON notificacoes(user_id, lida, created_at DESC);
+
+      -- F16: templates customizáveis de fases (alternativa às 8 fases Fix and Flip)
+      CREATE TABLE IF NOT EXISTS projeto_templates (
+        id TEXT PRIMARY KEY,
+        nome TEXT NOT NULL UNIQUE,
+        descricao TEXT,
+        fases_json TEXT NOT NULL,     -- JSON array de { key, nome, icon, tarefas: [] }
+        publico BOOLEAN DEFAULT true,
+        created_by TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- UX12: soft delete em negócios e fracções
+      ALTER TABLE negocios ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+      ALTER TABLE projeto_fracoes ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+      CREATE INDEX IF NOT EXISTS idx_negocios_deleted ON negocios(deleted_at);
+
       -- Frações dentro de um projecto (prédios com várias frações)
       CREATE TABLE IF NOT EXISTS projeto_fracoes (
         id TEXT PRIMARY KEY,

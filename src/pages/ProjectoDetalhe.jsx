@@ -11,6 +11,7 @@ import { Header } from '../components/layout/Header.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { PartilharAcesso } from '../components/PartilharAcesso.jsx'
+import { useToast } from '../components/ui/Toast.jsx'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const GOLD = '#C9A84C'
@@ -196,20 +197,20 @@ export function ProjectoDetalhe() {
           <FracaoChips fracoes={fracoes} fracaoSel={fracaoSel} setFracaoSel={setFracaoSel} />
         )}
 
-        {/* Banner do projeto */}
-        <div className="rounded-2xl p-5 sm:p-6 text-white shadow-md" style={{ background: `linear-gradient(135deg, ${BLACK} 0%, #1a1a1a 100%)` }}>
-          <div className="flex items-start justify-between gap-4 flex-wrap">
+        {/* Banner do projeto — responsivo */}
+        <div className="rounded-2xl p-4 sm:p-6 text-white shadow-md" style={{ background: `linear-gradient(135deg, ${BLACK} 0%, #1a1a1a 100%)` }}>
+          <div className="flex flex-col sm:flex-row items-start sm:justify-between gap-4">
             <div>
               <p className="text-[11px] uppercase tracking-wider opacity-60">{negocio.categoria}</p>
-              <h1 className="text-2xl font-bold mt-1" style={{ color: GOLD }}>{negocio.movimento}</h1>
+              <h1 className="text-xl sm:text-2xl font-bold mt-1" style={{ color: GOLD }}>{negocio.movimento}</h1>
               {imovel?.nome && <p className="text-sm opacity-70 mt-0.5">📍 {imovel.nome} {imovel.zona && `· ${imovel.zona}`}</p>}
             </div>
-            <div className="flex items-center gap-6 flex-wrap">
+            <div className="grid grid-cols-2 sm:flex sm:items-center gap-3 sm:gap-6 w-full sm:w-auto">
               <BannerKpi label="Execução" value={`${percGlobal}%`} />
-              <BannerKpi label="Faturação esperada" value={EUR(negocio.lucro_estimado)} />
-              <BannerKpi label="Custo real obra" value={EUR(custoReal || negocio.custo_real_obra)} />
+              <BannerKpi label="Faturação" value={EUR(negocio.lucro_estimado)} />
+              <BannerKpi label="Custo obra" value={EUR(custoReal || negocio.custo_real_obra)} />
               {faseAtual && (
-                <div className="text-right">
+                <div className="sm:text-right col-span-2">
                   <p className="text-[10px] uppercase tracking-wider opacity-60">Fase actual</p>
                   <p className="text-sm font-semibold mt-1" style={{ color: GOLD }}>
                     {FASE_ICON[faseAtual.fase_key]} {faseAtual.nome}
@@ -576,6 +577,7 @@ function TabFases({ fases, onChange, readOnly, negocioId }) {
 }
 
 function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
+  const toast = useToast()
   const [open, setOpen] = useState(fase.estado === 'em_curso')
   const [novaTarefa, setNovaTarefa] = useState('')
   const [despesas, setDespesas] = useState([])
@@ -629,10 +631,12 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
     onChange()
   }
   async function setCampo(campo, valor) {
-    await apiFetch(`/api/crm/projetos/fases/${fase.id}`, {
+    const r = await apiFetch(`/api/crm/projetos/fases/${fase.id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ [campo]: valor }),
     })
+    if (r.ok) toast?.('Guardado', 'success', 1500)
+    else toast?.('Erro ao guardar', 'error')
     onChange()
   }
   async function toggleTarefa(t) {

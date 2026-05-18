@@ -17,6 +17,7 @@ const Metricas    = lazy(() => import('./pages/Metricas.jsx').then(m => ({ defau
 const Projectos   = lazy(() => import('./pages/Projectos.jsx').then(m => ({ default: m.Projectos })))
 const ProjectoDetalhe = lazy(() => import('./pages/ProjectoDetalhe.jsx').then(m => ({ default: m.ProjectoDetalhe })))
 const ProjectosCalendario = lazy(() => import('./pages/ProjectosCalendario.jsx').then(m => ({ default: m.ProjectosCalendario })))
+const AceitarAssinatura = lazy(() => import('./pages/AceitarAssinatura.jsx').then(m => ({ default: m.AceitarAssinatura })))
 const Utilizadores = lazy(() => import('./pages/Utilizadores.jsx').then(m => ({ default: m.Utilizadores })))
 const RelatoriosAdmin = lazy(() => import('./pages/RelatoriosAdmin.jsx').then(m => ({ default: m.RelatoriosAdmin })))
 
@@ -39,6 +40,19 @@ function AppRoutes() {
           <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#C9A84C', borderTopColor: 'transparent' }} />
         </div>
       </div>
+    )
+  }
+
+  // Rota pública para aceitar assinatura (não requer login)
+  if (window.location.pathname.startsWith('/aceitar/')) {
+    return (
+      <ChunkErrorBoundary>
+        <Suspense fallback={<PageFallback />}>
+          <Routes>
+            <Route path="/aceitar/:token" element={<AceitarAssinatura />} />
+          </Routes>
+        </Suspense>
+      </ChunkErrorBoundary>
     )
   }
 

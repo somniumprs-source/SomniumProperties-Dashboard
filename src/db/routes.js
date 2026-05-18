@@ -42,6 +42,14 @@ import {
 } from './pdfProjectoFixFlip.js'
 import { gerarResumoProjeto, invalidarCacheAi, isConfigured as aiConfigured } from './projetoAiAssistant.js'
 import { audit, descreverMudanca } from './projetoAuditLog.js'
+import rateLimit from 'express-rate-limit'
+
+// Rate limit para endpoints de IA (controla custos)
+const aiRateLimit = rateLimit({
+  windowMs: 60 * 1000, max: 10,
+  standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Demasiados pedidos de IA. Aguarda 1 minuto.' },
+})
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const uploadsDir = path.resolve(__dirname, '../../public/uploads/despesas')
@@ -612,6 +620,46 @@ crudRoutes('/negocios', Negocios, {
       await criarFasesFixFlip(item.id).catch(e => console.error('[fases] auto-criar update:', e.message))
     }
   },
+})
+
+// UX12 — Soft delete (lixeira): substituir DELETE para marcar deleted_at em vez de apagar
+router.delete('/negocios/:id', async (req, res) => {
+  try {
+    const hard = req.query.hard === '1'
+    if (hard) {
+      const { rows } = await pool.query('DELETE FROM negocios WHERE id = $1 RETURNING id', [req.params.id])
+      if (!rows.length) return res.status(404).json({ error: 'Não encontrado' })
+      return res.json({ ok: true, hard: true })
+    }
+    const { rows } = await pool.query(
+      `UPDATE negocios SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
+      [req.params.id]
+    )
+    if (!rows.length) return res.status(404).json({ error: 'Não encontrado ou já apagado' })
+    res.json({ ok: true, soft_deleted: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Restaurar projecto da lixeira
+router.post('/negocios/:id/restaurar', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE negocios SET deleted_at = NULL WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    )
+    if (!rows.length) return res.status(404).json({ error: 'Não encontrado' })
+    res.json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Lista lixeira
+router.get('/negocios-lixeira', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM negocios WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT 100`
+    )
+    res.json({ data: rows })
+  } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 // ── Confirmar pagamento de tranche ──────────────────────────
@@ -2895,7 +2943,7 @@ router.get('/projetos/meus', async (req, res) => {
     }
     const isRestricted = RECORD_RESTRICTED_ROLES.has(u.role)
     if (!isRestricted) {
-      const { rows } = await pool.query(`SELECT n.*, i.nome AS imovel_nome FROM negocios n LEFT JOIN imoveis i ON n.imovel_id = i.id ORDER BY n.created_at DESC LIMIT 200`)
+      const { rows } = await pool.query(`SELECT n.*, i.nome AS imovel_nome FROM negocios n LEFT JOIN imoveis i ON n.imovel_id = i.id WHERE n.deleted_at IS NULL ORDER BY n.created_at DESC LIMIT 200`)
       return res.json({ data: rows, role: u.role })
     }
     // Investidor/parceiro: filtrar pelos acessos
@@ -2903,7 +2951,7 @@ router.get('/projetos/meus', async (req, res) => {
       `SELECT n.*, i.nome AS imovel_nome FROM negocios n
        JOIN acessos a ON a.entidade = 'negocio' AND a.entidade_id = n.id
        LEFT JOIN imoveis i ON n.imovel_id = i.id
-       WHERE a.user_id = $1
+       WHERE a.user_id = $1 AND n.deleted_at IS NULL
        ORDER BY n.created_at DESC`,
       [u.id]
     )
@@ -3043,6 +3091,21 @@ router.put('/projetos/tarefas/:tarefaId', async (req, res) => {
       params
     )
     if (!rows.length) return res.status(404).json({ error: 'Tarefa não encontrada' })
+
+    // Audit
+    if (req.body.concluida !== undefined) {
+      const { rows: faseRows } = await pool.query('SELECT negocio_id FROM projeto_fases WHERE id = $1', [rows[0].fase_id])
+      const negId = faseRows[0]?.negocio_id
+      if (negId) {
+        const user = await resolveCrmUser(req).catch(() => null)
+        audit({
+          negocioId: negId, entidade: 'tarefa', entidadeId: rows[0].id,
+          acao: 'status_change',
+          descricao: `Tarefa "${rows[0].descricao}" ${req.body.concluida ? 'concluída' : 'reaberta'}`,
+          user,
+        })
+      }
+    }
     res.json(rows[0])
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -3367,7 +3430,14 @@ async function notificarInvestidoresMudancaFase(negocioId, novaFaseKey) {
 
     const textoWhatsApp = `🏗️ *Somnium Properties*\n\n${negocio.movimento}: nova fase iniciada\n\n${faseIcon} *${faseNome}*\n\nConsulta o cronograma e fotos no portal: ${link}`
 
-    let envios = { email: 0, whatsapp: 0 }
+    // Procurar user_id ligado a cada investidor (F19: notificação in-app)
+    const { rows: invsComUser } = await pool.query(
+      `SELECT id, user_id FROM investidores WHERE id = ANY($1) AND user_id IS NOT NULL`,
+      [invIds]
+    )
+    const userIdsPorInv = Object.fromEntries(invsComUser.map(i => [i.id, i.user_id]))
+
+    let envios = { email: 0, whatsapp: 0, in_app: 0 }
     for (const inv of invs) {
       const canal = inv.canal_notificacao || 'email'
       if ((canal === 'email' || canal === 'ambos') && inv.email) {
@@ -3382,8 +3452,19 @@ async function notificarInvestidoresMudancaFase(negocioId, novaFaseKey) {
           envios.whatsapp++
         } catch (e) { console.error(`[notif-fase] whatsapp ${inv.telemovel}:`, e.message) }
       }
+      // F19: notificação in-app
+      const userId = userIdsPorInv[inv.id]
+      if (userId) {
+        criarNotificacao(userId, {
+          tipo: 'fase_mudou',
+          titulo: `${negocio.movimento}: ${faseNome}`,
+          mensagem: `Nova fase iniciada — ${faseIcon} ${faseNome}`,
+          link: `/projectos/${negocioId}`,
+        })
+        envios.in_app++
+      }
     }
-    console.log(`[notif-fase] ${negocio.movimento} → ${faseNome}: email=${envios.email}, whatsapp=${envios.whatsapp}`)
+    console.log(`[notif-fase] ${negocio.movimento} → ${faseNome}: email=${envios.email}, whatsapp=${envios.whatsapp}, in-app=${envios.in_app}`)
   } catch (e) { console.error('[notif-fase]', e.message) }
 }
 
@@ -3676,6 +3757,9 @@ router.post('/projetos/:negocioId/fracoes', async (req, res) => {
 
 router.put('/projetos/fracoes/:fracaoId', async (req, res) => {
   try {
+    const { rows: antes } = await pool.query('SELECT estado, negocio_id, nome FROM projeto_fracoes WHERE id = $1', [req.params.fracaoId])
+    const estadoAntes = antes[0]?.estado
+
     const allowed = ['nome', 'tipo', 'categoria_comum', 'tipologia', 'andar', 'area_m2', 'estado', 'valor_venda_estimado', 'valor_venda_real', 'data_venda_estimada', 'data_venda_real', 'comprador', 'notas', 'ordem']
     const sets = []
     const params = []
@@ -3690,6 +3774,19 @@ router.put('/projetos/fracoes/:fracaoId', async (req, res) => {
     params.push(req.params.fracaoId)
     const { rows } = await pool.query(`UPDATE projeto_fracoes SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`, params)
     if (!rows.length) return res.status(404).json({ error: 'Fração não encontrada' })
+
+    // F21: hook automático quando fracção é marcada como vendida
+    if (req.body.estado === 'vendido' && estadoAntes !== 'vendido') {
+      disparoVendaFracaoAutomatico(req.params.fracaoId).catch(() => {})
+      // Audit
+      const user = await resolveCrmUser(req).catch(() => null)
+      audit({
+        negocioId: rows[0].negocio_id, entidade: 'fracao', entidadeId: rows[0].id,
+        acao: 'status_change',
+        descricao: `Fração "${rows[0].nome}" marcada como Vendida`,
+        user,
+      })
+    }
     res.json(rows[0])
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -3788,19 +3885,112 @@ router.get('/projetos/:negocioId/forecast', async (req, res) => {
     const totalIn = inflows.reduce((s, e) => s + e.valor, 0)
     const saldoFinal = totalIn - totalOut
 
+    // F23: Cenário pessimista (ajuste de risco)
+    // Baseado em padrões empíricos de obra de reabilitação: +20% custos, -10% receita, +30 dias datas
+    const FACTOR_CUSTO = 1.20
+    const FACTOR_RECEITA = 0.90
+    const cenarioPessimista = {
+      outflow: totalOut * FACTOR_CUSTO,
+      inflow: totalIn * FACTOR_RECEITA,
+      saldo_previsto: (totalIn * FACTOR_RECEITA) - (totalOut * FACTOR_CUSTO),
+    }
+    // Detectar atrasos históricos das fases (se há fases com data real depois da prevista, factor sobe)
+    const atrasoHistorico = fases.filter(f => f.data_fim_real && f.data_fim_prevista && new Date(f.data_fim_real) > new Date(f.data_fim_prevista)).length
+    const factorRisco = atrasoHistorico >= 2 ? 'alto' : atrasoHistorico === 1 ? 'medio' : 'baixo'
+
     res.json({
       eventos: cashflow,
       totais: { outflow: totalOut, inflow: totalIn, saldo_previsto: saldoFinal },
+      cenario_pessimista: cenarioPessimista,
+      factor_risco: factorRisco,
+      observacao: `Cenário pessimista aplica +20% custos e -10% receita. Factor de risco actual: ${factorRisco} (${atrasoHistorico} fase${atrasoHistorico !== 1 ? 's' : ''} com atraso histórico)`,
     })
   } catch (e) { console.error('[forecast]', e.message); res.status(500).json({ error: e.message }) }
 })
 
+// F21: PDF Saída CAEP automático ao marcar fração como Vendida
+// Hook que dispara o envio do PDF aos investidores quando o estado muda
+async function disparoVendaFracaoAutomatico(fracaoId) {
+  try {
+    const { rows: fracs } = await pool.query('SELECT * FROM projeto_fracoes WHERE id = $1', [fracaoId])
+    if (!fracs.length || fracs[0].estado !== 'vendido') return
+    const negocioId = fracs[0].negocio_id
+
+    // Verificar se TODAS as frações estão vendidas
+    const { rows: todas } = await pool.query(
+      `SELECT estado FROM projeto_fracoes WHERE negocio_id = $1 AND tipo = 'fracao'`,
+      [negocioId]
+    )
+    const todasVendidas = todas.every(f => f.estado === 'vendido')
+    if (!todasVendidas) return
+
+    // Carregar dados + gerar PDF + enviar a investidores
+    const { sendEmail, isConfigured: emailOK } = await import('./emailService.js')
+    if (!emailOK()) return
+
+    const { rows: negs } = await pool.query('SELECT * FROM negocios WHERE id = $1', [negocioId])
+    const negocio = negs[0]
+    let invIds = []
+    try { invIds = typeof negocio.investidor_ids === 'string' ? JSON.parse(negocio.investidor_ids || '[]') : (negocio.investidor_ids || []) } catch {}
+    if (invIds.length === 0) return
+
+    const { rows: invs } = await pool.query(
+      'SELECT id, nome, email FROM investidores WHERE id = ANY($1) AND email IS NOT NULL',
+      [invIds]
+    )
+    if (invs.length === 0) return
+
+    // Gerar PDF Saída em buffer
+    const data = await loadProjetoCompleto(negocioId)
+    if (!data) return
+    const { rows: projInv } = await pool.query(
+      `SELECT pi.capital, pi.percentagem, i.nome FROM projeto_investidores pi
+       JOIN investidores i ON pi.investidor_id = i.id WHERE pi.negocio_id = $1`,
+      [negocioId]
+    )
+    const investidores = projInv.length > 0
+      ? projInv.map(p => ({ nome: p.nome, capital: Number(p.capital) || 0 }))
+      : invs.map(i => ({ nome: i.nome, capital: (Number(negocio.capital_total) || 0) / invs.length }))
+
+    const doc = generateRelatorioSaida({ ...data, investidores })
+    const chunks = []
+    doc.on('data', c => chunks.push(c))
+    await new Promise((resolve, reject) => { doc.on('end', resolve); doc.on('error', reject); doc.end() })
+    const pdfBuffer = Buffer.concat(chunks)
+
+    const subject = `${negocio.movimento}: Relatório de Saída CAEP`
+    const html = `<div style="font-family: -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px;">
+      <div style="background: #0d0d0d; padding: 24px; border-radius: 12px; color: white; text-align: center;">
+        <p style="color: #C9A84C; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; margin: 0;">SOMNIUM PROPERTIES</p>
+        <h1 style="color: #C9A84C; margin: 8px 0 0;">${negocio.movimento}</h1>
+      </div>
+      <p style="font-size: 15px; color: #1f2937; line-height: 1.6;">O projecto foi vendido. Em anexo está o relatório final com a distribuição CAEP.</p>
+      <p style="font-size: 11px; color: #9ca3af; text-align: center;">Documento confidencial · Somnium Properties</p>
+    </div>`
+
+    for (const inv of invs) {
+      sendEmail(subject, html, {
+        to: inv.email,
+        attachments: [{ filename: `saida-caep-${negocio.movimento.replace(/[^\w]/g, '_')}.pdf`, content: pdfBuffer }],
+      }).catch(e => console.error(`[venda-auto] ${inv.email}:`, e.message))
+    }
+    console.log(`[venda-auto] PDF Saída CAEP enviado a ${invs.length} investidor(es) para ${negocio.movimento}`)
+  } catch (e) { console.error('[venda-auto]', e.message) }
+}
+
 // ── P4.8: IA preditiva — análise de atrasos e recomendações ─
 // Usa Claude Sonnet para analisar TODOS os projectos activos e sinalizar
 // os que estão em risco de atraso baseado em padrões (data prevista vs progresso)
-router.get('/projetos/portfolio/ia-predicoes', async (req, res) => {
+// Cache em memória das predições (30min)
+let _predicoesCache = null
+let _predicoesExpires = 0
+router.get('/projetos/portfolio/ia-predicoes', aiRateLimit, async (req, res) => {
   try {
     if (!aiConfigured()) return res.status(503).json({ error: 'AI não configurada' })
+    // Cache
+    if (req.query.fresh !== '1' && _predicoesCache && _predicoesExpires > Date.now()) {
+      return res.json({ ..._predicoesCache, cached: true })
+    }
     const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY
     const Anthropic = (await import('@anthropic-ai/sdk')).default
     const client = new Anthropic({ apiKey: ANTHROPIC_KEY })
@@ -3861,14 +4051,190 @@ Regras:
     try { parsed = JSON.parse(jsonMatch ? jsonMatch[0] : text) }
     catch { return res.status(500).json({ error: 'Resposta IA inválida' }) }
 
-    res.json({
+    const result = {
       predicoes: parsed.predicoes || [],
       gerado_em: new Date().toISOString(),
       ms: Date.now() - t0,
       modelo: 'claude-sonnet-4-6',
       total_analisados: contextos.length,
-    })
+    }
+    _predicoesCache = result
+    _predicoesExpires = Date.now() + 30 * 60 * 1000
+    res.json(result)
   } catch (e) { console.error('[ia-predicoes]', e.message); res.status(500).json({ error: e.message }) }
+})
+
+// ════════════════════════════════════════════════════════════════
+// F15 — Assinaturas digitais in-house
+// ════════════════════════════════════════════════════════════════
+import { createHash } from 'crypto'
+
+// Criar pedido de assinatura: gera token único, devolve link público
+router.post('/projetos/:negocioId/assinaturas', async (req, res) => {
+  try {
+    const { documento_tipo, documento_hash, investidor_id, investidor_nome, investidor_email } = req.body || {}
+    if (!documento_tipo || !documento_hash) return res.status(400).json({ error: 'documento_tipo e documento_hash obrigatórios' })
+    const id = randomUUID()
+    const token = randomUUID().replace(/-/g, '')
+    const { rows } = await pool.query(
+      `INSERT INTO projeto_assinaturas (id, negocio_id, documento_tipo, documento_hash, token, investidor_id, investidor_nome, investidor_email)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [id, req.params.negocioId, documento_tipo, documento_hash, token, investidor_id || null, investidor_nome || null, investidor_email || null]
+    )
+    res.status(201).json({ ...rows[0], link_aceitacao: `/aceitar/${token}` })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/projetos/:negocioId/assinaturas', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM projeto_assinaturas WHERE negocio_id = $1 ORDER BY created_at DESC',
+      [req.params.negocioId]
+    )
+    res.json({ assinaturas: rows })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Validar token (página pública /aceitar/:token)
+router.get('/assinaturas/:token/validar', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM projeto_assinaturas WHERE token = $1', [req.params.token])
+    if (!rows.length) return res.status(404).json({ error: 'Pedido não encontrado' })
+    res.json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Registar aceitação
+router.post('/assinaturas/:token/aceitar', async (req, res) => {
+  try {
+    const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown'
+    const ua = req.headers['user-agent'] || 'unknown'
+    const { rows } = await pool.query(
+      `UPDATE projeto_assinaturas
+       SET aceite_em = NOW(), aceite_ip = $1, aceite_user_agent = $2
+       WHERE token = $3 AND aceite_em IS NULL
+       RETURNING *`,
+      [ip.slice(0, 45), ua.slice(0, 250), req.params.token]
+    )
+    if (!rows.length) return res.status(404).json({ error: 'Pedido inválido ou já aceite' })
+    res.json({ ok: true, aceitacao: rows[0] })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ════════════════════════════════════════════════════════════════
+// F18 — Analytics do investidor (registo de acessos)
+// ════════════════════════════════════════════════════════════════
+router.post('/projetos/:negocioId/track', async (req, res) => {
+  try {
+    const u = await resolveCrmUser(req).catch(() => null)
+    if (!u) return res.json({ ok: true, skipped: true })
+    const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown'
+    const ua = req.headers['user-agent'] || ''
+    await pool.query(
+      `INSERT INTO investidor_acessos (id, user_id, negocio_id, pagina, tab, ip, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [randomUUID(), u.id, req.params.negocioId, req.body?.pagina || null, req.body?.tab || null, ip.slice(0, 45), ua.slice(0, 250)]
+    )
+    res.json({ ok: true })
+  } catch (e) { res.json({ ok: false, error: e.message }) }
+})
+
+router.get('/projetos/:negocioId/analytics', async (req, res) => {
+  try {
+    const { rows: visitas } = await pool.query(
+      `SELECT user_id, COUNT(*)::int AS num_visitas, MAX(created_at) AS ultima_visita,
+              COUNT(DISTINCT DATE(created_at))::int AS dias_distintos
+       FROM investidor_acessos WHERE negocio_id = $1 GROUP BY user_id ORDER BY ultima_visita DESC`,
+      [req.params.negocioId]
+    )
+    const userIds = visitas.map(v => v.user_id)
+    let users = []
+    if (userIds.length > 0) {
+      const { rows } = await pool.query('SELECT id, nome, email FROM users WHERE id = ANY($1)', [userIds])
+      users = rows
+    }
+    const enriched = visitas.map(v => ({
+      ...v,
+      user: users.find(u => u.id === v.user_id) || { nome: 'Desconhecido' },
+    }))
+    res.json({ analytics: enriched })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ════════════════════════════════════════════════════════════════
+// F19 — Notificações in-app (bell icon)
+// ════════════════════════════════════════════════════════════════
+router.get('/notificacoes', async (req, res) => {
+  try {
+    const u = await resolveCrmUser(req).catch(() => null)
+    if (!u) return res.json({ notificacoes: [], unread: 0 })
+    const { rows } = await pool.query(
+      `SELECT * FROM notificacoes WHERE user_id = $1 ORDER BY created_at DESC LIMIT 30`,
+      [u.id]
+    )
+    const { rows: unreadRows } = await pool.query(
+      `SELECT COUNT(*)::int AS c FROM notificacoes WHERE user_id = $1 AND lida = false`,
+      [u.id]
+    )
+    res.json({ notificacoes: rows, unread: unreadRows[0]?.c || 0 })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/notificacoes/marcar-lidas', async (req, res) => {
+  try {
+    const u = await resolveCrmUser(req).catch(() => null)
+    if (!u) return res.json({ ok: false })
+    await pool.query(`UPDATE notificacoes SET lida = true WHERE user_id = $1`, [u.id])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Helper para criar notificação
+async function criarNotificacao(userId, { tipo, titulo, mensagem, link }) {
+  try {
+    await pool.query(
+      `INSERT INTO notificacoes (id, user_id, tipo, titulo, mensagem, link) VALUES ($1, $2, $3, $4, $5, $6)`,
+      [randomUUID(), userId, tipo, titulo, mensagem || null, link || null]
+    )
+  } catch (e) { console.error('[notif]', e.message) }
+}
+
+// ════════════════════════════════════════════════════════════════
+// F16 — Templates de obra customizáveis
+// ════════════════════════════════════════════════════════════════
+router.get('/projetos/templates', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM projeto_templates WHERE publico = true OR created_by = $1 ORDER BY nome', [(await resolveCrmUser(req).catch(() => null))?.id || ''])
+    // Adicionar template default Fix and Flip
+    const defaultTemplate = {
+      id: '__default__', nome: 'Fix and Flip (default)', descricao: '8 fases padrão para reabilitação em PT',
+      fases_json: JSON.stringify(FASES_FIX_FLIP),
+      publico: true, created_at: null,
+    }
+    res.json({ templates: [defaultTemplate, ...rows] })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/projetos/templates', async (req, res) => {
+  try {
+    const { nome, descricao, fases_json } = req.body || {}
+    if (!nome?.trim() || !fases_json) return res.status(400).json({ error: 'nome e fases_json obrigatórios' })
+    const id = randomUUID()
+    const u = await resolveCrmUser(req).catch(() => null)
+    const { rows } = await pool.query(
+      `INSERT INTO projeto_templates (id, nome, descricao, fases_json, created_by)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [id, nome.trim(), descricao || null, typeof fases_json === 'string' ? fases_json : JSON.stringify(fases_json), u?.id || null]
+    )
+    res.status(201).json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/projetos/templates/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM projeto_templates WHERE id = $1', [req.params.id])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 // ── P4.1: GET audit log do projecto ──────────────────────────
@@ -3967,7 +4333,7 @@ router.get('/projetos/calendario', async (req, res) => {
 })
 
 // ── P3.18 — AI assistant: resumo do projecto ────────────────
-router.get('/projetos/:negocioId/ai-resumo', async (req, res) => {
+router.get('/projetos/:negocioId/ai-resumo', aiRateLimit, async (req, res) => {
   try {
     if (!aiConfigured()) return res.status(503).json({ error: 'AI não configurada (ANTHROPIC_API_KEY)' })
     const ignorarCache = req.query.fresh === '1'

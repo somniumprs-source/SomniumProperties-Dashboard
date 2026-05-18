@@ -39,13 +39,14 @@ export async function sendEmail(subject, html, textOrOpts) {
     console.warn('[email] SMTP não configurado — email não enviado')
     return { ok: false, error: 'SMTP não configurado' }
   }
-  // Suporta forma antiga sendEmail(subject, html, text) e nova sendEmail(subject, html, { to, text })
+  // Suporta forma antiga sendEmail(subject, html, text) e nova sendEmail(subject, html, { to, text, attachments })
   let to = EMAIL_TO
-  let text
+  let text, attachments
   if (typeof textOrOpts === 'string') text = textOrOpts
   else if (textOrOpts && typeof textOrOpts === 'object') {
     to = textOrOpts.to || EMAIL_TO
     text = textOrOpts.text
+    attachments = textOrOpts.attachments
   }
   try {
     const info = await getTransporter().sendMail({
@@ -54,6 +55,7 @@ export async function sendEmail(subject, html, textOrOpts) {
       subject,
       html,
       text: text || html.replace(/<[^>]+>/g, ''),
+      ...(attachments ? { attachments } : {}),
     })
     console.log('[email] Enviado:', subject, '→', to, info.messageId)
     return { ok: true, messageId: info.messageId }

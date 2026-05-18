@@ -131,6 +131,24 @@ export function Projectos() {
       .catch(() => {})
   }, [])
 
+  // UX13: Keyboard shortcuts
+  useEffect(() => {
+    function onKey(e) {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName)) return
+      if (e.key === 'n' && !isReadOnly) { e.preventDefault(); setEditing({}) }
+      else if (e.key === '/') {
+        e.preventDefault()
+        document.querySelector('input[placeholder^="Pesquisar"]')?.focus()
+      }
+      else if (e.key === 'k' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        document.querySelector('input[placeholder^="Pesquisar"]')?.focus()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isReadOnly])
+
   async function save(form) {
     try {
       const isNew = !form.id
