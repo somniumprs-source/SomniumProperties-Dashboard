@@ -931,9 +931,8 @@ export async function initSchema() {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
 
-      -- UX12: soft delete em negócios e fracções
+      -- UX12: soft delete em negócios (projeto_fracoes.deleted_at é adicionado abaixo, depois da tabela existir)
       ALTER TABLE negocios ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
-      ALTER TABLE projeto_fracoes ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
       CREATE INDEX IF NOT EXISTS idx_negocios_deleted ON negocios(deleted_at);
 
       -- Frações dentro de um projecto (prédios com várias frações)
@@ -960,9 +959,10 @@ export async function initSchema() {
       CREATE INDEX IF NOT EXISTS idx_projeto_fracoes_negocio ON projeto_fracoes(negocio_id);
       CREATE INDEX IF NOT EXISTS idx_projeto_fracoes_tipo ON projeto_fracoes(tipo);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_projeto_fracoes_nome ON projeto_fracoes(negocio_id, nome);
-      -- Migration: adicionar colunas tipo/categoria_comum a tabelas pré-existentes
+      -- Migration: adicionar colunas tipo/categoria_comum/deleted_at a tabelas pré-existentes
       ALTER TABLE projeto_fracoes ADD COLUMN IF NOT EXISTS tipo TEXT DEFAULT 'fracao';
       ALTER TABLE projeto_fracoes ADD COLUMN IF NOT EXISTS categoria_comum TEXT;
+      ALTER TABLE projeto_fracoes ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 
       -- Ligação opcional fracao_id em fases, fotos, despesas (NULL = comum ao prédio)
       ALTER TABLE projeto_fases ADD COLUMN IF NOT EXISTS fracao_id TEXT;
