@@ -98,6 +98,14 @@ export function ProjectoDetalhe() {
               <Button size="sm" icon={Plus} onClick={inicializarFases}>Inicializar fases de obra</Button>
             )}
             <ShareInvestidorButton negocioId={id} />
+            <Button size="sm" variant="destructive" icon={Trash2}
+              onClick={async () => {
+                if (!confirm(`Apagar o projecto "${negocio.movimento}"? Esta acção apaga também fases, tarefas e fotos. Não pode ser revertida.`)) return
+                const r = await apiFetch(`/api/crm/negocios/${id}`, { method: 'DELETE' })
+                if (r.ok) navigate('/projectos')
+                else alert('Erro ao apagar')
+              }}
+            >Apagar</Button>
           </div>
         </div>
 
