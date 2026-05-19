@@ -22,8 +22,8 @@ import { RegiaoBadge } from '../components/RegiaoBadge.jsx'
 
 const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Construtores']
 // Sub-tabs que requerem distinção regional (modal ao entrar). Investidores
-// é pool unificado; Construtores ainda não usa região.
-const TABS_REGIONAIS = new Set(['Imóveis', 'Consultores'])
+// é pool unificado (sem filtro).
+const TABS_REGIONAIS = new Set(['Imóveis', 'Consultores', 'Construtores'])
 const tabKeyRegional = (t) => `crm-${(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()}`
 
 // Progresso checklist por imóvel (cache local)
