@@ -608,10 +608,16 @@ router.post('/consultores/find-or-create', async (req, res) => {
 // Lista enriquecida de consultores (com métricas e alertas inline)
 router.get('/consultores/enriched', async (req, res) => {
   try {
-    // 4 queries em paralelo (eram sequenciais com await) — poupa ~150-300ms
+    const regiao = req.regiaoActiva
+    // 4 queries em paralelo (eram sequenciais com await) — poupa ~150-300ms.
+    // Filtro por região nas tabelas que têm coluna `regiao` (consultores e imoveis).
+    // Interacoes/followups herdam — agregadas por consultor_id depois filtra.
+    const consultoresWhere = regiao ? 'WHERE regiao = $1' : ''
+    const imoveisWhere = regiao ? "WHERE nome_consultor IS NOT NULL AND regiao = $1" : "WHERE nome_consultor IS NOT NULL"
+    const params = regiao ? [regiao] : []
     const [resConsultores, resImoveis, resInteracoes, resFollowupAgg] = await Promise.all([
-      pool.query('SELECT * FROM consultores ORDER BY score_prioridade DESC NULLS LAST, updated_at DESC'),
-      pool.query('SELECT nome_consultor, estado, check_qualidade, data_adicionado FROM imoveis WHERE nome_consultor IS NOT NULL'),
+      pool.query(`SELECT * FROM consultores ${consultoresWhere} ORDER BY score_prioridade DESC NULLS LAST, updated_at DESC`, params),
+      pool.query(`SELECT nome_consultor, estado, check_qualidade, data_adicionado FROM imoveis ${imoveisWhere}`, params),
       pool.query('SELECT consultor_id, data_hora, direcao FROM consultor_interacoes ORDER BY data_hora DESC'),
       pool.query('SELECT consultor_id, MIN(data) AS primeiro_followup, MAX(data) AS ultimo_followup FROM consultor_followups GROUP BY consultor_id'),
     ])
