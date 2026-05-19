@@ -31,24 +31,70 @@ const MODELOS_NEGOCIO = [
   { key: 'Wholesalling',           nome: 'Wholesalling',  Icon: Zap,        desc: 'Finder fee' },
 ]
 
-// Fases do Kanban — paleta sofisticada Somnium (gold + dark + acentos elegantes)
-const FASES_KANBAN = [
-  { key: 'aquisicao',                nome: 'Aquisição',                  icon: '🔑', cor: '#475569' },  // slate (cálculo)
-  { key: 'projeto_licenca',          nome: 'Projeto & Licença',          icon: '📐', cor: '#1F4E5F' },  // teal escuro (técnico)
-  { key: 'demolicoes',               nome: 'Demolições',                 icon: '🔨', cor: '#7C2D40' },  // vinho (transformação)
-  { key: 'estrutura_especialidades', nome: 'Estrutura & Especialidades', icon: '⚡', cor: '#5F4D20' },  // gold-800 (base)
-  { key: 'acabamentos',              nome: 'Acabamentos',                icon: '🎨', cor: '#C9A84C' },  // brand gold (brilho)
-  { key: 'exterior_fecho',           nome: 'Exterior & Fecho',           icon: '🏠', cor: '#D5B65A' },  // gold-400 (final)
-  { key: 'comercializacao',          nome: 'Comercialização',            icon: '📣', cor: '#866B2D' },  // gold-700 (venda)
-  { key: 'vendido',                  nome: 'Vendido',                    icon: '✅', cor: '#0d0d0d' },  // brand dark (sucesso)
+// Fases do Kanban por categoria — paleta Somnium (gold + dark + acentos elegantes)
+// Fix and Flip e CAEP partilham as mesmas 8 fases operacionais
+const FASES_FIX_FLIP_KANBAN = [
+  { key: 'aquisicao',                nome: 'Aquisição',                  icon: '🔑', cor: '#475569' },
+  { key: 'projeto_licenca',          nome: 'Projeto & Licença',          icon: '📐', cor: '#1F4E5F' },
+  { key: 'demolicoes',               nome: 'Demolições',                 icon: '🔨', cor: '#7C2D40' },
+  { key: 'estrutura_especialidades', nome: 'Estrutura & Especialidades', icon: '⚡', cor: '#5F4D20' },
+  { key: 'acabamentos',              nome: 'Acabamentos',                icon: '🎨', cor: '#C9A84C' },
+  { key: 'exterior_fecho',           nome: 'Exterior & Fecho',           icon: '🏠', cor: '#D5B65A' },
+  { key: 'comercializacao',          nome: 'Comercialização',            icon: '📣', cor: '#866B2D' },
+  { key: 'vendido',                  nome: 'Vendido',                    icon: '✅', cor: '#0d0d0d' },
 ]
 
-// Mapa fase-macro do CRM legacy → coluna Kanban (para projetos não-Fix&Flip)
-function faseLegacyParaKanban(faseLegacy) {
-  if (faseLegacy === 'Vendido') return 'vendido'
-  if (faseLegacy === 'Fase de venda') return 'comercializacao'
-  if (faseLegacy === 'Fase de obras') return 'acabamentos'
-  return 'aquisicao'
+const FASES_WHOLESALLING_KANBAN = [
+  { key: 'prospecao',              nome: 'Prospecção',               icon: '🔍', cor: '#475569' },
+  { key: 'analise_oferta',         nome: 'Análise & Oferta',         icon: '📊', cor: '#1F4E5F' },
+  { key: 'cpcv_compra',            nome: 'CPCV de Compra',           icon: '📝', cor: '#7C2D40' },
+  { key: 'procurar_investidor',    nome: 'Procurar Investidor',      icon: '🔎', cor: '#5F4D20' },
+  { key: 'negociacao_investidor',  nome: 'Negociação Investidor',    icon: '💬', cor: '#C9A84C' },
+  { key: 'cpcv_cedencia',          nome: 'CPCV de Cedência',         icon: '✍️', cor: '#D5B65A' },
+  { key: 'fee_recebido',           nome: 'Fee Recebido',             icon: '💰', cor: '#0d0d0d' },
+]
+
+const FASES_MEDIACAO_KANBAN = [
+  { key: 'captacao',           nome: 'Captação',                icon: '📋', cor: '#475569' },
+  { key: 'preparacao_imovel',  nome: 'Preparação do Imóvel',    icon: '🛠️', cor: '#1F4E5F' },
+  { key: 'publicacao',         nome: 'Publicação & Divulgação', icon: '🌐', cor: '#5F4D20' },
+  { key: 'visitas',            nome: 'Visitas',                 icon: '👀', cor: '#866B2D' },
+  { key: 'propostas',          nome: 'Propostas',               icon: '💬', cor: '#C9A84C' },
+  { key: 'cpcv',               nome: 'CPCV',                    icon: '📝', cor: '#D5B65A' },
+  { key: 'escritura',          nome: 'Escritura',               icon: '🔑', cor: '#0d0d0d' },
+]
+
+// Mapa de categoria → colunas Kanban
+const FASES_KANBAN_POR_CATEGORIA = {
+  'Fix and Flip':         FASES_FIX_FLIP_KANBAN,
+  'CAEP':                 FASES_FIX_FLIP_KANBAN,  // mesmo workflow
+  'Wholesalling':         FASES_WHOLESALLING_KANBAN,
+  'Mediação Imobiliária': FASES_MEDIACAO_KANBAN,
+}
+
+// Fallback (vista "Todos") — usa o template Fix and Flip como referência genérica
+const FASES_KANBAN = FASES_FIX_FLIP_KANBAN
+
+// Mapa fase-macro do CRM legacy → coluna Kanban (para projetos sem fases inicializadas)
+function faseLegacyParaKanban(faseLegacy, colunasDisponiveis) {
+  const keys = new Set(colunasDisponiveis.map(c => c.key))
+  // Heurística por nome de fase
+  if (faseLegacy === 'Vendido') {
+    if (keys.has('vendido')) return 'vendido'
+    if (keys.has('fee_recebido')) return 'fee_recebido'
+    if (keys.has('escritura')) return 'escritura'
+  }
+  if (faseLegacy === 'Fase de venda') {
+    if (keys.has('comercializacao')) return 'comercializacao'
+    if (keys.has('propostas')) return 'propostas'
+    if (keys.has('negociacao_investidor')) return 'negociacao_investidor'
+  }
+  if (faseLegacy === 'Fase de obras') {
+    if (keys.has('acabamentos')) return 'acabamentos'
+    if (keys.has('publicacao')) return 'publicacao'
+    if (keys.has('analise_oferta')) return 'analise_oferta'
+  }
+  return colunasDisponiveis[0]?.key
 }
 
 export function Projectos() {
@@ -109,10 +155,11 @@ export function Projectos() {
   }
 
   async function loadFases(negocios) {
-    const ffNegocios = negocios.filter(n => n.categoria === 'Fix and Flip')
+    // Carrega fases para todas as categorias que suportam workflow
+    const negociosComFases = negocios.filter(n => FASES_KANBAN_POR_CATEGORIA[n.categoria])
     const result = {}
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
-    await Promise.all(ffNegocios.map(async (n) => {
+    await Promise.all(negociosComFases.map(async (n) => {
       try {
         const r = await apiFetch(`/api/crm/projetos/${n.id}/fases`)
         if (!r.ok) return
@@ -190,20 +237,25 @@ export function Projectos() {
     [lista, filterCat, search, filterAtraso, fasesPorNegocio]
   )
 
-  // Agrupa por coluna Kanban
+  // Colunas Kanban activas — escolhidas pela categoria filtrada
+  const colunasKanban = useMemo(() => {
+    return FASES_KANBAN_POR_CATEGORIA[filterCat] || FASES_KANBAN
+  }, [filterCat])
+
+  // Agrupa por coluna Kanban (usa o template da categoria filtrada)
   const cardsPorColuna = useMemo(() => {
-    const map = Object.fromEntries(FASES_KANBAN.map(f => [f.key, []]))
+    const map = Object.fromEntries(colunasKanban.map(f => [f.key, []]))
     for (const n of filtered) {
       let colKey
-      if (n.categoria === 'Fix and Flip' && fasesPorNegocio[n.id]?.faseAtualKey) {
+      if (FASES_KANBAN_POR_CATEGORIA[n.categoria] && fasesPorNegocio[n.id]?.faseAtualKey) {
         colKey = fasesPorNegocio[n.id].faseAtualKey
       } else {
-        colKey = faseLegacyParaKanban(n.fase)
+        colKey = faseLegacyParaKanban(n.fase, colunasKanban)
       }
       if (map[colKey]) map[colKey].push(n)
     }
     return map
-  }, [filtered, fasesPorNegocio])
+  }, [filtered, fasesPorNegocio, colunasKanban])
 
   return (
     <>
@@ -405,7 +457,7 @@ export function Projectos() {
 
         {view === 'kanban' ? (
           <KanbanBoard
-            colunas={FASES_KANBAN}
+            colunas={colunasKanban}
             cardsPorColuna={cardsPorColuna}
             fasesInfo={fasesPorNegocio}
             readOnly={isReadOnly}
@@ -451,19 +503,19 @@ function PortfolioKpi({ label, value, sub, accent, green }) {
 }
 
 function KanbanBoard({ colunas, cardsPorColuna, fasesInfo, onCardClick, onMoveCard, readOnly }) {
-  const [dragging, setDragging] = useState(null)         // { negocioId, isFF }
+  const [dragging, setDragging] = useState(null)         // { negocioId }
   const [overCol, setOverCol] = useState(null)           // fase_key da coluna sob hover
 
   function onDragStart(negocio) {
     return (e) => {
       if (readOnly) { e.preventDefault(); return }
-      const isFF = negocio.categoria === 'Fix and Flip'
+      const temWorkflow = !!FASES_KANBAN_POR_CATEGORIA[negocio.categoria]
       const hasFases = !!fasesInfo[negocio.id]
-      if (!isFF || !hasFases) {
+      if (!temWorkflow || !hasFases) {
         e.preventDefault()
         return
       }
-      setDragging({ negocioId: negocio.id, isFF })
+      setDragging({ negocioId: negocio.id })
       e.dataTransfer.effectAllowed = 'move'
       e.dataTransfer.setData('text/plain', negocio.id)
     }
@@ -534,8 +586,8 @@ function KanbanBoard({ colunas, cardsPorColuna, fasesInfo, onCardClick, onMoveCa
 }
 
 function KanbanCard({ negocio: n, info, onClick, onDragStart, onDragEnd, isDragging, readOnly }) {
-  const isFF = n.categoria === 'Fix and Flip'
-  const podeArrastar = !readOnly && isFF && !!info
+  const temWorkflow = !!FASES_KANBAN_POR_CATEGORIA[n.categoria]
+  const podeArrastar = !readOnly && temWorkflow && !!info
   return (
     <div
       draggable={podeArrastar}
@@ -565,7 +617,7 @@ function KanbanCard({ negocio: n, info, onClick, onDragStart, onDragEnd, isDragg
         </div>
       )}
 
-      {isFF && info && (
+      {temWorkflow && info && (
         <div className="mb-2">
           <div className="flex items-center justify-between text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 mb-1">
             <span>{info.concluidas}/{info.totalFases} fases</span>
@@ -606,8 +658,9 @@ function ListaProjetos({ projectos, fasesInfo, onCardClick }) {
         <tbody>
           {projectos.map(n => {
             const info = fasesInfo[n.id]
+            const colunasCat = FASES_KANBAN_POR_CATEGORIA[n.categoria] || FASES_KANBAN
             const faseNome = info?.faseAtualKey
-              ? FASES_KANBAN.find(f => f.key === info.faseAtualKey)?.nome
+              ? colunasCat.find(f => f.key === info.faseAtualKey)?.nome
               : n.fase || '—'
             const cat = n.categoria
             const corCat = CAT_COLORS[cat] ?? '#6366f1'

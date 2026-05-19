@@ -155,3 +155,215 @@ export const FASE_KEYS = FASES_FIX_FLIP.map(f => f.key)
 export function getFaseConfig(key) {
   return FASES_FIX_FLIP.find(f => f.key === key)
 }
+
+// CAEP partilha o mesmo workflow operacional do Fix and Flip
+export const FASES_CAEP = FASES_FIX_FLIP
+
+export const FASES_WHOLESALLING = [
+  {
+    key: 'prospecao',
+    nome: 'Prospecção',
+    icon: '🔍',
+    cor: '#475569',
+    descricao: 'Leads, imóveis em dificuldade, contactos iniciais',
+    tarefas: [
+      'Identificar lead / imóvel',
+      'Contactar vendedor',
+      'Validar motivação de venda',
+      'Recolher documentação inicial',
+    ],
+  },
+  {
+    key: 'analise_oferta',
+    nome: 'Análise & Oferta',
+    icon: '📊',
+    cor: '#1F4E5F',
+    descricao: 'Análise dos números, definição de oferta',
+    tarefas: [
+      'Análise financeira (ARV, ROI, margem)',
+      'Visita técnica ao imóvel',
+      'Definir valor de oferta',
+      'Apresentar oferta ao vendedor',
+    ],
+  },
+  {
+    key: 'cpcv_compra',
+    nome: 'CPCV de Compra',
+    icon: '📝',
+    cor: '#7C2D40',
+    descricao: 'Contrato promessa com o proprietário',
+    tarefas: [
+      'Redigir CPCV',
+      'Validar cláusulas (prazo, sinal, cessão)',
+      'Pagamento de sinal',
+      'Assinatura CPCV com vendedor',
+    ],
+  },
+  {
+    key: 'procurar_investidor',
+    nome: 'Procurar Investidor Ativo',
+    icon: '🔎',
+    cor: '#5F4D20',
+    descricao: 'Match com pool de investidores Somnium',
+    tarefas: [
+      'Filtrar investidores activos compatíveis',
+      'Preparar dossier do deal',
+      'Apresentar oportunidade',
+      'Recolher manifestações de interesse',
+    ],
+  },
+  {
+    key: 'negociacao_investidor',
+    nome: 'Negociação Investidor Ativo',
+    icon: '💬',
+    cor: '#C9A84C',
+    descricao: 'Termos, fee, calendarização',
+    tarefas: [
+      'Negociar valor de cedência',
+      'Definir fee Somnium',
+      'Acordar timing da escritura',
+      'Confirmar capacidade financeira do investidor',
+    ],
+  },
+  {
+    key: 'cpcv_cedencia',
+    nome: 'CPCV de Cedência',
+    icon: '✍️',
+    cor: '#D5B65A',
+    descricao: 'Cessão de posição contratual ao investidor',
+    tarefas: [
+      'Redigir cessão de posição',
+      'Assinatura tripartida (Somnium + vendedor + investidor)',
+      'Registo da cessão',
+      'Pagamento do investidor',
+    ],
+  },
+  {
+    key: 'fee_recebido',
+    nome: 'Fee Recebido',
+    icon: '💰',
+    cor: '#0d0d0d',
+    descricao: 'Finder fee liquidada',
+    tarefas: [
+      'Emitir factura',
+      'Confirmar recebimento',
+      'Reconciliar com financeiro',
+      'Arquivo do dossier',
+    ],
+  },
+]
+
+export const FASES_MEDIACAO = [
+  {
+    key: 'captacao',
+    nome: 'Captação',
+    icon: '📋',
+    cor: '#475569',
+    descricao: 'Angariação do imóvel e contrato de mediação',
+    tarefas: [
+      'Visita de captação',
+      'Avaliação comercial (CMA)',
+      'Assinatura contrato de mediação',
+      'Validar documentação (CE, FTH, planta)',
+    ],
+  },
+  {
+    key: 'preparacao_imovel',
+    nome: 'Preparação do Imóvel',
+    icon: '🛠️',
+    cor: '#1F4E5F',
+    descricao: 'Limpeza, home staging, preparação para visitas',
+    tarefas: [
+      'Limpeza / arranjos pré-fotos',
+      'Home staging (se aplicável)',
+      'Sessão fotográfica profissional',
+      'Memória descritiva e ficha técnica',
+    ],
+  },
+  {
+    key: 'publicacao',
+    nome: 'Publicação & Divulgação',
+    icon: '🌐',
+    cor: '#5F4D20',
+    descricao: 'Anúncios em portais e marketing digital',
+    tarefas: [
+      'Publicar Idealista / Imovirtual / Casa Sapo',
+      'Listing no site Somnium',
+      'Campanha redes sociais',
+      'Partilha com rede de consultores',
+    ],
+  },
+  {
+    key: 'visitas',
+    nome: 'Visitas',
+    icon: '👀',
+    cor: '#866B2D',
+    descricao: 'Agendamento e qualificação de interessados',
+    tarefas: [
+      'Triagem de pedidos',
+      'Agendar visitas',
+      'Acompanhar visitas',
+      'Follow-up pós-visita',
+    ],
+  },
+  {
+    key: 'propostas',
+    nome: 'Propostas',
+    icon: '💬',
+    cor: '#C9A84C',
+    descricao: 'Recepção e negociação de ofertas',
+    tarefas: [
+      'Recolher proposta formal',
+      'Validar capacidade financeira',
+      'Negociar valor e condições',
+      'Aceitação pelo vendedor',
+    ],
+  },
+  {
+    key: 'cpcv',
+    nome: 'CPCV',
+    icon: '📝',
+    cor: '#D5B65A',
+    descricao: 'Contrato promessa entre comprador e vendedor',
+    tarefas: [
+      'Redigir CPCV',
+      'Pagamento de sinal',
+      'Assinatura CPCV',
+      'Notificar entidades fiscais (se aplicável)',
+    ],
+  },
+  {
+    key: 'escritura',
+    nome: 'Escritura',
+    icon: '🔑',
+    cor: '#0d0d0d',
+    descricao: 'Fecho do negócio e liquidação da comissão',
+    tarefas: [
+      'Marcação de escritura',
+      'Assinatura escritura',
+      'Emissão factura de comissão',
+      'Recebimento e arquivo',
+    ],
+  },
+]
+
+// Mapa de categoria → template de fases
+export const FASES_POR_CATEGORIA = {
+  'Fix and Flip': FASES_FIX_FLIP,
+  'CAEP': FASES_CAEP,
+  'Wholesalling': FASES_WHOLESALLING,
+  'Mediação Imobiliária': FASES_MEDIACAO,
+}
+
+export function getTemplateFases(categoria) {
+  return FASES_POR_CATEGORIA[categoria] || null
+}
+
+// Lookup global de uma fase em qualquer template (para emails, notificações, etc.)
+export function getFaseConfigGlobal(key) {
+  for (const tpl of Object.values(FASES_POR_CATEGORIA)) {
+    const f = tpl.find(x => x.key === key)
+    if (f) return f
+  }
+  return null
+}

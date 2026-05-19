@@ -31,7 +31,7 @@ import { exportDepartment } from './excelExport.js'
 import { scrapePhotosFromLink } from './linkScraper.js'
 import { generateDocx, getAvailableTypes } from './docxGenerator.js'
 import { runEstudoLocalizacao } from '../lib/estudoLocalizacao.js'
-import { FASES_FIX_FLIP } from './fasesFixFlip.js'
+import { FASES_FIX_FLIP, FASES_POR_CATEGORIA, getTemplateFases, getFaseConfigGlobal } from './fasesFixFlip.js'
 import { resolveAppUser, RECORD_RESTRICTED_ROLES } from './userRoutes.js'
 import {
   generateFichaAcompanhamento,
@@ -607,8 +607,12 @@ router.get('/consultores/enriched', async (req, res) => {
 
 crudRoutes('/consultores', Consultores)
 
-// ── Negocios: auto-criar fases de obra quando categoria=Fix and Flip ──
-async function criarFasesFixFlip(negocioId) {
+// ── Negocios: auto-criar fases conforme template da categoria ──
+// Suporta: Fix and Flip, CAEP, Wholesalling, Mediação Imobiliária
+async function criarFasesProjecto(negocioId, categoria) {
+  const template = getTemplateFases(categoria)
+  if (!template) return  // categoria sem workflow
+
   const { rows: existentes } = await pool.query(
     'SELECT id FROM projeto_fases WHERE negocio_id = $1 LIMIT 1',
     [negocioId]
@@ -631,8 +635,8 @@ async function criarFasesFixFlip(negocioId) {
     )
   }
 
-  for (let i = 0; i < FASES_FIX_FLIP.length; i++) {
-    const fase = FASES_FIX_FLIP[i]
+  for (let i = 0; i < template.length; i++) {
+    const fase = template[i]
     const faseId = randomUUID()
     await pool.query(
       `INSERT INTO projeto_fases (id, negocio_id, fracao_id, fase_key, nome, ordem, estado)
@@ -648,16 +652,19 @@ async function criarFasesFixFlip(negocioId) {
   }
 }
 
+// Alias para compatibilidade com chamadas existentes
+const criarFasesFixFlip = (negocioId) => criarFasesProjecto(negocioId, 'Fix and Flip')
+
 crudRoutes('/negocios', Negocios, {
   onCreate: async (item) => {
-    if (item.categoria === 'Fix and Flip') {
-      await criarFasesFixFlip(item.id).catch(e => console.error('[fases] auto-criar:', e.message))
+    if (FASES_POR_CATEGORIA[item.categoria]) {
+      await criarFasesProjecto(item.id, item.categoria).catch(e => console.error('[fases] auto-criar:', e.message))
     }
   },
   onUpdate: async (item, body) => {
-    // Se categoria mudou para Fix and Flip, criar fases (idempotente)
-    if (body.categoria === 'Fix and Flip') {
-      await criarFasesFixFlip(item.id).catch(e => console.error('[fases] auto-criar update:', e.message))
+    // Se categoria suporta template, criar fases (idempotente)
+    if (FASES_POR_CATEGORIA[body.categoria]) {
+      await criarFasesProjecto(item.id, body.categoria).catch(e => console.error('[fases] auto-criar update:', e.message))
     }
   },
 })
@@ -3430,7 +3437,7 @@ async function notificarInvestidoresMudancaFase(negocioId, novaFaseKey) {
     )
     if (invs.length === 0) return
 
-    const faseConfig = FASES_FIX_FLIP.find(f => f.key === novaFaseKey)
+    const faseConfig = getFaseConfigGlobal(novaFaseKey)
     const faseNome = faseConfig?.nome || novaFaseKey
     const faseIcon = faseConfig?.icon || '🛠️'
 
@@ -4244,13 +4251,14 @@ async function criarNotificacao(userId, { tipo, titulo, mensagem, link }) {
 router.get('/projetos/templates', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM projeto_templates WHERE publico = true OR created_by = $1 ORDER BY nome', [(await resolveCrmUser(req).catch(() => null))?.id || ''])
-    // Adicionar template default Fix and Flip
-    const defaultTemplate = {
-      id: '__default__', nome: 'Fix and Flip (default)', descricao: '8 fases padrão para reabilitação em PT',
-      fases_json: JSON.stringify(FASES_FIX_FLIP),
-      publico: true, created_at: null,
-    }
-    res.json({ templates: [defaultTemplate, ...rows] })
+    // Templates default por categoria
+    const defaults = [
+      { id: '__default_ff__',  nome: 'Fix and Flip (default)',  descricao: '8 fases padrão para reabilitação em PT',           fases_json: JSON.stringify(FASES_POR_CATEGORIA['Fix and Flip']) },
+      { id: '__default_caep__', nome: 'CAEP (default)',          descricao: '8 fases (igual ao Fix and Flip)',                  fases_json: JSON.stringify(FASES_POR_CATEGORIA['CAEP']) },
+      { id: '__default_whs__',  nome: 'Wholesalling (default)',  descricao: '7 fases — prospecção a fee recebido',              fases_json: JSON.stringify(FASES_POR_CATEGORIA['Wholesalling']) },
+      { id: '__default_med__',  nome: 'Mediação Imobiliária (default)', descricao: '7 fases — captação a escritura',           fases_json: JSON.stringify(FASES_POR_CATEGORIA['Mediação Imobiliária']) },
+    ].map(t => ({ ...t, publico: true, created_at: null }))
+    res.json({ templates: [...defaults, ...rows] })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
