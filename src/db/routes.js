@@ -195,7 +195,7 @@ function crudRoutes(path, crud, { onCreate, onUpdate } = {}) {
   })
 
   router.get(`${path}/stats`, async (req, res) => {
-    try { res.json(await crud.stats()) }
+    try { res.json(await crud.stats({ regiao: req.regiaoActiva })) }
     catch (e) { res.status(500).json({ error: e.message }) }
   })
 
@@ -1211,7 +1211,7 @@ router.delete('/despesas/:id/upload/:docId', async (req, res) => {
 })
 
 router.get('/stats', async (req, res) => {
-  try { res.json(await getDashboardStats()) }
+  try { res.json(await getDashboardStats({ regiao: req.regiaoActiva })) }
   catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -1611,41 +1611,49 @@ router.get('/consultores/:id/full', async (req, res) => {
 router.get('/kpis/:tab', async (req, res) => {
   try {
     const tab = req.params.tab
+    const regiao = req.regiaoActiva
+    // WHERE para tabelas com coluna `regiao` directa
+    const wReg = regiao ? `WHERE regiao = $1` : ''
+    const wAnd = regiao ? `AND regiao = $1` : ''
+    const params = regiao ? [regiao] : []
+    // WHERE especial para investidores (pool unificado por regioes_preferidas)
+    const wInv = regiao ? `WHERE regioes_preferidas LIKE $1` : ''
+    const paramsInv = regiao ? [`%"${regiao}"%`] : []
     if (tab === 'imoveis') {
       const { rows } = await pool.query(`
         SELECT estado, COUNT(*) as count, COALESCE(SUM(ask_price),0) as valor
-        FROM imoveis GROUP BY estado ORDER BY count DESC
-      `)
-      const { rows: [totals] } = await pool.query(`SELECT COUNT(*) as total, COALESCE(AVG(NULLIF(roi,0)),0) as roi_medio FROM imoveis`)
+        FROM imoveis ${wReg} GROUP BY estado ORDER BY count DESC
+      `, params)
+      const { rows: [totals] } = await pool.query(`SELECT COUNT(*) as total, COALESCE(AVG(NULLIF(roi,0)),0) as roi_medio FROM imoveis ${wReg}`, params)
       res.json({ byEstado: rows, total: parseInt(totals.total), roiMedio: parseFloat(totals.roi_medio).toFixed(1) })
     } else if (tab === 'investidores') {
-      const { rows } = await pool.query(`SELECT status, COUNT(*) as count FROM investidores GROUP BY status ORDER BY count DESC`)
+      const { rows } = await pool.query(`SELECT status, COUNT(*) as count FROM investidores ${wInv} GROUP BY status ORDER BY count DESC`, paramsInv)
       const { rows: [totals] } = await pool.query(`
         SELECT COUNT(*) as total,
           COUNT(CASE WHEN classificacao IN ('A','B') THEN 1 END) as ab,
           COALESCE(SUM(capital_max),0) as capital
-        FROM investidores
-      `)
+        FROM investidores ${wInv}
+      `, paramsInv)
       res.json({ byStatus: rows, total: parseInt(totals.total), classAB: parseInt(totals.ab), capitalTotal: parseFloat(totals.capital) })
     } else if (tab === 'consultores') {
-      const { rows } = await pool.query(`SELECT estatuto, COUNT(*) as count FROM consultores GROUP BY estatuto ORDER BY count DESC`)
-      const { rows: [totals] } = await pool.query(`SELECT COUNT(*) as total FROM consultores`)
+      const { rows } = await pool.query(`SELECT estatuto, COUNT(*) as count FROM consultores ${wReg} GROUP BY estatuto ORDER BY count DESC`, params)
+      const { rows: [totals] } = await pool.query(`SELECT COUNT(*) as total FROM consultores ${wReg}`, params)
       res.json({ byEstatuto: rows, total: parseInt(totals.total) })
     } else if (tab === 'negocios') {
       const { rows: [totals] } = await pool.query(`
         SELECT COUNT(*) as total, COALESCE(SUM(lucro_estimado),0) as lucro_est,
           COALESCE(SUM(lucro_real),0) as lucro_real,
           COUNT(CASE WHEN fase = 'Vendido' THEN 1 END) as vendidos
-        FROM negocios
-      `)
+        FROM negocios ${wReg}
+      `, params)
       res.json(totals)
     } else if (tab === 'despesas') {
       const { rows: [totals] } = await pool.query(`
         SELECT COUNT(*) as total,
           COALESCE(SUM(CASE WHEN timing = 'Mensalmente' THEN custo_mensal ELSE 0 END),0) as burn_rate,
           COALESCE(SUM(custo_anual),0) as total_anual
-        FROM despesas
-      `)
+        FROM despesas ${wReg}
+      `, params)
       res.json(totals)
     } else {
       res.status(404).json({ error: 'Tab not found' })

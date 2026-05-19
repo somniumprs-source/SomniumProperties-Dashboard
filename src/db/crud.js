@@ -177,8 +177,22 @@ function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at 
       return rows
     },
 
-    async stats() {
-      const { rows } = await pool.query(`SELECT COUNT(*) as c, MAX(updated_at) as d FROM ${table}`)
+    async stats({ regiao } = {}) {
+      // Filtro especial para investidores: pool unificado por região via
+      // regioes_preferidas (JSON array). Outras tabelas têm coluna regiao directa.
+      let where = ''
+      const params = []
+      if (regiao) {
+        const cols = await getColumns(table)
+        if (table === 'investidores' && cols.has('regioes_preferidas')) {
+          params.push(`%"${regiao}"%`)
+          where = `WHERE regioes_preferidas LIKE $1`
+        } else if (cols.has('regiao')) {
+          params.push(regiao)
+          where = `WHERE regiao = $1`
+        }
+      }
+      const { rows } = await pool.query(`SELECT COUNT(*) as c, MAX(updated_at) as d FROM ${table} ${where}`, params)
       return { table, total: parseInt(rows[0].c), lastUpdate: rows[0].d }
     },
   }
@@ -196,14 +210,16 @@ export const ConsultorFollowups = createCRUD('consultor_followups', { searchFiel
 export const DocumentosInvestidor = createCRUD('documentos_investidor', { searchFields: ['nome', 'tipo'], defaultSort: 'created_at DESC' })
 export const Visitas = createCRUD('visitas', { searchFields: ['notas', 'resultado'], defaultSort: 'data_hora DESC' })
 
-export async function getDashboardStats() {
-  return {
-    imoveis: await Imoveis.stats(),
-    investidores: await Investidores.stats(),
-    consultores: await Consultores.stats(),
-    negocios: await Negocios.stats(),
-    despesas: await Despesas.stats(),
-  }
+export async function getDashboardStats({ regiao } = {}) {
+  const opts = { regiao }
+  const [imoveis, investidores, consultores, negocios, despesas] = await Promise.all([
+    Imoveis.stats(opts),
+    Investidores.stats(opts),
+    Consultores.stats(opts),
+    Negocios.stats(opts),
+    Despesas.stats(opts),
+  ])
+  return { imoveis, investidores, consultores, negocios, despesas }
 }
 
 export { auditLog }

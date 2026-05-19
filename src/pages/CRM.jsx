@@ -671,7 +671,12 @@ export function CRM() {
       setFilters(f => ({ ...f, tipo_principal: invSubTab }))
     }
   }, [invSubTab, tab])
-  useEffect(() => { apiFetch('/api/crm/stats').then(r => r.json()).then(setStats).catch(() => {}) }, [])
+  useEffect(() => {
+    // Stats dos cards/KPIs do topo respeitam a região da sub-tab activa
+    // (Investidores tem pool unificado, logo só filtra quando regiaoActiva
+    // pertencer a Imóveis/Consultores/Negócios/Construtores).
+    apiFetch('/api/crm/stats', { regiao: regiaoActiva }).then(r => r.json()).then(setStats).catch(() => {})
+  }, [regiaoActiva])
   useEffect(() => { apiFetch('/api/alertas').then(r => r.json()).then(d => setAlertCount(d.resumo?.total ?? 0)).catch(() => {}) }, [])
   useEffect(() => {
     apiFetch('/api/crm/lookup/consultores').then(r => r.json()).then(list => {
@@ -1068,7 +1073,7 @@ export function CRM() {
         </div>
 
         {/* KPIs integrados */}
-        <TabKPIs tab={tab} />
+        <TabKPIs tab={tab} regiao={regiaoActiva} />
 
         {/* Sub-tabs Investidores: Passivo / Ativo */}
         {tab === 'Investidores' && (

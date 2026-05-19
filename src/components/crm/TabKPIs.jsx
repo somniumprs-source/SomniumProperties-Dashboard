@@ -5,13 +5,13 @@ import { useState, useEffect } from 'react'
 import { apiFetch } from '../../lib/api.js'
 import { EUR } from '../../constants.js'
 
-export function TabKPIs({ tab }) {
+export function TabKPIs({ tab, regiao }) {
   const [kpis, setKpis] = useState(null)
   const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores', 'Negócios': 'negocios', 'Despesas': 'despesas' }[tab]
 
   useEffect(() => {
-    apiFetch(`/api/crm/kpis/${endpoint}`).then(r => r.json()).then(setKpis).catch(() => {})
-  }, [endpoint])
+    apiFetch(`/api/crm/kpis/${endpoint}`, { regiao }).then(r => r.json()).then(setKpis).catch(() => {})
+  }, [endpoint, regiao])
 
   if (!kpis) return null
 
