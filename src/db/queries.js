@@ -114,33 +114,51 @@ function mapConsultor(r) {
 
 // ── Query functions (same API as Notion getters) ─────────────
 
-export async function getNegócios() {
-  const { rows } = await pool.query('SELECT * FROM negocios')
+// Helper: aceita opcionalmente `{ regiao }` e injecta WHERE regiao = $1 quando
+// presente. Mantém retro-compatibilidade com chamadas sem argumento.
+function regiaoWhere(regiao) {
+  return regiao ? { clause: ' WHERE regiao = $1', params: [regiao] } : { clause: '', params: [] }
+}
+
+export async function getNegócios({ regiao } = {}) {
+  const w = regiaoWhere(regiao)
+  const { rows } = await pool.query(`SELECT * FROM negocios${w.clause}`, w.params)
   return rows.map(mapNegocio)
 }
 
-export async function getDespesas() {
-  const { rows } = await pool.query('SELECT * FROM despesas')
+export async function getDespesas({ regiao } = {}) {
+  const w = regiaoWhere(regiao)
+  const { rows } = await pool.query(`SELECT * FROM despesas${w.clause}`, w.params)
   return rows.map(mapDespesa)
 }
 
-export async function getImóveis() {
-  const { rows } = await pool.query('SELECT * FROM imoveis')
+export async function getImóveis({ regiao } = {}) {
+  const w = regiaoWhere(regiao)
+  const { rows } = await pool.query(`SELECT * FROM imoveis${w.clause}`, w.params)
   return rows.map(mapImovel)
 }
 
-export async function getInvestidores() {
+export async function getInvestidores({ regiao } = {}) {
+  // Investidores são pool unificado — filtro só quando explicitamente pedido,
+  // procurando o nome da região dentro do array JSON `regioes_preferidas`.
+  if (regiao) {
+    const { rows } = await pool.query(
+      `SELECT * FROM investidores WHERE regioes_preferidas LIKE $1`, [`%"${regiao}"%`])
+    return rows.map(mapInvestidor)
+  }
   const { rows } = await pool.query('SELECT * FROM investidores')
   return rows.map(mapInvestidor)
 }
 
-export async function getConsultores() {
-  const { rows } = await pool.query('SELECT * FROM consultores')
+export async function getConsultores({ regiao } = {}) {
+  const w = regiaoWhere(regiao)
+  const { rows } = await pool.query(`SELECT * FROM consultores${w.clause}`, w.params)
   return rows.map(mapConsultor)
 }
 
-export async function getTarefas() {
-  const { rows } = await pool.query('SELECT * FROM tarefas ORDER BY inicio DESC')
+export async function getTarefas({ regiao } = {}) {
+  const w = regiaoWhere(regiao)
+  const { rows } = await pool.query(`SELECT * FROM tarefas${w.clause} ORDER BY inicio DESC`, w.params)
   return rows.map(r => ({
     id: r.id, tarefa: r.tarefa, status: r.status, categoria: r.categoria,
     inicio: r.inicio, fim: r.fim, funcionario: r.funcionario,

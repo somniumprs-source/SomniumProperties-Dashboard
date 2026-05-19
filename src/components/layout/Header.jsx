@@ -1,7 +1,6 @@
 import { RefreshCw, Moon, Sun, ArrowLeft, ChevronRight } from 'lucide-react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useTheme } from '../../contexts/ThemeContext.jsx'
-import { RegiaoBadge } from '../RegiaoBadge.jsx'
 
 function NotionIcon() {
   return (
@@ -70,7 +69,6 @@ export function Header({ title, subtitle, onRefresh, loading, notionUrl, breadcr
         </div>
       </div>
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        <RegiaoBadge />
         <span className="hidden sm:block text-xs capitalize text-neutral-400">{now}</span>
         <button
           onClick={toggle}

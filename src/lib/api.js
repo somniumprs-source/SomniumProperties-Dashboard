@@ -1,5 +1,4 @@
 import { supabase, authEnabled } from './supabase.js'
-import { getRegiaoActivaFromStorage } from '../contexts/RegiaoContext.jsx'
 
 /**
  * Devolve o access token actual da sessão Supabase (string vazia se não houver).
@@ -28,23 +27,23 @@ function scheduleRefreshSignal() {
 /**
  * Fetch wrapper que inclui o token de auth em todos os pedidos.
  * Emite o evento "somnium:refresh" depois de mutações OK (POST/PUT/PATCH/DELETE).
- * Injecta header X-Regiao com a região activa da aba actual — o middleware
- * backend usa isto para filtrar listagens/KPIs automaticamente.
+ *
+ * Para filtrar por região, o caller passa `options.regiao = 'Coimbra' | 'AMP'`
+ * — o wrapper injecta o header `X-Regiao`. Sem regiao = sem filtro (backend
+ * devolve dados de todas as regiões). Páginas que querem filtro regional
+ * usam useRegiaoGate(tabKey).
  */
 export async function apiFetch(url, options = {}) {
-  const headers = { ...options.headers }
+  const { regiao, ...rest } = options
+  const headers = { ...rest.headers }
   if (authEnabled && supabase) {
     const { data: { session } } = await supabase.auth.getSession()
     if (session?.access_token) {
       headers['Authorization'] = `Bearer ${session.access_token}`
     }
   }
-  // Região activa — só envia se já foi escolhida; backend cai para "sem filtro" caso ausente.
-  if (!headers['X-Regiao']) {
-    const r = getRegiaoActivaFromStorage()
-    if (r) headers['X-Regiao'] = r
-  }
-  const res = await fetch(url, { ...options, headers })
+  if (regiao && !headers['X-Regiao']) headers['X-Regiao'] = regiao
+  const res = await fetch(url, { ...rest, headers })
   const method = (options.method || 'GET').toUpperCase()
   if (res.ok && (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE')) {
     scheduleRefreshSignal()

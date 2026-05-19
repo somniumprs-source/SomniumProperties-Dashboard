@@ -16,8 +16,15 @@ import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STA
 import { apiFetch } from '../lib/api.js'
 import { useUnreadCounts } from '../hooks/useUnreadCounts.js'
 import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
+import { useRegiaoGate } from '../contexts/RegiaoContext.jsx'
+import { RegiaoModal } from '../components/RegiaoModal.jsx'
+import { RegiaoBadge } from '../components/RegiaoBadge.jsx'
 
 const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Construtores']
+// Sub-tabs que requerem distinção regional (modal ao entrar). Investidores
+// é pool unificado; Construtores ainda não usa região.
+const TABS_REGIONAIS = new Set(['Imóveis', 'Consultores'])
+const tabKeyRegional = (t) => `crm-${(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()}`
 
 // Progresso checklist por imóvel (cache local)
 let checklistProgressCache = {}
@@ -573,6 +580,11 @@ function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
 
 export function CRM() {
   const [tab, setTab] = useUrlState('tab', 'Imóveis')
+  // Gate regional — uma chave por sub-tab regional. Apenas abre modal em
+  // Imóveis/Consultores. Outras sub-tabs ignoram a região.
+  const regionalKey = TABS_REGIONAIS.has(tab) ? tabKeyRegional(tab) : null
+  const gate = useRegiaoGate(regionalKey || 'crm-noop', { autoOpen: !!regionalKey })
+  const regiaoActiva = regionalKey ? gate.regiao : null
   const [data, setData] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -604,13 +616,16 @@ export function CRM() {
 
   const load = useCallback(async () => {
     setLoading(true)
+    // Não carregar enquanto modal de região está aberto (evita 1 query com tudo
+    // antes do utilizador escolher e 2ª query com filtro depois).
+    if (regionalKey && !regiaoActiva) { setLoading(false); return }
     try {
       if (search) {
         const params = new URLSearchParams({ search })
         // Investidores: sempre filtrar por tipo mesmo na pesquisa
         if (tab === 'Investidores') params.set('tipo_principal', invSubTab)
         for (const [k, v] of Object.entries(effectiveFilters)) { if (v && k !== 'tipo_principal') params.set(k, v) }
-        const r = await apiFetch(`/api/crm/${endpoint}?${params}`)
+        const r = await apiFetch(`/api/crm/${endpoint}?${params}`, { regiao: regiaoActiva })
         const d = await r.json()
         let items = d.data ?? []
         // Filtrar client-side se backend não suportar tipo_principal na pesquisa
@@ -620,7 +635,7 @@ export function CRM() {
         // Usar endpoint enriquecido para consultores (com métricas e alertas)
         const params = new URLSearchParams()
         for (const [k, v] of Object.entries(effectiveFilters)) { if (v) params.set(k, v) }
-        const r = await apiFetch(`/api/crm/consultores/enriched${params.toString() ? '?' + params : ''}`)
+        const r = await apiFetch(`/api/crm/consultores/enriched${params.toString() ? '?' + params : ''}`, { regiao: regiaoActiva })
         const d = await r.json()
         let items = d.data ?? []
         // Filtrar client-side por estado_avaliacao se necessário
@@ -629,7 +644,7 @@ export function CRM() {
       } else {
         const params = new URLSearchParams({ limit: '200' })
         for (const [k, v] of Object.entries(effectiveFilters)) { if (v) params.set(k, v) }
-        const r = await apiFetch(`/api/crm/${endpoint}?${params}`)
+        const r = await apiFetch(`/api/crm/${endpoint}?${params}`, { regiao: regiaoActiva })
         const d = await r.json()
         let items = d.data ?? []
         // Segurança extra: filtrar client-side para investidores
@@ -638,13 +653,13 @@ export function CRM() {
       }
       // Carregar progresso checklist para imóveis
       if (tab === 'Imóveis') {
-        apiFetch('/api/crm/checklist/progress-batch').then(r => r.json()).then(d => {
+        apiFetch('/api/crm/checklist/progress-batch', { regiao: regiaoActiva }).then(r => r.json()).then(d => {
           checklistProgressCache = d
         }).catch(() => {})
       }
     } catch {}
     setLoading(false)
-  }, [endpoint, tab, search, filters, invSubTab, effectiveFilters])
+  }, [endpoint, tab, search, filters, invSubTab, effectiveFilters, regiaoActiva, regionalKey])
 
   useEffect(() => { load() }, [load])
   // Forçar filtro tipo_principal quando sub-tab investidores muda
@@ -964,8 +979,14 @@ export function CRM() {
 
   return (
     <>
+      {regionalKey && <RegiaoModal gate={gate} contexto={`O CRM · ${tab}`} />}
       <Header title="CRM" subtitle="Gestão de dados — Base de dados local" onRefresh={load} loading={loading} breadcrumbs={breadcrumbs} />
       <div className="p-4 sm:p-6 flex flex-col gap-3 sm:gap-4">
+        {regionalKey && regiaoActiva && (
+          <div className="flex justify-end">
+            <RegiaoBadge regiao={regiaoActiva} onTrocar={gate.abrirModal} />
+          </div>
+        )}
 
         {/* Pipelines — 4 cards centrados que actuam como tabs */}
         <div className="flex justify-center">
@@ -1019,7 +1040,7 @@ export function CRM() {
         )}
 
         {/* Filtros dinâmicos */}
-        <Filters tab={tab} filters={filters} onChange={f => { setFilters(f); setSearch('') }} />
+        <Filters tab={tab} filters={filters} onChange={f => { setFilters(f); setSearch('') }} regiao={regiaoActiva} />
 
         {/* Search + Actions */}
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center">

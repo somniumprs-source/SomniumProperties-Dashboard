@@ -5,6 +5,9 @@ import { apiFetch } from '../lib/api.js'
 import { useUrlState } from '../hooks/useUrlState.js'
 import { EUR, PCT, DAYS, NUM, RATIO } from '../constants.js'
 import { Tabs } from '../components/ui/Tabs.jsx'
+import { useRegiaoGate } from '../contexts/RegiaoContext.jsx'
+import { RegiaoModal } from '../components/RegiaoModal.jsx'
+import { RegiaoBadge } from '../components/RegiaoBadge.jsx'
 
 const GOLD = '#C9A84C'
 const TABS = [
@@ -164,6 +167,8 @@ function ProgressMeta({ label, value, meta, format = 'eur' }) {
 
 // ── Main ────────────────────────────────────────────────────────
 export function Metricas() {
+  const gate = useRegiaoGate('metricas')
+  const regiao = gate.regiao
   const [tab, setTab]       = useUrlState('tab', 'resumo')
   const [data, setData]     = useState(null)
   const [okrs, setOkrs]     = useState([])
@@ -175,11 +180,12 @@ export function Metricas() {
 
   async function load() {
     setLoading(true); setError(null)
+    if (!regiao) { setLoading(false); return }
     try {
       const [r, okrRes, fontesRes] = await Promise.all([
-        apiFetch('/api/metricas'),
-        apiFetch('/api/okrs').then(r => r.json()).catch(() => []),
-        apiFetch('/api/okrs/fontes').then(r => r.json()).catch(() => []),
+        apiFetch('/api/metricas', { regiao }),
+        apiFetch('/api/okrs', { regiao }).then(r => r.json()).catch(() => []),
+        apiFetch('/api/okrs/fontes', { regiao }).then(r => r.json()).catch(() => []),
       ])
       if (!r.ok) throw new Error('Erro no servidor')
       const d = await r.json()
@@ -189,15 +195,15 @@ export function Metricas() {
       setFontes(fontesRes)
       // Seed Q2 se vazio
       if (!okrRes.length) {
-        await apiFetch('/api/okrs/seed-q2', { method: 'POST' })
-        const seeded = await apiFetch('/api/okrs').then(r => r.json()).catch(() => [])
+        await apiFetch('/api/okrs/seed-q2', { regiao, method: 'POST' })
+        const seeded = await apiFetch('/api/okrs', { regiao }).then(r => r.json()).catch(() => [])
         setOkrs(seeded)
       }
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [regiao])
 
   const top = data?.top
   const p1  = data?.pipeline1
@@ -208,17 +214,19 @@ export function Metricas() {
 
   return (
     <>
+      <RegiaoModal gate={gate} contexto="O painel de Métricas & KPIs" />
       <Header title="Métricas & KPIs" subtitle="Framework Completo — Wholesaling · CAEP · Capital Passivo"
         onRefresh={load} loading={loading} />
 
       {/* Tab bar */}
-      <div className="px-4 sm:px-6 pt-3 bg-white sticky top-0 z-10">
+      <div className="px-4 sm:px-6 pt-3 bg-white sticky top-0 z-10 flex items-center justify-between">
         <Tabs
           variant="underline"
           value={tab}
           onChange={setTab}
           items={TABS.map(t => ({ key: t.id, label: t.label }))}
         />
+        {regiao && <RegiaoBadge regiao={regiao} onTrocar={gate.abrirModal} />}
       </div>
 
       <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">

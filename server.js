@@ -1072,12 +1072,24 @@ import { TTLCache } from './src/db/utils/ttlCache.js'
 const cache = new TTLCache(60000) // 60s default TTL
 app.post('/api/cache/clear', (_req, res) => { cache.clear(); res.json({ ok: true }) })
 
+// ── Middleware regional global ────────────────────────────────
+// Captura header X-Regiao em req.regiaoActiva para uso em endpoints /api/*
+// (kpis, metricas, financeiro, alertas, etc.). O router /api/crm já tem o
+// seu próprio middleware (em routes.js); este aplica-se ao resto.
+const REGIOES_VALIDAS_GLOBAL = new Set(['Coimbra', 'AMP'])
+app.use('/api', (req, _res, next) => {
+  const r = req.headers['x-regiao'] || req.headers['X-Regiao']
+  if (r && REGIOES_VALIDAS_GLOBAL.has(r)) req.regiaoActiva = r
+  next()
+})
+
 // ════════════════════════════════════════════════════════════════
 // FINANCEIRO — Wholesaling Imobiliário
 // ════════════════════════════════════════════════════════════════
 app.get('/api/kpis/financeiro', async (req, res) => {
   try {
-    const [negócios, despesas] = await Promise.all([getNegócios(), getDespesas()])
+    const regiao = req.regiaoActiva
+    const [negócios, despesas] = await Promise.all([getNegócios({ regiao }), getDespesas({ regiao })])
 
     const lucroEstimadoTotal = round2(negócios.reduce((s,n) => s + n.lucroEstimado, 0))
     const lucroRealTotal     = round2(negócios.reduce((s,n) => s + n.lucroReal, 0))
@@ -1183,7 +1195,7 @@ app.get('/api/kpis/financeiro', async (req, res) => {
 // ── Despesas operacionais ────────────────────────────────────────
 app.get('/api/financeiro/despesas', async (req, res) => {
   try {
-    const despesas = await getDespesas()
+    const despesas = await getDespesas({ regiao: req.regiaoActiva })
 
     const recorrentes = despesas.filter(d => d.timing === 'Mensalmente')
     const anuais      = despesas.filter(d => d.timing === 'Anual')
@@ -1230,7 +1242,8 @@ app.get('/api/financeiro/despesas', async (req, res) => {
 // ── Cash Flow & Runway ───────────────────────────────────────────
 app.get('/api/financeiro/cashflow', async (req, res) => {
   try {
-    const [negócios, despesas] = await Promise.all([getNegócios(), getDespesas()])
+    const regiao = req.regiaoActiva
+    const [negócios, despesas] = await Promise.all([getNegócios({ regiao }), getDespesas({ regiao })])
 
     const pendentes  = negócios.filter(n => n.pagamentoEmFalta)
     const recebidos  = negócios.filter(n => !n.pagamentoEmFalta && n.lucroReal > 0)
@@ -1262,7 +1275,8 @@ app.get('/api/financeiro/budget', async (_req, res) => res.json({ linhas: [] }))
 // ── Conta Corrente (extrato cronológico) ─────────────────────────
 app.get('/api/financeiro/conta-corrente', async (req, res) => {
   try {
-    const [negócios, despesasAll] = await Promise.all([getNegócios(), getDespesas()])
+    const regiao = req.regiaoActiva
+    const [negócios, despesasAll] = await Promise.all([getNegócios({ regiao }), getDespesas({ regiao })])
     const movimentos = []
 
     // Entradas: tranches recebidas de projectos

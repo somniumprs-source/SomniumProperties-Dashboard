@@ -1,12 +1,11 @@
 /**
- * Filtros dinâmicos por tab.
+ * Filtros dinâmicos por tab. Recebe a região activa via prop (pode ser null).
+ * Mostra dropdown de concelho dinâmico baseado na região.
  */
 import { invStatusFor, concelhosDe } from '../../constants.js'
-import { useRegiao } from '../../contexts/RegiaoContext.jsx'
 
-export function Filters({ tab, filters, onChange }) {
-  const { regiaoAtiva } = useRegiao()
-  const concelhos = concelhosDe(regiaoAtiva)
+export function Filters({ tab, filters, onChange, regiao }) {
+  const concelhos = concelhosDe(regiao)
 
   function set(key, value) {
     onChange({ ...filters, [key]: value || undefined })

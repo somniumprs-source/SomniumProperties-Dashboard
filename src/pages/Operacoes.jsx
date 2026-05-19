@@ -7,6 +7,9 @@ import { EUR, PCT, NUM } from '../constants.js'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { KpiCard } from '../components/ui/KpiCard.jsx'
+import { useRegiaoGate } from '../contexts/RegiaoContext.jsx'
+import { RegiaoModal } from '../components/RegiaoModal.jsx'
+import { RegiaoBadge } from '../components/RegiaoBadge.jsx'
 
 const HRS = v => v == null ? '—' : `${Number(v).toFixed(1)}h`
 const GOLD = '#C9A84C'
@@ -225,6 +228,8 @@ function CalendarWeek({ events, tarefas }) {
 
 // ── Main ────────────────────────────────────────────────────────
 export function Operacoes() {
+  const gate = useRegiaoGate('operacoes')
+  const regiao = gate.regiao
   const [tab, setTab] = useUrlState('tab', 'resumo')
   const [data, setData] = useState(null)
   const [tarefas, setTarefas] = useState([])
@@ -242,11 +247,12 @@ export function Operacoes() {
 
   const loadAll = useCallback(async () => {
     setLoading(true); setError(null)
+    if (!regiao) { setLoading(false); return }
     try {
       const [tr, tf, ce] = await Promise.all([
-        apiFetch('/api/time-tracking').then(r => r.json()),
-        apiFetch('/api/tarefas?limit=200').then(r => r.json()),
-        apiFetch('/api/calendar/events?days=14&past=7').then(r => r.json()).catch(() => ({ events: [] })),
+        apiFetch('/api/time-tracking', { regiao }).then(r => r.json()),
+        apiFetch('/api/tarefas?limit=200', { regiao }).then(r => r.json()),
+        apiFetch('/api/calendar/events?days=14&past=7', { regiao }).then(r => r.json()).catch(() => ({ events: [] })),
       ])
       if (tr.error) throw new Error(tr.error)
       setData(tr)
@@ -254,7 +260,7 @@ export function Operacoes() {
       setCalEvents(ce.events || [])
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
-  }, [])
+  }, [regiao])
 
   useEffect(() => { loadAll() }, [loadAll])
 
@@ -351,6 +357,7 @@ export function Operacoes() {
 
   return (
     <>
+      <RegiaoModal gate={gate} contexto="O módulo Operações" />
       <Header title="Operações" subtitle="Tarefas · Calendário · Horas · Eficiência" onRefresh={loadAll} loading={loading} />
 
       <div className="px-4 sm:px-6 pt-3 bg-white sticky top-0 z-10">
@@ -363,6 +370,7 @@ export function Operacoes() {
               items={TABS.map(t => ({ key: t.id, label: t.label }))}
             />
           </div>
+          {regiao && <RegiaoBadge regiao={regiao} onTrocar={gate.abrirModal} />}
           <Button variant="secondary" size="sm" onClick={syncNotion} disabled={syncing}>
             {syncing ? 'Sync...' : 'Sync Notion'}
           </Button>

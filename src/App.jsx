@@ -8,8 +8,6 @@ import { ErrorBoundary } from './components/ui/ErrorBoundary.jsx'
 import { ChunkErrorBoundary } from './components/ui/ChunkErrorBoundary.jsx'
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
 import { ThemeProvider } from './contexts/ThemeContext.jsx'
-import { RegiaoProvider } from './contexts/RegiaoContext.jsx'
-import { RegiaoModal } from './components/RegiaoModal.jsx'
 
 const Financeiro  = lazy(() => import('./pages/Financeiro.jsx').then(m => ({ default: m.Financeiro })))
 const Alertas     = lazy(() => import('./pages/Alertas.jsx').then(m => ({ default: m.Alertas })))
@@ -64,37 +62,34 @@ function AppRoutes() {
   if (!isAuthenticated) return <Login />
 
   return (
-    <RegiaoProvider>
-      <RegiaoModal />
-      <ChunkErrorBoundary>
-        <Suspense fallback={<PageFallback />}>
-          <Routes>
-            <Route element={<Layout />}>
-              <Route index element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
-              <Route path="/crm" element={<ErrorBoundary><CRM /></ErrorBoundary>} />
-              <Route path="/projectos" element={<ErrorBoundary><Projectos /></ErrorBoundary>} />
-              <Route path="/projectos/calendario" element={<ErrorBoundary><ProjectosCalendario /></ErrorBoundary>} />
-              <Route path="/projectos/:id" element={<ErrorBoundary><ProjectoDetalhe /></ErrorBoundary>} />
-              <Route path="/financeiro" element={<ErrorBoundary><Financeiro /></ErrorBoundary>} />
-              <Route path="/operacoes" element={<ErrorBoundary><Operacoes /></ErrorBoundary>} />
-              <Route path="/metricas" element={<ErrorBoundary><Metricas /></ErrorBoundary>} />
-              <Route path="/alertas" element={<ErrorBoundary><Alertas /></ErrorBoundary>} />
-              <Route path="/administracao" element={<ErrorBoundary><Administracao /></ErrorBoundary>}>
-                <Route index element={<Navigate to="sop" replace />} />
-                <Route path="relatorios" element={<RelatoriosAdmin />} />
-                <Route path="sop" element={<AdministracaoSOP />} />
-                <Route path="regiao" element={<AdministracaoMultiRegiao />} />
-              </Route>
-              <Route path="/admin/utilizadores" element={<ErrorBoundary><Utilizadores /></ErrorBoundary>} />
-              {/* Redirects de páginas removidas / renomeadas */}
-              <Route path="/relatorios-admin" element={<Navigate to="/administracao/relatorios" replace />} />
-              <Route path="/comercial" element={<Navigate to="/crm" replace />} />
-              <Route path="/marketing" element={<Navigate to="/crm" replace />} />
+    <ChunkErrorBoundary>
+      <Suspense fallback={<PageFallback />}>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route index element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+            <Route path="/crm" element={<ErrorBoundary><CRM /></ErrorBoundary>} />
+            <Route path="/projectos" element={<ErrorBoundary><Projectos /></ErrorBoundary>} />
+            <Route path="/projectos/calendario" element={<ErrorBoundary><ProjectosCalendario /></ErrorBoundary>} />
+            <Route path="/projectos/:id" element={<ErrorBoundary><ProjectoDetalhe /></ErrorBoundary>} />
+            <Route path="/financeiro" element={<ErrorBoundary><Financeiro /></ErrorBoundary>} />
+            <Route path="/operacoes" element={<ErrorBoundary><Operacoes /></ErrorBoundary>} />
+            <Route path="/metricas" element={<ErrorBoundary><Metricas /></ErrorBoundary>} />
+            <Route path="/alertas" element={<ErrorBoundary><Alertas /></ErrorBoundary>} />
+            <Route path="/administracao" element={<ErrorBoundary><Administracao /></ErrorBoundary>}>
+              <Route index element={<Navigate to="sop" replace />} />
+              <Route path="relatorios" element={<RelatoriosAdmin />} />
+              <Route path="sop" element={<AdministracaoSOP />} />
+              <Route path="regiao" element={<AdministracaoMultiRegiao />} />
             </Route>
-          </Routes>
-        </Suspense>
-      </ChunkErrorBoundary>
-    </RegiaoProvider>
+            <Route path="/admin/utilizadores" element={<ErrorBoundary><Utilizadores /></ErrorBoundary>} />
+            {/* Redirects de páginas removidas / renomeadas */}
+            <Route path="/relatorios-admin" element={<Navigate to="/administracao/relatorios" replace />} />
+            <Route path="/comercial" element={<Navigate to="/crm" replace />} />
+            <Route path="/marketing" element={<Navigate to="/crm" replace />} />
+          </Route>
+        </Routes>
+      </Suspense>
+    </ChunkErrorBoundary>
   )
 }
 

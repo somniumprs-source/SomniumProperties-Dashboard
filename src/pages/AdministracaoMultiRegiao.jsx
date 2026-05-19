@@ -1,7 +1,9 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Map, TrendingUp, Scale, Trophy, Plus, Save, X } from 'lucide-react'
 import { apiFetch } from '../lib/api.js'
-import { useRegiao } from '../contexts/RegiaoContext.jsx'
+import { useRegiaoGate } from '../contexts/RegiaoContext.jsx'
+import { RegiaoModal } from '../components/RegiaoModal.jsx'
+import { RegiaoBadge } from '../components/RegiaoBadge.jsx'
 import { REGIAO_LABEL, REGIAO_COR, concelhosDe, EUR, PCT } from '../constants.js'
 
 const TABS = [
@@ -13,14 +15,18 @@ const TABS = [
 ]
 
 export function AdministracaoMultiRegiao() {
-  const { regiaoAtiva } = useRegiao()
+  const gate = useRegiaoGate('administracao-regiao')
+  const regiaoAtiva = gate.regiao
   const [tab, setTab] = useState('kpis')
 
   if (!regiaoAtiva) {
     return (
-      <div className="text-center py-12 text-sm text-neutral-500">
-        Escolhe uma região para ver os dados.
-      </div>
+      <>
+        <RegiaoModal gate={gate} contexto="Esta área de Multi-Região" />
+        <div className="text-center py-12 text-sm text-neutral-500">
+          Escolha uma região para ver os dados.
+        </div>
+      </>
     )
   }
 
@@ -28,19 +34,23 @@ export function AdministracaoMultiRegiao() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3 pb-2">
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center text-white"
-          style={{ backgroundColor: cor }}
-        >
-          <Map className="w-5 h-5" />
+      <RegiaoModal gate={gate} contexto="Esta área de Multi-Região" />
+      <div className="flex items-center justify-between gap-3 pb-2">
+        <div className="flex items-center gap-3">
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-white"
+            style={{ backgroundColor: cor }}
+          >
+            <Map className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+              {REGIAO_LABEL[regiaoAtiva]}
+            </h2>
+            <p className="text-xs text-neutral-500">Dados específicos desta região</p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-            {REGIAO_LABEL[regiaoAtiva]}
-          </h2>
-          <p className="text-xs text-neutral-500">Dados específicos desta região</p>
-        </div>
+        <RegiaoBadge regiao={regiaoAtiva} onTrocar={gate.abrirModal} />
       </div>
 
       <div className="flex flex-wrap gap-2 border-b border-neutral-200 dark:border-neutral-800 pb-2">
@@ -72,17 +82,22 @@ export function AdministracaoMultiRegiao() {
   )
 }
 
+// helper local para todas as chamadas multi-região passarem o filtro
+function fetchR(url, regiao, options = {}) {
+  return apiFetch(url, { ...options, regiao })
+}
+
 // ─────────────────────────────────────────────────────────────
 // KPIs por região
 // ─────────────────────────────────────────────────────────────
-function KpisPanel() {
+function KpisPanel({ regiao }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     setLoading(true)
-    apiFetch('/api/crm/regiao/kpis').then(r => r.json()).then(d => { setData(d); setLoading(false) })
-  }, [])
+    fetchR('/api/crm/regiao/kpis', regiao).then(r => r.json()).then(d => { setData(d); setLoading(false) })
+  }, [regiao])
 
   if (loading) return <div className="text-sm text-neutral-500">A carregar…</div>
   if (!data || data.error) return <div className="text-sm text-red-500">{data?.error || 'Sem dados'}</div>
@@ -124,14 +139,14 @@ function MercadoPanel({ regiao }) {
 
   function reload() {
     setLoading(true)
-    apiFetch('/api/crm/regiao/mercado').then(r => r.json()).then(d => { setData(d.data || []); setLoading(false) })
+    fetchR('/api/crm/regiao/mercado', regiao).then(r => r.json()).then(d => { setData(d.data || []); setLoading(false) })
   }
 
   useEffect(() => { reload() }, [regiao])
 
   async function remover(id) {
     if (!confirm('Eliminar entrada de mercado?')) return
-    await apiFetch(`/api/crm/regiao/mercado/${id}`, { method: 'DELETE' })
+    await fetchR(`/api/crm/regiao/mercado/${id}`, regiao, { method: 'DELETE' })
     reload()
   }
 
@@ -223,7 +238,7 @@ function MercadoForm({ regiao, concelhos, initial, onCancel, onSaved }) {
     }
     const url = initial ? `/api/crm/regiao/mercado/${initial.id}` : '/api/crm/regiao/mercado'
     const method = initial ? 'PUT' : 'POST'
-    await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    await apiFetch(url, { regiao, method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     setSaving(false)
     onSaved()
   }
@@ -272,7 +287,7 @@ function HotZonesPanel({ regiao }) {
 
   useEffect(() => {
     setLoading(true)
-    apiFetch('/api/crm/regiao/hot-zones').then(r => r.json()).then(d => { setData(d.data || []); setLoading(false) })
+    fetchR('/api/crm/regiao/hot-zones', regiao).then(r => r.json()).then(d => { setData(d.data || []); setLoading(false) })
   }, [regiao])
 
   const maxTotal = useMemo(() => Math.max(...data.map(d => Number(d.total)), 1), [data])
@@ -321,12 +336,13 @@ function CompliancePanel({ regiao }) {
   const [editing, setEditing] = useState(null)
 
   function reload() {
-    apiFetch('/api/crm/regiao/compliance').then(r => r.json()).then(d => setData(d.data || []))
+    fetchR('/api/crm/regiao/compliance', regiao).then(r => r.json()).then(d => setData(d.data || []))
   }
   useEffect(() => { reload() }, [regiao])
 
   async function save(form) {
     await apiFetch(`/api/crm/regiao/compliance/${encodeURIComponent(form.concelho)}`, {
+      regiao,
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form),
@@ -407,7 +423,7 @@ function BenchmarkingPanel({ regiao }) {
 
   useEffect(() => {
     setLoading(true)
-    apiFetch('/api/crm/regiao/benchmarking/consultores').then(r => r.json()).then(d => { setData(d.data || []); setLoading(false) })
+    fetchR('/api/crm/regiao/benchmarking/consultores', regiao).then(r => r.json()).then(d => { setData(d.data || []); setLoading(false) })
   }, [regiao])
 
   if (loading) return <p className="text-sm text-neutral-500">A carregar…</p>

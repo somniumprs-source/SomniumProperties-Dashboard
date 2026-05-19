@@ -8,6 +8,9 @@ import { Card } from '../components/ui/Card.jsx'
 import { Badge } from '../components/ui/Badge.jsx'
 import { Input, Select } from '../components/ui/Input.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
+import { useRegiaoGate } from '../contexts/RegiaoContext.jsx'
+import { RegiaoModal } from '../components/RegiaoModal.jsx'
+import { RegiaoBadge } from '../components/RegiaoBadge.jsx'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 
@@ -51,6 +54,8 @@ function faseLegacyParaKanban(faseLegacy) {
 export function Projectos() {
   const navigate = useNavigate()
   const { role, isInvestidor, isReadOnly } = useAuth()
+  const gate = useRegiaoGate('projectos')
+  const regiao = gate.regiao
   const [kpis, setKpis] = useState(null)
   const [projectos, setProjectos] = useState([])
   const [fasesPorNegocio, setFasesPorNegocio] = useState({})  // negocioId → { faseAtualKey, percGlobal }
@@ -67,13 +72,14 @@ export function Projectos() {
 
   async function load() {
     setLoading(true); setError(null)
+    if (!regiao) { setLoading(false); return }
     try {
       const safe = (p) => p.then(r => r.ok ? r.json() : null).catch(() => null)
       // Investidores/parceiros usam endpoint filtrado por acessos
       const negociosUrl = isReadOnly ? '/api/crm/projetos/meus' : '/api/crm/negocios?limit=200'
       const [k, n] = await Promise.all([
-        isInvestidor ? Promise.resolve(null) : safe(apiFetch('/api/kpis/financeiro')),
-        safe(apiFetch(negociosUrl)),
+        isInvestidor ? Promise.resolve(null) : safe(apiFetch('/api/kpis/financeiro', { regiao })),
+        safe(apiFetch(negociosUrl, { regiao })),
       ])
       if (!isInvestidor && !k) throw new Error('Erro ao carregar projectos')
       setKpis(k)
@@ -134,7 +140,7 @@ export function Projectos() {
     setFasesPorNegocio(result)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [regiao])
   useEffect(() => { if (projectos.length > 0) loadFases(projectos) }, [projectos])
   useEffect(() => {
     apiFetch('/api/crm/projetos/portfolio/kpis')
@@ -201,9 +207,15 @@ export function Projectos() {
 
   return (
     <>
+      <RegiaoModal gate={gate} contexto="O módulo Projectos" />
       <Header title="Projectos" subtitle="Gestão de projectos activos por fase de obra" onRefresh={load} loading={loading} />
 
       <div className="p-4 sm:p-6 flex flex-col gap-4">
+        {regiao && (
+          <div className="flex justify-end">
+            <RegiaoBadge regiao={regiao} onTrocar={gate.abrirModal} />
+          </div>
+        )}
         {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>}
 
         {/* Caixas individuais por modelo de negócio — em série no topo, clicáveis */}

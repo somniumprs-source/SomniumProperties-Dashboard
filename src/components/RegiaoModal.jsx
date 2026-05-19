@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { MapPin, Building2 } from 'lucide-react'
-import { useRegiao } from '../contexts/RegiaoContext.jsx'
 import { REGIAO_LABEL, REGIAO_COR } from '../constants.js'
+import { getUltimaRegiao } from '../contexts/RegiaoContext.jsx'
 
 const REGIOES_META = {
   Coimbra: {
@@ -18,17 +18,22 @@ const REGIOES_META = {
   },
 }
 
-export function RegiaoModal() {
-  const { regiaoAtiva, modalAberto, setRegiaoAtiva, fecharModal, ultimaRegiao, regioesDisponiveis } = useRegiao()
+/**
+ * Modal de escolha de região. Recebe um gate (resultado de useRegiaoGate)
+ * via props ou os campos individuais.
+ *
+ *   <RegiaoModal gate={gate} contexto="o módulo Projectos" />
+ */
+export function RegiaoModal({ gate, contexto }) {
+  const { modalAberto, regiao, setRegiao, fecharModal, regioesDisponiveis } = gate
+  const ultimaRegiao = getUltimaRegiao()
 
   useEffect(() => {
     if (!modalAberto) return
-    function onKey(e) {
-      if (e.key === 'Escape' && regiaoAtiva) fecharModal()
-    }
+    function onKey(e) { if (e.key === 'Escape' && regiao) fecharModal() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [modalAberto, regiaoAtiva, fecharModal])
+  }, [modalAberto, regiao, fecharModal])
 
   if (!modalAberto) return null
 
@@ -41,9 +46,11 @@ export function RegiaoModal() {
             Em que região vai trabalhar?
           </h1>
           <p className="mt-1 text-sm text-neutral-400">
-            Toda a aba — dados, KPIs, despesas, OKRs — fica restrita à região escolhida.
+            {contexto
+              ? `${contexto} fica restrito à região escolhida.`
+              : 'Esta área da dashboard fica restrita à região escolhida.'}
           </p>
-          {ultimaRegiao && !regiaoAtiva && (
+          {ultimaRegiao && !regiao && (
             <p className="mt-2 text-xs text-neutral-500">
               Última escolha: <span className="text-neutral-300">{REGIAO_LABEL[ultimaRegiao]}</span>
             </p>
@@ -55,11 +62,11 @@ export function RegiaoModal() {
             const meta = REGIOES_META[r]
             const Icon = meta.Icon
             const cor = REGIAO_COR[r]
-            const isActive = regiaoAtiva === r
+            const isActive = regiao === r
             return (
               <button
                 key={r}
-                onClick={() => setRegiaoAtiva(r)}
+                onClick={() => setRegiao(r)}
                 className={`group relative overflow-hidden rounded-2xl border-2 transition-all p-8 text-left
                   ${isActive ? 'border-white/40' : 'border-neutral-800 hover:border-neutral-700'}
                   bg-neutral-900 hover:bg-neutral-800/80
@@ -93,13 +100,13 @@ export function RegiaoModal() {
           })}
         </div>
 
-        {regiaoAtiva && (
+        {regiao && (
           <div className="text-center mt-6">
             <button
               onClick={fecharModal}
               className="text-sm text-neutral-500 hover:text-neutral-300 transition-colors"
             >
-              Cancelar (manter {REGIAO_LABEL[regiaoAtiva]})
+              Cancelar (manter {REGIAO_LABEL[regiao]})
             </button>
           </div>
         )}
