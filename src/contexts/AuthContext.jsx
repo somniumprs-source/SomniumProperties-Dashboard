@@ -41,16 +41,28 @@ export function AuthProvider({ children }) {
       setLoading(false)
       return
     }
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session)
-      if (session) await refreshProfile()
+    // Safety: nunca deixar o utilizador preso no splash se Supabase pendurar
+    const timeoutId = setTimeout(() => {
+      console.warn('[auth] getSession timeout — a prosseguir sem sessão')
       setLoading(false)
-    })
+    }, 6000)
+    supabase.auth.getSession()
+      .then(async ({ data: { session } }) => {
+        clearTimeout(timeoutId)
+        setSession(session)
+        if (session) await refreshProfile()
+        setLoading(false)
+      })
+      .catch((err) => {
+        clearTimeout(timeoutId)
+        console.error('[auth] getSession falhou:', err)
+        setLoading(false)
+      })
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, s) => {
       setSession(s)
       if (s) await refreshProfile(); else setProfile(null)
     })
-    return () => subscription.unsubscribe()
+    return () => { clearTimeout(timeoutId); subscription.unsubscribe() }
   }, [refreshProfile])
 
   async function signIn(email, password) {
