@@ -3438,12 +3438,25 @@ router.put('/projetos/:negocioId/mover-fase', async (req, res) => {
   try {
     const { faseKey } = req.body
     if (!faseKey) return res.status(400).json({ error: 'faseKey obrigatório' })
-    // Garantir que as fases existem
-    const { rows: fases } = await pool.query(
+    // Garantir que as fases existem — auto-inicializa conforme template da categoria se for o caso
+    let { rows: fases } = await pool.query(
       'SELECT id, fase_key, ordem FROM projeto_fases WHERE negocio_id = $1 ORDER BY ordem',
       [req.params.negocioId]
     )
-    if (fases.length === 0) return res.status(400).json({ error: 'Negócio sem fases. Inicializa primeiro.' })
+    if (fases.length === 0) {
+      const { rows: negs } = await pool.query('SELECT categoria FROM negocios WHERE id = $1', [req.params.negocioId])
+      const categoria = negs[0]?.categoria
+      if (!FASES_POR_CATEGORIA[categoria]) {
+        return res.status(400).json({ error: `Categoria "${categoria || '—'}" não tem workflow de fases.` })
+      }
+      await criarFasesProjecto(req.params.negocioId, categoria)
+      const reload = await pool.query(
+        'SELECT id, fase_key, ordem FROM projeto_fases WHERE negocio_id = $1 ORDER BY ordem',
+        [req.params.negocioId]
+      )
+      fases = reload.rows
+      if (fases.length === 0) return res.status(500).json({ error: 'Falha a inicializar fases' })
+    }
 
     const novaFase = fases.find(f => f.fase_key === faseKey)
     if (!novaFase) return res.status(400).json({ error: 'Fase inválida' })

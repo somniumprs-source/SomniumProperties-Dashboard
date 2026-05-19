@@ -510,11 +510,11 @@ function KanbanBoard({ colunas, cardsPorColuna, fasesInfo, onCardClick, onMoveCa
     return (e) => {
       if (readOnly) { e.preventDefault(); return }
       const temWorkflow = !!FASES_KANBAN_POR_CATEGORIA[negocio.categoria]
-      const hasFases = !!fasesInfo[negocio.id]
-      if (!temWorkflow || !hasFases) {
+      if (!temWorkflow) {
         e.preventDefault()
         return
       }
+      // Drag activo mesmo sem fases inicializadas — o backend faz init on-demand
       setDragging({ negocioId: negocio.id })
       e.dataTransfer.effectAllowed = 'move'
       e.dataTransfer.setData('text/plain', negocio.id)
@@ -587,7 +587,7 @@ function KanbanBoard({ colunas, cardsPorColuna, fasesInfo, onCardClick, onMoveCa
 
 function KanbanCard({ negocio: n, info, onClick, onDragStart, onDragEnd, isDragging, readOnly }) {
   const temWorkflow = !!FASES_KANBAN_POR_CATEGORIA[n.categoria]
-  const podeArrastar = !readOnly && temWorkflow && !!info
+  const podeArrastar = !readOnly && temWorkflow
   return (
     <div
       draggable={podeArrastar}
