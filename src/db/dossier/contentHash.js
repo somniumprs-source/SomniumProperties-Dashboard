@@ -8,6 +8,10 @@ const FIELDS = [
   'capital_necessario', 'lucro_bruto', 'lucro_liquido',
   'retorno_anualizado', 'moic', 'payback_meses',
   'regime_fiscal', 'meses', 'perc_financiamento', 'modo_obra',
+  // Região do imóvel — quando o deal é re-categorizado de Coimbra para AMP
+  // (ou vice-versa) o hash deve mudar para invalidar assinaturas antigas
+  // que se referiam a um contexto regional diferente.
+  'regiao',
 ]
 
 function num(v) {

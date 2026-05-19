@@ -30,10 +30,12 @@ function validateRequired(table, data) {
 // usada pela análise activa, criando ROIs incoerentes nos cards e KPIs.
 
 // ── Audit log ────────────────────────────────────────────────
-async function auditLog(tabela, registoId, acao, dadosAnteriores, dadosNovos) {
+// regiaoActiva: região seleccionada pelo operador no momento da acção
+// (vinda do header X-Regiao). NULL = acção fora de contexto regional.
+async function auditLog(tabela, registoId, acao, dadosAnteriores, dadosNovos, regiaoActiva = null) {
   await pool.query(
-    `INSERT INTO audit_log (tabela, registo_id, acao, dados_anteriores, dados_novos) VALUES ($1, $2, $3, $4, $5)`,
-    [tabela, registoId, acao, dadosAnteriores ? JSON.stringify(dadosAnteriores) : null, dadosNovos ? JSON.stringify(dadosNovos) : null]
+    `INSERT INTO audit_log (tabela, registo_id, acao, dados_anteriores, dados_novos, regiao_activa) VALUES ($1, $2, $3, $4, $5, $6)`,
+    [tabela, registoId, acao, dadosAnteriores ? JSON.stringify(dadosAnteriores) : null, dadosNovos ? JSON.stringify(dadosNovos) : null, regiaoActiva || null]
   )
 }
 
@@ -117,7 +119,7 @@ function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at 
       return rows[0] ?? null
     },
 
-    async create(rawData) {
+    async create(rawData, { regiaoActiva = null } = {}) {
       const data = cleanFormData(rawData)
       const validationError = validateRequired(table, data)
       if (validationError) throw new Error(validationError)
@@ -137,11 +139,11 @@ function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at 
       const vals = cols.map((_, i) => `$${i + 1}`)
       const params = [id, ...entries.map(([, v]) => v), now, now]
       await pool.query(`INSERT INTO ${table} (${cols.join(', ')}) VALUES (${vals.join(', ')})`, params)
-      auditLog(table, id, 'INSERT', null, { id, ...data })
+      auditLog(table, id, 'INSERT', null, { id, ...data }, regiaoActiva)
       return { id, ...data, created_at: now, updated_at: now }
     },
 
-    async update(id, rawData) {
+    async update(id, rawData, { regiaoActiva = null } = {}) {
       const data = cleanFormData(rawData)
       const { rows: existing } = await pool.query(`SELECT * FROM ${table} WHERE id = $1`, [id])
       if (!existing[0]) return null
@@ -153,23 +155,37 @@ function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at 
       sets.push(`updated_at = $${entries.length + 1}`)
       const params = [...entries.map(([, v]) => v), now, id]
       await pool.query(`UPDATE ${table} SET ${sets.join(', ')} WHERE id = $${entries.length + 2}`, params)
-      auditLog(table, id, 'UPDATE', existing[0], data)
+      auditLog(table, id, 'UPDATE', existing[0], data, regiaoActiva)
       return { ...existing[0], ...data, updated_at: now }
     },
 
-    async delete(id) {
+    async delete(id, { regiaoActiva = null } = {}) {
       const { rows: existing } = await pool.query(`SELECT * FROM ${table} WHERE id = $1`, [id])
       if (!existing[0]) return false
       await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id])
-      auditLog(table, id, 'DELETE', existing[0], null)
+      auditLog(table, id, 'DELETE', existing[0], null, regiaoActiva)
       return true
     },
 
-    async search(q, limit = 20) {
-      const conditions = searchFields.map((f, i) => `${f} ILIKE $1`).join(' OR ')
+    async search(q, limit = 20, { regiao } = {}) {
+      const conditions = searchFields.map(f => `${f} ILIKE $1`).join(' OR ')
+      const params = [`%${q}%`]
+      let regiaoClause = ''
+      if (regiao) {
+        const cols = await getColumns(table)
+        // Caso especial: investidores (pool unificado por regioes_preferidas)
+        if (table === 'investidores' && cols.has('regioes_preferidas')) {
+          params.push(`%"${regiao}"%`)
+          regiaoClause = ` AND regioes_preferidas LIKE $${params.length}`
+        } else if (cols.has('regiao')) {
+          params.push(regiao)
+          regiaoClause = ` AND regiao = $${params.length}`
+        }
+      }
+      params.push(limit)
       const { rows } = await pool.query(
-        `SELECT * FROM ${table} WHERE ${conditions} ORDER BY updated_at DESC LIMIT $2`,
-        [`%${q}%`, limit]
+        `SELECT * FROM ${table} WHERE (${conditions})${regiaoClause} ORDER BY updated_at DESC LIMIT $${params.length}`,
+        params,
       )
       return rows
     },

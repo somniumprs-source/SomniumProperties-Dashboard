@@ -4479,10 +4479,15 @@ app.get('/api/okrs', async (req, res) => {
   try {
     const pgPool = (await import('./src/db/pg.js')).default
     const { trimestre } = req.query
-    let q = 'SELECT * FROM okrs'
+    const regiao = req.regiaoActiva
+    // OKRs com regiao NULL = globais (visíveis em ambas as regiões).
+    // OKRs com regiao = X = só visíveis quando essa região está activa.
+    const where = []
     const params = []
-    if (trimestre) { q += ' WHERE trimestre = $1'; params.push(trimestre) }
-    q += ' ORDER BY ordem, created_at'
+    if (trimestre) { params.push(trimestre); where.push(`trimestre = $${params.length}`) }
+    if (regiao) { params.push(regiao); where.push(`(regiao IS NULL OR regiao = $${params.length})`) }
+    const whereSql = where.length ? ` WHERE ${where.join(' AND ')}` : ''
+    const q = `SELECT * FROM okrs${whereSql} ORDER BY ordem, created_at`
     const { rows: okrs } = await pgPool.query(q, params)
 
     if (okrs.length === 0) return res.json([])
@@ -4494,9 +4499,12 @@ app.get('/api/okrs', async (req, res) => {
       [okrIds]
     )
 
-    // Pre-calcular todas as fontes de uma vez
+    // Pre-calcular todas as fontes de uma vez. Quando há região activa, as
+    // queries de fonte são automaticamente filtradas (KR "imóveis_semana" em
+    // modo AMP só conta imóveis da AMP — sem isto, KRs regionais davam o
+    // total agregado de ambas as regiões e levavam a metas batoteiras).
     const fontes = [...new Set(allKrs.map(kr => kr.fonte).filter(Boolean))]
-    const fonteValues = await calcAllKRValues(fontes, pgPool)
+    const fonteValues = await calcAllKRValues(fontes, pgPool, regiao)
 
     // Agrupar KRs por OKR e calcular progresso
     const krsByOkr = {}
@@ -4541,14 +4549,43 @@ const KR_FONTE_QUERIES = {
   investidores_ab_total: "SELECT COUNT(*) as c FROM investidores WHERE classificacao IN ('A','B')",
 }
 
+// Tabelas filtráveis por região + a forma de filtrar.
+// Investidores usa pool unificado (regioes_preferidas LIKE) para alinhar
+// com /api/crm/investidores. Outras tabelas têm coluna regiao directa.
+const REGIAO_FILTER_BY_TABLE = {
+  imoveis: r => ({ clause: 'regiao = ?', param: r }),
+  consultores: r => ({ clause: 'regiao = ?', param: r }),
+  negocios: r => ({ clause: 'regiao = ?', param: r }),
+  despesas: r => ({ clause: 'regiao = ?', param: r }),
+  tarefas: r => ({ clause: 'regiao = ?', param: r }),
+  empreiteiros: r => ({ clause: 'regiao = ?', param: r }),
+  visitas: r => ({ clause: 'regiao = ?', param: r }),
+  investidores: r => ({ clause: 'regioes_preferidas LIKE ?', param: `%"${r}"%` }),
+}
+
+function applyRegiaoToSql(sql, regiao) {
+  if (!regiao) return { sql, params: [] }
+  const m = sql.match(/FROM\s+(\w+)/i)
+  if (!m) return { sql, params: [] }
+  const fn = REGIAO_FILTER_BY_TABLE[m[1]]
+  if (!fn) return { sql, params: [] }
+  const { clause, param } = fn(regiao)
+  const placeholder = clause.replace('?', '$1')
+  if (/\bWHERE\b/i.test(sql)) {
+    return { sql: sql.replace(/\bWHERE\b/i, `WHERE ${placeholder} AND`), params: [param] }
+  }
+  return { sql: `${sql} WHERE ${placeholder}`, params: [param] }
+}
+
 // Calcular TODOS os valores de KR em batch (uma query por fonte única)
-async function calcAllKRValues(fontes, pgPool) {
+async function calcAllKRValues(fontes, pgPool, regiao = null) {
   const results = {}
   await Promise.all(fontes.map(async (fonte) => {
-    const sql = KR_FONTE_QUERIES[fonte]
-    if (!sql) { results[fonte] = 0; return }
+    const rawSql = KR_FONTE_QUERIES[fonte]
+    if (!rawSql) { results[fonte] = 0; return }
+    const { sql, params } = applyRegiaoToSql(rawSql, regiao)
     try {
-      const { rows } = await pgPool.query(sql)
+      const { rows } = await pgPool.query(sql, params)
       results[fonte] = parseInt(rows[0].c)
     } catch { results[fonte] = 0 }
   }))
@@ -4556,9 +4593,9 @@ async function calcAllKRValues(fontes, pgPool) {
 }
 
 // Legacy single KR calc (kept for backward compat)
-async function calcKRValue(kr, pgPool) {
+async function calcKRValue(kr, pgPool, regiao = null) {
   if (!kr.fonte) return 0
-  const values = await calcAllKRValues([kr.fonte], pgPool)
+  const values = await calcAllKRValues([kr.fonte], pgPool, regiao)
   return values[kr.fonte] ?? 0
 }
 
@@ -4566,12 +4603,16 @@ async function calcKRValue(kr, pgPool) {
 app.post('/api/okrs', async (req, res) => {
   try {
     const pgPool = (await import('./src/db/pg.js')).default
-    const { trimestre, objectivo, ordem, krs } = req.body
+    const { trimestre, objectivo, ordem, krs, regiao: regiaoBody } = req.body
     if (!trimestre || !objectivo) return res.status(400).json({ error: 'trimestre e objectivo são obrigatórios' })
+    // OKR herda região: explícita no body > região activa do operador > NULL (global).
+    // null/empty body permite criar OKRs explicitamente globais a partir de qualquer
+    // contexto (ex: admin a criar OKR "company-wide" estando em modo Coimbra).
+    const regiao = regiaoBody === null ? null : (regiaoBody || req.regiaoActiva || null)
     const id = (await import('crypto')).randomUUID()
     const now = new Date().toISOString()
-    await pgPool.query('INSERT INTO okrs (id, trimestre, objectivo, ordem, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6)',
-      [id, trimestre, objectivo, ordem || 0, now, now])
+    await pgPool.query('INSERT INTO okrs (id, trimestre, objectivo, ordem, regiao, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+      [id, trimestre, objectivo, ordem || 0, regiao, now, now])
 
     // Criar KRs se fornecidos
     if (krs?.length) {
@@ -4592,10 +4633,17 @@ app.post('/api/okrs', async (req, res) => {
 app.put('/api/okrs/:id', async (req, res) => {
   try {
     const pgPool = (await import('./src/db/pg.js')).default
-    const { objectivo, ordem } = req.body
+    const { objectivo, ordem, regiao } = req.body
     const now = new Date().toISOString()
-    await pgPool.query('UPDATE okrs SET objectivo = COALESCE($1, objectivo), ordem = COALESCE($2, ordem), updated_at = $3 WHERE id = $4',
-      [objectivo, ordem, now, req.params.id])
+    // regiao undefined = não tocar; null explícito = converter em global.
+    const setRegiao = Object.prototype.hasOwnProperty.call(req.body, 'regiao')
+    if (setRegiao) {
+      await pgPool.query('UPDATE okrs SET objectivo = COALESCE($1, objectivo), ordem = COALESCE($2, ordem), regiao = $3, updated_at = $4 WHERE id = $5',
+        [objectivo, ordem, regiao || null, now, req.params.id])
+    } else {
+      await pgPool.query('UPDATE okrs SET objectivo = COALESCE($1, objectivo), ordem = COALESCE($2, ordem), updated_at = $3 WHERE id = $4',
+        [objectivo, ordem, now, req.params.id])
+    }
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })

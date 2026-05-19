@@ -249,6 +249,13 @@ ZONAS DE INTERESSE
 {{ZONAS_INTERESSE}}
 Outras zonas: "Essa zona não é o nosso foco principal, mas envia-nos os dados na mesma que vamos analisar internamente."
 
+ZONAS COM NOME AMBÍGUO (procurar sempre concelho explícito antes de decidir):
+• "Madalena" — pode ser Vila Nova de Gaia (AMP) OU Mealhada (Coimbra). Confirmar concelho.
+• "Olival" — pode ser Vila Nova de Gaia (AMP) OU Ourém. Confirmar.
+• "Santa Marinha" — Vila Nova de Gaia (AMP).
+• "São Paulo" — várias localidades. Confirmar.
+Se o consultor não indicar concelho/distrito, perguntar explicitamente antes de criar imóvel: "Só para confirmar — essa Madalena é a de Gaia ou a da Mealhada?"
+
 ═══════════════════════════════════════
 CRITÉRIOS SOP §5.1
 ═══════════════════════════════════════

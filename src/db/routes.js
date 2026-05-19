@@ -135,6 +135,16 @@ router.use((_req, res, next) => {
 // Para mutações (POST/PUT), preenche também req.body.regiao se ausente — o
 // frontend não precisa de enviar o campo explicitamente.
 const REGIOES_VALIDAS = new Set(['Coimbra', 'AMP'])
+// Tabelas onde o filtro regional é uma garantia de isolamento (não só filtro UI).
+// PUT/DELETE sobre um registo destas tabelas exige que a região do registo
+// corresponda à `X-Regiao` enviada — protege contra edição cruzada entre regiões.
+const TABELAS_ISOLADAS_REGIAO = new Set(['imoveis', 'consultores', 'negocios', 'empreiteiros'])
+const PATH_TO_TABLE = {
+  imoveis: 'imoveis', consultores: 'consultores', negocios: 'negocios',
+  empreiteiros: 'empreiteiros', despesas: 'despesas', tarefas: 'tarefas',
+  investidores: 'investidores',
+}
+
 router.use((req, _res, next) => {
   const r = req.headers['x-regiao'] || req.headers['X-Regiao']
   if (r && REGIOES_VALIDAS.has(r)) {
@@ -153,6 +163,33 @@ router.use((req, _res, next) => {
     }
   }
   next()
+})
+
+// Middleware de autorização regional — bloqueia mutações sobre registos que
+// pertencem a uma região diferente da activa. Aplica-se a PUT/PATCH/DELETE
+// em rotas /:tabela/:id de tabelas listadas em TABELAS_ISOLADAS_REGIAO.
+router.use(async (req, res, next) => {
+  try {
+    if (!['PUT', 'PATCH', 'DELETE'].includes(req.method)) return next()
+    if (!req.regiaoActiva) return next() // sem header: chamadas legacy passam (admin global)
+    const m = req.path.match(/^\/(\w+)\/([^/]+)$/)
+    if (!m) return next()
+    const tabela = PATH_TO_TABLE[m[1]]
+    if (!tabela || !TABELAS_ISOLADAS_REGIAO.has(tabela)) return next()
+    const id = m[2]
+    const { rows } = await pool.query(`SELECT regiao FROM ${tabela} WHERE id = $1`, [id])
+    if (!rows[0]) return next() // 404 trata depois
+    const regiaoRegisto = rows[0].regiao
+    // Permitir se o registo ainda não tem região atribuída (legacy/Coimbra default)
+    if (regiaoRegisto && regiaoRegisto !== req.regiaoActiva) {
+      return res.status(403).json({
+        error: `Acesso negado: registo pertence à região "${regiaoRegisto}" mas operação está em "${req.regiaoActiva}". Troque de região e tente de novo.`,
+        registo_regiao: regiaoRegisto,
+        regiao_activa: req.regiaoActiva,
+      })
+    }
+    next()
+  } catch (e) { next() } // em caso de erro, deixar passar (fail-open) — auth global apanha noutra camada
 })
 
 // ── Mapa de qualidade por estado do pipeline ─────────────────
@@ -187,7 +224,7 @@ function crudRoutes(path, crud, { onCreate, onUpdate } = {}) {
         filter.regiao = req.regiaoActiva
       }
       if (search) {
-        const data = await crud.search(search, +limit)
+        const data = await crud.search(search, +limit, { regiao: req.regiaoActiva })
         return res.json({ data, total: data.length })
       }
       res.json(await crud.list({ limit: +limit, offset: +offset, sort, filter }))
@@ -209,7 +246,7 @@ function crudRoutes(path, crud, { onCreate, onUpdate } = {}) {
 
   router.post(path, async (req, res) => {
     try {
-      const item = await crud.create(req.body)
+      const item = await crud.create(req.body, { regiaoActiva: req.regiaoActiva })
       const table = path.slice(1)
       syncToNotion(table, item.id).catch(e => console.error(`[sync] create ${table}:`, e.message))
       if (onCreate) onCreate(item).catch(e => console.error(`[hook] create ${table}:`, e.message))
@@ -219,7 +256,7 @@ function crudRoutes(path, crud, { onCreate, onUpdate } = {}) {
 
   router.put(`${path}/:id`, async (req, res) => {
     try {
-      const item = await crud.update(req.params.id, req.body)
+      const item = await crud.update(req.params.id, req.body, { regiaoActiva: req.regiaoActiva })
       if (!item) return res.status(404).json({ error: 'Não encontrado' })
       const table = path.slice(1)
       syncToNotion(table, req.params.id).catch(e => console.error(`[sync] update ${table}:`, e.message))
@@ -230,7 +267,7 @@ function crudRoutes(path, crud, { onCreate, onUpdate } = {}) {
 
   router.delete(`${path}/:id`, async (req, res) => {
     try {
-      const ok = await crud.delete(req.params.id)
+      const ok = await crud.delete(req.params.id, { regiaoActiva: req.regiaoActiva })
       if (!ok) return res.status(404).json({ error: 'Não encontrado' })
       res.json({ ok: true })
     } catch (e) { res.status(500).json({ error: e.message }) }
@@ -2818,6 +2855,36 @@ router.post('/backup/restore/:id', async (req, res) => {
     const { rows } = await pool.query('SELECT * FROM backups WHERE id = $1', [req.params.id])
     if (!rows[0]) return res.status(404).json({ error: 'Backup não encontrado' })
 
+    // Restauração regional: parâmetros opcionais.
+    //  • req.body.regiao = 'Coimbra' | 'AMP' → restaurar APENAS registos dessa região.
+    //  • req.body.confirm_perda_amp = true → autoriza restaurar globalmente
+    //    mesmo que o backup seja anterior à expansão AMP (apaga AMP).
+    //  Sem nenhum dos dois: bloqueia se detectar perda cross-regional.
+    const restoreRegiao = (req.body?.regiao === 'AMP' || req.body?.regiao === 'Coimbra') ? req.body.regiao : null
+    const confirmPerdaAmp = req.body?.confirm_perda_amp === true
+
+    // Detectar se o backup é pré-AMP: imóveis no backup com regiao IS NULL/Coimbra apenas
+    const backup = typeof rows[0].data === 'string' ? JSON.parse(rows[0].data) : rows[0].data
+    const backupTemAmp = (backup.imoveis || []).some(r => r.regiao === 'AMP')
+        || (backup.consultores || []).some(r => r.regiao === 'AMP')
+        || (backup.negocios || []).some(r => r.regiao === 'AMP')
+    // Detectar dados AMP actuais que seriam apagados num restore global
+    const { rows: ampActual } = await pool.query(
+      `SELECT (SELECT COUNT(*)::int FROM imoveis WHERE regiao = 'AMP') AS imoveis,
+              (SELECT COUNT(*)::int FROM consultores WHERE regiao = 'AMP') AS consultores,
+              (SELECT COUNT(*)::int FROM negocios WHERE regiao = 'AMP') AS negocios`,
+    )
+    const totalAmpAtual = (ampActual[0]?.imoveis || 0) + (ampActual[0]?.consultores || 0) + (ampActual[0]?.negocios || 0)
+    if (!restoreRegiao && !backupTemAmp && totalAmpAtual > 0 && !confirmPerdaAmp) {
+      return res.status(409).json({
+        error: 'Restore bloqueado: backup é anterior à expansão AMP e existem ' + totalAmpAtual +
+          ' registos AMP que seriam perdidos. Reenvie com {"confirm_perda_amp":true} para forçar, ' +
+          'ou {"regiao":"Coimbra"} para restaurar só Coimbra preservando AMP.',
+        amp_atual: ampActual[0],
+        backup_tem_amp: backupTemAmp,
+      })
+    }
+
     // Primeiro fazer backup do estado actual (safety net)
     const currentBackup = {}
     let currentTotal = 0
@@ -2833,22 +2900,40 @@ router.post('/backup/restore/:id', async (req, res) => {
     )
 
     // Restaurar
-    const backup = typeof rows[0].data === 'string' ? JSON.parse(rows[0].data) : rows[0].data
     let restored = 0
     for (const t of BACKUP_TABLES) {
       if (!backup[t]?.length) continue
-      // Limpar tabela
-      await pool.query(`DELETE FROM ${t}`)
-      // Re-inserir registos
-      for (const row of backup[t]) {
-        const fields = Object.entries(row).filter(([, v]) => v !== undefined && v !== null)
-        const cols = fields.map(([k]) => k)
-        const vals = fields.map((_, i) => `$${i + 1}`)
-        await pool.query(`INSERT INTO ${t} (${cols.join(', ')}) VALUES (${vals.join(', ')}) ON CONFLICT (id) DO NOTHING`, fields.map(([, v]) => v))
-        restored++
+      if (restoreRegiao) {
+        // Apenas linhas da região pedida — preserva o resto.
+        const colsCheck = await pool.query(
+          `SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=$1 AND column_name='regiao' LIMIT 1`, [t])
+        const hasRegiao = colsCheck.rowCount > 0
+        if (hasRegiao) {
+          await pool.query(`DELETE FROM ${t} WHERE regiao = $1`, [restoreRegiao])
+        } else {
+          continue // tabela sem coluna regiao → saltar quando restore é regional
+        }
+        for (const row of backup[t]) {
+          if ((row.regiao || 'Coimbra') !== restoreRegiao) continue
+          const fields = Object.entries(row).filter(([, v]) => v !== undefined && v !== null)
+          const cols = fields.map(([k]) => k)
+          const vals = fields.map((_, i) => `$${i + 1}`)
+          await pool.query(`INSERT INTO ${t} (${cols.join(', ')}) VALUES (${vals.join(', ')}) ON CONFLICT (id) DO NOTHING`, fields.map(([, v]) => v))
+          restored++
+        }
+      } else {
+        // Restauro global tradicional
+        await pool.query(`DELETE FROM ${t}`)
+        for (const row of backup[t]) {
+          const fields = Object.entries(row).filter(([, v]) => v !== undefined && v !== null)
+          const cols = fields.map(([k]) => k)
+          const vals = fields.map((_, i) => `$${i + 1}`)
+          await pool.query(`INSERT INTO ${t} (${cols.join(', ')}) VALUES (${vals.join(', ')}) ON CONFLICT (id) DO NOTHING`, fields.map(([, v]) => v))
+          restored++
+        }
       }
     }
-    res.json({ ok: true, restored, fromBackup: rows[0].created_at })
+    res.json({ ok: true, restored, fromBackup: rows[0].created_at, regiao: restoreRegiao || 'global' })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -3588,12 +3673,25 @@ async function notificarInvestidoresMudancaFase(negocioId, novaFaseKey) {
     try { invIds = typeof negocio.investidor_ids === 'string' ? JSON.parse(negocio.investidor_ids || '[]') : (negocio.investidor_ids || []) } catch {}
     if (invIds.length === 0) return
 
+    // Filtra investidores que TÊM a região do negócio nas suas preferências.
+    // Pool unificado: se regioes_preferidas inclui a região do negócio (ou
+    // o investidor não definiu preferências), recebe notificação.
+    const regiaoNegocio = negocio.regiao || 'Coimbra'
     const { rows: invs } = await pool.query(
-      `SELECT id, nome, email, telemovel, canal_notificacao FROM investidores
+      `SELECT id, nome, email, telemovel, canal_notificacao, regioes_preferidas FROM investidores
        WHERE id = ANY($1) AND (canal_notificacao IS NULL OR canal_notificacao <> 'nenhum')`,
       [invIds]
     )
-    if (invs.length === 0) return
+    const invsFiltered = invs.filter(inv => {
+      let prefs = []
+      try { prefs = typeof inv.regioes_preferidas === 'string' ? JSON.parse(inv.regioes_preferidas || '[]') : (inv.regioes_preferidas || []) } catch {}
+      if (!Array.isArray(prefs) || prefs.length === 0) return true // sem preferência definida → recebe tudo
+      return prefs.includes(regiaoNegocio)
+    })
+    if (invsFiltered.length === 0) return
+    // Substituir array original para que o resto da função use a lista filtrada.
+    invs.length = 0
+    invsFiltered.forEach(x => invs.push(x))
 
     const faseConfig = getFaseConfigGlobal(novaFaseKey)
     const faseNome = faseConfig?.nome || novaFaseKey

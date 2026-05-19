@@ -1078,6 +1078,16 @@ export async function initSchema() {
       END $$;
       CREATE INDEX IF NOT EXISTS idx_despesas_regiao ON despesas(regiao);
 
+      -- Rateio para despesas partilhadas entre regiões. JSON com chaves
+      -- region -> fracção (ex: {"Coimbra":0.6,"AMP":0.4}, soma = 1.0). Quando
+      -- preenchido, sobrepoe-se a regiao: o custo e dividido proporcionalmente
+      -- nos relatorios P&L de cada regiao. Caso tipico: software CRM 100 EUR/mes
+      -- usado pelas duas equipas, antes ficava 100% em Coimbra a inflar custos.
+      DO $$ BEGIN
+        ALTER TABLE despesas ADD COLUMN IF NOT EXISTS rateio TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
       DO $$ BEGIN
         ALTER TABLE okrs ADD COLUMN IF NOT EXISTS regiao TEXT;
       EXCEPTION WHEN OTHERS THEN NULL;
@@ -1112,6 +1122,15 @@ export async function initSchema() {
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
       CREATE INDEX IF NOT EXISTS idx_visitas_regiao ON visitas(regiao);
+
+      -- Audit log regista a região activa do operador no momento da acção.
+      -- Permite analisar "actividade por região" sem precisar de inferir
+      -- pela tabela alvo (que pode ser global, ex: investidores).
+      DO $$ BEGIN
+        ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS regiao_activa TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+      CREATE INDEX IF NOT EXISTS idx_audit_regiao ON audit_log(regiao_activa, created_at DESC);
 
       -- ════════════════════════════════════════════════════════════════
       -- EMPREITEIROS / CONSTRUTORES — pool por região, especialidades,

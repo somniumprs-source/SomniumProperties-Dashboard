@@ -29,12 +29,52 @@ function mapNegocio(r) {
   }
 }
 
+function parseRateio(raw) {
+  if (!raw) return null
+  try {
+    const obj = typeof raw === 'string' ? JSON.parse(raw) : raw
+    if (!obj || typeof obj !== 'object') return null
+    // Normalizar: descartar entradas <=0 e devolver só se sobrarem pelo menos 2 regiões.
+    const clean = {}
+    for (const [k, v] of Object.entries(obj)) {
+      const n = parseFloat(v)
+      if (Number.isFinite(n) && n > 0) clean[k] = n
+    }
+    return Object.keys(clean).length >= 2 ? clean : null
+  } catch { return null }
+}
+
 function mapDespesa(r) {
   return {
     id: r.id, movimento: r.movimento, categoria: r.categoria, data: r.data,
     custoMensal: r.custo_mensal || 0, custoAnual: r.custo_anual || 0, timing: r.timing,
     notas: r.notas,
+    regiao: r.regiao || null,
+    rateio: parseRateio(r.rateio),
   }
+}
+
+// Quando uma região está activa, aplica o rateio (se houver) escalando os custos
+// pela fracção da região. Despesas sem rateio mas com `regiao` certa passam intactas;
+// despesas com rateio são incluídas com custos escalados.
+function aplicarRateioRegiao(despesas, regiao) {
+  if (!regiao) return despesas
+  const out = []
+  for (const d of despesas) {
+    if (d.rateio && d.rateio[regiao] != null) {
+      const frac = d.rateio[regiao]
+      out.push({
+        ...d,
+        custoMensal: round2((d.custoMensal || 0) * frac),
+        custoAnual: round2((d.custoAnual || 0) * frac),
+        rateioFraccao: frac,
+        partilhada: true,
+      })
+    } else if (!d.rateio && d.regiao === regiao) {
+      out.push(d)
+    }
+  }
+  return out
 }
 
 function mapImovel(r) {
@@ -132,8 +172,16 @@ export async function getNegócios({ regiao } = {}) {
 }
 
 export async function getDespesas({ regiao } = {}) {
-  const w = regiaoWhere(regiao)
-  const { rows } = await pool.query(`SELECT * FROM despesas${w.clause}`, w.params)
+  // Quando há região activa, precisamos também das despesas com rateio que
+  // toquem nessa região (independentemente da coluna `regiao` directa). Por
+  // isso o filtro SQL não pode ser estrito — fazemos `WHERE regiao = $1 OR
+  // rateio IS NOT NULL` e refinamos em JS via aplicarRateioRegiao.
+  if (regiao) {
+    const { rows } = await pool.query(
+      `SELECT * FROM despesas WHERE regiao = $1 OR rateio IS NOT NULL`, [regiao])
+    return aplicarRateioRegiao(rows.map(mapDespesa), regiao)
+  }
+  const { rows } = await pool.query(`SELECT * FROM despesas`)
   return rows.map(mapDespesa)
 }
 

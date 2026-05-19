@@ -9,6 +9,7 @@ import { KPICard } from '../components/dashboard/KPICard.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { apiFetch } from '../lib/api.js'
 import { useUrlState } from '../hooks/useUrlState.js'
+import { REGIOES } from '../constants.js'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const EUR2 = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0)
@@ -404,7 +405,21 @@ export function Financeiro() {
                         onClick={() => setEditingDesp(crmDespesas.find(x => x.id === d.id) || d)}
                         className="border-b border-gray-50 hover:bg-indigo-50 cursor-pointer transition-colors">
                         <td className="py-2 px-3 text-xs text-gray-500 whitespace-nowrap">{d.data ?? '—'}</td>
-                        <td className="py-2 px-3 font-medium text-gray-800">{d.movimento}</td>
+                        <td className="py-2 px-3 font-medium text-gray-800">
+                          {d.movimento}
+                          {(() => {
+                            // Badge de atribuição regional: partilhada (rateio) ou região única.
+                            const rateioObj = d.rateio && typeof d.rateio === 'string' ? (() => { try { return JSON.parse(d.rateio) } catch { return null } })() : d.rateio
+                            if (rateioObj && Object.keys(rateioObj).length >= 2) {
+                              const txt = Object.entries(rateioObj).map(([k,v]) => `${k} ${Math.round(v*100)}%`).join(' / ')
+                              return <span className="ml-2 inline-block px-1.5 py-0.5 text-[10px] rounded bg-amber-100 text-amber-700 font-medium">Partilhada · {txt}</span>
+                            }
+                            if (d.regiao && d.regiao !== 'Coimbra') {
+                              return <span className="ml-2 inline-block px-1.5 py-0.5 text-[10px] rounded bg-indigo-50 text-indigo-700">{d.regiao}</span>
+                            }
+                            return null
+                          })()}
+                        </td>
                         <td className="py-2 px-3 text-xs text-gray-500">{d.categoria || '—'}</td>
                         <td className="py-2 px-3">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -1019,9 +1034,22 @@ function DespesaForm({ item, onSave, onCancel, onReload }) {
   const normalized = { ...item }
   if (normalized.custoMensal !== undefined && normalized.custo_mensal === undefined) normalized.custo_mensal = normalized.custoMensal
   if (normalized.custoAnual !== undefined && normalized.custo_anual === undefined) normalized.custo_anual = normalized.custoAnual
+  // Rateio: serializado como JSON string na BD, objecto em memória.
+  let rateioInicial = null
+  try {
+    const raw = normalized.rateio
+    if (raw) rateioInicial = typeof raw === 'string' ? JSON.parse(raw) : raw
+  } catch { rateioInicial = null }
   const [f, setF] = useState({
     movimento: '', categoria: '', timing: 'Mensalmente', custo_mensal: '', custo_anual: '', data: '', notas: '',
+    regiao: 'Coimbra',
     ...normalized,
+  })
+  const [modoAtribuicao, setModoAtribuicao] = useState(rateioInicial ? 'partilhada' : 'unica')
+  // Para partilhada, mantemos % Coimbra (0-100); AMP é o complemento.
+  const [percCoimbra, setPercCoimbra] = useState(() => {
+    if (rateioInicial && rateioInicial.Coimbra != null) return Math.round(rateioInicial.Coimbra * 100)
+    return 50
   })
   const [docs, setDocs] = useState(() => {
     try { return item.documentos ? JSON.parse(item.documentos) : [] } catch { return [] }
@@ -1112,6 +1140,38 @@ function DespesaForm({ item, onSave, onCancel, onReload }) {
           <label className="text-xs text-gray-500 block mb-1">Notas</label>
           <textarea value={f.notas ?? ''} onChange={e => set('notas', e.target.value)} rows={2} className={inputClass} />
         </div>
+        <div className="sm:col-span-2 xl:col-span-3 mt-2 pt-3 border-t border-gray-100">
+          <label className="text-xs text-gray-500 block mb-2 font-semibold uppercase tracking-wide">Atribuição Regional</label>
+          <div className="flex flex-wrap gap-2 mb-3">
+            <button type="button" onClick={() => setModoAtribuicao('unica')}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${modoAtribuicao === 'unica' ? 'bg-red-50 border-red-300 text-red-700 font-semibold' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+              Região única
+            </button>
+            <button type="button" onClick={() => setModoAtribuicao('partilhada')}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${modoAtribuicao === 'partilhada' ? 'bg-red-50 border-red-300 text-red-700 font-semibold' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+              Partilhada (rateio %)
+            </button>
+          </div>
+          {modoAtribuicao === 'unica' ? (
+            <div className="max-w-xs">
+              <select value={f.regiao || 'Coimbra'} onChange={e => set('regiao', e.target.value)} className={inputClass}>
+                {REGIOES.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">Custo é atribuído 100% a esta região no P&L.</p>
+            </div>
+          ) : (
+            <div className="bg-gray-50 rounded-lg p-3 max-w-md">
+              <div className="flex items-center justify-between text-xs text-gray-600 mb-2">
+                <span>Coimbra: <strong className="text-gray-800">{percCoimbra}%</strong></span>
+                <span>AMP: <strong className="text-gray-800">{100 - percCoimbra}%</strong></span>
+              </div>
+              <input type="range" min="0" max="100" step="5" value={percCoimbra}
+                onChange={e => setPercCoimbra(parseInt(e.target.value))}
+                className="w-full accent-red-500" />
+              <p className="text-xs text-gray-400 mt-2">Custo será dividido entre regiões no P&L. Ex: software CRM partilhado pelas duas equipas.</p>
+            </div>
+          )}
+        </div>
       </div>
 
       {item.id && (
@@ -1147,7 +1207,19 @@ function DespesaForm({ item, onSave, onCancel, onReload }) {
       )}
 
       <div className="flex gap-3 mt-4">
-        <button onClick={() => onSave(f)} disabled={!f.movimento?.trim()} className="px-5 py-2 bg-red-600 text-white text-sm font-medium rounded-xl hover:bg-red-700 disabled:opacity-40">
+        <button onClick={() => {
+          // Serializar rateio antes de submeter. Em modo "partilhada", `regiao`
+          // perde sentido — limpamos para evitar confusão no relatório.
+          const payload = { ...f }
+          if (modoAtribuicao === 'partilhada') {
+            const cb = Math.max(0, Math.min(100, percCoimbra)) / 100
+            payload.rateio = JSON.stringify({ Coimbra: cb, AMP: 1 - cb })
+            payload.regiao = null
+          } else {
+            payload.rateio = null
+          }
+          onSave(payload)
+        }} disabled={!f.movimento?.trim()} className="px-5 py-2 bg-red-600 text-white text-sm font-medium rounded-xl hover:bg-red-700 disabled:opacity-40">
           {isNew ? 'Criar' : 'Guardar'}
         </button>
         <button onClick={onCancel} className="px-5 py-2 bg-gray-100 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-200">Cancelar</button>

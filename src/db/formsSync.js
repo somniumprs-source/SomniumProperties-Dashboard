@@ -141,6 +141,10 @@ export async function syncForms() {
       if (experiencia) data.experiencia_imobiliario = experiencia
       const perfil = derivarPerfilRisco(roi, roiAnualizado)
       if (perfil) data.perfil_risco = perfil
+      // Auto-detectar `regioes_preferidas` a partir da string localização
+      // (campo livre do Google Forms). Procura por palavras-chave de cada
+      // região; default ["Coimbra"] se nada bater. Permite múltiplas regiões.
+      data.regioes_preferidas = JSON.stringify(detectarRegioes(localizacao))
 
       await Investidores.create(data)
       created++
@@ -148,6 +152,32 @@ export async function syncForms() {
   }
 
   return { created, updated, skipped, total: rows.length - 1 }
+}
+
+// ── Detecção regional a partir de texto livre ────────────────
+// Map: palavras-chave (lowercased, sem acentos) → região.
+// Permite múltiplas regiões se o investidor escreveu, ex: "Coimbra e Porto".
+const REGIAO_KEYWORDS = {
+  AMP: [
+    'porto', 'gaia', 'vila nova de gaia', 'amp', 'area metropolitana do porto',
+    'matosinhos', 'maia', 'gondomar', 'valongo', 'espinho', 'feira',
+    'santa maria da feira', 'santo tirso', 'trofa', 'povoa de varzim',
+    'aveiro',
+  ],
+  Coimbra: [
+    'coimbra', 'condeixa', 'mealhada', 'cantanhede', 'lousa', 'lousã',
+    'penacova', 'miranda do corvo', 'montemor', 'figueira da foz', 'pampilhosa',
+    'tabua', 'tábua', 'soure', 'mira', 'gois', 'góis', 'arganil', 'penela',
+  ],
+}
+function detectarRegioes(texto) {
+  if (!texto || typeof texto !== 'string') return ['Coimbra']
+  const norm = texto.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  const found = new Set()
+  for (const [regiao, words] of Object.entries(REGIAO_KEYWORDS)) {
+    if (words.some(w => norm.includes(w))) found.add(regiao)
+  }
+  return found.size > 0 ? [...found] : ['Coimbra']
 }
 
 // ── Parsers ─────────────────────────────────────────────────
