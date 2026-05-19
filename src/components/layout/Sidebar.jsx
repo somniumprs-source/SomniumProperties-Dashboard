@@ -29,6 +29,8 @@ export function Sidebar() {
 
   useEffect(() => {
     const load = async () => {
+      // Não fazer polling se a tab está inactiva (poupa requests/CPU)
+      if (typeof document !== 'undefined' && document.hidden) return
       try {
         const [alertas, tarefasCount] = await Promise.all([
           apiFetch('/api/alertas').then(r => r.json()).catch(() => null),
@@ -41,8 +43,16 @@ export function Sidebar() {
       } catch {}
     }
     load()
-    const interval = setInterval(load, 60000)
-    return () => clearInterval(interval)
+    // 90s (era 60s) — badges informativos, não críticos.
+    const interval = setInterval(load, 90000)
+    // Refresh imediato quando a tab volta a estar visível (mais ágil sem
+    // pagar overhead constante).
+    const onVisible = () => { if (!document.hidden) load() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [])
 
   // Close mobile sidebar on navigation
@@ -199,8 +209,14 @@ function NotificationsBell() {
   }
   useEffect(() => {
     loadCount()
-    const i = setInterval(loadCount, 60000)
-    return () => clearInterval(i)
+    // 120s (era 60s) — notificações são polling de baixa prioridade.
+    const i = setInterval(() => { if (!document.hidden) loadCount() }, 120000)
+    const onVisible = () => { if (!document.hidden) loadCount() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(i)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [])
 
   useEffect(() => {

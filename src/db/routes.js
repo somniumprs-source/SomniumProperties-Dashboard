@@ -824,11 +824,16 @@ crudRoutes('/tarefas', Tarefas)
 crudRoutes('/consultor-interacoes', ConsultorInteracoes)
 
 // Contagem rápida de tarefas atrasadas — usado pelo badge da Sidebar. Evita
-// puxar ?limit=200 só para contar quantas estão em "Atrasada".
+// puxar ?limit=200 só para contar quantas estão em "Atrasada". Cache 30s.
+let _countAtrasadasCache = { exp: 0, n: 0 }
 router.get('/tarefas/count-atrasadas', async (_req, res) => {
   try {
+    const now = Date.now()
+    if (now < _countAtrasadasCache.exp) return res.json({ atrasadas: _countAtrasadasCache.n })
     const { rows } = await pool.query(`SELECT COUNT(*)::int AS n FROM tarefas WHERE status = 'Atrasada'`)
-    res.json({ atrasadas: rows[0]?.n ?? 0 })
+    const n = rows[0]?.n ?? 0
+    _countAtrasadasCache = { exp: now + 30_000, n }
+    res.json({ atrasadas: n })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -1809,24 +1814,33 @@ router.get('/checklist/:imovelId/progress', async (req, res) => {
 })
 
 // ── Relation lookups (para dropdowns nos formulários) ─────────
-router.get('/lookup/imoveis', async (req, res) => {
+// Cache local de 120s — lookups raramente mudam, e são chamados em vários
+// formulários e selectors no boot.
+const _lookupCache = new Map()
+function lookupCacheGet(key) {
+  const e = _lookupCache.get(key)
+  if (e && Date.now() < e.exp) return e.data
+  if (e) _lookupCache.delete(key)
+  return null
+}
+function lookupCacheSet(key, data, ttl = 120_000) {
+  _lookupCache.set(key, { data, exp: Date.now() + ttl })
+}
+async function serveLookup(key, sql, res) {
   try {
-    const { rows } = await pool.query("SELECT id, nome, estado FROM imoveis ORDER BY nome")
+    const cached = lookupCacheGet(key)
+    if (cached) return res.json(cached)
+    const { rows } = await pool.query(sql)
+    lookupCacheSet(key, rows)
     res.json(rows)
   } catch (e) { res.status(500).json({ error: e.message }) }
-})
-router.get('/lookup/investidores', async (req, res) => {
-  try {
-    const { rows } = await pool.query("SELECT id, nome, status FROM investidores ORDER BY nome")
-    res.json(rows)
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
-router.get('/lookup/consultores', async (req, res) => {
-  try {
-    const { rows } = await pool.query("SELECT id, nome, estatuto FROM consultores ORDER BY nome")
-    res.json(rows)
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
+}
+router.get('/lookup/imoveis', (req, res) =>
+  serveLookup('imoveis', "SELECT id, nome, estado FROM imoveis ORDER BY nome", res))
+router.get('/lookup/investidores', (req, res) =>
+  serveLookup('investidores', "SELECT id, nome, status FROM investidores ORDER BY nome", res))
+router.get('/lookup/consultores', (req, res) =>
+  serveLookup('consultores', "SELECT id, nome, estatuto FROM consultores ORDER BY nome", res))
 
 // ── Automações PostgreSQL ──────────────────────────────────────
 router.post('/automation/score-investidores', async (req, res) => {

@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import compression from 'compression'
 import rateLimit from 'express-rate-limit'
 import { Client } from '@notionhq/client'
 import path from 'path'
@@ -10,6 +11,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const app = express()
 app.use(cors())
+// gzip dos payloads JSON (~70-80% redução em respostas grandes como
+// /api/crm/investidores que devolve 70KB → ~15KB).
+app.use(compression({ threshold: 1024 }))
 app.use(express.json())
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500, standardHeaders: true, legacyHeaders: false }))
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads'), {
