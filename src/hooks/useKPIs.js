@@ -1,13 +1,15 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { apiFetch } from '../lib/api.js'
 
 export function useKPIs() {
   const [kpis, setKpis] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const hasDataRef = useRef(false)
 
   const refresh = useCallback(async () => {
-    setLoading(true)
+    // Só mete loading=true se ainda não há dados — evita flicker em refreshes.
+    if (!hasDataRef.current) setLoading(true)
     setError(null)
     try {
       const res = await apiFetch('/api/kpis')
@@ -15,6 +17,7 @@ export function useKPIs() {
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       setKpis(data)
+      hasDataRef.current = true
     } catch (err) {
       setError(err.message)
     } finally {

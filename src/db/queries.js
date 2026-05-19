@@ -187,10 +187,12 @@ function mapVisita(r) {
   }
 }
 
-export async function getVisitas({ imovelId } = {}) {
+export async function getVisitas({ imovelId, regiao } = {}) {
+  const conds = []
   const params = []
-  let where = ''
-  if (imovelId) { params.push(imovelId); where = `WHERE imovel_id = $1` }
+  if (imovelId) { params.push(imovelId); conds.push(`imovel_id = $${params.length}`) }
+  if (regiao)   { params.push(regiao);   conds.push(`regiao = $${params.length}`) }
+  const where = conds.length ? `WHERE ${conds.join(' AND ')}` : ''
   const { rows } = await pool.query(`SELECT * FROM visitas ${where} ORDER BY data_hora DESC`, params)
   return rows.map(mapVisita)
 }

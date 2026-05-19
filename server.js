@@ -1096,8 +1096,29 @@ const getObras        = async () => []
 // Cache com TTL para endpoints que fazem queries pesadas
 import { TTLCache } from './src/db/utils/ttlCache.js'
 import pool from './src/db/pg.js'
+import http from 'node:http'
 const cache = new TTLCache(60000) // 60s default TTL
 app.post('/api/cache/clear', (_req, res) => { cache.clear(); res.json({ ok: true }) })
+
+// Agent persistente para chamadas internas (loopback /api/*).
+// Reutiliza TCP socket entre fetches do /api/kpis aos sub-endpoints — elimina
+// handshake repetido (~30-80ms por chamada × 6 = 200-500ms no boot).
+const internalAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
+function internalGet(path, headers = {}) {
+  return new Promise((resolve) => {
+    const port = process.env.PORT ?? 3001
+    const req = http.request(
+      { hostname: '127.0.0.1', port, path, method: 'GET', headers, agent: internalAgent },
+      res => {
+        let data = ''
+        res.on('data', c => { data += c })
+        res.on('end', () => { try { resolve(JSON.parse(data)) } catch { resolve({}) } })
+      },
+    )
+    req.on('error', () => resolve({}))
+    req.end()
+  })
+}
 
 // Invalida caches do dashboard (dash:*) em qualquer mutation /api/* bem-sucedida.
 // Isto cobre todas as rotas CRM CRUD, evitando ter de tocar caso a caso.
@@ -2341,21 +2362,24 @@ app.get('/api/operacoes/historico', async (req, res) => {
 // ════════════════════════════════════════════════════════════════
 app.get('/api/kpis', async (req, res) => {
   try {
-    const cacheKey = 'dash:kpis'
+    const regiao = req.regiaoActiva
+    const cacheKey = `dash:kpis|r=${regiao || ''}`
     const cached = cache.get(cacheKey)
     if (cached) return res.json(cached)
 
-    const base = `http://127.0.0.1:${process.env.PORT ?? 3001}`
     const auth = req.headers.authorization
     const headers = auth ? { Authorization: auth } : {}
-    const safe = url => fetch(url, { headers }).then(r => r.json()).catch(() => ({}))
+    if (regiao) headers['X-Regiao'] = regiao
+    // Chamadas em paralelo via agent keepAlive (loopback reaproveita socket).
+    // Cada sub-endpoint tem o seu próprio endpointCache(300_000), pelo que o
+    // custo real depois do primeiro request a quente é ~0ms por chamada.
     const [financeiro, comercial, marketing, operacoes, cashflow, analises] = await Promise.all([
-      safe(`${base}/api/kpis/financeiro`),
-      safe(`${base}/api/kpis/comercial`),
-      safe(`${base}/api/kpis/marketing`),
-      safe(`${base}/api/kpis/operacoes`),
-      safe(`${base}/api/financeiro/cashflow`),
-      safe(`${base}/api/crm/analises-kpis`),
+      internalGet('/api/kpis/financeiro', headers),
+      internalGet('/api/kpis/comercial', headers),
+      internalGet('/api/kpis/marketing', headers),
+      internalGet('/api/kpis/operacoes', headers),
+      internalGet('/api/financeiro/cashflow', headers),
+      internalGet('/api/crm/analises-kpis', headers),
     ])
     const payload = { financeiro: { ...financeiro, cashflow, analises }, comercial, marketing, operacoes, updatedAt: new Date().toISOString() }
     // TTL longo: mutations /api/* invalidam o cache via middleware → frescura preservada
@@ -2371,16 +2395,17 @@ app.get('/api/kpis', async (req, res) => {
 // ════════════════════════════════════════════════════════════════
 app.get('/api/weekly-pulse', async (req, res) => {
   try {
-    const cacheKey = 'dash:pulse'
+    const regiao = req.regiaoActiva
+    const cacheKey = `dash:pulse|r=${regiao || ''}`
     const cached = cache.get(cacheKey)
     if (cached) return res.json(cached)
     const [imoveis, investidores, consultoresRaw, negocios, despesas, visitas] = await Promise.all([
-      getImóveis().catch(() => []),
-      getInvestidores(),
-      getConsultores().catch(() => []),
-      getNegócios(),
-      getDespesas(),
-      getVisitas().catch(() => []),
+      getImóveis({ regiao }).catch(() => []),
+      getInvestidores({ regiao }),
+      getConsultores({ regiao }).catch(() => []),
+      getNegócios({ regiao }),
+      getDespesas({ regiao }),
+      getVisitas({ regiao }).catch(() => []),
     ])
     const now = new Date()
     const wDay = now.getDay()
@@ -2447,7 +2472,7 @@ app.get('/api/weekly-pulse', async (req, res) => {
       alertas: { imoveisParados, investSemContacto, consFollowUpAtrasado },
       financeiro: { burnRate, lucroPendente, runway },
     }
-    cache.set('dash:pulse', payload, 300000)
+    cache.set(cacheKey, payload, 300000)
     res.json(payload)
   } catch (err) {
     console.error('[weekly-pulse]', err.message)
@@ -2687,16 +2712,17 @@ function avg(arr) {
 
 app.get('/api/metricas', async (req, res) => {
   try {
-    const cacheKey = 'dash:metricas'
+    const regiao = req.regiaoActiva
+    const cacheKey = `dash:metricas|r=${regiao || ''}`
     const cached = cache.get(cacheKey)
     if (cached) return res.json(cached)
     const [imoveis, negocios, investidores, consultoresRaw, despesas, visitas] = await Promise.all([
-      getImóveis().catch(() => []),
-      getNegócios(),
-      getInvestidores(),
-      getConsultores().catch(() => []),
-      getDespesas().catch(() => []),
-      getVisitas().catch(() => []),
+      getImóveis({ regiao }).catch(() => []),
+      getNegócios({ regiao }),
+      getInvestidores({ regiao }),
+      getConsultores({ regiao }).catch(() => []),
+      getDespesas({ regiao }).catch(() => []),
+      getVisitas({ regiao }).catch(() => []),
     ])
 
     const { ano, month } = getMesAtual()
@@ -3891,7 +3917,7 @@ app.get('/api/metricas', async (req, res) => {
       // ── KPIs Avançados + OKRs ──
       avancado: trackerAvancado,
     }
-    cache.set('dash:metricas', metricasPayload, 300000)
+    cache.set(cacheKey, metricasPayload, 300000)
     res.json(metricasPayload)
   } catch (err) {
     console.error('[metricas]', err.message)

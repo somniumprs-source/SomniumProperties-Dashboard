@@ -30,12 +30,13 @@ export function Sidebar() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [alertas, tarefas] = await Promise.all([
+        const [alertas, tarefasCount] = await Promise.all([
           apiFetch('/api/alertas').then(r => r.json()).catch(() => null),
-          apiFetch('/api/crm/tarefas?limit=200').then(r => r.json()).catch(() => null),
+          // Endpoint dedicado de contagem — evita puxar ?limit=200 só para o badge.
+          apiFetch('/api/crm/tarefas/count-atrasadas').then(r => r.json()).catch(() => null),
         ])
         const criticos = alertas?.resumo?.criticos ?? 0
-        const atrasadas = Array.isArray(tarefas?.data) ? tarefas.data.filter(t => t.estado === 'Atrasada').length : 0
+        const atrasadas = Number(tarefasCount?.atrasadas) || 0
         setBadges({ alertas: criticos, crm: 0, tarefas: atrasadas })
       } catch {}
     }
@@ -171,21 +172,34 @@ function NotificationsBell() {
   const [items, setItems] = useState([])
   const [unread, setUnread] = useState(0)
   const [open, setOpenPanel] = useState(false)
+  const [listLoaded, setListLoaded] = useState(false)
   const panelRef = useRef(null)
 
-  async function load() {
+  // Boot: só carrega o contador (endpoint leve). Lista detalhada é carregada
+  // ao abrir o painel — evita query pesada no boot quando bell nunca é clicado.
+  async function loadCount() {
+    try {
+      const r = await apiFetch('/api/crm/notificacoes/count')
+      if (r.ok) {
+        const j = await r.json()
+        setUnread(j.unread || 0)
+      }
+    } catch {}
+  }
+  async function loadList() {
     try {
       const r = await apiFetch('/api/crm/notificacoes')
       if (r.ok) {
         const j = await r.json()
         setItems(j.notificacoes || [])
         setUnread(j.unread || 0)
+        setListLoaded(true)
       }
     } catch {}
   }
   useEffect(() => {
-    load()
-    const i = setInterval(load, 60000)
+    loadCount()
+    const i = setInterval(loadCount, 60000)
     return () => clearInterval(i)
   }, [])
 
@@ -198,10 +212,15 @@ function NotificationsBell() {
   }, [open])
 
   async function abrir() {
-    setOpenPanel(!open)
-    if (!open && unread > 0) {
-      await apiFetch('/api/crm/notificacoes/marcar-lidas', { method: 'POST' })
-      setUnread(0)
+    const willOpen = !open
+    setOpenPanel(willOpen)
+    if (willOpen) {
+      // Carrega a lista detalhada só agora (lazy)
+      if (!listLoaded) await loadList()
+      if (unread > 0) {
+        await apiFetch('/api/crm/notificacoes/marcar-lidas', { method: 'POST' })
+        setUnread(0)
+      }
     }
   }
 

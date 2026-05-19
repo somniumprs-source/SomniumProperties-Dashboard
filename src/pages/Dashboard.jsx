@@ -141,7 +141,10 @@ export function Dashboard() {
           </div>
         )}
 
-        {loading && !error && <KPISkeleton count={8} />}
+        {/* Skeleton inicial — só aparece no primeiro boot (quando ainda não há
+            dados parciais). Em refresh subsequente os números antigos ficam
+            visíveis sem flash. */}
+        {loading && !error && !pulse && !kpis && <KPISkeleton count={8} />}
 
         {/* Banner principal — refinado em linha com Projetos */}
         <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 text-white shadow-lg bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700">

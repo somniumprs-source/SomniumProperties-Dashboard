@@ -816,6 +816,15 @@ crudRoutes('/despesas', Despesas)
 crudRoutes('/tarefas', Tarefas)
 crudRoutes('/consultor-interacoes', ConsultorInteracoes)
 
+// Contagem rápida de tarefas atrasadas — usado pelo badge da Sidebar. Evita
+// puxar ?limit=200 só para contar quantas estão em "Atrasada".
+router.get('/tarefas/count-atrasadas', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT COUNT(*)::int AS n FROM tarefas WHERE status = 'Atrasada'`)
+    res.json({ atrasadas: rows[0]?.n ?? 0 })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 // ── Visitas — CRUD com sync de imoveis.data_visita ───────────
 // Cada mutacao (create/update/delete) re-sincroniza o campo derivado
 // imoveis.data_visita = MAX(data_hora) WHERE estado='realizada' AND <= NOW().
@@ -4301,6 +4310,20 @@ router.get('/notificacoes', async (req, res) => {
       [u.id]
     )
     res.json({ notificacoes: rows, unread: unreadRows[0]?.c || 0 })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Contagem de não lidas — endpoint leve para badge da bell. Lista completa
+// só é puxada quando o utilizador abre o painel.
+router.get('/notificacoes/count', async (req, res) => {
+  try {
+    const u = await resolveCrmUser(req).catch(() => null)
+    if (!u) return res.json({ unread: 0 })
+    const { rows } = await pool.query(
+      `SELECT COUNT(*)::int AS c FROM notificacoes WHERE user_id = $1 AND lida = false`,
+      [u.id]
+    )
+    res.json({ unread: rows[0]?.c || 0 })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 

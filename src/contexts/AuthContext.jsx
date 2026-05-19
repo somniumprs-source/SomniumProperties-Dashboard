@@ -8,7 +8,10 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState(null)
 
-  const refreshProfile = useCallback(async () => {
+  // Aceita um session opcional (vindo de getSession já feito) para evitar
+  // chamada duplicada a supabase.auth.getSession(). Quando ausente, faz
+  // getSession internamente (mantém compat. com onAuthStateChange).
+  const refreshProfile = useCallback(async (sessionArg) => {
     if (!authEnabled || !supabase) {
       // Modo dev: assume admin
       setProfile({
@@ -20,7 +23,11 @@ export function AuthProvider({ children }) {
       return
     }
     try {
-      const { data: { session } } = await supabase.auth.getSession()
+      let session = sessionArg
+      if (session === undefined) {
+        const r = await supabase.auth.getSession()
+        session = r.data.session
+      }
       if (!session?.access_token) { setProfile(null); return }
       const r = await fetch('/api/users/me', { headers: { Authorization: `Bearer ${session.access_token}` } })
       if (!r.ok) { setProfile(null); return }
@@ -50,7 +57,8 @@ export function AuthProvider({ children }) {
       .then(async ({ data: { session } }) => {
         clearTimeout(timeoutId)
         setSession(session)
-        if (session) await refreshProfile()
+        // Passa a session já obtida — evita 2º getSession dentro de refreshProfile
+        if (session) await refreshProfile(session)
         setLoading(false)
       })
       .catch((err) => {
@@ -60,7 +68,7 @@ export function AuthProvider({ children }) {
       })
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, s) => {
       setSession(s)
-      if (s) await refreshProfile(); else setProfile(null)
+      if (s) await refreshProfile(s); else setProfile(null)
     })
     return () => { clearTimeout(timeoutId); subscription.unsubscribe() }
   }, [refreshProfile])
