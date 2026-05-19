@@ -24,9 +24,8 @@ router.get('/', async (req, res) => {
       where = 'WHERE departamento = $1'
     }
     const { rows } = await pool.query(
-      `SELECT id, titulo, departamento, versao, drive_url, drive_file_id,
-              created_at, updated_at, updated_by,
-              LEFT(conteudo_md, 400) AS conteudo_md_preview
+      `SELECT id, titulo, departamento, drive_url, drive_file_id,
+              created_at, updated_at, updated_by
          FROM sops ${where}
          ORDER BY
            COALESCE((SUBSTRING(titulo FROM 'SOP[[:space:]]*([0-9]+)'))::int, 999999),
@@ -52,33 +51,11 @@ router.get('/:id', async (req, res) => {
   }
 })
 
-// POST /api/sops
-router.post('/', async (req, res) => {
-  try {
-    const { titulo, departamento, conteudo_md } = req.body || {}
-    if (!titulo || !departamento) {
-      return res.status(400).json({ error: 'titulo e departamento são obrigatórios' })
-    }
-    if (!DEPARTAMENTOS_VALIDOS.includes(departamento)) {
-      return res.status(400).json({ error: `departamento inválido: ${departamento}` })
-    }
-    const user = userEmail(req)
-    const { rows } = await pool.query(
-      `INSERT INTO sops (titulo, departamento, conteudo_md, created_by, updated_by)
-       VALUES ($1, $2, $3, $4, $4) RETURNING *`,
-      [titulo, departamento, conteudo_md || '', user]
-    )
-    res.json({ sop: rows[0] })
-  } catch (e) {
-    console.error('[sops] create erro:', e)
-    res.status(500).json({ error: e.message })
-  }
-})
-
-// PUT /api/sops/:id
+// PUT /api/sops/:id  — só permite reclassificar (titulo + departamento). O
+// conteúdo dos SOPs vive no Drive, não na BD.
 router.put('/:id', async (req, res) => {
   try {
-    const { titulo, departamento, conteudo_md } = req.body || {}
+    const { titulo, departamento } = req.body || {}
     if (departamento && !DEPARTAMENTOS_VALIDOS.includes(departamento)) {
       return res.status(400).json({ error: `departamento inválido: ${departamento}` })
     }
@@ -88,11 +65,9 @@ router.put('/:id', async (req, res) => {
     let i = 1
     if (titulo !== undefined) { fields.push(`titulo = $${i++}`); values.push(titulo) }
     if (departamento !== undefined) { fields.push(`departamento = $${i++}`); values.push(departamento) }
-    if (conteudo_md !== undefined) { fields.push(`conteudo_md = $${i++}`); values.push(conteudo_md) }
     if (!fields.length) return res.status(400).json({ error: 'Nada para actualizar' })
     fields.push(`updated_at = NOW()`)
     fields.push(`updated_by = $${i++}`); values.push(user)
-    fields.push(`versao = versao + 1`)
     values.push(req.params.id)
     const { rows } = await pool.query(
       `UPDATE sops SET ${fields.join(', ')} WHERE id = $${i} RETURNING *`,
