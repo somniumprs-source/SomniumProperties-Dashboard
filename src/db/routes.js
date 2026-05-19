@@ -237,6 +237,62 @@ function crudRoutes(path, crud, { onCreate, onUpdate } = {}) {
   })
 }
 
+// Mapa estado do imóvel → categoria de negocio
+// Nota: o estado no CRM aparece como "Wholesaling" (1 L) mas a categoria de negocio é "Wholesalling" (2 Ls)
+const ESTADO_IMOVEL_PARA_CATEGORIA = {
+  'Wholesaling':  'Wholesalling',
+  'Wholesalling': 'Wholesalling',
+  'CAEP':         'CAEP',
+  'Fix and Flip': 'Fix and Flip',
+}
+
+async function autoCriarNegocioDeImovel(imovel, novoEstado) {
+  const categoria = ESTADO_IMOVEL_PARA_CATEGORIA[novoEstado]
+  if (!categoria) return  // estado não é um modelo de negócio
+
+  // Idempotência: skipar se já existir negocio activo para este imóvel
+  const { rows: existentes } = await pool.query(
+    `SELECT id FROM negocios WHERE imovel_id = $1 AND (deleted_at IS NULL) LIMIT 1`,
+    [imovel.id]
+  )
+  if (existentes.length > 0) {
+    console.log(`[auto-negocio] Skip — já existe negocio para imóvel ${imovel.nome || imovel.id}`)
+    return
+  }
+
+  const negocioId = randomUUID()
+  const capital = Number(imovel.valor_proposta) > 0 ? Number(imovel.valor_proposta) : (Number(imovel.ask_price) || 0)
+  const lucroEst = Number(imovel.valor_venda_remodelado) > 0 && Number(imovel.custo_estimado_obra) >= 0 && capital > 0
+    ? Math.max(0, Number(imovel.valor_venda_remodelado) - capital - Number(imovel.custo_estimado_obra || 0))
+    : 0
+  const movimento = imovel.nome || `Projecto ${categoria}`
+  const notas = `Auto-criado a partir do imóvel "${imovel.nome || imovel.id}" (estado: ${novoEstado})`
+
+  await pool.query(
+    `INSERT INTO negocios (id, movimento, categoria, fase, capital_total, lucro_estimado, imovel_id, data, notas)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [
+      negocioId,
+      movimento,
+      categoria,
+      'Fase de obras',
+      capital,
+      lucroEst,
+      imovel.id,
+      new Date().toISOString().slice(0, 10),
+      notas,
+    ]
+  )
+
+  // Auto-criar fases conforme template da categoria
+  if (FASES_POR_CATEGORIA[categoria]) {
+    await criarFasesProjecto(negocioId, categoria).catch(e => console.error('[auto-negocio] criarFases:', e.message))
+  }
+
+  console.log(`[auto-negocio] Criado negocio ${negocioId} (${categoria}) para imóvel ${imovel.nome || imovel.id}`)
+  return negocioId
+}
+
 crudRoutes('/imoveis', Imoveis, {
   onCreate: async (item) => {
     if (driveConfigured()) {
@@ -244,6 +300,10 @@ crudRoutes('/imoveis', Imoveis, {
     }
     // Auto-gerar Ficha do Imóvel v1 (persiste em disco + documentos_imovel)
     onImovelCreated(item).catch(e => console.error('[docs] onCreate ficha:', e.message))
+    // Se o imóvel é criado já num estado de modelo de negócio, auto-criar projecto
+    if (ESTADO_IMOVEL_PARA_CATEGORIA[item.estado]) {
+      autoCriarNegocioDeImovel(item, item.estado).catch(e => console.error('[auto-negocio] onCreate:', e.message))
+    }
     // Auto-scrape fotos do link do anuncio
     if (item.link && item.link.startsWith('http')) {
       scrapePhotosFromLink(item.link, item.id).then(async (photos) => {
@@ -277,6 +337,11 @@ crudRoutes('/imoveis', Imoveis, {
       // Mover pasta no Drive
       if (driveConfigured()) {
         await moveImovelFolder(item.id, body.estado)
+      }
+      // Auto-criar projecto quando estado muda para um modelo de negócio
+      if (body.estado !== item.estado && ESTADO_IMOVEL_PARA_CATEGORIA[body.estado]) {
+        const merged = { ...item, ...body }
+        autoCriarNegocioDeImovel(merged, body.estado).catch(e => console.error('[auto-negocio] onUpdate:', e.message))
       }
       // Gerar documentos da fase: persistir em Supabase Storage + DB e upload ao Drive
       const docs = getDocsForEstado(body.estado)
