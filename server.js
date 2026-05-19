@@ -4160,12 +4160,16 @@ app.post('/api/calendar/events', async (req, res) => {
 app.get('/api/tarefas', async (req, res) => {
   try {
     const pgPool = (await import('./src/db/pg.js')).default
-    const { limit = 100, offset = 0, status, funcionario, since, until } = req.query
-    const cappedLimit = Math.min(Math.max(+limit || 100, 1), 500)
+    const { limit = 100, offset = 0, status, funcionario, since, until, incluir_arquivadas } = req.query
+    const cappedLimit = Math.min(Math.max(+limit || 100, 1), 2000)
     const cappedOffset = Math.max(+offset || 0, 0)
+    const incluirArquivadas = incluir_arquivadas === 'true' || incluir_arquivadas === '1'
     let q = 'SELECT * FROM tarefas'
     const params = []
     const conds = []
+    // Por defeito esconde tarefas arquivadas (concluídas há >90 dias).
+    // Métricas/KPI continuam a contá-las porque usam getTarefas() directamente.
+    if (!incluirArquivadas) conds.push('arquivada = FALSE')
     if (status) { conds.push(`status = $${params.length + 1}`); params.push(status) }
     if (funcionario) { conds.push(`funcionario ILIKE $${params.length + 1}`); params.push(`%${funcionario}%`) }
     if (since) { conds.push(`inicio >= $${params.length + 1}`); params.push(since) }
@@ -4249,6 +4253,33 @@ app.delete('/api/tarefas/:id', async (req, res) => {
     if (tarefa?.gcal_event_id) {
       deleteGCalEvent(gcal, GCAL_ID, tarefa.gcal_event_id).catch(e => console.error('[gcal-sync]', e.message))
     }
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Endpoint manual (admin): POST /api/tarefas/arquivar-antigas?dias=90
+app.post('/api/tarefas/arquivar-antigas', async (req, res) => {
+  try {
+    const { arquivarTarefasAntigas } = await import('./src/db/tarefasArquivo.js')
+    const dias = Math.max(parseInt(req.query.dias) || 90, 30)
+    const arquivadas = await arquivarTarefasAntigas(dias)
+    cache.invalidate('dash:')
+    res.json({ ok: true, arquivadas, dias_limite: dias })
+  } catch (e) {
+    console.error('[arquivar-tarefas]', e.message)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Endpoint reverso: POST /api/tarefas/desarquivar/:id
+app.post('/api/tarefas/desarquivar/:id', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      'UPDATE tarefas SET arquivada = FALSE, arquivada_em = NULL WHERE id = $1',
+      [req.params.id]
+    )
+    if (rowCount === 0) return res.status(404).json({ error: 'Tarefa não encontrada' })
+    cache.invalidate('dash:')
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })

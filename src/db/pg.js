@@ -1089,6 +1089,17 @@ export async function initSchema() {
       END $$;
       CREATE INDEX IF NOT EXISTS idx_tarefas_regiao ON tarefas(regiao);
 
+      -- Arquivamento de tarefas concluídas há mais de 90 dias (reversível).
+      -- As tarefas continuam na BD; apenas ficam ocultas das listagens por
+      -- defeito. Métricas e KPIs continuam a contá-las.
+      DO $$ BEGIN
+        ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS arquivada BOOLEAN DEFAULT FALSE;
+        ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS arquivada_em TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+      -- Index parcial: 99% das queries filtram WHERE arquivada = FALSE.
+      CREATE INDEX IF NOT EXISTS idx_tarefas_activas ON tarefas(inicio DESC) WHERE arquivada = FALSE;
+
       DO $$ BEGIN
         ALTER TABLE users ADD COLUMN IF NOT EXISTS regiao TEXT;
       EXCEPTION WHEN OTHERS THEN NULL;

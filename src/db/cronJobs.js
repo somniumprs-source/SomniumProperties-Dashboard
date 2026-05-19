@@ -473,6 +473,18 @@ export function startCronJobs() {
   // Arquivo mensal de relatórios de obra — Dia 1 de cada mês às 06:00
   cron.schedule('0 6 1 * *', runArquivoRelatoriosObra, { timezone: TIMEZONE })
   console.log('[cron] Arquivo mensal de relatórios de obra registado → Dia 1 06:00 Europe/Lisbon')
+
+  // Arquivamento trimestral de tarefas concluídas há >90 dias — 1 Jan/Abr/Jul/Out 03:00
+  cron.schedule('0 3 1 1,4,7,10 *', async () => {
+    try {
+      const { arquivarTarefasAntigas } = await import('./tarefasArquivo.js')
+      const n = await arquivarTarefasAntigas(90)
+      console.log(`[cron] Tarefas arquivadas (>90 dias): ${n}`)
+    } catch (e) {
+      console.error('[cron] Arquivamento de tarefas falhou:', e.message)
+    }
+  }, { timezone: TIMEZONE })
+  console.log('[cron] Arquivamento trimestral de tarefas registado → 1 Jan/Abr/Jul/Out 03:00 Europe/Lisbon')
 }
 
 // Exports para execução manual via API
