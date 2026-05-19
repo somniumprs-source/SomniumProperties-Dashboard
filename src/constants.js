@@ -24,7 +24,7 @@ export const REGIAO_COR = {
 
 export const CONCELHOS_POR_REGIAO = {
   Coimbra: ['Coimbra', 'Condeixa-a-Nova', 'Mealhada', 'Cantanhede', 'Montemor-o-Velho', 'Penacova', 'Miranda do Corvo', 'Lousã'],
-  AMP: ['Porto', 'Vila Nova de Gaia'],
+  AMP: ['Porto', 'Vila Nova de Gaia', 'Santa Maria da Feira'],
 }
 
 export function concelhosDe(regiao) {

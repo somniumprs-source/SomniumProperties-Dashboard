@@ -28,7 +28,8 @@ function TabFallback() {
   )
 }
 import { Combobox } from '../ui/Combobox.jsx'
-import freguesiasData from '../../constants/coimbra-freguesias.json'
+import coimbraFreguesiasData from '../../constants/coimbra-freguesias.json'
+import ampFreguesiasData from '../../constants/amp-freguesias.json'
 import { supabase } from '../../lib/supabase.js'
 import { CLASS_COLOR, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, ORIGENS_INVESTIDORES, fmtDate, fmtDateRelative } from '../../constants.js'
 
@@ -1118,6 +1119,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
             {type === 'Consultores' && <>
               {editing ? <>
                 <EF label="Nome" field="nome" form={form} set={setField} />
+                <EF label="Região" field="regiao" form={form} set={setField} type="select" options={['Coimbra','AMP']} />
                 <EF label="Estatuto" field="estatuto" form={form} set={setField} type="select" options={['Cold Call','Follow up','Aberto Parcerias','Acesso imoveis Off market','Consultores em Parceria']} />
                 <EF label="Estado Avaliação" field="estado_avaliacao" form={form} set={setField} type="select" options={['Em avaliação','Ativo','Inativo']} />
                 <EF label="Classificação" field="classificacao" form={form} set={setField} type="select" options={['A','B','C','D']} />
@@ -1126,6 +1128,11 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                 <EF label="Comissão %" field="comissao" form={form} set={setField} type="number" />
                 <EF label="Leads Enviados" field="imoveis_enviados" form={form} set={setField} type="number" />
                 <EF label="Off-Market" field="imoveis_off_market" form={form} set={setField} type="number" />
+                <div className="col-span-1 sm:col-span-2 md:col-span-3">
+                  <ChipsEditor label="Imobiliárias" jsonField={form.imobiliaria} onChange={v => setField('imobiliaria', JSON.stringify(v))} placeholder="Ex: Remax, Century 21…" />
+                </div>
+                <div className="col-span-1 sm:col-span-2 md:col-span-3">
+                  <ChipsEditor label="Zonas de Atuação" jsonField={form.zonas} onChange={v => setField('zonas', JSON.stringify(v))} placeholder={form.regiao === 'AMP' ? 'Ex: Porto, Vila Nova de Gaia, Bonfim…' : 'Ex: Coimbra, Lousã, Penacova…'} /></div>
                 <EF label="Meta Mensal Leads" field="meta_mensal_leads" form={form} set={setField} type="number" />
                 <EF label="Data Início Parceria" field="data_inicio" form={form} set={setField} type="date" />
                 <EF label="1º Contacto" field="data_primeira_call" form={form} set={setField} type="date" />
@@ -1572,14 +1579,69 @@ function Section({ icon, title, fields, form, defaultOpen = false, accent, child
   )
 }
 
-// Hook que devolve concelhos/freguesias para os Combobox da secção Localização
+// Editor de tags livre — guarda como JSON array em string. Suporta criar do
+// zero (ex: imobiliária nova em AMP, zonas de atuação em concelhos novos).
+// Enter adiciona, X remove, vírgula também separa.
+function ChipsEditor({ label, jsonField, onChange, placeholder }) {
+  const items = useMemo(() => {
+    try {
+      if (Array.isArray(jsonField)) return jsonField
+      const v = JSON.parse(jsonField || '[]')
+      return Array.isArray(v) ? v : []
+    } catch { return [] }
+  }, [jsonField])
+  const [input, setInput] = useState('')
+  const add = (raw) => {
+    const novo = String(raw || '').trim()
+    if (!novo) return
+    const next = [...new Set([...items, novo])]
+    onChange(next)
+    setInput('')
+  }
+  const remove = (idx) => onChange(items.filter((_, i) => i !== idx))
+  const onKey = (e) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      add(input)
+    } else if (e.key === 'Backspace' && !input && items.length) {
+      onChange(items.slice(0, -1))
+    }
+  }
+  return (
+    <div>
+      <p className="text-xs text-gray-400 mb-1">{label}</p>
+      <div className="flex flex-wrap gap-1.5 px-2 py-1.5 rounded-lg border border-gray-200 bg-white min-h-[38px] focus-within:ring-2 focus-within:ring-yellow-300">
+        {items.map((it, i) => (
+          <span key={`${it}-${i}`} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-yellow-50 border border-yellow-200 text-yellow-900">
+            {it}
+            <button type="button" onClick={() => remove(i)} className="text-yellow-700 hover:text-red-600" aria-label={`Remover ${it}`}>×</button>
+          </span>
+        ))}
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={onKey}
+          onBlur={() => input && add(input)}
+          placeholder={items.length ? '' : (placeholder || 'Escreve e prime Enter…')}
+          className="flex-1 min-w-[140px] outline-none text-sm bg-transparent"
+        />
+      </div>
+    </div>
+  )
+}
+
+// Hook que devolve concelhos/freguesias para os Combobox da secção Localização.
+// Determina a fonte de dados pela região do imóvel: AMP usa amp-freguesias
+// (Porto, Vila Nova de Gaia, Santa Maria da Feira); Coimbra usa o JSON
+// histórico do distrito de Coimbra.
 function useFreguesiasLookup(form) {
-  const concelhos = Object.keys(freguesiasData?.concelhos || {})
+  const dataset = form?.regiao === 'AMP' ? ampFreguesiasData : coimbraFreguesiasData
+  const concelhos = Object.keys(dataset?.concelhos || {})
   const freguesias = useMemo(() => {
     const c = form?.concelho
-    if (c && freguesiasData?.concelhos?.[c]) return freguesiasData.concelhos[c]
-    return Object.values(freguesiasData?.concelhos || {}).flat()
-  }, [form?.concelho])
+    if (c && dataset?.concelhos?.[c]) return dataset.concelhos[c]
+    return Object.values(dataset?.concelhos || {}).flat()
+  }, [form?.concelho, form?.regiao])
   return { concelhos, freguesias }
 }
 
