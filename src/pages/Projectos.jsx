@@ -154,9 +154,12 @@ export function Projectos() {
     finally { setLoading(false) }
   }
 
-  async function loadFases(negocios) {
-    // Carrega fases para todas as categorias que suportam workflow
-    const negociosComFases = negocios.filter(n => FASES_KANBAN_POR_CATEGORIA[n.categoria])
+  async function loadFases(negocios, categoriaActiva) {
+    // Optimização: só carregar fases para projectos da categoria filtrada (evita N requests inúteis)
+    const negociosComFases = negocios.filter(n =>
+      FASES_KANBAN_POR_CATEGORIA[n.categoria] &&
+      (!categoriaActiva || n.categoria === categoriaActiva)
+    )
     const result = {}
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
     await Promise.all(negociosComFases.map(async (n) => {
@@ -188,7 +191,7 @@ export function Projectos() {
   }
 
   useEffect(() => { load() }, [regiao])
-  useEffect(() => { if (projectos.length > 0) loadFases(projectos) }, [projectos])
+  useEffect(() => { if (projectos.length > 0) loadFases(projectos, filterCat) }, [projectos, filterCat])
   useEffect(() => {
     apiFetch('/api/crm/projetos/portfolio/kpis')
       .then(r => r.ok ? r.json() : null)
@@ -463,6 +466,7 @@ export function Projectos() {
             readOnly={isReadOnly}
             onCardClick={(id) => navigate(`/projectos/${id}`)}
             onMoveCard={async (negocioId, faseKey) => {
+              console.log('[kanban] moveCard', { negocioId, faseKey })
               try {
                 const r = await apiFetch(`/api/crm/projetos/${negocioId}/mover-fase`, {
                   method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -470,11 +474,16 @@ export function Projectos() {
                 })
                 if (!r.ok) {
                   const err = await r.json().catch(() => ({}))
-                  alert(err.error || 'Não foi possível mover. Inicializa as fases primeiro.')
+                  console.error('[kanban] mover-fase falhou:', r.status, err)
+                  alert(err.error || `Não foi possível mover (HTTP ${r.status})`)
                   return
                 }
+                console.log('[kanban] move OK — a recarregar')
                 load()
-              } catch (e) { alert(e.message) }
+              } catch (e) {
+                console.error('[kanban] mover-fase exception:', e)
+                alert(e.message)
+              }
             }}
           />
         ) : (
