@@ -19,6 +19,7 @@ import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
 import { useRegiaoGate } from '../contexts/RegiaoContext.jsx'
 import { RegiaoModal } from '../components/RegiaoModal.jsx'
 import { RegiaoBadge } from '../components/RegiaoBadge.jsx'
+import ampFreguesiasData from '../constants/amp-freguesias.json'
 
 const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Construtores']
 // Sub-tabs que requerem distinção regional (modal ao entrar). Investidores
@@ -1609,7 +1610,7 @@ const FIELD_DEFS = {
     { key: 'custo_estimado_obra', label: 'Custo Estimado Obra (€)', type: 'number' },
     { key: 'valor_venda_remodelado', label: 'Valor Venda Remodelado (€)', type: 'number' },
     { key: 'zona', label: 'Zona Principal', type: 'text' },
-    { key: 'zonas', label: 'Zonas', type: 'multiselect', options: FREGUESIAS },
+    { key: 'zonas', label: 'Zonas', type: 'multiselect_freguesias' },
     { key: 'origem', label: 'Origem', type: 'select', options: ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro'] },
     { key: 'modelo_negocio', label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix & Flip','CAEP','Mediação'] },
     { key: 'nome_consultor', label: 'Consultor', type: 'relation_name_or_new', endpoint: '/api/crm/lookup/consultores', display: r => `${r.nome} (${r.estatuto ?? '—'})`, createEndpoint: '/api/crm/consultores/find-or-create' },
@@ -1748,6 +1749,21 @@ const ZONAS_ATUACAO_POR_REGIAO = {
   Coimbra: FREGUESIAS,
 }
 
+// Freguesias por região — usado no campo "Zonas" do imóvel.
+// AMP: união das freguesias de Porto, Vila Nova de Gaia, Santa Maria da Feira
+// (ordenadas alfabeticamente, deduplicadas).
+const FREGUESIAS_AMP = (() => {
+  const all = []
+  for (const c of Object.values(ampFreguesiasData?.concelhos || {})) {
+    if (Array.isArray(c)) all.push(...c)
+  }
+  return [...new Set(all)].sort((a, b) => a.localeCompare(b, 'pt'))
+})()
+const FREGUESIAS_POR_REGIAO = {
+  AMP: FREGUESIAS_AMP,
+  Coimbra: FREGUESIAS,
+}
+
 // Input com chips + autocomplete a partir de sugestões da BD (ex: imobiliárias
 // já usadas por outros consultores). Texto livre — pode-se criar nova com Enter.
 // `value` é uma JSON string (formato actual da coluna `imobiliaria`).
@@ -1873,6 +1889,13 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
               <MultiSelect
                 value={form[f.key]}
                 options={ZONAS_ATUACAO_POR_REGIAO[form.regiao || regiao] || ZONAS_ATUACAO_POR_REGIAO.Coimbra}
+                onChange={v => handleChange(f.key, v)}
+                placeholder={`Selecionar ${f.label.toLowerCase()}...`}
+              />
+            ) : f.type === 'multiselect_freguesias' ? (
+              <MultiSelect
+                value={form[f.key]}
+                options={FREGUESIAS_POR_REGIAO[form.regiao || regiao] || FREGUESIAS_POR_REGIAO.Coimbra}
                 onChange={v => handleChange(f.key, v)}
                 placeholder={`Selecionar ${f.label.toLowerCase()}...`}
               />
