@@ -871,12 +871,14 @@ export function CRM() {
     const item = data.find(i => i.id === id)
     await apiFetch(`/api/crm/${endpoint}/${id}`, {
       method: 'PUT',
+      regiao: regiaoActiva,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ [field]: newColumn, ...extra }),
     })
     // Auto-task on phase change
     apiFetch('/api/crm/auto-task', {
       method: 'POST',
+      regiao: regiaoActiva,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ entity: endpoint, entityId: id, entityName: item?.nome ?? item?.movimento ?? '', newPhase: newColumn }),
     }).catch(() => {})
@@ -910,7 +912,10 @@ export function CRM() {
       const isNew = !item.id
       const url = isNew ? `/api/crm/${endpoint}` : `/api/crm/${endpoint}/${item.id}`
       const method = isNew ? 'POST' : 'PUT'
-      const r = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) })
+      // Propagar a região activa — o middleware regional do backend usa o
+      // header X-Regiao para preencher automaticamente body.regiao (ou
+      // regioes_preferidas em investidores) quando ausente.
+      const r = await apiFetch(url, { method, regiao: regiaoActiva, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) })
       if (!r.ok) throw new Error('Erro ao guardar')
       const saved = await r.json()
       toast(isNew ? 'Registo criado' : 'Registo atualizado', 'success')
