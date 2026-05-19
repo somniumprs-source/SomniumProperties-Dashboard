@@ -126,6 +126,35 @@ router.use((_req, res, next) => {
   next()
 })
 
+// ── Multi-região: filtro automático por X-Regiao ─────────────
+// Lê o header X-Regiao e injecta em req.regiaoActiva + req.query.regiao.
+// Quando o crudRoutes.list usa req.query como filter, o CRUD aceita
+// regiao= como filtro de coluna (validado por information_schema), pelo
+// que basta passar a query: as tabelas que TÊM coluna regiao são filtradas,
+// as que não têm são ignoradas silenciosamente.
+// Para mutações (POST/PUT), preenche também req.body.regiao se ausente — o
+// frontend não precisa de enviar o campo explicitamente.
+const REGIOES_VALIDAS = new Set(['Coimbra', 'AMP'])
+router.use((req, _res, next) => {
+  const r = req.headers['x-regiao'] || req.headers['X-Regiao']
+  if (r && REGIOES_VALIDAS.has(r)) {
+    req.regiaoActiva = r
+    // POST/PUT/PATCH: pré-preenche regiao no body. Caso especial investidores
+    // (pool unificado): usa regioes_preferidas (JSON array) em vez de regiao.
+    if ((req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') && req.body && typeof req.body === 'object') {
+      const isInvestidor = req.path.startsWith('/investidores')
+      if (isInvestidor) {
+        if (req.body.regioes_preferidas === undefined) {
+          req.body.regioes_preferidas = JSON.stringify([r])
+        }
+      } else if (req.body.regiao === undefined) {
+        req.body.regiao = r
+      }
+    }
+  }
+  next()
+})
+
 // ── Mapa de qualidade por estado do pipeline ─────────────────
 // 0% = enviado sem info | 25% = check qualidade (SOP §5.1)
 // 50% = visita/VVR concluído | 75% = negociação activa | 100% = proposta apresentada
@@ -152,6 +181,11 @@ function crudRoutes(path, crud, { onCreate, onUpdate } = {}) {
   router.get(path, async (req, res) => {
     try {
       const { limit = 100, offset = 0, sort, search, ...filter } = req.query
+      // Injecta regiao activa no filter, salvo se já vier explicitamente.
+      // O crud.list valida via getColumns: tabelas sem coluna regiao ignoram.
+      if (req.regiaoActiva && filter.regiao === undefined) {
+        filter.regiao = req.regiaoActiva
+      }
       if (search) {
         const data = await crud.search(search, +limit)
         return res.json({ data, total: data.length })

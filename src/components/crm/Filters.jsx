@@ -1,14 +1,26 @@
 /**
  * Filtros dinâmicos por tab.
  */
-import { invStatusFor } from '../../constants.js'
+import { invStatusFor, concelhosDe } from '../../constants.js'
+import { useRegiao } from '../../contexts/RegiaoContext.jsx'
 
 export function Filters({ tab, filters, onChange }) {
+  const { regiaoAtiva } = useRegiao()
+  const concelhos = concelhosDe(regiaoAtiva)
+
   function set(key, value) {
     onChange({ ...filters, [key]: value || undefined })
   }
 
   const selectClass = "px-2 py-1.5 rounded-lg border border-gray-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
+
+  // Filtro de concelho — disponível em todas as tabs com entidades geo-referenciadas
+  const concelhoFilter = concelhos.length > 0 && ['Imóveis','Negócios','Despesas','Consultores'].includes(tab) && (
+    <select value={filters.concelho ?? ''} onChange={e => set('concelho', e.target.value)} className={selectClass}>
+      <option value="">Todos os concelhos</option>
+      {concelhos.map(c => <option key={c} value={c}>{c}</option>)}
+    </select>
+  )
 
   return (
     <div className="flex flex-wrap gap-2 items-center">
@@ -31,6 +43,7 @@ export function Filters({ tab, filters, onChange }) {
             <option key={o} value={o}>{o}</option>
           )}
         </select>
+        {concelhoFilter}
       </>}
       {tab === 'Investidores' && <>
         <select value={filters.status ?? ''} onChange={e => set('status', e.target.value)} className={selectClass}>
@@ -67,6 +80,7 @@ export function Filters({ tab, filters, onChange }) {
           <option value="">Todas as classes</option>
           {['A','B','C','D'].map(o => <option key={o} value={o}>{o}</option>)}
         </select>
+        {concelhoFilter}
       </>}
       {tab === 'Negócios' && <>
         <select value={filters.categoria ?? ''} onChange={e => set('categoria', e.target.value)} className={selectClass}>
@@ -79,12 +93,14 @@ export function Filters({ tab, filters, onChange }) {
           <option value="">Todas as fases</option>
           {['Fase de obras','Fase de venda','Vendido'].map(o => <option key={o} value={o}>{o}</option>)}
         </select>
+        {concelhoFilter}
       </>}
       {tab === 'Despesas' && <>
         <select value={filters.timing ?? ''} onChange={e => set('timing', e.target.value)} className={selectClass}>
           <option value="">Todos os timings</option>
           {['Mensalmente','Anual','Único'].map(o => <option key={o} value={o}>{o}</option>)}
         </select>
+        {concelhoFilter}
       </>}
       {Object.values(filters).some(v => v) && (
         <button onClick={() => onChange({})} className="text-xs text-red-500 hover:text-red-700 underline">Limpar</button>

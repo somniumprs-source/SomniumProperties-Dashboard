@@ -10,6 +10,7 @@ import { PartilharAcesso } from '../PartilharAcesso.jsx'
 import { AnaliseTab } from '../analise/AnaliseTab.jsx'
 import { ObraTab } from '../obra/ObraTab.jsx'
 import { InteracoesTab } from './InteracoesTab.jsx'
+import { MatchingInvestidoresTab } from './MatchingInvestidoresTab.jsx'
 import { FollowUpsSection } from './FollowUpsSection.jsx'
 import { WhatsAppTab } from './WhatsAppTab.jsx'
 import { FicheirosTab } from './FicheirosTab.jsx'
@@ -780,6 +781,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
     { key: 'localizacao', label: 'Localização', icon: '📍', show: type === 'Imóveis' },
     { key: 'pontos_riscos', label: 'Pontos & Riscos', icon: '⚖️', show: type === 'Imóveis' },
     { key: 'visitas', label: 'Visitas', icon: '🚪', show: type === 'Imóveis' },
+    { key: 'matching', label: 'Matching investidores', icon: '🎯', show: type === 'Imóveis' },
     { key: 'relatorios_imovel', label: 'Documentos', icon: '📄', show: type === 'Imóveis' },
     { key: 'checklist', label: 'Checklist', icon: '📋', show: type === 'Imóveis' },
     { key: 'whatsapp', label: 'WhatsApp', icon: '📱', show: type === 'Consultores' },
@@ -890,6 +892,11 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
 
       ) : type === 'Imóveis' && activeTab === 'visitas' ? (
         <VisitasTab imovelId={data.id} onUpdate={loadData} />
+
+      ) : type === 'Imóveis' && activeTab === 'matching' ? (
+        <div className="p-4 sm:p-6">
+          <MatchingInvestidoresTab imovelId={data.id} imovelNome={data.nome} />
+        </div>
 
       ) : type === 'Imóveis' && activeTab === 'pontos_riscos' ? (
         <div className="p-4 sm:p-6">
@@ -1610,6 +1617,14 @@ function ImovelEditSections({ data, form, setField }) {
 
     {/* 2. Localização */}
     <Section icon="📍" title="Localização" fields={sec.localizacao} form={form}>
+      <div>
+        <p className="text-xs text-gray-400 mb-1">Região</p>
+        <select value={form.regiao || 'Coimbra'} onChange={e => setField('regiao', e.target.value)}
+          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+          <option value="Coimbra">Coimbra</option>
+          <option value="AMP">AMP (Porto + Gaia)</option>
+        </select>
+      </div>
       <div>
         <Combobox label="Distrito" value={form.distrito} onChange={v => setField('distrito', v)} options={[]} placeholder="Coimbra…" />
       </div>

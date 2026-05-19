@@ -81,19 +81,37 @@ function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at 
     async list({ limit = 100, offset = 0, sort = defaultSort, filter } = {}) {
       let query = `SELECT * FROM ${table}`
       const params = []
+      const whereParts = []
       if (filter) {
         const cols = await getColumns(table)
-        const conditions = Object.entries(filter)
-          .filter(([k, v]) => v !== undefined && v !== null && v !== '' && cols.has(k))
-        if (conditions.length > 0) {
-          const where = conditions.map(([k, v], i) => { params.push(v); return `${k} = $${i + 1}` })
-          query += ` WHERE ${where.join(' AND ')}`
+        // Caso especial: investidores filtram por regioes_preferidas (JSON array)
+        // em vez de coluna regiao igual. Pool unificado: investidor visível na
+        // região X se "X" estiver no array regioes_preferidas.
+        if (table === 'investidores' && filter.regiao && cols.has('regioes_preferidas')) {
+          params.push(`%"${filter.regiao}"%`)
+          whereParts.push(`regioes_preferidas LIKE $${params.length}`)
+        }
+        for (const [k, v] of Object.entries(filter)) {
+          if (v === undefined || v === null || v === '') continue
+          if (!cols.has(k)) continue
+          if (table === 'investidores' && k === 'regiao') continue // já tratado acima
+          params.push(v)
+          whereParts.push(`${k} = $${params.length}`)
+        }
+        if (whereParts.length > 0) {
+          query += ` WHERE ${whereParts.join(' AND ')}`
         }
       }
       query += ` ORDER BY ${sort} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`
       params.push(limit, offset)
       const { rows } = await pool.query(query, params)
-      const { rows: countRows } = await pool.query(`SELECT COUNT(*) as c FROM ${table}`)
+      // Total respeita o filtro também (antes contava sempre a tabela inteira,
+      // o que dava paginação errada quando filtros estavam activos)
+      const countQuery = whereParts.length > 0
+        ? `SELECT COUNT(*) as c FROM ${table} WHERE ${whereParts.join(' AND ')}`
+        : `SELECT COUNT(*) as c FROM ${table}`
+      const countParams = whereParts.length > 0 ? params.slice(0, -2) : []
+      const { rows: countRows } = await pool.query(countQuery, countParams)
       return { data: rows, total: parseInt(countRows[0].c), limit, offset }
     },
 

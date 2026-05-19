@@ -1,16 +1,18 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { FileText, BookOpen } from 'lucide-react'
+import { FileText, BookOpen, Map } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
 
 const TABS = [
   { key: 'sop',        label: 'SOP',                icon: BookOpen },
   { key: 'relatorios', label: 'Relatórios Reuniões', icon: FileText },
+  { key: 'regiao',     label: 'Multi-Região',        icon: Map },
 ]
 
 const SUBTITLES = {
   sop:        'Procedimentos operacionais por departamento',
   relatorios: 'Sínteses executivas semanais geradas a partir das reuniões internas',
+  regiao:     'Mercado de referência, compliance, hot zones e benchmarking por região',
 }
 
 export function Administracao() {

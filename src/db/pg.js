@@ -1040,6 +1040,8 @@ export async function initSchema() {
       DO $$ BEGIN
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS regiao TEXT;
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS concelho TEXT;
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS distrito TEXT;
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS freguesia TEXT;
         UPDATE imoveis SET regiao = 'Coimbra' WHERE regiao IS NULL;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
