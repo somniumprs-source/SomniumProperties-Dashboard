@@ -957,7 +957,7 @@ function FotosGaleriaPorFase({ fotos, onDelete }) {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
             {g.fotos.map(foto => (
               <div key={foto.id} className="group relative aspect-square rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
-                <img src={foto.url} alt={foto.legenda || ''} className="w-full h-full object-cover" />
+                <img src={foto.url} alt={foto.legenda || ''} className="w-full h-full object-cover" loading="lazy" decoding="async" />
                 <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] font-medium uppercase tracking-wide"
                   style={{ background: foto.tipo === 'antes' ? '#ef444499' : foto.tipo === 'depois' ? '#22c55e99' : '#0d0d0d99', color: 'white' }}>
                   {foto.tipo}

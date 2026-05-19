@@ -366,21 +366,24 @@ function RelatorioInvestidores() {
 // ── Follow-up Priority View ──────────────────────────────────
 function FollowUpView({ data, onView, onDelete }) {
   // Ordenar: vermelho primeiro, depois laranja, depois por dias sem contacto desc, depois sem dados
-  const sorted = [...data].sort((a, b) => {
+  const { sorted, urgentes, atencao, pendentes, ok } = useMemo(() => {
     const priority = { red: 0, orange: 1, green: 3, null: 2 }
-    const pa = priority[a._alertStatus] ?? 2
-    const pb = priority[b._alertStatus] ?? 2
-    if (pa !== pb) return pa - pb
-    // Dentro do mesmo grupo, ordenar por dias sem contacto (mais dias = mais urgente)
-    const da = a._diasSemContacto ?? -1
-    const db = b._diasSemContacto ?? -1
-    return db - da
-  })
-
-  const urgentes = sorted.filter(c => c._alertStatus === 'red')
-  const atencao = sorted.filter(c => c._alertStatus === 'orange')
-  const pendentes = sorted.filter(c => !c._alertStatus || c._alertStatus === null)
-  const ok = sorted.filter(c => c._alertStatus === 'green')
+    const sorted = [...data].sort((a, b) => {
+      const pa = priority[a._alertStatus] ?? 2
+      const pb = priority[b._alertStatus] ?? 2
+      if (pa !== pb) return pa - pb
+      const da = a._diasSemContacto ?? -1
+      const db = b._diasSemContacto ?? -1
+      return db - da
+    })
+    return {
+      sorted,
+      urgentes: sorted.filter(c => c._alertStatus === 'red'),
+      atencao: sorted.filter(c => c._alertStatus === 'orange'),
+      pendentes: sorted.filter(c => !c._alertStatus || c._alertStatus === null),
+      ok: sorted.filter(c => c._alertStatus === 'green'),
+    }
+  }, [data])
 
   function Section({ title, icon, color, items, borderColor }) {
     if (items.length === 0) return null
@@ -931,6 +934,27 @@ export function CRM() {
     }
   }
 
+  const kanbanOnDelete = useCallback((id, nome) => {
+    if (!confirm(`Apagar "${nome || 'este registo'}"?`)) return
+    handleDelete(id)
+  }, [endpoint])
+  const kanbanOnCardClick = useCallback((id) => {
+    if (['Imóveis', 'Investidores', 'Consultores'].includes(tab)) {
+      setDetail(id)
+    } else if (tab === 'Negócios') {
+      const item = data.find(i => i.id === id)
+      if (item?.imovel_id) {
+        setTab('Imóveis')
+        setTimeout(() => setDetail(item.imovel_id), 100)
+      } else if (item) {
+        setEditing(item)
+      }
+    } else {
+      const item = data.find(i => i.id === id)
+      if (item) setEditing(item)
+    }
+  }, [tab, data, setDetail, setTab, setEditing])
+
   function handleSearch(value) {
     setSearchInput(value)
     clearTimeout(searchTimer.current)
@@ -1229,26 +1253,8 @@ export function CRM() {
               groupField={kanbanConfig.groupField}
               renderCard={kanbanConfig.renderCard}
               onMove={handleMove}
-              onDelete={(id, nome) => {
-                if (!confirm(`Apagar "${nome || 'este registo'}"?`)) return
-                handleDelete(id)
-              }}
-              onCardClick={(id) => {
-                if (['Imóveis', 'Investidores', 'Consultores'].includes(tab)) {
-                  setDetail(id)
-                } else if (tab === 'Negócios') {
-                  const item = data.find(i => i.id === id)
-                  if (item?.imovel_id) {
-                    setTab('Imóveis')
-                    setTimeout(() => setDetail(item.imovel_id), 100)
-                  } else if (item) {
-                    setEditing(item)
-                  }
-                } else {
-                  const item = data.find(i => i.id === id)
-                  if (item) setEditing(item)
-                }
-              }}
+              onDelete={kanbanOnDelete}
+              onCardClick={kanbanOnCardClick}
             />
           )}
 

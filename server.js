@@ -22,6 +22,26 @@ const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.s
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
 const supabaseAdmin = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null
 
+// Cache de validação de token (TTL 30s) — evita uma chamada HTTP a Supabase auth por cada request
+const authCache = new Map()
+const AUTH_TTL_MS = 30 * 1000
+const AUTH_CACHE_MAX = 5000
+function authCacheGet(token) {
+  const e = authCache.get(token)
+  if (!e) return null
+  if (Date.now() - e.t > AUTH_TTL_MS) { authCache.delete(token); return null }
+  return e.user
+}
+function authCacheSet(token, user) {
+  if (authCache.size >= AUTH_CACHE_MAX) {
+    // remove ~10% mais antigos
+    const drop = Math.ceil(AUTH_CACHE_MAX * 0.1)
+    let i = 0
+    for (const k of authCache.keys()) { authCache.delete(k); if (++i >= drop) break }
+  }
+  authCache.set(token, { user, t: Date.now() })
+}
+
 app.use('/api', async (req, res, next) => {
   // CRM API — usa PostgreSQL directamente, sem auth Supabase (comportamento histórico)
   if (req.path.startsWith('/crm/')) return next()
@@ -47,9 +67,12 @@ app.use('/api', async (req, res, next) => {
   // Token via header Authorization OU via query string (para PDFs abertos em novo tab)
   const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token
   if (!token) return res.status(401).json({ error: 'Autenticação necessária' })
+  const cached = authCacheGet(token)
+  if (cached) { req.user = cached; return next() }
   try {
     const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
     if (error || !user) return res.status(401).json({ error: 'Sessão inválida' })
+    authCacheSet(token, user)
     req.user = user
     next()
   } catch {
@@ -1073,13 +1096,22 @@ const cache = new TTLCache(60000) // 60s default TTL
 app.post('/api/cache/clear', (_req, res) => { cache.clear(); res.json({ ok: true }) })
 
 // ── Middleware regional global ────────────────────────────────
-// Captura header X-Regiao em req.regiaoActiva para uso em endpoints /api/*
-// (kpis, metricas, financeiro, alertas, etc.). O router /api/crm já tem o
-// seu próprio middleware (em routes.js); este aplica-se ao resto.
+// Captura header X-Regiao OU query param ?mercado= em req.regiaoActiva para
+// uso em endpoints /api/* (kpis, metricas, financeiro, alertas, etc.). O
+// router /api/crm já tem o seu próprio middleware (em routes.js); este
+// aplica-se ao resto. ?mercado= (do MercadoSelector global) tem precedência
+// sobre X-Regiao (legacy useRegiaoGate).
 const REGIOES_VALIDAS_GLOBAL = new Set(['Coimbra', 'AMP'])
 app.use('/api', (req, _res, next) => {
-  const r = req.headers['x-regiao'] || req.headers['X-Regiao']
-  if (r && REGIOES_VALIDAS_GLOBAL.has(r)) req.regiaoActiva = r
+  const fromQuery = req.query?.mercado
+  const fromHeader = req.headers['x-regiao'] || req.headers['X-Regiao']
+  const r = (fromQuery && REGIOES_VALIDAS_GLOBAL.has(fromQuery)) ? fromQuery
+          : (fromHeader && REGIOES_VALIDAS_GLOBAL.has(fromHeader)) ? fromHeader
+          : null
+  if (r) req.regiaoActiva = r
+  // mercado é uma chave do MercadoSelector, não uma coluna de DB — não deve
+  // ser propagado para rotas downstream que reflictam req.query em filtros.
+  if (req.query && 'mercado' in req.query) delete req.query.mercado
   next()
 })
 
@@ -4078,17 +4110,21 @@ app.post('/api/calendar/events', async (req, res) => {
 app.get('/api/tarefas', async (req, res) => {
   try {
     const pgPool = (await import('./src/db/pg.js')).default
-    const { limit = 100, status, funcionario } = req.query
+    const { limit = 100, offset = 0, status, funcionario, since, until } = req.query
+    const cappedLimit = Math.min(Math.max(+limit || 100, 1), 500)
+    const cappedOffset = Math.max(+offset || 0, 0)
     let q = 'SELECT * FROM tarefas'
     const params = []
     const conds = []
     if (status) { conds.push(`status = $${params.length + 1}`); params.push(status) }
     if (funcionario) { conds.push(`funcionario ILIKE $${params.length + 1}`); params.push(`%${funcionario}%`) }
+    if (since) { conds.push(`inicio >= $${params.length + 1}`); params.push(since) }
+    if (until) { conds.push(`inicio <= $${params.length + 1}`); params.push(until) }
     if (conds.length) q += ' WHERE ' + conds.join(' AND ')
-    q += ' ORDER BY inicio DESC NULLS LAST LIMIT $' + (params.length + 1)
-    params.push(+limit)
+    q += ` ORDER BY inicio DESC NULLS LAST LIMIT $${params.length + 1} OFFSET $${params.length + 2}`
+    params.push(cappedLimit, cappedOffset)
     const { rows } = await pgPool.query(q, params)
-    res.json({ data: rows, total: rows.length })
+    res.json({ data: rows, total: rows.length, limit: cappedLimit, offset: cappedOffset })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -4211,7 +4247,7 @@ app.post('/api/crm/projetos/:negocioId/sync-gcal', async (req, res) => {
   } catch (e) { console.error('[projeto-gcal]', e.message); res.status(500).json({ error: e.message }) }
 })
 
-// Auto-sync bidirecional a cada 15 minutos
+// Auto-sync bidirecional (~15 min, com jitter para não colidir com outros sincronizadores)
 if (gcal) {
   const GCAL_SYNC_INTERVAL = 15 * 60 * 1000
   async function autoSyncCalendar() {
@@ -4227,15 +4263,15 @@ if (gcal) {
     }
   }
   setTimeout(autoSyncCalendar, 30000)
-  setInterval(autoSyncCalendar, GCAL_SYNC_INTERVAL)
-  console.log('[gcal-sync] Auto-sync bidirecional ativo (a cada 15 min)')
+  setInterval(autoSyncCalendar, GCAL_SYNC_INTERVAL + Math.random() * 30000)
+  console.log('[gcal-sync] Auto-sync bidirecional ativo (~15 min)')
 }
 
 // ── Auto-sync Fireflies (a cada 15 min) ──────────────────────
 try {
   const { isConfigured } = await import('./src/db/firefliesSync.js')
   if (isConfigured()) {
-    const FF_SYNC_INTERVAL = 15 * 60 * 1000
+    const FF_SYNC_INTERVAL = 16 * 60 * 1000
     async function autoSyncFireflies() {
       try {
         const { syncFireflies } = await import('./src/db/firefliesSync.js')
@@ -4252,14 +4288,19 @@ try {
             [result.created]
           )
           let invFill = 0, consFill = 0
-          for (const r of novas) {
-            try {
-              if (r.entidade_tipo === 'investidores') { await autoFillInvestidor(r.id); invFill++ }
-              else if (r.entidade_tipo === 'consultores') { await autoFillConsultor(r.id); consFill++ }
-            } catch (e) {
-              console.warn(`[fireflies] Auto-fill falhou para ${r.id}:`, e.message)
+          const fillResults = await Promise.allSettled(novas.map(r => {
+            if (r.entidade_tipo === 'investidores') return autoFillInvestidor(r.id).then(() => 'inv')
+            if (r.entidade_tipo === 'consultores') return autoFillConsultor(r.id).then(() => 'cons')
+            return Promise.resolve(null)
+          }))
+          fillResults.forEach((res, i) => {
+            if (res.status === 'fulfilled') {
+              if (res.value === 'inv') invFill++
+              else if (res.value === 'cons') consFill++
+            } else {
+              console.warn(`[fireflies] Auto-fill falhou para ${novas[i]?.id}:`, res.reason?.message)
             }
-          }
+          })
           if (invFill > 0) console.log(`[fireflies] Auto-fill: ${invFill} investidores actualizados`)
           if (consFill > 0) console.log(`[fireflies] Auto-fill: ${consFill} consultores actualizados`)
 
@@ -4286,8 +4327,8 @@ try {
       }
     }
     setTimeout(autoSyncFireflies, 60000) // primeiro sync 1 min após arranque
-    setInterval(autoSyncFireflies, FF_SYNC_INTERVAL + Math.random() * 30000) // jitter até 30s
-    console.log('[fireflies] Auto-sync ativo (a cada 15 min)')
+    setInterval(autoSyncFireflies, FF_SYNC_INTERVAL + Math.random() * 30000) // ~16 min + jitter
+    console.log('[fireflies] Auto-sync ativo (~16 min)')
   }
 } catch (e) {
   console.warn('[fireflies] Auto-sync não disponível:', e.message)
@@ -4297,7 +4338,7 @@ try {
 try {
   const { isConfigured: formsConfigured, syncForms } = await import('./src/db/formsSync.js')
   if (formsConfigured()) {
-    const FORMS_SYNC_INTERVAL = 15 * 60 * 1000
+    const FORMS_SYNC_INTERVAL = 17 * 60 * 1000
     async function autoSyncForms() {
       try {
         const result = await syncForms()
@@ -4309,8 +4350,8 @@ try {
       }
     }
     setTimeout(autoSyncForms, 180000) // 3 min após arranque (staggered)
-    setInterval(autoSyncForms, FORMS_SYNC_INTERVAL + Math.random() * 30000) // jitter até 30s
-    console.log('[forms] Auto-sync Google Forms ativo (a cada 15 min)')
+    setInterval(autoSyncForms, FORMS_SYNC_INTERVAL + Math.random() * 30000) // ~17 min + jitter
+    console.log('[forms] Auto-sync Google Forms ativo (~17 min)')
   }
 } catch (e) {
   console.warn('[forms] Auto-sync não disponível:', e.message)

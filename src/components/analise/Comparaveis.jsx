@@ -434,7 +434,7 @@ export function Comparaveis({ analise, imovel, onUpdate }) {
         </div>
         {meta.alfredo_imagem ? (
           <div className="flex items-start gap-3">
-            <img src={meta.alfredo_imagem} alt="Estudo Alfredo"
+            <img src={meta.alfredo_imagem} alt="Estudo Alfredo" loading="lazy" decoding="async"
               className="rounded border border-gray-200 max-h-56 object-contain bg-white" />
             <div className="flex flex-col gap-2">
               <button type="button" disabled={uploadingAlfredo}

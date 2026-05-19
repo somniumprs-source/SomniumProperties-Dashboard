@@ -372,7 +372,7 @@ export function FicheirosTab({ imovelId, driveFolderId }) {
                   }`}
                   onClick={e => { e.stopPropagation(); setLightbox(i) }}>
                   <img src={f.source === 'local' ? f.url : (f.thumbnailLink || f.url)}
-                    alt="" className="w-full h-full object-cover" />
+                    alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                 </div>
               ))}
             </div>

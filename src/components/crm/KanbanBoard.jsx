@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo, memo } from 'react'
 import { EUR } from '../../constants.js'
 
 const COLUMN_COLORS = {
@@ -75,7 +75,7 @@ const DEFAULT_COLORS = { bg: 'bg-gray-50', border: 'border-gray-200', header: 'b
  * @param {Function} props.onMove - callback quando um item é movido (id, newColumn)
  * @param {Function} props.onCardClick - callback quando um card é clicado (id)
  */
-export function KanbanBoard({ columns, items, groupField, renderCard, onMove, onCardClick, onDelete }) {
+function KanbanBoardImpl({ columns, items, groupField, renderCard, onMove, onCardClick, onDelete }) {
   const [dragging, setDragging] = useState(null)
   const [dragOver, setDragOver] = useState(null)
 
@@ -107,16 +107,18 @@ export function KanbanBoard({ columns, items, groupField, renderCard, onMove, on
   }
 
   // Group items by column — normaliza prefixos numéricos e acentos
-  const normalize = s => (s ?? '').replace(/^\d+-\s*/, '').replace('Nao interessa', 'Não interessa').trim()
-  const grouped = {}
-  for (const col of columns) grouped[col] = []
-  for (const item of items) {
-    const val = normalize(item[groupField])
-    const col = columns.find(c => val === c) ?? columns.find(c => val.includes(c)) ?? null
-    if (col && grouped[col]) grouped[col].push(item)
-    // Se não encontrou coluna, não esconder — pôr na última antes de "Não interessa"
-    else if (grouped[columns[columns.length - 1]]) grouped[columns[columns.length - 1]].push(item)
-  }
+  const grouped = useMemo(() => {
+    const normalize = s => (s ?? '').replace(/^\d+-\s*/, '').replace('Nao interessa', 'Não interessa').trim()
+    const acc = {}
+    for (const col of columns) acc[col] = []
+    for (const item of items) {
+      const val = normalize(item[groupField])
+      const col = columns.find(c => val === c) ?? columns.find(c => val.includes(c)) ?? null
+      if (col && acc[col]) acc[col].push(item)
+      else if (acc[columns[columns.length - 1]]) acc[columns[columns.length - 1]].push(item)
+    }
+    return acc
+  }, [columns, items, groupField])
 
   return (
     <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory sm:snap-none" style={{ minHeight: '350px' }}>
@@ -175,3 +177,5 @@ export function KanbanBoard({ columns, items, groupField, renderCard, onMove, on
     </div>
   )
 }
+
+export const KanbanBoard = memo(KanbanBoardImpl)

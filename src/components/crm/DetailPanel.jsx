@@ -2,22 +2,31 @@
  * Painel de detalhe para Imóveis, Investidores, Consultores.
  * Mostra: campos editáveis + relações + timeline + tarefas + reuniões.
  */
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
 import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, RefreshCw, MoreVertical, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { PartilharAcesso } from '../PartilharAcesso.jsx'
-import { AnaliseTab } from '../analise/AnaliseTab.jsx'
-import { ObraTab } from '../obra/ObraTab.jsx'
-import { InteracoesTab } from './InteracoesTab.jsx'
-import { MatchingInvestidoresTab } from './MatchingInvestidoresTab.jsx'
 import { FollowUpsSection } from './FollowUpsSection.jsx'
-import { WhatsAppTab } from './WhatsAppTab.jsx'
-import { FicheirosTab } from './FicheirosTab.jsx'
-import { ChecklistTab } from './ChecklistTab.jsx'
-import { VisitasTab } from './VisitasTab.jsx'
-import { DocumentosInvestidorTab } from './DocumentosInvestidorTab.jsx'
 import { ImovelInteracoesSection } from './ImovelInteracoesSection.jsx'
+
+const AnaliseTab = lazy(() => import('../analise/AnaliseTab.jsx').then(m => ({ default: m.AnaliseTab })))
+const ObraTab = lazy(() => import('../obra/ObraTab.jsx').then(m => ({ default: m.ObraTab })))
+const InteracoesTab = lazy(() => import('./InteracoesTab.jsx').then(m => ({ default: m.InteracoesTab })))
+const MatchingInvestidoresTab = lazy(() => import('./MatchingInvestidoresTab.jsx').then(m => ({ default: m.MatchingInvestidoresTab })))
+const WhatsAppTab = lazy(() => import('./WhatsAppTab.jsx').then(m => ({ default: m.WhatsAppTab })))
+const FicheirosTab = lazy(() => import('./FicheirosTab.jsx').then(m => ({ default: m.FicheirosTab })))
+const ChecklistTab = lazy(() => import('./ChecklistTab.jsx').then(m => ({ default: m.ChecklistTab })))
+const VisitasTab = lazy(() => import('./VisitasTab.jsx').then(m => ({ default: m.VisitasTab })))
+const DocumentosInvestidorTab = lazy(() => import('./DocumentosInvestidorTab.jsx').then(m => ({ default: m.DocumentosInvestidorTab })))
+
+function TabFallback() {
+  return (
+    <div className="flex items-center justify-center py-12">
+      <div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#C9A84C', borderTopColor: 'transparent' }} />
+    </div>
+  )
+}
 import { Combobox } from '../ui/Combobox.jsx'
 import freguesiasData from '../../constants/coimbra-freguesias.json'
 import { supabase } from '../../lib/supabase.js'
@@ -259,7 +268,7 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
             </div>
           </div>
           <div className="p-3 bg-gray-50 flex justify-center">
-            <img src={imagemUrl} alt="Estudo de Localização" className="w-full max-w-3xl rounded-md border border-gray-200 bg-white" />
+            <img src={imagemUrl} alt="Estudo de Localização" className="w-full max-w-3xl rounded-md border border-gray-200 bg-white" loading="lazy" decoding="async" />
           </div>
         </div>
       ) : (
@@ -878,6 +887,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
 
       {/* Análise Financeira tab */}
       {/* Interacções (Consultores) */}
+      <Suspense fallback={<TabFallback />}>
       {type === 'Consultores' && activeTab === 'whatsapp' ? (
         <WhatsAppTab consultorId={data.id} consultorNome={data.nome} controloManual={data.controlo_manual} onUpdate={loadData} />
 
@@ -1291,6 +1301,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
       </div>
       </div>
       )}
+      </Suspense>
     </div>
   )
 }
@@ -1641,7 +1652,7 @@ function ImovelEditSections({ data, form, setField }) {
         <label className="text-xs text-gray-400 block mb-1">Imagem de localização (print do Google Maps)</label>
         {form.localizacao_imagem ? (
           <div className="flex items-start gap-3">
-            <img src={form.localizacao_imagem} alt="Localização" className="w-64 h-40 object-cover rounded-lg border border-gray-200" />
+            <img src={form.localizacao_imagem} alt="Localização" className="w-64 h-40 object-cover rounded-lg border border-gray-200" loading="lazy" decoding="async" />
             <div className="flex flex-col gap-2">
               <label className="text-xs px-3 py-1.5 rounded-md bg-yellow-50 border border-yellow-200 text-yellow-800 hover:bg-yellow-100 cursor-pointer text-center">
                 Substituir
@@ -1853,7 +1864,7 @@ function ImovelReadSections({ data }) {
       {data.localizacao_imagem && (
         <div className="col-span-2 md:col-span-3">
           <p className="text-xs text-gray-400 mb-1">Imagem de localização</p>
-          <img src={data.localizacao_imagem} alt="Localização" className="w-full max-w-md rounded-lg border border-gray-200" />
+          <img src={data.localizacao_imagem} alt="Localização" className="w-full max-w-md rounded-lg border border-gray-200" loading="lazy" decoding="async" />
         </div>
       )}
     </Section>
