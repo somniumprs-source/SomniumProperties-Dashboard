@@ -9,7 +9,6 @@ import { KPICard } from '../components/dashboard/KPICard.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { apiFetch } from '../lib/api.js'
 import { useUrlState } from '../hooks/useUrlState.js'
-import { RegiaoToggle } from '../components/RegiaoBadge.jsx'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const EUR2 = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0)
@@ -48,9 +47,6 @@ export function Financeiro() {
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState(null)
   const [tab,      setTab]      = useUrlState('tab', 'Visão Geral')
-  // Filtro regional do Financeiro: 'Coimbra' | 'AMP' | null (=Geral)
-  const [regiaoFinanceiro, setRegiaoFinanceiro] = useUrlState('regiao', '')
-  const regiao = (regiaoFinanceiro === 'Coimbra' || regiaoFinanceiro === 'AMP') ? regiaoFinanceiro : null
   const [editingDesp, setEditingDesp] = useState(null)
   const [crmDespesas, setCrmDespesas] = useState([])
 
@@ -59,15 +55,15 @@ export function Financeiro() {
     try {
       const safe = (promise) => promise.then(r => r.ok ? r.json() : null).catch(() => null)
       const [k, d, c, p, a, ds, ag, re, cc] = await Promise.all([
-        safe(apiFetch('/api/kpis/financeiro', { regiao })),
-        safe(apiFetch('/api/financeiro/despesas', { regiao })),
-        safe(apiFetch('/api/financeiro/cashflow', { regiao })),
-        safe(apiFetch('/api/financeiro/projecao', { regiao })),
-        safe(apiFetch('/api/crm/analises-kpis', { regiao })),
-        safe(apiFetch('/api/crm/despesas?limit=200', { regiao })),
-        safe(apiFetch('/api/financeiro/aging', { regiao })),
-        safe(apiFetch('/api/financeiro/rentabilidade', { regiao })),
-        safe(apiFetch('/api/financeiro/conta-corrente', { regiao })),
+        safe(apiFetch('/api/kpis/financeiro')),
+        safe(apiFetch('/api/financeiro/despesas')),
+        safe(apiFetch('/api/financeiro/cashflow')),
+        safe(apiFetch('/api/financeiro/projecao')),
+        safe(apiFetch('/api/crm/analises-kpis')),
+        safe(apiFetch('/api/crm/despesas?limit=200')),
+        safe(apiFetch('/api/financeiro/aging')),
+        safe(apiFetch('/api/financeiro/rentabilidade')),
+        safe(apiFetch('/api/financeiro/conta-corrente')),
       ])
       if (!k) throw new Error('Erro ao carregar dados financeiros')
       setKpis(k); setDespesas(d); setCashflow(c); setProjecao(p); setAnalises(a)
@@ -138,7 +134,7 @@ export function Financeiro() {
     }
   }
 
-  useEffect(() => { load() }, [regiao])
+  useEffect(() => { load() }, [])
 
   const negociosLista  = kpis?.negociosLista ?? []
   const categoriasPie  = (kpis?.categorias ?? [])
@@ -163,22 +159,16 @@ export function Financeiro() {
         notionUrl="https://www.notion.so/333c6d45a01f81dc9cb4d12a999e28ed" />
 
       {/* Tabs */}
-      <div className="px-4 sm:px-6 pt-3 bg-white sticky top-0 z-10 flex items-center justify-between gap-3">
+      <div className="px-4 sm:px-6 pt-3 bg-white sticky top-0 z-10">
         <Tabs
           variant="underline"
           value={tab}
           onChange={setTab}
           items={TABS.map(t => ({ key: t, label: t }))}
         />
-        <RegiaoToggle value={regiaoFinanceiro} onChange={(v) => setRegiaoFinanceiro(v || '')} />
       </div>
 
       <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
-        {regiao && (
-          <div className="text-xs text-neutral-500 -mt-2">
-            A mostrar apenas dados de <strong className="text-neutral-900 dark:text-white">{regiao}</strong>. Use o toggle no topo para alternar.
-          </div>
-        )}
         {error && (
           <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>
         )}

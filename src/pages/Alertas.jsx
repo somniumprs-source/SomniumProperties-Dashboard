@@ -6,9 +6,6 @@ import { Button } from '../components/ui/Button.jsx'
 import { KpiCard } from '../components/ui/KpiCard.jsx'
 import { Card } from '../components/ui/Card.jsx'
 import { Bell, AlertTriangle, AlertCircle, Info, FileWarning, ShieldAlert, History, Database, Zap } from 'lucide-react'
-import { useRegiaoGate } from '../contexts/RegiaoContext.jsx'
-import { RegiaoModal } from '../components/RegiaoModal.jsx'
-import { RegiaoBadge } from '../components/RegiaoBadge.jsx'
 
 const SEV_STYLE = {
   critico: 'bg-red-100 text-red-700 border-red-200',
@@ -41,8 +38,6 @@ const HEALTH_BAR = pct =>
   pct >= 80 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-500' : 'bg-red-500'
 
 export function Alertas() {
-  const gate = useRegiaoGate('alertas')
-  const regiao = gate.regiao
   const [alertas, setAlertas]     = useState(null)
   const [health, setHealth]       = useState(null)
   const [loading, setLoading]     = useState(true)
@@ -55,13 +50,12 @@ export function Alertas() {
 
   async function load() {
     setLoading(true); setError(null)
-    if (!regiao) { setLoading(false); return }
     try {
       const [ar, hr, bl, al] = await Promise.all([
-        apiFetch('/api/alertas', { regiao }),
-        apiFetch('/api/data-health', { regiao }),
-        apiFetch('/api/crm/backup/list', { regiao }).then(r => r.json()).catch(() => []),
-        apiFetch('/api/crm/audit?limit=30', { regiao }).then(r => r.json()).catch(() => []),
+        apiFetch('/api/alertas'),
+        apiFetch('/api/data-health'),
+        apiFetch('/api/crm/backup/list').then(r => r.json()).catch(() => []),
+        apiFetch('/api/crm/audit?limit=30').then(r => r.json()).catch(() => []),
       ])
       if (!ar.ok || !hr.ok) throw new Error('Erro no servidor')
       const [a, h] = await Promise.all([ar.json(), hr.json()])
@@ -102,7 +96,7 @@ export function Alertas() {
     } catch (e) { setError(e.message) }
   }
 
-  useEffect(() => { load() }, [regiao])
+  useEffect(() => { load() }, [])
 
   async function runAutomation(name, label) {
     setRunning(name); setRunResult(null)
@@ -120,14 +114,8 @@ export function Alertas() {
 
   return (
     <>
-      <RegiaoModal gate={gate} contexto="O Centro de Alertas" />
       <Header title="Centro de Alertas" subtitle="Automações & Higiene de Dados" onRefresh={load} loading={loading} />
       <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
-        {regiao && (
-          <div className="flex justify-end">
-            <RegiaoBadge regiao={regiao} onTrocar={gate.abrirModal} />
-          </div>
-        )}
         {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>}
 
         {/* Hero banner — Centro de Alertas */}
