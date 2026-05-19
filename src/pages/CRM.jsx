@@ -19,7 +19,6 @@ import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
 import { useRegiaoGate } from '../contexts/RegiaoContext.jsx'
 import { RegiaoModal } from '../components/RegiaoModal.jsx'
 import { RegiaoBadge } from '../components/RegiaoBadge.jsx'
-import ampFreguesiasData from '../constants/amp-freguesias.json'
 
 const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Construtores']
 // Sub-tabs que requerem distinção regional (modal ao entrar). Investidores
@@ -1610,7 +1609,6 @@ const FIELD_DEFS = {
     { key: 'custo_estimado_obra', label: 'Custo Estimado Obra (€)', type: 'number' },
     { key: 'valor_venda_remodelado', label: 'Valor Venda Remodelado (€)', type: 'number' },
     { key: 'zona', label: 'Zona Principal', type: 'text' },
-    { key: 'freguesia', label: 'Freguesia', type: 'freguesia_grouped', required: true },
     { key: 'zonas', label: 'Zonas', type: 'multiselect_freguesias' },
     { key: 'origem', label: 'Origem', type: 'select', options: ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro'] },
     { key: 'modelo_negocio', label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix & Flip','CAEP','Mediação'] },
@@ -1751,50 +1749,40 @@ const ZONAS_ATUACAO_POR_REGIAO = {
 }
 
 // Freguesias por região — usado no campo "Zonas" do imóvel.
-// AMP: união das freguesias de Porto, Vila Nova de Gaia, Santa Maria da Feira
-// (ordenadas alfabeticamente, deduplicadas).
-const FREGUESIAS_AMP = (() => {
-  const all = []
-  for (const c of Object.values(ampFreguesiasData?.concelhos || {})) {
-    if (Array.isArray(c)) all.push(...c)
-  }
-  return [...new Set(all)].sort((a, b) => a.localeCompare(b, 'pt'))
-})()
+// AMP: agrupadas por concelho (Porto, Vila Nova de Gaia) — o MultiSelect
+// suporta optgroup quando recebe um objecto em vez de array.
+// Coimbra: lista plana (FREGUESIAS já é array ordenado).
 const FREGUESIAS_POR_REGIAO = {
-  AMP: FREGUESIAS_AMP,
+  AMP: {
+    'Porto': [
+      'Aldoar, Foz do Douro e Nevogilde',
+      'Bonfim',
+      'Campanhã',
+      'Cedofeita, Santo Ildefonso, Sé, Miragaia, São Nicolau e Vitória',
+      'Lordelo do Ouro e Massarelos',
+      'Paranhos',
+      'Ramalde',
+      'São Roque da Lameira',
+    ],
+    'Vila Nova de Gaia': [
+      'Arcozelo',
+      'Avintes',
+      'Canidelo',
+      'Crestuma',
+      'Lever',
+      'Madalena',
+      'Mafamude e Vilar do Paraíso',
+      'Oliveira do Douro',
+      'Pedroso e Seixezelo',
+      'Sandim, Olival, Lever e Crestuma',
+      'Santa Marinha e São Pedro da Afurada',
+      'São Félix da Marinha',
+      'Serzedo e Perosinho',
+      'Vilar de Andorinho',
+      'Vilar do Paraíso',
+    ],
+  },
   Coimbra: FREGUESIAS,
-}
-
-// Freguesias canónicas agrupadas por concelho — usado no campo "Freguesia"
-// (singular, dropdown obrigatório). Ordem alfabética dentro de cada grupo.
-const FREGUESIAS_GROUPED_AMP = {
-  'Porto': [
-    'Aldoar, Foz do Douro e Nevogilde',
-    'Bonfim',
-    'Campanhã',
-    'Cedofeita, Santo Ildefonso, Sé, Miragaia, São Nicolau e Vitória',
-    'Lordelo do Ouro e Massarelos',
-    'Paranhos',
-    'Ramalde',
-    'São Roque da Lameira',
-  ],
-  'Vila Nova de Gaia': [
-    'Arcozelo',
-    'Avintes',
-    'Canidelo',
-    'Crestuma',
-    'Lever',
-    'Madalena',
-    'Mafamude e Vilar do Paraíso',
-    'Oliveira do Douro',
-    'Pedroso e Seixezelo',
-    'Sandim, Olival, Lever e Crestuma',
-    'Santa Marinha e São Pedro da Afurada',
-    'São Félix da Marinha',
-    'Serzedo e Perosinho',
-    'Vilar de Andorinho',
-    'Vilar do Paraíso',
-  ],
 }
 
 // Input com chips + autocomplete a partir de sugestões da BD (ex: imobiliárias
@@ -1932,21 +1920,6 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
                 onChange={v => handleChange(f.key, v)}
                 placeholder={`Selecionar ${f.label.toLowerCase()}...`}
               />
-            ) : f.type === 'freguesia_grouped' ? (
-              <select
-                id={f.key}
-                value={form[f.key] ?? ''}
-                onChange={e => handleChange(f.key, e.target.value)}
-                required={!!f.required}
-                className={inputClass}
-              >
-                <option value="">Selecionar freguesia...</option>
-                {Object.entries(FREGUESIAS_GROUPED_AMP).map(([concelho, freguesias]) => (
-                  <optgroup key={concelho} label={concelho}>
-                    {freguesias.map(fre => <option key={fre} value={fre}>{fre}</option>)}
-                  </optgroup>
-                ))}
-              </select>
             ) : f.type === 'chips_autocomplete' ? (
               <ChipsAutocomplete
                 value={form[f.key]}
