@@ -79,7 +79,6 @@ async function getColumns(table) {
 function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at DESC' } = {}) {
   return {
     async list({ limit = 100, offset = 0, sort = defaultSort, filter } = {}) {
-      let query = `SELECT * FROM ${table}`
       const params = []
       const whereParts = []
       if (filter) {
@@ -98,21 +97,18 @@ function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at 
           params.push(v)
           whereParts.push(`${k} = $${params.length}`)
         }
-        if (whereParts.length > 0) {
-          query += ` WHERE ${whereParts.join(' AND ')}`
-        }
       }
-      query += ` ORDER BY ${sort} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`
+      const whereSql = whereParts.length > 0 ? ` WHERE ${whereParts.join(' AND ')}` : ''
+      // Window function COUNT(*) OVER() devolve o total na mesma query — evita
+      // 2º round-trip a Supabase para o COUNT (poupava ~50-150ms por list).
+      const query = `SELECT *, COUNT(*) OVER() AS __total FROM ${table}${whereSql}
+                     ORDER BY ${sort} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`
       params.push(limit, offset)
       const { rows } = await pool.query(query, params)
-      // Total respeita o filtro também (antes contava sempre a tabela inteira,
-      // o que dava paginação errada quando filtros estavam activos)
-      const countQuery = whereParts.length > 0
-        ? `SELECT COUNT(*) as c FROM ${table} WHERE ${whereParts.join(' AND ')}`
-        : `SELECT COUNT(*) as c FROM ${table}`
-      const countParams = whereParts.length > 0 ? params.slice(0, -2) : []
-      const { rows: countRows } = await pool.query(countQuery, countParams)
-      return { data: rows, total: parseInt(countRows[0].c), limit, offset }
+      const total = rows.length > 0 ? parseInt(rows[0].__total) : 0
+      // Remover __total dos rows antes de devolver ao cliente
+      const data = rows.map(({ __total, ...r }) => r)
+      return { data, total, limit, offset }
     },
 
     async getById(id) {
