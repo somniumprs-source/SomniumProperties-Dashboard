@@ -671,7 +671,17 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
   const [saving, setSaving] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
   const [openContactoForm, setOpenContactoForm] = useState(false)
+  // Sugestões para autocomplete (imobiliárias + zonas) — alimentado pelos
+  // valores já usados por outros consultores na região activa.
+  const [sugestoesTags, setSugestoesTags] = useState({ imobiliarias: [], zonas: [] })
   const toast = useToast()
+  useEffect(() => {
+    if (type !== 'Consultores' || !editing) return
+    apiFetch('/api/crm/consultores/sugestoes-tags')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setSugestoesTags({ imobiliarias: d.imobiliarias || [], zonas: d.zonas || [] }) })
+      .catch(() => {})
+  }, [type, editing])
 
   async function attemptClose() {
     if (saving) return
@@ -1129,10 +1139,10 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                 <EF label="Leads Enviados" field="imoveis_enviados" form={form} set={setField} type="number" />
                 <EF label="Off-Market" field="imoveis_off_market" form={form} set={setField} type="number" />
                 <div className="col-span-1 sm:col-span-2 md:col-span-3">
-                  <ChipsEditor label="Imobiliárias" jsonField={form.imobiliaria} onChange={v => setField('imobiliaria', JSON.stringify(v))} placeholder="Ex: Remax, Century 21…" />
+                  <ChipsEditor label="Imobiliárias" jsonField={form.imobiliaria} onChange={v => setField('imobiliaria', JSON.stringify(v))} placeholder="Ex: Remax, Century 21…" suggestions={sugestoesTags.imobiliarias} />
                 </div>
                 <div className="col-span-1 sm:col-span-2 md:col-span-3">
-                  <ChipsEditor label="Zonas de Atuação" jsonField={form.zonas} onChange={v => setField('zonas', JSON.stringify(v))} placeholder={form.regiao === 'AMP' ? 'Ex: Porto, Vila Nova de Gaia, Bonfim…' : 'Ex: Coimbra, Lousã, Penacova…'} /></div>
+                  <ChipsEditor label="Zonas de Atuação" jsonField={form.zonas} onChange={v => setField('zonas', JSON.stringify(v))} placeholder={form.regiao === 'AMP' ? 'Ex: Porto, Vila Nova de Gaia, Bonfim…' : 'Ex: Coimbra, Lousã, Penacova…'} suggestions={sugestoesTags.zonas} /></div>
                 <EF label="Meta Mensal Leads" field="meta_mensal_leads" form={form} set={setField} type="number" />
                 <EF label="Data Início Parceria" field="data_inicio" form={form} set={setField} type="date" />
                 <EF label="1º Contacto" field="data_primeira_call" form={form} set={setField} type="date" />
@@ -1579,10 +1589,11 @@ function Section({ icon, title, fields, form, defaultOpen = false, accent, child
   )
 }
 
-// Editor de tags livre — guarda como JSON array em string. Suporta criar do
-// zero (ex: imobiliária nova em AMP, zonas de atuação em concelhos novos).
-// Enter adiciona, X remove, vírgula também separa.
-function ChipsEditor({ label, jsonField, onChange, placeholder }) {
+// Editor de tags livre — guarda como JSON array em string. Suporta autocomplete
+// a partir de uma lista de sugestões já existentes na DB (ex: imobiliárias já
+// usadas por outros consultores). Enter ou clique numa sugestão adiciona;
+// X remove; vírgula também separa.
+function ChipsEditor({ label, jsonField, onChange, placeholder, suggestions = [] }) {
   const items = useMemo(() => {
     try {
       if (Array.isArray(jsonField)) return jsonField
@@ -1591,12 +1602,16 @@ function ChipsEditor({ label, jsonField, onChange, placeholder }) {
     } catch { return [] }
   }, [jsonField])
   const [input, setInput] = useState('')
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef(null)
+
   const add = (raw) => {
     const novo = String(raw || '').trim()
     if (!novo) return
     const next = [...new Set([...items, novo])]
     onChange(next)
     setInput('')
+    setOpen(false)
   }
   const remove = (idx) => onChange(items.filter((_, i) => i !== idx))
   const onKey = (e) => {
@@ -1605,10 +1620,28 @@ function ChipsEditor({ label, jsonField, onChange, placeholder }) {
       add(input)
     } else if (e.key === 'Backspace' && !input && items.length) {
       onChange(items.slice(0, -1))
+    } else if (e.key === 'Escape') {
+      setOpen(false)
     }
   }
+
+  // Filtra sugestões: remove já seleccionadas, faz match insensitive ao texto.
+  const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  const filtered = useMemo(() => {
+    const q = norm(input)
+    const sel = new Set(items.map(norm))
+    return (suggestions || []).filter(s => !sel.has(norm(s)) && (q === '' || norm(s).includes(q))).slice(0, 8)
+  }, [suggestions, input, items])
+
+  // Fechar dropdown ao clicar fora.
+  useEffect(() => {
+    function onDoc(e) { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [])
+
   return (
-    <div>
+    <div ref={wrapRef} className="relative">
       <p className="text-xs text-gray-400 mb-1">{label}</p>
       <div className="flex flex-wrap gap-1.5 px-2 py-1.5 rounded-lg border border-gray-200 bg-white min-h-[38px] focus-within:ring-2 focus-within:ring-yellow-300">
         {items.map((it, i) => (
@@ -1619,13 +1652,28 @@ function ChipsEditor({ label, jsonField, onChange, placeholder }) {
         ))}
         <input
           value={input}
-          onChange={e => setInput(e.target.value)}
+          onChange={e => { setInput(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
           onKeyDown={onKey}
-          onBlur={() => input && add(input)}
+          onBlur={() => { if (input) add(input) }}
           placeholder={items.length ? '' : (placeholder || 'Escreve e prime Enter…')}
           className="flex-1 min-w-[140px] outline-none text-sm bg-transparent"
         />
       </div>
+      {open && filtered.length > 0 && (
+        <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-auto">
+          {filtered.map((s, i) => (
+            <button
+              key={s + i}
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); add(s) }}
+              className="w-full text-left px-3 py-1.5 text-sm hover:bg-yellow-50 hover:text-yellow-900"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

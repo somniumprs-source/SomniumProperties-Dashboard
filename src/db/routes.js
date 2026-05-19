@@ -606,6 +606,41 @@ router.post('/consultores/find-or-create', async (req, res) => {
 })
 
 // Lista enriquecida de consultores (com métricas e alertas inline)
+// Lista única de valores já usados em `imobiliaria` e `zonas` dos consultores —
+// alimenta autocomplete do ChipsEditor para evitar reescrever sempre.
+// Filtra por região quando o header X-Regiao está presente.
+let _sugestoesCache = new Map()
+router.get('/consultores/sugestoes-tags', async (req, res) => {
+  try {
+    const regiao = req.regiaoActiva || 'all'
+    const cacheKey = `tags:${regiao}`
+    const now = Date.now()
+    const cached = _sugestoesCache.get(cacheKey)
+    if (cached && now < cached.exp) return res.json(cached.data)
+    const where = req.regiaoActiva ? 'WHERE regiao = $1' : ''
+    const params = req.regiaoActiva ? [req.regiaoActiva] : []
+    const { rows } = await pool.query(`SELECT imobiliaria, zonas FROM consultores ${where}`, params)
+    const imobiliarias = new Set()
+    const zonas = new Set()
+    for (const r of rows) {
+      try {
+        const arr = typeof r.imobiliaria === 'string' ? JSON.parse(r.imobiliaria || '[]') : (r.imobiliaria || [])
+        if (Array.isArray(arr)) arr.forEach(x => { const s = String(x || '').trim(); if (s) imobiliarias.add(s) })
+      } catch {}
+      try {
+        const arr = typeof r.zonas === 'string' ? JSON.parse(r.zonas || '[]') : (r.zonas || [])
+        if (Array.isArray(arr)) arr.forEach(x => { const s = String(x || '').trim(); if (s) zonas.add(s) })
+      } catch {}
+    }
+    const data = {
+      imobiliarias: [...imobiliarias].sort((a, b) => a.localeCompare(b, 'pt')),
+      zonas: [...zonas].sort((a, b) => a.localeCompare(b, 'pt')),
+    }
+    _sugestoesCache.set(cacheKey, { data, exp: now + 60_000 })
+    res.json(data)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 router.get('/consultores/enriched', async (req, res) => {
   try {
     const regiao = req.regiaoActiva
