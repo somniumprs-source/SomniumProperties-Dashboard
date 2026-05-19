@@ -13,7 +13,9 @@ if (!DATABASE_URL) {
 const pool = new pg.Pool({
   connectionString: DATABASE_URL,
   ssl: { rejectUnauthorized: false },
-  max: 10,
+  // 30 conexões para evitar congestão no boot (pre-warm + dashboard pode
+  // disparar ~30-50 queries em paralelo via Promise.all).
+  max: 30,
   idleTimeoutMillis: 30000,
 })
 

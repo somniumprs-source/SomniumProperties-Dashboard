@@ -48,11 +48,13 @@ export function AuthProvider({ children }) {
       setLoading(false)
       return
     }
-    // Safety: nunca deixar o utilizador preso no splash se Supabase pendurar
+    // Safety: nunca deixar o utilizador preso no splash se Supabase pendurar.
+    // 2s é suficiente para uma rede típica; em rede má prossegue sem sessão e
+    // o utilizador faz login depois (em vez de ver splash 6s).
     const timeoutId = setTimeout(() => {
       console.warn('[auth] getSession timeout — a prosseguir sem sessão')
       setLoading(false)
-    }, 6000)
+    }, 2000)
     supabase.auth.getSession()
       .then(async ({ data: { session } }) => {
         clearTimeout(timeoutId)

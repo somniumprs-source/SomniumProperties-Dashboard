@@ -25,23 +25,19 @@ function scheduleRefreshSignal() {
 }
 
 /**
- * Fetch wrapper que inclui o token de auth em todos os pedidos.
- * Emite o evento "somnium:refresh" depois de mutações OK (POST/PUT/PATCH/DELETE).
+ * Fetch wrapper. O Authorization header é adicionado pelo interceptor global
+ * do `window.fetch` (definido em main.jsx) que tem cache de token com TTL —
+ * evita chamar `supabase.auth.getSession()` a cada apiFetch (era 100-300ms
+ * por chamada × N requests paralelas no boot).
  *
  * Para filtrar por região, o caller passa `options.regiao = 'Coimbra' | 'AMP'`
- * — o wrapper injecta o header `X-Regiao`. Sem regiao = sem filtro (backend
- * devolve dados de todas as regiões). Páginas que querem filtro regional
- * usam useRegiaoGate(tabKey).
+ * — o wrapper injecta o header `X-Regiao`. Sem regiao = sem filtro.
+ *
+ * Emite o evento "somnium:refresh" depois de mutações OK.
  */
 export async function apiFetch(url, options = {}) {
   const { regiao, ...rest } = options
   const headers = { ...rest.headers }
-  if (authEnabled && supabase) {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`
-    }
-  }
   if (regiao && !headers['X-Regiao']) headers['X-Regiao'] = regiao
   const res = await fetch(url, { ...rest, headers })
   const method = (options.method || 'GET').toUpperCase()

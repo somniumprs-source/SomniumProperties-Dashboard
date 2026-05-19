@@ -5737,33 +5737,40 @@ autoMigrate().then(() => {
   app.listen(PORT, async () => {
     console.log(`[server] a correr na porta ${PORT}`)
 
-    // Pré-aquecer cache do dashboard 30s após arranque — para que o primeiro
-    // utilizador a abrir a app já apanhe os endpoints com cache quente. Os
-    // requests são internos (sem auth), seguros porque estes endpoints não
-    // expõem dados sensíveis.
+    // Pré-aquecer cache do dashboard 60s após arranque. Atrasado para 60s
+    // (era 30s) para dar tempo dos auto-syncs (gcal/forms) terminarem o
+    // primeiro ciclo. Usa o keepAlive `internalGet` em vez de fetch novo.
     setTimeout(() => {
-      const base = `http://127.0.0.1:${PORT}`
-      const warm = path => fetch(`${base}${path}`).then(() => {}).catch(() => {})
-      Promise.all([warm('/api/kpis'), warm('/api/weekly-pulse'), warm('/api/metricas')])
-        .then(() => console.log('[cache] dashboard pré-aquecido'))
-        .catch(() => {})
-    }, 30000)
+      Promise.all([
+        internalGet('/api/kpis'),
+        internalGet('/api/weekly-pulse'),
+        internalGet('/api/metricas'),
+      ]).then(() => console.log('[cache] dashboard pré-aquecido')).catch(() => {})
+    }, 60_000)
 
-    // Sync lucro_real a partir de tranches confirmadas (corrige dados legacy)
-    try {
-      const { rows } = await pool.query('SELECT id, pagamentos_faseados, pagamento_em_falta FROM negocios')
-      let fixed = 0
-      for (const r of rows) {
-        let pags = []
-        try { pags = typeof r.pagamentos_faseados === 'string' ? JSON.parse(r.pagamentos_faseados || '[]') : (r.pagamentos_faseados || []) } catch { continue }
-        if (!pags.length) continue
-        const totalRecebido = Math.round(pags.filter(p => p.recebido).reduce((s, p) => s + (parseFloat(p.valor) || 0), 0) * 100) / 100
-        const emFalta = pags.every(p => p.recebido) ? 0 : 1
-        await pool.query('UPDATE negocios SET lucro_real = $1, pagamento_em_falta = $2 WHERE id = $3 AND (lucro_real IS DISTINCT FROM $1 OR pagamento_em_falta IS DISTINCT FROM $2)', [totalRecebido, emFalta, r.id])
-        fixed++
-      }
-      if (fixed) console.log(`[sync] lucro_real recalculado para ${fixed} negócios com tranches`)
-    } catch (e) { console.error('[sync] Erro ao sincronizar lucro_real:', e.message) }
+    // Sync lucro_real a partir de tranches confirmadas — em paralelo (era loop
+    // sequencial bloqueante). Não-bloqueante: corre em background, não atrasa
+    // o app.listen.
+    ;(async () => {
+      try {
+        const { rows } = await pool.query('SELECT id, pagamentos_faseados, pagamento_em_falta FROM negocios')
+        const updates = []
+        for (const r of rows) {
+          let pags = []
+          try { pags = typeof r.pagamentos_faseados === 'string' ? JSON.parse(r.pagamentos_faseados || '[]') : (r.pagamentos_faseados || []) } catch { continue }
+          if (!pags.length) continue
+          const totalRecebido = Math.round(pags.filter(p => p.recebido).reduce((s, p) => s + (parseFloat(p.valor) || 0), 0) * 100) / 100
+          const emFalta = pags.every(p => p.recebido) ? 0 : 1
+          updates.push(pool.query(
+            'UPDATE negocios SET lucro_real = $1, pagamento_em_falta = $2 WHERE id = $3 AND (lucro_real IS DISTINCT FROM $1 OR pagamento_em_falta IS DISTINCT FROM $2)',
+            [totalRecebido, emFalta, r.id],
+          ))
+        }
+        const results = await Promise.allSettled(updates)
+        const fixed = results.filter(r => r.status === 'fulfilled' && r.value?.rowCount > 0).length
+        if (fixed) console.log(`[sync] lucro_real recalculado para ${fixed} negócios com tranches`)
+      } catch (e) { console.error('[sync] Erro ao sincronizar lucro_real:', e.message) }
+    })()
 
     // Auto-registo mensal de despesas recorrentes (subscrições)
     async function registarDespesasMensais() {
