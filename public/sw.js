@@ -1,4 +1,8 @@
-const CACHE_NAME = 'somnium-crm-v18'
+// v19: bump para invalidar caches antigos (v18 servia chunks AnaliseTab/
+// vendor-html2canvas com hashes que já não existem após deploys —
+// resultava em 404 → HTML → "text/html is not a valid JavaScript MIME type"
+// ao abrir Análise Financeira ou Stress Tests).
+const CACHE_NAME = 'somnium-crm-v19'
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/icons/icon-192x192.png',
@@ -32,9 +36,7 @@ self.addEventListener('fetch', (event) => {
   // API CRM e afins: NUNCA servir cache — dados sempre frescos da rede.
   if (url.pathname.startsWith('/api')) return
 
-  // index.html (navegacao SPA): network-first. Cache-first servia HTML
-  // antigo apontando para bundles JS antigos, mantendo bugs corrigidos
-  // visiveis ao utilizador apos deploy.
+  // index.html (navegacao SPA): network-first.
   const isHtml = request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html')
   if (isHtml) {
     event.respondWith(
@@ -49,12 +51,31 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Assets estaticos com hash no nome: cache-first
+  // Assets JS/CSS com hash: network-first (fallback ao cache só se offline).
+  // Antes era cache-first, o que servia bundles antigos com chunk hashes
+  // mortos após deploy — causa raiz do bug Análise Financeira / MIME error.
+  // Imagens/fontes/etc continuam cache-first (não mudam de hash com deploy
+  // se forem assets fixos em /public/).
+  const isHashedJsCss = url.pathname.match(/\.(js|css|woff2?)$/) && /-[A-Za-z0-9_-]{6,}\./.test(url.pathname)
+  if (isHashedJsCss) {
+    event.respondWith(
+      fetch(request).then((response) => {
+        if (response.ok) {
+          const clone = response.clone()
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+        }
+        return response
+      }).catch(() => caches.match(request))
+    )
+    return
+  }
+
+  // Imagens e outros estáticos: cache-first
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached
       return fetch(request).then((response) => {
-        if (response.ok && url.pathname.match(/\.(js|css|png|jpg|svg|woff2?)$/)) {
+        if (response.ok && url.pathname.match(/\.(png|jpg|jpeg|svg|webp|ico|woff2?)$/)) {
           const clone = response.clone()
           caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
         }

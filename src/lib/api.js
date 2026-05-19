@@ -1,4 +1,5 @@
 import { supabase, authEnabled } from './supabase.js'
+import { getRegiaoActivaFromStorage } from '../contexts/RegiaoContext.jsx'
 
 /**
  * Devolve o access token actual da sessão Supabase (string vazia se não houver).
@@ -38,7 +39,15 @@ function scheduleRefreshSignal() {
 export async function apiFetch(url, options = {}) {
   const { regiao, ...rest } = options
   const headers = { ...rest.headers }
-  if (regiao && !headers['X-Regiao']) headers['X-Regiao'] = regiao
+  // Prioridade: regiao explícito > sessionStorage da página actual (apenas
+  // se URL for `/api/crm/*` para limitar a entidades regionais).
+  if (!headers['X-Regiao']) {
+    let r = regiao
+    if (!r && typeof url === 'string' && url.startsWith('/api/crm/')) {
+      r = getRegiaoActivaFromStorage()
+    }
+    if (r) headers['X-Regiao'] = r
+  }
   const res = await fetch(url, { ...rest, headers })
   const method = (options.method || 'GET').toUpperCase()
   if (res.ok && (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE')) {

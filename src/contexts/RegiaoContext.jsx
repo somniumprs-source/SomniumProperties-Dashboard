@@ -58,3 +58,42 @@ export function useRegiaoGate(tabKey, { autoOpen = true } = {}) {
 export function getUltimaRegiao() {
   try { return localStorage.getItem(LAST_KEY) } catch { return null }
 }
+
+/**
+ * Determina a região activa a partir do path actual + sessionStorage.
+ * Usado pelo apiFetch para auto-injectar X-Regiao em mutações disparadas
+ * por sub-componentes (DetailPanel, tabs) que não recebem regiao via prop.
+ *
+ * Mapping:
+ *   /crm    + ?tab=Imóveis|Consultores|Construtores|Negócios → crm-<tab>
+ *   /projectos[/...]                                          → projectos
+ *
+ * Restantes paths → null (sem filtro). Mutações de entidades não-regionais
+ * (lookups, tarefas globais, notificações) não pagam header desnecessário.
+ */
+export function getRegiaoActivaFromStorage() {
+  if (typeof window === 'undefined') return null
+  let key = null
+  try {
+    const path = window.location.pathname || '/'
+    if (path.startsWith('/projectos')) {
+      key = `${STORAGE_PREFIX}.projectos`
+    } else if (path.startsWith('/crm')) {
+      const params = new URLSearchParams(window.location.search || '')
+      const tab = params.get('tab') || 'Imóveis'
+      const slug = tab.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+      // Só sub-tabs regionais (Imóveis, Consultores, Construtores, Negócios).
+      // Investidores e Despesas são pool unificado.
+      if (['imoveis', 'consultores', 'construtores', 'negocios'].includes(slug)) {
+        key = `${STORAGE_PREFIX}.crm-${slug}`
+      }
+    } else if (path.startsWith('/administracao/regiao')) {
+      key = `${STORAGE_PREFIX}.administracao-regiao`
+    }
+  } catch {}
+  if (!key) return null
+  try {
+    const r = sessionStorage.getItem(key)
+    return isRegiaoValida(r) ? r : null
+  } catch { return null }
+}
