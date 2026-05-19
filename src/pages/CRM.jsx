@@ -1685,13 +1685,25 @@ const FIELD_DEFS = {
   'Construtores': [
     { key: 'nome', label: 'Nome', type: 'text', required: true },
     { key: 'empresa', label: 'Empresa', type: 'text' },
-    { key: 'estado', label: 'Estado', type: 'select', options: ['Qualificado','Em avaliação','Rejeitado','Inativo'] },
-    { key: 'especializacao', label: 'Especialização', type: 'text' },
-    { key: 'zona', label: 'Zona', type: 'text' },
-    { key: 'score', label: 'Score', type: 'number' },
-    { key: 'custo_medio_m2', label: 'Custo Médio m² (€)', type: 'number' },
-    { key: 'fonte', label: 'Fonte', type: 'text' },
-    { key: 'contrato_formalizado', label: 'Contrato Formalizado', type: 'checkbox' },
+    { key: 'nif', label: 'NIF', type: 'text' },
+    { key: 'contacto', label: 'Contacto (telefone)', type: 'tel' },
+    { key: 'email', label: 'Email', type: 'email' },
+    { key: 'morada', label: 'Morada / Sede', type: 'text' },
+    { key: 'estado', label: 'Estado', type: 'select', options: ['Em avaliação','Activo','Inactivo'] },
+    { key: 'classificacao', label: 'Classificação', type: 'select', options: ['A','B','C','D'] },
+    { key: 'concelhos_atuacao', label: 'Concelhos de Actuação', type: 'multiselect_concelhos' },
+    { key: 'especialidades', label: 'Especialidades', type: 'multiselect', options: ['Construção geral','Remodelação integral','Carpintaria','Pichelaria / Canalização','Electricidade','AVAC','Pinturas','Pavimentos','Cozinhas','Caixilharia','Coberturas','Pladur','Demolições','Estuque','Estruturas','Jardins / Exteriores'] },
+    { key: 'preco_m2_medio', label: 'Preço Médio m² (€)', type: 'number' },
+    { key: 'prazo_medio_dias', label: 'Prazo Médio (dias)', type: 'number' },
+    { key: 'regime_iva', label: 'Regime IVA', type: 'select', options: ['Normal','Autoliquidação','Isento'] },
+    { key: 'retencao_irs', label: 'Retenção IRS aplicável', type: 'checkbox' },
+    { key: 'seguro_responsabilidade', label: 'Seguro Responsabilidade Civil', type: 'checkbox' },
+    { key: 'alvara', label: 'Alvará', type: 'text' },
+    { key: 'data_primeiro_contacto', label: 'Data 1º Contacto', type: 'date' },
+    { key: 'data_ultima_obra', label: 'Data Última Obra', type: 'date' },
+    { key: 'obras_realizadas', label: 'Obras Realizadas', type: 'number' },
+    { key: 'lucro_gerado', label: 'Lucro Gerado (€)', type: 'number' },
+    { key: 'notas', label: 'Notas', type: 'textarea' },
   ],
 }
 
@@ -1910,6 +1922,15 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
               <MultiSelect
                 value={form[f.key]}
                 options={ZONAS_ATUACAO_POR_REGIAO[form.regiao || regiao] || ZONAS_ATUACAO_POR_REGIAO.Coimbra}
+                onChange={v => handleChange(f.key, v)}
+                placeholder={`Selecionar ${f.label.toLowerCase()}...`}
+              />
+            ) : f.type === 'multiselect_concelhos' ? (
+              <MultiSelect
+                value={form[f.key]}
+                options={(form.regiao || regiao) === 'AMP'
+                  ? ['Espinho', 'Gondomar', 'Porto', 'Santa Maria da Feira', 'Vila Nova de Gaia']
+                  : ['Cantanhede', 'Coimbra', 'Condeixa-a-Nova', 'Lousã', 'Mealhada', 'Miranda do Corvo', 'Montemor-o-Velho', 'Penacova']}
                 onChange={v => handleChange(f.key, v)}
                 placeholder={`Selecionar ${f.label.toLowerCase()}...`}
               />

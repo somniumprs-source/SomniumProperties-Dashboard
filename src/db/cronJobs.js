@@ -18,12 +18,21 @@ const FOLLOWUP_RULES = {
   D: { dias: [15], canal: 'whatsapp_auto' },
 }
 
-// ── Template de reactivação ─────────────────────────────────
-const REACTIVATION_TEMPLATE = (nome) => {
+// ── Templates de reactivação por região ──────────────────────
+const ZONAS_INTERESSE = {
+  Coimbra: 'concelho de Coimbra, zona central de Condeixa-a-Nova e Ventosa do Bairro (Mealhada)',
+  AMP: 'Porto (Bonfim, Campanhã, Cedofeita, Paranhos), Vila Nova de Gaia (Santa Marinha, Mafamude, Canidelo) e Santa Maria da Feira',
+}
+function zonasDeInteresse(regiao) {
+  return ZONAS_INTERESSE[regiao] || ZONAS_INTERESSE.Coimbra
+}
+
+const REACTIVATION_TEMPLATE = (nome, regiao = 'Coimbra') => {
   const primeiroNome = nome.split(' ')[0]
+  const zonaRegiao = regiao === 'AMP' ? 'na Área Metropolitana do Porto' : 'na zona de Coimbra'
   return `Boa tarde ${primeiroNome}, sou o Alexandre Mendes da Somnium Properties.
 
-Mudei recentemente de contacto e estou a retomar a comunicação com consultores com quem já trabalhei ou que operam na zona de Coimbra.
+Mudei recentemente de contacto e estou a retomar a comunicação com consultores com quem já trabalhei ou que operam ${zonaRegiao}.
 
 Investimos em imóveis com potencial de valorização. Compramos directamente, renovamos e recolocamos no mercado. Trabalhamos com consultores como parceiros de negócio e valorizamos quem nos apresenta boas oportunidades.
 
@@ -31,7 +40,7 @@ Investimos em imóveis com potencial de valorização. Compramos directamente, r
 • Imóveis com margem de negociação, construção anterior a 2000 ou que precisem de obras
 • Proprietário com motivação concreta para vender (herança, emigração, divórcio, dificuldades financeiras)
 • Questões de licenciamento ou documentação não são impedimento
-• Zonas: concelho de Coimbra, zona central de Condeixa-a-Nova e Ventosa do Bairro (Mealhada)
+• Zonas: ${zonasDeInteresse(regiao)}
 • Valor máximo de aquisição: 250.000€
 
 Quando encontramos o imóvel certo, avançamos com rapidez e sem burocracia.
@@ -97,7 +106,10 @@ async function runFollowUp() {
           })
           msg = resp.content[0]?.text?.trim()
         } catch {
-          msg = `Olá ${c.nome}, tudo bem? Alguma novidade de imóveis que possam encaixar no nosso perfil? Estamos à procura de oportunidades com margem negocial em Coimbra e arredores.`
+          {
+            const regiaoConsultor = c.regiao === 'AMP' ? 'no Porto, Gaia e arredores' : 'em Coimbra e arredores'
+            msg = `Olá ${c.nome}, tudo bem? Alguma novidade de imóveis que possam encaixar no nosso perfil? Estamos à procura de oportunidades com margem negocial ${regiaoConsultor}.`
+          }
         }
 
         // Enviar via template aprovado (necessario para primeira mensagem)

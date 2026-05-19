@@ -128,7 +128,7 @@ async function aggregateWithClaude(reunioes, range) {
     max_tokens: 4500,
     messages: [{
       role: 'user',
-      content: `Es analista executivo da Somnium Properties (investimento imobiliário em Coimbra, Portugal).
+      content: `Es analista executivo da Somnium Properties (empresa portuguesa de investimento imobiliário com operações em Coimbra e na Área Metropolitana do Porto — Porto, Vila Nova de Gaia, Santa Maria da Feira).
 Recebes transcrições de reuniões internas semanais (sócios Alexandre Mendes, João Abreu e Luís Pedro).
 Compõe um relatório executivo CORPORATIVO em PT-PT formal, estruturado para PDF institucional.
 

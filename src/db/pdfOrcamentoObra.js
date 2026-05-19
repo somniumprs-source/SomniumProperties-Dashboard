@@ -237,8 +237,13 @@ export function generateOrcamentoObraPDF(imovel, orcamentoRow) {
   const footerY = doc.page.height - 40
   doc.rect(0, footerY - 8, doc.page.width, 40).fill(BLACK)
   doc.rect(0, footerY - 8, doc.page.width, 2).fill(GOLD)
+  // Distrito dinâmico — Coimbra como default, AMP → Porto.
+  const distrito = imovel?.distrito
+    || (imovel?.concelho === 'Porto' || imovel?.concelho === 'Vila Nova de Gaia' ? 'Porto'
+      : imovel?.concelho === 'Santa Maria da Feira' ? 'Aveiro'
+      : imovel?.regiao === 'AMP' ? 'Porto' : 'Coimbra')
   doc.fontSize(7).fillColor(GOLD)
-     .text('SOMNIUM PROPERTIES · Coimbra, Portugal · Documento confidencial · Cumpre CIVA art 2º (autoliquidação) e CIRS art 101º (retenções)',
+     .text(`SOMNIUM PROPERTIES · ${distrito}, Portugal · Documento confidencial · Cumpre CIVA art 2º (autoliquidação) e CIRS art 101º (retenções)`,
            50, footerY + 4, { align: 'center', width: doc.page.width - 100 })
 
   doc.end()

@@ -101,8 +101,35 @@ function isActiveHours() {
   return hour >= 8 && hour <= 23
 }
 
+// ── Zonas de interesse por região (injectadas no system prompt) ──
+const ZONAS_INTERESSE_TEXT = {
+  Coimbra: `Concelho de Coimbra (todas as freguesias)
+Zona central de Condeixa-a-Nova
+Ventosa do Bairro (Mealhada)`,
+  AMP: `Porto (Bonfim, Campanhã, Cedofeita, Lordelo do Ouro e Massarelos, Paranhos, Ramalde)
+Vila Nova de Gaia (Santa Marinha e S. Pedro da Afurada, Mafamude e Vilar do Paraíso, Canidelo, Madalena)
+Santa Maria da Feira (Fiães, Lourosa, S. João de Ver, Mozelos)`,
+}
+const RESPONDER_CRITERIOS_TEXT = {
+  Coimbra: 'Procuramos imóveis com margem de negociação — construção antiga ou que precise de obras, onde haja espaço para criar valor. Zonas de Coimbra, Condeixa e arredores. Até 250k.',
+  AMP: 'Procuramos imóveis com margem de negociação — construção antiga ou que precise de obras, onde haja espaço para criar valor. Zonas: Porto, Vila Nova de Gaia e Santa Maria da Feira. Até 250k.',
+}
+const RESPONDER_QUEM_SOMOS_TEXT = {
+  Coimbra: 'Somos a Somnium Properties — investimos em imóveis com potencial em Coimbra e arredores. Compramos, renovamos e colocamos novamente no mercado. Trabalhamos com consultores para encontrar as melhores oportunidades.',
+  AMP: 'Somos a Somnium Properties — investimos em imóveis com potencial na Área Metropolitana do Porto (Porto, Gaia, Santa Maria da Feira). Compramos, renovamos e colocamos novamente no mercado. Trabalhamos com consultores para encontrar as melhores oportunidades.',
+}
+
+// Gera o system prompt parametrizado pela região do consultor. Default Coimbra.
+export function buildSystemPrompt(regiao = 'Coimbra') {
+  const r = regiao === 'AMP' ? 'AMP' : 'Coimbra'
+  return SYSTEM_PROMPT_TEMPLATE
+    .replaceAll('{{ZONAS_INTERESSE}}', ZONAS_INTERESSE_TEXT[r])
+    .replaceAll('{{RESPONDER_CRITERIOS}}', RESPONDER_CRITERIOS_TEXT[r])
+    .replaceAll('{{RESPONDER_QUEM_SOMOS}}', RESPONDER_QUEM_SOMOS_TEXT[r])
+}
+
 // ── System Prompt ───────────────────────────────────────────
-const SYSTEM_PROMPT = `
+const SYSTEM_PROMPT_TEMPLATE = `
 # Role: Alexandre, Commercial Lead at Somnium Properties
 # Objective: Build genuine relationships with real estate consultants.
 
@@ -219,9 +246,7 @@ Quando o imóvel tem interesse (ADICIONAR ou TRIAGEM com potencial):
 ═══════════════════════════════════════
 ZONAS DE INTERESSE
 ═══════════════════════════════════════
-Concelho de Coimbra (todas as freguesias)
-Zona central de Condeixa-a-Nova
-Ventosa do Bairro (Mealhada)
+{{ZONAS_INTERESSE}}
 Outras zonas: "Essa zona não é o nosso foco principal, mas envia-nos os dados na mesma que vamos analisar internamente."
 
 ═══════════════════════════════════════
@@ -258,10 +283,10 @@ IGNORAR: sem equity, casual, dispersão
   → Se for imóvel sem interesse: "Este não se enquadra — precisamos de margem no preço e este está fechado. Mas continua a enviar!"
 
 RESPONDER_CRITERIOS: pergunta sobre o que procuramos
-  → Explicar de forma natural e curta: "Procuramos imóveis com margem de negociação — construção antiga ou que precise de obras, onde haja espaço para criar valor. Zonas de Coimbra, Condeixa e arredores. Até 250k."
+  → Explicar de forma natural e curta: "{{RESPONDER_CRITERIOS}}"
 
 RESPONDER_QUEM_SOMOS: não sabe quem somos
-  → "Somos a Somnium Properties — investimos em imóveis com potencial em Coimbra e arredores. Compramos, renovamos e colocamos novamente no mercado. Trabalhamos com consultores para encontrar as melhores oportunidades."
+  → "{{RESPONDER_QUEM_SOMOS}}"
 
 AGUARDAR: "vou verificar", "já te digo", "ok"
   → Não responder. Esperar naturalmente.
@@ -648,6 +673,9 @@ ${combinedText}
 ${urgente ? '⚠️ URGÊNCIA DETECTADA — prioridade máxima' : ''}
 `
 
+    // System prompt regional (zonas, critérios e quem-somos adaptados à
+    // região do consultor — Coimbra vs AMP).
+    const systemPromptRegional = buildSystemPrompt(consultor.regiao || 'Coimbra')
     const response = await withRetry(() => client.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 2000,
@@ -655,7 +683,7 @@ ${urgente ? '⚠️ URGÊNCIA DETECTADA — prioridade máxima' : ''}
       messages: [
         { role: 'user', content: userContent }
       ],
-      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+      system: [{ type: 'text', text: systemPromptRegional, cache_control: { type: 'ephemeral' } }],
     }), 'claude-api')
 
     const responseText = response.content[0]?.text || '{}'

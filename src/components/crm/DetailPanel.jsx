@@ -290,7 +290,7 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
         <div>
           <label className="text-xs font-semibold text-gray-700 block mb-1">📍 Morada do imóvel (origem)</label>
           <input type="text" value={origem} onChange={e => setOrigem(e.target.value)}
-            placeholder="Ex: Rua das Flores 12, Coimbra"
+            placeholder={imovel?.regiao === 'AMP' ? 'Ex: Rua de Santa Catarina 200, Porto' : 'Ex: Rua das Flores 12, Coimbra'}
             className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
         </div>
         <div>
@@ -327,7 +327,7 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
                 placeholder="Categoria (ex: Hospital)"
                 className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
               <input type="text" value={d.endereco || ''} onChange={e => setDestino(i, { endereco: e.target.value })}
-                placeholder="Morada do ponto (ex: Hospital Geral, Coimbra)"
+                placeholder={imovel?.regiao === 'AMP' ? 'Morada do ponto (ex: Hospital São João, Porto)' : 'Morada do ponto (ex: Hospital Geral, Coimbra)'}
                 className="flex-[2] px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
               <button type="button" onClick={() => remover(i)}
                 className="px-2 py-2 text-xs rounded-lg bg-red-50 text-red-600 hover:bg-red-100">×</button>
@@ -1747,10 +1747,10 @@ function ImovelEditSections({ data, form, setField }) {
         </select>
       </div>
       <div>
-        <Combobox label="Distrito" value={form.distrito} onChange={v => setField('distrito', v)} options={[]} placeholder="Coimbra…" />
+        <Combobox label="Distrito" value={form.distrito} onChange={v => setField('distrito', v)} options={[]} placeholder={form.regiao === 'AMP' ? 'Porto…' : 'Coimbra…'} />
       </div>
       <div>
-        <Combobox label="Concelho" value={form.concelho} onChange={v => setField('concelho', v)} options={concelhos} placeholder="Coimbra…" />
+        <Combobox label="Concelho" value={form.concelho} onChange={v => setField('concelho', v)} options={concelhos} placeholder={form.regiao === 'AMP' ? 'Porto / V. N. Gaia / S. M. da Feira…' : 'Coimbra…'} />
       </div>
       <div>
         <Combobox label="Freguesia" value={form.freguesia} onChange={v => setField('freguesia', v)} options={freguesias} placeholder="Pesquisar freguesia…" />
@@ -2703,7 +2703,7 @@ const SCRIPT_PERGUNTAS = {
         { pergunta: 'Conta-me o teu último projecto do início ao fim. Como encontraste o imóvel, quanto pagaste, o que fizeste, e como correu a venda?', extrai: 'Historial completo num caso real. Atenção aos detalhes: se é vago → pode não ter feito. Se é específico → genuíno. Notar se os números fazem sentido.' },
         { pergunta: 'Qual foi a maior dor de cabeça que tiveste numa obra? Aquele momento em que pensaste "para que é que eu me meti nisto?"', extrai: 'Resiliência e honestidade. Toda a gente que faz obras tem histórias de horror. Se diz "nunca tive problemas" → ou não fez obras ou não é honesto.' },
         { pergunta: 'Tens empreiteiro de confiança? Há quanto tempo trabalham juntos e em quantos projectos?', extrai: 'Equipa operacional. Empreiteiro de confiança com historial = activo sólido. "Tenho de procurar" = risco de atraso.' },
-        { pergunta: 'Só para calibrar: quanto achas que custaria remodelar um T2 com 80m² aqui em Coimbra? Cozinha e casas de banho novas, pavimento, pintura, canalização.', extrai: 'TESTE DE CONHECIMENTO REAL. Resposta razoável: €35k-€55k. Se diz €15k ou €100k → desfasado do mercado. A precisão da estimativa revela experiência operacional.' },
+        { pergunta: 'Só para calibrar: quanto acha que custaria remodelar um T2 com 80m² em zona urbana (Coimbra, Porto ou Gaia)? Cozinha e casas de banho novas, pavimento, pintura, canalização.', extrai: 'TESTE DE CONHECIMENTO REAL. Resposta razoável: €35k-€55k. Se diz €15k ou €100k → desfasado do mercado. A precisão da estimativa revela experiência operacional.' },
       ],
       red_flags: ['Respostas vagas sobre projectos ("fiz umas coisas")', 'Não consegue estimar custos de obra', 'Sem empreiteiro e sem plano para arranjar', 'Nunca geriu obra directamente — delegou tudo', 'Projectos "todos correram bem, sem problemas"'],
     },

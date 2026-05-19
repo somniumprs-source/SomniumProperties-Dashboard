@@ -634,9 +634,10 @@ TODAS as tarefas devem ser sincronizadas com Google Calendar.`,
       try { await runRelatorioSemanal(); res.json({ ok: true }) } catch (e) { res.status(500).json({ error: e.message }) }
     })
 
-    // Endpoint para obter template de reactivação
+    // Endpoint para obter template de reactivação — regional (?regiao=AMP|Coimbra)
     app.get('/api/template/reactivacao/:nome', (req, res) => {
-      res.json({ template: REACTIVATION_TEMPLATE(req.params.nome) })
+      const regiao = req.query.regiao === 'AMP' ? 'AMP' : 'Coimbra'
+      res.json({ template: REACTIVATION_TEMPLATE(req.params.nome, regiao) })
     })
 
     // ── Reactivação em massa (20/dia) ─────────────────────────
@@ -646,9 +647,10 @@ TODAS as tarefas devem ser sincronizadas com Google Calendar.`,
         const limite = req.body?.limite || 20
         const { sendWhatsApp } = await import('./src/db/whatsappAgent.js')
 
-        // Buscar consultores com contacto que ainda nao foram reactivados
+        // Buscar consultores com contacto que ainda nao foram reactivados.
+        // Incluir `regiao` para que REACTIVATION_TEMPLATE seja regional.
         const { rows: consultores } = await pgQuery(
-          "SELECT id, nome, contacto FROM consultores WHERE reactivado = false AND contacto IS NOT NULL AND contacto != '' ORDER BY classificacao ASC, score_prioridade DESC LIMIT $1",
+          "SELECT id, nome, contacto, regiao FROM consultores WHERE reactivado = false AND contacto IS NOT NULL AND contacto != '' ORDER BY classificacao ASC, score_prioridade DESC LIMIT $1",
           [limite]
         )
 
@@ -664,7 +666,7 @@ TODAS as tarefas devem ser sincronizadas com Google Calendar.`,
         for (const c of consultores) {
           try {
             const firstName = (c.nome || '').split(' ')[0]
-            const msg = REACTIVATION_TEMPLATE(firstName)
+            const msg = REACTIVATION_TEMPLATE(firstName, c.regiao || 'Coimbra')
             // Usar template aprovado pela Meta (necessario para primeira mensagem)
             const twilio = (await import('twilio')).default
             const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)

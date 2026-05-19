@@ -14,7 +14,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.s
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
 const supabaseStorage = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null
 export { supabaseStorage }
-import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, ConsultorFollowups, DocumentosInvestidor, Visitas, getDashboardStats } from './crud.js'
+import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, ConsultorFollowups, DocumentosInvestidor, Visitas, Empreiteiros, getDashboardStats } from './crud.js'
 import pool from './pg.js'
 import { getVisitasEnriquecidas, syncDataVisitaDerivada } from './queries.js'
 import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
@@ -863,6 +863,7 @@ router.put('/negocios/:id/confirmar-pagamento', async (req, res) => {
 crudRoutes('/despesas', Despesas)
 crudRoutes('/tarefas', Tarefas)
 crudRoutes('/consultor-interacoes', ConsultorInteracoes)
+crudRoutes('/empreiteiros', Empreiteiros)
 
 // Contagem rápida de tarefas atrasadas — usado pelo badge da Sidebar. Evita
 // puxar ?limit=200 só para contar quantas estão em "Atrasada". Cache 30s.

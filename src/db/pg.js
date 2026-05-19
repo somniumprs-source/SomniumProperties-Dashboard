@@ -1114,6 +1114,41 @@ export async function initSchema() {
       CREATE INDEX IF NOT EXISTS idx_visitas_regiao ON visitas(regiao);
 
       -- ════════════════════════════════════════════════════════════════
+      -- EMPREITEIROS / CONSTRUTORES — pool por região, especialidades,
+      -- preço médio €/m², range geográfico, certificações. Antes só havia
+      -- a sub-tab vazia "Construtores" no CRM (endpoint 404 ao gravar).
+      -- ════════════════════════════════════════════════════════════════
+      CREATE TABLE IF NOT EXISTS empreiteiros (
+        id              TEXT PRIMARY KEY,
+        nome            TEXT NOT NULL,
+        empresa         TEXT,
+        nif             TEXT,
+        contacto        TEXT,
+        email           TEXT,
+        morada          TEXT,
+        regiao          TEXT,
+        concelhos_atuacao TEXT,            -- JSON array (ex: ["Porto","Vila Nova de Gaia"])
+        especialidades  TEXT,              -- JSON array (ex: ["Carpintaria","AVAC","Pichelaria"])
+        estado          TEXT DEFAULT 'Em avaliação',  -- 'Em avaliação' | 'Activo' | 'Inactivo'
+        classificacao   TEXT,              -- 'A' | 'B' | 'C' | 'D'
+        preco_m2_medio  REAL DEFAULT 0,    -- €/m² indicativo
+        prazo_medio_dias INTEGER DEFAULT 0,
+        regime_iva      TEXT DEFAULT 'Normal', -- 'Normal' | 'Autoliquidação' | 'Isento'
+        retencao_irs    BOOLEAN DEFAULT false,
+        seguro_responsabilidade BOOLEAN DEFAULT false,
+        alvara          TEXT,
+        notas           TEXT,
+        lucro_gerado    REAL DEFAULT 0,
+        obras_realizadas INTEGER DEFAULT 0,
+        data_primeiro_contacto TEXT,
+        data_ultima_obra TEXT,
+        created_at      TEXT DEFAULT (NOW()::TEXT),
+        updated_at      TEXT DEFAULT (NOW()::TEXT)
+      );
+      CREATE INDEX IF NOT EXISTS idx_empreiteiros_regiao ON empreiteiros(regiao);
+      CREATE INDEX IF NOT EXISTS idx_empreiteiros_estado ON empreiteiros(estado);
+
+      -- ════════════════════════════════════════════════════════════════
       -- MERCADO DE REFERÊNCIA — preços médios e tempo de absorção por
       -- concelho e tipologia. Crítico para wholesaling em AMP (preços
       -- diferem radicalmente entre concelhos). Popular manualmente ou
@@ -1202,13 +1237,34 @@ export async function initSchema() {
       -- despesas: filtros de timing já existem; índice em data
       CREATE INDEX IF NOT EXISTS idx_despesas_data            ON despesas(data);
 
-      -- Seed compliance básico para arranque (idempotente).
-      INSERT INTO compliance_regional (id, regiao, concelho, imt_perc_base, imi_perc, aimi_perc, zona_aru, notas_legais)
+      -- Seed compliance regional (idempotente, com taxas reais por município).
+      -- Fontes: portarias municipais 2025/2026 + Lei Geral Tributária.
+      -- IMT: taxa marginal usada como "base" — a calculadora aplica escalões.
+      -- IMI: taxa fixada anualmente pela assembleia municipal (intervalo
+      --      legal 0,3% — 0,45% para urbano avaliado).
+      -- AIMI: taxa estatal sobre VPT > €600k (0,4%); 1,0% sobre > €1M.
+      INSERT INTO compliance_regional (id, regiao, concelho, imt_perc_base, imi_perc, aimi_perc, zona_aru, notas_legais, contactos_uteis)
       VALUES
-        ('compl-coimbra',  'Coimbra', 'Coimbra',          6.0, 0.3, 0.4, true,  'Centro histórico = ARU. Isenção IMT até 6 anos.'),
-        ('compl-porto',    'AMP',     'Porto',            6.0, 0.3, 0.4, true,  'Várias ARUs (Baixa, Bonfim, Cedofeita). Pressão urbanística alta.'),
-        ('compl-gaia',     'AMP',     'Vila Nova de Gaia', 6.0, 0.3, 0.4, true,  'ARU em Santa Marinha e Mafamude. Mercado em forte valorização.')
-      ON CONFLICT (concelho) DO NOTHING;
+        ('compl-coimbra',     'Coimbra', 'Coimbra',            6.0, 0.30, 0.4, true,
+         'IMI mínimo legal (0,30%). Centro histórico = ARU "Coimbra Património Mundial" — isenção IMT/IMI até 5 anos em reabilitação. IRS mais-valias isento se reinvestimento em habitação própria.',
+         'Câmara: 239 702 000 · Finanças Coimbra-1: 239 798 300 · Conservatória Predial: 239 793 600'),
+        ('compl-porto',       'AMP',     'Porto',              6.5, 0.40, 0.4, true,
+         'IMI máximo legal (0,45%) prática (0,40% em 2025). Várias ARUs: Baixa do Porto, Bonfim, Campanhã, Cedofeita, Lapa, Massarelos. Isenção IMT até 3 anos e IMI até 5 anos em obras de reabilitação certificadas. AIMI agravado para fundos.',
+         'Câmara: 222 097 000 · Finanças Porto-1: 222 098 200 · Conservatória 1ª Porto: 222 339 100'),
+        ('compl-gaia',        'AMP',     'Vila Nova de Gaia',  6.5, 0.40, 0.4, true,
+         'IMI 0,40%. ARUs: Santa Marinha (centro histórico), Afurada, Mafamude e Vilar do Paraíso, Avintes. Mercado em forte valorização — atenção ao VPT desactualizado vs valor de mercado (factor de avaliação).',
+         'Câmara: 223 742 700 · Finanças Gaia-1: 227 869 100 · Conservatória Predial Gaia: 223 716 220'),
+        ('compl-feira',       'AMP',     'Santa Maria da Feira', 6.5, 0.35, 0.4, false,
+         'IMI 0,35% (escalão intermédio). Sem ARU activa ampla — verificar PDM por freguesia. Distrito de Aveiro, taxas IMT seguem regra nacional. Boa relação preço/m² vs Porto, menor pressão urbanística.',
+         'Câmara: 256 370 800 · Finanças Feira-1: 256 379 100')
+      ON CONFLICT (concelho) DO UPDATE SET
+        imt_perc_base = EXCLUDED.imt_perc_base,
+        imi_perc      = EXCLUDED.imi_perc,
+        aimi_perc     = EXCLUDED.aimi_perc,
+        zona_aru      = EXCLUDED.zona_aru,
+        notas_legais  = EXCLUDED.notas_legais,
+        contactos_uteis = EXCLUDED.contactos_uteis,
+        updated_at    = NOW();
     `)
 
     // Bootstrap: garantir que somniumprs@gmail.com (owner) existe como admin

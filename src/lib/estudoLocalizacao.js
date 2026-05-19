@@ -248,16 +248,25 @@ const T = {
   green: '#2d6a2d', red: '#8b2020', white: '#FFFFFF',
 }
 
+// Mapeia região → distrito mostrado nos PDFs/imagens. Default Coimbra para
+// retro-compatibilidade (a maioria do histórico não tinha região definida).
+function distritoDeRegiao(regiao) {
+  if (regiao === 'AMP') return 'Área Metropolitana do Porto'
+  return 'Coimbra'
+}
+
 export function composeEstudoSvg({
   imovelNome,
   morada,
   freguesia,
+  regiao = null,         // 'Coimbra' | 'AMP' — controla footer e prefixo do subtítulo
   resultados = [],
   highlights = [],
   destaque = null,    // categoria/string a marcar como ★ gold
   modo = 'driving',
   mapaPngBase64 = null, // imagem satélite Google Static Maps
 }) {
+  const distrito = distritoDeRegiao(regiao)
   const ok = resultados.filter(r => r.status === 'OK')
                        .sort((a, b) => (a.distancia_metros ?? Infinity) - (b.distancia_metros ?? Infinity))
 
@@ -497,7 +506,7 @@ export function composeEstudoSvg({
     <text x="50" y="32" font-size="10" fill="${T.muted}" font-weight="700" letter-spacing="2.5">SOMNIUM PROPERTIES</text>
     <text x="50" y="50" font-size="9" fill="${T.muted}">Estudo de localização · gerado para apresentação a investidor</text>
     <text x="50" y="66" font-size="9" fill="${T.muted}" font-style="italic">Distâncias e tempos calculados em modo de condução.</text>
-    <text x="${W - 50}" y="32" font-size="9" fill="${T.muted}" text-anchor="end">Coimbra · Portugal</text>
+    <text x="${W - 50}" y="32" font-size="9" fill="${T.muted}" text-anchor="end">${escapeXml(distrito)} · Portugal</text>
     <text x="${W - 50}" y="50" font-size="9" fill="${T.muted}" font-style="italic" text-anchor="end">${escapeXml(imovelNome || '')}</text>
   </g>
 </svg>`
@@ -511,7 +520,7 @@ export async function runEstudoLocalizacao({ pool, supabaseStorage, imovelId, de
   if (!supabaseStorage) throw new Error('Supabase Storage não configurado (SUPABASE_SERVICE_KEY ausente)')
 
   const { rows: [imovel] } = await pool.query(
-    'SELECT id, nome, morada, zona, pois_distancias FROM imoveis WHERE id = $1',
+    'SELECT id, nome, morada, zona, regiao, pois_distancias FROM imoveis WHERE id = $1',
     [imovelId]
   )
   if (!imovel) throw new Error('Imóvel não encontrado')
@@ -544,12 +553,15 @@ export async function runEstudoLocalizacao({ pool, supabaseStorage, imovelId, de
     apiKey,
   })
 
-  // 3. Compose SVG
+  // 3. Compose SVG — prefixo regional dinâmico (Coimbra ou AMP)
   const { freguesia, codigoPostal } = parseFreguesia(origem_resolvida)
+  const regiao = imovel.regiao || 'Coimbra'
+  const prefixoRegional = regiao === 'AMP' ? 'Porto/Gaia' : 'Coimbra'
   const svg = composeEstudoSvg({
     imovelNome: imovel.nome,
     morada: origem_resolvida,
-    freguesia: freguesia ? `Coimbra · ${freguesia}` : null,
+    freguesia: freguesia ? `${prefixoRegional} · ${freguesia}` : null,
+    regiao,
     resultados,
     highlights,
     destaque,

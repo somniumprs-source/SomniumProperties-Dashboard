@@ -13,6 +13,7 @@ const REQUIRED_FIELDS = {
   despesas: ['movimento'],
   tarefas: ['titulo'],
   visitas: ['imovel_id', 'data_hora'],
+  empreiteiros: ['nome'],
 }
 
 function validateRequired(table, data) {
@@ -205,6 +206,7 @@ export const ConsultorInteracoes = createCRUD('consultor_interacoes', { searchFi
 export const ConsultorFollowups = createCRUD('consultor_followups', { searchFields: ['motivo'], defaultSort: 'data DESC' })
 export const DocumentosInvestidor = createCRUD('documentos_investidor', { searchFields: ['nome', 'tipo'], defaultSort: 'created_at DESC' })
 export const Visitas = createCRUD('visitas', { searchFields: ['notas', 'resultado'], defaultSort: 'data_hora DESC' })
+export const Empreiteiros = createCRUD('empreiteiros', { searchFields: ['nome', 'empresa', 'contacto', 'email', 'alvara'], defaultSort: 'updated_at DESC' })
 
 export async function getDashboardStats({ regiao } = {}) {
   const opts = { regiao }

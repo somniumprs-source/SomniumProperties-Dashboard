@@ -156,7 +156,7 @@ export function CalculadoraForm({ analise, onUpdate }) {
           <Input label="Utilidades / mês" field="utilidades_mensal" value={form.utilidades_mensal} onChange={handleChange} placeholder="0" />
           <Input label="N.º Tranches obra" field="n_tranches" value={form.n_tranches} onChange={handleChange} step="1" placeholder="1" />
           <Input label="Custo / Tranche" field="custo_tranche" value={form.custo_tranche} onChange={handleChange} placeholder="0" />
-          <Input label="Taxa IMI %" field="taxa_imi" value={form.taxa_imi} onChange={handleChange} step="0.05" placeholder="0.3" />
+          <Input label="Taxa IMI %" field="taxa_imi" value={form.taxa_imi} onChange={handleChange} step="0.05" placeholder="0.30 a 0.45 (Coimbra 0.30 · Porto/Gaia 0.40)" />
           <Input label="Ligação Serviços" field="ligacao_servicos" value={form.ligacao_servicos} onChange={handleChange} placeholder="0" />
           <Input label="Excedente Capital" field="excedente_capital" value={form.excedente_capital} onChange={handleChange} placeholder="0" />
         </div>

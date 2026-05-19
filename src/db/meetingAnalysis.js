@@ -38,7 +38,7 @@ async function analyzeWithClaude(reuniao, transcricao, resumo) {
     max_tokens: 2000,
     messages: [{
       role: 'user',
-      content: `Analisa esta transcrição de uma reunião com um potencial investidor imobiliário da Somnium Properties (empresa de investimento imobiliário em Coimbra, Portugal).
+      content: `Analisa esta transcrição de uma reunião com um potencial investidor imobiliário da Somnium Properties (empresa portuguesa de investimento imobiliário com operações em Coimbra e na Área Metropolitana do Porto — Porto, Vila Nova de Gaia, Santa Maria da Feira).
 
 TÍTULO: ${reuniao.titulo}
 DATA: ${reuniao.data}
@@ -366,7 +366,7 @@ async function analyzeConsultorWithClaude(reuniao, transcricao, resumo) {
     max_tokens: 2000,
     messages: [{
       role: 'user',
-      content: `Analisa esta transcrição de uma reunião com um consultor imobiliário (potencial parceiro da Somnium Properties, empresa de investimento imobiliário em Coimbra).
+      content: `Analisa esta transcrição de uma reunião com um consultor imobiliário (potencial parceiro da Somnium Properties, empresa portuguesa de investimento imobiliário com operações em Coimbra e na Área Metropolitana do Porto).
 
 TÍTULO: ${reuniao.titulo}
 DATA: ${reuniao.data}
@@ -379,7 +379,7 @@ Responde APENAS em JSON válido com esta estrutura:
 {
   "consultor_dados": {
     "imobiliaria": null ou nome da imobiliária mencionada,
-    "zonas": null ou texto com zonas de actuação (ex: "Coimbra, Figueira da Foz"),
+    "zonas": null ou texto com zonas de actuação (ex: "Coimbra, Lousã" ou "Porto, Vila Nova de Gaia"),
     "tipo_imoveis": null ou texto (ex: "T2/T3 urbano", "rústicos", "comercial"),
     "equipa_remax": null ou nome da equipa se mencionada,
     "imoveis_estimados_mes": null ou número aproximado de leads/imóveis por mês,

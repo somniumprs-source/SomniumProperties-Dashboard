@@ -19,6 +19,28 @@ import { computeContentHash, shortHash } from './dossier/contentHash.js'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const STRESS_DIR = path.resolve(__dirname, '../../public/uploads/stress_tests')
 
+// Helpers regionais — substituem hardcodes "Coimbra · Portugal" pelo distrito
+// correcto do imóvel. Default "Coimbra" para retro-compatibilidade do legacy.
+function regiaoDoImovel(im) {
+  return im?.regiao === 'AMP' ? 'AMP' : 'Coimbra'
+}
+function distritoDoImovel(im) {
+  // Prioridade: campo explícito > concelho conhecido > inferido pela região.
+  if (im?.distrito) return im.distrito
+  if (im?.concelho === 'Porto' || im?.concelho === 'Vila Nova de Gaia') return 'Porto'
+  if (im?.concelho === 'Santa Maria da Feira') return 'Aveiro'
+  return regiaoDoImovel(im) === 'AMP' ? 'Porto' : 'Coimbra'
+}
+function localizacaoTexto(im, opts = {}) {
+  // Devolve "{zona}, {distrito}" ou "{distrito}, Portugal" sem assumir Coimbra.
+  const distrito = distritoDoImovel(im)
+  const zona = im?.zona || im?.freguesia || im?.concelho
+  if (opts.completo) {
+    return zona ? `Zona de ${zona}, ${distrito}` : `${distrito}, Portugal`
+  }
+  return zona ? ` na zona de ${zona}, ${distrito}` : ` em ${distrito}`
+}
+
 // Design tokens (reference: Proposta de Investimento Somnium)
 const C = {
   gold: '#C9A84C', black: '#0d0d0d', white: '#ffffff',
@@ -454,7 +476,7 @@ class DocBuilder {
     d.fontSize(28).fillColor(C.body).text(title, ML, titleY, { width: CW, align: 'center' })
     const sub = [im.nome, im.zona].filter(Boolean).join(' · ').toUpperCase()
     if (sub) d.fontSize(10).fillColor(C.gold).text(sub, ML, subY, { width: CW, align: 'center', characterSpacing: 1.5 })
-    if (subtitle) d.fontSize(10).fillColor(C.muted).text(subtitle + ' · Coimbra · Portugal', ML, subtitleY, { width: CW, align: 'center' })
+    if (subtitle) d.fontSize(10).fillColor(C.muted).text(subtitle + ' · ' + distritoDoImovel(im) + ' · Portugal', ML, subtitleY, { width: CW, align: 'center' })
     d.rect(ML + 80, accent2Y, CW - 160, 0.5).fill(C.gold)
     d.fontSize(9).fillColor(C.muted).text(NOW(), ML, dateY, { width: CW, align: 'center' })
     d.rect(ML, PH - 65, CW, 0.5).fill(C.gold)
@@ -1468,9 +1490,9 @@ function renderFichaImovel(b, im) {
     { label: 'Freguesia', value: im.freguesia },
     { label: 'Concelho', value: im.concelho },
   ]
-  if (im.distrito && im.distrito !== 'Coimbra') {
-    rows1.push({ label: 'Distrito', value: im.distrito })
-  }
+  // Mostrar distrito sempre (independentemente da região, para clareza com
+  // imóveis AMP). Antes só mostrava se ≠ Coimbra, escondendo-o por defeito.
+  rows1.push({ label: 'Distrito', value: distritoDoImovel(im) })
   rows1.push(
     { label: 'Artigo Matricial', value: im.artigo_matricial },
     { label: 'Descrição Predial', value: im.descricao_predial },
@@ -3139,7 +3161,7 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
   b.header('SOBRE O PROJECTO')
   const tipoDesc = im.tipologia ? `um ${im.tipologia}` : 'um imóvel'
   const areaDesc = im.area_bruta ? ` com uma área bruta de ${im.area_bruta} m²` : ''
-  const zonaDesc = im.zona ? ` na zona de ${im.zona}, Coimbra` : ' em Coimbra'
+  const zonaDesc = localizacaoTexto(im)
   b.textBlock(
     `O projecto consiste na aquisição, remodelação integral e revenda de ${tipoDesc}${areaDesc}, localizado${zonaDesc}. ` +
     `O imóvel encontra-se num estado de conservação que exige remodelação total, o que justifica o preço de aquisição abaixo do valor de mercado e cria a margem de valorização identificada.`
@@ -3148,7 +3170,7 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
 
   b.header('IDENTIFICAÇÃO DO IMÓVEL')
   b.simpleTable([
-    { label: 'Localização', value: im.zona ? `Zona de ${im.zona}, Coimbra` : 'Coimbra, Portugal' },
+    { label: 'Localização', value: localizacaoTexto(im, { completo: true }) },
     { label: 'Tipologia', value: im.tipologia || '—' },
     { label: 'Área Bruta Privativa', value: im.area_bruta ? `${im.area_bruta} m²` : '—' },
     { label: 'Modelo de Negócio', value: im.modelo_negocio || 'CAEP 50/50' },
@@ -3247,7 +3269,7 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
       conclusao += ` No pior cenário, o lucro estimado é de ${EUR(stParsed.pior.lucro_liquido)}, o que requer atenção ao risco.`
     }
   }
-  if (im.zona) conclusao += ` A localização na zona de ${im.zona}, Coimbra, sustenta os valores de venda projectados.`
+  if (im.zona) conclusao += ` A localização${localizacaoTexto(im)}, sustenta os valores de venda projectados.`
   b.textBlock(conclusao)
 
   b.space(4)
@@ -3464,7 +3486,7 @@ const GENERATORS = {
     const b = new DocBuilder('Proposta de Investimento', '', {
       ...im,
       nome: 'OPORTUNIDADE DE INVESTIMENTO',
-      zona: im.zona ? `Zona de ${im.zona}` : 'Coimbra',
+      zona: im.zona ? `Zona de ${im.zona}` : distritoDoImovel(im),
     }, {
       style: 'investor',
       heroItems: [
