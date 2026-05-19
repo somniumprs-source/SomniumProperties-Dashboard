@@ -1166,6 +1166,29 @@ export async function initSchema() {
       CREATE INDEX IF NOT EXISTS idx_lead_int_regiao ON lead_interactions(regiao, data_hora DESC);
       CREATE INDEX IF NOT EXISTS idx_lead_int_canal ON lead_interactions(canal);
 
+      -- ── Indexes de performance (hot paths identificados em audit 2026-05) ──
+      -- /api/tarefas filtros + ordering
+      CREATE INDEX IF NOT EXISTS idx_tarefas_inicio       ON tarefas(inicio DESC);
+      CREATE INDEX IF NOT EXISTS idx_tarefas_status       ON tarefas(status);
+      CREATE INDEX IF NOT EXISTS idx_tarefas_funcionario  ON tarefas(funcionario);
+      -- calendarSync.js procura por gcal_event_id em vários sítios
+      CREATE INDEX IF NOT EXISTS idx_tarefas_gcal_event   ON tarefas(gcal_event_id) WHERE gcal_event_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_tarefas_pending_gcal ON tarefas(inicio) WHERE gcal_event_id IS NULL AND inicio IS NOT NULL;
+      -- fireflies auto-fill (server.js:4259)
+      CREATE INDEX IF NOT EXISTS idx_reunioes_analise_pendente ON reunioes(entidade_tipo, created_at DESC) WHERE entidade_id IS NOT NULL AND analise_completa IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_reunioes_created       ON reunioes(created_at DESC);
+      -- imoveis: filtros temporais usados em weekly-pulse e /api/metricas
+      CREATE INDEX IF NOT EXISTS idx_imoveis_data_adicionado  ON imoveis(data_adicionado);
+      CREATE INDEX IF NOT EXISTS idx_imoveis_data_chamada     ON imoveis(data_chamada);
+      CREATE INDEX IF NOT EXISTS idx_imoveis_data_proposta    ON imoveis(data_proposta);
+      -- consultores: alertas de follow-up
+      CREATE INDEX IF NOT EXISTS idx_consultores_proximo_fup  ON consultores(data_proximo_follow_up);
+      -- negocios: filtros de venda/compra em /api/metricas
+      CREATE INDEX IF NOT EXISTS idx_negocios_data_venda      ON negocios(data_venda);
+      CREATE INDEX IF NOT EXISTS idx_negocios_data_compra     ON negocios(data_compra);
+      -- despesas: filtros de timing já existem; índice em data
+      CREATE INDEX IF NOT EXISTS idx_despesas_data            ON despesas(data);
+
       -- Seed compliance básico para arranque (idempotente).
       INSERT INTO compliance_regional (id, regiao, concelho, imt_perc_base, imi_perc, aimi_perc, zona_aru, notas_legais)
       VALUES

@@ -12,7 +12,10 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500, standardHeaders: true, legacyHeaders: false }))
-app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')))
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads'), {
+  maxAge: '7d',
+  immutable: false,
+}))
 // Landing page de captação de investidores (servida estaticamente)
 app.use('/investir', express.static(path.join(__dirname, 'public/investir')))
 
@@ -1092,6 +1095,7 @@ const getObras        = async () => []
 
 // Cache com TTL para endpoints que fazem queries pesadas
 import { TTLCache } from './src/db/utils/ttlCache.js'
+import pool from './src/db/pg.js'
 const cache = new TTLCache(60000) // 60s default TTL
 app.post('/api/cache/clear', (_req, res) => { cache.clear(); res.json({ ok: true }) })
 
@@ -1125,10 +1129,29 @@ app.use('/api', (req, _res, next) => {
   next()
 })
 
+// ── Middleware de cache de endpoints (TTL configurável) ───────
+// Usa prefixo 'dash:' para que a invalidação automática nas mutations
+// /api/* limpe estes caches também. Chave inclui path + query + regiao.
+function endpointCache(ttl) {
+  return (req, res, next) => {
+    if (req.method !== 'GET') return next()
+    const queryStr = new URLSearchParams(req.query || {}).toString()
+    const key = `dash:${req.path}?${queryStr}|r=${req.regiaoActiva || ''}`
+    const cached = cache.get(key)
+    if (cached !== undefined) return res.json(cached)
+    const origJson = res.json.bind(res)
+    res.json = (payload) => {
+      if (res.statusCode >= 200 && res.statusCode < 300) cache.set(key, payload, ttl)
+      return origJson(payload)
+    }
+    next()
+  }
+}
+
 // ════════════════════════════════════════════════════════════════
 // FINANCEIRO — Wholesaling Imobiliário
 // ════════════════════════════════════════════════════════════════
-app.get('/api/kpis/financeiro', async (req, res) => {
+app.get('/api/kpis/financeiro', endpointCache(300000), async (req, res) => {
   try {
     const regiao = req.regiaoActiva
     const [negócios, despesas] = await Promise.all([getNegócios({ regiao }), getDespesas({ regiao })])
@@ -1235,7 +1258,7 @@ app.get('/api/kpis/financeiro', async (req, res) => {
 })
 
 // ── Despesas operacionais ────────────────────────────────────────
-app.get('/api/financeiro/despesas', async (req, res) => {
+app.get('/api/financeiro/despesas', endpointCache(300000), async (req, res) => {
   try {
     const despesas = await getDespesas({ regiao: req.regiaoActiva })
 
@@ -1282,7 +1305,7 @@ app.get('/api/financeiro/despesas', async (req, res) => {
 })
 
 // ── Cash Flow & Runway ───────────────────────────────────────────
-app.get('/api/financeiro/cashflow', async (req, res) => {
+app.get('/api/financeiro/cashflow', endpointCache(300000), async (req, res) => {
   try {
     const regiao = req.regiaoActiva
     const [negócios, despesas] = await Promise.all([getNegócios({ regiao }), getDespesas({ regiao })])
@@ -1315,7 +1338,7 @@ app.get('/api/financeiro/pl',     async (_req, res) => res.json({}))
 app.get('/api/financeiro/budget', async (_req, res) => res.json({ linhas: [] }))
 
 // ── Conta Corrente (extrato cronológico) ─────────────────────────
-app.get('/api/financeiro/conta-corrente', async (req, res) => {
+app.get('/api/financeiro/conta-corrente', endpointCache(300000), async (req, res) => {
   try {
     const regiao = req.regiaoActiva
     const [negócios, despesasAll] = await Promise.all([getNegócios({ regiao }), getDespesas({ regiao })])
@@ -1455,7 +1478,7 @@ app.get('/api/financeiro/conta-corrente', async (req, res) => {
 })
 
 // ── Aging de pagamentos faseados ─────────────────────────────────
-app.get('/api/financeiro/aging', async (_req, res) => {
+app.get('/api/financeiro/aging', endpointCache(300000), async (_req, res) => {
   try {
     const negocios = await getNegócios()
     const hoje = new Date()
@@ -1485,7 +1508,7 @@ app.get('/api/financeiro/aging', async (_req, res) => {
 })
 
 // ── Rentabilidade ────────────────────────────────────────────────
-app.get('/api/financeiro/rentabilidade', async (req, res) => {
+app.get('/api/financeiro/rentabilidade', endpointCache(300000), async (req, res) => {
   try {
     const [negocios, imoveis, consultores, investidores] = await Promise.all([
       getNegócios(), getImóveis(), getConsultores(), getInvestidores()
@@ -1637,7 +1660,7 @@ const FUNIL_INV_LABEL = {
   'Investidor Ativo':                    'Ativo',
 }
 
-app.get('/api/kpis/comercial', async (req, res) => {
+app.get('/api/kpis/comercial', endpointCache(300000), async (req, res) => {
   try {
     const [imoveisResult, investidores] = await Promise.all([
       getImóveis().catch(() => []),
@@ -2154,7 +2177,7 @@ app.get('/api/comercial/metricas-temporais', async (req, res) => {
 // ════════════════════════════════════════════════════════════════
 // MARKETING
 // ════════════════════════════════════════════════════════════════
-app.get('/api/kpis/marketing', async (req, res) => {
+app.get('/api/kpis/marketing', endpointCache(300000), async (req, res) => {
   try {
     const { ano, month } = getMesAtual()
     const campanhas = await getCampanhas()
@@ -2232,7 +2255,7 @@ app.get('/api/marketing/historico', async (req, res) => {
 // ════════════════════════════════════════════════════════════════
 // OPERAÇÕES
 // ════════════════════════════════════════════════════════════════
-app.get('/api/kpis/operacoes', async (req, res) => {
+app.get('/api/kpis/operacoes', endpointCache(300000), async (req, res) => {
   try {
     const { ano, month } = getMesAtual()
     const obras = await getObras()
@@ -2335,7 +2358,8 @@ app.get('/api/kpis', async (req, res) => {
       safe(`${base}/api/crm/analises-kpis`),
     ])
     const payload = { financeiro: { ...financeiro, cashflow, analises }, comercial, marketing, operacoes, updatedAt: new Date().toISOString() }
-    cache.set(cacheKey, payload, 30000)
+    // TTL longo: mutations /api/* invalidam o cache via middleware → frescura preservada
+    cache.set(cacheKey, payload, 300000)
     res.json(payload)
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -2423,7 +2447,7 @@ app.get('/api/weekly-pulse', async (req, res) => {
       alertas: { imoveisParados, investSemContacto, consFollowUpAtrasado },
       financeiro: { burnRate, lucroPendente, runway },
     }
-    cache.set('dash:pulse', payload, 60000)
+    cache.set('dash:pulse', payload, 300000)
     res.json(payload)
   } catch (err) {
     console.error('[weekly-pulse]', err.message)
@@ -2434,7 +2458,7 @@ app.get('/api/weekly-pulse', async (req, res) => {
 // ════════════════════════════════════════════════════════════════
 // CASH FLOW PROJETADO — Projeção mensal
 // ════════════════════════════════════════════════════════════════
-app.get('/api/financeiro/projecao', async (req, res) => {
+app.get('/api/financeiro/projecao', endpointCache(300000), async (req, res) => {
   try {
     const [negocios, despesas] = await Promise.all([getNegócios(), getDespesas()])
     const now = new Date()
@@ -3867,7 +3891,7 @@ app.get('/api/metricas', async (req, res) => {
       // ── KPIs Avançados + OKRs ──
       avancado: trackerAvancado,
     }
-    cache.set('dash:metricas', metricasPayload, 60000)
+    cache.set('dash:metricas', metricasPayload, 300000)
     res.json(metricasPayload)
   } catch (err) {
     console.error('[metricas]', err.message)
@@ -4842,7 +4866,7 @@ app.get('/api/time-tracking', async (req, res) => {
 // ════════════════════════════════════════════════════════════════
 // ALERTAS — Centro de atenção do CEO
 // ════════════════════════════════════════════════════════════════
-app.get('/api/alertas', async (req, res) => {
+app.get('/api/alertas', endpointCache(300000), async (req, res) => {
   try {
     const [imoveis, investidores, consultoresRaw, negocios] = await Promise.all([
       getImóveis().catch(() => []),
@@ -5157,7 +5181,7 @@ app.get('/api/alertas', async (req, res) => {
 // ════════════════════════════════════════════════════════════════
 // DATA HEALTH — Relatório de higiene de dados
 // ════════════════════════════════════════════════════════════════
-app.get('/api/data-health', async (req, res) => {
+app.get('/api/data-health', endpointCache(300000), async (req, res) => {
   try {
     const [imoveis, investidores, consultoresRaw, negocios, despesas] = await Promise.all([
       getImóveis().catch(() => []),
@@ -5605,11 +5629,28 @@ app.post('/api/automation/run-all', async (req, res) => {
 
 // Em produção serve o frontend compilado (DEPOIS de todas as APIs)
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, 'dist')))
+  // Assets com hash no nome (vite produz index-XXXX.js, vendor-XXXX.js, etc.):
+  // cache de 1 ano + immutable. Qualquer alteração muda o hash → invalidation
+  // automática nos browsers/CDN.
+  app.use('/assets', express.static(path.join(__dirname, 'dist/assets'), {
+    maxAge: '1y',
+    immutable: true,
+  }))
+  // Restantes ficheiros do dist (index.html, manifest, sw.js, logos): cache curto
+  // para apanhar updates imediatamente.
+  app.use(express.static(path.join(__dirname, 'dist'), {
+    maxAge: '5m',
+    setHeaders(res, filePath) {
+      if (filePath.endsWith('index.html') || filePath.endsWith('sw.js')) {
+        res.setHeader('Cache-Control', 'no-cache')
+      }
+    },
+  }))
   app.get('/{*splat}', (req, res, next) => {
     // Não interceptar rotas /api nem a landing /investir (servidas por outros middlewares)
     if (req.path.startsWith('/api')) return next()
     if (req.path.startsWith('/investir')) return next()
+    res.set('Cache-Control', 'no-cache')
     res.sendFile(path.join(__dirname, 'dist', 'index.html'))
   })
 }
@@ -5638,6 +5679,18 @@ const PORT = process.env.PORT ?? 3001
 autoMigrate().then(() => {
   app.listen(PORT, async () => {
     console.log(`[server] a correr na porta ${PORT}`)
+
+    // Pré-aquecer cache do dashboard 30s após arranque — para que o primeiro
+    // utilizador a abrir a app já apanhe os endpoints com cache quente. Os
+    // requests são internos (sem auth), seguros porque estes endpoints não
+    // expõem dados sensíveis.
+    setTimeout(() => {
+      const base = `http://127.0.0.1:${PORT}`
+      const warm = path => fetch(`${base}${path}`).then(() => {}).catch(() => {})
+      Promise.all([warm('/api/kpis'), warm('/api/weekly-pulse'), warm('/api/metricas')])
+        .then(() => console.log('[cache] dashboard pré-aquecido'))
+        .catch(() => {})
+    }, 30000)
 
     // Sync lucro_real a partir de tranches confirmadas (corrige dados legacy)
     try {
