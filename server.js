@@ -1095,6 +1095,16 @@ import { TTLCache } from './src/db/utils/ttlCache.js'
 const cache = new TTLCache(60000) // 60s default TTL
 app.post('/api/cache/clear', (_req, res) => { cache.clear(); res.json({ ok: true }) })
 
+// Invalida caches do dashboard (dash:*) em qualquer mutation /api/* bem-sucedida.
+// Isto cobre todas as rotas CRM CRUD, evitando ter de tocar caso a caso.
+app.use('/api', (req, _res, next) => {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next()
+  _res.on('finish', () => {
+    if (_res.statusCode >= 200 && _res.statusCode < 400) cache.invalidate('dash:')
+  })
+  next()
+})
+
 // ── Middleware regional global ────────────────────────────────
 // Captura header X-Regiao OU query param ?mercado= em req.regiaoActiva para
 // uso em endpoints /api/* (kpis, metricas, financeiro, alertas, etc.). O
@@ -2308,6 +2318,10 @@ app.get('/api/operacoes/historico', async (req, res) => {
 // ════════════════════════════════════════════════════════════════
 app.get('/api/kpis', async (req, res) => {
   try {
+    const cacheKey = 'dash:kpis'
+    const cached = cache.get(cacheKey)
+    if (cached) return res.json(cached)
+
     const base = `http://127.0.0.1:${process.env.PORT ?? 3001}`
     const auth = req.headers.authorization
     const headers = auth ? { Authorization: auth } : {}
@@ -2320,7 +2334,9 @@ app.get('/api/kpis', async (req, res) => {
       safe(`${base}/api/financeiro/cashflow`),
       safe(`${base}/api/crm/analises-kpis`),
     ])
-    res.json({ financeiro: { ...financeiro, cashflow, analises }, comercial, marketing, operacoes, updatedAt: new Date().toISOString() })
+    const payload = { financeiro: { ...financeiro, cashflow, analises }, comercial, marketing, operacoes, updatedAt: new Date().toISOString() }
+    cache.set(cacheKey, payload, 30000)
+    res.json(payload)
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -2331,6 +2347,9 @@ app.get('/api/kpis', async (req, res) => {
 // ════════════════════════════════════════════════════════════════
 app.get('/api/weekly-pulse', async (req, res) => {
   try {
+    const cacheKey = 'dash:pulse'
+    const cached = cache.get(cacheKey)
+    if (cached) return res.json(cached)
     const [imoveis, investidores, consultoresRaw, negocios, despesas, visitas] = await Promise.all([
       getImóveis().catch(() => []),
       getInvestidores(),
@@ -2397,13 +2416,15 @@ app.get('/api/weekly-pulse', async (req, res) => {
 
     const status = score >= 75 ? 'excelente' : score >= 50 ? 'bom' : score >= 30 ? 'atenção' : 'crítico'
 
-    res.json({
+    const payload = {
       semana: { de: weekStart.toISOString().slice(0,10), ate: now.toISOString().slice(0,10) },
       score, status,
       atividades: { imoveisAdicionados, chamadasFeitas, visitasFeitas, propostasEnviadas, dealsFechados },
       alertas: { imoveisParados, investSemContacto, consFollowUpAtrasado },
       financeiro: { burnRate, lucroPendente, runway },
-    })
+    }
+    cache.set('dash:pulse', payload, 60000)
+    res.json(payload)
   } catch (err) {
     console.error('[weekly-pulse]', err.message)
     res.status(500).json({ error: err.message })
@@ -2642,6 +2663,9 @@ function avg(arr) {
 
 app.get('/api/metricas', async (req, res) => {
   try {
+    const cacheKey = 'dash:metricas'
+    const cached = cache.get(cacheKey)
+    if (cached) return res.json(cached)
     const [imoveis, negocios, investidores, consultoresRaw, despesas, visitas] = await Promise.all([
       getImóveis().catch(() => []),
       getNegócios(),
@@ -3733,7 +3757,7 @@ app.get('/api/metricas', async (req, res) => {
       okrs,
     }
 
-    res.json({
+    const metricasPayload = {
       updatedAt: new Date().toISOString(),
 
       // ── Top KPIs ──
@@ -3842,7 +3866,9 @@ app.get('/api/metricas', async (req, res) => {
 
       // ── KPIs Avançados + OKRs ──
       avancado: trackerAvancado,
-    })
+    }
+    cache.set('dash:metricas', metricasPayload, 60000)
+    res.json(metricasPayload)
   } catch (err) {
     console.error('[metricas]', err.message)
     res.status(500).json({ error: err.message })
@@ -5299,6 +5325,7 @@ app.post('/api/automation/score-investidores', async (req, res) => {
     }
 
     cache.delete('inv') // Invalidate cache
+    cache.invalidate('dash:')
     res.json({ ok: true, atualizados: updated.length, detalhes: updated })
   } catch (err) {
     console.error('[score-investidores]', err.message)
@@ -5353,6 +5380,7 @@ app.post('/api/automation/score-consultores', async (req, res) => {
     }
 
     cache.delete('cons')
+    cache.invalidate('dash:')
     res.json({ ok: true, atualizados: updated.length, detalhes: updated })
   } catch (err) {
     console.error('[score-consultores]', err.message)
@@ -5406,6 +5434,7 @@ app.post('/api/automation/calc-roi', async (req, res) => {
     }
 
     cache.delete('imo')
+    cache.invalidate('dash:')
     res.json({ ok: true, atualizados: updated.length, detalhes: updated })
   } catch (err) {
     console.error('[calc-roi]', err.message)
@@ -5462,6 +5491,7 @@ app.post('/api/automation/auto-dates', async (req, res) => {
 
     cache.delete('inv')
     cache.delete('cons')
+    cache.invalidate('dash:')
     res.json({ ok: true, atualizados: updated.length, detalhes: updated })
   } catch (err) {
     console.error('[auto-dates]', err.message)
@@ -5542,6 +5572,7 @@ app.post('/api/automation/pipeline-to-faturacao', async (req, res) => {
     }
 
     cache.delete('neg')
+    cache.invalidate('dash:')
     res.json({ ok: true, criados: created.length, detalhes: created })
   } catch (err) {
     console.error('[pipeline-to-faturacao]', err.message)
