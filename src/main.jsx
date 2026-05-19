@@ -54,6 +54,21 @@ if ('serviceWorker' in navigator) {
     window.location.reload()
   })
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {})
+    navigator.serviceWorker.register('/sw.js').then((reg) => {
+      // Verificar versão nova a cada 60s — apanha deploys sem precisar fechar tab.
+      setInterval(() => { reg.update().catch(() => {}) }, 60_000)
+      // Se há um SW "waiting" (já instalado mas não activo), forçar skipWaiting.
+      if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' })
+      reg.addEventListener('updatefound', () => {
+        const newSW = reg.installing
+        if (!newSW) return
+        newSW.addEventListener('statechange', () => {
+          if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+            // Há nova versão pronta — pedir activação imediata.
+            newSW.postMessage({ type: 'SKIP_WAITING' })
+          }
+        })
+      })
+    }).catch(() => {})
   })
 }

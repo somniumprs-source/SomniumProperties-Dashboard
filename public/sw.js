@@ -1,8 +1,7 @@
-// v19: bump para invalidar caches antigos (v18 servia chunks AnaliseTab/
-// vendor-html2canvas com hashes que já não existem após deploys —
-// resultava em 404 → HTML → "text/html is not a valid JavaScript MIME type"
-// ao abrir Análise Financeira ou Stress Tests).
-const CACHE_NAME = 'somnium-crm-v19'
+// v20: bump para invalidar bundles JS antigos que ainda passavam apiFetch
+// sem o header X-Regiao em endpoints regionais (resultava em listas Coimbra
+// a aparecerem mesmo com AMP seleccionado). Apaga todas as caches anteriores.
+const CACHE_NAME = 'somnium-crm-v20'
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/icons/icon-192x192.png',
@@ -16,6 +15,13 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
   )
   self.skipWaiting()
+})
+
+// Permite ao cliente pedir activação imediata via postMessage({type:'SKIP_WAITING'})
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting()
+  }
 })
 
 self.addEventListener('activate', (event) => {
