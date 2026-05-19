@@ -4,7 +4,8 @@ import { apiFetch } from '../lib/api.js'
 import { EUR, PCT } from '../constants.js'
 import { Button } from '../components/ui/Button.jsx'
 import { KpiCard } from '../components/ui/KpiCard.jsx'
-import { Bell, AlertTriangle, AlertCircle, Info, FileWarning } from 'lucide-react'
+import { Card } from '../components/ui/Card.jsx'
+import { Bell, AlertTriangle, AlertCircle, Info, FileWarning, ShieldAlert, History, Database, Zap } from 'lucide-react'
 import { useRegiaoGate } from '../contexts/RegiaoContext.jsx'
 import { RegiaoModal } from '../components/RegiaoModal.jsx'
 import { RegiaoBadge } from '../components/RegiaoBadge.jsx'
@@ -129,6 +130,29 @@ export function Alertas() {
         )}
         {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>}
 
+        {/* Hero banner — Centro de Alertas */}
+        <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 text-white shadow-lg bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+          <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-brand-gold to-transparent" />
+          <div className="relative flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-brand-gold/15 border border-brand-gold/30 flex items-center justify-center">
+                <ShieldAlert className="w-4 h-4 text-brand-gold" strokeWidth={1.75} />
+              </div>
+              <div>
+                <h2 className="text-overline uppercase tracking-widest font-semibold text-brand-gold">Centro de Alertas</h2>
+                <p className="text-sm font-semibold text-white">Eventos críticos · A monitorizar · Resolvidos</p>
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <HeroKpi label="Críticos" value={resumo.criticos ?? '—'} sub="acção imediata" red />
+            <HeroKpi label="Avisos" value={resumo.avisos ?? '—'} sub="a monitorizar" accent />
+            <HeroKpi label="Info" value={resumo.info ?? '—'} sub="contextual" green />
+            <HeroKpi label="Total alertas" value={resumo.total ?? '—'} sub={`${resumo.camposIncompletos ?? 0} campos incompletos`} />
+          </div>
+        </div>
+
         {/* Resumo */}
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
           <KpiCard icon={Bell}          label="Total Alertas"      value={resumo.total ?? '—'}             tone="gray" />
@@ -139,8 +163,8 @@ export function Alertas() {
         </div>
 
         {/* Automações */}
-        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">Automações</h2>
+        <Card padding="md">
+          <Card.Header title="Automações" subtitle="Workflows operacionais" icon={Zap} />
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {[
               { key: 'run-all',              label: 'Correr Todas',             desc: 'Executa todas as automações de uma vez' },
@@ -181,13 +205,11 @@ export function Alertas() {
               )}
             </div>
           )}
-        </div>
+        </Card>
 
         {/* Alertas */}
-        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">
-            Alertas Ativos ({alertas?.alertas?.length ?? 0})
-          </h2>
+        <Card padding="md">
+          <Card.Header title={`Alertas Ativos (${alertas?.alertas?.length ?? 0})`} subtitle="Eventos por severidade" icon={Bell} />
           <div className="space-y-2 max-h-[500px] overflow-y-auto">
             {(alertas?.alertas ?? []).map((a, i) => (
               <div key={i} className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 rounded-lg border ${SEV_STYLE[a.severidade] ?? ''}`}>
@@ -210,21 +232,21 @@ export function Alertas() {
               <p className="text-center text-gray-400 text-sm py-8">Sem alertas ativos</p>
             )}
           </div>
-        </div>
+        </Card>
 
         {/* Investidores Inactivos (auto) */}
         {(() => {
           const inactivos = (alertas?.alertas ?? []).filter(a => a.tipo === 'investidor_inactivo_recente')
           if (inactivos.length === 0) return null
           return (
-            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
+            <Card padding="md">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-semibold text-gray-700">
+                <h2 className="text-sm font-semibold text-gray-700 dark:text-neutral-100">
                   Investidores movidos para Inactivo (últimos 7 dias)
                 </h2>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium">{inactivos.length}</span>
+                <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium">{inactivos.length}</span>
               </div>
-              <p className="text-xs text-gray-400 mb-3">A cron diária passa Follow Ups parados &gt; 90 dias para Inactivo automaticamente. Revê e reactiva se for caso.</p>
+              <p className="text-caption text-gray-500 dark:text-neutral-400 mb-3">A cron diária passa Follow Ups parados &gt; 90 dias para Inactivo automaticamente. Revê e reactiva se for caso.</p>
               <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
                 {inactivos.map((a, i) => (
                   <div key={i} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg border border-gray-100 hover:bg-gray-50">
@@ -239,16 +261,14 @@ export function Alertas() {
                   </div>
                 ))}
               </div>
-            </div>
+            </Card>
           )
         })()}
 
         {/* Campos em Falta */}
         {alertas?.camposEmFalta?.length > 0 && (
-          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
-            <h2 className="text-sm font-semibold text-gray-700 mb-4">
-              Campos Obrigatórios em Falta ({alertas.camposEmFalta.length})
-            </h2>
+          <Card padding="md">
+            <Card.Header title={`Campos Obrigatórios em Falta (${alertas.camposEmFalta.length})`} subtitle="Higiene de dados" icon={FileWarning} />
             <div className="overflow-x-auto">
               <table className="min-w-[700px] w-full text-sm">
                 <thead>
@@ -277,15 +297,18 @@ export function Alertas() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </Card>
         )}
 
         {/* Data Health */}
-        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
+        <Card padding="md">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-gray-700">Higiene de Dados</h2>
+            <div className="flex items-center gap-2">
+              <Database className="w-4 h-4 text-brand-gold" strokeWidth={1.75} />
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-neutral-100">Higiene de Dados</h2>
+            </div>
             {health?.scoreGlobal != null && (
-              <span className={`text-lg font-bold ${HEALTH_COLOR(health.scoreGlobal)}`}>
+              <span className={`text-lg font-mono font-bold ${HEALTH_COLOR(health.scoreGlobal)}`}>
                 {PCT(health.scoreGlobal)} global
               </span>
             )}
@@ -316,12 +339,15 @@ export function Alertas() {
               </div>
             ))}
           </div>
-        </div>
+        </Card>
 
         {/* ── Backups ────────────────────────── */}
-        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
+        <Card padding="md">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-gray-700">Backups</h2>
+            <div className="flex items-center gap-2">
+              <Database className="w-4 h-4 text-brand-gold" strokeWidth={1.75} />
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-neutral-100">Backups</h2>
+            </div>
             <button onClick={createBackup} disabled={backupLoading}
               className="px-3 py-1.5 text-xs font-medium rounded-lg text-white disabled:opacity-50"
               style={{ backgroundColor: '#C9A84C' }}>
@@ -355,11 +381,11 @@ export function Alertas() {
               </table>
             </div>
           ) : <p className="text-xs text-gray-400 text-center py-4">Sem backups — clica em "Criar Backup Agora"</p>}
-        </div>
+        </Card>
 
         {/* ── Histórico de Alterações ─────────── */}
-        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">Histórico de Alterações (últimas 30)</h2>
+        <Card padding="md">
+          <Card.Header title="Histórico de Alterações (últimas 30)" subtitle="Auditoria & desfazer" icon={History} />
           {auditLog.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="min-w-[600px] w-full text-xs">
@@ -401,8 +427,18 @@ export function Alertas() {
               </table>
             </div>
           ) : <p className="text-xs text-gray-400 text-center py-4">Sem alterações registadas</p>}
-        </div>
+        </Card>
       </div>
     </>
+  )
+}
+
+function HeroKpi({ label, value, sub, accent, green, red }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-overline uppercase tracking-widest text-gray-400 font-semibold">{label}</p>
+      <p className={`text-2xl font-mono font-bold mt-1 truncate ${accent ? 'text-brand-gold' : green ? 'text-green-400' : red ? 'text-red-400' : 'text-white'}`}>{value}</p>
+      {sub && <p className="text-caption text-gray-500 mt-0.5 truncate">{sub}</p>}
+    </div>
   )
 }

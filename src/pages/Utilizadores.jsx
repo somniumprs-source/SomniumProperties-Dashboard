@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, Fragment } from 'react'
-import { Shield, Plus, Trash2, KeyRound, RefreshCw, X, Link as LinkIcon, Copy, Check, ChevronDown, ChevronRight } from 'lucide-react'
+import { Shield, Plus, Trash2, KeyRound, RefreshCw, X, Link as LinkIcon, Copy, Check, ChevronDown, ChevronRight, Users } from 'lucide-react'
 import { apiFetch } from '../lib/api.js'
 import { useToast } from '../components/ui/Toast.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
@@ -99,27 +99,44 @@ export function Utilizadores() {
     } finally { setBusy(null) }
   }
 
+  // KPIs do hero banner
+  const totalUsers = users.length
+  const admins = users.filter(u => u.role === 'admin').length
+  const investidores = users.filter(u => u.role === 'investidor').length
+  const ativos = users.filter(u => u.ativo).length
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="flex items-center gap-2">
-            <Shield className="w-5 h-5" style={{ color: '#C9A84C' }} />
-            <h1 className="text-xl font-semibold">Utilizadores</h1>
+      {/* Hero banner — Gestão de Acessos */}
+      <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 text-white shadow-lg bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700 mb-6">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-brand-gold to-transparent" />
+        <div className="relative flex items-center justify-between mb-5 gap-3 flex-wrap">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-brand-gold/15 border border-brand-gold/30 flex items-center justify-center">
+              <Users className="w-4 h-4 text-brand-gold" strokeWidth={1.75} />
+            </div>
+            <div>
+              <h2 className="text-overline uppercase tracking-widest font-semibold text-brand-gold">Gestão de Acessos</h2>
+              <p className="text-sm font-semibold text-white">Utilizadores · Roles · Permissões</p>
+            </div>
           </div>
-          <p className="text-xs text-gray-500 mt-1">Gestão de acessos por camada (admin · comercial · financeiro · operações)</p>
+          <div className="flex gap-2">
+            <button onClick={load}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs hover:bg-white/5 border border-white/10 text-gray-300">
+              <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} /> Atualizar
+            </button>
+            <button onClick={() => setShowForm(true)}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold bg-brand-gold text-brand-dark hover:bg-brand-gold-light transition-colors shadow-gold">
+              <Plus className="w-3.5 h-3.5" strokeWidth={1.75} /> Convidar utilizador
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={load}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs hover:bg-white/5"
-            style={{ border: '1px solid #1a1a1a', color: '#999' }}>
-            <RefreshCw className="w-3.5 h-3.5" /> Atualizar
-          </button>
-          <button onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium"
-            style={{ backgroundColor: '#C9A84C', color: '#0d0d0d' }}>
-            <Plus className="w-3.5 h-3.5" /> Convidar utilizador
-          </button>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <HeroKpi label="Total utilizadores" value={totalUsers} sub={`${ROLES.length} roles definidos`} />
+          <HeroKpi label="Admins" value={admins} sub="acesso total" accent />
+          <HeroKpi label="Investidores" value={investidores} sub="acesso externo" />
+          <HeroKpi label="Ativos" value={ativos} sub={`${totalUsers - ativos} inativos`} green />
         </div>
       </div>
 
@@ -250,6 +267,16 @@ export function Utilizadores() {
         />
       )}
       {linkModal && <LinkModal {...linkModal} onClose={() => setLinkModal(null)} />}
+    </div>
+  )
+}
+
+function HeroKpi({ label, value, sub, accent, green, red }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-overline uppercase tracking-widest text-gray-400 font-semibold">{label}</p>
+      <p className={`text-2xl font-mono font-bold mt-1 truncate ${accent ? 'text-brand-gold' : green ? 'text-green-400' : red ? 'text-red-400' : 'text-white'}`}>{value}</p>
+      {sub && <p className="text-caption text-gray-500 mt-0.5 truncate">{sub}</p>}
     </div>
   )
 }

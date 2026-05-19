@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { FileDown, Sparkles, Trash2, Calendar, Loader2, Plus, RefreshCw, Zap } from 'lucide-react'
+import { FileDown, Sparkles, Trash2, Calendar, Loader2, Plus, RefreshCw, Zap, FileText } from 'lucide-react'
 import { apiFetch, getToken } from '../lib/api.js'
 
 const GOLD = '#C9A84C'
@@ -108,8 +108,39 @@ export function RelatoriosAdmin() {
     } catch (e) { alert(e.message) }
   }
 
+  const totalRelatorios = relatorios.length
+  const totalReunioes = relatorios.reduce((s, r) => s + (Number(r.num_reunioes) || 0), 0)
+  const recentes = relatorios.filter(r => {
+    if (!r.criado_em) return false
+    const days = (Date.now() - new Date(r.criado_em).getTime()) / 86400000
+    return days <= 30
+  }).length
+
   return (
     <>
+      {/* Hero banner — identidade Somnium */}
+      <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 text-white shadow-lg bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700 mb-6">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-brand-gold to-transparent" />
+        <div className="relative flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-brand-gold/15 border border-brand-gold/30 flex items-center justify-center">
+              <FileText className="w-4 h-4 text-brand-gold" />
+            </div>
+            <div>
+              <h2 className="text-overline uppercase tracking-widest font-semibold text-brand-gold">Relatórios Administrativos</h2>
+              <p className="text-sm font-semibold text-white">Análises · Auditoria · Exports</p>
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <HeroKpi label="Relatórios gerados" value={totalRelatorios} sub="total" />
+          <HeroKpi label="Recentes" value={recentes} sub="últimos 30 dias" accent />
+          <HeroKpi label="Reuniões cobertas" value={totalReunioes} sub="origem Fireflies" green />
+          <HeroKpi label="Status" value={syncing ? 'A sincronizar' : 'OK'} sub={syncStatus ? 'última sync OK' : 'pronto'} />
+        </div>
+      </div>
+
       {/* Action bar */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
           <div>
@@ -318,3 +349,14 @@ export function RelatoriosAdmin() {
     </>
   )
 }
+
+function HeroKpi({ label, value, sub, accent, green, red }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-overline uppercase tracking-widest text-gray-400 font-semibold">{label}</p>
+      <p className={`text-2xl font-mono font-bold mt-1 truncate ${accent ? 'text-brand-gold' : green ? 'text-green-400' : red ? 'text-red-400' : 'text-white'}`}>{value}</p>
+      {sub && <p className="text-caption text-gray-500 mt-0.5 truncate">{sub}</p>}
+    </div>
+  )
+}
+

@@ -109,9 +109,38 @@ export function AdministracaoSOP() {
   }
 
   // ── Modo lista ──────────────────────────────────────
+  const totalSops = sops.length
+  const sopsRecentes = sops.filter(s => {
+    if (!s.updated_at) return false
+    const days = (Date.now() - new Date(s.updated_at).getTime()) / 86400000
+    return days <= 30
+  }).length
   return (
     <div className="flex flex-col gap-4">
       {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>}
+
+      {/* Hero banner — identidade Somnium */}
+      <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 text-white shadow-lg bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-brand-gold to-transparent" />
+        <div className="relative flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-brand-gold/15 border border-brand-gold/30 flex items-center justify-center">
+              <BookOpen className="w-4 h-4 text-brand-gold" />
+            </div>
+            <div>
+              <h2 className="text-overline uppercase tracking-widest font-semibold text-brand-gold">Standard Operating Procedures</h2>
+              <p className="text-sm font-semibold text-white">Processos · Checklists · Auditoria</p>
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <HeroKpi label="Total SOPs" value={totalSops} sub="documentados" />
+          <HeroKpi label="Departamentos" value={DEPARTAMENTOS.length - 1} sub="áreas cobertas" accent />
+          <HeroKpi label="Actualizados" value={sopsRecentes} sub="últimos 30 dias" green />
+          <HeroKpi label="Vista" value={filterDep ? (DEPT_MAP[filterDep]?.nome ?? 'Filtrada') : 'Todos'} sub="filtro activo" />
+        </div>
+      </div>
 
       {/* Caixas top por departamento */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -522,6 +551,16 @@ function ImportDriveModal({ defaultDepartamento, onClose, onDone }) {
           )}
         </div>
       </Card>
+    </div>
+  )
+}
+
+function HeroKpi({ label, value, sub, accent, green, red }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-overline uppercase tracking-widest text-gray-400 font-semibold">{label}</p>
+      <p className={`text-2xl font-mono font-bold mt-1 truncate ${accent ? 'text-brand-gold' : green ? 'text-green-400' : red ? 'text-red-400' : 'text-white'}`}>{value}</p>
+      {sub && <p className="text-caption text-gray-500 mt-0.5 truncate">{sub}</p>}
     </div>
   )
 }

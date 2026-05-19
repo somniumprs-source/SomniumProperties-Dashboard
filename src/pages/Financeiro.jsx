@@ -3,7 +3,7 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, ComposedChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts'
-import { Upload, X, FileText, Image, Trash2, Plus, ChevronDown, ChevronUp, Check } from 'lucide-react'
+import { Upload, X, FileText, Image, Trash2, Plus, ChevronDown, ChevronUp, Check, Wallet } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { KPICard } from '../components/dashboard/KPICard.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
@@ -182,6 +182,29 @@ export function Financeiro() {
         {error && (
           <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>
         )}
+
+        {/* Hero banner — identidade Somnium */}
+        <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 text-white shadow-lg bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+          <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-brand-gold to-transparent" />
+          <div className="relative flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-brand-gold/15 border border-brand-gold/30 flex items-center justify-center">
+                <Wallet className="w-4 h-4 text-brand-gold" />
+              </div>
+              <div>
+                <h2 className="text-overline uppercase tracking-widest font-semibold text-brand-gold">Saúde Financeira</h2>
+                <p className="text-sm font-semibold text-white">Pipeline · Lucro · Tesouraria · P&amp;L</p>
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <HeroKpi label="Faturação Expectável" value={EUR(kpis?.lucroEstimadoTotal)} sub={`${kpis?.negóciosAtivos ?? 0} negócios activos`} accent />
+            <HeroKpi label="Faturação Real" value={EUR(kpis?.lucroRealTotal)} sub={kpis?.lucroRealTotal > 0 ? 'recebido' : 'a receber'} green />
+            <HeroKpi label="Burn Rate / Mês" value={EUR(kpis?.burnRate)} sub="custos fixos" red={(kpis?.burnRate ?? 0) > 1000} />
+            <HeroKpi label="Runway" value={runwayMeses != null ? `${Math.round(runwayMeses)}m` : '—'} sub="meses estimados" />
+          </div>
+        </div>
 
         {/* ══════════════════ VISÃO GERAL ══════════════════ */}
         {tab === 'Visão Geral' && (
@@ -1139,6 +1162,16 @@ function DespesaForm({ item, onSave, onCancel, onReload }) {
         </button>
         <button onClick={onCancel} className="px-5 py-2 bg-gray-100 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-200">Cancelar</button>
       </div>
+    </div>
+  )
+}
+
+function HeroKpi({ label, value, sub, accent, green, red }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-overline uppercase tracking-widest text-gray-400 font-semibold">{label}</p>
+      <p className={`text-2xl font-mono font-bold mt-1 truncate ${accent ? 'text-brand-gold' : green ? 'text-green-400' : red ? 'text-red-400' : 'text-white'}`}>{value}</p>
+      {sub && <p className="text-caption text-gray-500 mt-0.5 truncate">{sub}</p>}
     </div>
   )
 }

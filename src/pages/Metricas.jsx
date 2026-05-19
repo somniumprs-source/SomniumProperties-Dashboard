@@ -234,6 +234,31 @@ export function Metricas() {
 
         {loading && !error && <PageSkeleton />}
 
+        {/* Hero banner — Métricas Avançadas (visível em todas as tabs) */}
+        {!loading && data && (
+          <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 text-white shadow-lg bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-brand-gold to-transparent" />
+            <div className="relative flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-brand-gold/15 border border-brand-gold/30 flex items-center justify-center">
+                  <Gauge className="w-4 h-4 text-brand-gold" strokeWidth={1.75} />
+                </div>
+                <div>
+                  <h2 className="text-overline uppercase tracking-widest font-semibold text-brand-gold">Métricas Avançadas</h2>
+                  <p className="text-sm font-semibold text-white">OKRs · Atividade · Performance</p>
+                </div>
+              </div>
+            </div>
+            <div className="relative grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <HeroKpi label="Receita Prevista / Mês" value={EUR(top?.receitaPrevistaMes)} sub="Pipeline activo" accent />
+              <HeroKpi label="Deals Fechados / Mês" value={NUM(top?.dealsFechadosMes)} sub={`${p2?.totalDeals ?? '—'} total`} green />
+              <HeroKpi label="Capital Captado" value={EUR(top?.capitalPassivoCaptado)} sub={`${p3?.investidoresAtivos ?? 0} investidores`} />
+              <HeroKpi label="Ciclo Médio" value={DAYS(top?.velocidadeMediaCiclo)} sub="Abordagem → fecho" red={(top?.velocidadeMediaCiclo ?? 0) > 90} />
+            </div>
+          </div>
+        )}
+
         {/* ══════════ VISÃO GERAL ══════════ */}
         {tab === 'resumo' && (
           <>
@@ -246,8 +271,8 @@ export function Metricas() {
 
             {/* Pipeline summaries */}
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Pipeline 1 — Imóveis</h3>
+              <Card padding="lg">
+                <Card.Header title="Pipeline 1 — Imóveis" subtitle="Lead → contrato" icon={Activity} />
                 <div className="flex flex-col gap-2 text-sm">
                   <Row label="Leads no pipeline" value={NUM(p1?.funil?.[0]?.value)} />
                   <Row label="Taxa lead → contrato" value={PCT(p1?.taxaConversao)} />
@@ -255,9 +280,9 @@ export function Metricas() {
                   <Row label="Em due diligence" value={NUM(p1?.nDueDiligence)} />
                   <Row label="Taxa de descarte" value={PCT(p1?.taxaDescarte)} />
                 </div>
-              </div>
-              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Pipeline 2 — Negócios</h3>
+              </Card>
+              <Card padding="lg">
+                <Card.Header title="Pipeline 2 — Negócios" subtitle="Fechos & realização" icon={TrendingUp} />
                 <div className="flex flex-col gap-2 text-sm">
                   <Row label="Total negócios" value={NUM(p2?.totalDeals)} />
                   <Row label="Fechados (Vendidos)" value={NUM(p2?.dealsFechados)} />
@@ -265,9 +290,9 @@ export function Metricas() {
                   <Row label="Margem média Wholesaling" value={EUR(p2?.margemWholesaling)} />
                   <Row label="% c/ capital passivo" value={PCT(p2?.pctDealsCapitalPassivo)} />
                 </div>
-              </div>
-              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Pipeline 3 — Investidores</h3>
+              </Card>
+              <Card padding="lg">
+                <Card.Header title="Pipeline 3 — Investidores" subtitle="Captação & ROI" icon={Users} />
                 <div className="flex flex-col gap-2 text-sm">
                   <Row label="Capital captado" value={EUR(p3?.capitalCaptado)} />
                   <Row label="Investidores activos" value={NUM(p3?.investidoresAtivos)} />
@@ -275,12 +300,12 @@ export function Metricas() {
                   <Row label="Taxa de conversão" value={PCT(p3?.taxaConversao)} />
                   <Row label="ROI entregue" value={p3?.roiEntregue != null ? PCT(p3.roiEntregue) : '—'} />
                 </div>
-              </div>
+              </Card>
             </div>
 
             {/* Transversal */}
-            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
-              <h3 className="text-sm font-semibold text-gray-700 mb-4">Métricas Transversais</h3>
+            <Card padding="lg">
+              <Card.Header title="Métricas Transversais" subtitle="Saúde global do negócio" icon={Gauge} />
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                 <M label="Deal Flow / Capital" value={tr?.ratioDealFlowCapital != null ? `${tr.ratioDealFlowCapital}×` : '—'}
                   sub="Pipeline value / capital disponível" warn={tr?.ratioDealFlowCapital != null && tr.ratioDealFlowCapital < 1} />
@@ -288,11 +313,11 @@ export function Metricas() {
                 <M label="ROE (capital passivo)" value={tr?.roe != null ? PCT(tr.roe) : '—'} sub="Lucro entregue / capital captado" />
                 <M label="% projecções cumpridas" value={tr?.cumpreProjeccao != null ? PCT(tr.cumpreProjeccao) : '—'} sub="Lucro real ≥ 80% do estimado" />
               </div>
-            </div>
+            </Card>
 
             {/* Diagnóstico */}
-            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
-              <h3 className="text-sm font-semibold text-gray-700 mb-4">Diagnóstico Estratégico</h3>
+            <Card padding="lg">
+              <Card.Header title="Diagnóstico Estratégico" subtitle="Sinais de equilíbrio do funil" icon={Target} />
               <div className="flex flex-col gap-4">
                 <Diagnostico label="Bottleneck: Imóveis vs Capital" value={tr?.ratioDealFlowCapital}
                   renderMsg={v => v == null ? 'Sem dados suficientes' : v < 0.5
@@ -305,7 +330,7 @@ export function Metricas() {
                     ? '🟡 Desvio moderado — revê critérios.'
                     : '🔴 Projecções pouco fiáveis.'} />
               </div>
-            </div>
+            </Card>
           </>
         )}
 
@@ -1212,5 +1237,16 @@ export function Metricas() {
 
       </div>
     </>
+  )
+}
+
+// ── Hero KPI (banner topo) ──────────────────────────────────────
+function HeroKpi({ label, value, sub, accent, green, red }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-overline uppercase tracking-widest text-gray-400 font-semibold">{label}</p>
+      <p className={`text-2xl font-mono font-bold mt-1 truncate ${accent ? 'text-brand-gold' : green ? 'text-green-400' : red ? 'text-red-400' : 'text-white'}`}>{value}</p>
+      {sub && <p className="text-caption text-gray-500 mt-0.5 truncate">{sub}</p>}
+    </div>
   )
 }

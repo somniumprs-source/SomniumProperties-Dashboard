@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { Map, TrendingUp, Scale, Trophy, Plus, Save, X } from 'lucide-react'
+import { Map, TrendingUp, Scale, Trophy, Plus, Save, X, Globe2 } from 'lucide-react'
 import { apiFetch } from '../lib/api.js'
 import { useRegiaoGate } from '../contexts/RegiaoContext.jsx'
 import { RegiaoModal } from '../components/RegiaoModal.jsx'
@@ -32,25 +32,34 @@ export function AdministracaoMultiRegiao() {
 
   const cor = REGIAO_COR[regiaoAtiva]
 
+  const concelhosCount = concelhosDe(regiaoAtiva).length
+  const tabActual = TABS.find(t => t.key === tab)?.label ?? '—'
   return (
     <div className="space-y-6">
       <RegiaoModal gate={gate} contexto="Esta área de Multi-Região" />
-      <div className="flex items-center justify-between gap-3 pb-2">
-        <div className="flex items-center gap-3">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-white"
-            style={{ backgroundColor: cor }}
-          >
-            <Map className="w-5 h-5" />
+
+      {/* Hero banner — identidade Somnium */}
+      <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 text-white shadow-lg bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-brand-gold to-transparent" />
+        <div className="relative flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-brand-gold/15 border border-brand-gold/30 flex items-center justify-center">
+              <Globe2 className="w-4 h-4 text-brand-gold" />
+            </div>
+            <div>
+              <h2 className="text-overline uppercase tracking-widest font-semibold text-brand-gold">Multi-Região</h2>
+              <p className="text-sm font-semibold text-white">Coimbra · AMP · Configurações regionais</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-              {REGIAO_LABEL[regiaoAtiva]}
-            </h2>
-            <p className="text-xs text-neutral-500">Dados específicos desta região</p>
-          </div>
+          <RegiaoBadge regiao={regiaoAtiva} onTrocar={gate.abrirModal} />
         </div>
-        <RegiaoBadge regiao={regiaoAtiva} onTrocar={gate.abrirModal} />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <HeroKpi label="Região activa" value={REGIAO_LABEL[regiaoAtiva]} sub="filtro principal" accent />
+          <HeroKpi label="Concelhos" value={concelhosCount} sub="cobertos" />
+          <HeroKpi label="Vista actual" value={tabActual} sub="painel" />
+          <HeroKpi label="Identidade" value={regiaoAtiva.toUpperCase()} sub="cor regional" green />
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2 border-b border-neutral-200 dark:border-neutral-800 pb-2">
@@ -469,3 +478,14 @@ function BenchmarkingPanel({ regiao }) {
     </div>
   )
 }
+
+function HeroKpi({ label, value, sub, accent, green, red }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-overline uppercase tracking-widest text-gray-400 font-semibold">{label}</p>
+      <p className={`text-2xl font-mono font-bold mt-1 truncate ${accent ? 'text-brand-gold' : green ? 'text-green-400' : red ? 'text-red-400' : 'text-white'}`}>{value}</p>
+      {sub && <p className="text-caption text-gray-500 mt-0.5 truncate">{sub}</p>}
+    </div>
+  )
+}
+

@@ -7,7 +7,7 @@ import { TabKPIs } from '../components/crm/TabKPIs.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { KanbanSkeleton, TableSkeleton } from '../components/ui/Skeleton.jsx'
 import { EmptyState } from '../components/ui/EmptyState.jsx'
-import { Building2, Users, UserCheck, HardHat, ChevronLeft, ChevronRight, Phone, MessageCircle, Wallet, AlertTriangle, Clock as Clock3, Plus } from 'lucide-react'
+import { Building2, Users, UserCheck, HardHat, ChevronLeft, ChevronRight, Phone, MessageCircle, Wallet, AlertTriangle, Clock as Clock3, Plus, Briefcase } from 'lucide-react'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { KpiCard } from '../components/ui/KpiCard.jsx'
@@ -988,6 +988,29 @@ export function CRM() {
           </div>
         )}
 
+        {/* Hero banner — identidade Somnium */}
+        <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 text-white shadow-lg bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+          <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-brand-gold to-transparent" />
+          <div className="relative flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-brand-gold/15 border border-brand-gold/30 flex items-center justify-center">
+                <Briefcase className="w-4 h-4 text-brand-gold" />
+              </div>
+              <div>
+                <h2 className="text-overline uppercase tracking-widest font-semibold text-brand-gold">Pipeline Comercial</h2>
+                <p className="text-sm font-semibold text-white">Imóveis · Investidores · Consultores · Negócios</p>
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <HeroKpi label="Imóveis" value={stats?.imoveis?.total ?? '—'} sub="activos" />
+            <HeroKpi label="Investidores" value={stats?.investidores?.total ?? '—'} accent />
+            <HeroKpi label="Consultores" value={stats?.consultores?.total ?? '—'} />
+            <HeroKpi label="Negócios" value={stats?.negocios?.total ?? '—'} green />
+          </div>
+        </div>
+
         {/* Pipelines — 4 cards centrados que actuam como tabs */}
         <div className="flex justify-center">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 w-full max-w-5xl">
@@ -1793,6 +1816,16 @@ function FormPanel({ tab, item, onSave, onCancel }) {
           Cancelar
         </button>
       </div>
+    </div>
+  )
+}
+
+function HeroKpi({ label, value, sub, accent, green, red }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-overline uppercase tracking-widest text-gray-400 font-semibold">{label}</p>
+      <p className={`text-2xl font-mono font-bold mt-1 truncate ${accent ? 'text-brand-gold' : green ? 'text-green-400' : red ? 'text-red-400' : 'text-white'}`}>{value}</p>
+      {sub && <p className="text-caption text-gray-500 mt-0.5 truncate">{sub}</p>}
     </div>
   )
 }
