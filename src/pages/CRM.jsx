@@ -1140,7 +1140,7 @@ export function CRM() {
 
         {/* Edit/Create form */}
         {editing !== null && (
-          <FormPanel tab={tab} item={editing} onSave={handleSave} onCancel={() => setEditing(null)} />
+          <FormPanel tab={tab} item={editing} regiao={regiaoActiva} onSave={handleSave} onCancel={() => setEditing(null)} />
         )}
 
         {/* Loading */}
@@ -1668,8 +1668,8 @@ const FIELD_DEFS = {
     { key: 'classificacao', label: 'Classificação', type: 'select', options: ['A','B','C','D'] },
     { key: 'contacto', label: 'Contacto (telefone)', type: 'tel' },
     { key: 'email', label: 'Email', type: 'email' },
-    { key: 'imobiliaria', label: 'Imobiliária', type: 'multiselect', options: ['Remax','ERA','KW','Century21','Coldwell Banker','IAD','Listoo','Impactus','Decisões e Soluções','RE/MAX','Outra'] },
-    { key: 'zonas', label: 'Zonas de Atuação', type: 'multiselect', options: FREGUESIAS },
+    { key: 'imobiliaria', label: 'Imobiliária', type: 'chips_autocomplete' },
+    { key: 'zonas', label: 'Zonas de Atuação', type: 'multiselect_regional' },
     { key: 'data_inicio', label: 'Data Início Parceria', type: 'date' },
     { key: 'data_primeira_call', label: '1º Contacto (Data)', type: 'date' },
     { key: 'data_follow_up', label: 'Data Follow Up', type: 'date' },
@@ -1742,10 +1742,93 @@ function RelationOrNew({ value, options, display, createEndpoint, onChange, onCr
   )
 }
 
-function FormPanel({ tab, item, onSave, onCancel }) {
+// Zonas de Atuação por região — multi-select com opções fixas em ordem alfabética.
+const ZONAS_ATUACAO_POR_REGIAO = {
+  AMP: ['Espinho', 'Gondomar', 'Porto', 'Santa Maria da Feira', 'Vila Nova de Gaia'],
+  Coimbra: FREGUESIAS,
+}
+
+// Input com chips + autocomplete a partir de sugestões da BD (ex: imobiliárias
+// já usadas por outros consultores). Texto livre — pode-se criar nova com Enter.
+// `value` é uma JSON string (formato actual da coluna `imobiliaria`).
+function ChipsAutocomplete({ value, suggestions = [], onChange, placeholder }) {
+  const items = useMemo(() => {
+    try {
+      if (Array.isArray(value)) return value
+      const v = JSON.parse(value || '[]')
+      return Array.isArray(v) ? v : []
+    } catch { return [] }
+  }, [value])
+  const [input, setInput] = useState('')
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef(null)
+  const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  const filtered = useMemo(() => {
+    const q = norm(input)
+    const sel = new Set(items.map(norm))
+    return (suggestions || []).filter(s => !sel.has(norm(s)) && (q === '' || norm(s).includes(q))).slice(0, 10)
+  }, [suggestions, input, items])
+  const add = (raw) => {
+    const novo = String(raw || '').trim()
+    if (!novo) return
+    const next = [...new Set([...items, novo])]
+    onChange(JSON.stringify(next))
+    setInput('')
+    setOpen(false)
+  }
+  const remove = (i) => onChange(JSON.stringify(items.filter((_, k) => k !== i)))
+  const onKey = (e) => {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(input) }
+    else if (e.key === 'Backspace' && !input && items.length) onChange(JSON.stringify(items.slice(0, -1)))
+    else if (e.key === 'Escape') setOpen(false)
+  }
+  useEffect(() => {
+    function onDoc(e) { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [])
+  return (
+    <div ref={wrapRef} className="relative">
+      <div className="flex flex-wrap gap-1.5 px-2 py-1.5 rounded-lg border border-gray-200 bg-white min-h-[38px] focus-within:ring-2 focus-within:ring-indigo-300">
+        {items.map((it, i) => (
+          <span key={`${it}-${i}`} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-yellow-50 border border-yellow-200 text-yellow-900">
+            {it}
+            <button type="button" onClick={() => remove(i)} className="text-yellow-700 hover:text-red-600" aria-label={`Remover ${it}`}>×</button>
+          </span>
+        ))}
+        <input
+          value={input}
+          onChange={e => { setInput(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={onKey}
+          onBlur={() => { if (input) add(input) }}
+          placeholder={items.length ? '' : (placeholder || 'Escreve e prime Enter…')}
+          className="flex-1 min-w-[160px] outline-none text-sm bg-transparent"
+        />
+      </div>
+      {open && filtered.length > 0 && (
+        <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-auto">
+          {filtered.map((s, i) => (
+            <button
+              key={s + i}
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); add(s) }}
+              className="w-full text-left px-3 py-1.5 text-sm hover:bg-yellow-50 hover:text-yellow-900"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FormPanel({ tab, item, regiao, onSave, onCancel }) {
   const fields = FIELD_DEFS[tab] ?? []
-  const [form, setForm] = useState({ ...item })
+  const [form, setForm] = useState({ ...item, regiao: item?.regiao || regiao || null })
   const [lookups, setLookups] = useState({})
+  const [tagSuggestions, setTagSuggestions] = useState({ imobiliarias: [], zonas: [] })
   const isNew = !item.id
 
   // Load relation lookups
@@ -1755,6 +1838,15 @@ function FormPanel({ tab, item, onSave, onCancel }) {
         setLookups(prev => ({ ...prev, [f.key]: data }))
       }).catch(() => {})
     })
+  }, [tab])
+
+  // Sugestões para chips_autocomplete (Consultores) — imobiliárias já gravadas.
+  useEffect(() => {
+    if (tab !== 'Consultores') return
+    apiFetch('/api/crm/consultores/sugestoes-tags')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setTagSuggestions({ imobiliarias: d.imobiliarias || [], zonas: d.zonas || [] }) })
+      .catch(() => {})
   }, [tab])
 
   function handleChange(key, value) {
@@ -1777,6 +1869,20 @@ function FormPanel({ tab, item, onSave, onCancel }) {
               </select>
             ) : f.type === 'multiselect' ? (
               <MultiSelect value={form[f.key]} options={f.options} onChange={v => handleChange(f.key, v)} placeholder={`Selecionar ${f.label.toLowerCase()}...`} />
+            ) : f.type === 'multiselect_regional' ? (
+              <MultiSelect
+                value={form[f.key]}
+                options={ZONAS_ATUACAO_POR_REGIAO[form.regiao || regiao] || ZONAS_ATUACAO_POR_REGIAO.Coimbra}
+                onChange={v => handleChange(f.key, v)}
+                placeholder={`Selecionar ${f.label.toLowerCase()}...`}
+              />
+            ) : f.type === 'chips_autocomplete' ? (
+              <ChipsAutocomplete
+                value={form[f.key]}
+                suggestions={tagSuggestions[f.key === 'imobiliaria' ? 'imobiliarias' : 'zonas'] || []}
+                onChange={v => handleChange(f.key, v)}
+                placeholder={f.key === 'imobiliaria' ? 'Escreve para procurar ou criar nova…' : 'Escreve e prime Enter…'}
+              />
             ) : f.type === 'relation' ? (
               <select value={form[f.key] ?? ''} onChange={e => handleChange(f.key, e.target.value)} className={inputClass}>
                 <option value="">— Selecionar —</option>
