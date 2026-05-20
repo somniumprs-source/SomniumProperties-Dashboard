@@ -31,8 +31,18 @@ const supabaseAdmin = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE
 
 // Cache de validação de token (TTL 30s) — evita uma chamada HTTP a Supabase auth por cada request
 const authCache = new Map()
-const AUTH_TTL_MS = 30 * 1000
+// TTL: 5 min em vez de 30s. Mesmo que a sessão Supabase real expire, o token
+// continua válido para a getUser() durante hora(s); 5 min equilibra revalidação
+// e custo. Antes, no boot do Dashboard (10+ requests paralelas), o cache de
+// 30s expirava entre páginas e cada navegação reabria thundering herd à
+// Supabase auth API.
+const AUTH_TTL_MS = 5 * 60 * 1000
 const AUTH_CACHE_MAX = 5000
+// Coalescing: quando 10 fetches chegam ao mesmo tempo com o mesmo token e
+// não há cache hit, todos faziam supabaseAdmin.auth.getUser(token) em paralelo
+// (10× round-trips à Supabase). Agora a 1ª faz a chamada; as restantes esperam
+// pela mesma promise.
+const authInFlight = new Map()
 function authCacheGet(token) {
   const e = authCache.get(token)
   if (!e) return null
@@ -47,6 +57,20 @@ function authCacheSet(token, user) {
     for (const k of authCache.keys()) { authCache.delete(k); if (++i >= drop) break }
   }
   authCache.set(token, { user, t: Date.now() })
+}
+async function validateTokenCoalesced(token) {
+  const existing = authInFlight.get(token)
+  if (existing) return existing
+  const promise = supabaseAdmin.auth.getUser(token)
+    .then(({ data: { user }, error }) => {
+      if (error || !user) return null
+      authCacheSet(token, user)
+      return user
+    })
+    .catch(() => null)
+    .finally(() => authInFlight.delete(token))
+  authInFlight.set(token, promise)
+  return promise
 }
 
 app.use('/api', async (req, res, next) => {
@@ -77,9 +101,8 @@ app.use('/api', async (req, res, next) => {
   const cached = authCacheGet(token)
   if (cached) { req.user = cached; return next() }
   try {
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
-    if (error || !user) return res.status(401).json({ error: 'Sessão inválida' })
-    authCacheSet(token, user)
+    const user = await validateTokenCoalesced(token)
+    if (!user) return res.status(401).json({ error: 'Sessão inválida' })
     req.user = user
     next()
   } catch {

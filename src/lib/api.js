@@ -36,8 +36,14 @@ function scheduleRefreshSignal() {
  *
  * Emite o evento "somnium:refresh" depois de mutações OK.
  */
+// Timeout default: 30s. Antes ficavam requests penduradas indefinidamente
+// quando o backend não respondia (Render cold-start, Supabase pool exausto),
+// e o Dashboard mostrava "A carregar dados..." eternamente. Com abort, o
+// catch dispara e o utilizador vê uma mensagem de erro accionável.
+const DEFAULT_TIMEOUT_MS = 30_000
+
 export async function apiFetch(url, options = {}) {
-  const { regiao, ...rest } = options
+  const { regiao, timeoutMs = DEFAULT_TIMEOUT_MS, ...rest } = options
   const headers = { ...rest.headers }
   // Prioridade: regiao explícito > sessionStorage da página actual (apenas
   // se URL for `/api/crm/*` para limitar a entidades regionais).
@@ -48,10 +54,24 @@ export async function apiFetch(url, options = {}) {
     }
     if (r) headers['X-Regiao'] = r
   }
-  const res = await fetch(url, { ...rest, headers })
-  const method = (options.method || 'GET').toUpperCase()
-  if (res.ok && (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE')) {
-    scheduleRefreshSignal()
+  // AbortController só corre se o caller não passou já um signal — senão
+  // respeitamos o controlo deles (ex: componentes que cancelam ao desmontar).
+  let controller
+  let timer
+  let signal = rest.signal
+  if (!signal && timeoutMs > 0) {
+    controller = new AbortController()
+    signal = controller.signal
+    timer = setTimeout(() => controller.abort(), timeoutMs)
   }
-  return res
+  try {
+    const res = await fetch(url, { ...rest, headers, signal })
+    const method = (options.method || 'GET').toUpperCase()
+    if (res.ok && (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE')) {
+      scheduleRefreshSignal()
+    }
+    return res
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }
