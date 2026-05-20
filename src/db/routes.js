@@ -375,10 +375,12 @@ crudRoutes('/imoveis', Imoveis, {
       if (driveConfigured()) {
         await moveImovelFolder(item.id, body.estado)
       }
-      // Auto-criar projecto quando estado muda para um modelo de negócio
-      if (body.estado !== item.estado && ESTADO_IMOVEL_PARA_CATEGORIA[body.estado]) {
-        const merged = { ...item, ...body }
-        autoCriarNegocioDeImovel(merged, body.estado).catch(e => console.error('[auto-negocio] onUpdate:', e.message))
+      // Auto-criar projecto quando estado é um modelo de negócio.
+      // A idempotência interna de autoCriarNegocioDeImovel garante zero duplicados —
+      // não comparamos com o estado anterior porque o item devolvido pelo crud.update
+      // já vem merged com body, tornando a comparação sempre falsa.
+      if (ESTADO_IMOVEL_PARA_CATEGORIA[body.estado]) {
+        autoCriarNegocioDeImovel({ ...item, ...body }, body.estado).catch(e => console.error('[auto-negocio] onUpdate:', e.message))
       }
       // Gerar documentos da fase: persistir em Supabase Storage + DB e upload ao Drive
       const docs = getDocsForEstado(body.estado)

@@ -886,10 +886,9 @@ export function CRM() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ entity: endpoint, entityId: id, entityName: item?.nome ?? item?.movimento ?? '', newPhase: newColumn }),
     }).catch(() => {})
-    // Auto-criar projecto quando imóvel passa para modelo de negócio
-    if (tab === 'Imóveis' && ['Wholesaling', 'Fix and Flip', 'CAEP', 'Mediação Imobiliária'].includes(newColumn)) {
-      apiFetch('/api/automation/pipeline-to-faturacao', { method: 'POST' }).catch(() => {})
-    }
+    // O auto-criar do projecto é feito no backend (onUpdate de /api/crm/imoveis/:id).
+    // Não disparar aqui /api/automation/pipeline-to-faturacao — evita duplicação
+    // de lógica e race com o load() abaixo.
     load()
   }
 
