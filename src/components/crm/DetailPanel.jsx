@@ -47,6 +47,26 @@ function useLookups() {
   return data || {}
 }
 
+// Lista de consultores da região do imóvel (id + nome + estatuto). O endpoint
+// filtra por X-Regiao quando presente. Cache em memória por região para evitar
+// pedidos repetidos enquanto a tab está aberta.
+const __consultoresLookupCache = {}
+function useConsultoresLookup(regiao) {
+  const key = regiao || 'all'
+  const [data, setData] = useState(__consultoresLookupCache[key] || null)
+  useEffect(() => {
+    if (__consultoresLookupCache[key]) { setData(__consultoresLookupCache[key]); return }
+    let cancelled = false
+    const opts = regiao ? { regiao } : {}
+    apiFetch('/api/crm/lookup/consultores', opts)
+      .then(r => r.ok ? r.json() : [])
+      .then(rows => { if (!cancelled) { __consultoresLookupCache[key] = rows; setData(rows) } })
+      .catch(() => { if (!cancelled) setData([]) })
+    return () => { cancelled = true }
+  }, [key, regiao])
+  return data || []
+}
+
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 
 const ACAO_LABEL = { INSERT: 'Criado', UPDATE: 'Atualizado', DELETE: 'Apagado' }
@@ -1050,7 +1070,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
                     />
                   </div>
                 )}
-                <ImovelReadSections data={data} />
+                <ImovelReadSections data={data} onNavigate={onNavigate} />
 
                 {/* ── Dados da Calculadora de Rentabilidade ── */}
                 {analise && (
@@ -1701,6 +1721,8 @@ const MODELO_NEGOCIO_OPTS = ['Wholesaling','Fix & Flip','CAEP','Mediação']
 function ImovelEditSections({ data, form, setField }) {
   const lookups = useLookups()
   const { concelhos, freguesias } = useFreguesiasLookup(form)
+  const consultoresRegiao = useConsultoresLookup(form?.regiao)
+  const consultoresOptions = useMemo(() => consultoresRegiao.map(c => c.nome).filter(Boolean), [consultoresRegiao])
   const onusList = Array.isArray(form.onus_registados) ? form.onus_registados : []
   const toggleOnus = v => {
     const set = new Set(onusList)
@@ -1733,7 +1755,19 @@ function ImovelEditSections({ data, form, setField }) {
         </select>
       </div>
       <EF label="Origem (Canal)" field="origem" form={form} set={setField} type="select" options={ORIGEM_OPTS} />
-      <EF label="Consultor" field="nome_consultor" form={form} set={setField} />
+      <div>
+        <Combobox
+          label="Consultor"
+          value={form.nome_consultor}
+          onChange={v => setField('nome_consultor', v)}
+          options={consultoresOptions}
+          placeholder={consultoresRegiao.length ? `Pesquisar (${consultoresRegiao.length} ${form?.regiao || ''})…` : 'Sem consultores nesta região'}
+          allowFree={false}
+        />
+        {form.nome_consultor && !consultoresOptions.some(o => o.toLowerCase() === form.nome_consultor.toLowerCase()) && (
+          <p className="text-[10px] text-amber-600 mt-1">Nome livre (não corresponde a consultor da BD)</p>
+        )}
+      </div>
     </Section>
 
     {/* 2. Localização */}
@@ -1939,10 +1973,21 @@ function ImovelEditSections({ data, form, setField }) {
 }
 
 // Bloco read-only — mesmas 6 secções, sem inputs.
-function ImovelReadSections({ data }) {
+function ImovelReadSections({ data, onNavigate }) {
   const fmtArea = v => (v > 0 ? `${v} m²` : '—')
   const fmtEur = v => (v > 0 ? EUR(v) : '—')
   const onusList = Array.isArray(data.onus_registados) ? data.onus_registados : []
+  // Resolve o nome livre para o consultor real (id) da BD na região do imóvel.
+  // Match exacto ou substring (alinhado com navigateToConsultor do CRM.jsx).
+  const consultoresRegiao = useConsultoresLookup(data?.regiao)
+  const consultorMatch = useMemo(() => {
+    if (!data?.nome_consultor || !consultoresRegiao.length) return null
+    const n = data.nome_consultor.trim().toLowerCase()
+    return consultoresRegiao.find(c => {
+      const cn = c.nome?.trim().toLowerCase()
+      return cn && (cn === n || cn.includes(n) || n.includes(cn))
+    }) || null
+  }, [data?.nome_consultor, consultoresRegiao])
 
   const sec = {
     identificacao: ['nome','estado','ref_interna','link','tipo_oportunidade','origem','nome_consultor'],
@@ -1961,7 +2006,14 @@ function ImovelReadSections({ data }) {
       <Field label="Link" value={data.link ? <a href={data.link} target="_blank" rel="noopener noreferrer" className="text-brand-gold hover:underline truncate block">{data.link === 'OFF MARKET' ? 'OFF MARKET' : 'Ver anúncio'}</a> : '—'} />
       <Field label="Tipo de Oportunidade" value={data.tipo_oportunidade} />
       <Field label="Origem (Canal)" value={data.origem} />
-      <Field label="Consultor" value={data.nome_consultor} />
+      <Field label="Consultor" value={
+        data.nome_consultor
+          ? (consultorMatch && onNavigate
+              ? <button type="button" onClick={() => onNavigate('Consultores', consultorMatch.id)}
+                  className="text-brand-gold hover:underline text-left">{data.nome_consultor}</button>
+              : data.nome_consultor)
+          : '—'
+      } />
     </Section>
 
     <Section icon="📍" title="Localização" fields={sec.localizacao} form={data}>

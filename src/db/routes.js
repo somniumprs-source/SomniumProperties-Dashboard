@@ -1921,8 +1921,18 @@ router.get('/lookup/imoveis', (req, res) =>
   serveLookup('imoveis', "SELECT id, nome, estado FROM imoveis ORDER BY nome", res))
 router.get('/lookup/investidores', (req, res) =>
   serveLookup('investidores', "SELECT id, nome, status FROM investidores ORDER BY nome", res))
-router.get('/lookup/consultores', (req, res) =>
-  serveLookup('consultores', "SELECT id, nome, estatuto FROM consultores ORDER BY nome", res))
+// Consultores filtram por região quando o header X-Regiao está presente.
+// Necessário para o select da ficha do imóvel só sugerir consultores da AMP
+// quando o imóvel é da AMP (não faz sentido sugerir consultor de Coimbra).
+router.get('/lookup/consultores', (req, res) => {
+  const regiao = req.regiaoActiva
+  if (regiao) {
+    const key = `consultores:${regiao}`
+    const sql = `SELECT id, nome, estatuto FROM consultores WHERE regiao = '${regiao.replace(/'/g, "''")}' ORDER BY nome`
+    return serveLookup(key, sql, res)
+  }
+  return serveLookup('consultores', "SELECT id, nome, estatuto, regiao FROM consultores ORDER BY nome", res)
+})
 
 // ── Automações PostgreSQL ──────────────────────────────────────
 router.post('/automation/score-investidores', async (req, res) => {
