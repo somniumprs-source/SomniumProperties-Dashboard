@@ -12,6 +12,11 @@ export function FicheirosTab({ imovelId, driveFolderId }) {
   const [uploading, setUploading] = useState(false)
   const [lightbox, setLightbox] = useState(null)
   const [section, setSection] = useState('fotos') // 'fotos' | 'docs'
+  // IDs de fotos cujo <img> falhou a carregar (404, broken URL, content-type
+  // não imagem servido como tal). São automaticamente escondidas e ficam
+  // acessíveis para limpeza via botão "Remover fotos quebradas".
+  const [brokenIds, setBrokenIds] = useState(() => new Set())
+  const [cleaning, setCleaning] = useState(false)
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
 
@@ -30,6 +35,35 @@ export function FicheirosTab({ imovelId, driveFolderId }) {
   }
 
   useEffect(() => { loadData() }, [imovelId])
+
+  // Quando carregamos lista nova, esquecer os "broken" anteriores —
+  // pode ser ficheiro reuploaded com mesmo id, etc.
+  useEffect(() => { setBrokenIds(new Set()) }, [imovelId])
+
+  function markBroken(id) {
+    setBrokenIds(prev => {
+      if (prev.has(id)) return prev
+      const next = new Set(prev)
+      next.add(id)
+      return next
+    })
+  }
+
+  async function cleanBrokenPhotos() {
+    if (brokenIds.size === 0) return
+    if (!confirm(`Remover ${brokenIds.size} foto${brokenIds.size > 1 ? 's' : ''} que não carregou${brokenIds.size > 1 ? 'aram' : ''}?`)) return
+    setCleaning(true)
+    try {
+      // Apaga em paralelo cada foto broken via endpoint existente.
+      await Promise.all([...brokenIds].map(id =>
+        apiFetch(`/api/crm/imoveis/${imovelId}/fotos/${id}`, { method: 'DELETE' }).catch(() => null)
+      ))
+      // Recarrega lista oficial do servidor
+      await loadData()
+      setBrokenIds(new Set())
+    } catch (e) { console.error('Erro a remover fotos quebradas:', e) }
+    setCleaning(false)
+  }
 
   async function handleUpload(e) {
     const files = e.target.files
@@ -94,7 +128,7 @@ export function FicheirosTab({ imovelId, driveFolderId }) {
   const galleryPhotos = [
     ...localPhotos.map(f => ({ ...f, source: 'local', url: f.path })),
     ...drivePhotos,
-  ]
+  ].filter(f => !brokenIds.has(f.id))
   const allDocuments = [
     ...localDocs.map(f => ({ ...f, source: 'local' })),
     ...driveDocuments.map(f => ({ ...f, source: 'drive' })),
@@ -172,6 +206,20 @@ export function FicheirosTab({ imovelId, driveFolderId }) {
         </div>
       </div>
 
+      {/* Aviso + acção para fotos quebradas (scraper falhou, URL caducou, etc.) */}
+      {section === 'fotos' && brokenIds.size > 0 && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-lg bg-amber-50 border border-amber-200">
+          <div className="text-xs text-amber-800">
+            <strong>{brokenIds.size}</strong> {brokenIds.size === 1 ? 'foto não carregou' : 'fotos não carregaram'} —
+            provavelmente falharam ao serem extraídas do anúncio original.
+          </div>
+          <button onClick={cleanBrokenPhotos} disabled={cleaning}
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 whitespace-nowrap">
+            {cleaning ? 'A remover…' : `Remover ${brokenIds.size}`}
+          </button>
+        </div>
+      )}
+
       {/* ── FOTOGRAFIAS ── */}
       {section === 'fotos' && (
         galleryPhotos.length === 0 ? (
@@ -205,7 +253,7 @@ export function FicheirosTab({ imovelId, driveFolderId }) {
                   alt={foto.name}
                   className="w-full h-full object-cover"
                   loading="lazy"
-                  onError={e => { e.target.style.display = 'none' }}
+                  onError={() => markBroken(foto.id)}
                 />
                 {/* Hover overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />

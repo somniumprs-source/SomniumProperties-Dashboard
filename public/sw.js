@@ -1,7 +1,7 @@
-// v24: dropdown de consultor da ficha do imóvel deixa de ser cortado pela
-// caixa colapsável (overflow-hidden quando aberta). Lookup invalida cache
-// automaticamente após criar/editar/apagar consultor (server e cliente).
-const CACHE_NAME = 'somnium-crm-v24'
+// v25: fotos cujo <img> falha a carregar (scraper original 404, URL caducou,
+// formato invalido) deixam de aparecer como cards cinzentos vazios. São
+// escondidas da galeria e oferecemos botão "Remover N" para limpar a BD.
+const CACHE_NAME = 'somnium-crm-v25'
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/icons/icon-192x192.png',
