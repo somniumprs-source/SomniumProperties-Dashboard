@@ -681,7 +681,7 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
   )
 }
 
-export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
+export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit = false }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('detalhe')
@@ -798,6 +798,17 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate }) {
     setActiveTab('detalhe')
     setEditing(false)
     loadData()
+      .then(() => {
+        // defaultEdit: arrancar logo em edit mode (ex: vindo do form de criação).
+        // Lê data depois do setData ter corrido — usar a ref ao state actual
+        // não funciona aqui; chamamos startEdit que copia data→form e activa edit.
+        if (defaultEdit) {
+          // micro-deferred para garantir que setData foi commit antes do startEdit
+          queueMicrotask(() => {
+            setData(d => { if (d) { setForm({ ...d }); setEditing(true) } return d })
+          })
+        }
+      })
       .finally(() => setLoading(false))
 
     // Carregar reuniões para investidores e consultores

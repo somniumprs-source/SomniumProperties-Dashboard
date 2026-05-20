@@ -595,6 +595,9 @@ export function CRM() {
   const [searchInput, setSearchInput] = useState(search)
   const [editing, setEditing] = useState(null) // null = list view, object = edit/create
   const [detail, setDetail] = useUrlState('detail', '') // '' = no detail, id = show detail panel
+  // Quando true, a próxima abertura de detail arranca já em edit mode. Reseta
+  // automaticamente após ser consumido. Usado pelo fluxo "criar → continuar edit".
+  const [detailDefaultEdit, setDetailDefaultEdit] = useState(false)
   const [stats, setStats] = useState(null)
   const [view, setView] = useUrlState('view', 'kanban') // 'kanban' | 'table'
   const [filters, setFilters] = useUrlFilters()
@@ -927,6 +930,15 @@ export function CRM() {
       }
 
       setEditing(null)
+      // Após criar imóvel: abrir a ficha em modo edição para o utilizador
+      // continuar a preencher os campos avançados (localização detalhada,
+      // caracterização física, valores, legal, pipeline). Antes ficava na
+      // listagem e o user tinha que abrir a ficha + clicar Editar manualmente,
+      // dando a sensação de "preencher duas vezes".
+      if (isNew && tab === 'Imóveis' && saved.id) {
+        setDetailDefaultEdit(true)
+        setDetail(saved.id)
+      }
       load()
     } catch (e) {
       toast(e.message, 'error')
@@ -1221,8 +1233,9 @@ export function CRM() {
             </div>
           </div>
         ) : detail && ['Imóveis', 'Consultores'].includes(tab) ? (
-          <DetailPanel type={tab} id={detail} onClose={() => { setDetail(null, { replace: true }); load() }} onSave={load}
-            onNavigate={(navType, navId) => { setDetail(null, { replace: true }); setTab(navType, { replace: true }); setTimeout(() => setDetail(navId), 150) }} />
+          <DetailPanel type={tab} id={detail} defaultEdit={detailDefaultEdit}
+            onClose={() => { setDetail(null, { replace: true }); setDetailDefaultEdit(false); load() }} onSave={load}
+            onNavigate={(navType, navId) => { setDetail(null, { replace: true }); setDetailDefaultEdit(false); setTab(navType, { replace: true }); setTimeout(() => setDetail(navId), 150) }} />
         ) : (<>
           {/* Follow-ups View (Consultores only) */}
           {!loading && editing === null && view === 'followups' && tab === 'Consultores' && (

@@ -1,7 +1,9 @@
-// v22: bump após introduzir Combobox de consultor na ficha do imóvel (filtra
-// por região via X-Regiao). SW velho ainda servia o bundle anterior, mantendo
-// o campo Consultor como input de texto livre.
-const CACHE_NAME = 'somnium-crm-v22'
+// v23: após criar imóvel, ficha abre directamente em edit mode para o user
+// continuar a preencher os campos avançados (localização, caracterização
+// física, valores, legal, pipeline) sem ter de clicar "Editar" depois. Antes
+// dava a sensação de "preencher tudo duas vezes" porque a ficha tem 6 secções
+// com ~50 campos enquanto o form de criação só tem 27.
+const CACHE_NAME = 'somnium-crm-v23'
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/icons/icon-192x192.png',
