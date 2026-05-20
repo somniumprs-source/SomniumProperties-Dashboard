@@ -434,10 +434,18 @@ async function propagarParaImovel(imovelId, calculados, inputs) {
         const pct = neg.comissao_pct || 2.5
         lucroEstimado = Math.round(vvr * (pct / 100) * 100) / 100
       } else if (neg.categoria === 'CAEP') {
-        // CAEP: 2/3 da quota activa (split definido no negócio)
-        const split = parseFloat(neg.comissao_pct) || 40
+        // CAEP: 2/3 da quota activa.
+        // Prioridade: perc_somnium definido na ficha CAEP da análise (fonte da verdade)
+        //          > comissao_pct já guardado no negocio
+        //          > default 40
+        const caepData = typeof inputs?.caep === 'string' ? JSON.parse(inputs.caep || 'null') : inputs?.caep
+        const split = Number(caepData?.perc_somnium) || parseFloat(neg.comissao_pct) || 40
         const quotaActiva = lucroBruto * (split / 100)
         lucroEstimado = Math.round(quotaActiva * (2 / 3) * 100) / 100
+        // Sincroniza comissao_pct no negocio quando vem do perc_somnium da análise
+        if (Number(caepData?.perc_somnium) && parseFloat(neg.comissao_pct) !== split) {
+          await pool.query('UPDATE negocios SET comissao_pct = $1 WHERE id = $2', [split, neg.id])
+        }
       } else {
         lucroEstimado = calculados.lucro_liquido || 0
       }
