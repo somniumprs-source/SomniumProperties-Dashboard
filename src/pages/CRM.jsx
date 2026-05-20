@@ -1613,21 +1613,46 @@ const FREGUESIAS = [
 ].sort()
 
 const FIELD_DEFS = {
+  // O formulário inicial reflecte o mesmo conjunto de campos da ficha de
+  // detalhe (ImovelEditSections). Antes só tinha 27 keys e faltavam áreas,
+  // caracterização física e localização detalhada — quem criava um imóvel
+  // tinha de reabrir a ficha para preencher estes campos do zero.
   'Imóveis': [
+    // — Identificação —
     { key: 'nome', label: 'Nome do Imóvel', type: 'text', required: true },
     { key: 'estado', label: 'Estado', type: 'select', options: ['Adicionado','Chamada Não Atendida','Pendentes','Pré-aprovação','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'] },
-    { key: 'tipologia', label: 'Tipologia', type: 'text' },
+    { key: 'ref_interna', label: 'REF Interna', type: 'text' },
+    { key: 'tipo_oportunidade', label: 'Tipo Oportunidade', type: 'select', options: ['Portal', 'Off-Market'] },
+    { key: 'origem', label: 'Origem', type: 'select', options: ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro'] },
+    { key: 'nome_consultor', label: 'Consultor', type: 'relation_name_or_new', endpoint: '/api/crm/lookup/consultores', display: r => `${r.nome} (${r.estatuto ?? '—'})`, createEndpoint: '/api/crm/consultores/find-or-create' },
+    { key: 'link', label: 'Link do Imóvel', type: 'url' },
+    // — Localização —
+    { key: 'distrito', label: 'Distrito', type: 'text' },
+    { key: 'concelho', label: 'Concelho', type: 'text' },
+    { key: 'freguesia', label: 'Freguesia', type: 'text' },
+    { key: 'zona', label: 'Zona / Bairro', type: 'text' },
+    { key: 'zonas', label: 'Zonas (freguesias)', type: 'multiselect_freguesias' },
+    // — Caracterização Física —
+    { key: 'tipologia', label: 'Tipologia (T1, T2, T3…)', type: 'text' },
+    { key: 'predio_tipo', label: 'Tipo de Prédio', type: 'select', options: ['Edifício multifamiliar','Moradia','Terreno','Prédio para reabilitação','Outro'] },
+    { key: 'area_util', label: 'Área Útil (m²)', type: 'number' },
+    { key: 'area_bruta', label: 'ABP — Área Bruta Privativa (m²)', type: 'number' },
+    { key: 'area_bruta_dependente', label: 'ABD — Área Bruta Dependente (m²)', type: 'number' },
+    { key: 'andar', label: 'Andar', type: 'text' },
+    { key: 'numero_pisos_predio', label: 'Nº Pisos do Prédio', type: 'number' },
+    { key: 'tem_elevador', label: 'Tem Elevador', type: 'select', options: ['Sim','Não'] },
+    { key: 'ano_construcao', label: 'Ano de Construção', type: 'number' },
+    { key: 'cru', label: 'Uso (CRU)', type: 'select', options: ['Habitação','Comércio','Serviços','Indústria','Misto'] },
+    // — Valores —
     { key: 'ask_price', label: 'Ask Price (€)', type: 'number' },
     { key: 'valor_proposta', label: 'Valor Proposta (€)', type: 'number' },
     { key: 'custo_estimado_obra', label: 'Custo Estimado Obra (€)', type: 'number' },
     { key: 'valor_venda_remodelado', label: 'Valor Venda Remodelado (€)', type: 'number' },
-    { key: 'zona', label: 'Zona Principal', type: 'text' },
-    { key: 'zonas', label: 'Zonas', type: 'multiselect_freguesias' },
-    { key: 'origem', label: 'Origem', type: 'select', options: ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro'] },
+    { key: 'vpt', label: 'VPT (€)', type: 'number' },
+    { key: 'imi_anual', label: 'IMI Anual (€)', type: 'number' },
+    { key: 'condominio_mensal_anunciado', label: 'Condomínio Mensal (€)', type: 'number' },
+    // — Pipeline & Negócio —
     { key: 'modelo_negocio', label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix & Flip','CAEP','Mediação'] },
-    { key: 'nome_consultor', label: 'Consultor', type: 'relation_name_or_new', endpoint: '/api/crm/lookup/consultores', display: r => `${r.nome} (${r.estatuto ?? '—'})`, createEndpoint: '/api/crm/consultores/find-or-create' },
-    { key: 'tipo_oportunidade', label: 'Tipo Oportunidade', type: 'select', options: ['Portal', 'Off-Market'] },
-    { key: 'link', label: 'Link do Imóvel', type: 'url' },
     { key: 'check_qualidade', label: 'Check Qualidade', type: 'checkbox' },
     { key: 'check_ouro', label: 'Check Ouro (3 critérios)', type: 'checkbox' },
     { key: 'motivo_descarte', label: 'Motivo Descarte', type: 'select', options: ['Preço elevado','Produto final não vendável','Sem interesse do investidor','Zona fraca','ROI insuficiente','Já vendido','Outro'] },

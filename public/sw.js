@@ -1,7 +1,8 @@
-// v25: fotos cujo <img> falha a carregar (scraper original 404, URL caducou,
-// formato invalido) deixam de aparecer como cards cinzentos vazios. São
-// escondidas da galeria e oferecemos botão "Remover N" para limpar a BD.
-const CACHE_NAME = 'somnium-crm-v25'
+// v26: form inicial de imóvel agora tem paridade com a ficha — campos de área
+// (Útil, ABP, ABD), caracterização física (predio_tipo, andar, ano construção,
+// elevador), localização detalhada (distrito, concelho, freguesia) e valores
+// fiscais (VPT, IMI, condomínio). Antes faltavam ~12 campos críticos.
+const CACHE_NAME = 'somnium-crm-v26'
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/icons/icon-192x192.png',
