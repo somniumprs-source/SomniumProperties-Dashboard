@@ -1,7 +1,7 @@
-// v21: bump após restaurar a ordem de rotas no Express (/tarefas/count-atrasadas
-// estava a ser apanhado pelo router.get('/tarefas/:id') do crudRoutes e a
-// devolver 404, prendendo o badge da sidebar e cascateando no Dashboard).
-const CACHE_NAME = 'somnium-crm-v21'
+// v22: bump após introduzir Combobox de consultor na ficha do imóvel (filtra
+// por região via X-Regiao). SW velho ainda servia o bundle anterior, mantendo
+// o campo Consultor como input de texto livre.
+const CACHE_NAME = 'somnium-crm-v22'
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/icons/icon-192x192.png',
