@@ -49,11 +49,24 @@ function useLookups() {
 
 // Lista de consultores da região do imóvel (id + nome + estatuto). O endpoint
 // filtra por X-Regiao quando presente. Cache em memória por região para evitar
-// pedidos repetidos enquanto a tab está aberta.
+// pedidos repetidos enquanto a tab está aberta. Invalidada automaticamente
+// quando dispara o evento global `somnium:refresh` (após criar/editar/apagar
+// consultor o apiFetch dispara este sinal em todas as mutations bem-sucedidas).
 const __consultoresLookupCache = {}
 function useConsultoresLookup(regiao) {
   const key = regiao || 'all'
   const [data, setData] = useState(__consultoresLookupCache[key] || null)
+  const [refreshTick, setRefreshTick] = useState(0)
+  useEffect(() => {
+    const onRefresh = () => {
+      // Apaga todas as entries (não sabemos qual região foi mutada) e
+      // força refetch nos componentes montados.
+      for (const k of Object.keys(__consultoresLookupCache)) delete __consultoresLookupCache[k]
+      setRefreshTick(t => t + 1)
+    }
+    window.addEventListener('somnium:refresh', onRefresh)
+    return () => window.removeEventListener('somnium:refresh', onRefresh)
+  }, [])
   useEffect(() => {
     if (__consultoresLookupCache[key]) { setData(__consultoresLookupCache[key]); return }
     let cancelled = false
@@ -63,7 +76,7 @@ function useConsultoresLookup(regiao) {
       .then(rows => { if (!cancelled) { __consultoresLookupCache[key] = rows; setData(rows) } })
       .catch(() => { if (!cancelled) setData([]) })
     return () => { cancelled = true }
-  }, [key, regiao])
+  }, [key, regiao, refreshTick])
   return data || []
 }
 
@@ -1592,9 +1605,14 @@ function Section({ icon, title, fields, form, defaultOpen = false, accent, child
   const total = fields?.length ?? 0
   const complete = filled !== null && filled === total && total > 0
   return (
-    <div className="col-span-2 md:col-span-3 border border-gray-200 rounded-xl bg-white overflow-hidden">
+    // overflow-visible quando aberto: o dropdown do Combobox de consultor
+    // estava a ser cortado pelo `overflow-hidden` desta caixa (lista da
+    // imobiliária ocultada). Mantém overflow-hidden quando fechado para
+    // preservar os rounded corners do botão de header.
+    <div className={`col-span-2 md:col-span-3 border border-gray-200 rounded-xl bg-white ${open ? '' : 'overflow-hidden'}`}>
       <button type="button" onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+        className={`w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 ${open ? 'rounded-t-xl' : 'rounded-xl'}`}>
+
         <span className="flex items-center gap-2">
           {icon && <span>{icon}</span>}
           <span>{title}</span>

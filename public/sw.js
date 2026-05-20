@@ -1,9 +1,7 @@
-// v23: após criar imóvel, ficha abre directamente em edit mode para o user
-// continuar a preencher os campos avançados (localização, caracterização
-// física, valores, legal, pipeline) sem ter de clicar "Editar" depois. Antes
-// dava a sensação de "preencher tudo duas vezes" porque a ficha tem 6 secções
-// com ~50 campos enquanto o form de criação só tem 27.
-const CACHE_NAME = 'somnium-crm-v23'
+// v24: dropdown de consultor da ficha do imóvel deixa de ser cortado pela
+// caixa colapsável (overflow-hidden quando aberta). Lookup invalida cache
+// automaticamente após criar/editar/apagar consultor (server e cliente).
+const CACHE_NAME = 'somnium-crm-v24'
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/icons/icon-192x192.png',

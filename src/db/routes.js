@@ -755,6 +755,18 @@ router.get('/consultores/enriched', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// Middleware ANTES do crudRoutes regista um listener no res.finish para
+// invalidar a cache do lookup quando uma mutação em /consultores tem sucesso.
+// Cobre POST, PUT, PATCH e DELETE — incluindo DELETE que não passa pelo hook
+// onCreate/onUpdate do factory.
+router.use((req, res, next) => {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && req.path.startsWith('/consultores')) {
+    res.on('finish', () => {
+      if (res.statusCode >= 200 && res.statusCode < 400) lookupCacheInvalidate('consultores')
+    })
+  }
+  next()
+})
 crudRoutes('/consultores', Consultores)
 
 // ── Negocios: auto-criar fases conforme template da categoria ──
@@ -1907,6 +1919,15 @@ function lookupCacheGet(key) {
 }
 function lookupCacheSet(key, data, ttl = 120_000) {
   _lookupCache.set(key, { data, exp: Date.now() + ttl })
+}
+// Invalida entries cuja key começa por `prefix`. Chamado pelos hooks de
+// mutation abaixo: criar/editar/apagar um consultor → invalida consultores:*.
+// Sem isto, após criar uma imobiliária nova o frontend recebia até 120s da
+// lista antiga (Era Gaia Oriente não aparecia no dropdown da ficha do imóvel).
+function lookupCacheInvalidate(prefix) {
+  for (const k of _lookupCache.keys()) {
+    if (k === prefix || k.startsWith(`${prefix}:`)) _lookupCache.delete(k)
+  }
 }
 async function serveLookup(key, sql, res) {
   try {
