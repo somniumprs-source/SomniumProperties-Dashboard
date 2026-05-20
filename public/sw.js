@@ -1,7 +1,7 @@
-// v20: bump para invalidar bundles JS antigos que ainda passavam apiFetch
-// sem o header X-Regiao em endpoints regionais (resultava em listas Coimbra
-// a aparecerem mesmo com AMP seleccionado). Apaga todas as caches anteriores.
-const CACHE_NAME = 'somnium-crm-v20'
+// v21: bump após restaurar a ordem de rotas no Express (/tarefas/count-atrasadas
+// estava a ser apanhado pelo router.get('/tarefas/:id') do crudRoutes e a
+// devolver 404, prendendo o badge da sidebar e cascateando no Dashboard).
+const CACHE_NAME = 'somnium-crm-v21'
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/icons/icon-192x192.png',

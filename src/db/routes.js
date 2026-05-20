@@ -898,12 +898,11 @@ router.put('/negocios/:id/confirmar-pagamento', async (req, res) => {
 })
 
 crudRoutes('/despesas', Despesas)
-crudRoutes('/tarefas', Tarefas)
-crudRoutes('/consultor-interacoes', ConsultorInteracoes)
-crudRoutes('/empreiteiros', Empreiteiros)
 
 // Contagem rápida de tarefas atrasadas — usado pelo badge da Sidebar. Evita
 // puxar ?limit=200 só para contar quantas estão em "Atrasada". Cache 30s.
+// IMPORTANTE: registar ANTES de crudRoutes('/tarefas') senão o router.get
+// /tarefas/:id apanha "count-atrasadas" como id e devolve 404.
 let _countAtrasadasCache = { exp: 0, n: 0 }
 router.get('/tarefas/count-atrasadas', async (_req, res) => {
   try {
@@ -915,6 +914,10 @@ router.get('/tarefas/count-atrasadas', async (_req, res) => {
     res.json({ atrasadas: n })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
+
+crudRoutes('/tarefas', Tarefas)
+crudRoutes('/consultor-interacoes', ConsultorInteracoes)
+crudRoutes('/empreiteiros', Empreiteiros)
 
 // ── Visitas — CRUD com sync de imoveis.data_visita ───────────
 // Cada mutacao (create/update/delete) re-sincroniza o campo derivado
