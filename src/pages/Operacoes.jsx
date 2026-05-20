@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Header } from '../components/layout/Header.jsx'
 import { PageSkeleton } from '../components/ui/Skeleton.jsx'
 import { apiFetch } from '../lib/api.js'
@@ -210,7 +210,9 @@ function CalendarWeek({ events, tarefas }) {
                 </a>
               ))}
               {taskEvents.map((t, j) => (
-                <div key={`t${j}`} className={`px-2 py-1 rounded text-[10px] truncate ${STATUS_COLOR[t.status] || 'bg-gray-100 text-gray-600'}`}>
+                <div key={`t${j}`} className={`px-2 py-1 rounded text-[10px] truncate ${STATUS_COLOR[t.status] || 'bg-gray-100 text-gray-600'}`}
+                  title={t.gcal_event_id ? 'Sincronizada do Google Calendar' : 'Criada na app'}>
+                  {t.gcal_event_id && <span className="mr-1 text-blue-500">●</span>}
                   {t.inicio?.slice(11, 16)} {t.tarefa}
                 </div>
               ))}
@@ -300,6 +302,15 @@ export function Operacoes() {
 
   const r = data?.resumo
   const k = data?.kpis
+
+  // Dedup: eventos do Google Calendar que já estão sincronizados em `tarefas`
+  // (com gcal_event_id preenchido) deixam de aparecer também na lista azul do
+  // calendário. Antes, criar evento no GCal mostrava-o 2× — uma como evento
+  // GCal directo, outra como tarefa após o pull de 15 min.
+  const calEventsDedup = useMemo(() => {
+    const syncedIds = new Set(tarefas.map(t => t.gcal_event_id).filter(Boolean))
+    return calEvents.filter(e => !syncedIds.has(e.id))
+  }, [calEvents, tarefas])
 
   // Week boundaries (Mon-Sun)
   const now = new Date()
@@ -641,14 +652,14 @@ export function Operacoes() {
         {tab === 'calendario' && (
           <>
             <SectionTitle>Esta Semana — Google Calendar + Tarefas</SectionTitle>
-            <CalendarWeek events={calEvents} tarefas={tarefas} />
+            <CalendarWeek events={calEventsDedup} tarefas={tarefas} />
 
-            {calEvents.length > 0 && (
+            {calEventsDedup.length > 0 && (
               <>
                 <SectionTitle>Próximos Eventos (Google Calendar)</SectionTitle>
                 <Card padding="md">
                   <div className="flex flex-col gap-2">
-                    {calEvents.slice(0, 15).map((e, i) => (
+                    {calEventsDedup.slice(0, 15).map((e, i) => (
                       <a key={i} href={e.link} target="_blank" rel="noreferrer"
                         className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 border border-gray-100">
                         <div className="flex items-center gap-3">

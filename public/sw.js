@@ -1,7 +1,8 @@
-// v27: campo Consultor da ficha do imóvel passa a oferecer "+ Criar consultor"
-// quando o nome digitado não existe. Abre painel inline com Nome, Contacto,
-// Email e Imobiliária e cria o consultor na região do imóvel sem trocar de tab.
-const CACHE_NAME = 'somnium-crm-v27'
+// v28: vista Operações > Calendário deixa de mostrar eventos do Google
+// Calendar em duplicado (uma vez como evento azul + uma vez como tarefa já
+// sincronizada). Filtra calEvents pelos gcal_event_id já presentes em tarefas
+// e marca tarefas de origem GCal com indicador • azul.
+const CACHE_NAME = 'somnium-crm-v28'
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/icons/icon-192x192.png',
