@@ -17,11 +17,18 @@ const pool = new pg.Pool({
   // disparar ~30-50 queries em paralelo via Promise.all).
   max: 30,
   idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 8000,
 })
 
 pool.on('error', (err) => {
   console.error('[pg] Pool error:', err.message)
 })
+
+setInterval(() => {
+  if (pool.waitingCount > 0) {
+    console.warn(`[pg] waiting=${pool.waitingCount} total=${pool.totalCount} idle=${pool.idleCount}`)
+  }
+}, 5000).unref?.()
 
 // ── Schema creation ──────────────────────────────────────────
 export async function initSchema() {

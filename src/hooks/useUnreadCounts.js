@@ -22,8 +22,13 @@ export function useUnreadCounts(enabled = true) {
   useEffect(() => {
     if (!enabled) return
     fetch()
-    intervalRef.current = setInterval(fetch, 30000)
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
+    intervalRef.current = setInterval(() => { if (!document.hidden) fetch() }, 60000)
+    const onVisible = () => { if (!document.hidden) fetch() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [enabled, fetch])
 
   const total = Object.values(counts).reduce((a, b) => a + b, 0)

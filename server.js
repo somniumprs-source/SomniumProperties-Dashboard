@@ -11,8 +11,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const app = express()
 app.use(cors())
-// gzip dos payloads JSON (~70-80% redução em respostas grandes como
-// /api/crm/investidores que devolve 70KB → ~15KB).
+// gzip dos payloads JSON e dos chunks estáticos (~70-80% redução em
+// respostas grandes como /api/crm/investidores que devolve 70KB → ~15KB).
 app.use(compression({ threshold: 1024 }))
 app.use(express.json())
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500, standardHeaders: true, legacyHeaders: false }))
@@ -2397,6 +2397,7 @@ app.get('/api/kpis', async (req, res) => {
     if (cached) return res.json(cached)
 
     const auth = req.headers.authorization
+    // Propagar regiao para os sub-fetches internos via X-Regiao (não passa por query, evita rescrita no middleware).
     const headers = auth ? { Authorization: auth } : {}
     if (regiao) headers['X-Regiao'] = regiao
     // Chamadas em paralelo via agent keepAlive (loopback reaproveita socket).
@@ -4386,7 +4387,10 @@ app.post('/api/crm/projetos/:negocioId/sync-gcal', async (req, res) => {
 // Auto-sync bidirecional (~15 min, com jitter para não colidir com outros sincronizadores)
 if (gcal) {
   const GCAL_SYNC_INTERVAL = 15 * 60 * 1000
+  let _calendarRunning = false
   async function autoSyncCalendar() {
+    if (_calendarRunning) { console.warn('[gcal-sync] Auto: ainda a correr, skip'); return }
+    _calendarRunning = true
     try {
       const { pushAllTarefas, pullGCalToTarefas } = await import('./src/db/calendarSync.js')
       const push = await pushAllTarefas(gcal, GCAL_ID, { sinceDate: mondayOfCurrentWeek() })
@@ -4396,6 +4400,8 @@ if (gcal) {
       }
     } catch (e) {
       console.error('[gcal-sync] Auto erro:', e.message)
+    } finally {
+      _calendarRunning = false
     }
   }
   setTimeout(autoSyncCalendar, 30000)
@@ -4408,7 +4414,10 @@ try {
   const { isConfigured } = await import('./src/db/firefliesSync.js')
   if (isConfigured()) {
     const FF_SYNC_INTERVAL = 16 * 60 * 1000
+    let _ffRunning = false
     async function autoSyncFireflies() {
+      if (_ffRunning) { console.warn('[fireflies] Auto-sync: ainda a correr, skip'); return }
+      _ffRunning = true
       try {
         const { syncFireflies } = await import('./src/db/firefliesSync.js')
         const { autoFillInvestidor, autoFillConsultor } = await import('./src/db/meetingAnalysis.js')
@@ -4460,6 +4469,8 @@ try {
         }
       } catch (e) {
         console.error('[fireflies] Auto-sync erro:', e.message)
+      } finally {
+        _ffRunning = false
       }
     }
     setTimeout(autoSyncFireflies, 60000) // primeiro sync 1 min após arranque
@@ -4475,7 +4486,10 @@ try {
   const { isConfigured: formsConfigured, syncForms } = await import('./src/db/formsSync.js')
   if (formsConfigured()) {
     const FORMS_SYNC_INTERVAL = 17 * 60 * 1000
+    let _formsRunning = false
     async function autoSyncForms() {
+      if (_formsRunning) { console.warn('[forms] Auto-sync: ainda a correr, skip'); return }
+      _formsRunning = true
       try {
         const result = await syncForms()
         if (result.created > 0 || result.updated > 0) {
@@ -4483,6 +4497,8 @@ try {
         }
       } catch (e) {
         console.error('[forms] Auto-sync erro:', e.message)
+      } finally {
+        _formsRunning = false
       }
     }
     setTimeout(autoSyncForms, 180000) // 3 min após arranque (staggered)
@@ -5002,11 +5018,12 @@ app.get('/api/time-tracking', async (req, res) => {
 // ════════════════════════════════════════════════════════════════
 app.get('/api/alertas', endpointCache(300000), async (req, res) => {
   try {
+    const regiao = req.regiaoActiva
     const [imoveis, investidores, consultoresRaw, negocios] = await Promise.all([
-      getImóveis().catch(() => []),
-      getInvestidores(),
-      getConsultores().catch(() => []),
-      getNegócios(),
+      getImóveis({ regiao }).catch(() => []),
+      getInvestidores({ regiao }),
+      getConsultores({ regiao }).catch(() => []),
+      getNegócios({ regiao }),
     ])
     const now = new Date()
     const alerts = []
@@ -5855,58 +5872,51 @@ autoMigrate().then(() => {
         const { rows: subs } = await pool.query("SELECT * FROM despesas WHERE timing IN ('Mensalmente', 'Anual')")
         const hoje = new Date()
         const mesActual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
-        let criados = 0
 
+        // Recolher elegíveis em memória; deduplicação garantida por ON CONFLICT (id)
+        const rows = []
         for (const sub of subs) {
           const dataSub = sub.data ? new Date(sub.data) : null
           const diaPagamento = dataSub ? dataSub.getDate() : 1
-
           if (sub.timing === 'Anual') {
-            // Anuais: registo único no mês de pagamento, valor total
             const mesPagamento = dataSub ? dataSub.getMonth() + 1 : 1
-            if (hoje.getMonth() + 1 !== mesPagamento) continue // não é o mês de pagamento
-            if (hoje.getDate() < diaPagamento) continue // dia ainda não chegou
+            if (hoje.getMonth() + 1 !== mesPagamento) continue
+            if (hoje.getDate() < diaPagamento) continue
             const valor = sub.custo_anual || 0
             if (valor <= 0) continue
-
-            const dataRegisto = `${mesActual}-${String(diaPagamento).padStart(2, '0')}`
-            const { rows: existente } = await pool.query(
-              "SELECT id FROM despesas WHERE timing = 'Registado' AND movimento = $1 AND data LIKE $2",
-              [sub.movimento, `${mesActual}%`]
-            )
-            if (existente.length > 0) continue
-
-            const id = `auto-${sub.id}-${mesActual}`
-            await pool.query(
-              `INSERT INTO despesas (id, movimento, categoria, data, custo_mensal, custo_anual, timing, notas, created_at, updated_at)
-               VALUES ($1, $2, $3, $4, $5, $5, 'Registado', $6, NOW(), NOW())
-               ON CONFLICT (id) DO NOTHING`,
-              [id, sub.movimento, sub.categoria, dataRegisto, valor, 'Subscrição anual']
-            )
-            criados++
+            rows.push({
+              id: `auto-${sub.id}-${mesActual}`,
+              movimento: sub.movimento, categoria: sub.categoria,
+              data: `${mesActual}-${String(diaPagamento).padStart(2, '0')}`,
+              valor, notas: 'Subscrição anual',
+            })
           } else {
-            // Mensais: registo todos os meses, valor mensal
             if (hoje.getDate() < diaPagamento) continue
             const valor = sub.custo_mensal || 0
             if (valor <= 0) continue
-
-            const dataRegisto = `${mesActual}-${String(diaPagamento).padStart(2, '0')}`
-            const { rows: existente } = await pool.query(
-              "SELECT id FROM despesas WHERE timing = 'Registado' AND movimento = $1 AND data LIKE $2",
-              [sub.movimento, `${mesActual}%`]
-            )
-            if (existente.length > 0) continue
-
-            const id = `auto-${sub.id}-${mesActual}`
-            await pool.query(
-              `INSERT INTO despesas (id, movimento, categoria, data, custo_mensal, custo_anual, timing, notas, created_at, updated_at)
-               VALUES ($1, $2, $3, $4, $5, $5, 'Registado', $6, NOW(), NOW())
-               ON CONFLICT (id) DO NOTHING`,
-              [id, sub.movimento, sub.categoria, dataRegisto, valor, 'Subscrição mensal']
-            )
-            criados++
+            rows.push({
+              id: `auto-${sub.id}-${mesActual}`,
+              movimento: sub.movimento, categoria: sub.categoria,
+              data: `${mesActual}-${String(diaPagamento).padStart(2, '0')}`,
+              valor, notas: 'Subscrição mensal',
+            })
           }
         }
+        if (rows.length === 0) return
+
+        // Bulk INSERT numa única query; RETURNING id devolve apenas os realmente criados
+        const cols = 6
+        const placeholders = rows.map((_, i) => {
+          const o = i * cols
+          return `($${o + 1}, $${o + 2}, $${o + 3}, $${o + 4}, $${o + 5}, $${o + 5}, 'Registado', $${o + 6}, NOW(), NOW())`
+        }).join(', ')
+        const params = rows.flatMap(r => [r.id, r.movimento, r.categoria, r.data, r.valor, r.notas])
+        const { rowCount: criados } = await pool.query(
+          `INSERT INTO despesas (id, movimento, categoria, data, custo_mensal, custo_anual, timing, notas, created_at, updated_at)
+           VALUES ${placeholders}
+           ON CONFLICT (id) DO NOTHING`,
+          params
+        )
         if (criados > 0) console.log(`[despesas] ${criados} registo(s) mensal(is) criado(s) automaticamente`)
       } catch (e) { console.error('[despesas] Erro auto-registo:', e.message) }
     }

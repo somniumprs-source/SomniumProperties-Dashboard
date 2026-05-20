@@ -85,18 +85,8 @@ const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: '
 const ACAO_LABEL = { INSERT: 'Criado', UPDATE: 'Atualizado', DELETE: 'Apagado' }
 const ACAO_COLOR = { INSERT: 'text-green-600', UPDATE: 'text-blue-600', DELETE: 'text-red-600' }
 
-export const MOTIVOS_NAO_INTERESSA_PADRAO = [
-  'Preço elevado',
-  'Produto final não vendável',
-  'Sem interesse do investidor',
-  'Zona fraca',
-  'ROI insuficiente',
-  'Já vendido',
-  'Estado de conservação',
-  'Discrepância em áreas/documentos',
-  'Proprietário difícil',
-  'Imóvel com ónus / problemas legais',
-]
+export { MOTIVOS_NAO_INTERESSA_PADRAO } from './detailPanelConstants.js'
+import { MOTIVOS_NAO_INTERESSA_PADRAO } from './detailPanelConstants.js'
 
 function PontosRiscosTab({ imovel, endpoint, id, onUpdate, toast }) {
   const CAMPOS = [

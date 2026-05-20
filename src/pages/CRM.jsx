@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
 import { Header } from '../components/layout/Header.jsx'
 import { KanbanBoard } from '../components/crm/KanbanBoard.jsx'
-import { DetailPanel, MOTIVOS_NAO_INTERESSA_PADRAO } from '../components/crm/DetailPanel.jsx'
+import { MOTIVOS_NAO_INTERESSA_PADRAO } from '../components/crm/detailPanelConstants.js'
+const DetailPanel = lazy(() => import('../components/crm/DetailPanel.jsx').then(m => ({ default: m.DetailPanel })))
 import { Filters } from '../components/crm/Filters.jsx'
 import { TabKPIs } from '../components/crm/TabKPIs.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
@@ -1228,14 +1229,18 @@ export function CRM() {
                   </div>
                 )
               })()}
-              <DetailPanel type="Investidores" id={detail} onClose={() => { setDetail(null, { replace: true }); load() }} onSave={load}
-                onNavigate={(navType, navId) => { setDetail(null, { replace: true }); setTab(navType, { replace: true }); setTimeout(() => setDetail(navId), 150) }} />
+              <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#C9A84C', borderTopColor: 'transparent' }} /></div>}>
+                <DetailPanel type="Investidores" id={detail} onClose={() => { setDetail(null, { replace: true }); load() }} onSave={load}
+                  onNavigate={(navType, navId) => { setDetail(null, { replace: true }); setTab(navType, { replace: true }); setTimeout(() => setDetail(navId), 150) }} />
+              </Suspense>
             </div>
           </div>
         ) : detail && ['Imóveis', 'Consultores'].includes(tab) ? (
-          <DetailPanel type={tab} id={detail} defaultEdit={detailDefaultEdit}
-            onClose={() => { setDetail(null, { replace: true }); setDetailDefaultEdit(false); load() }} onSave={load}
-            onNavigate={(navType, navId) => { setDetail(null, { replace: true }); setDetailDefaultEdit(false); setTab(navType, { replace: true }); setTimeout(() => setDetail(navId), 150) }} />
+          <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#C9A84C', borderTopColor: 'transparent' }} /></div>}>
+            <DetailPanel type={tab} id={detail} defaultEdit={detailDefaultEdit}
+              onClose={() => { setDetail(null, { replace: true }); setDetailDefaultEdit(false); load() }} onSave={load}
+              onNavigate={(navType, navId) => { setDetail(null, { replace: true }); setDetailDefaultEdit(false); setTab(navType, { replace: true }); setTimeout(() => setDetail(navId), 150) }} />
+          </Suspense>
         ) : (<>
           {/* Follow-ups View (Consultores only) */}
           {!loading && editing === null && view === 'followups' && tab === 'Consultores' && (

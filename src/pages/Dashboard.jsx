@@ -49,18 +49,17 @@ export function Dashboard() {
     refreshPulseMetricas().then(() => setLastRefresh(Date.now()))
   }, [refreshPulseMetricas])
 
-  // Polling, visibilidade do tab, foco da janela e evento global de mutacao.
+  // Polling, visibilidade do tab e evento global de mutacao.
+  // (Removido window.focus: duplicava visibilitychange e gerava spike ao voltar a tab.)
   useEffect(() => {
-    const interval = setInterval(refreshAll, REFRESH_INTERVAL_MS)
+    const interval = setInterval(() => { if (!document.hidden) refreshAll() }, REFRESH_INTERVAL_MS)
     const onVisible = () => { if (!document.hidden) refreshAll() }
     const onMutation = () => refreshAll()
     document.addEventListener('visibilitychange', onVisible)
-    window.addEventListener('focus', onVisible)
     window.addEventListener('somnium:refresh', onMutation)
     return () => {
       clearInterval(interval)
       document.removeEventListener('visibilitychange', onVisible)
-      window.removeEventListener('focus', onVisible)
       window.removeEventListener('somnium:refresh', onMutation)
     }
   }, [refreshAll])
