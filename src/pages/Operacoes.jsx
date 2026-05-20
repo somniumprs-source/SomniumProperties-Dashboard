@@ -232,8 +232,8 @@ export function Operacoes() {
   const [tab, setTab] = useUrlState('tab', 'resumo')
   const [data, setData] = useState(null)
   const [tarefas, setTarefas] = useState([])
-  const [calEvents, setCalEvents] = useState([])
   const [loading, setLoading] = useState(true)
+  const [syncingGcal, setSyncingGcal] = useState(false)
   const [error, setError] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [editingTask, setEditingTask] = useState(null)
@@ -247,20 +247,35 @@ export function Operacoes() {
   const loadAll = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const [tr, tf, ce] = await Promise.all([
+      // Antes esta vista chamava também /api/calendar/events (GCal directo).
+      // Mas isso causava duplicação: cada evento aparecia uma vez como tarefa
+      // sincronizada (com gcal_event_id) e outra vez como evento GCal "puro".
+      // Resolução: passar a usar apenas as tarefas da BD, que já incluem tudo
+      // o que veio do Google Calendar via pull. Para eventos GCal mais recentes
+      // que ainda não passaram pelo pull, usa-se o botão "Sincronizar agora".
+      const [tr, tf] = await Promise.all([
         apiFetch('/api/time-tracking').then(r => r.json()),
         apiFetch('/api/tarefas?limit=200').then(r => r.json()),
-        apiFetch('/api/calendar/events?days=14&past=7').then(r => r.json()).catch(() => ({ events: [] })),
       ])
       if (tr.error) throw new Error(tr.error)
       setData(tr)
       setTarefas(tf.data || [])
-      setCalEvents(ce.events || [])
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
   }, [])
 
   useEffect(() => { loadAll() }, [loadAll])
+
+  // Força um pull GCal → tarefas e recarrega a lista. Antes era preciso esperar
+  // até 15 min pelo auto-sync; o botão dá controlo imediato ao utilizador.
+  async function syncGcalNow() {
+    setSyncingGcal(true)
+    try {
+      await apiFetch('/api/calendar/pull', { method: 'POST' })
+      await loadAll()
+    } catch (e) { setError(e.message) }
+    finally { setSyncingGcal(false) }
+  }
 
   async function saveTarefa(form) {
     try {
@@ -302,15 +317,6 @@ export function Operacoes() {
 
   const r = data?.resumo
   const k = data?.kpis
-
-  // Dedup: eventos do Google Calendar que já estão sincronizados em `tarefas`
-  // (com gcal_event_id preenchido) deixam de aparecer também na lista azul do
-  // calendário. Antes, criar evento no GCal mostrava-o 2× — uma como evento
-  // GCal directo, outra como tarefa após o pull de 15 min.
-  const calEventsDedup = useMemo(() => {
-    const syncedIds = new Set(tarefas.map(t => t.gcal_event_id).filter(Boolean))
-    return calEvents.filter(e => !syncedIds.has(e.id))
-  }, [calEvents, tarefas])
 
   // Week boundaries (Mon-Sun)
   const now = new Date()
@@ -651,33 +657,14 @@ export function Operacoes() {
         {/* ══════════ CALENDARIO ══════════ */}
         {tab === 'calendario' && (
           <>
-            <SectionTitle>Esta Semana — Google Calendar + Tarefas</SectionTitle>
-            <CalendarWeek events={calEventsDedup} tarefas={tarefas} />
-
-            {calEventsDedup.length > 0 && (
-              <>
-                <SectionTitle>Próximos Eventos (Google Calendar)</SectionTitle>
-                <Card padding="md">
-                  <div className="flex flex-col gap-2">
-                    {calEventsDedup.slice(0, 15).map((e, i) => (
-                      <a key={i} href={e.link} target="_blank" rel="noreferrer"
-                        className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 border border-gray-100">
-                        <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
-                          <span className="text-sm text-gray-700 font-medium">{e.titulo}</span>
-                        </div>
-                        <div className="text-xs text-gray-400 font-mono">
-                          {e.inicio ? new Date(e.inicio).toLocaleDateString('pt-PT', { weekday: 'short', day: '2-digit', month: '2-digit' }) : ''}
-                          {' '}
-                          {!e.diaInteiro && e.inicio?.slice(11, 16)}
-                          {!e.diaInteiro && e.fim && ` — ${e.fim.slice(11, 16)}`}
-                        </div>
-                      </a>
-                    ))}
-                  </div>
-                </Card>
-              </>
-            )}
+            <div className="flex items-center justify-between mb-2">
+              <SectionTitle>Esta Semana</SectionTitle>
+              <button onClick={syncGcalNow} disabled={syncingGcal}
+                className="text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50">
+                {syncingGcal ? 'A sincronizar…' : 'Sincronizar GCal agora'}
+              </button>
+            </div>
+            <CalendarWeek tarefas={tarefas} />
           </>
         )}
 

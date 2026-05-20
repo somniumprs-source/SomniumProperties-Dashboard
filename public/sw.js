@@ -1,8 +1,8 @@
-// v28: vista Operações > Calendário deixa de mostrar eventos do Google
-// Calendar em duplicado (uma vez como evento azul + uma vez como tarefa já
-// sincronizada). Filtra calEvents pelos gcal_event_id já presentes em tarefas
-// e marca tarefas de origem GCal com indicador • azul.
-const CACHE_NAME = 'somnium-crm-v28'
+// v29: vista Operações deixa de buscar /api/calendar/events. Esta vista usa
+// apenas as tarefas da BD (que já incluem tudo o que veio do GCal via pull).
+// Elimina por completo a duplicação visual de eventos. Para refrescar manual,
+// botão "Sincronizar GCal agora" chama POST /api/calendar/pull.
+const CACHE_NAME = 'somnium-crm-v29'
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/icons/icon-192x192.png',
