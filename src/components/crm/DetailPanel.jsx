@@ -1736,12 +1736,113 @@ const ESTADOS_PIPELINE = ['Pré-aprovação','Adicionado','Chamada Não Atendida
 const ORIGEM_OPTS = ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro']
 const MODELO_NEGOCIO_OPTS = ['Wholesaling','Fix & Flip','CAEP','Mediação']
 
+// Mini-form embutido para criar consultor sem sair da ficha do imóvel.
+// Triggado quando o utilizador escreve um nome novo no Combobox de consultor
+// e clica "+ Criar consultor 'X'". Herda a região do imóvel; estatuto e
+// estado_avaliacao usam os defaults consistentes com find-or-create.
+function ConsultorInlineCreator({ initialNome, regiao, sugestoesImobiliarias = [], onCreated, onCancel }) {
+  const [nome, setNome] = useState(initialNome || '')
+  const [contacto, setContacto] = useState('')
+  const [email, setEmail] = useState('')
+  const [imobiliarias, setImobiliarias] = useState([])
+  const [saving, setSaving] = useState(false)
+  const [erro, setErro] = useState(null)
+  const toast = useToast()
+
+  async function submit() {
+    if (!nome.trim()) { setErro('Nome obrigatório'); return }
+    setSaving(true)
+    setErro(null)
+    try {
+      const body = {
+        nome: nome.trim(),
+        contacto: contacto.trim() || null,
+        email: email.trim() || null,
+        imobiliaria: imobiliarias.length ? JSON.stringify(imobiliarias) : null,
+        regiao,
+        estatuto: 'Cold Call',
+        estado_avaliacao: 'Em avaliação',
+      }
+      const r = await apiFetch('/api/crm/consultores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        regiao,
+      })
+      if (!r.ok) throw new Error(await r.text())
+      const created = await r.json()
+      toast(`Consultor "${created.nome}" criado`, 'success')
+      onCreated?.(created)
+    } catch (e) {
+      setErro(e.message || 'Erro ao criar consultor')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const input = "w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
+
+  return (
+    <div className="mt-2 p-3 rounded-xl border border-yellow-200 bg-yellow-50/40">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold text-yellow-800">
+          Criar consultor em <strong>{regiao}</strong>
+        </p>
+        <button type="button" onClick={onCancel}
+          className="text-[11px] text-gray-500 hover:text-gray-700">Cancelar</button>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div>
+          <p className="text-[10px] text-gray-500 mb-0.5">Nome *</p>
+          <input value={nome} onChange={e => setNome(e.target.value)} className={input} autoFocus />
+        </div>
+        <div>
+          <p className="text-[10px] text-gray-500 mb-0.5">Contacto</p>
+          <input value={contacto} onChange={e => setContacto(e.target.value)} className={input} placeholder="9XX XXX XXX" />
+        </div>
+        <div>
+          <p className="text-[10px] text-gray-500 mb-0.5">Email</p>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={input} placeholder="nome@exemplo.pt" />
+        </div>
+        <div>
+          <ChipsEditor
+            label="Imobiliária"
+            jsonField={imobiliarias}
+            onChange={setImobiliarias}
+            placeholder="Ex: Remax, ERA…"
+            suggestions={sugestoesImobiliarias}
+          />
+        </div>
+      </div>
+      {erro && <p className="mt-2 text-[11px] text-red-600">{erro}</p>}
+      <div className="mt-3 flex items-center gap-2">
+        <button type="button" onClick={submit} disabled={saving || !nome.trim()}
+          className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-yellow-600 text-white hover:bg-yellow-700 disabled:opacity-50">
+          {saving ? 'A criar…' : 'Criar consultor'}
+        </button>
+        <span className="text-[10px] text-gray-500">Os restantes campos preenchem-se depois na ficha do consultor.</span>
+      </div>
+    </div>
+  )
+}
+
 // Bloco editável da Ficha do Imóvel — 6 secções colapsáveis sem duplicação.
 function ImovelEditSections({ data, form, setField }) {
   const lookups = useLookups()
   const { concelhos, freguesias } = useFreguesiasLookup(form)
   const consultoresRegiao = useConsultoresLookup(form?.regiao)
   const consultoresOptions = useMemo(() => consultoresRegiao.map(c => c.nome).filter(Boolean), [consultoresRegiao])
+  // Quando o utilizador escreve um nome de consultor que não está na lista da
+  // região e clica "+ Criar consultor 'X'", abre-se um mini-form embutido.
+  const [openCreatorFor, setOpenCreatorFor] = useState(null)
+  const [sugestoesImob, setSugestoesImob] = useState([])
+  useEffect(() => {
+    if (!openCreatorFor) return
+    apiFetch('/api/crm/consultores/sugestoes-tags', { regiao: form?.regiao })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setSugestoesImob(d.imobiliarias || []) })
+      .catch(() => {})
+  }, [openCreatorFor, form?.regiao])
   const onusList = Array.isArray(form.onus_registados) ? form.onus_registados : []
   const toggleOnus = v => {
     const set = new Set(onusList)
@@ -1774,7 +1875,7 @@ function ImovelEditSections({ data, form, setField }) {
         </select>
       </div>
       <EF label="Origem (Canal)" field="origem" form={form} set={setField} type="select" options={ORIGEM_OPTS} />
-      <div>
+      <div className="col-span-2 md:col-span-1">
         <Combobox
           label="Consultor"
           value={form.nome_consultor}
@@ -1782,11 +1883,24 @@ function ImovelEditSections({ data, form, setField }) {
           options={consultoresOptions}
           placeholder={consultoresRegiao.length ? `Pesquisar (${consultoresRegiao.length} ${form?.regiao || ''})…` : 'Sem consultores nesta região'}
           allowFree={false}
+          onCreateNew={(nome) => setOpenCreatorFor(nome)}
+          createLabel="Criar consultor"
         />
         {form.nome_consultor && !consultoresOptions.some(o => o.toLowerCase() === form.nome_consultor.toLowerCase()) && (
           <p className="text-[10px] text-amber-600 mt-1">Nome livre (não corresponde a consultor da BD)</p>
         )}
       </div>
+      {openCreatorFor && (
+        <div className="col-span-2 md:col-span-3">
+          <ConsultorInlineCreator
+            initialNome={openCreatorFor}
+            regiao={form.regiao || 'Coimbra'}
+            sugestoesImobiliarias={sugestoesImob}
+            onCreated={(c) => { setField('nome_consultor', c.nome); setOpenCreatorFor(null) }}
+            onCancel={() => setOpenCreatorFor(null)}
+          />
+        </div>
+      )}
     </Section>
 
     {/* 2. Localização */}

@@ -1,8 +1,7 @@
-// v26: form inicial de imóvel agora tem paridade com a ficha — campos de área
-// (Útil, ABP, ABD), caracterização física (predio_tipo, andar, ano construção,
-// elevador), localização detalhada (distrito, concelho, freguesia) e valores
-// fiscais (VPT, IMI, condomínio). Antes faltavam ~12 campos críticos.
-const CACHE_NAME = 'somnium-crm-v26'
+// v27: campo Consultor da ficha do imóvel passa a oferecer "+ Criar consultor"
+// quando o nome digitado não existe. Abre painel inline com Nome, Contacto,
+// Email e Imobiliária e cria o consultor na região do imóvel sem trocar de tab.
+const CACHE_NAME = 'somnium-crm-v27'
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/icons/icon-192x192.png',

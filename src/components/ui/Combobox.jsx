@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 const norm = s => (s || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
-export function Combobox({ value, onChange, options = [], placeholder = 'Pesquisar…', label, className = '', allowFree = true, disabled = false }) {
+export function Combobox({ value, onChange, options = [], placeholder = 'Pesquisar…', label, className = '', allowFree = true, disabled = false, onCreateNew, createLabel = 'Criar' }) {
   const [query, setQuery] = useState(value || '')
   const [open, setOpen] = useState(false)
   const [hover, setHover] = useState(0)
@@ -22,7 +22,15 @@ export function Combobox({ value, onChange, options = [], placeholder = 'Pesquis
     return options.filter(o => norm(o).includes(q)).slice(0, 50)
   }, [query, options])
 
+  // Match exacto pelo query? Se sim, não oferecer "Criar".
+  const exactMatch = useMemo(() => {
+    const q = norm(query)
+    return !!q && options.some(o => norm(o) === q)
+  }, [query, options])
+  const showCreate = !!onCreateNew && query.trim().length >= 2 && !exactMatch
+
   const choose = v => { onChange(v); setQuery(v); setOpen(false) }
+  const triggerCreate = () => { setOpen(false); onCreateNew?.(query.trim()) }
 
   const onKeyDown = e => {
     if (!open && (e.key === 'ArrowDown' || e.key === 'Enter')) { setOpen(true); return }
@@ -31,6 +39,7 @@ export function Combobox({ value, onChange, options = [], placeholder = 'Pesquis
     if (e.key === 'Enter') {
       e.preventDefault()
       if (filtered[hover]) choose(filtered[hover])
+      else if (showCreate) triggerCreate()
       else if (allowFree) { onChange(query); setOpen(false) }
     }
     if (e.key === 'Escape') setOpen(false)
@@ -49,7 +58,7 @@ export function Combobox({ value, onChange, options = [], placeholder = 'Pesquis
         disabled={disabled}
         className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300 disabled:bg-gray-50"
       />
-      {open && filtered.length > 0 && (
+      {open && (filtered.length > 0 || showCreate) && (
         <div className="absolute z-30 mt-1 w-full max-h-60 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
           {filtered.map((o, i) => (
             <button
@@ -60,6 +69,15 @@ export function Combobox({ value, onChange, options = [], placeholder = 'Pesquis
               className={`block w-full text-left px-3 py-1.5 text-sm ${i === hover ? 'bg-yellow-50' : 'hover:bg-gray-50'}`}
             >{o}</button>
           ))}
+          {showCreate && (
+            <button
+              type="button"
+              onClick={triggerCreate}
+              className={`block w-full text-left px-3 py-1.5 text-sm border-t border-gray-100 ${filtered.length === 0 ? 'bg-yellow-50' : 'bg-white hover:bg-yellow-50'} text-yellow-700 font-medium`}
+            >
+              + {createLabel} “{query.trim()}”
+            </button>
+          )}
         </div>
       )}
     </div>
