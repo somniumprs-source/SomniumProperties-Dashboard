@@ -1732,7 +1732,20 @@ router.get('/kpis/:tab', async (req, res) => {
         SELECT estado, COUNT(*) as count, COALESCE(SUM(ask_price),0) as valor
         FROM imoveis ${wReg} GROUP BY estado ORDER BY count DESC
       `, params)
-      const { rows: [totals] } = await pool.query(`SELECT COUNT(*) as total, COALESCE(AVG(NULLIF(roi,0)),0) as roi_medio FROM imoveis ${wReg}`, params)
+      // ROI médio: só de imóveis "em projectos" (com negocio activo associado).
+      // Os restantes têm cálculos preliminares que não são finais — não devem entrar na média.
+      const { rows: [totals] } = await pool.query(`
+        SELECT
+          COUNT(*) AS total,
+          COALESCE(
+            AVG(NULLIF(i.roi, 0)) FILTER (
+              WHERE EXISTS (SELECT 1 FROM negocios n WHERE n.imovel_id = i.id AND n.deleted_at IS NULL)
+            ),
+            0
+          ) AS roi_medio
+        FROM imoveis i
+        ${regiao ? 'WHERE i.regiao = $1' : ''}
+      `, params)
       res.json({ byEstado: rows, total: parseInt(totals.total), roiMedio: parseFloat(totals.roi_medio).toFixed(1) })
     } else if (tab === 'investidores') {
       const { rows } = await pool.query(`SELECT status, COUNT(*) as count FROM investidores ${wInv} GROUP BY status ORDER BY count DESC`, paramsInv)
