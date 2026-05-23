@@ -1877,8 +1877,8 @@ function renderResumoExecutivo(b, im, a, m) {
     return `${mult.toFixed(1)}x`
   })()
   b.bigNumbers([
-    { label: 'Capital Necessário', value: EUR(a.capital_necessario || compra + obra), sub: '(Capital próprio + financiamento bancário)' },
-    { label: 'Lucro Líquido', value: EUR(a.lucro_liquido), sub: '(Resultado final após IRC, derrama e dividendos)' },
+    { label: 'Capital Necessário', value: EUR(a.capital_necessario || compra + obra), sub: '(Capital próprio a adiantar, líquido de financiamento)' },
+    { label: 'Lucro Bruto', value: EUR(a.lucro_bruto), sub: '(VVR − Custo Total do Projecto, antes de impostos)' },
     { label: 'MOIC', value: MULT(m.moic), sub: '(Múltiplo do capital investido — quanto recebe por cada €)' },
   ])
   b.space(2)
@@ -2209,52 +2209,83 @@ function renderEstruturaCAEP(b, im, a, m) {
   b.doc.fontSize(8.5).fillColor(C.body).text(ctxTexto, ML + 12, b.y + 8, { width: CW - 24, lineGap: 3 })
   b.y += ctxH + 22
 
-  const caepCampos = [
-    a.caep_capital_somnium,
-    a.caep_capital_investidor,
-    a.caep_distribuicao_perc,
-    a.caep_hurdle_rate,
-    a.caep_waterfall_descricao,
-  ]
-  const caepAtivo = a.caep_ativo === true || caepCampos.some(v => v != null && v !== '')
+  // Fonte de verdade: JSON `a.caep` preenchido via tab Análise → Parcerias.
+  // (Os campos legados caep_capital_somnium/... já não são alimentados pelo UI.)
+  const caepRaw = a.caep
+  const parsed = typeof caepRaw === 'string' ? (() => { try { return JSON.parse(caepRaw || 'null') } catch { return null } })() : caepRaw
+  const investidores = parsed?.investidores || []
+  const captado = parsed?.capital_total || investidores.reduce((s, inv) => s + (parseFloat(inv.capital) || 0), 0)
+  const necessario = parseFloat(a.capital_necessario) || 0
+  const cobertura = necessario > 0 ? Math.round((captado / necessario) * 100) : null
 
-  if (!caepAtivo) {
-    b.note('Estrutura CAEP não aplicável a este negócio. Para activar, preencher os campos CAEP na ficha financeira (capital Somnium, capital investidor, % distribuição, hurdle rate e waterfall).')
+  if (!parsed || (investidores.length === 0 && parsed.quota_somnium === undefined)) {
+    b.note('Estrutura CAEP não configurada para este negócio. Para activar, preencher a tab "Análise → Parcerias" da ficha do imóvel: % Somnium, base de distribuição e lista de investidores.')
     return
   }
 
-  // Calculo lucro distribuivel: lucro liquido apos IRC+Derrama, antes de retencao de dividendos
-  const lucroLiq = parseFloat(a.lucro_liquido) || 0
-  const retencaoDiv = parseFloat(a.retencao_dividendos) || 0
-  const lucroDistribuivel = lucroLiq + retencaoDiv
-
-  b.subheader('Estrutura de Capital')
+  // ── Resumo da parceria ──
+  b.subheader('Estrutura da Parceria')
   b.simpleTable([
-    { label: 'Capital Somnium Properties', value: a.caep_capital_somnium != null ? EUR(a.caep_capital_somnium) : 'A definir' },
-    { label: 'Capital Investidor', value: a.caep_capital_investidor != null ? EUR(a.caep_capital_investidor) : 'A definir' },
-    { label: '% Distribuição ao Investidor', value: a.caep_distribuicao_perc != null ? PCT(a.caep_distribuicao_perc) : 'A definir' },
-    { label: 'Hurdle Rate', value: a.caep_hurdle_rate != null ? PCT(a.caep_hurdle_rate) : 'A definir' },
+    { label: '% Somnium Properties', value: parsed.perc_somnium != null ? `${parsed.perc_somnium}%` : 'A definir' },
+    { label: '% Investidores', value: parsed.perc_somnium != null ? `${100 - parsed.perc_somnium}%` : 'A definir' },
+    { label: 'Base de Distribuição', value: parsed.base_distribuicao === 'liquido' ? 'Lucro Líquido (após IRC + dividendos)' : 'Lucro Bruto' },
   ])
-  b.space(4)
+  b.space(3)
 
-  b.subheader('Resultado Distribuível')
-  b.simpleTable([
-    { label: 'Lucro Líquido (após IRC + Derrama)', value: EUR(lucroDistribuivel), total: true },
-    { label: '   Retenção de Dividendos (28%)', value: EUR(retencaoDiv) },
-    { label: 'Lucro Distribuível Final', value: EUR(lucroLiq), total: true },
+  // ── Capital captado vs. necessário ──
+  b.subheader('Capital da Operação')
+  b.bigNumbers([
+    { label: 'Capital Necessário', value: EUR(necessario) },
+    { label: 'Capital Captado', value: EUR(captado) },
+    { label: 'Cobertura', value: cobertura != null ? `${cobertura}%` : '—' },
   ])
-  b.space(4)
+  b.space(3)
 
-  if (a.caep_waterfall_descricao) {
-    b.subheader('Estrutura Waterfall')
-    const wfH = b.doc.heightOfString(a.caep_waterfall_descricao, { width: CW - 24, lineGap: 3 })
-    b.ensure(wfH + 18)
-    b.doc.rect(ML, b.y, CW, wfH + 14).fill(C.bg)
-    b.doc.fontSize(8.5).fillColor(C.body).text(a.caep_waterfall_descricao, ML + 12, b.y + 7, { width: CW - 24, lineGap: 3 })
-    b.y += wfH + 20
+  // ── Investidores ──
+  if (investidores.length > 0) {
+    b.subheader('Investidores')
+    b.colTable(
+      [['#', 24], ['Nome', 130], ['Tipo', 90], ['Capital', 90], ['% do pool', 70]],
+      [
+        ...investidores.map((inv, i) => ({
+          _values: [
+            `#${i + 1}`,
+            inv.nome || `Investidor ${i + 1}`,
+            inv.tipo === 'empresa' ? 'Empresa (IRC)' : 'Particular (IRS)',
+            EUR(inv.capital),
+            captado > 0 ? `${((parseFloat(inv.capital) || 0) / captado * 100).toFixed(1)}%` : '—',
+          ]
+        })),
+        { _values: ['', 'Total captado', '', EUR(captado), '100%'], _total: true },
+      ]
+    )
+    b.space(3)
+
+    // Distribuição do lucro (só faz sentido se calcCAEP produziu detalhes por investidor)
+    const temDetalhes = investidores.some(inv => inv.lucro_bruto != null || inv.lucro_liquido != null)
+    if (temDetalhes && parsed.quota_somnium != null) {
+      b.subheader('Distribuição do Lucro')
+      b.colTable(
+        [['#', 24], ['Parte', 100], ['%', 40], ['Lucro Bruto', 75], ['Imposto', 60], ['Líquido', 75]],
+        [
+          { _values: ['S', 'Somnium Properties', `${parsed.perc_somnium}%`, EUR(parsed.quota_somnium), '—', EUR(parsed.quota_somnium)] },
+          ...investidores.map((inv, i) => ({
+            _values: [
+              `#${i + 1}`,
+              inv.nome || `Inv. ${i + 1}`,
+              `${inv.perc_lucro || 0}%`,
+              EUR(inv.lucro_bruto),
+              EUR(inv.impostos),
+              EUR(inv.lucro_liquido),
+            ]
+          })),
+        ]
+      )
+      b.space(3)
+    }
   }
 
-  b.note('A distribuição efectiva depende do contrato CAEP assinado entre as partes. Valores indicativos baseados nos parâmetros introduzidos na ficha financeira.')
+  b.note('A distribuição efectiva depende do contrato CAEP assinado entre as partes. Valores indicativos baseados nos inputs configurados na tab "Análise → Parcerias" e na fórmula de cálculo fiscal vigente.')
 }
 
 // Coeficiente de ajuste de area usado em Comparaveis.jsx (mantido em 0,25)
@@ -2869,7 +2900,7 @@ function renderDossierInvestidor(b, im, a) {
   b.header('SUMÁRIO EXECUTIVO')
   b.bigNumbers([
     { label: 'Capital Necessário', value: EUR(deal.capital_necessario) },
-    { label: 'Lucro Líquido', value: EUR(deal.lucro_liquido) },
+    { label: 'Lucro Bruto', value: EUR(deal.lucro_bruto), sub: 'Antes de impostos' },
     { label: 'MOIC', value: formatMOIC(deal.moic), sub: 'Múltiplo do capital' },
   ])
   b.space(2)
@@ -2999,30 +3030,44 @@ function renderRelatorioInvestimento(b, im, an) {
   }
 
   b.header('CUSTOS DO INVESTIMENTO')
-  b.simpleTable([
-    { label: 'Preço de compra', value: EUR(an.compra) },
-    { label: 'IMT', value: EUR(an.imt) },
-    { label: 'Imposto de Selo', value: EUR(an.imposto_selo) },
-    { label: 'Escritura + CPCV', value: EUR((an.escritura || 0) + (an.cpcv_compra || 0)) },
-    { label: 'Total Aquisição', value: EUR(an.total_aquisicao), total: true },
-    { label: 'Obra c/ IVA', value: EUR(an.obra_com_iva) },
-    { label: 'Licenciamento', value: EUR(an.licenciamento) },
-    { label: 'Total Obra', value: EUR(an.obra_com_iva), total: true },
-    { label: `Detenção (${an.meses || 6} meses)`, value: EUR(an.total_detencao) },
-    { label: `Comissão venda (${an.comissao_perc || 2.5}%)`, value: EUR(an.comissao_com_iva) },
-    { label: 'Total Investimento', value: EUR(an.capital_necessario), total: true },
-  ])
+  {
+    const valorFinanciado = an.valor_financiado || 0
+    const comissaoVenda = an.comissao_com_iva || 0
+    const custoTotalProjecto = (an.capital_necessario || 0) + valorFinanciado + comissaoVenda
+    const rows = [
+      { label: 'Preço de compra', value: EUR(an.compra) },
+      { label: 'IMT', value: EUR(an.imt) },
+      { label: 'Imposto de Selo', value: EUR(an.imposto_selo) },
+      { label: 'Escritura + CPCV', value: EUR((an.escritura || 0) + (an.cpcv_compra || 0)) },
+      { label: 'Total Aquisição', value: EUR(an.total_aquisicao), total: true },
+      { label: 'Obra c/ IVA', value: EUR(an.obra_com_iva) },
+      { label: 'Licenciamento', value: EUR(an.licenciamento) },
+      { label: 'Total Obra', value: EUR(an.obra_com_iva), total: true },
+      { label: `Detenção (${an.meses || 6} meses)`, value: EUR(an.total_detencao) },
+      { label: `Comissão venda (${an.comissao_perc || 2.5}%)`, value: EUR(comissaoVenda) },
+      { label: 'Custo Total do Projecto', value: EUR(custoTotalProjecto), total: true },
+    ]
+    if (valorFinanciado > 0) rows.push({ label: '(−) Valor Financiado (banco)', value: `−${EUR(valorFinanciado)}` })
+    if (comissaoVenda > 0) rows.push({ label: '(−) Comissão paga pelo sinal do comprador', value: `−${EUR(comissaoVenda)}` })
+    rows.push({ label: 'Capital Necessário (a adiantar)', value: EUR(an.capital_necessario), total: true })
+    b.simpleTable(rows)
+  }
   b.space(3)
 
   b.header('RESULTADO')
-  b.simpleTable([
-    { label: 'Receita de venda (VVR)', value: EUR(an.vvr) },
-    { label: 'Total de custos', value: EUR(an.capital_necessario) },
-    { label: 'Lucro Bruto', value: EUR(an.lucro_bruto), total: true },
-    { label: 'Impostos (IRC + Derrama)', value: EUR(an.impostos) },
-    { label: 'Retenção dividendos', value: EUR(an.retencao_dividendos) },
-    { label: 'Lucro Líquido', value: EUR(an.lucro_liquido), total: true },
-  ])
+  {
+    const valorFinanciado = an.valor_financiado || 0
+    const comissaoVenda = an.comissao_com_iva || 0
+    const custoTotalProjecto = (an.capital_necessario || 0) + valorFinanciado + comissaoVenda
+    b.simpleTable([
+      { label: 'Receita de venda (VVR)', value: EUR(an.vvr) },
+      { label: 'Total de custos do projecto', value: EUR(custoTotalProjecto) },
+      { label: 'Lucro Bruto', value: EUR(an.lucro_bruto), total: true },
+      { label: 'Impostos (IRC + Derrama)', value: EUR(an.impostos) },
+      { label: 'Retenção dividendos', value: EUR(an.retencao_dividendos) },
+      { label: 'Lucro Líquido', value: EUR(an.lucro_liquido), total: true },
+    ])
+  }
   b.space(3)
 
   b.header('MÉTRICAS DE RETORNO')
@@ -3141,14 +3186,13 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
   b.bigNumbers([
     { label: 'Valor de Aquisição', value: EUR(compra), sub: deal.perc_financiamento > 0 ? `${deal.perc_financiamento}% financiado` : '100% capitais próprios' },
     { label: 'Valor de Venda Alvo', value: EUR(vvr) },
-    { label: 'Retorno Total', value: PCT(deal.retorno_total), sub: 'lucro bruto / total investido' },
+    { label: 'Retorno Total', value: PCT(deal.retorno_total), sub: 'lucro bruto / capital necessário' },
     { label: 'Retorno Anualizado', value: PCT(deal.retorno_anualizado), sub: `base ${meses} meses` },
   ])
   b.space(2)
   b.bigNumbers([
     { label: 'Lucro Bruto Estimado', value: EUR(deal.lucro_bruto), sub: 'antes de impostos' },
-    { label: 'Lucro Líquido', value: EUR(deal.lucro_liquido), sub: `${deal.regime_fiscal} sobre lucro` },
-    { label: 'Total Investido', value: EUR(capitalNecessario), sub: 'aquisição + obra + custos' },
+    { label: 'Capital Necessário', value: EUR(capitalNecessario), sub: 'a adiantar, líquido de financiamento e sinal' },
     { label: 'Prazo de Retenção', value: `${meses} meses`, sub: 'da compra à escritura de venda' },
   ])
   b.space(2)
@@ -3218,16 +3262,25 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
   b.newPage()
   b.header('ANÁLISE FINANCEIRA — CENÁRIO BASE')
   b.subheader('Estrutura de Custos')
-  b.simpleTable([
-    { label: 'Valor de Compra', value: EUR(compra) },
-    { label: 'IMT + Imposto de Selo', value: EUR((deal.imt || 0) + (deal.imposto_selo || 0)) },
-    { label: 'Escritura + Registos + CPCV', value: EUR((deal.escritura || 0) + (parseFloat(a.cpcv_compra) || 0)) },
-    { label: 'Total Custos de Aquisição', value: EUR(deal.total_aquisicao), total: true },
-    { label: 'Obra + IVA', value: EUR(obra) },
-    { label: `Manutenção (${meses} meses)`, value: EUR(deal.total_detencao) },
-    { label: 'Comissão Imobiliária', value: EUR(deal.comissao_com_iva) },
-    { label: 'Total Investido', value: EUR(capitalNecessario), total: true },
-  ])
+  {
+    const valorFinanciado = deal.valor_financiado || 0
+    const comissaoVenda = deal.comissao_com_iva || 0
+    const custoTotalProjecto = (capitalNecessario || 0) + valorFinanciado + comissaoVenda
+    const rows = [
+      { label: 'Valor de Compra', value: EUR(compra) },
+      { label: 'IMT + Imposto de Selo', value: EUR((deal.imt || 0) + (deal.imposto_selo || 0)) },
+      { label: 'Escritura + Registos + CPCV', value: EUR((deal.escritura || 0) + (parseFloat(a.cpcv_compra) || 0)) },
+      { label: 'Total Custos de Aquisição', value: EUR(deal.total_aquisicao), total: true },
+      { label: 'Obra + IVA', value: EUR(obra) },
+      { label: `Manutenção (${meses} meses)`, value: EUR(deal.total_detencao) },
+      { label: 'Comissão Imobiliária', value: EUR(comissaoVenda) },
+      { label: 'Custo Total do Projecto', value: EUR(custoTotalProjecto), total: true },
+    ]
+    if (valorFinanciado > 0) rows.push({ label: '(−) Valor Financiado (banco)', value: `−${EUR(valorFinanciado)}` })
+    if (comissaoVenda > 0) rows.push({ label: '(−) Comissão paga pelo sinal do comprador', value: `−${EUR(comissaoVenda)}` })
+    rows.push({ label: 'Capital Necessário (a adiantar)', value: EUR(capitalNecessario), total: true })
+    b.simpleTable(rows)
+  }
   b.space(3)
 
   b.subheader('Retornos')
@@ -3492,7 +3545,7 @@ const GENERATORS = {
       heroItems: [
         { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado), sub: `Base ${meses} meses` },
         { label: 'Lucro Líquido',      value: EUR(a.lucro_liquido) },
-        { label: 'Total Investido',    value: EUR(a.capital_necessario) },
+        { label: 'Capital Necessário', value: EUR(a.capital_necessario) },
       ],
     })
     renderPropostaInvestimentoAnonima(b, im, a)
