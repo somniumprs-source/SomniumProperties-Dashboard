@@ -133,15 +133,20 @@ export function CAEPParcerias({ analise, onUpdate }) {
                     <option value="empresa">Empresa</option>
                   </select>
                 </div>
-                {result && (
-                  <div className="bg-gray-50 rounded p-2">
-                    <p className="text-gray-400">Lucro Líq.</p>
-                    <p className={`font-mono font-semibold ${result.lucro_liquido >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                      {EUR(result.lucro_liquido)}
-                    </p>
-                    <p className="text-gray-400 mt-1">ROI: {PCT(result.roi)} · CoC: {PCT(result.cash_on_cash)} · RA: {PCT(result.retorno_anualizado)}</p>
-                  </div>
-                )}
+                {result && (() => {
+                  const isBruto = config.base_distribuicao === 'bruto'
+                  const label = isBruto ? 'Lucro Bruto' : 'Lucro Líq.'
+                  const valor = isBruto ? result.lucro_bruto : result.lucro_liquido
+                  return (
+                    <div className="bg-gray-50 rounded p-2">
+                      <p className="text-gray-400">{label}</p>
+                      <p className={`font-mono font-semibold ${valor >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                        {EUR(valor)}
+                      </p>
+                      <p className="text-gray-400 mt-1">ROI: {PCT(result.roi)} · CoC: {PCT(result.cash_on_cash)} · RA: {PCT(result.retorno_anualizado)}</p>
+                    </div>
+                  )
+                })()}
               </div>
             </div>
           )
