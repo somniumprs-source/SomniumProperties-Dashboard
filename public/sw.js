@@ -1,8 +1,8 @@
-// v29: vista Operações deixa de buscar /api/calendar/events. Esta vista usa
-// apenas as tarefas da BD (que já incluem tudo o que veio do GCal via pull).
-// Elimina por completo a duplicação visual de eventos. Para refrescar manual,
-// botão "Sincronizar GCal agora" chama POST /api/calendar/pull.
-const CACHE_NAME = 'somnium-crm-v29'
+// v30: interceptor de fetch passa a invalidar o cache do JWT em
+// onAuthStateChange e a recuperar de 401 com signOut+reload. Antes, em PWA
+// standalone, sessões dormentes ficavam com token expirado em cache local e o
+// Dashboard ficava preso em "A carregar dados..." sem hipótese de recuperar.
+const CACHE_NAME = 'somnium-crm-v30'
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/icons/icon-192x192.png',

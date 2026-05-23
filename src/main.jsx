@@ -10,22 +10,70 @@ if (authEnabled && supabase) {
   const _originalFetch = window.fetch.bind(window)
   let _cachedToken = null
   let _tokenExpiry = 0
+  let _recovering = false
+
+  // Manter o cache local sincronizado com a sessão Supabase. Sem isto, depois
+  // de o SDK refrescar o JWT (TOKEN_REFRESHED), o interceptor continuava a
+  // enviar o token velho durante até 5 min — em PWA standalone no telemóvel
+  // (sessão dormente vários dias) bastava para o backend devolver 401 em todas
+  // as chamadas /api/* e o Dashboard ficar preso em "A carregar dados...".
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_OUT' || !session?.access_token) {
+      _cachedToken = null
+      _tokenExpiry = 0
+      return
+    }
+    _cachedToken = session.access_token
+    _tokenExpiry = Date.now() + 300000
+  })
+
+  async function recoverFromUnauthorized() {
+    if (_recovering) return
+    _recovering = true
+    _cachedToken = null
+    _tokenExpiry = 0
+    try { await supabase.auth.signOut() } catch { /* ignore */ }
+    // Reload força reinício do AuthProvider → ecrã de login.
+    if (typeof window !== 'undefined') window.location.reload()
+  }
+
+  async function fetchWithToken(url, options, token) {
+    const next = { ...options, headers: { ...options.headers, 'Authorization': `Bearer ${token}` } }
+    const res = await _originalFetch(url, next)
+    if (res.status === 401) {
+      // Token recusado pelo backend: invalidar cache, tentar uma vez com sessão
+      // fresca (pode haver TOKEN_REFRESHED em curso), e se ainda assim 401, fazer
+      // signOut para o utilizador voltar a entrar em vez de ver loading eterno.
+      _cachedToken = null
+      _tokenExpiry = 0
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const fresh = session?.access_token
+        if (fresh && fresh !== token) {
+          _cachedToken = fresh
+          _tokenExpiry = Date.now() + 300000
+          const retry = await _originalFetch(url, { ...options, headers: { ...options.headers, 'Authorization': `Bearer ${fresh}` } })
+          if (retry.status !== 401) return retry
+        }
+      } catch { /* ignore */ }
+      recoverFromUnauthorized()
+      return res
+    }
+    return res
+  }
 
   window.fetch = function (url, options = {}) {
     // Só interceptar chamadas /api locais (não chamadas do Supabase SDK)
     if (typeof url === 'string' && url.startsWith('/api')) {
       const now = Date.now()
-      // Usar token em cache se ainda válido (evita chamar getSession a cada fetch)
       if (_cachedToken && now < _tokenExpiry) {
-        options = { ...options, headers: { ...options.headers, 'Authorization': `Bearer ${_cachedToken}` } }
-        return _originalFetch(url, options)
+        return fetchWithToken(url, options, _cachedToken)
       }
-      // Buscar token fresco
       return supabase.auth.getSession().then(({ data: { session } }) => {
         if (session?.access_token) {
           _cachedToken = session.access_token
-          _tokenExpiry = now + 300000 // cache 5 min
-          options = { ...options, headers: { ...options.headers, 'Authorization': `Bearer ${session.access_token}` } }
+          _tokenExpiry = now + 300000
+          return fetchWithToken(url, options, session.access_token)
         }
         return _originalFetch(url, options)
       }).catch(() => _originalFetch(url, options))
