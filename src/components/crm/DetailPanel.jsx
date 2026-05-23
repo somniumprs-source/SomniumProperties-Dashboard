@@ -578,6 +578,14 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
 
   const [subTab, setSubTab] = useState(faseActual?.key || 'adicionado')
   const [selected, setSelected] = useState(new Set())
+  // Token cacheado para os links: getToken() é async (Supabase); se for chamado
+  // dentro do onClick, o `await` quebra a cadeia de user-gesture e o Safari
+  // bloqueia silenciosamente o window.open. Cachamos no mount para que os
+  // hrefs sejam construídos sincronamente.
+  const [token, setToken] = useState('')
+  useEffect(() => { getToken().then(setToken) }, [])
+  const qs = token ? `?token=${token}` : ''
+  const compilarQs = token ? `&token=${token}` : ''
 
   const activeTab = FASE_TABS.find(f => f.key === subTab)
   const visibleDocs = activeTab?.docs || []
@@ -640,16 +648,14 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-neutral-700">{d.label}</p>
               </div>
-              <button type="button"
-                onClick={async e => {
-                  e.stopPropagation()
-                  const token = await getToken()
-                  const url = `/api/crm/imoveis/${imovelId}/documento/${d.tipo}${token ? `?token=${token}` : ''}`
-                  window.open(url, '_blank')
-                }}
+              <a
+                href={`/api/crm/imoveis/${imovelId}/documento/${d.tipo}${qs}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
                 className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors shrink-0 opacity-50 group-hover:opacity-100">
                 Abrir
-              </button>
+              </a>
             </div>
           )
         })}
@@ -666,16 +672,14 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
           <p className="text-xs text-neutral-400 mt-0.5">O dossier compilado inclui capa profissional e índice</p>
         </div>
         {compilarUrl ? (
-          <button type="button"
-            onClick={async () => {
-              const token = await getToken()
-              const url = `${compilarUrl}${token ? `&token=${token}` : ''}`
-              window.open(url, '_blank')
-            }}
+          <a
+            href={`${compilarUrl}${compilarQs}`}
+            target="_blank"
+            rel="noopener noreferrer"
             className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl text-white shadow-sm hover:shadow transition-all"
             style={{ backgroundColor: '#C9A84C' }}>
             <FileDown className="w-4 h-4" /> Gerar Dossier
-          </button>
+          </a>
         ) : (
           <span className="px-5 py-2.5 text-sm text-neutral-400 rounded-xl bg-neutral-200/50">Gerar Dossier</span>
         )}
