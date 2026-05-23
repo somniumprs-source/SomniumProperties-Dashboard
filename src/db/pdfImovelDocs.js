@@ -287,7 +287,7 @@ export async function generateDoc(tipo, imovel, analise = null) {
   if (investidor.includes(tipo)) im = await preloadLocalizacao(im)
   if (comFotoHero.includes(tipo)) im = await preloadHeroFoto(im)
   if (comOrcamentoObra.includes(tipo)) im = await preloadOrcamentoObra(im)
-  if (tipo === 'estudo_comparaveis') an = await preloadAlfredoImagem(an)
+  if (tipo === 'estudo_comparaveis' || tipo === 'dossier_investidor') an = await preloadAlfredoImagem(an)
   return fn(im, an)
 }
 
@@ -2439,6 +2439,57 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
   }
 
   // ─────────────────────────────────────────────────────────
+  // MODO COMPACTO (Dossier) — resumo + imagem Alfredo, sem metodologia,
+  // sem tabela de comparáveis ajustados, sem lista de URLs.
+  // ─────────────────────────────────────────────────────────
+  if (opts.compactMode) {
+    b.header('ESTUDO DE COMPARÁVEIS')
+    if (n > 0) {
+      b.bigNumbers([
+        { label: 'Mediana VVR Est.', value: EUR(medianaVvr), sub: `(${n} comparáveis analisados)` },
+        { label: 'VVR Adoptado', value: EUR(vvrAdoptado), valueColor: posCor, sub: deltaMediana != null ? `${deltaMediana >= 0 ? '+' : ''}${deltaMediana.toFixed(1)}% vs. mediana` : '(escolha interna)' },
+        { label: 'Preço/m² VVR', value: precoM2Vvr ? `${Math.round(precoM2Vvr).toLocaleString('pt-PT')} €/m²` : '—', sub: '(preço por m² implícito)' },
+      ])
+      b.space(3)
+    } else {
+      b.note('Sem comparáveis registados nesta análise.')
+    }
+
+    // Imagem Alfredo (estudo de mercado externo) — validação independente
+    if (a._alfredoImgData) {
+      const buf = a._alfredoImgData
+      const dims = pngDimensions(buf)
+      const ratio = dims ? dims.h / dims.w : 0.7
+      let drawW = CW
+      let drawH = drawW * ratio
+      const maxH = PH - 50 - 70
+      if (drawH > maxH * 0.8) { b.newPage() } else { b.ensure(drawH + 60) }
+      b.subheader('Estudo de Mercado de Referência (Alfredo AI)')
+      const availH = PH - b.y - 70
+      if (drawH > availH) { drawH = availH; drawW = drawH / ratio }
+      const x = ML + (CW - drawW) / 2
+      let drawn = false
+      b.doc.save()
+      try {
+        b.doc.roundedRect(x, b.y, drawW, drawH, 4).clip()
+        b.doc.image(buf, x, b.y, { width: drawW, height: drawH })
+        drawn = true
+      } catch { /* PDFKit recusou — omitir */ }
+      b.doc.restore()
+      if (drawn) {
+        b.doc.roundedRect(x, b.y, drawW, drawH, 4).lineWidth(0.5).stroke(C.border)
+        b.y += drawH + 8
+        const dataRecolha = meta.data_recolha ? FDATE(meta.data_recolha) : null
+        b.note(dataRecolha
+          ? `Captura do estudo de mercado externo (Alfredo AI), recolhida em ${dataRecolha}.`
+          : 'Captura do estudo de mercado externo (Alfredo AI).')
+      }
+    }
+    b.space(3)
+    return
+  }
+
+  // ─────────────────────────────────────────────────────────
   // PAGINA 2 — SUMARIO EXECUTIVO
   // ─────────────────────────────────────────────────────────
   // Sumario Executivo do Estudo (skip quando chamado do Dossier — duplica
@@ -2923,21 +2974,17 @@ function renderDossierInvestidor(b, im, a) {
   if (im.pontos_fortes || im.pontos_fracos || im.riscos) { b.pontosFortesFracosRiscos() }
   if (im.mitigacao_riscos) { b.space(2); b.riscosMitigacao() }
 
-  // Estudo de Comparáveis — modo urlsOnly. Sem newPage explicito: o header()
-  // dentro de renderEstudoComparaveis tem anti-orfao e fara newPage se necessario.
+  // Estudo de Comparáveis — modo compacto no Dossier: resumo (3 KPIs) +
+  // print do Alfredo AI. Metodologia, tabela ajustada e URLs ficam no PDF
+  // "estudo_comparaveis" dedicado, para não inflar o Dossier.
   try {
     let __comps = a.comparaveis
     if (typeof __comps === 'string') { try { __comps = JSON.parse(__comps || 'null') } catch { __comps = null } }
     const __tipologias = Array.isArray(__comps) ? __comps : (__comps?.tipologias || [])
     const __hasValid = __tipologias.some(t => (t?.comparaveis || []).some(c => parseFloat(c?.preco) > 0 && parseFloat(c?.area) > 0))
-    if (__hasValid) {
-      renderEstudoComparaveis(b, im, a, {
-        skipImovelEmAnalise: true,
-        skipExitArrendamento: true,
-        skipSumarioExecutivo: true,
-        skipFichasIndividuais: true,
-        urlsOnly: true,
-      })
+    const __temAlfredo = !!a._alfredoImgData
+    if (__hasValid || __temAlfredo) {
+      renderEstudoComparaveis(b, im, a, { compactMode: true })
     }
   } catch (e) {
     console.error('[dossier] estudo de comparaveis falhou:', e.message, '\n', e.stack?.split('\n').slice(0,5).join('\n'))
