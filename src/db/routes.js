@@ -1732,14 +1732,20 @@ router.get('/kpis/:tab', async (req, res) => {
         SELECT estado, COUNT(*) as count, COALESCE(SUM(ask_price),0) as valor
         FROM imoveis ${wReg} GROUP BY estado ORDER BY count DESC
       `, params)
-      // ROI médio: só de imóveis "em projectos" (com negocio activo associado).
-      // Os restantes têm cálculos preliminares que não são finais — não devem entrar na média.
+      // ROI médio: só de imóveis com negocio activo de CAEP ou Fix and Flip.
+      // Wholesalling e Mediação Imobiliária são modelos de fee/comissão, não de ROI
+      // sobre capital investido — não pertencem a esta métrica.
       const { rows: [totals] } = await pool.query(`
         SELECT
           COUNT(*) AS total,
           COALESCE(
             AVG(NULLIF(i.roi, 0)) FILTER (
-              WHERE EXISTS (SELECT 1 FROM negocios n WHERE n.imovel_id = i.id AND n.deleted_at IS NULL)
+              WHERE EXISTS (
+                SELECT 1 FROM negocios n
+                WHERE n.imovel_id = i.id
+                  AND n.deleted_at IS NULL
+                  AND n.categoria IN ('CAEP', 'Fix and Flip')
+              )
             ),
             0
           ) AS roi_medio
