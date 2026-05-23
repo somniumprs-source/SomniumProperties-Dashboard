@@ -111,9 +111,11 @@ export function calcMetricsExtra(a, im = {}) {
   const vacancyPct = a.vacancy_pct != null ? safeNum(a.vacancy_pct) : 5
   const gestaoArrPct = a.gestao_arr_pct != null ? safeNum(a.gestao_arr_pct) : 8
 
-  const custoTotal = cap + valorFin
-  const custoFinanciamento = Math.max(custoTotal - totalAq - obraComIva - licen - totalDet - totalVen, 0)
+  // capital_necessario = custoTotal - valorFinanciado - comissaoComIva (comissão paga pelo sinal do comprador).
+  // Para reconstruir custoTotal coerentemente, somar a comissão de volta.
   const comissaoComIva = safeNum(a.comissao_com_iva) || (vvr * comissaoPerc / 100 * 1.23)
+  const custoTotal = cap + valorFin + comissaoComIva
+  const custoFinanciamento = Math.max(custoTotal - totalAq - obraComIva - licen - totalDet - totalVen, 0)
   const fixedSaleCosts = Math.max(totalVen - comissaoComIva, 0)
   const custoExcVenda = totalAq + obraComIva + licen + totalDet + custoFinanciamento + fixedSaleCosts
   const custoExcObra = totalAq + licen + totalDet + custoFinanciamento + totalVen

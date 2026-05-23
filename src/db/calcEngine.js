@@ -260,7 +260,8 @@ export function calcAnalise(inputs) {
 
   // ── Totais ────────────────────────────────────────────────
   const custoTotal = round2(totalAquisicao + custoFinanciamento + obraComIva + licenciamento + totalDetencao + totalVenda)
-  const capitalNecessario = round2(custoTotal - valorFinanciado)
+  // Comissão de mediação é paga com o sinal do comprador no CPCV de venda — não é capital a adiantar pela Somnium.
+  const capitalNecessario = round2(custoTotal - valorFinanciado - comissaoComIva)
   const lucroBruto = round2(vvr - custoTotal)
 
   // ── F. Fiscalidade ────────────────────────────────────────
@@ -292,9 +293,8 @@ export function calcAnalise(inputs) {
 
   // ── KPIs ──────────────────────────────────────────────────
   const retornoTotal = capitalNecessario > 0 ? round2((lucroBruto / capitalNecessario) * 100) : 0
-  const retornoAnualizado = capitalNecessario > 0 && meses > 0
-    ? round2((Math.pow(1 + lucroBruto / capitalNecessario, 12 / meses) - 1) * 100)
-    : 0
+  // Sanitização: se LB ≤ −capital, ratio fica ≤ 0 e Math.pow daria NaN. Saturamos em −100%.
+  const retornoAnualizado = anualizarRetorno(lucroBruto, capitalNecessario, meses)
   const cashOnCash = capitalNecessario > 0 ? round2((lucroLiquido / capitalNecessario) * 100) : 0
   // Break-even VVR: VVR mínimo para LB ≥ 0.
   // A comissão de venda é variável com VVR; tem de ser excluída dos custos fixos
@@ -398,6 +398,15 @@ export function calcStressTests(inputs) {
 
 // ── CAEP (Parcerias) ─────────────────────────────────────────
 
+// TODO(fiscal): O caminho fiscal CAEP precisa de validação contabilística.
+// Risco identificado de dupla tributação quando base_distribuicao === 'liquido':
+//   1. SPV paga IRC + derrama (calcAnalise: regime 'Empresa')
+//   2. SPV aplica retenção de dividendos 28% (calcAnalise: percDividendos = 100 default)
+//   3. CAEP redistribui esse líquido por investidores
+//   4. calcCAEP aplica novamente 28% (particular) ou IRC (empresa) por investidor
+// Em estrutura "CAEP em participação" puro (Art. 26 CIVA, Cat. E IRS), as etapas 2 e 4
+// não deveriam coexistir. Reunir com contabilista para definir caminho correcto.
+// Por agora mantém-se o cálculo conservador (mais imposto); investidor é avisado na UI.
 export function calcCAEP(inputs, caepConfig) {
   if (!caepConfig) return null
 
@@ -430,15 +439,13 @@ export function calcCAEP(inputs, caepConfig) {
     }
 
     const lucroLiq = round2(lucro - impostos)
-    // Convencao do codebase (ver calcAnalise):
-    //   ROI         = lucro bruto / capital × 100  (retorno do periodo, antes de impostos)
-    //   Cash-on-Cash= lucro liquido / capital × 100  (retorno liquido do capital)
-    //   RA          = Cash-on-Cash anualizado
+    // Convenção do codebase (alinhada com calcAnalise):
+    //   ROI = Retorno Total = lucro bruto / capital × 100  (antes de impostos do investidor)
+    //   Cash-on-Cash = lucro líquido / capital × 100  (após impostos do investidor)
+    //   RA = anualização do ROI (numerador BRUTO — comparável com RA do imóvel).
     const roi = capital > 0 ? round2((lucro / capital) * 100) : 0
     const cashOnCash = capital > 0 ? round2((lucroLiq / capital) * 100) : 0
-    const ra = capital > 0 && meses > 0
-      ? round2((Math.pow(1 + lucroLiq / capital, 12 / meses) - 1) * 100)
-      : 0
+    const ra = anualizarRetorno(lucro, capital, meses)
 
     return {
       nome: inv.nome,
@@ -489,11 +496,11 @@ export function quickCheck({ compra, obra, vvr, meses }) {
   const { total: irc } = calcIRC(Math.max(lucroBruto, 0), 1.5)
   const lucroLiquido = round2(lucroBruto - irc)
 
-  const capital = custoTotal
+  // Alinhado com calcAnalise: capital_necessario exclui comissão (paga pelo sinal do comprador).
+  // QuickCheck assume empresa isenta de IMT, sem financiamento. Aproximação suficiente para triagem.
+  const capital = round2(custoTotal - comissao)
   const rt = capital > 0 ? round2((lucroBruto / capital) * 100) : 0
-  const ra = capital > 0 && m > 0
-    ? round2((Math.pow(1 + lucroBruto / capital, 12 / m) - 1) * 100)
-    : 0
+  const ra = anualizarRetorno(lucroBruto, capital, m)
 
   let veredicto = 'NAO_ENTRA'
   if (ra >= 15) veredicto = 'ENTRA'
@@ -514,4 +521,13 @@ export function quickCheck({ compra, obra, vvr, meses }) {
 
 function round2(n) {
   return Math.round(n * 100) / 100
+}
+
+// Anualização robusta de um retorno periódico.
+// Se o ratio (1 + lucro/capital) ≤ 0, Math.pow daria NaN — saturamos em −100%.
+function anualizarRetorno(lucro, capital, meses) {
+  if (!(capital > 0) || !(meses > 0)) return 0
+  const ratio = 1 + lucro / capital
+  if (ratio <= 0) return -100
+  return round2((Math.pow(ratio, 12 / meses) - 1) * 100)
 }

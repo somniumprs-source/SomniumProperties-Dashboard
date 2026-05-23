@@ -11,6 +11,7 @@ export function useAnalise(imovelId) {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const saveTimer = useRef(null)
+  const pendingFields = useRef({})
 
   // Carregar lista de análises
   const load = useCallback(async () => {
@@ -56,17 +57,20 @@ export function useAnalise(imovelId) {
     return null
   }, [imovelId, load])
 
-  // Guardar (debounced — chamado a cada alteração de input)
+  // Guardar (debounced — acumula campos no buffer para não perder edições rápidas)
   const guardar = useCallback((campos) => {
     if (!selected?.id) return
+    pendingFields.current = { ...pendingFields.current, ...campos }
     clearTimeout(saveTimer.current)
     setSaving(true)
     saveTimer.current = setTimeout(async () => {
+      const toSend = pendingFields.current
+      pendingFields.current = {}
       try {
         const r = await apiFetch(`/api/crm/analises/${selected.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(campos),
+          body: JSON.stringify(toSend),
         })
         if (r.ok) {
           const updated = await r.json()

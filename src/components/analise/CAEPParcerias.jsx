@@ -52,6 +52,18 @@ export function CAEPParcerias({ analise, onUpdate }) {
 
   return (
     <div className="space-y-6">
+      {/* Aviso fiscal — caminho CAEP precisa de validação contabilística */}
+      <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+        <p className="font-semibold mb-1">⚠ Cálculo fiscal CAEP — validação pendente</p>
+        <p>
+          A tributação do investidor pode estar sobrestimada (cenário conservador): com base
+          <strong> Líquido</strong>, a SPV já paga IRC + retenção de dividendos (28%), e cada investidor leva
+          mais 28% (particular) ou novo IRC (empresa) sobre o seu quinhão. Em estrutura
+          "CAEP em participação" puro, essa segunda camada pode não se aplicar.
+          Validar com contabilista antes de comprometer números com investidores.
+        </p>
+      </div>
+
       {/* Configuração */}
       <div className="rounded-xl border border-gray-200 p-4">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Estrutura da Parceria</p>
