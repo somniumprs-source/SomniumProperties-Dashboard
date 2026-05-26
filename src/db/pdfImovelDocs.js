@@ -3465,8 +3465,8 @@ function renderPropostaCedenciaPosicao(b, im, a) {
   const areaDesc = im.area_bruta ? ` com ${im.area_bruta} m² de área bruta` : ''
   b.textBlock(
     `A Somnium Properties detém uma posição contratual já garantida sobre ${tipoDesc}${areaDesc}, localizado${localizacaoTexto(im)}. ` +
-    `Por via de cedência de posição contratual, o investidor assume directamente a operação de remodelação integral e revenda, com gestão e acompanhamento operacional da Somnium até ao exit. ` +
-    `A nossa remuneração corresponde exclusivamente a 10% do lucro líquido expectável.`
+    `Por via de cedência de posição contratual, o investidor passa a assumir integralmente o controlo e a responsabilidade pela operação, incluindo escritura, obra, detenção e venda. ` +
+    `A intervenção da Somnium termina no momento da cedência. A nossa remuneração corresponde exclusivamente a 10% do lucro líquido expectável, liquidada nesse acto.`
   )
   b.space(4)
 
@@ -3527,13 +3527,16 @@ function renderPropostaCedenciaPosicao(b, im, a) {
   b.textBlock(
     'A Cedência de Posição Contratual está prevista nos artigos 424.º a 427.º do Código Civil Português. ' +
     'A Somnium Properties, na qualidade de promitente-compradora, cede ao investidor a sua posição contratual no contrato-promessa de compra e venda, transferindo todos os direitos e obrigações dela emergentes. ' +
-    'O investidor passa a deter o controlo integral da operação, beneficiando do trabalho prévio de identificação, negociação e estruturação realizado pela Somnium.'
+    'A partir da cedência, o investidor assume integralmente a operação, sem qualquer intervenção operacional, técnica ou comercial da Somnium. ' +
+    'O trabalho prévio de identificação, negociação e estruturação do negócio já realizado pela Somnium constitui o objecto da remuneração de 10% do lucro líquido expectável.'
   )
   b.space(3)
   b.simpleTable([
     { label: 'Posição Cedida', value: 'Promitente-comprador no CPCV' },
-    { label: 'Responsabilidade pela escritura', value: 'Investidor (com apoio operacional Somnium)' },
-    { label: 'Gestão de Obra', value: 'Somnium (incluída no orçamento)' },
+    { label: 'Responsabilidade pela escritura', value: 'Investidor' },
+    { label: 'Gestão de Obra', value: 'Investidor (sem envolvimento da Somnium)' },
+    { label: 'Detenção, licenciamento e venda', value: 'Investidor' },
+    { label: 'Intervenção da Somnium após a cedência', value: 'Nenhuma' },
     { label: 'Comissão Somnium', value: '10% sobre Lucro Líquido Expectável' },
     { label: 'Momento de liquidação da comissão', value: 'Na escritura de cedência' },
   ])
