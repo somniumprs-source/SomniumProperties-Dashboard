@@ -2126,6 +2126,10 @@ function ImovelReadSections({ data, onNavigate }) {
     }) || null
   }, [data?.nome_consultor, consultoresRegiao])
 
+  const consultorContacto = (
+    data.consultores?.find(c => c.id === consultorMatch?.id) || data.consultores?.[0]
+  )?.contacto || null
+
   const sec = {
     identificacao: ['nome','estado','ref_interna','link','tipo_oportunidade','origem','nome_consultor'],
     localizacao:   ['distrito','concelho','freguesia','zona','coordenadas_lat','coordenadas_lng','localizacao_imagem'],
@@ -2144,12 +2148,21 @@ function ImovelReadSections({ data, onNavigate }) {
       <Field label="Tipo de Oportunidade" value={data.tipo_oportunidade} />
       <Field label="Origem (Canal)" value={data.origem} />
       <Field label="Consultor" value={
-        data.nome_consultor
-          ? (consultorMatch && onNavigate
+        data.nome_consultor ? (
+          <span className="flex flex-col gap-0.5">
+            {consultorMatch && onNavigate
               ? <button type="button" onClick={() => onNavigate('Consultores', consultorMatch.id)}
-                  className="text-brand-gold hover:underline text-left">{data.nome_consultor}</button>
-              : data.nome_consultor)
-          : '—'
+                  className="text-brand-gold hover:underline text-left truncate">{data.nome_consultor}</button>
+              : <span className="truncate">{data.nome_consultor}</span>}
+            {consultorContacto && (
+              <a href={`tel:${consultorContacto}`}
+                 onClick={e => e.stopPropagation()}
+                 className="text-xs text-gray-500 hover:text-brand-gold hover:underline truncate">
+                {consultorContacto}
+              </a>
+            )}
+          </span>
+        ) : '—'
       } />
     </Section>
 
