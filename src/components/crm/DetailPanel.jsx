@@ -529,6 +529,7 @@ const DOC_LABELS = {
   proposta_formal: 'Proposta Formal',
   dossier_investidor: 'Dossier de Investimento',
   proposta_investimento_anonima: 'Proposta de Investimento (Anónima)',
+  proposta_cedencia_posicao: 'Proposta de Cedência de Posição',
   resumo_negociacao: 'Resumo Negociação',
   ficha_follow_up: 'Ficha Follow-Up',
   ficha_descarte: 'Ficha de Descarte',
@@ -539,7 +540,7 @@ const ESTADO_DOCS = {
   'Estudo de VVR': ['analise_rentabilidade', 'estudo_comparaveis'],
   'Criar Proposta ao Proprietário': ['proposta_formal'], 'Enviar proposta ao Proprietário': ['proposta_formal'],
   'Em negociação': ['resumo_negociacao'],
-  'Enviar proposta ao investidor': ['dossier_investidor', 'proposta_investimento_anonima'],
+  'Enviar proposta ao investidor': ['dossier_investidor', 'proposta_investimento_anonima', 'proposta_cedencia_posicao'],
   'Follow Up após proposta': ['ficha_follow_up'], 'Follow UP': ['ficha_follow_up'],
   'Descartado': ['ficha_descarte'],
 }
@@ -563,6 +564,7 @@ const FASE_TABS = [
     docs: [
       { tipo: 'dossier_investidor',            label: 'Dossier de Investimento',            compilavel: 'dossier_investidor' },
       { tipo: 'proposta_investimento_anonima', label: 'Proposta de Investimento (Anónima)', compilavel: 'proposta_investimento_anonima' },
+      { tipo: 'proposta_cedencia_posicao',     label: 'Proposta de Cedência de Posição',    compilavel: 'proposta_cedencia_posicao' },
     ] },
   { key: 'followup',     label: 'Follow Up',           estados: ['Follow Up após proposta', 'Follow UP'],
     docs: [{ tipo: 'ficha_follow_up', label: 'Ficha de Follow Up', compilavel: 'ficha_follow_up' }] },

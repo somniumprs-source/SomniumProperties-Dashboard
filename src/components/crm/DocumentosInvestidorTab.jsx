@@ -11,6 +11,7 @@ const TIPO_LABELS = {
   dossier_investidor: 'Dossier de Investimento',
   proposta_investimento: 'Proposta de Investimento',
   proposta_investimento_anonima: 'Proposta de Investimento (Anonima)',
+  proposta_cedencia_posicao: 'Proposta de Cedencia de Posicao',
   relatorio_reuniao: 'Relatorio de Reuniao',
   nda: 'NDA',
   outro: 'Outro',

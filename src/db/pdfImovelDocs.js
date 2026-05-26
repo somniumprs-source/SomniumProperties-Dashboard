@@ -112,7 +112,7 @@ const ESTADO_DOC_MAP = {
   'Criar Proposta ao Proprietário':  ['proposta_formal'],
   'Enviar proposta ao Proprietário': ['proposta_formal'],
   'Em negociação':                   ['resumo_negociacao'],
-  'Enviar proposta ao investidor':   ['dossier_investidor', 'proposta_investimento_anonima'],
+  'Enviar proposta ao investidor':   ['dossier_investidor', 'proposta_investimento_anonima', 'proposta_cedencia_posicao'],
   'Follow Up após proposta':         ['ficha_follow_up'],
   'Follow UP':                       ['ficha_follow_up'],
   'Descartado':                      ['ficha_descarte'],
@@ -128,6 +128,7 @@ const DOC_LABELS = {
   proposta_formal: 'Proposta ao Proprietário',
   dossier_investidor: 'Dossier de Investimento',
   proposta_investimento_anonima: 'Proposta de Investimento (Anónima)',
+  proposta_cedencia_posicao: 'Proposta de Cedência de Posição',
   resumo_negociacao: 'Resumo de Negociação',
   ficha_follow_up: 'Ficha de Follow Up',
   ficha_descarte: 'Ficha de Descarte',
@@ -276,18 +277,18 @@ export async function generateDoc(tipo, imovel, analise = null) {
   if (!fn) return null
   // Tipos investidor precisam da imagem de localização pré-carregada
   // (Supabase URL exige fetch async; o resto do render é síncrono).
-  const investidor = ['relatorio_investimento', 'dossier_investidor', 'proposta_investimento_anonima']
+  const investidor = ['relatorio_investimento', 'dossier_investidor', 'proposta_investimento_anonima', 'proposta_cedencia_posicao']
   const comFotoHero = ['ficha_imovel', ...investidor]
   // Tipos que mostram o orçamento de obra detalhado consomem o que
   // foi preenchido na aba "Obra" (orcamentos_obra) — e não apenas
   // os agregados da analise activa.
-  const comOrcamentoObra = ['dossier_investidor', 'proposta_investimento_anonima']
+  const comOrcamentoObra = ['dossier_investidor', 'proposta_investimento_anonima', 'proposta_cedencia_posicao']
   let im = imovel
   let an = analise
   if (investidor.includes(tipo)) im = await preloadLocalizacao(im)
   if (comFotoHero.includes(tipo)) im = await preloadHeroFoto(im)
   if (comOrcamentoObra.includes(tipo)) im = await preloadOrcamentoObra(im)
-  if (tipo === 'estudo_comparaveis' || tipo === 'dossier_investidor') an = await preloadAlfredoImagem(an)
+  if (tipo === 'estudo_comparaveis' || tipo === 'dossier_investidor' || tipo === 'proposta_cedencia_posicao') an = await preloadAlfredoImagem(an)
   return fn(im, an)
 }
 
@@ -3404,6 +3405,151 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
   b.note('Os valores apresentados são estimativas conservadoras baseadas em análise de mercado e podem variar. A Somnium Properties utiliza stress tests automáticos em todos os negócios para protecção do investidor. Investimento imobiliário envolve risco de capital.')
 }
 
+// ── Proposta de Cedência de Posição Contratual ─────────────────
+// Apresenta o negócio a investidor para tomar a posição contratual
+// já garantida pela Somnium. O preço de compra não é exposto: os custos
+// de aquisição são bundlados num único valor de "Cedência da Posição".
+// Somnium recebe comissão = 10% do lucro líquido expectável.
+function renderPropostaCedenciaPosicao(b, im, a) {
+  const fotos = parseFotos(im)
+  const deal = resolveDealData(im, a)
+  const meses = deal.meses || 6
+  const obra = deal.obra_com_iva ?? deal.obra ?? 0
+  const detencao = deal.total_detencao || 0
+  const comissaoVenda = deal.comissao_com_iva || 0
+  const vvr = deal.vvr || 0
+
+  // Bundle dos custos de aquisicao - investidor nao ve preco de compra
+  const totalAquisicao = deal.total_aquisicao || (
+    (deal.compra || 0) + (deal.imt || 0) + (deal.imposto_selo || 0) +
+    (deal.escritura || 0) + (parseFloat(a.cpcv_compra) || 0) + (deal.due_diligence || 0)
+  )
+
+  const lucroLiquidoOriginal = deal.lucro_liquido || 0
+  const lucroBrutoOriginal = deal.lucro_bruto || 0
+  const comissaoSomnium = Math.round(lucroLiquidoOriginal * 0.10)
+  const lucroLiquidoInvestidor = lucroLiquidoOriginal - comissaoSomnium
+  const investimentoTotal = totalAquisicao + obra + detencao + comissaoVenda + comissaoSomnium
+
+  // Retorno ajustado: usa investimento total (sem financiamento) como base
+  const retornoTotal = investimentoTotal > 0 ? Math.round((lucroLiquidoInvestidor / investimentoTotal) * 1000) / 10 : 0
+  const retornoAnualizado = meses > 0 ? Math.round((retornoTotal * 12 / meses) * 10) / 10 : 0
+
+  b.header('OPORTUNIDADE — CEDÊNCIA DE POSIÇÃO CONTRATUAL')
+  b.simpleTable([
+    { label: 'Imóvel', value: im.nome },
+    { label: 'Localização', value: localizacaoTexto(im, { completo: true }) },
+    { label: 'Tipologia', value: im.tipologia || '—' },
+    { label: 'Área Bruta', value: im.area_bruta ? `${im.area_bruta} m²` : '—' },
+    { label: 'Modelo', value: 'Cedência de Posição (Wholesaling)' },
+    { label: 'Prazo Estimado', value: `${meses} meses` },
+  ])
+  b.space(3)
+
+  b.header('SUMÁRIO EXECUTIVO')
+  b.bigNumbers([
+    { label: 'Investimento Total', value: EUR(investimentoTotal), sub: 'Tudo incluído' },
+    { label: 'Lucro Líquido Estimado', value: EUR(lucroLiquidoInvestidor), sub: 'Após comissão Somnium' },
+    { label: 'Retorno Anualizado', value: PCT(retornoAnualizado), sub: `base ${meses} meses` },
+  ])
+  b.space(2)
+  b.bigNumbers([
+    { label: 'VVR — Valor de Venda', value: EUR(vvr) },
+    { label: 'Retorno Total', value: PCT(retornoTotal) },
+    { label: 'Payback', value: meses ? `${meses} meses` : '—', sub: 'Recuperação no exit' },
+  ])
+  b.space(4)
+
+  b.header('SOBRE A OPERAÇÃO')
+  const tipoDesc = im.tipologia ? `um ${im.tipologia}` : 'um imóvel'
+  const areaDesc = im.area_bruta ? ` com ${im.area_bruta} m² de área bruta` : ''
+  b.textBlock(
+    `A Somnium Properties detém uma posição contratual já garantida sobre ${tipoDesc}${areaDesc}, localizado${localizacaoTexto(im)}. ` +
+    `Por via de cedência de posição contratual, o investidor assume directamente a operação de remodelação integral e revenda, com gestão e acompanhamento operacional da Somnium até ao exit. ` +
+    `A nossa remuneração corresponde exclusivamente a 10% do lucro líquido expectável.`
+  )
+  b.space(4)
+
+  if (fotos.length > 0) { b.photos(fotos, 'O IMÓVEL'); b.space(2) }
+  if (im._localizacaoImgData) { b.newPage(); b.localizacao() }
+  if (im.pontos_fortes || im.pontos_fracos || im.riscos) { b.pontosFortesFracosRiscos() }
+  if (im.mitigacao_riscos) { b.space(2); b.riscosMitigacao() }
+
+  // Estudo de comparaveis compacto (igual ao dossier_investidor)
+  try {
+    let __comps = a.comparaveis
+    if (typeof __comps === 'string') { try { __comps = JSON.parse(__comps || 'null') } catch { __comps = null } }
+    const __tipologias = Array.isArray(__comps) ? __comps : (__comps?.tipologias || [])
+    const __hasValid = __tipologias.some(t => (t?.comparaveis || []).some(c => parseFloat(c?.preco) > 0 && parseFloat(c?.area) > 0))
+    const __temAlfredo = !!a._alfredoImgData
+    if (__hasValid || __temAlfredo) {
+      renderEstudoComparaveis(b, im, a, { compactMode: true })
+    }
+  } catch (e) {
+    console.error('[cedencia] estudo de comparaveis falhou:', e.message)
+  }
+
+  b.newPage()
+  b.header('ESTRUTURA FINANCEIRA DA OPERAÇÃO')
+  b.subheader('Custos para o Investidor')
+  b.simpleTable([
+    { label: 'Valor da Cedência da Posição (todo o custo de aquisição)', value: EUR(totalAquisicao) },
+    { label: 'Obra com IVA', value: EUR(obra) },
+    { label: `Detenção (${meses} meses)`, value: EUR(detencao) },
+    { label: 'Comissão Imobiliária (venda)', value: EUR(comissaoVenda) },
+    { label: 'Comissão Somnium (10% sobre Lucro Líquido)', value: EUR(comissaoSomnium) },
+    { label: 'Investimento Total', value: EUR(investimentoTotal), total: true },
+  ])
+  b.space(3)
+
+  b.subheader('Resultado para o Investidor')
+  b.simpleTable([
+    { label: 'Valor de Venda Alvo (VVR)', value: EUR(vvr) },
+    { label: 'Lucro Bruto Estimado', value: EUR(lucroBrutoOriginal) },
+    { label: `Impostos (${deal.regime_fiscal || 'Empresa'})`, value: EUR(deal.impostos) },
+    { label: 'Lucro Líquido Estimado', value: EUR(lucroLiquidoOriginal) },
+    { label: '(−) Comissão Somnium (10%)', value: `−${EUR(comissaoSomnium)}` },
+    { label: 'Lucro Líquido para o Investidor', value: EUR(lucroLiquidoInvestidor), total: true },
+  ])
+  b.space(3)
+
+  b.bigNumbers([
+    { label: 'Retorno Total', value: PCT(retornoTotal) },
+    { label: 'Retorno Anualizado', value: PCT(retornoAnualizado) },
+    { label: 'Lucro por Mês', value: meses > 0 ? `${EUR_S(Math.round(lucroLiquidoInvestidor / meses))}/mês` : '—' },
+  ])
+  b.space(4)
+
+  b.note(`Pressupostos: Cessão de posição contratual (artigo 424.º CC). Regime fiscal: ${deal.regime_fiscal || 'Empresa'}. Prazo: ${meses} meses. Comissão Somnium liquidada como parte do investimento total no momento da cedência.`)
+
+  b.newPage()
+  b.header('ENQUADRAMENTO LEGAL — CEDÊNCIA DE POSIÇÃO')
+  b.textBlock(
+    'A Cedência de Posição Contratual está prevista nos artigos 424.º a 427.º do Código Civil Português. ' +
+    'A Somnium Properties, na qualidade de promitente-compradora, cede ao investidor a sua posição contratual no contrato-promessa de compra e venda, transferindo todos os direitos e obrigações dela emergentes. ' +
+    'O investidor passa a deter o controlo integral da operação, beneficiando do trabalho prévio de identificação, negociação e estruturação realizado pela Somnium.'
+  )
+  b.space(3)
+  b.simpleTable([
+    { label: 'Posição Cedida', value: 'Promitente-comprador no CPCV' },
+    { label: 'Responsabilidade pela escritura', value: 'Investidor (com apoio operacional Somnium)' },
+    { label: 'Gestão de Obra', value: 'Somnium (incluída no orçamento)' },
+    { label: 'Comissão Somnium', value: '10% sobre Lucro Líquido Expectável' },
+    { label: 'Momento de liquidação da comissão', value: 'Na escritura de cedência' },
+  ])
+  b.space(4)
+
+  // Pressupostos e glossario partilhados
+  try {
+    renderAssumptionsAndGlossary(b, deal)
+  } catch (e) {
+    console.error('[cedencia] glossario falhou:', e.message)
+  }
+
+  b.space(3)
+  b.note('Os valores apresentados são estimativas conservadoras baseadas em análise de mercado e podem variar. A Somnium Properties utiliza stress tests automáticos para protecção do investidor. Investimento imobiliário envolve risco de capital.')
+}
+
 function renderFichaDescarte(b, im) {
   b.header('DADOS DO IMÓVEL')
   b.simpleTable([
@@ -3601,6 +3747,36 @@ const GENERATORS = {
     return b.end()
   },
 
+  proposta_cedencia_posicao: (im, analise) => {
+    const a = analise || {}
+    const meses = a.meses || 6
+    const lucroLiq = a.lucro_liquido || 0
+    const comissaoSomnium = Math.round(lucroLiq * 0.10)
+    const lucroInvestidor = lucroLiq - comissaoSomnium
+    const b = new DocBuilder('Proposta de Cedência de Posição', `Oportunidade · ${im.zona || ''}`, im, {
+      style: 'investor',
+      withIndex: true,
+      heroItems: [
+        { label: 'Lucro Líquido (Investidor)', value: EUR(lucroInvestidor), sub: 'Após 10% Somnium' },
+        { label: 'Prazo Estimado', value: `${meses} meses` },
+        { label: 'Comissão Somnium', value: EUR(comissaoSomnium), sub: '10% do lucro líquido' },
+      ],
+    })
+    try {
+      renderPropostaCedenciaPosicao(b, im, a)
+    } catch (e) {
+      console.error('[GENERATORS.proposta_cedencia_posicao] falhou:', e.message, '\n', e.stack)
+      try {
+        b.header('AVISO')
+        b.note(`Nao foi possivel gerar todas as seccoes desta Proposta de Cedencia devido a um erro tecnico (${e.message}). Contacte a Somnium Properties para a versao completa.`)
+      } catch {}
+    }
+    b.disclaimer()
+    b.applyIndex()
+    b.applyFooter()
+    return b.end()
+  },
+
   ficha_descarte: (im) => {
     const b = new DocBuilder('Ficha de Descarte', im.zona || '', im)
     renderFichaDescarte(b, im)
@@ -3623,6 +3799,7 @@ const RENDERERS = {
   proposta_formal: renderPropostaFormal,
   dossier_investidor: renderDossierInvestidor,
   proposta_investimento_anonima: renderPropostaInvestimentoAnonima,
+  proposta_cedencia_posicao: renderPropostaCedenciaPosicao,
   resumo_negociacao: renderResumoNegociacao,
   ficha_follow_up: renderFichaFollowUp,
   ficha_descarte: renderFichaDescarte,
@@ -3644,13 +3821,13 @@ const COMPILAVEL_TO_GENERATOR = {
 
 // Seccoes que mostram a imagem de localizacao (precisam preload async)
 const SECCOES_COM_LOCALIZACAO = new Set([
-  'dossier_investidor', 'proposta_investimento_anonima', 'investimento',
+  'dossier_investidor', 'proposta_investimento_anonima', 'proposta_cedencia_posicao', 'investimento',
 ])
 
 // Seccoes que mostram o orçamento detalhado (precisam preload do
 // orcamentos_obra, vide preloadOrcamentoObra).
 const SECCOES_COM_ORCAMENTO_OBRA = new Set([
-  'dossier_investidor', 'proposta_investimento_anonima',
+  'dossier_investidor', 'proposta_investimento_anonima', 'proposta_cedencia_posicao',
 ])
 
 // Gera um PDF compilado para investidor. Quando ha apenas uma

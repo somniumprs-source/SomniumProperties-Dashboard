@@ -204,6 +204,7 @@ const DOC_GENERATORS = {
   proposta_formal: (im) => propostaFormal(im),
   dossier_investidor: (im, a) => apresentacaoInvestidor(im, a),
   proposta_investimento_anonima: (im, a) => apresentacaoInvestidor(im, a),
+  proposta_cedencia_posicao: (im, a) => apresentacaoInvestidor(im, a),
   resumo_negociacao: (im) => genericDoc('Resumo de Negociação', im),
   ficha_follow_up: (im) => genericDoc('Ficha Follow Up', im),
   ficha_descarte: (im) => genericDoc('Ficha de Descarte', im),

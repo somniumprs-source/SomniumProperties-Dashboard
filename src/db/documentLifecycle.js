@@ -30,6 +30,7 @@ const TIPO_LABELS = {
   proposta_formal: 'Proposta ao Proprietario',
   dossier_investidor: 'Dossier de Investimento',
   proposta_investimento_anonima: 'Proposta de Investimento',
+  proposta_cedencia_posicao: 'Proposta de Cedencia de Posicao',
   resumo_negociacao: 'Resumo de Negociacao',
   ficha_follow_up: 'Ficha de Follow Up',
   ficha_descarte: 'Ficha de Descarte',
