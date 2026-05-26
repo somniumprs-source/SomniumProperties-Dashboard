@@ -36,7 +36,7 @@ export function ImovelInteracoesSection({ imovelId, consultores, onUpdate }) {
     if (!form.notas?.trim() || !form.consultor_id) return
     setSaving(true)
     try {
-      await apiFetch('/api/crm/consultor-interacoes', {
+      const res = await apiFetch('/api/crm/consultor-interacoes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -48,6 +48,10 @@ export function ImovelInteracoesSection({ imovelId, consultores, onUpdate }) {
           data_hora: form.data_hora || new Date().toISOString(),
         }),
       })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || `Erro ${res.status} ao registar`)
+      }
       setForm(f => ({ ...f, notas: '', data_hora: '' }))
       setShowForm(false)
       await load()

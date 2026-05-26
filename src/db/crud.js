@@ -134,13 +134,16 @@ function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at 
       if (table === 'consultores' && !data.data_inicio) data.data_inicio = today
       if (table === 'negocios' && !data.data) data.data = today
 
-      const entries = Object.entries(data).filter(([k, v]) => v !== undefined && !SYSTEM_FIELDS.has(k))
+      // Filtrar colunas inexistentes (ex: middleware injecta `regiao` em tabelas sem essa coluna)
+      const tableCols = await getColumns(table)
+      const entries = Object.entries(data).filter(([k, v]) => v !== undefined && !SYSTEM_FIELDS.has(k) && tableCols.has(k))
+      const cleanData = Object.fromEntries(entries)
       const cols = ['id', ...entries.map(([k]) => k), 'created_at', 'updated_at']
       const vals = cols.map((_, i) => `$${i + 1}`)
       const params = [id, ...entries.map(([, v]) => v), now, now]
       await pool.query(`INSERT INTO ${table} (${cols.join(', ')}) VALUES (${vals.join(', ')})`, params)
-      auditLog(table, id, 'INSERT', null, { id, ...data }, regiaoActiva)
-      return { id, ...data, created_at: now, updated_at: now }
+      auditLog(table, id, 'INSERT', null, { id, ...cleanData }, regiaoActiva)
+      return { id, ...cleanData, created_at: now, updated_at: now }
     },
 
     async update(id, rawData, { regiaoActiva = null } = {}) {
@@ -150,13 +153,15 @@ function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at 
       const now = new Date().toISOString()
       const SYSTEM_FIELDS = new Set(['id', 'created_at', 'updated_at', 'synced_at', 'notion_id'])
 
-      const entries = Object.entries(data).filter(([k, v]) => v !== undefined && !SYSTEM_FIELDS.has(k))
+      const tableCols = await getColumns(table)
+      const entries = Object.entries(data).filter(([k, v]) => v !== undefined && !SYSTEM_FIELDS.has(k) && tableCols.has(k))
+      const cleanData = Object.fromEntries(entries)
       const sets = entries.map(([k], i) => `${k} = $${i + 1}`)
       sets.push(`updated_at = $${entries.length + 1}`)
       const params = [...entries.map(([, v]) => v), now, id]
       await pool.query(`UPDATE ${table} SET ${sets.join(', ')} WHERE id = $${entries.length + 2}`, params)
-      auditLog(table, id, 'UPDATE', existing[0], data, regiaoActiva)
-      return { ...existing[0], ...data, updated_at: now }
+      auditLog(table, id, 'UPDATE', existing[0], cleanData, regiaoActiva)
+      return { ...existing[0], ...cleanData, updated_at: now }
     },
 
     async delete(id, { regiaoActiva = null } = {}) {
