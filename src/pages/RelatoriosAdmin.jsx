@@ -141,6 +141,33 @@ export function RelatoriosAdmin() {
         </div>
       </div>
 
+      {/* Estudos Estrategicos — relatorios de mercado estaticos */}
+      <div className="mb-6 rounded-2xl border border-brand-gold/30 bg-gradient-to-br from-neutral-50 to-white dark:from-neutral-900 dark:to-neutral-900/40 p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-lg" style={{ backgroundColor: 'rgba(201,168,76,0.15)' }}>
+              <FileText className="w-5 h-5" style={{ color: GOLD }} />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-neutral-800 dark:text-neutral-100">Estudos Estratégicos</h2>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 max-w-xl">
+                Relatórios de mercado e expansão para apresentar a investidores e equipa. Documentos confidenciais Somnium Properties.
+              </p>
+            </div>
+          </div>
+          <a
+            href={`/api/crm/relatorios/expansao-gaia?token=${getToken() || ''}`}
+            target="_blank"
+            rel="noopener"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap"
+            style={{ backgroundColor: GOLD, color: '#0d0d0d' }}
+          >
+            <FileDown className="w-4 h-4" />
+            Relatório de Expansão — Vila Nova de Gaia
+          </a>
+        </div>
+      </div>
+
       {/* Action bar */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
           <div>

@@ -39,6 +39,7 @@ import {
   generateMemoriaDescritiva,
   generateRelatorioSaida,
 } from './pdfProjectoFixFlip.js'
+import { generateRelatorioExpansaoGaia } from './pdfRelatorioExpansaoGaia.js'
 import { gerarResumoProjeto, invalidarCacheAi, isConfigured as aiConfigured } from './projetoAiAssistant.js'
 import { audit, descreverMudanca } from './projetoAuditLog.js'
 import rateLimit from 'express-rate-limit'
@@ -3651,6 +3652,21 @@ router.get('/projetos/:negocioId/pdf/saida', async (req, res) => {
     const doc = generateRelatorioSaida({ ...data, investidores })
     doc.pipe(res)
   } catch (e) { console.error('[pdf/saida]', e.message); res.status(500).json({ error: e.message }) }
+})
+
+// ── Relatorio Executivo de Expansao para Vila Nova de Gaia ──
+// Documento estrategico (10-15 paginas) para apresentar a investidores,
+// equipa e parceiros locais. Dataset em ./expansaoGaiaData.js.
+router.get('/relatorios/expansao-gaia', async (_req, res) => {
+  try {
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', 'inline; filename="relatorio-expansao-gaia.pdf"')
+    const doc = generateRelatorioExpansaoGaia()
+    doc.pipe(res)
+  } catch (e) {
+    console.error('[pdf/expansao-gaia]', e.message)
+    res.status(500).json({ error: e.message })
+  }
 })
 
 // ── Mover negócio entre fases do Kanban (drag&drop) ─────────
