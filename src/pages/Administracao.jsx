@@ -5,13 +5,13 @@ import { Tabs } from '../components/ui/Tabs.jsx'
 
 const TABS = [
   { key: 'sop',        label: 'SOP',                icon: BookOpen },
-  { key: 'relatorios', label: 'Relatórios Reuniões', icon: FileText },
+  { key: 'relatorios', label: 'Relatórios',           icon: FileText },
   { key: 'regiao',     label: 'Multi-Região',        icon: Map },
 ]
 
 const SUBTITLES = {
   sop:        'Procedimentos operacionais por departamento',
-  relatorios: 'Sínteses executivas semanais geradas a partir das reuniões internas',
+  relatorios: 'Sínteses semanais de reuniões e estudos estratégicos da Somnium Properties',
   regiao:     'Mercado de referência, compliance, hot zones e benchmarking por região',
 }
 
