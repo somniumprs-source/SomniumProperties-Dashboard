@@ -651,6 +651,15 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
                 <p className="text-sm font-medium text-neutral-700">{d.label}</p>
               </div>
               <a
+                href={`/api/crm/imoveis/${imovelId}/documento/${d.tipo}?refresh=1${token ? `&token=${token}` : ''}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                title="Forçar regeneração (ignora versão em cache)"
+                className="px-2 py-1.5 text-[11px] font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors shrink-0 opacity-50 group-hover:opacity-100">
+                Regerar
+              </a>
+              <a
                 href={`/api/crm/imoveis/${imovelId}/documento/${d.tipo}${qs}`}
                 target="_blank"
                 rel="noopener noreferrer"

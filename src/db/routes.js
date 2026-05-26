@@ -481,19 +481,24 @@ router.get('/imoveis/:id/documento/:tipo', async (req, res) => {
     const imovel = await Imoveis.getById(req.params.id)
     if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
 
+    // ?refresh=1 (ou refresh=true) força regeneração mesmo que exista PDF em cache.
+    const refresh = ['1', 'true', 'yes'].includes(String(req.query.refresh || '').toLowerCase())
+
     // Tentar primeiro o PDF persistido (frozen=false: vivo; frozen=true: ultima versao)
-    try {
-      const { rows: [doc] } = await pool.query(
-        `SELECT pdf_path FROM documentos_imovel
-           WHERE imovel_id = $1 AND tipo = $2
-           ORDER BY frozen DESC, version DESC LIMIT 1`,
-        [imovel.id, req.params.tipo]
-      )
-      if (doc?.pdf_path && /^https?:\/\//i.test(doc.pdf_path)) {
-        // Redirect 302 — browser segue para Supabase Storage directamente
-        return res.redirect(302, doc.pdf_path)
-      }
-    } catch (e) { /* cai para geracao */ }
+    if (!refresh) {
+      try {
+        const { rows: [doc] } = await pool.query(
+          `SELECT pdf_path FROM documentos_imovel
+             WHERE imovel_id = $1 AND tipo = $2
+             ORDER BY frozen DESC, version DESC LIMIT 1`,
+          [imovel.id, req.params.tipo]
+        )
+        if (doc?.pdf_path && /^https?:\/\//i.test(doc.pdf_path)) {
+          // Redirect 302 — browser segue para Supabase Storage directamente
+          return res.redirect(302, doc.pdf_path)
+        }
+      } catch (e) { /* cai para geracao */ }
+    }
 
     let analise = null
     try {
