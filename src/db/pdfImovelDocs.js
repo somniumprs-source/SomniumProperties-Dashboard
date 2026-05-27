@@ -272,12 +272,16 @@ async function preloadOrcamentoObra(im) {
   }
 }
 
+// Tipos de documento que embutem a imagem do estudo de localização.
+export const DOCS_COM_LOCALIZACAO = ['relatorio_investimento', 'dossier_investidor', 'proposta_investimento_anonima', 'proposta_cedencia_posicao']
+export function docEmbedeLocalizacao(tipo) { return DOCS_COM_LOCALIZACAO.includes(tipo) }
+
 export async function generateDoc(tipo, imovel, analise = null) {
   const fn = GENERATORS[tipo]
   if (!fn) return null
   // Tipos investidor precisam da imagem de localização pré-carregada
   // (Supabase URL exige fetch async; o resto do render é síncrono).
-  const investidor = ['relatorio_investimento', 'dossier_investidor', 'proposta_investimento_anonima', 'proposta_cedencia_posicao']
+  const investidor = DOCS_COM_LOCALIZACAO
   const comFotoHero = ['ficha_imovel', ...investidor]
   // Tipos que mostram o orçamento de obra detalhado consomem o que
   // foi preenchido na aba "Obra" (orcamentos_obra) — e não apenas

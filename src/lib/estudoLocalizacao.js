@@ -603,10 +603,12 @@ export async function runEstudoLocalizacao({ pool, supabaseStorage, imovelId, de
   const publicUrl = urlData.publicUrl
 
   // 4. UPDATE imoveis
+  const agora = new Date().toISOString()
   const payload = {
     origem: origem_resolvida,
     mode,
-    atualizado_em: new Date().toISOString(),
+    atualizado_em: agora,
+    imagem_gerada_em: agora,   // quando a IMAGEM foi gerada — usado para detectar desactualização nos relatórios
     resultados,
     highlights,
     destaque,
@@ -616,12 +618,12 @@ export async function runEstudoLocalizacao({ pool, supabaseStorage, imovelId, de
   await pool.query(
     `UPDATE imoveis
        SET pois_distancias = $1::jsonb,
-           pois_atualizado_em = NOW(),
+           pois_atualizado_em = $5,
            localizacao_imagem = $2,
            morada = COALESCE(NULLIF($3,''), morada),
            updated_at = NOW()::text
      WHERE id = $4`,
-    [JSON.stringify(payload), publicUrl, origem_resolvida, imovelId]
+    [JSON.stringify(payload), publicUrl, origem_resolvida, imovelId, agora]
   )
 
   return {

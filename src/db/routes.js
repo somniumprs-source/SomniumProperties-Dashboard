@@ -22,7 +22,7 @@ import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
 import { syncForms, isConfigured as formsConfigured } from './formsSync.js'
 import { createImovelFolder, moveImovelFolder, uploadDocToFolder, isConfigured as driveConfigured } from './driveSync.js'
-import { generateDoc, getDocsForEstado } from './pdfImovelDocs.js'
+import { generateDoc, getDocsForEstado, docEmbedeLocalizacao } from './pdfImovelDocs.js'
 import { onImovelCreated, listDocumentos, persistDocumento, streamPdfToResAndPersist } from './documentLifecycle.js'
 import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
 import { generateMeetingPDF } from './pdfMeetingReport.js'
@@ -467,6 +467,39 @@ router.get('/lookups', async (_req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// Regenera a imagem do estudo de localização se estiver desactualizada
+// (gerada antes da última recolha de distâncias, ou legacy sem marca de
+// geração). Preserva highlights/destaque/modo guardados. Nunca lança: em
+// erro devolve o imóvel original (o relatório usa a imagem em cache).
+// Só corre em produção (precisa de GOOGLE_MAPS_API_KEY + Supabase Storage).
+async function refreshEstudoLocalizacaoSeNecessario(imovel) {
+  try {
+    if (!imovel?.localizacao_imagem) return imovel
+    if (!process.env.GOOGLE_MAPS_API_KEY || !supabaseStorage) return imovel
+    const p = imovel.pois_distancias || {}
+    const genMs = p.imagem_gerada_em ? new Date(p.imagem_gerada_em).getTime() : 0
+    const poisMs = imovel.pois_atualizado_em ? new Date(imovel.pois_atualizado_em).getTime() : 0
+    // Desactualizada: sem marca (legacy) ou dados de POIs mudaram >1s depois da imagem.
+    const stale = !genMs || (poisMs - genMs > 1000)
+    if (!stale) return imovel
+    await runEstudoLocalizacao({
+      pool,
+      supabaseStorage,
+      imovelId: imovel.id,
+      destinos: undefined,                                  // usa os guardados em pois_distancias
+      mode: p.mode || 'driving',
+      highlights: Array.isArray(p.highlights) ? p.highlights : [],
+      destaque: p.destaque || null,
+      origem: p.origem || imovel.morada || null,
+    })
+    const fresco = await Imoveis.getById(imovel.id)
+    return fresco || imovel
+  } catch (e) {
+    console.error(`[estudo-refresh imovel=${imovel?.id}] falhou, usa imagem em cache:`, e.message)
+    return imovel
+  }
+}
+
 // ── Documento PDF por fase do imóvel ─────────────────────────
 //
 // Estratégia: se já existe pdf_path persistido, redireccionar para a URL
@@ -484,30 +517,41 @@ router.get('/imoveis/:id/documento/:tipo', async (req, res) => {
     // ?refresh=1 (ou refresh=true) força regeneração mesmo que exista PDF em cache.
     const refresh = ['1', 'true', 'yes'].includes(String(req.query.refresh || '').toLowerCase())
 
-    // Tentar primeiro o PDF persistido (frozen=false: vivo; frozen=true: ultima versao)
-    if (!refresh) {
-      try {
-        const { rows: [doc] } = await pool.query(
-          `SELECT pdf_path FROM documentos_imovel
-             WHERE imovel_id = $1 AND tipo = $2
-             ORDER BY frozen DESC, version DESC LIMIT 1`,
-          [imovel.id, req.params.tipo]
-        )
-        if (doc?.pdf_path && /^https?:\/\//i.test(doc.pdf_path)) {
-          // Redirect 302 — browser segue para Supabase Storage directamente
-          return res.redirect(302, doc.pdf_path)
-        }
-      } catch (e) { /* cai para geracao */ }
-    }
-
+    // Análise activa — necessária para gerar e para detectar desactualização.
     let analise = null
     try {
       const { rows: [a] } = await pool.query('SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1', [imovel.id])
       analise = a
     } catch {}
 
-    const out = await persistDocumento(imovel, req.params.tipo, {
-      trigger: 'view:documento',
+    // Regenerar a imagem do estudo se desactualizada (só docs que a embutem).
+    let im = imovel
+    if (docEmbedeLocalizacao(req.params.tipo)) im = await refreshEstudoLocalizacaoSeNecessario(imovel)
+
+    // Servir PDF em cache APENAS se ainda reflecte os dados actuais. Regenera
+    // quando o imóvel ou a análise mudaram depois da última geração.
+    if (!refresh) {
+      try {
+        const { rows: [doc] } = await pool.query(
+          `SELECT pdf_path, generated_at, frozen FROM documentos_imovel
+             WHERE imovel_id = $1 AND tipo = $2
+             ORDER BY frozen DESC, version DESC LIMIT 1`,
+          [im.id, req.params.tipo]
+        )
+        if (doc?.pdf_path && /^https?:\/\//i.test(doc.pdf_path)) {
+          const genMs = doc.generated_at ? new Date(doc.generated_at).getTime() : 0
+          const upImovel = im.updated_at ? new Date(im.updated_at).getTime() : 0
+          const upAnalise = analise?.updated_at ? new Date(analise.updated_at).getTime() : 0
+          // Frozen = snapshot imutável (intencional). Vivo = só se ainda fresco.
+          const fresco = doc.frozen || genMs >= Math.max(upImovel, upAnalise)
+          if (fresco) return res.redirect(302, doc.pdf_path)
+          // senão: dados mudaram desde a geração → cai para regeneração
+        }
+      } catch (e) { /* cai para geracao */ }
+    }
+
+    const out = await persistDocumento(im, req.params.tipo, {
+      trigger: refresh ? 'view:refresh' : 'view:auto',
       generatedBy: req.user?.email || 'system',
       analise,
     })
@@ -551,11 +595,14 @@ router.get('/imoveis/:id/relatorio', async (req, res) => {
 // ── Relatório compilado para investidor ──────────────────────
 router.get('/imoveis/:id/relatorio-investidor', async (req, res) => {
   try {
-    const imovel = await Imoveis.getById(req.params.id)
+    let imovel = await Imoveis.getById(req.params.id)
     if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
     const { rows: [analise] } = await pool.query(
       'SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1', [imovel.id]
     ).catch(() => ({ rows: [] }))
+
+    // Garante que o estudo de localização embutido reflecte os dados actuais.
+    imovel = await refreshEstudoLocalizacaoSeNecessario(imovel)
 
     const seccoes = (req.query.seccoes || 'investimento,comparaveis,caep,stress_tests').split(',').filter(Boolean)
     const { generateCompiledReport } = await import('./pdfImovelDocs.js')
