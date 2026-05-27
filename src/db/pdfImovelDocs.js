@@ -3883,6 +3883,12 @@ const SECCOES_COM_ORCAMENTO_OBRA = new Set([
   'dossier_investidor', 'proposta_investimento_anonima', 'proposta_cedencia_posicao',
 ])
 
+// Seccoes cujos renderers mostram a galeria de fotografias do imóvel
+// (precisam preload das fotos como buffers, vide preloadFotosGaleria).
+const SECCOES_COM_GALERIA = new Set([
+  'dossier_investidor', 'proposta_cedencia_posicao',
+])
+
 // Gera um PDF compilado para investidor. Quando ha apenas uma
 // seccao, devolve o gerador completo (com a sua capa especifica).
 // Para multiplas, faz capa "Dossier" + render inline de cada
@@ -3899,8 +3905,10 @@ export async function generateCompiledReport(imovel, analise, seccoes = []) {
   // que o renderer sincrono ja receba o buffer de imagem em memoria.
   const precisaLocalizacao = seccoes.some(s => SECCOES_COM_LOCALIZACAO.has(s))
   const precisaOrcamento = seccoes.some(s => SECCOES_COM_ORCAMENTO_OBRA.has(s))
+  const precisaGaleria = seccoes.some(s => SECCOES_COM_GALERIA.has(s))
   let im = precisaLocalizacao ? await preloadLocalizacao(imovel) : imovel
   if (precisaOrcamento) im = await preloadOrcamentoObra(im)
+  if (precisaGaleria) im = await preloadFotosGaleria(im)
 
   const b = new DocBuilder('Dossier de Investimento', im.zona || '', im)
   const an = analise || {}
