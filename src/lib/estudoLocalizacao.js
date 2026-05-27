@@ -378,8 +378,8 @@ export function composeEstudoSvg({
         <rect width="540" height="32" rx="4" fill="${T.body}"/>
         <text x="18" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1">#</text>
         <text x="44" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1">PONTO DE INTERESSE</text>
-        <text x="385" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1" text-anchor="end">🚗 CARRO</text>
-        <text x="535" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1" text-anchor="end">🚶 A PÉ</text>
+        <text x="385" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1" text-anchor="end">CARRO</text>
+        <text x="535" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1" text-anchor="end">A PÉ</text>
       </g>
       <g transform="translate(0, 70)" font-size="13" fill="${T.body}">
         ${principais.map((r, i) => {
@@ -416,11 +416,11 @@ export function composeEstudoSvg({
       ${['acessos', 'saude_universidade', 'lazer', 'comercio'].map((sec, idx) => {
         const xCard = (idx % 2) * (CARD_W + CARD_GAP_X)
         const yCard = 30 + Math.floor(idx / 2) * (CARD_H + CARD_GAP_Y)
-        const items = grupos[sec].slice(0, 6)
+        const items = grupos[sec].slice(0, 5)
         if (items.length === 0) return ''
         const colorBar = SECCOES[sec].cor
         const linhas = items.map((r, i) => {
-          const y = 50 + i * 24
+          const y = 50 + i * 30
           const isDestaque = destaque && r.categoria && r.categoria.toLowerCase().includes(destaque.toLowerCase())
           const colTxt = isDestaque ? T.goldDark : T.body
           const colVal = isDestaque ? T.goldDark : T.body
@@ -432,10 +432,15 @@ export function composeEstudoSvg({
           const distancia = r.distancia_texto || fmtKm(r.distancia_metros)
           const duracao = fmtMin(r.duracao_segundos)
           const valor = `${distancia} · ${duracao}`
+          // Tempo a pé numa 2.ª linha — só até 5 km (acima não faz sentido).
+          const pe = r.pe
+          const peDentro5km = pe && pe.status === 'OK' && pe.distancia_metros != null && pe.distancia_metros <= 5000
+          const valorPe = peDentro5km ? `a pé ${fmtMin(pe.duracao_segundos)}` : ''
           return `
             ${isDestaque ? `<polygon points="6,${y - 8} 10,${y - 5} 6,${y - 2}" fill="${T.gold}"/>` : ''}
             <text x="14" y="${y}" font-weight="${wTxt}" fill="${colTxt}">${escapeXml(nome)}</text>
-            <text x="${VALOR_X}" y="${y}" text-anchor="end" font-weight="${wVal}" fill="${colVal}">${escapeXml(valor)}</text>`
+            <text x="${VALOR_X}" y="${y}" text-anchor="end" font-weight="${wVal}" fill="${colVal}">${escapeXml(valor)}</text>
+            ${valorPe ? `<text x="${VALOR_X}" y="${y + 13}" text-anchor="end" font-size="10" font-weight="500" fill="${T.muted}">${escapeXml(valorPe)}</text>` : ''}`
         }).join('')
         return `<g transform="translate(${xCard}, ${yCard})">
           <rect width="${CARD_W}" height="${CARD_H}" rx="6" fill="${T.white}" stroke="${T.border}" stroke-width="1"/>
