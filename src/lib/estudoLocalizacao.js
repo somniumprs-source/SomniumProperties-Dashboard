@@ -203,7 +203,7 @@ export async function fetchStaticSatelliteMap({ origem, destinos, paths = [], ap
   const url = new URL('https://maps.googleapis.com/maps/api/staticmap')
   url.searchParams.set('size', `${w}x${h}`)
   url.searchParams.set('scale', String(scale))
-  url.searchParams.set('maptype', 'hybrid') // satélite + labels e estradas
+  url.searchParams.set('maptype', 'roadmap') // satélite/híbrido bloqueado pela Google no Static Maps na UE/EEE (HTTP 403) — usar mapa de ruas
   url.searchParams.set('language', 'pt')
   url.searchParams.set('region', 'pt')
   // Rotas (paths) — desenhadas PRIMEIRO para ficarem por baixo dos markers
