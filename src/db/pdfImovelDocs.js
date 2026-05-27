@@ -1612,8 +1612,15 @@ function renderFichaImovel(b, im) {
   b.versionStamp()
 }
 
-function renderFichaVisita(b, im) {
+function renderFichaVisita(b, im, analise = null) {
   const fotos = parseFotos(im)
+  // VVR/Obra/ROI preferem a análise activa (mesma fonte da calculadora);
+  // fallback aos campos denormalizados do imóvel se não houver análise.
+  const a = analise || {}
+  const vvrEst = a.vvr ?? im.valor_venda_remodelado
+  const obraEst = a.obra_com_iva ?? im.custo_estimado_obra
+  const roiEst = a.retorno_total ?? im.roi
+  const roiAnuEst = a.retorno_anualizado ?? im.roi_anualizado
   b.header('IDENTIFICAÇÃO DO IMÓVEL')
   b.simpleTable([
     { label: 'Nome / Referência', value: im.nome },
@@ -1640,12 +1647,12 @@ function renderFichaVisita(b, im) {
   b.bigNumbers([
     { label: 'Ask Price', value: EUR(im.ask_price) },
     { label: 'Proposta Estimada', value: EUR(im.valor_proposta) },
-    { label: 'VVR Estimado', value: EUR(im.valor_venda_remodelado) },
+    { label: 'VVR Estimado', value: EUR(vvrEst) },
   ])
   b.simpleTable([
-    { label: 'Custo Estimado de Obra', value: EUR(im.custo_estimado_obra) },
-    { label: 'ROI Estimado', value: PCT(im.roi) },
-    { label: 'ROI Anualizado Estimado', value: PCT(im.roi_anualizado) },
+    { label: 'Custo Estimado de Obra', value: EUR(obraEst) },
+    { label: 'ROI Estimado', value: PCT(roiEst) },
+    { label: 'ROI Anualizado Estimado', value: PCT(roiAnuEst) },
     { label: 'Desconto face ao Ask Price', value: im.ask_price && im.valor_proposta ? PCT(Math.round((1 - im.valor_proposta / im.ask_price) * 100)) : '—' },
   ])
   b.space(4)
@@ -3661,9 +3668,9 @@ const GENERATORS = {
     return b.end()
   },
 
-  ficha_visita: (im) => {
+  ficha_visita: (im, analise) => {
     const b = new DocBuilder('Ficha de Visita', `${im.zona || ''} · ${im.tipologia || ''}`, im)
-    renderFichaVisita(b, im)
+    renderFichaVisita(b, im, analise)
     b.disclaimer()
     b.applyFooter()
     return b.end()
