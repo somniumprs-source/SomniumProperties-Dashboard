@@ -44,6 +44,17 @@ export function Dashboard() {
     }
   }, [refreshKpis, refreshPulseMetricas])
 
+  // Clique manual no botão "Atualizar": re-sincroniza os campos derivados
+  // (ROI, ROI anualizado, VVR, custo de obra) das análises activas para os
+  // imóveis no servidor e só depois recarrega. O polling/visibilidade
+  // continuam a usar refreshAll (sem sync) para não escrever na BD a cada ciclo.
+  const refreshManual = useCallback(async () => {
+    try {
+      await apiFetch('/api/crm/sync-derivados', { method: 'POST' })
+    } catch { /* se o sync falhar, recarrega na mesma os dados */ }
+    await refreshAll()
+  }, [refreshAll])
+
   // Fetch inicial de pulse/metricas (kpis ja vai pelo useKPIs).
   useEffect(() => {
     refreshPulseMetricas().then(() => setLastRefresh(Date.now()))
@@ -130,7 +141,7 @@ export function Dashboard() {
       <Header
         title="Dashboard Central"
         subtitle={updatedAt ? `Última atualização: ${updatedAt}` : 'A carregar dados...'}
-        onRefresh={refreshAll}
+        onRefresh={refreshManual}
         loading={loading}
       />
       <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">

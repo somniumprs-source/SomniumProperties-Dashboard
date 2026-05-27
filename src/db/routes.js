@@ -568,6 +568,35 @@ router.get('/imoveis/:id/documento/:tipo', async (req, res) => {
 })
 
 // ── Relatório PDF do imóvel ──────────────────────────────────
+// ── Re-sincronização global: análise activa → campos derivados do imóvel ──
+// Usado pelo botão "Atualizar" da Dashboard para garantir que ROI, ROI
+// anualizado, VVR e custo de obra dos imóveis reflectem a análise activa
+// (mesma fonte da calculadora). Só toca nas linhas dessincronizadas (o
+// IS DISTINCT FROM evita bumps de updated_at desnecessários).
+router.post('/sync-derivados', async (_req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `UPDATE imoveis i SET
+         roi = COALESCE(a.retorno_total, 0),
+         roi_anualizado = COALESCE(a.retorno_anualizado, 0),
+         valor_venda_remodelado = COALESCE(a.vvr, 0),
+         custo_estimado_obra = COALESCE(a.obra_com_iva, 0),
+         updated_at = $1
+       FROM analises a
+       WHERE a.imovel_id = i.id AND a.activa = true
+         AND (i.roi IS DISTINCT FROM COALESCE(a.retorno_total, 0)
+           OR i.roi_anualizado IS DISTINCT FROM COALESCE(a.retorno_anualizado, 0)
+           OR i.valor_venda_remodelado IS DISTINCT FROM COALESCE(a.vvr, 0)
+           OR i.custo_estimado_obra IS DISTINCT FROM COALESCE(a.obra_com_iva, 0))`,
+      [new Date().toISOString()]
+    )
+    res.json({ ok: true, sincronizados: rowCount })
+  } catch (e) {
+    console.error('[sync-derivados]', e.message)
+    res.status(500).json({ error: e.message })
+  }
+})
+
 router.get('/imoveis/:id/relatorio', async (req, res) => {
   try {
     const imovel = await Imoveis.getById(req.params.id)
