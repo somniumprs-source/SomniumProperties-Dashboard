@@ -416,7 +416,7 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
       {resultado?.resultados?.length > 0 && (
         <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
           <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-700">Resultados — {resultado.mode}</span>
+            <span className="text-xs font-semibold text-gray-700">Resultados — 🚗 Carro e 🚶 A pé</span>
             <span className="text-[10px] text-gray-400">
               {resultado.atualizado_em ? new Date(resultado.atualizado_em).toLocaleString('pt-PT') : ''}
             </span>
@@ -426,19 +426,28 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
               <tr className="border-b border-gray-100">
                 <th className="text-left px-4 py-2">Ponto</th>
                 <th className="text-left px-4 py-2">Endereço</th>
-                <th className="text-right px-4 py-2">Distância</th>
-                <th className="text-right px-4 py-2">Tempo</th>
+                <th className="text-right px-4 py-2">🚗 Carro</th>
+                <th className="text-right px-4 py-2">🚶 A pé</th>
               </tr>
             </thead>
             <tbody>
-              {resultado.resultados.map((r, i) => (
-                <tr key={i} className="border-b border-gray-50">
-                  <td className="px-4 py-2"><span className="mr-1">{r.icone || '📍'}</span>{r.categoria || '—'}</td>
-                  <td className="px-4 py-2 text-gray-500 truncate max-w-xs">{r.endereco}</td>
-                  <td className="px-4 py-2 text-right font-mono">{r.distancia_texto || (r.status !== 'OK' ? r.status : '—')}</td>
-                  <td className="px-4 py-2 text-right font-mono text-emerald-700">{r.duracao_texto || '—'}</td>
-                </tr>
-              ))}
+              {resultado.resultados.map((r, i) => {
+                const carro = r.carro || (r.distancia_texto ? { distancia_texto: r.distancia_texto, duracao_texto: r.duracao_texto, status: r.status } : null)
+                const pe = r.pe || null
+                const fmt = (m) => {
+                  if (!m) return '—'
+                  if (m.status && m.status !== 'OK') return m.status
+                  return `${m.distancia_texto || '—'} · ${m.duracao_texto || '—'}`
+                }
+                return (
+                  <tr key={i} className="border-b border-gray-50">
+                    <td className="px-4 py-2"><span className="mr-1">{r.icone || '📍'}</span>{r.categoria || '—'}</td>
+                    <td className="px-4 py-2 text-gray-500 truncate max-w-xs">{r.endereco}</td>
+                    <td className="px-4 py-2 text-right font-mono">{fmt(carro)}</td>
+                    <td className="px-4 py-2 text-right font-mono text-emerald-700">{fmt(pe)}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

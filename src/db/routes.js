@@ -3079,39 +3079,54 @@ router.post('/imoveis/:id/distancias', async (req, res) => {
     const mode = req.body?.mode === 'walking' ? 'walking' : req.body?.mode === 'bicycling' ? 'bicycling' : req.body?.mode === 'transit' ? 'transit' : 'driving'
     const region = 'pt'
 
-    const url = new URL('https://maps.googleapis.com/maps/api/distancematrix/json')
-    url.searchParams.set('origins', origem)
-    url.searchParams.set('destinations', destinos.map(d => d.endereco).join('|'))
-    url.searchParams.set('mode', mode)
-    url.searchParams.set('region', region)
-    url.searchParams.set('language', 'pt')
-    url.searchParams.set('key', apiKey)
-
-    const r = await fetch(url.toString())
-    const j = await r.json()
-    if (j.status !== 'OK') {
-      return res.status(502).json({ error: `Distance Matrix: ${j.status}`, detalhe: j.error_message || null })
+    // Calcula sempre os dois modos: trajecto/distância a pé difere do de carro.
+    async function matrixFor(modeX) {
+      const url = new URL('https://maps.googleapis.com/maps/api/distancematrix/json')
+      url.searchParams.set('origins', origem)
+      url.searchParams.set('destinations', destinos.map(d => d.endereco).join('|'))
+      url.searchParams.set('mode', modeX)
+      url.searchParams.set('region', region)
+      url.searchParams.set('language', 'pt')
+      url.searchParams.set('key', apiKey)
+      const resp = await fetch(url.toString())
+      const j = await resp.json()
+      if (j.status !== 'OK') {
+        const err = new Error(`Distance Matrix (${modeX}): ${j.status}${j.error_message ? ' — ' + j.error_message : ''}`)
+        err.detalhe = j.error_message || null
+        throw err
+      }
+      return j
     }
 
-    const linha = j.rows?.[0]?.elements || []
+    const [jCar, jWalk] = await Promise.all([matrixFor('driving'), matrixFor('walking')])
+    const carEls = jCar.rows?.[0]?.elements || []
+    const walkEls = jWalk.rows?.[0]?.elements || []
+    const pick = (el) => ({
+      distancia_metros: el?.status === 'OK' ? el.distance?.value ?? null : null,
+      distancia_texto: el?.status === 'OK' ? el.distance?.text ?? null : null,
+      duracao_segundos: el?.status === 'OK' ? el.duration?.value ?? null : null,
+      duracao_texto: el?.status === 'OK' ? el.duration?.text ?? null : null,
+      status: el?.status || 'UNKNOWN',
+    })
+
     const resultados = destinos.map((d, i) => {
-      const el = linha[i] || {}
+      const carro = pick(carEls[i])
+      const pe = pick(walkEls[i])
       return {
         categoria: d.categoria || null,
         icone: d.icone || null,
         endereco: d.endereco,
-        distancia_metros: el.status === 'OK' ? el.distance?.value ?? null : null,
-        distancia_texto: el.status === 'OK' ? el.distance?.text ?? null : null,
-        duracao_segundos: el.status === 'OK' ? el.duration?.value ?? null : null,
-        duracao_texto: el.status === 'OK' ? el.duration?.text ?? null : null,
-        status: el.status || 'UNKNOWN',
+        carro,
+        pe,
+        // compatibilidade com consumidores antigos (= carro)
+        ...carro,
       }
     })
 
     const payload = {
       origem,
       mode,
-      origem_resolvida: j.origin_addresses?.[0] || null,
+      origem_resolvida: jCar.origin_addresses?.[0] || jWalk.origin_addresses?.[0] || null,
       atualizado_em: new Date().toISOString(),
       resultados,
     }
