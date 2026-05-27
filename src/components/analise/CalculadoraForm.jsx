@@ -18,6 +18,7 @@ const FINALIDADES = [
 const REGIMES = [
   { value: 'Empresa', label: 'Empresa (IRC PME)' },
   { value: 'Particular', label: 'Particular (IRS)' },
+  { value: 'Sem', label: 'Sem regime fiscal (valor bruto)' },
 ]
 
 const CATEGORIAS_IRS = [
