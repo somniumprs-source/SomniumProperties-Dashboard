@@ -187,14 +187,14 @@ export function CalculadoraForm({ analise, onUpdate }) {
 
       {/* F. Fiscalidade */}
       <Section title="Fiscalidade" tag="F" open={openSections.fiscal} onToggle={() => toggleSection('fiscal')}
-        summary={analise.impostos > 0 ? `Impostos: ${EUR(analise.impostos)}` : null}
-        hint="IRC (empresa) ou IRS (particular) — OE 2026">
+        summary={form.regime_fiscal === 'Sem' ? 'Sem regime fiscal (valor bruto)' : (analise.impostos > 0 ? `Impostos: ${EUR(analise.impostos)}` : null)}
+        hint="IRC (empresa), IRS (particular) ou valor bruto — OE 2026">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <Select label="Regime Fiscal" field="regime_fiscal" value={form.regime_fiscal} options={REGIMES} onChange={handleChange} />
           {form.regime_fiscal === 'Empresa' ? <>
             <Input label="Derrama Municipal %" field="derrama_perc" value={form.derrama_perc} onChange={handleChange} step="0.5" placeholder="1.5" />
             <Input label="% Distribuição Dividendos" field="perc_dividendos" value={form.perc_dividendos} onChange={handleChange} step="10" placeholder="100" />
-          </> : <>
+          </> : form.regime_fiscal === 'Sem' ? null : <>
             <Select label="Categoria IRS" field="categoria_irs" value={form.categoria_irs || 'G'} options={CATEGORIAS_IRS} onChange={handleChange} />
             <Input label="Ano de Aquisição" field="ano_aquisicao" value={form.ano_aquisicao} onChange={handleChange} step="1" placeholder="2026" />
             {(form.categoria_irs || 'G') === 'G' ? <>
@@ -205,6 +205,13 @@ export function CalculadoraForm({ analise, onUpdate }) {
             </>}
           </>}
         </div>
+        {form.regime_fiscal === 'Sem' && (
+          <div className="mt-2 text-xs text-gray-400 leading-relaxed">
+            <strong>Sem regime fiscal</strong>: apresenta o lucro bruto ao investidor, sem deduzir qualquer imposto.
+            O lucro líquido iguala o lucro bruto. A fiscalidade fica a cargo do investidor, conforme a estrutura
+            jurídica que adoptar para o negócio.
+          </div>
+        )}
         {form.regime_fiscal === 'Particular' && (
           <div className="mt-2 text-xs text-gray-400 leading-relaxed">
             <strong>Cat. G</strong>: mais-valia ocasional — 50% × 28% (autónoma) ou × marginal (englobada). Art. 43.º n.º 2 CIRS.<br />

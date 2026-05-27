@@ -20,6 +20,7 @@ function safeNum(v) {
 // Para isso, opts traz a parte FIXA da base dedutível (compra + IS + IMT + escritura
 // + cpcv compra + cpcv venda) e adicionamos obra+comissão da iteração.
 function calcImpostosIter(regime, lb, vvr, obraComIva, comissaoComIva, opts) {
+  if (regime === 'Sem') return 0  // valor bruto — sem fiscalidade
   if (regime === 'Empresa') {
     const lbPositive = Math.max(lb, 0)
     if (lbPositive === 0) return 0
@@ -221,11 +222,12 @@ export function calcMetricsExtra(a, im = {}) {
       dividendos_eur: retencaoDiv,
       taxa_efectiva: lb > 0 ? impostos / lb : null,
     }
-  } else if (regime !== 'Empresa' && lb > 0) {
+  } else if (regime === 'Particular' && lb > 0) {
     fiscal = {
       taxa_efectiva: impostos / lb,
     }
   }
+  // regime === 'Sem' — sem fiscalidade: fiscal fica null (taxa efectiva 0%).
 
   // ── PMO Breakdown ────────────────────────────────────────────
   const pmoSoma = pmoArq + pmoFisc + pmoSeg + pmoOutros
@@ -278,7 +280,7 @@ export function calcMetricsExtra(a, im = {}) {
     const beArrendamento = rendaNetaMensal > 0 && lucroPerdidoMes != null
       ? Math.ceil(Math.abs(lucroPerdidoMes) / rendaNetaMensal)
       : null
-    const taxaTributacao = regime === 'Empresa' ? 0.25 : 0.28
+    const taxaTributacao = regime === 'Sem' ? 0 : regime === 'Empresa' ? 0.25 : 0.28
     const impostoRenda = rendaAnualLiq * taxaTributacao
     const rendaPosImp = rendaAnualLiq - impostoRenda
     exitArrendamento = {

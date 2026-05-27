@@ -268,7 +268,12 @@ export function calcAnalise(inputs) {
   let impostos = 0
   let retencaoDividendos = 0
 
-  if (regimeFiscal === 'Empresa') {
+  if (regimeFiscal === 'Sem') {
+    // Sem regime fiscal — apresenta o valor bruto ao investidor: nenhum imposto deduzido.
+    // O lucro líquido iguala o lucro bruto; a fiscalidade fica a cargo do investidor
+    // conforme a estrutura jurídica que adoptar para o negócio.
+    impostos = 0
+  } else if (regimeFiscal === 'Empresa') {
     const { total: totalIRC } = calcIRC(Math.max(lucroBruto, 0), derramaPerc)
     const lucroAposIRC = Math.max(lucroBruto - totalIRC, 0)
     retencaoDividendos = calcRetencaoDividendos(lucroAposIRC, percDividendos)

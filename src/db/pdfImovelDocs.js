@@ -2058,8 +2058,11 @@ function renderAnaliseRentabilidade(b, im, a, opts = {}) {
   b.space(4)
 
   b.header('F. FISCALIDADE')
+  const regimeFiscalLabel = a.regime_fiscal === 'Sem'
+    ? 'Sem regime fiscal (valor bruto)'
+    : (a.regime_fiscal || '—')
   const fiscRows = [
-    { label: 'Regime', value: a.regime_fiscal || '—' },
+    { label: 'Regime', value: regimeFiscalLabel },
   ]
   if (a.regime_fiscal === 'Empresa' && m.fiscal && m.fiscal.total_irc != null) {
     fiscRows.push({ label: 'IRC Base (15% até 50k + 19% acima)', value: EUR(m.fiscal.irc_base) })
@@ -2076,6 +2079,9 @@ function renderAnaliseRentabilidade(b, im, a, opts = {}) {
     }
   }
   b.simpleTable(fiscRows)
+  if (a.regime_fiscal === 'Sem') {
+    b.note('Valor apresentado bruto de fiscalidade. O lucro líquido iguala o lucro bruto. A carga fiscal aplicável depende da estrutura jurídica adoptada pelo investidor para o negócio.')
+  }
   b.space(4)
 
   b.header('G. RESULTADO')

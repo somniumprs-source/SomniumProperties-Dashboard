@@ -42,7 +42,7 @@ export function renderAssumptionsAndGlossary(b, deal) {
 
   b.header('PRESSUPOSTOS DO ESTUDO')
   b.simpleTable([
-    { label: 'Regime fiscal (SPV)', value: deal.regime_fiscal || 'Empresa' },
+    { label: 'Regime fiscal (SPV)', value: deal.regime_fiscal === 'Sem' ? 'Sem regime fiscal (valor bruto)' : (deal.regime_fiscal || 'Empresa') },
     { label: 'Estrutura de capital', value: financiamentoLabel(deal) },
     { label: 'Prazo de detencao', value: deal.meses ? `${deal.meses} meses` : '—' },
     { label: 'Peso PMO (mao-de-obra)', value: pctOrDash(deal.pmo_perc) },
