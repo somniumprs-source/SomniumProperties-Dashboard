@@ -372,25 +372,30 @@ export function composeEstudoSvg({
   const tableY = HEADER_H + 33 + MAP_H + 20 + highlightsH + (highlightsH > 0 ? 30 : 0)
   const tabelaSvg = `
     <g transform="translate(50, ${tableY})">
-      <text x="0" y="0" font-size="18" fill="${T.body}" font-weight="700">Distâncias e tempos de carro</text>
+      <text x="0" y="0" font-size="18" fill="${T.body}" font-weight="700">Distâncias e tempos — carro e a pé</text>
       <line x1="0" y1="10" x2="540" y2="10" stroke="${T.gold}" stroke-width="2"/>
       <g transform="translate(0, 30)">
         <rect width="540" height="32" rx="4" fill="${T.body}"/>
-        <text x="20" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1">#</text>
-        <text x="60" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1">PONTO DE INTERESSE</text>
-        <text x="400" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1" text-anchor="end">DISTÂNCIA</text>
-        <text x="510" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1" text-anchor="end">CARRO</text>
+        <text x="18" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1">#</text>
+        <text x="44" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1">PONTO DE INTERESSE</text>
+        <text x="385" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1" text-anchor="end">🚗 CARRO</text>
+        <text x="535" y="21" font-size="11" fill="${T.gold}" font-weight="700" letter-spacing="1" text-anchor="end">🚶 A PÉ</text>
       </g>
       <g transform="translate(0, 70)" font-size="13" fill="${T.body}">
         ${principais.map((r, i) => {
           const yRow = i * 34
           const fill = i % 2 === 0 ? T.light : T.white
+          const carroTxt = `${fmtKm(r.distancia_metros)} · ${fmtMin(r.duracao_segundos)}`
+          const pe = r.pe
+          const peDentro5km = pe && pe.status === 'OK' && pe.distancia_metros != null && pe.distancia_metros <= 5000
+          const peTxt = peDentro5km ? `${fmtKm(pe.distancia_metros)} · ${fmtMin(pe.duracao_segundos)}` : '—'
           return `<rect x="0" y="${yRow}" width="540" height="34" fill="${fill}"/>
-                  <text x="20" y="${yRow + 22}" font-weight="700">${i + 1}</text>
-                  <text x="60" y="${yRow + 22}" font-weight="600">${escapeXml((r.categoria || r.endereco || '').slice(0, 35))}</text>
-                  <text x="400" y="${yRow + 22}" text-anchor="end" font-weight="700">${escapeXml(r.distancia_texto || fmtKm(r.distancia_metros))}</text>
-                  <text x="510" y="${yRow + 22}" text-anchor="end" font-weight="700">${escapeXml(r.duracao_texto || fmtMin(r.duracao_segundos))}</text>`
+                  <text x="18" y="${yRow + 22}" font-weight="700">${i + 1}</text>
+                  <text x="44" y="${yRow + 22}" font-weight="600">${escapeXml((r.categoria || r.endereco || '').slice(0, 28))}</text>
+                  <text x="385" y="${yRow + 22}" text-anchor="end" font-weight="700">${escapeXml(carroTxt)}</text>
+                  <text x="535" y="${yRow + 22}" text-anchor="end" font-weight="600" fill="${T.muted}">${escapeXml(peTxt)}</text>`
         }).join('')}
+        <text x="0" y="${principais.length * 34 + 16}" font-size="10" fill="${T.muted}" font-style="italic">A pé indicado até 5 km de distância.</text>
       </g>
     </g>`
 
@@ -537,8 +542,18 @@ export async function runEstudoLocalizacao({ pool, supabaseStorage, imovelId, de
   const origem = (origemOverride || imovel.morada || imovel.zona || '').trim()
   if (!origem) throw new Error('Imóvel sem morada — preenche o campo morada')
 
-  // 1. Distance Matrix
-  const { origem_resolvida, resultados } = await callDistanceMatrix({ origem, destinos: destinosUsar, mode, apiKey })
+  // 1. Distance Matrix — calcula sempre carro (driving) + a pé (walking).
+  //    O trajecto/distância a pé difere do de carro; a pé só faz sentido até 5 km.
+  const carroDM = await callDistanceMatrix({ origem, destinos: destinosUsar, mode: 'driving', apiKey })
+  const origem_resolvida = carroDM.origem_resolvida
+  const resultados = carroDM.resultados
+  let resultadosPe = []
+  try {
+    resultadosPe = (await callDistanceMatrix({ origem, destinos: destinosUsar, mode: 'walking', apiKey })).resultados
+  } catch (e) {
+    console.warn('[estudo-localizacao] tempos a pé indisponíveis:', e.message)
+  }
+  resultados.forEach((r, i) => { r.pe = resultadosPe[i] || null })
 
   // 2. Static Map satélite + rotas reais (Directions API para top 9 destinos)
   const okOrdenados = resultados.filter(r => r.status === 'OK').sort((a, b) => (a.distancia_metros ?? Infinity) - (b.distancia_metros ?? Infinity))
