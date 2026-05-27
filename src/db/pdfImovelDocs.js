@@ -96,6 +96,9 @@ function cleanMultilineText(text) {
 
 // Parse fotos JSON from imovel — only images, max 6 for PDF
 function parseFotos(im) {
+  // Se a galeria já foi pré-carregada (buffers via preloadFotosGaleria),
+  // usá-la directamente — já vem filtrada e com `_data` para o render.
+  if (Array.isArray(im?._fotosGaleria)) return im._fotosGaleria
   try {
     const all = typeof im.fotos === 'string' ? JSON.parse(im.fotos || '[]') : (im.fotos || [])
     return all
@@ -253,6 +256,34 @@ async function preloadHeroFoto(imovel) {
   return imovel
 }
 
+// Pré-carrega as fotos da galeria (até 6) como buffers prontos para PDF,
+// suportando URLs remotas (Supabase) e paths locais — tal como a hero foto.
+// Devolve novo objecto com `_fotosGaleria` (cada foto com `_data` Buffer).
+// Sem isto, em produção as fotos (URLs Supabase) não carregavam porque o
+// render só lia do disco local.
+async function preloadFotosGaleria(imovel) {
+  if (Array.isArray(imovel?._fotosGaleria)) return imovel
+  const fotos = parseFotos(imovel)
+  if (fotos.length === 0) return imovel
+  const carregadas = []
+  for (const foto of fotos) {
+    const url = foto?.path
+    if (!url) continue
+    try {
+      let buf = null
+      if (url.startsWith('http')) {
+        buf = await fetchWithTimeout(url)
+      } else {
+        const localPath = path.resolve(__dirname, '../..', 'public', url.replace(/^\//, ''))
+        if (existsSync(localPath)) buf = readFileSync(localPath)
+      }
+      const img = normalizarImagemParaPdf(buf)
+      if (img) carregadas.push({ ...foto, _data: img })
+    } catch { /* salta foto que falhe — não bloqueia o documento */ }
+  }
+  return carregadas.length > 0 ? { ...imovel, _fotosGaleria: carregadas } : imovel
+}
+
 // Carrega o orçamento detalhado da aba "Obra" (orcamentos_obra) e
 // devolve o resultado já calculado por calcOrcamentoObra. Devolve
 // null se não existir ou falhar — os renderers fazem fallback aos
@@ -287,10 +318,13 @@ export async function generateDoc(tipo, imovel, analise = null) {
   // foi preenchido na aba "Obra" (orcamentos_obra) — e não apenas
   // os agregados da analise activa.
   const comOrcamentoObra = ['dossier_investidor', 'proposta_investimento_anonima', 'proposta_cedencia_posicao']
+  // Tipos que mostram galeria de fotografias do imóvel.
+  const comGaleria = ['ficha_imovel', 'dossier_investidor', 'proposta_cedencia_posicao']
   let im = imovel
   let an = analise
   if (investidor.includes(tipo)) im = await preloadLocalizacao(im)
   if (comFotoHero.includes(tipo)) im = await preloadHeroFoto(im)
+  if (comGaleria.includes(tipo)) im = await preloadFotosGaleria(im)
   if (comOrcamentoObra.includes(tipo)) im = await preloadOrcamentoObra(im)
   if (tipo === 'estudo_comparaveis' || tipo === 'dossier_investidor' || tipo === 'proposta_cedencia_posicao') an = await preloadAlfredoImagem(an)
   return fn(im, an)
@@ -869,9 +903,13 @@ class DocBuilder {
     for (const foto of fotos) {
       // Skip non-image files
       if (!foto.type?.startsWith('image/') && !foto.path?.match(/\.(jpg|jpeg|png|webp)$/i)) continue
-      const filePath = path.join(ROOT, 'public', foto.path)
       try {
-        const imgData = readFileSync(filePath)
+        // Buffer pré-carregado (URLs remotas Supabase) ou leitura do disco local.
+        let imgData = foto._data || null
+        if (!imgData) {
+          if (!foto.path || /^https?:\/\//i.test(foto.path)) continue // remota sem buffer → salta
+          imgData = readFileSync(path.join(ROOT, 'public', foto.path))
+        }
         this.ensure(imgHeight + 20)
         const x = ML + col * (imgSize + 10)
         this.doc.save()
@@ -1314,8 +1352,10 @@ class DocBuilder {
           hash ? `Hash ${hash}` : null,
         ].filter(Boolean)
         const text = parts.join(' · ')
+        // PH-24: abaixo da linha "Confidencial..." do newPage (PH-35), evitando
+        // a sobreposição de texto no rodapé dos documentos de investidor.
         this.doc.fontSize(6).fillColor(C.muted)
-          .text(text, ML, PH - 32, { width: CW, align: 'center', lineBreak: false })
+          .text(text, ML, PH - 24, { width: CW, align: 'center', lineBreak: false })
       }
     } catch {
       // bufferedPageRange so funciona com bufferPages: true — ja activado
