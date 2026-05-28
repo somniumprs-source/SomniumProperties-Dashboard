@@ -5,6 +5,8 @@ import { apiFetch } from '../lib/api.js'
 import { useUrlState } from '../hooks/useUrlState.js'
 import { EUR, PCT, DAYS, NUM, RATIO } from '../constants.js'
 import { Tabs } from '../components/ui/Tabs.jsx'
+import { Card } from '../components/ui/Card.jsx'
+import { Activity, TrendingUp, Users, Gauge, Target } from 'lucide-react'
 
 const GOLD = '#C9A84C'
 const TABS = [
