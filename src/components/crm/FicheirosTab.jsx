@@ -4,8 +4,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { Upload, Image, FileText, Trash2, ExternalLink, FolderOpen, X, ChevronLeft, ChevronRight, Plus, ArrowRightLeft, Camera } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
+import { ImovelDocumentacao } from './ImovelDocumentacao/index.jsx'
 
-export function FicheirosTab({ imovelId, driveFolderId }) {
+export function FicheirosTab({ imovelId, driveFolderId, tipoImovel }) {
   const [allFiles, setAllFiles] = useState([])
   const [driveData, setDriveData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -167,7 +168,7 @@ export function FicheirosTab({ imovelId, driveFolderId }) {
               section === 'docs' ? 'bg-white text-neutral-800 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
             }`}>
             <FileText className="w-3.5 h-3.5" />
-            Documentos
+            Documentação
             {allDocuments.length > 0 && (
               <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full ${
                 section === 'docs' ? 'bg-indigo-500 text-white' : 'bg-neutral-200 text-neutral-500'
@@ -299,79 +300,9 @@ export function FicheirosTab({ imovelId, driveFolderId }) {
         )
       )}
 
-      {/* ── DOCUMENTOS ── */}
+      {/* ── DOCUMENTAÇÃO (checklist + análise IA + relatório) ── */}
       {section === 'docs' && (
-        allDocuments.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 rounded-xl bg-neutral-50 border border-dashed border-neutral-200 cursor-pointer hover:border-indigo-300 transition-colors"
-            onClick={() => fileInputRef.current?.click()}>
-            <div className="w-16 h-16 rounded-2xl bg-white border border-neutral-100 flex items-center justify-center mb-3 shadow-sm">
-              <FileText className="w-7 h-7 text-neutral-300" />
-            </div>
-            <p className="text-sm font-medium text-neutral-500">Sem documentos</p>
-            <p className="text-xs text-neutral-400 mt-1">Os PDFs e ficheiros da pasta Drive aparecem aqui</p>
-          </div>
-        ) : (
-          <div className="rounded-xl border border-neutral-100 overflow-hidden divide-y divide-neutral-50">
-            {allDocuments.map(doc => {
-              const isPdf = doc.name?.toLowerCase().endsWith('.pdf') || doc.mimeType?.includes('pdf') || doc.type?.includes('pdf')
-              const isImage = doc.type?.startsWith('image/') || doc.mimeType?.startsWith('image/')
-              const link = doc.source === 'drive' ? doc.viewLink : doc.path
-              return (
-                <div key={doc.id} className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-neutral-50/80 transition-colors group">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                    isPdf ? 'bg-red-50' : isImage ? 'bg-amber-50' : 'bg-neutral-50'
-                  }`}>
-                    {isPdf ? (
-                      <span className="text-[10px] font-black text-red-500">PDF</span>
-                    ) : isImage ? (
-                      <Image className="w-4.5 h-4.5 text-amber-500" />
-                    ) : (
-                      <FileText className="w-4.5 h-4.5 text-neutral-400" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-neutral-700 truncate">{doc.name}</p>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      {doc.size > 0 && (
-                        <span className="text-[10px] text-neutral-400">
-                          {doc.size > 1024 * 1024 ? `${(doc.size / 1024 / 1024).toFixed(1)}MB` : `${Math.round(doc.size / 1024)}KB`}
-                        </span>
-                      )}
-                      {(doc.uploaded_at || doc.createdTime) && (
-                        <span className="text-[10px] text-neutral-300">
-                          {new Date(doc.uploaded_at || doc.createdTime).toLocaleDateString('pt-PT')}
-                        </span>
-                      )}
-                      {doc.source === 'drive' && (
-                        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-500">Drive</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
-                    {link && (
-                      <a href={link} target="_blank" rel="noopener noreferrer"
-                        className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors">
-                        Abrir
-                      </a>
-                    )}
-                    {doc.source === 'local' && isImage && (
-                      <button onClick={() => handleMove(doc.id, 'fotos')} title="Mover para Fotografias"
-                        className="p-1.5 rounded-lg text-neutral-300 hover:bg-emerald-50 hover:text-emerald-500 transition-colors">
-                        <ArrowRightLeft className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    {doc.source === 'local' && (
-                      <button onClick={() => handleDelete(doc.id)}
-                        className="p-1.5 rounded-lg text-neutral-300 hover:bg-red-50 hover:text-red-500 transition-colors">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )
+        <ImovelDocumentacao imovelId={imovelId} tipoImovel={tipoImovel} />
       )}
 
       {/* ── LIGHTBOX ── */}

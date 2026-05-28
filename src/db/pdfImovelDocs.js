@@ -135,6 +135,7 @@ const DOC_LABELS = {
   resumo_negociacao: 'Resumo de Negociação',
   ficha_follow_up: 'Ficha de Follow Up',
   ficha_descarte: 'Ficha de Descarte',
+  relatorio_documental: 'Relatório Documental',
 }
 
 // PNG magic number: 0x89 0x50 0x4E 0x47
@@ -3659,6 +3660,143 @@ function renderFichaDescarte(b, im) {
 // DOCUMENT GENERATORS — capa especifica + render + disclaimer
 // ══════════════════════════════════════════════════════════════
 
+// Checklist documental por tipo de imóvel (espelha documentacao.config.js no frontend).
+const DOC_LABELS_LEGAIS = {
+  certidao: 'Certidão Permanente',
+  caderneta: 'Caderneta Predial',
+  guia_impostos: 'Guia de Impostos IMT/IS',
+  licenca: 'Licença de Utilização',
+  ficha_tecnica: 'Ficha Técnica de Habitação',
+  cert_energetico: 'Certificado Energético',
+  cert_condominio: 'Declaração de Condomínio',
+}
+const DOCS_OBRIGATORIOS = {
+  apartamento: ['certidao', 'caderneta', 'guia_impostos', 'licenca', 'ficha_tecnica', 'cert_energetico', 'cert_condominio'],
+  moradia: ['certidao', 'caderneta', 'guia_impostos', 'licenca', 'ficha_tecnica', 'cert_energetico'],
+}
+function tipoImovelChecklist(im) {
+  const t = `${im?.predio_tipo || ''} ${im?.tipologia || ''}`.toLowerCase()
+  return t.includes('morad') ? 'moradia' : 'apartamento'
+}
+
+// Relatório consolidado da documentação legal analisada por IA.
+function renderRelatorioDocumental(b, im) {
+  const COR = { pendente: C.muted, validado: C.green, warning: '#b5651d', erro: C.red }
+  let analises = im?.documentacao_analise
+  if (typeof analises === 'string') { try { analises = JSON.parse(analises) } catch { analises = [] } }
+  if (!Array.isArray(analises)) analises = []
+
+  const tipo = tipoImovelChecklist(im)
+  const obrigatorios = DOCS_OBRIGATORIOS[tipo]
+  const byDoc = new Map(analises.filter(a => a.doc_id && a.doc_id !== 'outro').map(a => [a.doc_id, a]))
+
+  const estadoDoc = (a) => {
+    if (!a) return { txt: 'Pendente', cor: COR.pendente }
+    if (a.valido === true) return { txt: 'Validado', cor: COR.validado }
+    if (a.valido === 'warning') return { txt: 'Atenção', cor: COR.warning }
+    return { txt: 'Erro / Inválido', cor: COR.erro }
+  }
+
+  const validados = obrigatorios.filter(id => byDoc.get(id)?.valido === true).length
+  const score = obrigatorios.length ? Math.round((validados / obrigatorios.length) * 100) : 0
+
+  // Todas as flags com o documento de origem, ordenadas por severidade.
+  const rank = { critical: 0, warning: 1, info: 2 }
+  const flags = []
+  for (const a of analises) {
+    for (const f of (a.flags || [])) flags.push({ ...f, origem: a.tipo_documento || DOC_LABELS_LEGAIS[a.doc_id] || 'Documento' })
+  }
+  flags.sort((x, y) => (rank[x.severity] ?? 3) - (rank[y.severity] ?? 3))
+  const temCritica = flags.some(f => f.severity === 'critical')
+  const temErroObrig = obrigatorios.some(id => byDoc.get(id)?.valido === false)
+  const temAlerta = flags.some(f => f.severity === 'warning') || obrigatorios.some(id => byDoc.get(id)?.valido === 'warning')
+  const pendentes = obrigatorios.filter(id => !byDoc.has(id)).length
+
+  // ── Score ──
+  b.bigNumbers([
+    { label: 'Score Documental', value: `${score}%`, sub: `${validados}/${obrigatorios.length} obrigatórios validados`, valueColor: score === 100 ? C.green : (score >= 50 ? C.gold : C.red) },
+    { label: 'Pendentes', value: String(pendentes), valueColor: pendentes ? C.gold : C.green },
+    { label: 'Red Flags', value: String(flags.length), valueColor: temCritica ? C.red : (flags.length ? C.gold : C.green) },
+  ])
+  b.space(4)
+
+  // ── Conclusão automática ──
+  if (temCritica || temErroObrig) {
+    b.verdict('CONCLUSÃO: Processo NÃO pode avançar para escritura. Existem flags críticas ou documentos inválidos por resolver.', false)
+  } else if (temAlerta || pendentes > 0) {
+    b.verdict('CONCLUSÃO: Verificar alertas e documentos pendentes antes de agendar a escritura.', false)
+  } else {
+    b.verdict('CONCLUSÃO: Dossiê documental completo. Pode avançar para escritura.', true)
+  }
+  b.space(2)
+
+  // ── Tabela de estado por documento ──
+  b.header('ESTADO DOS DOCUMENTOS')
+  b.colTable(
+    [['DOCUMENTO', 200], ['ESTADO', 110], ['OBSERVAÇÕES', 175]],
+    obrigatorios.map(id => {
+      const a = byDoc.get(id)
+      const est = estadoDoc(a)
+      const nFlags = a?.flags?.length || 0
+      const obs = a
+        ? (nFlags ? `${nFlags} flag${nFlags > 1 ? 's' : ''}${a.flags.some(f => f.severity === 'critical') ? ' (crítica)' : ''}` : 'Sem flags')
+        : 'Não carregado'
+      return { _values: [
+        DOC_LABELS_LEGAIS[id],
+        { value: est.txt, color: est.cor },
+        obs,
+      ] }
+    })
+  )
+
+  // Documentos extra (doc_id "outro" ou não-obrigatórios analisados)
+  const extras = analises.filter(a => !obrigatorios.includes(a.doc_id))
+  if (extras.length) {
+    b.space(2)
+    b.subheader('Outros documentos analisados')
+    extras.forEach(a => {
+      const est = estadoDoc(a)
+      b.splitRow(
+        { label: 'Documento', value: a.tipo_documento || a.nome_ficheiro || '—' },
+        { label: 'Estado', value: est.txt },
+      )
+    })
+  }
+
+  // ── Red flags ──
+  if (flags.length) {
+    b.space(4)
+    b.header('RED FLAGS')
+    const sevLabel = { critical: 'CRÍTICO', warning: 'ALERTA', info: 'INFO' }
+    const sevCor = { critical: C.red, warning: COR.warning, info: C.muted }
+    flags.forEach(f => {
+      b.ensure(40)
+      const titulo = `[${sevLabel[f.severity] || 'INFO'}] ${f.titulo || ''} · ${f.origem}`
+      b.text(titulo, { size: 9, color: sevCor[f.severity] || C.body })
+      if (f.descricao) b.note(f.descricao)
+      b.space(2)
+    })
+  }
+
+  // ── Análise por documento (campos + resumo) ──
+  b.space(4)
+  b.header('ANÁLISE POR DOCUMENTO')
+  if (analises.length === 0) {
+    b.note('Ainda não foi analisado nenhum documento para este imóvel.')
+  }
+  analises.forEach(a => {
+    b.subheader(a.tipo_documento || DOC_LABELS_LEGAIS[a.doc_id] || a.nome_ficheiro || 'Documento')
+    if (Array.isArray(a.campos) && a.campos.length) {
+      a.campos.slice(0, 6).forEach(c => b.row(c.label || '—', c.valor || '—'))
+    }
+    if (a.resumo) b.text(a.resumo, { size: 8.5 })
+    if (Array.isArray(a.pontos_verificar) && a.pontos_verificar.length) {
+      a.pontos_verificar.forEach(p => b.bullet(p))
+    }
+    b.space(4)
+  })
+}
+
 const GENERATORS = {
   ficha_imovel: (im) => {
     const b = new DocBuilder('Ficha do Imóvel', im.zona || '', im)
@@ -3840,6 +3978,14 @@ const GENERATORS = {
   ficha_descarte: (im) => {
     const b = new DocBuilder('Ficha de Descarte', im.zona || '', im)
     renderFichaDescarte(b, im)
+    b.disclaimer()
+    b.applyFooter()
+    return b.end()
+  },
+
+  relatorio_documental: (im) => {
+    const b = new DocBuilder('Relatório Documental', im.zona || '', im)
+    renderRelatorioDocumental(b, im)
     b.disclaimer()
     b.applyFooter()
     return b.end()

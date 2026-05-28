@@ -998,7 +998,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       /* Ficheiros do imóvel (fotos + documentos + Drive) */
       ) : type === 'Imóveis' && activeTab === 'ficheiros' ? (
         <div className="p-4 sm:p-6">
-          <FicheirosTab imovelId={data.id} driveFolderId={data.drive_folder_id} />
+          <FicheirosTab imovelId={data.id} driveFolderId={data.drive_folder_id} tipoImovel={data.predio_tipo || data.tipologia} />
         </div>
 
       /* Relatórios do imóvel (documentos de fase) */

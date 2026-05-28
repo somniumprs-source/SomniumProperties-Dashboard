@@ -38,6 +38,7 @@ const TIPO_LABELS = {
   relatorio_comparaveis: 'Estudo de Mercado',
   relatorio_caep: 'Parceria CAEP',
   relatorio_stress: 'Analise de Risco',
+  relatorio_documental: 'Relatorio Documental',
 }
 
 function shortDocId(imovelId, tipo, version) {

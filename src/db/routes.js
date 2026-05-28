@@ -1227,6 +1227,160 @@ router.post('/imoveis/:id/fotos', uploadRateLimit, uploadImovel.array('fotos', 2
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// ── Análise documental por IA (Claude) ──────────────────────
+// Analisa um documento legal (certidão, caderneta, licença, etc.) e devolve
+// JSON estruturado (validade, campos, red flags, resumo). Persiste a análise
+// no array imoveis.documentacao_analise (upsert por doc_id). Toda a IA corre
+// no backend — a chave Anthropic nunca chega ao frontend.
+const DOC_MEDIA = {
+  '.pdf': { kind: 'document', media: 'application/pdf' },
+  '.jpg': { kind: 'image', media: 'image/jpeg' },
+  '.jpeg': { kind: 'image', media: 'image/jpeg' },
+  '.png': { kind: 'image', media: 'image/png' },
+  '.webp': { kind: 'image', media: 'image/webp' },
+}
+
+function buildDocPrompt(tipoImovel) {
+  const tipo = (tipoImovel || '').toLowerCase().includes('morad') ? 'MORADIA' : 'APARTAMENTO'
+  return `És um especialista jurídico e imobiliário português ao serviço da Somnium Properties.
+
+Tipo de imóvel: ${tipo}
+
+Analisa este documento e devolve APENAS um JSON válido, sem markdown, sem texto extra:
+
+{
+  "tipo_documento": "Nome do tipo (ex: Certidão Permanente)",
+  "doc_id": "certidao | caderneta | guia_impostos | licenca | ficha_tecnica | cert_energetico | cert_condominio | outro",
+  "valido": true | false | "warning",
+  "campos": [
+    { "label": "Campo extraído", "valor": "Valor" }
+  ],
+  "flags": [
+    {
+      "severity": "critical | warning | info",
+      "titulo": "Título da flag",
+      "descricao": "Descrição detalhada"
+    }
+  ],
+  "resumo": "Resumo em 2-3 frases sobre o documento.",
+  "pontos_verificar": ["Ponto 1", "Ponto 2"]
+}
+
+Regras:
+- Certidão Permanente: flag crítica se tiver ónus, penhoras ou hipotecas
+- Caderneta Predial: verificar VPT, área, tipologia; flag se área inconsistente
+- Licença de Utilização: obrigatória para imóveis após 07/08/1951; flag crítica se ausente ou uso não-habitacional
+- Ficha Técnica: obrigatória para obras após 30/03/2004; verificar assinatura técnica
+- Certificado Energético: verificar validade (10 anos); flag se classe abaixo de D
+- Guia de Impostos: verificar se IMT e IS foram pagos e valores corretos
+- Declaração Condomínio: flag crítica se existirem dívidas em atraso
+- Se não conseguires ler o documento, indica nas flags`
+}
+
+// Resolve o buffer + extensão do documento, vindo de multer ou de um path já carregado.
+async function resolveDocBuffer(req) {
+  if (req.file) {
+    const buf = await readFile(req.file.path)
+    await unlink(req.file.path).catch(() => {})
+    return { buffer: buf, ext: path.extname(req.file.originalname).toLowerCase(), name: req.file.originalname }
+  }
+  const p = req.body?.path
+  if (!p) return null
+  const ext = path.extname((req.body?.name || p).split('?')[0]).toLowerCase()
+  if (/^https?:\/\//i.test(p)) {
+    const r = await fetch(p)
+    if (!r.ok) throw new Error(`Não foi possível obter o ficheiro (${r.status})`)
+    return { buffer: Buffer.from(await r.arrayBuffer()), ext, name: req.body?.name || path.basename(p) }
+  }
+  const rel = p.startsWith('/') ? p.slice(1) : p
+  const abs = path.resolve(REPO_ROOT, 'public', rel)
+  if (!abs.startsWith(path.resolve(REPO_ROOT, 'public'))) throw new Error('Caminho inválido')
+  return { buffer: await readFile(abs), ext, name: req.body?.name || path.basename(p) }
+}
+
+router.post('/imoveis/:id/documentos/analise', uploadRateLimit, uploadImovel.single('ficheiro'), async (req, res) => {
+  try {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return res.status(503).json({ error: 'Análise por IA indisponível (ANTHROPIC_API_KEY não configurada).' })
+    }
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+
+    let doc
+    try { doc = await resolveDocBuffer(req) }
+    catch (e) { return res.status(400).json({ error: e.message }) }
+    if (!doc?.buffer?.length) return res.status(400).json({ error: 'Nenhum documento para analisar (PDF, JPG ou PNG).' })
+
+    const meta = DOC_MEDIA[doc.ext]
+    if (!meta) return res.status(400).json({ error: 'Formato não suportado. Usa PDF, JPG ou PNG.' })
+    if (doc.buffer.length > 15 * 1024 * 1024) return res.status(400).json({ error: 'Ficheiro demasiado grande (máx. 15MB).' })
+
+    const base64 = doc.buffer.toString('base64')
+    const fileBlock = meta.kind === 'document'
+      ? { type: 'document', source: { type: 'base64', media_type: meta.media, data: base64 } }
+      : { type: 'image', source: { type: 'base64', media_type: meta.media, data: base64 } }
+
+    const Anthropic = (await import('@anthropic-ai/sdk')).default
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    const tipoImovel = req.body?.tipoImovel || imovel.predio_tipo || imovel.tipologia || ''
+
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      messages: [{ role: 'user', content: [fileBlock, { type: 'text', text: buildDocPrompt(tipoImovel) }] }],
+    })
+
+    const respText = response.content?.[0]?.text || '{}'
+    let parsed
+    try {
+      const jsonMatch = respText.match(/\{[\s\S]*\}/)
+      parsed = JSON.parse(jsonMatch?.[0] || respText)
+    } catch {
+      return res.status(502).json({ error: 'A IA devolveu uma resposta ilegível. Tenta novamente.' })
+    }
+
+    const entry = {
+      doc_id: parsed.doc_id || 'outro',
+      fotoId: req.body?.fotoId || null,
+      nome_ficheiro: doc.name,
+      tipo_documento: parsed.tipo_documento || 'Documento',
+      valido: parsed.valido ?? false,
+      campos: Array.isArray(parsed.campos) ? parsed.campos.slice(0, 6) : [],
+      flags: Array.isArray(parsed.flags) ? parsed.flags : [],
+      resumo: parsed.resumo || '',
+      pontos_verificar: Array.isArray(parsed.pontos_verificar) ? parsed.pontos_verificar : [],
+      analyzed_at: new Date().toISOString(),
+    }
+
+    // Upsert por doc_id (excepto "outro", que acumula).
+    const atual = Array.isArray(imovel.documentacao_analise) ? imovel.documentacao_analise : []
+    let next
+    if (entry.doc_id === 'outro') {
+      next = [...atual.filter(a => !(a.doc_id === 'outro' && a.fotoId && a.fotoId === entry.fotoId)), entry]
+    } else {
+      next = [...atual.filter(a => a.doc_id !== entry.doc_id), entry]
+    }
+    await Imoveis.update(req.params.id, { documentacao_analise: JSON.stringify(next) }, { regiaoActiva: req.regiaoActiva })
+
+    res.json({ ok: true, analise: entry, documentacao_analise: next })
+  } catch (e) {
+    console.error(`[documentos/analise imovel=${req.params.id}] FALHOU:`, e.message)
+    res.status(500).json({ error: e.message || 'Falha na análise do documento.' })
+  }
+})
+
+// Remover a análise de um documento (por doc_id) — permite reanalisar do zero.
+router.delete('/imoveis/:id/documentos/analise/:docId', async (req, res) => {
+  try {
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+    const atual = Array.isArray(imovel.documentacao_analise) ? imovel.documentacao_analise : []
+    const next = atual.filter(a => a.doc_id !== req.params.docId)
+    await Imoveis.update(req.params.id, { documentacao_analise: JSON.stringify(next) }, { regiaoActiva: req.regiaoActiva })
+    res.json({ ok: true, documentacao_analise: next })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 // Mover ficheiro entre categorias (fotos ↔ documentos)
 router.put('/imoveis/:id/fotos/:fotoId/mover', async (req, res) => {
   try {
