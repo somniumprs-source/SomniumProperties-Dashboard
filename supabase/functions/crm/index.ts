@@ -39,6 +39,21 @@ import Anthropic from "@anthropic-ai/sdk";
 import { registerRegiaoRoutes } from "./regiaoRoutes.ts";
 import { registerAnaliseRoutes } from "./analiseRoutes.ts";
 import { registerOrcamentoRoutes } from "./orcamentoRoutes.ts";
+// ── Subsistema PROJETOS (Fix and Flip) ─────────────────────────
+import {
+  FASES_POR_CATEGORIA, getTemplateFases, getFaseConfigGlobal,
+} from "../_shared/fasesFixFlip.ts";
+import {
+  generateFichaAcompanhamento, generateRelatorioAcompanhamento,
+  generateMemoriaDescritiva, generateRelatorioSaida,
+} from "../_shared/pdfProjectoFixFlip.ts";
+import { exportProjetoExcel } from "../_shared/projetoExcelExport.ts";
+import { audit } from "../_shared/projetoAuditLog.ts";
+import { gerarResumoProjeto, isConfigured as aiConfigured } from "../_shared/projetoAiAssistant.ts";
+import { sendEmail, isConfigured as emailConfigured } from "../_shared/emailService.ts";
+import { sendWhatsApp } from "../_shared/whatsappAgent.ts";
+import { createClient } from "@supabase/supabase-js";
+import { Buffer } from "node:buffer";
 
 // Variavel de contexto guardada pelos middlewares (port de req.regiaoActiva).
 declare module "@hono/hono" {
@@ -60,6 +75,275 @@ const PATH_TO_TABLE: Record<string, string> = {
 
 // Stub para endpoints cujos handlers dependem de modulos ainda nao portados.
 const notImplemented = (c: any) => c.json({ error: "Not implemented — porting em curso", todo: true }, 501);
+
+// ── Resolucao de utilizador para o CRM (port de routes.js resolveCrmUser) ──
+// O CRM bypassa o auth global mas precisa do user para filtros (acessos,
+// roles restritos, audit, notificacoes in-app). Sem service key (dev) ou sem
+// token -> null (o handler devolve tudo / age como admin, igual ao Express).
+const RECORD_RESTRICTED_ROLES = new Set(["parceiro", "investidor"]);
+const _crmAuthClient = Deno.env.get("SUPABASE_SERVICE_KEY")
+  ? createClient(
+    Deno.env.get("SUPABASE_URL") || "https://mjgusjuougzoeiyavsor.supabase.co",
+    Deno.env.get("SUPABASE_SERVICE_KEY")!,
+  )
+  : null;
+
+async function resolveCrmUser(c: any): Promise<any | null> {
+  if (!_crmAuthClient) return null;
+  const h = c.req.header("authorization");
+  const token = (h?.startsWith("Bearer ") ? h.slice(7) : null) || c.req.query("token");
+  if (!token) return null;
+  try {
+    const { data: { user }, error } = await _crmAuthClient.auth.getUser(token);
+    if (error || !user?.email) return null;
+    // Resolver o app-user a partir do email (port de resolveAppUser, simplificado).
+    const { rows } = await pool.query("SELECT * FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1", [user.email]);
+    return rows[0] || null;
+  } catch { return null; }
+}
+
+// ── Auto-criar fases+tarefas conforme o template da categoria (port de routes.js criarFasesProjecto) ──
+async function criarFasesProjecto(negocioId: string, categoria: string): Promise<void> {
+  const template = getTemplateFases(categoria);
+  if (!template) return; // categoria sem workflow
+
+  const { rows: existentes } = await pool.query("SELECT id FROM projeto_fases WHERE negocio_id = $1 LIMIT 1", [negocioId]);
+  if (existentes.length > 0) return; // idempotente
+
+  const { rows: negRows } = await pool.query("SELECT tipo_projeto FROM negocios WHERE id = $1", [negocioId]);
+  const tipoProjeto = negRows[0]?.tipo_projeto || "fracao_unica";
+
+  let fracaoId: string | null = null;
+  if (tipoProjeto === "fracao_unica") {
+    fracaoId = crypto.randomUUID();
+    await pool.query(
+      `INSERT INTO projeto_fracoes (id, negocio_id, nome, tipo, ordem)
+       VALUES ($1, $2, $3, 'fracao', 0)
+       ON CONFLICT (negocio_id, nome) DO NOTHING`,
+      [fracaoId, negocioId, "Fração Única"],
+    );
+  }
+
+  for (let i = 0; i < template.length; i++) {
+    const fase = template[i];
+    const faseId = crypto.randomUUID();
+    await pool.query(
+      `INSERT INTO projeto_fases (id, negocio_id, fracao_id, fase_key, nome, ordem, estado)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [faseId, negocioId, fracaoId, fase.key, fase.nome, i, i === 0 ? "em_curso" : "pendente"],
+    );
+    for (let j = 0; j < fase.tarefas.length; j++) {
+      await pool.query(
+        `INSERT INTO projeto_tarefas (id, fase_id, descricao, ordem) VALUES ($1, $2, $3, $4)`,
+        [crypto.randomUUID(), faseId, fase.tarefas[j], j],
+      );
+    }
+  }
+}
+const criarFasesFixFlip = (negocioId: string) => criarFasesProjecto(negocioId, "Fix and Flip");
+
+// ── Notificacao in-app (port de routes.js criarNotificacao) ──
+async function criarNotificacao(userId: string, { tipo, titulo, mensagem, link }: any): Promise<void> {
+  try {
+    await pool.query(
+      `INSERT INTO notificacoes (id, user_id, tipo, titulo, mensagem, link) VALUES ($1, $2, $3, $4, $5, $6)`,
+      [crypto.randomUUID(), userId, tipo, titulo, mensagem || null, link || null],
+    );
+  } catch (e) { console.error("[notif]", (e as Error).message); }
+}
+
+// ── Carregar dados completos do projecto (port de routes.js loadProjetoCompleto) ──
+// As fotos sao pre-carregadas como buffers (_data) para o gerador PDF, ja que
+// `/public/uploads` nao existe nos isolates (URLs Supabase obtidas por fetch).
+async function fetchFotoBuffer(url: string): Promise<Buffer | null> {
+  try {
+    if (!url) return null;
+    const target = /^https?:\/\//i.test(url) ? url : null;
+    if (!target) return null; // paths de disco do servidor antigo nao existem
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const r = await fetch(target, { signal: ctrl.signal });
+      if (!r.ok) return null;
+      return Buffer.from(await r.arrayBuffer());
+    } finally { clearTimeout(timer); }
+  } catch { return null; }
+}
+
+async function loadProjetoCompleto(negocioId: string): Promise<any | null> {
+  const { rows: negRows } = await pool.query("SELECT * FROM negocios WHERE id = $1", [negocioId]);
+  if (!negRows.length) return null;
+  const negocio = negRows[0];
+
+  let imovel = null;
+  if (negocio.imovel_id) {
+    const { rows } = await pool.query("SELECT * FROM imoveis WHERE id = $1", [negocio.imovel_id]);
+    imovel = rows[0] || null;
+  }
+
+  const { rows: fases } = await pool.query("SELECT * FROM projeto_fases WHERE negocio_id = $1 ORDER BY ordem", [negocioId]);
+  const faseIds = fases.map((f: any) => f.id);
+  const tarefas = faseIds.length > 0
+    ? (await pool.query("SELECT * FROM projeto_tarefas WHERE fase_id = ANY($1) ORDER BY ordem", [faseIds])).rows
+    : [];
+  const fotos = faseIds.length > 0
+    ? (await pool.query(
+      `SELECT pf.*, f.fase_key, f.nome AS fase_nome FROM projeto_fotos pf
+         JOIN projeto_fases f ON pf.fase_id = f.id
+         WHERE pf.negocio_id = $1 ORDER BY f.ordem, pf.created_at`,
+      [negocioId],
+    )).rows
+    : [];
+  // Preload buffers das fotos (max 6 por documento; o gerador faz slice tambem).
+  for (const foto of fotos.slice(0, 12)) {
+    foto._data = await fetchFotoBuffer(foto.url);
+  }
+
+  let orcamento = null;
+  if (negocio.imovel_id) {
+    const { rows } = await pool.query("SELECT * FROM orcamentos_obra WHERE imovel_id = $1 LIMIT 1", [negocio.imovel_id]).catch(() => ({ rows: [] }));
+    orcamento = rows?.[0] || null;
+    if (orcamento?.seccoes && typeof orcamento.seccoes === "string") {
+      try { orcamento.seccoes = JSON.parse(orcamento.seccoes); } catch { /* ignore */ }
+    }
+  }
+
+  const orcAlocado = fases.reduce((s: number, f: any) => s + (Number(f.orcamento_alocado) || 0), 0);
+  const custoReal = fases.reduce((s: number, f: any) => s + (Number(f.custo_real) || 0), 0);
+  const percGlobal = fases.length > 0
+    ? Math.round(fases.reduce((s: number, f: any) => s + (Number(f.perc_execucao) || 0), 0) / fases.length)
+    : 0;
+
+  return { negocio, imovel, fases, tarefas, fotos, orcamento, orcAlocado, custoReal, percGlobal };
+}
+
+// ── Notificar investidores quando uma fase muda (port de routes.js, best-effort) ──
+async function notificarInvestidoresMudancaFase(negocioId: string, novaFaseKey: string): Promise<void> {
+  try {
+    if (!emailConfigured()) return;
+    const { rows: negs } = await pool.query("SELECT * FROM negocios WHERE id = $1", [negocioId]);
+    if (!negs.length) return;
+    const negocio = negs[0];
+
+    let invIds: any[] = [];
+    try { invIds = typeof negocio.investidor_ids === "string" ? JSON.parse(negocio.investidor_ids || "[]") : (negocio.investidor_ids || []); } catch { /* ignore */ }
+    if (invIds.length === 0) return;
+
+    const regiaoNegocio = negocio.regiao || "Coimbra";
+    const { rows: invs } = await pool.query(
+      `SELECT id, nome, email, telemovel, canal_notificacao, regioes_preferidas FROM investidores
+       WHERE id = ANY($1) AND (canal_notificacao IS NULL OR canal_notificacao <> 'nenhum')`,
+      [invIds],
+    );
+    const invsFiltered = invs.filter((inv: any) => {
+      let prefs: any[] = [];
+      try { prefs = typeof inv.regioes_preferidas === "string" ? JSON.parse(inv.regioes_preferidas || "[]") : (inv.regioes_preferidas || []); } catch { /* ignore */ }
+      if (!Array.isArray(prefs) || prefs.length === 0) return true;
+      return prefs.includes(regiaoNegocio);
+    });
+    if (invsFiltered.length === 0) return;
+
+    const faseConfig = getFaseConfigGlobal(novaFaseKey);
+    const faseNome = faseConfig?.nome || novaFaseKey;
+    const faseIcon = faseConfig?.icon || "🛠️";
+
+    const baseUrl = Deno.env.get("PUBLIC_URL") || "https://somniumproperties-dashboard.onrender.com";
+    const link = `${baseUrl}/projectos/${negocioId}`;
+    const subject = `${faseIcon} ${negocio.movimento}: nova fase de obra — ${faseNome}`;
+    const html = `
+      <div style="font-family: -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; background: #ffffff;">
+        <div style="background: #0d0d0d; padding: 24px; border-radius: 12px; color: white; text-align: center;">
+          <p style="color: #C9A84C; font-size: 11px; letter-spacing: 1px; margin: 0; text-transform: uppercase;">SOMNIUM PROPERTIES</p>
+          <h1 style="color: #C9A84C; margin: 8px 0 0; font-size: 22px;">${negocio.movimento}</h1>
+        </div>
+        <div style="padding: 24px 0;">
+          <p style="font-size: 15px; color: #1f2937; line-height: 1.6;">Tem uma atualização do projeto <strong>${negocio.movimento}</strong>.</p>
+          <div style="background: #f9fafb; border-left: 3px solid #C9A84C; padding: 16px; border-radius: 8px; margin: 16px 0;">
+            <p style="margin: 0; color: #6b7280; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Nova fase iniciada</p>
+            <p style="margin: 6px 0 0; font-size: 18px; font-weight: bold; color: #0d0d0d;">${faseIcon} ${faseNome}</p>
+          </div>
+          <p style="text-align: center; margin: 28px 0;">
+            <a href="${link}" style="background: #0d0d0d; color: #C9A84C; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block;">Ver projeto</a>
+          </p>
+        </div>
+      </div>`;
+    const textoWhatsApp = `🏗️ *Somnium Properties*\n\n${negocio.movimento}: nova fase iniciada\n\n${faseIcon} *${faseNome}*\n\nConsulta o cronograma e fotos no portal: ${link}`;
+
+    const { rows: invsComUser } = await pool.query(
+      `SELECT id, user_id FROM investidores WHERE id = ANY($1) AND user_id IS NOT NULL`, [invIds],
+    );
+    const userIdsPorInv = Object.fromEntries(invsComUser.map((i: any) => [i.id, i.user_id]));
+
+    for (const inv of invsFiltered) {
+      const canal = inv.canal_notificacao || "email";
+      if ((canal === "email" || canal === "ambos") && inv.email) {
+        sendEmail(subject, html, { to: inv.email }).catch((e) => console.error(`[notif-fase] email ${inv.email}:`, e.message));
+      }
+      if ((canal === "whatsapp" || canal === "ambos") && inv.telemovel) {
+        try { await sendWhatsApp(inv.telemovel, textoWhatsApp); } catch (e) { console.error(`[notif-fase] whatsapp ${inv.telemovel}:`, (e as Error).message); }
+      }
+      const userId = userIdsPorInv[inv.id];
+      if (userId) {
+        await criarNotificacao(userId, {
+          tipo: "fase_mudou",
+          titulo: `${negocio.movimento}: ${faseNome}`,
+          mensagem: `Nova fase iniciada — ${faseIcon} ${faseNome}`,
+          link: `/projectos/${negocioId}`,
+        });
+      }
+    }
+  } catch (e) { console.error("[notif-fase]", (e as Error).message); }
+}
+
+// ── Hook automatico quando todas as fracoes sao vendidas (port de routes.js disparoVendaFracaoAutomatico) ──
+async function disparoVendaFracaoAutomatico(fracaoId: string): Promise<void> {
+  try {
+    const { rows: fracs } = await pool.query("SELECT * FROM projeto_fracoes WHERE id = $1", [fracaoId]);
+    if (!fracs.length || fracs[0].estado !== "vendido") return;
+    const negocioId = fracs[0].negocio_id;
+
+    const { rows: todas } = await pool.query("SELECT estado FROM projeto_fracoes WHERE negocio_id = $1 AND tipo = 'fracao'", [negocioId]);
+    const todasVendidas = todas.every((f: any) => f.estado === "vendido");
+    if (!todasVendidas) return;
+
+    if (!emailConfigured()) return;
+    const { rows: negs } = await pool.query("SELECT * FROM negocios WHERE id = $1", [negocioId]);
+    const negocio = negs[0];
+    let invIds: any[] = [];
+    try { invIds = typeof negocio.investidor_ids === "string" ? JSON.parse(negocio.investidor_ids || "[]") : (negocio.investidor_ids || []); } catch { /* ignore */ }
+    if (invIds.length === 0) return;
+
+    const { rows: invs } = await pool.query("SELECT id, nome, email FROM investidores WHERE id = ANY($1) AND email IS NOT NULL", [invIds]);
+    if (invs.length === 0) return;
+
+    const data = await loadProjetoCompleto(negocioId);
+    if (!data) return;
+    const { rows: projInv } = await pool.query(
+      `SELECT pi.capital, pi.percentagem, i.nome FROM projeto_investidores pi
+       JOIN investidores i ON pi.investidor_id = i.id WHERE pi.negocio_id = $1`,
+      [negocioId],
+    );
+    const investidores = projInv.length > 0
+      ? projInv.map((p: any) => ({ nome: p.nome, capital: Number(p.capital) || 0 }))
+      : invs.map((i: any) => ({ nome: i.nome, capital: (Number(negocio.capital_total) || 0) / invs.length }));
+
+    const pdfBuffer = await streamToBuffer(generateRelatorioSaida({ ...data, investidores }));
+    const subject = `${negocio.movimento}: Relatório de Saída CAEP`;
+    const html = `<div style="font-family: -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px;">
+      <div style="background: #0d0d0d; padding: 24px; border-radius: 12px; color: white; text-align: center;">
+        <p style="color: #C9A84C; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; margin: 0;">SOMNIUM PROPERTIES</p>
+        <h1 style="color: #C9A84C; margin: 8px 0 0;">${negocio.movimento}</h1>
+      </div>
+      <p style="font-size: 15px; color: #1f2937; line-height: 1.6;">O projecto foi vendido. Em anexo está o relatório final com a distribuição CAEP.</p>
+    </div>`;
+    for (const inv of invs) {
+      sendEmail(subject, html, {
+        to: inv.email,
+        attachments: [{ filename: `saida-caep-${negocio.movimento.replace(/[^\w]/g, "_")}.pdf`, content: Buffer.from(pdfBuffer).toString("base64") }],
+      }).catch((e) => console.error(`[venda-auto] ${inv.email}:`, e.message));
+    }
+  } catch (e) { console.error("[venda-auto]", (e as Error).message); }
+}
 
 // Regenera a imagem do estudo de localizacao se estiver desactualizada
 // (gerada antes da ultima recolha de distancias, ou legacy sem marca de
@@ -2916,8 +3200,30 @@ app.put("/relatorios-semanais/:id", async (c: any) => {
 // PROJETOS FIX AND FLIP — Fases, Tarefas, Fotos
 // ════════════════════════════════════════════════════════════════
 
-// ── GET lista de projectos (resolveCrmUser/RECORD_RESTRICTED_ROLES) → 501 ──
-app.get("/projetos/meus", notImplemented);
+// ── GET lista de projectos — port de routes.js 3519-3543 ──
+app.get("/projetos/meus", async (c: any) => {
+  try {
+    const u = await resolveCrmUser(c);
+    if (!u) {
+      const { rows } = await pool.query(`SELECT n.*, i.nome AS imovel_nome FROM negocios n LEFT JOIN imoveis i ON n.imovel_id = i.id ORDER BY n.created_at DESC LIMIT 200`);
+      return c.json({ data: rows, role: "admin" });
+    }
+    const isRestricted = RECORD_RESTRICTED_ROLES.has(u.role);
+    if (!isRestricted) {
+      const { rows } = await pool.query(`SELECT n.*, i.nome AS imovel_nome FROM negocios n LEFT JOIN imoveis i ON n.imovel_id = i.id WHERE n.deleted_at IS NULL ORDER BY n.created_at DESC LIMIT 200`);
+      return c.json({ data: rows, role: u.role });
+    }
+    const { rows } = await pool.query(
+      `SELECT n.*, i.nome AS imovel_nome FROM negocios n
+       JOIN acessos a ON a.entidade = 'negocio' AND a.entidade_id = n.id
+       LEFT JOIN imoveis i ON n.imovel_id = i.id
+       WHERE a.user_id = $1 AND n.deleted_at IS NULL
+       ORDER BY n.created_at DESC`,
+      [u.id],
+    );
+    return c.json({ data: rows, role: u.role });
+  } catch (e) { console.error("[projetos/meus]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── GET fases + tarefas + fotos — port de routes.js 3546-3583 ──
 app.get("/projetos/:negocioId/fases", async (c: any) => {
@@ -2959,11 +3265,52 @@ app.get("/projetos/:negocioId/fases", async (c: any) => {
   } catch (e) { console.error("[projetos/fases]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── POST inicializar fases (criarFasesFixFlip/criarFasesProjecto) → 501 ──
-app.post("/projetos/:negocioId/fases/inicializar", notImplemented);
+// ── POST inicializar fases — port de routes.js 3586-3591 ──
+app.post("/projetos/:negocioId/fases/inicializar", async (c: any) => {
+  try {
+    await criarFasesFixFlip(c.req.param("negocioId"));
+    return c.json({ ok: true });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
 
-// ── PUT fase (audit/descreverMudanca/notificarInvestidoresMudancaFase) → 501 ──
-app.put("/projetos/fases/:faseId", notImplemented);
+// ── PUT fase — port de routes.js 3594-3636 ──
+app.put("/projetos/fases/:faseId", async (c: any) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { rows: antes } = await pool.query("SELECT estado, fase_key, negocio_id FROM projeto_fases WHERE id = $1", [c.req.param("faseId")]);
+    const estadoAntes = antes[0]?.estado;
+
+    const allowed = ["estado", "perc_execucao", "data_inicio_prevista", "data_fim_prevista", "data_inicio_real", "data_fim_real", "orcamento_alocado", "custo_real", "responsavel", "notas"];
+    const sets: string[] = [];
+    const params: any[] = [];
+    for (const k of allowed) {
+      if (body[k] !== undefined) {
+        params.push(body[k]);
+        sets.push(`${k} = $${params.length}`);
+      }
+    }
+    if (sets.length === 0) return c.json({ error: "Sem campos para atualizar" }, 400);
+    sets.push(`updated_at = NOW()`);
+    params.push(c.req.param("faseId"));
+    const { rows } = await pool.query(`UPDATE projeto_fases SET ${sets.join(", ")} WHERE id = $${params.length} RETURNING *`, params);
+    if (!rows.length) return c.json({ error: "Fase não encontrada" }, 404);
+
+    if (body.estado === "em_curso" && estadoAntes !== "em_curso") {
+      notificarInvestidoresMudancaFase(rows[0].negocio_id, rows[0].fase_key).catch(() => {});
+    }
+
+    const user = await resolveCrmUser(c).catch(() => null);
+    for (const k of Object.keys(body)) {
+      audit({
+        negocioId: rows[0].negocio_id, entidade: "fase", entidadeId: rows[0].id,
+        acao: "update", campo: k, valorDepois: body[k],
+        descricao: `Fase "${rows[0].nome}": ${k} = ${body[k]}`,
+        user,
+      });
+    }
+    return c.json(rows[0]);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── POST nova tarefa numa fase — port de routes.js 3639-3652 ──
 app.post("/projetos/fases/:faseId/tarefas", async (c: any) => {
@@ -2981,8 +3328,44 @@ app.post("/projetos/fases/:faseId/tarefas", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── PUT tarefa (audit/descreverMudanca/resolveCrmUser) → 501 ──
-app.put("/projetos/tarefas/:tarefaId", notImplemented);
+// ── PUT tarefa — port de routes.js 3655-3694 ──
+app.put("/projetos/tarefas/:tarefaId", async (c: any) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const allowed = ["descricao", "concluida", "responsavel", "deadline", "notas"];
+    const sets: string[] = [];
+    const params: any[] = [];
+    for (const k of allowed) {
+      if (body[k] !== undefined) {
+        params.push(body[k]);
+        sets.push(`${k} = $${params.length}`);
+      }
+    }
+    if (body.concluida !== undefined) {
+      params.push(body.concluida ? new Date().toISOString() : null);
+      sets.push(`concluida_em = $${params.length}`);
+    }
+    if (sets.length === 0) return c.json({ error: "Sem campos" }, 400);
+    params.push(c.req.param("tarefaId"));
+    const { rows } = await pool.query(`UPDATE projeto_tarefas SET ${sets.join(", ")} WHERE id = $${params.length} RETURNING *`, params);
+    if (!rows.length) return c.json({ error: "Tarefa não encontrada" }, 404);
+
+    if (body.concluida !== undefined) {
+      const { rows: faseRows } = await pool.query("SELECT negocio_id FROM projeto_fases WHERE id = $1", [rows[0].fase_id]);
+      const negId = faseRows[0]?.negocio_id;
+      if (negId) {
+        const user = await resolveCrmUser(c).catch(() => null);
+        audit({
+          negocioId: negId, entidade: "tarefa", entidadeId: rows[0].id,
+          acao: "status_change",
+          descricao: `Tarefa "${rows[0].descricao}" ${body.concluida ? "concluída" : "reaberta"}`,
+          user,
+        });
+      }
+    }
+    return c.json(rows[0]);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── DELETE tarefa — port de routes.js 3696-3701 ──
 app.delete("/projetos/tarefas/:tarefaId", async (c: any) => {
@@ -3007,8 +3390,33 @@ app.get("/projetos/:negocioId/fotos", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── POST fotos da fase (multer/uploadFoto/disco) → 501 ──
-app.post("/projetos/fases/:faseId/fotos", notImplemented);
+// ── POST fotos da fase — port de routes.js 3730-3750 ──
+// Multipart (multer array 'fotos', 20) → Hono formData + uploadPublic (bucket "projetos").
+app.post("/projetos/fases/:faseId/fotos", async (c: any) => {
+  try {
+    const { rows: faseRows } = await pool.query("SELECT negocio_id FROM projeto_fases WHERE id = $1", [c.req.param("faseId")]);
+    if (!faseRows.length) return c.json({ error: "Fase não encontrada" }, 404);
+    const negocioId = faseRows[0].negocio_id;
+    const form = await c.req.formData();
+    const files = form.getAll("fotos").filter((f: any): f is File => f instanceof File);
+    const tipo = (typeof form.get("tipo") === "string" ? form.get("tipo") as string : "") || "durante";
+    const legenda = (typeof form.get("legenda") === "string" ? form.get("legenda") as string : "") || "";
+    const inserted: any[] = [];
+    for (const file of files) {
+      const id = crypto.randomUUID();
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const storagePath = `fotos/${negocioId}/${crypto.randomUUID()}_${file.name}`;
+      const url = await uploadPublic("projetos", storagePath, bytes, file.type || "application/octet-stream");
+      const { rows } = await pool.query(
+        `INSERT INTO projeto_fotos (id, fase_id, negocio_id, url, legenda, tipo)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+        [id, c.req.param("faseId"), negocioId, url, legenda, tipo],
+      );
+      inserted.push(rows[0]);
+    }
+    return c.json({ fotos: inserted }, 201);
+  } catch (e) { console.error("[projetos/fotos] upload", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── PUT foto — port de routes.js 3752-3772 ──
 app.put("/projetos/fotos/:fotoId", async (c: any) => {
@@ -3034,20 +3442,149 @@ app.put("/projetos/fotos/:fotoId", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── DELETE foto (unlink de disco) → 501 ──
-app.delete("/projetos/fotos/:fotoId", notImplemented);
+// ── DELETE foto — port de routes.js 3774-3783 (unlink disco → removeFromStorage) ──
+app.delete("/projetos/fotos/:fotoId", async (c: any) => {
+  try {
+    const { rows } = await pool.query("DELETE FROM projeto_fotos WHERE id = $1 RETURNING url", [c.req.param("fotoId")]);
+    const url = rows[0]?.url;
+    if (url && url.includes("supabase.co/storage/")) {
+      const match = url.match(/\/storage\/v1\/object\/public\/projetos\/(.+)$/);
+      if (match) await removeFromStorage("projetos", match[1]);
+    }
+    return c.json({ ok: true });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
 
-// ── PDFs do projecto (loadProjetoCompleto/generate*PDF) → 501 ──
-app.get("/projetos/:negocioId/pdf/ficha/:faseId", notImplemented);
-app.get("/projetos/:negocioId/pdf/relatorio", notImplemented);
-app.get("/projetos/:negocioId/pdf/memoria", notImplemented);
-app.get("/projetos/:negocioId/pdf/saida", notImplemented);
+// ── PDF: Ficha de Acompanhamento (por fase) — port de routes.js 3832-3846 ──
+app.get("/projetos/:negocioId/pdf/ficha/:faseId", async (c: any) => {
+  try {
+    const data = await loadProjetoCompleto(c.req.param("negocioId"));
+    if (!data) return c.json({ error: "Projecto não encontrado" }, 404);
+    const fase = data.fases.find((f: any) => f.id === c.req.param("faseId"));
+    if (!fase) return c.json({ error: "Fase não encontrada" }, 404);
+    const tarefas = data.tarefas.filter((t: any) => t.fase_id === fase.id);
+    const fotos = data.fotos.filter((f: any) => f.fase_id === fase.id);
+    const buf = await streamToBuffer(generateFichaAcompanhamento({ negocio: data.negocio, imovel: data.imovel, fase, tarefas, fotos }));
+    return c.body(buf, 200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="ficha-${fase.fase_key}-${data.negocio.movimento.replace(/[^\w]/g, "_")}.pdf"`,
+    });
+  } catch (e) { console.error("[pdf/ficha]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── PDF: Relatório de Acompanhamento (executivo) — port de routes.js 3849-3858 ──
+app.get("/projetos/:negocioId/pdf/relatorio", async (c: any) => {
+  try {
+    const data = await loadProjetoCompleto(c.req.param("negocioId"));
+    if (!data) return c.json({ error: "Projecto não encontrado" }, 404);
+    const buf = await streamToBuffer(generateRelatorioAcompanhamento(data));
+    return c.body(buf, 200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="relatorio-obra-${data.negocio.movimento.replace(/[^\w]/g, "_")}.pdf"`,
+    });
+  } catch (e) { console.error("[pdf/relatorio]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── PDF: Memória Descritiva de Acabamentos — port de routes.js 3861-3870 ──
+app.get("/projetos/:negocioId/pdf/memoria", async (c: any) => {
+  try {
+    const data = await loadProjetoCompleto(c.req.param("negocioId"));
+    if (!data) return c.json({ error: "Projecto não encontrado" }, 404);
+    const buf = await streamToBuffer(generateMemoriaDescritiva(data));
+    return c.body(buf, 200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="memoria-acabamentos-${data.negocio.movimento.replace(/[^\w]/g, "_")}.pdf"`,
+    });
+  } catch (e) { console.error("[pdf/memoria]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── PDF: Relatório de Saída CAEP — port de routes.js 3873-3905 ──
+app.get("/projetos/:negocioId/pdf/saida", async (c: any) => {
+  try {
+    const data = await loadProjetoCompleto(c.req.param("negocioId"));
+    if (!data) return c.json({ error: "Projecto não encontrado" }, 404);
+
+    let investidores: any[] = [];
+    const { rows: projInv } = await pool.query(
+      `SELECT pi.capital, pi.percentagem, i.nome
+       FROM projeto_investidores pi
+       JOIN investidores i ON pi.investidor_id = i.id
+       WHERE pi.negocio_id = $1
+       ORDER BY pi.capital DESC`,
+      [c.req.param("negocioId")],
+    );
+    if (projInv.length > 0) {
+      investidores = projInv.map((p: any) => ({ nome: p.nome, capital: Number(p.capital) || 0 }));
+    } else {
+      let invIds: any[] = [];
+      try { invIds = typeof data.negocio.investidor_ids === "string" ? JSON.parse(data.negocio.investidor_ids || "[]") : (data.negocio.investidor_ids || []); } catch { /* ignore */ }
+      if (invIds.length > 0) {
+        const { rows } = await pool.query("SELECT id, nome FROM investidores WHERE id = ANY($1)", [invIds]);
+        const capitalPorInv = (Number(data.negocio.capital_total) || 0) / invIds.length;
+        investidores = rows.map((r: any) => ({ id: r.id, nome: r.nome, capital: capitalPorInv }));
+      }
+    }
+    const buf = await streamToBuffer(generateRelatorioSaida({ ...data, investidores }));
+    return c.body(buf, 200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="saida-caep-${data.negocio.movimento.replace(/[^\w]/g, "_")}.pdf"`,
+    });
+  } catch (e) { console.error("[pdf/saida]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── Relatorio Executivo Expansao Gaia (generateRelatorioExpansaoGaia) → 501 ──
 app.get("/relatorios/expansao-gaia", notImplemented);
 
-// ── Mover negocio entre fases (criarFasesProjecto/FASES_POR_CATEGORIA/audit/notif) → 501 ──
-app.put("/projetos/:negocioId/mover-fase", notImplemented);
+// ── Mover negocio entre fases (drag&drop) — port de routes.js 3923-3981 ──
+app.put("/projetos/:negocioId/mover-fase", async (c: any) => {
+  try {
+    const negocioId = c.req.param("negocioId");
+    const { faseKey } = await c.req.json().catch(() => ({}));
+    if (!faseKey) return c.json({ error: "faseKey obrigatório" }, 400);
+    let { rows: fases } = await pool.query("SELECT id, fase_key, ordem FROM projeto_fases WHERE negocio_id = $1 ORDER BY ordem", [negocioId]);
+    if (fases.length === 0) {
+      const { rows: negs } = await pool.query("SELECT categoria FROM negocios WHERE id = $1", [negocioId]);
+      const categoria = negs[0]?.categoria;
+      if (!(FASES_POR_CATEGORIA as any)[categoria]) {
+        return c.json({ error: `Categoria "${categoria || "—"}" não tem workflow de fases.` }, 400);
+      }
+      await criarFasesProjecto(negocioId, categoria);
+      const reload = await pool.query("SELECT id, fase_key, ordem FROM projeto_fases WHERE negocio_id = $1 ORDER BY ordem", [negocioId]);
+      fases = reload.rows;
+      if (fases.length === 0) return c.json({ error: "Falha a inicializar fases" }, 500);
+    }
+
+    const novaFase = fases.find((f: any) => f.fase_key === faseKey);
+    if (!novaFase) return c.json({ error: "Fase inválida" }, 400);
+
+    for (const f of fases) {
+      let estado, perc;
+      if (f.ordem < novaFase.ordem) { estado = "concluida"; perc = 100; }
+      else if (f.ordem === novaFase.ordem) { estado = "em_curso"; perc = Math.max(1, Math.min(99, 50)); }
+      else { estado = "pendente"; perc = 0; }
+      await pool.query(
+        `UPDATE projeto_fases SET estado = $1,
+           perc_execucao = CASE WHEN $2 = 100 THEN 100 WHEN $2 = 0 THEN 0 ELSE perc_execucao END,
+           ${f.ordem === novaFase.ordem ? "data_inicio_real = COALESCE(data_inicio_real, $4)," : ""}
+           updated_at = NOW()
+         WHERE id = $3`,
+        f.ordem === novaFase.ordem
+          ? [estado, perc, f.id, new Date().toISOString().slice(0, 10)]
+          : [estado, perc, f.id],
+      );
+    }
+    notificarInvestidoresMudancaFase(negocioId, faseKey).catch(() => {});
+
+    const user = await resolveCrmUser(c).catch(() => null);
+    audit({
+      negocioId, entidade: "negocio", entidadeId: negocioId,
+      acao: "status_change", campo: "fase_atual", valorDepois: faseKey,
+      descricao: `Projecto movido para fase "${faseKey}"`,
+      user,
+    });
+    return c.json({ ok: true, faseKey });
+  } catch (e) { console.error("[mover-fase]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── GET documentos do projecto — port de routes.js 4108-4120 ──
 app.get("/projetos/:negocioId/documentos", async (c: any) => {
@@ -3064,8 +3601,32 @@ app.get("/projetos/:negocioId/documentos", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── POST documentos do projecto (multer/uploadDoc/disco) → 501 ──
-app.post("/projetos/:negocioId/documentos", notImplemented);
+// ── POST documentos do projecto — port de routes.js 4122-4138 ──
+// Multipart (multer array 'files', 10) → Hono formData + uploadPublic (bucket "projetos").
+app.post("/projetos/:negocioId/documentos", async (c: any) => {
+  try {
+    const negocioId = c.req.param("negocioId");
+    const form = await c.req.formData();
+    const files = form.getAll("files").filter((f: any): f is File => f instanceof File);
+    const faseId = typeof form.get("faseId") === "string" ? form.get("faseId") as string : null;
+    const tipo = typeof form.get("tipo") === "string" ? form.get("tipo") as string : null;
+    const notas = typeof form.get("notas") === "string" ? form.get("notas") as string : null;
+    const inserted: any[] = [];
+    for (const file of files) {
+      const id = crypto.randomUUID();
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const storagePath = `docs/${negocioId}/${crypto.randomUUID()}_${file.name}`;
+      const url = await uploadPublic("projetos", storagePath, bytes, file.type || "application/octet-stream");
+      const { rows } = await pool.query(
+        `INSERT INTO projeto_documentos (id, fase_id, negocio_id, url, nome, tipo, tamanho, mime, notas)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+        [id, faseId || null, negocioId, url, file.name, tipo || "outro", file.size, file.type, notas || null],
+      );
+      inserted.push(rows[0]);
+    }
+    return c.json({ documentos: inserted }, 201);
+  } catch (e) { console.error("[projetos/documentos] upload", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── PUT documento do projecto — port de routes.js 4140-4157 ──
 app.put("/projetos/documentos/:docId", async (c: any) => {
@@ -3088,8 +3649,18 @@ app.put("/projetos/documentos/:docId", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── DELETE documento do projecto (unlink de disco) → 501 ──
-app.delete("/projetos/documentos/:docId", notImplemented);
+// ── DELETE documento do projecto — port de routes.js 4159-4168 (unlink → removeFromStorage) ──
+app.delete("/projetos/documentos/:docId", async (c: any) => {
+  try {
+    const { rows } = await pool.query("DELETE FROM projeto_documentos WHERE id = $1 RETURNING url", [c.req.param("docId")]);
+    const url = rows[0]?.url;
+    if (url && url.includes("supabase.co/storage/")) {
+      const match = url.match(/\/storage\/v1\/object\/public\/projetos\/(.+)$/);
+      if (match) await removeFromStorage("projetos", match[1]);
+    }
+    return c.json({ ok: true });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── GET despesas por fase — port de routes.js 4171-4183 ──
 app.get("/projetos/:negocioId/despesas", async (c: any) => {
@@ -3106,11 +3677,57 @@ app.get("/projetos/:negocioId/despesas", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── POST despesa por fase (audit/descreverMudanca/resolveCrmUser) → 501 ──
-app.post("/projetos/:negocioId/despesas", notImplemented);
+// ── POST despesa por fase — port de routes.js 4185-4214 ──
+app.post("/projetos/:negocioId/despesas", async (c: any) => {
+  try {
+    const negocioId = c.req.param("negocioId");
+    const { fase_id, fracao_id, movimento, valor, data, categoria, fornecedor, notas, comprovativo_url, comprovativo_nome } = await c.req.json().catch(() => ({}));
+    if (!movimento?.trim()) return c.json({ error: "movimento obrigatório" }, 400);
+    const id = crypto.randomUUID();
+    const { rows } = await pool.query(
+      `INSERT INTO despesas (id, movimento, categoria, custo_mensal, custo_anual, timing, data, notas, negocio_id, fase_id, fracao_id, fornecedor, comprovativo_url, comprovativo_nome)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+      [id, movimento.trim(), categoria || "Obra", Number(valor) || 0, 0, "Único", data || null, notas || null,
+        negocioId, fase_id || null, fracao_id || null,
+        fornecedor || null, comprovativo_url || null, comprovativo_nome || null],
+    );
+    if (fase_id) {
+      await pool.query(
+        `UPDATE projeto_fases SET custo_real = (SELECT COALESCE(SUM(custo_mensal), 0) FROM despesas WHERE fase_id = $1), updated_at = NOW() WHERE id = $1`,
+        [fase_id],
+      );
+    }
+    const user = await resolveCrmUser(c).catch(() => null);
+    audit({
+      negocioId, entidade: "despesa", entidadeId: id,
+      acao: "create", valorDepois: `${movimento.trim()} (${Number(valor) || 0}€)`,
+      descricao: `Despesa registada: ${movimento.trim()} — ${Number(valor) || 0}€${fornecedor ? ` · ${fornecedor}` : ""}`,
+      user,
+    });
+    return c.json(rows[0], 201);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
 
-// ── POST comprovativo (multer/uploadComprovativo/disco) → 501 ──
-app.post("/projetos/despesas/:despesaId/comprovativo", notImplemented);
+// ── POST comprovativo de despesa — port de routes.js 4229-4240 ──
+// Multipart (multer single 'comprovativo') → Hono formData + uploadPublic (bucket "projetos").
+app.post("/projetos/despesas/:despesaId/comprovativo", async (c: any) => {
+  try {
+    const despesaId = c.req.param("despesaId");
+    const form = await c.req.formData();
+    const fRaw = form.get("comprovativo");
+    const file = fRaw instanceof File ? fRaw : null;
+    if (!file) return c.json({ error: "Sem ficheiro" }, 400);
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const storagePath = `comprovativos/${despesaId}/${crypto.randomUUID()}_${file.name}`;
+    const url = await uploadPublic("projetos", storagePath, bytes, file.type || "application/octet-stream");
+    const { rows } = await pool.query(
+      `UPDATE despesas SET comprovativo_url = $1, comprovativo_nome = $2 WHERE id = $3 RETURNING *`,
+      [url, file.name, despesaId],
+    );
+    if (!rows.length) return c.json({ error: "Despesa não encontrada" }, 404);
+    return c.json(rows[0]);
+  } catch (e) { console.error("[comprovativo]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── DELETE despesa do projecto — port de routes.js 4242-4253 ──
 app.delete("/projetos/despesas/:despesaId", async (c: any) => {
@@ -3254,8 +3871,42 @@ app.post("/projetos/:negocioId/fracoes", async (c: any) => {
   }
 });
 
-// ── PUT fracao (disparoVendaFracaoAutomatico/audit/resolveCrmUser) → 501 ──
-app.put("/projetos/fracoes/:fracaoId", notImplemented);
+// ── PUT fracao — port de routes.js 4382-4416 ──
+app.put("/projetos/fracoes/:fracaoId", async (c: any) => {
+  try {
+    const fracaoId = c.req.param("fracaoId");
+    const body = await c.req.json().catch(() => ({}));
+    const { rows: antes } = await pool.query("SELECT estado, negocio_id, nome FROM projeto_fracoes WHERE id = $1", [fracaoId]);
+    const estadoAntes = antes[0]?.estado;
+
+    const allowed = ["nome", "tipo", "categoria_comum", "tipologia", "andar", "area_m2", "estado", "valor_venda_estimado", "valor_venda_real", "data_venda_estimada", "data_venda_real", "comprador", "notas", "ordem"];
+    const sets: string[] = [];
+    const params: any[] = [];
+    for (const k of allowed) {
+      if (body[k] !== undefined) {
+        params.push(body[k]);
+        sets.push(`${k} = $${params.length}`);
+      }
+    }
+    if (sets.length === 0) return c.json({ error: "Sem campos" }, 400);
+    sets.push(`updated_at = NOW()`);
+    params.push(fracaoId);
+    const { rows } = await pool.query(`UPDATE projeto_fracoes SET ${sets.join(", ")} WHERE id = $${params.length} RETURNING *`, params);
+    if (!rows.length) return c.json({ error: "Fração não encontrada" }, 404);
+
+    if (body.estado === "vendido" && estadoAntes !== "vendido") {
+      disparoVendaFracaoAutomatico(fracaoId).catch(() => {});
+      const user = await resolveCrmUser(c).catch(() => null);
+      audit({
+        negocioId: rows[0].negocio_id, entidade: "fracao", entidadeId: rows[0].id,
+        acao: "status_change",
+        descricao: `Fração "${rows[0].nome}" marcada como Vendida`,
+        user,
+      });
+    }
+    return c.json(rows[0]);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── DELETE fracao — port de routes.js 4418-4427 ──
 app.delete("/projetos/fracoes/:fracaoId", async (c: any) => {
@@ -3268,8 +3919,19 @@ app.delete("/projetos/fracoes/:fracaoId", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Export Excel completo do projecto (projetoExcelExport/streams) → 501 ──
-app.get("/projetos/:negocioId/export-excel", notImplemented);
+// ── Export Excel completo do projecto — port de routes.js 4430-4439 ──
+// O modulo devolve { workbook, filename }; geramos o buffer via xlsx.writeBuffer().
+app.get("/projetos/:negocioId/export-excel", async (c: any) => {
+  try {
+    const result = await exportProjetoExcel(c.req.param("negocioId"));
+    if (!result) return c.json({ error: "Projecto não encontrado" }, 404);
+    const buf = await result.workbook.xlsx.writeBuffer();
+    return c.body(new Uint8Array(buf), 200, {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="${result.filename}"`,
+    });
+  } catch (e) { console.error("[export-excel]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── Forecast de tesouraria — port de routes.js 4443-4533 ──
 app.get("/projetos/:negocioId/forecast", async (c: any) => {
@@ -3354,8 +4016,85 @@ app.get("/projetos/:negocioId/forecast", async (c: any) => {
   } catch (e) { console.error("[forecast]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── IA preditiva de portfolio (Anthropic SDK) → 501 ──
-app.get("/projetos/portfolio/ia-predicoes", notImplemented);
+// ── IA preditiva de portfolio — port de routes.js 4611-4689 ──
+let _predicoesCache: any = null;
+let _predicoesExpires = 0;
+app.get("/projetos/portfolio/ia-predicoes", async (c: any) => {
+  try {
+    const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!ANTHROPIC_KEY) return c.json({ error: "AI não configurada" }, 503);
+    if (c.req.query("fresh") !== "1" && _predicoesCache && _predicoesExpires > Date.now()) {
+      return c.json({ ..._predicoesCache, cached: true });
+    }
+    const client = new Anthropic({ apiKey: ANTHROPIC_KEY });
+
+    const { rows: projectos } = await pool.query(
+      `SELECT n.id, n.movimento, n.categoria, n.data_compra, n.data_estimada_venda
+       FROM negocios n
+       WHERE n.categoria = 'Fix and Flip' AND (n.fase IS NULL OR n.fase <> 'Vendido')`,
+    );
+
+    const contextos: any[] = [];
+    for (const p of projectos) {
+      const { rows: fases } = await pool.query(
+        `SELECT nome, estado, perc_execucao, data_fim_prevista FROM projeto_fases
+         WHERE negocio_id = $1 ORDER BY ordem`, [p.id],
+      );
+      if (fases.length === 0) continue;
+      contextos.push({
+        id: p.id,
+        nome: p.movimento,
+        venda_estimada: p.data_estimada_venda,
+        fases: fases.map((f: any) => `${f.nome}: ${f.estado} ${f.perc_execucao || 0}% ${f.data_fim_prevista ? `(prev. ${f.data_fim_prevista})` : ""}`),
+      });
+    }
+
+    if (contextos.length === 0) return c.json({ predicoes: [] });
+
+    const prompt = `És um consultor de obra experiente. Analisa o estado destes projectos Fix and Flip e identifica os que estão em RISCO de atraso ou desvio orçamental significativo.
+
+Hoje é ${new Date().toLocaleDateString("pt-PT")}.
+
+PROJECTOS:
+${contextos.map((ctx) => `\n--- ${ctx.nome} (venda esperada ${ctx.venda_estimada || "—"}) ---\n${ctx.fases.join("\n")}`).join("\n")}
+
+Devolve JSON estrito:
+{
+  "predicoes": [
+    { "projeto_id": "id-do-projecto", "projeto_nome": "nome", "risco": "alto"|"medio"|"baixo", "razao": "1 frase curta", "acao_recomendada": "1 acção concreta" }
+  ]
+}
+
+Regras:
+- Considera "alto" risco quando há fase em curso com data prevista a menos de 30 dias mas <50% executada, ou venda esperada nos próximos 60 dias com obra incompleta.
+- "medio" se há sinais preocupantes mas ainda há margem.
+- Apenas inclui projectos onde haja efectivamente risco. NÃO listes projectos saudáveis.
+- Máximo 10 entradas. Devolve APENAS o JSON, sem texto à volta.`;
+
+    const t0 = Date.now();
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 2000,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = (response.content[0] as any)?.text || "{}";
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    let parsed;
+    try { parsed = JSON.parse(jsonMatch ? jsonMatch[0] : text); }
+    catch { return c.json({ error: "Resposta IA inválida" }, 500); }
+
+    const result = {
+      predicoes: parsed.predicoes || [],
+      gerado_em: new Date().toISOString(),
+      ms: Date.now() - t0,
+      modelo: "claude-sonnet-4-6",
+      total_analisados: contextos.length,
+    };
+    _predicoesCache = result;
+    _predicoesExpires = Date.now() + 30 * 60 * 1000;
+    return c.json(result);
+  } catch (e) { console.error("[ia-predicoes]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── F15 — Assinaturas digitais in-house — port de routes.js 4696-4745 ──
 app.post("/projetos/:negocioId/assinaturas", async (c: any) => {
@@ -3407,8 +4146,22 @@ app.post("/assinaturas/:token/aceitar", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── F18 — Analytics do investidor (resolveCrmUser) → 501 ──
-app.post("/projetos/:negocioId/track", notImplemented);
+// ── F18 — Track de visita do investidor — port de routes.js 4750-4763 ──
+app.post("/projetos/:negocioId/track", async (c: any) => {
+  try {
+    const u = await resolveCrmUser(c).catch(() => null);
+    if (!u) return c.json({ ok: true, skipped: true });
+    const body = await c.req.json().catch(() => ({}));
+    const ip = c.req.header("x-forwarded-for")?.split(",")[0].trim() || "unknown";
+    const ua = c.req.header("user-agent") || "";
+    await pool.query(
+      `INSERT INTO investidor_acessos (id, user_id, negocio_id, pagina, tab, ip, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [crypto.randomUUID(), u.id, c.req.param("negocioId"), body?.pagina || null, body?.tab || null, ip.slice(0, 45), ua.slice(0, 250)],
+    );
+    return c.json({ ok: true });
+  } catch (e) { return c.json({ ok: false, error: (e as Error).message }); }
+});
 
 // ── GET analytics do projecto — port de routes.js 4765-4785 ──
 app.get("/projetos/:negocioId/analytics", async (c: any) => {
@@ -3433,14 +4186,64 @@ app.get("/projetos/:negocioId/analytics", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── F19 — Notificacoes in-app (resolveCrmUser) → 501 ──
-app.get("/notificacoes", notImplemented);
-app.get("/notificacoes/count", notImplemented);
-app.post("/notificacoes/marcar-lidas", notImplemented);
+// ── F19 — Notificacoes in-app — port de routes.js 4790-4827 ──
+app.get("/notificacoes", async (c: any) => {
+  try {
+    const u = await resolveCrmUser(c).catch(() => null);
+    if (!u) return c.json({ notificacoes: [], unread: 0 });
+    const { rows } = await pool.query("SELECT * FROM notificacoes WHERE user_id = $1 ORDER BY created_at DESC LIMIT 30", [u.id]);
+    const { rows: unreadRows } = await pool.query("SELECT COUNT(*)::int AS c FROM notificacoes WHERE user_id = $1 AND lida = false", [u.id]);
+    return c.json({ notificacoes: rows, unread: unreadRows[0]?.c || 0 });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
 
-// ── F16 — Templates de obra (FASES_POR_CATEGORIA/resolveCrmUser) → 501 ──
-app.get("/projetos/templates", notImplemented);
-app.post("/projetos/templates", notImplemented);
+app.get("/notificacoes/count", async (c: any) => {
+  try {
+    const u = await resolveCrmUser(c).catch(() => null);
+    if (!u) return c.json({ unread: 0 });
+    const { rows } = await pool.query("SELECT COUNT(*)::int AS c FROM notificacoes WHERE user_id = $1 AND lida = false", [u.id]);
+    return c.json({ unread: rows[0]?.c || 0 });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/notificacoes/marcar-lidas", async (c: any) => {
+  try {
+    const u = await resolveCrmUser(c).catch(() => null);
+    if (!u) return c.json({ ok: false });
+    await pool.query("UPDATE notificacoes SET lida = true WHERE user_id = $1", [u.id]);
+    return c.json({ ok: true });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── F16 — Templates de obra — port de routes.js 4842-4869 ──
+app.get("/projetos/templates", async (c: any) => {
+  try {
+    const u = await resolveCrmUser(c).catch(() => null);
+    const { rows } = await pool.query("SELECT * FROM projeto_templates WHERE publico = true OR created_by = $1 ORDER BY nome", [u?.id || ""]);
+    const defaults = [
+      { id: "__default_ff__", nome: "Fix and Flip (default)", descricao: "8 fases padrão para reabilitação em PT", fases_json: JSON.stringify(FASES_POR_CATEGORIA["Fix and Flip"]) },
+      { id: "__default_caep__", nome: "CAEP (default)", descricao: "8 fases (igual ao Fix and Flip)", fases_json: JSON.stringify(FASES_POR_CATEGORIA["CAEP"]) },
+      { id: "__default_whs__", nome: "Wholesalling (default)", descricao: "7 fases — prospecção a fee recebido", fases_json: JSON.stringify(FASES_POR_CATEGORIA["Wholesalling"]) },
+      { id: "__default_med__", nome: "Mediação Imobiliária (default)", descricao: "7 fases — captação a escritura", fases_json: JSON.stringify(FASES_POR_CATEGORIA["Mediação Imobiliária"]) },
+    ].map((t) => ({ ...t, publico: true, created_at: null }));
+    return c.json({ templates: [...defaults, ...rows] });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/projetos/templates", async (c: any) => {
+  try {
+    const { nome, descricao, fases_json } = await c.req.json().catch(() => ({}));
+    if (!nome?.trim() || !fases_json) return c.json({ error: "nome e fases_json obrigatórios" }, 400);
+    const id = crypto.randomUUID();
+    const u = await resolveCrmUser(c).catch(() => null);
+    const { rows } = await pool.query(
+      `INSERT INTO projeto_templates (id, nome, descricao, fases_json, created_by)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [id, nome.trim(), descricao || null, typeof fases_json === "string" ? fases_json : JSON.stringify(fases_json), u?.id || null],
+    );
+    return c.json(rows[0], 201);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── DELETE template — port de routes.js 4871-4876 ──
 app.delete("/projetos/templates/:id", async (c: any) => {
@@ -3473,8 +4276,24 @@ app.get("/projetos/fases/:faseId/comentarios", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── POST comentario por fase (resolveCrmUser) → 501 ──
-app.post("/projetos/fases/:faseId/comentarios", notImplemented);
+// ── POST comentario por fase — port de routes.js 4901-4915 ──
+app.post("/projetos/fases/:faseId/comentarios", async (c: any) => {
+  try {
+    const faseId = c.req.param("faseId");
+    const { texto } = await c.req.json().catch(() => ({}));
+    if (!texto?.trim()) return c.json({ error: "texto obrigatório" }, 400);
+    const { rows: faseRows } = await pool.query("SELECT negocio_id FROM projeto_fases WHERE id = $1", [faseId]);
+    if (!faseRows.length) return c.json({ error: "Fase não encontrada" }, 404);
+    const user = await resolveCrmUser(c).catch(() => null);
+    const id = crypto.randomUUID();
+    const { rows } = await pool.query(
+      `INSERT INTO projeto_comentarios (id, fase_id, negocio_id, autor_id, autor_nome, texto)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [id, faseId, faseRows[0].negocio_id, user?.id || null, user?.nome || user?.email || "Sistema", texto.trim()],
+    );
+    return c.json(rows[0], 201);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── DELETE comentario — port de routes.js 4918-4923 ──
 app.delete("/projetos/comentarios/:comentarioId", async (c: any) => {
@@ -3484,14 +4303,124 @@ app.delete("/projetos/comentarios/:comentarioId", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── P3.16 — Calendario (resolveCrmUser/RECORD_RESTRICTED_ROLES) → 501 ──
-app.get("/projetos/calendario", notImplemented);
+// ── P3.16 — Calendario: deadlines de fases e tarefas — port de routes.js 4928-4971 ──
+app.get("/projetos/calendario", async (c: any) => {
+  try {
+    const qFrom = c.req.query("from");
+    const qTo = c.req.query("to");
+    const from = qFrom ? new Date(qFrom) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const to = qTo ? new Date(qTo) : new Date(new Date().getFullYear(), new Date().getMonth() + 2, 0);
+    const fromStr = from.toISOString().slice(0, 10);
+    const toStr = to.toISOString().slice(0, 10);
 
-// ── P3.18 — AI assistant resumo (gerarResumoProjeto) → 501 ──
-app.get("/projetos/:negocioId/ai-resumo", notImplemented);
+    const u = await resolveCrmUser(c);
+    const isRestricted = u && RECORD_RESTRICTED_ROLES.has(u.role);
+    const filtro = isRestricted
+      ? `n.id IN (SELECT entidade_id FROM acessos WHERE entidade = 'negocio' AND user_id = $3)`
+      : `1=1`;
+    const params = isRestricted ? [fromStr, toStr, u.id] : [fromStr, toStr];
 
-// ── F2.7 — KPIs portfolio (resolveCrmUser/RECORD_RESTRICTED_ROLES) → 501 ──
-app.get("/projetos/portfolio/kpis", notImplemented);
+    const { rows: fases } = await pool.query(
+      `SELECT f.id, f.nome AS titulo, f.data_fim_prevista AS data, f.estado, f.fase_key,
+              n.id AS negocio_id, n.movimento AS projeto
+       FROM projeto_fases f
+       JOIN negocios n ON n.id = f.negocio_id
+       WHERE f.data_fim_prevista IS NOT NULL
+         AND f.data_fim_prevista::date BETWEEN $1::date AND $2::date
+         AND ${filtro}`,
+      params,
+    );
+    const { rows: tarefas } = await pool.query(
+      `SELECT t.id, t.descricao AS titulo, t.deadline AS data, t.concluida, t.responsavel,
+              f.fase_key, f.nome AS fase,
+              n.id AS negocio_id, n.movimento AS projeto
+       FROM projeto_tarefas t
+       JOIN projeto_fases f ON t.fase_id = f.id
+       JOIN negocios n ON n.id = f.negocio_id
+       WHERE t.deadline IS NOT NULL
+         AND t.deadline::date BETWEEN $1::date AND $2::date
+         AND ${filtro}`,
+      params,
+    );
+
+    const eventos = [
+      ...fases.map((f: any) => ({ ...f, tipo: "fase" })),
+      ...tarefas.map((t: any) => ({ ...t, tipo: "tarefa" })),
+    ];
+    return c.json({ eventos, from: fromStr, to: toStr });
+  } catch (e) { console.error("[calendario]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── P3.18 — AI assistant: resumo do projecto — port de routes.js 4974-4982 ──
+app.get("/projetos/:negocioId/ai-resumo", async (c: any) => {
+  try {
+    if (!aiConfigured()) return c.json({ error: "AI não configurada (ANTHROPIC_API_KEY)" }, 503);
+    const ignorarCache = c.req.query("fresh") === "1";
+    const r = await gerarResumoProjeto(c.req.param("negocioId"), { ignorarCache });
+    if (!r.ok) return c.json({ error: r.error }, 500);
+    return c.json(r);
+  } catch (e) { console.error("[ai-resumo]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── F2.7 — KPIs agregados de portfolio Fix and Flip — port de routes.js 4985-5043 ──
+app.get("/projetos/portfolio/kpis", async (c: any) => {
+  try {
+    const u = await resolveCrmUser(c);
+    const isRestricted = u && RECORD_RESTRICTED_ROLES.has(u.role);
+
+    const filterNegocio = isRestricted
+      ? `n.id IN (SELECT entidade_id FROM acessos WHERE entidade = 'negocio' AND user_id = $1)`
+      : `1=1`;
+    const params = isRestricted ? [u.id] : [];
+
+    const { rows: stats } = await pool.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE n.categoria = 'Fix and Flip') AS total_ff,
+         COUNT(*) FILTER (WHERE n.categoria = 'Fix and Flip' AND n.fase <> 'Vendido') AS ativos_ff,
+         COALESCE(SUM(n.lucro_estimado) FILTER (WHERE n.categoria = 'Fix and Flip'), 0) AS lucro_estimado_total,
+         COALESCE(SUM(n.lucro_real) FILTER (WHERE n.categoria = 'Fix and Flip'), 0) AS lucro_real_total,
+         COALESCE(SUM(n.capital_total) FILTER (WHERE n.categoria = 'Fix and Flip'), 0) AS capital_total
+       FROM negocios n WHERE ${filterNegocio}`,
+      params,
+    );
+
+    const { rows: faseStats } = await pool.query(
+      `SELECT estado, COUNT(*) AS c FROM projeto_fases f
+       JOIN negocios n ON n.id = f.negocio_id
+       WHERE ${filterNegocio}
+       GROUP BY estado`,
+      params,
+    );
+    const { rows: atrasos } = await pool.query(
+      `SELECT f.id, f.nome, f.data_fim_prevista, n.id AS negocio_id, n.movimento, n.categoria,
+              (CURRENT_DATE - f.data_fim_prevista::date)::int AS dias_atraso
+       FROM projeto_fases f
+       JOIN negocios n ON n.id = f.negocio_id
+       WHERE f.data_fim_prevista IS NOT NULL
+         AND f.data_fim_prevista::date < CURRENT_DATE
+         AND f.estado <> 'concluida'
+         AND ${filterNegocio}
+       ORDER BY dias_atraso DESC
+       LIMIT 5`,
+      params,
+    );
+    const { rows: distribuicao } = await pool.query(
+      `SELECT f.fase_key, f.nome, COUNT(*) AS projetos
+       FROM projeto_fases f
+       JOIN negocios n ON n.id = f.negocio_id
+       WHERE f.estado = 'em_curso' AND ${filterNegocio}
+       GROUP BY f.fase_key, f.nome ORDER BY projetos DESC`,
+      params,
+    );
+
+    return c.json({
+      totais: stats[0],
+      fases: Object.fromEntries(faseStats.map((r: any) => [r.estado, Number(r.c)])),
+      topAtrasos: atrasos,
+      distribuicaoFases: distribuicao,
+    });
+  } catch (e) { console.error("[portfolio/kpis]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── Vista agregada por negocio — port de routes.js 5047-5075 ──
 app.get("/projetos/:negocioId/resumo", async (c: any) => {
