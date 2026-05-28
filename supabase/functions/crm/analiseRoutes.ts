@@ -3,14 +3,12 @@
  * Cada imóvel pode ter N análises, 1 activa (alimenta KPIs).
  * Port de src/db/analiseRoutes.js (Express -> Hono). Registado sob basePath /crm.
  *
- * Endpoints de upload (stress-screenshot, alfredo-imagem) dependem de
- * multer/Supabase Storage (routes.js, não portado) → stub 501.
+ * Endpoints de upload (stress-screenshot, alfredo-imagem) usam Supabase Storage
+ * (multipart via c.req.formData(); disco substituído por buckets públicos).
  */
 import pool from "../_shared/pg.ts";
 import { calcAnalise, calcStressTests, calcCAEP, quickCheck } from "../_shared/calcEngine.ts";
-
-// Stub para endpoints cujos handlers dependem de modulos ainda nao portados.
-const notImplemented = (c: any) => c.json({ error: "Not implemented — porting em curso", todo: true }, 501);
+import { uploadPublic, removeFromStorage } from "../_shared/storage.ts";
 
 // Campos de input (enviados pelo frontend)
 const INPUT_FIELDS = new Set([
@@ -366,10 +364,87 @@ export function registerAnaliseRoutes(app: any) {
     } catch (e) { return c.json({ error: (e as Error).message }, 500); }
   });
 
-  // ── Upload screenshot dos stress tests (multer/disco) → 501 ──
-  app.post("/analises/:id/stress-screenshot", notImplemented);
+  // ── Upload screenshot dos stress tests (Storage) ────────────
+  app.post("/analises/:id/stress-screenshot", async (c: any) => {
+    try {
+      const id = c.req.param("id");
+      const form = await c.req.formData();
+      const file = form.get("screenshot");
+      if (!file || typeof file === "string") return c.json({ error: "Ficheiro não recebido" }, 400);
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const url = await uploadPublic("stress-tests", `${id}.png`, bytes, (file as any).type || "image/png");
+      return c.json({ ok: true, path: url });
+    } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+  });
 
-  // ── Upload imagem do estudo de mercado externo (Alfredo) (uploadImovel/supabaseStorage) → 501 ──
-  app.post("/analises/:id/alfredo-imagem", notImplemented);
-  app.delete("/analises/:id/alfredo-imagem", notImplemented);
+  // ── Upload imagem do estudo de mercado externo (Alfredo) ────
+  // Guardada em meta.alfredo_imagem dentro do JSONB analises.comparaveis
+  app.post("/analises/:id/alfredo-imagem", async (c: any) => {
+    try {
+      const id = c.req.param("id");
+      const form = await c.req.formData();
+      const file = form.get("imagem");
+      if (!file || typeof file === "string") {
+        return c.json({ error: "Nenhum ficheiro válido (JPG, PNG, WEBP até 15MB)" }, 400);
+      }
+      const { rows: [analise] } = await pool.query("SELECT * FROM analises WHERE id = $1", [id]);
+      if (!analise) return c.json({ error: "Análise não encontrada" }, 404);
+
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const storagePath = `analises/${id}/alfredo_${Date.now()}.png`;
+      const filePath = await uploadPublic("Imoveis", storagePath, bytes, (file as any).type || "image/png");
+
+      // Mergir filePath em meta.alfredo_imagem (preservar tipologias e restantes meta)
+      const raw = analise.comparaveis;
+      let parsed: any;
+      try { parsed = typeof raw === "string" ? JSON.parse(raw || "null") : raw; } catch { parsed = null; }
+      let next: any;
+      if (Array.isArray(parsed)) {
+        next = { _version: 2, meta: { alfredo_imagem: filePath }, tipologias: parsed };
+      } else if (parsed && typeof parsed === "object") {
+        next = { ...parsed, _version: 2, meta: { ...(parsed.meta || {}), alfredo_imagem: filePath }, tipologias: parsed.tipologias || [] };
+      } else {
+        next = { _version: 2, meta: { alfredo_imagem: filePath }, tipologias: [] };
+      }
+      await pool.query(
+        "UPDATE analises SET comparaveis = $1, updated_at = $2 WHERE id = $3",
+        [JSON.stringify(next), new Date().toISOString(), id],
+      );
+      return c.json({ ok: true, alfredo_imagem: filePath });
+    } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+  });
+
+  app.delete("/analises/:id/alfredo-imagem", async (c: any) => {
+    try {
+      const id = c.req.param("id");
+      const { rows: [analise] } = await pool.query("SELECT * FROM analises WHERE id = $1", [id]);
+      if (!analise) return c.json({ error: "Análise não encontrada" }, 404);
+
+      const raw = analise.comparaveis;
+      let parsed: any;
+      try { parsed = typeof raw === "string" ? JSON.parse(raw || "null") : raw; } catch { parsed = null; }
+      const url = (parsed && !Array.isArray(parsed) && parsed.meta) ? parsed.meta.alfredo_imagem : null;
+
+      // Best-effort: remover do Storage (path sob bucket "Imoveis").
+      if (url && typeof url === "string" && url.includes("supabase.co/storage/")) {
+        const match = url.match(/\/storage\/v1\/object\/public\/Imoveis\/(.+)$/);
+        if (match) await removeFromStorage("Imoveis", match[1]);
+      }
+
+      let next: any;
+      if (Array.isArray(parsed)) {
+        next = { _version: 2, meta: {}, tipologias: parsed };
+      } else if (parsed && typeof parsed === "object") {
+        const { alfredo_imagem: _drop, ...metaRest } = parsed.meta || {};
+        next = { ...parsed, _version: 2, meta: metaRest, tipologias: parsed.tipologias || [] };
+      } else {
+        next = { _version: 2, meta: {}, tipologias: [] };
+      }
+      await pool.query(
+        "UPDATE analises SET comparaveis = $1, updated_at = $2 WHERE id = $3",
+        [JSON.stringify(next), new Date().toISOString(), id],
+      );
+      return c.json({ ok: true });
+    } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+  });
 }

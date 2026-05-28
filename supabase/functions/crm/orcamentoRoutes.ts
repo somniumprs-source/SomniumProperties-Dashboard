@@ -2,7 +2,7 @@
  * API routes para o orçamento de obra (1 por imóvel).
  *   GET  /imoveis/:imovelId/orcamento-obra
  *   PUT  /imoveis/:imovelId/orcamento-obra
- *   GET  /imoveis/:imovelId/orcamento-obra/pdf   → 501 (PDF + documentLifecycle não portados)
+ *   GET  /imoveis/:imovelId/orcamento-obra/pdf   → PDF inline (generateOrcamentoObraPDF)
  *
  * O PUT recalcula totais com calcOrcamentoObra() e propaga
  * total_geral para imoveis.custo_estimado_obra.
@@ -10,9 +10,8 @@
  */
 import pool from "../_shared/pg.ts";
 import { calcOrcamentoObra } from "../_shared/orcamentoObraEngine.ts";
-
-// Stub para endpoints cujos handlers dependem de modulos ainda nao portados.
-const notImplemented = (c: any) => c.json({ error: "Not implemented — porting em curso", todo: true }, 501);
+import { generateOrcamentoObraPDF } from "../_shared/pdfOrcamentoObra.ts";
+import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
 
 export function registerOrcamentoRoutes(app: any) {
   // ── GET ──────────────────────────────────────────────────────
@@ -130,6 +129,30 @@ export function registerOrcamentoRoutes(app: any) {
     }
   });
 
-  // ── GET PDF (generateOrcamentoObraPDF + documentLifecycle não portados) → 501 ──
-  app.get("/imoveis/:imovelId/orcamento-obra/pdf", notImplemented);
+  // ── GET PDF (generateOrcamentoObraPDF + streamToBuffer) ──────
+  app.get("/imoveis/:imovelId/orcamento-obra/pdf", async (c: any) => {
+    try {
+      const imovelId = c.req.param("imovelId");
+      const { rows: [imovel] } = await pool.query("SELECT * FROM imoveis WHERE id = $1", [imovelId]);
+      if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
+
+      const { rows: [orcamento] } = await pool.query(
+        "SELECT * FROM orcamentos_obra WHERE imovel_id = $1",
+        [imovelId],
+      );
+      if (!orcamento) return c.json({ error: "Orçamento ainda não preenchido" }, 404);
+
+      const safeNome = String(imovel.nome || "imovel").replace(/[^a-z0-9]+/gi, "_").slice(0, 40);
+      const doc = generateOrcamentoObraPDF(imovel, orcamento);
+      const buf = await streamToBuffer(doc);
+
+      return c.body(buf, 200, {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `inline; filename="orcamento_obra_${safeNome}.pdf"`,
+      });
+    } catch (e) {
+      console.error("[orcamento-obra] PDF erro:", e);
+      return c.json({ error: (e as Error).message }, 500);
+    }
+  });
 }
