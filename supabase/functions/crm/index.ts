@@ -20,7 +20,7 @@ import { getVisitasEnriquecidas, syncDataVisitaDerivada } from "../_shared/queri
 import {
   generateDoc, getDocsForEstado, docEmbedeLocalizacao, generateCompiledReport,
 } from "../_shared/pdfImovelDocs.ts";
-import { persistDocumento, listDocumentos } from "../_shared/documentLifecycle.ts";
+import { onImovelCreated, persistDocumento, listDocumentos } from "../_shared/documentLifecycle.ts";
 import { generateImovelPDF } from "../_shared/pdfReport.ts";
 import { generateMeetingPDF } from "../_shared/pdfMeetingReport.ts";
 import { analyzeReuniao, autoFillConsultor, autoFillInvestidor } from "../_shared/meetingAnalysis.ts";
@@ -31,7 +31,10 @@ import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
 import { removeFromStorage, supabase, uploadPublic } from "../_shared/storage.ts";
 import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { syncAllFromNotion, syncFromNotion, syncToNotion } from "../_shared/sync.ts";
-import { isConfigured as driveConfigured, listImovelFiles } from "../_shared/driveSync.ts";
+import {
+  createImovelFolder, isConfigured as driveConfigured, listImovelFiles,
+  moveImovelFolder, uploadDocToFolder,
+} from "../_shared/driveSync.ts";
 import {
   autoOrganize, ensureLabels, isConfigured as gmailConfigured, organizeBatch, organizeMessage,
 } from "../_shared/gmailSync.ts";
@@ -445,8 +448,12 @@ function qualidadeImovel(estado: string): number {
 }
 
 // ── Generic CRUD route factory (port de routes.js 218-276) ───────
-// SEM hooks onCreate/onUpdate (dependem de modulos nao portados); syncToNotion real (no-op gracioso sem NOTION_API_KEY).
-function crudRoutes(path: string, crud: any) {
+// hooks onCreate/onUpdate ligados (PDF/drive/scrape/fases); syncToNotion real (no-op gracioso sem NOTION_API_KEY).
+function crudRoutes(
+  path: string,
+  crud: any,
+  hooks: { onCreate?: (item: any) => Promise<void>; onUpdate?: (item: any, body: any) => Promise<void> } = {},
+) {
   const table = path.slice(1);
   app.get(path, async (c: any) => {
     try {
@@ -482,6 +489,7 @@ function crudRoutes(path: string, crud: any) {
       }
       const item = await crud.create(body, { regiaoActiva });
       syncToNotion(table, item.id);
+      hooks.onCreate?.(item).catch((e: any) => console.error(`[hook] create ${table}:`, e.message));
       return c.json(item, 201);
     } catch (e) { return c.json({ error: (e as Error).message }, 400); }
   });
@@ -496,6 +504,7 @@ function crudRoutes(path: string, crud: any) {
       const item = await crud.update(c.req.param("id"), body, { regiaoActiva });
       if (!item) return c.json({ error: "Não encontrado" }, 404);
       syncToNotion(table, c.req.param("id"));
+      hooks.onUpdate?.(item, body).catch((e: any) => console.error(`[hook] update ${table}:`, e.message));
       return c.json(item);
     } catch (e) { return c.json({ error: (e as Error).message }, 400); }
   });
@@ -508,9 +517,167 @@ function crudRoutes(path: string, crud: any) {
   });
 }
 
-// crudRoutes('/imoveis', Imoveis, {...hooks...}) — hooks ignorados.
-// TODO hooks onCreate/onUpdate (PDF/drive/scrape) diferidos
-crudRoutes("/imoveis", Imoveis);
+// Mapa estado do imóvel → categoria de negocio (port de routes.js 280-285)
+// Nota: o estado no CRM aparece como "Wholesaling" (1 L) mas a categoria de negocio é "Wholesalling" (2 Ls)
+const ESTADO_IMOVEL_PARA_CATEGORIA: Record<string, string> = {
+  "Wholesaling": "Wholesalling",
+  "Wholesalling": "Wholesalling",
+  "CAEP": "CAEP",
+  "Fix and Flip": "Fix and Flip",
+};
+
+// Port de routes.js 287-332 (autoCriarNegocioDeImovel).
+async function autoCriarNegocioDeImovel(imovel: any, novoEstado: string): Promise<string | undefined> {
+  const categoria = ESTADO_IMOVEL_PARA_CATEGORIA[novoEstado];
+  if (!categoria) return; // estado não é um modelo de negócio
+
+  // Idempotência: skipar se já existir negocio activo para este imóvel
+  const { rows: existentes } = await pool.query(
+    `SELECT id FROM negocios WHERE imovel_id = $1 AND (deleted_at IS NULL) LIMIT 1`,
+    [imovel.id],
+  );
+  if (existentes.length > 0) {
+    console.log(`[auto-negocio] Skip — já existe negocio para imóvel ${imovel.nome || imovel.id}`);
+    return;
+  }
+
+  const negocioId = crypto.randomUUID();
+  const capital = Number(imovel.valor_proposta) > 0 ? Number(imovel.valor_proposta) : (Number(imovel.ask_price) || 0);
+  const lucroEst = Number(imovel.valor_venda_remodelado) > 0 && Number(imovel.custo_estimado_obra) >= 0 && capital > 0
+    ? Math.max(0, Number(imovel.valor_venda_remodelado) - capital - Number(imovel.custo_estimado_obra || 0))
+    : 0;
+  const movimento = imovel.nome || `Projecto ${categoria}`;
+  const notas = `Auto-criado a partir do imóvel "${imovel.nome || imovel.id}" (estado: ${novoEstado})`;
+
+  await pool.query(
+    `INSERT INTO negocios (id, movimento, categoria, fase, capital_total, lucro_estimado, imovel_id, data, notas)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [
+      negocioId,
+      movimento,
+      categoria,
+      "Fase de obras",
+      capital,
+      lucroEst,
+      imovel.id,
+      new Date().toISOString().slice(0, 10),
+      notas,
+    ],
+  );
+
+  // Auto-criar fases conforme template da categoria
+  if ((FASES_POR_CATEGORIA as any)[categoria]) {
+    await criarFasesProjecto(negocioId, categoria).catch((e) => console.error("[auto-negocio] criarFases:", e.message));
+  }
+
+  console.log(`[auto-negocio] Criado negocio ${negocioId} (${categoria}) para imóvel ${imovel.nome || imovel.id}`);
+  return negocioId;
+}
+
+// Hooks dos imóveis ligados (port de routes.js 334-428). req.user?.email -> "system" (sem req nos hooks).
+crudRoutes("/imoveis", Imoveis, {
+  onCreate: async (item: any) => {
+    if (driveConfigured()) {
+      await createImovelFolder(item.id, item.nome || "Sem nome", item.estado || "Adicionado");
+    }
+    // Auto-gerar Ficha do Imóvel v1 (persiste em Storage + documentos_imovel)
+    onImovelCreated(item).catch((e: any) => console.error("[docs] onCreate ficha:", e.message));
+    // Se o imóvel é criado já num estado de modelo de negócio, auto-criar projecto
+    if (ESTADO_IMOVEL_PARA_CATEGORIA[item.estado]) {
+      autoCriarNegocioDeImovel(item, item.estado).catch((e: any) => console.error("[auto-negocio] onCreate:", e.message));
+    }
+    // Auto-scrape fotos do link do anuncio
+    if (item.link && item.link.startsWith("http")) {
+      scrapePhotosFromLink(item.link, item.id).then(async (photos: any[]) => {
+        if (photos.length > 0) {
+          const existing = item.fotos ? JSON.parse(item.fotos) : [];
+          existing.push(...photos);
+          await Imoveis.update(item.id, { fotos: JSON.stringify(existing) });
+          console.log(`[scraper] ${photos.length} fotos extraidas automaticamente para ${item.nome || item.id}`);
+        }
+      }).catch((e: any) => console.error(`[scraper] Erro auto-scrape:`, e.message));
+    }
+  },
+  onUpdate: async (item: any, body: any) => {
+    // Auto-scrape fotos quando link e adicionado ou alterado
+    if (body.link && body.link.startsWith("http")) {
+      const existingFotos = item.fotos ? JSON.parse(item.fotos) : [];
+      const alreadyScraped = existingFotos.some((f: any) =>
+        f.source === "scraper" && f.source_url?.includes(new URL(body.link).hostname)
+      );
+      if (!alreadyScraped) {
+        scrapePhotosFromLink(body.link, item.id).then(async (photos: any[]) => {
+          if (photos.length > 0) {
+            const current = await Imoveis.getById(item.id);
+            const fotos = current?.fotos ? JSON.parse(current.fotos) : [];
+            fotos.push(...photos);
+            await Imoveis.update(item.id, { fotos: JSON.stringify(fotos) });
+            console.log(`[scraper] ${photos.length} fotos extraidas de link actualizado para ${item.nome || item.id}`);
+          }
+        }).catch((e: any) => console.error(`[scraper] Erro auto-scrape update:`, e.message));
+      }
+    }
+    if (body.estado) {
+      // Mover pasta no Drive
+      if (driveConfigured()) {
+        await moveImovelFolder(item.id, body.estado);
+      }
+      // Auto-criar projecto quando estado é um modelo de negócio.
+      // A idempotência interna de autoCriarNegocioDeImovel garante zero duplicados —
+      // não comparamos com o estado anterior porque o item devolvido pelo crud.update
+      // já vem merged com body, tornando a comparação sempre falsa.
+      if (ESTADO_IMOVEL_PARA_CATEGORIA[body.estado]) {
+        autoCriarNegocioDeImovel({ ...item, ...body }, body.estado).catch((e: any) =>
+          console.error("[auto-negocio] onUpdate:", e.message)
+        );
+      }
+      // Gerar documentos da fase: persistir em Supabase Storage + DB e upload ao Drive
+      const docs = getDocsForEstado(body.estado);
+      for (const tipo of docs) {
+        try {
+          let analise: any = null;
+          try {
+            const { rows: [a] } = await pool.query("SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1", [item.id]);
+            analise = a;
+          } catch { /* ignore */ }
+          await persistDocumento(item, tipo, { trigger: `estado:${body.estado}`, generatedBy: "system", analise });
+          if (driveConfigured()) {
+            const pdfDoc = await generateDoc(tipo, item, analise);
+            if (pdfDoc) await uploadDocToFolder(item.id, pdfDoc, `${tipo}.pdf`);
+          }
+        } catch (e) { console.error(`[docs] Erro ${tipo}:`, (e as Error).message); }
+      }
+    }
+    // Auto-complete checklist: verificar campos preenchidos
+    try {
+      const merged = { ...item, ...body };
+      const { rows: pending } = await pool.query(
+        "SELECT * FROM checklist_imovel WHERE imovel_id = $1 AND concluida = false AND campo_crm IS NOT NULL",
+        [item.id],
+      );
+      const now = new Date().toISOString();
+      const toComplete: any[] = [];
+      for (const cl of pending) {
+        if (/^(analise:|negocio:|doc:|tarefa calendario)/.test(cl.campo_crm)) continue;
+        const fields = cl.campo_crm.split(",").map((f: string) => f.trim()).filter((f: string) => f !== "notas" && f !== "fotos");
+        if (fields.length === 0) continue;
+        const allFilled = fields.every((f: string) => {
+          const v = merged[f];
+          return v !== null && v !== undefined && v !== "" && v !== 0;
+        });
+        if (allFilled) toComplete.push(cl.id);
+      }
+      if (toComplete.length > 0) {
+        await pool.query(
+          `UPDATE checklist_imovel SET concluida = true, concluida_em = $1, concluida_por = 'auto', updated_at = $1
+           WHERE id = ANY($2)`,
+          [now, toComplete],
+        );
+        console.log(`[checklist] Auto-completadas ${toComplete.length} tarefas para ${item.nome || item.id}`);
+      }
+    } catch (e) { console.error("[checklist] Erro auto-complete:", (e as Error).message); }
+  },
+});
 
 // ── Listagem dos documentos persistidos do imovel (listDocumentos) ──
 app.get("/imoveis/:id/documentos-persistidos", async (c: any) => {
@@ -876,9 +1043,20 @@ app.get("/consultores/enriched", async (c: any) => {
 
 crudRoutes("/consultores", Consultores);
 
-// crudRoutes('/negocios', Negocios, {...hooks fases...}) — hooks ignorados.
-// TODO hooks onCreate/onUpdate (criarFasesProjecto) diferidos
-crudRoutes("/negocios", Negocios);
+// Hooks dos negócios ligados — auto-criar fases conforme template (port de routes.js 904-916).
+crudRoutes("/negocios", Negocios, {
+  onCreate: async (item: any) => {
+    if ((FASES_POR_CATEGORIA as any)[item.categoria]) {
+      await criarFasesProjecto(item.id, item.categoria).catch((e) => console.error("[fases] auto-criar:", e.message));
+    }
+  },
+  onUpdate: async (item: any, body: any) => {
+    // Se categoria suporta template, criar fases (idempotente)
+    if ((FASES_POR_CATEGORIA as any)[body.categoria]) {
+      await criarFasesProjecto(item.id, body.categoria).catch((e) => console.error("[fases] auto-criar update:", e.message));
+    }
+  },
+});
 
 // UX12 — Soft delete (lixeira) — port de routes.js 919-934
 app.delete("/negocios/:id", async (c: any) => {

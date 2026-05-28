@@ -6,6 +6,9 @@
 import pool from "../_shared/pg.ts";
 import { isConfigured as whatsappConfigured, sendWhatsApp } from "./whatsappAgent.ts";
 import { isConfigured as emailConfigured, sendEmail } from "./emailService.ts";
+import { generateRelatorioAcompanhamento } from "./pdfProjectoFixFlip.ts";
+import { streamToBuffer } from "./pdfkitGuard.ts";
+import { uploadPublic } from "./storage.ts";
 import Anthropic from "@anthropic-ai/sdk";
 
 // ── Follow-up config por classe ─────────────────────────────
@@ -523,7 +526,7 @@ async function runArquivoRelatoriosObra() {
 
     const mesIso = new Date().toISOString().slice(0, 7); // YYYY-MM
 
-    let lidos = 0;
+    let gerados = 0;
     for (const negocio of negocios) {
       try {
         const { rows: fases } = await pool.query(
@@ -532,22 +535,28 @@ async function runArquivoRelatoriosObra() {
         );
         if (fases.length === 0) continue;
         const faseIds = fases.map((f: any) => f.id);
-        await pool.query("SELECT * FROM projeto_tarefas WHERE fase_id = ANY($1)", [faseIds]);
-        await pool.query("SELECT * FROM projeto_fotos WHERE negocio_id = $1", [negocio.id]);
+        const { rows: tarefas } = await pool.query("SELECT * FROM projeto_tarefas WHERE fase_id = ANY($1)", [faseIds]);
+        const { rows: fotos } = await pool.query("SELECT * FROM projeto_fotos WHERE negocio_id = $1", [negocio.id]);
+        let imovel: any = null;
         if (negocio.imovel_id) {
-          await pool.query("SELECT * FROM imoveis WHERE id = $1", [negocio.imovel_id]);
+          const { rows } = await pool.query("SELECT * FROM imoveis WHERE id = $1", [negocio.imovel_id]);
+          imovel = rows[0] || null;
         }
-        // TODO: arquivo PDF de obra depende de pdfProjectoFixFlip (nao portado)
-        // A geracao do PDF (generateRelatorioAcompanhamento) e a escrita em disco (fs)
-        // nao foram portadas para Edge Functions. So a leitura/DB e feita aqui.
-        lidos++;
+        const orcAlocado = fases.reduce((s: number, f: any) => s + (Number(f.orcamento_alocado) || 0), 0);
+        const custoReal = fases.reduce((s: number, f: any) => s + (Number(f.custo_real) || 0), 0);
+        const percGlobal = Math.round(fases.reduce((s: number, f: any) => s + (Number(f.perc_execucao) || 0), 0) / fases.length);
+
+        const doc = generateRelatorioAcompanhamento({ negocio, imovel, fases, tarefas, fotos, percGlobal, orcAlocado, custoReal });
+        const buf = await streamToBuffer(doc);
+        const safeNome = (negocio.movimento || "projecto").replace(/[^\w]/g, "_").slice(0, 60);
+        const storagePath = `arquivo-obra/${negocio.id}__${mesIso}__${safeNome}.pdf`;
+        await uploadPublic("projetos", storagePath, buf, "application/pdf");
+        gerados++;
       } catch (e) {
         console.error(`[cron arquivo-obra] ${negocio.id}:`, (e as Error).message);
       }
     }
-    console.log(
-      `[cron] Arquivo mensal de obra: ${lidos} projecto(s) lido(s) (${mesIso}); geracao de PDF stub (pdfProjectoFixFlip nao portado)`,
-    );
+    console.log(`[cron] Arquivo mensal de obra: ${gerados} relatórios gerados em projetos/arquivo-obra (${mesIso})`);
   } catch (e) {
     console.error("[cron] Erro arquivo-obra:", (e as Error).message);
   }
