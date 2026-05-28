@@ -1371,6 +1371,29 @@ const DOC_MEDIA: Record<string, { kind: string; media: string }> = {
   ".png": { kind: "image", media: "image/png" },
   ".webp": { kind: "image", media: "image/webp" },
 };
+// Fallback por mimetype quando a extensão do nome/path não é fiável.
+const CT_MEDIA: Record<string, { kind: string; media: string }> = {
+  "application/pdf": { kind: "document", media: "application/pdf" },
+  "image/jpeg": { kind: "image", media: "image/jpeg" },
+  "image/jpg": { kind: "image", media: "image/jpeg" },
+  "image/png": { kind: "image", media: "image/png" },
+  "image/webp": { kind: "image", media: "image/webp" },
+};
+// Resolve o bloco de media (kind/media_type) por extensão ou, em alternativa, por mimetype.
+function resolveDocMedia(ext: string, ...contentTypes: (string | null)[]) {
+  if (ext && DOC_MEDIA[ext]) return DOC_MEDIA[ext];
+  for (const ct of contentTypes) {
+    const norm = String(ct || "").split(";")[0].trim().toLowerCase();
+    if (CT_MEDIA[norm]) return CT_MEDIA[norm];
+  }
+  return null;
+}
+// A IA pode devolver valido como string; normaliza para true|false|'warning'.
+function normalizarValido(v: any): boolean | "warning" {
+  if (v === true || v === "true") return true;
+  if (v === "warning") return "warning";
+  return false;
+}
 
 function buildDocPrompt(tipoImovel: string): string {
   const tipo = (tipoImovel || "").toLowerCase().includes("morad") ? "MORADIA" : ((tipoImovel || "").trim() ? "APARTAMENTO" : "NÃO ESPECIFICADO");
@@ -1433,11 +1456,11 @@ async function resolveDocBuffer(
   file: File | null,
   bodyPath: string | null,
   bodyName: string | null,
-): Promise<{ bytes: Uint8Array; ext: string; name: string } | null> {
+): Promise<{ bytes: Uint8Array; ext: string; name: string; contentType: string | null } | null> {
   if (file) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const ext = (file.name?.match(/\.[a-z0-9]+$/i)?.[0] || "").toLowerCase();
-    return { bytes, ext, name: file.name };
+    return { bytes, ext, name: file.name, contentType: file.type || null };
   }
   const p = bodyPath;
   if (!p) return null;
@@ -1445,7 +1468,7 @@ async function resolveDocBuffer(
   if (/^https?:\/\//i.test(p)) {
     const r = await fetch(p);
     if (!r.ok) throw new Error(`Não foi possível obter o ficheiro (${r.status})`);
-    return { bytes: new Uint8Array(await r.arrayBuffer()), ext, name: bodyName || p.split("/").pop() || "documento" };
+    return { bytes: new Uint8Array(await r.arrayBuffer()), ext, name: bodyName || p.split("/").pop() || "documento", contentType: r.headers.get("content-type") };
   }
   // Paths de disco do servidor antigo nao existem nas Edge Functions.
   throw new Error("Caminho inválido (apenas File do upload ou URL http são suportados)");
@@ -1466,6 +1489,7 @@ app.post("/imoveis/:id/documentos/analise", async (c: any) => {
     let bodyName: string | null = null;
     let bodyFotoId: string | null = null;
     let bodyTipoImovel: string | null = null;
+    let bodyType: string | null = null;
     const contentType = c.req.header("content-type") || "";
     if (contentType.includes("application/json")) {
       const body = await c.req.json().catch(() => ({}));
@@ -1473,6 +1497,7 @@ app.post("/imoveis/:id/documentos/analise", async (c: any) => {
       bodyName = typeof body.name === "string" ? body.name : null;
       bodyFotoId = typeof body.fotoId === "string" ? body.fotoId : null;
       bodyTipoImovel = typeof body.tipoImovel === "string" ? body.tipoImovel : null;
+      bodyType = typeof body.type === "string" ? body.type : null;
     } else {
       const form = await c.req.formData();
       const fichRaw = form.get("ficheiro");
@@ -1481,6 +1506,7 @@ app.post("/imoveis/:id/documentos/analise", async (c: any) => {
       bodyName = typeof form.get("name") === "string" ? form.get("name") as string : null;
       bodyFotoId = typeof form.get("fotoId") === "string" ? form.get("fotoId") as string : null;
       bodyTipoImovel = typeof form.get("tipoImovel") === "string" ? form.get("tipoImovel") as string : null;
+      bodyType = typeof form.get("type") === "string" ? form.get("type") as string : null;
     }
 
     let doc;
@@ -1488,8 +1514,8 @@ app.post("/imoveis/:id/documentos/analise", async (c: any) => {
     catch (e) { return c.json({ error: (e as Error).message }, 400); }
     if (!doc?.bytes?.length) return c.json({ error: "Nenhum documento para analisar (PDF, JPG ou PNG)." }, 400);
 
-    const meta = DOC_MEDIA[doc.ext];
-    if (!meta) return c.json({ error: "Formato não suportado. Usa PDF, JPG ou PNG." }, 400);
+    const meta = resolveDocMedia(doc.ext, bodyType, doc.contentType);
+    if (!meta) return c.json({ error: "Formato não suportado. Usa PDF, JPG, JPEG, PNG ou WEBP." }, 400);
     if (doc.bytes.length > 15 * 1024 * 1024) return c.json({ error: "Ficheiro demasiado grande (máx. 15MB)." }, 400);
 
     let bin = "";
@@ -1504,7 +1530,7 @@ app.post("/imoveis/:id/documentos/analise", async (c: any) => {
 
     const response = await client.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
+      max_tokens: 1500,
       messages: [{ role: "user", content: [fileBlock, { type: "text", text: buildDocPrompt(tipoImovel) }] as any }],
     });
 
@@ -1521,7 +1547,7 @@ app.post("/imoveis/:id/documentos/analise", async (c: any) => {
       fotoId: bodyFotoId || null,
       nome_ficheiro: doc.name,
       tipo_documento: parsed.tipo_documento || "Documento",
-      valido: parsed.valido ?? false,
+      valido: normalizarValido(parsed.valido),
       campos: Array.isArray(parsed.campos) ? parsed.campos.slice(0, 6) : [],
       dados_chave: (parsed.dados_chave && typeof parsed.dados_chave === "object") ? parsed.dados_chave : {},
       flags: Array.isArray(parsed.flags) ? parsed.flags : [],

@@ -71,7 +71,7 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
       const r = await apiFetch(`/api/crm/imoveis/${imovelId}/documentos/analise`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         timeoutMs: 120000,
-        body: JSON.stringify({ path: doc.path, name: doc.name, fotoId: doc.id, tipoImovel: tipoImovelProp }),
+        body: JSON.stringify({ path: doc.path, name: doc.name, type: doc.type, fotoId: doc.id, tipoImovel: tipoImovelProp }),
       })
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || 'Falha na análise')

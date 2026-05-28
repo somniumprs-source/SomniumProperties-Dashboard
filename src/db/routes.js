@@ -1239,6 +1239,29 @@ const DOC_MEDIA = {
   '.png': { kind: 'image', media: 'image/png' },
   '.webp': { kind: 'image', media: 'image/webp' },
 }
+// Fallback por mimetype quando a extensão do nome/path não é fiável.
+const CT_MEDIA = {
+  'application/pdf': { kind: 'document', media: 'application/pdf' },
+  'image/jpeg': { kind: 'image', media: 'image/jpeg' },
+  'image/jpg': { kind: 'image', media: 'image/jpeg' },
+  'image/png': { kind: 'image', media: 'image/png' },
+  'image/webp': { kind: 'image', media: 'image/webp' },
+}
+// Resolve o bloco de media (kind/media_type) por extensão ou, em alternativa, por mimetype.
+function resolveDocMedia(ext, ...contentTypes) {
+  if (ext && DOC_MEDIA[ext]) return DOC_MEDIA[ext]
+  for (const ct of contentTypes) {
+    const norm = String(ct || '').split(';')[0].trim().toLowerCase()
+    if (CT_MEDIA[norm]) return CT_MEDIA[norm]
+  }
+  return null
+}
+// A IA pode devolver valido como string; normaliza para true|false|'warning'.
+function normalizarValido(v) {
+  if (v === true || v === 'true') return true
+  if (v === 'warning') return 'warning'
+  return false
+}
 
 function buildDocPrompt(tipoImovel) {
   const tipo = (tipoImovel || '').toLowerCase().includes('morad') ? 'MORADIA' : ((tipoImovel || '').trim() ? 'APARTAMENTO' : 'NÃO ESPECIFICADO')
@@ -1299,7 +1322,7 @@ async function resolveDocBuffer(req) {
   if (req.file) {
     const buf = await readFile(req.file.path)
     await unlink(req.file.path).catch(() => {})
-    return { buffer: buf, ext: path.extname(req.file.originalname).toLowerCase(), name: req.file.originalname }
+    return { buffer: buf, ext: path.extname(req.file.originalname).toLowerCase(), name: req.file.originalname, contentType: req.file.mimetype }
   }
   const p = req.body?.path
   if (!p) return null
@@ -1307,12 +1330,12 @@ async function resolveDocBuffer(req) {
   if (/^https?:\/\//i.test(p)) {
     const r = await fetch(p)
     if (!r.ok) throw new Error(`Não foi possível obter o ficheiro (${r.status})`)
-    return { buffer: Buffer.from(await r.arrayBuffer()), ext, name: req.body?.name || path.basename(p) }
+    return { buffer: Buffer.from(await r.arrayBuffer()), ext, name: req.body?.name || path.basename(p), contentType: r.headers.get('content-type') }
   }
   const rel = p.startsWith('/') ? p.slice(1) : p
   const abs = path.resolve(REPO_ROOT, 'public', rel)
   if (!abs.startsWith(path.resolve(REPO_ROOT, 'public'))) throw new Error('Caminho inválido')
-  return { buffer: await readFile(abs), ext, name: req.body?.name || path.basename(p) }
+  return { buffer: await readFile(abs), ext, name: req.body?.name || path.basename(p), contentType: null }
 }
 
 router.post('/imoveis/:id/documentos/analise', uploadRateLimit, uploadImovel.single('ficheiro'), async (req, res) => {
@@ -1328,8 +1351,8 @@ router.post('/imoveis/:id/documentos/analise', uploadRateLimit, uploadImovel.sin
     catch (e) { return res.status(400).json({ error: e.message }) }
     if (!doc?.buffer?.length) return res.status(400).json({ error: 'Nenhum documento para analisar (PDF, JPG ou PNG).' })
 
-    const meta = DOC_MEDIA[doc.ext]
-    if (!meta) return res.status(400).json({ error: 'Formato não suportado. Usa PDF, JPG ou PNG.' })
+    const meta = resolveDocMedia(doc.ext, req.body?.type, doc.contentType)
+    if (!meta) return res.status(400).json({ error: 'Formato não suportado. Usa PDF, JPG, JPEG, PNG ou WEBP.' })
     if (doc.buffer.length > 15 * 1024 * 1024) return res.status(400).json({ error: 'Ficheiro demasiado grande (máx. 15MB).' })
 
     const base64 = doc.buffer.toString('base64')
@@ -1343,7 +1366,7 @@ router.post('/imoveis/:id/documentos/analise', uploadRateLimit, uploadImovel.sin
 
     const response = await client.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
+      max_tokens: 1500,
       messages: [{ role: 'user', content: [fileBlock, { type: 'text', text: buildDocPrompt(tipoImovel) }] }],
     })
 
@@ -1360,7 +1383,7 @@ router.post('/imoveis/:id/documentos/analise', uploadRateLimit, uploadImovel.sin
       fotoId: req.body?.fotoId || null,
       nome_ficheiro: doc.name,
       tipo_documento: parsed.tipo_documento || 'Documento',
-      valido: parsed.valido ?? false,
+      valido: normalizarValido(parsed.valido),
       campos: Array.isArray(parsed.campos) ? parsed.campos.slice(0, 6) : [],
       dados_chave: (parsed.dados_chave && typeof parsed.dados_chave === 'object') ? parsed.dados_chave : {},
       flags: Array.isArray(parsed.flags) ? parsed.flags : [],
