@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
   if (!rows[0]?.got) return Response.json({ ok: true, ran: false, reason: "lock ocupado" });
   try {
     const out = await runBackup();
-    return Response.json({ ok: true, ran: true, fn: "cron-backup", ...out });
+    return Response.json({ ran: true, fn: "cron-backup", ...out });
   } catch (e) {
     console.error("[cron-backup]", (e as Error).message);
     return Response.json({ ok: false, error: (e as Error).message }, { status: 500 });
