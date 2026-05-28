@@ -17,6 +17,9 @@ import {
   Empreiteiros, getDashboardStats,
 } from "../_shared/crud.ts";
 import { getVisitasEnriquecidas, syncDataVisitaDerivada } from "../_shared/queries.ts";
+import { registerRegiaoRoutes } from "./regiaoRoutes.ts";
+import { registerAnaliseRoutes } from "./analiseRoutes.ts";
+import { registerOrcamentoRoutes } from "./orcamentoRoutes.ts";
 
 // Variavel de contexto guardada pelos middlewares (port de req.regiaoActiva).
 declare module "@hono/hono" {
@@ -2926,6 +2929,14 @@ app.get("/projetos/:negocioId/resumo", async (c: any) => {
     return c.json({ negocio, imovel, fases, orcAlocado, custoReal, percGlobal, faseAtual });
   } catch (e) { console.error("[projetos/resumo]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
 });
+
+// ── Routers portados (analises, orcamento-obra, regiao) — port dos sub-routers Express ──
+// Estes registam apenas paths especificos (/regiao/*, /analises/*, /analises-kpis,
+// /imoveis/:imovelId/analises, /imoveis/:imovelId/orcamento-obra) que nao colidem
+// com os crudRoutes/:id ja registados. Replica a ordem de montagem do Express.
+registerAnaliseRoutes(app);
+registerOrcamentoRoutes(app);
+registerRegiaoRoutes(app);
 
 app.get("/_health", (c) => c.json({ ok: true, fn: "crm" }));
 
