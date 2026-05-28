@@ -15,6 +15,7 @@ const SELF = new Set(["crm", "users", "sops", "calendar", "voice", "scrape-porta
 const DASH = new Set([
   "kpis", "financeiro", "comercial", "marketing", "operacoes",
   "metricas", "tarefas", "okrs", "okr-krs", "alertas",
+  "weekly-pulse", "ops-scorecard", "time-tracking", "data-health",
 ]);
 
 export function resolveApiUrl(url) {
@@ -31,5 +32,6 @@ export function resolveApiUrl(url) {
   if (SELF.has(seg)) return `${API_BASE}/${rest}`;
   if (DASH.has(seg)) return `${API_BASE}/dashboard/${rest}`;
   if (seg === "acessos") return `${API_BASE}/users/${rest}`; // accessRouter -> /users/acessos/*
+  if (seg === "automation") return `${API_BASE}/crm/${rest}`; // /api/automation/* -> {BASE}/crm/automation/*
   return url; // desconhecido: fallback same-origin
 }

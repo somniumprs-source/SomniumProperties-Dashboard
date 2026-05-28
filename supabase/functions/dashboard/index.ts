@@ -10,6 +10,7 @@ import {
   getInvestidores as _getInvestidores,
   getConsultores as _getConsultores,
   getVisitas as _getVisitas,
+  getTarefas as _getTarefas,
   round2,
 } from "../_shared/queries.ts";
 
@@ -23,6 +24,7 @@ const getImóveis = _getImóveis as (a?: RegiaoArg) => Promise<any[]>;
 const getInvestidores = _getInvestidores as (a?: RegiaoArg) => Promise<any[]>;
 const getConsultores = _getConsultores as (a?: RegiaoArg) => Promise<any[]>;
 const getVisitas = _getVisitas as (a?: RegiaoArg) => Promise<any[]>;
+const getTarefas = _getTarefas as (a?: RegiaoArg) => Promise<any[]>;
 
 const app = createApp("/dashboard");
 
@@ -3145,6 +3147,566 @@ app.get("/alertas", async (c: any) => {
     });
   } catch (err: any) {
     console.error("[alertas]", err.message);
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// ════════════════════════════════════════════════════════════════
+// WEEKLY PULSE
+// ════════════════════════════════════════════════════════════════
+app.get("/weekly-pulse", async (c: any) => {
+  try {
+    const regiao = regiaoFrom(c);
+    const [imoveis, investidores, consultoresRaw, negocios, despesas, visitas] = await Promise.all([
+      getImóveis({ regiao }).catch(() => [] as any[]),
+      getInvestidores({ regiao }),
+      getConsultores({ regiao }).catch(() => [] as any[]),
+      getNegócios({ regiao }),
+      getDespesas({ regiao }),
+      getVisitas({ regiao }).catch(() => [] as any[]),
+    ]);
+    const now = new Date();
+    const wDay = now.getDay();
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - (wDay === 0 ? 6 : wDay - 1));
+    weekStart.setHours(0, 0, 0, 0);
+
+    function inWeek(dateStr: any) {
+      if (!dateStr) return false;
+      return new Date(dateStr) >= weekStart && new Date(dateStr) <= now;
+    }
+
+    // Atividades da semana
+    const imoveisAdicionados = imoveis.filter((i) => inWeek(i.dataAdicionado)).length;
+    const chamadasFeitas = imoveis.filter((i) => inWeek(i.dataChamada)).length;
+    // Visitas: contar da tabela 'visitas' (multiplas por imovel, com estado).
+    // So conta as marcadas como 'realizada' que ja aconteceram.
+    const visitasFeitas = visitas.filter((v) => v.estado === "realizada" && inWeek(v.dataHora)).length;
+    const propostasEnviadas = imoveis.filter((i) => inWeek(i.dataProposta)).length;
+    const dealsFechados = negocios.filter((n) => inWeek(n.dataVenda) || inWeek(n.dataCompra)).length;
+
+    // Alertas críticos
+    const ESTADOS_NEG = new Set(["Descartado", "Nao interessa", "Não interessa", "Cancelado"]);
+    const imoveisParados = imoveis.filter((i) => {
+      if (ESTADOS_NEG.has(i.estado) || ["Vendido", "Wholesaling", "Negócio em Curso"].includes(i.estado)) return false;
+      const ultima = i.dataPropostaAceite ?? i.dataProposta ?? i.dataEstudoMercado ?? i.dataVisita ?? i.dataChamada ?? i.dataAdicionado;
+      if (!ultima) return false;
+      return ((now as any) - (new Date(ultima) as any)) / 86400000 > 7;
+    }).length;
+
+    const investSemContacto = investidores.filter((i) => {
+      const dias = i.diasSemContacto ?? (() => {
+        const u = i.dataUltimoContacto ?? i.dataReuniao ?? i.dataPrimeiroContacto;
+        return u ? Math.floor(((now as any) - (new Date(u) as any)) / 86400000) : null;
+      })();
+      return dias != null && dias > 14;
+    }).length;
+
+    const CONS_ATIVOS = new Set(["Aberto Parcerias", "Em Parceria", "Follow up", "Follow Up", "Acesso imoveis Off market"]);
+    const consFollowUpAtrasado = consultoresRaw.filter((c2) =>
+      CONS_ATIVOS.has(c2.estatuto) && c2.dataProximoFollowUp && new Date(c2.dataProximoFollowUp) < now
+    ).length;
+
+    // Cash
+    const burnRate = round2(
+      despesas.filter((d) => d.timing === "Mensalmente").reduce((s, d) => s + d.custoMensal, 0) +
+        despesas.filter((d) => d.timing === "Anual").reduce((s, d) => s + (d.custoAnual || 0) / 12, 0),
+    );
+    const lucroPendente = round2(negocios.filter((n) => n.pagamentoEmFalta).reduce((s, n) => s + n.lucroEstimado, 0));
+    const runway = burnRate > 0 ? round2(lucroPendente / burnRate) : null;
+
+    // Pulse score (0-100)
+    let score = 50; // base
+    score += Math.min(imoveisAdicionados * 5, 15); // até +15 por imóveis novos
+    score += Math.min(chamadasFeitas * 3, 10); // até +10 por chamadas
+    score += Math.min(visitasFeitas * 5, 10); // até +10 por visitas
+    score += dealsFechados * 15; // +15 por deal
+    score -= Math.min(imoveisParados * 2, 15); // até -15 por parados
+    score -= Math.min(investSemContacto * 1, 10); // até -10 por inativos
+    score -= Math.min(consFollowUpAtrasado * 1, 10); // até -10 por follow-ups
+    score = Math.max(0, Math.min(100, score));
+
+    const status = score >= 75 ? "excelente" : score >= 50 ? "bom" : score >= 30 ? "atenção" : "crítico";
+
+    const payload = {
+      semana: { de: weekStart.toISOString().slice(0, 10), ate: now.toISOString().slice(0, 10) },
+      score,
+      status,
+      atividades: { imoveisAdicionados, chamadasFeitas, visitasFeitas, propostasEnviadas, dealsFechados },
+      alertas: { imoveisParados, investSemContacto, consFollowUpAtrasado },
+      financeiro: { burnRate, lucroPendente, runway },
+    };
+    return c.json(payload);
+  } catch (err: any) {
+    console.error("[weekly-pulse]", err.message);
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// ════════════════════════════════════════════════════════════════
+// OPS SCORECARD
+// ════════════════════════════════════════════════════════════════
+app.get("/ops-scorecard", async (c: any) => {
+  try {
+    const [imoveis, consultoresRaw, negocios, investidores] = await Promise.all([
+      getImóveis().catch(() => [] as any[]),
+      getConsultores().catch(() => [] as any[]),
+      getNegócios(),
+      getInvestidores(),
+    ]);
+    const now = new Date();
+    const CONS_ATIVOS = new Set(["Aberto Parcerias", "Em Parceria", "Follow up", "Follow Up", "Acesso imoveis Off market", "Consultores em Parceria"]);
+    const ESTADOS_NEG = new Set(["Descartado", "Nao interessa", "Não interessa", "Cancelado"]);
+
+    // Consultores ativos
+    const consAtivos = consultoresRaw.filter((c2) => CONS_ATIVOS.has(c2.estatuto));
+    const consParceria = consultoresRaw.filter((c2) => c2.estatuto === "Consultores em Parceria" || c2.estatuto === "Em Parceria");
+    const taxaAtivacao = consultoresRaw.length > 0 ? round2(consAtivos.length / consultoresRaw.length * 100) : 0;
+
+    // Pipeline velocity
+    const imoveisAtivos = imoveis.filter((i) => !ESTADOS_NEG.has(i.estado));
+    const tempoMedioFase = (() => {
+      const tempos = imoveisAtivos.map((i) => {
+        const ultima = i.dataPropostaAceite ?? i.dataProposta ?? i.dataEstudoMercado ?? i.dataVisita ?? i.dataChamada ?? i.dataAdicionado;
+        if (!ultima) return null;
+        return Math.floor(((now as any) - (new Date(ultima) as any)) / 86400000);
+      }).filter((v) => v != null) as number[];
+      return tempos.length > 0 ? round2(tempos.reduce((s, v) => s + v, 0) / tempos.length) : null;
+    })();
+
+    // Ranking consultores (top 10 por leads)
+    const byNome: Record<string, any> = {};
+    for (const im of imoveis) {
+      const nome = im.nomeConsultor?.trim();
+      if (!nome) continue;
+      if (!byNome[nome]) byNome[nome] = { total: 0, ativos: 0, descartados: 0, avancados: 0, visitas: 0 };
+      byNome[nome].total++;
+      if (ESTADOS_NEG.has(im.estado)) byNome[nome].descartados++;
+      else byNome[nome].ativos++;
+      if (im.dataVisita) byNome[nome].visitas++;
+      if (["Wholesaling", "Negócio em Curso", "Estudo de VVR", "Enviar proposta ao investidor"].includes(im.estado)) byNome[nome].avancados++;
+    }
+
+    const rankingConsultores = Object.entries(byNome)
+      .map(([nome, v]: [string, any]) => ({
+        nome,
+        ...v,
+        taxaConversao: v.total > 0 ? round2(v.avancados / v.total * 100) : 0,
+        consultor: consultoresRaw.find((c2) => c2.nome === nome),
+      }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 15);
+
+    // Pipeline por zona
+    const porZona: Record<string, any> = {};
+    for (const im of imoveis) {
+      const zona = im.zonas?.[0] ?? im.zona ?? "Sem zona";
+      if (!porZona[zona]) porZona[zona] = { total: 0, ativos: 0, valor: 0 };
+      porZona[zona].total++;
+      if (!ESTADOS_NEG.has(im.estado)) {
+        porZona[zona].ativos++;
+        porZona[zona].valor += im.askPrice || 0;
+      }
+    }
+    const zonas = Object.entries(porZona)
+      .map(([zona, v]: [string, any]) => ({ zona, ...v, valor: round2(v.valor) }))
+      .sort((a, b) => b.ativos - a.ativos);
+
+    // Tempo médio por fase do pipeline
+    const faseTimings: Record<string, any> = {};
+    const FUNIL = ["dataChamada", "dataVisita", "dataEstudoMercado", "dataProposta", "dataPropostaAceite"];
+    const FUNIL_LABELS = ["Lead → Chamada", "Chamada → Visita", "Visita → Estudo", "Estudo → Proposta", "Proposta → Aceite"];
+    const FUNIL_FROM = ["dataAdicionado", "dataChamada", "dataVisita", "dataEstudoMercado", "dataProposta"];
+    for (let idx = 0; idx < FUNIL.length; idx++) {
+      const dias = imoveis.map((i) => {
+        const from = i[FUNIL_FROM[idx]];
+        const to = i[FUNIL[idx]];
+        if (!from || !to) return null;
+        const d = ((new Date(to) as any) - (new Date(from) as any)) / 86400000;
+        return d >= 0 && d < 365 ? d : null;
+      }).filter((v) => v != null) as number[];
+      faseTimings[FUNIL_LABELS[idx]] = dias.length > 0 ? round2(dias.reduce((s, v) => s + v, 0) / dias.length) : null;
+    }
+
+    // Investidores: funil de conversão
+    const invTotal = investidores.length;
+    const invReuniao = investidores.filter((i) => i.dataReuniao).length;
+    const invClassificado = investidores.filter((i) => i.classificacao?.length > 0).length;
+    const invParceria = investidores.filter((i) => ["Investidor em parceria", "Em Parceria"].includes(i.status)).length;
+    const invTaxaConversao = invTotal > 0 ? round2(invParceria / invTotal * 100) : 0;
+
+    return c.json({
+      updatedAt: new Date().toISOString(),
+      consultores: {
+        total: consultoresRaw.length,
+        ativos: consAtivos.length,
+        emParceria: consParceria.length,
+        taxaAtivacao,
+      },
+      pipeline: {
+        imoveisAtivos: imoveisAtivos.length,
+        imoveisTotal: imoveis.length,
+        tempoMedioFase,
+        faseTimings,
+      },
+      investidores: {
+        total: invTotal,
+        comReuniao: invReuniao,
+        classificados: invClassificado,
+        emParceria: invParceria,
+        taxaConversao: invTaxaConversao,
+      },
+      negocios: { total: negocios.length, fechados: negocios.filter((n) => n.fase === "Vendido").length },
+      rankingConsultores,
+      zonas,
+    });
+  } catch (err: any) {
+    console.error("[ops-scorecard]", err.message);
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// ════════════════════════════════════════════════════════════════
+// TIME TRACKING
+// ════════════════════════════════════════════════════════════════
+app.get("/time-tracking", async (c: any) => {
+  try {
+    const [tarefas, negocios, despesas] = await Promise.all([
+      getTarefas(),
+      getNegócios(),
+      getDespesas().catch(() => [] as any[]),
+    ]);
+
+    const now = new Date();
+    const { ano, month } = getMesAtual();
+    const CUSTO_HORA = 15;
+
+    // Filtrar outliers (>24h numa tarefa = erro de dados)
+    const tarefasValidas = tarefas.filter((t) => t.tempoHoras > 0 && t.tempoHoras <= 24);
+    const totalHoras = round2(tarefasValidas.reduce((s, t) => s + t.tempoHoras, 0));
+    const totalTarefas = tarefasValidas.length;
+
+    // ── Por funcionário (split: tarefas comuns contam para ambos) ──
+    const NOMES_EQUIPA = ["João Abreu", "Alexandre Mendes"];
+    const porFuncionario: Record<string, any> = {};
+    for (const nome of NOMES_EQUIPA) porFuncionario[nome] = { horas: 0, tarefas: 0, concluidas: 0 };
+    for (const t of tarefasValidas) {
+      const f = t.funcionario || "";
+      // Se contém ambos nomes (separados por vírgula), atribuir a cada um
+      const pessoas = NOMES_EQUIPA.filter((n) => f.includes(n));
+      if (pessoas.length === 0) pessoas.push("Não atribuído");
+      for (const p of pessoas) {
+        if (!porFuncionario[p]) porFuncionario[p] = { horas: 0, tarefas: 0, concluidas: 0 };
+        porFuncionario[p].horas += t.tempoHoras; // horas completas para cada pessoa
+        porFuncionario[p].tarefas++;
+        if (t.status === "Concluída") porFuncionario[p].concluidas++;
+      }
+    }
+    const funcionarios = Object.entries(porFuncionario)
+      .filter(([, v]: [string, any]) => v.tarefas > 0)
+      .map(([nome, v]: [string, any]) => ({
+        nome,
+        horas: round2(v.horas),
+        tarefas: v.tarefas,
+        concluidas: v.concluidas,
+        custoTotal: round2(v.horas * CUSTO_HORA),
+        taxaConclusao: v.tarefas > 0 ? round2(v.concluidas / v.tarefas * 100) : 0,
+      })).sort((a, b) => b.horas - a.horas);
+
+    // ── Por mês ──
+    const porMes: Record<string, any> = {};
+    for (const t of tarefasValidas) {
+      if (!t.inicio) continue;
+      const m = t.inicio.substring(0, 7);
+      if (!porMes[m]) porMes[m] = { horas: 0, tarefas: 0, custoHoras: 0 };
+      porMes[m].horas += t.tempoHoras;
+      porMes[m].tarefas++;
+      porMes[m].custoHoras += t.tempoHoras * CUSTO_HORA;
+    }
+    const meses = Object.entries(porMes)
+      .map(([mes, v]: [string, any]) => ({ mes, horas: round2(v.horas), tarefas: v.tarefas, custoHoras: round2(v.custoHoras) }))
+      .sort((a, b) => a.mes.localeCompare(b.mes));
+
+    // ── Por mês + funcionário (split tarefas comuns) ──
+    const porMesFunc: Record<string, any> = {};
+    for (const t of tarefasValidas) {
+      if (!t.inicio) continue;
+      const m = t.inicio.substring(0, 7);
+      const f = t.funcionario || "";
+      const pessoas = NOMES_EQUIPA.filter((n) => f.includes(n));
+      if (pessoas.length === 0) pessoas.push("Não atribuído");
+      for (const p of pessoas) {
+        const key = `${m}|${p}`;
+        if (!porMesFunc[key]) porMesFunc[key] = { mes: m, funcionario: p, horas: 0, tarefas: 0 };
+        porMesFunc[key].horas += t.tempoHoras;
+        porMesFunc[key].tarefas++;
+      }
+    }
+    const mesesFuncionario = Object.values(porMesFunc)
+      .filter((v: any) => v.tarefas > 0)
+      .map((v: any) => ({ ...v, horas: round2(v.horas) }))
+      .sort((a: any, b: any) => a.mes.localeCompare(b.mes) || a.funcionario.localeCompare(b.funcionario));
+
+    // ── Por tipo de actividade (normalizado) ──
+    const CATEGORIAS: Record<string, RegExp> = {
+      "Cold Call": /cold call/i,
+      "Pesquisa de Imóveis": /pesquisa.*im[oó]ve/i,
+      "Estudo de Mercado": /estudo.*mercado/i,
+      "Follow Up Consultores": /follow.*up.*consult/i,
+      "Follow Up Investidores": /follow.*up.*invest|contacto.*invest/i,
+      "Reunião Investidores": /reuni[ãa]o.*invest|call.*invest/i,
+      "Reunião de Equipa Somnium": /reuni[ãa]o.*(semanal|lu[ií]s|parceria|equipa)/i,
+      "Visita": /visita/i,
+      "Proposta": /proposta/i,
+      "Apresentação de Negócios": /apresenta[çc][ãa]o|revis[ãa]o.*apresenta/i,
+      "SOP / Formação": /sop|forma[çc][ãa]o/i,
+      "Planeamento": /planeamento|an[aá]lise.*semanal|defini[çc][ãa]o|contabiliza/i,
+      "Implementação com IA": /dashboard|claude.*code|notion|crm|tech|otimiza[çc][ãa]o.*notion|implementa[çc][ãa]o.*claude/i,
+      "Análise de Negócio": /an[aá]lise.*neg[oó]cio|analise.*potencial/i,
+      "Contacto Consultores": /contacto.*consult|cold.*call.*consult/i,
+    };
+    const porCategoria: Record<string, any> = {};
+    for (const t of tarefasValidas) {
+      // Usar categoria guardada na DB; fallback para regex se vazia
+      let cat = t.categoria || null;
+      if (!cat) {
+        cat = "Outros";
+        for (const [nome, regex] of Object.entries(CATEGORIAS)) {
+          if (regex.test(t.tarefa)) {
+            cat = nome;
+            break;
+          }
+        }
+      }
+      if (!porCategoria[cat]) porCategoria[cat] = { horas: 0, tarefas: 0 };
+      porCategoria[cat].horas += t.tempoHoras;
+      porCategoria[cat].tarefas++;
+    }
+    const categorias = Object.entries(porCategoria)
+      .map(([categoria, v]: [string, any]) => ({
+        categoria,
+        horas: round2(v.horas),
+        tarefas: v.tarefas,
+        pctHoras: totalHoras > 0 ? round2(v.horas / totalHoras * 100) : 0,
+        custoTotal: round2(v.horas * CUSTO_HORA),
+      }))
+      .sort((a, b) => b.horas - a.horas);
+
+    // ── Mês actual ──
+    const horasMesActual = round2(tarefasValidas
+      .filter((t) => t.inicio && isMonth(t.inicio, ano, month))
+      .reduce((s, t) => s + t.tempoHoras, 0));
+    const tarefasMesActual = tarefasValidas.filter((t) => t.inicio && isMonth(t.inicio, ano, month)).length;
+
+    // ── Semana actual ──
+    const horasSemana = round2(tarefasValidas
+      .filter((t) => {
+        if (!t.inicio) return false;
+        const d = new Date(t.inicio);
+        return ((now as any) - (d as any)) / 86400000 < 7;
+      })
+      .reduce((s, t) => s + t.tempoHoras, 0));
+
+    // ── KPIs derivados ──
+    // Revenue per hour
+    const receitaTotal = round2(negocios.reduce((s, n) => s + (n.lucroReal || n.lucroEstimado), 0));
+    const receitaRealizada = round2(negocios.filter((n) => n.fase === "Vendido").reduce((s, n) => s + n.lucroReal, 0));
+    const rph = totalHoras > 0 ? round2(receitaTotal / totalHoras) : null;
+    const rphRealizado = totalHoras > 0 && receitaRealizada > 0 ? round2(receitaRealizada / totalHoras) : null;
+
+    // Custo por hora (horas × 15€ + custos fixos rateados)
+    const burnRateMensal = round2(
+      despesas.filter((d) => d.timing === "Mensalmente").reduce((s, d) => s + d.custoMensal, 0) +
+        despesas.filter((d) => d.timing === "Anual").reduce((s, d) => s + (d.custoAnual || 0) / 12, 0),
+    ) || 360.40;
+    const custoHorasTotal = round2(totalHoras * CUSTO_HORA);
+    const mesesOp = meses.length || 1;
+    const custoFixoTotal = round2(burnRateMensal * mesesOp);
+    const custoOperacaoTotal = round2(custoHorasTotal + custoFixoTotal);
+
+    // Horas por deal
+    const horasPorDeal = negocios.length > 0 ? round2(totalHoras / negocios.length) : null;
+    const custoPorDeal = negocios.length > 0 ? round2(custoOperacaoTotal / negocios.length) : null;
+
+    // Produtividade (horas concluídas / horas totais)
+    const horasConcluidas = round2(tarefasValidas.filter((t) => t.status === "Concluída").reduce((s, t) => s + t.tempoHoras, 0));
+    const taxaProdutividade = totalHoras > 0 ? round2(horasConcluidas / totalHoras * 100) : null;
+
+    // Horas por tipo de actividade comercial (para CAC refinado)
+    const horasProspeccao = round2((porCategoria["Cold Call"]?.horas ?? 0) + (porCategoria["Pesquisa de Imóveis"]?.horas ?? 0) + (porCategoria["Contacto Consultores"]?.horas ?? 0));
+    const horasAnalise = round2((porCategoria["Estudo de Mercado"]?.horas ?? 0) + (porCategoria["Análise de Negócio"]?.horas ?? 0));
+    const horasRelacional = round2((porCategoria["Follow Up Consultores"]?.horas ?? 0) + (porCategoria["Follow Up Investidores"]?.horas ?? 0) +
+      (porCategoria["Reunião Investidores"]?.horas ?? 0));
+    const horasGestao = round2((porCategoria["Planeamento"]?.horas ?? 0) + (porCategoria["SOP / Formação"]?.horas ?? 0) +
+      (porCategoria["Implementação com IA"]?.horas ?? 0) + (porCategoria["Reunião de Equipa Somnium"]?.horas ?? 0));
+
+    // Status das tarefas
+    const statusTarefas = { aFazer: 0, emAndamento: 0, concluida: 0, atrasada: 0 };
+    for (const t of tarefas) {
+      if (t.status === "Concluída") statusTarefas.concluida++;
+      else if (t.status === "Em andamento") statusTarefas.emAndamento++;
+      else if (t.status === "Atrasada") statusTarefas.atrasada++;
+      else statusTarefas.aFazer++;
+    }
+
+    return c.json({
+      updatedAt: new Date().toISOString(),
+      resumo: {
+        totalHoras,
+        totalTarefas,
+        horasMesActual,
+        tarefasMesActual,
+        horasSemana,
+        custoHora: CUSTO_HORA,
+        custoHorasTotal,
+        custoFixoTotal,
+        custoOperacaoTotal,
+        horasConcluidas,
+        taxaProdutividade,
+        statusTarefas,
+      },
+      kpis: {
+        rph,
+        rphRealizado,
+        receitaTotal,
+        receitaRealizada,
+        horasPorDeal,
+        custoPorDeal,
+        horasProspeccao,
+        horasAnalise,
+        horasRelacional,
+        horasGestao,
+        pctProspeccao: totalHoras > 0 ? round2(horasProspeccao / totalHoras * 100) : null,
+        pctAnalise: totalHoras > 0 ? round2(horasAnalise / totalHoras * 100) : null,
+        pctRelacional: totalHoras > 0 ? round2(horasRelacional / totalHoras * 100) : null,
+        pctGestao: totalHoras > 0 ? round2(horasGestao / totalHoras * 100) : null,
+      },
+      funcionarios,
+      meses,
+      mesesFuncionario,
+      categorias,
+    });
+  } catch (err: any) {
+    console.error("[time-tracking]", err.message);
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// ════════════════════════════════════════════════════════════════
+// DATA HEALTH
+// ════════════════════════════════════════════════════════════════
+app.get("/data-health", async (c: any) => {
+  try {
+    const [imoveis, investidores, consultoresRaw, negocios, despesas] = await Promise.all([
+      getImóveis().catch(() => [] as any[]),
+      getInvestidores(),
+      getConsultores().catch(() => [] as any[]),
+      getNegócios(),
+      getDespesas(),
+    ]);
+
+    function pctFilled(arr: any[], accessor: (item: any) => any) {
+      if (arr.length === 0) return 0;
+      const filled = arr.filter((item) => {
+        const v = accessor(item);
+        return v !== null && v !== undefined && v !== "" && v !== 0 && !(Array.isArray(v) && v.length === 0);
+      }).length;
+      return round2(filled / arr.length * 100);
+    }
+
+    const health: Record<string, any> = {
+      imoveis: {
+        total: imoveis.length,
+        campos: {
+          "Nome": pctFilled(imoveis, (i) => i.nome),
+          "Ask Price": pctFilled(imoveis, (i) => i.askPrice),
+          "Estado": pctFilled(imoveis, (i) => i.estado),
+          "Data Adicionado": pctFilled(imoveis, (i) => i.dataAdicionado),
+          "Origem": pctFilled(imoveis, (i) => i.origem),
+          "Zona": pctFilled(imoveis, (i) => i.zonas?.length > 0 ? i.zonas : null),
+          "Tipologia": pctFilled(imoveis, (i) => i.tipologia),
+          "Data Chamada": pctFilled(imoveis, (i) => i.dataChamada),
+          "Data Visita": pctFilled(imoveis, (i) => i.dataVisita),
+          "Data Estudo": pctFilled(imoveis, (i) => i.dataEstudoMercado),
+          "Data Proposta": pctFilled(imoveis, (i) => i.dataProposta),
+          "Modelo Negócio": pctFilled(imoveis, (i) => i.modeloNegocio),
+          "ROI": pctFilled(imoveis, (i) => i.roi),
+          "Motivo Descarte": pctFilled(imoveis.filter((i) => new Set(["Descartado", "Nao interessa", "Não interessa"]).has(i.estado)), (i) => i.motivoDescarte),
+        },
+      },
+      investidores: {
+        total: investidores.length,
+        campos: {
+          "Nome": pctFilled(investidores, (i) => i.nome),
+          "Status": pctFilled(investidores, (i) => i.status),
+          "Origem": pctFilled(investidores, (i) => i.origem),
+          "Data 1º Contacto": pctFilled(investidores, (i) => i.dataPrimeiroContacto),
+          "Data Reunião": pctFilled(investidores, (i) => i.dataReuniao),
+          "Data Último Contacto": pctFilled(investidores, (i) => i.dataUltimoContacto),
+          "Classificação": pctFilled(investidores, (i) => i.classificacao?.length > 0 ? i.classificacao : null),
+          "Capital Mínimo": pctFilled(investidores, (i) => i.capitalMin),
+          "Capital Máximo": pctFilled(investidores, (i) => i.capitalMax),
+          "Montante Investido": pctFilled(investidores, (i) => i.montanteInvestido),
+          "NDA Assinado": pctFilled(investidores, (i) => i.ndaAssinado ? "sim" : null),
+          "Estratégia": pctFilled(investidores, (i) => i.estrategia?.length > 0 ? i.estrategia : null),
+          "Tipo Investidor": pctFilled(investidores, (i) => i.tipoInvestidor?.length > 0 ? i.tipoInvestidor : null),
+          "ROI Investidor %": pctFilled(investidores, (i) => i.roiInvestidor),
+        },
+      },
+      consultores: {
+        total: consultoresRaw.length,
+        campos: {
+          "Nome": pctFilled(consultoresRaw, (c2) => c2.nome),
+          "Estatuto": pctFilled(consultoresRaw, (c2) => c2.estatuto),
+          "Contacto": pctFilled(consultoresRaw, (c2) => c2.contacto),
+          "Imobiliária": pctFilled(consultoresRaw, (c2) => c2.imobiliaria?.length > 0 ? c2.imobiliaria : null),
+          "Email": pctFilled(consultoresRaw, (c2) => c2.email),
+          "Zona Atuação": pctFilled(consultoresRaw, (c2) => c2.zonas?.length > 0 ? c2.zonas : null),
+          "Data Follow Up": pctFilled(consultoresRaw, (c2) => c2.dataFollowUp),
+          "Imóveis Enviados": pctFilled(consultoresRaw, (c2) => c2.imoveisEnviados),
+          "Imóveis Off/Market": pctFilled(consultoresRaw, (c2) => c2.imoveisOffMarket),
+          "Data 1ª Call": pctFilled(consultoresRaw, (c2) => c2.dataPrimeiraCall),
+          "Classificação": pctFilled(consultoresRaw, (c2) => c2.classificacao),
+        },
+      },
+      faturacao: {
+        total: negocios.length,
+        campos: {
+          "Movimento": pctFilled(negocios, (n) => n.movimento),
+          "Categoria": pctFilled(negocios, (n) => n.categoria),
+          "Fase": pctFilled(negocios, (n) => n.fase),
+          "Lucro Estimado": pctFilled(negocios, (n) => n.lucroEstimado),
+          "Lucro Real": pctFilled(negocios, (n) => n.lucroReal),
+          "Data": pctFilled(negocios, (n) => n.data),
+          "Data Compra": pctFilled(negocios, (n) => n.dataCompra),
+          "Data Venda": pctFilled(negocios, (n) => n.dataVenda),
+          "Capital Total": pctFilled(negocios, (n) => n.capitalTotal),
+          "Nº Investidores": pctFilled(negocios, (n) => n.nInvestidores),
+        },
+      },
+      despesas: {
+        total: despesas.length,
+        campos: {
+          "Movimento": pctFilled(despesas, (d) => d.movimento),
+          "Categoria": pctFilled(despesas, (d) => d.categoria),
+          "Timing": pctFilled(despesas, (d) => d.timing),
+          "Custo Mensal": pctFilled(despesas, (d) => d.custoMensal),
+          "Data": pctFilled(despesas, (d) => d.data),
+        },
+      },
+    };
+
+    // Score global: média das médias de cada DB
+    for (const db of Object.values(health)) {
+      const vals = Object.values(db.campos) as number[];
+      db.scoreMedio = vals.length > 0 ? round2(vals.reduce((s, v) => s + v, 0) / vals.length) : 0;
+    }
+
+    const scoreGlobal = round2(Object.values(health).reduce((s, db: any) => s + db.scoreMedio, 0) / Object.keys(health).length);
+
+    return c.json({ updatedAt: new Date().toISOString(), scoreGlobal, databases: health });
+  } catch (err: any) {
+    console.error("[data-health]", err.message);
     return c.json({ error: err.message }, 500);
   }
 });
