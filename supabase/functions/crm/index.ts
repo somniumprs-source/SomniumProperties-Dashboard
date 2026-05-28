@@ -17,6 +17,14 @@ import {
   Empreiteiros, getDashboardStats,
 } from "../_shared/crud.ts";
 import { getVisitasEnriquecidas, syncDataVisitaDerivada } from "../_shared/queries.ts";
+import {
+  generateDoc, getDocsForEstado, docEmbedeLocalizacao, generateCompiledReport,
+} from "../_shared/pdfImovelDocs.ts";
+import { persistDocumento, listDocumentos } from "../_shared/documentLifecycle.ts";
+import { generateImovelPDF } from "../_shared/pdfReport.ts";
+import { runEstudoLocalizacao } from "../_shared/estudoLocalizacao.ts";
+import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
+import { supabase, uploadPublic } from "../_shared/storage.ts";
 import { registerRegiaoRoutes } from "./regiaoRoutes.ts";
 import { registerAnaliseRoutes } from "./analiseRoutes.ts";
 import { registerOrcamentoRoutes } from "./orcamentoRoutes.ts";
@@ -42,6 +50,40 @@ const PATH_TO_TABLE: Record<string, string> = {
 
 // Stub para endpoints cujos handlers dependem de modulos ainda nao portados.
 const notImplemented = (c: any) => c.json({ error: "Not implemented — porting em curso", todo: true }, 501);
+
+// Regenera a imagem do estudo de localizacao se estiver desactualizada
+// (gerada antes da ultima recolha de distancias, ou legacy sem marca de
+// geracao). Preserva highlights/destaque/modo guardados. Nunca lanca: em
+// erro devolve o imovel original (o relatorio usa a imagem em cache).
+// So corre quando ha GOOGLE_MAPS_API_KEY + Supabase Storage. Port de
+// routes.js 475-501.
+async function refreshEstudoLocalizacaoSeNecessario(imovel: any): Promise<any> {
+  try {
+    if (!imovel?.localizacao_imagem) return imovel;
+    if (!Deno.env.get("GOOGLE_MAPS_API_KEY") || !supabase) return imovel;
+    const p = imovel.pois_distancias || {};
+    const genMs = p.imagem_gerada_em ? new Date(p.imagem_gerada_em).getTime() : 0;
+    const poisMs = imovel.pois_atualizado_em ? new Date(imovel.pois_atualizado_em).getTime() : 0;
+    // Desactualizada: sem marca (legacy) ou dados de POIs mudaram >1s depois da imagem.
+    const stale = !genMs || (poisMs - genMs > 1000);
+    if (!stale) return imovel;
+    await runEstudoLocalizacao({
+      pool,
+      supabaseStorage: supabase,
+      imovelId: imovel.id,
+      destinos: undefined, // usa os guardados em pois_distancias
+      mode: p.mode || "driving",
+      highlights: Array.isArray(p.highlights) ? p.highlights : [],
+      destaque: p.destaque || null,
+      origem: p.origem || imovel.morada || null,
+    });
+    const fresco = await Imoveis.getById(imovel.id);
+    return fresco || imovel;
+  } catch (e) {
+    console.error(`[estudo-refresh imovel=${imovel?.id}] falhou, usa imagem em cache:`, (e as Error).message);
+    return imovel;
+  }
+}
 
 // ── Middleware no-store (port de routes.js 123-128) ──────────────
 app.use("*", async (c, next) => {
@@ -169,11 +211,30 @@ function crudRoutes(path: string, crud: any) {
 // TODO hooks onCreate/onUpdate (PDF/drive/scrape) diferidos
 crudRoutes("/imoveis", Imoveis);
 
-// ── Listagem dos documentos persistidos do imovel (listDocumentos) → 501 ──
-app.get("/imoveis/:id/documentos-persistidos", notImplemented);
+// ── Listagem dos documentos persistidos do imovel (listDocumentos) ──
+app.get("/imoveis/:id/documentos-persistidos", async (c: any) => {
+  try { return c.json(await listDocumentos(c.req.param("id"))); }
+  catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
 
-// ── Regenerar documento (persistDocumento) → 501 ──
-app.post("/imoveis/:id/documentos/:tipo/regenerar", notImplemented);
+// ── Regenerar (cria nova versao e persiste) — port de routes.js 438-451 ──
+app.post("/imoveis/:id/documentos/:tipo/regenerar", async (c: any) => {
+  const id = c.req.param("id");
+  const tipo = c.req.param("tipo");
+  try {
+    const imovel = await Imoveis.getById(id);
+    if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
+    let analise: any = null;
+    try { const { rows: [a] } = await pool.query("SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1", [imovel.id]); analise = a; } catch { /* ignore */ }
+    const out = await persistDocumento(imovel, tipo, { trigger: "manual:regenerar", generatedBy: c.get("user")?.email || "manual", analise });
+    if (!out) return c.json({ error: "Tipo inválido" }, 400);
+    const { buffer: _b, ...meta } = out;
+    return c.json(meta);
+  } catch (e) {
+    console.error(`[regenerar ${tipo} imovel=${id}] FALHOU:`, (e as Error).message, "\n", (e as Error).stack);
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
 
 // ── Lookups (dropdowns dinamicos) — port de routes.js 454-468 ──
 app.get("/lookups/:categoria", async (c: any) => {
@@ -192,8 +253,71 @@ app.get("/lookups", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Documento PDF por fase do imovel (persistDocumento/refreshEstudo) → 501 ──
-app.get("/imoveis/:id/documento/:tipo", notImplemented);
+// ── Documento PDF por fase do imovel — port de routes.js 512-568 ──
+//
+// Estrategia: se ja existe pdf_path persistido e fresco, redireccionar para a
+// URL Supabase (instantaneo). So gera o PDF quando ainda nao existe ou esta
+// desactualizado. Para forcar regeneracao, ?refresh=1 ou POST .../regenerar.
+app.get("/imoveis/:id/documento/:tipo", async (c: any) => {
+  const id = c.req.param("id");
+  const tipo = c.req.param("tipo");
+  try {
+    const imovel = await Imoveis.getById(id);
+    if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
+
+    // ?refresh=1 (ou refresh=true) forca regeneracao mesmo que exista PDF em cache.
+    const refresh = ["1", "true", "yes"].includes(String(c.req.query("refresh") || "").toLowerCase());
+
+    // Analise activa — necessaria para gerar e para detectar desactualizacao.
+    let analise: any = null;
+    try {
+      const { rows: [a] } = await pool.query("SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1", [imovel.id]);
+      analise = a;
+    } catch { /* ignore */ }
+
+    // Regenerar a imagem do estudo se desactualizada (so docs que a embutem).
+    let im = imovel;
+    if (docEmbedeLocalizacao(tipo)) im = await refreshEstudoLocalizacaoSeNecessario(imovel);
+
+    // Servir PDF em cache APENAS se ainda reflecte os dados actuais. Regenera
+    // quando o imovel ou a analise mudaram depois da ultima geracao.
+    if (!refresh) {
+      try {
+        const { rows: [doc] } = await pool.query(
+          `SELECT pdf_path, generated_at, frozen FROM documentos_imovel
+             WHERE imovel_id = $1 AND tipo = $2
+             ORDER BY frozen DESC, version DESC LIMIT 1`,
+          [im.id, tipo],
+        );
+        if (doc?.pdf_path && /^https?:\/\//i.test(doc.pdf_path)) {
+          const genMs = doc.generated_at ? new Date(doc.generated_at).getTime() : 0;
+          const upImovel = im.updated_at ? new Date(im.updated_at).getTime() : 0;
+          const upAnalise = analise?.updated_at ? new Date(analise.updated_at).getTime() : 0;
+          // Frozen = snapshot imutavel (intencional). Vivo = so se ainda fresco.
+          const fresco = doc.frozen || genMs >= Math.max(upImovel, upAnalise);
+          if (fresco) return c.redirect(doc.pdf_path, 302);
+          // senao: dados mudaram desde a geracao → cai para regeneracao
+        }
+      } catch { /* cai para geracao */ }
+    }
+
+    const out = await persistDocumento(im, tipo, {
+      trigger: refresh ? "view:refresh" : "view:auto",
+      generatedBy: c.get("user")?.email || "system",
+      analise,
+    });
+    if (!out) return c.json({ error: "Tipo de documento inválido" }, 400);
+
+    const nome = (imovel.nome || "doc").replace(/[^a-zA-Z0-9À-ú ]/g, "").replace(/\s+/g, "_");
+    return c.body(out.buffer, 200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="${tipo}_${nome}.pdf"`,
+    });
+  } catch (e) {
+    console.error(`[documento ${tipo} imovel=${id}] FALHOU:`, (e as Error).message, "\n", (e as Error).stack);
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
 
 // ── Re-sincronizacao global: analise activa → campos derivados do imovel ──
 // port de routes.js 576-598
@@ -221,11 +345,55 @@ app.post("/sync-derivados", async (c: any) => {
   }
 });
 
-// ── Relatorio PDF do imovel (generateImovelPDF/streamPdf) → 501 ──
-app.get("/imoveis/:id/relatorio", notImplemented);
+// ── Relatorio PDF do imovel — port de routes.js 600-622 ──
+app.get("/imoveis/:id/relatorio", async (c: any) => {
+  const id = c.req.param("id");
+  try {
+    const imovel = await Imoveis.getById(id);
+    if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
 
-// ── Relatorio compilado para investidor (generateCompiledReport) → 501 ──
-app.get("/imoveis/:id/relatorio-investidor", notImplemented);
+    // Buscar analise activa se existir
+    const { rows: [analise] } = await pool.query(
+      "SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1", [imovel.id],
+    ).catch(() => ({ rows: [] }));
+
+    const nome = (imovel.nome || "imovel").replace(/[^a-zA-Z0-9À-ú ]/g, "").replace(/\s+/g, "_");
+    const buffer = await streamToBuffer(generateImovelPDF(imovel, analise || null));
+    return c.body(buffer, 200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="Relatorio_${nome}.pdf"`,
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+// ── Relatorio compilado para investidor — port de routes.js 625-650 ──
+app.get("/imoveis/:id/relatorio-investidor", async (c: any) => {
+  const id = c.req.param("id");
+  try {
+    let imovel = await Imoveis.getById(id);
+    if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
+    const { rows: [analise] } = await pool.query(
+      "SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1", [imovel.id],
+    ).catch(() => ({ rows: [] }));
+
+    // Garante que o estudo de localizacao embutido reflecte os dados actuais.
+    imovel = await refreshEstudoLocalizacaoSeNecessario(imovel);
+
+    const seccoes = (c.req.query("seccoes") || "investimento,comparaveis,caep,stress_tests").split(",").filter(Boolean);
+    const nome = (imovel.nome || "imovel").replace(/[^a-zA-Z0-9À-ú ]/g, "").replace(/\s+/g, "_");
+    const doc = await generateCompiledReport(imovel, analise || null, seccoes);
+    const buffer = await streamToBuffer(doc);
+    return c.body(buffer, 200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="Dossier_Investimento_${nome}.pdf"`,
+    });
+  } catch (e) {
+    console.error(`[relatorio-investidor imovel=${id}] FALHOU:`, (e as Error).message, "\n", (e as Error).stack);
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
 
 crudRoutes("/investidores", Investidores);
 
@@ -689,11 +857,44 @@ app.put("/imoveis/:id/fotos/:fotoId/mover", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Upload da imagem de localizacao (multer/Supabase Storage/disco) → 501 ──
-app.post("/imoveis/:id/localizacao", notImplemented);
+// ── Upload da imagem de localizacao — port de routes.js 1400-1422 ──
+// Multipart (multer single 'imagem') → Hono parseBody + uploadPublic.
+app.post("/imoveis/:id/localizacao", async (c: any) => {
+  const id = c.req.param("id");
+  try {
+    const body = await c.req.parseBody();
+    const file = body["imagem"] as File | undefined;
+    if (!file || typeof file === "string") {
+      return c.json({ error: "Nenhum ficheiro válido (JPG, PNG, WEBP até 15MB)" }, 400);
+    }
+    const imovel = await Imoveis.getById(id);
+    if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
 
-// ── Apagar imagem de localizacao (Supabase Storage remove) → 501 ──
-app.delete("/imoveis/:id/localizacao", notImplemented);
+    const ext = (file.name?.match(/\.[a-z0-9]+$/i)?.[0] || ".png");
+    const storagePath = `imoveis/${id}/localizacao_${Date.now()}${ext}`;
+    const filePath = await uploadPublic(
+      "Imoveis", storagePath, new Uint8Array(await file.arrayBuffer()), file.type || "image/png",
+    );
+    await Imoveis.update(id, { localizacao_imagem: filePath });
+    return c.json({ ok: true, localizacao_imagem: filePath });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── Apagar imagem de localizacao — port de routes.js 1424-1436 ──
+app.delete("/imoveis/:id/localizacao", async (c: any) => {
+  const id = c.req.param("id");
+  try {
+    const imovel = await Imoveis.getById(id);
+    if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
+    const url = imovel.localizacao_imagem;
+    if (url && supabase && url.includes("supabase.co/storage/")) {
+      const match = url.match(/\/storage\/v1\/object\/public\/Imoveis\/(.+)$/);
+      if (match) await supabase.storage.from("Imoveis").remove([match[1]]).catch(() => {});
+    }
+    await Imoveis.update(id, { localizacao_imagem: null });
+    return c.json({ ok: true });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── Apagar foto (Supabase Storage remove) → 501 ──
 app.delete("/imoveis/:id/fotos/:fotoId", notImplemented);
@@ -2249,8 +2450,27 @@ app.post("/imoveis/:id/distancias", async (c: any) => {
   }
 });
 
-// ── Estudo de localizacao auto (runEstudoLocalizacao/Supabase Storage) → 501 ──
-app.post("/imoveis/:id/estudo-localizacao", notImplemented);
+// ── Estudo de localizacao auto — port de routes.js 3377-3395 ──
+app.post("/imoveis/:id/estudo-localizacao", async (c: any) => {
+  try {
+    if (!supabase) return c.json({ error: "Supabase Storage não configurado" }, 500);
+    const reqBody = await c.req.json().catch(() => ({}));
+    const r = await runEstudoLocalizacao({
+      pool,
+      supabaseStorage: supabase,
+      imovelId: c.req.param("id"),
+      destinos: reqBody?.destinos,
+      mode: reqBody?.mode || "driving",
+      highlights: Array.isArray(reqBody?.highlights) ? reqBody.highlights : [],
+      destaque: reqBody?.destaque || null,
+      origem: reqBody?.origem || null,
+    });
+    return c.json(r);
+  } catch (e) {
+    console.error("[estudo-localizacao]", e);
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
 
 // ── GET distancias gravadas — port de routes.js 3397-3407 ──
 app.get("/imoveis/:id/distancias", async (c: any) => {
