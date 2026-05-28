@@ -5,10 +5,13 @@ CRM e dashboard operacional da Somnium Properties: gere imoveis, investidores, c
 ## Tech Stack
 
 - Frontend: React 18 + Vite 5 + Tailwind CSS + Recharts + Lucide Icons
-- Backend: Express 5 (server.js ~4200 linhas) + PostgreSQL (Supabase)
+- Backend producao: Supabase Edge Functions (Deno/Hono) em `supabase/functions/`
+- Backend Express (server.js + src/db/routes.js): so dev local (`npm run dev`); Render decomissionado
 - Auth: Supabase JWT (desactivado em dev quando SUPABASE_SERVICE_KEY vazio)
-- Deploy: Render (auto-deploy do branch main)
+- Deploy: frontend no Vercel (auto-deploy do branch main); Edge Functions via `supabase functions deploy` (NAO e disparado pelo git push)
 - Repo: github.com/somniumprs-source/SomniumProperties-Dashboard
+
+IMPORTANTE: alteracoes a endpoints precisam de ser portadas para AMBOS `src/db/routes.js` (Express, dev) e `supabase/functions/crm/index.ts` (producao). So o segundo chega a producao.
 
 ## Comandos
 
