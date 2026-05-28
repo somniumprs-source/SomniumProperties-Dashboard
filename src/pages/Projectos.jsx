@@ -193,11 +193,12 @@ export function Projectos() {
   useEffect(() => { load() }, [regiao])
   useEffect(() => { if (projectos.length > 0) loadFases(projectos, filterCat) }, [projectos, filterCat])
   useEffect(() => {
-    apiFetch('/api/crm/projetos/portfolio/kpis')
+    const qs = filterCat ? `?categoria=${encodeURIComponent(filterCat)}` : ''
+    apiFetch(`/api/crm/projetos/portfolio/kpis${qs}`)
       .then(r => r.ok ? r.json() : null)
       .then(setPortfolio)
       .catch(() => {})
-  }, [])
+  }, [filterCat])
 
   // UX13: Keyboard shortcuts
   useEffect(() => {
@@ -375,7 +376,9 @@ export function Projectos() {
                 </div>
                 <div>
                   <h2 className="text-overline uppercase tracking-widest font-semibold text-brand-gold">Portfolio</h2>
-                  <p className="text-sm font-semibold text-white">Fix and Flip · Vista agregada</p>
+                  <p className="text-sm font-semibold text-white">
+                    {(MODELOS_NEGOCIO.find(m => m.key === filterCat)?.nome || 'Todos')} · Vista agregada
+                  </p>
                 </div>
               </div>
               {!isReadOnly && (
@@ -392,7 +395,7 @@ export function Projectos() {
               )}
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-              <PortfolioKpi label="Projectos activos" value={portfolio.totais.ativos_ff} sub={`de ${portfolio.totais.total_ff} total`} />
+              <PortfolioKpi label="Projectos activos" value={portfolio.totais.ativos} sub={`de ${portfolio.totais.total} total`} />
               <PortfolioKpi label="Capital agregado" value={EUR(portfolio.totais.capital_total)} />
               <PortfolioKpi label="Lucro esperado" value={EUR(portfolio.totais.lucro_estimado_total)} accent />
               <PortfolioKpi label="Lucro realizado" value={EUR(portfolio.totais.lucro_real_total)} green />

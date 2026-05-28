@@ -4981,24 +4981,32 @@ router.get('/projetos/:negocioId/ai-resumo', aiRateLimit, async (req, res) => {
   } catch (e) { console.error('[ai-resumo]', e.message); res.status(500).json({ error: e.message }) }
 })
 
-// ── F2.7 — KPIs agregados de portfolio Fix and Flip ─────────
+// ── F2.7 — KPIs agregados de portfolio por modelo de negócio ─────────
 router.get('/projetos/portfolio/kpis', async (req, res) => {
   try {
     const u = await resolveCrmUser(req)
     const isRestricted = u && RECORD_RESTRICTED_ROLES.has(u.role)
 
-    const filterNegocio = isRestricted
-      ? `n.id IN (SELECT entidade_id FROM acessos WHERE entidade = 'negocio' AND user_id = $1)`
-      : `1=1`
-    const params = isRestricted ? [u.id] : []
+    const categoria = (req.query.categoria || '').trim()  // '' = todos os modelos de negócio
+    const conds = []
+    const params = []
+    if (isRestricted) {
+      params.push(u.id)
+      conds.push(`n.id IN (SELECT entidade_id FROM acessos WHERE entidade = 'negocio' AND user_id = $${params.length})`)
+    }
+    if (categoria) {
+      params.push(categoria)
+      conds.push(`n.categoria = $${params.length}`)
+    }
+    const filterNegocio = conds.length ? conds.join(' AND ') : '1=1'
 
     const { rows: stats } = await pool.query(
       `SELECT
-         COUNT(*) FILTER (WHERE n.categoria = 'Fix and Flip') AS total_ff,
-         COUNT(*) FILTER (WHERE n.categoria = 'Fix and Flip' AND n.fase <> 'Vendido') AS ativos_ff,
-         COALESCE(SUM(n.lucro_estimado) FILTER (WHERE n.categoria = 'Fix and Flip'), 0) AS lucro_estimado_total,
-         COALESCE(SUM(n.lucro_real) FILTER (WHERE n.categoria = 'Fix and Flip'), 0) AS lucro_real_total,
-         COALESCE(SUM(n.capital_total) FILTER (WHERE n.categoria = 'Fix and Flip'), 0) AS capital_total
+         COUNT(*) AS total,
+         COUNT(*) FILTER (WHERE n.fase <> 'Vendido') AS ativos,
+         COALESCE(SUM(n.lucro_estimado), 0) AS lucro_estimado_total,
+         COALESCE(SUM(n.lucro_real), 0) AS lucro_real_total,
+         COALESCE(SUM(n.capital_total), 0) AS capital_total
        FROM negocios n WHERE ${filterNegocio}`,
       params
     )
