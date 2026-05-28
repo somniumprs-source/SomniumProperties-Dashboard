@@ -10,6 +10,7 @@
 // first-match-wins tal como o Express, por isso os endpoints especificos
 // continuam registados ANTES dos crudRoutes/:id correspondentes.
 import { createApp } from "../_shared/hono.ts";
+import { requireAuth } from "../_shared/auth.ts";
 import pool from "../_shared/pg.ts";
 import {
   Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas,
