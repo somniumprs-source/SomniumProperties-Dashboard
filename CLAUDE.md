@@ -10,6 +10,7 @@ CRM e dashboard operacional da Somnium Properties: gere imoveis, investidores, c
 - Auth: Supabase JWT (desactivado em dev quando SUPABASE_SERVICE_KEY vazio)
 - Deploy: tudo auto-deploy no push para main — frontend no Vercel; Edge Functions via GitHub Actions (`.github/workflows/deploy-supabase.yml`, dispara quando muda `supabase/functions/**` ou `config.toml`; usa o secret `SUPABASE_ACCESS_TOKEN`)
 - Repo: github.com/somniumprs-source/SomniumProperties-Dashboard
+- Restos: `render.yaml` e `railway.json` (raiz) sao do setup Render antigo (decomissionado). Nao usados em deploy; mantidos por historico.
 
 IMPORTANTE: alteracoes a endpoints precisam de ser portadas para AMBOS `src/db/routes.js` (Express, dev) e `supabase/functions/crm/index.ts` (producao). So o segundo chega a producao.
 
@@ -19,6 +20,31 @@ IMPORTANTE: alteracoes a endpoints precisam de ser portadas para AMBOS `src/db/r
 npm run dev          # Backend (3001) + Vite (5173)
 npm run build        # Build producao
 ```
+
+## Mapa de Navegacao
+
+Onde mexer por dominio. Backend dev = `server.js` (rotas inline) + `src/db/routes.js` (so `/api/crm`, montado em server.js:128). Localizar rotas por `grep "/api/<dominio>" server.js` (linhas aproximadas abaixo, podem mover).
+
+| Dominio | Backend dev (server.js ~linha / routes) | Frontend |
+|---|---|---|
+| CRM, imoveis, investidores | `/api/crm` -> `src/db/routes.js` | `src/pages/CRM.jsx`, `src/components/crm/` |
+| Consultores | `/api/consultores` ~344 | `src/components/crm/` |
+| Financeiro, despesas, negocios | `/api/financeiro` ~1311 | `src/pages/Financeiro.jsx`, `src/components/analise/` |
+| Comercial | `/api/comercial` ~1776 | `src/pages/CRM.jsx` |
+| KPIs e metricas | `/api/kpis` ~1204, `/api/metricas` ~2743 | `src/pages/Metricas.jsx`, `src/components/dashboard/` |
+| Operacoes | `/api/operacoes` ~2345 | `src/pages/Operacoes.jsx` |
+| OKRs e tarefas | `/api/okrs` ~4517, `/api/tarefas` ~4216 | `src/pages/Administracao*.jsx` |
+| Alertas | `/api/alertas` ~5019 | `src/pages/Alertas.jsx` |
+| Calendario | `/api/calendar` ~4020 | `src/pages/ProjectosCalendario.jsx` |
+| Relatorios | `/api/relatorios` ~753 | `src/pages/RelatoriosAdmin.jsx`, `Relatorios/` |
+| SOPs | `/api/sops` ~137 | `src/pages/AdministracaoSOP.jsx` |
+| Utilizadores e acessos | `/api/users`, `/api/acessos` ~120 | `src/pages/Utilizadores.jsx` |
+| Automation e webhooks | `/api/automation` ~5456, `/api/webhook` ~159 | `src/api/automation/` |
+| Cron jobs | `/api/cron` ~650 | — |
+
+Transversal: fetch -> `src/lib/api.js` (`apiFetch`). Limpeza de forms -> `src/db/crud.js` (`cleanFormData`). Migracoes BD -> `supabase/migrations/`. Fotos -> `public/uploads/imoveis/`.
+
+Producao: Edge Functions em `supabase/functions/` (crm, dashboard, calendar, users, sops, voice, webhook-*, cron-*, scrape-portal). Endpoints alterados em dev precisam de port para a funcao respectiva (ver IMPORTANTE acima).
 
 ## Departamentos
 
@@ -43,13 +69,16 @@ Outputs gerados por scripts ficam na raiz (ex: `Manual_Orcamento_Obra_Somnium.pd
 ## Regras de Operacao
 
 - Todos os fetch no frontend usam `apiFetch()` de `src/lib/api.js` (nunca fetch directo).
-- Campos numericos vazios ("") convertidos para null pelo `cleanFormData()` no crud.js.
-- server.js: NAO ler inteiro. Usar offset/limit ou grep.
+- Campos numericos vazios ("") convertidos para null pelo `cleanFormData()` no `src/db/crud.js`.
 - Fotos: guardadas em `/public/uploads/imoveis/` com metadados JSON na coluna `fotos`.
 - PDFs incluem fotografias do imovel automaticamente (max 6 por documento).
 - Palette: brand gold #C9A84C, brand dark #0d0d0d (tailwind.config.js).
-- Commit messages em portugues. Commit e push automatico quando build passa.
-- Nunca criar ficheiros fora das pastas existentes sem perguntar.
+- Commit messages em portugues. Commit e push automatico quando build passa (gate no Stop hook de `.claude/settings.json`).
+
+## Proibicoes (NAO fazer)
+
+- NAO ler `server.js` inteiro: usar offset/limit ou grep (ver Mapa de Navegacao).
+- NAO criar ficheiros fora das pastas existentes sem perguntar.
 
 ## Convencoes de Nomenclatura
 
