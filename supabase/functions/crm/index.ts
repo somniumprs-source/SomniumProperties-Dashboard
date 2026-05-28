@@ -390,6 +390,14 @@ async function refreshEstudoLocalizacaoSeNecessario(imovel: any): Promise<any> {
   }
 }
 
+// ── Auth: crm tem verify_jwt=false no gateway (para o fallback ?token= dos PDFs),
+// por isso a validacao e em codigo: exige Bearer OU ?token=. _health isento.
+// (Substitui a proteccao do middleware global do Express no Render.) ──
+app.use("*", async (c, next) => {
+  if (c.req.path.endsWith("/_health")) return await next();
+  return await requireAuth(c, next);
+});
+
 // ── Middleware no-store (port de routes.js 123-128) ──────────────
 app.use("*", async (c, next) => {
   await next();
