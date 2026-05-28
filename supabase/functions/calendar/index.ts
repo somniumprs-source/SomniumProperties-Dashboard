@@ -10,6 +10,7 @@
 //
 // googleapis COMPILA em Deno (deno check exit 0) — Google API NAO foi stubbada.
 import { createApp } from "../_shared/hono.ts";
+import { requireAuth } from "../_shared/auth.ts";
 import pool from "../_shared/pg.ts";
 import { OAuth2Client } from "google-auth-library";
 import { calendar } from "@googleapis/calendar";
@@ -17,6 +18,13 @@ import { oauth2 } from "@googleapis/oauth2";
 import { pushAllTarefas, pullGCalToTarefas } from "./calendarSync.ts";
 
 const app = createApp("/calendar");
+
+// Auth em codigo: o gateway verify_jwt=true aceita a anon key (publica); requireAuth
+// exige um utilizador REAL (rejeita anon), como o middleware global do Render. _health isento.
+app.use("*", async (c: any, next: any) => {
+  if (c.req.path.endsWith("/_health")) return await next();
+  return await requireAuth(c, next);
+});
 
 const GCAL_ID = Deno.env.get("GOOGLE_CALENDAR_ID") || "somniumprs@gmail.com";
 

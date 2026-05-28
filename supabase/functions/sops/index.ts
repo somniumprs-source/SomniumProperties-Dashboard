@@ -2,9 +2,17 @@
 // CRUD da biblioteca de SOPs. O endpoint POST /import-drive depende do modulo
 // sopDriveImport (Google Drive) ainda nao portado -> 501.
 import { createApp } from "../_shared/hono.ts";
+import { requireAuth } from "../_shared/auth.ts";
 import pool from "../_shared/pg.ts";
 
 const app = createApp("/sops");
+
+// Auth em codigo: o gateway verify_jwt=true aceita a anon key (publica); requireAuth
+// exige um utilizador REAL (rejeita anon), como o middleware global do Render. _health isento.
+app.use("*", async (c: any, next: any) => {
+  if (c.req.path.endsWith("/_health")) return await next();
+  return await requireAuth(c, next);
+});
 
 const DEPARTAMENTOS_VALIDOS = ["comercial", "financeiro", "administrativo", "geral"];
 

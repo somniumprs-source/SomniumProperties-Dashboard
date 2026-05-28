@@ -2,9 +2,17 @@
 // Usa _shared/portalFetch.ts (browser remoto Browserless + Storage). O caminho
 // de fetch simples corre sem browser; o fallback usa BROWSERLESS_URL/TOKEN.
 import { createApp } from "../_shared/hono.ts";
+import { requireAuth } from "../_shared/auth.ts";
 import { detectPortalLink, downloadPortalPhotos, fetchPortalData } from "../_shared/portalFetch.ts";
 
 const app = createApp("/scrape-portal");
+
+// Auth em codigo: o gateway verify_jwt=true aceita a anon key (publica); requireAuth
+// exige um utilizador REAL (rejeita anon), como o middleware global do Render. _health isento.
+app.use("*", async (c: any, next: any) => {
+  if (c.req.path.endsWith("/_health")) return await next();
+  return await requireAuth(c, next);
+});
 
 // Deteccao de link de portal num texto (util para o agente WhatsApp/inbound).
 app.post("/detect", async (c) => {

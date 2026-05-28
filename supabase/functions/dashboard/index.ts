@@ -1,6 +1,7 @@
 // Edge Function "dashboard" — port READ-ONLY (GET) dos handlers do dashboard do server.js Express.
 // Traducao mecanica: logica de negocio identica; so muda a camada wrapper (Express req/res -> Hono).
 import { createApp } from "../_shared/hono.ts";
+import { requireAuth } from "../_shared/auth.ts";
 import pool from "../_shared/pg.ts";
 import {
   getNegócios as _getNegócios,
@@ -24,6 +25,13 @@ const getConsultores = _getConsultores as (a?: RegiaoArg) => Promise<any[]>;
 const getVisitas = _getVisitas as (a?: RegiaoArg) => Promise<any[]>;
 
 const app = createApp("/dashboard");
+
+// Auth em codigo: o gateway verify_jwt=true aceita a anon key (publica); requireAuth
+// exige um utilizador REAL (rejeita anon), como o middleware global do Render. _health isento.
+app.use("*", async (c: any, next: any) => {
+  if (c.req.path.endsWith("/_health")) return await next();
+  return await requireAuth(c, next);
+});
 
 // ── Helper de regiao (semantica do middleware global do server.js) ──
 // ?mercado= tem precedencia sobre header X-Regiao; conjunto valido { Coimbra, AMP }.
