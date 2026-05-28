@@ -1,0 +1,399 @@
+/**
+ * Metricas profissionais derivadas para o relatorio de Analise de Rentabilidade.
+ * Calculadas on-the-fly a partir do registo persistido em `analises` + `imoveis`.
+ * Nada e gravado em BD: alteracoes a estas formulas reflectem-se em todos os relatorios.
+ */
+
+import { calcIRC } from './calcEngine.ts'
+
+const DIVIDENDOS_RETENCAO = 0.28
+const IRS_TAXA_AUTONOMA = 0.28
+
+function safeNum(v: any): number {
+  const n = parseFloat(v)
+  return isFinite(n) ? n : 0
+}
+
+// Calcula impostos de uma iteração (usado em break-even VVR/Obra e sensibilidades).
+// Tem de ser consistente com calcEngine.calcAnalise — para Particular Cat. G,
+// o imposto depende de VVR e da obra/comissão (porque entram na base dedutível Art. 51.º).
+// Para isso, opts traz a parte FIXA da base dedutível (compra + IS + IMT + escritura
+// + cpcv compra + cpcv venda) e adicionamos obra+comissão da iteração.
+function calcImpostosIter(regime: any, lb: number, vvr: number, obraComIva: number, comissaoComIva: number, opts: any): number {
+  if (regime === 'Sem') return 0  // valor bruto — sem fiscalidade
+  if (regime === 'Empresa') {
+    const lbPositive = Math.max(lb, 0)
+    if (lbPositive === 0) return 0
+    const { total: irc } = calcIRC(lbPositive, opts.derramaPerc)
+    const aposIRC = Math.max(lbPositive - irc, 0)
+    return irc + aposIRC * (opts.percDiv / 100) * DIVIDENDOS_RETENCAO
+  }
+  // Particular
+  const cat = opts.categoria || 'G'
+  const taxaMarginal = opts.taxaMarginal || 0
+  if (cat === 'B-organizada') {
+    return Math.max(lb, 0) * (taxaMarginal > 0 ? taxaMarginal / 100 : IRS_TAXA_AUTONOMA)
+  }
+  if (cat === 'B-simplificado') {
+    return Math.max(vvr, 0) * 0.15 * (taxaMarginal > 0 ? taxaMarginal / 100 : IRS_TAXA_AUTONOMA)
+  }
+  // Cat. G — Art. 43.º n.º 2 (50%) sobre mais-valia, autónoma 28% ou marginal englobada.
+  const baseDed = (opts.baseDedutivelFixa || 0) + Math.max(obraComIva, 0) + Math.max(comissaoComIva, 0)
+  const mv = Math.max(vvr - baseDed, 0)
+  const taxa = (opts.englobamento && taxaMarginal > 0) ? taxaMarginal / 100 : IRS_TAXA_AUTONOMA
+  return mv * 0.5 * taxa
+}
+
+function lucroLiqFor(lb: number, regime: any, vvr: number, obraComIva: number, comissaoComIva: number, opts: any): number {
+  return lb - calcImpostosIter(regime, lb, vvr, obraComIva, comissaoComIva, opts)
+}
+
+function calcTIR(equity: number, lucroLiq: number, meses: number): number | null {
+  if (!equity || equity <= 0 || !meses || meses <= 0) return null
+  const cf = new Array(meses + 1).fill(0)
+  cf[0] = -Math.abs(equity)
+  cf[meses] = Math.abs(equity) + lucroLiq
+  let r = 0.01
+  for (let i = 0; i < 200; i++) {
+    let npv = 0, dnpv = 0
+    for (let t = 0; t < cf.length; t++) {
+      const denom = Math.pow(1 + r, t)
+      npv += cf[t] / denom
+      dnpv -= t * cf[t] / (denom * (1 + r))
+    }
+    if (!isFinite(npv) || !isFinite(dnpv) || Math.abs(dnpv) < 1e-12) break
+    const delta = npv / dnpv
+    r -= delta
+    if (!isFinite(r) || r <= -0.999) return null
+    if (Math.abs(delta) < 1e-10) break
+  }
+  if (!isFinite(r) || r <= -1) return null
+  return Math.pow(1 + r, 12) - 1
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  if (!isFinite(v)) return lo
+  return Math.max(lo, Math.min(hi, v))
+}
+
+export function calcMetricsExtra(a: any, im: any = {}): any {
+  const compra = safeNum(a.compra) || safeNum(im.valor_proposta) || safeNum(im.ask_price)
+  const obra = safeNum(a.obra)
+  const obraComIva = safeNum(a.obra_com_iva) || obra
+  const vvr = safeNum(a.vvr) || safeNum(im.valor_venda_remodelado)
+  const meses = Math.max(safeNum(a.meses), 0)
+  const cap = safeNum(a.capital_necessario)
+  const lb = safeNum(a.lucro_bruto)
+  const ll = safeNum(a.lucro_liquido)
+  const rt = safeNum(a.retorno_total)
+  const totalAq = safeNum(a.total_aquisicao)
+  const totalDet = safeNum(a.total_detencao)
+  const totalVen = safeNum(a.total_venda)
+  const licen = safeNum(a.licenciamento)
+  const valorFin = safeNum(a.valor_financiado)
+  const percFin = safeNum(a.perc_financiamento)
+  const regime = a.regime_fiscal || 'Empresa'
+  const derramaPerc = a.derrama_perc != null ? safeNum(a.derrama_perc) : 1.5
+  const percDiv = a.perc_dividendos != null ? safeNum(a.perc_dividendos) : 100
+  const comissaoPerc = a.comissao_perc != null ? safeNum(a.comissao_perc) : 2.5
+  const seguroMensal = safeNum(a.seguro_mensal)
+  const condominioMensal = safeNum(a.condominio_mensal)
+  const taxaImi = safeNum(a.taxa_imi)
+  const vpt = safeNum(a.vpt)
+  const impostos = safeNum(a.impostos)
+  const retencaoDiv = safeNum(a.retencao_dividendos)
+  const area = safeNum(im.area_bruta)
+  const pmoPerc = safeNum(a.pmo_perc)
+  const pmoArq = safeNum(a.pmo_arq_perc)
+  const pmoFisc = safeNum(a.pmo_fisc_perc)
+  const pmoSeg = safeNum(a.pmo_seg_obra_perc)
+  const pmoOutros = safeNum(a.pmo_outros_perc)
+  const rendaMensal = safeNum(a.renda_mensal)
+  const vacancyPct = a.vacancy_pct != null ? safeNum(a.vacancy_pct) : 5
+  const gestaoArrPct = a.gestao_arr_pct != null ? safeNum(a.gestao_arr_pct) : 8
+
+  // capital_necessario = custoTotal - valorFinanciado - comissaoComIva (comissão paga pelo sinal do comprador).
+  // Para reconstruir custoTotal coerentemente, somar a comissão de volta.
+  const comissaoComIva = safeNum(a.comissao_com_iva) || (vvr * comissaoPerc / 100 * 1.23)
+  const custoTotal = cap + valorFin + comissaoComIva
+  const custoFinanciamento = Math.max(custoTotal - totalAq - obraComIva - licen - totalDet - totalVen, 0)
+  const fixedSaleCosts = Math.max(totalVen - comissaoComIva, 0)
+  const custoExcVenda = totalAq + obraComIva + licen + totalDet + custoFinanciamento + fixedSaleCosts
+  const custoExcObra = totalAq + licen + totalDet + custoFinanciamento + totalVen
+
+  // Para iterações fiscais (break-even, sensibilidades) — passa-se a parte FIXA da
+  // base dedutível Cat. G; o resto (obra, comissão) é ajustado por iteração.
+  const baseDedutivelFixa = safeNum(a.compra) + safeNum(a.imposto_selo) + safeNum(a.imt)
+    + safeNum(a.escritura) + safeNum(a.cpcv_compra) + safeNum(a.cpcv_venda)
+  const fiscalOpts = {
+    derramaPerc,
+    percDiv,
+    categoria: a.categoria_irs || 'G',
+    taxaMarginal: safeNum(a.taxa_irs_marginal),
+    englobamento: !!a.englobamento,
+    baseDedutivelFixa,
+  }
+
+  const moic = cap > 0 ? 1 + ll / cap : null
+  const tirAnual = calcTIR(cap, ll, meses)
+  const equityReal = cap - valorFin
+  const tirAlavancada = (percFin > 0 && equityReal > 0) ? calcTIR(equityReal, ll, meses) : null
+
+  const lucroMensal = meses > 0 ? ll / meses : null
+  const racio = cap > 0 ? ll / cap : null
+
+  const roeSemAlav = cap > 0 ? ll / cap : null
+  const paybackMeses = lucroMensal && lucroMensal > 0 ? cap / lucroMensal : null
+  const raSimplesAnual_pp = meses > 0 ? (rt / meses) * 12 : 0
+  const custoOportunidadePp = raSimplesAnual_pp - 3.5
+
+  const margemCusto = custoTotal > 0 ? lb / custoTotal : null
+
+  const aquisicaoM2 = area > 0 ? compra / area : null
+  const custoTotalM2 = area > 0 ? custoTotal / area : null
+  const vvrM2 = area > 0 ? vvr / area : null
+
+  const spreadEur = vvr - (compra + obraComIva)
+  const baseSpread = compra + obraComIva
+  const spreadPct = baseSpread > 0 ? spreadEur / baseSpread : null
+
+  const ltv = (percFin > 0 && vvr > 0) ? valorFin / vvr : null
+  const ltc = (percFin > 0 && custoTotal > 0) ? valorFin / custoTotal : null
+
+  let beVVR: number | null = null
+  if (custoExcVenda > 0 && comissaoPerc >= 0 && comissaoPerc < 100) {
+    const passo = Math.max(Math.round(custoExcVenda / 1000), 50)
+    const start = Math.max(custoExcVenda * 0.5, 1000)
+    const max = custoExcVenda * 3
+    for (let v = start; v <= max; v += passo) {
+      const com = v * comissaoPerc / 100 * 1.23
+      const lbV = v - (custoExcVenda + com)
+      const llV = lucroLiqFor(lbV, regime, v, obraComIva, com, fiscalOpts)
+      if (llV >= 0) { beVVR = Math.round(v); break }
+    }
+  }
+  const margemSegVVR = (beVVR != null && vvr > 0) ? (vvr - beVVR) / vvr : null
+
+  let beObra: number | null = null
+  if (vvr > 0 && obraComIva > 0) {
+    const ivaPct = obra > 0 ? (obraComIva / obra) - 1 : 0
+    const passo = Math.max(Math.round(vvr / 1000), 50)
+    for (let o = 0; o <= vvr; o += passo) {
+      const oCI = o * (1 + ivaPct)
+      const lbO = vvr - (custoExcObra + oCI)
+      const llO = lucroLiqFor(lbO, regime, vvr, oCI, comissaoComIva, fiscalOpts)
+      if (llO <= 0) { beObra = Math.round(o); break }
+    }
+  }
+  const margemSegObra = (beObra != null && obra > 0) ? (beObra - obra) / obra : null
+
+  const imiAnual = vpt * (taxaImi / 100)
+  const custoMensalFixo = seguroMensal + condominioMensal + (imiAnual / 12)
+  const mesesExtra = (custoMensalFixo > 0 && ll > 0) ? Math.floor(ll / custoMensalFixo) : null
+  const prazoMaxMeses = mesesExtra != null ? meses + mesesExtra : null
+
+  function impactoObra(deltaPct: number): any {
+    if (obraComIva <= 0) return null
+    const incremento = obraComIva * deltaPct
+    const lbNew = lb - incremento
+    const obraNew = obraComIva + incremento
+    const llNew = lucroLiqFor(lbNew, regime, vvr, obraNew, comissaoComIva, fiscalOpts)
+    const roi = cap > 0 ? llNew / cap : null
+    return { delta: deltaPct, lucro_liquido: llNew, roi }
+  }
+
+  const variacoes = [-0.15, -0.10, -0.05, 0, 0.05, 0.10]
+  const sensibilidadeVvr = variacoes.map(d => {
+    const vvrAdj = vvr * (1 + d)
+    const comissaoAdj = vvrAdj * comissaoPerc / 100 * 1.23
+    const lbAdj = vvrAdj - (custoExcVenda + comissaoAdj)
+    const llAdj = lucroLiqFor(lbAdj, regime, vvrAdj, obraComIva, comissaoAdj, fiscalOpts)
+    const roiAdj = cap > 0 ? llAdj / cap : null
+    return { delta: d, vvr: vvrAdj, lucro_liquido: llAdj, roi: roiAdj }
+  })
+
+  let fiscal: any = null
+  if (regime === 'Empresa' && lb > 0) {
+    const { irc, derrama, total } = calcIRC(lb, derramaPerc)
+    fiscal = {
+      irc_base: irc,
+      derrama_eur: derrama,
+      total_irc: total,
+      dividendos_eur: retencaoDiv,
+      taxa_efectiva: lb > 0 ? impostos / lb : null,
+    }
+  } else if (regime === 'Particular' && lb > 0) {
+    fiscal = {
+      taxa_efectiva: impostos / lb,
+    }
+  }
+  // regime === 'Sem' — sem fiscalidade: fiscal fica null (taxa efectiva 0%).
+
+  // ── PMO Breakdown ────────────────────────────────────────────
+  const pmoSoma = pmoArq + pmoFisc + pmoSeg + pmoOutros
+  const obraValor = obraComIva > 0 ? obraComIva : obra
+  function pmoEur(pct: number): number { return obraValor > 0 ? obraValor * (pct / 100) : 0 }
+  const pmoBreakdown = pmoSoma > 0 ? {
+    total_perc: pmoPerc,
+    soma_breakdown: pmoSoma,
+    arq: { perc: pmoArq, eur: pmoEur(pmoArq) },
+    fisc: { perc: pmoFisc, eur: pmoEur(pmoFisc) },
+    seg: { perc: pmoSeg, eur: pmoEur(pmoSeg) },
+    outros: { perc: pmoOutros, eur: pmoEur(pmoOutros) },
+    valido: Math.abs(pmoSoma - pmoPerc) <= 0.1,
+  } : null
+
+  // ── Sensibilidade ao Prazo de Detenção ────────────────────────
+  const prazos = [6, 9, 12, 18, 24]
+  const custoMensalDet = seguroMensal + condominioMensal + (compra * (taxaImi / 100)) / 12
+  const raBaseSimples_pp = meses > 0 ? (rt / meses) * 12 : 0
+  const sensibilidadePrazo = prazos.map(prazoAlt => {
+    const custosExtra = Math.max(0, (prazoAlt - meses) * custoMensalDet)
+    const llAjust = ll - custosExtra
+    const raSimples_pp = prazoAlt > 0 ? (rt / prazoAlt) * 12 : 0
+    const delta_pp = raSimples_pp - raBaseSimples_pp
+    const premio_pp = raSimples_pp - 3.5
+    return {
+      prazo: prazoAlt,
+      lucro_liquido: llAjust,
+      ra_simples_pp: raSimples_pp,
+      delta_pp,
+      premio_pp,
+      is_base: prazoAlt === meses,
+    }
+  })
+
+  // ── Exit Alternativo (Arrendamento) ──────────────────────────
+  let exitArrendamento: any = null
+  if (rendaMensal > 0) {
+    const vac = vacancyPct / 100
+    const gest = gestaoArrPct / 100
+    const rendaAnualBruta = rendaMensal * 12
+    const rendaAnualLiq = rendaAnualBruta * (1 - vac) * (1 - gest)
+    const rendaNetaMensal = rendaMensal * (1 - vac) * (1 - gest)
+    const yieldBruto = vvr > 0 ? rendaAnualBruta / vvr : null
+    const yieldLiquido = vvr > 0 ? rendaAnualLiq / vvr : null
+    const yieldCusto = cap > 0 ? rendaAnualLiq / cap : null
+    const cobertura = rendaNetaMensal > custoMensalDet
+    const folga = rendaNetaMensal - custoMensalDet
+    const lucroPerdidoMes = meses > 0 ? ll / meses : null
+    const beArrendamento = rendaNetaMensal > 0 && lucroPerdidoMes != null
+      ? Math.ceil(Math.abs(lucroPerdidoMes) / rendaNetaMensal)
+      : null
+    const taxaTributacao = regime === 'Sem' ? 0 : regime === 'Empresa' ? 0.25 : 0.28
+    const impostoRenda = rendaAnualLiq * taxaTributacao
+    const rendaPosImp = rendaAnualLiq - impostoRenda
+    exitArrendamento = {
+      renda_mensal: rendaMensal,
+      vacancy_pct: vacancyPct,
+      gestao_pct: gestaoArrPct,
+      renda_anual_bruta: rendaAnualBruta,
+      renda_anual_liq: rendaAnualLiq,
+      renda_neta_mensal: rendaNetaMensal,
+      yield_bruto: yieldBruto,
+      yield_liquido: yieldLiquido,
+      yield_custo: yieldCusto,
+      cobertura_ok: cobertura,
+      custo_mensal_det: custoMensalDet,
+      folga,
+      be_arrendamento: beArrendamento,
+      taxa_tributacao: taxaTributacao,
+      imposto_anual: impostoRenda,
+      renda_pos_imposto: rendaPosImp,
+    }
+  }
+
+  // ── Score de Risco Somnium ───────────────────────────────────
+  const scoreVVR = clamp(((margemSegVVR ?? 0) / 0.30) * 100, 0, 100)
+  const scoreMargem = clamp(((margemCusto ?? 0) - 0.15) / 0.15 * 100, 0, 100)
+  const scoreObra = clamp(((margemSegObra ?? 0) / 1.0) * 100, 0, 100)
+  const scorePrazo = clamp((1 - Math.max(0, (meses - 6)) / 12) * 100, 0, 100)
+  const scoreTotal = Math.round(0.35 * scoreVVR + 0.25 * scoreMargem + 0.20 * scoreObra + 0.20 * scorePrazo)
+  const scoreNivel = scoreTotal >= 70 ? 'BAIXO RISCO' : scoreTotal >= 50 ? 'RISCO MODERADO' : 'RISCO ELEVADO'
+  const scoreCor = scoreTotal >= 70 ? '#1B5E20' : scoreTotal >= 50 ? '#8C6A30' : '#8B1A1A'
+  const scoreRisco = {
+    total: scoreTotal,
+    nivel: scoreNivel,
+    cor: scoreCor,
+    componentes: {
+      vvr: { pts: Math.round(scoreVVR), peso: 35 },
+      margem: { pts: Math.round(scoreMargem), peso: 25 },
+      obra: { pts: Math.round(scoreObra), peso: 20 },
+      prazo: { pts: Math.round(scorePrazo), peso: 20 },
+    },
+  }
+
+  return {
+    moic,
+    tir_anual: tirAnual,
+    tir_alavancada: tirAlavancada,
+    lucro_mensal: lucroMensal,
+    racio_risco_retorno: racio,
+    roe_sem_alav: roeSemAlav,
+    payback_meses: paybackMeses,
+    custo_oportunidade_pp: custoOportunidadePp,
+    custo_total_eur: custoTotal,
+    margem_custo_total: margemCusto,
+    aquisicao_m2: aquisicaoM2,
+    custo_total_m2: custoTotalM2,
+    vvr_m2: vvrM2,
+    spread_eur: spreadEur,
+    spread_pct: spreadPct,
+    ltv,
+    ltc,
+    break_even_vvr: beVVR,
+    margem_seg_vvr: margemSegVVR,
+    break_even_obra: beObra,
+    margem_seg_obra: margemSegObra,
+    prazo_max_meses: prazoMaxMeses,
+    meses_extra: mesesExtra,
+    contingencia_10: impactoObra(0.10),
+    contingencia_20: impactoObra(0.20),
+    sensibilidade_vvr: sensibilidadeVvr,
+    fiscal,
+    pmo_breakdown: pmoBreakdown,
+    sensibilidade_prazo: sensibilidadePrazo,
+    exit_arrendamento: exitArrendamento,
+    score_risco: scoreRisco,
+    has_area: area > 0,
+    has_financiamento: percFin > 0,
+    has_renda: rendaMensal > 0,
+  }
+}
+
+export function MULT(v: any): string {
+  if (v == null || !isFinite(v)) return '—'
+  return v.toFixed(2) + 'x'
+}
+
+export function EUR_M2(v: any): string {
+  if (v == null || !isFinite(v)) return '—'
+  return Math.round(v).toLocaleString('pt-PT') + ' €/m²'
+}
+
+export function RACIO(v: any): string {
+  if (v == null || !isFinite(v)) return '—'
+  return '1 : ' + v.toFixed(2)
+}
+
+export function PCT_DEC(v: any, decimals = 1): string {
+  if (v == null || !isFinite(v)) return '—'
+  return (v * 100).toFixed(decimals) + '%'
+}
+
+export function EUR_S(v: any): string {
+  if (v == null || !isFinite(v)) return '—'
+  return Math.round(v).toLocaleString('pt-PT') + ' €'
+}
+
+export function colorMargem(v: any): string | null {
+  if (v == null || !isFinite(v)) return null
+  if (v < 0.20) return '#8B1A1A'
+  if (v >= 0.25) return '#1B5E20'
+  return '#8C6A30'
+}
+
+export function colorPositivo(v: any): string | null {
+  if (v == null || !isFinite(v)) return null
+  return v >= 0 ? '#1B5E20' : '#8B1A1A'
+}
