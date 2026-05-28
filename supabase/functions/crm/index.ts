@@ -1373,20 +1373,31 @@ const DOC_MEDIA: Record<string, { kind: string; media: string }> = {
 };
 
 function buildDocPrompt(tipoImovel: string): string {
-  const tipo = (tipoImovel || "").toLowerCase().includes("morad") ? "MORADIA" : "APARTAMENTO";
+  const tipo = (tipoImovel || "").toLowerCase().includes("morad") ? "MORADIA" : ((tipoImovel || "").trim() ? "APARTAMENTO" : "NÃO ESPECIFICADO");
   return `És um especialista jurídico e imobiliário português ao serviço da Somnium Properties.
 
-Tipo de imóvel: ${tipo}
+Contexto: documento associado a um imóvel (tipo: ${tipo}).
 
-Analisa este documento e devolve APENAS um JSON válido, sem markdown, sem texto extra:
+Identifica que documento é (qualquer tipo, não apenas documentos de escritura) e analisa-o com lente jurídica/imobiliária portuguesa. Devolve APENAS um JSON válido, sem markdown, sem texto extra:
 
 {
-  "tipo_documento": "Nome do tipo (ex: Certidão Permanente)",
-  "doc_id": "certidao | caderneta | guia_impostos | licenca | ficha_tecnica | cert_energetico | cert_condominio | outro",
+  "tipo_documento": "Nome do tipo de documento que identificaste (ex: Certidão Permanente, Caderneta Predial, Contrato, Fatura, Planta, etc.)",
   "valido": true | false | "warning",
   "campos": [
     { "label": "Campo extraído", "valor": "Valor" }
   ],
+  "dados_chave": {
+    "morada": "...",
+    "freguesia": "...",
+    "concelho": "...",
+    "artigo_matricial": "...",
+    "fracao": "...",
+    "area": "...",
+    "vpt": "...",
+    "titular": "...",
+    "data_documento": "...",
+    "validade": "..."
+  },
   "flags": [
     {
       "severity": "critical | warning | info",
@@ -1398,14 +1409,20 @@ Analisa este documento e devolve APENAS um JSON válido, sem markdown, sem texto
   "pontos_verificar": ["Ponto 1", "Ponto 2"]
 }
 
-Regras:
+Instruções para dados_chave:
+- Inclui APENAS as chaves cujo valor consegues extrair do documento; omite as restantes.
+- Usa os valores tal como aparecem no documento (estes campos servem para cruzar dados entre documentos).
+- area em m2; vpt em euros.
+
+Regras de validação (aplica as que forem relevantes ao documento):
 - Certidão Permanente: flag crítica se tiver ónus, penhoras ou hipotecas
 - Caderneta Predial: verificar VPT, área, tipologia; flag se área inconsistente
 - Licença de Utilização: obrigatória para imóveis após 07/08/1951; flag crítica se ausente ou uso não-habitacional
 - Ficha Técnica: obrigatória para obras após 30/03/2004; verificar assinatura técnica
 - Certificado Energético: verificar validade (10 anos); flag se classe abaixo de D
 - Guia de Impostos: verificar se IMT e IS foram pagos e valores corretos
-- Declaração Condomínio: flag crítica se existirem dívidas em atraso
+- Declaração de Condomínio: flag crítica se existirem dívidas em atraso
+- Para outros documentos: assinala datas vencidas, valores em falta, assinaturas ausentes ou qualquer pormenor relevante
 - Se não conseguires ler o documento, indica nas flags`;
 }
 
@@ -1486,26 +1503,21 @@ app.post("/imoveis/:id/documentos/analise", async (c: any) => {
     }
 
     const entry = {
-      doc_id: parsed.doc_id || "outro",
       fotoId: bodyFotoId || null,
       nome_ficheiro: doc.name,
       tipo_documento: parsed.tipo_documento || "Documento",
       valido: parsed.valido ?? false,
       campos: Array.isArray(parsed.campos) ? parsed.campos.slice(0, 6) : [],
+      dados_chave: (parsed.dados_chave && typeof parsed.dados_chave === "object") ? parsed.dados_chave : {},
       flags: Array.isArray(parsed.flags) ? parsed.flags : [],
       resumo: parsed.resumo || "",
       pontos_verificar: Array.isArray(parsed.pontos_verificar) ? parsed.pontos_verificar : [],
       analyzed_at: new Date().toISOString(),
     };
 
-    // Upsert por doc_id (excepto "outro", que acumula).
+    // Upsert por fotoId (uma análise por ficheiro carregado).
     const atual = Array.isArray(imovel.documentacao_analise) ? imovel.documentacao_analise : [];
-    let next;
-    if (entry.doc_id === "outro") {
-      next = [...atual.filter((a: any) => !(a.doc_id === "outro" && a.fotoId && a.fotoId === entry.fotoId)), entry];
-    } else {
-      next = [...atual.filter((a: any) => a.doc_id !== entry.doc_id), entry];
-    }
+    const next = [...atual.filter((a: any) => !(entry.fotoId && a.fotoId === entry.fotoId)), entry];
     await Imoveis.update(id, { documentacao_analise: JSON.stringify(next) }, { regiaoActiva: c.get("regiaoActiva") });
 
     return c.json({ ok: true, analise: entry, documentacao_analise: next });

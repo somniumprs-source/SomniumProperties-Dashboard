@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { apiFetch } from '../../../lib/api.js'
-import { CHECKLIST, resolveTipo, estadoFromAnalise } from './documentacao.config.js'
+import { detectarInconsistencias, estadoFromValido } from './documentacao.config.js'
 
 /**
- * Lógica de estado do módulo de documentação:
+ * Lógica de estado do módulo de documentação (importação livre):
  * - carrega os documentos (coluna fotos, pasta "documentos") e as análises
  *   persistidas (coluna documentacao_analise) do imóvel;
  * - faz upload (reutiliza POST /fotos + move para a pasta documentos);
- * - chama o endpoint de análise por IA e persiste o resultado;
- * - deriva checklist com estado, score e flags.
+ * - chama o endpoint de análise por IA (opt-in, por documento) e persiste o resultado;
+ * - agrega flags e cruza dados_chave entre documentos para detectar inconsistências.
  */
 export function useDocumentacao(imovelId, tipoImovelProp) {
   const [docs, setDocs] = useState([])           // ficheiros (pasta documentos)
@@ -17,9 +17,6 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
   const [uploading, setUploading] = useState(false)
   const [analyzing, setAnalyzing] = useState(() => new Set()) // fotoIds em análise
   const [erros, setErros] = useState({})          // { [fotoId]: mensagem }
-  const [tipoOverride, setTipoOverride] = useState(null)
-
-  const tipo = tipoOverride || resolveTipo(tipoImovelProp)
 
   const isDoc = (f) =>
     f.folder === 'documentos' ||
@@ -66,7 +63,7 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
     setUploading(false)
   }, [imovelId, docs, load])
 
-  // Analisa um documento via IA (endpoint backend → Claude).
+  // Analisa um documento via IA (endpoint backend → Claude). Opt-in, por ficheiro.
   const analisar = useCallback(async (doc) => {
     setErros(prev => { const n = { ...prev }; delete n[doc.id]; return n })
     setAnalyzing(prev => new Set(prev).add(doc.id))
@@ -93,9 +90,9 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
     }
   }, [docs, analises, analisar])
 
-  const removerAnalise = useCallback(async (docId) => {
+  const removerAnalise = useCallback(async (fotoId) => {
     try {
-      const r = await apiFetch(`/api/crm/imoveis/${imovelId}/documentos/analise/${docId}`, { method: 'DELETE' })
+      const r = await apiFetch(`/api/crm/imoveis/${imovelId}/documentos/analise/${fotoId}`, { method: 'DELETE' })
       const data = await r.json()
       if (Array.isArray(data.documentacao_analise)) setAnalises(data.documentacao_analise)
     } catch (e) { console.error('Erro a remover análise:', e) }
@@ -103,26 +100,11 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
 
   // Análise associada a um ficheiro (por fotoId).
   const analiseDoFicheiro = useCallback(
-    (docId) => analises.find(a => a.fotoId === docId) || null,
+    (fotoId) => analises.find(a => a.fotoId === fotoId) || null,
     [analises]
   )
 
-  // Checklist com estado derivado (por doc_id).
-  const checklist = useMemo(() => {
-    if (!tipo) return []
-    const byDoc = new Map(analises.filter(a => a.doc_id && a.doc_id !== 'outro').map(a => [a.doc_id, a]))
-    return CHECKLIST[tipo].map(item => {
-      const an = byDoc.get(item.id)
-      return { ...item, analise: an || null, estado: estadoFromAnalise(an) }
-    })
-  }, [tipo, analises])
-
-  const score = useMemo(() => {
-    if (!checklist.length) return 0
-    const validados = checklist.filter(c => c.estado === 'validado').length
-    return Math.round((validados / checklist.length) * 100)
-  }, [checklist])
-
+  // Flags agregadas de todas as análises, ordenadas por severidade.
   const flags = useMemo(() => {
     const out = []
     for (const a of analises) {
@@ -132,11 +114,31 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
     return out.sort((x, y) => (rank[x.severity] ?? 3) - (rank[y.severity] ?? 3))
   }, [analises])
 
+  // Inconsistências entre documentos (cruzamento de dados_chave, sem IA).
+  const inconsistencias = useMemo(() => detectarInconsistencias(analises), [analises])
+
+  // Resumo de contagens (substitui o score por checklist).
+  const resumoEstado = useMemo(() => {
+    const validos = analises.filter(a => a.valido === true).length
+    const alertas = analises.filter(a => a.valido === 'warning').length
+    const problemas = analises.filter(a => a.valido !== true && a.valido !== 'warning').length
+    return {
+      totalDocs: docs.length,
+      analisados: analises.length,
+      porAnalisar: docs.filter(d => !analises.some(a => a.fotoId === d.id)).length,
+      validos,
+      alertas,
+      problemas,
+      nInconsistencias: inconsistencias.length,
+      nFlags: flags.length,
+      nCriticas: flags.filter(f => f.severity === 'critical').length,
+    }
+  }, [docs, analises, flags, inconsistencias])
+
   return {
-    tipo, tipoOverride, setTipoOverride,
     docs, analises, loading, uploading, analyzing, erros,
     upload, analisar, analisarTodos, removerAnalise, analiseDoFicheiro,
-    checklist, score, flags, reload: load,
+    flags, inconsistencias, resumoEstado, estadoFromValido, reload: load,
   }
 }
 

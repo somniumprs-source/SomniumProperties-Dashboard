@@ -1,16 +1,15 @@
 import { useState } from 'react'
-import { ListChecks, UploadCloud, FileBarChart2 } from 'lucide-react'
+import { UploadCloud, FileBarChart2 } from 'lucide-react'
 import { useDocumentacao } from './useDocumentacao.js'
-import { Checklist } from './Checklist.jsx'
 import { UploadAnalise } from './UploadAnalise.jsx'
 import { Relatorio } from './Relatorio.jsx'
 
 /**
- * Módulo de gestão documental com análise por IA — Ficha do Imóvel.
- * 3 sub-secções: Checklist · Upload & Análise · Relatório.
+ * Módulo de gestão documental com interpretação por IA — Ficha do Imóvel.
+ * Importação livre: 2 sub-secções — Upload & Análise · Relatório.
  */
 export function ImovelDocumentacao({ imovelId, tipoImovel }) {
-  const [sub, setSub] = useState('checklist')
+  const [sub, setSub] = useState('upload')
   const d = useDocumentacao(imovelId, tipoImovel)
 
   if (d.loading) {
@@ -22,27 +21,7 @@ export function ImovelDocumentacao({ imovelId, tipoImovel }) {
     )
   }
 
-  // Tipo de imóvel indefinido/ambíguo → selector (a checklist depende dele).
-  if (!d.tipo) {
-    return (
-      <div className="flex flex-col items-center justify-center py-14 rounded-xl bg-neutral-50 border border-dashed border-neutral-200">
-        <p className="text-sm font-medium text-neutral-600 mb-1">Tipo de imóvel não definido</p>
-        <p className="text-xs text-neutral-400 mb-4">Escolhe o tipo para gerar a checklist documental correcta.</p>
-        <div className="flex gap-2">
-          {['apartamento', 'moradia'].map(t => (
-            <button key={t} onClick={() => d.setTipoOverride(t)}
-              className="px-4 py-2 text-sm font-semibold rounded-lg text-white capitalize"
-              style={{ backgroundColor: '#C9A84C' }}>
-              {t}
-            </button>
-          ))}
-        </div>
-      </div>
-    )
-  }
-
   const subs = [
-    { key: 'checklist', label: 'Checklist', icon: ListChecks },
     { key: 'upload', label: 'Upload & Análise', icon: UploadCloud },
     { key: 'relatorio', label: 'Relatório', icon: FileBarChart2 },
   ]
@@ -66,7 +45,6 @@ export function ImovelDocumentacao({ imovelId, tipoImovel }) {
         })}
       </div>
 
-      {sub === 'checklist' && <Checklist checklist={d.checklist} score={d.score} />}
       {sub === 'upload' && (
         <UploadAnalise
           docs={d.docs}
@@ -81,7 +59,13 @@ export function ImovelDocumentacao({ imovelId, tipoImovel }) {
         />
       )}
       {sub === 'relatorio' && (
-        <Relatorio imovelId={imovelId} checklist={d.checklist} score={d.score} flags={d.flags} />
+        <Relatorio
+          imovelId={imovelId}
+          analises={d.analises}
+          flags={d.flags}
+          inconsistencias={d.inconsistencias}
+          resumoEstado={d.resumoEstado}
+        />
       )}
     </div>
   )
