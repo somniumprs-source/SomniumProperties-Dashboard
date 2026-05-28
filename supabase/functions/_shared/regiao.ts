@@ -2,10 +2,13 @@
 // Header X-Regiao tem prioridade; querystring ?regiao como fallback.
 import type { Context, Next } from "@hono/hono";
 
-export const REGIOES_VALIDAS = ["Coimbra", "Gaia"];
+export const REGIOES_VALIDAS = ["Coimbra", "AMP"];
 
 // Tabelas com coluna `regiao` directa (filtraveis por regiao).
 export const TABELAS_REGIAO = new Set(["imoveis", "negocios", "despesas", "tarefas", "visitas"]);
+
+// Tabelas onde o filtro regional e garantia de isolamento (PUT/DELETE exige match).
+export const TABELAS_ISOLADAS_REGIAO = new Set(["imoveis", "consultores", "negocios", "empreiteiros"]);
 
 export function regiaoFromRequest(c: Context): string | null {
   const h = (c.req.header("x-regiao") || c.req.query("regiao") || "").toString().trim();
