@@ -8,7 +8,7 @@ CRM e dashboard operacional da Somnium Properties: gere imoveis, investidores, c
 - Backend producao: Supabase Edge Functions (Deno/Hono) em `supabase/functions/`
 - Backend Express (server.js + src/db/routes.js): so dev local (`npm run dev`); Render decomissionado
 - Auth: Supabase JWT (desactivado em dev quando SUPABASE_SERVICE_KEY vazio)
-- Deploy: frontend no Vercel (auto-deploy do branch main); Edge Functions via `supabase functions deploy` (NAO e disparado pelo git push)
+- Deploy: tudo auto-deploy no push para main — frontend no Vercel; Edge Functions via GitHub Actions (`.github/workflows/deploy-supabase.yml`, dispara quando muda `supabase/functions/**` ou `config.toml`; usa o secret `SUPABASE_ACCESS_TOKEN`)
 - Repo: github.com/somniumprs-source/SomniumProperties-Dashboard
 
 IMPORTANTE: alteracoes a endpoints precisam de ser portadas para AMBOS `src/db/routes.js` (Express, dev) e `supabase/functions/crm/index.ts` (producao). So o segundo chega a producao.
