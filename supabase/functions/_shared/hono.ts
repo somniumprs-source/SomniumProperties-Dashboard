@@ -2,8 +2,8 @@
 // Cada Edge Function e servida em /<nome-da-funcao>/... pelo Supabase, por isso
 // usamos basePath com o nome da funcao para os sufixos baterem certo com os
 // mounts Express antigos (ex: Express /api/crm/imoveis -> Hono /imoveis sob basePath /crm).
-import { Hono } from "jsr:@hono/hono";
-import { cors } from "jsr:@hono/hono/cors";
+import { Hono } from "@hono/hono";
+import { cors } from "@hono/hono/cors";
 
 export function createApp(basePath: string) {
   const app = new Hono().basePath(basePath);

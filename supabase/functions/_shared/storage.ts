@@ -1,6 +1,6 @@
 // Supabase Storage. Substitui os uploads em disco (multer) e o helper de
 // documentLifecycle.js. supabase-js corre em Deno.
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "https://mjgusjuougzoeiyavsor.supabase.co";
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_KEY") || "";

@@ -3,9 +3,9 @@
 // Replica o comportamento do middleware Express de server.js:
 //  - token via header Authorization: Bearer OU ?token= (PDFs em nova janela)
 //  - se nao houver service key/secret configurado, deixa passar (dev mode)
-import type { Context, Next } from "jsr:@hono/hono";
-import { jwtVerify } from "npm:jose@5";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import type { Context, Next } from "@hono/hono";
+import { jwtVerify } from "jose";
+import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "https://mjgusjuougzoeiyavsor.supabase.co";
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_KEY") || "";

@@ -1,6 +1,6 @@
 // Contexto regional. Port do middleware de src/db/routes.js (regiaoFromReq).
 // Header X-Regiao tem prioridade; querystring ?regiao como fallback.
-import type { Context, Next } from "jsr:@hono/hono";
+import type { Context, Next } from "@hono/hono";
 
 export const REGIOES_VALIDAS = ["Coimbra", "Gaia"];
 

@@ -2,7 +2,7 @@
 // Usa o proprio 'pg' (node-postgres) via node-compat do Deno: mesma lib da app,
 // mesma semantica de Pool e concorrencia correcta (postgres.js pendurava queries
 // `unsafe` concorrentes acima do max). pool.query(text, params) -> { rows, rowCount }.
-import pg from "npm:pg@8.20.0";
+import pg from "pg";
 
 const DATABASE_URL = Deno.env.get("DATABASE_URL");
 if (!DATABASE_URL) {

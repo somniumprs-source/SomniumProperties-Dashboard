@@ -1,0 +1,69 @@
+project_id = "mjgusjuougzoeiyavsor"
+
+# Gateway verify_jwt por funcao.
+#  - false: token tratado em codigo (auth.ts), publicas (webhooks) ou ?token= dos PDFs.
+#  - true : JWT da sessao Supabase obrigatorio no header Authorization.
+# Em local: `supabase functions serve <fn> --no-verify-jwt` para testar sem token.
+
+[functions.crm]
+verify_jwt = false
+
+[functions.dashboard]
+verify_jwt = true
+
+[functions.users]
+verify_jwt = true
+
+[functions.sops]
+verify_jwt = true
+
+[functions.calendar]
+verify_jwt = true
+
+[functions.voice]
+verify_jwt = true
+
+[functions.scrape-portal]
+verify_jwt = true
+
+[functions.webhook-whatsapp]
+verify_jwt = false
+
+[functions.webhook-landing-lead]
+verify_jwt = false
+
+[functions.cron-followup]
+verify_jwt = false
+
+[functions.cron-relatorio-diario]
+verify_jwt = false
+
+[functions.cron-relatorio-semanal]
+verify_jwt = false
+
+[functions.cron-reclassificacao]
+verify_jwt = false
+
+[functions.cron-auto-inactivo]
+verify_jwt = false
+
+[functions.cron-arquivo-obra]
+verify_jwt = false
+
+[functions.cron-arquivo-tarefas]
+verify_jwt = false
+
+[functions.cron-sync-calendar]
+verify_jwt = false
+
+[functions.cron-sync-fireflies]
+verify_jwt = false
+
+[functions.cron-sync-forms]
+verify_jwt = false
+
+[functions.cron-despesas]
+verify_jwt = false
+
+[functions.cron-backup]
+verify_jwt = false
