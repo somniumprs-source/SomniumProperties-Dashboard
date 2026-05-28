@@ -147,7 +147,16 @@ async function getColumns() {
 
 async function main() {
   console.log(`=== Migração uploads -> Storage (${APPLY ? "APPLY" : "DRY-RUN"}) ===`);
-  const cols = await getColumns();
+  let cols = await getColumns();
+
+  // Filtro opcional: MIGRATE_ONLY="tabela.coluna,tabela.coluna" limita as colunas a reescrever.
+  // Sem a variavel, comportamento original (todas as colunas).
+  const only = (process.env.MIGRATE_ONLY || "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (only.length) {
+    const set = new Set(only);
+    cols = cols.filter((c) => set.has(`${c.table_name}.${c.column_name}`));
+    console.log(`Filtro MIGRATE_ONLY activo: ${only.join(", ")} -> ${cols.length} coluna(s)`);
+  }
 
   for (const { table_name, column_name, data_type } of cols) {
     // Procurar linhas cuja coluna contém /uploads/
