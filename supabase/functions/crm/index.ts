@@ -22,6 +22,10 @@ import {
 } from "../_shared/pdfImovelDocs.ts";
 import { persistDocumento, listDocumentos } from "../_shared/documentLifecycle.ts";
 import { generateImovelPDF } from "../_shared/pdfReport.ts";
+import { generateMeetingPDF } from "../_shared/pdfMeetingReport.ts";
+import { analyzeReuniao, autoFillConsultor, autoFillInvestidor } from "../_shared/meetingAnalysis.ts";
+import { isConfigured as firefliesConfigured, syncFireflies } from "../_shared/firefliesSync.ts";
+import { isConfigured as formsConfigured, syncForms } from "../_shared/formsSync.ts";
 import { runEstudoLocalizacao } from "../_shared/estudoLocalizacao.ts";
 import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
 import { removeFromStorage, supabase, uploadPublic } from "../_shared/storage.ts";
@@ -1207,8 +1211,37 @@ app.get("/reunioes/:id/transcricao", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Relatorio PDF reuniao (analyzeReuniao/generateMeetingPDF/streamPdf) → 501 ──
-app.get("/reunioes/:id/relatorio", notImplemented);
+// ── Relatorio PDF reuniao — port de routes.js 1595-1626 ──
+app.get("/reunioes/:id/relatorio", async (c: any) => {
+  const id = c.req.param("id");
+  try {
+    const { rows: [reuniao] } = await pool.query("SELECT * FROM reunioes WHERE id = $1", [id]);
+    if (!reuniao) return c.json({ error: "Reunião não encontrada" }, 404);
+
+    // Usar analise_completa guardada se existir, senão fallback para análise por padrões
+    let analise: any;
+    if (reuniao.analise_completa) {
+      try { analise = JSON.parse(reuniao.analise_completa); } catch { analise = await analyzeReuniao(id); }
+    } else {
+      analise = await analyzeReuniao(id);
+    }
+
+    let investidor: any = null;
+    if (reuniao.entidade_id && reuniao.entidade_tipo === "investidores") {
+      const { rows: [inv] } = await pool.query("SELECT * FROM investidores WHERE id = $1", [reuniao.entidade_id]);
+      investidor = inv;
+    }
+
+    const nome = (reuniao.titulo || "reuniao").replace(/[^a-zA-Z0-9À-ú ]/g, "").replace(/\s+/g, "_");
+    const buffer = await streamToBuffer(generateMeetingPDF(reuniao, analise, investidor));
+    return c.body(buffer, 200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="Relatorio_Reuniao_${nome}.pdf"`,
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
 
 // ── Actualizar reuniao — port de routes.js 1628-1640 ──
 app.put("/reunioes/:id", async (c: any) => {
@@ -1225,8 +1258,20 @@ app.put("/reunioes/:id", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Analisar reuniao (autoFillConsultor/autoFillInvestidor) → 501 ──
-app.post("/reunioes/:id/analisar", notImplemented);
+// ── Analisar reuniao — port de routes.js 1642-1652 ──
+app.post("/reunioes/:id/analisar", async (c: any) => {
+  const id = c.req.param("id");
+  try {
+    const { rows: [r] } = await pool.query("SELECT entidade_tipo FROM reunioes WHERE id = $1", [id]);
+    if (!r) return c.json({ error: "Reunião não encontrada" }, 404);
+    const result = r.entidade_tipo === "consultores"
+      ? await autoFillConsultor(id)
+      : await autoFillInvestidor(id);
+    return c.json(result);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
 
 // ── Marcar reuniao vista — port de routes.js 1654-1662 ──
 app.post("/reunioes/:id/marcar-vista", async (c: any) => {
@@ -1239,11 +1284,40 @@ app.post("/reunioes/:id/marcar-vista", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Fireflies sync (syncFireflies/autoFillInvestidor) → 501 ──
-app.post("/fireflies/sync", notImplemented);
+// ── Fireflies sync — port de routes.js 1664-1684 ──
+app.post("/fireflies/sync", async (c: any) => {
+  try {
+    if (!firefliesConfigured()) return c.json({ error: "FIREFLIES_API_KEY não configurada" }, 503);
+    const result: any = await syncFireflies();
 
-// ── Google Forms sync (syncForms) → 501 ──
-app.post("/forms/sync", notImplemented);
+    // Auto-analisar e preencher investidores para reuniões novas
+    if (result.created > 0) {
+      const { rows: novas } = await pool.query(
+        "SELECT id FROM reunioes WHERE entidade_tipo = 'investidores' AND entidade_id IS NOT NULL ORDER BY created_at DESC LIMIT $1",
+        [result.created],
+      );
+      for (const r of novas) {
+        try { await autoFillInvestidor(r.id); } catch { /* ignora falhas individuais */ }
+      }
+      result.analyzed = novas.length;
+    }
+
+    return c.json(result);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+// ── Google Forms sync — port de routes.js 1687-1693 ──
+app.post("/forms/sync", async (c: any) => {
+  try {
+    if (!formsConfigured()) return c.json({ error: "Google Forms não configurado" }, 503);
+    const result = await syncForms();
+    return c.json(result);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
 
 // ── Gmail (ensureLabels/organizeMessage/organizeBatch/autoOrganize) → 501 ──
 app.get("/gmail/labels", notImplemented);
