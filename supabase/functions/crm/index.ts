@@ -1528,12 +1528,12 @@ app.post("/imoveis/:id/documentos/analise", async (c: any) => {
 });
 
 // ── Remover analise documental (Imoveis CRUD + JSON) — port de routes.js 1373-1382 ──
-app.delete("/imoveis/:id/documentos/analise/:docId", async (c: any) => {
+app.delete("/imoveis/:id/documentos/analise/:fotoId", async (c: any) => {
   try {
     const imovel = await Imoveis.getById(c.req.param("id"));
     if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
     const atual = Array.isArray(imovel.documentacao_analise) ? imovel.documentacao_analise : [];
-    const next = atual.filter((a: any) => a.doc_id !== c.req.param("docId"));
+    const next = atual.filter((a: any) => a.fotoId !== c.req.param("fotoId"));
     await Imoveis.update(c.req.param("id"), { documentacao_analise: JSON.stringify(next) }, { regiaoActiva: c.get("regiaoActiva") });
     return c.json({ ok: true, documentacao_analise: next });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
