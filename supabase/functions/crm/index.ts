@@ -24,7 +24,9 @@ import { persistDocumento, listDocumentos } from "../_shared/documentLifecycle.t
 import { generateImovelPDF } from "../_shared/pdfReport.ts";
 import { runEstudoLocalizacao } from "../_shared/estudoLocalizacao.ts";
 import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
-import { supabase, uploadPublic } from "../_shared/storage.ts";
+import { removeFromStorage, supabase, uploadPublic } from "../_shared/storage.ts";
+import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
+import Anthropic from "@anthropic-ai/sdk";
 import { registerRegiaoRoutes } from "./regiaoRoutes.ts";
 import { registerAnaliseRoutes } from "./analiseRoutes.ts";
 import { registerOrcamentoRoutes } from "./orcamentoRoutes.ts";
@@ -821,14 +823,211 @@ app.get("/imoveis/:id/interacoes", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Extrair fotos de link (scrapePhotosFromLink) → 501 ──
-app.post("/imoveis/:id/scrape-fotos", notImplemented);
+// ── Extrair fotos de link (scrapePhotosFromLink) — port de routes.js 1168-1185 ──
+app.post("/imoveis/:id/scrape-fotos", async (c: any) => {
+  const id = c.req.param("id");
+  try {
+    const imovel = await Imoveis.getById(id);
+    if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
 
-// ── Upload de fotos (multer/Supabase Storage/disco) → 501 ──
-app.post("/imoveis/:id/fotos", notImplemented);
+    const body = await c.req.json().catch(() => ({}));
+    const url = body.url || imovel.link;
+    if (!url) return c.json({ error: 'Nenhum link fornecido. Enviar { url: "..." } ou preencher o campo link do imóvel.' }, 400);
 
-// ── Analise documental por IA (Anthropic SDK/multer/disco) → 501 ──
-app.post("/imoveis/:id/documentos/analise", notImplemented);
+    const scraped = await scrapePhotosFromLink(url, id);
+    if (scraped.length === 0) return c.json({ ok: true, fotos: [], message: "Nenhuma foto encontrada no link." });
+
+    const fotos = imovel.fotos ? JSON.parse(imovel.fotos) : [];
+    fotos.push(...scraped);
+    await Imoveis.update(id, { fotos: JSON.stringify(fotos) });
+
+    return c.json({ ok: true, extraidas: scraped.length, fotos });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── Upload de fotos (multer/Supabase Storage) — port de routes.js 1188-1228 ──
+// Multipart (multer array 'fotos', 20) → Hono formData + uploadPublic.
+app.post("/imoveis/:id/fotos", async (c: any) => {
+  const id = c.req.param("id");
+  try {
+    const form = await c.req.formData();
+    const files = form.getAll("fotos").filter((f: any): f is File => f instanceof File);
+    if (!files.length) return c.json({ error: "Nenhum ficheiro válido (JPG, PNG, WEBP até 15MB)" }, 400);
+    const imovel = await Imoveis.getById(id);
+    if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
+
+    const fotos = imovel.fotos ? JSON.parse(imovel.fotos) : [];
+    for (const file of files) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const storagePath = `imoveis/${id}/${crypto.randomUUID()}_${file.name}`;
+      const filePath = await uploadPublic("Imoveis", storagePath, bytes, file.type || "application/octet-stream");
+      fotos.push({
+        id: crypto.randomUUID(),
+        name: file.name,
+        path: filePath,
+        type: file.type,
+        size: file.size,
+        uploaded_at: new Date().toISOString(),
+      });
+    }
+    await Imoveis.update(id, { fotos: JSON.stringify(fotos) });
+    return c.json({ ok: true, fotos });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── Análise documental por IA (Claude) — port de routes.js 1235-1370 ──
+// Analisa um documento legal e devolve JSON estruturado. Persiste a análise
+// no array imoveis.documentacao_analise (upsert por doc_id).
+const DOC_MEDIA: Record<string, { kind: string; media: string }> = {
+  ".pdf": { kind: "document", media: "application/pdf" },
+  ".jpg": { kind: "image", media: "image/jpeg" },
+  ".jpeg": { kind: "image", media: "image/jpeg" },
+  ".png": { kind: "image", media: "image/png" },
+  ".webp": { kind: "image", media: "image/webp" },
+};
+
+function buildDocPrompt(tipoImovel: string): string {
+  const tipo = (tipoImovel || "").toLowerCase().includes("morad") ? "MORADIA" : "APARTAMENTO";
+  return `És um especialista jurídico e imobiliário português ao serviço da Somnium Properties.
+
+Tipo de imóvel: ${tipo}
+
+Analisa este documento e devolve APENAS um JSON válido, sem markdown, sem texto extra:
+
+{
+  "tipo_documento": "Nome do tipo (ex: Certidão Permanente)",
+  "doc_id": "certidao | caderneta | guia_impostos | licenca | ficha_tecnica | cert_energetico | cert_condominio | outro",
+  "valido": true | false | "warning",
+  "campos": [
+    { "label": "Campo extraído", "valor": "Valor" }
+  ],
+  "flags": [
+    {
+      "severity": "critical | warning | info",
+      "titulo": "Título da flag",
+      "descricao": "Descrição detalhada"
+    }
+  ],
+  "resumo": "Resumo em 2-3 frases sobre o documento.",
+  "pontos_verificar": ["Ponto 1", "Ponto 2"]
+}
+
+Regras:
+- Certidão Permanente: flag crítica se tiver ónus, penhoras ou hipotecas
+- Caderneta Predial: verificar VPT, área, tipologia; flag se área inconsistente
+- Licença de Utilização: obrigatória para imóveis após 07/08/1951; flag crítica se ausente ou uso não-habitacional
+- Ficha Técnica: obrigatória para obras após 30/03/2004; verificar assinatura técnica
+- Certificado Energético: verificar validade (10 anos); flag se classe abaixo de D
+- Guia de Impostos: verificar se IMT e IS foram pagos e valores corretos
+- Declaração Condomínio: flag crítica se existirem dívidas em atraso
+- Se não conseguires ler o documento, indica nas flags`;
+}
+
+// Resolve os bytes + extensão do documento, vindo do form (File) ou de um path/url.
+// Versao Hono: aceita File do form OU body.path (url http -> fetch; paths de
+// disco sao ignorados, ja nao existem em Edge Functions).
+async function resolveDocBuffer(
+  file: File | null,
+  bodyPath: string | null,
+  bodyName: string | null,
+): Promise<{ bytes: Uint8Array; ext: string; name: string } | null> {
+  if (file) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const ext = (file.name?.match(/\.[a-z0-9]+$/i)?.[0] || "").toLowerCase();
+    return { bytes, ext, name: file.name };
+  }
+  const p = bodyPath;
+  if (!p) return null;
+  const ext = ((bodyName || p).split("?")[0].match(/\.[a-z0-9]+$/i)?.[0] || "").toLowerCase();
+  if (/^https?:\/\//i.test(p)) {
+    const r = await fetch(p);
+    if (!r.ok) throw new Error(`Não foi possível obter o ficheiro (${r.status})`);
+    return { bytes: new Uint8Array(await r.arrayBuffer()), ext, name: bodyName || p.split("/").pop() || "documento" };
+  }
+  // Paths de disco do servidor antigo nao existem nas Edge Functions.
+  throw new Error("Caminho inválido (apenas File do upload ou URL http são suportados)");
+}
+
+app.post("/imoveis/:id/documentos/analise", async (c: any) => {
+  const id = c.req.param("id");
+  try {
+    if (!Deno.env.get("ANTHROPIC_API_KEY")) {
+      return c.json({ error: "Análise por IA indisponível (ANTHROPIC_API_KEY não configurada)." }, 503);
+    }
+    const imovel = await Imoveis.getById(id);
+    if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
+
+    const form = await c.req.formData();
+    const fichRaw = form.get("ficheiro");
+    const file = fichRaw instanceof File ? fichRaw : null;
+    const bodyPath = typeof form.get("path") === "string" ? form.get("path") as string : null;
+    const bodyName = typeof form.get("name") === "string" ? form.get("name") as string : null;
+    const bodyFotoId = typeof form.get("fotoId") === "string" ? form.get("fotoId") as string : null;
+    const bodyTipoImovel = typeof form.get("tipoImovel") === "string" ? form.get("tipoImovel") as string : null;
+
+    let doc;
+    try { doc = await resolveDocBuffer(file, bodyPath, bodyName); }
+    catch (e) { return c.json({ error: (e as Error).message }, 400); }
+    if (!doc?.bytes?.length) return c.json({ error: "Nenhum documento para analisar (PDF, JPG ou PNG)." }, 400);
+
+    const meta = DOC_MEDIA[doc.ext];
+    if (!meta) return c.json({ error: "Formato não suportado. Usa PDF, JPG ou PNG." }, 400);
+    if (doc.bytes.length > 15 * 1024 * 1024) return c.json({ error: "Ficheiro demasiado grande (máx. 15MB)." }, 400);
+
+    let bin = "";
+    for (let i = 0; i < doc.bytes.length; i++) bin += String.fromCharCode(doc.bytes[i]);
+    const base64 = btoa(bin);
+    const fileBlock = meta.kind === "document"
+      ? { type: "document", source: { type: "base64", media_type: meta.media, data: base64 } }
+      : { type: "image", source: { type: "base64", media_type: meta.media, data: base64 } };
+
+    const client = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") });
+    const tipoImovel = bodyTipoImovel || imovel.predio_tipo || imovel.tipologia || "";
+
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1000,
+      messages: [{ role: "user", content: [fileBlock, { type: "text", text: buildDocPrompt(tipoImovel) }] as any }],
+    });
+
+    const respText = (response.content?.[0] as any)?.text || "{}";
+    let parsed: any;
+    try {
+      const jsonMatch = respText.match(/\{[\s\S]*\}/);
+      parsed = JSON.parse(jsonMatch?.[0] || respText);
+    } catch {
+      return c.json({ error: "A IA devolveu uma resposta ilegível. Tenta novamente." }, 502);
+    }
+
+    const entry = {
+      doc_id: parsed.doc_id || "outro",
+      fotoId: bodyFotoId || null,
+      nome_ficheiro: doc.name,
+      tipo_documento: parsed.tipo_documento || "Documento",
+      valido: parsed.valido ?? false,
+      campos: Array.isArray(parsed.campos) ? parsed.campos.slice(0, 6) : [],
+      flags: Array.isArray(parsed.flags) ? parsed.flags : [],
+      resumo: parsed.resumo || "",
+      pontos_verificar: Array.isArray(parsed.pontos_verificar) ? parsed.pontos_verificar : [],
+      analyzed_at: new Date().toISOString(),
+    };
+
+    // Upsert por doc_id (excepto "outro", que acumula).
+    const atual = Array.isArray(imovel.documentacao_analise) ? imovel.documentacao_analise : [];
+    let next;
+    if (entry.doc_id === "outro") {
+      next = [...atual.filter((a: any) => !(a.doc_id === "outro" && a.fotoId && a.fotoId === entry.fotoId)), entry];
+    } else {
+      next = [...atual.filter((a: any) => a.doc_id !== entry.doc_id), entry];
+    }
+    await Imoveis.update(id, { documentacao_analise: JSON.stringify(next) }, { regiaoActiva: c.get("regiaoActiva") });
+
+    return c.json({ ok: true, analise: entry, documentacao_analise: next });
+  } catch (e) {
+    console.error(`[documentos/analise imovel=${id}] FALHOU:`, (e as Error).message);
+    return c.json({ error: (e as Error).message || "Falha na análise do documento." }, 500);
+  }
+});
 
 // ── Remover analise documental (Imoveis CRUD + JSON) — port de routes.js 1373-1382 ──
 app.delete("/imoveis/:id/documentos/analise/:docId", async (c: any) => {
@@ -896,14 +1095,61 @@ app.delete("/imoveis/:id/localizacao", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Apagar foto (Supabase Storage remove) → 501 ──
-app.delete("/imoveis/:id/fotos/:fotoId", notImplemented);
+// ── Apagar foto (Supabase Storage remove + JSON) — port de routes.js 1438-1458 ──
+app.delete("/imoveis/:id/fotos/:fotoId", async (c: any) => {
+  const id = c.req.param("id");
+  const fotoId = c.req.param("fotoId");
+  try {
+    const imovel = await Imoveis.getById(id);
+    if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
+
+    const fotos = imovel.fotos ? JSON.parse(imovel.fotos) : [];
+    const foto = fotos.find((f: any) => f.id === fotoId);
+
+    // Apagar do Supabase Storage se for URL do Supabase
+    if (foto && foto.path?.includes("supabase.co/storage/")) {
+      const match = foto.path.match(/\/storage\/v1\/object\/public\/Imoveis\/(.+)$/);
+      if (match) await removeFromStorage("Imoveis", match[1]);
+    }
+
+    const filtered = fotos.filter((f: any) => f.id !== fotoId);
+    await Imoveis.update(id, { fotos: JSON.stringify(filtered) });
+    return c.json({ ok: true, fotos: filtered });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── Listar ficheiros do Google Drive do imovel (googleapis/disco) → 501 ──
 app.get("/imoveis/:id/drive-files", notImplemented);
 
-// ── Upload de documentos para despesas (multer/disco) → 501 ──
-app.post("/despesas/:id/upload", notImplemented);
+// ── Upload de documentos para despesas (multer/Storage) — port de routes.js 1523-1542 ──
+// Multipart (multer single 'file') → Hono formData + uploadPublic (bucket "despesas").
+app.post("/despesas/:id/upload", async (c: any) => {
+  const id = c.req.param("id");
+  try {
+    const form = await c.req.formData();
+    const fRaw = form.get("file");
+    const file = fRaw instanceof File ? fRaw : null;
+    if (!file) return c.json({ error: "Ficheiro inválido (PDF, JPG, PNG até 10MB)" }, 400);
+    const despesa = await Despesas.getById(id);
+    if (!despesa) return c.json({ error: "Despesa não encontrada" }, 404);
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const storagePath = `despesas/${id}/${crypto.randomUUID()}_${file.name}`;
+    const filePath = await uploadPublic("despesas", storagePath, bytes, file.type || "application/octet-stream");
+
+    const docs = despesa.documentos ? JSON.parse(despesa.documentos) : [];
+    docs.push({
+      id: crypto.randomUUID(),
+      name: file.name,
+      path: filePath,
+      type: file.type,
+      size: file.size,
+      uploaded_at: new Date().toISOString(),
+    });
+    await Despesas.update(id, { documentos: JSON.stringify(docs) });
+    return c.json({ ok: true, documentos: docs });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── Apagar documento de despesa (Despesas CRUD + JSON) — port de routes.js 1544-1555 ──
 app.delete("/despesas/:id/upload/:docId", async (c: any) => {
