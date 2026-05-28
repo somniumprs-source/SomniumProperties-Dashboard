@@ -109,7 +109,7 @@ app.post("/", async (c) => {
           <tr><td style="padding:8px 14px 8px 0;color:#888;">ROI anualizado pretendido</td><td>${body.roi_anualizado || "-"}</td></tr>
         </table>
         <hr style="margin:24px 0;border:0;border-top:1px solid #eee;">
-        <p style="font-size:12px;color:#999;margin:0;">Submissão automática via formulário da landing page Somnium Properties.<br>Acesso ao CRM: <a href="https://somniumproperties-dashboard.onrender.com" style="color:#C9A84C;">Dashboard</a></p>
+        <p style="font-size:12px;color:#999;margin:0;">Submissão automática via formulário da landing page Somnium Properties.<br>Acesso ao CRM: <a href="https://somnium-properties-dashboard.vercel.app" style="color:#C9A84C;">Dashboard</a></p>
       </div>
     `;
     sendEmail(`Somnium · Nova candidatura: ${nome}`, emailHtml).catch((e: any) =>

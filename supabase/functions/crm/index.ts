@@ -258,7 +258,7 @@ async function notificarInvestidoresMudancaFase(negocioId: string, novaFaseKey: 
     const faseNome = faseConfig?.nome || novaFaseKey;
     const faseIcon = faseConfig?.icon || "🛠️";
 
-    const baseUrl = Deno.env.get("PUBLIC_URL") || "https://somniumproperties-dashboard.onrender.com";
+    const baseUrl = Deno.env.get("PUBLIC_URL") || "https://somnium-properties-dashboard.vercel.app";
     const link = `${baseUrl}/projectos/${negocioId}`;
     const subject = `${faseIcon} ${negocio.movimento}: nova fase de obra — ${faseNome}`;
     const html = `

@@ -72,7 +72,7 @@ app.get("/status", (c) => {
     google_oauth: googleConfigured,
     ultimo_webhook: lastWebhookReceived || "Nenhum pedido recebido desde o ultimo restart",
     instrucoes: !webhookUrl
-      ? "Configurar no Twilio Console: Sandbox Settings → When a message comes in → https://somniumproperties-dashboard.onrender.com/api/webhook/whatsapp (HTTP POST)"
+      ? "Configurar no Twilio Console: Sandbox Settings → When a message comes in → https://mjgusjuougzoeiyavsor.supabase.co/functions/v1/webhook-whatsapp (HTTP POST)"
       : null,
   });
 });

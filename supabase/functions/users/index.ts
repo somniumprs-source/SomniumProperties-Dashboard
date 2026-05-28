@@ -75,16 +75,16 @@ async function getUserById(id: string) {
 
 // Determina o redirectTo para os links Supabase.
 // Em Edge Functions nao temos req.protocol/host fiavel — usamos PUBLIC_APP_URL
-// ou o host do pedido (via header) com fallback para o dominio Render.
+// ou o host do pedido (via header) com fallback para o dominio Vercel.
 function resolveRedirectTo(c: any): string {
   const publicUrl = Deno.env.get("PUBLIC_APP_URL");
   if (publicUrl) return publicUrl;
   const host = c.req.header("host");
   if (host && !host.startsWith("localhost")) {
-    const proto = c.req.header("x-forwarded-proto") || (host.includes("onrender.com") ? "https" : "https");
+    const proto = c.req.header("x-forwarded-proto") || "https";
     return `${proto}://${host}`;
   }
-  return "https://somniumproperties-dashboard.onrender.com";
+  return "https://somnium-properties-dashboard.vercel.app";
 }
 
 function iniciaisFromNome(nome?: string): string {
