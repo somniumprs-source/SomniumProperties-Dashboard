@@ -8,7 +8,8 @@
  *   como na Edge Function `calendar`. Sem leitura de disco.
  * - mappers (investidorMappers.js) inline (nao havia .ts portado).
  */
-import { google } from "googleapis";
+import { OAuth2Client } from "google-auth-library";
+import { sheets } from "@googleapis/sheets";
 import pool from "../_shared/pg.ts";
 import { Investidores } from "./crud.ts";
 
@@ -20,7 +21,7 @@ function getAuth(): any {
   const clientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
   const refreshToken = Deno.env.get("GOOGLE_REFRESH_TOKEN");
   if (clientId && clientSecret && refreshToken) {
-    const oauth2 = new google.auth.OAuth2(clientId, clientSecret, "http://localhost:3333");
+    const oauth2 = new OAuth2Client(clientId, clientSecret, "http://localhost:3333");
     oauth2.setCredentials({ refresh_token: refreshToken });
     return oauth2;
   }
@@ -43,8 +44,8 @@ export async function syncForms() {
   const auth = getAuth();
   if (!auth) throw new Error("Google OAuth não configurado");
 
-  const sheets = google.sheets({ version: "v4", auth });
-  const r = await sheets.spreadsheets.values.get({
+  const sheetsClient = sheets({ version: "v4", auth });
+  const r = await sheetsClient.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
     range: "A:O",
   });

@@ -1,5 +1,6 @@
 import pool from "../_shared/pg.ts";
-import { google } from "googleapis";
+import { OAuth2Client } from "google-auth-library";
+import { calendar } from "@googleapis/calendar";
 import { pullGCalToTarefas, pushAllTarefas } from "../calendar/calendarSync.ts";
 
 const INTERNAL_API_KEY = Deno.env.get("INTERNAL_API_KEY") || "";
@@ -13,9 +14,9 @@ function getGcal(): any {
   const refreshToken = Deno.env.get("GOOGLE_REFRESH_TOKEN");
   if (clientId && clientSecret && refreshToken) {
     try {
-      const oauth2 = new google.auth.OAuth2(clientId, clientSecret, "http://localhost:3333");
+      const oauth2 = new OAuth2Client(clientId, clientSecret, "http://localhost:3333");
       oauth2.setCredentials({ refresh_token: refreshToken });
-      return google.calendar({ version: "v3", auth: oauth2 });
+      return calendar({ version: "v3", auth: oauth2 });
     } catch (e) {
       console.warn("[cron-sync-calendar] Google Calendar não disponível:", (e as Error).message);
       return null;

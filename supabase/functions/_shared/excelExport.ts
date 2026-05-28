@@ -4,7 +4,7 @@
  */
 import ExcelJS from 'exceljs'
 import pool from './pg.ts'
-import { google } from 'googleapis'
+import { drive } from '@googleapis/drive'
 import { Readable } from 'node:stream'
 import { Buffer } from 'node:buffer'
 import { getGoogleAuth } from './googleAuth.ts'
@@ -14,7 +14,7 @@ const BRAND = { gold: 'C9A84C', dark: '0D0D0D', white: 'FFFFFF', light: 'F5F5F0'
 function getDrive() {
   const auth = getGoogleAuth()
   if (!auth) return null
-  return google.drive({ version: 'v3', auth })
+  return drive({ version: 'v3', auth })
 }
 
 function styleHeader(row) {

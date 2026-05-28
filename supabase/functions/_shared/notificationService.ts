@@ -5,7 +5,7 @@
  * Reutiliza o padrao OAuth de gmailSync.
  * Port de src/db/notificationService.js (Express -> Edge Functions / Deno).
  */
-import { google } from 'googleapis'
+import { gmail } from '@googleapis/gmail'
 import { Buffer } from 'node:buffer'
 import { getGoogleAuth, isGoogleConfigured } from './googleAuth.ts'
 
@@ -15,7 +15,7 @@ let cachedLabelId = null
 function getGmail() {
   const auth = getGoogleAuth()
   if (!auth) return null
-  return google.gmail({ version: 'v1', auth })
+  return gmail({ version: 'v1', auth })
 }
 
 export function isConfigured() {

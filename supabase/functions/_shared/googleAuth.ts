@@ -6,7 +6,7 @@
  *
  * Mesma técnica já provada na função `calendar` (googleapis OAuth2 por env em Deno).
  */
-import { google } from "googleapis";
+import { OAuth2Client } from "google-auth-library";
 
 /**
  * Obter cliente OAuth2 autenticado a partir de env vars.
@@ -17,7 +17,7 @@ export function getGoogleAuth(): any {
   const clientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
   const refreshToken = Deno.env.get("GOOGLE_REFRESH_TOKEN");
   if (clientId && clientSecret && refreshToken) {
-    const oauth2 = new google.auth.OAuth2(clientId, clientSecret, "http://localhost:3333");
+    const oauth2 = new OAuth2Client(clientId, clientSecret, "http://localhost:3333");
     oauth2.setCredentials({ refresh_token: refreshToken });
     return oauth2;
   }

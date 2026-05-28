@@ -11,7 +11,12 @@
     "@resvg/resvg-wasm": "npm:@resvg/resvg-wasm@2.6.2",
     "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@0.88.0",
     "@notionhq/client": "npm:@notionhq/client@2.2.15",
-    "googleapis": "npm:googleapis@171.4.0"
+    "google-auth-library": "npm:google-auth-library@10.6.2",
+    "@googleapis/calendar": "npm:@googleapis/calendar@14.3.0",
+    "@googleapis/drive": "npm:@googleapis/drive@20.2.0",
+    "@googleapis/gmail": "npm:@googleapis/gmail@16.1.2",
+    "@googleapis/sheets": "npm:@googleapis/sheets@13.0.2",
+    "@googleapis/oauth2": "npm:@googleapis/oauth2@5.0.1"
   },
   "compilerOptions": {
     "lib": ["deno.window"],

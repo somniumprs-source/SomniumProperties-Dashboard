@@ -11,7 +11,9 @@
 // googleapis COMPILA em Deno (deno check exit 0) — Google API NAO foi stubbada.
 import { createApp } from "../_shared/hono.ts";
 import pool from "../_shared/pg.ts";
-import { google } from "googleapis";
+import { OAuth2Client } from "google-auth-library";
+import { calendar } from "@googleapis/calendar";
+import { oauth2 } from "@googleapis/oauth2";
 import { pushAllTarefas, pullGCalToTarefas } from "./calendarSync.ts";
 
 const app = createApp("/calendar");
@@ -26,9 +28,9 @@ function getGcal(): any {
   const refreshToken = Deno.env.get("GOOGLE_REFRESH_TOKEN");
   if (clientId && clientSecret && refreshToken) {
     try {
-      const oauth2 = new google.auth.OAuth2(clientId, clientSecret, "http://localhost:3333");
-      oauth2.setCredentials({ refresh_token: refreshToken });
-      return google.calendar({ version: "v3", auth: oauth2 });
+      const oauth2Client = new OAuth2Client(clientId, clientSecret, "http://localhost:3333");
+      oauth2Client.setCredentials({ refresh_token: refreshToken });
+      return calendar({ version: "v3", auth: oauth2Client });
     } catch (e) {
       console.warn("[gcal] Google Calendar não disponível:", (e as Error).message);
       return null;
@@ -71,8 +73,8 @@ app.get("/status", async (c: any) => {
 
     // Identificar a conta OAuth2 autenticada
     try {
-      const oauth2 = google.oauth2({ version: "v2", auth: gcal.context._options.auth });
-      const info = await oauth2.userinfo.get();
+      const oauth2Svc = oauth2({ version: "v2", auth: gcal.context._options.auth });
+      const info = await oauth2Svc.userinfo.get();
       status.authenticated_as = info.data.email;
     } catch { /* ignore */ }
 

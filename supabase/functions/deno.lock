@@ -5,6 +5,11 @@
     "jsr:@supabase/functions-js@^0.0.0-automated": "0.0.0-jsr-test.1",
     "jsr:@supabase/supabase-js@2": "2.105.4",
     "npm:@anthropic-ai/sdk@0.88.0": "0.88.0",
+    "npm:@googleapis/calendar@14.3.0": "14.3.0",
+    "npm:@googleapis/drive@20.2.0": "20.2.0",
+    "npm:@googleapis/gmail@16.1.2": "16.1.2",
+    "npm:@googleapis/oauth2@5.0.1": "5.0.1",
+    "npm:@googleapis/sheets@13.0.2": "13.0.2",
     "npm:@notionhq/client@2.2.15": "2.2.15",
     "npm:@resvg/resvg-wasm@2.6.2": "2.6.2",
     "npm:@supabase/auth-js@2.105.4": "2.105.4",
@@ -13,7 +18,7 @@
     "npm:@supabase/storage-js@2.105.4": "2.105.4",
     "npm:docx@9.6.1": "9.6.1",
     "npm:exceljs@4.4.0": "4.4.0",
-    "npm:googleapis@171.4.0": "171.4.0",
+    "npm:google-auth-library@10.6.2": "10.6.2",
     "npm:jose@5": "5.10.0",
     "npm:pdfkit@0.18.0": "0.18.0",
     "npm:pg@8.20.0": "8.20.0"
@@ -68,6 +73,36 @@
         "lodash.isnil",
         "lodash.isundefined",
         "lodash.uniq"
+      ]
+    },
+    "@googleapis/calendar@14.3.0": {
+      "integrity": "sha512-sPPwuIBKNN0ifmvbYTOPXdrjjRRBNTC7gz81kanjXLffnuIqRNt2vzAO8Q6KXzgYXyTApuJZrryUVL4ZncQDiQ==",
+      "dependencies": [
+        "googleapis-common"
+      ]
+    },
+    "@googleapis/drive@20.2.0": {
+      "integrity": "sha512-6xPjqqLl34jBXWYMO34ywLVQsT8FgH948x8YI9o6Tdqs7+n4QRyvkC+BcvVQaAPNc+pyqsvZAXcbdMEcGgDUGw==",
+      "dependencies": [
+        "googleapis-common"
+      ]
+    },
+    "@googleapis/gmail@16.1.2": {
+      "integrity": "sha512-/EjAtgTtmu6bwh7jhlspmzWu6VtO0zvkOlgR2nOfuhF2B6Wr6FAhGaqXF+/t8noLAAlQDQ638jLvR+ofdzzIxQ==",
+      "dependencies": [
+        "googleapis-common"
+      ]
+    },
+    "@googleapis/oauth2@5.0.1": {
+      "integrity": "sha512-C67lu327UqJJwjrDzw/6j3udYlBF9vJudv7CrZZAQW47Q1sVhvzAriQ1+MdIGIb0Aypv9IXsVaWya8jqJzjpQA==",
+      "dependencies": [
+        "googleapis-common"
+      ]
+    },
+    "@googleapis/sheets@13.0.2": {
+      "integrity": "sha512-b1tBlMcfvNEziM4DZCikLOc9iqSlgCK1e5bMKtNQIADRXr1CQmbkHV3ZBVvTsFsjLErgihqO58Itn/kzCnSZ0A==",
+      "dependencies": [
+        "googleapis-common"
       ]
     },
     "@noble/ciphers@1.3.0": {
@@ -551,13 +586,6 @@
         "google-auth-library",
         "qs",
         "url-template"
-      ]
-    },
-    "googleapis@171.4.0": {
-      "integrity": "sha512-xybFL2SmmUgIifgsbsRQYRdNrSAYwxWZDmkZTGjUIaRnX5jPqR8el/cEvo6rCqh7iaZx6MfEPS/lrDgZ0bymkg==",
-      "dependencies": [
-        "google-auth-library",
-        "googleapis-common"
       ]
     },
     "gopd@1.2.0": {
@@ -1108,11 +1136,16 @@
       "jsr:@hono/hono@^4.12.23",
       "jsr:@supabase/supabase-js@2",
       "npm:@anthropic-ai/sdk@0.88.0",
+      "npm:@googleapis/calendar@14.3.0",
+      "npm:@googleapis/drive@20.2.0",
+      "npm:@googleapis/gmail@16.1.2",
+      "npm:@googleapis/oauth2@5.0.1",
+      "npm:@googleapis/sheets@13.0.2",
       "npm:@notionhq/client@2.2.15",
       "npm:@resvg/resvg-wasm@2.6.2",
       "npm:docx@9.6.1",
       "npm:exceljs@4.4.0",
-      "npm:googleapis@171.4.0",
+      "npm:google-auth-library@10.6.2",
       "npm:jose@5",
       "npm:pdfkit@0.18.0",
       "npm:pg@8.20.0"

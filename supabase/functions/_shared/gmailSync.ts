@@ -7,7 +7,7 @@
  * Nota: classifyEmail é baseado em regras (regex), NÃO usa Anthropic — o
  * gmailSync.js original não importa @anthropic-ai/sdk.
  */
-import { google } from "googleapis";
+import { gmail } from "@googleapis/gmail";
 import { getGoogleAuth, isGoogleConfigured } from "./googleAuth.ts";
 
 // Labels por departamento (sem cores customizadas — Gmail tem paleta muito restrita)
@@ -55,7 +55,7 @@ const AUTO_RULES = [
 function getGmail() {
   const auth = getGoogleAuth()
   if (!auth) return null
-  return google.gmail({ version: 'v1', auth })
+  return gmail({ version: 'v1', auth })
 }
 
 export function isConfigured() {

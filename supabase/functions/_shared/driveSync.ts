@@ -13,7 +13,7 @@
  *    routes.js (que construía o cliente Drive inline a partir de disco) e
  *    reescrita para usar getGoogleAuth().
  */
-import { google } from "googleapis";
+import { drive } from "@googleapis/drive";
 import pool from "./pg.ts";
 import { getGoogleAuth, isGoogleConfigured } from "./googleAuth.ts";
 
@@ -43,7 +43,7 @@ const ESTADO_FOLDER_MAP = {
 function getDrive() {
   const auth = getGoogleAuth()
   if (!auth) return null
-  return google.drive({ version: 'v3', auth })
+  return drive({ version: 'v3', auth })
 }
 
 export function isConfigured() {
