@@ -8,7 +8,7 @@ import { jwtVerify } from "jose";
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "https://mjgusjuougzoeiyavsor.supabase.co";
-const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_KEY") || "";
+const SUPABASE_SERVICE_KEY = (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_KEY")) || "";
 const JWT_SECRET = Deno.env.get("SUPABASE_JWT_SECRET") || "";
 
 const secretKey = JWT_SECRET ? new TextEncoder().encode(JWT_SECRET) : null;

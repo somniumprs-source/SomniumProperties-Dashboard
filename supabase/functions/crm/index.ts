@@ -91,10 +91,10 @@ const PATH_TO_TABLE: Record<string, string> = {
 // roles restritos, audit, notificacoes in-app). Sem service key (dev) ou sem
 // token -> null (o handler devolve tudo / age como admin, igual ao Express).
 const RECORD_RESTRICTED_ROLES = new Set(["parceiro", "investidor"]);
-const _crmAuthClient = Deno.env.get("SUPABASE_SERVICE_KEY")
+const _crmAuthClient = (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_KEY"))
   ? createClient(
     Deno.env.get("SUPABASE_URL") || "https://mjgusjuougzoeiyavsor.supabase.co",
-    Deno.env.get("SUPABASE_SERVICE_KEY")!,
+    (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_KEY"))!,
   )
   : null;
 

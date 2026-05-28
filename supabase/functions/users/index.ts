@@ -46,7 +46,7 @@ const ROLE_MODULES: Record<string, string[]> = {
 const RECORD_RESTRICTED_ROLES = new Set(["parceiro", "investidor"]);
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "https://mjgusjuougzoeiyavsor.supabase.co";
-const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_KEY") || "";
+const SUPABASE_SERVICE_KEY = (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_KEY")) || "";
 const supabaseAdmin = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null;
 
 // Emails que ficam SEMPRE como admin activo.
