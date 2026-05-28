@@ -1460,13 +1460,28 @@ app.post("/imoveis/:id/documentos/analise", async (c: any) => {
     const imovel = await Imoveis.getById(id);
     if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
 
-    const form = await c.req.formData();
-    const fichRaw = form.get("ficheiro");
-    const file = fichRaw instanceof File ? fichRaw : null;
-    const bodyPath = typeof form.get("path") === "string" ? form.get("path") as string : null;
-    const bodyName = typeof form.get("name") === "string" ? form.get("name") as string : null;
-    const bodyFotoId = typeof form.get("fotoId") === "string" ? form.get("fotoId") as string : null;
-    const bodyTipoImovel = typeof form.get("tipoImovel") === "string" ? form.get("tipoImovel") as string : null;
+    // O frontend envia JSON (analise por path); multipart e suportado como fallback.
+    let file: File | null = null;
+    let bodyPath: string | null = null;
+    let bodyName: string | null = null;
+    let bodyFotoId: string | null = null;
+    let bodyTipoImovel: string | null = null;
+    const contentType = c.req.header("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const body = await c.req.json().catch(() => ({}));
+      bodyPath = typeof body.path === "string" ? body.path : null;
+      bodyName = typeof body.name === "string" ? body.name : null;
+      bodyFotoId = typeof body.fotoId === "string" ? body.fotoId : null;
+      bodyTipoImovel = typeof body.tipoImovel === "string" ? body.tipoImovel : null;
+    } else {
+      const form = await c.req.formData();
+      const fichRaw = form.get("ficheiro");
+      file = fichRaw instanceof File ? fichRaw : null;
+      bodyPath = typeof form.get("path") === "string" ? form.get("path") as string : null;
+      bodyName = typeof form.get("name") === "string" ? form.get("name") as string : null;
+      bodyFotoId = typeof form.get("fotoId") === "string" ? form.get("fotoId") as string : null;
+      bodyTipoImovel = typeof form.get("tipoImovel") === "string" ? form.get("tipoImovel") as string : null;
+    }
 
     let doc;
     try { doc = await resolveDocBuffer(file, bodyPath, bodyName); }
