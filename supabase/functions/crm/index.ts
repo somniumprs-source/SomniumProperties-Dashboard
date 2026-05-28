@@ -52,6 +52,16 @@ import { audit } from "../_shared/projetoAuditLog.ts";
 import { gerarResumoProjeto, isConfigured as aiConfigured } from "../_shared/projetoAiAssistant.ts";
 import { sendEmail, isConfigured as emailConfigured } from "../_shared/emailService.ts";
 import { sendWhatsApp } from "../_shared/whatsappAgent.ts";
+// ── Subsistema RELATORIOS / EXPORTS / AUTOMATION (ultimo lote de stubs) ──
+import {
+  autoGerarRelatoriosSemanaisPendentes, gerarRelatorioSemanal,
+} from "../_shared/relatorioSemanalAggregator.ts";
+import { generateRelatorioSemanalPDF } from "../_shared/pdfRelatorioSemanal.ts";
+import { generateRelatorioExpansaoGaia } from "../_shared/pdfRelatorioExpansaoGaia.ts";
+import { DADOS_EXPANSAO_GAIA } from "../_shared/expansaoGaiaData.ts";
+import { exportDepartment } from "../_shared/excelExport.ts";
+import { generateDocx, getAvailableTypes } from "../_shared/docxGenerator.ts";
+import { CHECKLIST_TEMPLATES } from "../_shared/checklistTemplates.ts";
 import { createClient } from "@supabase/supabase-js";
 import { Buffer } from "node:buffer";
 
@@ -72,9 +82,6 @@ const PATH_TO_TABLE: Record<string, string> = {
   imoveis: "imoveis", consultores: "consultores", negocios: "negocios",
   empreiteiros: "empreiteiros", despesas: "despesas", tarefas: "tarefas", investidores: "investidores",
 };
-
-// Stub para endpoints cujos handlers dependem de modulos ainda nao portados.
-const notImplemented = (c: any) => c.json({ error: "Not implemented — porting em curso", todo: true }, 501);
 
 // ── Resolucao de utilizador para o CRM (port de routes.js resolveCrmUser) ──
 // O CRM bypassa o auth global mas precisa do user para filtros (acessos,
@@ -1657,13 +1664,37 @@ app.post("/gmail/auto-organize", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Excel Export por departamento (exportDepartment) → 501 ──
-app.get("/export/:dept", notImplemented);
+// ── Excel Export por departamento — port de routes.js 1732-1744 ──
+// exportDepartment devolve { buffer, fileName, driveFile }. Por defeito faz
+// download do xlsx (download !== "false"); upload p/ Drive so se driveFolderId.
+app.get("/export/:dept", async (c: any) => {
+  try {
+    const dept = c.req.param("dept");
+    const driveFolderId = c.req.query("driveFolderId") || null;
+    const { buffer, fileName, driveFile } = await exportDepartment(dept, driveFolderId);
+    if (c.req.query("download") !== "false") {
+      return c.body(new Uint8Array(buffer), 200, {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${fileName}"`,
+      });
+    }
+    return c.json({ fileName, driveFile });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
 
-// ── DOCX (generateDocx) → 501 ──
-app.get("/imoveis/:id/docx/:tipo", notImplemented);
-// ── DOCX tipos (getAvailableTypes) → 501 ──
-app.get("/docx/tipos", notImplemented);
+// ── DOCX — documentos Word — port de routes.js 1747-1754 ──
+app.get("/imoveis/:id/docx/:tipo", async (c: any) => {
+  try {
+    const { buffer, fileName } = await generateDocx(c.req.param("tipo"), c.req.param("id"));
+    return c.body(new Uint8Array(buffer), 200, {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "Content-Disposition": `attachment; filename="${fileName}"`,
+    });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── DOCX tipos disponiveis — port de routes.js 1756-1758 ──
+app.get("/docx/tipos", (c: any) => c.json({ tipos: getAvailableTypes() }));
 
 // ── CSV Export — port de routes.js 1761-1783 ──
 app.get("/export-csv/:entity", async (c: any) => {
@@ -1908,8 +1939,72 @@ app.get("/kpis/:tab", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Tarefas automaticas por mudanca de fase (import de constants/checklistTemplates de disco) → 501 ──
-app.post("/auto-task", notImplemented);
+// ── Tarefas automaticas por mudanca de fase — port de routes.js 2028-2091 ──
+// Imoveis: gera checklist a partir de CHECKLIST_TEMPLATES (de _shared, nao disco).
+// Investidores/consultores: cria 1 tarefa conforme TASK_MAP. randomUUID via crypto global.
+app.post("/auto-task", async (c: any) => {
+  try {
+    const { entity, entityId, entityName, newPhase } = await c.req.json();
+
+    // Para imoveis: gerar checklist automaticamente
+    if (entity === "imoveis" && entityId) {
+      const templates = (CHECKLIST_TEMPLATES as any)[newPhase];
+      if (templates && templates.length > 0) {
+        const now = new Date().toISOString();
+        let created = 0;
+        for (let i = 0; i < templates.length; i++) {
+          const t = templates[i];
+          const id = crypto.randomUUID();
+          try {
+            await pool.query(
+              `INSERT INTO checklist_imovel (id, imovel_id, estado, template_key, titulo, campo_crm, categoria, tempo_estimado, obrigatoria, ordem, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+               ON CONFLICT (imovel_id, template_key) DO NOTHING`,
+              [id, entityId, newPhase, t.key, t.titulo, t.campo_crm, t.categoria, t.tempo_estimado, t.obrigatoria, i + 1, now, now],
+            );
+            created++;
+          } catch { /* duplicado, ignorar */ }
+        }
+        console.log(`[checklist] ${created} items gerados para ${entityName} → ${newPhase}`);
+        return c.json({ ok: true, created: true, count: created });
+      }
+    }
+
+    // Fallback para investidores/consultores: manter auto-task antigo
+    const TASK_MAP: Record<string, Record<string, string>> = {
+      investidores: {
+        // Comuns
+        "Pendente de Aprovação": "Aprovar lead {name}",
+        "Potencial Investidor": "Marcar 1ª call com {name}",
+        "Marcar call": "Marcar call com investidor {name}",
+        "Call marcada": "Preparar apresentação para {name}",
+        "Follow Up": "Follow-up com investidor {name}",
+        // Passivo
+        "Investidor Qualificado em Carteira": "Procurar deal compatível para {name}",
+        "Investidor em parceria": "Preparar onboarding de {name}",
+        // Activo
+        "Negociação de Deal": "Acompanhar negociação de deal com {name}",
+        "Investidor Ativo": "Preparar próximo deal para {name}",
+      },
+      consultores: {
+        "Follow up": "Follow-up com consultor {name}",
+        "Aberto Parcerias": "Formalizar parceria com {name}",
+      },
+    };
+    const taskTemplates = TASK_MAP[entity] ?? {};
+    const template = taskTemplates[newPhase];
+    if (!template) return c.json({ ok: true, created: false, reason: "No task for this phase" });
+
+    const tarefa = template.replace("{name}", entityName);
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await pool.query(
+      "INSERT INTO tarefas (id, tarefa, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)",
+      [id, tarefa, "A fazer", now, now],
+    );
+    return c.json({ ok: true, created: true, tarefa, id });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── Checklist de imoveis — port de routes.js 2094-2165 ──
 app.get("/checklist/progress-batch", async (c: any) => {
@@ -2767,8 +2862,22 @@ app.get("/relatorio/consultores", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Run-all automacoes (faz fetch interno a /api/crm/... do Express) → 501 ──
-app.post("/automation/run-all", notImplemented);
+// ── Run-all automacoes — port de routes.js 2999-3011 ──
+// O Express fazia fetch interno aos seus proprios /api/crm/automation/<ep>.
+// Em Hono dispatchamos internamente via app.request() (basePath /crm) para os
+// handlers ja portados — mesmo conjunto, mesma ordem, mesma forma de resultado.
+app.post("/automation/run-all", async (c: any) => {
+  try {
+    const results: Record<string, any> = {};
+    for (const ep of ["score-investidores", "score-consultores", "score-prioridade-consultores", "calc-roi"]) {
+      try {
+        const r = await app.request(`/crm/automation/${ep}`, { method: "POST" });
+        results[ep] = await r.json();
+      } catch (e) { results[ep] = { error: (e as Error).message }; }
+    }
+    return c.json({ ok: true, results });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── Audit log — port de routes.js 3014-3025 ──
 app.get("/audit", async (c: any) => {
@@ -3161,14 +3270,42 @@ app.get("/relatorios-semanais/:id", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── PDF relatorio semanal (disco/generateRelatorioSemanalPDF/streamPdf) → 501 ──
-app.get("/relatorios-semanais/:id/pdf", notImplemented);
+// ── PDF relatorio semanal — port de routes.js 3427-3460 ──
+// O Express servia um pdf_original_path do disco quando existia; em Deno (isolate
+// sem FS persistente, sem streamPdfToResAndPersist) geramos sempre do template e
+// devolvemos inline via streamToBuffer.
+app.get("/relatorios-semanais/:id/pdf", async (c: any) => {
+  try {
+    const { rows: [r] } = await pool.query("SELECT * FROM relatorios_semanais WHERE id = $1", [c.req.param("id")]);
+    if (!r) return c.json({ error: "Relatório não encontrado" }, 404);
+    const doc = generateRelatorioSemanalPDF(r);
+    const buffer = await streamToBuffer(doc);
+    return c.body(buffer, 200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="Relatorio_Semanal_${r.semana_iso}.pdf"`,
+    });
+  } catch (e) { console.error("[relatorios-semanais/pdf]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
 
-// ── Gerar relatorio semanal (relatorioSemanalAggregator) → 501 ──
-app.post("/relatorios-semanais/gerar", notImplemented);
+// ── Gerar relatorio semanal — port de routes.js 3462-3472 ──
+app.post("/relatorios-semanais/gerar", async (c: any) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { semana_iso, data_inicio, data_fim, regenerar } = body || {};
+    const result = await gerarRelatorioSemanal({ semana_iso, data_inicio, data_fim, regenerar });
+    return c.json(result);
+  } catch (e) { console.error("[relatorios-semanais/gerar]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
 
-// ── Auto-gerar relatorios semanais (relatorioSemanalAggregator) → 501 ──
-app.post("/relatorios-semanais/auto-gerar", notImplemented);
+// ── Auto-gerar relatorios semanais — port de routes.js 3474-3484 ──
+app.post("/relatorios-semanais/auto-gerar", async (c: any) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const apenas_pendentes = body?.apenas_pendentes ?? c.req.query("apenas_pendentes") === "true";
+    const r = await autoGerarRelatoriosSemanaisPendentes({ apenas_pendentes: !!apenas_pendentes });
+    return c.json(r);
+  } catch (e) { console.error("[relatorios-semanais/auto-gerar]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
 
 app.delete("/relatorios-semanais/:id", async (c: any) => {
   try {
@@ -3532,8 +3669,19 @@ app.get("/projetos/:negocioId/pdf/saida", async (c: any) => {
   } catch (e) { console.error("[pdf/saida]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Relatorio Executivo Expansao Gaia (generateRelatorioExpansaoGaia) → 501 ──
-app.get("/relatorios/expansao-gaia", notImplemented);
+// ── Relatorio Executivo Expansao Gaia — port de routes.js 3910-3920 ──
+// O Express fazia doc.pipe(res); em Deno geramos os bytes via streamToBuffer e
+// devolvemos inline. Dataset injectado explicitamente (default do gerador).
+app.get("/relatorios/expansao-gaia", async (c: any) => {
+  try {
+    const doc = generateRelatorioExpansaoGaia(DADOS_EXPANSAO_GAIA);
+    const buffer = await streamToBuffer(doc);
+    return c.body(buffer, 200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": 'inline; filename="relatorio-expansao-gaia.pdf"',
+    });
+  } catch (e) { console.error("[pdf/expansao-gaia]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── Mover negocio entre fases (drag&drop) — port de routes.js 3923-3981 ──
 app.put("/projetos/:negocioId/mover-fase", async (c: any) => {
