@@ -1,0 +1,12 @@
+# Nao enviar para o Vercel o que nao e preciso para o build do frontend.
+# As fotos (448MB) migram para Supabase Storage; o backend corre em Edge Functions.
+# NB: scripts/ FICA (o prebuild corre scripts/sync-landing.mjs) e patches/ FICA
+# (postinstall corre patch-package).
+public/uploads
+supabase
+server.js
+docs
+tmp
+.git
+node_modules
+dist

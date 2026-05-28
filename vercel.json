@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build && rm -rf dist/uploads",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/investir", "destination": "/investir/index.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
