@@ -11,8 +11,10 @@ backups/
 public/uploads/despesas/*
 !public/uploads/.gitkeep
 .claude/settings.local.json
+.claude/skills/
 relatorio-agente.html
 inputs/whatsapp/
+tmp/
 Relatorios/*
 !Relatorios/RelatoriosSemanais/
 Relatorios/RelatoriosSemanais/*

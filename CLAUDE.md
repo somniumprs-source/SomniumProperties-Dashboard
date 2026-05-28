@@ -28,6 +28,15 @@ npm run build        # Build producao
 
 Para trabalhar num departamento: correr o skill respectivo ou ler o ficheiro de contexto.
 
+## Documentacao de negocio
+
+Documentos de referencia (contexto, checklists, apresentacoes) vivem em `docs/`:
+
+- `docs/contexto/` — snapshots de contexto do CRM e investidores (CONTEXTO_*.md/pdf). Ler antes de tarefas que envolvam dados de imoveis ou investidores.
+- `docs/comercial/`, `docs/administrativo/`, `docs/diversos/` — checklists e materiais por area.
+
+Outputs gerados por scripts ficam na raiz (ex: `Manual_Orcamento_Obra_Somnium.pdf`, `Apresentacao_Investidores_Marco_2026.pptx`, `somnium-investidores.html`): nao mover, os scripts dependem destes caminhos.
+
 ## Regras de Operacao
 
 - Todos os fetch no frontend usam `apiFetch()` de `src/lib/api.js` (nunca fetch directo).
