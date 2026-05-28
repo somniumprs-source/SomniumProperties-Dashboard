@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
 import { supabase, authEnabled } from './lib/supabase.js'
+import { resolveApiUrl } from './lib/apiUrl.js'
 
 // Interceptar fetch para /api/ e adicionar token Supabase automaticamente
 // Usa referência directa ao fetch original para evitar loop
@@ -65,18 +66,21 @@ if (authEnabled && supabase) {
   window.fetch = function (url, options = {}) {
     // Só interceptar chamadas /api locais (não chamadas do Supabase SDK)
     if (typeof url === 'string' && url.startsWith('/api')) {
+      // Reescreve /api/* -> Edge Function Supabase (se VITE_API_URL definido);
+      // caso contrário devolve o url original (same-origin Express).
+      const target = resolveApiUrl(url)
       const now = Date.now()
       if (_cachedToken && now < _tokenExpiry) {
-        return fetchWithToken(url, options, _cachedToken)
+        return fetchWithToken(target, options, _cachedToken)
       }
       return supabase.auth.getSession().then(({ data: { session } }) => {
         if (session?.access_token) {
           _cachedToken = session.access_token
           _tokenExpiry = now + 300000
-          return fetchWithToken(url, options, session.access_token)
+          return fetchWithToken(target, options, session.access_token)
         }
-        return _originalFetch(url, options)
-      }).catch(() => _originalFetch(url, options))
+        return _originalFetch(target, options)
+      }).catch(() => _originalFetch(target, options))
     }
     return _originalFetch(url, options)
   }

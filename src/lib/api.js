@@ -1,5 +1,8 @@
 import { supabase, authEnabled } from './supabase.js'
 import { getRegiaoActivaFromStorage } from '../contexts/RegiaoContext.jsx'
+// Re-export: links de PDF/descarga (window.open) usam isto para apontar para a
+// Edge Function correcta quando VITE_API_URL esta definido.
+export { resolveApiUrl, API_BASE } from './apiUrl.js'
 
 /**
  * Devolve o access token actual da sessão Supabase (string vazia se não houver).
