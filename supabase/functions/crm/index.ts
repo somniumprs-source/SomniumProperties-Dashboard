@@ -30,6 +30,11 @@ import { runEstudoLocalizacao } from "../_shared/estudoLocalizacao.ts";
 import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
 import { removeFromStorage, supabase, uploadPublic } from "../_shared/storage.ts";
 import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
+import { syncAllFromNotion, syncFromNotion, syncToNotion } from "../_shared/sync.ts";
+import { isConfigured as driveConfigured, listImovelFiles } from "../_shared/driveSync.ts";
+import {
+  autoOrganize, ensureLabels, isConfigured as gmailConfigured, organizeBatch, organizeMessage,
+} from "../_shared/gmailSync.ts";
 import Anthropic from "@anthropic-ai/sdk";
 import { registerRegiaoRoutes } from "./regiaoRoutes.ts";
 import { registerAnaliseRoutes } from "./analiseRoutes.ts";
@@ -44,8 +49,7 @@ declare module "@hono/hono" {
 
 const app = createApp("/crm");
 
-// Notion sync diferido (port das integracoes vem depois): no-op.
-function syncToNotion(_table: string, _id: string): Promise<void> { return Promise.resolve(); }
+// Notion sync agora real (de ../_shared/sync.ts). No-op gracioso sem NOTION_API_KEY.
 
 const REGIOES_VALIDAS = new Set(["Coimbra", "AMP"]);
 const TABELAS_ISOLADAS_REGIAO = new Set(["imoveis", "consultores", "negocios", "empreiteiros"]);
@@ -150,7 +154,7 @@ function qualidadeImovel(estado: string): number {
 }
 
 // ── Generic CRUD route factory (port de routes.js 218-276) ───────
-// SEM hooks onCreate/onUpdate (dependem de modulos nao portados) e com syncToNotion no-op.
+// SEM hooks onCreate/onUpdate (dependem de modulos nao portados); syncToNotion real (no-op gracioso sem NOTION_API_KEY).
 function crudRoutes(path: string, crud: any) {
   const table = path.slice(1);
   app.get(path, async (c: any) => {
@@ -1122,8 +1126,19 @@ app.delete("/imoveis/:id/fotos/:fotoId", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Listar ficheiros do Google Drive do imovel (googleapis/disco) → 501 ──
-app.get("/imoveis/:id/drive-files", notImplemented);
+// ── Listar ficheiros do Google Drive do imovel (port routes.js ~1461) ──
+app.get("/imoveis/:id/drive-files", async (c: any) => {
+  try {
+    const imovel = await Imoveis.getById(c.req.param("id"));
+    if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
+    if (!imovel.drive_folder_id) return c.json({ files: [], fotos: [], documentos: [], configured: false });
+    if (!driveConfigured()) return c.json({ files: [], fotos: [], documentos: [], configured: false });
+    return c.json(await listImovelFiles(imovel.drive_folder_id));
+  } catch (e) {
+    console.error("[drive] list files error:", (e as Error).message);
+    return c.json({ files: [], fotos: [], documentos: [], configured: false, error: (e as Error).message });
+  }
+});
 
 // ── Upload de documentos para despesas (multer/Storage) — port de routes.js 1523-1542 ──
 // Multipart (multer single 'file') → Hono formData + uploadPublic (bucket "despesas").
@@ -1319,11 +1334,44 @@ app.post("/forms/sync", async (c: any) => {
   }
 });
 
-// ── Gmail (ensureLabels/organizeMessage/organizeBatch/autoOrganize) → 501 ──
-app.get("/gmail/labels", notImplemented);
-app.post("/gmail/organize", notImplemented);
-app.post("/gmail/organize-batch", notImplemented);
-app.post("/gmail/auto-organize", notImplemented);
+// ── Gmail (port routes.js ~1695-1729) ──
+app.get("/gmail/labels", async (c: any) => {
+  try {
+    if (!gmailConfigured()) {
+      return c.json({ error: "Gmail não configurado. Correr: node scripts/auth-google.js" }, 503);
+    }
+    const labels = await ensureLabels();
+    return c.json({ labels });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/gmail/organize", async (c: any) => {
+  try {
+    if (!gmailConfigured()) return c.json({ error: "Gmail não configurado" }, 503);
+    const { messageId, label, markRead } = await c.req.json();
+    if (!messageId || !label) return c.json({ error: "messageId e label obrigatórios" }, 400);
+    const result = await organizeMessage(messageId, label, markRead !== false);
+    return c.json(result);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/gmail/organize-batch", async (c: any) => {
+  try {
+    if (!gmailConfigured()) return c.json({ error: "Gmail não configurado" }, 503);
+    const { messages } = await c.req.json();
+    if (!Array.isArray(messages)) return c.json({ error: "messages deve ser um array" }, 400);
+    const results = await organizeBatch(messages);
+    return c.json({ results });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/gmail/auto-organize", async (c: any) => {
+  try {
+    if (!gmailConfigured()) return c.json({ error: "Gmail não configurado" }, 503);
+    const result = await autoOrganize();
+    return c.json(result);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── Excel Export por departamento (exportDepartment) → 501 ──
 app.get("/export/:dept", notImplemented);
@@ -1400,9 +1448,15 @@ app.get("/search", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Sync Notion <-> CRM (syncAllFromNotion/syncFromNotion) → 501 ──
-app.post("/sync", notImplemented);
-app.post("/sync/:table", notImplemented);
+// ── Sync Notion <-> CRM (port routes.js ~1828-1836) ──
+app.post("/sync", async (c: any) => {
+  try { return c.json({ ok: true, results: await syncAllFromNotion() }); }
+  catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+app.post("/sync/:table", async (c: any) => {
+  try { return c.json(await syncFromNotion(c.req.param("table"))); }
+  catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
 
 // ── Ficha de detalhe do imovel com relacoes — port de routes.js 1839-1895 ──
 app.get("/imoveis/:id/full", async (c: any) => {
