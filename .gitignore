@@ -9,6 +9,7 @@ data/
 *.db
 backups/
 public/uploads/despesas/*
+public/uploads/imoveis/
 !public/uploads/.gitkeep
 .claude/settings.local.json
 .claude/skills/
@@ -19,3 +20,4 @@ Relatorios/*
 !Relatorios/RelatoriosSemanais/
 Relatorios/RelatoriosSemanais/*
 !Relatorios/RelatoriosSemanais/*.pdf
+.vercel
