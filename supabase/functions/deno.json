@@ -8,7 +8,10 @@
     "pdfkit": "npm:pdfkit@0.18.0",
     "exceljs": "npm:exceljs@4.4.0",
     "docx": "npm:docx@9.6.1",
-    "@resvg/resvg-wasm": "npm:@resvg/resvg-wasm@2.6.2"
+    "@resvg/resvg-wasm": "npm:@resvg/resvg-wasm@2.6.2",
+    "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@0.88.0",
+    "@notionhq/client": "npm:@notionhq/client@2.2.15",
+    "googleapis": "npm:googleapis@171.4.0"
   },
   "compilerOptions": {
     "lib": ["deno.window"],
