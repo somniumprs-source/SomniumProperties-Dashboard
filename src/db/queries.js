@@ -240,6 +240,7 @@ function mapVisita(r) {
     consultorId: r.consultor_id,
     resultado: r.resultado,
     notas: r.notas,
+    ficha: r.ficha || null,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at,
     updatedAt: r.updated_at instanceof Date ? r.updated_at.toISOString() : r.updated_at,
   }
@@ -277,6 +278,21 @@ export async function getVisitasEnriquecidas({ imovelId } = {}) {
     consultorNome: r.consultor_nome,
     imovelNome: r.imovel_nome,
   }))
+}
+
+/**
+ * Devolve a ficha de visita (JSONB) da visita mais recente do imovel que tenha
+ * ficha preenchida. Usado para pre-preencher o PDF ficha_visita.
+ */
+export async function getFichaVisitaParaImovel(imovelId) {
+  if (!imovelId) return null
+  const { rows } = await pool.query(
+    `SELECT ficha FROM visitas
+       WHERE imovel_id = $1 AND ficha IS NOT NULL
+       ORDER BY data_hora DESC LIMIT 1`,
+    [imovelId]
+  )
+  return rows[0]?.ficha || null
 }
 
 /**

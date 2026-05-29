@@ -4,8 +4,10 @@
  * estado (agendada/realizada/cancelada), investidor opcional e notas.
  */
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, MapPin, CheckCircle2, XCircle, Clock } from 'lucide-react'
+import { Plus, Trash2, MapPin, CheckCircle2, XCircle, Clock, ClipboardList } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
+import { FichaVisitaModal } from './FichaVisitaModal.jsx'
+import { fichaTemConteudo } from '../../constants/fichaVisitaSchema.js'
 
 const ESTADOS = [
   { key: 'agendada',  label: 'Agendada',  color: '#C9A84C', bg: '#FEF3C7', icon: Clock },
@@ -38,6 +40,7 @@ export function VisitasTab({ imovelId, onUpdate }) {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [fichaVisita, setFichaVisita] = useState(null)
   const [form, setForm] = useState({ data_hora: todayISO(), estado: 'agendada', investidor_id: '', resultado: '', notas: '' })
 
   async function load() {
@@ -222,12 +225,21 @@ export function VisitasTab({ imovelId, onUpdate }) {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-gray-900">{fmtDateTime(it.dataHora)}</span>
+                      <button type="button" onClick={() => setFichaVisita(it)}
+                        className="text-sm font-semibold text-gray-900 hover:text-yellow-700 hover:underline"
+                        title="Abrir ficha de visita">
+                        {fmtDateTime(it.dataHora)}
+                      </button>
                       <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium"
                         style={{ backgroundColor: meta.bg, color: meta.color }}>
                         <Icon className="w-3 h-3" />
                         {meta.label}
                       </span>
+                      {fichaTemConteudo(it.ficha) && (
+                        <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-700">
+                          <ClipboardList className="w-3 h-3" /> Ficha preenchida
+                        </span>
+                      )}
                       {it.investidorNome && (
                         <span className="text-xs px-1.5 py-0.5 rounded bg-blue-50 border border-blue-100 text-blue-700">
                           c/ {it.investidorNome}
@@ -244,6 +256,11 @@ export function VisitasTab({ imovelId, onUpdate }) {
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => setFichaVisita(it)}
+                      className="text-xs px-2 py-1 rounded-lg bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200"
+                      title="Ficha de visita">
+                      <ClipboardList className="w-3.5 h-3.5 inline" /> Ficha
+                    </button>
                     {it.estado === 'agendada' && (
                       <button onClick={() => handleEstadoChange(it, 'realizada')}
                         className="text-xs px-2 py-1 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
@@ -267,6 +284,15 @@ export function VisitasTab({ imovelId, onUpdate }) {
             )
           })}
         </div>
+      )}
+
+      {fichaVisita && (
+        <FichaVisitaModal
+          visita={fichaVisita}
+          imovelId={imovelId}
+          onClose={() => setFichaVisita(null)}
+          onSaved={async () => { await load(); setFichaVisita(null); onUpdate?.() }}
+        />
       )}
     </div>
   )

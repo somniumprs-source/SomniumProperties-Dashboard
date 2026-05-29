@@ -1190,6 +1190,7 @@ app.post("/visitas", async (c: any) => {
 
 app.put("/visitas/:id", async (c: any) => {
   try {
+    await ensureColumn("visitas", "ficha JSONB");
     const item = await Visitas.update(c.req.param("id"), await c.req.json().catch(() => ({})));
     if (!item) return c.json({ error: "Não encontrado" }, 404);
     await syncDataVisitaDerivada(item.imovel_id);
