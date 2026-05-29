@@ -25,5 +25,34 @@ jobs:
           # partindo o deploy. A v2.101.0 (a ultima que correu com sucesso) nao
           # tem esse problema. Rever quando o Supabase corrigir em versoes futuras.
           version: 2.101.0
-      - name: Deploy todas as Edge Functions
-        run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF"
+      - name: Deploy Edge Functions (uma a uma, resiliente)
+        # Deploy funcao-a-funcao em vez de em bloco: uma funcao que falhe (ex:
+        # crons grandes que batem no limite 413 do Supabase) nao bloqueia o
+        # deploy das restantes (crm, dashboard, ...). Falha o job no fim apenas
+        # se uma funcao CRITICA nao publicou; crons grandes apenas avisam.
+        run: |
+          CRITICAS="crm dashboard users sops calendar voice"
+          falhas_criticas=""
+          avisos=""
+          for dir in supabase/functions/*/; do
+            fn=$(basename "$dir")
+            [ "$fn" = "_shared" ] && continue
+            echo "::group::deploy $fn"
+            if supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF"; then
+              echo "OK: $fn"
+            else
+              echo "FALHOU: $fn"
+              if echo " $CRITICAS " | grep -q " $fn "; then
+                falhas_criticas="$falhas_criticas $fn"
+              else
+                avisos="$avisos $fn"
+              fi
+            fi
+            echo "::endgroup::"
+          done
+          [ -n "$avisos" ] && echo "::warning::Funcoes nao-criticas que falharam (provavelmente >limite de tamanho):$avisos"
+          if [ -n "$falhas_criticas" ]; then
+            echo "::error::Funcoes criticas falharam:$falhas_criticas"
+            exit 1
+          fi
+          echo "Deploy concluido (criticas OK)."
