@@ -14,7 +14,7 @@ import { Button } from '../components/ui/Button.jsx'
 import { KpiCard } from '../components/ui/KpiCard.jsx'
 import { MultiSelect } from '../components/ui/MultiSelect.jsx'
 import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
-import { apiFetch } from '../lib/api.js'
+import { apiFetch, resolveApiUrl } from '../lib/api.js'
 import { useUnreadCounts } from '../hooks/useUnreadCounts.js'
 import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
 import { useRegiaoGate } from '../contexts/RegiaoContext.jsx'
@@ -925,7 +925,7 @@ export function CRM() {
 
       // Auto-gerar relatório PDF ao criar imóvel
       if (isNew && tab === 'Imóveis' && saved.id) {
-        window.open(`/api/crm/imoveis/${saved.id}/relatorio`, '_blank')
+        window.open(resolveApiUrl(`/api/crm/imoveis/${saved.id}/relatorio`), '_blank')
         toast('Relatório PDF gerado automaticamente', 'success')
       }
 
@@ -1144,7 +1144,7 @@ export function CRM() {
               </div>
             )}
             <Button onClick={() => setEditing({})} icon={Plus}>Novo</Button>
-            <a href={`/api/crm/backup?download=true`} className="hidden sm:block px-3 py-2 bg-gray-100 text-gray-600 text-xs font-medium rounded-xl hover:bg-gray-200 transition-colors">
+            <a href={resolveApiUrl(`/api/crm/backup?download=true`)} className="hidden sm:block px-3 py-2 bg-gray-100 text-gray-600 text-xs font-medium rounded-xl hover:bg-gray-200 transition-colors">
               Backup
             </a>
           </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { FileDown, Sparkles, Trash2, Calendar, Loader2, Plus, RefreshCw, Zap, FileText } from 'lucide-react'
-import { apiFetch, getToken } from '../lib/api.js'
+import { apiFetch, getToken, resolveApiUrl } from '../lib/api.js'
 
 const GOLD = '#C9A84C'
 
@@ -67,7 +67,7 @@ export function RelatoriosAdmin() {
       await load()
       if (data.id) {
         const token = await getToken()
-        window.open(`/api/crm/relatorios-semanais/${data.id}/pdf?token=${token}`, '_blank')
+        window.open(resolveApiUrl(`/api/crm/relatorios-semanais/${data.id}/pdf?token=${token}`), '_blank')
       }
     } catch (e) {
       setError(e.message)
@@ -97,7 +97,7 @@ export function RelatoriosAdmin() {
 
   async function abrirPdf(id) {
     const token = await getToken()
-    window.open(`/api/crm/relatorios-semanais/${id}/pdf?token=${token}`, '_blank')
+    window.open(resolveApiUrl(`/api/crm/relatorios-semanais/${id}/pdf?token=${token}`), '_blank')
   }
 
   async function eliminar(id) {
@@ -156,8 +156,12 @@ export function RelatoriosAdmin() {
             </div>
           </div>
           <a
-            href={`/api/crm/relatorios/expansao-gaia?token=${getToken() || ''}`}
-            target="_blank"
+            href="#"
+            onClick={async (e) => {
+              e.preventDefault()
+              const t = await getToken()
+              window.open(resolveApiUrl(`/api/crm/relatorios/expansao-gaia?token=${t || ''}`), '_blank')
+            }}
             rel="noopener"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap"
             style={{ backgroundColor: GOLD, color: '#0d0d0d' }}

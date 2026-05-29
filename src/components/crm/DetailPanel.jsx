@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
 import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, RefreshCw, MoreVertical, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users } from 'lucide-react'
-import { apiFetch } from '../../lib/api.js'
+import { apiFetch, resolveApiUrl } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { PartilharAcesso } from '../PartilharAcesso.jsx'
 import { FollowUpsSection } from './FollowUpsSection.jsx'
@@ -660,7 +660,7 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
                 <p className="text-sm font-medium text-neutral-700">{d.label}</p>
               </div>
               <a
-                href={`/api/crm/imoveis/${imovelId}/documento/${d.tipo}?refresh=1${token ? `&token=${token}` : ''}`}
+                href={resolveApiUrl(`/api/crm/imoveis/${imovelId}/documento/${d.tipo}?refresh=1`) + (token ? `&token=${token}` : '')}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={e => e.stopPropagation()}
@@ -669,7 +669,7 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
                 Regerar
               </a>
               <a
-                href={`/api/crm/imoveis/${imovelId}/documento/${d.tipo}${qs}`}
+                href={resolveApiUrl(`/api/crm/imoveis/${imovelId}/documento/${d.tipo}`) + qs}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={e => e.stopPropagation()}
@@ -924,7 +924,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
           {type === 'Imóveis' && !editing && (
             <button onClick={async () => {
               const token = await getToken()
-              window.open(`/api/crm/imoveis/${id}/relatorio?token=${token}`, '_blank')
+              window.open(resolveApiUrl(`/api/crm/imoveis/${id}/relatorio?token=${token}`), '_blank')
             }}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer"
               style={{ backgroundColor: '#1a1a1a', color: '#C9A84C', border: '1px solid #C9A84C33' }}>
@@ -1446,7 +1446,7 @@ function RelatoriosTab({ reunioes, investidorNome }) {
                 <button onClick={async (e) => {
                   e.stopPropagation()
                   const token = await getToken()
-                  window.open(`/api/crm/reunioes/${r.id}/relatorio?token=${token}`, '_blank')
+                  window.open(resolveApiUrl(`/api/crm/reunioes/${r.id}/relatorio?token=${token}`), '_blank')
                 }}
                   className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-white border border-gray-200 text-gray-600 hover:border-gray-300">
                   <FileDown className="w-3 h-3" /> PDF

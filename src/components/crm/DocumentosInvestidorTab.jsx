@@ -4,7 +4,7 @@
  */
 import { useState } from 'react'
 import { FileText, Plus, Trash2, ExternalLink } from 'lucide-react'
-import { apiFetch, getToken } from '../../lib/api.js'
+import { apiFetch, getToken, resolveApiUrl } from '../../lib/api.js'
 import { fmtDate } from '../../constants.js'
 
 const TIPO_LABELS = {
@@ -135,7 +135,7 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
                     type="button"
                     onClick={async () => {
                       const token = await getToken()
-                      const url = `/api/crm/imoveis/${doc.imovel_id}/relatorio-investidor${token ? `?token=${token}` : ''}`
+                      const url = resolveApiUrl(`/api/crm/imoveis/${doc.imovel_id}/relatorio-investidor${token ? `?token=${token}` : ''}`)
                       window.open(url, '_blank')
                     }}
                     className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600"

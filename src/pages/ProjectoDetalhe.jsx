@@ -7,7 +7,7 @@ import {
   History, MessageSquare, TrendingUp, FileSpreadsheet, Pencil,
 } from 'lucide-react'
 import { ProjectoForm } from './Projectos.jsx'
-import { apiFetch, getToken } from '../lib/api.js'
+import { apiFetch, getToken, resolveApiUrl } from '../lib/api.js'
 import { Header } from '../components/layout/Header.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { Card } from '../components/ui/Card.jsx'
@@ -189,7 +189,7 @@ export function ProjectoDetalhe() {
             {!isReadOnly && !semFases && (
               <SyncGCalButton negocioId={id} />
             )}
-            <a href={`/api/crm/projetos/${id}/export-excel`} download
+            <a href={resolveApiUrl(`/api/crm/projetos/${id}/export-excel`)} download
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50">
               <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
             </a>
@@ -1012,7 +1012,7 @@ function TabDocumentos({ negocio, fases, readOnly }) {
   async function abrirPDF(url) {
     try {
       const token = await getToken().catch(() => null)
-      window.open(`${url}${token ? `?token=${token}` : ''}`, '_blank')
+      window.open(resolveApiUrl(`${url}${token ? `?token=${token}` : ''}`), '_blank')
     } catch (e) { alert('Erro: ' + e.message) }
   }
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { FileDown, FileText } from 'lucide-react'
-import { getToken } from '../../../lib/api.js'
+import { getToken, resolveApiUrl } from '../../../lib/api.js'
 import { ESTADOS, SEVERIDADE, estadoFromValido, DADOS_CHAVE_LABELS } from './documentacao.config.js'
 
 /**
@@ -26,7 +26,7 @@ export function Relatorio({ imovelId, analises, flags, inconsistencias, resumoEs
     try {
       const token = await getToken()
       const qs = token ? `&token=${token}` : ''
-      window.open(`/api/crm/imoveis/${imovelId}/documento/relatorio_documental?refresh=1${qs}`, '_blank')
+      window.open(resolveApiUrl(`/api/crm/imoveis/${imovelId}/documento/relatorio_documental?refresh=1`) + qs, '_blank')
     } finally {
       setExporting(false)
     }

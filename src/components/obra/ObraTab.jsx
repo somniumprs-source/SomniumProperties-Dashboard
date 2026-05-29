@@ -10,7 +10,7 @@ import { PisosManager } from './PisosManager.jsx'
 import { SeccaoCard } from './SeccaoCard.jsx'
 import { SECCOES, TIPOS_OBRA } from './seccoesConfig.js'
 import { calcOrcamentoObra, validarOrcamento } from '../../db/orcamentoObraEngine.js'
-import { getToken } from '../../lib/api.js'
+import { getToken, resolveApiUrl } from '../../lib/api.js'
 
 const GOLD = '#C9A84C'
 const BLACK = '#0d0d0d'
@@ -56,7 +56,7 @@ export function ObraTab({ imovelId, imovelNome }) {
 
   const abrirPDF = async () => {
     const token = await getToken()
-    const url = `/api/crm/imoveis/${imovelId}/orcamento-obra/pdf${token ? `?token=${token}` : ''}`
+    const url = resolveApiUrl(`/api/crm/imoveis/${imovelId}/orcamento-obra/pdf${token ? `?token=${token}` : ''}`)
     window.open(url, '_blank')
   }
 
