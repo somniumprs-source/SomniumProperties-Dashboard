@@ -21,7 +21,7 @@ import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
 import { syncForms, isConfigured as formsConfigured } from './formsSync.js'
-import { createImovelFolder, moveImovelFolder, uploadDocToFolder, isConfigured as driveConfigured } from './driveSync.js'
+import { createImovelFolder, moveImovelFolder, uploadDocToFolder, isConfigured as driveConfigured, downloadDriveFile } from './driveSync.js'
 import { generateDoc, getDocsForEstado, docEmbedeLocalizacao } from './pdfImovelDocs.js'
 import { onImovelCreated, listDocumentos, persistDocumento, streamPdfToResAndPersist } from './documentLifecycle.js'
 import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
@@ -1349,8 +1349,17 @@ router.post('/imoveis/:id/documentos/analise', uploadRateLimit, uploadImovel.sin
     if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
 
     let doc
-    try { doc = await resolveDocBuffer(req) }
-    catch (e) { return res.status(400).json({ error: e.message }) }
+    if (req.body?.driveFileId) {
+      // Documento que vive no Google Drive — download autenticado (o link público não serve).
+      try {
+        const df = await downloadDriveFile(req.body.driveFileId)
+        const ext = path.extname(df.name || req.body?.name || '').toLowerCase()
+        doc = { buffer: df.buffer, ext, name: df.name || req.body?.name || 'documento', contentType: df.mimeType }
+      } catch (e) { return res.status(400).json({ error: e.message }) }
+    } else {
+      try { doc = await resolveDocBuffer(req) }
+      catch (e) { return res.status(400).json({ error: e.message }) }
+    }
     if (!doc?.buffer?.length) return res.status(400).json({ error: 'Nenhum documento para analisar (PDF, JPG ou PNG).' })
 
     const meta = resolveDocMedia(doc.ext, req.body?.type, doc.contentType)

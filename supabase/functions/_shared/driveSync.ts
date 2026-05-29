@@ -274,3 +274,24 @@ export async function listImovelFiles(driveFolderId) {
     return { files: [], fotos: [], documentos: [], configured: false, error: e.message }
   }
 }
+
+/**
+ * Descarrega os bytes de um ficheiro do Drive (autenticado). Necessário para a
+ * análise por IA de documentos que vivem no Drive — o webContentLink não é
+ * acessível anonimamente em ficheiros privados.
+ */
+export async function downloadDriveFile(fileId) {
+  if (!isGoogleConfigured()) throw new Error('Google Drive não configurado')
+  const d = getDrive()
+  if (!d) throw new Error('Google Drive não configurado')
+  const meta = await d.files.get({ fileId, fields: 'name,mimeType', supportsAllDrives: true })
+  const res = await d.files.get(
+    { fileId, alt: 'media', supportsAllDrives: true },
+    { responseType: 'arraybuffer' },
+  )
+  return {
+    bytes: new Uint8Array(res.data),
+    name: meta.data.name,
+    mimeType: meta.data.mimeType || null,
+  }
+}

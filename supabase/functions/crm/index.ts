@@ -34,7 +34,7 @@ import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { syncAllFromNotion, syncFromNotion, syncToNotion } from "../_shared/sync.ts";
 import {
   createImovelFolder, isConfigured as driveConfigured, listImovelFiles,
-  moveImovelFolder, uploadDocToFolder,
+  moveImovelFolder, uploadDocToFolder, downloadDriveFile,
 } from "../_shared/driveSync.ts";
 import {
   autoOrganize, ensureLabels, isConfigured as gmailConfigured, organizeBatch, organizeMessage,
@@ -1492,6 +1492,7 @@ app.post("/imoveis/:id/documentos/analise", async (c: any) => {
     let bodyFotoId: string | null = null;
     let bodyTipoImovel: string | null = null;
     let bodyType: string | null = null;
+    let bodyDriveFileId: string | null = null;
     const contentType = c.req.header("content-type") || "";
     if (contentType.includes("application/json")) {
       const body = await c.req.json().catch(() => ({}));
@@ -1500,6 +1501,7 @@ app.post("/imoveis/:id/documentos/analise", async (c: any) => {
       bodyFotoId = typeof body.fotoId === "string" ? body.fotoId : null;
       bodyTipoImovel = typeof body.tipoImovel === "string" ? body.tipoImovel : null;
       bodyType = typeof body.type === "string" ? body.type : null;
+      bodyDriveFileId = typeof body.driveFileId === "string" ? body.driveFileId : null;
     } else {
       const form = await c.req.formData();
       const fichRaw = form.get("ficheiro");
@@ -1509,11 +1511,21 @@ app.post("/imoveis/:id/documentos/analise", async (c: any) => {
       bodyFotoId = typeof form.get("fotoId") === "string" ? form.get("fotoId") as string : null;
       bodyTipoImovel = typeof form.get("tipoImovel") === "string" ? form.get("tipoImovel") as string : null;
       bodyType = typeof form.get("type") === "string" ? form.get("type") as string : null;
+      bodyDriveFileId = typeof form.get("driveFileId") === "string" ? form.get("driveFileId") as string : null;
     }
 
     let doc;
-    try { doc = await resolveDocBuffer(file, bodyPath, bodyName); }
-    catch (e) { return c.json({ error: (e as Error).message }, 400); }
+    if (bodyDriveFileId) {
+      // Documento que vive no Google Drive — download autenticado (o link público não serve).
+      try {
+        const df = await downloadDriveFile(bodyDriveFileId);
+        const ext = (df.name?.match(/\.[a-z0-9]+$/i)?.[0] || "").toLowerCase();
+        doc = { bytes: df.bytes, ext, name: df.name || bodyName || "documento", contentType: df.mimeType };
+      } catch (e) { return c.json({ error: (e as Error).message }, 400); }
+    } else {
+      try { doc = await resolveDocBuffer(file, bodyPath, bodyName); }
+      catch (e) { return c.json({ error: (e as Error).message }, 400); }
+    }
     if (!doc?.bytes?.length) return c.json({ error: "Nenhum documento para analisar (PDF, JPG ou PNG)." }, 400);
 
     const meta = resolveDocMedia(doc.ext, bodyType, doc.contentType);

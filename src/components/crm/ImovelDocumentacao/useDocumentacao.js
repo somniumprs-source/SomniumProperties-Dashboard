@@ -25,13 +25,34 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
     /\.pdf$/i.test(f.name || '') ||
     (f.type?.startsWith('application/'))
 
+  // Documentos vêm de duas fontes: ficheiros locais (coluna fotos) e a subpasta
+  // "Documentos" do Google Drive do imóvel. Ambos aparecem na lista e podem ser
+  // analisados por IA (os do Drive são descarregados de forma autenticada no backend).
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const r = await apiFetch(`/api/crm/imoveis/${imovelId}`)
-      const imovel = await r.json()
+      const [imRes, drvRes] = await Promise.all([
+        apiFetch(`/api/crm/imoveis/${imovelId}`),
+        apiFetch(`/api/crm/imoveis/${imovelId}/drive-files`).catch(() => null),
+      ])
+      const imovel = await imRes.json()
       const fotos = imovel.fotos ? JSON.parse(imovel.fotos) : []
-      setDocs(fotos.filter(isDoc))
+      const locais = fotos.filter(isDoc).map(f => ({ ...f, source: 'local' }))
+
+      let drive = []
+      if (drvRes) {
+        const dd = await drvRes.json().catch(() => null)
+        drive = Array.isArray(dd?.documentos) ? dd.documentos.map(f => ({
+          id: `drive:${f.id}`,
+          driveFileId: f.id,
+          name: f.name,
+          path: f.viewLink || f.downloadLink || null,
+          type: f.mimeType,
+          source: 'drive',
+        })) : []
+      }
+      setDocs([...locais, ...drive])
+
       const an = imovel.documentacao_analise
       setAnalises(Array.isArray(an) ? an : (typeof an === 'string' ? safeParse(an) : []))
     } catch (e) { console.error('Erro a carregar documentação:', e) }
@@ -56,8 +77,13 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
       const r = await apiFetch(`/api/crm/imoveis/${imovelId}/fotos`, { method: 'POST', body: fd, timeoutMs: 120000 })
       const data = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(data.error || `Falha no upload (HTTP ${r.status})`)
-      // Refletir já o resultado devolvido pelo servidor (não depender só do reload).
-      if (Array.isArray(data.fotos)) setDocs(data.fotos.filter(isDoc))
+      // Refletir já os locais devolvidos pelo servidor, preservando os do Drive.
+      if (Array.isArray(data.fotos)) {
+        setDocs(prev => [
+          ...data.fotos.filter(isDoc).map(f => ({ ...f, source: 'local' })),
+          ...prev.filter(d => d.source === 'drive'),
+        ])
+      }
       await load()
     } catch (e) {
       const msg = e.name === 'AbortError' ? 'Upload demorou demasiado e foi cancelado. Tenta ficheiros mais pequenos.' : (e.message || 'Erro no upload')
@@ -72,10 +98,13 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
     setErros(prev => { const n = { ...prev }; delete n[doc.id]; return n })
     setAnalyzing(prev => new Set(prev).add(doc.id))
     try {
+      const payload = { name: doc.name, type: doc.type, fotoId: doc.id, tipoImovel: tipoImovelProp }
+      if (doc.source === 'drive') payload.driveFileId = doc.driveFileId
+      else payload.path = doc.path
       const r = await apiFetch(`/api/crm/imoveis/${imovelId}/documentos/analise`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         timeoutMs: 120000,
-        body: JSON.stringify({ path: doc.path, name: doc.name, type: doc.type, fotoId: doc.id, tipoImovel: tipoImovelProp }),
+        body: JSON.stringify(payload),
       })
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || 'Falha na análise')
@@ -96,7 +125,7 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
 
   const removerAnalise = useCallback(async (fotoId) => {
     try {
-      const r = await apiFetch(`/api/crm/imoveis/${imovelId}/documentos/analise/${fotoId}`, { method: 'DELETE' })
+      const r = await apiFetch(`/api/crm/imoveis/${imovelId}/documentos/analise/${encodeURIComponent(fotoId)}`, { method: 'DELETE' })
       const data = await r.json()
       if (Array.isArray(data.documentacao_analise)) setAnalises(data.documentacao_analise)
     } catch (e) { console.error('Erro a remover análise:', e) }

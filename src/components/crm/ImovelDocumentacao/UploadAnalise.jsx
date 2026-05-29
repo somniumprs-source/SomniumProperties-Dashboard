@@ -68,7 +68,12 @@ export function UploadAnalise({ docs, uploading, uploadErro, analyzing, erros, o
                   <FileText className="w-4 h-4" style={{ color: '#c0392b' }} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-neutral-700 truncate">{doc.name}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium text-neutral-700 truncate">{doc.name}</p>
+                    {doc.source === 'drive' && (
+                      <span className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">Drive</span>
+                    )}
+                  </div>
                   {analise && <p className="text-[11px]" style={{ color: '#888' }}>{analise.tipo_documento}</p>}
                 </div>
                 {doc.path && (

@@ -41,6 +41,23 @@ export function isConfigured() {
 }
 
 /**
+ * Descarrega os bytes de um ficheiro do Drive (autenticado). Necessário para a
+ * análise por IA de documentos que vivem no Drive — o webContentLink não é
+ * acessível anonimamente em ficheiros privados.
+ */
+export async function downloadDriveFile(fileId) {
+  if (!isGoogleConfigured()) throw new Error('Google Drive não configurado')
+  const drive = getDrive()
+  if (!drive) throw new Error('Google Drive não configurado')
+  const meta = await drive.files.get({ fileId, fields: 'name,mimeType', supportsAllDrives: true })
+  const res = await drive.files.get(
+    { fileId, alt: 'media', supportsAllDrives: true },
+    { responseType: 'arraybuffer' },
+  )
+  return { buffer: Buffer.from(res.data), name: meta.data.name, mimeType: meta.data.mimeType || null }
+}
+
+/**
  * Upload de documento PDF para a pasta Documentos do imóvel no Drive.
  */
 export async function uploadDocToFolder(imovelId, pdfStream, fileName) {
