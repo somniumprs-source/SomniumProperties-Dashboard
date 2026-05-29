@@ -12,7 +12,7 @@
  */
 import PDFDocument from "./pdfkitGuard.ts"
 import { Buffer } from "node:buffer"
-import { LOGO_BLACK_PNG } from "./logoBlack.ts"
+import { LOGO_WHITE_PNG } from "./logoWhite.ts"
 import { calcOrcamentoObra, validarOrcamento, REGIMES_FISCAIS, SECCOES_ORDEM, SECCOES_LABELS } from "./orcamentoObraEngine.ts"
 
 const GOLD  = '#C9A84C'
@@ -57,7 +57,7 @@ export function generateOrcamentoObraPDF(imovel, orcamentoRow) {
   // ── Header ─────────────────────────────────────────────────
   doc.rect(0, 0, doc.page.width, 110).fill(BLACK)
   try {
-    doc.image(LOGO_BLACK_PNG, 50, 25, { height: 50 })
+    doc.image(LOGO_WHITE_PNG, 50, 25, { height: 50 })
   } catch {
     doc.fontSize(16).fillColor(GOLD).text('SOMNIUM PROPERTIES', 50, 40)
   }
@@ -71,10 +71,6 @@ export function generateOrcamentoObraPDF(imovel, orcamentoRow) {
   // ── Título do imóvel + regime fiscal ───────────────────────
   doc.fontSize(20).fillColor(BLACK).text(imovel.nome || 'Sem nome', 50, y)
   y += 28
-  if (imovel.morada) {
-    doc.fontSize(10).fillColor(GRAY).text(imovel.morada, 50, y)
-    y += 18
-  }
 
   // Badge do regime fiscal (v4)
   const regimeW = doc.widthOfString(regimeLabelStr) + 16

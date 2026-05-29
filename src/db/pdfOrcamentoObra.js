@@ -71,10 +71,6 @@ export function generateOrcamentoObraPDF(imovel, orcamentoRow) {
   // ── Título do imóvel + regime fiscal ───────────────────────
   doc.fontSize(20).fillColor(BLACK).text(imovel.nome || 'Sem nome', 50, y)
   y += 28
-  if (imovel.morada) {
-    doc.fontSize(10).fillColor(GRAY).text(imovel.morada, 50, y)
-    y += 18
-  }
 
   // Badge do regime fiscal (v4)
   const regimeW = doc.widthOfString(regimeLabelStr) + 16
