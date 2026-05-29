@@ -15,6 +15,7 @@ import { resolveDealData } from './dossier/dataResolver.js'
 import { computeMOIC, computePayback, formatMOIC, formatPayback } from './dossier/metrics.js'
 import { renderAssumptionsAndGlossary } from './dossier/sections/assumptionsGlossary.js'
 import { computeContentHash, shortHash } from './dossier/contentHash.js'
+import { CHECKLIST_SECTIONS, MEDICAO_COMPARTIMENTOS, OBRA_TRABALHOS, RELATORIO_OBRAS, DECISOES, GRAUS_OBRA, normalizeFicha } from '../constants/fichaVisitaSchema.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const STRESS_DIR = path.resolve(__dirname, '../../public/uploads/stress_tests')
@@ -1684,6 +1685,10 @@ function renderFichaVisita(b, im, analise = null) {
   const obraEst = a.obra_com_iva ?? im.custo_estimado_obra
   const roiEst = a.retorno_total ?? im.roi
   const roiAnuEst = a.retorno_anualizado ?? im.roi_anualizado
+  // Ficha preenchida (de uma visita) injectada em im._fichaVisita; quando ausente,
+  // a ficha sai como template em branco (comportamento original).
+  const fv = im._fichaVisita ? normalizeFicha(im._fichaVisita) : null
+  const chk = active => fv ? (active ? 'X' : '') : '□'
   b.header('IDENTIFICAÇÃO DO IMÓVEL')
   b.simpleTable([
     { label: 'Nome / Referência', value: im.nome },
@@ -1834,9 +1839,10 @@ function renderFichaVisita(b, im, analise = null) {
   }
 
   b.header('NOTAS DE CAMPO (PRÉ-VISITA)')
-  b.input('Impressão geral do contacto telefónico', '', { tall: true })
-  b.input('Pontos críticos a confirmar na visita', '', { tall: true })
-  b.input('Estratégia de negociação a adoptar', '', { tall: true })
+  const nc = fv?.preVisita?.notasCampo || {}
+  b.input('Impressão geral do contacto telefónico', nc.impressaoContacto || '', { tall: true })
+  b.input('Pontos críticos a confirmar na visita', nc.pontosCriticos || '', { tall: true })
+  b.input('Estratégia de negociação a adoptar', nc.estrategia || '', { tall: true })
   b.space(4)
 
   b.newPage()
