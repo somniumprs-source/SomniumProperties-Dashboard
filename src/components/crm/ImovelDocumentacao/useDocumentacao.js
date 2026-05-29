@@ -15,6 +15,7 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
   const [analises, setAnalises] = useState([])    // documentacao_analise
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [uploadErro, setUploadErro] = useState(null) // erro do último upload
   const [analyzing, setAnalyzing] = useState(() => new Set()) // fotoIds em análise
   const [erros, setErros] = useState({})          // { [fotoId]: mensagem }
 
@@ -42,17 +43,27 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
   // Upload: envia ficheiros já marcados como pertencentes à pasta "documentos".
   // O backend grava o folder na própria entrada (write único), evitando a race
   // de chamadas /mover em paralelo que sobrepunham o array e perdiam documentos.
+  // Timeout alargado (uploads de fotos/PDF grandes excediam os 30s default e
+  // abortavam sem feedback). Erros são expostos em vez de engolidos.
   const upload = useCallback(async (files) => {
     if (!files?.length) return
     setUploading(true)
+    setUploadErro(null)
     try {
       const fd = new FormData()
       fd.append('folder', 'documentos')
       for (const f of files) fd.append('fotos', f)
-      const r = await apiFetch(`/api/crm/imoveis/${imovelId}/fotos`, { method: 'POST', body: fd })
-      await r.json()
+      const r = await apiFetch(`/api/crm/imoveis/${imovelId}/fotos`, { method: 'POST', body: fd, timeoutMs: 120000 })
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(data.error || `Falha no upload (HTTP ${r.status})`)
+      // Refletir já o resultado devolvido pelo servidor (não depender só do reload).
+      if (Array.isArray(data.fotos)) setDocs(data.fotos.filter(isDoc))
       await load()
-    } catch (e) { console.error('Erro no upload:', e) }
+    } catch (e) {
+      const msg = e.name === 'AbortError' ? 'Upload demorou demasiado e foi cancelado. Tenta ficheiros mais pequenos.' : (e.message || 'Erro no upload')
+      setUploadErro(msg)
+      console.error('Erro no upload:', e)
+    }
     setUploading(false)
   }, [imovelId, load])
 
@@ -129,7 +140,7 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
   }, [docs, analises, flags, inconsistencias])
 
   return {
-    docs, analises, loading, uploading, analyzing, erros,
+    docs, analises, loading, uploading, uploadErro, analyzing, erros,
     upload, analisar, analisarTodos, removerAnalise, analiseDoFicheiro,
     flags, inconsistencias, resumoEstado, estadoFromValido, reload: load,
   }

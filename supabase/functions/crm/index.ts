@@ -15,7 +15,7 @@ import pool from "../_shared/pg.ts";
 import {
   Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas,
   ConsultorInteracoes, ConsultorFollowups, DocumentosInvestidor, Visitas,
-  Empreiteiros, getDashboardStats,
+  Empreiteiros, getDashboardStats, ensureColumn,
 } from "../_shared/crud.ts";
 import { getVisitasEnriquecidas, syncDataVisitaDerivada } from "../_shared/queries.ts";
 import {
@@ -1559,6 +1559,7 @@ app.post("/imoveis/:id/documentos/analise", async (c: any) => {
     };
 
     // Upsert por fotoId (uma análise por ficheiro carregado).
+    await ensureColumn("imoveis", "documentacao_analise JSONB DEFAULT '[]'");
     const atual = Array.isArray(imovel.documentacao_analise) ? imovel.documentacao_analise : [];
     const next = [...atual.filter((a: any) => !(entry.fotoId && a.fotoId === entry.fotoId)), entry];
     await Imoveis.update(id, { documentacao_analise: JSON.stringify(next) }, { regiaoActiva: c.get("regiaoActiva") });
@@ -1575,6 +1576,7 @@ app.delete("/imoveis/:id/documentos/analise/:fotoId", async (c: any) => {
   try {
     const imovel = await Imoveis.getById(c.req.param("id"));
     if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
+    await ensureColumn("imoveis", "documentacao_analise JSONB DEFAULT '[]'");
     const atual = Array.isArray(imovel.documentacao_analise) ? imovel.documentacao_analise : [];
     const next = atual.filter((a: any) => a.fotoId !== c.req.param("fotoId"));
     await Imoveis.update(c.req.param("id"), { documentacao_analise: JSON.stringify(next) }, { regiaoActiva: c.get("regiaoActiva") });

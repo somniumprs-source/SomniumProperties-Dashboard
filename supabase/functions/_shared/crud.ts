@@ -59,6 +59,20 @@ async function getColumns(table: string): Promise<Set<string>> {
   return set;
 }
 
+// Garante (idempotente) que uma coluna existe. Necessário porque o deploy só
+// publica Edge Functions — não aplica supabase/migrations. Colunas adicionadas
+// só pelo ALTER do pg.js (dev) podem não existir em produção; sem isto,
+// crud.update descarta o campo em silêncio (filtro tableCols.has). DDL é uma
+// constante controlada no código (sem input do utilizador).
+const _ensured = new Set<string>();
+export async function ensureColumn(table: string, columnDdl: string): Promise<void> {
+  const key = `${table}.${columnDdl}`;
+  if (_ensured.has(key)) return;
+  await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${columnDdl}`);
+  _ensured.add(key);
+  _columnsCache.delete(table); // forçar re-leitura das colunas na próxima escrita
+}
+
 interface ListOpts { limit?: number; offset?: number; sort?: string; filter?: Record<string, any> }
 interface RegiaoOpt { regiaoActiva?: string | null }
 

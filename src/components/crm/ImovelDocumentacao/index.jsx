@@ -49,6 +49,7 @@ export function ImovelDocumentacao({ imovelId, tipoImovel }) {
         <UploadAnalise
           docs={d.docs}
           uploading={d.uploading}
+          uploadErro={d.uploadErro}
           analyzing={d.analyzing}
           erros={d.erros}
           onUpload={d.upload}

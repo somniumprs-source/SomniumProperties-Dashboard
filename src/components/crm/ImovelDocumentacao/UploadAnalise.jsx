@@ -5,7 +5,7 @@ import { SEVERIDADE } from './documentacao.config.js'
 /**
  * Upload (drag & drop) + análise por IA de cada documento.
  */
-export function UploadAnalise({ docs, uploading, analyzing, erros, onUpload, onAnalisar, onAnalisarTodos, onRemoverAnalise, analiseDoFicheiro }) {
+export function UploadAnalise({ docs, uploading, uploadErro, analyzing, erros, onUpload, onAnalisar, onAnalisarTodos, onRemoverAnalise, analiseDoFicheiro }) {
   const [dragOver, setDragOver] = useState(false)
   const inputRef = useRef(null)
 
@@ -35,6 +35,13 @@ export function UploadAnalise({ docs, uploading, analyzing, erros, onUpload, onA
         <input ref={inputRef} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" className="hidden"
           onChange={e => { if (e.target.files?.length) onUpload(e.target.files); e.target.value = '' }} />
       </div>
+
+      {/* Erro de upload — antes era engolido em silêncio (utilizador via "nada guardado"). */}
+      {uploadErro && (
+        <div className="px-4 py-3 rounded-xl border border-red-100 bg-red-50">
+          <p className="text-xs text-red-700"><strong>Não foi possível guardar:</strong> {uploadErro}</p>
+        </div>
+      )}
 
       {docs.length > 0 && (
         <div className="flex items-center justify-between">
