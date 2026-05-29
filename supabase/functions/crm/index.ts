@@ -17,7 +17,7 @@ import {
   ConsultorInteracoes, ConsultorFollowups, DocumentosInvestidor, Visitas,
   Empreiteiros, getDashboardStats, ensureColumn,
 } from "../_shared/crud.ts";
-import { getVisitasEnriquecidas, syncDataVisitaDerivada } from "../_shared/queries.ts";
+import { getVisitasEnriquecidas, syncDataVisitaDerivada, getFichaVisitaParaImovel } from "../_shared/queries.ts";
 import {
   generateDoc, getDocsForEstado, docEmbedeLocalizacao, generateCompiledReport,
 } from "../_shared/pdfImovelDocs.ts";
@@ -649,6 +649,7 @@ crudRoutes("/imoveis", Imoveis, {
             const { rows: [a] } = await pool.query("SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1", [item.id]);
             analise = a;
           } catch { /* ignore */ }
+          if (tipo === "ficha_visita") { try { item._fichaVisita = await getFichaVisitaParaImovel(item.id); } catch { /* ignore */ } }
           await persistDocumento(item, tipo, { trigger: `estado:${body.estado}`, generatedBy: "system", analise });
           if (driveConfigured()) {
             const pdfDoc = await generateDoc(tipo, item, analise);

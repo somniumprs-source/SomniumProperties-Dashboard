@@ -16,7 +16,7 @@ const supabaseStorage = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABA
 export { supabaseStorage }
 import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, ConsultorFollowups, DocumentosInvestidor, Visitas, Empreiteiros, getDashboardStats } from './crud.js'
 import pool from './pg.js'
-import { getVisitasEnriquecidas, syncDataVisitaDerivada } from './queries.js'
+import { getVisitasEnriquecidas, syncDataVisitaDerivada, getFichaVisitaParaImovel } from './queries.js'
 import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
@@ -389,6 +389,7 @@ crudRoutes('/imoveis', Imoveis, {
         try {
           let analise = null
           try { const { rows: [a] } = await pool.query('SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1', [item.id]); analise = a } catch {}
+          if (tipo === 'ficha_visita') { try { item._fichaVisita = await getFichaVisitaParaImovel(item.id) } catch {} }
           await persistDocumento(item, tipo, { trigger: `estado:${body.estado}`, generatedBy: req.user?.email || 'system', analise })
           if (driveConfigured()) {
             const pdfDoc = await generateDoc(tipo, item, analise)

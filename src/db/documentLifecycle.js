@@ -18,6 +18,7 @@ import { createClient } from '@supabase/supabase-js'
 import { generateDoc } from './pdfImovelDocs.js'
 import { resolveDealData } from './dossier/dataResolver.js'
 import { computeContentHash, shortHash } from './dossier/contentHash.js'
+import { getFichaVisitaParaImovel } from './queries.js'
 import pool from './pg.js'
 
 // Labels usados pelo footer dos PDFs — espelha DOC_LABELS em pdfImovelDocs.js
@@ -192,6 +193,10 @@ export async function persistDocumento(imovel, tipo, { trigger, generatedBy = 's
     _documentId: shortDocId(imovel.id, tipo, version),
     _tipoLabel: TIPO_LABELS[tipo] || tipo,
     _pdfHashShort: pdfHashShort,
+  }
+  // Ficha de visita: pre-preencher o PDF com as respostas da visita mais recente.
+  if (tipo === 'ficha_visita') {
+    try { imForRender._fichaVisita = await getFichaVisitaParaImovel(imovel.id) } catch {}
   }
   const pdfDoc = await generateDoc(tipo, imForRender, analise)
   if (!pdfDoc) return null

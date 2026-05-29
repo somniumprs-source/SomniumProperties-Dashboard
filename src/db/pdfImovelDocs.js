@@ -1850,73 +1850,30 @@ function renderFichaVisita(b, im, analise = null) {
   b.note('B = Bom (sem intervenção)  ·  R = Razoável (intervenção ligeira)  ·  M = Mau (intervenção profunda)  ·  N/A = Não aplicável')
   b.space(4)
 
-  b.header('1. ESTRUTURA E EXTERIOR')
-  b.colTable(
-    [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
-    ['Fachada (reboco, pintura, fissuras)', 'Telhado / cobertura (telhas, isolamento)', 'Chaminés e saídas de ventilação', 'Terraço / varanda (impermeabilização)', 'Garagem / estacionamento coberto', 'Muros / vedação / portões', 'Logradouro / jardim / quintal', 'Fundações (assentamentos visíveis)', 'Caixas de estore exteriores'].map(item => ({ _values: [item, '□', '□', '□', ''] }))
-  )
-  b.space(4)
-
-  b.header('2. INTERIOR — COMPARTIMENTOS')
-  b.colTable(
-    [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
-    ['Hall de entrada', 'Sala de estar', 'Sala de jantar', 'Cozinha', 'Quarto 1 (suite)', 'Quarto 2', 'Quarto 3', 'WC 1', 'WC 2', 'Despensa / arrecadação', 'Corredor / circulação'].map(item => ({ _values: [item, '□', '□', '□', ''] }))
-  )
-  b.space(4)
-
-  b.header('3. PAREDES, TECTOS E PAVIMENTOS')
-  b.colTable(
-    [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
-    ['Paredes interiores (fissuras, humidade, bolor)', 'Tectos (manchas, infiltrações, deformações)', 'Pavimento sala / quartos (tipo e estado)', 'Pavimento cozinha (tipo e estado)', 'Pavimento WC (tipo e estado)', 'Rodapés e molduras', 'Portas interiores (funcionamento, estado)'].map(item => ({ _values: [item, '□', '□', '□', ''] }))
-  )
-  b.space(4)
-
-  b.header('4. INSTALAÇÕES TÉCNICAS')
-  b.colTable(
-    [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
-    ['Quadro eléctrico (disjuntores, diferencial, terra)', 'Tomadas e interruptores (quantidade, estado)', 'Iluminação (pontos de luz, funcionamento)', 'Canalização de água fria (pressão, material)', 'Canalização de água quente (pressão, material)', 'Esgotos (cheiros, escoamento, caixas de visita)', 'Esquentador / caldeira / bomba de calor', 'Aquecimento central (radiadores, piso radiante)', 'Ar condicionado (unidades, estado)', 'Instalação de gás (tipo, certificação)', 'Telecomunicações (fibra, TV cabo, tomadas)'].map(item => ({ _values: [item, '□', '□', '□', ''] }))
-  )
-  b.space(4)
-
-  b.header('5. CAIXILHARIA E ISOLAMENTO')
-  b.colTable(
-    [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
-    ['Janelas (material, vidro simples/duplo)', 'Estores / portadas (funcionamento)', 'Porta de entrada (segurança, estado)', 'Isolamento térmico (pontes térmicas visíveis)', 'Isolamento acústico (ruído exterior)', 'Humidade por condensação (paredes frias)'].map(item => ({ _values: [item, '□', '□', '□', ''] }))
-  )
-  b.space(4)
-
-  b.header('6. COZINHA — DETALHE')
-  b.colTable(
-    [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
-    ['Bancada (material, estado)', 'Armários superiores e inferiores', 'Equipamentos (forno, placa, exaustor)', 'Ponto de água (torneira, lava-louça)', 'Revestimento de parede (azulejo, estado)', 'Ventilação / exaustão'].map(item => ({ _values: [item, '□', '□', '□', ''] }))
-  )
-  b.space(4)
-
-  b.header('7. CASAS DE BANHO — DETALHE')
-  b.colTable(
-    [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
-    ['Louças sanitárias (sanita, bidé, lavatório)', 'Base de duche / banheira (impermeabilização)', 'Torneiras e misturadoras', 'Azulejos (estado, fissuras, juntas)', 'Ventilação (natural ou mecânica)', 'Espelho e acessórios'].map(item => ({ _values: [item, '□', '□', '□', ''] }))
-  )
-  b.space(4)
-
-  b.header('8. ENVOLVENTE E LOCALIZAÇÃO')
-  b.colTable(
-    [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]],
-    ['Vizinhança (tipo de zona, comércio, serviços)', 'Segurança da zona', 'Ruído (tráfego, vizinhos, indústria)', 'Transportes públicos (proximidade)', 'Estacionamento na envolvente', 'Orientação solar (nascente, poente)', 'Luminosidade natural dos compartimentos', 'Estado do prédio / condomínio (se aplicável)', 'Elevador (se aplicável)', 'Zonas comuns (se aplicável)'].map(item => ({ _values: [item, '□', '□', '□', ''] }))
-  )
-  b.space(4)
+  const colHeadersBRM = [['Elemento', 250], ['B', 40], ['R', 40], ['M', 40], ['Observações', 100]]
+  for (const sec of CHECKLIST_SECTIONS) {
+    const ans = fv?.checklists?.[sec.key] || []
+    b.header(sec.pdfHeader)
+    b.colTable(colHeadersBRM, sec.items.map((item, i) => {
+      const r = ans[i]?.rating || ''
+      const obs = ans[i]?.obs || ''
+      const obsCell = r === 'NA' ? (obs ? `N/A · ${obs}` : 'N/A') : obs
+      return { _values: [item, chk(r === 'B'), chk(r === 'R'), chk(r === 'M'), obsCell] }
+    }))
+    b.space(4)
+  }
 
   b.header('9. CONFIRMAÇÃO DE ÁREAS E MEDIÇÕES')
   b.note('Medir ou estimar as áreas reais e comparar com o anunciado / registado.')
   b.colTable(
     [['Compartimento', 200], ['Medição (m²)', 130], ['Observações', 150]],
-    ['Sala', 'Cozinha', 'Quarto 1', 'Quarto 2', 'Quarto 3', 'WC 1', 'WC 2', 'Corredor', 'Varanda / Terraço', 'Garagem'].map(item => ({ _values: [item, '', ''] }))
+    MEDICAO_COMPARTIMENTOS.map((item, i) => ({ _values: [item, fv?.medicoes?.[i]?.m2 || '', fv?.medicoes?.[i]?.obs || ''] }))
   )
   b.space(2)
   b.simpleTable([
     { label: 'Área Bruta Anunciada', value: im.area_bruta ? `${im.area_bruta} m²` : '—' },
-    { label: 'Área Bruta Medida / Estimada', value: '__________ m²' },
-    { label: 'Discrepância', value: '□ Sim  □ Não' },
+    { label: 'Área Bruta Medida / Estimada', value: fv?.areaMedida ? `${fv.areaMedida} m²` : '__________ m²' },
+    { label: 'Discrepância', value: fv ? (fv.discrepancia ? 'Sim' : 'Não') : '□ Sim  □ Não' },
   ])
   b.space(4)
 
@@ -1924,40 +1881,44 @@ function renderFichaVisita(b, im, analise = null) {
   b.note('Registo rápido dos trabalhos necessários observados na visita.')
   b.colTable(
     [['Trabalho', 230], ['Necessário?', 80], ['Grau', 80], ['Custo Est.', 90]],
-    ['Demolições e remoção de entulho', 'Estrutura / alvenaria / paredes', 'Cobertura / telhado', 'Canalização (água e esgotos)', 'Electricidade (quadro e instalação)', 'Revestimentos (pavimentos e paredes)', 'Cozinha completa', 'Casa(s) de banho completa(s)', 'Caixilharia (janelas e portas)', 'Pintura interior e exterior', 'Isolamento térmico / acústico', 'Ar condicionado / aquecimento', 'Arranjos exteriores / jardim', 'Outros'].map(item => ({ _values: [item, '□ S  □ N', '□ L  □ P', '€ _____'] }))
+    OBRA_TRABALHOS.map((item, i) => {
+      const o = fv?.estimativaObra?.[i]
+      const nec = fv ? (o?.necessario ? 'Sim' : 'Não') : '□ S  □ N'
+      const grau = fv ? (GRAUS_OBRA.find(g => g.key === o?.grau)?.label || '—') : '□ L  □ P'
+      const custo = fv ? (o?.custo ? `€ ${o.custo}` : '—') : '€ _____'
+      return { _values: [item, nec, grau, custo] }
+    })
   )
   b.note('L = Ligeira  ·  P = Profunda')
   b.space(2)
-  b.highlight('Total Estimado de Obra (campo)', '€ _______________')
+  b.highlight('Total Estimado de Obra (campo)', fv?.totalObra ? `€ ${fv.totalObra}` : '€ _______________')
   b.space(4)
 
   b.newPage()
   b.header('RELATÓRIO DE VISITA')
+  const rel = fv?.relatorio || {}
   b.subheader('Estado Real do Imóvel')
-  b.input('Descrição geral do estado encontrado', '', { tall: true })
+  b.input('Descrição geral do estado encontrado', rel.estadoReal || '', { tall: true })
   b.space(4)
   b.subheader('Obras Necessárias')
   b.colTable(
     [['Trabalho', 280], ['Custo Estimado', 200]],
-    ['Demolições e remoção', 'Estrutura / alvenaria', 'Canalização', 'Electricidade', 'Revestimentos / acabamentos', 'Cozinha e WC', 'Caixilharia', 'Pintura', 'Outros'].map(item => ({ _values: [item, '________________'] }))
+    RELATORIO_OBRAS.map((item, i) => ({ _values: [item, rel.obras?.[i]?.custo ? `€ ${rel.obras[i].custo}` : '________________'] }))
   )
   b.space(4)
   b.header('IMPRESSÃO GERAL')
-  b.input('Pontos fortes do imóvel', '', { tall: true })
-  b.input('Pontos fracos / riscos identificados', '', { tall: true })
-  b.input('Potencial de valorização', '', { tall: true })
+  b.input('Pontos fortes do imóvel', rel.pontosFortes || '', { tall: true })
+  b.input('Pontos fracos / riscos identificados', rel.pontosFracos || '', { tall: true })
+  b.input('Potencial de valorização', rel.potencial || '', { tall: true })
   b.space(4)
   b.header('DECISÃO')
-  b.simpleTable([
-    { label: '□  GO — Avançar para estudo de mercado e análise de rentabilidade', value: '' },
-    { label: '□  SEGUNDA VISITA — Necessita validação adicional (especificar)', value: '' },
-    { label: '□  PERITO — Necessita avaliação por engenheiro / arquitecto', value: '' },
-    { label: '□  STAND-BY — Aguardar documentação ou informação adicional', value: '' },
-    { label: '□  NO GO — Descartar (especificar motivo)', value: '' },
-  ])
+  b.simpleTable(DECISOES.map(d => ({
+    label: `${fv ? (rel.decisao === d.key ? '[X]' : '[  ]') : '□'}  ${d.label}`,
+    value: '',
+  })))
   b.space(4)
-  b.input('Justificação da decisão', '', { tall: true })
-  b.input('Próximos passos', '', { tall: true })
+  b.input('Justificação da decisão', rel.justificacao || '', { tall: true })
+  b.input('Próximos passos', rel.proximosPassos || '', { tall: true })
 }
 
 function renderResumoExecutivo(b, im, a, m) {

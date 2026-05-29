@@ -18,6 +18,7 @@
 import { generateDoc } from "./pdfImovelDocs.ts"
 import { resolveDealData } from "./dossier/dataResolver.ts"
 import { computeContentHash, shortHash } from "./dossier/contentHash.ts"
+import { getFichaVisitaParaImovel } from "./queries.ts"
 import pool from "./pg.ts"
 import { supabase } from "./storage.ts"
 import { streamToBuffer } from "./pdfkitGuard.ts"
@@ -148,6 +149,10 @@ export async function persistDocumento(imovel, tipo, opts = {}) {
     _documentId: shortDocId(imovel.id, tipo, version),
     _tipoLabel: TIPO_LABELS[tipo] || tipo,
     _pdfHashShort: pdfHashShort,
+  }
+  // Ficha de visita: pre-preencher o PDF com as respostas da visita mais recente.
+  if (tipo === "ficha_visita") {
+    try { imForRender._fichaVisita = await getFichaVisitaParaImovel(imovel.id) } catch { /* ignore */ }
   }
   const pdfDoc = await generateDoc(tipo, imForRender, analise)
   if (!pdfDoc) return null
