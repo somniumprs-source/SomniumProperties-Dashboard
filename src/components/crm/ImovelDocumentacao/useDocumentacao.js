@@ -39,29 +39,22 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
 
   useEffect(() => { load() }, [load])
 
-  // Upload: envia ficheiros, marca-os como pertencentes à pasta "documentos".
+  // Upload: envia ficheiros já marcados como pertencentes à pasta "documentos".
+  // O backend grava o folder na própria entrada (write único), evitando a race
+  // de chamadas /mover em paralelo que sobrepunham o array e perdiam documentos.
   const upload = useCallback(async (files) => {
     if (!files?.length) return
     setUploading(true)
     try {
-      const idsAntes = new Set(docs.map(d => d.id))
       const fd = new FormData()
+      fd.append('folder', 'documentos')
       for (const f of files) fd.append('fotos', f)
       const r = await apiFetch(`/api/crm/imoveis/${imovelId}/fotos`, { method: 'POST', body: fd })
-      const data = await r.json()
-      const todos = data.fotos || []
-      // Mover os ficheiros novos para a pasta "documentos" (classificação consistente).
-      const novos = todos.filter(f => !idsAntes.has(f.id) && !isDoc(f))
-      await Promise.all(novos.map(f =>
-        apiFetch(`/api/crm/imoveis/${imovelId}/fotos/${f.id}/mover`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ folder: 'documentos' }),
-        }).catch(() => null)
-      ))
+      await r.json()
       await load()
     } catch (e) { console.error('Erro no upload:', e) }
     setUploading(false)
-  }, [imovelId, docs, load])
+  }, [imovelId, load])
 
   // Analisa um documento via IA (endpoint backend → Claude). Opt-in, por ficheiro.
   const analisar = useCallback(async (doc) => {

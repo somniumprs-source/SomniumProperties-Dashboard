@@ -1191,6 +1191,7 @@ router.post('/imoveis/:id/fotos', uploadRateLimit, uploadImovel.array('fotos', 2
     const imovel = await Imoveis.getById(req.params.id)
     if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
 
+    const folder = req.body?.folder === 'documentos' ? 'documentos' : undefined
     const fotos = imovel.fotos ? JSON.parse(imovel.fotos) : []
     for (const file of req.files) {
       let filePath = `/uploads/imoveis/${file.filename}`
@@ -1220,6 +1221,7 @@ router.post('/imoveis/:id/fotos', uploadRateLimit, uploadImovel.array('fotos', 2
         type: file.mimetype,
         size: file.size,
         uploaded_at: new Date().toISOString(),
+        ...(folder ? { folder } : {}),
       })
     }
     await Imoveis.update(req.params.id, { fotos: JSON.stringify(fotos) })
