@@ -1,0 +1,7 @@
+{
+  "imports": {
+    "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@0.88.0",
+    "jose": "npm:jose@5",
+    "pg": "npm:pg@8.20.0"
+  }
+}

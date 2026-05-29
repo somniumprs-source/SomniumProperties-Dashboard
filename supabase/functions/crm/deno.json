@@ -1,0 +1,16 @@
+{
+  "imports": {
+    "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@0.88.0",
+    "@googleapis/drive": "npm:@googleapis/drive@20.2.0",
+    "@googleapis/gmail": "npm:@googleapis/gmail@16.1.2",
+    "@googleapis/sheets": "npm:@googleapis/sheets@13.0.2",
+    "@notionhq/client": "npm:@notionhq/client@2.2.15",
+    "@resvg/resvg-wasm": "npm:@resvg/resvg-wasm@2.6.2",
+    "docx": "npm:docx@9.6.1",
+    "exceljs": "npm:exceljs@4.4.0",
+    "google-auth-library": "npm:google-auth-library@10.6.2",
+    "jose": "npm:jose@5",
+    "pdfkit": "npm:pdfkit@0.18.0",
+    "pg": "npm:pg@8.20.0"
+  }
+}
