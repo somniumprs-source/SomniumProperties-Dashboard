@@ -206,29 +206,10 @@ function urlFotoReduzida(url, isPng) {
   return `${base}/storage/v1/render/image/public/${objectPath}?width=${width}&quality=60&format=origin`
 }
 
-// Re-encoda uma imagem (sobretudo PNG, que não comprime por qualidade) para
-// JPEG pequeno. imagescript é JS puro (corre em Node e Deno). Import dinâmico
-// tardio + guardas: se a lib não carregar (Deno) ou falhar, devolve o buffer
-// original — degrada com segurança, nunca rebenta a geração. Pressupõe que a
-// imagem já vem com dimensão reduzida (urlFotoReduzida), pelo que o decode é barato.
-let _imagescript // undefined=por tentar · null=indisponível · Image=carregado
-async function carregarImagescript() {
-  if (_imagescript !== undefined) return _imagescript
-  try {
-    const m = await import('imagescript')
-    _imagescript = m.Image || m.default?.Image || null
-  } catch { _imagescript = null }
-  return _imagescript
-}
-async function reencodeParaJpeg(buf) {
-  try {
-    const Image = await carregarImagescript()
-    if (!Image) return buf
-    const img = await Image.decode(buf)
-    const out = Buffer.from(await img.encodeJPEG(60))
-    return (out.length > 2 && out[0] === 0xFF && out[1] === 0xD8) ? out : buf
-  } catch { return buf }
-}
+// Nota: a re-encodagem PNG->JPEG via imagescript foi removida. A lib pesava
+// ~10MB e estourava o limite de tamanho do bundle da Edge Function (HTTP 413 no
+// deploy). As fotos ja sao reduzidas pela transformacao do Supabase (urlFotoReduzida:
+// resize + quality); o orcamento de bytes garante que o PDF nao fica grande demais.
 
 // Pré-carrega imagem de localização (URL Supabase ou path local) e
 // devolve novo objecto imóvel com `_localizacaoImgData` (Buffer) injectado.
@@ -296,7 +277,6 @@ async function preloadHeroFoto(imovel) {
       const localPath = path.resolve(__dirname, '../..', 'public', url.replace(/^\//, ''))
       if (existsSync(localPath)) buf = readFileSync(localPath)
     }
-    if (buf && isPngFoto) buf = await reencodeParaJpeg(buf)
     if (buf && (isPng(buf) || isJpeg(buf))) {
       return { ...imovel, _heroFotoData: buf }
     }
@@ -338,9 +318,6 @@ async function preloadFotosGaleria(imovel) {
       }
       let img = await normalizarImagemParaPdf(buf)
       if (!img) continue
-      // PNG não comprime por qualidade → re-encoda para JPEG pequeno, para
-      // caberem todas as fotos no orçamento (com fallback se a lib não estiver).
-      if (isPngFoto) img = await reencodeParaJpeg(img)
       // Inclui sempre a 1.ª; as seguintes só enquanto couberem no orçamento.
       if (carregadas.length > 0 && totalBytes + img.length > ORCAMENTO_BYTES) break
       carregadas.push({ ...foto, _data: img })
