@@ -768,12 +768,16 @@ export async function initSchema() {
         consultor_id TEXT REFERENCES consultores(id) ON DELETE SET NULL,
         resultado TEXT,
         notas TEXT,
+        ficha JSONB,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
       CREATE INDEX IF NOT EXISTS idx_visitas_imovel ON visitas(imovel_id);
       CREATE INDEX IF NOT EXISTS idx_visitas_data ON visitas(data_hora DESC);
       CREATE INDEX IF NOT EXISTS idx_visitas_estado ON visitas(estado);
+      -- Ficha de visita preenchivel (checklists B/R/M, medicoes, obra, relatorio).
+      -- Idempotente para BDs ja existentes que nao tinham a coluna.
+      ALTER TABLE visitas ADD COLUMN IF NOT EXISTS ficha JSONB;
 
       -- Backfill idempotente: para cada imovel com data_visita preenchida e
       -- SEM visitas registadas, criar uma. Datas no passado -> realizada;
