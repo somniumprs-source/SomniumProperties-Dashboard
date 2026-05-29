@@ -20,6 +20,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Fixado: a v2.102.0 (29-05-2026) passou a rejeitar bundles grandes
+          # com 413 "request entity too large" (ex: cron-reclassificacao 22MB),
+          # partindo o deploy. A v2.101.0 (a ultima que correu com sucesso) nao
+          # tem esse problema. Rever quando o Supabase corrigir em versoes futuras.
+          version: 2.101.0
       - name: Deploy todas as Edge Functions
         run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF"
