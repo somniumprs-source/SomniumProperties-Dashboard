@@ -206,28 +206,32 @@ function urlFotoReduzida(url, isPng) {
   return `${base}/storage/v1/render/image/public/${objectPath}?width=${width}&quality=60&format=origin`
 }
 
-// Re-encoda uma imagem (sobretudo PNG, que não comprime por qualidade) para
-// JPEG pequeno, para caberem TODAS as fotos no dossier sem o tornar pesado.
-// imagescript é JS puro/WASM (Node + Deno). Import dinâmico tardio + guardas:
-// se a lib não carregar ou falhar, devolve o buffer original (degrada com
-// segurança). Possível agora que cada função tem o seu deno.json (o bundle do
-// crm deixou de empacotar as deps de todas as funções), com folga para a lib.
-let _imagescript // undefined=por tentar · null=indisponível · Image=carregado
-async function carregarImagescript() {
-  if (_imagescript !== undefined) return _imagescript
+// PNG->JPEG via lib pura-JS leve (upng-js decode + jpeg-js encode), para caberem
+// TODAS as fotos no dossier sem o tornar pesado. Escolhidas por serem minusculas
+// (~150KB) ao contrario do imagescript (~10MB, estoirava o limite do bundle da
+// Edge Function). Import dinamico tardio + guardas: se as libs nao carregarem ou
+// falharem, devolve o buffer original (degrada com seguranca). Pressupoe imagem
+// ja reduzida (urlFotoReduzida), pelo que o decode e barato.
+let _imgLibs // undefined=por tentar · null=indisponivel · {UPNG,jpeg}=carregado
+async function carregarImgLibs() {
+  if (_imgLibs !== undefined) return _imgLibs
   try {
-    const m = await import('imagescript')
-    _imagescript = m.Image || m.default?.Image || null
-  } catch { _imagescript = null }
-  return _imagescript
+    const [upng, jpegMod] = await Promise.all([import('upng-js'), import('jpeg-js')])
+    const UPNG = upng.default || upng
+    const jpeg = jpegMod.default || jpegMod
+    _imgLibs = (UPNG?.decode && jpeg?.encode) ? { UPNG, jpeg } : null
+  } catch { _imgLibs = null }
+  return _imgLibs
 }
 async function reencodeParaJpeg(buf) {
   try {
-    const Image = await carregarImagescript()
-    if (!Image) return buf
-    const img = await Image.decode(buf)
-    const out = Buffer.from(await img.encodeJPEG(60))
-    return (out.length > 2 && out[0] === 0xFF && out[1] === 0xD8) ? out : buf
+    const libs = await carregarImgLibs()
+    if (!libs) return buf
+    const png = libs.UPNG.decode(buf)
+    const rgba = new Uint8Array(libs.UPNG.toRGBA8(png)[0])
+    const out = libs.jpeg.encode({ data: rgba, width: png.width, height: png.height }, 60).data
+    const jbuf = Buffer.from(out)
+    return (jbuf.length > 2 && jbuf[0] === 0xFF && jbuf[1] === 0xD8) ? jbuf : buf
   } catch { return buf }
 }
 
