@@ -1,7 +1,8 @@
-import { MapPin, Building2, ChevronDown } from 'lucide-react'
+import { MapPin, Building2, ChevronDown, Globe2 } from 'lucide-react'
 import { REGIAO_LABEL, REGIAO_LABEL_CURTA, REGIAO_COR } from '../constants.js'
 
-const ICONS = { Coimbra: MapPin, AMP: Building2 }
+const ICONS = { Coimbra: MapPin, AMP: Building2, Geral: Globe2 }
+const LABEL_TOGGLE = { Coimbra: 'Coimbra', AMP: 'Porto', Geral: 'Geral' }
 
 /**
  * Pequeno chip que mostra a região activa + permite reabrir o modal.
@@ -32,29 +33,30 @@ export function RegiaoBadge({ regiao, onTrocar, compact = false }) {
 }
 
 /**
- * Toggle Coimbra | AMP | Geral — para uso no Financeiro onde não há modal,
- * só seletor inline com 3 opções (geral = sem filtro). Recebe valor + setter.
+ * Toggle Coimbra | Porto | Geral — segmented control alinhado com o estilo
+ * Somnium (mesmo look-and-feel dos Tabs segmentados: fundo cinza claro,
+ * opção activa em preto com texto dourado). Geral = null = sem filtro.
  *
  *   <RegiaoToggle value={regiao} onChange={setRegiao} />
  */
 export function RegiaoToggle({ value, onChange, options = ['Coimbra', 'AMP', 'Geral'] }) {
   return (
-    <div className="inline-flex rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-0.5 text-xs">
+    <div className="inline-flex items-center gap-0.5 rounded-xl bg-gray-100 dark:bg-neutral-800 p-1">
       {options.map(o => {
         const active = (value || 'Geral') === o
-        const cor = REGIAO_COR[o]
+        const Icon = ICONS[o] || MapPin
         return (
           <button
             key={o}
             onClick={() => onChange(o === 'Geral' ? null : o)}
-            className={`px-3 py-1.5 rounded-md transition-all font-medium ${
+            className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-all ${
               active
-                ? 'bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white shadow-sm'
-                : 'text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-200'
+                ? 'bg-brand-dark text-brand-gold shadow-sm'
+                : 'bg-transparent text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-neutral-100 hover:bg-white/60 dark:hover:bg-neutral-700/60'
             }`}
-            style={active && cor ? { color: cor } : undefined}
           >
-            {o === 'AMP' ? 'AMP' : o}
+            <Icon className="w-3.5 h-3.5 shrink-0" />
+            <span>{LABEL_TOGGLE[o] || o}</span>
           </button>
         )
       })}
