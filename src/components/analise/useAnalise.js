@@ -5,13 +5,49 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { apiFetch } from '../../lib/api.js'
 
+const SAVE_DEBOUNCE_MS = 1200
+
 export function useAnalise(imovelId) {
   const [analises, setAnalises] = useState([])
   const [selected, setSelected] = useState(null) // análise completa seleccionada
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  // { status: 'idle'|'saving'|'saved'|'error', at: Date|null, error: string|null }
+  const [lastSaveStatus, setLastSaveStatus] = useState({ status: 'idle', at: null, error: null })
   const saveTimer = useRef(null)
   const pendingFields = useRef({})
+  const selectedRef = useRef(null)
+  selectedRef.current = selected
+
+  const sendNow = useCallback(async (fields) => {
+    const id = selectedRef.current?.id
+    if (!id || !fields || Object.keys(fields).length === 0) return null
+    setSaving(true)
+    setLastSaveStatus({ status: 'saving', at: null, error: null })
+    try {
+      const r = await apiFetch(`/api/crm/analises/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fields),
+      })
+      if (!r.ok) {
+        const text = await r.text().catch(() => '')
+        throw new Error(`HTTP ${r.status} ${r.statusText} ${text.slice(0, 200)}`.trim())
+      }
+      const updated = await r.json()
+      setSelected(updated)
+      setAnalises(prev => prev.map(a => a.id === updated.id ? updated : a))
+      setLastSaveStatus({ status: 'saved', at: new Date(), error: null })
+      return updated
+    } catch (err) {
+      const msg = err?.message || String(err)
+      setLastSaveStatus({ status: 'error', at: new Date(), error: msg })
+      console.error('[useAnalise] save error:', msg)
+      return null
+    } finally {
+      setSaving(false)
+    }
+  }, [])
 
   // Carregar lista de análises
   const load = useCallback(async () => {
@@ -59,50 +95,39 @@ export function useAnalise(imovelId) {
 
   // Guardar (debounced — acumula campos no buffer para não perder edições rápidas)
   const guardar = useCallback((campos) => {
-    if (!selected?.id) return
+    if (!selectedRef.current?.id || !campos) return
     pendingFields.current = { ...pendingFields.current, ...campos }
     clearTimeout(saveTimer.current)
     setSaving(true)
-    saveTimer.current = setTimeout(async () => {
+    setLastSaveStatus(prev => prev.status === 'error' ? prev : { status: 'saving', at: null, error: null })
+    saveTimer.current = setTimeout(() => {
       const toSend = pendingFields.current
       pendingFields.current = {}
-      try {
-        const r = await apiFetch(`/api/crm/analises/${selected.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(toSend),
-        })
-        if (r.ok) {
-          const updated = await r.json()
-          setSelected(updated)
-          setAnalises(prev => prev.map(a => a.id === updated.id ? updated : a))
-        }
-      } catch {}
-      setSaving(false)
-    }, 1500)
-  }, [selected?.id])
+      saveTimer.current = null
+      void sendNow(toSend)
+    }, SAVE_DEBOUNCE_MS)
+  }, [sendNow])
 
-  // Guardar imediato (para acções explícitas)
+  // Força flush imediato do save debounced pendente. Retorna Promise que resolve quando o PUT terminar.
+  const flush = useCallback(async () => {
+    if (!saveTimer.current && Object.keys(pendingFields.current).length === 0) return null
+    clearTimeout(saveTimer.current)
+    saveTimer.current = null
+    const toSend = pendingFields.current
+    pendingFields.current = {}
+    if (Object.keys(toSend).length === 0) return null
+    return sendNow(toSend)
+  }, [sendNow])
+
+  // Guardar imediato (para acções explícitas — botão "Guardar", rename, etc.)
   const guardarAgora = useCallback(async (campos) => {
-    if (!selected?.id) return null
-    setSaving(true)
-    try {
-      const r = await apiFetch(`/api/crm/analises/${selected.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(campos),
-      })
-      if (r.ok) {
-        const updated = await r.json()
-        setSelected(updated)
-        setAnalises(prev => prev.map(a => a.id === updated.id ? updated : a))
-        setSaving(false)
-        return updated
-      }
-    } catch {}
-    setSaving(false)
-    return null
-  }, [selected?.id])
+    // Funde com pendentes para não perder edições em curso
+    const merged = { ...pendingFields.current, ...(campos || {}) }
+    pendingFields.current = {}
+    clearTimeout(saveTimer.current)
+    saveTimer.current = null
+    return sendNow(merged)
+  }, [sendNow])
 
   // Activar análise
   const activar = useCallback(async (analiseId) => {
@@ -141,11 +166,23 @@ export function useAnalise(imovelId) {
     } catch {}
   }, [load, selected?.id, analises])
 
-  // Cleanup timer
-  useEffect(() => () => clearTimeout(saveTimer.current), [])
+  // Cleanup timer + aviso ao fechar tab se houver save por terminar
+  useEffect(() => {
+    const onBeforeUnload = (e) => {
+      if (saveTimer.current || Object.keys(pendingFields.current).length > 0) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
+      clearTimeout(saveTimer.current)
+    }
+  }, [])
 
   return {
-    analises, selected, loading, saving,
-    select, criar, guardar, guardarAgora, activar, duplicar, apagar, reload: load,
+    analises, selected, loading, saving, lastSaveStatus,
+    select, criar, guardar, guardarAgora, flush, activar, duplicar, apagar, reload: load,
   }
 }

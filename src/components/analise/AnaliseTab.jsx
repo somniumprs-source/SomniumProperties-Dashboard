@@ -54,11 +54,19 @@ const BLACK = '#1A1A1A'
 
 export function AnaliseTab({ imovelId, imovelNome, imovel }) {
   const {
-    analises, selected, loading, saving,
-    select, criar, guardar, guardarAgora, activar, duplicar, apagar,
+    analises, selected, loading, saving, lastSaveStatus,
+    select, criar, guardar, guardarAgora, flush, activar, duplicar, apagar,
   } = useAnalise(imovelId)
 
   const [subTab, setSubTab] = useState('Calculadora')
+
+  // Mudar de subTab obriga a flush — garante que edições debounced (Comparáveis, Calculadora)
+  // ficam persistidas antes do componente desmontar.
+  const changeSubTab = async (key) => {
+    if (key === subTab) return
+    try { await flush?.() } catch {}
+    setSubTab(key)
+  }
 
   if (loading) {
     return (
@@ -190,7 +198,7 @@ export function AnaliseTab({ imovelId, imovelNome, imovel }) {
           {SUB_TABS.map(t => (
             <button
               key={t.key}
-              onClick={() => setSubTab(t.key)}
+              onClick={() => changeSubTab(t.key)}
               className={`px-3 py-2 text-xs font-medium rounded-lg whitespace-nowrap transition-all ${
                 subTab === t.key
                   ? 'text-white shadow-sm'
@@ -219,7 +227,13 @@ export function AnaliseTab({ imovelId, imovelNome, imovel }) {
               <StressTests analise={selected} />
             )}
             {subTab === 'Comparáveis' && (
-              <Comparaveis analise={selected} imovel={imovel} onUpdate={guardarAgora} />
+              <Comparaveis
+                analise={selected}
+                imovel={imovel}
+                onUpdate={guardar}
+                flush={flush}
+                lastSaveStatus={lastSaveStatus}
+              />
             )}
             {subTab === 'CAEP' && (
               <CAEPParcerias analise={selected} onUpdate={guardarAgora} />

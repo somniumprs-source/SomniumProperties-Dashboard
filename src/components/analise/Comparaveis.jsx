@@ -7,9 +7,15 @@
  * Ajustes manuais: Localização, Idade, Conservação, Outros + 3 desagregados (Piso, Elevador, Garagem).
  */
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { ChevronDown, ChevronRight, Upload, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Upload, Trash2, Save, Check, AlertTriangle, Loader2 } from 'lucide-react'
 import { EUR } from '../../constants.js'
 import { apiFetch } from '../../lib/api.js'
+
+function formatTime(d) {
+  if (!d) return ''
+  try { return new Date(d).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) }
+  catch { return '' }
+}
 
 const PISO_OPCOES = ['Cave', 'R/C', '1.º Andar', '2.º Andar', '3.º Andar', '4.º Andar ou superior', 'Último Andar', 'Duplex', 'Outro']
 const ESTADO_OPCOES = ['Novo / Excelente estado', 'Reabilitado / Remodelado', 'Bom estado (usado)', 'Estado razoável (precisa de pequenas obras)', 'Degradado (precisa de obras de fundo)', 'Ruína / Para demolir']
@@ -81,7 +87,7 @@ function parseAndMigrate(raw) {
   return { _version: 2, meta: { ...DEFAULT_META }, tipologias: [] }
 }
 
-export function Comparaveis({ analise, imovel, onUpdate }) {
+export function Comparaveis({ analise, imovel, onUpdate, flush, lastSaveStatus }) {
   const [meta, setMeta] = useState(DEFAULT_META)
   const [tipologias, setTipologias] = useState([])
   const [tipCount, setTipCount] = useState(1)
@@ -91,6 +97,8 @@ export function Comparaveis({ analise, imovel, onUpdate }) {
   const [expandedAdj, setExpandedAdj] = useState(() => new Set())
   const [uploadingAlfredo, setUploadingAlfredo] = useState(false)
   const alfredoInputRef = useRef(null)
+  // Snapshot do conteúdo já enviado (evita writes no-op em re-mounts / loads)
+  const lastSentRef = useRef(null)
 
   useEffect(() => {
     const raw = analise?.comparaveis
@@ -101,17 +109,56 @@ export function Comparaveis({ analise, imovel, onUpdate }) {
     setMeta(obj.meta)
     setTipologias(obj.tipologias)
     setTipCount(obj.tipologias.length)
+    const normalized = JSON.stringify({ _version: 2, meta: obj.meta, tipologias: obj.tipologias })
+    lastSentRef.current = normalized
     // Auto-persistir se a estrutura veio do formato legacy (array) - garante que o
     // backend PDF passa a ler como objecto novo com meta na proxima geracao.
     if (wasLegacy && analise?.id) {
-      onUpdate({ comparaveis: JSON.stringify({ _version: 2, meta: obj.meta, tipologias: obj.tipologias }) })
+      onUpdate?.({ comparaveis: normalized })
     }
   }, [analise?.id])
 
   const persist = (nextMeta, nextTipologias) => {
     setMeta(nextMeta)
     setTipologias(nextTipologias)
-    onUpdate({ comparaveis: JSON.stringify({ _version: 2, meta: nextMeta, tipologias: nextTipologias }) })
+    const serialized = JSON.stringify({ _version: 2, meta: nextMeta, tipologias: nextTipologias })
+    if (serialized === lastSentRef.current) return // no-op, nao reescrever
+    lastSentRef.current = serialized
+    onUpdate?.({ comparaveis: serialized })
+  }
+
+  // Auto-flush ao sair da aba (subTab muda, painel fecha, troca de imóvel) ou ao esconder o separador do browser.
+  useEffect(() => {
+    if (typeof flush !== 'function') return undefined
+    const onHide = () => { if (document.visibilityState === 'hidden') flush() }
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      document.removeEventListener('visibilitychange', onHide)
+      flush()
+    }
+  }, [flush])
+
+  const guardarManual = async () => {
+    if (typeof flush === 'function') await flush()
+  }
+
+  const removeComp = (tIdx, cIdx) => {
+    const tip = tipologias[tIdx]
+    const target = tip?.comparaveis?.[cIdx]
+    const tag = (target?.descricao || target?.link || `#${cIdx + 1}`).toString().slice(0, 60)
+    if (!confirm(`Eliminar este comparável (${tag})?`)) return
+    const next = tipologias.map((t, i) => {
+      if (i !== tIdx) return t
+      const remaining = t.comparaveis.filter((_, j) => j !== cIdx)
+      // Mantém sempre 5 slots (preenche com vazios à direita), para a UI continuar uniforme.
+      const padded = remaining.concat(
+        Array(Math.max(0, 5 - remaining.length))
+          .fill(null)
+          .map(() => ({ ...EMPTY_COMP, ajustes: { ...EMPTY_COMP.ajustes } }))
+      )
+      return { ...t, comparaveis: padded }
+    })
+    persist(meta, next)
   }
 
   const updateMeta = (field, value) => {
@@ -313,8 +360,46 @@ export function Comparaveis({ analise, imovel, onUpdate }) {
     setExpandedAdj(next)
   }
 
+  const status = lastSaveStatus?.status || 'idle'
+  const statusAt = lastSaveStatus?.at
+  const statusErr = lastSaveStatus?.error
+
   return (
     <div className="space-y-6">
+      {/* Barra fixa: Guardar manual + Indicador de estado */}
+      <div className="sticky top-0 z-10 -mx-1 px-1">
+        <div className="flex items-center justify-between gap-3 rounded-xl bg-white border border-gray-200 shadow-sm px-3 py-2">
+          <div className="flex items-center gap-2 text-xs">
+            {status === 'saving' && (
+              <span className="inline-flex items-center gap-1.5 text-gray-500">
+                <Loader2 size={12} className="animate-spin" /> A guardar...
+              </span>
+            )}
+            {status === 'saved' && (
+              <span className="inline-flex items-center gap-1.5 text-green-600">
+                <Check size={12} /> Guardado{statusAt ? ` às ${formatTime(statusAt)}` : ''}
+              </span>
+            )}
+            {status === 'error' && (
+              <span className="inline-flex items-center gap-1.5 text-red-600" title={statusErr || ''}>
+                <AlertTriangle size={12} /> Erro a guardar — clique em "Guardar" para tentar de novo
+              </span>
+            )}
+            {status === 'idle' && (
+              <span className="text-gray-400">Alterações guardam automaticamente ao sair da aba</span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={guardarManual}
+            disabled={status === 'saving'}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50 transition-colors"
+          >
+            <Save size={12} /> Guardar
+          </button>
+        </div>
+      </div>
+
       {/* Bloco Metadados do Estudo */}
       <div className="rounded-xl border border-gray-200 overflow-hidden bg-gray-50">
         <button
@@ -603,10 +688,10 @@ export function Comparaveis({ analise, imovel, onUpdate }) {
                       </div>
                     </div>
 
-                    {/* Linha de chevrons + badge ajuste total */}
+                    {/* Linha de chevrons + badge ajuste total + eliminar */}
                     <div className="grid grid-cols-12 gap-2 items-center text-xs">
                       <span className="col-span-1" />
-                      <div className="col-span-10 flex items-center gap-3">
+                      <div className="col-span-9 flex items-center gap-3">
                         <button onClick={() => toggleAttrs(key)} className="text-[11px] text-gray-500 hover:text-gray-700 flex items-center gap-1">
                           {attrsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                           Atributos detalhados
@@ -615,8 +700,16 @@ export function Comparaveis({ analise, imovel, onUpdate }) {
                           {adjOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                           Ajustes desagregados
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => removeComp(tIdx, cIdx)}
+                          className="text-[11px] text-red-400 hover:text-red-600 inline-flex items-center gap-1"
+                          title="Eliminar este comparável"
+                        >
+                          <Trash2 size={12} /> Eliminar
+                        </button>
                       </div>
-                      <div className="col-span-1 text-right">
+                      <div className="col-span-2 text-right">
                         {ajusteTotal !== 0 && (
                           <span className={`text-[10px] font-mono ${ajusteTotal > 0 ? 'text-green-500' : 'text-red-500'}`}>
                             {ajusteTotal > 0 ? '+' : ''}{ajusteTotal.toFixed(1)}%
