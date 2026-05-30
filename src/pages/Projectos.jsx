@@ -208,11 +208,11 @@ export function Projectos() {
   useEffect(() => { if (projectos.length > 0) loadFases(projectos, filterCat) }, [projectos, filterCat])
   useEffect(() => {
     const qs = filterCat ? `?categoria=${encodeURIComponent(filterCat)}` : ''
-    apiFetch(`/api/crm/projetos/portfolio/kpis${qs}`)
+    apiFetch(`/api/crm/projetos/portfolio/kpis${qs}`, { regiao })
       .then(r => r.ok ? r.json() : null)
       .then(setPortfolio)
       .catch(() => {})
-  }, [filterCat])
+  }, [filterCat, regiao])
 
   // UX13: Keyboard shortcuts
   useEffect(() => {

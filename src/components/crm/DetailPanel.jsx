@@ -1580,6 +1580,83 @@ function Field({ label, value }) {
   )
 }
 
+// Mostra, na seccao Valores da ficha do imovel, os negocios de wholesaling
+// associados, com campo editavel para o valor da cedencia de posicao e o
+// lucro esperado calculado (cedencia − valor_proposta do imovel).
+function WholesalingValoresBlock({ negocios, valorProposta }) {
+  const list = Array.isArray(negocios) ? negocios.filter(n => n.categoria === 'Wholesalling') : []
+  const [drafts, setDrafts] = useState({})
+  const [saving, setSaving] = useState({})
+  useEffect(() => {
+    const next = {}
+    for (const n of list) next[n.id] = n.valor_cedencia_posicao ?? ''
+    setDrafts(next)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list.map(n => `${n.id}:${n.valor_cedencia_posicao ?? ''}`).join('|')])
+
+  async function commit(n) {
+    const raw = drafts[n.id]
+    const next = raw === '' || raw === null || raw === undefined ? null : Number(raw)
+    if (next === (n.valor_cedencia_posicao ?? null)) return
+    setSaving(s => ({ ...s, [n.id]: true }))
+    try {
+      await apiFetch(`/api/crm/negocios/${n.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ valor_cedencia_posicao: next }),
+      })
+    } catch (e) {
+      console.error('[wholesaling cedencia save]', e)
+    } finally {
+      setSaving(s => ({ ...s, [n.id]: false }))
+    }
+  }
+
+  return (
+    <div className="col-span-2 md:col-span-3 mt-2 pt-3 border-t border-gray-100">
+      <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Wholesaling — Cedência de Posição</p>
+      {list.length === 0 ? (
+        <p className="text-xs text-gray-400 italic">Sem negócios de wholesaling associados a este imóvel.</p>
+      ) : (
+        <div className="space-y-2">
+          {list.map(n => {
+            const ced = Number(drafts[n.id])
+            const compra = Number(valorProposta)
+            const lucro = Number.isFinite(ced) && Number.isFinite(compra) ? Math.max(0, ced - compra) : null
+            return (
+              <div key={n.id} className="bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <span className="text-sm font-medium text-indigo-800">{n.movimento}</span>
+                  {n.fase && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-white text-indigo-600 border border-indigo-200">{n.fase}</span>}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Valor Cedência (€)</p>
+                    <input
+                      type="number"
+                      value={drafts[n.id] ?? ''}
+                      onChange={e => setDrafts(d => ({ ...d, [n.id]: e.target.value === '' ? '' : +e.target.value }))}
+                      onBlur={() => commit(n)}
+                      disabled={saving[n.id]}
+                      className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Lucro Esperado</p>
+                    <div className="px-2 py-1.5 rounded-lg border border-transparent bg-white/60 text-sm font-mono font-semibold text-indigo-700">
+                      {lucro === null ? '—' : EUR(lucro)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function EF({ label, field, form, set, type = 'text', options }) {
   const inputClass = "w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
   return (
@@ -2052,6 +2129,7 @@ function ImovelEditSections({ data, form, setField }) {
       <EF label="VPT (€)" field="vpt" form={form} set={setField} type="number" />
       <EF label="IMI Anual (€)" field="imi_anual" form={form} set={setField} type="number" />
       <EF label="Condomínio Mensal (€)" field="condominio_mensal_anunciado" form={form} set={setField} type="number" />
+      <WholesalingValoresBlock negocios={data?.negocios} valorProposta={form.valor_proposta} />
     </Section>
 
     {/* 5. Situação Legal e Fiscal */}

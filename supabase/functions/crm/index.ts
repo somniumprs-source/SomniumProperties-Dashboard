@@ -668,6 +668,10 @@ crudRoutes("/imoveis", Imoveis, {
         } catch (e) { console.error(`[docs] Erro ${tipo}:`, (e as Error).message); }
       }
     }
+    // Wholesaling: se mudou valor_proposta, recompor lucro dos negocios de wholesaling deste imovel
+    if (body.valor_proposta !== undefined) {
+      await recomputeLucroWholesalingPorImovel(item.id).catch((e: any) => console.error("[wholesaling/recompute imovel]", (e as Error).message));
+    }
     // Auto-complete checklist: verificar campos preenchidos
     try {
       const merged = { ...item, ...body };
@@ -1063,17 +1067,71 @@ app.get("/consultores/enriched", async (c: any) => {
 
 crudRoutes("/consultores", Consultores);
 
+// Wholesaling: lucro esperado = valor_cedencia_posicao − imovel.valor_proposta.
+// Persistido em negocios.lucro_estimado para os KPIs do portfolio (SUM) reflectirem.
+async function recomputeLucroWholesaling(negocioId: string) {
+  await ensureColumn("negocios", "valor_cedencia_posicao REAL");
+  const { rows } = await pool.query(
+    `SELECT n.valor_cedencia_posicao, im.valor_proposta
+       FROM negocios n
+       LEFT JOIN imoveis im ON im.id = n.imovel_id
+      WHERE n.id = $1 AND n.categoria = 'Wholesalling'`,
+    [negocioId],
+  );
+  if (!rows[0]) return;
+  const ced = Number(rows[0].valor_cedencia_posicao);
+  const compra = Number(rows[0].valor_proposta);
+  if (!Number.isFinite(ced) || !Number.isFinite(compra)) return;
+  await pool.query(
+    `UPDATE negocios SET lucro_estimado = $1, updated_at = NOW()::TEXT WHERE id = $2`,
+    [Math.max(0, ced - compra), negocioId],
+  );
+}
+
+async function recomputeLucroWholesalingPorImovel(imovelId: string) {
+  await ensureColumn("negocios", "valor_cedencia_posicao REAL");
+  const { rows } = await pool.query(
+    `SELECT id FROM negocios WHERE imovel_id = $1 AND categoria = 'Wholesalling'`,
+    [imovelId],
+  );
+  for (const r of rows) {
+    await recomputeLucroWholesaling(r.id).catch((e) => console.error("[wholesaling/recompute]", (e as Error).message));
+  }
+}
+
+// Middleware: garante a coluna valor_cedencia_posicao antes de qualquer POST/PUT
+// em /negocios — evita drop silencioso do campo no primeiro save quando a
+// coluna ainda nao existe em producao (migracoes nao sao auto-aplicadas).
+app.use("/negocios", async (c: any, next: any) => {
+  if (c.req.method === "POST" || c.req.method === "PUT" || c.req.method === "PATCH") {
+    await ensureColumn("negocios", "valor_cedencia_posicao REAL");
+  }
+  await next();
+});
+app.use("/negocios/*", async (c: any, next: any) => {
+  if (c.req.method === "POST" || c.req.method === "PUT" || c.req.method === "PATCH") {
+    await ensureColumn("negocios", "valor_cedencia_posicao REAL");
+  }
+  await next();
+});
+
 // Hooks dos negócios ligados — auto-criar fases conforme template (port de routes.js 904-916).
 crudRoutes("/negocios", Negocios, {
   onCreate: async (item: any) => {
     if ((FASES_POR_CATEGORIA as any)[item.categoria]) {
       await criarFasesProjecto(item.id, item.categoria).catch((e) => console.error("[fases] auto-criar:", e.message));
     }
+    if (item.categoria === "Wholesalling") {
+      await recomputeLucroWholesaling(item.id).catch((e) => console.error("[wholesaling/recompute]", (e as Error).message));
+    }
   },
   onUpdate: async (item: any, body: any) => {
     // Se categoria suporta template, criar fases (idempotente)
     if ((FASES_POR_CATEGORIA as any)[body.categoria]) {
       await criarFasesProjecto(item.id, body.categoria).catch((e) => console.error("[fases] auto-criar update:", e.message));
+    }
+    if (item.categoria === "Wholesalling" || body.categoria === "Wholesalling") {
+      await recomputeLucroWholesaling(item.id).catch((e) => console.error("[wholesaling/recompute]", (e as Error).message));
     }
   },
 });
@@ -4826,6 +4884,7 @@ app.get("/projetos/portfolio/kpis", async (c: any) => {
     const isRestricted = u && RECORD_RESTRICTED_ROLES.has(u.role);
 
     const categoria = (c.req.query("categoria") || "").trim();  // '' = todos os modelos de negócio
+    const regiaoActiva = c.get("regiaoActiva");
     const conds: string[] = [];
     const params: any[] = [];
     if (isRestricted) {
@@ -4835,6 +4894,10 @@ app.get("/projetos/portfolio/kpis", async (c: any) => {
     if (categoria) {
       params.push(categoria);
       conds.push(`n.categoria = $${params.length}`);
+    }
+    if (regiaoActiva) {
+      params.push(regiaoActiva);
+      conds.push(`n.regiao = $${params.length}`);
     }
     const filterNegocio = conds.length ? conds.join(" AND ") : "1=1";
 

@@ -398,6 +398,10 @@ crudRoutes('/imoveis', Imoveis, {
         } catch (e) { console.error(`[docs] Erro ${tipo}:`, e.message) }
       }
     }
+    // Wholesaling: se mudou valor_proposta, recompor lucro dos negocios de wholesaling deste imovel
+    if (body.valor_proposta !== undefined) {
+      await recomputeLucroWholesalingPorImovel(item.id).catch(e => console.error('[wholesaling/recompute imovel]', e.message))
+    }
     // Auto-complete checklist: verificar campos preenchidos
     try {
       const merged = { ...item, ...body }
@@ -912,16 +916,52 @@ async function criarFasesProjecto(negocioId, categoria) {
 // Alias para compatibilidade com chamadas existentes
 const criarFasesFixFlip = (negocioId) => criarFasesProjecto(negocioId, 'Fix and Flip')
 
+// Wholesaling: lucro esperado = valor_cedencia_posicao − imovel.valor_proposta.
+// Persistido em negocios.lucro_estimado para os KPIs do portfolio (SUM) reflectirem.
+async function recomputeLucroWholesaling(negocioId) {
+  const { rows } = await pool.query(
+    `SELECT n.valor_cedencia_posicao, im.valor_proposta
+       FROM negocios n
+       LEFT JOIN imoveis im ON im.id = n.imovel_id
+      WHERE n.id = $1 AND n.categoria = 'Wholesalling'`,
+    [negocioId],
+  )
+  if (!rows[0]) return
+  const ced = Number(rows[0].valor_cedencia_posicao)
+  const compra = Number(rows[0].valor_proposta)
+  if (!Number.isFinite(ced) || !Number.isFinite(compra)) return
+  await pool.query(
+    `UPDATE negocios SET lucro_estimado = $1, updated_at = NOW()::TEXT WHERE id = $2`,
+    [Math.max(0, ced - compra), negocioId],
+  )
+}
+
+async function recomputeLucroWholesalingPorImovel(imovelId) {
+  const { rows } = await pool.query(
+    `SELECT id FROM negocios WHERE imovel_id = $1 AND categoria = 'Wholesalling'`,
+    [imovelId],
+  )
+  for (const r of rows) {
+    await recomputeLucroWholesaling(r.id).catch(e => console.error('[wholesaling/recompute]', e.message))
+  }
+}
+
 crudRoutes('/negocios', Negocios, {
   onCreate: async (item) => {
     if (FASES_POR_CATEGORIA[item.categoria]) {
       await criarFasesProjecto(item.id, item.categoria).catch(e => console.error('[fases] auto-criar:', e.message))
+    }
+    if (item.categoria === 'Wholesalling') {
+      await recomputeLucroWholesaling(item.id).catch(e => console.error('[wholesaling/recompute]', e.message))
     }
   },
   onUpdate: async (item, body) => {
     // Se categoria suporta template, criar fases (idempotente)
     if (FASES_POR_CATEGORIA[body.categoria]) {
       await criarFasesProjecto(item.id, body.categoria).catch(e => console.error('[fases] auto-criar update:', e.message))
+    }
+    if (item.categoria === 'Wholesalling' || body.categoria === 'Wholesalling') {
+      await recomputeLucroWholesaling(item.id).catch(e => console.error('[wholesaling/recompute]', e.message))
     }
   },
 })
@@ -5094,6 +5134,10 @@ router.get('/projetos/portfolio/kpis', async (req, res) => {
     if (categoria) {
       params.push(categoria)
       conds.push(`n.categoria = $${params.length}`)
+    }
+    if (req.regiaoActiva) {
+      params.push(req.regiaoActiva)
+      conds.push(`n.regiao = $${params.length}`)
     }
     const filterNegocio = conds.length ? conds.join(' AND ') : '1=1'
 

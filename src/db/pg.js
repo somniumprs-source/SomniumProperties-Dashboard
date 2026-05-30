@@ -145,6 +145,7 @@ export async function initSchema() {
         lucro_real REAL DEFAULT 0,
         custo_real_obra REAL DEFAULT 0,
         capital_total REAL DEFAULT 0,
+        valor_cedencia_posicao REAL,
         n_investidores INTEGER DEFAULT 0,
         quota_somnium REAL DEFAULT 0,
         pagamento_em_falta INTEGER DEFAULT 1,
