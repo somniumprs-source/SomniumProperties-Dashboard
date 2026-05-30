@@ -3,7 +3,8 @@ import { Header } from '../components/layout/Header.jsx'
 import { PageSkeleton } from '../components/ui/Skeleton.jsx'
 import { apiFetch } from '../lib/api.js'
 import { useUrlState } from '../hooks/useUrlState.js'
-import { EUR, PCT, NUM } from '../constants.js'
+import { EUR, PCT, NUM, REGIOES } from '../constants.js'
+import { getUltimaRegiao } from '../contexts/RegiaoContext.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { KpiCard } from '../components/ui/KpiCard.jsx'
@@ -81,7 +82,11 @@ function calcHoras(inicio, fim) {
 }
 
 function TaskForm({ onSave, onCancel, initial }) {
-  const defaults = { tarefa: '', status: 'A fazer', categoria: '', inicio: '', fim: '', funcionario: FUNCIONARIOS[0], tempo_horas: '' }
+  const defaults = {
+    tarefa: '', status: 'A fazer', categoria: '', inicio: '', fim: '',
+    funcionario: FUNCIONARIOS[0], tempo_horas: '',
+    regiao: getUltimaRegiao() || 'Coimbra',
+  }
   const [f, setF] = useState(() => {
     if (!initial) return defaults
     return {
@@ -89,6 +94,7 @@ function TaskForm({ onSave, onCancel, initial }) {
       inicio: initial.inicio?.slice(0, 16) || '',
       fim: initial.fim?.slice(0, 16) || '',
       tempo_horas: initial.tempo_horas || '',
+      regiao: initial.regiao || defaults.regiao,
     }
   })
   const set = (k, v) => setF(p => {
@@ -130,6 +136,12 @@ function TaskForm({ onSave, onCancel, initial }) {
           <label className="text-xs text-gray-500 block mb-1">Status</label>
           <select value={f.status} onChange={e => set('status', e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
             {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Região</label>
+          <select value={f.regiao} onChange={e => set('regiao', e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+            {REGIOES.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
         </div>
         <div className="sm:col-span-1 xl:col-span-2">
@@ -308,7 +320,12 @@ export function Operacoes() {
     try {
       const r = await apiFetch('/api/crm/sync/tarefas', { method: 'POST' })
       const d = await r.json()
-      if (d.error) throw new Error(d.error)
+      if (d.error) {
+        const msg = /no notion db|notion db for tarefas/i.test(d.error)
+          ? 'Sync Notion nao configurada (falta NOTION_DB_TAREFAS no .env).'
+          : d.error
+        throw new Error(msg)
+      }
       await loadAll()
     } catch (e) { setError(e.message) }
     finally { setSyncing(false) }

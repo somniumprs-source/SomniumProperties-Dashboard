@@ -2695,19 +2695,20 @@ app.get("/tarefas", async (c: any) => {
 app.post("/tarefas", async (c: any) => {
   try {
     const body = await c.req.json().catch(() => ({}));
-    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas } = body;
+    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, regiao } = body;
     if (!tarefa) return c.json({ error: "tarefa é obrigatória" }, 400);
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const horas = tempo_horas != null && tempo_horas !== ""
       ? Number(tempo_horas)
       : (inicio && fim ? round2((new Date(fim).getTime() - new Date(inicio).getTime()) / 3600000) : 0);
+    const regiaoFinal = regiao || c.req.header("X-Regiao") || "Coimbra";
     await pool.query(
-      `INSERT INTO tarefas (id, tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [id, tarefa, status || "A fazer", categoria || null, inicio || null, fim || null, funcionario || null, horas, now, now],
+      `INSERT INTO tarefas (id, tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, regiao, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [id, tarefa, status || "A fazer", categoria || null, inicio || null, fim || null, funcionario || null, horas, regiaoFinal, now, now],
     );
-    return c.json({ id, tarefa, status: status || "A fazer", inicio, fim, funcionario, tempo_horas: horas }, 201);
+    return c.json({ id, tarefa, status: status || "A fazer", inicio, fim, funcionario, tempo_horas: horas, regiao: regiaoFinal }, 201);
   } catch (e: any) {
     return c.json({ error: e.message }, 500);
   }
@@ -2716,7 +2717,7 @@ app.post("/tarefas", async (c: any) => {
 app.put("/tarefas/:id", async (c: any) => {
   try {
     const body = await c.req.json().catch(() => ({}));
-    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas } = body;
+    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, regiao } = body;
     const now = new Date().toISOString();
     const horas = tempo_horas != null && tempo_horas !== ""
       ? Number(tempo_horas)
@@ -2730,6 +2731,7 @@ app.put("/tarefas/:id", async (c: any) => {
     if (fim !== undefined) { sets.push(`fim = $${params.length + 1}`); params.push(fim); }
     if (funcionario !== undefined) { sets.push(`funcionario = $${params.length + 1}`); params.push(funcionario); }
     if (horas !== undefined) { sets.push(`tempo_horas = $${params.length + 1}`); params.push(horas); }
+    if (regiao !== undefined) { sets.push(`regiao = $${params.length + 1}`); params.push(regiao); }
     if (sets.length === 0) return c.json({ error: "nada para actualizar" }, 400);
     sets.push(`updated_at = $${params.length + 1}`); params.push(now);
     params.push(c.req.param("id"));

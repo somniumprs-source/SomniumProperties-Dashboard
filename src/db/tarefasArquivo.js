@@ -8,7 +8,7 @@
  */
 import pool from './pg.js'
 
-const STATUS_CONCLUIDOS = ['Concluida', 'Concluída', 'Concluído', 'Concluido']
+const STATUS_CONCLUIDOS = ['Concluída']
 
 export async function arquivarTarefasAntigas(diasLimite = 90) {
   const limiteIso = new Date(Date.now() - diasLimite * 86400000).toISOString()

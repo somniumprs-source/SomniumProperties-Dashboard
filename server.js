@@ -4242,23 +4242,25 @@ app.post('/api/tarefas', async (req, res) => {
   try {
     const pgPool = (await import('./src/db/pg.js')).default
     const { pushTarefaToGCal } = await import('./src/db/calendarSync.js')
-    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas } = req.body
+    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, regiao } = req.body
     if (!tarefa) return res.status(400).json({ error: 'tarefa é obrigatória' })
     const id = (await import('crypto')).randomUUID()
     const now = new Date().toISOString()
-    const horas = tempo_horas || (inicio && fim
-      ? round2((new Date(fim) - new Date(inicio)) / 3600000) : 0)
+    const horas = (tempo_horas != null && tempo_horas !== '')
+      ? Number(tempo_horas)
+      : (inicio && fim ? round2((new Date(fim) - new Date(inicio)) / 3600000) : 0)
+    const regiaoFinal = regiao || req.headers['x-regiao'] || 'Coimbra'
     await pgPool.query(
-      `INSERT INTO tarefas (id, tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [id, tarefa, status || 'A fazer', categoria || null, inicio || null, fim || null, funcionario || null, horas, now, now]
+      `INSERT INTO tarefas (id, tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, regiao, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [id, tarefa, status || 'A fazer', categoria || null, inicio || null, fim || null, funcionario || null, horas, regiaoFinal, now, now]
     )
     // Sync automático com Google Calendar
     if (inicio) {
       pushTarefaToGCal(gcal, GCAL_ID, { id, tarefa, status: status || 'A fazer', inicio, fim, funcionario, tempo_horas: horas })
         .catch(e => console.error('[gcal-sync] auto-push:', e.message))
     }
-    res.status(201).json({ id, tarefa, status: status || 'A fazer', inicio, fim, funcionario, tempo_horas: horas })
+    res.status(201).json({ id, tarefa, status: status || 'A fazer', inicio, fim, funcionario, tempo_horas: horas, regiao: regiaoFinal })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -4266,10 +4268,11 @@ app.put('/api/tarefas/:id', async (req, res) => {
   try {
     const pgPool = (await import('./src/db/pg.js')).default
     const { updateGCalEvent, pushTarefaToGCal } = await import('./src/db/calendarSync.js')
-    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas } = req.body
+    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, regiao } = req.body
     const now = new Date().toISOString()
-    const horas = tempo_horas || (inicio && fim
-      ? round2((new Date(fim) - new Date(inicio)) / 3600000) : undefined)
+    const horas = (tempo_horas != null && tempo_horas !== '')
+      ? Number(tempo_horas)
+      : (inicio && fim ? round2((new Date(fim) - new Date(inicio)) / 3600000) : undefined)
     const sets = []; const params = []
     if (tarefa !== undefined) { sets.push(`tarefa = $${params.length + 1}`); params.push(tarefa) }
     if (status !== undefined) { sets.push(`status = $${params.length + 1}`); params.push(status) }
@@ -4278,6 +4281,7 @@ app.put('/api/tarefas/:id', async (req, res) => {
     if (fim !== undefined) { sets.push(`fim = $${params.length + 1}`); params.push(fim) }
     if (funcionario !== undefined) { sets.push(`funcionario = $${params.length + 1}`); params.push(funcionario) }
     if (horas !== undefined) { sets.push(`tempo_horas = $${params.length + 1}`); params.push(horas) }
+    if (regiao !== undefined) { sets.push(`regiao = $${params.length + 1}`); params.push(regiao) }
     sets.push(`updated_at = $${params.length + 1}`); params.push(now)
     params.push(req.params.id)
     const { rowCount } = await pgPool.query(
