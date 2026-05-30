@@ -14,19 +14,11 @@ export function Checklist({ docs, uploading, onUpload, onRemoverDoc }) {
   return (
     <div className="space-y-4">
       {/* Sumário */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-xl border border-neutral-100 bg-white px-4 py-3">
-          <p className="text-[10px] uppercase tracking-wide text-neutral-400">Obrigatórios</p>
-          <p className="text-2xl font-bold" style={{ color: resumo.obrigatoriosOk === resumo.obrigatoriosTotal ? '#27ae60' : '#c0392b' }}>
-            {resumo.obrigatoriosOk}<span className="text-neutral-400 text-base font-normal">/{resumo.obrigatoriosTotal}</span>
-          </p>
-        </div>
-        <div className="rounded-xl border border-neutral-100 bg-white px-4 py-3">
-          <p className="text-[10px] uppercase tracking-wide text-neutral-400">Opcionais</p>
-          <p className="text-2xl font-bold text-neutral-700">
-            {resumo.opcionaisOk}<span className="text-neutral-400 text-base font-normal">/{resumo.opcionaisTotal}</span>
-          </p>
-        </div>
+      <div className="rounded-xl border border-neutral-100 bg-white px-4 py-3">
+        <p className="text-[10px] uppercase tracking-wide text-neutral-400">Importados</p>
+        <p className="text-2xl font-bold text-neutral-700">
+          {resumo.importados}<span className="text-neutral-400 text-base font-normal">/{resumo.total}</span>
+        </p>
       </div>
 
       <p className="text-[11px] text-neutral-400">
@@ -55,13 +47,10 @@ function SlotRow({ item, doc, uploading, onUpload, onRemove }) {
   const [removing, setRemoving] = useState(false)
 
   const importado = !!doc
-  const emFaltaObrigatorio = !importado && item.obrigatoria
 
   const badge = importado
     ? { txt: 'Importado', cor: '#27ae60', bg: '#eafaf0', icon: CheckCircle2 }
-    : emFaltaObrigatorio
-      ? { txt: 'Em falta', cor: '#c0392b', bg: '#fdecea', icon: AlertCircle }
-      : { txt: 'Opcional', cor: '#9ca3af', bg: '#f3f4f6', icon: AlertCircle }
+    : { txt: 'Em falta', cor: '#9ca3af', bg: '#f3f4f6', icon: AlertCircle }
   const BadgeIcon = badge.icon
 
   async function handleRemove() {
@@ -80,14 +69,7 @@ function SlotRow({ item, doc, uploading, onUpload, onRemove }) {
     <div className="rounded-xl border border-neutral-100 bg-white px-4 py-3">
       <div className="flex items-center gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-semibold text-neutral-700 truncate">{item.titulo}</p>
-            {item.obrigatoria && (
-              <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-500 uppercase tracking-wide">
-                Obrigatório
-              </span>
-            )}
-          </div>
+          <p className="text-sm font-semibold text-neutral-700 truncate">{item.titulo}</p>
           <p className="text-[11px] text-neutral-400 mt-0.5">{item.descricao}</p>
           {doc && (
             <div className="flex items-center gap-2 mt-2">

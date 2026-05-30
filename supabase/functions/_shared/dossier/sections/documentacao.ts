@@ -2,15 +2,15 @@
 // A lista CHECKLIST_DOCUMENTACAO está duplicada por design — versão JS e versão Deno
 // têm de viver em árvores separadas. Sempre que mexer numa, mexer na outra.
 export const CHECKLIST_DOCUMENTACAO = [
-  { slot: "caderneta_predial", titulo: "Caderneta Predial Urbana", obrigatoria: true },
-  { slot: "certidao_permanente", titulo: "Certidão Permanente do Registo Predial", obrigatoria: true },
-  { slot: "licenca_utilizacao", titulo: "Licença de Utilização", obrigatoria: true },
-  { slot: "ficha_tecnica", titulo: "Ficha Técnica de Habitação", obrigatoria: true },
-  { slot: "certificado_energetico", titulo: "Certificado Energético", obrigatoria: true },
-  { slot: "planta_imovel", titulo: "Planta do imóvel", obrigatoria: false },
-  { slot: "cpcv", titulo: "Contrato Promessa Compra e Venda", obrigatoria: false },
-  { slot: "id_vendedor", titulo: "Documento de identificação do vendedor", obrigatoria: false },
-  { slot: "comprovativo_imi", titulo: "Comprovativo de IMI", obrigatoria: false },
+  { slot: "caderneta_predial", titulo: "Caderneta Predial Urbana" },
+  { slot: "certidao_permanente", titulo: "Certidão Permanente do Registo Predial" },
+  { slot: "licenca_utilizacao", titulo: "Licença de Utilização" },
+  { slot: "ficha_tecnica", titulo: "Ficha Técnica de Habitação" },
+  { slot: "certificado_energetico", titulo: "Certificado Energético" },
+  { slot: "planta_imovel", titulo: "Planta do imóvel" },
+  { slot: "cpcv", titulo: "Contrato Promessa Compra e Venda" },
+  { slot: "id_vendedor", titulo: "Documento de identificação do vendedor" },
+  { slot: "comprovativo_imi", titulo: "Comprovativo de IMI" },
 ];
 
 export function renderDocumentacaoChecklist(b: any, im: any) {
@@ -27,7 +27,7 @@ export function renderDocumentacaoChecklist(b: any, im: any) {
     const f = porSlot.get(item.slot);
     const isPdf = f && (/\.pdf$/i.test(f.name || "") || f.type === "application/pdf");
     const estado = !f
-      ? (item.obrigatoria ? "Em falta (obrigatório)" : "Em falta")
+      ? "Em falta"
       : isPdf ? "Anexo · PDF" : "Anexo · imagem (apenas listado)";
     return { label: item.titulo, value: estado };
   });

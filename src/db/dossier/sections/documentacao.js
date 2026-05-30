@@ -20,7 +20,7 @@ export function renderDocumentacaoChecklist(b, im) {
     const f = porSlot.get(item.slot)
     const isPdf = f && (/\.pdf$/i.test(f.name || '') || f.type === 'application/pdf')
     const estado = !f
-      ? (item.obrigatoria ? 'Em falta (obrigatório)' : 'Em falta')
+      ? 'Em falta'
       : isPdf ? 'Anexo · PDF' : 'Anexo · imagem (apenas listado)'
     return { label: item.titulo, value: estado }
   })
