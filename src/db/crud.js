@@ -57,6 +57,13 @@ function cleanFormData(data) {
     if (typeof value === 'string' && /^(custo|lucro|capital|ask_price|valor|roi|area|montante|score|comissao|pontuacao|tempo)/.test(key)) {
       const num = parseFloat(value)
       cleaned[key] = isNaN(num) ? null : num
+      continue
+    }
+    // Colunas JSONB chegam do GET /full já desserializadas (array/object).
+    // pg só serializa para JSONB se receber string — sem este stringify, o array
+    // vira "[object Object]" no SQL e Postgres rejeita "invalid input syntax for type json".
+    if (value !== null && typeof value === 'object' && !(value instanceof Date) && !Buffer.isBuffer(value)) {
+      cleaned[key] = JSON.stringify(value)
     }
   }
   return cleaned

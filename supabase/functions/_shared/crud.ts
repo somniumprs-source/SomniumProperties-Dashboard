@@ -41,6 +41,13 @@ function cleanFormData(data: Record<string, any>): Record<string, any> {
     if (typeof value === "string" && /^(custo|lucro|capital|ask_price|valor|roi|area|montante|score|comissao|pontuacao|tempo)/.test(key)) {
       const num = parseFloat(value);
       cleaned[key] = isNaN(num) ? null : num;
+      continue;
+    }
+    // Colunas JSONB chegam do GET /full já desserializadas (deno-postgres faz
+    // auto-parse). Quando o frontend re-envia, sem este stringify o pg manda
+    // o array como texto literal e PG rejeita "invalid input syntax for type json".
+    if (value !== null && typeof value === "object" && !(value instanceof Date) && !(value instanceof Uint8Array)) {
+      cleaned[key] = JSON.stringify(value);
     }
   }
   return cleaned;
