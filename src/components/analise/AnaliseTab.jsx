@@ -232,6 +232,7 @@ export function AnaliseTab({ imovelId, imovelNome, imovel }) {
                 imovel={imovel}
                 onUpdate={guardar}
                 flush={flush}
+                guardarAgora={guardarAgora}
                 lastSaveStatus={lastSaveStatus}
               />
             )}

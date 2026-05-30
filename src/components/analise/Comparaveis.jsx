@@ -87,7 +87,7 @@ function parseAndMigrate(raw) {
   return { _version: 2, meta: { ...DEFAULT_META }, tipologias: [] }
 }
 
-export function Comparaveis({ analise, imovel, onUpdate, flush, lastSaveStatus }) {
+export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, lastSaveStatus }) {
   const [meta, setMeta] = useState(DEFAULT_META)
   const [tipologias, setTipologias] = useState([])
   const [tipCount, setTipCount] = useState(1)
@@ -139,7 +139,13 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, lastSaveStatus }
   }, [flush])
 
   const guardarManual = async () => {
-    if (typeof flush === 'function') await flush()
+    // Força sempre um save explícito do snapshot actual — assim o user tem
+    // sempre feedback visual ("Guardado às HH:MM"), mesmo que o debounced
+    // já tenha disparado e não haja pendentes no buffer.
+    const snapshot = JSON.stringify({ _version: 2, meta, tipologias })
+    lastSentRef.current = snapshot
+    if (typeof guardarAgora === 'function') await guardarAgora({ comparaveis: snapshot })
+    else if (typeof flush === 'function') await flush()
   }
 
   const removeComp = (tIdx, cIdx) => {
