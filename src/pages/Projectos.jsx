@@ -8,9 +8,15 @@ import { Card } from '../components/ui/Card.jsx'
 import { Badge } from '../components/ui/Badge.jsx'
 import { Input, Select } from '../components/ui/Input.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
-import { useRegiaoGate } from '../contexts/RegiaoContext.jsx'
-import { RegiaoModal } from '../components/RegiaoModal.jsx'
-import { RegiaoBadge } from '../components/RegiaoBadge.jsx'
+import { RegiaoToggle } from '../components/RegiaoBadge.jsx'
+
+const REGIAO_STORAGE_KEY = 'somnium.regiao.projectos'
+function readRegiaoFromStorage() {
+  try {
+    const r = sessionStorage.getItem(REGIAO_STORAGE_KEY)
+    return r === 'Coimbra' || r === 'AMP' ? r : null
+  } catch { return null }
+}
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 
@@ -100,8 +106,17 @@ function faseLegacyParaKanban(faseLegacy, colunasDisponiveis) {
 export function Projectos() {
   const navigate = useNavigate()
   const { role, isInvestidor, isReadOnly } = useAuth()
-  const gate = useRegiaoGate('projectos')
-  const regiao = gate.regiao
+  // Filtro regional inline (Coimbra | AMP | Geral). Geral = null = ver todas.
+  // Partilha a chave de sessionStorage com o apiFetch para manter consistência
+  // em mutações disparadas por sub-componentes (DetailPanel etc.).
+  const [regiao, setRegiaoState] = useState(() => readRegiaoFromStorage())
+  const setRegiao = (r) => {
+    setRegiaoState(r)
+    try {
+      if (r) sessionStorage.setItem(REGIAO_STORAGE_KEY, r)
+      else sessionStorage.removeItem(REGIAO_STORAGE_KEY)
+    } catch {}
+  }
   const [kpis, setKpis] = useState(null)
   const [projectos, setProjectos] = useState([])
   const [fasesPorNegocio, setFasesPorNegocio] = useState({})  // negocioId → { faseAtualKey, percGlobal }
@@ -118,7 +133,6 @@ export function Projectos() {
 
   async function load() {
     setLoading(true); setError(null)
-    if (!regiao) { setLoading(false); return }
     try {
       const safe = (p) => p.then(r => r.ok ? r.json() : null).catch(() => null)
       // Investidores/parceiros usam endpoint filtrado por acessos
@@ -263,15 +277,12 @@ export function Projectos() {
 
   return (
     <>
-      <RegiaoModal gate={gate} contexto="O módulo Projectos" />
       <Header title="Projectos" subtitle="Gestão de projectos activos por fase de obra" onRefresh={load} loading={loading} />
 
       <div className="p-4 sm:p-6 flex flex-col gap-4">
-        {regiao && (
-          <div className="flex justify-end">
-            <RegiaoBadge regiao={regiao} onTrocar={gate.abrirModal} />
-          </div>
-        )}
+        <div className="flex justify-end">
+          <RegiaoToggle value={regiao} onChange={setRegiao} />
+        </div>
         {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>}
 
         {/* Caixas individuais por modelo de negócio — em série no topo, clicáveis */}

@@ -17,9 +17,18 @@ import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STA
 import { apiFetch, resolveApiUrl } from '../lib/api.js'
 import { useUnreadCounts } from '../hooks/useUnreadCounts.js'
 import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
-import { useRegiaoGate } from '../contexts/RegiaoContext.jsx'
-import { RegiaoModal } from '../components/RegiaoModal.jsx'
-import { RegiaoBadge } from '../components/RegiaoBadge.jsx'
+import { RegiaoToggle } from '../components/RegiaoBadge.jsx'
+
+// Sub-tabs regionais partilham as mesmas chaves de sessionStorage que o
+// apiFetch consulta via getRegiaoActivaFromStorage — não trocar o prefixo
+// sem actualizar os dois lados.
+function readRegiaoCRM(regionalKey) {
+  if (!regionalKey) return null
+  try {
+    const r = sessionStorage.getItem(`somnium.regiao.${regionalKey}`)
+    return r === 'Coimbra' || r === 'AMP' ? r : null
+  } catch { return null }
+}
 
 const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Construtores']
 // Sub-tabs que requerem distinção regional (modal ao entrar). Investidores
@@ -584,11 +593,19 @@ function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
 
 export function CRM() {
   const [tab, setTab] = useUrlState('tab', 'Imóveis')
-  // Gate regional — uma chave por sub-tab regional. Apenas abre modal em
-  // Imóveis/Consultores. Outras sub-tabs ignoram a região.
+  // Filtro regional inline (Coimbra | AMP | Geral). Uma chave de sessionStorage
+  // por sub-tab regional — partilhada com apiFetch.getRegiaoActivaFromStorage.
   const regionalKey = TABS_REGIONAIS.has(tab) ? tabKeyRegional(tab) : null
-  const gate = useRegiaoGate(regionalKey || 'crm-noop', { autoOpen: !!regionalKey })
-  const regiaoActiva = regionalKey ? gate.regiao : null
+  const [regiaoActiva, setRegiaoState] = useState(() => readRegiaoCRM(regionalKey))
+  useEffect(() => { setRegiaoState(readRegiaoCRM(regionalKey)) }, [regionalKey])
+  const setRegiaoActiva = (r) => {
+    setRegiaoState(r)
+    if (!regionalKey) return
+    try {
+      if (r) sessionStorage.setItem(`somnium.regiao.${regionalKey}`, r)
+      else sessionStorage.removeItem(`somnium.regiao.${regionalKey}`)
+    } catch {}
+  }
   const [data, setData] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -623,9 +640,7 @@ export function CRM() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    // Não carregar enquanto modal de região está aberto (evita 1 query com tudo
-    // antes do utilizador escolher e 2ª query com filtro depois).
-    if (regionalKey && !regiaoActiva) { setLoading(false); return }
+    // Geral (regiaoActiva = null) é válido — backend devolve sem filtro.
     try {
       if (search) {
         const params = new URLSearchParams({ search })
@@ -1025,12 +1040,11 @@ export function CRM() {
 
   return (
     <>
-      {regionalKey && <RegiaoModal gate={gate} contexto={`O CRM · ${tab}`} />}
       <Header title="CRM" subtitle="Gestão de dados — Base de dados local" onRefresh={load} loading={loading} breadcrumbs={breadcrumbs} />
       <div className="p-4 sm:p-6 flex flex-col gap-3 sm:gap-4">
-        {regionalKey && regiaoActiva && (
+        {regionalKey && (
           <div className="flex justify-end">
-            <RegiaoBadge regiao={regiaoActiva} onTrocar={gate.abrirModal} />
+            <RegiaoToggle value={regiaoActiva} onChange={setRegiaoActiva} />
           </div>
         )}
 

@@ -6,8 +6,17 @@ import { useKPIs } from '../hooks/useKPIs.js'
 import { KPISkeleton } from '../components/ui/Skeleton.jsx'
 import { apiFetch } from '../lib/api.js'
 import { EUR, statusColor } from '../constants.js'
+import { RegiaoToggle } from '../components/RegiaoBadge.jsx'
 
 const REFRESH_INTERVAL_MS = 30_000
+
+const REGIAO_STORAGE_KEY = 'somnium.regiao.dashboard'
+function readRegiaoFromStorage() {
+  try {
+    const r = sessionStorage.getItem(REGIAO_STORAGE_KEY)
+    return r === 'Coimbra' || r === 'AMP' ? r : null
+  } catch { return null }
+}
 
 const formatEur = EUR
 const statusFromValue = statusColor
@@ -16,7 +25,15 @@ const PULSE_COLOR = { excelente: '#22c55e', bom: '#C9A84C', 'atenção': '#f59e0
 const PULSE_BG = { excelente: 'rgba(34,197,94,0.1)', bom: 'rgba(201,168,76,0.1)', 'atenção': 'rgba(245,158,11,0.1)', 'crítico': 'rgba(239,68,68,0.1)' }
 
 export function Dashboard() {
-  const { kpis, loading, error, refresh: refreshKpis } = useKPIs()
+  const [regiao, setRegiaoState] = useState(() => readRegiaoFromStorage())
+  const setRegiao = (r) => {
+    setRegiaoState(r)
+    try {
+      if (r) sessionStorage.setItem(REGIAO_STORAGE_KEY, r)
+      else sessionStorage.removeItem(REGIAO_STORAGE_KEY)
+    } catch {}
+  }
+  const { kpis, loading, error, refresh: refreshKpis } = useKPIs(regiao)
   const [pulse, setPulse] = useState(null)
   const [metricas, setMetricas] = useState(null)
   const [lastRefresh, setLastRefresh] = useState(null)
@@ -25,13 +42,13 @@ export function Dashboard() {
   const refreshPulseMetricas = useCallback(async () => {
     try {
       const [pRes, mRes] = await Promise.all([
-        apiFetch('/api/weekly-pulse'),
-        apiFetch('/api/metricas'),
+        apiFetch('/api/weekly-pulse', { regiao }),
+        apiFetch('/api/metricas', { regiao }),
       ])
       if (pRes.ok) setPulse(await pRes.json())
       if (mRes.ok) setMetricas(await mRes.json())
     } catch { /* offline / network — manter ultima leitura */ }
-  }, [])
+  }, [regiao])
 
   const refreshAll = useCallback(async () => {
     if (inFlightRef.current) return
@@ -145,6 +162,9 @@ export function Dashboard() {
         loading={loading}
       />
       <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
+        <div className="flex justify-end">
+          <RegiaoToggle value={regiao} onChange={setRegiao} />
+        </div>
         {error && (
           <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">
             Erro ao carregar KPIs: {error}
