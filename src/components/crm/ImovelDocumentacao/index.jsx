@@ -1,15 +1,16 @@
 import { useState } from 'react'
-import { UploadCloud, FileBarChart2 } from 'lucide-react'
+import { UploadCloud, FileBarChart2, ListChecks } from 'lucide-react'
 import { useDocumentacao } from './useDocumentacao.js'
 import { UploadAnalise } from './UploadAnalise.jsx'
 import { Relatorio } from './Relatorio.jsx'
+import { Checklist } from './Checklist.jsx'
 
 /**
  * Módulo de gestão documental com interpretação por IA — Ficha do Imóvel.
- * Importação livre: 2 sub-secções — Upload & Análise · Relatório.
+ * 3 sub-secções — Checklist (slots canónicos) · Upload & Análise · Relatório.
  */
 export function ImovelDocumentacao({ imovelId, tipoImovel }) {
-  const [sub, setSub] = useState('upload')
+  const [sub, setSub] = useState('checklist')
   const d = useDocumentacao(imovelId, tipoImovel)
 
   if (d.loading) {
@@ -22,6 +23,7 @@ export function ImovelDocumentacao({ imovelId, tipoImovel }) {
   }
 
   const subs = [
+    { key: 'checklist', label: 'Checklist', icon: ListChecks },
     { key: 'upload', label: 'Upload & Análise', icon: UploadCloud },
     { key: 'relatorio', label: 'Relatório', icon: FileBarChart2 },
   ]
@@ -45,6 +47,14 @@ export function ImovelDocumentacao({ imovelId, tipoImovel }) {
         })}
       </div>
 
+      {sub === 'checklist' && (
+        <Checklist
+          docs={d.docs}
+          uploading={d.uploading}
+          onUpload={d.upload}
+          onRemoverDoc={d.removerDoc}
+        />
+      )}
       {sub === 'upload' && (
         <UploadAnalise
           docs={d.docs}

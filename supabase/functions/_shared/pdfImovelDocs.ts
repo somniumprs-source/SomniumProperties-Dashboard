@@ -16,6 +16,7 @@ import { calcOrcamentoObra, SECCOES_ORDEM, SECCOES_OBRA, SECCOES_LABELS } from "
 import { resolveDealData } from "./dossier/dataResolver.ts"
 import { computeMOIC, computePayback, formatMOIC, formatPayback } from "./dossier/metrics.ts"
 import { renderAssumptionsAndGlossary } from "./dossier/sections/assumptionsGlossary.ts"
+import { renderDocumentacaoChecklist } from "./dossier/sections/documentacao.ts"
 import { computeContentHash, shortHash } from "./dossier/contentHash.ts"
 import { CHECKLIST_SECTIONS, MEDICAO_COMPARTIMENTOS, OBRA_TRABALHOS, RELATORIO_OBRAS, DECISOES, GRAUS_OBRA, normalizeFicha } from "./fichaVisitaSchema.ts"
 
@@ -3102,6 +3103,48 @@ function renderDossierInvestidor(b, im, a) {
     renderAssumptionsAndGlossary(b, deal)
   } catch (e) {
     console.error('[dossier] glossario falhou:', e.message)
+  }
+
+  // Indice da documentacao anexa. As paginas fisicas dos PDFs sao acrescentadas
+  // ao buffer final por appendDocumentacaoChecklist (pdf-lib) em documentLifecycle.
+  try {
+    renderDocumentacaoChecklist(b, im)
+  } catch (e) {
+    console.error('[dossier] checklist documentacao falhou:', e.message)
+  }
+}
+
+/**
+ * Anexa ao buffer do dossier (gerado pelo pdfkit) todas as páginas dos PDFs
+ * importados na checklist de documentação. Imagens são ignoradas (já estão
+ * listadas no índice). Devolve novo buffer; em caso de erro devolve o original.
+ */
+export async function appendDocumentacaoChecklist(buffer: Uint8Array | any, imovel: any): Promise<any> {
+  try {
+    let fotos: any[] = []
+    try { fotos = typeof imovel.fotos === 'string' ? JSON.parse(imovel.fotos || '[]') : (imovel.fotos || []) } catch { fotos = [] }
+    const docs = fotos.filter((f: any) => f?.slot && f?.path && (/\.pdf$/i.test(f.name || '') || f.type === 'application/pdf'))
+    if (!docs.length) return buffer
+
+    const { PDFDocument } = await import('https://esm.sh/pdf-lib@1.17.1')
+    const merged = await PDFDocument.load(buffer)
+    for (const f of docs) {
+      try {
+        const r = await fetch(f.path)
+        if (!r.ok) { console.warn('[dossier-anexos] fetch falhou:', f.path, r.status); continue }
+        const bytes = new Uint8Array(await r.arrayBuffer())
+        const src = await PDFDocument.load(bytes, { ignoreEncryption: true })
+        const pages = await merged.copyPages(src, src.getPageIndices())
+        for (const p of pages) merged.addPage(p)
+      } catch (e: any) {
+        console.warn('[dossier-anexos] anexo falhou:', f.name, e.message)
+      }
+    }
+    const out = await merged.save()
+    return Buffer.from(out)
+  } catch (e: any) {
+    console.error('[dossier-anexos] merge global falhou:', e.message)
+    return buffer
   }
 }
 

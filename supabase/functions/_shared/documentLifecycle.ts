@@ -15,7 +15,7 @@
 //   - imoveis.onCreate         → gera Ficha do Imóvel
 //   - imoveis.onUpdate(estado) → regenera documentos da fase
 //   - manual                   → POST /api/crm/imoveis/:id/documentos/:tipo/regenerar
-import { generateDoc } from "./pdfImovelDocs.ts"
+import { generateDoc, appendDocumentacaoChecklist } from "./pdfImovelDocs.ts"
 import { resolveDealData } from "./dossier/dataResolver.ts"
 import { computeContentHash, shortHash } from "./dossier/contentHash.ts"
 import { getFichaVisitaParaImovel } from "./queries.ts"
@@ -156,7 +156,13 @@ export async function persistDocumento(imovel, tipo, opts = {}) {
   }
   const pdfDoc = await generateDoc(tipo, imForRender, analise)
   if (!pdfDoc) return null
-  const buf = Buffer.from(await streamToBuffer(pdfDoc))
+  let buf = Buffer.from(await streamToBuffer(pdfDoc))
+  // Dossier de Investimento: anexar PDFs importados na checklist de documentação
+  // ao fim do ficheiro entregue ao investidor (pdf-lib merge). Os outros tipos
+  // não levam anexos — appendDocumentacaoChecklist é noop sem documentos.
+  if (tipo === 'dossier_investidor') {
+    buf = await appendDocumentacaoChecklist(buf, imForRender)
+  }
 
   if (frozen) {
     const storagePath = `${imovel.id}/${tipo}_${slug}_v${version}.pdf`

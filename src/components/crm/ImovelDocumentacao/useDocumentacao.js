@@ -66,13 +66,16 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
   // de chamadas /mover em paralelo que sobrepunham o array e perdiam documentos.
   // Timeout alargado (uploads de fotos/PDF grandes excediam os 30s default e
   // abortavam sem feedback). Erros são expostos em vez de engolidos.
-  const upload = useCallback(async (files) => {
+  // O segundo argumento opcional { slot } liga o ficheiro a um item da checklist
+  // canónica de documentação (ver checklist.config.js).
+  const upload = useCallback(async (files, opts = {}) => {
     if (!files?.length) return
     setUploading(true)
     setUploadErro(null)
     try {
       const fd = new FormData()
       fd.append('folder', 'documentos')
+      if (opts.slot) fd.append('slot', opts.slot)
       for (const f of files) fd.append('fotos', f)
       const r = await apiFetch(`/api/crm/imoveis/${imovelId}/fotos`, { method: 'POST', body: fd, timeoutMs: 120000 })
       const data = await r.json().catch(() => ({}))
@@ -123,6 +126,22 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
     }
   }, [docs, analises, analisar])
 
+  // Remove um ficheiro da coluna fotos (e a análise associada, se existir).
+  // Usado pela checklist para "substituir" / "remover" um documento de um slot.
+  const removerDoc = useCallback(async (fotoId) => {
+    try {
+      const r = await apiFetch(`/api/crm/imoveis/${imovelId}/fotos/${encodeURIComponent(fotoId)}`, { method: 'DELETE' })
+      const data = await r.json().catch(() => ({}))
+      if (Array.isArray(data.fotos)) {
+        const locais = data.fotos.filter(isDoc).map(f => ({ ...f, source: 'local' }))
+        setDocs(prev => [...locais, ...prev.filter(d => d.source === 'drive')])
+      } else {
+        await load()
+      }
+      setAnalises(prev => prev.filter(a => a.fotoId !== fotoId))
+    } catch (e) { console.error('Erro a remover documento:', e) }
+  }, [imovelId, load])
+
   const removerAnalise = useCallback(async (fotoId) => {
     try {
       const r = await apiFetch(`/api/crm/imoveis/${imovelId}/documentos/analise/${encodeURIComponent(fotoId)}`, { method: 'DELETE' })
@@ -170,7 +189,7 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
 
   return {
     docs, analises, loading, uploading, uploadErro, analyzing, erros,
-    upload, analisar, analisarTodos, removerAnalise, analiseDoFicheiro,
+    upload, analisar, analisarTodos, removerDoc, removerAnalise, analiseDoFicheiro,
     flags, inconsistencias, resumoEstado, estadoFromValido, reload: load,
   }
 }

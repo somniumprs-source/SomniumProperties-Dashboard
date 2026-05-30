@@ -15,7 +15,7 @@
 //   - imoveis.onUpdate(estado) → regenera documentos da fase
 //   - manual                   → POST /api/crm/imoveis/:id/documentos/:tipo/regenerar
 import { createClient } from '@supabase/supabase-js'
-import { generateDoc } from './pdfImovelDocs.js'
+import { generateDoc, appendDocumentacaoChecklist } from './pdfImovelDocs.js'
 import { resolveDealData } from './dossier/dataResolver.js'
 import { computeContentHash, shortHash } from './dossier/contentHash.js'
 import { getFichaVisitaParaImovel } from './queries.js'
@@ -200,7 +200,13 @@ export async function persistDocumento(imovel, tipo, { trigger, generatedBy = 's
   }
   const pdfDoc = await generateDoc(tipo, imForRender, analise)
   if (!pdfDoc) return null
-  const buf = await streamToBuffer(pdfDoc)
+  let buf = await streamToBuffer(pdfDoc)
+  // Dossier de Investimento: anexar PDFs importados na checklist de documentação
+  // ao fim do ficheiro entregue ao investidor (pdf-lib merge). Os outros tipos
+  // não levam anexos — appendDocumentacaoChecklist é noop sem documentos.
+  if (tipo === 'dossier_investidor') {
+    buf = await appendDocumentacaoChecklist(buf, imForRender)
+  }
 
   if (frozen) {
     const storagePath = `${imovel.id}/${tipo}_${slug}_v${version}.pdf`

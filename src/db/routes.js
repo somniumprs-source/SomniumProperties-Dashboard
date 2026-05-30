@@ -1230,7 +1230,13 @@ router.post('/imoveis/:id/fotos', uploadRateLimit, uploadImovel.array('fotos', 2
     if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
 
     const folder = req.body?.folder === 'documentos' ? 'documentos' : undefined
-    const fotos = imovel.fotos ? JSON.parse(imovel.fotos) : []
+    // Slot opcional: liga o ficheiro a um item da checklist canónica de
+    // documentação (ver src/components/crm/ImovelDocumentacao/checklist.config.js).
+    // Quando vem slot, removemos do array as entradas anteriores desse slot —
+    // efeito "substituir" sem deixar duplicados na checklist.
+    const slot = req.body?.slot ? String(req.body.slot).trim() : undefined
+    let fotos = imovel.fotos ? JSON.parse(imovel.fotos) : []
+    if (slot) fotos = fotos.filter(f => f?.slot !== slot)
     for (const file of req.files) {
       let filePath = `/uploads/imoveis/${file.filename}`
 
@@ -1260,6 +1266,7 @@ router.post('/imoveis/:id/fotos', uploadRateLimit, uploadImovel.array('fotos', 2
         size: file.size,
         uploaded_at: new Date().toISOString(),
         ...(folder ? { folder } : {}),
+        ...(slot ? { slot } : {}),
       })
     }
     await Imoveis.update(req.params.id, { fotos: JSON.stringify(fotos) })
