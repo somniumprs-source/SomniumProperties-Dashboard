@@ -873,13 +873,23 @@ async function criarFasesProjecto(negocioId, categoria) {
 
   let fracaoId = null
   if (tipoProjeto === 'fracao_unica') {
-    fracaoId = randomUUID()
-    await pool.query(
-      `INSERT INTO projeto_fracoes (id, negocio_id, nome, tipo, ordem)
-       VALUES ($1, $2, $3, 'fracao', 0)
-       ON CONFLICT (negocio_id, nome) DO NOTHING`,
-      [fracaoId, negocioId, 'Fração Única']
+    // Reutilizar fração existente: o INSERT ... DO NOTHING não devolve nada
+    // quando há conflito, deixando-nos com um UUID órfão que rebenta a FK de
+    // projeto_fases. Procurar primeiro, inserir só se faltar.
+    const { rows: existeFrac } = await pool.query(
+      `SELECT id FROM projeto_fracoes WHERE negocio_id = $1 AND nome = $2 LIMIT 1`,
+      [negocioId, 'Fração Única']
     )
+    if (existeFrac.length > 0) {
+      fracaoId = existeFrac[0].id
+    } else {
+      fracaoId = randomUUID()
+      await pool.query(
+        `INSERT INTO projeto_fracoes (id, negocio_id, nome, tipo, ordem)
+         VALUES ($1, $2, $3, 'fracao', 0)`,
+        [fracaoId, negocioId, 'Fração Única']
+      )
+    }
   }
 
   for (let i = 0; i < template.length; i++) {
@@ -914,6 +924,33 @@ crudRoutes('/negocios', Negocios, {
       await criarFasesProjecto(item.id, body.categoria).catch(e => console.error('[fases] auto-criar update:', e.message))
     }
   },
+})
+
+// Recovery: criar fases para negócios cuja categoria tem template mas ficaram sem fases
+// (ex: mudança de categoria que falhou silenciosamente por causa do bug antigo do fracaoId).
+router.post('/negocios/recover-fases', async (req, res) => {
+  try {
+    const categorias = Object.keys(FASES_POR_CATEGORIA)
+    const { rows } = await pool.query(
+      `SELECT n.id, n.movimento, n.categoria
+         FROM negocios n
+         LEFT JOIN projeto_fases f ON f.negocio_id = n.id
+        WHERE n.categoria = ANY($1)
+          AND n.deleted_at IS NULL
+          AND f.id IS NULL`,
+      [categorias]
+    )
+    const resultados = []
+    for (const n of rows) {
+      try {
+        await criarFasesProjecto(n.id, n.categoria)
+        resultados.push({ id: n.id, movimento: n.movimento, categoria: n.categoria, ok: true })
+      } catch (e) {
+        resultados.push({ id: n.id, movimento: n.movimento, categoria: n.categoria, ok: false, error: e.message })
+      }
+    }
+    res.json({ total: rows.length, criados: resultados.filter(r => r.ok).length, resultados })
+  } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 // UX12 — Soft delete (lixeira): substituir DELETE para marcar deleted_at em vez de apagar
@@ -3632,8 +3669,14 @@ router.get('/projetos/:negocioId/fases', async (req, res) => {
 // POST: forçar criação de fases (caso negócio já exista sem elas)
 router.post('/projetos/:negocioId/fases/inicializar', async (req, res) => {
   try {
-    await criarFasesFixFlip(req.params.negocioId)
-    res.json({ ok: true })
+    const { rows } = await pool.query('SELECT categoria FROM negocios WHERE id = $1', [req.params.negocioId])
+    if (!rows.length) return res.status(404).json({ error: 'Negócio não encontrado' })
+    const categoria = rows[0].categoria
+    if (!FASES_POR_CATEGORIA[categoria]) {
+      return res.status(400).json({ error: `Categoria "${categoria || '—'}" não tem workflow de fases.` })
+    }
+    await criarFasesProjecto(req.params.negocioId, categoria)
+    res.json({ ok: true, categoria })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
