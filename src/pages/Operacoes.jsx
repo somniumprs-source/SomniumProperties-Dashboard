@@ -240,7 +240,6 @@ export function Operacoes() {
   const [taskFilter, setTaskFilter] = useState('semana')
   const [funcFilter, setFuncFilter] = useState('todos')
   const [viewMode, setViewMode] = useState('board')
-  const [showArchive, setShowArchive] = useState(false)
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [syncing, setSyncing] = useState(false)
 
@@ -281,7 +280,7 @@ export function Operacoes() {
     try {
       const method = editingTask ? 'PUT' : 'POST'
       const url = editingTask ? `/api/tarefas/${editingTask.id}` : '/api/tarefas'
-      const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+      const r = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
       const d = await r.json()
       if (d.error) throw new Error(d.error)
       setShowForm(false); setEditingTask(null)

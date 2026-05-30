@@ -2647,7 +2647,8 @@ app.get("/metricas", async (c: any) => {
 });
 
 // ════════════════════════════════════════════════════════════════
-// TAREFAS (apenas GET)
+// TAREFAS — CRUD (port de server.js:4216-4341)
+// Sync com Google Calendar e feito pela cron-sync-calendar (proximo tick).
 // ════════════════════════════════════════════════════════════════
 app.get("/tarefas", async (c: any) => {
   try {
@@ -2686,6 +2687,92 @@ app.get("/tarefas", async (c: any) => {
     params.push(cappedLimit, cappedOffset);
     const { rows } = await pool.query(q, params);
     return c.json({ data: rows, total: rows.length, limit: cappedLimit, offset: cappedOffset });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+app.post("/tarefas", async (c: any) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas } = body;
+    if (!tarefa) return c.json({ error: "tarefa é obrigatória" }, 400);
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const horas = tempo_horas != null && tempo_horas !== ""
+      ? Number(tempo_horas)
+      : (inicio && fim ? round2((new Date(fim).getTime() - new Date(inicio).getTime()) / 3600000) : 0);
+    await pool.query(
+      `INSERT INTO tarefas (id, tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [id, tarefa, status || "A fazer", categoria || null, inicio || null, fim || null, funcionario || null, horas, now, now],
+    );
+    return c.json({ id, tarefa, status: status || "A fazer", inicio, fim, funcionario, tempo_horas: horas }, 201);
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+app.put("/tarefas/:id", async (c: any) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas } = body;
+    const now = new Date().toISOString();
+    const horas = tempo_horas != null && tempo_horas !== ""
+      ? Number(tempo_horas)
+      : (inicio && fim ? round2((new Date(fim).getTime() - new Date(inicio).getTime()) / 3600000) : undefined);
+    const sets: string[] = [];
+    const params: any[] = [];
+    if (tarefa !== undefined) { sets.push(`tarefa = $${params.length + 1}`); params.push(tarefa); }
+    if (status !== undefined) { sets.push(`status = $${params.length + 1}`); params.push(status); }
+    if (categoria !== undefined) { sets.push(`categoria = $${params.length + 1}`); params.push(categoria); }
+    if (inicio !== undefined) { sets.push(`inicio = $${params.length + 1}`); params.push(inicio); }
+    if (fim !== undefined) { sets.push(`fim = $${params.length + 1}`); params.push(fim); }
+    if (funcionario !== undefined) { sets.push(`funcionario = $${params.length + 1}`); params.push(funcionario); }
+    if (horas !== undefined) { sets.push(`tempo_horas = $${params.length + 1}`); params.push(horas); }
+    if (sets.length === 0) return c.json({ error: "nada para actualizar" }, 400);
+    sets.push(`updated_at = $${params.length + 1}`); params.push(now);
+    params.push(c.req.param("id"));
+    const { rowCount } = await pool.query(
+      `UPDATE tarefas SET ${sets.join(", ")} WHERE id = $${params.length}`,
+      params,
+    );
+    if (!rowCount) return c.json({ error: "Não encontrada" }, 404);
+    return c.json({ ok: true });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+app.delete("/tarefas/:id", async (c: any) => {
+  try {
+    const { rowCount } = await pool.query("DELETE FROM tarefas WHERE id = $1", [c.req.param("id")]);
+    if (!rowCount) return c.json({ error: "Não encontrada" }, 404);
+    return c.json({ ok: true });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+app.post("/tarefas/arquivar-antigas", async (c: any) => {
+  try {
+    const { arquivarTarefasAntigas } = await import("../_shared/tarefasArquivo.ts");
+    const dias = Math.max(parseInt(c.req.query("dias") || "90") || 90, 30);
+    const arquivadas = await arquivarTarefasAntigas(dias);
+    return c.json({ ok: true, arquivadas, dias_limite: dias });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+app.post("/tarefas/desarquivar/:id", async (c: any) => {
+  try {
+    const { rowCount } = await pool.query(
+      "UPDATE tarefas SET arquivada = FALSE, arquivada_em = NULL WHERE id = $1",
+      [c.req.param("id")],
+    );
+    if (!rowCount) return c.json({ error: "Tarefa não encontrada" }, 404);
+    return c.json({ ok: true });
   } catch (e: any) {
     return c.json({ error: e.message }, 500);
   }
