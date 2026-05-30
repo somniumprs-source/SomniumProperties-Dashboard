@@ -41,13 +41,6 @@ function cleanFormData(data: Record<string, any>): Record<string, any> {
     if (typeof value === "string" && /^(custo|lucro|capital|ask_price|valor|roi|area|montante|score|comissao|pontuacao|tempo)/.test(key)) {
       const num = parseFloat(value);
       cleaned[key] = isNaN(num) ? null : num;
-      continue;
-    }
-    // Colunas JSONB chegam do GET /full já desserializadas (deno-postgres faz
-    // auto-parse). Quando o frontend re-envia, sem este stringify o pg manda
-    // o array como texto literal e PG rejeita "invalid input syntax for type json".
-    if (value !== null && typeof value === "object" && !(value instanceof Date) && !(value instanceof Uint8Array)) {
-      cleaned[key] = JSON.stringify(value);
     }
   }
   return cleaned;
@@ -64,6 +57,29 @@ async function getColumns(table: string): Promise<Set<string>> {
   const set = new Set<string>(rows.map((r: any) => r.column_name));
   _columnsCache.set(table, set);
   return set;
+}
+
+// Colunas JSONB precisam de JSON.stringify antes de irem para o pool.query —
+// o GET devolve já parsed (object/array) e deno-postgres não auto-serializa
+// para JSONB sem hint. Em contraste, colunas TEXT[] esperam array JS directo.
+const _jsonbColsCache = new Map<string, Set<string>>();
+async function getJsonbColumns(table: string): Promise<Set<string>> {
+  if (_jsonbColsCache.has(table)) return _jsonbColsCache.get(table)!;
+  const { rows } = await pool.query(
+    `SELECT column_name FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = $1 AND data_type IN ('json','jsonb')`,
+    [table],
+  );
+  const set = new Set<string>(rows.map((r: any) => r.column_name));
+  _jsonbColsCache.set(table, set);
+  return set;
+}
+
+function serializeForCol(value: any, isJsonb: boolean): any {
+  if (!isJsonb) return value;
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string") return value;
+  return JSON.stringify(value);
 }
 
 // Garante (idempotente) que uma coluna existe. Necessário porque o deploy só
@@ -133,11 +149,12 @@ function createCRUD(table: string, { searchFields = ["nome"], defaultSort = "cre
       if (table === "negocios" && !data.data) data.data = today;
 
       const tableCols = await getColumns(table);
+      const jsonbCols = await getJsonbColumns(table);
       const entries = Object.entries(data).filter(([k, v]) => v !== undefined && !SYSTEM_FIELDS.has(k) && tableCols.has(k));
       const cleanData = Object.fromEntries(entries);
       const cols = ["id", ...entries.map(([k]) => k), "created_at", "updated_at"];
       const vals = cols.map((_, i) => `$${i + 1}`);
-      const params = [id, ...entries.map(([, v]) => v), now, now];
+      const params = [id, ...entries.map(([k, v]) => serializeForCol(v, jsonbCols.has(k))), now, now];
       await pool.query(`INSERT INTO ${table} (${cols.join(", ")}) VALUES (${vals.join(", ")})`, params);
       auditLog(table, id, "INSERT", null, { id, ...cleanData }, regiaoActiva);
       return { id, ...cleanData, created_at: now, updated_at: now };
@@ -151,11 +168,12 @@ function createCRUD(table: string, { searchFields = ["nome"], defaultSort = "cre
       const SYSTEM_FIELDS = new Set(["id", "created_at", "updated_at", "synced_at", "notion_id"]);
 
       const tableCols = await getColumns(table);
+      const jsonbCols = await getJsonbColumns(table);
       const entries = Object.entries(data).filter(([k, v]) => v !== undefined && !SYSTEM_FIELDS.has(k) && tableCols.has(k));
       const cleanData = Object.fromEntries(entries);
       const sets = entries.map(([k], i) => `${k} = $${i + 1}`);
       sets.push(`updated_at = $${entries.length + 1}`);
-      const params = [...entries.map(([, v]) => v), now, id];
+      const params = [...entries.map(([k, v]) => serializeForCol(v, jsonbCols.has(k))), now, id];
       await pool.query(`UPDATE ${table} SET ${sets.join(", ")} WHERE id = $${entries.length + 2}`, params);
       auditLog(table, id, "UPDATE", existing[0], cleanData, regiaoActiva);
       return { ...existing[0], ...cleanData, updated_at: now };
