@@ -1,8 +1,10 @@
-// v30: interceptor de fetch passa a invalidar o cache do JWT em
-// onAuthStateChange e a recuperar de 401 com signOut+reload. Antes, em PWA
-// standalone, sessões dormentes ficavam com token expirado em cache local e o
-// Dashboard ficava preso em "A carregar dados..." sem hipótese de recuperar.
-const CACHE_NAME = 'somnium-crm-v30'
+// v31: o handler de fetch passa a ignorar requests cross-origin. Antes, as
+// chamadas reescritas para a Edge Function Supabase (https://*.functions.supabase.co/*)
+// caiam no ramo default (cache-first) e eram envolvidas em respondWith(); quando
+// a rede falhava, o utilizador via "FetchEvent.respondWith received an error:
+// TypeError: Load failed" em vez do erro de rede limpo. Agora o browser trata
+// nativamente tudo o que nao for same-origin.
+const CACHE_NAME = 'somnium-crm-v31'
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/icons/icon-192x192.png',
@@ -39,6 +41,11 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url)
 
   if (request.method !== 'GET') return
+
+  // Cross-origin (ex: Edge Functions Supabase): nao interceptar. O browser
+  // trata nativamente e os erros aparecem limpos ("TypeError: Load failed")
+  // em vez de envolvidos em "FetchEvent.respondWith received an error: ...".
+  if (url.origin !== self.location.origin) return
 
   // API CRM e afins: NUNCA servir cache — dados sempre frescos da rede.
   if (url.pathname.startsWith('/api')) return
