@@ -4,7 +4,6 @@ import { PageSkeleton } from '../components/ui/Skeleton.jsx'
 import { apiFetch } from '../lib/api.js'
 import { useUrlState } from '../hooks/useUrlState.js'
 import { EUR, PCT, NUM, REGIOES } from '../constants.js'
-import { getUltimaRegiao } from '../contexts/RegiaoContext.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { KpiCard } from '../components/ui/KpiCard.jsx'
@@ -27,6 +26,17 @@ const CATEGORIAS = [
 ]
 const STATUS_OPTIONS = ['A fazer', 'Em andamento', 'Concluída', 'Atrasada']
 const STATUS_COLOR = { 'A fazer': 'bg-gray-100 text-gray-600', 'Em andamento': 'bg-blue-100 text-blue-700', 'Concluída': 'bg-green-100 text-green-700', 'Atrasada': 'bg-red-100 text-red-600' }
+
+// Categorias cuja tarefa é geograficamente situada — só nestas aparece o selector
+// de região no TaskForm e contam para o filtro por região. As restantes guardam
+// regiao = NULL e aparecem em qualquer vista, independentemente do filtro.
+const CATEGORIAS_COM_REGIAO = new Set([
+  'Cold Call', 'Pesquisa de Imóveis', 'Estudo de Mercado',
+  'Follow Up Consultores', 'Contacto Consultores',
+  'Visita', 'Visita a Obra',
+  'Análise de Negócio', 'Proposta', 'Negociações',
+  'Apresentação de Negócios', 'Networking / Eventos',
+])
 
 const TABS = [
   { id: 'resumo',     label: 'Visão Geral' },
@@ -82,19 +92,15 @@ function calcHoras(inicio, fim) {
 }
 
 function TaskForm({ onSave, onCancel, initial }) {
-  const defaults = {
-    tarefa: '', status: 'A fazer', categoria: '', inicio: '', fim: '',
-    funcionario: FUNCIONARIOS[0], tempo_horas: '',
-    regiao: getUltimaRegiao() || 'Coimbra',
-  }
+  const defaults = { tarefa: '', status: 'A fazer', categoria: '', regiao: '', inicio: '', fim: '', funcionario: FUNCIONARIOS[0], tempo_horas: '' }
   const [f, setF] = useState(() => {
     if (!initial) return defaults
     return {
       ...defaults, ...initial,
+      regiao: initial.regiao || '',
       inicio: initial.inicio?.slice(0, 16) || '',
       fim: initial.fim?.slice(0, 16) || '',
       tempo_horas: initial.tempo_horas || '',
-      regiao: initial.regiao || defaults.regiao,
     }
   })
   const set = (k, v) => setF(p => {
@@ -104,8 +110,11 @@ function TaskForm({ onSave, onCancel, initial }) {
       const h = calcHoras(next.inicio, next.fim)
       if (h != null) next.tempo_horas = h
     }
+    // Categoria sem dimensão geográfica → apaga a região previamente escolhida
+    if (k === 'categoria' && !CATEGORIAS_COM_REGIAO.has(v)) next.regiao = ''
     return next
   })
+  const podeTerRegiao = CATEGORIAS_COM_REGIAO.has(f.categoria)
   const horasDisplay = f.tempo_horas || calcHoras(f.inicio, f.fim) || 0
 
   return (
@@ -138,12 +147,15 @@ function TaskForm({ onSave, onCancel, initial }) {
             {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
-        <div>
-          <label className="text-xs text-gray-500 block mb-1">Região</label>
-          <select value={f.regiao} onChange={e => set('regiao', e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-            {REGIOES.map(r => <option key={r} value={r}>{r}</option>)}
-          </select>
-        </div>
+        {podeTerRegiao && (
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Região</label>
+            <select value={f.regiao} onChange={e => set('regiao', e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+              <option value="">— (sem região)</option>
+              {REGIOES.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+        )}
         <div className="sm:col-span-1 xl:col-span-2">
           <label className="text-xs text-gray-500 block mb-1">Início da tarefa</label>
           <input type="datetime-local" value={f.inicio} onChange={e => set('inicio', e.target.value)}
@@ -251,6 +263,7 @@ export function Operacoes() {
   const [editingTask, setEditingTask] = useState(null)
   const [taskFilter, setTaskFilter] = useState('semana')
   const [funcFilter, setFuncFilter] = useState('todos')
+  const [regFilter, setRegFilter] = useState('todas')
   const [viewMode, setViewMode] = useState('board')
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [syncing, setSyncing] = useState(false)
@@ -358,8 +371,13 @@ export function Operacoes() {
     : taskFilter === 'pendentes' ? ativas
     : taskFilter === 'arquivo' ? concluídasPassadas
     : tarefas
-  const filteredTarefas = funcFilter === 'todos' ? byTimeFilter
+  const byFuncFilter = funcFilter === 'todos' ? byTimeFilter
     : byTimeFilter.filter(t => (t.funcionario || '').includes(funcFilter))
+  // Filtro por região: 'todas' mostra tudo (inclui sem região); caso contrário
+  // mostra exactamente a região escolhida. Tarefas sem região (investidores,
+  // equipa, gestão) só aparecem quando 'todas' está activo.
+  const filteredTarefas = regFilter === 'todas' ? byFuncFilter
+    : byFuncFilter.filter(t => t.regiao === regFilter)
 
   async function bulkDelete() {
     if (selectedIds.size === 0) return
@@ -521,6 +539,20 @@ export function Operacoes() {
                 </div>
               </div>
 
+              {/* Filtro por região — opcional. 'Todas' inclui tarefas sem região
+                  (investidores, equipa, gestão); chips por região mostram só essa. */}
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { id: 'todas', label: 'Todas as regiões' },
+                  ...REGIOES.map(r => ({ id: r, label: r })),
+                ].map(r => (
+                  <button key={r.id} onClick={() => { setRegFilter(r.id); setSelectedIds(new Set()) }}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border ${regFilter === r.id ? 'border-purple-300 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+
               {/* Barra de selecção — sempre visível */}
               <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200">
                 <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-500">
@@ -574,6 +606,7 @@ export function Operacoes() {
                               <div className="flex-1 min-w-0 cursor-pointer" onClick={() => { setEditingTask(t); setShowForm(false) }}>
                                 <p className="text-sm text-gray-700 font-medium leading-tight">{t.tarefa}</p>
                                 {t.categoria && <span className="text-[9px] px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded mt-1 inline-block">{t.categoria}</span>}
+                                {t.regiao && <span className="text-[9px] px-1.5 py-0.5 bg-purple-50 text-purple-700 rounded mt-1 ml-1 inline-block">{t.regiao}</span>}
                                 <div className="flex items-center justify-between mt-1.5">
                                   <span className="text-[10px] text-gray-400">{t.funcionario?.split(',')[0] || '—'}</span>
                                   <div className="flex items-center gap-2">
@@ -633,7 +666,10 @@ export function Operacoes() {
                             {t.tarefa}
                           </span>
                         </td>
-                        <td className="py-2 px-3 text-xs">{t.categoria ? <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded">{t.categoria}</span> : <span className="text-gray-300">—</span>}</td>
+                        <td className="py-2 px-3 text-xs">
+                          {t.categoria ? <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded">{t.categoria}</span> : <span className="text-gray-300">—</span>}
+                          {t.regiao && <span className="ml-1 px-1.5 py-0.5 bg-purple-50 text-purple-700 rounded">{t.regiao}</span>}
+                        </td>
                         <td className="py-2 px-3">
                           <select value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
                             className={`px-2 py-0.5 rounded text-xs font-medium border-0 cursor-pointer ${STATUS_COLOR[t.status] || 'bg-gray-100'}`}>

@@ -4216,7 +4216,7 @@ app.post('/api/calendar/events', async (req, res) => {
 app.get('/api/tarefas', async (req, res) => {
   try {
     const pgPool = (await import('./src/db/pg.js')).default
-    const { limit = 100, offset = 0, status, funcionario, since, until, incluir_arquivadas } = req.query
+    const { limit = 100, offset = 0, status, funcionario, since, until, incluir_arquivadas, regiao } = req.query
     const cappedLimit = Math.min(Math.max(+limit || 100, 1), 2000)
     const cappedOffset = Math.max(+offset || 0, 0)
     const incluirArquivadas = incluir_arquivadas === 'true' || incluir_arquivadas === '1'
@@ -4230,6 +4230,10 @@ app.get('/api/tarefas', async (req, res) => {
     if (funcionario) { conds.push(`funcionario ILIKE $${params.length + 1}`); params.push(`%${funcionario}%`) }
     if (since) { conds.push(`inicio >= $${params.length + 1}`); params.push(since) }
     if (until) { conds.push(`inicio <= $${params.length + 1}`); params.push(until) }
+    // Filtro por região: opcional. Tarefas sem região (categorias não-geográficas
+    // como Follow Up Investidores, Reunião de Equipa) não são apanhadas aqui;
+    // o filtro 'todas' no frontend é o que mostra esse conjunto.
+    if (regiao) { conds.push(`regiao = $${params.length + 1}`); params.push(regiao) }
     if (conds.length) q += ' WHERE ' + conds.join(' AND ')
     q += ` ORDER BY inicio DESC NULLS LAST LIMIT $${params.length + 1} OFFSET $${params.length + 2}`
     params.push(cappedLimit, cappedOffset)
@@ -4249,7 +4253,10 @@ app.post('/api/tarefas', async (req, res) => {
     const horas = (tempo_horas != null && tempo_horas !== '')
       ? Number(tempo_horas)
       : (inicio && fim ? round2((new Date(fim) - new Date(inicio)) / 3600000) : 0)
-    const regiaoFinal = regiao || req.headers['x-regiao'] || 'Coimbra'
+    // Região vem explícita do form (só preenchida quando a categoria é
+    // geograficamente situada). Categorias sem dimensão geográfica enviam ''
+    // e ficam NULL — não há fallback para 'Coimbra' nem para o X-Regiao header.
+    const regiaoFinal = regiao || null
     await pgPool.query(
       `INSERT INTO tarefas (id, tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, regiao, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
@@ -4281,7 +4288,7 @@ app.put('/api/tarefas/:id', async (req, res) => {
     if (fim !== undefined) { sets.push(`fim = $${params.length + 1}`); params.push(fim) }
     if (funcionario !== undefined) { sets.push(`funcionario = $${params.length + 1}`); params.push(funcionario) }
     if (horas !== undefined) { sets.push(`tempo_horas = $${params.length + 1}`); params.push(horas) }
-    if (regiao !== undefined) { sets.push(`regiao = $${params.length + 1}`); params.push(regiao) }
+    if (regiao !== undefined) { sets.push(`regiao = $${params.length + 1}`); params.push(regiao || null) }
     sets.push(`updated_at = $${params.length + 1}`); params.push(now)
     params.push(req.params.id)
     const { rowCount } = await pgPool.query(

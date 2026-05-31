@@ -382,6 +382,13 @@ export async function initSchema() {
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 
+      -- Migration: regiao opcional em tarefas. Só preenchida quando a categoria
+      -- é geográfica (Cold Call, Visita, etc.); restantes ficam NULL.
+      DO $$ BEGIN
+        ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS regiao TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
       -- Migration: adicionar coluna drive_folder_id à tabela imoveis
       DO $$ BEGIN
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS drive_folder_id TEXT;

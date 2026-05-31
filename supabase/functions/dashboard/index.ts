@@ -2659,6 +2659,7 @@ app.get("/tarefas", async (c: any) => {
     const since = c.req.query("since");
     const until = c.req.query("until");
     const incluir_arquivadas = c.req.query("incluir_arquivadas");
+    const regiao = c.req.query("regiao");
     const cappedLimit = Math.min(Math.max(+limit || 100, 1), 2000);
     const cappedOffset = Math.max(+offset || 0, 0);
     const incluirArquivadas = incluir_arquivadas === "true" || incluir_arquivadas === "1";
@@ -2682,6 +2683,12 @@ app.get("/tarefas", async (c: any) => {
       conds.push(`inicio <= $${params.length + 1}`);
       params.push(until);
     }
+    // Filtro por região opcional. Tarefas sem categoria geográfica ficam com
+    // regiao=NULL e não aparecem aqui — só com o filtro 'todas' no frontend.
+    if (regiao) {
+      conds.push(`regiao = $${params.length + 1}`);
+      params.push(regiao);
+    }
     if (conds.length) q += " WHERE " + conds.join(" AND ");
     q += ` ORDER BY inicio DESC NULLS LAST LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(cappedLimit, cappedOffset);
@@ -2702,7 +2709,10 @@ app.post("/tarefas", async (c: any) => {
     const horas = tempo_horas != null && tempo_horas !== ""
       ? Number(tempo_horas)
       : (inicio && fim ? round2((new Date(fim).getTime() - new Date(inicio).getTime()) / 3600000) : 0);
-    const regiaoFinal = regiao || c.req.header("X-Regiao") || "Coimbra";
+    // Região vem explícita do form (só preenchida quando a categoria é
+    // geograficamente situada). Categorias sem dimensão geográfica enviam ''
+    // e ficam NULL — não há fallback para 'Coimbra' nem para o X-Regiao header.
+    const regiaoFinal = regiao || null;
     await pool.query(
       `INSERT INTO tarefas (id, tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, regiao, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
@@ -2731,7 +2741,7 @@ app.put("/tarefas/:id", async (c: any) => {
     if (fim !== undefined) { sets.push(`fim = $${params.length + 1}`); params.push(fim); }
     if (funcionario !== undefined) { sets.push(`funcionario = $${params.length + 1}`); params.push(funcionario); }
     if (horas !== undefined) { sets.push(`tempo_horas = $${params.length + 1}`); params.push(horas); }
-    if (regiao !== undefined) { sets.push(`regiao = $${params.length + 1}`); params.push(regiao); }
+    if (regiao !== undefined) { sets.push(`regiao = $${params.length + 1}`); params.push(regiao || null); }
     if (sets.length === 0) return c.json({ error: "nada para actualizar" }, 400);
     sets.push(`updated_at = $${params.length + 1}`); params.push(now);
     params.push(c.req.param("id"));
