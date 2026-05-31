@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
-import { LayoutDashboard, TrendingUp, Database, Bell, Clock, BarChart3, Menu, X, LogOut, Briefcase, Shield, ScrollText } from 'lucide-react'
+import { LayoutDashboard, TrendingUp, Database, Bell, Clock, BarChart3, Menu, X, LogOut, Briefcase, Shield, ScrollText, History } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { apiFetch } from '../../lib/api.js'
 import { prefetchRoute } from '../../lib/prefetch.js'
@@ -15,6 +15,7 @@ const nav = [
   { to: '/alertas',            label: 'Alertas',    Icon: Bell, badgeKey: 'alertas', area: 'alertas' },
   { to: '/administracao',      label: 'Administração', Icon: ScrollText, area: 'administracao' },
   { to: '/admin/utilizadores', label: 'Utilizadores', Icon: Shield, area: 'admin' },
+  { to: '/admin/auditoria',    label: 'Auditoria',   Icon: History, area: 'admin' },
 ]
 
 export function Sidebar() {

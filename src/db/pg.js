@@ -3,6 +3,7 @@
  * Drop-in replacement for schema.js SQLite.
  */
 import pg from 'pg'
+import { installAuditedQuery } from './audit.js'
 
 const DATABASE_URL = process.env.DATABASE_URL
 if (!DATABASE_URL) {
@@ -23,6 +24,8 @@ const pool = new pg.Pool({
 pool.on('error', (err) => {
   console.error('[pg] Pool error:', err.message)
 })
+
+installAuditedQuery(pool)
 
 setInterval(() => {
   if (pool.waitingCount > 0) {

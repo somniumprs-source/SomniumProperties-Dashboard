@@ -12,6 +12,7 @@
 import { createApp } from "../_shared/hono.ts";
 import { requireAuth } from "../_shared/auth.ts";
 import pool from "../_shared/pg.ts";
+import { withAuditUser } from "../_shared/audit.ts";
 import {
   Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas,
   ConsultorInteracoes, ConsultorFollowups, DocumentosInvestidor, Visitas,
@@ -414,6 +415,16 @@ app.use("*", async (c, next) => {
   c.header("Cache-Control", "no-store, no-cache, must-revalidate, private");
   c.header("Pragma", "no-cache");
   c.header("Expires", "0");
+});
+
+// ── Middleware audit: injecta user_email no AsyncLocalStorage para audit_log.
+app.use("*", async (c, next) => {
+  let email: string | null = null;
+  try {
+    const u = await resolveCrmUser(c);
+    email = u?.email || null;
+  } catch { /* best-effort */ }
+  await withAuditUser(email, () => next());
 });
 
 // ── Middleware regional (port de routes.js 149-167) ──────────────
@@ -4993,6 +5004,75 @@ app.get("/projetos/:negocioId/resumo", async (c: any) => {
 registerAnaliseRoutes(app);
 registerOrcamentoRoutes(app);
 registerRegiaoRoutes(app);
+
+// ── Auditoria · historico de alteracoes (admin only) ──────────────
+async function requireAdminAudit(c: any): Promise<Response | null> {
+  // Em dev sem service-role, deixa passar
+  if (!_crmAuthClient) return null;
+  const u = await resolveCrmUser(c);
+  if (!u) return c.json({ error: "Nao autenticado" }, 401);
+  if (u.role !== "admin") return c.json({ error: "So administradores" }, 403);
+  return null;
+}
+
+app.get("/auditoria", async (c) => {
+  const denied = await requireAdminAudit(c);
+  if (denied) return denied;
+  try {
+    const entidade = c.req.query("entidade");
+    const entidadeId = c.req.query("entidade_id");
+    const userEmail = c.req.query("user_email");
+    const from = c.req.query("from");
+    const to = c.req.query("to");
+    const limit = Math.min(parseInt(c.req.query("limit") || "100"), 500);
+    const offset = parseInt(c.req.query("offset") || "0");
+
+    const where: string[] = [];
+    const params: any[] = [];
+    if (entidade) { params.push(entidade); where.push(`a.entidade = $${params.length}`); }
+    if (entidadeId) { params.push(entidadeId); where.push(`a.entidade_id = $${params.length}`); }
+    if (userEmail) { params.push(`%${userEmail}%`); where.push(`a.user_email ILIKE $${params.length}`); }
+    if (from) { params.push(from); where.push(`a.created_at >= $${params.length}`); }
+    if (to) { params.push(to); where.push(`a.created_at <= $${params.length}`); }
+    const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    const [{ rows }, { rows: countRows }] = await Promise.all([
+      pool.query(
+        `SELECT a.id, a.entidade, a.entidade_id, a.operacao, a.user_email, a.alteracoes, a.created_at,
+                CASE
+                  WHEN a.entidade = 'imoveis' THEN (SELECT nome FROM imoveis WHERE id = a.entidade_id)
+                  WHEN a.entidade = 'investidores' THEN (SELECT nome FROM investidores WHERE id = a.entidade_id)
+                  WHEN a.entidade = 'negocios' THEN (SELECT COALESCE(NULLIF(notas,''), id::text) FROM negocios WHERE id = a.entidade_id)
+                END AS entidade_nome
+         FROM audit_log a
+         ${whereClause}
+         ORDER BY a.created_at DESC
+         LIMIT ${limit} OFFSET ${offset}`,
+        params,
+      ),
+      pool.query(`SELECT COUNT(*)::int AS total FROM audit_log a ${whereClause}`, params),
+    ]);
+
+    return c.json({ rows, total: countRows[0]?.total || 0, limit, offset });
+  } catch (e) {
+    console.error("[auditoria]", (e as Error).message);
+    return c.json({ error: "Erro a obter auditoria" }, 500);
+  }
+});
+
+app.get("/auditoria/utilizadores", async (c) => {
+  const denied = await requireAdminAudit(c);
+  if (denied) return denied;
+  try {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT user_email FROM audit_log WHERE user_email IS NOT NULL ORDER BY user_email`,
+    );
+    return c.json(rows.map((r: any) => r.user_email));
+  } catch (e) {
+    console.error("[auditoria/utilizadores]", (e as Error).message);
+    return c.json({ error: "Erro" }, 500);
+  }
+});
 
 app.get("/_health", (c) => c.json({ ok: true, fn: "crm" }));
 

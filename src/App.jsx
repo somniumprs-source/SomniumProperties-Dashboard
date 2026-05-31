@@ -21,6 +21,7 @@ const ProjectoDetalhe = lazy(() => import('./pages/ProjectoDetalhe.jsx').then(m 
 const ProjectosCalendario = lazy(() => import('./pages/ProjectosCalendario.jsx').then(m => ({ default: m.ProjectosCalendario })))
 const AceitarAssinatura = lazy(() => import('./pages/AceitarAssinatura.jsx').then(m => ({ default: m.AceitarAssinatura })))
 const Utilizadores = lazy(() => import('./pages/Utilizadores.jsx').then(m => ({ default: m.Utilizadores })))
+const Auditoria   = lazy(() => import('./pages/Auditoria.jsx'))
 const RelatoriosAdmin = lazy(() => import('./pages/RelatoriosAdmin.jsx').then(m => ({ default: m.RelatoriosAdmin })))
 const Administracao = lazy(() => import('./pages/Administracao.jsx').then(m => ({ default: m.Administracao })))
 const AdministracaoSOP = lazy(() => import('./pages/AdministracaoSOP.jsx').then(m => ({ default: m.AdministracaoSOP })))
@@ -84,6 +85,7 @@ function AppRoutes() {
               <Route path="regiao" element={<AdministracaoMultiRegiao />} />
             </Route>
             <Route path="/admin/utilizadores" element={<ErrorBoundary><Utilizadores /></ErrorBoundary>} />
+            <Route path="/admin/auditoria" element={<ErrorBoundary><Auditoria /></ErrorBoundary>} />
             {/* Redirects de páginas removidas / renomeadas */}
             <Route path="/relatorios-admin" element={<Navigate to="/administracao/relatorios" replace />} />
             <Route path="/comercial" element={<Navigate to="/crm" replace />} />

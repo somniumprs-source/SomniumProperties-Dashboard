@@ -114,6 +114,26 @@ app.use('/api', async (req, res, next) => {
 try {
   const { initSchema } = await import('./src/db/pg.js')
   await initSchema()
+  const { withAuditUser } = await import('./src/db/audit.js')
+
+  // Middleware audit: envolve cada request /api/* com AsyncLocalStorage com
+  // o user_email. O wrapper de pool.query (audit.js) usa-o para SET LOCAL
+  // app.audit_user_email antes de writes em imoveis/investidores/negocios.
+  // Para /api/crm/* (auth bypass historico), tenta resolver via header sem bloquear.
+  app.use('/api', async (req, res, next) => {
+    let email = req.user?.email || null
+    if (!email && supabaseAdmin && req.path.startsWith('/crm/')) {
+      const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token
+      if (token) {
+        try {
+          const cached = authCacheGet(token)
+          const user = cached || await validateTokenCoalesced(token)
+          email = user?.email || null
+        } catch {}
+      }
+    }
+    withAuditUser(email, () => next())
+  })
 
   // ── Gestão de utilizadores e camadas de acesso ──
   const { default: userRoutes, accessRouter, requireRole } = await import('./src/db/userRoutes.js')
@@ -135,7 +155,11 @@ try {
   app.use('/api/crm', regiaoRoutes)
   const { default: sopRoutes } = await import('./src/db/sopRoutes.js')
   app.use('/api/sops', sopRoutes)
-  console.log('[crm] API CRM + Análises + Orçamento Obra + Multi-Região + SOPs montada (PostgreSQL)')
+  const { default: auditoriaRoutes } = await import('./src/db/auditoriaRoutes.js')
+  // Montado em /api/crm/auditoria para o resolveApiUrl mapear directamente para
+  // a edge function "crm" em producao (ver src/lib/apiUrl.js).
+  app.use('/api/crm/auditoria', auditoriaRoutes)
+  console.log('[crm] API CRM + Análises + Orçamento Obra + Multi-Região + SOPs + Auditoria montada (PostgreSQL)')
   // Filtros por área (admin passa sempre; em dev sem Supabase passa sempre)
   // Bloqueios por role desactivados — qualquer utilizador autenticado vê tudo.
   // (Roles continuam como labels na tabela users, mas sem enforcement no backend.)
