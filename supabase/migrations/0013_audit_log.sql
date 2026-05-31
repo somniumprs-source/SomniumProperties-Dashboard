@@ -1,5 +1,9 @@
 -- 0013_audit_log.sql — historico de alteracoes em imoveis, investidores, negocios.
 --
+-- NOTA: existe ja uma tabela "audit_log" antiga (usada pelo crud.ts antigo para
+-- timeline/backup, schema: tabela, registo_id, acao, dados_anteriores, ...).
+-- Para evitar colisao, esta funcionalidade usa a tabela "historico_alteracoes".
+--
 -- Captura INSERT/UPDATE/DELETE via trigger generico. Para cada UPDATE, regista
 -- so os campos que mudaram (jsonb_diff). user_email vem de
 -- current_setting('app.audit_user_email', true), injectado pelo backend antes
@@ -7,7 +11,7 @@
 -- RLS: nao adicionamos politicas; o acesso e feito sempre pela Edge Function
 -- (service-role -> BYPASSRLS) que valida admin via tabela users.
 
-CREATE TABLE IF NOT EXISTS audit_log (
+CREATE TABLE IF NOT EXISTS historico_alteracoes (
   id BIGSERIAL PRIMARY KEY,
   entidade TEXT NOT NULL,
   entidade_id TEXT NOT NULL,
@@ -17,19 +21,19 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_audit_log_entidade ON audit_log (entidade, entidade_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log (user_email, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_historico_entidade ON historico_alteracoes (entidade, entidade_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_historico_user ON historico_alteracoes (user_email, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_historico_created ON historico_alteracoes (created_at DESC);
 
-ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE historico_alteracoes ENABLE ROW LEVEL SECURITY;
 
 -- Campos ignorados (ruido tecnico, nao interessam ao log)
-CREATE OR REPLACE FUNCTION audit_log_ignored_fields() RETURNS TEXT[] AS $$
+CREATE OR REPLACE FUNCTION historico_ignored_fields() RETURNS TEXT[] AS $$
   SELECT ARRAY['updated_at','created_at','pois_atualizado_em','data_visita']::TEXT[];
 $$ LANGUAGE SQL IMMUTABLE;
 
 -- Trigger generico
-CREATE OR REPLACE FUNCTION audit_log_trigger() RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION historico_alteracoes_trigger() RETURNS TRIGGER AS $$
 DECLARE
   v_user TEXT;
   v_old JSONB;
@@ -42,7 +46,7 @@ DECLARE
   v_id TEXT;
 BEGIN
   v_user := NULLIF(current_setting('app.audit_user_email', true), '');
-  v_ignored := audit_log_ignored_fields();
+  v_ignored := historico_ignored_fields();
 
   IF TG_OP = 'INSERT' THEN
     v_new := to_jsonb(NEW);
@@ -76,7 +80,7 @@ BEGIN
     v_diff := jsonb_build_array(jsonb_build_object('campo', '__delete__', 'antes', v_old, 'depois', null));
   END IF;
 
-  INSERT INTO audit_log (entidade, entidade_id, operacao, user_email, alteracoes)
+  INSERT INTO historico_alteracoes (entidade, entidade_id, operacao, user_email, alteracoes)
   VALUES (TG_TABLE_NAME, v_id, TG_OP, v_user, v_diff);
 
   RETURN COALESCE(NEW, OLD);
@@ -84,17 +88,17 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Aplicar triggers
-DROP TRIGGER IF EXISTS audit_imoveis ON imoveis;
-CREATE TRIGGER audit_imoveis
+DROP TRIGGER IF EXISTS historico_imoveis ON imoveis;
+CREATE TRIGGER historico_imoveis
   AFTER INSERT OR UPDATE OR DELETE ON imoveis
-  FOR EACH ROW EXECUTE FUNCTION audit_log_trigger();
+  FOR EACH ROW EXECUTE FUNCTION historico_alteracoes_trigger();
 
-DROP TRIGGER IF EXISTS audit_investidores ON investidores;
-CREATE TRIGGER audit_investidores
+DROP TRIGGER IF EXISTS historico_investidores ON investidores;
+CREATE TRIGGER historico_investidores
   AFTER INSERT OR UPDATE OR DELETE ON investidores
-  FOR EACH ROW EXECUTE FUNCTION audit_log_trigger();
+  FOR EACH ROW EXECUTE FUNCTION historico_alteracoes_trigger();
 
-DROP TRIGGER IF EXISTS audit_negocios ON negocios;
-CREATE TRIGGER audit_negocios
+DROP TRIGGER IF EXISTS historico_negocios ON negocios;
+CREATE TRIGGER historico_negocios
   AFTER INSERT OR UPDATE OR DELETE ON negocios
-  FOR EACH ROW EXECUTE FUNCTION audit_log_trigger();
+  FOR EACH ROW EXECUTE FUNCTION historico_alteracoes_trigger();

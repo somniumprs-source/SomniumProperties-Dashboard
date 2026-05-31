@@ -1,5 +1,5 @@
 /**
- * Audit context para audit_log (trigger Postgres em imoveis, investidores, negocios).
+ * Audit context para historico_alteracoes (trigger Postgres em imoveis, investidores, negocios).
  *
  * O trigger le `current_setting('app.audit_user_email', true)`. Como o pool
  * partilha connections entre requests, nao podemos fazer SET persistente.

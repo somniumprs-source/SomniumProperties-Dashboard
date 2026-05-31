@@ -1,6 +1,6 @@
 /**
  * Endpoints de auditoria — historico de alteracoes em imoveis, investidores,
- * negocios. Acesso restrito a admins. Triggers PG em supabase/migrations/0013_audit_log.sql.
+ * negocios. Acesso restrito a admins. Triggers PG em supabase/migrations/0013_historico_alteracoes.sql.
  */
 import { Router } from 'express'
 import { createClient } from '@supabase/supabase-js'
@@ -60,19 +60,25 @@ router.get('/', async (req, res) => {
                   WHEN a.entidade = 'investidores' THEN (SELECT nome FROM investidores WHERE id = a.entidade_id)
                   WHEN a.entidade = 'negocios' THEN (SELECT COALESCE(NULLIF(notas,''), id::text) FROM negocios WHERE id = a.entidade_id)
                 END AS entidade_nome
-         FROM audit_log a
+         FROM historico_alteracoes a
          ${whereClause}
          ORDER BY a.created_at DESC
          LIMIT ${limit} OFFSET ${offset}`,
         params
       ),
-      pool.query(`SELECT COUNT(*)::int AS total FROM audit_log a ${whereClause}`, params),
+      pool.query(`SELECT COUNT(*)::int AS total FROM historico_alteracoes a ${whereClause}`, params),
     ])
 
     res.json({ rows, total: countRows[0]?.total || 0, limit, offset })
   } catch (e) {
     console.error('[auditoria] GET /', e.message)
-    res.status(500).json({ error: 'Erro a obter auditoria' })
+    // Mensagem mais util quando a migracao 0013 ainda nao correu
+    const missing = /relation .*historico_alteracoes.* does not exist/i.test(e.message)
+    res.status(500).json({
+      error: missing
+        ? 'Tabela historico_alteracoes nao existe. Correr: node scripts/run-migration-0013.mjs'
+        : 'Erro: ' + e.message,
+    })
   }
 })
 
@@ -80,7 +86,7 @@ router.get('/', async (req, res) => {
 router.get('/utilizadores', async (_req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT DISTINCT user_email FROM audit_log WHERE user_email IS NOT NULL ORDER BY user_email`
+      `SELECT DISTINCT user_email FROM historico_alteracoes WHERE user_email IS NOT NULL ORDER BY user_email`
     )
     res.json(rows.map(r => r.user_email))
   } catch (e) {

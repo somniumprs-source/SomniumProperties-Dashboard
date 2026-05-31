@@ -5044,19 +5044,25 @@ app.get("/auditoria", async (c) => {
                   WHEN a.entidade = 'investidores' THEN (SELECT nome FROM investidores WHERE id = a.entidade_id)
                   WHEN a.entidade = 'negocios' THEN (SELECT COALESCE(NULLIF(notas,''), id::text) FROM negocios WHERE id = a.entidade_id)
                 END AS entidade_nome
-         FROM audit_log a
+         FROM historico_alteracoes a
          ${whereClause}
          ORDER BY a.created_at DESC
          LIMIT ${limit} OFFSET ${offset}`,
         params,
       ),
-      pool.query(`SELECT COUNT(*)::int AS total FROM audit_log a ${whereClause}`, params),
+      pool.query(`SELECT COUNT(*)::int AS total FROM historico_alteracoes a ${whereClause}`, params),
     ]);
 
     return c.json({ rows, total: countRows[0]?.total || 0, limit, offset });
   } catch (e) {
-    console.error("[auditoria]", (e as Error).message);
-    return c.json({ error: "Erro a obter auditoria" }, 500);
+    const msg = (e as Error).message;
+    console.error("[auditoria]", msg);
+    const missing = /relation .*historico_alteracoes.* does not exist/i.test(msg);
+    return c.json({
+      error: missing
+        ? "Tabela historico_alteracoes nao existe. Correr: node scripts/run-migration-0013.mjs"
+        : "Erro: " + msg,
+    }, 500);
   }
 });
 
@@ -5065,7 +5071,7 @@ app.get("/auditoria/utilizadores", async (c) => {
   if (denied) return denied;
   try {
     const { rows } = await pool.query(
-      `SELECT DISTINCT user_email FROM audit_log WHERE user_email IS NOT NULL ORDER BY user_email`,
+      `SELECT DISTINCT user_email FROM historico_alteracoes WHERE user_email IS NOT NULL ORDER BY user_email`,
     );
     return c.json(rows.map((r: any) => r.user_email));
   } catch (e) {

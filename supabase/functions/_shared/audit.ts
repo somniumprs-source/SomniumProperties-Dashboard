@@ -1,5 +1,5 @@
 /**
- * Audit context para audit_log (trigger Postgres em imoveis, investidores, negocios).
+ * Audit context para historico_alteracoes (trigger Postgres em imoveis, investidores, negocios).
  * Equivalente a src/db/audit.js do servidor Express.
  *
  * Em Deno usamos AsyncLocalStorage tambem (disponivel via node:async_hooks).
