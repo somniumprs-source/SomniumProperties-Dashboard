@@ -6,6 +6,11 @@ import { Upload, Image, FileText, Trash2, ExternalLink, FolderOpen, X, ChevronLe
 import { apiFetch } from '../../lib/api.js'
 import { ImovelDocumentacao } from './ImovelDocumentacao/index.jsx'
 
+function baseName(name) {
+  if (!name || typeof name !== 'string') return ''
+  return name.replace(/\.[^.]+$/, '').trim().toLowerCase()
+}
+
 export function FicheirosTab({ imovelId, driveFolderId, tipoImovel }) {
   const [allFiles, setAllFiles] = useState([])
   const [driveData, setDriveData] = useState(null)
@@ -29,8 +34,34 @@ export function FicheirosTab({ imovelId, driveFolderId, tipoImovel }) {
         apiFetch(`/api/crm/imoveis/${imovelId}/drive-files`),
       ])
       const imovel = await imovelRes.json()
-      setAllFiles(imovel.fotos ? JSON.parse(imovel.fotos) : [])
-      setDriveData(await driveRes.json())
+      const driveJson = await driveRes.json()
+      let fotos = imovel.fotos ? JSON.parse(imovel.fotos) : []
+
+      // Auto-dedup de fotos locais por nome (sem extensao, case-insensitive).
+      // Drive nao da para apagar daqui — se o nome ja existir no Drive,
+      // apagamos o duplicado local e ficamos com a versao do Drive.
+      const driveNames = new Set(
+        (driveJson?.fotos || []).map(f => baseName(f.name)).filter(Boolean)
+      )
+      const seen = new Set()
+      const toDelete = []
+      for (const f of fotos) {
+        if (f.folder === 'documentos' || !f.type?.startsWith('image/')) continue
+        const key = baseName(f.name)
+        if (!key) continue
+        if (seen.has(key) || driveNames.has(key)) toDelete.push(f.id)
+        else seen.add(key)
+      }
+      if (toDelete.length > 0) {
+        const deleted = new Set(toDelete)
+        await Promise.allSettled(toDelete.map(id =>
+          apiFetch(`/api/crm/imoveis/${imovelId}/fotos/${id}`, { method: 'DELETE' })
+        ))
+        fotos = fotos.filter(f => !deleted.has(f.id))
+      }
+
+      setAllFiles(fotos)
+      setDriveData(driveJson)
     } catch (e) { console.error('Erro:', e) }
     setLoading(false)
   }
