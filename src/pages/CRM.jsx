@@ -50,46 +50,45 @@ function ClassBadge({ cls }) {
   return <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white ${CLASS_COLOR[cls] ?? 'bg-gray-400'}`}>{cls}</span>
 }
 
-// ── Barra de fases para Investidores (Activos/Passivos) ─────
-// Mostra contagem por status do pipeline correspondente ao sub-tab escolhido.
-// Estados terminais (Não qualificado, Inactivo) são omitidos por defeito;
-// só aparecem se houver registos lá.
-function InvestidoresPhaseBar({ data, tipo }) {
-  const accent = tipo === 'Ativo'
-    ? { text: 'text-green-700',  bg: 'bg-green-50/70',  border: 'border-green-200',  dot: 'bg-green-500' }
-    : { text: 'text-yellow-700', bg: 'bg-yellow-50/70', border: 'border-yellow-300', dot: 'bg-yellow-400' }
-  const base = tipo === 'Ativo' ? INV_STATUS_ATIVO : INV_STATUS_PASSIVO
-  const counts = base.reduce((acc, s) => { acc[s] = 0; return acc }, {})
-  for (const inv of data) {
-    if (counts[inv.status] != null) counts[inv.status] += 1
+// ── Cards de KPI para Investidores (após escolher Activos/Passivos) ─────
+// 4 quadros calculados a partir do `data` já filtrado pelo sub-tab:
+//   - Investidores A         → count(classificacao = 'A')
+//   - Investidores B         → count(classificacao = 'B')
+//   - Capital Angariado      → Σ capital_max  WHERE status = 'Investidor Qualificado em Carteira'
+//   - Capital Investido      → Σ montante_investido WHERE status = 'Investidor em parceria'
+function InvestidoresKPICards({ data }) {
+  const stats = data.reduce((a, inv) => {
+    if (inv.classificacao === 'A') a.classA += 1
+    if (inv.classificacao === 'B') a.classB += 1
+    if (inv.status === 'Investidor Qualificado em Carteira') a.capAngariado += Number(inv.capital_max || 0)
+    if (inv.status === 'Investidor em parceria')             a.capInvestido += Number(inv.montante_investido || 0)
+    return a
+  }, { classA: 0, classB: 0, capAngariado: 0, capInvestido: 0 })
+
+  const cards = [
+    { label: 'Investidores A',  value: stats.classA,          tone: 'emerald' },
+    { label: 'Investidores B',  value: stats.classB,          tone: 'sky' },
+    { label: 'Capital Angariado', value: EUR(stats.capAngariado), tone: 'amber',  hint: 'Qualificados em Carteira' },
+    { label: 'Capital Investido', value: EUR(stats.capInvestido), tone: 'indigo', hint: 'Investidores em Parceria' },
+  ]
+  const tones = {
+    emerald: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', label: 'text-emerald-600' },
+    sky:     { bg: 'bg-sky-50',     border: 'border-sky-200',     text: 'text-sky-700',     label: 'text-sky-600' },
+    amber:   { bg: 'bg-amber-50',   border: 'border-amber-200',   text: 'text-amber-700',   label: 'text-amber-600' },
+    indigo:  { bg: 'bg-indigo-50',  border: 'border-indigo-200',  text: 'text-indigo-700',  label: 'text-indigo-600' },
   }
-  // Mostra todos os principais; terminais só se > 0
-  const phases = base.filter(s => (s !== 'Não qualificado' && s !== 'Inactivo') || counts[s] > 0)
-  const total = data.length
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-xs">
-      <div className="flex items-center gap-2 mb-2">
-        <span className={`inline-block w-2 h-2 rounded-full ${accent.dot}`} />
-        <h3 className={`text-xs uppercase tracking-wider font-bold ${accent.text}`}>
-          Pipeline {tipo === 'Ativo' ? 'Activos' : 'Passivos'}
-        </h3>
-        <span className="text-xs text-gray-400 ml-auto">{total} investidor{total !== 1 ? 'es' : ''}</span>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
-        {phases.map(p => {
-          const n = counts[p]
-          const has = n > 0
-          return (
-            <div key={p}
-              className={`rounded-xl border px-3 py-2 transition-all ${
-                has ? `${accent.bg} ${accent.border}` : 'bg-gray-50 border-gray-100'
-              }`}>
-              <p className="text-[10px] uppercase tracking-wide text-gray-500 leading-tight line-clamp-2 min-h-[1.6rem]" title={p}>{p}</p>
-              <p className={`text-2xl font-bold mt-0.5 ${has ? accent.text : 'text-gray-300'}`}>{n}</p>
-            </div>
-          )
-        })}
-      </div>
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {cards.map((c, i) => {
+        const t = tones[c.tone]
+        return (
+          <div key={i} className={`rounded-2xl border ${t.border} ${t.bg} px-4 py-3 shadow-xs`}>
+            <p className={`text-[11px] uppercase tracking-wider font-semibold ${t.label}`}>{c.label}</p>
+            <p className={`text-2xl sm:text-3xl font-bold mt-1 ${t.text}`}>{c.value}</p>
+            {c.hint && <p className="text-[10px] text-gray-400 mt-0.5">{c.hint}</p>}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -1173,8 +1172,8 @@ export function CRM() {
               })}
             </div>
 
-            {/* Barra de contabilização por fases — só após escolher Ativos ou Passivos */}
-            <InvestidoresPhaseBar data={data} tipo={invSubTab} />
+            {/* KPIs do sub-tab seleccionado — A, B, Capital Angariado, Capital Investido */}
+            <InvestidoresKPICards data={data} />
           </div>
         )}
 

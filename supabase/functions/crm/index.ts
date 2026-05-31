@@ -2273,19 +2273,10 @@ app.get("/kpis/:tab", async (c: any) => {
       const { rows: [totals] } = await pool.query(`
         SELECT COUNT(*) as total,
           COUNT(CASE WHEN classificacao IN ('A','B') THEN 1 END) as ab,
-          COUNT(CASE WHEN classificacao = 'A' THEN 1 END) as class_a,
-          COUNT(CASE WHEN classificacao = 'B' THEN 1 END) as class_b,
           COALESCE(SUM(capital_max),0) as capital
         FROM investidores ${wInvDup}
       `, paramsInv);
-      return c.json({
-        byStatus: rows,
-        total: parseInt(totals.total),
-        classAB: parseInt(totals.ab),
-        classA: parseInt(totals.class_a),
-        classB: parseInt(totals.class_b),
-        capitalTotal: parseFloat(totals.capital),
-      });
+      return c.json({ byStatus: rows, total: parseInt(totals.total), classAB: parseInt(totals.ab), capitalTotal: parseFloat(totals.capital) });
     } else if (tab === "consultores") {
       const { rows } = await pool.query(`SELECT estatuto, COUNT(*) as count FROM consultores ${wReg} GROUP BY estatuto ORDER BY count DESC`, params);
       const { rows: [totals] } = await pool.query(`SELECT COUNT(*) as total FROM consultores ${wReg}`, params);
