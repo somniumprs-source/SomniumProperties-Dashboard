@@ -1112,6 +1112,7 @@ import {
   getNegócios, getDespesas, getImóveis, getInvestidores, getConsultores, getTarefas,
   getVisitas,
   round2 as round2PG,
+  isInvestidorPrincipal,
 } from './src/db/queries.js'
 
 // Legacy getters (retornam vazio — DBs inacessíveis)
@@ -1712,11 +1713,13 @@ const FUNIL_INV_LABEL = {
 
 app.get('/api/kpis/comercial', endpointCache(300000), async (req, res) => {
   try {
-    const [imoveisResult, investidores] = await Promise.all([
+    const [imoveisResult, investidoresRaw] = await Promise.all([
       getImóveis().catch(() => []),
       getInvestidores(),
     ])
     const imoveis = imoveisResult
+    // Excluir cópias duplicadas (Ativo/Passivo) para não contar a mesma pessoa duas vezes
+    const investidores = investidoresRaw.filter(isInvestidorPrincipal)
 
     const ativos = imoveis.filter(i => !ESTADOS_NEGATIVOS.some(e => i.estado?.toLowerCase().includes(e.toLowerCase())))
     const negativos = imoveis.filter(i => ESTADOS_NEGATIVOS.some(e => i.estado?.toLowerCase().includes(e.toLowerCase())))
@@ -1995,12 +1998,14 @@ app.get('/api/comercial/historico', async (req, res) => {
 // ════════════════════════════════════════════════════════════════
 app.get('/api/comercial/metricas-temporais', async (req, res) => {
   try {
-    const [imoveis, investidores, consultoresRaw, negocios] = await Promise.all([
+    const [imoveis, investidoresRaw, consultoresRaw, negocios] = await Promise.all([
       getImóveis().catch(() => []),
       getInvestidores(),
       getConsultores().catch(() => []),
       getNegócios(),
     ])
+    // Excluir cópias duplicadas (Ativo/Passivo) para não contar a mesma pessoa duas vezes
+    const investidores = investidoresRaw.filter(isInvestidorPrincipal)
 
     const now   = new Date()
     const year  = now.getFullYear()
@@ -2429,7 +2434,7 @@ app.get('/api/weekly-pulse', async (req, res) => {
     const cacheKey = `dash:pulse|r=${regiao || ''}`
     const cached = cache.get(cacheKey)
     if (cached) return res.json(cached)
-    const [imoveis, investidores, consultoresRaw, negocios, despesas, visitas] = await Promise.all([
+    const [imoveis, investidoresRaw, consultoresRaw, negocios, despesas, visitas] = await Promise.all([
       getImóveis({ regiao }).catch(() => []),
       getInvestidores({ regiao }),
       getConsultores({ regiao }).catch(() => []),
@@ -2437,6 +2442,8 @@ app.get('/api/weekly-pulse', async (req, res) => {
       getDespesas({ regiao }),
       getVisitas({ regiao }).catch(() => []),
     ])
+    // Excluir cópias duplicadas (Ativo/Passivo) para não contar a mesma pessoa duas vezes
+    const investidores = investidoresRaw.filter(isInvestidorPrincipal)
     const now = new Date()
     const wDay = now.getDay()
     const weekStart = new Date(now); weekStart.setDate(now.getDate() - (wDay === 0 ? 6 : wDay - 1)); weekStart.setHours(0,0,0,0)
@@ -2613,12 +2620,14 @@ app.get('/api/financeiro/projecao', endpointCache(300000), async (req, res) => {
 // ════════════════════════════════════════════════════════════════
 app.get('/api/ops-scorecard', async (req, res) => {
   try {
-    const [imoveis, consultoresRaw, negocios, investidores] = await Promise.all([
+    const [imoveis, consultoresRaw, negocios, investidoresRaw] = await Promise.all([
       getImóveis().catch(() => []),
       getConsultores().catch(() => []),
       getNegócios(),
       getInvestidores(),
     ])
+    // Excluir cópias duplicadas (Ativo/Passivo) para não contar a mesma pessoa duas vezes
+    const investidores = investidoresRaw.filter(isInvestidorPrincipal)
     const now = new Date()
     const CONS_ATIVOS = new Set(['Aberto Parcerias','Em Parceria','Follow up','Follow Up','Acesso imoveis Off market','Consultores em Parceria'])
     const ESTADOS_NEG = new Set(['Descartado','Nao interessa','Não interessa','Cancelado'])
@@ -2746,7 +2755,7 @@ app.get('/api/metricas', async (req, res) => {
     const cacheKey = `dash:metricas|r=${regiao || ''}`
     const cached = cache.get(cacheKey)
     if (cached) return res.json(cached)
-    const [imoveis, negocios, investidores, consultoresRaw, despesas, visitas] = await Promise.all([
+    const [imoveis, negocios, investidoresRaw, consultoresRaw, despesas, visitas] = await Promise.all([
       getImóveis({ regiao }).catch(() => []),
       getNegócios({ regiao }),
       getInvestidores({ regiao }),
@@ -2754,6 +2763,8 @@ app.get('/api/metricas', async (req, res) => {
       getDespesas({ regiao }).catch(() => []),
       getVisitas({ regiao }).catch(() => []),
     ])
+    // Excluir cópias duplicadas (Ativo/Passivo) para não contar a mesma pessoa duas vezes
+    const investidores = investidoresRaw.filter(isInvestidorPrincipal)
 
     const { ano, month } = getMesAtual()
     const now = new Date()
@@ -4258,9 +4269,9 @@ app.post('/api/tarefas', async (req, res) => {
     // e ficam NULL — não há fallback para 'Coimbra' nem para o X-Regiao header.
     const regiaoFinal = regiao || null
     await pgPool.query(
-      `INSERT INTO tarefas (id, tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, regiao, created_at, updated_at)
+      `INSERT INTO tarefas (id, tarefa, status, categoria, regiao, inicio, fim, funcionario, tempo_horas, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-      [id, tarefa, status || 'A fazer', categoria || null, inicio || null, fim || null, funcionario || null, horas, regiaoFinal, now, now]
+      [id, tarefa, status || 'A fazer', categoria || null, regiaoFinal, inicio || null, fim || null, funcionario || null, horas, now, now]
     )
     // Sync automático com Google Calendar
     if (inicio) {
@@ -4284,11 +4295,11 @@ app.put('/api/tarefas/:id', async (req, res) => {
     if (tarefa !== undefined) { sets.push(`tarefa = $${params.length + 1}`); params.push(tarefa) }
     if (status !== undefined) { sets.push(`status = $${params.length + 1}`); params.push(status) }
     if (categoria !== undefined) { sets.push(`categoria = $${params.length + 1}`); params.push(categoria) }
+    if (regiao !== undefined) { sets.push(`regiao = $${params.length + 1}`); params.push(regiao || null) }
     if (inicio !== undefined) { sets.push(`inicio = $${params.length + 1}`); params.push(inicio) }
     if (fim !== undefined) { sets.push(`fim = $${params.length + 1}`); params.push(fim) }
     if (funcionario !== undefined) { sets.push(`funcionario = $${params.length + 1}`); params.push(funcionario) }
     if (horas !== undefined) { sets.push(`tempo_horas = $${params.length + 1}`); params.push(horas) }
-    if (regiao !== undefined) { sets.push(`regiao = $${params.length + 1}`); params.push(regiao || null) }
     sets.push(`updated_at = $${params.length + 1}`); params.push(now)
     params.push(req.params.id)
     const { rowCount } = await pgPool.query(
@@ -4584,10 +4595,12 @@ const KR_FONTE_QUERIES = {
   imoveis_com_proposta: "SELECT COUNT(*) as c FROM imoveis WHERE data_proposta IS NOT NULL",
   negocios_total: "SELECT COUNT(*) as c FROM negocios",
   negocios_vendidos: "SELECT COUNT(*) as c FROM negocios WHERE fase = 'Vendido'",
-  investidores_sem_contacto_30d: "SELECT COUNT(*) as c FROM investidores WHERE data_ultimo_contacto IS NULL OR data_ultimo_contacto < NOW() - INTERVAL '30 days'",
-  investidores_ab_reuniao: "SELECT COUNT(*) as c FROM investidores WHERE classificacao IN ('A','B') AND data_reuniao IS NOT NULL",
-  investidores_nda: "SELECT COUNT(*) as c FROM investidores WHERE nda_assinado = 1",
-  investidores_capital: "SELECT COUNT(*) as c FROM investidores WHERE montante_investido > 0",
+  // Excluir cópias duplicadas (duplicado_de aponta para outro investidor) — só
+  // contamos pessoas únicas. Origens auto-referenciadas (duplicado_de = id) ficam dentro.
+  investidores_sem_contacto_30d: "SELECT COUNT(*) as c FROM investidores WHERE (duplicado_de IS NULL OR duplicado_de = id) AND (data_ultimo_contacto IS NULL OR data_ultimo_contacto < NOW() - INTERVAL '30 days')",
+  investidores_ab_reuniao: "SELECT COUNT(*) as c FROM investidores WHERE (duplicado_de IS NULL OR duplicado_de = id) AND classificacao IN ('A','B') AND data_reuniao IS NOT NULL",
+  investidores_nda: "SELECT COUNT(*) as c FROM investidores WHERE (duplicado_de IS NULL OR duplicado_de = id) AND nda_assinado = 1",
+  investidores_capital: "SELECT COUNT(*) as c FROM investidores WHERE (duplicado_de IS NULL OR duplicado_de = id) AND montante_investido > 0",
   consultores_followup_semana: "SELECT COUNT(*) as c FROM consultores WHERE data_follow_up >= NOW() - INTERVAL '7 days'",
   consultores_followup_em_dia: "SELECT COUNT(*) as c FROM consultores WHERE data_proximo_follow_up >= NOW() AND estatuto IN ('Aberto Parcerias','Follow up','Acesso imoveis Off market','Consultores em Parceria')",
   consultores_com_call: "SELECT COUNT(*) as c FROM consultores WHERE data_primeira_call IS NOT NULL AND estatuto IN ('Aberto Parcerias','Follow up','Acesso imoveis Off market','Consultores em Parceria')",
@@ -4595,8 +4608,8 @@ const KR_FONTE_QUERIES = {
   imoveis_sem_modelo: "SELECT COUNT(*) as c FROM imoveis WHERE (modelo_negocio IS NULL OR modelo_negocio = '') AND estado NOT IN ('Descartado','Nao interessa','Não interessa')",
   imoveis_com_modelo: "SELECT COUNT(*) as c FROM imoveis WHERE modelo_negocio IS NOT NULL AND modelo_negocio != '' AND estado NOT IN ('Descartado','Nao interessa','Não interessa')",
   imoveis_ativos: "SELECT COUNT(*) as c FROM imoveis WHERE estado NOT IN ('Descartado','Nao interessa','Não interessa')",
-  investidores_ab_contacto: "SELECT COUNT(*) as c FROM investidores WHERE classificacao IN ('A','B') AND data_ultimo_contacto IS NOT NULL",
-  investidores_ab_total: "SELECT COUNT(*) as c FROM investidores WHERE classificacao IN ('A','B')",
+  investidores_ab_contacto: "SELECT COUNT(*) as c FROM investidores WHERE (duplicado_de IS NULL OR duplicado_de = id) AND classificacao IN ('A','B') AND data_ultimo_contacto IS NOT NULL",
+  investidores_ab_total: "SELECT COUNT(*) as c FROM investidores WHERE (duplicado_de IS NULL OR duplicado_de = id) AND classificacao IN ('A','B')",
 }
 
 // Tabelas filtráveis por região + a forma de filtrar.
@@ -5030,12 +5043,14 @@ app.get('/api/time-tracking', async (req, res) => {
 app.get('/api/alertas', endpointCache(300000), async (req, res) => {
   try {
     const regiao = req.regiaoActiva
-    const [imoveis, investidores, consultoresRaw, negocios] = await Promise.all([
+    const [imoveis, investidoresRaw, consultoresRaw, negocios] = await Promise.all([
       getImóveis({ regiao }).catch(() => []),
       getInvestidores({ regiao }),
       getConsultores({ regiao }).catch(() => []),
       getNegócios({ regiao }),
     ])
+    // Excluir cópias duplicadas (Ativo/Passivo) para não contar a mesma pessoa duas vezes
+    const investidores = investidoresRaw.filter(isInvestidorPrincipal)
     const now = new Date()
     const alerts = []
 

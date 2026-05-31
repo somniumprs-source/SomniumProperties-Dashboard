@@ -122,6 +122,8 @@ function mapInvestidor(r) {
     dataProximaAcao: r.data_proxima_acao,
     dataApresentacaoNegocio: r.data_apresentacao_negocio,
     dataAprovacaoNegocio: r.data_aprovacao_negocio,
+    duplicadoDe: r.duplicado_de || null,
+    tipoPrincipal: r.tipo_principal || null,
     diasSemContacto: (() => {
       const u = r.data_ultimo_contacto ?? r.data_reuniao ?? r.data_primeiro_contacto
       if (!u) return null
@@ -129,6 +131,13 @@ function mapInvestidor(r) {
     })(),
     notas: r.notas,
   }
+}
+
+// Investidor "principal" = origem do par Ativo/Passivo, ou registo sem duplicado.
+// Cópias criadas via /investidores/:id/duplicar têm duplicadoDe != id e devem
+// ficar de fora de qualquer contagem de pessoas únicas.
+export function isInvestidorPrincipal(i) {
+  return !i.duplicadoDe || i.duplicadoDe === i.id
 }
 
 function mapConsultor(r) {
