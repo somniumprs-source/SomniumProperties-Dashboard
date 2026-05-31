@@ -2216,7 +2216,6 @@ function renderAnaliseRentabilidade(b, im, a, opts = {}) {
   renderStressTests(b, a, { title: 'I. TESTES DE STRESS', metrics: m })
 
   renderExitAlternativo(b, im, a, m)
-  renderEstruturaCAEP(b, im, a, m)
 }
 
 function renderExitAlternativo(b, im, a, m) {
@@ -2288,98 +2287,6 @@ function renderExitAlternativo(b, im, a, m) {
     ]
   )
   b.note('A renda estimada deve ser validada com comparáveis de mercado locais. Tributação ao abrigo do Art.º 94.º CIRC (retenção 25% rendimentos prediais para empresas) ou Art.º 72.º CIRS (28% taxa autónoma para particulares).')
-}
-
-function renderEstruturaCAEP(b, im, a, m) {
-  b.space(4)
-  b.header('K. ESTRUTURA CAEP — ASSOCIAÇÃO EM PARTICIPAÇÃO')
-
-  // Caixa explicativa
-  const ctxTexto = 'CAEP (Contrato de Associação em Participação) é uma estrutura jurídica que permite captar capital de investidor mantendo a Somnium Properties como gestora exclusiva do projecto. Distribuição de resultados conforme contrato.'
-  const ctxH = b.doc.heightOfString(ctxTexto, { width: CW - 24, lineGap: 3 })
-  b.ensure(ctxH + 22)
-  b.doc.rect(ML, b.y, CW, ctxH + 16).fill('#f5f3ee')
-  b.doc.rect(ML, b.y, 3, ctxH + 16).fill(C.gold)
-  b.doc.fontSize(8.5).fillColor(C.body).text(ctxTexto, ML + 12, b.y + 8, { width: CW - 24, lineGap: 3 })
-  b.y += ctxH + 22
-
-  // Fonte de verdade: JSON `a.caep` preenchido via tab Análise → Parcerias.
-  // (Os campos legados caep_capital_somnium/... já não são alimentados pelo UI.)
-  const caepRaw = a.caep
-  const parsed = typeof caepRaw === 'string' ? (() => { try { return JSON.parse(caepRaw || 'null') } catch { return null } })() : caepRaw
-  const investidores = parsed?.investidores || []
-  const captado = parsed?.capital_total || investidores.reduce((s, inv) => s + (parseFloat(inv.capital) || 0), 0)
-  const necessario = parseFloat(a.capital_necessario) || 0
-  const cobertura = necessario > 0 ? Math.round((captado / necessario) * 100) : null
-
-  if (!parsed || (investidores.length === 0 && parsed.quota_somnium === undefined)) {
-    b.note('Estrutura CAEP não configurada para este negócio. Para activar, preencher a tab "Análise → Parcerias" da ficha do imóvel: % Somnium, base de distribuição e lista de investidores.')
-    return
-  }
-
-  // ── Resumo da parceria ──
-  b.subheader('Estrutura da Parceria')
-  b.simpleTable([
-    { label: '% Somnium Properties', value: parsed.perc_somnium != null ? `${parsed.perc_somnium}%` : 'A definir' },
-    { label: '% Investidores', value: parsed.perc_somnium != null ? `${100 - parsed.perc_somnium}%` : 'A definir' },
-    { label: 'Base de Distribuição', value: parsed.base_distribuicao === 'liquido' ? 'Lucro Líquido (após IRC + dividendos)' : 'Lucro Bruto' },
-  ])
-  b.space(3)
-
-  // ── Capital captado vs. necessário ──
-  b.subheader('Capital da Operação')
-  b.bigNumbers([
-    { label: 'Capital Necessário', value: EUR(necessario) },
-    { label: 'Capital Captado', value: EUR(captado) },
-    { label: 'Cobertura', value: cobertura != null ? `${cobertura}%` : '—' },
-  ])
-  b.space(3)
-
-  // ── Investidores ──
-  if (investidores.length > 0) {
-    b.subheader('Investidores')
-    b.colTable(
-      [['#', 24], ['Nome', 130], ['Tipo', 90], ['Capital', 90], ['% do pool', 70]],
-      [
-        ...investidores.map((inv, i) => ({
-          _values: [
-            `#${i + 1}`,
-            inv.nome || `Investidor ${i + 1}`,
-            inv.tipo === 'empresa' ? 'Empresa (IRC)' : 'Particular (IRS)',
-            EUR(inv.capital),
-            captado > 0 ? `${((parseFloat(inv.capital) || 0) / captado * 100).toFixed(1)}%` : '—',
-          ]
-        })),
-        { _values: ['', 'Total captado', '', EUR(captado), '100%'], _total: true },
-      ]
-    )
-    b.space(3)
-
-    // Distribuição do lucro (só faz sentido se calcCAEP produziu detalhes por investidor)
-    const temDetalhes = investidores.some(inv => inv.lucro_bruto != null || inv.lucro_liquido != null)
-    if (temDetalhes && parsed.quota_somnium != null) {
-      b.subheader('Distribuição do Lucro')
-      b.colTable(
-        [['#', 24], ['Parte', 100], ['%', 40], ['Lucro Bruto', 75], ['Imposto', 60], ['Líquido', 75]],
-        [
-          { _values: ['S', 'Somnium Properties', `${parsed.perc_somnium}%`, EUR(parsed.quota_somnium), '—', EUR(parsed.quota_somnium)] },
-          ...investidores.map((inv, i) => ({
-            _values: [
-              `#${i + 1}`,
-              inv.nome || `Inv. ${i + 1}`,
-              `${inv.perc_lucro || 0}%`,
-              EUR(inv.lucro_bruto),
-              EUR(inv.impostos),
-              EUR(inv.lucro_liquido),
-            ]
-          })),
-        ]
-      )
-      b.space(3)
-    }
-  }
-
-  b.note('A distribuição efectiva depende do contrato CAEP assinado entre as partes. Valores indicativos baseados nos inputs configurados na tab "Análise → Parcerias" e na fórmula de cálculo fiscal vigente.')
 }
 
 // Coeficiente de ajuste de area usado em Comparaveis.jsx (mantido em 0,25)
