@@ -3,7 +3,7 @@
  * Mostra: campos editáveis + relações + timeline + tarefas + reuniões.
  */
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
-import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, RefreshCw, MoreVertical, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users } from 'lucide-react'
+import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, RefreshCw, MoreVertical, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin } from 'lucide-react'
 import { apiFetch, resolveApiUrl } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { PartilharAcesso } from '../PartilharAcesso.jsx'
@@ -2343,6 +2343,7 @@ const INV_ROI_OPTS = ['<10%', '10–15%', '15–20%', '20–25%', '>25%']
 const INV_EXPERIENCIA_OPTS = ['Nenhuma', '1–2 negócios', '3–10 negócios', '>10 negócios']
 const INV_TIPO_IMOVEL_OPTS = ['T0', 'T1', 'T2', 'T3+', 'Apartamento', 'Moradia', 'Edifício', 'Comercial', 'Terreno', 'Ruína', 'Indiferente']
 const INV_DISTRITOS_OPTS = ['Aveiro','Beja','Braga','Bragança','Castelo Branco','Coimbra','Évora','Faro','Guarda','Leiria','Lisboa','Portalegre','Porto','Santarém','Setúbal','Viana do Castelo','Vila Real','Viseu','Açores','Madeira']
+const INV_REGIOES_OPTS = ['Norte','Centro','Lisboa e Vale do Tejo','Alentejo','Algarve','Açores','Madeira','Coimbra','Porto','AMP','AML']
 const INV_EQUIPA_OBRAS_OPTS = ['Própria', 'Da Somnium', 'Indiferente', 'Sem opinião']
 const INV_ESTRATEGIA_OPTS = ['Wholesaling', 'CAEP', 'Fix & Flip', 'Mediação', 'Cedência de posição', 'Arrendamento']
 const INV_PERFIL_RISCO_OPTS = ['Conservador', 'Moderado', 'Agressivo']
@@ -2447,6 +2448,13 @@ function InvestidorHero({ data, onCriarPerfilDuplo }) {
   const pos = pipelinePosition(data.status, tipo)
   const score = Number(data.pontuacao || 0)
 
+  // Área geográfica de atuação — para Ativos, é informação central.
+  // Une localizacao_preferida (distritos) com regioes_preferidas (regiões macro), sem duplicados.
+  const areaAtuacao = Array.from(new Set([
+    ...parseJsonArray(data.localizacao_preferida),
+    ...parseJsonArray(data.regioes_preferidas),
+  ].filter(Boolean)))
+
   return (
     <div className="col-span-2 md:col-span-3 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
       {/* Topo */}
@@ -2511,6 +2519,24 @@ function InvestidorHero({ data, onCriarPerfilDuplo }) {
             ) : null
           } />
         </div>
+
+        {/* Área de Atuação — destaque para investidores Ativos */}
+        {isAtivo && (
+          <div className="mt-4 rounded-xl border border-orange-100 bg-orange-50/60 px-3 py-2">
+            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-orange-700/80 font-semibold">
+              <MapPin className="w-3 h-3" /> Área de Atuação
+            </div>
+            {areaAtuacao.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {areaAtuacao.map(s => (
+                  <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-white border border-orange-200 text-orange-800 font-medium">{s}</span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400 mt-1">Por definir</p>
+            )}
+          </div>
+        )}
 
         {/* Acções rápidas */}
         <div className="flex items-center gap-2 mt-4 flex-wrap">
@@ -2739,10 +2765,11 @@ function InvestidorTimeline({ data }) {
 
 // Bloco editável — 6 secções colapsáveis.
 function InvestidorEditSections({ data, form, setField }) {
+  const isAtivo = (form.tipo_principal || 'Passivo') === 'Ativo'
   const sec = {
     identificacao: ['nome','tipo_principal','status','classificacao','origem','data_primeiro_contacto'],
     capital:       ['capital_min','capital_max','estrategia','perfil_risco','roi_pretendido','origem_capital','montante_investido'],
-    preferencias:  ['tipo_imovel_preferido','localizacao_preferida','experiencia_imobiliario','equipa_obras'],
+    preferencias:  ['tipo_imovel_preferido','localizacao_preferida','regioes_preferidas','experiencia_imobiliario','equipa_obras'],
     contacto:      ['telemovel','email','preferencia_contacto','nda_assinado'],
     timeline:      ['data_primeiro_contacto','data_reuniao','data_ultimo_contacto','data_follow_up','data_proxima_acao','proxima_acao'],
     bloqueios:     ['motivo_nao_aprovacao','motivo_inatividade'],
@@ -2773,7 +2800,8 @@ function InvestidorEditSections({ data, form, setField }) {
     {/* 3. Preferências de Investimento */}
     <Section icon="🏠" title="Preferências de Investimento" fields={sec.preferencias} form={form} defaultOpen>
       <MultiChips label="Tipo de Imóvel" field="tipo_imovel_preferido" form={form} set={setField} options={INV_TIPO_IMOVEL_OPTS} />
-      <MultiChips label="Localização Preferida" field="localizacao_preferida" form={form} set={setField} options={INV_DISTRITOS_OPTS} />
+      <MultiChips label={isAtivo ? 'Área de Atuação (Distritos)' : 'Localização Preferida'} field="localizacao_preferida" form={form} set={setField} options={INV_DISTRITOS_OPTS} />
+      <MultiChips label={isAtivo ? 'Área de Atuação (Regiões)' : 'Regiões Preferidas'} field="regioes_preferidas" form={form} set={setField} options={INV_REGIOES_OPTS} />
       <EF label="Experiência" field="experiencia_imobiliario" form={form} set={setField} type="select" options={INV_EXPERIENCIA_OPTS} />
       <EF label="Equipa de Obras" field="equipa_obras" form={form} set={setField} type="select" options={INV_EQUIPA_OBRAS_OPTS} />
     </Section>
@@ -2819,10 +2847,13 @@ function InvestidorReadSections({ data }) {
   const estrategia = parseJsonArray(data.estrategia)
   const tipoImovel = parseJsonArray(data.tipo_imovel_preferido)
   const localizacao = parseJsonArray(data.localizacao_preferida)
+  const regioes = parseJsonArray(data.regioes_preferidas)
+  const isAtivo = (data.tipo_principal || 'Passivo') === 'Ativo'
+  const labelLocalizacao = isAtivo ? 'Área de Atuação (Distritos)' : 'Localização'
   const sec = {
     identificacao: ['nome','tipo_principal','status','classificacao','origem','data_primeiro_contacto'],
     capital:       ['capital_min','capital_max','estrategia','perfil_risco','roi_pretendido','origem_capital','montante_investido'],
-    preferencias:  ['tipo_imovel_preferido','localizacao_preferida','experiencia_imobiliario','equipa_obras'],
+    preferencias:  ['tipo_imovel_preferido','localizacao_preferida','regioes_preferidas','experiencia_imobiliario','equipa_obras'],
     contacto:      ['telemovel','email','preferencia_contacto','nda_assinado'],
     timeline:      ['data_primeiro_contacto','data_reuniao','data_ultimo_contacto','data_follow_up','data_proxima_acao','proxima_acao'],
     bloqueios:     ['motivo_nao_aprovacao','motivo_inatividade'],
@@ -2871,13 +2902,23 @@ function InvestidorReadSections({ data }) {
         ) : <p className="text-sm text-gray-400">{data.tipo_imovel_preferido || '—'}</p>}
       </div>
       <div className="col-span-2 md:col-span-3">
-        <p className="text-xs text-gray-400 mb-1">Localização</p>
+        <p className="text-xs text-gray-400 mb-1">{labelLocalizacao}</p>
         {localizacao.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
             {localizacao.map(s => <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-blue-50 border border-blue-100 text-blue-700">{s}</span>)}
           </div>
         ) : <p className="text-sm text-gray-400">{data.localizacao_preferida || '—'}</p>}
       </div>
+      {(isAtivo || regioes.length > 0) && (
+        <div className="col-span-2 md:col-span-3">
+          <p className="text-xs text-gray-400 mb-1">{isAtivo ? 'Área de Atuação (Regiões)' : 'Regiões Preferidas'}</p>
+          {regioes.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {regioes.map(s => <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-sky-50 border border-sky-100 text-sky-700">{s}</span>)}
+            </div>
+          ) : <p className="text-sm text-gray-400">—</p>}
+        </div>
+      )}
       <Field label="Experiência" value={data.experiencia_imobiliario} />
       <Field label="Equipa Obras" value={data.equipa_obras} />
     </Section>

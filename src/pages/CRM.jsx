@@ -50,6 +50,50 @@ function ClassBadge({ cls }) {
   return <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white ${CLASS_COLOR[cls] ?? 'bg-gray-400'}`}>{cls}</span>
 }
 
+// ── Barra de fases para Investidores (Activos/Passivos) ─────
+// Mostra contagem por status do pipeline correspondente ao sub-tab escolhido.
+// Estados terminais (Não qualificado, Inactivo) são omitidos por defeito;
+// só aparecem se houver registos lá.
+function InvestidoresPhaseBar({ data, tipo }) {
+  const accent = tipo === 'Ativo'
+    ? { text: 'text-orange-700', bg: 'bg-orange-50/70', border: 'border-orange-200', dot: 'bg-orange-500' }
+    : { text: 'text-violet-700', bg: 'bg-violet-50/70', border: 'border-violet-200', dot: 'bg-violet-500' }
+  const base = tipo === 'Ativo' ? INV_STATUS_ATIVO : INV_STATUS_PASSIVO
+  const counts = base.reduce((acc, s) => { acc[s] = 0; return acc }, {})
+  for (const inv of data) {
+    if (counts[inv.status] != null) counts[inv.status] += 1
+  }
+  // Mostra todos os principais; terminais só se > 0
+  const phases = base.filter(s => (s !== 'Não qualificado' && s !== 'Inactivo') || counts[s] > 0)
+  const total = data.length
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-xs">
+      <div className="flex items-center gap-2 mb-2">
+        <span className={`inline-block w-2 h-2 rounded-full ${accent.dot}`} />
+        <h3 className={`text-xs uppercase tracking-wider font-bold ${accent.text}`}>
+          Pipeline {tipo === 'Ativo' ? 'Activos' : 'Passivos'}
+        </h3>
+        <span className="text-xs text-gray-400 ml-auto">{total} investidor{total !== 1 ? 'es' : ''}</span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
+        {phases.map(p => {
+          const n = counts[p]
+          const has = n > 0
+          return (
+            <div key={p}
+              className={`rounded-xl border px-3 py-2 transition-all ${
+                has ? `${accent.bg} ${accent.border}` : 'bg-gray-50 border-gray-100'
+              }`}>
+              <p className="text-[10px] uppercase tracking-wide text-gray-500 leading-tight line-clamp-2 min-h-[1.6rem]" title={p}>{p}</p>
+              <p className={`text-2xl font-bold mt-0.5 ${has ? accent.text : 'text-gray-300'}`}>{n}</p>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Relatório Semanal de Consultores ─────────────────────────
 function RelatorioConsultores() {
   const [report, setReport] = useState(null)
@@ -1106,19 +1150,31 @@ export function CRM() {
         {/* KPIs integrados */}
         <TabKPIs tab={tab} regiao={regiaoActiva} />
 
-        {/* Sub-tabs Investidores: Passivo / Ativo */}
+        {/* Sub-tabs Investidores: Passivo / Ativo — destaque visual + barra de fases */}
         {tab === 'Investidores' && (
-          <div className="flex items-center gap-3">
-            <Tabs
-              size="sm"
-              value={invSubTab}
-              onChange={v => { setInvSubTab(v); setDetail(null, { replace: true }) }}
-              items={[
-                { key: 'Passivo', label: 'Passivos' },
-                { key: 'Ativo',   label: 'Ativos' },
-              ]}
-            />
-            <span className="text-xs text-gray-400">{data.length} investidor{data.length !== 1 ? 'es' : ''}</span>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              {[
+                { key: 'Passivo', label: 'Passivos', gradient: 'from-violet-500 to-purple-600', hoverRing: 'hover:border-violet-300', activeRing: 'ring-violet-200' },
+                { key: 'Ativo',   label: 'Ativos',   gradient: 'from-orange-500 to-amber-600', hoverRing: 'hover:border-orange-300', activeRing: 'ring-orange-200' },
+              ].map(t => {
+                const active = invSubTab === t.key
+                return (
+                  <button key={t.key} type="button"
+                    onClick={() => { setInvSubTab(t.key); setDetail(null, { replace: true }) }}
+                    className={`px-7 py-3 rounded-2xl border-2 font-bold text-base uppercase tracking-wider transition-all ${
+                      active
+                        ? `bg-gradient-to-r ${t.gradient} text-white border-transparent shadow-lg ring-4 ${t.activeRing}`
+                        : `bg-white text-gray-500 border-gray-200 ${t.hoverRing} hover:text-gray-700`
+                    }`}>
+                    {t.label}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Barra de contabilização por fases — só após escolher Ativos ou Passivos */}
+            <InvestidoresPhaseBar data={data} tipo={invSubTab} />
           </div>
         )}
 
