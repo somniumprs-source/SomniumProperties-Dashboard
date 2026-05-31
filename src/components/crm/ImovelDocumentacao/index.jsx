@@ -1,13 +1,14 @@
 import { useState } from 'react'
-import { UploadCloud, FileBarChart2, ListChecks } from 'lucide-react'
+import { Files, FileBarChart2, ListChecks } from 'lucide-react'
 import { useDocumentacao } from './useDocumentacao.js'
-import { UploadAnalise } from './UploadAnalise.jsx'
+import { OutrosDocumentos } from './OutrosDocumentos.jsx'
 import { Relatorio } from './Relatorio.jsx'
 import { Checklist } from './Checklist.jsx'
+import { getDocsChecklist, getDocsOutros } from './checklist.config.js'
 
 /**
  * Módulo de gestão documental com interpretação por IA — Ficha do Imóvel.
- * 3 sub-secções — Checklist (slots canónicos) · Upload & Análise · Relatório.
+ * 3 sub-secções — Checklist (slots canónicos com IA inline) · Outros Documentos (storage livre) · Relatório.
  */
 export function ImovelDocumentacao({ imovelId, tipoImovel }) {
   const [sub, setSub] = useState('checklist')
@@ -24,13 +25,15 @@ export function ImovelDocumentacao({ imovelId, tipoImovel }) {
 
   const subs = [
     { key: 'checklist', label: 'Checklist', icon: ListChecks },
-    { key: 'upload', label: 'Upload & Análise', icon: UploadCloud },
+    { key: 'outros', label: 'Outros Documentos', icon: Files },
     { key: 'relatorio', label: 'Relatório', icon: FileBarChart2 },
   ]
 
+  const docsChecklist = getDocsChecklist(d.docs)
+  const docsOutros = getDocsOutros(d.docs)
+
   return (
     <div className="space-y-4">
-      {/* Sub-tabs internas */}
       <div className="flex bg-neutral-100 rounded-lg p-0.5 w-fit">
         {subs.map(s => {
           const Icon = s.icon
@@ -49,24 +52,24 @@ export function ImovelDocumentacao({ imovelId, tipoImovel }) {
 
       {sub === 'checklist' && (
         <Checklist
-          docs={d.docs}
+          docs={docsChecklist}
           uploading={d.uploading}
-          onUpload={d.upload}
-          onRemoverDoc={d.removerDoc}
-        />
-      )}
-      {sub === 'upload' && (
-        <UploadAnalise
-          docs={d.docs}
-          uploading={d.uploading}
-          uploadErro={d.uploadErro}
           analyzing={d.analyzing}
           erros={d.erros}
           onUpload={d.upload}
+          onRemoverDoc={d.removerDoc}
           onAnalisar={d.analisar}
-          onAnalisarTodos={d.analisarTodos}
           onRemoverAnalise={d.removerAnalise}
           analiseDoFicheiro={d.analiseDoFicheiro}
+        />
+      )}
+      {sub === 'outros' && (
+        <OutrosDocumentos
+          docs={docsOutros}
+          uploading={d.uploading}
+          uploadErro={d.uploadErro}
+          onUpload={d.upload}
+          onRemoverDoc={d.removerDoc}
         />
       )}
       {sub === 'relatorio' && (

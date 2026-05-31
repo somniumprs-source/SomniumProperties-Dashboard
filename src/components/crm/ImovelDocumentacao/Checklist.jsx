@@ -1,19 +1,28 @@
 import { useRef, useState } from 'react'
-import { CheckCircle2, AlertCircle, Upload, ExternalLink, RefreshCw, Trash2 } from 'lucide-react'
+import { CheckCircle2, AlertCircle, Upload, ExternalLink, RefreshCw, Trash2, Sparkles } from 'lucide-react'
 import { CHECKLIST_DOCUMENTACAO, getDocBySlot, resumoChecklist } from './checklist.config.js'
+import { ResultadoAnalise } from './ResultadoAnalise.jsx'
 
 /**
- * Checklist canónica de documentação do imóvel. Cada slot tem o seu botão
- * "Importar" — o ficheiro escolhido é enviado já marcado com o slot, ficando
- * explicitamente ligado àquela linha. Os documentos com slot são depois
- * anexados ao Dossier de Investimento.
+ * Checklist canónica de documentação do imóvel. Cada slot tem botões
+ * para importar/substituir o ficheiro e analisar com IA (depois de importado).
+ * O resultado da análise expande inline na linha do slot.
  */
-export function Checklist({ docs, uploading, onUpload, onRemoverDoc }) {
+export function Checklist({
+  docs,
+  uploading,
+  analyzing,
+  erros,
+  onUpload,
+  onRemoverDoc,
+  onAnalisar,
+  onRemoverAnalise,
+  analiseDoFicheiro,
+}) {
   const resumo = resumoChecklist(docs)
 
   return (
     <div className="space-y-4">
-      {/* Sumário */}
       <div className="rounded-xl border border-neutral-100 bg-white px-4 py-3">
         <p className="text-[10px] uppercase tracking-wide text-neutral-400">Importados</p>
         <p className="text-2xl font-bold text-neutral-700">
@@ -25,28 +34,36 @@ export function Checklist({ docs, uploading, onUpload, onRemoverDoc }) {
         Os documentos importados aqui ficam anexados ao Dossier de Investimento entregue ao investidor.
       </p>
 
-      {/* Lista */}
       <div className="space-y-2">
-        {CHECKLIST_DOCUMENTACAO.map(item => (
-          <SlotRow
-            key={item.slot}
-            item={item}
-            doc={getDocBySlot(docs, item.slot)}
-            uploading={uploading}
-            onUpload={(files) => onUpload(files, { slot: item.slot })}
-            onRemove={onRemoverDoc}
-          />
-        ))}
+        {CHECKLIST_DOCUMENTACAO.map(item => {
+          const doc = getDocBySlot(docs, item.slot)
+          return (
+            <SlotRow
+              key={item.slot}
+              item={item}
+              doc={doc}
+              uploading={uploading}
+              analyzing={analyzing}
+              erro={doc ? erros?.[doc.id] : null}
+              analise={doc ? analiseDoFicheiro?.(doc.id) : null}
+              onUpload={(files) => onUpload(files, { slot: item.slot })}
+              onRemove={onRemoverDoc}
+              onAnalisar={onAnalisar}
+              onRemoverAnalise={onRemoverAnalise}
+            />
+          )
+        })}
       </div>
     </div>
   )
 }
 
-function SlotRow({ item, doc, uploading, onUpload, onRemove }) {
+function SlotRow({ item, doc, uploading, analyzing, erro, analise, onUpload, onRemove, onAnalisar, onRemoverAnalise }) {
   const inputRef = useRef(null)
   const [removing, setRemoving] = useState(false)
 
   const importado = !!doc
+  const aAnalisar = doc ? analyzing?.has?.(doc.id) : false
 
   const badge = importado
     ? { txt: 'Importado', cor: '#27ae60', bg: '#eafaf0', icon: CheckCircle2 }
@@ -66,8 +83,8 @@ function SlotRow({ item, doc, uploading, onUpload, onRemove }) {
   }
 
   return (
-    <div className="rounded-xl border border-neutral-100 bg-white px-4 py-3">
-      <div className="flex items-center gap-3">
+    <div className="rounded-xl border border-neutral-100 bg-white overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-neutral-700 truncate">{item.titulo}</p>
           <p className="text-[11px] text-neutral-400 mt-0.5">{item.descricao}</p>
@@ -99,14 +116,45 @@ function SlotRow({ item, doc, uploading, onUpload, onRemove }) {
             {importado ? <RefreshCw className="w-3.5 h-3.5" /> : <Upload className="w-3.5 h-3.5" />}
             {importado ? 'Substituir' : 'Importar'}
           </button>
+
+          {importado && !analise && (
+            <button onClick={() => onAnalisar(doc)} disabled={aAnalisar}
+              title="Analisar com IA"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white disabled:opacity-50"
+              style={{ backgroundColor: '#C9A84C' }}>
+              {aAnalisar
+                ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                : <Sparkles className="w-3.5 h-3.5" />}
+              {aAnalisar ? 'A analisar…' : 'Analisar IA'}
+            </button>
+          )}
+
+          {importado && analise && (
+            <button onClick={() => onRemoverAnalise(doc.id)} title="Limpar análise / reanalisar"
+              className="p-1.5 rounded-lg text-neutral-300 hover:text-neutral-700 hover:bg-neutral-50">
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {importado && (
-            <button onClick={handleRemove} disabled={removing} title="Remover"
+            <button onClick={handleRemove} disabled={removing} title="Remover documento"
               className="p-1.5 rounded-lg text-neutral-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-50">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
       </div>
+
+      {erro && (
+        <div className="px-4 py-3 border-t border-red-100 bg-red-50 flex items-center justify-between gap-3">
+          <p className="text-xs text-red-700">{erro}</p>
+          <button onClick={() => onAnalisar(doc)} className="text-xs font-semibold text-red-700 underline shrink-0">
+            Tentar novamente
+          </button>
+        </div>
+      )}
+
+      {analise && <ResultadoAnalise analise={analise} />}
 
       <input ref={inputRef} type="file"
         accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"

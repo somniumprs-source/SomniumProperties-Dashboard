@@ -38,3 +38,13 @@ export function resumoChecklist(docs) {
   }
   return { importados, total: CHECKLIST_DOCUMENTACAO.length }
 }
+
+export function getDocsChecklist(docs) {
+  if (!Array.isArray(docs)) return []
+  return docs.filter(d => d?.slot && CHECKLIST_SLOTS.has(d.slot))
+}
+
+export function getDocsOutros(docs) {
+  if (!Array.isArray(docs)) return []
+  return docs.filter(d => !d?.slot || !CHECKLIST_SLOTS.has(d.slot))
+}
