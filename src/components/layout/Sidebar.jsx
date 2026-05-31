@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { LayoutDashboard, TrendingUp, Database, Bell, Clock, BarChart3, Menu, X, LogOut, Briefcase, Shield, ScrollText } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { apiFetch } from '../../lib/api.js'
+import { prefetchRoute } from '../../lib/prefetch.js'
 
 const nav = [
   { to: '/',                   label: 'Dashboard',  Icon: LayoutDashboard, end: true, area: 'dashboard' },
@@ -79,6 +80,9 @@ export function Sidebar() {
             to={to}
             end={end}
             onClick={handleNav}
+            onMouseEnter={() => prefetchRoute(to)}
+            onFocus={() => prefetchRoute(to)}
+            onTouchStart={() => prefetchRoute(to)}
             className={({ isActive }) =>
               `group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
                 isActive ? 'active-nav' : 'text-neutral-500 hover:text-white'

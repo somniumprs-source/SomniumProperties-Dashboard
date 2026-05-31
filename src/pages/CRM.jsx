@@ -54,21 +54,23 @@ function ClassBadge({ cls }) {
 // 4 quadros calculados a partir do `data` já filtrado pelo sub-tab:
 //   - Investidores A         → count(classificacao = 'A')
 //   - Investidores B         → count(classificacao = 'B')
-//   - Capital Angariado      → Σ capital_max  WHERE status = 'Investidor Qualificado em Carteira'
+//   - Capital Angariado      → Σ capital_max  WHERE status IN ('Investidor Qualificado em Carteira', 'Investidor em parceria')
 //   - Capital Investido      → Σ montante_investido WHERE status = 'Investidor em parceria'
 function InvestidoresKPICards({ data }) {
   const stats = data.reduce((a, inv) => {
     if (inv.classificacao === 'A') a.classA += 1
     if (inv.classificacao === 'B') a.classB += 1
-    if (inv.status === 'Investidor Qualificado em Carteira') a.capAngariado += Number(inv.capital_max || 0)
-    if (inv.status === 'Investidor em parceria')             a.capInvestido += Number(inv.montante_investido || 0)
+    if (inv.status === 'Investidor Qualificado em Carteira' || inv.status === 'Investidor em parceria') {
+      a.capAngariado += Number(inv.capital_max || 0)
+    }
+    if (inv.status === 'Investidor em parceria') a.capInvestido += Number(inv.montante_investido || 0)
     return a
   }, { classA: 0, classB: 0, capAngariado: 0, capInvestido: 0 })
 
   const cards = [
     { label: 'Investidores A',  value: stats.classA,          tone: 'emerald' },
     { label: 'Investidores B',  value: stats.classB,          tone: 'sky' },
-    { label: 'Capital Angariado', value: EUR(stats.capAngariado), tone: 'amber',  hint: 'Qualificados em Carteira' },
+    { label: 'Capital Angariado', value: EUR(stats.capAngariado), tone: 'amber',  hint: 'Qualificados + Parceria' },
     { label: 'Capital Investido', value: EUR(stats.capInvestido), tone: 'indigo', hint: 'Investidores em Parceria' },
   ]
   const tones = {

@@ -65,6 +65,40 @@ const COLUMN_COLORS = {
 
 const DEFAULT_COLORS = { bg: 'bg-gray-50', border: 'border-gray-200', header: 'bg-gray-100 text-gray-700' }
 
+const KanbanCard = memo(function KanbanCard({ item, dragging, onDragStart, onDragEnd, onCardClick, onDelete, renderCard }) {
+  // view-transition-name único por item → o browser anima a transição entre colunas.
+  const viewName = `kanban-card-${item.id}`
+  return (
+    <div
+      draggable
+      onDragStart={e => onDragStart(e, item)}
+      onDragEnd={onDragEnd}
+      onClick={() => onCardClick?.(item.id)}
+      style={{ viewTransitionName: viewName }}
+      className={`bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-800 p-3 shadow-xs cursor-pointer hover:shadow-md hover:border-indigo-300 transition-all group/card relative ${
+        dragging ? 'opacity-50 cursor-grabbing scale-[0.98]' : ''
+      }`}
+    >
+      {onDelete && (
+        <button
+          onClick={e => { e.stopPropagation(); onDelete(item.id, item.nome ?? item.movimento) }}
+          className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-red-100 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center text-xs opacity-0 group-hover/card:opacity-100 transition-all"
+          title="Apagar">
+          ×
+        </button>
+      )}
+      {renderCard(item)}
+    </div>
+  )
+}, (prev, next) => (
+  prev.item.id === next.item.id &&
+  prev.item.updated_at === next.item.updated_at &&
+  prev.item[prev.item.__groupField] === next.item[next.item.__groupField] &&
+  prev.dragging === next.dragging &&
+  prev.renderCard === next.renderCard &&
+  prev.onDelete === next.onDelete
+))
+
 /**
  * Kanban Board genérico.
  * @param {Object} props
@@ -94,7 +128,13 @@ function KanbanBoardImpl({ columns, items, groupField, renderCard, onMove, onCar
     if (dragging && onMove) {
       const item = items.find(i => i.id === dragging)
       if (item && (item[groupField] ?? '').replace(/^\d+-/, '') !== col) {
-        onMove(dragging, col)
+        // View Transitions API: morph nativo entre estados (Chrome/Edge/Safari TP).
+        // Fallback gracioso: chama onMove directo.
+        if (typeof document !== 'undefined' && document.startViewTransition) {
+          document.startViewTransition(() => onMove(dragging, col))
+        } else {
+          onMove(dragging, col)
+        }
       }
     }
     setDragging(null)
@@ -146,26 +186,16 @@ function KanbanBoardImpl({ columns, items, groupField, renderCard, onMove, onCar
             {/* Cards */}
             <div className="flex-1 p-2 space-y-2 overflow-y-auto" style={{ maxHeight: '500px' }}>
               {colItems.map(item => (
-                <div
+                <KanbanCard
                   key={item.id}
-                  draggable
-                  onDragStart={e => handleDragStart(e, item)}
+                  item={item}
+                  dragging={dragging === item.id}
+                  onDragStart={handleDragStart}
                   onDragEnd={handleDragEnd}
-                  onClick={() => onCardClick?.(item.id)}
-                  className={`bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-800 p-3 shadow-xs cursor-pointer hover:shadow-md hover:border-indigo-300 transition-all group/card relative ${
-                    dragging === item.id ? 'opacity-50 cursor-grabbing' : ''
-                  }`}
-                >
-                  {onDelete && (
-                    <button
-                      onClick={e => { e.stopPropagation(); onDelete(item.id, item.nome ?? item.movimento) }}
-                      className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-red-100 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center text-xs opacity-0 group-hover/card:opacity-100 transition-all"
-                      title="Apagar">
-                      ×
-                    </button>
-                  )}
-                  {renderCard(item)}
-                </div>
+                  onCardClick={onCardClick}
+                  onDelete={onDelete}
+                  renderCard={renderCard}
+                />
               ))}
               {colItems.length === 0 && (
                 <p className="text-xs text-gray-300 text-center py-6">Vazio</p>

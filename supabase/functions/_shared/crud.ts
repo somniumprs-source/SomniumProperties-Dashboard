@@ -33,12 +33,16 @@ async function auditLog(
 }
 
 // ── Limpar dados do form antes de inserir/actualizar ─────────
+// Campos TEXT cujo nome bate no regex de coerção numérica mas que guardam
+// strings (selects, gamas). NUNCA passar por parseFloat — '<10%' → NaN → null.
+const TEXT_FIELDS_KEEP_STRING = new Set(["roi_pretendido"]);
+
 function cleanFormData(data: Record<string, any>): Record<string, any> {
   const cleaned: Record<string, any> = { ...data };
   for (const [key, value] of Object.entries(cleaned)) {
     if (key.startsWith("_")) { delete cleaned[key]; continue; }
     if (value === "" || value === undefined) { cleaned[key] = null; continue; }
-    if (typeof value === "string" && /^(custo|lucro|capital|ask_price|valor|roi|area|montante|score|comissao|pontuacao|tempo)/.test(key)) {
+    if (typeof value === "string" && !TEXT_FIELDS_KEEP_STRING.has(key) && /^(custo|lucro|capital|ask_price|valor|roi|area|montante|score|comissao|pontuacao|tempo)/.test(key)) {
       const num = parseFloat(value);
       cleaned[key] = isNaN(num) ? null : num;
     }

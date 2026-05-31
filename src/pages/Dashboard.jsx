@@ -4,6 +4,7 @@ import { Header } from '../components/layout/Header.jsx'
 import { DepartmentSection } from '../components/dashboard/DepartmentSection.jsx'
 import { useKPIs } from '../hooks/useKPIs.js'
 import { KPISkeleton } from '../components/ui/Skeleton.jsx'
+import { Stagger } from '../components/ui/Stagger.jsx'
 import { apiFetch } from '../lib/api.js'
 import { EUR, statusColor } from '../constants.js'
 import { RegiaoToggle } from '../components/RegiaoBadge.jsx'
@@ -214,7 +215,7 @@ export function Dashboard() {
                 {pulse.score}/100
               </span>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-3 text-center">
+            <Stagger className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-3 text-center">
               {[
                 { label: 'Imóveis Novos', value: pulse.atividades.imoveisAdicionados, good: true },
                 { label: 'Chamadas', value: pulse.atividades.chamadasFeitas, good: true },
@@ -222,12 +223,12 @@ export function Dashboard() {
                 { label: 'Propostas', value: pulse.atividades.propostasEnviadas, good: true },
                 { label: 'Deals', value: pulse.atividades.dealsFechados, good: true },
               ].map(item => (
-                <div key={item.label} className="bg-white dark:bg-neutral-900 rounded-lg p-2.5 shadow-xs border border-gray-100 dark:border-neutral-800">
+                <Stagger.Item key={item.label} className="bg-white dark:bg-neutral-900 rounded-lg p-2.5 shadow-xs border border-gray-100 dark:border-neutral-800">
                   <p className="text-lg font-bold text-gray-900">{item.value}</p>
                   <p className="text-xs text-gray-500">{item.label}</p>
-                </div>
+                </Stagger.Item>
               ))}
-            </div>
+            </Stagger>
             {(pulse.alertas.imoveisParados > 0 || pulse.alertas.investSemContacto > 0 || pulse.alertas.consFollowUpAtrasado > 0) && (
               <div className="mt-3 flex gap-4 text-xs">
                 {pulse.alertas.imoveisParados > 0 && <span className="text-red-600">{pulse.alertas.imoveisParados} imóveis parados</span>}
@@ -263,11 +264,11 @@ export function Dashboard() {
                   <span className="text-xs text-gray-400">Activity Score</span>
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              <Stagger className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                 {Object.entries(wa).filter(([k]) => k !== 'score').map(([key, v]) => {
                   const pct = v.meta > 0 ? Math.min(100, Math.round(v.valor / v.meta * 100)) : 0
                   return (
-                    <div key={key} className="flex flex-col gap-1.5">
+                    <Stagger.Item key={key} className="flex flex-col gap-1.5">
                       <div className="flex justify-between items-baseline">
                         <span className="text-xs text-gray-500">{LABELS[key] || key}</span>
                         <span className={`text-sm font-bold ${pct >= 100 ? 'text-green-600' : pct >= 50 ? 'text-yellow-600' : 'text-red-500'}`}>
@@ -278,21 +279,23 @@ export function Dashboard() {
                         <div className={`h-2 rounded-full transition-all ${pct >= 100 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-400' : 'bg-red-400'}`}
                           style={{ width: `${pct}%` }} />
                       </div>
-                    </div>
+                    </Stagger.Item>
                   )
                 })}
-              </div>
+              </Stagger>
             </div>
           )
         })()}
 
         {/* Sections */}
         {!loading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+        <Stagger className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
           {sections.map((s) => (
-            <DepartmentSection key={s.title} {...s} />
+            <Stagger.Item key={s.title}>
+              <DepartmentSection {...s} />
+            </Stagger.Item>
           ))}
-        </div>
+        </Stagger>
         )}
       </div>
     </>
