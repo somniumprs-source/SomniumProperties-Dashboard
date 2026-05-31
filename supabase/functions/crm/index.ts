@@ -109,7 +109,13 @@ async function resolveCrmUser(c: any): Promise<any | null> {
     const { data: { user }, error } = await _crmAuthClient.auth.getUser(token);
     if (error || !user?.email) return null;
     // Resolver o app-user a partir do email (port de resolveAppUser, simplificado).
-    const { rows } = await pool.query("SELECT * FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1", [user.email]);
+    // Email pode estar partilhado por varios registos (admin + outros). Ordem
+    // deterministica: admin activo > activo > restantes (port de getUserByEmail).
+    const { rows } = await pool.query(
+      `SELECT * FROM users WHERE LOWER(email) = LOWER($1)
+       ORDER BY (role='admin' AND ativo)::int DESC, ativo::int DESC, created_at ASC LIMIT 1`,
+      [user.email],
+    );
     return rows[0] || null;
   } catch { return null; }
 }

@@ -67,7 +67,13 @@ function invalidateUserCache(email) {
 
 // ── Helpers ──────────────────────────────────────────────────
 async function getUserByEmail(email) {
-  const r = await pool.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [email])
+  // A equipa pode ter varios registos com o mesmo email (sessao Supabase
+  // partilhada). Ordem deterministica: admin activo > activo > restantes.
+  const r = await pool.query(
+    `SELECT * FROM users WHERE LOWER(email) = LOWER($1)
+     ORDER BY (role='admin' AND ativo)::int DESC, ativo::int DESC, created_at ASC LIMIT 1`,
+    [email],
+  )
   return r.rows[0] || null
 }
 
@@ -121,7 +127,7 @@ export async function resolveAppUser(req) {
     await pool.query(
       `INSERT INTO users (id, email, nome, iniciais, role, ativo)
        VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (email) DO NOTHING`,
+       ON CONFLICT (id) DO NOTHING`,
       [req.user.id, email, email.split('@')[0], iniciaisFromNome(email),
        isOwner ? 'admin' : 'comercial', isOwner]
     )
