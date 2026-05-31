@@ -140,13 +140,8 @@ async function runFollowUp() {
         )
         enviadosAuto++
       } else {
-        // Criar tarefa no CRM para follow-up manual (A e B)
-        await pool.query(
-          `INSERT INTO tarefas (id, tarefa, status, categoria, inicio, funcionario, created_at, updated_at)
-           VALUES ($1, $2, 'A fazer', 'Follow-up Consultor', $3, 'Alexandre Mendes', $3, $3)`,
-          [randomUUID(), `Follow-up pendente — ${c.nome} (${classe}, ${diasSem}d sem contacto)`, now.toISOString()]
-        )
-        tarefasCriadas++
+        // Criação de tarefa manual desactivada (gerava ruído no CRM com classe D
+        // quando whatsappConfigured() era false). Reactivar apenas para A/B.
       }
 
       // Actualizar próximo follow-up
