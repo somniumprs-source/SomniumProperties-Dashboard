@@ -2121,14 +2121,27 @@ router.get('/kpis/:tab', async (req, res) => {
       `, params)
       res.json({ byEstado: rows, total: parseInt(totals.total), roiMedio: parseFloat(totals.roi_medio).toFixed(1) })
     } else if (tab === 'investidores') {
-      const { rows } = await pool.query(`SELECT status, COUNT(*) as count FROM investidores ${wInv} GROUP BY status ORDER BY count DESC`, paramsInv)
+      // Excluir cópias duplicadas (Ativo/Passivo) — só contam pessoas únicas.
+      // Origens auto-referenciadas (duplicado_de = id) ficam dentro.
+      const dupGuard = '(duplicado_de IS NULL OR duplicado_de = id)'
+      const wInvDup = wInv ? `${wInv} AND ${dupGuard}` : `WHERE ${dupGuard}`
+      const { rows } = await pool.query(`SELECT status, COUNT(*) as count FROM investidores ${wInvDup} GROUP BY status ORDER BY count DESC`, paramsInv)
       const { rows: [totals] } = await pool.query(`
         SELECT COUNT(*) as total,
           COUNT(CASE WHEN classificacao IN ('A','B') THEN 1 END) as ab,
+          COUNT(CASE WHEN classificacao = 'A' THEN 1 END) as class_a,
+          COUNT(CASE WHEN classificacao = 'B' THEN 1 END) as class_b,
           COALESCE(SUM(capital_max),0) as capital
-        FROM investidores ${wInv}
+        FROM investidores ${wInvDup}
       `, paramsInv)
-      res.json({ byStatus: rows, total: parseInt(totals.total), classAB: parseInt(totals.ab), capitalTotal: parseFloat(totals.capital) })
+      res.json({
+        byStatus: rows,
+        total: parseInt(totals.total),
+        classAB: parseInt(totals.ab),
+        classA: parseInt(totals.class_a),
+        classB: parseInt(totals.class_b),
+        capitalTotal: parseFloat(totals.capital),
+      })
     } else if (tab === 'consultores') {
       const { rows } = await pool.query(`SELECT estatuto, COUNT(*) as count FROM consultores ${wReg} GROUP BY estatuto ORDER BY count DESC`, params)
       const { rows: [totals] } = await pool.query(`SELECT COUNT(*) as total FROM consultores ${wReg}`, params)
@@ -2594,7 +2607,10 @@ router.post('/automation/score-prioridade-consultores', async (req, res) => {
 // ── Relatório semanal de investidores ────────────────────────
 router.get('/relatorio/investidores', async (req, res) => {
   try {
-    const { rows: investidores } = await pool.query('SELECT * FROM investidores ORDER BY pontuacao DESC NULLS LAST')
+    // Excluir cópias duplicadas (Ativo/Passivo) — só contam pessoas únicas.
+    const { rows: investidores } = await pool.query(
+      'SELECT * FROM investidores WHERE duplicado_de IS NULL OR duplicado_de = id ORDER BY pontuacao DESC NULLS LAST'
+    )
     const { rows: negocios } = await pool.query('SELECT * FROM negocios')
     const { rows: reunioes } = await pool.query("SELECT id, entidade_id, data, duracao_min FROM reunioes WHERE entidade_tipo = 'investidores'")
     const now = new Date()

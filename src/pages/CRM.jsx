@@ -56,8 +56,8 @@ function ClassBadge({ cls }) {
 // só aparecem se houver registos lá.
 function InvestidoresPhaseBar({ data, tipo }) {
   const accent = tipo === 'Ativo'
-    ? { text: 'text-orange-700', bg: 'bg-orange-50/70', border: 'border-orange-200', dot: 'bg-orange-500' }
-    : { text: 'text-violet-700', bg: 'bg-violet-50/70', border: 'border-violet-200', dot: 'bg-violet-500' }
+    ? { text: 'text-green-700',  bg: 'bg-green-50/70',  border: 'border-green-200',  dot: 'bg-green-500' }
+    : { text: 'text-yellow-700', bg: 'bg-yellow-50/70', border: 'border-yellow-300', dot: 'bg-yellow-400' }
   const base = tipo === 'Ativo' ? INV_STATUS_ATIVO : INV_STATUS_PASSIVO
   const counts = base.reduce((acc, s) => { acc[s] = 0; return acc }, {})
   for (const inv of data) {
@@ -805,7 +805,7 @@ export function CRM() {
       groupField: 'status',
       renderCard: (item) => {
         const tipo = item.tipo_principal || 'Passivo'
-        const tipoBg = tipo === 'Ativo' ? 'from-orange-500 to-amber-600' : 'from-violet-500 to-purple-600'
+        const tipoBg = tipo === 'Ativo' ? 'from-green-500 to-emerald-600' : 'from-yellow-400 to-amber-500'
         const iniciais = (item.nome || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase()).join('') || '?'
         // Capital compacto
         const capCompact = (() => {
@@ -1155,8 +1155,8 @@ export function CRM() {
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {[
-                { key: 'Passivo', label: 'Passivos', gradient: 'from-violet-500 to-purple-600', hoverRing: 'hover:border-violet-300', activeRing: 'ring-violet-200' },
-                { key: 'Ativo',   label: 'Ativos',   gradient: 'from-orange-500 to-amber-600', hoverRing: 'hover:border-orange-300', activeRing: 'ring-orange-200' },
+                { key: 'Passivo', label: 'Passivos', gradient: 'from-yellow-400 to-amber-500', hoverRing: 'hover:border-yellow-300', activeRing: 'ring-yellow-200' },
+                { key: 'Ativo',   label: 'Ativos',   gradient: 'from-green-500 to-emerald-600', hoverRing: 'hover:border-green-300', activeRing: 'ring-green-200' },
               ].map(t => {
                 const active = invSubTab === t.key
                 return (
@@ -1255,7 +1255,7 @@ export function CRM() {
                       <button onClick={() => setDetail(inv.id)}
                         className={`w-full text-left px-3 py-2.5 border-b border-gray-50 transition-all ${
                           isActive
-                            ? `${invSubTab === 'Ativo' ? 'bg-orange-50 border-l-3 border-l-orange-500' : 'bg-violet-50 border-l-3 border-l-violet-500'}`
+                            ? `${invSubTab === 'Ativo' ? 'bg-green-50 border-l-3 border-l-green-500' : 'bg-yellow-50 border-l-3 border-l-yellow-400'}`
                             : 'hover:bg-gray-50'
                         }`}>
                         <div className="flex items-center gap-2">
@@ -1516,7 +1516,7 @@ function InvestidoresTable({ data, onEdit, onDelete, onView }) {
       <tbody>
         {sorted.map(r => {
           const tipo = r.tipo_principal || 'Passivo'
-          const tipoStyle = tipo === 'Ativo' ? 'bg-orange-100 text-orange-700' : 'bg-violet-100 text-violet-700'
+          const tipoStyle = tipo === 'Ativo' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
           return (
             <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => onView?.(r.id)}>
               <td className="py-3 px-3"><ClickableName name={r.nome} onClick={() => onView?.(r.id)} /></td>

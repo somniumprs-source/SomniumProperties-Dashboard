@@ -2422,8 +2422,8 @@ function InvestidorHero({ data, onCriarPerfilDuplo }) {
   const tipo = data.tipo_principal || 'Passivo'
   const isAtivo = tipo === 'Ativo'
   const outroTipo = isAtivo ? 'Passivo' : 'Ativo'
-  const tipoBg = isAtivo ? 'from-orange-500 to-amber-600' : 'from-violet-500 to-purple-600'
-  const tipoText = isAtivo ? 'text-orange-700 bg-orange-100 border-orange-200' : 'text-violet-700 bg-violet-100 border-violet-200'
+  const tipoBg = isAtivo ? 'from-green-500 to-emerald-600' : 'from-yellow-400 to-amber-500'
+  const tipoText = isAtivo ? 'text-green-700 bg-green-100 border-green-200' : 'text-yellow-700 bg-yellow-100 border-yellow-200'
   const statusColor = INV_STATUS_COLOR[data.status] || 'bg-gray-100 text-gray-600'
   const iniciais = (data.nome || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase()).join('') || '?'
   const [menuOpen, setMenuOpen] = useState(false)
@@ -2522,14 +2522,14 @@ function InvestidorHero({ data, onCriarPerfilDuplo }) {
 
         {/* Área de Atuação — destaque para investidores Ativos */}
         {isAtivo && (
-          <div className="mt-4 rounded-xl border border-orange-100 bg-orange-50/60 px-3 py-2">
-            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-orange-700/80 font-semibold">
+          <div className="mt-4 rounded-xl border border-green-100 bg-green-50/60 px-3 py-2">
+            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-green-700/80 font-semibold">
               <MapPin className="w-3 h-3" /> Área de Atuação
             </div>
             {areaAtuacao.length > 0 ? (
               <div className="flex flex-wrap gap-1.5 mt-1.5">
                 {areaAtuacao.map(s => (
-                  <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-white border border-orange-200 text-orange-800 font-medium">{s}</span>
+                  <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-white border border-green-200 text-green-800 font-medium">{s}</span>
                 ))}
               </div>
             ) : (
