@@ -3,21 +3,26 @@
  * Equivalente a src/db/audit.js do servidor Express.
  *
  * Em Deno usamos AsyncLocalStorage tambem (disponivel via node:async_hooks).
- * O trigger PG le current_setting('app.audit_user_email', true) — quando a
- * query for write numa tabela auditada, envolvemos em BEGIN / set_config local / COMMIT.
+ * O trigger PG le current_setting('app.audit_user_email', true) e
+ * current_setting('app.audit_user_nome', true). Quando a query for write numa
+ * tabela auditada, envolvemos em BEGIN / set_config local / COMMIT.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import pool from "./pg.ts";
 
-const auditCtx = new AsyncLocalStorage<{ userEmail: string | null }>();
+const auditCtx = new AsyncLocalStorage<{ userEmail: string | null; userNome: string | null }>();
 const AUDITED_RE = /\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+(imoveis|investidores|negocios)\b/i;
 
-export function withAuditUser<T>(userEmail: string | null | undefined, fn: () => T): T {
-  return auditCtx.run({ userEmail: userEmail || null }, fn);
+export function withAuditUser<T>(
+  userEmail: string | null | undefined,
+  userNome: string | null | undefined,
+  fn: () => T,
+): T {
+  return auditCtx.run({ userEmail: userEmail || null, userNome: userNome || null }, fn);
 }
 
-export function getAuditUser(): string | null {
-  return auditCtx.getStore()?.userEmail || null;
+export function getAuditUser(): { userEmail: string | null; userNome: string | null } {
+  return auditCtx.getStore() || { userEmail: null, userNome: null };
 }
 
 export function isAuditedQuery(text: any): boolean {
@@ -32,15 +37,15 @@ export function installAuditedQuery(): void {
   const original = pool.query.bind(pool);
   // deno-lint-ignore no-explicit-any
   (pool as any).query = async function auditedQuery(...args: any[]) {
-    const userEmail = getAuditUser();
+    const { userEmail, userNome } = getAuditUser();
     const text = typeof args[0] === "string" ? args[0] : args[0]?.text;
-    if (!userEmail || !isAuditedQuery(text)) {
-      return original(...args);
-    }
+    if (!userEmail && !userNome) return original(...args);
+    if (!isAuditedQuery(text)) return original(...args);
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      await client.query(`SELECT set_config('app.audit_user_email', $1, true)`, [userEmail]);
+      await client.query(`SELECT set_config('app.audit_user_email', $1, true)`, [userEmail || ""]);
+      await client.query(`SELECT set_config('app.audit_user_nome', $1, true)`, [userNome || ""]);
       // deno-lint-ignore no-explicit-any
       const result = await (client.query as any)(...args);
       await client.query("COMMIT");

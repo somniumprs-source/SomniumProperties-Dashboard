@@ -115,10 +115,25 @@ try {
   const { initSchema } = await import('./src/db/pg.js')
   await initSchema()
   const { withAuditUser } = await import('./src/db/audit.js')
+  const { default: pgPoolAudit } = await import('./src/db/pg.js')
+
+  // Cache de nome do perfil activo (X-User-Id -> nome) com TTL 5min
+  const _userNomeCache = new Map()
+  async function resolveUserNome(userId) {
+    if (!userId) return null
+    const e = _userNomeCache.get(userId)
+    if (e && e.expires > Date.now()) return e.nome
+    try {
+      const { rows } = await pgPoolAudit.query('SELECT nome FROM users WHERE id = $1 LIMIT 1', [userId])
+      const nome = rows[0]?.nome || null
+      _userNomeCache.set(userId, { nome, expires: Date.now() + 5 * 60 * 1000 })
+      return nome
+    } catch { return null }
+  }
 
   // Middleware audit: envolve cada request /api/* com AsyncLocalStorage com
-  // o user_email. O wrapper de pool.query (audit.js) usa-o para SET LOCAL
-  // app.audit_user_email antes de writes em imoveis/investidores/negocios.
+  // email da sessao + nome do perfil activo (X-User-Id). O wrapper de pool.query
+  // (audit.js) usa-os para SET LOCAL nos GUC antes de writes em imoveis/etc.
   // Para /api/crm/* (auth bypass historico), tenta resolver via header sem bloquear.
   app.use('/api', async (req, res, next) => {
     let email = req.user?.email || null
@@ -132,7 +147,9 @@ try {
         } catch {}
       }
     }
-    withAuditUser(email, () => next())
+    const userId = req.headers['x-user-id'] || null
+    const nome = userId ? await resolveUserNome(userId) : null
+    withAuditUser(email, nome, () => next())
   })
 
   // ── Gestão de utilizadores e camadas de acesso ──

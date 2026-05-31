@@ -417,14 +417,31 @@ app.use("*", async (c, next) => {
   c.header("Expires", "0");
 });
 
-// ── Middleware audit: injecta user_email no AsyncLocalStorage para audit_log.
+// ── Middleware audit: injecta user_email + user_nome no AsyncLocalStorage.
+// nome vem de X-User-Id (perfil activo) via lookup na tabela users — distingue
+// quem fez a alteracao quando a equipa partilha a mesma sessao Supabase.
+const _userNomeCache = new Map<string, { nome: string | null; expires: number }>();
+async function _resolveUserNome(userId: string | null): Promise<string | null> {
+  if (!userId) return null;
+  const e = _userNomeCache.get(userId);
+  if (e && e.expires > Date.now()) return e.nome;
+  try {
+    const { rows } = await pool.query("SELECT nome FROM users WHERE id = $1 LIMIT 1", [userId]);
+    const nome = rows[0]?.nome || null;
+    _userNomeCache.set(userId, { nome, expires: Date.now() + 5 * 60 * 1000 });
+    return nome;
+  } catch { return null; }
+}
+
 app.use("*", async (c, next) => {
   let email: string | null = null;
   try {
     const u = await resolveCrmUser(c);
     email = u?.email || null;
   } catch { /* best-effort */ }
-  await withAuditUser(email, () => next());
+  const userId = c.req.header("x-user-id") || null;
+  const nome = await _resolveUserNome(userId);
+  await withAuditUser(email, nome, () => next());
 });
 
 // ── Middleware regional (port de routes.js 149-167) ──────────────
@@ -5031,14 +5048,14 @@ app.get("/auditoria", async (c) => {
     const params: any[] = [];
     if (entidade) { params.push(entidade); where.push(`a.entidade = $${params.length}`); }
     if (entidadeId) { params.push(entidadeId); where.push(`a.entidade_id = $${params.length}`); }
-    if (userEmail) { params.push(`%${userEmail}%`); where.push(`a.user_email ILIKE $${params.length}`); }
+    if (userEmail) { params.push(`%${userEmail}%`); where.push(`(a.user_email ILIKE $${params.length} OR a.user_nome ILIKE $${params.length})`); }
     if (from) { params.push(from); where.push(`a.created_at >= $${params.length}`); }
     if (to) { params.push(to); where.push(`a.created_at <= $${params.length}`); }
     const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
     const [{ rows }, { rows: countRows }] = await Promise.all([
       pool.query(
-        `SELECT a.id, a.entidade, a.entidade_id, a.operacao, a.user_email, a.alteracoes, a.created_at,
+        `SELECT a.id, a.entidade, a.entidade_id, a.operacao, a.user_email, a.user_nome, a.alteracoes, a.created_at,
                 CASE
                   WHEN a.entidade = 'imoveis' THEN (SELECT nome FROM imoveis WHERE id = a.entidade_id)
                   WHEN a.entidade = 'investidores' THEN (SELECT nome FROM investidores WHERE id = a.entidade_id)
@@ -5071,9 +5088,10 @@ app.get("/auditoria/utilizadores", async (c) => {
   if (denied) return denied;
   try {
     const { rows } = await pool.query(
-      `SELECT DISTINCT user_email FROM historico_alteracoes WHERE user_email IS NOT NULL ORDER BY user_email`,
+      `SELECT DISTINCT COALESCE(NULLIF(user_nome,''), user_email) AS nome FROM historico_alteracoes
+       WHERE COALESCE(NULLIF(user_nome,''), user_email) IS NOT NULL ORDER BY nome`,
     );
-    return c.json(rows.map((r: any) => r.user_email));
+    return c.json(rows.map((r: any) => r.nome));
   } catch (e) {
     console.error("[auditoria/utilizadores]", (e as Error).message);
     return c.json({ error: "Erro" }, 500);

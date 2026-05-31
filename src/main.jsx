@@ -38,8 +38,18 @@ if (authEnabled && supabase) {
     if (typeof window !== 'undefined') window.location.reload()
   }
 
+  function withActiveUserHeader(headers) {
+    // Perfil activo da equipa (X-User-Id) — identifica quem fez a alteracao
+    // no audit log quando a sessao Supabase e partilhada.
+    if (headers && headers['X-User-Id']) return headers
+    try {
+      const id = window.localStorage.getItem('somnium:active_user_id')
+      return id ? { ...headers, 'X-User-Id': id } : headers
+    } catch { return headers }
+  }
+
   async function fetchWithToken(url, options, token) {
-    const next = { ...options, headers: { ...options.headers, 'Authorization': `Bearer ${token}` } }
+    const next = { ...options, headers: withActiveUserHeader({ ...options.headers, 'Authorization': `Bearer ${token}` }) }
     const res = await _originalFetch(url, next)
     if (res.status === 401) {
       // Token recusado pelo backend: invalidar cache, tentar uma vez com sessão
@@ -53,7 +63,7 @@ if (authEnabled && supabase) {
         if (fresh && fresh !== token) {
           _cachedToken = fresh
           _tokenExpiry = Date.now() + 300000
-          const retry = await _originalFetch(url, { ...options, headers: { ...options.headers, 'Authorization': `Bearer ${fresh}` } })
+          const retry = await _originalFetch(url, { ...options, headers: withActiveUserHeader({ ...options.headers, 'Authorization': `Bearer ${fresh}` }) })
           if (retry.status !== 401) return retry
         }
       } catch { /* ignore */ }

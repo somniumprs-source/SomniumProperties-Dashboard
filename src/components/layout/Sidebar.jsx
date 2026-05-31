@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
-import { LayoutDashboard, TrendingUp, Database, Bell, Clock, BarChart3, Menu, X, LogOut, Briefcase, Shield, ScrollText, History } from 'lucide-react'
+import { LayoutDashboard, TrendingUp, Database, Bell, Clock, BarChart3, Menu, X, LogOut, Briefcase, Shield, ScrollText, History, UserCheck, ChevronDown } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { apiFetch } from '../../lib/api.js'
 import { prefetchRoute } from '../../lib/prefetch.js'
@@ -113,6 +113,7 @@ export function Sidebar() {
 
       {/* Profile + Footer */}
       <div className="px-4 py-4 flex flex-col gap-3" style={{ borderTop: '1px solid #1a1a1a' }}>
+        <PerfilActivoSelector />
         {profile && (
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
@@ -121,7 +122,7 @@ export function Sidebar() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-white truncate">{profile.nome}</p>
-              <p className="text-[10px]" style={{ color: '#444' }}>Online</p>
+              <p className="text-[10px]" style={{ color: '#444' }}>Sessao</p>
             </div>
           </div>
         )}
@@ -267,6 +268,84 @@ function NotificationsBell() {
                 <p className="text-xs font-semibold text-gray-800">{n.titulo}</p>
                 {n.mensagem && <p className="text-[11px] text-gray-500 mt-0.5">{n.mensagem}</p>}
                 <p className="text-[9px] text-gray-400 mt-1">{new Date(n.created_at).toLocaleString('pt-PT')}</p>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
+// Selector de perfil activo — distingue quem opera quando a equipa
+// partilha a sessao Supabase. ID guardado em localStorage e enviado
+// no header X-User-Id em todos os apiFetch (ver src/lib/api.js e
+// src/main.jsx). O backend regista o nome no historico_alteracoes.
+// ════════════════════════════════════════════════════════════════
+const ACTIVE_USER_KEY = 'somnium:active_user_id'
+
+function PerfilActivoSelector() {
+  const [users, setUsers] = useState([])
+  const [activeId, setActiveId] = useState(null)
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    try { setActiveId(window.localStorage.getItem(ACTIVE_USER_KEY)) } catch {}
+    apiFetch('/api/users').then(r => r.ok ? r.json() : { data: [] }).then(j => {
+      setUsers((j.data || []).filter(u => u.ativo))
+    }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    function onClick(e) { if (open && ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [open])
+
+  function escolher(id) {
+    try {
+      if (id) window.localStorage.setItem(ACTIVE_USER_KEY, id)
+      else window.localStorage.removeItem(ACTIVE_USER_KEY)
+    } catch {}
+    setActiveId(id)
+    setOpen(false)
+  }
+
+  const active = users.find(u => u.id === activeId) || null
+
+  return (
+    <div className="relative" ref={ref}>
+      <button onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors hover:bg-white/5"
+        style={{ backgroundColor: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.2)' }}
+        title="Quem esta a operar (para historico de alteracoes)">
+        <UserCheck className="w-3.5 h-3.5 shrink-0" style={{ color: '#C9A84C' }} />
+        <span className="flex-1 text-left truncate" style={{ color: active ? '#fff' : '#888' }}>
+          {active ? active.nome : 'Operar como...'}
+        </span>
+        <ChevronDown className="w-3 h-3 shrink-0" style={{ color: '#888' }} />
+      </button>
+      {open && (
+        <div className="absolute bottom-full left-0 right-0 mb-1 bg-neutral-900 rounded-xl shadow-xl border border-neutral-800 z-50 max-h-72 overflow-y-auto">
+          <button onClick={() => escolher(null)}
+            className="w-full text-left px-3 py-2 text-xs hover:bg-white/5 border-b border-neutral-800"
+            style={{ color: '#888' }}>
+            <span className="italic">(sem perfil activo)</span>
+          </button>
+          {users.length === 0 ? (
+            <p className="text-xs text-neutral-500 py-3 text-center">Sem utilizadores</p>
+          ) : (
+            users.map(u => (
+              <button key={u.id} onClick={() => escolher(u.id)}
+                className={`w-full text-left px-3 py-2 hover:bg-white/5 flex items-center gap-2 border-b border-neutral-800 last:border-0 ${activeId === u.id ? 'bg-white/5' : ''}`}>
+                <span className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
+                  style={{ backgroundColor: u.cor || '#C9A84C' }}>{u.iniciais}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-white truncate">{u.nome}</p>
+                  <p className="text-[10px] text-neutral-500 truncate">{u.role}</p>
+                </div>
               </button>
             ))
           )}

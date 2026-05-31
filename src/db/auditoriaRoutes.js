@@ -47,14 +47,14 @@ router.get('/', async (req, res) => {
     const params = []
     if (entidade) { params.push(entidade); where.push(`a.entidade = $${params.length}`) }
     if (entidade_id) { params.push(entidade_id); where.push(`a.entidade_id = $${params.length}`) }
-    if (user_email) { params.push(`%${user_email}%`); where.push(`a.user_email ILIKE $${params.length}`) }
+    if (user_email) { params.push(`%${user_email}%`); where.push(`(a.user_email ILIKE $${params.length} OR a.user_nome ILIKE $${params.length})`) }
     if (from) { params.push(from); where.push(`a.created_at >= $${params.length}`) }
     if (to) { params.push(to); where.push(`a.created_at <= $${params.length}`) }
     const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
 
     const [{ rows }, { rows: countRows }] = await Promise.all([
       pool.query(
-        `SELECT a.id, a.entidade, a.entidade_id, a.operacao, a.user_email, a.alteracoes, a.created_at,
+        `SELECT a.id, a.entidade, a.entidade_id, a.operacao, a.user_email, a.user_nome, a.alteracoes, a.created_at,
                 CASE
                   WHEN a.entidade = 'imoveis' THEN (SELECT nome FROM imoveis WHERE id = a.entidade_id)
                   WHEN a.entidade = 'investidores' THEN (SELECT nome FROM investidores WHERE id = a.entidade_id)
@@ -86,9 +86,10 @@ router.get('/', async (req, res) => {
 router.get('/utilizadores', async (_req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT DISTINCT user_email FROM historico_alteracoes WHERE user_email IS NOT NULL ORDER BY user_email`
+      `SELECT DISTINCT COALESCE(NULLIF(user_nome,''), user_email) AS nome FROM historico_alteracoes
+       WHERE COALESCE(NULLIF(user_nome,''), user_email) IS NOT NULL ORDER BY nome`
     )
-    res.json(rows.map(r => r.user_email))
+    res.json(rows.map(r => r.nome))
   } catch (e) {
     console.error('[auditoria] GET /utilizadores', e.message)
     res.status(500).json({ error: 'Erro' })

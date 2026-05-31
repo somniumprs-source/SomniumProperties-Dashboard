@@ -121,7 +121,7 @@ export default function Auditoria() {
           <label className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold">Utilizador</label>
           <input type="text" list="audit-users" value={filtros.user_email}
             onChange={e => setFiltros(f => ({ ...f, user_email: e.target.value }))}
-            placeholder="email"
+            placeholder="nome ou email"
             className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:border-brand-gold focus:outline-none" />
           <datalist id="audit-users">
             {utilizadores.map(u => <option key={u} value={u} />)}
@@ -207,7 +207,18 @@ function RowAuditoria({ row, isOpen, op, nCampos, onToggle }) {
         <td className="px-3 py-2 whitespace-nowrap text-gray-700">
           {new Date(row.created_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'medium' })}
         </td>
-        <td className="px-3 py-2 text-gray-700">{row.user_email || <span className="text-gray-400 italic">sistema</span>}</td>
+        <td className="px-3 py-2 text-gray-700">
+          {row.user_nome ? (
+            <div>
+              <div className="text-gray-900 font-medium">{row.user_nome}</div>
+              {row.user_email && <div className="text-[10px] text-gray-400">{row.user_email}</div>}
+            </div>
+          ) : row.user_email ? (
+            <span className="text-gray-700">{row.user_email}</span>
+          ) : (
+            <span className="text-gray-400 italic">sistema</span>
+          )}
+        </td>
         <td className="px-3 py-2 text-gray-500 text-[11px] uppercase tracking-wider">{ENTIDADE_LABEL[row.entidade] || row.entidade}</td>
         <td className="px-3 py-2">{entidadeLink(row)}</td>
         <td className="px-3 py-2">

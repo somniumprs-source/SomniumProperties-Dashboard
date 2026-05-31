@@ -57,6 +57,15 @@ export async function apiFetch(url, options = {}) {
     }
     if (r) headers['X-Regiao'] = r
   }
+  // Perfil activo: a equipa partilha a sessao Supabase (somniumprs@gmail.com).
+  // O ID escolhido na sidebar e enviado para o backend identificar quem fez
+  // a alteracao no historico (historico_alteracoes.user_nome).
+  if (!headers['X-User-Id'] && typeof window !== 'undefined') {
+    try {
+      const activeId = window.localStorage.getItem('somnium:active_user_id')
+      if (activeId) headers['X-User-Id'] = activeId
+    } catch {}
+  }
   // AbortController só corre se o caller não passou já um signal — senão
   // respeitamos o controlo deles (ex: componentes que cancelam ao desmontar).
   let controller
