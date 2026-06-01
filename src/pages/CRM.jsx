@@ -826,6 +826,16 @@ export function CRM() {
         // Telefone para WhatsApp
         const tel = (item.telemovel || '').replace(/\s+/g, '')
         const phoneIntl = tel.startsWith('+') ? tel : (tel.startsWith('00') ? '+' + tel.slice(2) : (tel.length === 9 ? '+351' + tel : tel))
+        // Área de atuação: união das regiões macro (Coimbra/AMP) com os distritos,
+        // de-duplicada. Espelha a definição em DetailPanel.jsx:2453.
+        const parseArr = (v) => { try { return Array.isArray(v) ? v : JSON.parse(v || '[]') } catch { return [] } }
+        const areaAtuacao = Array.from(new Set([
+          ...parseArr(item.regioes_preferidas),
+          ...parseArr(item.localizacao_preferida),
+        ].filter(Boolean)))
+        const areaLabel = areaAtuacao.length > 2
+          ? `${areaAtuacao.slice(0, 2).join(', ')} +${areaAtuacao.length - 2}`
+          : areaAtuacao.join(', ')
 
         return (
           <div className="group relative">
@@ -838,7 +848,7 @@ export function CRM() {
                   <ClassBadge cls={item.classificacao} />
                   <p className="text-sm font-semibold text-gray-800 truncate">{item.nome}</p>
                 </div>
-                <p className="text-[11px] text-gray-500 truncate">{item.origem ?? '—'}</p>
+                <p className="text-[11px] text-gray-500 truncate" title={areaAtuacao.join(', ')}>{areaLabel || '—'}</p>
               </div>
             </div>
 
