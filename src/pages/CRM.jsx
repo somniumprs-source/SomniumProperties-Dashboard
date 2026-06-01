@@ -13,10 +13,11 @@ import { Tabs } from '../components/ui/Tabs.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { KpiCard } from '../components/ui/KpiCard.jsx'
 import { MultiSelect } from '../components/ui/MultiSelect.jsx'
-import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
+import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
 import { apiFetch, resolveApiUrl } from '../lib/api.js'
 import { useUnreadCounts } from '../hooks/useUnreadCounts.js'
 import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
+import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 import { RegiaoToggle } from '../components/RegiaoBadge.jsx'
 
 // Sub-tabs regionais partilham as mesmas chaves de sessionStorage que o
@@ -735,18 +736,21 @@ export function CRM() {
       setFilters(f => ({ ...f, tipo_principal: invSubTab }))
     }
   }, [invSubTab, tab])
-  useEffect(() => {
-    // Stats dos cards/KPIs do topo respeitam a região da sub-tab activa
-    // (Investidores tem pool unificado, logo só filtra quando regiaoActiva
-    // pertencer a Imóveis/Consultores/Negócios/Construtores).
+  const loadStats = useCallback(() => {
     apiFetch('/api/crm/stats', { regiao: regiaoActiva }).then(r => r.json()).then(setStats).catch(() => {})
   }, [regiaoActiva])
-  useEffect(() => { apiFetch('/api/alertas').then(r => r.json()).then(d => setAlertCount(d.resumo?.total ?? 0)).catch(() => {}) }, [])
-  useEffect(() => {
-    apiFetch('/api/crm/lookup/consultores').then(r => r.json()).then(list => {
-      setConsultoresLookup(list)
-    }).catch(() => {})
+  const loadAlertCount = useCallback(() => {
+    apiFetch('/api/alertas').then(r => r.json()).then(d => setAlertCount(d.resumo?.total ?? 0)).catch(() => {})
   }, [])
+  const loadConsultoresLookup = useCallback(() => {
+    apiFetch('/api/crm/lookup/consultores').then(r => r.json()).then(setConsultoresLookup).catch(() => {})
+  }, [])
+  useEffect(() => { loadStats() }, [loadStats])
+  useEffect(() => { loadAlertCount() }, [loadAlertCount])
+  useEffect(() => { loadConsultoresLookup() }, [loadConsultoresLookup])
+  useRefreshOnMutation(useCallback(() => {
+    load(); loadStats(); loadAlertCount(); loadConsultoresLookup()
+  }, [load, loadStats, loadAlertCount, loadConsultoresLookup]))
 
   function navigateToConsultor(nomeConsultor) {
     if (!nomeConsultor) return
@@ -1732,7 +1736,7 @@ const FIELD_DEFS = {
   'Investidores': [
     { key: 'nome', label: 'Nome', type: 'text', required: true },
     { key: 'tipo_principal', label: 'Tipo de Investidor', type: 'select', options: ['Passivo','Ativo'], required: true },
-    { key: 'status', label: 'Status', type: 'select', options: INV_STATUS },
+    { key: 'status', label: 'Status', type: 'select', options: (form) => invStatusFor(form.tipo_principal) },
     { key: 'classificacao', label: 'Classificação', type: 'select', options: ['A','B','C','D'] },
     { key: 'origem', label: 'Origem', type: 'select', options: ['Landing Page','Skool','Grupos Whatsapp','Referenciação','LinkedIn','Eventos Networking','Outro'] },
     { key: 'telemovel', label: 'Telemóvel', type: 'tel' },
@@ -2009,16 +2013,28 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
     <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-6 shadow-xs">
       <h2 className="text-sm font-semibold text-gray-700 mb-4">{isNew ? 'Novo Registo' : 'Editar Registo'}</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {fields.map(f => (
+        {fields.map(f => {
+          const fieldOptions = typeof f.options === 'function' ? f.options(form) : f.options
+          const currentVal = form[f.key]
+          const staleSelect = f.type === 'select' && currentVal && fieldOptions && !fieldOptions.includes(currentVal)
+          return (
           <div key={f.key} className={f.type === 'textarea' ? 'md:col-span-2 xl:col-span-3' : ''}>
             <label className="block text-xs text-gray-500 mb-1">{f.label}{f.required && ' *'}</label>
             {f.type === 'select' ? (
-              <select value={form[f.key] ?? ''} onChange={e => handleChange(f.key, e.target.value)} className={inputClass}>
-                <option value="">—</option>
-                {f.options.map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
+              <>
+                <select value={currentVal ?? ''} onChange={e => handleChange(f.key, e.target.value)} className={`${inputClass}${staleSelect ? ' border-amber-400 ring-1 ring-amber-200' : ''}`}>
+                  <option value="">—</option>
+                  {staleSelect && <option value={currentVal} disabled>{currentVal} (fora do pipeline)</option>}
+                  {fieldOptions.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+                {staleSelect && (
+                  <p className="mt-1 text-[11px] text-amber-600">
+                    "{currentVal}" não pertence ao pipeline actual — escolhe um novo estado para confirmar.
+                  </p>
+                )}
+              </>
             ) : f.type === 'multiselect' ? (
-              <MultiSelect value={form[f.key]} options={f.options} onChange={v => handleChange(f.key, v)} placeholder={`Selecionar ${f.label.toLowerCase()}...`} />
+              <MultiSelect value={form[f.key]} options={fieldOptions} onChange={v => handleChange(f.key, v)} placeholder={`Selecionar ${f.label.toLowerCase()}...`} />
             ) : f.type === 'multiselect_regional' ? (
               <MultiSelect
                 value={form[f.key]}
@@ -2094,7 +2110,7 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
               <input type={f.type} value={form[f.key] ?? ''} onChange={e => handleChange(f.key, f.type === 'number' ? +e.target.value : e.target.value)} className={inputClass} />
             )}
           </div>
-        ))}
+        )})}
       </div>
       <div className="flex gap-3 mt-6">
         <button onClick={() => onSave(form)} className="px-6 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700">

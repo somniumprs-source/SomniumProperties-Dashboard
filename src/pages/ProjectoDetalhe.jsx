@@ -18,6 +18,7 @@ import { useAuth } from '../contexts/AuthContext.jsx'
 import { PartilharAcesso } from '../components/PartilharAcesso.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { AiResumoCard, GanttFases, TabHistorico } from '../components/projeto/cards.jsx'
+import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const GOLD = '#C9A84C'
@@ -137,6 +138,7 @@ export function ProjectoDetalhe() {
   }
 
   useEffect(() => { load() }, [id])
+  useRefreshOnMutation(load)
 
   if (loading) return <><Header title="Projecto" subtitle="A carregar..." /><div className="p-8 text-center text-gray-400">A carregar…</div></>
   if (error || !resumo) return <><Header title="Projecto" subtitle="Erro" /><div className="p-8 text-center text-red-500">{error || 'Sem dados'}</div></>

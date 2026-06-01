@@ -3,6 +3,7 @@ import { Header } from '../components/layout/Header.jsx'
 import { PageSkeleton } from '../components/ui/Skeleton.jsx'
 import { apiFetch } from '../lib/api.js'
 import { useUrlState } from '../hooks/useUrlState.js'
+import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 import { EUR, PCT, NUM, REGIOES } from '../constants.js'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { Button } from '../components/ui/Button.jsx'
@@ -289,6 +290,7 @@ export function Operacoes() {
   }, [])
 
   useEffect(() => { loadAll() }, [loadAll])
+  useRefreshOnMutation(loadAll)
 
   // Força um pull GCal → tarefas e recarrega a lista. Antes era preciso esperar
   // até 15 min pelo auto-sync; o botão dá controlo imediato ao utilizador.

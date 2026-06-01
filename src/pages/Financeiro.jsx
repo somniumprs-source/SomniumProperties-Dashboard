@@ -9,6 +9,7 @@ import { KPICard } from '../components/dashboard/KPICard.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { apiFetch } from '../lib/api.js'
 import { useUrlState } from '../hooks/useUrlState.js'
+import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 import { REGIOES } from '../constants.js'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
@@ -136,6 +137,7 @@ export function Financeiro() {
   }
 
   useEffect(() => { load() }, [])
+  useRefreshOnMutation(load)
 
   const negociosLista  = kpis?.negociosLista ?? []
   const categoriasPie  = (kpis?.categorias ?? [])

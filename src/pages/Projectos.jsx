@@ -9,6 +9,7 @@ import { Badge } from '../components/ui/Badge.jsx'
 import { Input, Select } from '../components/ui/Input.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { RegiaoToggle } from '../components/RegiaoBadge.jsx'
+import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 
 const REGIAO_STORAGE_KEY = 'somnium.regiao.projectos'
 function readRegiaoFromStorage() {
@@ -205,6 +206,7 @@ export function Projectos() {
   }
 
   useEffect(() => { load() }, [regiao])
+  useRefreshOnMutation(load)
   useEffect(() => { if (projectos.length > 0) loadFases(projectos, filterCat) }, [projectos, filterCat])
   useEffect(() => {
     const qs = filterCat ? `?categoria=${encodeURIComponent(filterCat)}` : ''

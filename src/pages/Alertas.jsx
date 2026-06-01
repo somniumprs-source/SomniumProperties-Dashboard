@@ -6,6 +6,7 @@ import { Button } from '../components/ui/Button.jsx'
 import { KpiCard } from '../components/ui/KpiCard.jsx'
 import { Card } from '../components/ui/Card.jsx'
 import { Bell, AlertTriangle, AlertCircle, Info, FileWarning, ShieldAlert, History, Database, Zap } from 'lucide-react'
+import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 
 const SEV_STYLE = {
   critico: 'bg-red-100 text-red-700 border-red-200',
@@ -97,6 +98,7 @@ export function Alertas() {
   }
 
   useEffect(() => { load() }, [])
+  useRefreshOnMutation(load)
 
   async function runAutomation(name, label) {
     setRunning(name); setRunResult(null)

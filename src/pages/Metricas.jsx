@@ -3,6 +3,7 @@ import { Header } from '../components/layout/Header.jsx'
 import { PageSkeleton } from '../components/ui/Skeleton.jsx'
 import { apiFetch } from '../lib/api.js'
 import { useUrlState } from '../hooks/useUrlState.js'
+import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 import { EUR, PCT, DAYS, NUM, RATIO } from '../constants.js'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { Card } from '../components/ui/Card.jsx'
@@ -200,6 +201,7 @@ export function Metricas() {
   }
 
   useEffect(() => { load() }, [])
+  useRefreshOnMutation(load)
 
   const top = data?.top
   const p1  = data?.pipeline1
