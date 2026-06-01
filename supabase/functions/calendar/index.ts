@@ -10,7 +10,7 @@
 //
 // googleapis COMPILA em Deno (deno check exit 0) — Google API NAO foi stubbada.
 import { createApp } from "../_shared/hono.ts";
-import { requireAuth } from "../_shared/auth.ts";
+import { requireAuth, requireInternalKey } from "../_shared/auth.ts";
 import pool from "../_shared/pg.ts";
 import { OAuth2Client } from "google-auth-library";
 import { calendar } from "@googleapis/calendar";
@@ -21,8 +21,10 @@ const app = createApp("/calendar");
 
 // Auth em codigo: o gateway verify_jwt=true aceita a anon key (publica); requireAuth
 // exige um utilizador REAL (rejeita anon), como o middleware global do Render. _health isento.
+// Scripts admin (one-shot) podem usar INTERNAL_API_KEY via header x-api-key.
 app.use("*", async (c: any, next: any) => {
   if (c.req.path.endsWith("/_health")) return await next();
+  if (c.req.header("x-api-key") && requireInternalKey(c)) return await next();
   return await requireAuth(c, next);
 });
 
@@ -247,6 +249,22 @@ app.post("/events", async (c: any) => {
     return c.json({ ok: true, eventId: r.data.id, link: r.data.htmlLink });
   } catch (e: any) {
     console.error("[gcal] create:", e.message);
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+// ── DELETE /calendar/events/:id — apaga evento do Google Calendar ──
+app.delete("/events/:id", async (c: any) => {
+  const gcal = getGcal();
+  if (!gcal) return c.json({ error: "Google Calendar não configurado" }, 503);
+  const eventId = c.req.param("id");
+  try {
+    await gcal.events.delete({ calendarId: GCAL_ID, eventId });
+    return c.json({ ok: true, eventId });
+  } catch (e: any) {
+    const code = e.code ?? e.response?.status;
+    if (code === 410 || code === 404) return c.json({ ok: true, eventId, alreadyDeleted: true });
+    console.error("[gcal] delete:", e.message);
     return c.json({ error: e.message }, 500);
   }
 });
