@@ -35,7 +35,7 @@ async function auditLog(
 // ── Limpar dados do form antes de inserir/actualizar ─────────
 // Campos TEXT cujo nome bate no regex de coerção numérica mas que guardam
 // strings (selects, gamas). NUNCA passar por parseFloat — '<10%' → NaN → null.
-const TEXT_FIELDS_KEEP_STRING = new Set(["roi_pretendido"]);
+const TEXT_FIELDS_KEEP_STRING = new Set(["roi_pretendido", "roi_anualizado_pretendido"]);
 
 function cleanFormData(data: Record<string, any>): Record<string, any> {
   const cleaned: Record<string, any> = { ...data };

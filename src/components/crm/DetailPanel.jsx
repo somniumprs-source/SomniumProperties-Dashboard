@@ -2339,7 +2339,11 @@ function ImovelReadSections({ data, onNavigate }) {
 }
 
 // ── Investidor: constantes e helpers ─────────────────────────
+// Passivos: gamas tipicas de mercado (capital pago, sem trabalho operacional).
 const INV_ROI_OPTS = ['<10%', '10–15%', '15–20%', '20–25%', '>25%']
+// Ativos: aceitam risco e trabalho, intervalos sobem ate >50%.
+const INV_ROI_OPTS_ATIVO = ['<10%', '10–15%', '15–20%', '20–25%', '25–30%', '30–40%', '40–50%', '>50%']
+const roiOptsFor = (tipo) => (tipo === 'Ativo' ? INV_ROI_OPTS_ATIVO : INV_ROI_OPTS)
 const INV_EXPERIENCIA_OPTS = ['Nenhuma', '1–2 negócios', '3–10 negócios', '>10 negócios']
 const INV_TIPO_IMOVEL_OPTS = ['T0', 'T1', 'T2', 'T3+', 'Apartamento', 'Moradia', 'Edifício', 'Comercial', 'Terreno', 'Ruína', 'Indiferente']
 const INV_DISTRITOS_OPTS = ['Aveiro','Beja','Braga','Bragança','Castelo Branco','Coimbra','Évora','Faro','Guarda','Leiria','Lisboa','Portalegre','Porto','Santarém','Setúbal','Viana do Castelo','Vila Real','Viseu','Açores','Madeira']
@@ -2509,7 +2513,11 @@ function InvestidorHero({ data, onCriarPerfilDuplo }) {
         {/* Mini-KPIs */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
           <KpiTile icon={Wallet}  label="Capital" value={capRange || '—'}  tone="indigo" />
-          <KpiTile icon={Target}  label="ROI desejado" value={data.roi_pretendido || '—'} tone="amber" />
+          <KpiTile icon={Target}  label="ROI desejado" value={data.roi_pretendido || '—'} tone="amber" extra={
+            data.roi_anualizado_pretendido
+              ? <p className="text-[10px] mt-0.5 opacity-70 truncate">Anualizado: {data.roi_anualizado_pretendido}</p>
+              : null
+          } />
           <KpiTile icon={Hourglass} label="Na pipeline" value={diasPipeline != null ? `${diasPipeline}d` : '—'} tone="slate" />
           <KpiTile icon={TrendingUp} label="Score" value={score > 0 ? `${score}/100` : '—'} tone="green" extra={
             score > 0 ? (
@@ -2768,12 +2776,13 @@ function InvestidorEditSections({ data, form, setField }) {
   const isAtivo = (form.tipo_principal || 'Passivo') === 'Ativo'
   const sec = {
     identificacao: ['nome','tipo_principal','status','classificacao','origem','data_primeiro_contacto'],
-    capital:       ['capital_min','capital_max','estrategia','perfil_risco','roi_pretendido','origem_capital','montante_investido'],
+    capital:       ['capital_min','capital_max','estrategia','perfil_risco','roi_pretendido','roi_anualizado_pretendido','origem_capital','montante_investido'],
     preferencias:  ['tipo_imovel_preferido','localizacao_preferida','regioes_preferidas','experiencia_imobiliario','equipa_obras'],
     contacto:      ['telemovel','email','preferencia_contacto','nda_assinado'],
     timeline:      ['data_primeiro_contacto','data_reuniao','data_ultimo_contacto','data_follow_up','data_proxima_acao','proxima_acao'],
     bloqueios:     ['motivo_nao_aprovacao','motivo_inatividade'],
   }
+  const roiOpts = roiOptsFor(form.tipo_principal)
   const temBloqueios = !!(data.motivo_nao_aprovacao || data.motivo_inatividade)
   return <>
     {/* 1. Identificação & Status */}
@@ -2791,7 +2800,8 @@ function InvestidorEditSections({ data, form, setField }) {
       <EF label="Capital Min (€)" field="capital_min" form={form} set={setField} type="number" />
       <EF label="Capital Max (€)" field="capital_max" form={form} set={setField} type="number" />
       <EF label="Perfil Risco" field="perfil_risco" form={form} set={setField} type="select" options={INV_PERFIL_RISCO_OPTS} />
-      <EF label="ROI Pretendido" field="roi_pretendido" form={form} set={setField} type="select" options={INV_ROI_OPTS} />
+      <EF label="ROI Total Pretendido" field="roi_pretendido" form={form} set={setField} type="select" options={roiOpts} />
+      <EF label="ROI Anualizado Pretendido" field="roi_anualizado_pretendido" form={form} set={setField} type="select" options={roiOpts} />
       <EF label="Origem Capital" field="origem_capital" form={form} set={setField} type="select" options={INV_ORIGEM_CAPITAL_OPTS} />
       <EF label="Montante Investido (€)" field="montante_investido" form={form} set={setField} type="number" />
       <MultiChips label="Estratégia" field="estrategia" form={form} set={setField} options={INV_ESTRATEGIA_OPTS} />
@@ -2852,7 +2862,7 @@ function InvestidorReadSections({ data }) {
   const labelLocalizacao = isAtivo ? 'Área de Atuação (Distritos)' : 'Localização'
   const sec = {
     identificacao: ['nome','tipo_principal','status','classificacao','origem','data_primeiro_contacto'],
-    capital:       ['capital_min','capital_max','estrategia','perfil_risco','roi_pretendido','origem_capital','montante_investido'],
+    capital:       ['capital_min','capital_max','estrategia','perfil_risco','roi_pretendido','roi_anualizado_pretendido','origem_capital','montante_investido'],
     preferencias:  ['tipo_imovel_preferido','localizacao_preferida','regioes_preferidas','experiencia_imobiliario','equipa_obras'],
     contacto:      ['telemovel','email','preferencia_contacto','nda_assinado'],
     timeline:      ['data_primeiro_contacto','data_reuniao','data_ultimo_contacto','data_follow_up','data_proxima_acao','proxima_acao'],
@@ -2878,7 +2888,8 @@ function InvestidorReadSections({ data }) {
       <Field label="Capital Min" value={data.capital_min > 0 ? `€${Number(data.capital_min).toLocaleString('pt-PT')}` : '—'} />
       <Field label="Capital Max" value={data.capital_max > 0 ? `€${Number(data.capital_max).toLocaleString('pt-PT')}` : '—'} />
       <Field label="Perfil Risco" value={data.perfil_risco} />
-      <Field label="ROI Pretendido" value={data.roi_pretendido} />
+      <Field label="ROI Total Pretendido" value={data.roi_pretendido} />
+      <Field label="ROI Anualizado Pretendido" value={data.roi_anualizado_pretendido} />
       <Field label="Origem Capital" value={data.origem_capital} />
       <Field label="Montante Investido" value={data.montante_investido > 0 ? `€${Number(data.montante_investido).toLocaleString('pt-PT')}` : '—'} />
       <div className="col-span-2 md:col-span-3">

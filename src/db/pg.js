@@ -606,6 +606,7 @@ export async function initSchema() {
         ALTER TABLE investidores ADD COLUMN IF NOT EXISTS tipo_imovel_preferido TEXT;
         ALTER TABLE investidores ADD COLUMN IF NOT EXISTS equipa_obras TEXT;
         ALTER TABLE investidores ADD COLUMN IF NOT EXISTS roi_pretendido TEXT;
+        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS roi_anualizado_pretendido TEXT;
         ALTER TABLE investidores ADD COLUMN IF NOT EXISTS experiencia_imobiliario TEXT;
         ALTER TABLE investidores ADD COLUMN IF NOT EXISTS preferencia_contacto TEXT;
         ALTER TABLE investidores ADD COLUMN IF NOT EXISTS horizonte_investimento TEXT;
