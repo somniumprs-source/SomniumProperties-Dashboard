@@ -42,6 +42,7 @@ import {
 import { generateRelatorioExpansaoGaia } from './pdfRelatorioExpansaoGaia.js'
 import { gerarResumoProjeto, invalidarCacheAi, isConfigured as aiConfigured } from './projetoAiAssistant.js'
 import { audit, descreverMudanca } from './projetoAuditLog.js'
+import { calcAnalise, calcStressTests } from './calcEngine.js'
 import rateLimit from 'express-rate-limit'
 
 // Rate limit para endpoints de IA (controla custos)
@@ -397,6 +398,10 @@ crudRoutes('/imoveis', Imoveis, {
     // Wholesaling: se mudou valor_proposta, recompor lucro dos negocios de wholesaling deste imovel
     if (body.valor_proposta !== undefined) {
       await recomputeLucroWholesalingPorImovel(item.id).catch(e => console.error('[wholesaling/recompute imovel]', e.message))
+    }
+    // Wholesaling: se mudou valor_com_cedencia ou modelo_negocio, recalcular analise activa
+    if (body.valor_com_cedencia !== undefined || body.modelo_negocio !== undefined) {
+      await recalcAnaliseActivaWholesaling(item.id).catch(e => console.error('[wholesaling/recalc analise]', e.message))
     }
     // Auto-complete checklist: verificar campos preenchidos
     try {
@@ -940,6 +945,41 @@ async function recomputeLucroWholesalingPorImovel(imovelId) {
   for (const r of rows) {
     await recomputeLucroWholesaling(r.id).catch(e => console.error('[wholesaling/recompute]', e.message))
   }
+}
+
+// Re-run calcAnalise para a analise activa do imovel forcando compra = valor_com_cedencia.
+// Disparado quando o utilizador altera valor_com_cedencia ou modelo_negocio na ficha do imovel.
+async function recalcAnaliseActivaWholesaling(imovelId) {
+  const { rows: [imovel] } = await pool.query(
+    'SELECT modelo_negocio, valor_com_cedencia FROM imoveis WHERE id = $1',
+    [imovelId],
+  )
+  if (!imovel || imovel.modelo_negocio !== 'Wholesaling') return
+  const cedencia = Number(imovel.valor_com_cedencia)
+  if (!Number.isFinite(cedencia) || cedencia <= 0) return
+
+  const { rows: [analise] } = await pool.query(
+    'SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1',
+    [imovelId],
+  )
+  if (!analise) return
+
+  const inputs = { ...analise, compra: cedencia }
+  const calculados = calcAnalise(inputs)
+  const stress = calcStressTests(inputs)
+  const now = new Date().toISOString()
+  const updates = { compra: cedencia, ...calculados, stress_tests: JSON.stringify(stress), updated_at: now }
+
+  const entries = Object.entries(updates)
+  const sets = entries.map(([k], i) => `${k} = $${i + 1}`)
+  const params = entries.map(([, v]) => typeof v === 'object' && v !== null ? JSON.stringify(v) : v)
+  params.push(analise.id)
+  await pool.query(`UPDATE analises SET ${sets.join(', ')} WHERE id = $${params.length}`, params)
+
+  await pool.query(
+    `UPDATE imoveis SET roi = $1, roi_anualizado = $2, updated_at = $3 WHERE id = $4`,
+    [calculados.retorno_total ?? null, calculados.retorno_anualizado ?? null, now, imovelId],
+  )
 }
 
 crudRoutes('/negocios', Negocios, {

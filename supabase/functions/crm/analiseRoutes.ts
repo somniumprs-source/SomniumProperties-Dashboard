@@ -137,13 +137,14 @@ export function registerAnaliseRoutes(app: any) {
       const activa = existentes.length === 0;
 
       // Pré-preencher com dados do imóvel se não vier input
-      const inputs: any = {
+      let inputs: any = {
         compra: body.compra ?? imovel.ask_price ?? 0,
         obra: body.obra ?? imovel.custo_estimado_obra ?? 0,
         vvr: body.vvr ?? imovel.valor_venda_remodelado ?? 0,
         meses: body.meses ?? 6,
         ...body,
       };
+      inputs = applyWholesalingOverride(inputs, imovel);
 
       // Calcular
       const calculados = calcAnalise(inputs);
@@ -256,7 +257,7 @@ export function registerAnaliseRoutes(app: any) {
       const body = (await c.req.json().catch(() => ({}))) || {};
 
       // Merge inputs existentes com novos
-      const merged: any = {};
+      let merged: any = {};
       for (const f of INPUT_FIELDS) {
         if (f === "comparaveis" || f === "caep") {
           merged[f] = body[f] !== undefined ? body[f] : existing[f];
@@ -264,6 +265,13 @@ export function registerAnaliseRoutes(app: any) {
           merged[f] = body[f] !== undefined ? body[f] : existing[f];
         }
       }
+
+      // Wholesaling: forcar compra = valor_com_cedencia do imovel
+      const { rows: [imovel] } = await pool.query(
+        "SELECT modelo_negocio, valor_com_cedencia FROM imoveis WHERE id = $1",
+        [existing.imovel_id],
+      );
+      merged = applyWholesalingOverride(merged, imovel);
 
       // Recalcular
       const calculados = calcAnalise(merged);

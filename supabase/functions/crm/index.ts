@@ -44,6 +44,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { registerRegiaoRoutes } from "./regiaoRoutes.ts";
 import { registerAnaliseRoutes } from "./analiseRoutes.ts";
 import { registerOrcamentoRoutes } from "./orcamentoRoutes.ts";
+import { calcAnalise, calcStressTests } from "../_shared/calcEngine.ts";
 // ── Subsistema PROJETOS (Fix and Flip) ─────────────────────────
 import {
   FASES_POR_CATEGORIA, getTemplateFases, getFaseConfigGlobal,
@@ -706,6 +707,10 @@ crudRoutes("/imoveis", Imoveis, {
     if (body.valor_proposta !== undefined) {
       await recomputeLucroWholesalingPorImovel(item.id).catch((e: any) => console.error("[wholesaling/recompute imovel]", (e as Error).message));
     }
+    // Wholesaling: se mudou valor_com_cedencia ou modelo_negocio, recalcular analise activa
+    if (body.valor_com_cedencia !== undefined || body.modelo_negocio !== undefined) {
+      await recalcAnaliseActivaWholesaling(item.id).catch((e: any) => console.error("[wholesaling/recalc analise]", (e as Error).message));
+    }
     // Auto-complete checklist: verificar campos preenchidos
     try {
       const merged = { ...item, ...body };
@@ -1133,6 +1138,41 @@ async function recomputeLucroWholesalingPorImovel(imovelId: string) {
   }
 }
 
+// Re-run calcAnalise para a analise activa do imovel forcando compra = valor_com_cedencia.
+// Disparado quando o utilizador altera valor_com_cedencia ou modelo_negocio na ficha do imovel.
+async function recalcAnaliseActivaWholesaling(imovelId: string) {
+  const { rows: [imovel] } = await pool.query(
+    "SELECT modelo_negocio, valor_com_cedencia FROM imoveis WHERE id = $1",
+    [imovelId],
+  );
+  if (!imovel || imovel.modelo_negocio !== "Wholesaling") return;
+  const cedencia = Number(imovel.valor_com_cedencia);
+  if (!Number.isFinite(cedencia) || cedencia <= 0) return;
+
+  const { rows: [analise] } = await pool.query(
+    "SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1",
+    [imovelId],
+  );
+  if (!analise) return;
+
+  const inputs: any = { ...analise, compra: cedencia };
+  const calculados = calcAnalise(inputs);
+  const stress = calcStressTests(inputs);
+  const now = new Date().toISOString();
+  const updates: any = { compra: cedencia, ...calculados, stress_tests: JSON.stringify(stress), updated_at: now };
+
+  const entries = Object.entries(updates);
+  const sets = entries.map(([k], i) => `${k} = $${i + 1}`);
+  const params = entries.map(([, v]) => typeof v === "object" && v !== null ? JSON.stringify(v) : v);
+  params.push(analise.id);
+  await pool.query(`UPDATE analises SET ${sets.join(", ")} WHERE id = $${params.length}`, params);
+
+  await pool.query(
+    `UPDATE imoveis SET roi = $1, roi_anualizado = $2, updated_at = $3 WHERE id = $4`,
+    [calculados.retorno_total ?? null, calculados.retorno_anualizado ?? null, now, imovelId],
+  );
+}
+
 // Middleware: garante a coluna valor_cedencia_posicao antes de qualquer POST/PUT
 // em /negocios — evita drop silencioso do campo no primeiro save quando a
 // coluna ainda nao existe em producao (migracoes nao sao auto-aplicadas).
@@ -1481,7 +1521,10 @@ app.post("/imoveis/:id/fotos", async (c: any) => {
     let fotos = imovel.fotos ? JSON.parse(imovel.fotos) : [];
     for (const file of files) {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const storagePath = `imoveis/${id}/${crypto.randomUUID()}_${file.name}`;
+      // Storage keys do Supabase rejeitam caracteres não-ASCII (ç, ã, espaços, etc.).
+      // Usar só UUID + extensão; o nome original fica preservado em `name`.
+      const ext = file.name?.match(/\.[^.]+$/)?.[0] || "";
+      const storagePath = `imoveis/${id}/${crypto.randomUUID()}${ext}`;
       const filePath = await uploadPublic("Imoveis", storagePath, bytes, file.type || "application/octet-stream");
       fotos.push({
         id: crypto.randomUUID(),
