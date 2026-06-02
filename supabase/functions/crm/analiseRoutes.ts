@@ -99,6 +99,15 @@ async function propagarParaImovel(imovelId: string, calculados: any, inputs: any
   }
 }
 
+// Em Wholesaling, o preco de aquisicao real e o valor pago pela cedencia de posicao.
+// O backend impoe o override para manter as KPIs alinhadas independentemente do input do utilizador.
+function applyWholesalingOverride(inputs: any, imovel: any) {
+  if (!imovel || imovel.modelo_negocio !== "Wholesaling") return inputs;
+  const cedencia = Number(imovel.valor_com_cedencia);
+  if (!Number.isFinite(cedencia) || cedencia <= 0) return inputs;
+  return { ...inputs, compra: cedencia };
+}
+
 export function registerAnaliseRoutes(app: any) {
   // ── Listar análises de um imóvel ─────────────────────────────
   app.get("/imoveis/:imovelId/analises", async (c: any) => {

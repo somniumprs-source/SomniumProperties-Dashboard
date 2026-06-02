@@ -27,7 +27,7 @@ const CATEGORIAS_IRS = [
   { value: 'B-organizada', label: 'Cat. B — Contabilidade Organizada' },
 ]
 
-export function CalculadoraForm({ analise, onUpdate }) {
+export function CalculadoraForm({ analise, imovel, onUpdate }) {
   const [form, setForm] = useState({})
   // Só Aquisição e Venda abertos por defeito
   const [openSections, setOpenSections] = useState({
@@ -51,6 +51,10 @@ export function CalculadoraForm({ analise, onUpdate }) {
 
   if (!analise) return null
 
+  const isWholesaling = imovel?.modelo_negocio === 'Wholesaling'
+  const cedencia = Number(imovel?.valor_com_cedencia)
+  const compraLocked = isWholesaling && Number.isFinite(cedencia) && cedencia > 0
+
   return (
     <div className="space-y-3">
       {/* A. Custos de Aquisição */}
@@ -58,7 +62,16 @@ export function CalculadoraForm({ analise, onUpdate }) {
         summary={analise.total_aquisicao > 0 ? EUR(analise.total_aquisicao) : null}
         hint="Preço de compra, impostos e custos de escritura">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <Input label="Preço de Compra" field="compra" value={form.compra} onChange={handleChange} placeholder="Ex: 150000" required />
+          <Input
+            label="Preço de Compra"
+            field="compra"
+            value={compraLocked ? cedencia : form.compra}
+            onChange={handleChange}
+            placeholder="Ex: 150000"
+            required
+            readOnly={compraLocked}
+            hint={compraLocked ? 'Definido em Valores → Valor já com Cedência' : null}
+          />
           <Input label="Valor Patrimonial (VPT)" field="vpt" value={form.vpt} onChange={handleChange} placeholder="Caderneta predial" />
           <Select label="Finalidade" field="finalidade" value={form.finalidade} options={FINALIDADES} onChange={handleChange} />
           <Input label="Escritura" field="escritura" value={form.escritura} onChange={handleChange} placeholder="~700€" />
@@ -300,7 +313,7 @@ function CalcRow({ items }) {
   )
 }
 
-function Input({ label, field, value, onChange, step, placeholder, required }) {
+function Input({ label, field, value, onChange, step, placeholder, required, readOnly, hint }) {
   const handleChange = (e) => {
     const v = e.target.value === '' ? 0 : parseFloat(e.target.value)
     onChange(field, v)
@@ -316,9 +329,11 @@ function Input({ label, field, value, onChange, step, placeholder, required }) {
         value={value ?? ''}
         onChange={handleChange}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm font-mono placeholder:text-gray-300 focus:outline-none focus:ring-2 transition-shadow"
+        readOnly={readOnly}
+        className={`w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm font-mono placeholder:text-gray-300 focus:outline-none focus:ring-2 transition-shadow ${readOnly ? 'bg-gray-50 cursor-not-allowed text-gray-600' : ''}`}
         style={{ '--tw-ring-color': GOLD + '66' }}
       />
+      {hint && <p className="text-[10px] text-gray-400 mt-1 italic">{hint}</p>}
     </div>
   )
 }

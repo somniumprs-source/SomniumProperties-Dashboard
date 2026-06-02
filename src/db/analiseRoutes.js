@@ -56,6 +56,15 @@ const CALC_FIELDS = new Set([
   'stress_tests',
 ])
 
+// Em Wholesaling, o preco de aquisicao real e o valor pago pela cedencia de posicao.
+// O backend impoe o override para manter as KPIs alinhadas independentemente do input do utilizador.
+function applyWholesalingOverride(inputs, imovel) {
+  if (!imovel || imovel.modelo_negocio !== 'Wholesaling') return inputs
+  const cedencia = Number(imovel.valor_com_cedencia)
+  if (!Number.isFinite(cedencia) || cedencia <= 0) return inputs
+  return { ...inputs, compra: cedencia }
+}
+
 // ── Listar análises de um imóvel ─────────────────────────────
 router.get('/imoveis/:imovelId/analises', async (req, res) => {
   try {
@@ -84,13 +93,14 @@ router.post('/imoveis/:imovelId/analises', async (req, res) => {
     const activa = existentes.length === 0
 
     // Pré-preencher com dados do imóvel se não vier input
-    const inputs = {
+    let inputs = {
       compra: body.compra ?? imovel.ask_price ?? 0,
       obra: body.obra ?? imovel.custo_estimado_obra ?? 0,
       vvr: body.vvr ?? imovel.valor_venda_remodelado ?? 0,
       meses: body.meses ?? 6,
       ...body,
     }
+    inputs = applyWholesalingOverride(inputs, imovel)
 
     // Calcular
     const calculados = calcAnalise(inputs)
@@ -149,7 +159,7 @@ router.put('/analises/:id', async (req, res) => {
     const body = req.body || {}
 
     // Merge inputs existentes com novos
-    const merged = {}
+    let merged = {}
     for (const f of INPUT_FIELDS) {
       if (f === 'comparaveis' || f === 'caep') {
         merged[f] = body[f] !== undefined ? body[f] : existing[f]
@@ -157,6 +167,13 @@ router.put('/analises/:id', async (req, res) => {
         merged[f] = body[f] !== undefined ? body[f] : existing[f]
       }
     }
+
+    // Wholesaling: forcar compra = valor_com_cedencia do imovel
+    const { rows: [imovel] } = await pool.query(
+      'SELECT modelo_negocio, valor_com_cedencia FROM imoveis WHERE id = $1',
+      [existing.imovel_id]
+    )
+    merged = applyWholesalingOverride(merged, imovel)
 
     // Recalcular
     const calculados = calcAnalise(merged)

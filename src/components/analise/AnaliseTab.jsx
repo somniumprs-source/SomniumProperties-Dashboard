@@ -218,7 +218,7 @@ export function AnaliseTab({ imovelId, imovelNome, imovel }) {
           {/* Coluna principal */}
           <div className="xl:col-span-2">
             {subTab === 'Calculadora' && (
-              <CalculadoraForm analise={selected} onUpdate={guardar} />
+              <CalculadoraForm analise={selected} imovel={imovel} onUpdate={guardar} />
             )}
             {subTab === 'Quick Check' && (
               <QuickCheck analise={selected} onTransfer={(dados) => { guardarAgora(dados); setSubTab('Calculadora') }} />

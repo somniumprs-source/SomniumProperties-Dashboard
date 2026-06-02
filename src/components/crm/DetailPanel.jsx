@@ -1899,7 +1899,7 @@ function ImovelEditSections({ data, form, setField }) {
     identificacao: ['nome','estado','ref_interna','link','tipo_oportunidade','origem','nome_consultor'],
     localizacao:   ['distrito','concelho','freguesia','zona','coordenadas_lat','coordenadas_lng','localizacao_imagem'],
     fisica:        ['tipologia','predio_tipo','area_util','area_bruta','area_bruta_dependente','andar','numero_pisos_predio','tem_elevador','ano_construcao','cru','licenca_utilizacao'],
-    valores:       ['ask_price','valor_proposta','valor_venda_remodelado','custo_estimado_obra','vpt','imi_anual','condominio_mensal_anunciado'],
+    valores:       ['ask_price','valor_proposta','valor_com_cedencia','valor_venda_remodelado','custo_estimado_obra','vpt','imi_anual','condominio_mensal_anunciado'],
     legal:         ['artigo_matricial','descricao_predial','fracao','regime_propriedade','certificado_energetico','numero_ce','onus_registados'],
     pipeline:      ['proprietario_nome','proprietario_nif','proprietario_contacto','motivo_venda_declarado','data_anuncio','tempo_no_mercado_dias','modelo_negocio','data_adicionado','data_chamada','data_visita','data_estudo_mercado','data_proposta','data_proposta_aceite','data_follow_up','data_aceite_investidor','motivo_follow_up','notas'],
   }
@@ -2068,6 +2068,9 @@ function ImovelEditSections({ data, form, setField }) {
     <Section icon="💰" title="Valores" fields={sec.valores} form={form} defaultOpen>
       <EF label="Ask Price (€)" field="ask_price" form={form} set={setField} type="number" />
       <EF label="Valor Proposta (€)" field="valor_proposta" form={form} set={setField} type="number" />
+      {form.modelo_negocio === 'Wholesaling' && (
+        <EF label="Valor já com Cedência (€)" field="valor_com_cedencia" form={form} set={setField} type="number" />
+      )}
       <EF label="VVR — Valor Venda Remodelado (€)" field="valor_venda_remodelado" form={form} set={setField} type="number" />
       <EF label="Custo Obra (€)" field="custo_estimado_obra" form={form} set={setField} type="number" />
       <EF label="VPT (€)" field="vpt" form={form} set={setField} type="number" />
@@ -2176,7 +2179,7 @@ function ImovelReadSections({ data, onNavigate }) {
     identificacao: ['nome','estado','ref_interna','link','tipo_oportunidade','origem','nome_consultor'],
     localizacao:   ['distrito','concelho','freguesia','zona','coordenadas_lat','coordenadas_lng','localizacao_imagem'],
     fisica:        ['tipologia','predio_tipo','area_util','area_bruta','area_bruta_dependente','andar','numero_pisos_predio','tem_elevador','ano_construcao','cru','licenca_utilizacao'],
-    valores:       ['ask_price','valor_proposta','valor_venda_remodelado','custo_estimado_obra','vpt','imi_anual','condominio_mensal_anunciado'],
+    valores:       ['ask_price','valor_proposta','valor_com_cedencia','valor_venda_remodelado','custo_estimado_obra','vpt','imi_anual','condominio_mensal_anunciado'],
     legal:         ['artigo_matricial','descricao_predial','fracao','regime_propriedade','certificado_energetico','numero_ce','onus_registados'],
     pipeline:      ['proprietario_nome','proprietario_nif','proprietario_contacto','motivo_venda_declarado','data_anuncio','tempo_no_mercado_dias','modelo_negocio','data_adicionado','data_chamada','data_visita','data_estudo_mercado','data_proposta','data_proposta_aceite','data_follow_up','data_aceite_investidor','motivo_follow_up','notas'],
   }
@@ -2240,6 +2243,9 @@ function ImovelReadSections({ data, onNavigate }) {
     <Section icon="💰" title="Valores" fields={sec.valores} form={data} defaultOpen>
       <Field label="Ask Price" value={fmtEur(data.ask_price)} />
       <Field label="Valor Proposta" value={fmtEur(data.valor_proposta)} />
+      {data.modelo_negocio === 'Wholesaling' && (
+        <Field label="Valor já com Cedência" value={fmtEur(data.valor_com_cedencia)} />
+      )}
       <Field label="VVR" value={fmtEur(data.valor_venda_remodelado)} />
       <Field label="Custo Obra" value={fmtEur(data.custo_estimado_obra)} />
       <Field label="VPT" value={fmtEur(data.vpt)} />
