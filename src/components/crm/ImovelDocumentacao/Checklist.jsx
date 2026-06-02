@@ -115,7 +115,6 @@ function SlotRow({ item, docs, uploading, analyzing, erros, onUpload, onRemove, 
       )}
 
       <input ref={inputRef} type="file" multiple
-        accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
         className="hidden"
         onChange={e => { handlePick(e.target.files); e.target.value = '' }} />
     </div>

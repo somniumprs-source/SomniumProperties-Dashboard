@@ -29,10 +29,9 @@ export function OutrosDocumentos({ docs, uploading, uploadErro, onUpload, onRemo
         style={{ borderColor: dragOver ? '#C9A84C' : '#e5e7eb', backgroundColor: dragOver ? '#FCF8EC' : '#fafafa' }}>
         <Upload className="w-7 h-7 mb-2" style={{ color: '#C9A84C' }} />
         <p className="text-sm font-medium text-neutral-600">Arrasta documentos para aqui ou clica para escolher</p>
-        <p className="text-xs text-neutral-400 mt-1">PDF, JPG/JPEG, PNG ou WEBP · vários ficheiros em simultâneo</p>
+        <p className="text-xs text-neutral-400 mt-1">Qualquer formato · vários ficheiros em simultâneo</p>
         {uploading && <p className="text-xs mt-2" style={{ color: '#C9A84C' }}>A carregar…</p>}
         <input ref={inputRef} type="file" multiple
-          accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
           className="hidden"
           onChange={e => { if (e.target.files?.length) onUpload(e.target.files, { slot: 'outros' }); e.target.value = '' }} />
       </div>

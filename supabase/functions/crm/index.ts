@@ -1469,7 +1469,7 @@ app.post("/imoveis/:id/fotos", async (c: any) => {
   try {
     const form = await c.req.formData();
     const files = form.getAll("fotos").filter((f: any): f is File => f instanceof File);
-    if (!files.length) return c.json({ error: "Nenhum ficheiro válido (JPG, PNG, WEBP até 15MB)" }, 400);
+    if (!files.length) return c.json({ error: "Nenhum ficheiro recebido (limite 15MB por ficheiro)" }, 400);
     const folder = form.get("folder") === "documentos" ? "documentos" : undefined;
     // Slot opcional: liga o ficheiro a um item da checklist canónica de
     // documentação. Múltiplos ficheiros podem partilhar o mesmo slot.

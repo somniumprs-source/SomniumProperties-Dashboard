@@ -93,10 +93,6 @@ const imoveisStorage = multer.diskStorage({
 const uploadImovel = multer({
   storage: imoveisStorage,
   limits: { fileSize: 15 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowed = /\.(jpg|jpeg|png|webp|heic|pdf|doc|docx|xls|xlsx)$/i
-    cb(null, allowed.test(path.extname(file.originalname)))
-  },
 })
 export { uploadImovel }
 
@@ -1265,7 +1261,7 @@ router.post('/imoveis/:id/scrape-fotos', async (req, res) => {
 // ── Upload de fotos para imóveis ─────────────────────────────
 router.post('/imoveis/:id/fotos', uploadRateLimit, uploadImovel.array('fotos', 20), async (req, res) => {
   try {
-    if (!req.files?.length) return res.status(400).json({ error: 'Nenhum ficheiro válido (JPG, PNG, WEBP até 15MB)' })
+    if (!req.files?.length) return res.status(400).json({ error: 'Nenhum ficheiro recebido (limite 15MB por ficheiro)' })
     const imovel = await Imoveis.getById(req.params.id)
     if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
 
