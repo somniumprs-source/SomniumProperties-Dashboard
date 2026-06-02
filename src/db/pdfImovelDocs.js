@@ -1619,10 +1619,15 @@ function renderFichaImovel(b, im) {
 
   // 2. CARACTERIZAÇÃO FÍSICA
   b.header('2. CARACTERIZAÇÃO FÍSICA')
+  const hasUtil  = im.area_util  != null && im.area_util  !== ''
+  const hasBruta = im.area_bruta != null && im.area_bruta !== ''
+  const areaRows = []
+  if (hasUtil) areaRows.push({ label: 'Área Útil', value: M2(im.area_util) })
+  if (hasBruta || !hasUtil) areaRows.push({ label: 'Área Bruta Privativa (ABP)', value: M2(im.area_bruta) })
+  areaRows.push({ label: 'Área Bruta Dependente (ABD)', value: M2(im.area_bruta_dependente) })
   b.simpleTable([
     { label: 'Tipologia', value: im.tipologia },
-    { label: 'Área Bruta Privativa (ABP)', value: M2(im.area_bruta) },
-    { label: 'Área Bruta Dependente (ABD)', value: M2(im.area_bruta_dependente) },
+    ...areaRows,
     { label: 'Andar', value: im.andar },
     { label: 'Nº Pisos do Prédio', value: NUM(im.numero_pisos_predio) },
     { label: 'Tipo de Prédio', value: im.predio_tipo },
