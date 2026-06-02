@@ -1272,11 +1272,9 @@ router.post('/imoveis/:id/fotos', uploadRateLimit, uploadImovel.array('fotos', 2
     const folder = req.body?.folder === 'documentos' ? 'documentos' : undefined
     // Slot opcional: liga o ficheiro a um item da checklist canónica de
     // documentação (ver src/components/crm/ImovelDocumentacao/checklist.config.js).
-    // Quando vem slot, removemos do array as entradas anteriores desse slot —
-    // efeito "substituir" sem deixar duplicados na checklist.
+    // Múltiplos ficheiros podem partilhar o mesmo slot.
     const slot = req.body?.slot ? String(req.body.slot).trim() : undefined
     let fotos = imovel.fotos ? JSON.parse(imovel.fotos) : []
-    if (slot) fotos = fotos.filter(f => f?.slot !== slot)
     for (const file of req.files) {
       let filePath = `/uploads/imoveis/${file.filename}`
 

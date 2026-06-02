@@ -1472,15 +1472,13 @@ app.post("/imoveis/:id/fotos", async (c: any) => {
     if (!files.length) return c.json({ error: "Nenhum ficheiro válido (JPG, PNG, WEBP até 15MB)" }, 400);
     const folder = form.get("folder") === "documentos" ? "documentos" : undefined;
     // Slot opcional: liga o ficheiro a um item da checklist canónica de
-    // documentação. Quando vem slot, removemos entradas anteriores desse slot
-    // (efeito "substituir" sem deixar duplicados).
+    // documentação. Múltiplos ficheiros podem partilhar o mesmo slot.
     const slotRaw = form.get("slot");
     const slot = typeof slotRaw === "string" && slotRaw.trim() ? slotRaw.trim() : undefined;
     const imovel = await Imoveis.getById(id);
     if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
 
     let fotos = imovel.fotos ? JSON.parse(imovel.fotos) : [];
-    if (slot) fotos = fotos.filter((f: any) => f?.slot !== slot);
     for (const file of files) {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const storagePath = `imoveis/${id}/${crypto.randomUUID()}_${file.name}`;

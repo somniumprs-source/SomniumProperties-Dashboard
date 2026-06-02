@@ -20,16 +20,30 @@ export const CHECKLIST_DOCUMENTACAO = [
 export const CHECKLIST_SLOTS = new Set(CHECKLIST_DOCUMENTACAO.map(c => c.slot))
 
 /**
- * Devolve o ficheiro associado a um slot da checklist (ou null).
- * Pesquisa na lista de docs (que já vem normalizada do useDocumentacao).
+ * Devolve todos os ficheiros associados a um slot da checklist,
+ * ordenados por uploaded_at ascendente (histórico cronológico).
  */
-export function getDocBySlot(docs, slot) {
-  if (!Array.isArray(docs) || !slot) return null
-  return docs.find(d => d?.slot === slot) || null
+export function getDocsBySlot(docs, slot) {
+  if (!Array.isArray(docs) || !slot) return []
+  return docs
+    .filter(d => d?.slot === slot)
+    .sort((a, b) => {
+      const ta = a?.uploaded_at ? Date.parse(a.uploaded_at) : 0
+      const tb = b?.uploaded_at ? Date.parse(b.uploaded_at) : 0
+      return ta - tb
+    })
 }
 
 /**
- * Sumário: { importados, total }.
+ * Devolve o primeiro ficheiro associado a um slot da checklist (ou null).
+ * Mantido por compatibilidade com consumidores que tratam o slot como único.
+ */
+export function getDocBySlot(docs, slot) {
+  return getDocsBySlot(docs, slot)[0] || null
+}
+
+/**
+ * Sumário: { importados, total }. Conta slots com pelo menos 1 ficheiro.
  */
 export function resumoChecklist(docs) {
   let importados = 0
