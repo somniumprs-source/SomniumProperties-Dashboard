@@ -581,14 +581,11 @@ const FASE_TABS = [
     docs: [{ tipo: 'ficha_descarte', label: 'Ficha de Descarte', compilavel: 'ficha_descarte' }] },
 ]
 
-const ALL_DOCS = FASE_TABS.flatMap(f => f.docs)
-
 function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
   const estadoClean = (estado || '').replace(/^\d+-\s*/, '').trim()
   const faseActual = FASE_TABS.find(f => f.estados.includes(estadoClean))
 
   const [subTab, setSubTab] = useState(faseActual?.key || 'adicionado')
-  const [selected, setSelected] = useState(new Set())
   // Token cacheado para os links: getToken() é async (Supabase); se for chamado
   // dentro do onClick, o `await` quebra a cadeia de user-gesture e o Safari
   // bloqueia silenciosamente o window.open. Cachamos no mount para que os
@@ -596,34 +593,16 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
   const [token, setToken] = useState('')
   useEffect(() => { getToken().then(setToken) }, [])
   const qs = token ? `?token=${token}` : ''
-  const compilarQs = token ? `&token=${token}` : ''
 
   const activeTab = FASE_TABS.find(f => f.key === subTab)
   const visibleDocs = activeTab?.docs || []
 
-  function toggle(key) {
-    setSelected(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
-  }
-  function selectAll() { setSelected(new Set(ALL_DOCS.map(d => d.compilavel))) }
-  function selectNone() { setSelected(new Set()) }
-
-  const selectedDocs = ALL_DOCS.filter(d => selected.has(d.compilavel))
-  const compilarUrl = selectedDocs.length > 0
-    ? `/api/crm/imoveis/${imovelId}/relatorio-investidor?seccoes=${selectedDocs.map(d => d.compilavel).join(',')}`
-    : null
-
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h3 className="text-sm font-bold text-neutral-800">Documentos do Imóvel</h3>
-          <p className="text-xs text-neutral-400 mt-0.5">Selecciona os documentos para gerar o dossier para investidor</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={selectAll} className="px-2.5 py-1.5 text-[11px] text-neutral-500 hover:text-neutral-700 rounded-lg hover:bg-neutral-100 transition-colors">Todos</button>
-          <button onClick={selectNone} className="px-2.5 py-1.5 text-[11px] text-neutral-500 hover:text-neutral-700 rounded-lg hover:bg-neutral-100 transition-colors">Nenhum</button>
-        </div>
+      <div>
+        <h3 className="text-sm font-bold text-neutral-800">Documentos do Imóvel</h3>
+        <p className="text-xs text-neutral-400 mt-0.5">Abre o documento da fase ou força regeneração</p>
       </div>
 
       {/* Sub-abas — fases da pipeline */}
@@ -646,63 +625,28 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
 
       {/* Lista de documentos da fase seleccionada */}
       <div className="rounded-xl border border-neutral-100 overflow-hidden divide-y divide-neutral-50">
-        {visibleDocs.map(d => {
-          const isSelected = selected.has(d.compilavel)
-          return (
-            <div key={d.tipo}
-              className={`flex items-center gap-3 px-4 py-3 transition-colors group cursor-pointer ${
-                isSelected ? 'bg-amber-50/70' : 'bg-white hover:bg-neutral-50/50'
-              }`}
-              onClick={() => toggle(d.compilavel)}>
-              <input type="checkbox" checked={isSelected} readOnly
-                className="w-4 h-4 rounded border-neutral-300 shrink-0 pointer-events-none" style={{ accentColor: '#C9A84C' }} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-neutral-700">{d.label}</p>
-              </div>
-              <a
-                href={resolveApiUrl(`/api/crm/imoveis/${imovelId}/documento/${d.tipo}?refresh=1`) + (token ? `&token=${token}` : '')}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={e => e.stopPropagation()}
-                title="Forçar regeneração (ignora versão em cache)"
-                className="px-2 py-1.5 text-[11px] font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors shrink-0 opacity-50 group-hover:opacity-100">
-                Regerar
-              </a>
-              <a
-                href={resolveApiUrl(`/api/crm/imoveis/${imovelId}/documento/${d.tipo}`) + qs}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={e => e.stopPropagation()}
-                className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors shrink-0 opacity-50 group-hover:opacity-100">
-                Abrir
-              </a>
+        {visibleDocs.map(d => (
+          <div key={d.tipo} className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-neutral-50/50 transition-colors group">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-neutral-700">{d.label}</p>
             </div>
-          )
-        })}
-      </div>
-
-      {/* Barra fixa em baixo — gerar dossier */}
-      <div className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
-        selectedDocs.length > 0 ? 'border-brand-gold bg-[#faf8f2]' : 'border-neutral-200 bg-neutral-50'
-      }`}>
-        <div>
-          <p className="text-sm font-bold text-neutral-800">
-            {selectedDocs.length > 0 ? `${selectedDocs.length} documento${selectedDocs.length > 1 ? 's' : ''} seleccionado${selectedDocs.length > 1 ? 's' : ''}` : 'Nenhum documento seleccionado'}
-          </p>
-          <p className="text-xs text-neutral-400 mt-0.5">O dossier compilado inclui capa profissional e índice</p>
-        </div>
-        {compilarUrl ? (
-          <a
-            href={`${compilarUrl}${compilarQs}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl text-white shadow-sm hover:shadow transition-all"
-            style={{ backgroundColor: '#C9A84C' }}>
-            <FileDown className="w-4 h-4" /> Gerar Dossier
-          </a>
-        ) : (
-          <span className="px-5 py-2.5 text-sm text-neutral-400 rounded-xl bg-neutral-200/50">Gerar Dossier</span>
-        )}
+            <a
+              href={resolveApiUrl(`/api/crm/imoveis/${imovelId}/documento/${d.tipo}?refresh=1`) + (token ? `&token=${token}` : '')}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Forçar regeneração (ignora versão em cache)"
+              className="px-2 py-1.5 text-[11px] font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors shrink-0 opacity-50 group-hover:opacity-100">
+              Regerar
+            </a>
+            <a
+              href={resolveApiUrl(`/api/crm/imoveis/${imovelId}/documento/${d.tipo}`) + qs}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors shrink-0 opacity-50 group-hover:opacity-100">
+              Abrir
+            </a>
+          </div>
+        ))}
       </div>
     </div>
   )
