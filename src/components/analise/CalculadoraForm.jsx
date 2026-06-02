@@ -63,7 +63,7 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
         hint="Preço de compra, impostos e custos de escritura">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <Input
-            label="Preço de Compra"
+            label={compraLocked ? 'Valor já com Cedência' : 'Preço de Compra'}
             field="compra"
             value={compraLocked ? cedencia : form.compra}
             onChange={handleChange}
