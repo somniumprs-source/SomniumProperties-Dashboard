@@ -113,7 +113,7 @@ app.use('/api', async (req, res, next) => {
 // ── CRM API (PostgreSQL/Supabase) ────────────────────────────
 try {
   const { initSchema } = await import('./src/db/pg.js')
-  await initSchema()
+  await initSchema().catch(e => console.warn('[crm] initSchema aviso (continua):', e.message))
   const { withAuditUser } = await import('./src/db/audit.js')
   const { default: pgPoolAudit } = await import('./src/db/pg.js')
 
