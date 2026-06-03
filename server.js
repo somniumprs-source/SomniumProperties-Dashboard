@@ -222,6 +222,7 @@ try {
         const today = new Date().toISOString().slice(0, 10)
         const submissaoNotas = [
           `Submissão Landing Page · ${new Date().toLocaleString('pt-PT')}`,
+          `Objetivo: ${body.objetivo || '-'}`,
           `Experiência: ${body.experiencia || '-'}`,
           `Empreiteiro disponível: ${body.empreiteiro || '-'}`,
           `Retorno total pretendido: ${body.retorno_total || '-'}`,
@@ -288,6 +289,7 @@ try {
               <tr><td style="padding:8px 14px 8px 0;color:#888;width:160px;">Nome</td><td style="font-weight:600;">${nome}</td></tr>
               <tr><td style="padding:8px 14px 8px 0;color:#888;">Email</td><td>${email}</td></tr>
               <tr><td style="padding:8px 14px 8px 0;color:#888;">Telemóvel</td><td>${telemovel || '-'}</td></tr>
+              <tr><td style="padding:8px 14px 8px 0;color:#888;">Objetivo</td><td>${body.objetivo || '-'}</td></tr>
               <tr><td style="padding:8px 14px 8px 0;color:#888;">Experiência</td><td>${body.experiencia || '-'}</td></tr>
               <tr><td style="padding:8px 14px 8px 0;color:#888;">Capital disponível</td><td>${body.capital || '-'}</td></tr>
               <tr><td style="padding:8px 14px 8px 0;color:#888;">Empreiteiro disponível</td><td>${body.empreiteiro || '-'}</td></tr>
