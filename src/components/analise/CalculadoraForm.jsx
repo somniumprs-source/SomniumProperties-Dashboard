@@ -51,9 +51,11 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
 
   if (!analise) return null
 
+  // Preco de aquisicao derivado da ficha: Wholesaling -> valor_com_cedencia; outros modelos -> valor_proposta
   const isWholesaling = imovel?.modelo_negocio === 'Wholesaling'
-  const cedencia = Number(imovel?.valor_com_cedencia)
-  const compraLocked = isWholesaling && Number.isFinite(cedencia) && cedencia > 0
+  const fonteCompra = isWholesaling ? Number(imovel?.valor_com_cedencia) : Number(imovel?.valor_proposta)
+  const compraLabel = isWholesaling ? 'Valor já com Cedência' : 'Valor da Proposta'
+  const compraLocked = Number.isFinite(fonteCompra) && fonteCompra > 0
 
   return (
     <div className="space-y-3">
@@ -63,14 +65,14 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
         hint="Preço de compra, impostos e custos de escritura">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <Input
-            label={compraLocked ? 'Valor já com Cedência' : 'Preço de Compra'}
+            label={compraLocked ? compraLabel : 'Preço de Compra'}
             field="compra"
-            value={compraLocked ? cedencia : form.compra}
+            value={compraLocked ? fonteCompra : form.compra}
             onChange={handleChange}
             placeholder="Ex: 150000"
             required
             readOnly={compraLocked}
-            hint={compraLocked ? 'Definido em Valores → Valor já com Cedência' : null}
+            hint={compraLocked ? `Definido em Valores → ${compraLabel}` : null}
           />
           <Input label="Valor Patrimonial (VPT)" field="vpt" value={form.vpt} onChange={handleChange} placeholder="Caderneta predial" />
           <Select label="Finalidade" field="finalidade" value={form.finalidade} options={FINALIDADES} onChange={handleChange} />

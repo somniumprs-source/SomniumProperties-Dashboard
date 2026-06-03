@@ -99,13 +99,17 @@ async function propagarParaImovel(imovelId: string, calculados: any, inputs: any
   }
 }
 
-// Em Wholesaling, o preco de aquisicao real e o valor pago pela cedencia de posicao.
+// O preco de aquisicao da analise e sempre derivado da ficha do imovel:
+//   - Wholesaling: valor pago pela cedencia de posicao (valor_com_cedencia)
+//   - Outros modelos: valor da proposta (valor_proposta)
 // O backend impoe o override para manter as KPIs alinhadas independentemente do input do utilizador.
-function applyWholesalingOverride(inputs: any, imovel: any) {
-  if (!imovel || imovel.modelo_negocio !== "Wholesaling") return inputs;
-  const cedencia = Number(imovel.valor_com_cedencia);
-  if (!Number.isFinite(cedencia) || cedencia <= 0) return inputs;
-  return { ...inputs, compra: cedencia };
+function applyCompraOverride(inputs: any, imovel: any) {
+  if (!imovel) return inputs;
+  const fonte = imovel.modelo_negocio === "Wholesaling"
+    ? Number(imovel.valor_com_cedencia)
+    : Number(imovel.valor_proposta);
+  if (!Number.isFinite(fonte) || fonte <= 0) return inputs;
+  return { ...inputs, compra: fonte };
 }
 
 export function registerAnaliseRoutes(app: any) {
@@ -144,7 +148,7 @@ export function registerAnaliseRoutes(app: any) {
         meses: body.meses ?? 6,
         ...body,
       };
-      inputs = applyWholesalingOverride(inputs, imovel);
+      inputs = applyCompraOverride(inputs, imovel);
 
       // Calcular
       const calculados = calcAnalise(inputs);
@@ -271,7 +275,7 @@ export function registerAnaliseRoutes(app: any) {
         "SELECT modelo_negocio, valor_com_cedencia FROM imoveis WHERE id = $1",
         [existing.imovel_id],
       );
-      merged = applyWholesalingOverride(merged, imovel);
+      merged = applyCompraOverride(merged, imovel);
 
       // Recalcular
       const calculados = calcAnalise(merged);

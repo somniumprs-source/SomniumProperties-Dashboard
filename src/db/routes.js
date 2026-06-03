@@ -399,9 +399,9 @@ crudRoutes('/imoveis', Imoveis, {
     if (body.valor_proposta !== undefined) {
       await recomputeLucroWholesalingPorImovel(item.id).catch(e => console.error('[wholesaling/recompute imovel]', e.message))
     }
-    // Wholesaling: se mudou valor_com_cedencia ou modelo_negocio, recalcular analise activa
-    if (body.valor_com_cedencia !== undefined || body.modelo_negocio !== undefined) {
-      await recalcAnaliseActivaWholesaling(item.id).catch(e => console.error('[wholesaling/recalc analise]', e.message))
+    // Se mudou a fonte do preco de aquisicao (valor_com_cedencia, valor_proposta) ou o modelo, recalcular analise activa
+    if (body.valor_com_cedencia !== undefined || body.valor_proposta !== undefined || body.modelo_negocio !== undefined) {
+      await recalcAnaliseActivaCompra(item.id).catch(e => console.error('[analise/recalc compra]', e.message))
     }
     // Auto-complete checklist: verificar campos preenchidos
     try {
@@ -949,14 +949,16 @@ async function recomputeLucroWholesalingPorImovel(imovelId) {
 
 // Re-run calcAnalise para a analise activa do imovel forcando compra = valor_com_cedencia.
 // Disparado quando o utilizador altera valor_com_cedencia ou modelo_negocio na ficha do imovel.
-async function recalcAnaliseActivaWholesaling(imovelId) {
+async function recalcAnaliseActivaCompra(imovelId) {
   const { rows: [imovel] } = await pool.query(
-    'SELECT modelo_negocio, valor_com_cedencia FROM imoveis WHERE id = $1',
+    'SELECT modelo_negocio, valor_com_cedencia, valor_proposta FROM imoveis WHERE id = $1',
     [imovelId],
   )
-  if (!imovel || imovel.modelo_negocio !== 'Wholesaling') return
-  const cedencia = Number(imovel.valor_com_cedencia)
-  if (!Number.isFinite(cedencia) || cedencia <= 0) return
+  if (!imovel) return
+  const compra = imovel.modelo_negocio === 'Wholesaling'
+    ? Number(imovel.valor_com_cedencia)
+    : Number(imovel.valor_proposta)
+  if (!Number.isFinite(compra) || compra <= 0) return
 
   const { rows: [analise] } = await pool.query(
     'SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1',
@@ -964,11 +966,11 @@ async function recalcAnaliseActivaWholesaling(imovelId) {
   )
   if (!analise) return
 
-  const inputs = { ...analise, compra: cedencia }
+  const inputs = { ...analise, compra }
   const calculados = calcAnalise(inputs)
   const stress = calcStressTests(inputs)
   const now = new Date().toISOString()
-  const updates = { compra: cedencia, ...calculados, stress_tests: JSON.stringify(stress), updated_at: now }
+  const updates = { compra, ...calculados, stress_tests: JSON.stringify(stress), updated_at: now }
 
   const entries = Object.entries(updates)
   const sets = entries.map(([k], i) => `${k} = $${i + 1}`)
