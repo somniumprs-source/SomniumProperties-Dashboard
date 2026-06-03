@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronDown, ChevronRight, History, Search, RefreshCcw } from 'lucide-react'
 import { apiFetch } from '../lib/api.js'
+import { ScrollableTable } from '../components/ui/ScrollableTable.jsx'
 
 const ENTIDADES = [
   { value: '', label: 'Todas' },
@@ -98,8 +99,8 @@ export default function Auditoria() {
   const paginaActual = Math.floor(offset / limit) + 1
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <header className="flex items-center gap-3 mb-6">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto min-w-0 w-full">
+      <header className="flex items-center gap-3 mb-6 pl-12 sm:pl-0">
         <div className="w-10 h-10 rounded-xl bg-brand-gold/10 flex items-center justify-center">
           <History className="w-5 h-5 text-brand-gold" />
         </div>
@@ -154,7 +155,8 @@ export default function Auditoria() {
       )}
 
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-        <table className="w-full text-sm">
+        <ScrollableTable>
+        <table className="w-full text-sm min-w-[680px]">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr className="text-[11px] uppercase tracking-wider text-gray-500">
               <th className="text-left px-3 py-2 w-8"></th>
@@ -183,6 +185,7 @@ export default function Auditoria() {
             })}
           </tbody>
         </table>
+        </ScrollableTable>
         <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 text-xs text-gray-500">
           <span>{total} registos · página {paginaActual} de {totalPaginas}</span>
           <div className="flex items-center gap-2">

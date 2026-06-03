@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, Fragment } from 'react'
 import { Shield, Plus, Trash2, KeyRound, RefreshCw, X, Link as LinkIcon, Copy, Check, ChevronDown, ChevronRight, Users } from 'lucide-react'
 import { apiFetch } from '../lib/api.js'
 import { useToast } from '../components/ui/Toast.jsx'
+import { ScrollableTable } from '../components/ui/ScrollableTable.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { AcessosDoUser } from '../components/PartilharAcesso.jsx'
 
@@ -106,9 +107,9 @@ export function Utilizadores() {
   const ativos = users.filter(u => u.ativo).length
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto min-w-0 w-full">
       {/* Hero banner — Gestão de Acessos */}
-      <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 text-white shadow-lg bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700 mb-6">
+      <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 pl-14 sm:pl-6 text-white shadow-lg bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700 mb-6">
         <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
         <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-brand-gold to-transparent" />
         <div className="relative flex items-center justify-between mb-5 gap-3 flex-wrap">
@@ -155,7 +156,8 @@ export function Utilizadores() {
 
       {/* Tabela */}
       <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #1a1a1a' }}>
-        <table className="w-full text-sm">
+        <ScrollableTable>
+        <table className="w-full text-sm min-w-[560px]">
           <thead style={{ backgroundColor: '#0f0f0f' }}>
             <tr className="text-left text-[10px] uppercase tracking-widest text-gray-500">
               <th className="px-4 py-3">Nome</th>
@@ -253,6 +255,7 @@ export function Utilizadores() {
             ))}
           </tbody>
         </table>
+        </ScrollableTable>
       </div>
 
       {showForm && (
