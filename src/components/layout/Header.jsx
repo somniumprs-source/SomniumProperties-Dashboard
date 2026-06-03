@@ -22,9 +22,9 @@ export function Header({ title, subtitle, onRefresh, loading, notionUrl, breadcr
   const trail = breadcrumbs?.filter(Boolean) ?? []
 
   return (
-    <header className="flex items-center justify-between px-4 sm:px-7 py-3 sm:py-4 bg-white dark:bg-neutral-900 sticky top-0 z-20 ml-10 md:ml-0 border-b border-neutral-200 dark:border-neutral-700"
+    <header className="flex items-center justify-between gap-2 pl-14 pr-4 sm:px-7 py-3 sm:py-4 bg-white dark:bg-neutral-900 sticky top-0 z-20 border-b border-neutral-200 dark:border-neutral-700"
       style={{ boxShadow: '0 1px 0 rgba(0,0,0,0.04)' }}>
-      <div className="min-w-0 flex-1 flex items-center gap-3">
+      <div className="min-w-0 flex-1 flex items-center gap-2 sm:gap-3">
         {canGoBack && (
           <button
             onClick={() => navigate(-1)}

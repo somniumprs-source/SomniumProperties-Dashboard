@@ -7,6 +7,7 @@ import { Upload, X, FileText, Image, Trash2, Plus, ChevronDown, ChevronUp, Check
 import { Header } from '../components/layout/Header.jsx'
 import { KPICard } from '../components/dashboard/KPICard.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
+import { ScrollableTable } from '../components/ui/ScrollableTable.jsx'
 import { apiFetch } from '../lib/api.js'
 import { useUrlState } from '../hooks/useUrlState.js'
 import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
@@ -387,7 +388,7 @@ export function Financeiro() {
             {/* Todas as despesas cronologicamente */}
             <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
               <h2 className="text-sm font-semibold text-gray-700 mb-4">Todas as Despesas</h2>
-              <div className="overflow-x-auto">
+              <ScrollableTable>
                 <table className="min-w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
@@ -441,7 +442,7 @@ export function Financeiro() {
                     )}
                   </tbody>
                 </table>
-              </div>
+              </ScrollableTable>
             </div>
           </>
         )}

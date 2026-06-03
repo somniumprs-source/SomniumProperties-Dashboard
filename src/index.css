@@ -32,6 +32,16 @@
   ::selection { background: #C9A84C40; color: inherit; }
   /* Tipografia tabular para números */
   .font-mono, [class*="font-mono"] { font-variant-numeric: tabular-nums; }
+
+  /* Mobile: evitar scroll horizontal acidental da página inteira */
+  html, body { overflow-x: hidden; }
+
+  /* Touch (sem hover real): revelar acções que normalmente só aparecem
+     com group-hover. Em telemóvel o hover nunca dispara, deixando botões
+     de editar/apagar inacessíveis. */
+  @media (hover: none) {
+    [class*="group-hover:opacity-100"] { opacity: 1 !important; }
+  }
 }
 
 @layer components {

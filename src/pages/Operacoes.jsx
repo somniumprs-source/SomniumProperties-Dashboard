@@ -6,6 +6,7 @@ import { useUrlState } from '../hooks/useUrlState.js'
 import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 import { EUR, PCT, NUM, REGIOES } from '../constants.js'
 import { Tabs } from '../components/ui/Tabs.jsx'
+import { ScrollableTable } from '../components/ui/ScrollableTable.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { KpiCard } from '../components/ui/KpiCard.jsx'
 import { Card } from '../components/ui/Card.jsx'
@@ -643,7 +644,7 @@ export function Operacoes() {
                     Arquivo — tarefas concluídas. Seleciona e apaga as que já não precisas.
                   </div>
                 )}
-                <div className="overflow-x-auto">
+                <ScrollableTable>
                 <table className="min-w-[800px] w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase bg-gray-50">
@@ -698,7 +699,7 @@ export function Operacoes() {
                     )}
                   </tbody>
                 </table>
-                </div>
+                </ScrollableTable>
                 <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex justify-between text-xs text-gray-400">
                   <span>{filteredTarefas.length} tarefa(s)</span>
                   <span>Total: {HRS(filteredTarefas.reduce((s, t) => s + (t.tempo_horas || 0), 0))}</span>

@@ -5,6 +5,7 @@ import { EUR, PCT } from '../constants.js'
 import { Button } from '../components/ui/Button.jsx'
 import { KpiCard } from '../components/ui/KpiCard.jsx'
 import { Card } from '../components/ui/Card.jsx'
+import { ScrollableTable } from '../components/ui/ScrollableTable.jsx'
 import { Bell, AlertTriangle, AlertCircle, Info, FileWarning, ShieldAlert, History, Database, Zap } from 'lucide-react'
 import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 
@@ -259,7 +260,7 @@ export function Alertas() {
         {alertas?.camposEmFalta?.length > 0 && (
           <Card padding="md">
             <Card.Header title={`Campos Obrigatórios em Falta (${alertas.camposEmFalta.length})`} subtitle="Higiene de dados" icon={FileWarning} />
-            <div className="overflow-x-auto">
+            <ScrollableTable>
               <table className="min-w-[700px] w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
@@ -286,7 +287,7 @@ export function Alertas() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </ScrollableTable>
           </Card>
         )}
 
@@ -346,7 +347,7 @@ export function Alertas() {
           </div>
           <p className="text-xs text-gray-400 mb-3">Backup automático diário às 03:00. Últimos 30 guardados. Cada restauro guarda o estado actual primeiro.</p>
           {backups.length > 0 ? (
-            <div className="overflow-x-auto">
+            <ScrollableTable>
               <table className="min-w-[600px] w-full text-xs">
                 <thead><tr className="border-b border-gray-100 text-gray-400 uppercase">
                   <th className="text-left py-2 px-3">Data</th>
@@ -369,7 +370,7 @@ export function Alertas() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </ScrollableTable>
           ) : <p className="text-xs text-gray-400 text-center py-4">Sem backups — clica em "Criar Backup Agora"</p>}
         </Card>
 
@@ -377,7 +378,7 @@ export function Alertas() {
         <Card padding="md">
           <Card.Header title="Histórico de Alterações (últimas 30)" subtitle="Auditoria & desfazer" icon={History} />
           {auditLog.length > 0 ? (
-            <div className="overflow-x-auto">
+            <ScrollableTable>
               <table className="min-w-[600px] w-full text-xs">
                 <thead><tr className="border-b border-gray-100 text-gray-400 uppercase">
                   <th className="text-left py-2 px-3">Data</th>
@@ -415,7 +416,7 @@ export function Alertas() {
                   })}
                 </tbody>
               </table>
-            </div>
+            </ScrollableTable>
           ) : <p className="text-xs text-gray-400 text-center py-4">Sem alterações registadas</p>}
         </Card>
       </div>

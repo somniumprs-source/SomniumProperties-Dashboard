@@ -2,7 +2,24 @@ import { StatusBadge } from './StatusBadge.jsx'
 
 export function KPITable({ rows }) {
   return (
-    <div className="overflow-x-auto">
+    <>
+    {/* Cartões em telemóvel */}
+    <div className="md:hidden divide-y divide-gray-100 dark:divide-neutral-800">
+      {rows.map((row, i) => (
+        <div key={i} className="py-2.5 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-700 dark:text-neutral-200 truncate">{row.label}</p>
+            <p className="text-xs text-gray-400 font-mono">
+              {row.value !== null && row.value !== undefined ? `${row.value}${row.unit ?? ''}` : '—'}
+              {row.meta !== undefined && <span className="text-gray-300"> / {row.meta}{row.unit ?? ''}</span>}
+            </p>
+          </div>
+          <StatusBadge status={row.status ?? 'yellow'} />
+        </div>
+      ))}
+    </div>
+    {/* Tabela em desktop */}
+    <div className="hidden md:block overflow-x-auto">
       <table className="min-w-[500px] w-full text-sm">
         <thead>
           <tr className="border-b border-gray-100">
@@ -30,5 +47,6 @@ export function KPITable({ rows }) {
         </tbody>
       </table>
     </div>
+    </>
   )
 }

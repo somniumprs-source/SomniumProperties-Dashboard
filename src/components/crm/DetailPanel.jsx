@@ -816,18 +816,18 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
   return (
     <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs overflow-hidden">
       {/* Header */}
-      <div className="px-4 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3" style={{ backgroundColor: '#0d0d0d' }}>
+      <div className="px-4 sm:px-6 py-4 border-b border-gray-100 flex flex-wrap items-center gap-y-2 gap-x-3" style={{ backgroundColor: '#0d0d0d' }}>
         <button onClick={attemptClose} disabled={saving}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ backgroundColor: '#1a1a1a', color: '#C9A84C', border: '1px solid #C9A84C33' }}
           title={editing ? 'Guardar e voltar' : 'Voltar à lista (Esc)'}>
           <ArrowLeft className="w-3.5 h-3.5" /> {editing ? 'Guardar e voltar' : 'Voltar'}
         </button>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 order-first w-full sm:order-none sm:w-auto">
           <p className="text-xs uppercase tracking-widest" style={{ color: '#C9A84C' }}>{type}</p>
           <h2 className="text-lg font-bold text-white truncate">{data.nome ?? data.movimento}</h2>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
           <button onClick={copyLink}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
             style={{ backgroundColor: '#1a1a1a', color: '#C9A84C', border: '1px solid #C9A84C33' }}

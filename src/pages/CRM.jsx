@@ -1446,11 +1446,63 @@ function ClickableName({ name, onClick }) {
   )
 }
 
+// ── Mobile cards ──────────────────────────────────────────────
+// Em telemóvel (<768px) cada linha de tabela vira um cartão vertical.
+// `fields`: [{ label, value }] — value pode ser texto ou JSX (badges, links).
+function MobileCardList({ items, renderCard }) {
+  return (
+    <div className="md:hidden divide-y divide-gray-100 dark:divide-neutral-800">
+      {items.length === 0
+        ? <div className="py-8 text-center text-gray-400 text-sm">Sem registos</div>
+        : items.map(renderCard)}
+    </div>
+  )
+}
+
+function EntityCard({ onClick, name, badge, fields = [], item, onEdit, onDelete, onView }) {
+  return (
+    <div className="py-3 px-1">
+      <div className="flex items-start justify-between gap-2">
+        <button onClick={onClick}
+          className="text-left font-semibold text-sm text-gray-800 dark:text-neutral-100 hover:text-indigo-600 min-w-0 flex-1 truncate">
+          {name}
+        </button>
+        {badge && <div className="shrink-0">{badge}</div>}
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
+        {fields.filter(f => f && f.value != null && f.value !== '—' && f.value !== '').map((f, i) => (
+          <div key={i} className="flex flex-col min-w-0">
+            <span className="text-[9px] text-gray-400 uppercase tracking-wide">{f.label}</span>
+            <span className="text-xs text-gray-700 dark:text-neutral-200 truncate">{f.value}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3" onClick={e => e.stopPropagation()}>
+        <ActionButtons item={item} onEdit={onEdit} onDelete={onDelete} onView={onView} />
+      </div>
+    </div>
+  )
+}
+
 function ImoveisTable({ data, onEdit, onDelete, onView, onConsultorClick }) {
   const { sorted, sortField, sortDir, onSort } = useSortableData(data)
   const sp = { sortField, sortDir, onSort }
   return (
-    <table className="min-w-[800px] w-full text-xs">
+    <>
+    <MobileCardList items={sorted} renderCard={r => (
+      <EntityCard key={r.id} name={r.nome} onClick={() => onView?.(r.id)}
+        item={r} onEdit={onEdit} onDelete={onDelete} onView={onView}
+        badge={<Badge text={r.estado} colorMap={IMOVEL_ESTADO_COLOR} />}
+        fields={[
+          { label: 'Zona', value: r.zona },
+          { label: 'Consultor', value: r.nome_consultor },
+          { label: 'Ask Price', value: r.ask_price > 0 ? EUR(r.ask_price) : null },
+          { label: 'ROI', value: r.roi > 0 ? `${r.roi}%` : null },
+          { label: 'Origem', value: r.origem },
+          { label: 'Data', value: fmtDate(r.data_adicionado) },
+        ]} />
+    )} />
+    <table className="hidden md:table min-w-[800px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
         <Th field="nome" label="Imóvel" {...sp} />
         <Th field="estado" label="Estado" {...sp} />
@@ -1486,6 +1538,7 @@ function ImoveisTable({ data, onEdit, onDelete, onView, onConsultorClick }) {
         {!sorted.length && <tr><td colSpan={9} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
       </tbody>
     </table>
+    </>
   )
 }
 
@@ -1493,7 +1546,25 @@ function InvestidoresTable({ data, onEdit, onDelete, onView }) {
   const { sorted, sortField, sortDir, onSort } = useSortableData(data)
   const sp = { sortField, sortDir, onSort }
   return (
-    <table className="min-w-[900px] w-full text-xs">
+    <>
+    <MobileCardList items={sorted} renderCard={r => {
+      const tipo = r.tipo_principal || 'Passivo'
+      const tipoStyle = tipo === 'Ativo' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+      return (
+        <EntityCard key={r.id} name={r.nome} onClick={() => onView?.(r.id)}
+          item={r} onEdit={onEdit} onDelete={onDelete} onView={onView}
+          badge={<Badge text={r.status} colorMap={INV_STATUS_COLOR} />}
+          fields={[
+            { label: 'Tipo', value: <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${tipoStyle}`}>{tipo}</span> },
+            { label: 'Classe', value: <ClassBadge cls={r.classificacao} /> },
+            { label: 'Capital Max', value: r.capital_max > 0 ? EUR(r.capital_max) : null },
+            { label: 'NDA', value: r.nda_assinado ? '✓' : null },
+            { label: 'Contacto', value: r.telemovel ? <a href={`tel:${r.telemovel}`} className="text-green-600">{r.telemovel}</a> : r.email ? <a href={`mailto:${r.email}`} className="text-blue-600">{r.email}</a> : null },
+            { label: '1º Contacto', value: fmtDate(r.data_primeiro_contacto) },
+          ]} />
+      )
+    }} />
+    <table className="hidden md:table min-w-[900px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
         <Th field="nome" label="Nome" {...sp} />
         <Th field="tipo_principal" label="Tipo" {...sp} />
@@ -1526,6 +1597,7 @@ function InvestidoresTable({ data, onEdit, onDelete, onView }) {
         {!sorted.length && <tr><td colSpan={9} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
       </tbody>
     </table>
+    </>
   )
 }
 
@@ -1540,8 +1612,30 @@ function AlertDot({ status }) {
 function ConsultoresTable({ data, onEdit, onDelete, onView }) {
   const { sorted, sortField, sortDir, onSort } = useSortableData(data)
   const sp = { sortField, sortDir, onSort }
+  const tempoRespFmt = (v) => v != null
+    ? (v < 1 ? `${Math.round(v * 60)}min` : v < 24 ? `${Math.round(v)}h` : `${Math.round(v / 24)}d`)
+    : null
   return (
-    <table className="min-w-[1100px] w-full text-xs">
+    <>
+    <MobileCardList items={sorted} renderCard={r => {
+      const agencia = r._agencia || (() => { try { return JSON.parse(r.imobiliaria || '[]').join(', ') } catch { return null } })()
+      return (
+        <EntityCard key={r.id} name={<span className="inline-flex items-center gap-1.5"><AlertDot status={r._alertStatus} />{r.nome}</span>}
+          onClick={() => onView?.(r.id)}
+          item={r} onEdit={onEdit} onDelete={onDelete} onView={onView}
+          badge={<Badge text={r.estado_avaliacao || 'Em avaliação'} colorMap={CONS_ESTADO_AVALIACAO_COLOR} />}
+          fields={[
+            { label: 'Agência', value: agencia },
+            { label: 'Score', value: r.score_prioridade > 0 ? <span className="font-mono font-semibold" style={{ color: '#C9A84C' }}>{r.score_prioridade}</span> : null },
+            { label: 'Imóveis', value: r._totalImoveis ?? r.imoveis_enviados ?? null },
+            { label: 'Taxa Qualidade', value: r.taxa_qualidade > 0 ? `${r.taxa_qualidade}%` : null },
+            { label: 'Tempo Resposta', value: tempoRespFmt(r.tempo_medio_resposta) },
+            { label: 'Próx. Follow-up', value: fmtDate(r.data_proximo_follow_up) },
+            { label: 'Dias s/ contacto', value: r._diasSemContacto != null ? `${r._diasSemContacto}d` : null },
+          ]} />
+      )
+    }} />
+    <table className="hidden md:table min-w-[1100px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
         <th className="w-6 py-2 px-1"></th>
         <Th field="nome" label="Nome" {...sp} />
@@ -1580,6 +1674,7 @@ function ConsultoresTable({ data, onEdit, onDelete, onView }) {
         {!sorted.length && <tr><td colSpan={11} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
       </tbody>
     </table>
+    </>
   )
 }
 
@@ -1587,7 +1682,21 @@ function NegociosTable({ data, onEdit, onDelete, onViewImovel }) {
   const { sorted, sortField, sortDir, onSort } = useSortableData(data)
   const sp = { sortField, sortDir, onSort }
   return (
-    <table className="min-w-[700px] w-full text-xs">
+    <>
+    <MobileCardList items={sorted} renderCard={r => (
+      <EntityCard key={r.id} name={r.movimento}
+        onClick={() => r.imovel_id && onViewImovel?.(r.imovel_id)}
+        item={r} onEdit={onEdit} onDelete={onDelete}
+        badge={<Badge text={r.fase} colorMap={NEG_FASE_COLOR} />}
+        fields={[
+          { label: 'Categoria', value: <Badge text={r.categoria} colorMap={NEG_CAT_COLOR} /> },
+          { label: 'Lucro Est.', value: <span className="text-indigo-600 font-mono">{EUR(r.lucro_estimado)}</span> },
+          { label: 'Lucro Real', value: r.lucro_real > 0 ? <span className="text-green-600 font-mono">{EUR(r.lucro_real)}</span> : null },
+          { label: 'Data', value: fmtDate(r.data) },
+          { label: '', value: r.imovel_id ? <span className="text-brand-gold">→ ver imóvel</span> : null },
+        ]} />
+    )} />
+    <table className="hidden md:table min-w-[700px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
         <Th field="movimento" label="Negócio" {...sp} />
         <Th field="categoria" label="Categoria" {...sp} />
@@ -1618,6 +1727,7 @@ function NegociosTable({ data, onEdit, onDelete, onViewImovel }) {
         {!sorted.length && <tr><td colSpan={7} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
       </tbody>
     </table>
+    </>
   )
 }
 
@@ -1625,7 +1735,13 @@ function GenericTable({ data, onEdit, onDelete, columns, labels }) {
   const { sorted, sortField, sortDir, onSort } = useSortableData(data)
   const sp = { sortField, sortDir, onSort }
   return (
-    <table className="min-w-[700px] w-full text-xs">
+    <>
+    <MobileCardList items={sorted} renderCard={r => (
+      <EntityCard key={r.id} name={r[columns[0]]} onClick={() => onEdit?.(r)}
+        item={r} onEdit={onEdit} onDelete={onDelete}
+        fields={columns.slice(1).map(c => ({ label: labels[c] || c, value: r[c] }))} />
+    )} />
+    <table className="hidden md:table min-w-[700px] w-full text-xs">
       <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
         {columns.map(c => <Th key={c} field={c} label={labels[c] || c} {...sp} />)}
         <th className="py-3 px-3"></th>
@@ -1644,6 +1760,7 @@ function GenericTable({ data, onEdit, onDelete, columns, labels }) {
         {!sorted.length && <tr><td colSpan={columns.length + 1} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
       </tbody>
     </table>
+    </>
   )
 }
 
