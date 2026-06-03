@@ -484,7 +484,7 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
       </div>
       <div class="trust-item">
         <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><path d="M10 6v4l3 2"/></svg>
-        ROI-alvo &gt; 17%
+        Retorno por contrato
       </div>
       <div class="trust-item">
         <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 7h14M3 12h9"/><circle cx="16" cy="14" r="3"/></svg>
@@ -564,10 +564,18 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
           </div>
         </div>
 
-        <!-- PASSO 3 · Objetivos -->
+        <!-- PASSO 3 · Objetivo -->
         <div class="fstep" id="fs2">
           <div class="fgroup">
-            <label class="flabel">Equipa de obras / Empreiteiro disponível <span style="color:var(--danger)">*</span></label>
+            <label class="flabel">O que procura? <span style="color:var(--danger)">*</span></label>
+            <div class="fpills" id="p_objetivo">
+              <button type="button" class="fpill" data-v="Retorno passivo">Retorno passivo, sem gerir</button>
+              <button type="button" class="fpill" data-v="Gerir o meu projeto">Gerir o meu próprio projeto</button>
+            </div>
+          </div>
+          <div class="fgroup" style="margin-top:6px">
+            <div class="fcheck-text" style="font-size:11.5px;margin-bottom:10px">Os campos seguintes são opcionais. Preencha só se já investe de forma ativa.</div>
+            <label class="flabel">Equipa de obras / empreiteiro disponível</label>
             <div class="fpills" id="p_equipa">
               <button type="button" class="fpill" data-v="Sim">Sim</button>
               <button type="button" class="fpill" data-v="Não">Não</button>
@@ -575,12 +583,12 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
           </div>
           <div class="frow">
             <div class="fgroup">
-              <label class="flabel" for="f_retorno">Retorno total pretendido (%) <span style="color:var(--danger)">*</span></label>
-              <input class="finput" id="f_retorno" type="text" placeholder="Ex.: 25%" inputmode="decimal" />
+              <label class="flabel" for="f_retorno">Retorno total pretendido (%)</label>
+              <input class="finput" id="f_retorno" type="text" placeholder="Opcional" inputmode="decimal" />
             </div>
             <div class="fgroup">
-              <label class="flabel" for="f_roi">ROI anualizado pretendido (%) <span style="color:var(--danger)">*</span></label>
-              <input class="finput" id="f_roi" type="text" placeholder="Ex.: 15%" inputmode="decimal" />
+              <label class="flabel" for="f_roi">ROI anualizado pretendido (%)</label>
+              <input class="finput" id="f_roi" type="text" placeholder="Opcional" inputmode="decimal" />
             </div>
           </div>
           <div class="fnav">
@@ -654,10 +662,10 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
       <div class="comp-cell"><span class="comp-bad">2-3%</span></div>
       <div class="comp-cell"><span class="comp-mid">5-8% (volátil)</span></div>
       <div class="comp-cell"><span class="comp-mid">5-8%</span></div>
-      <div class="comp-cell us"><span class="comp-good">&gt; 17%</span></div>
+      <div class="comp-cell us"><span class="comp-good">&gt; 17%<small style="display:block;font-weight:500;font-size:9px;color:var(--muted);letter-spacing:.04em">alvo, não garantido</small></span></div>
     </div>
     <div class="comp-row">
-      <div class="comp-cell lbl">Activo subjacente</div>
+      <div class="comp-cell lbl">Ativo subjacente</div>
       <div class="comp-cell"><span class="comp-bad">Não</span></div>
       <div class="comp-cell"><span class="comp-bad">Não</span></div>
       <div class="comp-cell"><span class="comp-mid">Indireto</span></div>
@@ -706,7 +714,7 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
           Rua Combatentes, 12
           <small>Coimbra · CAEP · 9 meses</small>
         </div>
-        <span class="mock-tag-hd">Exemplo ilustrativo</span>
+        <span class="mock-tag-hd">Dados simulados</span>
       </div>
 
       <div class="mock-hero-stat">
@@ -893,7 +901,7 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
 <!-- TESTEMUNHO -->
 <section class="testimonial-sec">
   <div class="testimonial-card">
-    <span class="testimonial-eye">Investidor activo</span>
+    <span class="testimonial-eye">Investidor ativo</span>
     <p class="testimonial-text">Excelente parceria com o João e o Alexandre, marcada por profissionalismo e boa comunicação. Uma colaboração eficiente e de grande qualidade, que recomendo a quem procura confiança, transparência e competência.</p>
     <div class="testimonial-meta">
       <div class="testimonial-avatar" aria-hidden="true">FM</div>
@@ -927,7 +935,7 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
           <span class="stack-check"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 10l3 3 7-7"/></svg></span>
           <div class="stack-content">
             <div class="stack-t">Stress tests com 3 cenários</div>
-            <div class="stack-d">Cenário-base, optimista e adverso. Sabe o pior caso antes de assinar.</div>
+            <div class="stack-d">Cenário-base, otimista e adverso. Sabe o pior caso antes de assinar.</div>
           </div>
         </div>
         <div class="stack-item">
@@ -962,7 +970,7 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
           <span class="stack-check"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 10l3 3 7-7"/></svg></span>
           <div class="stack-content">
             <div class="stack-t">Gestão integral da operação</div>
-            <div class="stack-d">Aquisição, licenciamento, obra, fiscalidade e venda. O investidor recebe relatórios, não geste.</div>
+            <div class="stack-d">Aquisição, licenciamento, obra, fiscalidade e venda. O investidor recebe relatórios, não gere.</div>
           </div>
         </div>
         <div class="stack-item">
@@ -979,7 +987,7 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
           <div class="stack-card-eye">Resumo da parceria</div>
           <div class="stack-card-title">Tudo incluído.<br><span class="stack-card-em">Sem extras.</span></div>
           <div class="stack-card-divider"></div>
-          <div class="stack-card-num">&gt;17<small>% ROI-alvo</small></div>
+          <div class="stack-card-num">6–12<small> meses por projeto</small></div>
           <div class="stack-card-foot">9 elementos contratuais. Uma única parceria. Tickets a partir de 25 000 €.<br><br><a href="#formulario" class="btn-cta1" style="display:inline-flex;margin-top:8px">Quero saber mais
             <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 10h10M11 6l4 4-4 4"/></svg>
           </a></div>
@@ -1045,12 +1053,12 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
 
       <div class="why-side">
         <div class="stats-grid">
-          <div class="stat-box"><div class="stat-v">&gt; 17%</div><div class="stat-l">ROI-alvo*</div></div>
+          <div class="stat-box"><div class="stat-v">Contrato</div><div class="stat-l">Retorno definido</div></div>
           <div class="stat-box"><div class="stat-v">6–12m</div><div class="stat-l">Prazo típico</div></div>
           <div class="stat-box"><div class="stat-v">25 K€</div><div class="stat-l">Ticket mínimo</div></div>
           <div class="stat-box"><div class="stat-v">Coimbra</div><div class="stat-l">Foco geográfico</div></div>
         </div>
-        <p class="stats-disclaim">*Retorno-alvo por projeto, definido em contrato CAEP. Investimento sujeito a risco de mercado. Resultados passados não garantem resultados futuros.</p>
+        <p class="stats-disclaim">Retorno-alvo por projeto, definido em contrato CAEP. Investimento sujeito a risco de mercado. Resultados passados não garantem resultados futuros.</p>
         <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--bg-2);border:1px solid var(--line);border-radius:8px">
           <div class="why-sig-avatars">
             <div class="why-sig-avatar" title="Alexandre Mendes">AM</div>
@@ -1080,9 +1088,9 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
         <div class="num-d">Reabilitação · Coimbra</div>
       </div>
       <div class="num-card">
-        <div class="num-v">&gt; 17%</div>
-        <div class="num-l">ROI alvo</div>
-        <div class="num-d">Cenário base contratual</div>
+        <div class="num-v">CAEP</div>
+        <div class="num-l">Modelo contratual</div>
+        <div class="num-d">Retorno definido por contrato</div>
       </div>
       <div class="num-card">
         <div class="num-v">3</div>
@@ -1367,9 +1375,7 @@ async function submitForm() {
   const roi     = document.getElementById('f_roi').value.trim();
   const hp      = document.getElementById('f_hp').value;
 
-  if (!sel['p_equipa']) { shakePills('p_equipa'); return; }
-  if (!retorno) { shake(document.getElementById('f_retorno')); document.getElementById('f_retorno').focus(); return; }
-  if (!roi)     { shake(document.getElementById('f_roi')); document.getElementById('f_roi').focus(); return; }
+  if (!sel['p_objetivo']) { shakePills('p_objetivo'); return; }
 
   if (btn) { btn.disabled = true; btn.innerHTML = 'A enviar…'; }
 
@@ -1377,6 +1383,7 @@ async function submitForm() {
     nome, email, telemovel: tel,
     experiencia: exp,
     capital: cap,
+    objetivo: sel['p_objetivo'] || '',
     empreiteiro: sel['p_equipa'] || '',
     retorno_total: retorno,
     roi_anualizado: roi,
