@@ -1993,37 +1993,6 @@ function renderResumoExecutivo(b, im, a, m) {
   ])
   b.space(3)
 
-  // Riscos
-  b.subheader('Principais Riscos')
-  const riscos = []
-  if (m.margem_seg_vvr != null) {
-    const cor = m.margem_seg_vvr < 0.10 ? C.red : (m.margem_seg_vvr < 0.20 ? '#8C6A30' : C.green)
-    riscos.push({ label: '⚠  Mercado', value: `Break-even VVR ${EUR(m.break_even_vvr)} · margem ${PCT_DEC(m.margem_seg_vvr)}`, color: cor })
-  }
-  if (m.margem_seg_obra != null) {
-    const cor = m.margem_seg_obra < 0.20 ? C.red : (m.margem_seg_obra < 0.50 ? '#8C6A30' : C.green)
-    riscos.push({ label: '⚠  Obra', value: `Break-even obra ${EUR(m.break_even_obra)} · margem ${PCT_DEC(m.margem_seg_obra)}`, color: cor })
-  }
-  const sens12 = (m.sensibilidade_prazo || []).find(s => s.prazo === 12)
-  if (sens12) {
-    riscos.push({ label: '⚠  Prazo', value: `RA cai para ${sens12.ra_simples_pp.toFixed(1)}% se demorar 12 meses` })
-  }
-  if (riscos.length === 0) riscos.push({ label: '—', value: 'Não foi possível derivar riscos com os dados actuais' })
-  b.simpleTable(riscos)
-  b.space(3)
-
-  // Mitigantes
-  b.subheader('Principais Mitigantes')
-  const mitigantes = [
-    { label: '✓  VVR', value: 'Suportado por estudo de comparáveis (anexo)', color: C.green },
-    { label: '✓  Obra', value: 'Orçamentada com base em histórico de execução', color: C.green },
-  ]
-  if (m.has_renda && m.exit_arrendamento?.cobertura_ok) {
-    mitigantes.push({ label: '✓  Exit Alt.', value: `Arrendamento cobre custos de detenção (folga ${EUR_S(m.exit_arrendamento.folga)}/mês)`, color: C.green })
-  }
-  b.simpleTable(mitigantes)
-  b.space(4)
-
   b.newPage()
 }
 
