@@ -1682,6 +1682,10 @@ function renderFichaImovel(b, im) {
   ])
   b.space(3)
 
+  // GALERIA FOTOGRÁFICA — todas as fotos da aba (pré-carregadas em _fotosGaleria)
+  const fotosGaleria = parseFotos(im)
+  if (fotosGaleria.length > 0) { b.space(4); b.photos(fotosGaleria, 'GALERIA FOTOGRÁFICA') }
+
   if (im.notas) { b.space(4); b.header('NOTAS INTERNAS'); b.text(im.notas) }
 
   // Stamp final: data de geração + versão (se foram injectados pelo lifecycle)
