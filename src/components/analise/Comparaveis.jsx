@@ -38,7 +38,7 @@ const EMPTY_COMP = {
   elevador: false, garagem: false, dias_mercado: null,
   ajustes: { neg: -5, area: 0, loc: 0, idade: 0, conserv: 0, outros: 0, piso_pct: 0, elevador_pct: 0, garagem_pct: 0 },
 }
-const EMPTY_TIP = { tipologia: 'T2', area: 0, renda: 0, yield: 0, comparaveis: Array(5).fill(null).map(() => ({ ...EMPTY_COMP, ajustes: { ...EMPTY_COMP.ajustes } })) }
+const EMPTY_TIP = { tipologia: 'T2', area: 0, vvr: 0, renda: 0, yield: 0, comparaveis: Array(5).fill(null).map(() => ({ ...EMPTY_COMP, ajustes: { ...EMPTY_COMP.ajustes } })) }
 
 const AREA_FACTOR = 0.25
 function calcAjusteArea(areaImovel, areaComp) {
@@ -58,6 +58,7 @@ function normalizeTip(t) {
   return {
     tipologia: t?.tipologia || 'T2',
     area: t?.area || 0,
+    vvr: t?.vvr || 0,
     renda: t?.renda || 0,
     yield: t?.yield || 0,
     comparaveis: Array.isArray(t?.comparaveis)
@@ -618,11 +619,13 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
               <div className="flex gap-3 text-xs text-gray-400 items-center flex-wrap">
                 <label>Área imóvel: <input type="number" value={tip.area || ''} onChange={e => updateTip(tIdx, 'area', parseFloat(e.target.value) || 0)}
                   className="w-16 bg-white border rounded px-1 py-0.5 font-mono" /> m²</label>
+                <label title="VVR adoptado para esta tipologia (deixar vazio usa o VVR da análise)">VVR adoptado: <input type="number" value={tip.vvr || ''} placeholder={mediaAjust > 0 && tip.area > 0 ? Math.round(mediaAjust * tip.area) : ''} onChange={e => updateTip(tIdx, 'vvr', parseFloat(e.target.value) || 0)}
+                  className="w-24 bg-white border rounded px-1 py-0.5 font-mono" /> €</label>
                 <span className="hidden sm:inline">|</span>
                 <span>Média: <strong className="text-gray-600">{media} €/m²</strong></span>
                 <span>Ajustada: <strong className="text-gray-600">{mediaAjust} €/m²</strong></span>
                 {mediaAjust > 0 && tip.area > 0 && (
-                  <span className="font-semibold text-gray-700">VVR: {EUR(mediaAjust * tip.area)}</span>
+                  <span className="font-semibold text-gray-700">VVR sugerido: {EUR(mediaAjust * tip.area)}</span>
                 )}
               </div>
             </div>
