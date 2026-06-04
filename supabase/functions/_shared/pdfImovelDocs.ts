@@ -1581,19 +1581,6 @@ function renderFichaImovel(b, im) {
   ])
   b.space(3)
 
-  // FOTO PRINCIPAL — hero 16:9 no topo (apenas se carregada)
-  if (im._heroFotoData) {
-    const w = CW
-    const h = Math.round(w * 9 / 16)
-    b.ensure(h + 10)
-    b.doc.save()
-    b.doc.roundedRect(ML, b.y, w, h, 6).clip()
-    b.doc.image(im._heroFotoData, ML, b.y, { fit: [w, h], align: 'center', valign: 'center' })
-    b.doc.restore()
-    b.doc.roundedRect(ML, b.y, w, h, 6).lineWidth(0.5).stroke(C.border)
-    b.y += h + 10
-  }
-
   // 1. IDENTIFICAÇÃO REGISTRAL
   b.header('1. IDENTIFICAÇÃO REGISTRAL')
   // Link Maps: prefere coordenadas (mais preciso); fallback para morada
