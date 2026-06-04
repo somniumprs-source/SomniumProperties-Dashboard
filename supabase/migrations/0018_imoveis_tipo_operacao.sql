@@ -1,0 +1,1 @@
+ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS tipo_operacao TEXT;

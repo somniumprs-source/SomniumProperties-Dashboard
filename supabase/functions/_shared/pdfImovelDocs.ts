@@ -1987,8 +1987,11 @@ function renderResumoExecutivo(b, im, a, m) {
     ? `Arrendamento (~${EUR_S(m.exit_arrendamento.renda_mensal)}/mês · yield ${PCT_DEC(m.exit_arrendamento.yield_liquido)})`
     : 'Não definido'
   const prazoMaxLabel = m.prazo_max_meses != null ? `${m.prazo_max_meses} meses` : '—'
+  const tipoOperacaoLabel = im.tipo_operacao === 'Arrendamento'
+    ? 'Arrendamento (Buy & Hold)'
+    : 'Fix & Flip (Reabilitação + Venda)'
   b.simpleTable([
-    { label: 'Tipo de Operação', value: 'Flip (Reabilitação + Venda)' },
+    { label: 'Tipo de Operação', value: tipoOperacaoLabel },
     { label: 'Prazo Estimado', value: `${a.meses || 0} meses` },
     { label: 'Exit Alternativo', value: exitLabel },
     { label: 'Prazo Máximo (antes de prejuízo)', value: prazoMaxLabel },

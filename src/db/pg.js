@@ -447,6 +447,7 @@ export async function initSchema() {
 
       DO $$ BEGIN
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS tipo_oportunidade TEXT;
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS tipo_operacao TEXT;
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS check_qualidade BOOLEAN DEFAULT false;
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS check_ouro BOOLEAN DEFAULT false;
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS fotos TEXT DEFAULT '[]';
