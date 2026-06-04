@@ -2043,27 +2043,6 @@ function renderAnaliseRentabilidade(b, im, a, opts = {}) {
   }
 
 
-  // Resumo do Investimento — skip quando chamado do Dossier (esta no
-  // SUMÁRIO EXECUTIVO no topo do Dossier).
-  if (!opts.skipResumoInvestimento) {
-    b.header('RESUMO DO INVESTIMENTO')
-    b.bigNumbers([
-      { label: 'Capital Necessário', value: EUR(a.capital_necessario || compra + obra) },
-      { label: 'Lucro Líquido', value: EUR(a.lucro_liquido) },
-      { label: 'MOIC', value: MULT(m.moic), sub: 'Múltiplo do capital' },
-    ])
-    b.space(2)
-    b.bigNumbers([
-      { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado), sub: 'Simples' },
-      { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash) },
-    ])
-    b.space(2)
-    b.bigNumbers([
-      { label: 'Payback', value: a.meses ? `${a.meses} meses` : '—', sub: 'Recuperacao integral no exit' },
-    ])
-    b.space(4)
-  }
-
   b.header('A. CUSTOS DE AQUISIÇÃO')
   b.simpleTable([
     { label: 'Valor de Compra', value: EUR(compra) },
