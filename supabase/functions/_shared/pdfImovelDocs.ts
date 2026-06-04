@@ -2057,7 +2057,6 @@ function renderAnaliseRentabilidade(b, im, a, opts = {}) {
     b.space(2)
     b.bigNumbers([
       { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado), sub: 'Simples' },
-      { label: 'TIR', value: PCT_DEC(m.tir_anual), sub: 'Valor temporal do dinheiro' },
       { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash) },
     ])
     b.space(2)
@@ -2956,7 +2955,6 @@ function renderDossierInvestidor(b, im, a) {
   b.space(2)
   b.bigNumbers([
     { label: 'Retorno Anualizado', value: PCT(deal.retorno_anualizado), sub: 'Simples' },
-    { label: 'TIR', value: PCT_DEC(m.tir_anual), sub: 'Valor temporal do dinheiro' },
     { label: 'Cash-on-Cash', value: PCT(deal.cash_on_cash) },
   ])
   b.space(2)
