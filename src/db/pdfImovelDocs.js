@@ -1968,7 +1968,6 @@ function renderResumoExecutivo(b, im, a, m) {
   b.space(2)
   b.bigNumbers([
     { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado), sub: '(RA simples — retorno total convertido para base anual)' },
-    { label: 'TIR', value: PCT_DEC(m.tir_anual), sub: '(Taxa Interna de Rentabilidade — considera valor temporal do dinheiro)' },
     { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash), sub: '(Lucro líquido / capital empregue no projecto)' },
   ])
   b.space(2)
