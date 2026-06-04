@@ -2140,8 +2140,6 @@ function renderAnaliseRentabilidade(b, im, a, opts = {}) {
     b.simpleTable([
       { label: 'LTV (Loan-to-Value)', value: PCT_DEC(m.ltv) },
       { label: 'LTC (Loan-to-Cost)', value: PCT_DEC(m.ltc) },
-      { label: 'TIR Não-Alavancada', value: PCT_DEC(m.tir_anual) },
-      { label: 'TIR Alavancada', value: PCT_DEC(m.tir_alavancada), color: colorPositivo(m.tir_alavancada) },
     ])
     b.space(4)
   }
