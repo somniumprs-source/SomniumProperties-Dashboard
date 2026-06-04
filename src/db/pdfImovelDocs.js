@@ -1962,17 +1962,20 @@ function renderResumoExecutivo(b, im, a, m) {
   })()
   b.bigNumbers([
     { label: 'Capital Necessário', value: EUR(a.capital_necessario || compra + obra), sub: '(Capital próprio a adiantar, líquido de financiamento)' },
-    { label: 'Lucro Bruto', value: EUR(a.lucro_bruto), sub: '(VVR − Custo Total do Projecto, antes de impostos)' },
+    { label: 'Lucro Bruto', value: EUR(a.lucro_bruto), sub: '(VVR - Custo Total do Projecto, antes de impostos)' },
+  ])
+  b.space(2)
+  b.bigNumbers([
     { label: 'MOIC', value: MULT(m.moic), sub: '(Múltiplo do capital investido — quanto recebe por cada €)' },
-  ])
-  b.space(2)
-  b.bigNumbers([
     { label: 'Retorno Anualizado', value: PCT(a.retorno_anualizado), sub: '(RA simples — retorno total convertido para base anual)' },
-    { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash), sub: '(Lucro líquido / capital empregue no projecto)' },
   ])
   b.space(2)
   b.bigNumbers([
+    { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash), sub: '(Lucro líquido / capital empregue no projecto)' },
     { label: 'ROI', value: PCT_DEC(m.roe_sem_alav), sub: '(Return on Investment — retorno sobre o capital total empregue)' },
+  ])
+  b.space(2)
+  b.bigNumbers([
     { label: 'Tempo de Permanência do Capital', value: tempoLabel, sub: '(Período em que o capital está alocado ao projecto)' },
     { label: 'Custo de Oportunidade', value: cooLabel, sub: '(Quantas vezes o RA supera um depósito a prazo a 3,5%)' },
   ])
