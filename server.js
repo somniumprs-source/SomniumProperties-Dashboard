@@ -2508,7 +2508,7 @@ app.get('/api/weekly-pulse', async (req, res) => {
     // Alertas críticos
     const ESTADOS_NEG = new Set(['Descartado','Nao interessa','Não interessa','Cancelado'])
     const imoveisParados = imoveis.filter(i => {
-      if (ESTADOS_NEG.has(i.estado) || ['Vendido','Wholesaling','Negócio em Curso'].includes(i.estado)) return false
+      if (ESTADOS_NEG.has(i.estado) || ['Vendido','Wholesaling','Negócio em Curso','Pendentes','CAEP','Fix and Flip'].includes(i.estado)) return false
       const ultima = i.dataPropostaAceite ?? i.dataProposta ?? i.dataEstudoMercado ?? i.dataVisita ?? i.dataChamada ?? i.dataAdicionado
       if (!ultima) return false
       return (now - new Date(ultima)) / 86400000 > 7
@@ -2790,6 +2790,13 @@ function daysBetween(d1, d2) {
 function avg(arr) {
   const valid = arr.filter(v => v != null && !isNaN(v))
   return valid.length > 0 ? round2(valid.reduce((s, v) => s + v, 0) / valid.length) : null
+}
+// Anualiza um retorno simples (lucro/capital) para um período de `meses` (espelha calcEngine).
+function anualizarRetorno(lucro, capital, meses) {
+  if (!(capital > 0) || !(meses > 0)) return null
+  const ratio = 1 + lucro / capital
+  if (ratio <= 0) return -100
+  return round2((Math.pow(ratio, 12 / meses) - 1) * 100)
 }
 
 app.get('/api/metricas', async (req, res) => {
@@ -3255,7 +3262,45 @@ app.get('/api/metricas', async (req, res) => {
       return { movimento: n.movimento, categoria: n.categoria, margemBruta, margemLiquida, desvioObra }
     })
 
+    // ── ROI médio do portfólio (Fix and Flip + CAEP + Wholesaling/cedência) ──
+    // Usa o ROI e ROI anualizado calculados na Análise Financeira de cada imóvel
+    // (imovel.roi / imovel.roiAnualizado — fonte única calcEngine, correta por modelo).
+    // Estimado: todas as categorias elegíveis. Real: só F&F + CAEP fechados (Wholesaling
+    // só conta para o estimado), ajustando o ROI projetado pelo rácio lucro real/estimado.
+    const ROI_CATS = new Set(['Fix and Flip', 'CAEP', 'Wholesalling'])
+    const ROI_CATS_REAL = new Set(['Fix and Flip', 'CAEP'])
+    const imovelComRoi = (n) => {
+      for (const id of n.imovel) {
+        const im = imoveis.find(i => i.id === id)
+        if (im && im.roi > 0) return im
+      }
+      return null
+    }
+    const roiEstTotal = [], roiEstAnual = [], roiRealTotal = [], roiRealAnual = []
+    for (const n of negocios) {
+      if (!ROI_CATS.has(n.categoria)) continue
+      const im = imovelComRoi(n)
+      if (!im) continue
+      roiEstTotal.push(im.roi)
+      if (im.roiAnualizado > 0) roiEstAnual.push(im.roiAnualizado)
+      if (ROI_CATS_REAL.has(n.categoria) && n.lucroReal > 0 && n.lucroEstimado > 0) {
+        const ratio = n.lucroReal / n.lucroEstimado
+        const capitalImplicito = n.lucroEstimado / (im.roi / 100) // base de capital implícita da análise
+        roiRealTotal.push(round2(im.roi * ratio))
+        const meses = (n.dataCompra && n.dataVenda) ? daysBetween(n.dataCompra, n.dataVenda) / 30 : null
+        const anual = (meses && meses > 0)
+          ? anualizarRetorno(n.lucroReal, capitalImplicito, meses)
+          : (im.roiAnualizado > 0 ? round2(im.roiAnualizado * ratio) : null)
+        if (anual != null) roiRealAnual.push(anual)
+      }
+    }
+    const roiPortfolio = {
+      estimado: { total: avg(roiEstTotal), anualizado: avg(roiEstAnual), n: roiEstTotal.length },
+      real:     { total: avg(roiRealTotal), anualizado: avg(roiRealAnual), n: roiRealTotal.length },
+    }
+
     const trackerMargem = {
+      roiPortfolio,
       wholesaling: {
         margemBrutaMedia: avg(margensPorNegocio.filter(m => m.categoria === 'Wholesalling' && m.margemBruta != null).map(m => m.margemBruta)),
         margemLiquidaMedia: avg(margensPorNegocio.filter(m => m.categoria === 'Wholesalling' && m.margemLiquida != null).map(m => m.margemLiquida)),
@@ -5229,7 +5274,7 @@ app.get('/api/alertas', endpointCache(300000), async (req, res) => {
 
     // ── Imóveis parados na mesma fase >5 dias ──
     const ESTADOS_NEG = new Set(['Descartado', 'Nao interessa', 'Não interessa', 'Cancelado'])
-    const ESTADOS_FINAIS = new Set([...ESTADOS_NEG, 'Vendido', 'Wholesaling', 'Negócio em Curso'])
+    const ESTADOS_FINAIS = new Set([...ESTADOS_NEG, 'Vendido', 'Wholesaling', 'Negócio em Curso', 'Pendentes', 'CAEP', 'Fix and Flip'])
     for (const im of imoveis) {
       if (ESTADOS_FINAIS.has(im.estado)) continue
       const ultimaData = im.dataPropostaAceite ?? im.dataProposta ?? im.dataEstudoMercado ?? im.dataVisita ?? im.dataChamada ?? im.dataAdicionado

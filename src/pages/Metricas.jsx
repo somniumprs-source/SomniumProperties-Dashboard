@@ -528,8 +528,25 @@ export function Metricas() {
         {tab === 'receita' && tk?.margem && (() => {
           const wh = tk.margem.wholesaling
           const caep = tk.margem.caep
+          const rp = tk.margem.roiPortfolio
           return (
             <>
+              {rp && (
+                <>
+                  <SectionTitle>ROI Médio do Portfólio (Fix &amp; Flip + CAEP + Cedência)</SectionTitle>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+                    <M label="ROI médio estimado" value={rp.estimado.total != null ? PCT(rp.estimado.total) : '—'}
+                      sub={`Análise Financeira · ${rp.estimado.n} negócio${rp.estimado.n === 1 ? '' : 's'}`} highlight />
+                    <M label="ROI médio anualizado (estimado)" value={rp.estimado.anualizado != null ? PCT(rp.estimado.anualizado) : '—'}
+                      sub="Retorno anualizado projetado" highlight />
+                    <M label="ROI médio real" value={rp.real.total != null ? PCT(rp.real.total) : '—'}
+                      sub={`F&F + CAEP fechados · ${rp.real.n} negócio${rp.real.n === 1 ? '' : 's'}`} />
+                    <M label="ROI médio anualizado (real)" value={rp.real.anualizado != null ? PCT(rp.real.anualizado) : '—'}
+                      sub="Lucro real / período de detenção" />
+                  </div>
+                </>
+              )}
+
               <SectionTitle>Wholesaling — Margem</SectionTitle>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 <M label="Margem bruta média" value={wh.margemBrutaMedia != null ? PCT(wh.margemBrutaMedia) : '—'} sub="Lucro estimado / Ask Price" />
