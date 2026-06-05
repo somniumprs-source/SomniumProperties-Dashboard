@@ -451,6 +451,8 @@ export async function initSchema() {
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS check_qualidade BOOLEAN DEFAULT false;
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS check_ouro BOOLEAN DEFAULT false;
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS fotos TEXT DEFAULT '[]';
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS fee_cedencia REAL;
+        ALTER TABLE analises ADD COLUMN IF NOT EXISTS fee_cedencia REAL;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 

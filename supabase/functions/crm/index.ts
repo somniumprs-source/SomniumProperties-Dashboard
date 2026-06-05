@@ -628,6 +628,22 @@ async function autoCriarNegocioDeImovel(imovel: any, novoEstado: string): Promis
   return negocioId;
 }
 
+// Middleware: garante a coluna fee_cedencia (fee de cedência do Wholesaling)
+// antes de qualquer POST/PUT em /imoveis — evita drop silencioso no primeiro
+// save quando a coluna ainda nao existe em producao (migracoes nao auto-aplicadas).
+app.use("/imoveis", async (c: any, next: any) => {
+  if (c.req.method === "POST" || c.req.method === "PUT" || c.req.method === "PATCH") {
+    await ensureColumn("imoveis", "fee_cedencia REAL");
+  }
+  await next();
+});
+app.use("/imoveis/*", async (c: any, next: any) => {
+  if (c.req.method === "POST" || c.req.method === "PUT" || c.req.method === "PATCH") {
+    await ensureColumn("imoveis", "fee_cedencia REAL");
+  }
+  await next();
+});
+
 // Hooks dos imóveis ligados (port de routes.js 334-428). req.user?.email -> "system" (sem req nos hooks).
 crudRoutes("/imoveis", Imoveis, {
   onCreate: async (item: any) => {
@@ -1191,6 +1207,28 @@ app.use("/negocios/*", async (c: any, next: any) => {
   await next();
 });
 
+// UX12 — Soft delete (lixeira) — port de routes.js 919-934.
+// IMPORTANTE: registar ANTES de crudRoutes('/negocios'), senão o DELETE genérico
+// do crud (hard delete) apanha o pedido primeiro e rebenta com violação de FK
+// (fases, tarefas, fotos, frações referenciam o negócio).
+app.delete("/negocios/:id", async (c: any) => {
+  try {
+    await ensureColumn("negocios", "deleted_at TIMESTAMPTZ");
+    const hard = c.req.query("hard") === "1";
+    if (hard) {
+      const { rows } = await pool.query("DELETE FROM negocios WHERE id = $1 RETURNING id", [c.req.param("id")]);
+      if (!rows.length) return c.json({ error: "Não encontrado" }, 404);
+      return c.json({ ok: true, hard: true });
+    }
+    const { rows } = await pool.query(
+      `UPDATE negocios SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
+      [c.req.param("id")],
+    );
+    if (!rows.length) return c.json({ error: "Não encontrado ou já apagado" }, 404);
+    return c.json({ ok: true, soft_deleted: true });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
 // Hooks dos negócios ligados — auto-criar fases conforme template (port de routes.js 904-916).
 crudRoutes("/negocios", Negocios, {
   onCreate: async (item: any) => {
@@ -1239,27 +1277,10 @@ app.post("/negocios/recover-fases", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// UX12 — Soft delete (lixeira) — port de routes.js 919-934
-app.delete("/negocios/:id", async (c: any) => {
-  try {
-    const hard = c.req.query("hard") === "1";
-    if (hard) {
-      const { rows } = await pool.query("DELETE FROM negocios WHERE id = $1 RETURNING id", [c.req.param("id")]);
-      if (!rows.length) return c.json({ error: "Não encontrado" }, 404);
-      return c.json({ ok: true, hard: true });
-    }
-    const { rows } = await pool.query(
-      `UPDATE negocios SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
-      [c.req.param("id")],
-    );
-    if (!rows.length) return c.json({ error: "Não encontrado ou já apagado" }, 404);
-    return c.json({ ok: true, soft_deleted: true });
-  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
-});
-
 // Restaurar projecto da lixeira — port de routes.js 937-946
 app.post("/negocios/:id/restaurar", async (c: any) => {
   try {
+    await ensureColumn("negocios", "deleted_at TIMESTAMPTZ");
     const { rows } = await pool.query(
       `UPDATE negocios SET deleted_at = NULL WHERE id = $1 RETURNING *`,
       [c.req.param("id")],
@@ -1272,6 +1293,7 @@ app.post("/negocios/:id/restaurar", async (c: any) => {
 // Lista lixeira — port de routes.js 949-956
 app.get("/negocios-lixeira", async (c: any) => {
   try {
+    await ensureColumn("negocios", "deleted_at TIMESTAMPTZ");
     const { rows } = await pool.query(
       `SELECT * FROM negocios WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT 100`,
     );
@@ -1881,7 +1903,12 @@ app.post("/despesas/:id/upload", async (c: any) => {
     if (!despesa) return c.json({ error: "Despesa não encontrada" }, 404);
 
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const storagePath = `despesas/${id}/${crypto.randomUUID()}_${file.name}`;
+    // Sanitizar nome para chave do Storage (sem acentos, espaços, parênteses) — file.name original fica em docs.name
+    const safeName = file.name
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")  // remover acentos (ã→a, à→a)
+      .replace(/[^a-zA-Z0-9._-]/g, "_")                  // restantes chars inválidos → _
+      .replace(/_+/g, "_");                              // colapsar __ repetidos
+    const storagePath = `despesas/${id}/${crypto.randomUUID()}_${safeName}`;
     const filePath = await uploadPublic("despesas", storagePath, bytes, file.type || "application/octet-stream");
 
     const docs = despesa.documentos ? JSON.parse(despesa.documentos) : [];

@@ -12,7 +12,7 @@ import { uploadPublic, removeFromStorage } from "../_shared/storage.ts";
 
 // Campos de input (enviados pelo frontend)
 const INPUT_FIELDS = new Set([
-  "nome", "compra", "vpt", "finalidade", "escritura", "cpcv_compra", "due_diligence",
+  "nome", "compra", "fee_cedencia", "vpt", "finalidade", "escritura", "cpcv_compra", "due_diligence",
   "perc_financiamento", "prazo_anos", "tan", "tipo_taxa", "comissoes_banco", "hipoteca",
   "modo_obra", "obra", "pmo_perc", "aru", "ampliacao", "licenciamento",
   "pmo_arq_perc", "pmo_fisc_perc", "pmo_seg_obra_perc", "pmo_outros_perc",
@@ -65,9 +65,10 @@ async function propagarParaImovel(imovelId: string, calculados: any, inputs: any
       let lucroEstimado = 0;
 
       if (neg.categoria === "Wholesalling") {
-        // Wholesaling: fee = % do lucro bruto F&F (default 10%)
-        const pct = neg.comissao_pct || 10;
-        lucroEstimado = Math.round(lucroBruto * (pct / 100) * 100) / 100;
+        // Wholesaling = cedência de posição: o lucro expectável da Somnium é o
+        // fee de cedência definido na ficha/análise (não 10% de um F&F). É este
+        // valor que vai para Projetos via negocios.lucro_estimado.
+        lucroEstimado = Math.round((parseFloat(inputs.fee_cedencia) || 0) * 100) / 100;
       } else if (neg.categoria === "Mediação Imobiliária") {
         // Mediação: comissão % sobre valor de venda
         const pct = neg.comissao_pct || 2.5;
@@ -99,20 +100,27 @@ async function propagarParaImovel(imovelId: string, calculados: any, inputs: any
   }
 }
 
-// O preco de aquisicao da analise e SUGERIDO pela ficha do imovel (editavel):
-//   - Wholesaling: valor pago pela cedencia de posicao (valor_com_cedencia)
-//   - Outros modelos: valor da proposta (valor_proposta)
-// Usa-se apenas como valor por defeito quando a analise ainda nao tem compra propria;
-// se o utilizador definir um valor, esse e respeitado.
+// O preco de aquisicao da analise (compra) e SUGERIDO pela proposta da ficha do
+// imovel (valor_proposta), editavel; so se usa como default quando a analise ainda
+// nao tem compra propria. No Wholesaling, o fee de cedencia e somado a compra
+// dentro do calcEngine (compra apresentada = compra + fee), e e tambem o default
+// herdado da ficha (imoveis.fee_cedencia) quando a analise nao o define.
 function applyCompraOverride(inputs: any, imovel: any) {
   if (!imovel) return inputs;
-  const atual = Number(inputs.compra);
-  if (Number.isFinite(atual) && atual > 0) return inputs;
-  const fonte = imovel.modelo_negocio === "Wholesaling"
-    ? Number(imovel.valor_com_cedencia)
-    : Number(imovel.valor_proposta);
-  if (!Number.isFinite(fonte) || fonte <= 0) return inputs;
-  return { ...inputs, compra: fonte };
+  const out = { ...inputs };
+  if (imovel.modelo_negocio === "Wholesaling") {
+    const feeAtual = Number(out.fee_cedencia);
+    if (!(Number.isFinite(feeAtual) && feeAtual > 0)) {
+      const feeFicha = Number(imovel.fee_cedencia);
+      if (Number.isFinite(feeFicha) && feeFicha > 0) out.fee_cedencia = feeFicha;
+    }
+  }
+  const atual = Number(out.compra);
+  if (Number.isFinite(atual) && atual > 0) return out;
+  const fonte = Number(imovel.valor_proposta);
+  if (!Number.isFinite(fonte) || fonte <= 0) return out;
+  out.compra = fonte;
+  return out;
 }
 
 export function registerAnaliseRoutes(app: any) {
@@ -273,9 +281,9 @@ export function registerAnaliseRoutes(app: any) {
         }
       }
 
-      // Wholesaling: forcar compra = valor_com_cedencia do imovel
+      // Wholesaling: sugerir compra = valor_proposta e herdar fee_cedencia da ficha
       const { rows: [imovel] } = await pool.query(
-        "SELECT modelo_negocio, valor_com_cedencia FROM imoveis WHERE id = $1",
+        "SELECT modelo_negocio, valor_proposta, fee_cedencia FROM imoveis WHERE id = $1",
         [existing.imovel_id],
       );
       merged = applyCompraOverride(merged, imovel);

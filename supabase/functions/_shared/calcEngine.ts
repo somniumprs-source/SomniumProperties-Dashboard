@@ -176,7 +176,11 @@ export function calcAnalise(inputs: any): any {
   const i = { ...inputs }
 
   // Defaults
-  const compra = parseFloat(i.compra) || 0
+  // Wholesaling: o fee de cedência soma-se à compra — a compra apresentada ao
+  // investidor activo é valor_proposta + fee, e é sobre ela que correm IMT/selo/
+  // capital/ROI. Para os outros modelos fee_cedencia é nulo e não altera a compra.
+  const feeCedencia = parseFloat(i.fee_cedencia) || 0
+  const compra = round2((parseFloat(i.compra) || 0) + feeCedencia)
   const vpt = parseFloat(i.vpt) || 0
   const finalidade = i.finalidade || 'Empresa_isencao'
   const escritura = parseFloat(i.escritura) || 700

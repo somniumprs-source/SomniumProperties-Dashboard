@@ -27,6 +27,7 @@ db.exec(`
     valor_proposta REAL DEFAULT 0,
     custo_estimado_obra REAL DEFAULT 0,
     valor_venda_remodelado REAL DEFAULT 0,
+    fee_cedencia REAL,
     roi REAL,
     roi_anualizado REAL,
     area_bruta REAL,
