@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "git add -A; if git diff --cached --quiet; then exit 0; fi; npm run build > /tmp/somnium-build.log 2>&1 || { echo 'BUILD FALHOU - commit/push abortado. Ver /tmp/somnium-build.log'; exit 0; }; git commit -m \"auto: update from Claude Code\" && git pull origin main --rebase --no-edit && git push origin main || echo 'PUSH falhou - resolver manualmente (git status)'",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/auto-push.sh\"",
             "timeout": 240,
             "statusMessage": "A validar build e enviar alterações para o GitHub..."
           }

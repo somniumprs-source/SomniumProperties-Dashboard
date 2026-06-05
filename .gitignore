@@ -23,3 +23,6 @@ Relatorios/*
 Relatorios/RelatoriosSemanais/*
 !Relatorios/RelatoriosSemanais/*.pdf
 .vercel
+
+# Aviso do Stop hook (auto-push) — nunca versionar
+AUTO_PUSH_FALHOU.txt
