@@ -1996,7 +1996,7 @@ function ImovelEditSections({ data, form, setField }) {
       {form.modelo_negocio === 'Wholesaling' && (
         <>
           <EF label="Valor de Cedência de Posição (€)" field="fee_cedencia" form={form} set={setField} type="number" />
-          <Field label="Compra apresentada ao investidor" value={fmtEur((Number(form.valor_proposta) || 0) + (Number(form.fee_cedencia) || 0))} />
+          <Field label="Compra apresentada ao investidor" value={EUR((Number(form.valor_proposta) || 0) + (Number(form.fee_cedencia) || 0))} />
         </>
       )}
       <EF label="VVR — Valor Venda Remodelado (€)" field="valor_venda_remodelado" form={form} set={setField} type="number" />
