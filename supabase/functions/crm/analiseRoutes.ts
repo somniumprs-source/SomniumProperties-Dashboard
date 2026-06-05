@@ -7,6 +7,7 @@
  * (multipart via c.req.formData(); disco substituído por buckets públicos).
  */
 import pool from "../_shared/pg.ts";
+import { ensureColumn } from "../_shared/crud.ts";
 import { calcAnalise, calcStressTests, calcCAEP, quickCheck } from "../_shared/calcEngine.ts";
 import { uploadPublic, removeFromStorage } from "../_shared/storage.ts";
 
@@ -138,6 +139,7 @@ export function registerAnaliseRoutes(app: any) {
   // ── Criar nova análise para um imóvel ────────────────────────
   app.post("/imoveis/:imovelId/analises", async (c: any) => {
     try {
+      await ensureColumn("analises", "fee_cedencia REAL");
       const imovelId = c.req.param("imovelId");
       // Verificar que o imóvel existe
       const { rows: [imovel] } = await pool.query("SELECT * FROM imoveis WHERE id = $1", [imovelId]);
@@ -265,6 +267,7 @@ export function registerAnaliseRoutes(app: any) {
   // ── Actualizar análise (recalcula server-side) ───────────────
   app.put("/analises/:id", async (c: any) => {
     try {
+      await ensureColumn("analises", "fee_cedencia REAL");
       const { rows: [existing] } = await pool.query("SELECT * FROM analises WHERE id = $1", [c.req.param("id")]);
       if (!existing) return c.json({ error: "Análise não encontrada" }, 404);
 

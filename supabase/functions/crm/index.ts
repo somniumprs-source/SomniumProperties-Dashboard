@@ -719,12 +719,12 @@ crudRoutes("/imoveis", Imoveis, {
         } catch (e) { console.error(`[docs] Erro ${tipo}:`, (e as Error).message); }
       }
     }
-    // Wholesaling: se mudou valor_proposta, recompor lucro dos negocios de wholesaling deste imovel
-    if (body.valor_proposta !== undefined) {
+    // Wholesaling: se mudou o fee de cedência (ou a proposta), recompor o lucro esperado dos negocios deste imovel
+    if (body.fee_cedencia !== undefined || body.valor_proposta !== undefined) {
       await recomputeLucroWholesalingPorImovel(item.id).catch((e: any) => console.error("[wholesaling/recompute imovel]", (e as Error).message));
     }
-    // Se mudou a fonte do preco de aquisicao (valor_com_cedencia, valor_proposta) ou o modelo, recalcular analise activa
-    if (body.valor_com_cedencia !== undefined || body.valor_proposta !== undefined || body.modelo_negocio !== undefined) {
+    // Se mudou a fonte do preco de aquisicao (valor_proposta, fee_cedencia) ou o modelo, recalcular analise activa
+    if (body.fee_cedencia !== undefined || body.valor_proposta !== undefined || body.modelo_negocio !== undefined) {
       await recalcAnaliseActivaCompra(item.id).catch((e: any) => console.error("[analise/recalc compra]", (e as Error).message));
     }
     // Auto-complete checklist: verificar campos preenchidos
@@ -1122,29 +1122,28 @@ app.get("/consultores/enriched", async (c: any) => {
 
 crudRoutes("/consultores", Consultores);
 
-// Wholesaling: lucro esperado = valor_cedencia_posicao − imovel.valor_proposta.
-// Persistido em negocios.lucro_estimado para os KPIs do portfolio (SUM) reflectirem.
+// Wholesaling: lucro esperado = fee de cedência da ficha do imóvel (imoveis.fee_cedencia).
+// Persistido em negocios.lucro_estimado para os KPIs do portfolio (SUM) e Projetos reflectirem.
 async function recomputeLucroWholesaling(negocioId: string) {
-  await ensureColumn("negocios", "valor_cedencia_posicao REAL");
+  await ensureColumn("imoveis", "fee_cedencia REAL");
   const { rows } = await pool.query(
-    `SELECT n.valor_cedencia_posicao, im.valor_proposta
+    `SELECT im.fee_cedencia
        FROM negocios n
        LEFT JOIN imoveis im ON im.id = n.imovel_id
       WHERE n.id = $1 AND n.categoria = 'Wholesalling'`,
     [negocioId],
   );
   if (!rows[0]) return;
-  const ced = Number(rows[0].valor_cedencia_posicao);
-  const compra = Number(rows[0].valor_proposta);
-  if (!Number.isFinite(ced) || !Number.isFinite(compra)) return;
+  const fee = Number(rows[0].fee_cedencia);
+  if (!Number.isFinite(fee)) return;
   await pool.query(
     `UPDATE negocios SET lucro_estimado = $1, updated_at = NOW()::TEXT WHERE id = $2`,
-    [Math.max(0, ced - compra), negocioId],
+    [Math.max(0, fee), negocioId],
   );
 }
 
 async function recomputeLucroWholesalingPorImovel(imovelId: string) {
-  await ensureColumn("negocios", "valor_cedencia_posicao REAL");
+  await ensureColumn("imoveis", "fee_cedencia REAL");
   const { rows } = await pool.query(
     `SELECT id FROM negocios WHERE imovel_id = $1 AND categoria = 'Wholesalling'`,
     [imovelId],
@@ -1154,17 +1153,18 @@ async function recomputeLucroWholesalingPorImovel(imovelId: string) {
   }
 }
 
-// Re-run calcAnalise para a analise activa do imovel forcando compra = valor_com_cedencia.
-// Disparado quando o utilizador altera valor_com_cedencia ou modelo_negocio na ficha do imovel.
+// Re-run calcAnalise para a analise activa do imovel: compra = valor_proposta e,
+// no Wholesaling, injecta o fee de cedência da ficha (somado à compra no calcEngine).
+// Disparado quando o utilizador altera valor_proposta, fee_cedencia ou modelo_negocio.
 async function recalcAnaliseActivaCompra(imovelId: string) {
+  await ensureColumn("imoveis", "fee_cedencia REAL");
+  await ensureColumn("analises", "fee_cedencia REAL");
   const { rows: [imovel] } = await pool.query(
-    "SELECT modelo_negocio, valor_com_cedencia, valor_proposta FROM imoveis WHERE id = $1",
+    "SELECT modelo_negocio, valor_proposta, fee_cedencia FROM imoveis WHERE id = $1",
     [imovelId],
   );
   if (!imovel) return;
-  const compra = imovel.modelo_negocio === "Wholesaling"
-    ? Number(imovel.valor_com_cedencia)
-    : Number(imovel.valor_proposta);
+  const compra = Number(imovel.valor_proposta);
   if (!Number.isFinite(compra) || compra <= 0) return;
 
   const { rows: [analise] } = await pool.query(
@@ -1173,11 +1173,14 @@ async function recalcAnaliseActivaCompra(imovelId: string) {
   );
   if (!analise) return;
 
-  const inputs: any = { ...analise, compra };
+  const feeCedencia = imovel.modelo_negocio === "Wholesaling"
+    ? (Number.isFinite(Number(imovel.fee_cedencia)) ? Number(imovel.fee_cedencia) : (analise.fee_cedencia ?? null))
+    : (analise.fee_cedencia ?? null);
+  const inputs: any = { ...analise, compra, fee_cedencia: feeCedencia };
   const calculados = calcAnalise(inputs);
   const stress = calcStressTests(inputs);
   const now = new Date().toISOString();
-  const updates: any = { compra, ...calculados, stress_tests: JSON.stringify(stress), updated_at: now };
+  const updates: any = { compra, fee_cedencia: feeCedencia, ...calculados, stress_tests: JSON.stringify(stress), updated_at: now };
 
   const entries = Object.entries(updates);
   const sets = entries.map(([k], i) => `${k} = $${i + 1}`);
