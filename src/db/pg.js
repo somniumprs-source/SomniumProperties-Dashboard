@@ -1331,10 +1331,10 @@ export async function initSchema() {
           ALTER TABLE negocios ADD CONSTRAINT negocios_imovel_id_fkey FOREIGN KEY (imovel_id) REFERENCES imoveis(id) ON DELETE SET NULL NOT VALID;
         END IF;
         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'analises'::regclass AND conname = 'analises_imovel_id_fkey') THEN
-          ALTER TABLE analises ADD CONSTRAINT analises_imovel_id_fkey FOREIGN KEY (imovel_id) REFERENCES imoveis(id) ON DELETE NO ACTION NOT VALID;
+          ALTER TABLE analises ADD CONSTRAINT analises_imovel_id_fkey FOREIGN KEY (imovel_id) REFERENCES imoveis(id) ON DELETE CASCADE NOT VALID;
         END IF;
         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'checklist_imovel'::regclass AND conname = 'checklist_imovel_imovel_id_fkey') THEN
-          ALTER TABLE checklist_imovel ADD CONSTRAINT checklist_imovel_imovel_id_fkey FOREIGN KEY (imovel_id) REFERENCES imoveis(id) ON DELETE NO ACTION NOT VALID;
+          ALTER TABLE checklist_imovel ADD CONSTRAINT checklist_imovel_imovel_id_fkey FOREIGN KEY (imovel_id) REFERENCES imoveis(id) ON DELETE CASCADE NOT VALID;
         END IF;
         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'consultor_interacoes'::regclass AND conname = 'consultor_interacoes_imovel_id_fkey') THEN
           ALTER TABLE consultor_interacoes ADD CONSTRAINT consultor_interacoes_imovel_id_fkey FOREIGN KEY (imovel_id) REFERENCES imoveis(id) ON DELETE SET NULL NOT VALID;

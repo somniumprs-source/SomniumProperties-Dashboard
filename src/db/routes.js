@@ -304,8 +304,8 @@ async function autoCriarNegocioDeImovel(imovel, novoEstado) {
   const notas = `Auto-criado a partir do imóvel "${imovel.nome || imovel.id}" (estado: ${novoEstado})`
 
   await pool.query(
-    `INSERT INTO negocios (id, movimento, categoria, fase, capital_total, lucro_estimado, imovel_id, data, notas)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    `INSERT INTO negocios (id, movimento, categoria, fase, capital_total, lucro_estimado, imovel_id, data, notas, regiao)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
     [
       negocioId,
       movimento,
@@ -316,6 +316,7 @@ async function autoCriarNegocioDeImovel(imovel, novoEstado) {
       imovel.id,
       new Date().toISOString().slice(0, 10),
       notas,
+      imovel.regiao ?? null,
     ]
   )
 
