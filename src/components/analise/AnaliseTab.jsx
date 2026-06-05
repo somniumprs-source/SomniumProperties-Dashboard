@@ -60,6 +60,13 @@ export function AnaliseTab({ imovelId, imovelNome, imovel }) {
 
   const [subTab, setSubTab] = useState('Calculadora')
 
+  // Wholesaling é cedência de posição: Stress Tests e CAEP não fazem sentido — escondem-se.
+  const isWholesaling = imovel?.modelo_negocio === 'Wholesaling'
+  const subTabs = isWholesaling
+    ? SUB_TABS.filter(t => t.key !== 'Stress Tests' && t.key !== 'CAEP')
+    : SUB_TABS
+  const effectiveSubTab = subTabs.some(t => t.key === subTab) ? subTab : 'Calculadora'
+
   // Mudar de subTab obriga a flush — garante que edições debounced (Comparáveis, Calculadora)
   // ficam persistidas antes do componente desmontar.
   const changeSubTab = async (key) => {
@@ -195,16 +202,16 @@ export function AnaliseTab({ imovelId, imovelNome, imovel }) {
       {/* Sub-tabs */}
       {selected && (
         <div className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1">
-          {SUB_TABS.map(t => (
+          {subTabs.map(t => (
             <button
               key={t.key}
               onClick={() => changeSubTab(t.key)}
               className={`px-3 py-2 text-xs font-medium rounded-lg whitespace-nowrap transition-all ${
-                subTab === t.key
+                effectiveSubTab === t.key
                   ? 'text-white shadow-sm'
                   : 'text-gray-500 hover:bg-gray-100'
               }`}
-              style={subTab === t.key ? { backgroundColor: BLACK } : undefined}
+              style={effectiveSubTab === t.key ? { backgroundColor: BLACK } : undefined}
             >
               <span className="mr-1">{t.icon}</span> {t.key}
             </button>
@@ -217,16 +224,16 @@ export function AnaliseTab({ imovelId, imovelNome, imovel }) {
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           {/* Coluna principal */}
           <div className="xl:col-span-2">
-            {subTab === 'Calculadora' && (
+            {effectiveSubTab === 'Calculadora' && (
               <CalculadoraForm analise={selected} imovel={imovel} onUpdate={guardar} />
             )}
-            {subTab === 'Quick Check' && (
+            {effectiveSubTab === 'Quick Check' && (
               <QuickCheck analise={selected} onTransfer={(dados) => { guardarAgora(dados); setSubTab('Calculadora') }} />
             )}
-            {subTab === 'Stress Tests' && (
+            {effectiveSubTab === 'Stress Tests' && (
               <StressTests analise={selected} />
             )}
-            {subTab === 'Comparáveis' && (
+            {effectiveSubTab === 'Comparáveis' && (
               <Comparaveis
                 analise={selected}
                 imovel={imovel}
@@ -236,7 +243,7 @@ export function AnaliseTab({ imovelId, imovelNome, imovel }) {
                 lastSaveStatus={lastSaveStatus}
               />
             )}
-            {subTab === 'CAEP' && (
+            {effectiveSubTab === 'CAEP' && (
               <CAEPParcerias analise={selected} onUpdate={guardarAgora} />
             )}
           </div>

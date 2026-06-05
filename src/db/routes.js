@@ -966,7 +966,7 @@ async function recalcAnaliseActivaCompra(imovelId) {
 
   const feeCedencia = imovel.modelo_negocio === 'Wholesaling'
     ? (Number.isFinite(Number(imovel.fee_cedencia)) ? Number(imovel.fee_cedencia) : (analise.fee_cedencia ?? null))
-    : (analise.fee_cedencia ?? null)
+    : null
   const inputs = { ...analise, compra, fee_cedencia: feeCedencia }
   const calculados = calcAnalise(inputs)
   const stress = calcStressTests(inputs)

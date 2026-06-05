@@ -1524,83 +1524,6 @@ function Field({ label, value }) {
   )
 }
 
-// Mostra, na seccao Valores da ficha do imovel, os negocios de wholesaling
-// associados, com campo editavel para o valor da cedencia de posicao e o
-// lucro esperado calculado (cedencia − valor_proposta do imovel).
-function WholesalingValoresBlock({ negocios, valorProposta }) {
-  const list = Array.isArray(negocios) ? negocios.filter(n => n.categoria === 'Wholesalling') : []
-  const [drafts, setDrafts] = useState({})
-  const [saving, setSaving] = useState({})
-  useEffect(() => {
-    const next = {}
-    for (const n of list) next[n.id] = n.valor_cedencia_posicao ?? ''
-    setDrafts(next)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [list.map(n => `${n.id}:${n.valor_cedencia_posicao ?? ''}`).join('|')])
-
-  async function commit(n) {
-    const raw = drafts[n.id]
-    const next = raw === '' || raw === null || raw === undefined ? null : Number(raw)
-    if (next === (n.valor_cedencia_posicao ?? null)) return
-    setSaving(s => ({ ...s, [n.id]: true }))
-    try {
-      await apiFetch(`/api/crm/negocios/${n.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ valor_cedencia_posicao: next }),
-      })
-    } catch (e) {
-      console.error('[wholesaling cedencia save]', e)
-    } finally {
-      setSaving(s => ({ ...s, [n.id]: false }))
-    }
-  }
-
-  return (
-    <div className="col-span-2 md:col-span-3 mt-2 pt-3 border-t border-gray-100">
-      <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Wholesaling — Cedência de Posição</p>
-      {list.length === 0 ? (
-        <p className="text-xs text-gray-400 italic">Sem negócios de wholesaling associados a este imóvel.</p>
-      ) : (
-        <div className="space-y-2">
-          {list.map(n => {
-            const ced = Number(drafts[n.id])
-            const compra = Number(valorProposta)
-            const lucro = Number.isFinite(ced) && Number.isFinite(compra) ? Math.max(0, ced - compra) : null
-            return (
-              <div key={n.id} className="bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-sm font-medium text-indigo-800">{n.movimento}</span>
-                  {n.fase && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-white text-indigo-600 border border-indigo-200">{n.fase}</span>}
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Valor Cedência (€)</p>
-                    <input
-                      type="number"
-                      value={drafts[n.id] ?? ''}
-                      onChange={e => setDrafts(d => ({ ...d, [n.id]: e.target.value === '' ? '' : +e.target.value }))}
-                      onBlur={() => commit(n)}
-                      disabled={saving[n.id]}
-                      className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300 bg-white"
-                    />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Lucro Esperado</p>
-                    <div className="px-2 py-1.5 rounded-lg border border-transparent bg-white/60 text-sm font-mono font-semibold text-indigo-700">
-                      {lucro === null ? '—' : EUR(lucro)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
 function EF({ label, field, form, set, type = 'text', options }) {
   const inputClass = "w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
   return (
@@ -1900,7 +1823,7 @@ function ImovelEditSections({ data, form, setField }) {
     identificacao: ['nome','estado','ref_interna','link','tipo_oportunidade','tipo_operacao','origem','nome_consultor'],
     localizacao:   ['distrito','concelho','freguesia','zona','coordenadas_lat','coordenadas_lng','localizacao_imagem'],
     fisica:        ['tipologia','predio_tipo','area_util','area_bruta','area_bruta_dependente','andar','numero_pisos_predio','tem_elevador','ano_construcao','cru','licenca_utilizacao'],
-    valores:       ['ask_price','valor_proposta','valor_com_cedencia','valor_venda_remodelado','custo_estimado_obra','vpt','imi_anual','condominio_mensal_anunciado'],
+    valores:       ['ask_price','valor_proposta','fee_cedencia','valor_venda_remodelado','custo_estimado_obra','vpt','imi_anual','condominio_mensal_anunciado'],
     legal:         ['artigo_matricial','descricao_predial','fracao','regime_propriedade','certificado_energetico','numero_ce','onus_registados'],
     pipeline:      ['proprietario_nome','proprietario_nif','proprietario_contacto','motivo_venda_declarado','data_anuncio','tempo_no_mercado_dias','modelo_negocio','data_adicionado','data_chamada','data_visita','data_estudo_mercado','data_proposta','data_proposta_aceite','data_follow_up','data_aceite_investidor','motivo_follow_up','notas'],
   }
@@ -2071,14 +1994,16 @@ function ImovelEditSections({ data, form, setField }) {
       <EF label="Ask Price (€)" field="ask_price" form={form} set={setField} type="number" />
       <EF label="Valor Proposta (€)" field="valor_proposta" form={form} set={setField} type="number" />
       {form.modelo_negocio === 'Wholesaling' && (
-        <EF label="Valor já com Cedência (€)" field="valor_com_cedencia" form={form} set={setField} type="number" />
+        <>
+          <EF label="Valor de Cedência de Posição (€)" field="fee_cedencia" form={form} set={setField} type="number" />
+          <Field label="Compra apresentada ao investidor" value={fmtEur((Number(form.valor_proposta) || 0) + (Number(form.fee_cedencia) || 0))} />
+        </>
       )}
       <EF label="VVR — Valor Venda Remodelado (€)" field="valor_venda_remodelado" form={form} set={setField} type="number" />
       <EF label="Custo Obra (€)" field="custo_estimado_obra" form={form} set={setField} type="number" />
       <EF label="VPT (€)" field="vpt" form={form} set={setField} type="number" />
       <EF label="IMI Anual (€)" field="imi_anual" form={form} set={setField} type="number" />
       <EF label="Condomínio Mensal (€)" field="condominio_mensal_anunciado" form={form} set={setField} type="number" />
-      <WholesalingValoresBlock negocios={data?.negocios} valorProposta={form.valor_proposta} />
     </Section>
 
     {/* 5. Situação Legal e Fiscal */}
@@ -2181,7 +2106,7 @@ function ImovelReadSections({ data, onNavigate }) {
     identificacao: ['nome','estado','ref_interna','link','tipo_oportunidade','tipo_operacao','origem','nome_consultor'],
     localizacao:   ['distrito','concelho','freguesia','zona','coordenadas_lat','coordenadas_lng','localizacao_imagem'],
     fisica:        ['tipologia','predio_tipo','area_util','area_bruta','area_bruta_dependente','andar','numero_pisos_predio','tem_elevador','ano_construcao','cru','licenca_utilizacao'],
-    valores:       ['ask_price','valor_proposta','valor_com_cedencia','valor_venda_remodelado','custo_estimado_obra','vpt','imi_anual','condominio_mensal_anunciado'],
+    valores:       ['ask_price','valor_proposta','fee_cedencia','valor_venda_remodelado','custo_estimado_obra','vpt','imi_anual','condominio_mensal_anunciado'],
     legal:         ['artigo_matricial','descricao_predial','fracao','regime_propriedade','certificado_energetico','numero_ce','onus_registados'],
     pipeline:      ['proprietario_nome','proprietario_nif','proprietario_contacto','motivo_venda_declarado','data_anuncio','tempo_no_mercado_dias','modelo_negocio','data_adicionado','data_chamada','data_visita','data_estudo_mercado','data_proposta','data_proposta_aceite','data_follow_up','data_aceite_investidor','motivo_follow_up','notas'],
   }
@@ -2247,7 +2172,10 @@ function ImovelReadSections({ data, onNavigate }) {
       <Field label="Ask Price" value={fmtEur(data.ask_price)} />
       <Field label="Valor Proposta" value={fmtEur(data.valor_proposta)} />
       {data.modelo_negocio === 'Wholesaling' && (
-        <Field label="Valor já com Cedência" value={fmtEur(data.valor_com_cedencia)} />
+        <>
+          <Field label="Valor de Cedência de Posição" value={fmtEur(data.fee_cedencia)} />
+          <Field label="Compra apresentada ao investidor" value={fmtEur((Number(data.valor_proposta) || 0) + (Number(data.fee_cedencia) || 0))} />
+        </>
       )}
       <Field label="VVR" value={fmtEur(data.valor_venda_remodelado)} />
       <Field label="Custo Obra" value={fmtEur(data.custo_estimado_obra)} />

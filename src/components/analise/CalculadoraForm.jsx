@@ -51,11 +51,13 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
 
   if (!analise) return null
 
-  // Preco de aquisicao sugerido pela ficha (editavel): Wholesaling -> valor_com_cedencia; outros modelos -> valor_proposta
+  // Preco de aquisicao sugerido pela ficha (editavel) = valor_proposta. No Wholesaling
+  // o fee de cedência soma-se à compra (compra apresentada ao investidor = compra + fee).
   const isWholesaling = imovel?.modelo_negocio === 'Wholesaling'
-  const fonteCompra = isWholesaling ? Number(imovel?.valor_com_cedencia) : Number(imovel?.valor_proposta)
-  const compraLabel = isWholesaling ? 'Valor já com Cedência' : 'Valor da Proposta'
+  const fonteCompra = Number(imovel?.valor_proposta)
+  const compraLabel = 'Valor da Proposta'
   const temSugestao = Number.isFinite(fonteCompra) && fonteCompra > 0
+  const compraApresentada = (Number(form.compra) || 0) + (Number(form.fee_cedencia) || 0)
 
   return (
     <div className="space-y-3">
@@ -73,6 +75,16 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
             required
             hint={temSugestao ? `Sugestão da ficha (${compraLabel}): ${EUR(fonteCompra)} — editável` : null}
           />
+          {isWholesaling && (
+            <Input
+              label="Valor de Cedência de Posição"
+              field="fee_cedencia"
+              value={form.fee_cedencia ?? ''}
+              onChange={handleChange}
+              placeholder="Ex: 25000"
+              hint="Margem da Somnium na cedência — soma-se ao Preço de Compra na compra apresentada ao investidor"
+            />
+          )}
           <Input label="Valor Patrimonial (VPT)" field="vpt" value={form.vpt} onChange={handleChange} placeholder="Caderneta predial" />
           <Select label="Finalidade" field="finalidade" value={form.finalidade} options={FINALIDADES} onChange={handleChange} />
           <Input label="Escritura" field="escritura" value={form.escritura} onChange={handleChange} placeholder="~700€" />
@@ -80,6 +92,7 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
           <Input label="Due Diligence" field="due_diligence" value={form.due_diligence} onChange={handleChange} placeholder="0" />
         </div>
         <CalcRow items={[
+          ...(isWholesaling ? [{ label: 'Compra apresentada ao investidor', value: compraApresentada, bold: true }] : []),
           { label: 'IMT', value: analise.imt },
           { label: 'Imposto Selo', value: analise.imposto_selo },
           { label: 'Total Aquisição', value: analise.total_aquisicao, bold: true },

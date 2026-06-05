@@ -36,6 +36,12 @@ export function AnaliseResume({ analise }) {
       {/* KPIs compactos */}
       <div className="grid grid-cols-2 gap-2">
         <KPI label="Compra" value={EUR(a.compra)} />
+        {Number(a.fee_cedencia) > 0 && (
+          <>
+            <KPI label="Cedência de Posição" value={EUR(a.fee_cedencia)} />
+            <KPI label="Compra apresentada" value={EUR((Number(a.compra) || 0) + (Number(a.fee_cedencia) || 0))} highlight />
+          </>
+        )}
         <KPI label="VVR" value={EUR(a.vvr)} highlight />
         <KPI label="Obra c/ IVA" value={EUR(a.obra_com_iva)} />
         <KPI label="Capital" value={EUR(a.capital_necessario)} />

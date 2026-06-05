@@ -5840,7 +5840,11 @@ app.post('/api/automation/pipeline-to-faturacao', async (req, res) => {
           const lucroBruto = calc.lucro_bruto || 0
           const vvr = calc.vvr || 0
           let lucroEstimado = 0
-          if (categoria === 'Wholesalling') lucroEstimado = Math.round(lucroBruto * 0.1 * 100) / 100
+          if (categoria === 'Wholesalling') {
+            // Wholesaling: lucro = fee de cedência da ficha do imóvel (não 10% de um F&F).
+            const { rows: [imf] } = await pool.query('SELECT fee_cedencia FROM imoveis WHERE id = $1', [im.id])
+            lucroEstimado = Math.round((Number(imf?.fee_cedencia) || 0) * 100) / 100
+          }
           else if (categoria === 'Mediação Imobiliária') lucroEstimado = Math.round(vvr * 0.025 * 100) / 100
           else if (categoria === 'CAEP') lucroEstimado = Math.round(lucroBruto * 0.4 * (2 / 3) * 100) / 100
           else lucroEstimado = calc.lucro_liquido || 0
