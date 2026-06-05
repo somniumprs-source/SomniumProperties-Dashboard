@@ -166,12 +166,8 @@ export const FASES_WHOLESALLING = [
     icon: '🔍',
     cor: '#475569',
     descricao: 'Leads, imóveis em dificuldade, contactos iniciais',
-    tarefas: [
-      'Identificar lead / imóvel',
-      'Contactar vendedor',
-      'Validar motivação de venda',
-      'Recolher documentação inicial',
-    ],
+    // Fase exploratória/comercial — sem tarefas (workflow só arranca em Procurar Investidor)
+    tarefas: [],
   },
   {
     key: 'analise_oferta',
@@ -179,12 +175,8 @@ export const FASES_WHOLESALLING = [
     icon: '📊',
     cor: '#1F4E5F',
     descricao: 'Análise dos números, definição de oferta',
-    tarefas: [
-      'Análise financeira (ARV, ROI, margem)',
-      'Visita técnica ao imóvel',
-      'Definir valor de oferta',
-      'Apresentar oferta ao vendedor',
-    ],
+    // Análise vive na Calculadora/AnaliseTab — sem tarefas de projeto
+    tarefas: [],
   },
   {
     key: 'cpcv_compra',
@@ -192,12 +184,8 @@ export const FASES_WHOLESALLING = [
     icon: '📝',
     cor: '#7C2D40',
     descricao: 'Contrato promessa com o proprietário',
-    tarefas: [
-      'Redigir CPCV',
-      'Validar cláusulas (prazo, sinal, cessão)',
-      'Pagamento de sinal',
-      'Assinatura CPCV com vendedor',
-    ],
+    // Sem tarefas — workflow accionável só a partir de Procurar Investidor (Fase 4)
+    tarefas: [],
   },
   {
     key: 'procurar_investidor',
@@ -207,7 +195,7 @@ export const FASES_WHOLESALLING = [
     descricao: 'Match com pool de investidores Somnium',
     tarefas: [
       'Filtrar investidores activos compatíveis',
-      'Preparar dossier do deal',
+      'Preparar dossier do deal (compra c/ fee + análise completa)',
       'Apresentar oportunidade',
       'Recolher manifestações de interesse',
     ],
@@ -219,8 +207,8 @@ export const FASES_WHOLESALLING = [
     cor: '#C9A84C',
     descricao: 'Termos, fee, calendarização',
     tarefas: [
-      'Negociar valor de cedência',
-      'Definir fee Somnium',
+      'Negociar/definir fee de cedência (Somnium)',
+      'Formalizar acordo de intenção/reserva',
       'Acordar timing da escritura',
       'Confirmar capacidade financeira do investidor',
     ],
@@ -235,7 +223,7 @@ export const FASES_WHOLESALLING = [
       'Redigir cessão de posição',
       'Assinatura tripartida (Somnium + vendedor + investidor)',
       'Registo da cessão',
-      'Pagamento do investidor',
+      'Recebimento do investidor (reembolso de sinal + fee)',
     ],
   },
   {
@@ -246,7 +234,7 @@ export const FASES_WHOLESALLING = [
     descricao: 'Finder fee liquidada',
     tarefas: [
       'Emitir factura',
-      'Confirmar recebimento',
+      'Confirmar recebimento do fee',
       'Reconciliar com financeiro',
       'Arquivo do dossier',
     ],
