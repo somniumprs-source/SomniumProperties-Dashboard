@@ -99,12 +99,15 @@ async function propagarParaImovel(imovelId: string, calculados: any, inputs: any
   }
 }
 
-// O preco de aquisicao da analise e sempre derivado da ficha do imovel:
+// O preco de aquisicao da analise e SUGERIDO pela ficha do imovel (editavel):
 //   - Wholesaling: valor pago pela cedencia de posicao (valor_com_cedencia)
 //   - Outros modelos: valor da proposta (valor_proposta)
-// O backend impoe o override para manter as KPIs alinhadas independentemente do input do utilizador.
+// Usa-se apenas como valor por defeito quando a analise ainda nao tem compra propria;
+// se o utilizador definir um valor, esse e respeitado.
 function applyCompraOverride(inputs: any, imovel: any) {
   if (!imovel) return inputs;
+  const atual = Number(inputs.compra);
+  if (Number.isFinite(atual) && atual > 0) return inputs;
   const fonte = imovel.modelo_negocio === "Wholesaling"
     ? Number(imovel.valor_com_cedencia)
     : Number(imovel.valor_proposta);
