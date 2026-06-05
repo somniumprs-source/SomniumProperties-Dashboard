@@ -5,7 +5,13 @@ const RELOAD_KEY = 'somnium_chunk_reload_attempted'
 function isChunkError(error) {
   if (!error) return false
   const msg = String(error.message || error)
-  return /Loading chunk|Loading CSS chunk|Failed to fetch dynamically imported|dynamically imported module|ChunkLoadError|Importing a module script failed/i.test(msg)
+  // Chrome/Firefox: "Failed to fetch dynamically imported module", "Loading chunk N failed", "ChunkLoadError"
+  // Safari/WebKit: "'text/html' is not a valid JavaScript MIME type.",
+  //   "Unable to load script ... because non script MIME types are not allowed",
+  //   "Importing a module script failed."
+  // Todos resultam da mesma causa: um chunk com hash antigo deixou de existir
+  // após deploy e o rewrite SPA devolve index.html (text/html) no seu lugar.
+  return /Loading chunk|Loading CSS chunk|Failed to fetch dynamically imported|dynamically imported module|ChunkLoadError|Importing a module script failed|not a valid JavaScript MIME type|non script MIME types are not allowed|Unable to load script|error loading dynamically imported module/i.test(msg)
 }
 
 export class ChunkErrorBoundary extends Component {
