@@ -3815,7 +3815,7 @@ app.get("/projetos/meus", async (c: any) => {
   try {
     const u = await resolveCrmUser(c);
     if (!u) {
-      const { rows } = await pool.query(`SELECT n.*, i.nome AS imovel_nome FROM negocios n LEFT JOIN imoveis i ON n.imovel_id = i.id ORDER BY n.created_at DESC LIMIT 200`);
+      const { rows } = await pool.query(`SELECT n.*, i.nome AS imovel_nome FROM negocios n LEFT JOIN imoveis i ON n.imovel_id = i.id WHERE n.deleted_at IS NULL ORDER BY n.created_at DESC LIMIT 200`);
       return c.json({ data: rows, role: "admin" });
     }
     const isRestricted = RECORD_RESTRICTED_ROLES.has(u.role);

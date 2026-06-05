@@ -3699,8 +3699,8 @@ router.get('/projetos/meus', async (req, res) => {
   try {
     const u = await resolveCrmUser(req)
     if (!u) {
-      // Sem user resolvido (dev/sem Supabase ou sem token) — retornar tudo
-      const { rows } = await pool.query(`SELECT n.*, i.nome AS imovel_nome FROM negocios n LEFT JOIN imoveis i ON n.imovel_id = i.id ORDER BY n.created_at DESC LIMIT 200`)
+      // Sem user resolvido (dev/sem Supabase ou sem token) — retornar tudo (excepto apagados)
+      const { rows } = await pool.query(`SELECT n.*, i.nome AS imovel_nome FROM negocios n LEFT JOIN imoveis i ON n.imovel_id = i.id WHERE n.deleted_at IS NULL ORDER BY n.created_at DESC LIMIT 200`)
       return res.json({ data: rows, role: 'admin' })
     }
     const isRestricted = RECORD_RESTRICTED_ROLES.has(u.role)
