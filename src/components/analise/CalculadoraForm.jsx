@@ -4,6 +4,7 @@
  */
 import { useState, useEffect, useCallback } from 'react'
 import { EUR } from '../../constants.js'
+import { isWholesaling } from '../../lib/modelos.js'
 
 const GOLD = '#C9A84C'
 const BLACK = '#1A1A1A'
@@ -53,7 +54,7 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
 
   // Preco de aquisicao sugerido pela ficha (editavel) = valor_proposta. No Wholesaling
   // o fee de cedência soma-se à compra (compra apresentada ao investidor = compra + fee).
-  const isWholesaling = imovel?.modelo_negocio === 'Wholesaling'
+  const wholesaling = isWholesaling(imovel)
   const fonteCompra = Number(imovel?.valor_proposta)
   const compraLabel = 'Valor da Proposta'
   const temSugestao = Number.isFinite(fonteCompra) && fonteCompra > 0
@@ -75,7 +76,7 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
             required
             hint={temSugestao ? `Sugestão da ficha (${compraLabel}): ${EUR(fonteCompra)} — editável` : null}
           />
-          {isWholesaling && (
+          {wholesaling && (
             <Input
               label="Valor de Cedência de Posição"
               field="fee_cedencia"
@@ -92,7 +93,7 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
           <Input label="Due Diligence" field="due_diligence" value={form.due_diligence} onChange={handleChange} placeholder="0" />
         </div>
         <CalcRow items={[
-          ...(isWholesaling ? [{ label: 'Compra apresentada ao investidor', value: compraApresentada, bold: true }] : []),
+          ...(wholesaling ? [{ label: 'Compra apresentada ao investidor', value: compraApresentada, bold: true }] : []),
           { label: 'IMT', value: analise.imt },
           { label: 'Imposto Selo', value: analise.imposto_selo },
           { label: 'Total Aquisição', value: analise.total_aquisicao, bold: true },

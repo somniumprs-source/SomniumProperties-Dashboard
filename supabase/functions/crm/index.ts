@@ -32,6 +32,7 @@ import { runEstudoLocalizacao } from "../_shared/estudoLocalizacao.ts";
 import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
 import { removeFromStorage, supabase, uploadPublic } from "../_shared/storage.ts";
 import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
+import { isWholesaling } from "../_shared/modelos.ts";
 import { syncAllFromNotion, syncFromNotion, syncToNotion } from "../_shared/sync.ts";
 import {
   createImovelFolder, isConfigured as driveConfigured, listImovelFiles,
@@ -1174,7 +1175,7 @@ async function recalcAnaliseActivaCompra(imovelId: string) {
   );
   if (!analise) return;
 
-  const feeCedencia = imovel.modelo_negocio === "Wholesaling"
+  const feeCedencia = isWholesaling(imovel)
     ? (Number.isFinite(Number(imovel.fee_cedencia)) ? Number(imovel.fee_cedencia) : (analise.fee_cedencia ?? null))
     : null;
   const inputs: any = { ...analise, compra, fee_cedencia: feeCedencia };

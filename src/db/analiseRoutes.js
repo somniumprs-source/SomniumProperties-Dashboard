@@ -12,6 +12,7 @@ import { fileURLToPath } from 'url'
 import pool from './pg.js'
 import { calcAnalise, calcStressTests, calcCAEP, quickCheck } from './calcEngine.js'
 import { uploadImovel, supabaseStorage } from './routes.js'
+import { isWholesaling } from '../lib/modelos.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const stressDir = path.resolve(__dirname, '../../public/uploads/stress_tests')
@@ -64,7 +65,7 @@ const CALC_FIELDS = new Set([
 function applyCompraOverride(inputs, imovel) {
   if (!imovel) return inputs
   const out = { ...inputs }
-  if (imovel.modelo_negocio === 'Wholesaling') {
+  if (isWholesaling(imovel)) {
     const feeAtual = Number(out.fee_cedencia)
     if (!(Number.isFinite(feeAtual) && feeAtual > 0)) {
       const feeFicha = Number(imovel.fee_cedencia)

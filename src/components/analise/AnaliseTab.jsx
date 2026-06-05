@@ -10,6 +10,7 @@ import { StressTests } from './StressTests.jsx'
 import { Comparaveis } from './Comparaveis.jsx'
 import { CAEPParcerias } from './CAEPParcerias.jsx'
 import { QuickCheck } from './QuickCheck.jsx'
+import { isWholesaling } from '../../lib/modelos.js'
 
 function RenameInput({ nome, onRename }) {
   const [editing, setEditing] = useState(false)
@@ -61,8 +62,8 @@ export function AnaliseTab({ imovelId, imovelNome, imovel }) {
   const [subTab, setSubTab] = useState('Calculadora')
 
   // Wholesaling é cedência de posição: Stress Tests e CAEP não fazem sentido — escondem-se.
-  const isWholesaling = imovel?.modelo_negocio === 'Wholesaling'
-  const subTabs = isWholesaling
+  const wholesaling = isWholesaling(imovel)
+  const subTabs = wholesaling
     ? SUB_TABS.filter(t => t.key !== 'Stress Tests' && t.key !== 'CAEP')
     : SUB_TABS
   const effectiveSubTab = subTabs.some(t => t.key === subTab) ? subTab : 'Calculadora'

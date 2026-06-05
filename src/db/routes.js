@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url'
 import { randomUUID, createHash } from 'crypto'
 import { readFile, unlink } from 'fs/promises'
 import { createClient } from '@supabase/supabase-js'
+import { isWholesaling } from '../lib/modelos.js'
 
 // Supabase Storage client para uploads persistentes
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.supabase.co'
@@ -965,7 +966,7 @@ async function recalcAnaliseActivaCompra(imovelId) {
   )
   if (!analise) return
 
-  const feeCedencia = imovel.modelo_negocio === 'Wholesaling'
+  const feeCedencia = isWholesaling(imovel)
     ? (Number.isFinite(Number(imovel.fee_cedencia)) ? Number(imovel.fee_cedencia) : (analise.fee_cedencia ?? null))
     : null
   const inputs = { ...analise, compra, fee_cedencia: feeCedencia }

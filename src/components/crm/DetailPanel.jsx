@@ -9,6 +9,7 @@ import { useToast } from '../ui/Toast.jsx'
 import { PartilharAcesso } from '../PartilharAcesso.jsx'
 import { FollowUpsSection } from './FollowUpsSection.jsx'
 import { ImovelInteracoesSection } from './ImovelInteracoesSection.jsx'
+import { isWholesaling } from '../../lib/modelos.js'
 
 const AnaliseTab = lazy(() => import('../analise/AnaliseTab.jsx').then(m => ({ default: m.AnaliseTab })))
 const ObraTab = lazy(() => import('../obra/ObraTab.jsx').then(m => ({ default: m.ObraTab })))
@@ -1993,7 +1994,7 @@ function ImovelEditSections({ data, form, setField }) {
     <Section icon="💰" title="Valores" fields={sec.valores} form={form} defaultOpen>
       <EF label="Ask Price (€)" field="ask_price" form={form} set={setField} type="number" />
       <EF label="Valor Proposta (€)" field="valor_proposta" form={form} set={setField} type="number" />
-      {form.modelo_negocio === 'Wholesaling' && (
+      {isWholesaling(form) && (
         <>
           <EF label="Valor de Cedência de Posição (€)" field="fee_cedencia" form={form} set={setField} type="number" />
           <Field label="Compra apresentada ao investidor" value={EUR((Number(form.valor_proposta) || 0) + (Number(form.fee_cedencia) || 0))} />
@@ -2171,7 +2172,7 @@ function ImovelReadSections({ data, onNavigate }) {
     <Section icon="💰" title="Valores" fields={sec.valores} form={data} defaultOpen>
       <Field label="Ask Price" value={fmtEur(data.ask_price)} />
       <Field label="Valor Proposta" value={fmtEur(data.valor_proposta)} />
-      {data.modelo_negocio === 'Wholesaling' && (
+      {isWholesaling(data) && (
         <>
           <Field label="Valor de Cedência de Posição" value={fmtEur(data.fee_cedencia)} />
           <Field label="Compra apresentada ao investidor" value={fmtEur((Number(data.valor_proposta) || 0) + (Number(data.fee_cedencia) || 0))} />

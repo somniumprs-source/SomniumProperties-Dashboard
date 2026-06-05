@@ -10,6 +10,7 @@ import pool from "../_shared/pg.ts";
 import { ensureColumn } from "../_shared/crud.ts";
 import { calcAnalise, calcStressTests, calcCAEP, quickCheck } from "../_shared/calcEngine.ts";
 import { uploadPublic, removeFromStorage } from "../_shared/storage.ts";
+import { isWholesaling } from "../_shared/modelos.ts";
 
 // Campos de input (enviados pelo frontend)
 const INPUT_FIELDS = new Set([
@@ -109,7 +110,7 @@ async function propagarParaImovel(imovelId: string, calculados: any, inputs: any
 function applyCompraOverride(inputs: any, imovel: any) {
   if (!imovel) return inputs;
   const out = { ...inputs };
-  if (imovel.modelo_negocio === "Wholesaling") {
+  if (isWholesaling(imovel)) {
     const feeAtual = Number(out.fee_cedencia);
     if (!(Number.isFinite(feeAtual) && feeAtual > 0)) {
       const feeFicha = Number(imovel.fee_cedencia);
