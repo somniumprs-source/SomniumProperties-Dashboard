@@ -210,8 +210,10 @@ function regiaoWhere(regiao?: string | null) {
 }
 
 export async function getNegócios({ regiao }: { regiao?: string | null } = {}) {
-  const w = regiaoWhere(regiao);
-  const { rows } = await pool.query(`SELECT * FROM negocios${w.clause}`, w.params);
+  // Exclui sempre negócios soft-deleted (deleted_at preenchido).
+  const clause = regiao ? "WHERE deleted_at IS NULL AND regiao = $1" : "WHERE deleted_at IS NULL";
+  const params = regiao ? [regiao] : [];
+  const { rows } = await pool.query(`SELECT * FROM negocios ${clause}`, params);
   return rows.map(mapNegocio);
 }
 
