@@ -531,21 +531,34 @@ export function Metricas() {
           const rp = tk.margem.roiPortfolio
           return (
             <>
-              {rp && (
-                <>
-                  <SectionTitle>ROI Médio do Portfólio (Fix &amp; Flip + CAEP + Cedência)</SectionTitle>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-                    <M label="ROI médio estimado" value={rp.estimado.total != null ? PCT(rp.estimado.total) : '—'}
-                      sub={`Análise Financeira · ${rp.estimado.n} negócio${rp.estimado.n === 1 ? '' : 's'}`} highlight />
-                    <M label="ROI médio anualizado (estimado)" value={rp.estimado.anualizado != null ? PCT(rp.estimado.anualizado) : '—'}
-                      sub="Retorno anualizado projetado" highlight />
-                    <M label="ROI médio real" value={rp.real.total != null ? PCT(rp.real.total) : '—'}
-                      sub={`F&F + CAEP fechados · ${rp.real.n} negócio${rp.real.n === 1 ? '' : 's'}`} />
-                    <M label="ROI médio anualizado (real)" value={rp.real.anualizado != null ? PCT(rp.real.anualizado) : '—'}
-                      sub="Lucro real / período de detenção" />
-                  </div>
-                </>
-              )}
+              {rp && (() => {
+                const nLbl = (n) => `${n} negócio${n === 1 ? '' : 's'}`
+                const RoiBlock = ({ title, data, hasReal = true }) => (
+                  <>
+                    <SectionTitle>{title}</SectionTitle>
+                    <div className={`grid grid-cols-1 sm:grid-cols-2 ${hasReal ? 'xl:grid-cols-4' : 'xl:grid-cols-2'} gap-3 sm:gap-4`}>
+                      <M label="ROI médio estimado" value={data.estimado.total != null ? PCT(data.estimado.total) : '—'}
+                        sub={`Análise Financeira · ${nLbl(data.estimado.n)}`} highlight />
+                      <M label="ROI anualizado (estimado)" value={data.estimado.anualizado != null ? PCT(data.estimado.anualizado) : '—'}
+                        sub="Retorno anualizado projetado" highlight />
+                      {hasReal && <>
+                        <M label="ROI médio real" value={data.real.total != null ? PCT(data.real.total) : '—'}
+                          sub={`Fechados · ${nLbl(data.real.n)}`} />
+                        <M label="ROI anualizado (real)" value={data.real.anualizado != null ? PCT(data.real.anualizado) : '—'}
+                          sub="Lucro real / período de detenção" />
+                      </>}
+                    </div>
+                  </>
+                )
+                return (
+                  <>
+                    <RoiBlock title="ROI Médio — Conjunto (Fix &amp; Flip + CAEP + Cedência)" data={rp.conjunto} />
+                    <RoiBlock title="ROI Médio — Fix &amp; Flip" data={rp.fixAndFlip} />
+                    <RoiBlock title="ROI Médio — CAEP" data={rp.caep} />
+                    <RoiBlock title="ROI Médio — Wholesalling (cedência)" data={rp.wholesalling} hasReal={false} />
+                  </>
+                )
+              })()}
 
               <SectionTitle>Wholesaling — Margem</SectionTitle>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">

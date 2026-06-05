@@ -1973,12 +1973,11 @@ app.get("/metricas", async (c: any) => {
       return { movimento: n.movimento, categoria: n.categoria, margemBruta, margemLiquida, desvioObra };
     });
 
-    // ── ROI médio do portfólio (Fix and Flip + CAEP + Wholesaling/cedência) ──
+    // ── ROI médio do portfólio, por modelo e em conjunto ──
     // Usa o ROI e ROI anualizado calculados na Análise Financeira de cada imóvel
     // (imovel.roi / imovel.roiAnualizado — fonte única calcEngine, correta por modelo).
-    // Estimado: todas as categorias elegíveis. Real: só F&F + CAEP fechados (Wholesaling
-    // só conta para o estimado), ajustando o ROI projetado pelo rácio lucro real/estimado.
-    const ROI_CATS = new Set(["Fix and Flip", "CAEP", "Wholesalling"]);
+    // Estimado: todos os modelos elegíveis. Real: só F&F + CAEP fechados (Wholesalling
+    // só considera estimado), ajustando o ROI projetado pelo rácio lucro real/estimado.
     const ROI_CATS_REAL = new Set(["Fix and Flip", "CAEP"]);
     const imovelComRoi = (n: any) => {
       for (const id of n.imovel) {
@@ -1987,27 +1986,40 @@ app.get("/metricas", async (c: any) => {
       }
       return null;
     };
-    const roiEstTotal: number[] = [], roiEstAnual: number[] = [], roiRealTotal: number[] = [], roiRealAnual: number[] = [];
+    const mkBucket = () => ({ estTotal: [] as number[], estAnual: [] as number[], realTotal: [] as number[], realAnual: [] as number[] });
+    const roiBuckets: Record<string, ReturnType<typeof mkBucket>> = { "Fix and Flip": mkBucket(), "CAEP": mkBucket(), "Wholesalling": mkBucket() };
     for (const n of negocios) {
-      if (!ROI_CATS.has(n.categoria)) continue;
+      const b = roiBuckets[n.categoria];
+      if (!b) continue;
       const im = imovelComRoi(n);
       if (!im) continue;
-      roiEstTotal.push(im.roi);
-      if (im.roiAnualizado > 0) roiEstAnual.push(im.roiAnualizado);
+      b.estTotal.push(im.roi);
+      if (im.roiAnualizado > 0) b.estAnual.push(im.roiAnualizado);
       if (ROI_CATS_REAL.has(n.categoria) && n.lucroReal > 0 && n.lucroEstimado > 0) {
         const ratio = n.lucroReal / n.lucroEstimado;
         const capitalImplicito = n.lucroEstimado / (im.roi / 100); // base de capital implícita da análise
-        roiRealTotal.push(round2(im.roi * ratio));
+        b.realTotal.push(round2(im.roi * ratio));
         const meses = (n.dataCompra && n.dataVenda) ? (daysBetween(n.dataCompra, n.dataVenda) as number) / 30 : null;
         const anual = (meses && meses > 0)
           ? anualizarRetorno(n.lucroReal, capitalImplicito, meses)
           : (im.roiAnualizado > 0 ? round2(im.roiAnualizado * ratio) : null);
-        if (anual != null) roiRealAnual.push(anual);
+        if (anual != null) b.realAnual.push(anual);
       }
     }
+    const estStats = (b: ReturnType<typeof mkBucket>) => ({ total: avg(b.estTotal), anualizado: avg(b.estAnual), n: b.estTotal.length });
+    const realStats = (b: ReturnType<typeof mkBucket>) => ({ total: avg(b.realTotal), anualizado: avg(b.realAnual), n: b.realTotal.length });
+    const ff = roiBuckets["Fix and Flip"], cp = roiBuckets["CAEP"], whl = roiBuckets["Wholesalling"];
+    const conjunto = {
+      estTotal: [...ff.estTotal, ...cp.estTotal, ...whl.estTotal],
+      estAnual: [...ff.estAnual, ...cp.estAnual, ...whl.estAnual],
+      realTotal: [...ff.realTotal, ...cp.realTotal],
+      realAnual: [...ff.realAnual, ...cp.realAnual],
+    };
     const roiPortfolio = {
-      estimado: { total: avg(roiEstTotal), anualizado: avg(roiEstAnual), n: roiEstTotal.length },
-      real: { total: avg(roiRealTotal), anualizado: avg(roiRealAnual), n: roiRealTotal.length },
+      conjunto: { estimado: estStats(conjunto), real: realStats(conjunto) },
+      fixAndFlip: { estimado: estStats(ff), real: realStats(ff) },
+      caep: { estimado: estStats(cp), real: realStats(cp) },
+      wholesalling: { estimado: estStats(whl) }, // só estimado
     };
 
     const trackerMargem = {
