@@ -85,27 +85,27 @@ function FiscalBadge({ tipo }) {
   return <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium shrink-0 ${m.cls}`}>{m.txt}</span>
 }
 
-// ── Bloco MO (dias × €/dia) ─────────────────────────────────
-function MOBlock({ dados, onChange, defaultEurDia = 147.5 }) {
-  const setDias = (v) => onChange({ ...(dados || {}), dias_mo: v })
-  const setEurDia = (v) => onChange({ ...(dados || {}), eur_dia_mo: v })
+// ── Bloco MO (horas × €/hora) ───────────────────────────────
+function MOBlock({ dados, onChange, defaultEurHora = 15 }) {
+  const setHoras = (v) => onChange({ ...(dados || {}), horas_mo: v })
+  const setEurHora = (v) => onChange({ ...(dados || {}), eur_hora_mo: v })
   const setAuto = (v) => onChange({ ...(dados || {}), autoliq_mo: v })
 
-  const dias = Number(dados?.dias_mo) || 0
-  const eurDia = Number(dados?.eur_dia_mo) || 0
-  const total = dias * eurDia
+  const horas = Number(dados?.horas_mo) || 0
+  const eurHora = Number(dados?.eur_hora_mo) || 0
+  const total = horas * eurHora
 
   return (
     <div className="rounded-lg border border-blue-300 bg-blue-50/50 p-3">
       <div className="flex items-center gap-3 flex-wrap">
         <span className="text-xs font-semibold text-blue-800 inline-flex items-center gap-1">
-          <FiscalBadge tipo="mo" /> Mão-de-obra da secção (sempre por dia)
+          <FiscalBadge tipo="mo" /> Mão-de-obra da secção (por hora)
         </span>
         <div className="flex items-center gap-1.5">
-          <NumIn value={dados?.dias_mo} onChange={setDias} w="w-16" />
-          <span className="text-xs text-gray-500">dias ×</span>
-          <NumIn value={dados?.eur_dia_mo} onChange={setEurDia} w="w-20" placeholder={String(defaultEurDia)} />
-          <span className="text-xs text-gray-500">€/dia</span>
+          <NumIn value={dados?.horas_mo} onChange={setHoras} w="w-16" />
+          <span className="text-xs text-gray-500">h ×</span>
+          <NumIn value={dados?.eur_hora_mo} onChange={setEurHora} w="w-20" placeholder={String(defaultEurHora)} />
+          <span className="text-xs text-gray-500">€/h</span>
         </div>
         {total > 0 && (
           <span className="text-xs text-gray-600 ml-auto">
@@ -325,7 +325,7 @@ export function SeccaoCard({ seccao, dados, pisos, onChange, calc }) {
             <MOBlock
               dados={dados}
               onChange={onChange}
-              defaultEurDia={seccao.mo_default_eur_dia}
+              defaultEurHora={seccao.mo_default_eur_hora}
             />
           )}
 
@@ -369,13 +369,27 @@ export function SeccaoCard({ seccao, dados, pisos, onChange, calc }) {
 
           {/* Resumo da secção */}
           {linhas.length > 0 && (
-            <div className="bg-gray-50 rounded-md p-3 text-xs">
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-gray-500">
+            <div className="bg-gray-50 rounded-md p-3 text-xs space-y-2">
+              {/* Material vs Mão-de-obra (com IVA) */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded border bg-sky-50 border-sky-200 text-sky-800">
+                  <FiscalBadge tipo="material" /> Material
+                  <strong className="text-gray-900">{EUR(calc.subtotal_material)}</strong>
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded border bg-blue-50 border-blue-200 text-blue-800">
+                  <FiscalBadge tipo="mo" /> Mão-de-obra
+                  <strong className="text-gray-900">{EUR(calc.subtotal_mo)}</strong>
+                </span>
+                <span className="ml-auto text-gray-500">
+                  Total especialidade: <strong className="text-base text-gray-900">{EUR(calc.subtotal_bruto)}</strong>
+                </span>
+              </div>
+              {/* Detalhe fiscal */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-gray-500 border-t border-gray-200 pt-2">
                 <span>Base: <strong className="text-gray-800">{EUR(calc.subtotal_base)}</strong></span>
                 <span>IVA liquidado: <strong className="text-gray-800">{EUR(calc.subtotal_iva)}</strong></span>
                 {calc.iva_autoliq > 0 && <span>Autoliq.: <strong className="text-amber-700">{EUR(calc.iva_autoliq)}</strong></span>}
                 {calc.retencoes > 0 && <span>Retenções: <strong className="text-red-700">-{EUR(calc.retencoes)}</strong></span>}
-                <span className="ml-auto">Total: <strong className="text-base text-gray-900">{EUR(calc.subtotal_bruto)}</strong></span>
               </div>
             </div>
           )}

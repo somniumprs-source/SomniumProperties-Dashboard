@@ -25,7 +25,8 @@
  *   │ ARU + Remod.     │    6%    │  6%  │
  *   └──────────────────┴──────────┴──────┘
  *
- * Mão-de-obra contabilizada SEMPRE por dia (dias × €/dia), nunca por m².
+ * Mão-de-obra contabilizada SEMPRE por hora (horas × €/hora), nunca por m².
+ * (Orçamentos antigos guardados por dia mantêm-se válidos via retrocompat.)
  *
  * Fonte da verdade — usado pelo backend (PUT) e frontend (cálculo realtime).
  *
@@ -70,7 +71,21 @@ function linhaMaterial(descricao: string, base: number, formula: string, tMat: n
   return linha({ descricao, base, taxa_iva: tMat, formula, tipo: 'material' })
 }
 
-// Helper: linha de MO por dias × €/dia
+// Helper: linha de MO por horas × €/hora
+function linhaMOPorHora(descricao: string, horas: number, eur_hora: number, tMO: number, autoliq: boolean): any {
+  const base = num(horas) * num(eur_hora)
+  if (base <= 0) return null
+  return linha({
+    descricao,
+    base,
+    taxa_iva: tMO,
+    autoliquidacao: !!autoliq,
+    formula: `${num(horas)} h × ${num(eur_hora)} €/h`,
+    tipo: 'mo',
+  })
+}
+
+// Helper: linha de MO por dias × €/dia (retrocompat — orçamentos antigos)
 function linhaMOPorDia(descricao: string, dias: number, eur_dia: number, tMO: number, autoliq: boolean): any {
   const base = num(dias) * num(eur_dia)
   if (base <= 0) return null
@@ -118,13 +133,19 @@ function linhaIsento(descricao: string, base: number, formula?: string): any {
   return linha({ descricao, base, taxa_iva: 0, formula: formula || `${num(base)} € (isento)`, tipo: 'isento' })
 }
 
-// Helper: bloco MO ao nível de secção (dias × €/dia comum a vários sub-itens)
+// Helper: bloco MO ao nível de secção (horas × €/hora comum a vários sub-itens)
 function moDaSeccao(s: any, descricaoPrefix: string, tMO: number): any {
-  const dias = num(s?.dias_mo)
-  const eur = num(s?.eur_dia_mo)
   const auto = !!s?.autoliq_mo
-  if (dias * eur <= 0) return null
-  return linhaMOPorDia(`${descricaoPrefix} — mão-de-obra`, dias, eur, tMO, auto)
+  const horas = num(s?.horas_mo)
+  const eurHora = num(s?.eur_hora_mo)
+  if (horas * eurHora > 0)
+    return linhaMOPorHora(`${descricaoPrefix} — mão-de-obra`, horas, eurHora, tMO, auto)
+  // Retrocompat: orçamentos guardados antes da migração para por hora (dias × €/dia)
+  const dias = num(s?.dias_mo)
+  const eurDia = num(s?.eur_dia_mo)
+  if (dias * eurDia > 0)
+    return linhaMOPorDia(`${descricaoPrefix} — mão-de-obra`, dias, eurDia, tMO, auto)
+  return null
 }
 
 // ════════════════════════════════════════════════════════════
@@ -930,6 +951,15 @@ export function calcOrcamentoObra(orcamento: any): any {
     const iva_autoliq = round2(linhas.reduce((a: number, l: any) => a + (l.autoliquidacao ? l.iva : 0), 0))
     const retencoes = round2(linhas.reduce((a: number, l: any) => a + l.retencao_valor, 0))
 
+    // Resumo Material vs Mão-de-obra da especialidade (bruto = base + IVA liquidado)
+    const brutoLinha = (l: any) => l.base + (l.autoliquidacao ? 0 : l.iva)
+    const linhasMaterial = linhas.filter((l: any) => l.tipo === 'material')
+    const linhasMO = linhas.filter((l: any) => l.tipo === 'mo' || l.tipo === 'servicos')
+    const subtotal_material_base = round2(linhasMaterial.reduce((a: number, l: any) => a + l.base, 0))
+    const subtotal_material = round2(linhasMaterial.reduce((a: number, l: any) => a + brutoLinha(l), 0))
+    const subtotal_mo_base = round2(linhasMO.reduce((a: number, l: any) => a + l.base, 0))
+    const subtotal_mo = round2(linhasMO.reduce((a: number, l: any) => a + brutoLinha(l), 0))
+
     for (const l of linhas) {
       const t = l.tipo || 'misto'
       const slot = porTipo[t] || (porTipo[t] = { base: 0, iva: 0 })
@@ -945,6 +975,8 @@ export function calcOrcamentoObra(orcamento: any): any {
     seccoes[key] = {
       linhas, subtotal_base, subtotal_iva, iva_autoliq, retencoes,
       subtotal_bruto: round2(subtotal_base + subtotal_iva),
+      subtotal_material, subtotal_material_base,
+      subtotal_mo, subtotal_mo_base,
     }
   }
 

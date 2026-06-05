@@ -4,11 +4,11 @@
  * Regras fiscais agora são derivadas globalmente (zona_aru + tipo_obra no
  * topo da aba), pelo que NÃO há mais override por secção nem por linha.
  *
- * MO contabilizada SEMPRE por dia (dias × €/dia), ao nível da secção.
+ * MO contabilizada SEMPRE por hora (horas × €/hora), ao nível da secção.
  *
  * Tipos de campo:
  *   - Material: campos numéricos (€, €/m², €/un)
- *   - MO da secção: bloco fixo `dias_mo` + `eur_dia_mo` no topo do body
+ *   - MO da secção: bloco fixo `horas_mo` + `eur_hora_mo` no topo do body
  *   - Por piso: campos materiais por piso (sem MO — MO é da secção)
  */
 
@@ -17,12 +17,12 @@ export {
   REGIMES_FISCAIS,  // legacy, mantido para retrocompat de imports
 } from '../../db/orcamentoObraEngine.js'
 
-const MO_DEFAULT_EUR_DIA = 147.5  // 2 pessoas × 8h × 15 €/h × IVA aprox.
+const MO_DEFAULT_EUR_HORA = 15  // €/hora por trabalhador (mão-de-obra corrente)
 
 // Helper: bloco MO de secção (todas as secções com MO o usam)
 const MO_FIELDS = {
   has_mo: true,
-  mo_default_eur_dia: MO_DEFAULT_EUR_DIA,
+  mo_default_eur_hora: MO_DEFAULT_EUR_HORA,
 }
 
 export const SECCOES = [
