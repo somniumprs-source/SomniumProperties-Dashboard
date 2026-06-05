@@ -268,6 +268,8 @@ export function Operacoes() {
   const [regFilter, setRegFilter] = useState('todas')
   const [viewMode, setViewMode] = useState('board')
   const [selectedIds, setSelectedIds] = useState(new Set())
+  const [draggedId, setDraggedId] = useState(null)
+  const [dragOverStatus, setDragOverStatus] = useState(null)
   const [syncing, setSyncing] = useState(false)
 
   const loadAll = useCallback(async () => {
@@ -329,6 +331,15 @@ export function Operacoes() {
       await apiFetch(`/api/tarefas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
       await loadAll()
     } catch (e) { setError(e.message) }
+  }
+
+  async function handleDropStatus(status) {
+    const id = draggedId
+    setDraggedId(null); setDragOverStatus(null)
+    if (!id) return
+    const t = tarefas.find(x => x.id === id)
+    if (!t || t.status === status) return
+    await updateStatus(id, status)
   }
 
   async function syncNotion() {
@@ -600,9 +611,17 @@ export function Operacoes() {
                         <span className="text-xs font-semibold uppercase">{status}</span>
                         <span className="text-xs font-mono">{pool.length} · {HRS(totalH)}</span>
                       </div>
-                      <div className="flex flex-col gap-1.5 p-2 bg-gray-50 rounded-b-xl min-h-[200px] border border-t-0 border-gray-200">
+                      <div
+                        onDragOver={(e) => { e.preventDefault(); if (dragOverStatus !== status) setDragOverStatus(status) }}
+                        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverStatus(null) }}
+                        onDrop={() => handleDropStatus(status)}
+                        className={`flex flex-col gap-1.5 p-2 bg-gray-50 rounded-b-xl min-h-[200px] border border-t-0 transition-colors ${dragOverStatus === status ? 'border-yellow-400 bg-yellow-50/60 ring-1 ring-yellow-200' : 'border-gray-200'}`}>
                         {pool.map(t => (
-                          <div key={t.id} className={`bg-white rounded-lg p-3 shadow-sm border hover:border-gray-300 ${selectedIds.has(t.id) ? 'border-yellow-400 bg-yellow-50 ring-1 ring-yellow-200' : 'border-gray-100'}`}>
+                          <div key={t.id}
+                            draggable
+                            onDragStart={(e) => { setDraggedId(t.id); e.dataTransfer.effectAllowed = 'move' }}
+                            onDragEnd={() => { setDraggedId(null); setDragOverStatus(null) }}
+                            className={`bg-white rounded-lg p-3 shadow-sm border hover:border-gray-300 cursor-grab active:cursor-grabbing ${draggedId === t.id ? 'opacity-40' : ''} ${selectedIds.has(t.id) ? 'border-yellow-400 bg-yellow-50 ring-1 ring-yellow-200' : 'border-gray-100'}`}>
                             <div className="flex items-start gap-2.5">
                               <input type="checkbox" checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)}
                                 className="mt-0.5 w-4 h-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-400 shrink-0 cursor-pointer" />
