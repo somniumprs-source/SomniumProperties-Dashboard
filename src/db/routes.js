@@ -931,10 +931,12 @@ async function recomputeLucroWholesaling(negocioId) {
   )
   if (!rows[0]) return
   const fee = Number(rows[0].fee_cedencia)
-  if (!Number.isFinite(fee)) return
+  // Só sobrescreve o lucro quando há um fee positivo. Com fee ausente/0 não zera —
+  // protege negócios cujo lucro vem das tranches (pagamentos_faseados).
+  if (!Number.isFinite(fee) || fee <= 0) return
   await pool.query(
     `UPDATE negocios SET lucro_estimado = $1, updated_at = NOW()::TEXT WHERE id = $2`,
-    [Math.max(0, fee), negocioId],
+    [fee, negocioId],
   )
 }
 

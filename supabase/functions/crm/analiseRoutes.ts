@@ -59,7 +59,7 @@ async function propagarParaImovel(imovelId: string, calculados: any, inputs: any
     );
 
     // Actualizar negócios associados (respeitando modelo de negócio)
-    const { rows: negocios } = await pool.query("SELECT id, categoria, comissao_pct FROM negocios WHERE imovel_id = $1", [imovelId]);
+    const { rows: negocios } = await pool.query("SELECT id, categoria, comissao_pct, pagamentos_faseados, lucro_estimado FROM negocios WHERE imovel_id = $1", [imovelId]);
     const lucroBruto = calculados.lucro_bruto || 0;
     const now = new Date().toISOString();
 
@@ -67,10 +67,21 @@ async function propagarParaImovel(imovelId: string, calculados: any, inputs: any
       let lucroEstimado = 0;
 
       if (neg.categoria === "Wholesalling") {
-        // Wholesaling = cedência de posição: o lucro expectável da Somnium é o
-        // fee de cedência definido na ficha/análise (não 10% de um F&F). É este
-        // valor que vai para Projetos via negocios.lucro_estimado.
-        lucroEstimado = Math.round((parseFloat(inputs.fee_cedencia) || 0) * 100) / 100;
+        // Wholesaling = cedência de posição: lucro expectável = fee de cedência.
+        // Fonte única = imoveis.fee_cedencia: quando a análise define o fee,
+        // propaga-se para a ficha do imóvel (a ficha e a Calculadora não divergem).
+        const fee = Math.round((parseFloat(inputs.fee_cedencia) || 0) * 100) / 100;
+        if (fee > 0) {
+          lucroEstimado = fee;
+          await pool.query("UPDATE imoveis SET fee_cedencia = $1 WHERE id = $2", [fee, imovelId]);
+        } else {
+          // Sem fee na análise: NÃO zerar. Se houver tranches, lucro = Σtranches
+          // (o fee está faseado); senão mantém o valor actual do negócio.
+          let pags: any[] = [];
+          try { pags = typeof neg.pagamentos_faseados === "string" ? JSON.parse(neg.pagamentos_faseados || "[]") : (neg.pagamentos_faseados || []); } catch { /* noop */ }
+          const somaTranches = pags.reduce((s: number, p: any) => s + (parseFloat(p.valor) || 0), 0);
+          lucroEstimado = somaTranches > 0 ? Math.round(somaTranches * 100) / 100 : (parseFloat(neg.lucro_estimado) || 0);
+        }
       } else if (neg.categoria === "Mediação Imobiliária") {
         // Mediação: comissão % sobre valor de venda
         const pct = neg.comissao_pct || 2.5;
