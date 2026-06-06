@@ -159,34 +159,9 @@ export function getFaseConfig(key) {
 // CAEP partilha o mesmo workflow operacional do Fix and Flip
 export const FASES_CAEP = FASES_FIX_FLIP
 
+// Fluxo Wholesalling: alinhar investidor antes de comprometer a compra.
+// Procurar Investidor → Negociação → CPCV de Compra → CPCV de Cedência → Fee Recebido
 export const FASES_WHOLESALLING = [
-  {
-    key: 'prospecao',
-    nome: 'Prospecção',
-    icon: '🔍',
-    cor: '#475569',
-    descricao: 'Leads, imóveis em dificuldade, contactos iniciais',
-    // Fase exploratória/comercial — sem tarefas (workflow só arranca em Procurar Investidor)
-    tarefas: [],
-  },
-  {
-    key: 'analise_oferta',
-    nome: 'Análise & Oferta',
-    icon: '📊',
-    cor: '#1F4E5F',
-    descricao: 'Análise dos números, definição de oferta',
-    // Análise vive na Calculadora/AnaliseTab — sem tarefas de projeto
-    tarefas: [],
-  },
-  {
-    key: 'cpcv_compra',
-    nome: 'CPCV de Compra',
-    icon: '📝',
-    cor: '#7C2D40',
-    descricao: 'Contrato promessa com o proprietário',
-    // Sem tarefas — workflow accionável só a partir de Procurar Investidor (Fase 4)
-    tarefas: [],
-  },
   {
     key: 'procurar_investidor',
     nome: 'Procurar Investidor Ativo',
@@ -211,6 +186,19 @@ export const FASES_WHOLESALLING = [
       'Formalizar acordo de intenção/reserva',
       'Acordar timing da escritura',
       'Confirmar capacidade financeira do investidor',
+    ],
+  },
+  {
+    key: 'cpcv_compra',
+    nome: 'CPCV de Compra',
+    icon: '📝',
+    cor: '#7C2D40',
+    descricao: 'Contrato promessa com o proprietário',
+    tarefas: [
+      'Redigir CPCV',
+      'Validar cláusulas (prazo, sinal, cessão)',
+      'Pagamento de sinal',
+      'Assinatura CPCV com vendedor',
     ],
   },
   {

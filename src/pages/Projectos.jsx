@@ -52,11 +52,9 @@ const FASES_FIX_FLIP_KANBAN = [
 ]
 
 const FASES_WHOLESALLING_KANBAN = [
-  { key: 'prospecao',              nome: 'Prospecção',               icon: '🔍', cor: '#475569' },
-  { key: 'analise_oferta',         nome: 'Análise & Oferta',         icon: '📊', cor: '#1F4E5F' },
-  { key: 'cpcv_compra',            nome: 'CPCV de Compra',           icon: '📝', cor: '#7C2D40' },
   { key: 'procurar_investidor',    nome: 'Procurar Investidor',      icon: '🔎', cor: '#5F4D20' },
   { key: 'negociacao_investidor',  nome: 'Negociação Investidor',    icon: '💬', cor: '#C9A84C' },
+  { key: 'cpcv_compra',            nome: 'CPCV de Compra',           icon: '📝', cor: '#7C2D40' },
   { key: 'cpcv_cedencia',          nome: 'CPCV de Cedência',         icon: '✍️', cor: '#D5B65A' },
   { key: 'fee_recebido',           nome: 'Fee Recebido',             icon: '💰', cor: '#0d0d0d' },
 ]
@@ -99,7 +97,7 @@ function faseLegacyParaKanban(faseLegacy, colunasDisponiveis) {
   if (faseLegacy === 'Fase de obras') {
     if (keys.has('acabamentos')) return 'acabamentos'
     if (keys.has('publicacao')) return 'publicacao'
-    if (keys.has('analise_oferta')) return 'analise_oferta'
+    if (keys.has('cpcv_compra')) return 'cpcv_compra'
   }
   return colunasDisponiveis[0]?.key
 }
