@@ -192,7 +192,7 @@ export function ProjectoDetalhe() {
           </Link>
           <div className="flex items-center gap-2">
             {!isReadOnly && semFases && (
-              <Button size="sm" icon={Plus} onClick={inicializarFases}>Inicializar fases de obra</Button>
+              <Button size="sm" icon={Plus} onClick={inicializarFases}>{isWholesalling ? 'Inicializar fases' : 'Inicializar fases de obra'}</Button>
             )}
             {!isReadOnly && !semFases && (
               <SyncGCalButton negocioId={id} />
@@ -272,7 +272,7 @@ export function ProjectoDetalhe() {
             <div className="grid grid-cols-2 sm:flex sm:items-start gap-4 sm:gap-7 w-full sm:w-auto">
               <BannerKpi label="Execução" value={`${percGlobal}%`} />
               <BannerKpi label="Faturação" value={EUR(negocio.lucro_estimado)} />
-              <BannerKpi label="Custo obra" value={EUR(custoReal || negocio.custo_real_obra)} />
+              {!isWholesalling && <BannerKpi label="Custo obra" value={EUR(custoReal || negocio.custo_real_obra)} />}
               {faseAtual && (
                 <div className="sm:text-right col-span-2 sm:col-span-1">
                   <p className="text-overline uppercase tracking-widest text-white/50 font-semibold">Fase actual</p>
