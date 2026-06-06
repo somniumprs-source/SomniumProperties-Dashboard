@@ -3433,7 +3433,7 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
 // Apresenta o negócio a investidor para tomar a posição contratual
 // já garantida pela Somnium. O preço de compra não é exposto: os custos
 // de aquisição são bundlados num único valor de "Cedência da Posição".
-// Somnium recebe comissão = 10% do lucro líquido expectável.
+// Somnium recebe o Valor de Cedência de Posição (fee), embutido no custo de aquisição apresentado.
 function renderPropostaCedenciaPosicao(b, im, a) {
   const fotos = parseFotos(im)
   const deal = resolveDealData(im, a)
@@ -3451,9 +3451,12 @@ function renderPropostaCedenciaPosicao(b, im, a) {
 
   const lucroLiquidoOriginal = deal.lucro_liquido || 0
   const lucroBrutoOriginal = deal.lucro_bruto || 0
-  const comissaoSomnium = Math.round(lucroLiquidoOriginal * 0.10)
-  const lucroLiquidoInvestidor = lucroLiquidoOriginal - comissaoSomnium
-  const investimentoTotal = totalAquisicao + obra + detencao + comissaoVenda + comissaoSomnium
+  // Modelo Wholesaling: a remuneração da Somnium é o Valor de Cedência (fee), já
+  // embutido no custo de aquisição (compra apresentada = compra + fee). Não há
+  // comissão de 10% sobre o lucro — o investidor recebe o lucro líquido calculado
+  // já sobre compra+fee.
+  const lucroLiquidoInvestidor = lucroLiquidoOriginal
+  const investimentoTotal = totalAquisicao + obra + detencao + comissaoVenda
 
   // Retorno ajustado: usa investimento total (sem financiamento) como base
   const retornoTotal = investimentoTotal > 0 ? Math.round((lucroLiquidoInvestidor / investimentoTotal) * 1000) / 10 : 0
@@ -3473,7 +3476,7 @@ function renderPropostaCedenciaPosicao(b, im, a) {
   b.header('SUMÁRIO EXECUTIVO')
   b.bigNumbers([
     { label: 'Investimento Total', value: EUR(investimentoTotal), sub: 'Tudo incluído' },
-    { label: 'Lucro Líquido Estimado', value: EUR(lucroLiquidoInvestidor), sub: 'Após comissão Somnium' },
+    { label: 'Lucro Líquido Estimado', value: EUR(lucroLiquidoInvestidor), sub: 'Líquido para o investidor' },
     { label: 'Retorno Anualizado', value: PCT(retornoAnualizado), sub: `base ${meses} meses` },
   ])
   b.space(2)
@@ -3490,7 +3493,7 @@ function renderPropostaCedenciaPosicao(b, im, a) {
   b.textBlock(
     `A Somnium Properties detém uma posição contratual já garantida sobre ${tipoDesc}${areaDesc}, localizado${localizacaoTexto(im)}. ` +
     `Por via de cedência de posição contratual, o investidor passa a assumir integralmente o controlo e a responsabilidade pela operação, incluindo escritura, obra, detenção e venda. ` +
-    `A intervenção da Somnium termina no momento da cedência. A nossa remuneração corresponde exclusivamente a 10% do lucro líquido expectável, liquidada nesse acto.`
+    `A intervenção da Somnium termina no momento da cedência. A remuneração da Somnium corresponde ao Valor de Cedência de Posição, já incluído no custo de aquisição apresentado — não há qualquer comissão adicional sobre o lucro do investidor.`
   )
   b.space(4)
 
@@ -3521,7 +3524,6 @@ function renderPropostaCedenciaPosicao(b, im, a) {
     { label: 'Obra com IVA', value: EUR(obra) },
     { label: `Detenção (${meses} meses)`, value: EUR(detencao) },
     { label: 'Comissão Imobiliária (venda)', value: EUR(comissaoVenda) },
-    { label: 'Comissão Somnium (10% sobre Lucro Líquido)', value: EUR(comissaoSomnium) },
     { label: 'Investimento Total', value: EUR(investimentoTotal), total: true },
   ])
   b.space(3)
@@ -3531,8 +3533,6 @@ function renderPropostaCedenciaPosicao(b, im, a) {
     { label: 'Valor de Venda Alvo (VVR)', value: EUR(vvr) },
     { label: 'Lucro Bruto Estimado', value: EUR(lucroBrutoOriginal) },
     { label: `Impostos (${deal.regime_fiscal || 'Empresa'})`, value: EUR(deal.impostos) },
-    { label: 'Lucro Líquido Estimado', value: EUR(lucroLiquidoOriginal) },
-    { label: '(−) Comissão Somnium (10%)', value: `−${EUR(comissaoSomnium)}` },
     { label: 'Lucro Líquido para o Investidor', value: EUR(lucroLiquidoInvestidor), total: true },
   ])
   b.space(3)
@@ -3544,7 +3544,7 @@ function renderPropostaCedenciaPosicao(b, im, a) {
   ])
   b.space(4)
 
-  b.note(`Pressupostos: Cessão de posição contratual (artigo 424.º CC). Regime fiscal: ${deal.regime_fiscal || 'Empresa'}. Prazo: ${meses} meses. Comissão Somnium liquidada como parte do investimento total no momento da cedência.`)
+  b.note(`Pressupostos: Cessão de posição contratual (artigo 424.º CC). Regime fiscal: ${deal.regime_fiscal || 'Empresa'}. Prazo: ${meses} meses. O Valor de Cedência de Posição está incluído no custo de aquisição apresentado.`)
 
   b.newPage()
   b.header('ENQUADRAMENTO LEGAL — CEDÊNCIA DE POSIÇÃO')
@@ -3552,7 +3552,7 @@ function renderPropostaCedenciaPosicao(b, im, a) {
     'A Cedência de Posição Contratual está prevista nos artigos 424.º a 427.º do Código Civil Português. ' +
     'A Somnium Properties, na qualidade de promitente-compradora, cede ao investidor a sua posição contratual no contrato-promessa de compra e venda, transferindo todos os direitos e obrigações dela emergentes. ' +
     'A partir da cedência, o investidor assume integralmente a operação, sem qualquer intervenção operacional, técnica ou comercial da Somnium. ' +
-    'O trabalho prévio de identificação, negociação e estruturação do negócio já realizado pela Somnium constitui o objecto da remuneração de 10% do lucro líquido expectável.'
+    'O trabalho prévio de identificação, negociação e estruturação do negócio já realizado pela Somnium constitui o objecto do Valor de Cedência de Posição, incluído no custo de aquisição.'
   )
   b.space(3)
   b.simpleTable([
@@ -3561,8 +3561,8 @@ function renderPropostaCedenciaPosicao(b, im, a) {
     { label: 'Gestão de Obra', value: 'Investidor (sem envolvimento da Somnium)' },
     { label: 'Detenção, licenciamento e venda', value: 'Investidor' },
     { label: 'Intervenção da Somnium após a cedência', value: 'Nenhuma' },
-    { label: 'Comissão Somnium', value: '10% sobre Lucro Líquido Expectável' },
-    { label: 'Momento de liquidação da comissão', value: 'Na escritura de cedência' },
+    { label: 'Remuneração Somnium', value: 'Valor de Cedência de Posição (incluído na aquisição)' },
+    { label: 'Momento de liquidação', value: 'Na cedência (CPCV de cedência)' },
   ])
   b.space(4)
 
@@ -3955,16 +3955,14 @@ const GENERATORS = {
   proposta_cedencia_posicao: (im, analise) => {
     const a = analise || {}
     const meses = a.meses || 6
-    const lucroLiq = a.lucro_liquido || 0
-    const comissaoSomnium = Math.round(lucroLiq * 0.10)
-    const lucroInvestidor = lucroLiq - comissaoSomnium
+    const lucroInvestidor = a.lucro_liquido || 0
     const b = new DocBuilder('Proposta de Cedência de Posição', `Oportunidade · ${im.zona || ''}`, im, {
       style: 'investor',
       withIndex: true,
       heroItems: [
-        { label: 'Lucro Líquido (Investidor)', value: EUR(lucroInvestidor), sub: 'Após 10% Somnium' },
+        { label: 'Lucro Líquido (Investidor)', value: EUR(lucroInvestidor), sub: 'Estimado, após cedência' },
         { label: 'Prazo Estimado', value: `${meses} meses` },
-        { label: 'Comissão Somnium', value: EUR(comissaoSomnium), sub: '10% do lucro líquido' },
+        { label: 'Modelo', value: 'Cedência de Posição', sub: 'Wholesaling' },
       ],
     })
     try {
