@@ -316,7 +316,7 @@ export function ProjectoDetalhe() {
             {tab === 'faturacao' && <TabFaturacao negocio={negocio} onChange={load} readOnly={isReadOnly} />}
             {tab === 'forecast' && <TabForecast negocioId={id} />}
             {tab === 'fotos' && <TabFotos negocioId={id} fases={fasesFiltradas} fotos={fotosFiltradas} onChange={load} readOnly={isReadOnly} fracaoSel={fracaoSel} />}
-            {tab === 'documentos' && <TabDocumentos negocio={negocio} fases={fases} readOnly={isReadOnly} />}
+            {tab === 'documentos' && <TabDocumentos negocio={negocio} imovel={imovel} fases={fases} readOnly={isReadOnly} />}
             {tab === 'investidores' && <TabInvestidores negocio={negocio} readOnly={isReadOnly} />}
             {tab === 'historico' && <TabHistorico negocioId={id} />}
           </div>
@@ -993,7 +993,8 @@ function FotosGaleriaPorFase({ fotos, onDelete }) {
 // ════════════════════════════════════════════════════════════════
 // TAB: DOCUMENTOS (placeholder V1 — geração V2)
 // ════════════════════════════════════════════════════════════════
-function TabDocumentos({ negocio, fases, readOnly }) {
+function TabDocumentos({ negocio, imovel, fases, readOnly }) {
+  const isWS = negocio.categoria === 'Wholesalling'
   const [faseFichaSel, setFaseFichaSel] = useState(fases[0]?.id || '')
   const [docs, setDocs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1062,12 +1063,20 @@ function TabDocumentos({ negocio, fases, readOnly }) {
     load()
   }
 
-  // Auto-gerados (PDFs Somnium)
+  // Auto-gerados (PDFs Somnium) — projetos de obra (Fix&Flip/CAEP)
   const autoGerados = [
     { key: 'relatorio', nome: 'Relatório de Acompanhamento', desc: 'Executivo mensal: cronograma, orçamento, fotos recentes.', url: `/api/crm/projetos/${negocio.id}/pdf/relatorio` },
     { key: 'memoria', nome: 'Memória Descritiva', desc: 'Acabamentos, garantias, ensaios — pré-venda.', url: `/api/crm/projetos/${negocio.id}/pdf/memoria` },
     { key: 'saida', nome: 'Relatório de Saída / CAEP', desc: 'Capital, distribuição, ROI/TIR.', url: `/api/crm/projetos/${negocio.id}/pdf/saida` },
   ]
+
+  // Wholesalling (cedência de posição): documentos do imóvel, não de obra.
+  const docsImovelWS = imovel ? [
+    { key: 'ficha_imovel',              nome: 'Ficha do Imóvel',                desc: 'Dados-base do imóvel.',                                 url: `/api/crm/imoveis/${imovel.id}/documento/ficha_imovel` },
+    { key: 'analise_rentabilidade',     nome: 'Análise de Rentabilidade',       desc: 'Análise financeira completa (tese do investidor).',      url: `/api/crm/imoveis/${imovel.id}/documento/analise_rentabilidade` },
+    { key: 'estudo_comparaveis',        nome: 'Estudo de Comparáveis',          desc: 'Comparáveis de mercado que suportam o VVR.',             url: `/api/crm/imoveis/${imovel.id}/documento/estudo_comparaveis` },
+    { key: 'proposta_cedencia_posicao', nome: 'Proposta de Cedência de Posição', desc: 'Documento central da cedência ao investidor ativo.',     url: `/api/crm/imoveis/${imovel.id}/documento/proposta_cedencia_posicao` },
+  ] : []
 
   return (
     <div className="space-y-6">
@@ -1075,39 +1084,60 @@ function TabDocumentos({ negocio, fases, readOnly }) {
       <div>
         <h3 className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">PDFs Somnium (auto-gerados)</h3>
         <div className="space-y-2">
-          {/* Ficha por fase */}
-          <div className="p-3 rounded-lg border border-gray-200 bg-gray-50">
-            <div className="flex items-start justify-between gap-3 mb-2">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-800">Ficha de Acompanhamento de Obra</p>
-                <p className="text-[11px] text-gray-500 mt-0.5">1 página A4 por fase. KPIs, % execução, fotos, tarefas.</p>
+          {isWS ? (
+            !imovel ? (
+              <p className="text-xs text-gray-400 py-2">Liga um imóvel ao negócio para gerar os documentos.</p>
+            ) : (
+              docsImovelWS.map(t => (
+                <div key={t.key} className="flex items-start justify-between gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-800">{t.nome}</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">{t.desc}</p>
+                  </div>
+                  <button onClick={() => abrirPDF(t.url)}
+                    className="px-3 py-1.5 text-xs rounded-lg bg-brand-dark text-brand-gold hover:bg-brand-dark-light inline-flex items-center gap-1.5">
+                    <FileDown className="w-3.5 h-3.5" /> Gerar
+                  </button>
+                </div>
+              ))
+            )
+          ) : (
+            <>
+              {/* Ficha por fase */}
+              <div className="p-3 rounded-lg border border-gray-200 bg-gray-50">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-800">Ficha de Acompanhamento de Obra</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">1 página A4 por fase. KPIs, % execução, fotos, tarefas.</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <select value={faseFichaSel} onChange={e => setFaseFichaSel(e.target.value)}
+                    className="flex-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs bg-white">
+                    <option value="">Escolhe uma fase…</option>
+                    {fases.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                  </select>
+                  <button onClick={() => faseFichaSel && abrirPDF(`/api/crm/projetos/${negocio.id}/pdf/ficha/${faseFichaSel}`)}
+                    disabled={!faseFichaSel}
+                    className="px-3 py-1.5 text-xs rounded-lg bg-brand-dark text-brand-gold hover:bg-brand-dark-light disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center gap-1.5">
+                    <FileDown className="w-3.5 h-3.5" /> Gerar
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="flex gap-2">
-              <select value={faseFichaSel} onChange={e => setFaseFichaSel(e.target.value)}
-                className="flex-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs bg-white">
-                <option value="">Escolhe uma fase…</option>
-                {fases.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
-              </select>
-              <button onClick={() => faseFichaSel && abrirPDF(`/api/crm/projetos/${negocio.id}/pdf/ficha/${faseFichaSel}`)}
-                disabled={!faseFichaSel}
-                className="px-3 py-1.5 text-xs rounded-lg bg-brand-dark text-brand-gold hover:bg-brand-dark-light disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center gap-1.5">
-                <FileDown className="w-3.5 h-3.5" /> Gerar
-              </button>
-            </div>
-          </div>
-          {autoGerados.map(t => (
-            <div key={t.key} className="flex items-start justify-between gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-800">{t.nome}</p>
-                <p className="text-[11px] text-gray-500 mt-0.5">{t.desc}</p>
-              </div>
-              <button onClick={() => abrirPDF(t.url)}
-                className="px-3 py-1.5 text-xs rounded-lg bg-brand-dark text-brand-gold hover:bg-brand-dark-light inline-flex items-center gap-1.5">
-                <FileDown className="w-3.5 h-3.5" /> Gerar
-              </button>
-            </div>
-          ))}
+              {autoGerados.map(t => (
+                <div key={t.key} className="flex items-start justify-between gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-800">{t.nome}</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">{t.desc}</p>
+                  </div>
+                  <button onClick={() => abrirPDF(t.url)}
+                    className="px-3 py-1.5 text-xs rounded-lg bg-brand-dark text-brand-gold hover:bg-brand-dark-light inline-flex items-center gap-1.5">
+                    <FileDown className="w-3.5 h-3.5" /> Gerar
+                  </button>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       </div>
 
