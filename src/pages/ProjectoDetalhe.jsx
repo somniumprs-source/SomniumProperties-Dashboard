@@ -146,7 +146,13 @@ export function ProjectoDetalhe() {
   const { negocio, imovel, percGlobal, custoReal, orcAlocado, faseAtual } = resumo
   const semFases = fases.length === 0
   const isPredio = negocio.tipo_projeto === 'predio'
-  const TABS = TABS_BASE.filter(t => !t.predioOnly || isPredio)
+  // Wholesalling é cedência de posição (sem obra): esconder as abas de obra.
+  const isWholesalling = negocio.categoria === 'Wholesalling'
+  const TABS_OBRA_OCULTAS = new Set(['orcamento', 'forecast', 'fotos'])
+  const TABS = TABS_BASE.filter(t =>
+    (!t.predioOnly || isPredio) &&
+    !(isWholesalling && TABS_OBRA_OCULTAS.has(t.key))
+  )
 
   return (
     <>
@@ -334,6 +340,7 @@ function BannerKpi({ label, value }) {
 // ════════════════════════════════════════════════════════════════
 function TabResumo({ resumo, fases }) {
   const { negocio } = resumo
+  const isWS = negocio.categoria === 'Wholesalling'
   const totalTarefas = fases.reduce((s, f) => s + (f.tarefas_total || 0), 0)
   const tarefasConcluidas = fases.reduce((s, f) => s + (f.tarefas_concluidas || 0), 0)
 
@@ -354,23 +361,26 @@ function TabResumo({ resumo, fases }) {
           <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Financeiro</h3>
           <Field label="Faturação esperada" value={EUR(negocio.lucro_estimado)} accent />
           <Field label="Faturação real" value={EUR(negocio.lucro_real)} accent />
-          <Field label="Custo real obra" value={EUR(negocio.custo_real_obra)} />
+          {!isWS && <Field label="Custo real obra" value={EUR(negocio.custo_real_obra)} />}
           <Field label="Capital total" value={EUR(negocio.capital_total)} />
           <Field label="Nº investidores" value={negocio.n_investidores} />
         </div>
-        <div className="space-y-3">
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Obra</h3>
-          <Field label="Fases criadas" value={`${fases.length}`} />
-          <Field label="Fases concluídas" value={`${fases.filter(f => f.estado === 'concluida').length} / ${fases.length}`} />
-          <Field label="Tarefas concluídas" value={`${tarefasConcluidas} / ${totalTarefas}`} />
-          {negocio.notas && (
-            <div className="mt-2">
-              <p className="text-[10px] text-gray-400 uppercase">Notas</p>
-              <p className="text-xs text-gray-700 bg-gray-50 rounded-lg p-2.5 mt-1">{negocio.notas}</p>
-            </div>
-          )}
-        </div>
+        {!isWS && (
+          <div className="space-y-3">
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Obra</h3>
+            <Field label="Fases criadas" value={`${fases.length}`} />
+            <Field label="Fases concluídas" value={`${fases.filter(f => f.estado === 'concluida').length} / ${fases.length}`} />
+            <Field label="Tarefas concluídas" value={`${tarefasConcluidas} / ${totalTarefas}`} />
+          </div>
+        )}
       </div>
+
+      {negocio.notas && (
+        <div>
+          <p className="text-[10px] text-gray-400 uppercase">Notas</p>
+          <p className="text-xs text-gray-700 bg-gray-50 rounded-lg p-2.5 mt-1">{negocio.notas}</p>
+        </div>
+      )}
 
       {fases.length > 0 && <GanttFases fases={fases} negocio={negocio} />}
     </div>
