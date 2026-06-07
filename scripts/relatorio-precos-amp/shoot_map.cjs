@@ -4,7 +4,7 @@ const path = require('path');
 (async () => {
   const HERE = __dirname;
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1240, height: 900 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ viewport: { width: 1240, height: 1040 }, deviceScaleFactor: 2 });
   await page.goto('file://' + path.join(HERE, 'map.html'), { waitUntil: 'networkidle' });
   await page.waitForTimeout(3500); // garantir tiles carregadas
   await page.locator('#map').screenshot({ path: path.join(HERE, 'map.png') });

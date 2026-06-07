@@ -3,7 +3,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   html,body{margin:0;padding:0;background:#fff}
-  #map{width:1240px;height:900px}
+  #map{width:1240px;height:1040px}
   .lbl{background:#0d0d0d;color:#C9A84C;border:1.5px solid #C9A84C;border-radius:6px;
         padding:2px 6px;font:700 13px/1 Arial;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.3)}
   .legend{position:absolute;bottom:24px;left:24px;z-index:1000;background:#0d0d0d;color:#fff;
@@ -36,6 +36,7 @@ pts.forEach(function(p){
   m.bindTooltip((p.m2/1000).toFixed(1).replace('.',',')+'k €/m²',{permanent:true,direction:'top',className:'lbl',offset:[0,-6]});
   group.push([p.lat,p.lng]);
 });
-map.fitBounds(group,{padding:[70,70]});
+map.fitBounds(group,{padding:[40,40]});
+if(map.getZoom()<13){map.setZoom(map.getZoom()+1);}  // ampliar um pouco mais quando possivel
 setTimeout(function(){window.__ready=true;},300);
 </script></body></html>

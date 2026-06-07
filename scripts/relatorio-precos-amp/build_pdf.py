@@ -57,6 +57,14 @@ zona_rows.sort(key=lambda r: (r["m2_med"] or 0), reverse=True)
 todos_m2 = [d["valor_mercado_m2"] for d in ims if d.get("valor_mercado_m2")]
 todos_yield = [d["yield_media"] for d in ims if d.get("yield_media")]
 
+# ---- comparacao ask price vs valor de mercado ----
+comp = [d for d in ims if d.get("ask_price") and d.get("valor_mercado")]
+deltas = [d["delta_ask_mercado_pct"] for d in comp]
+delta_med = st.mean(deltas) if deltas else None
+n_abaixo = len([x for x in deltas if x < 0])
+ask_total = sum(d["ask_price"] for d in comp)
+merc_total = sum(d["valor_mercado"] for d in comp)
+
 # ---- estilos ----
 H1 = ParagraphStyle("H1", fontName="Helvetica-Bold", fontSize=17, textColor=DARK, spaceAfter=3, leading=20)
 H2 = ParagraphStyle("H2", fontName="Helvetica-Bold", fontSize=12, textColor=GOLD, spaceBefore=10, spaceAfter=7, leading=15)
@@ -137,6 +145,21 @@ cards.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),LIGHT),("BOX",(0,0),(-1,-
                            ("LINEAFTER",(0,0),(-2,-1),0.5,LINE),("VALIGN",(0,0),(-1,-1),"TOP"),
                            ("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8)]))
 story.append(cards)
+story.append(Spacer(1, 8))
+
+# ---- callout: oportunidade ask vs mercado ----
+co_style = ParagraphStyle("co", fontName="Helvetica", fontSize=9.5, textColor=DARK, leading=14)
+callout = Table([[Paragraph(
+    f"<b>Preço pedido vs. valor de mercado.</b> Em média, o preço pedido dos imóveis em carteira está "
+    f"<b>{abs(delta_med):.0f}% abaixo</b> do valor de mercado estimado pelos estudos. "
+    f"<b>{n_abaixo} de {len(comp)}</b> imóveis estão abaixo do valor de mercado — margem potencial agregada de "
+    f"<b>{eur(merc_total - ask_total)}</b> ({eur(ask_total)} pedido vs. {eur(merc_total)} de mercado).", co_style)]],
+    colWidths=[doc.width])
+callout.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),colors.HexColor("#faf6ea")),
+                             ("LINEBEFORE",(0,0),(0,-1),3,GOLD),("BOX",(0,0),(-1,-1),0.5,LINE),
+                             ("LEFTPADDING",(0,0),(-1,-1),12),("RIGHTPADDING",(0,0),(-1,-1),12),
+                             ("TOPPADDING",(0,0),(-1,-1),9),("BOTTOMPADDING",(0,0),(-1,-1),9)]))
+story.append(callout)
 
 # ---- mapa ----
 story.append(Paragraph("Mapa de preços por zona", H2))
@@ -181,34 +204,42 @@ t.setStyle(TableStyle([
 story.append(t)
 story.append(Spacer(1, 14))
 
-# ---- detalhe por imovel ----
-story.append(Paragraph("Detalhe por imóvel", H1))
-story.append(Paragraph("Valor de mercado estimado e preço unitário de cada imóvel da carteira AMP.", BODY))
+# ---- detalhe por imovel: ask price vs valor de mercado ----
+story.append(Paragraph("Preço pedido vs. valor de mercado, por imóvel", H1))
+story.append(Paragraph("Ordenado pelo maior desconto face ao mercado. Δ negativo (verde) = preço pedido abaixo do "
+                       "valor de mercado estimado pelo estudo (margem potencial).", BODY))
 story.append(Spacer(1, 6))
-head2 = ["Imóvel / Morada", "Freguesia", "Tip.", "Área", "Valor mercado", "€/m²", "Yield"]
+head2 = ["Imóvel / Morada", "Freguesia", "Tip.", "Área", "Preço pedido", "Valor mercado", "Δ vs merc.", "Yield"]
 rows2 = [head2]
-det = sorted(ims, key=lambda d: (d.get("valor_mercado_m2") or 0), reverse=True)
+GREEN = colors.HexColor("#2e7d32"); RED = colors.HexColor("#c62828")
+delta_cmds = []
+det = sorted(comp, key=lambda d: (d.get("delta_ask_mercado_pct") if d.get("delta_ask_mercado_pct") is not None else 0))
 cellstyle = ParagraphStyle("c", fontName="Helvetica", fontSize=7.6, leading=9.5, textColor=colors.HexColor("#333"))
-for d in det:
+for i, d in enumerate(det, start=1):
     nome = d.get("nome") or "—"
     mor = (d.get("morada") or "").split(",")[0]
     label = f"<b>{nome}</b><br/><font size=6.5 color='#888'>{mor}</font>"
+    dl = d.get("delta_ask_mercado_pct")
+    dl_txt = "—" if dl is None else f"{dl:+.0f}%".replace("+", "+").replace("-", "−")
     rows2.append([Paragraph(label, cellstyle), Paragraph(d.get("freguesia") or "—", cellstyle),
                   d.get("tipologia") or "—", area(d.get("area_m2")),
-                  eur(d.get("valor_mercado")), eurm2(d.get("valor_mercado_m2")), pct(d.get("yield_media"))])
-t2 = Table(rows2, colWidths=[48*mm, 35*mm, 11*mm, 17*mm, 26*mm, 21*mm, 14*mm], repeatRows=1)
+                  eur(d.get("ask_price")), eur(d.get("valor_mercado")), dl_txt, pct(d.get("yield_media"))])
+    if dl is not None:
+        delta_cmds.append(("TEXTCOLOR", (6, i), (6, i), GREEN if dl < 0 else RED))
+t2 = Table(rows2, colWidths=[43*mm, 31*mm, 10*mm, 15*mm, 23*mm, 24*mm, 16*mm, 12*mm], repeatRows=1)
 t2.setStyle(TableStyle([
     ("BACKGROUND",(0,0),(-1,0),DARK),("TEXTCOLOR",(0,0),(-1,0),GOLD),
-    ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),("FONTSIZE",(0,0),(-1,0),7.8),
+    ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),("FONTSIZE",(0,0),(-1,0),7.6),
     ("FONTNAME",(0,1),(-1,-1),"Helvetica"),("FONTSIZE",(0,1),(-1,-1),7.6),
     ("TEXTCOLOR",(0,1),(-1,-1),colors.HexColor("#333333")),
     ("FONTNAME",(5,1),(5,-1),"Helvetica-Bold"),("TEXTCOLOR",(5,1),(5,-1),DARK),
+    ("FONTNAME",(6,1),(6,-1),"Helvetica-Bold"),
     ("ROWBACKGROUNDS",(0,1),(-1,-1),[WHITE, LIGHT]),
     ("ALIGN",(2,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
     ("GRID",(0,0),(-1,-1),0.4,LINE),("LINEBELOW",(0,0),(-1,0),1,GOLD),
     ("TOPPADDING",(0,0),(-1,-1),4),("BOTTOMPADDING",(0,0),(-1,-1),4),
     ("LEFTPADDING",(0,0),(0,-1),6),
-]))
+] + delta_cmds))
 story.append(t2)
 story.append(Spacer(1, 14))
 
