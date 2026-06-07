@@ -127,11 +127,16 @@ for im in imoveis:
     comp_preco = num(first(r"([\d\s.,  ]+)€\s*\npreço médio dos imóveis", est or full))
 
     freg = extrai_freguesia(doc) or normaliza_freguesia(im.get("freguesia"))
+    ask = im.get("ask_price")
+    ask = float(ask) if ask else None
+    delta = ((ask - market_total) / market_total * 100) if (ask and market_total) else None
     dataset.append({
         "id": im["id"], "nome": im["nome"], "tipo": (tipo or "").title() or None,
         "tipologia": tipologia, "area_m2": area, "morada": morada,
         "freguesia": freg, "concelho": im.get("concelho") or "Vila Nova de Gaia",
         "lat": lat, "lng": lng,
+        "ask_price": ask, "ask_price_m2": (ask / area) if (ask and area) else None,
+        "delta_ask_mercado_pct": delta,
         "valor_mercado": market_total, "valor_mercado_m2": market_m2,
         "valor_min": vmin_total, "valor_min_m2": vmin_m2,
         "valor_max": vmax_total, "valor_max_m2": vmax_m2,
