@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { FileDown, Sparkles, Trash2, Calendar, Loader2, Plus, RefreshCw, Zap, FileText, Presentation, Upload, Pencil, X, CalendarPlus } from 'lucide-react'
 import { apiFetch, getToken, resolveApiUrl } from '../lib/api.js'
 
@@ -49,7 +49,6 @@ export function RelatoriosAdmin() {
   const [reuniaoForm, setReuniaoForm] = useState({ id: null, titulo: '', data: '', notas: '' })
   const [savingReuniao, setSavingReuniao] = useState(false)
   const [uploadingId, setUploadingId] = useState(null)
-  const uploadInputRef = useRef(null)
 
   const loadReunioes = useCallback(async () => {
     try {
@@ -193,19 +192,6 @@ export function RelatoriosAdmin() {
     } catch (e) { alert(e.message) }
   }
 
-  async function eliminarDocumento(semana, nome) {
-    if (!confirm(`Eliminar "${nome}"?\n\nO ficheiro é removido permanentemente do armazenamento e não pode ser recuperado.`)) return
-    try {
-      const r = await apiFetch('/api/crm/relatorios-documentos', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ semana, nome }),
-      })
-      if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || 'Erro ao eliminar') }
-      await load()
-    } catch (e) { alert(e.message) }
-  }
-
   const totalRelatorios = relatorios.length
   const totalReunioes = relatorios.reduce((s, r) => s + (Number(r.num_reunioes) || 0), 0)
   const recentes = relatorios.filter(r => {
@@ -282,64 +268,189 @@ export function RelatoriosAdmin() {
         </div>
       </div>
 
-      {/* Documentos da reuniao — ficheiros PDF/PPTX por semana (Supabase Storage) */}
-      {documentos.length > 0 && (
-        <div className="mb-6 rounded-2xl border border-brand-gold/30 bg-gradient-to-br from-neutral-50 to-white dark:from-neutral-900 dark:to-neutral-900/40 p-5">
-          <div className="flex items-start gap-3 mb-4">
+      {/* Reunioes — documentos por reuniao (criar / editar / upload / apagar) */}
+      <div className="mb-6 rounded-2xl border border-brand-gold/30 bg-gradient-to-br from-neutral-50 to-white dark:from-neutral-900 dark:to-neutral-900/40 p-5">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+          <div className="flex items-start gap-3">
             <div className="p-2.5 rounded-lg" style={{ backgroundColor: 'rgba(201,168,76,0.15)' }}>
               <FileDown className="w-5 h-5" style={{ color: GOLD }} />
             </div>
             <div>
               <h2 className="text-base font-semibold text-neutral-800 dark:text-neutral-100">Documentos da reunião</h2>
               <p className="text-sm text-neutral-500 dark:text-neutral-400 max-w-xl">
-                Relatórios e apresentações por semana (PDF e PowerPoint). Documentos confidenciais Somnium Properties.
+                Relatórios e apresentações por reunião (PDF, PowerPoint, Word, Excel). Documentos confidenciais Somnium Properties.
               </p>
             </div>
           </div>
+          <button
+            onClick={abrirNovaReuniao}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap shrink-0"
+            style={{ backgroundColor: GOLD, color: '#0d0d0d' }}
+          >
+            <CalendarPlus className="w-4 h-4" />
+            Nova reunião
+          </button>
+        </div>
+
+        {/* Form criar/editar reuniao */}
+        {showReuniaoForm && (
+          <div className="mb-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-sm text-neutral-800 dark:text-neutral-100">
+                {reuniaoForm.id ? 'Editar reunião' : 'Nova reunião'}
+              </h3>
+              <button onClick={() => setShowReuniaoForm(false)} className="p-1 rounded-lg text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-2">
+                <label className="text-xs text-neutral-500 dark:text-neutral-400 block mb-1">Título *</label>
+                <input
+                  type="text"
+                  value={reuniaoForm.titulo}
+                  onChange={e => setReuniaoForm(f => ({ ...f, titulo: e.target.value }))}
+                  placeholder="Reunião Semanal 07-06 22h"
+                  className="w-full border border-neutral-200 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-500 dark:text-neutral-400 block mb-1">Data</label>
+                <input
+                  type="date"
+                  value={reuniaoForm.data || ''}
+                  onChange={e => setReuniaoForm(f => ({ ...f, data: e.target.value }))}
+                  className="w-full border border-neutral-200 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div className="mt-3">
+              <label className="text-xs text-neutral-500 dark:text-neutral-400 block mb-1">Notas (opcional)</label>
+              <input
+                type="text"
+                value={reuniaoForm.notas}
+                onChange={e => setReuniaoForm(f => ({ ...f, notas: e.target.value }))}
+                placeholder="Breve descrição da reunião"
+                className="w-full border border-neutral-200 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => setShowReuniaoForm(false)}
+                disabled={savingReuniao}
+                className="px-4 py-2 rounded-lg text-sm text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={guardarReuniao}
+                disabled={savingReuniao || !reuniaoForm.titulo.trim()}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                style={{ backgroundColor: GOLD, color: '#0d0d0d' }}
+              >
+                {savingReuniao ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                {reuniaoForm.id ? 'Guardar' : 'Criar reunião'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {reunioes.length === 0 && !showReuniaoForm ? (
+          <div className="text-center py-10 rounded-xl border-2 border-dashed border-neutral-200 dark:border-neutral-800">
+            <Calendar className="w-9 h-9 mx-auto mb-2 text-neutral-300 dark:text-neutral-700" />
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">Sem reuniões ainda</p>
+            <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">Clique em "Nova reunião" para criar a primeira</p>
+          </div>
+        ) : (
           <div className="space-y-4">
-            {documentos.map((g) => (
-              <div key={g.semana}>
-                <div className="flex items-center gap-2 mb-2">
-                  <Calendar className="w-3.5 h-3.5" style={{ color: GOLD }} />
-                  <span className="text-overline uppercase tracking-widest font-semibold text-neutral-500 dark:text-neutral-400">{g.semana}</span>
-                </div>
-                <div className="grid sm:grid-cols-2 gap-2">
-                  {g.ficheiros.map((f) => (
-                    <div
-                      key={f.nome}
-                      className="group flex items-center gap-2 p-3 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 hover:border-brand-gold/50 transition-all"
-                    >
-                      <button
-                        onClick={() => f.url && window.open(f.url, '_blank', 'noopener')}
-                        disabled={!f.url}
-                        className="flex items-center gap-3 flex-1 min-w-0 text-left disabled:opacity-50"
-                      >
-                        <div className="p-2 rounded-lg shrink-0" style={{ backgroundColor: 'rgba(201,168,76,0.12)' }}>
-                          {f.ext === 'pptx'
-                            ? <Presentation className="w-4 h-4" style={{ color: GOLD }} />
-                            : <FileText className="w-4 h-4" style={{ color: GOLD }} />}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100 truncate">{f.nome}</p>
-                          <p className="text-xs text-neutral-400">{f.ext.toUpperCase()}{f.tamanho ? ` · ${fmtSize(f.tamanho)}` : ''}</p>
-                        </div>
-                        <FileDown className="w-4 h-4 text-neutral-300 group-hover:text-brand-gold transition-colors shrink-0" />
-                      </button>
-                      <button
-                        onClick={() => eliminarDocumento(g.semana, f.nome)}
-                        title="Eliminar documento"
-                        className="p-2 rounded-lg text-neutral-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors shrink-0"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+            {reunioes.map((g) => (
+              <div key={g.id} className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4">
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-neutral-800 dark:text-neutral-100 truncate">{g.titulo}</h3>
+                    <div className="flex items-center gap-2 mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+                      <Calendar className="w-3.5 h-3.5" style={{ color: GOLD }} />
+                      <span>{g.data ? fmtDate(g.data) : (g.semana_iso || '—')}</span>
+                      {g.notas ? <span className="truncate">· {g.notas}</span> : null}
                     </div>
-                  ))}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <label
+                      title="Carregar documentos"
+                      className="p-2 rounded-lg text-neutral-400 hover:text-brand-gold hover:bg-brand-gold/10 transition-colors cursor-pointer"
+                    >
+                      {uploadingId === g.id
+                        ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: GOLD }} />
+                        : <Upload className="w-4 h-4" />}
+                      <input
+                        type="file"
+                        multiple
+                        accept=".pdf,.pptx,.ppt,.docx,.doc,.xlsx,.xls"
+                        className="hidden"
+                        disabled={uploadingId === g.id}
+                        onChange={e => { uploadFicheiros(g.id, e.target.files); e.target.value = '' }}
+                      />
+                    </label>
+                    <button
+                      onClick={() => editarReuniao(g)}
+                      title="Editar reunião"
+                      className="p-2 rounded-lg text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => apagarReuniao(g.id)}
+                      title="Eliminar reunião"
+                      className="p-2 rounded-lg text-neutral-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
+
+                {g.ficheiros.length === 0 ? (
+                  <p className="text-xs text-neutral-400 dark:text-neutral-500 italic py-2">
+                    Sem documentos. Use o botão de upload para adicionar PDF/PowerPoint.
+                  </p>
+                ) : (
+                  <div className="grid sm:grid-cols-2 gap-2">
+                    {g.ficheiros.map((f) => (
+                      <div
+                        key={f.nome}
+                        className="group flex items-center gap-2 p-3 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/40 hover:border-brand-gold/50 transition-all"
+                      >
+                        <button
+                          onClick={() => f.url && window.open(f.url, '_blank', 'noopener')}
+                          disabled={!f.url}
+                          className="flex items-center gap-3 flex-1 min-w-0 text-left disabled:opacity-50"
+                        >
+                          <div className="p-2 rounded-lg shrink-0" style={{ backgroundColor: 'rgba(201,168,76,0.12)' }}>
+                            {f.ext === 'pptx' || f.ext === 'ppt'
+                              ? <Presentation className="w-4 h-4" style={{ color: GOLD }} />
+                              : <FileText className="w-4 h-4" style={{ color: GOLD }} />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100 truncate">{f.nome}</p>
+                            <p className="text-xs text-neutral-400">{f.ext.toUpperCase()}{f.tamanho ? ` · ${fmtSize(f.tamanho)}` : ''}</p>
+                          </div>
+                          <FileDown className="w-4 h-4 text-neutral-300 group-hover:text-brand-gold transition-colors shrink-0" />
+                        </button>
+                        <button
+                          onClick={() => apagarFicheiro(g.id, f.nome)}
+                          title="Eliminar documento"
+                          className="p-2 rounded-lg text-neutral-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors shrink-0"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Action bar */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
