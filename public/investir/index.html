@@ -424,6 +424,19 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
 .why-sig-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--gold) 0%,var(--gold-light) 100%);color:var(--dark);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-weight:600;font-size:14px;border:2px solid var(--dark);flex-shrink:0}
 .why-sig-avatar+.why-sig-avatar{margin-left:-12px}
 
+/* FUNDADORES */
+.found-wrap{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:8px}
+.found-card{background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:26px 28px;display:flex;gap:18px;align-items:flex-start;transition:all .2s}
+.found-card:hover{border-color:var(--gold);box-shadow:0 12px 32px rgba(13,13,13,.06)}
+.found-avatar{flex-shrink:0;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--gold) 0%,var(--gold-light) 100%);color:var(--dark);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-weight:600;font-size:21px;letter-spacing:.02em}
+.found-name{font-size:16px;font-weight:600;color:var(--dark);letter-spacing:-.005em}
+.found-role{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin:3px 0 9px}
+.found-bio{font-size:13px;color:var(--muted);line-height:1.6}
+.found-chips{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:24px}
+.found-chip{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:500;color:var(--text);border:1px solid var(--line);background:var(--bg-2);padding:9px 16px;border-radius:99px}
+.found-chip svg{color:var(--gold);flex-shrink:0}
+@media(max-width:960px){.found-wrap{grid-template-columns:1fr}}
+
 /* RESPONSIVE */
 @media(max-width:1024px){
   .dash-wrap{grid-template-columns:1fr;gap:42px}
@@ -876,17 +889,48 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
           <div class="stat-box"><div class="stat-v">Coimbra</div><div class="stat-l">Foco geográfico</div></div>
         </div>
         <p class="stats-disclaim">Retorno-alvo por projeto, definido em contrato CAEP. Investimento sujeito a risco de mercado. Resultados passados não garantem resultados futuros.</p>
-        <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--bg-2);border:1px solid var(--line);border-radius:8px">
-          <div class="why-sig-avatars">
-            <div class="why-sig-avatar" title="Alexandre Mendes">AM</div>
-            <div class="why-sig-avatar" title="João Abreu">JA</div>
-          </div>
-          <div style="font-size:12.5px;line-height:1.4">
-            <strong style="color:var(--dark);font-weight:600">Alexandre Mendes &amp; João Abreu</strong>
-            <div style="color:var(--muted);font-size:11.5px;margin-top:1px">Sócios-fundadores · Somnium Properties</div>
-          </div>
-        </div>
       </div>
+    </div>
+  </div>
+</section>
+
+<!-- FUNDADORES · QUEM ESTÁ POR TRÁS -->
+<section class="sec">
+  <div class="sec-hdr" style="margin:0 auto 32px;text-align:center;max-width:660px">
+    <span class="sec-eye" style="margin-left:auto;margin-right:auto">Quem está por trás</span>
+    <h2 class="sec-title">Rigor clínico, aplicado ao <em>imobiliário.</em></h2>
+    <p class="sec-lede" style="margin-left:auto;margin-right:auto;text-align:center">A Somnium nasceu de dois sócios com percurso na área da saúde. Trouxemos a cultura de protocolos rigorosos e zero improviso para o investimento imobiliário: cada decisão segue um procedimento, é validada por matemática e fica registada. E investimos o nosso próprio capital em cada projeto antes de abrir espaço a parceiros.</p>
+  </div>
+  <div class="found-wrap">
+    <div class="found-card">
+      <div class="found-avatar">AM</div>
+      <div>
+        <div class="found-name">Alexandre Mendes</div>
+        <div class="found-role">CFO · Sócio-fundador</div>
+        <p class="found-bio">Percurso na área da saúde. Responsável pela estrutura financeira e pela disciplina de análise: validação matemática da compra (MAO) e stress tests em três cenários antes de qualquer aquisição.</p>
+      </div>
+    </div>
+    <div class="found-card">
+      <div class="found-avatar">JA</div>
+      <div>
+        <div class="found-name">João Abreu</div>
+        <div class="found-role">Sócio-fundador</div>
+        <p class="found-bio">Percurso na área da saúde. Foco na execução e no padrão de cada operação: SOPs digitalizados, acompanhamento de obra e relação com a rede de parceiros e consultores.</p>
+      </div>
+    </div>
+  </div>
+  <div class="found-chips">
+    <div class="found-chip">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 2v16M2 10h16"/></svg>
+      Co-investimento próprio em cada projeto
+    </div>
+    <div class="found-chip">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M7 8h6M7 12h4"/></svg>
+      SOPs e CRM proprietário
+    </div>
+    <div class="found-chip">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 16l4-5 3 3 4-6 3 4"/></svg>
+      Stress test em 3 cenários
     </div>
   </div>
 </section>
