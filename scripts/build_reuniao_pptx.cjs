@@ -105,7 +105,7 @@ function bullets(arr) {
   base(s, { eyebrow: "Síntese", title: "Os três destaques da semana", num: 3 });
   const items = [
     ["01", "Estrutura desenhada", "Duas empresas-mãe + conjunta (66/33). Avanço travado só pela solicitadora. Falta fechar a dúvida 1 vs 3 empresas."],
-    ["02", "Negócios a fechar", "Lajes 315k ao Sr. Alfredo. Cedência de Braga rumo a CPCV em numerário. NOZ e Santo Varão em andamento."],
+    ["02", "Negócios a fechar", "Lajes 315k ao Sr. Alfredo. Moradia Candal (Daniel Nogueira, de Braga) com visita quarta. Santo Varão e NOZ em andamento."],
     ["03", "Pivot Porto/Gaia", "Coimbra sem volume. Sourcing ativo na Foz (T1, PH para 2 T1) e T4 nas Carvalhosas. Capitalizar e expandir."],
   ];
   const gap = 0.35, cw = (W - 2 * M - 2 * gap) / 3, y = 2.0, ch = 4.4;
@@ -151,9 +151,9 @@ function bullets(arr) {
   base(s, { eyebrow: "Pipeline", title: "Negócios em curso", num: 5 });
   const items = [
     ["Lajes", "315.000 €", "3 frações (T2 Sub-Cave, Cave e RC) + interesse na 4.ª após reabilitação. Proposta enviada ao Sr. Alfredo."],
-    ["Cedência de Braga (Daniel)", "CPCV em numerário", "Visita quarta 10h com investidor e empreiteiro. Margem ao intermediário travada."],
+    ["Moradia Candal (Daniel Nogueira · Braga)", "CPCV em numerário", "Visita quarta 10h com investidor e empreiteiro próprio. Cessão de posição revista pelo advogado."],
     ["NOZ Investimentos", "Compra em numerário", "Certidão permanente e procuração recebidas. CPCV quando a imobiliária tiver a documentação."],
-    ["Santo Varão", "Cedência ~40 mil", "Em estudo. A aguardar feedback da Daniela Gaspar; Rafael Simões como possível alvo."],
+    ["Santo Varão (cedência de posição)", "Cedência ~40 mil", "Intermediário Rodrigo Mendes (Coimbra): margem travada. Daniela Gaspar (Coimbra) contactada."],
   ];
   const gap = 0.35, cw = (W - 2 * M - gap) / 2, ch = 2.1;
   items.forEach(([t, v, d], i) => {
@@ -168,10 +168,10 @@ function bullets(arr) {
 // ====================== SLIDE 6 - CEDENCIA DE BRAGA =======================
 (() => {
   const s = pptx.addSlide();
-  base(s, { eyebrow: "Negociação", title: "Cedência de Braga: a linha vermelha", num: 6 });
+  base(s, { eyebrow: "Negociação · Santo Varão", title: "Santo Varão: a linha vermelha", num: 6 });
   const colW = (W - 2 * M - 0.4) / 2;
   card(s, M, 1.85, colW, 2.55);
-  s.addText("O QUE O INTERMEDIÁRIO QUERIA", { x: M + 0.35, y: 2.08, w: colW - 0.7, h: 0.3, fontFace: FB, fontSize: 11.5, bold: true, color: C.goldTx, charSpacing: 1 });
+  s.addText("O QUE O INTERMEDIÁRIO RODRIGO MENDES QUERIA", { x: M + 0.35, y: 2.08, w: colW - 0.7, h: 0.3, fontFace: FB, fontSize: 10.5, bold: true, color: C.goldTx, charSpacing: 1 });
   s.addText("Ganhar ~10 mil € (o mesmo que cada sócio) com risco zero.", { x: M + 0.35, y: 2.42, w: colW - 0.7, h: 0.85, fontFace: FB, fontSize: 15.5, color: C.ink, lineSpacing: 21 });
   s.addText("Os sócios suportam: sinal de 10% (~10k), custos de CPCV e ~2.500 € cada a fundo perdido.", { x: M + 0.35, y: 3.32, w: colW - 0.7, h: 0.95, fontFace: FB, fontSize: 13, color: C.body, lineSpacing: 18 });
   card(s, M, 4.6, colW, 1.7);
@@ -336,7 +336,7 @@ function bullets(arr) {
   base(s, { eyebrow: "Roadmap", title: "Planeamento por prioridades", num: 13 });
   const items = [
     ["P1", "Destravar a estrutura", "Decidir 1 vs 3 empresas, solicitadora + prazo, abrir 1.ª empresa."],
-    ["P2", "Fechar o pipeline", "Lajes, Braga (quarta), NOZ, Santo Varão."],
+    ["P2", "Fechar o pipeline", "Lajes, Candal/Daniel (quarta), NOZ, Santo Varão."],
     ["P3", "Investidores", "Reescrever landing, classificar, follow-ups calendarizados."],
     ["P4", "Expansão Porto/Gaia", "Resumo de zona, validar imóveis, alocação 90/10."],
     ["P5", "Aplicação", "Cedência/wholesaling, ROI médio, Candal, frações."],
@@ -360,7 +360,7 @@ function bullets(arr) {
   const items = [
     "Estrutura: 1 empresa com parassocial ou 3 entidades?",
     "Solicitadora: qual, com prazo por escrito, e alternativa.",
-    "Braga: limite final da margem ao intermediário e plano B.",
+    "Santo Varão: limite da margem ao intermediário (Rodrigo Mendes) e plano B.",
     "Landing page: quem reescreve e até quando.",
     "Plataforma: especificar (modelo, preço, divisão) e agendar Q4.",
     "Pipeline: fechar a rúbrica de classificação e shortlist pronta.",
@@ -383,7 +383,7 @@ function bullets(arr) {
   s.addShape("rect", { x: 0, y: H - 0.16, w: W, h: 0.16, fill: { color: C.gold } });
   s.addImage({ path: LOGO, x: (W - 2.6) / 2, y: 1.35, w: 2.6, h: 2.6 * 614 / 1516 });
   s.addText("Foco da semana", { x: 0, y: 2.75, w: W, h: 0.5, align: "center", fontFace: FB, fontSize: 13, bold: true, color: C.gold, charSpacing: 4 });
-  s.addText("Abrir a empresa. Fechar Braga e Lajes.\nRodar o Porto.", { x: 0, y: 3.25, w: W, h: 1.7, align: "center", fontFace: FH, fontSize: 34, bold: true, color: C.dwhite, lineSpacing: 44 });
+  s.addText("Abrir a empresa. Fechar Candal e Lajes.\nRodar o Porto.", { x: 0, y: 3.25, w: W, h: 1.7, align: "center", fontFace: FH, fontSize: 34, bold: true, color: C.dwhite, lineSpacing: 44 });
   s.addText("Reunião de sócios · domingo 07/06 · 22h00", { x: 0, y: 5.35, w: W, h: 0.4, align: "center", fontFace: FB, fontSize: 14, color: C.dsub });
   s.addText("SOMNIUM PROPERTIES · CONFIDENCIAL", { x: 0, y: 6.75, w: W, h: 0.3, align: "center", fontFace: FB, fontSize: 9, color: C.dsub, charSpacing: 2 });
 })();
