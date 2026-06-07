@@ -310,13 +310,13 @@ for r in zona_rows:
                                 ("LINEBEFORE",(0,0),(0,-1),3,GOLD),("LEFTPADDING",(0,0),(-1,-1),10),
                                 ("RIGHTPADDING",(0,0),(-1,-1),10),("TOPPADDING",(0,0),(-1,-1),7),("BOTTOMPADDING",(0,0),(-1,-1),7)]))
     story.append(sigbox)
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 5))
 
     # mini-mapa
     zmap = os.path.join(HERE, f"map_{slug(z)}.png")
     if os.path.exists(zmap):
-        img = fit_image(zmap, doc.width, 165); img.hAlign = "CENTER"; story.append(img)
-        story.append(Spacer(1, 8))
+        img = fit_image(zmap, doc.width, 120); img.hAlign = "CENTER"; story.append(img)
+        story.append(Spacer(1, 6))
 
     # tabela imoveis da zona
     story.append(Paragraph("Os nossos imóveis nesta zona", H2))
@@ -342,19 +342,19 @@ for r in zona_rows:
         ("TOPPADDING",(0,0),(-1,-1),4),("BOTTOMPADDING",(0,0),(-1,-1),4),("LEFTPADDING",(0,0),(0,-1),6),
     ] + dcmds))
     story.append(it)
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 6))
 
     # POIs + fotos lado a lado
     blocos = []
     if r["pois"]:
-        top = r["pois"][:8]
+        top = r["pois"][:6]
         txt = "<br/>".join(f"• {p['nome']} <font color='#999'>({str(round(p['km'],2)).replace('.', ',')} km)</font>" for p in top)
         blocos.append([Paragraph("Pontos de interesse próximos", H2), Paragraph(txt, POIST)])
     if r["fotos"]:
         thumbs = []
         for fp in r["fotos"][:3]:
             if os.path.exists(fp):
-                thumbs.append(fit_image(fp, 52*mm, 36*mm))
+                thumbs.append(fit_image(fp, 50*mm, 30*mm))
         if thumbs:
             ph = Table([thumbs], colWidths=[doc.width/2/max(len(thumbs),1)]*len(thumbs))
             ph.setStyle(TableStyle([("ALIGN",(0,0),(-1,-1),"CENTER"),("LEFTPADDING",(0,0),(-1,-1),2),("RIGHTPADDING",(0,0),(-1,-1),2)]))
@@ -363,10 +363,9 @@ for r in zona_rows:
         if len(blocos) == 2:
             row = Table([[blocos[0][0], blocos[1][0]], [blocos[0][1], blocos[1][1]]], colWidths=[doc.width/2]*2)
             row.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"TOP"),("LEFTPADDING",(0,0),(0,-1),0),("LEFTPADDING",(1,0),(1,-1),8)]))
-            story.append(row)
+            story.append(KeepTogether(row))
         else:
-            for b in blocos[0]:
-                story.append(b)
+            story.append(KeepTogether(blocos[0]))
 
 # ---- metodologia ----
 story.append(PageBreak())
