@@ -3598,6 +3598,43 @@ router.get('/relatorios-semanais', async (_req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// Documentos (PDF/PPTX) por semana, guardados no bucket privado "Relatorios" do Storage.
+// Devolve [{ semana, ficheiros: [{ nome, ext, tamanho, atualizado, url (assinada 1h) }] }]
+router.get('/relatorios-documentos', async (_req, res) => {
+  try {
+    if (!supabaseStorage) return res.json([])
+    const BUCKET = 'Relatorios'
+    const { data: folders, error } = await supabaseStorage.storage
+      .from(BUCKET).list('', { limit: 200, sortBy: { column: 'name', order: 'desc' } })
+    if (error) throw error
+    const semanas = (folders || []).filter(f => f.id === null && /^\d{4}-W\d{2}$/.test(f.name))
+    const out = []
+    for (const s of semanas) {
+      const { data: files } = await supabaseStorage.storage.from(BUCKET).list(s.name, { limit: 200 })
+      const ficheiros = []
+      for (const f of (files || [])) {
+        const ext = (f.name.split('.').pop() || '').toLowerCase()
+        if (!['pdf', 'pptx'].includes(ext)) continue
+        const { data: signed } = await supabaseStorage.storage
+          .from(BUCKET).createSignedUrl(`${s.name}/${f.name}`, 60 * 60)
+        ficheiros.push({
+          nome: f.name,
+          ext,
+          tamanho: f.metadata?.size ?? null,
+          atualizado: f.updated_at || f.created_at || null,
+          url: signed?.signedUrl || null,
+        })
+      }
+      if (ficheiros.length) {
+        ficheiros.sort((a, b) => a.nome.localeCompare(b.nome))
+        out.push({ semana: s.name, ficheiros })
+      }
+    }
+    out.sort((a, b) => b.semana.localeCompare(a.semana))
+    res.json(out)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 router.get('/relatorios-semanais/:id', async (req, res) => {
   try {
     const { rows: [r] } = await pool.query('SELECT * FROM relatorios_semanais WHERE id = $1', [req.params.id])
