@@ -3789,6 +3789,180 @@ app.delete("/relatorios-documentos", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
+// ════════════════════════════════════════════════════════════════
+// REUNIOES DOCUMENTOS — reunioes editaveis com upload de ficheiros
+// Ficheiros no bucket privado "Relatorios" do Storage em <pasta>/<ficheiro>.
+// ════════════════════════════════════════════════════════════════
+const REUNIOES_BUCKET = "Relatorios";
+let _reunioesTableEnsured = false;
+async function ensureReunioesTable() {
+  if (_reunioesTableEnsured) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS reunioes_documentos (
+      id TEXT PRIMARY KEY,
+      titulo TEXT NOT NULL,
+      data TEXT,
+      semana_iso TEXT,
+      notas TEXT,
+      pasta TEXT NOT NULL,
+      created_at TEXT DEFAULT (NOW()::TEXT),
+      updated_at TEXT DEFAULT (NOW()::TEXT)
+    );
+  `);
+  _reunioesTableEnsured = true;
+}
+
+function semanaIsoDeData(dataIso: string | null | undefined): string | null {
+  if (!dataIso) return null;
+  try {
+    const d = new Date(dataIso);
+    const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+    const dayNum = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    const weekNum = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+    return `${date.getUTCFullYear()}-W${String(weekNum).padStart(2, "0")}`;
+  } catch { return null; }
+}
+
+async function listarFicheirosReuniao(pasta: string): Promise<any[]> {
+  if (!supabase || !pasta) return [];
+  const { data: files } = await supabase.storage.from(REUNIOES_BUCKET).list(pasta, { limit: 200 });
+  const out: any[] = [];
+  for (const f of (files || [])) {
+    if (f.id === null) continue;
+    const ext = (f.name.split(".").pop() || "").toLowerCase();
+    const { data: signed } = await supabase.storage
+      .from(REUNIOES_BUCKET).createSignedUrl(`${pasta}/${f.name}`, 60 * 60);
+    out.push({
+      nome: f.name,
+      ext,
+      tamanho: f.metadata?.size ?? null,
+      atualizado: f.updated_at || f.created_at || null,
+      url: signed?.signedUrl || null,
+    });
+  }
+  out.sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+  return out;
+}
+
+app.get("/reunioes-documentos", async (c: any) => {
+  try {
+    await ensureReunioesTable();
+    const { rows: existentes } = await pool.query("SELECT pasta FROM reunioes_documentos");
+    const pastasExistentes = new Set(existentes.map((r: any) => r.pasta));
+
+    if (supabase) {
+      const { data: folders } = await supabase.storage
+        .from(REUNIOES_BUCKET).list("", { limit: 200, sortBy: { column: "name", order: "desc" } });
+      const semanas = (folders || []).filter((f: any) => f.id === null && /^\d{4}-W\d{2}$/.test(f.name));
+      for (const s of semanas) {
+        if (pastasExistentes.has(s.name)) continue;
+        const ficheiros = await listarFicheirosReuniao(s.name);
+        if (!ficheiros.length) continue;
+        const id = crypto.randomUUID();
+        await pool.query(
+          `INSERT INTO reunioes_documentos (id, titulo, data, semana_iso, pasta) VALUES ($1, $2, NULL, $3, $4)`,
+          [id, `Reunião ${s.name}`, s.name, s.name],
+        );
+        pastasExistentes.add(s.name);
+      }
+    }
+
+    const { rows } = await pool.query(
+      "SELECT * FROM reunioes_documentos ORDER BY COALESCE(data, semana_iso, created_at) DESC, created_at DESC",
+    );
+    const out: any[] = [];
+    for (const r of rows) {
+      out.push({ ...r, ficheiros: await listarFicheirosReuniao(r.pasta) });
+    }
+    return c.json(out);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/reunioes-documentos", async (c: any) => {
+  try {
+    await ensureReunioesTable();
+    const { titulo, data, notas } = await c.req.json().catch(() => ({}));
+    if (!titulo || !String(titulo).trim()) return c.json({ error: "Título obrigatório" }, 400);
+    const id = crypto.randomUUID();
+    const pasta = `reunioes/${id}`;
+    const { rows: [r] } = await pool.query(
+      `INSERT INTO reunioes_documentos (id, titulo, data, semana_iso, notas, pasta)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [id, String(titulo).trim(), data || null, semanaIsoDeData(data), notas || null, pasta],
+    );
+    return c.json({ ...r, ficheiros: [] }, 201);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.put("/reunioes-documentos/:id", async (c: any) => {
+  try {
+    await ensureReunioesTable();
+    const { titulo, data, notas } = await c.req.json().catch(() => ({}));
+    const sets = ["updated_at = $1"];
+    const params: any[] = [new Date().toISOString()];
+    if (titulo !== undefined) { params.push(titulo); sets.push(`titulo = $${params.length}`); }
+    if (data !== undefined) {
+      params.push(data || null); sets.push(`data = $${params.length}`);
+      params.push(semanaIsoDeData(data)); sets.push(`semana_iso = $${params.length}`);
+    }
+    if (notas !== undefined) { params.push(notas || null); sets.push(`notas = $${params.length}`); }
+    params.push(c.req.param("id"));
+    const { rows: [r] } = await pool.query(
+      `UPDATE reunioes_documentos SET ${sets.join(", ")} WHERE id = $${params.length} RETURNING *`, params,
+    );
+    if (!r) return c.json({ error: "Reunião não encontrada" }, 404);
+    return c.json({ ...r, ficheiros: await listarFicheirosReuniao(r.pasta) });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.delete("/reunioes-documentos/:id", async (c: any) => {
+  try {
+    await ensureReunioesTable();
+    const { rows: [r] } = await pool.query("SELECT pasta FROM reunioes_documentos WHERE id = $1", [c.req.param("id")]);
+    if (!r) return c.json({ error: "Não encontrada" }, 404);
+    if (supabase) {
+      const { data: files } = await supabase.storage.from(REUNIOES_BUCKET).list(r.pasta, { limit: 200 });
+      const paths = (files || []).filter((f: any) => f.id !== null).map((f: any) => `${r.pasta}/${f.name}`);
+      if (paths.length) await supabase.storage.from(REUNIOES_BUCKET).remove(paths).catch(() => {});
+    }
+    await pool.query("DELETE FROM reunioes_documentos WHERE id = $1", [c.req.param("id")]);
+    return c.json({ ok: true });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/reunioes-documentos/:id/ficheiros", async (c: any) => {
+  try {
+    await ensureReunioesTable();
+    if (!supabase) return c.json({ error: "Storage indisponível" }, 503);
+    const { rows: [r] } = await pool.query("SELECT pasta FROM reunioes_documentos WHERE id = $1", [c.req.param("id")]);
+    if (!r) return c.json({ error: "Reunião não encontrada" }, 404);
+    const form = await c.req.formData();
+    const files = form.getAll("ficheiros").filter((f: any): f is File => f instanceof File);
+    if (!files.length) return c.json({ error: "Nenhum ficheiro recebido" }, 400);
+    for (const file of files) {
+      const safe = file.name.replace(/[^\w.\- ]+/g, "_");
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      await uploadPrivate(REUNIOES_BUCKET, `${r.pasta}/${safe}`, bytes, file.type || "application/octet-stream");
+    }
+    await pool.query("UPDATE reunioes_documentos SET updated_at = $1 WHERE id = $2", [new Date().toISOString(), c.req.param("id")]);
+    return c.json({ ficheiros: await listarFicheirosReuniao(r.pasta) });
+  } catch (e) { console.error("[reunioes-documentos] upload", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.delete("/reunioes-documentos/:id/ficheiros/:nome", async (c: any) => {
+  try {
+    await ensureReunioesTable();
+    if (!supabase) return c.json({ error: "Storage indisponível" }, 503);
+    const { rows: [r] } = await pool.query("SELECT pasta FROM reunioes_documentos WHERE id = $1", [c.req.param("id")]);
+    if (!r) return c.json({ error: "Reunião não encontrada" }, 404);
+    const nome = decodeURIComponent(c.req.param("nome"));
+    await supabase.storage.from(REUNIOES_BUCKET).remove([`${r.pasta}/${nome}`]);
+    return c.json({ ficheiros: await listarFicheirosReuniao(r.pasta) });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
 app.get("/relatorios-semanais/:id", async (c: any) => {
   try {
     const { rows: [r] } = await pool.query("SELECT * FROM relatorios_semanais WHERE id = $1", [c.req.param("id")]);

@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { FileDown, Sparkles, Trash2, Calendar, Loader2, Plus, RefreshCw, Zap, FileText, Presentation } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { FileDown, Sparkles, Trash2, Calendar, Loader2, Plus, RefreshCw, Zap, FileText, Presentation, Upload, Pencil, X, CalendarPlus } from 'lucide-react'
 import { apiFetch, getToken, resolveApiUrl } from '../lib/api.js'
 
 const GOLD = '#C9A84C'
@@ -35,7 +35,7 @@ function currentSemanaIso() {
 
 export function RelatoriosAdmin() {
   const [relatorios, setRelatorios] = useState([])
-  const [documentos, setDocumentos] = useState([])
+  const [reunioes, setReunioes] = useState([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -44,24 +44,35 @@ export function RelatoriosAdmin() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ semana_iso: currentSemanaIso(), regenerar: false })
 
+  // Reunioes editaveis com documentos
+  const [showReuniaoForm, setShowReuniaoForm] = useState(false)
+  const [reuniaoForm, setReuniaoForm] = useState({ id: null, titulo: '', data: '', notas: '' })
+  const [savingReuniao, setSavingReuniao] = useState(false)
+  const [uploadingId, setUploadingId] = useState(null)
+  const uploadInputRef = useRef(null)
+
+  const loadReunioes = useCallback(async () => {
+    try {
+      const rd = await apiFetch('/api/crm/reunioes-documentos')
+      const dd = await rd.json()
+      setReunioes(Array.isArray(dd) ? dd : [])
+    } catch { setReunioes([]) }
+  }, [])
+
   const load = useCallback(async () => {
     try {
       setLoading(true)
       const r = await apiFetch('/api/crm/relatorios-semanais')
       const data = await r.json()
       setRelatorios(Array.isArray(data) ? data : [])
-      try {
-        const rd = await apiFetch('/api/crm/relatorios-documentos')
-        const dd = await rd.json()
-        setDocumentos(Array.isArray(dd) ? dd : [])
-      } catch { setDocumentos([]) }
+      await loadReunioes()
       setError(null)
     } catch (e) {
       setError(e.message)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [loadReunioes])
 
   useEffect(() => { load() }, [load])
 
@@ -118,6 +129,67 @@ export function RelatoriosAdmin() {
     try {
       await apiFetch(`/api/crm/relatorios-semanais/${id}`, { method: 'DELETE' })
       await load()
+    } catch (e) { alert(e.message) }
+  }
+
+  // ── Reunioes ──────────────────────────────────────────────────
+  function abrirNovaReuniao() {
+    setReuniaoForm({ id: null, titulo: '', data: '', notas: '' })
+    setShowReuniaoForm(true)
+  }
+
+  function editarReuniao(r) {
+    setReuniaoForm({ id: r.id, titulo: r.titulo || '', data: r.data || '', notas: r.notas || '' })
+    setShowReuniaoForm(true)
+  }
+
+  async function guardarReuniao() {
+    if (!reuniaoForm.titulo.trim()) return
+    setSavingReuniao(true)
+    setError(null)
+    try {
+      const body = { titulo: reuniaoForm.titulo.trim(), data: reuniaoForm.data || null, notas: reuniaoForm.notas || null }
+      const url = reuniaoForm.id ? `/api/crm/reunioes-documentos/${reuniaoForm.id}` : '/api/crm/reunioes-documentos'
+      const method = reuniaoForm.id ? 'PUT' : 'POST'
+      const r = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error || 'Erro ao guardar reunião')
+      setShowReuniaoForm(false)
+      await loadReunioes()
+    } catch (e) { setError(e.message) }
+    setSavingReuniao(false)
+  }
+
+  async function apagarReuniao(id) {
+    if (!confirm('Eliminar esta reunião e todos os seus documentos?')) return
+    try {
+      await apiFetch(`/api/crm/reunioes-documentos/${id}`, { method: 'DELETE' })
+      await loadReunioes()
+    } catch (e) { alert(e.message) }
+  }
+
+  async function uploadFicheiros(id, files) {
+    if (!files?.length) return
+    setUploadingId(id)
+    setError(null)
+    try {
+      const fd = new FormData()
+      for (const f of files) fd.append('ficheiros', f)
+      const r = await apiFetch(`/api/crm/reunioes-documentos/${id}/ficheiros`, { method: 'POST', body: fd })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error || 'Erro ao carregar ficheiros')
+      setReunioes(prev => prev.map(x => x.id === id ? { ...x, ficheiros: data.ficheiros } : x))
+    } catch (e) { setError(e.message) }
+    setUploadingId(null)
+  }
+
+  async function apagarFicheiro(id, nome) {
+    if (!confirm(`Eliminar "${nome}"?`)) return
+    try {
+      const r = await apiFetch(`/api/crm/reunioes-documentos/${id}/ficheiros/${encodeURIComponent(nome)}`, { method: 'DELETE' })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error || 'Erro ao eliminar')
+      setReunioes(prev => prev.map(x => x.id === id ? { ...x, ficheiros: data.ficheiros } : x))
     } catch (e) { alert(e.message) }
   }
 
