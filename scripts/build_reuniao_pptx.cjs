@@ -18,6 +18,7 @@ const C = {
   card2: "FBF9F3",
   tint: "FBF4E2",       // cartao destaque (tom ouro claro)
   line: "E4DFD0",
+  cardBorder: "D7D0BD",  // borda dos cartoes (sem sombra)
   red: "C0392B",
   // bookends escuros
   dbg: "121110", dwhite: "FFFFFF", dsub: "B7B2A6",
@@ -25,7 +26,6 @@ const C = {
 const FH = "Georgia";
 const FB = "Calibri";
 const W = 13.333, H = 7.5, M = 0.6;
-const SHADOW = { type: "outer", color: "C9C2B0", blur: 7, offset: 3, angle: 90, opacity: 0.45 };
 
 const pptx = new PptxGenJS();
 pptx.defineLayout({ name: "WIDE", width: W, height: H });
@@ -51,8 +51,10 @@ function base(slide, { eyebrow, title, num }) {
       x: W - M - 0.45, y: 7.08, w: 0.45, h: 0.3, fontFace: FB, fontSize: 8, bold: true, color: C.goldTx, align: "right" });
 }
 function card(slide, x, y, w, h, fill = C.card) {
+  // Sem sombra (o XML de sombra do pptxgenjs faz o PowerPoint Mac pedir reparacao).
+  // Definicao dada por borda quente um pouco mais visivel sobre o fundo creme.
   slide.addShape("roundRect", { x, y, w, h, rectRadius: 0.06, fill: { color: fill },
-    line: { color: C.line, width: 1 }, shadow: SHADOW });
+    line: { color: C.cardBorder, width: 1.25 } });
 }
 function goldTab(slide, x, y, w) {
   slide.addShape("rect", { x, y, w, h: 0.05, fill: { color: C.gold } });
