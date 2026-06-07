@@ -3738,6 +3738,43 @@ app.get("/relatorios-semanais", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
+// Documentos (PDF/PPTX) por semana, no bucket privado "Relatorios" do Storage.
+// Devolve [{ semana, ficheiros: [{ nome, ext, tamanho, atualizado, url (assinada 1h) }] }]
+app.get("/relatorios-documentos", async (c: any) => {
+  try {
+    if (!supabase) return c.json([]);
+    const BUCKET = "Relatorios";
+    const { data: folders, error } = await supabase.storage
+      .from(BUCKET).list("", { limit: 200, sortBy: { column: "name", order: "desc" } });
+    if (error) throw error;
+    const semanas = (folders || []).filter((f: any) => f.id === null && /^\d{4}-W\d{2}$/.test(f.name));
+    const out: any[] = [];
+    for (const s of semanas) {
+      const { data: files } = await supabase.storage.from(BUCKET).list(s.name, { limit: 200 });
+      const ficheiros: any[] = [];
+      for (const f of (files || [])) {
+        const ext = (f.name.split(".").pop() || "").toLowerCase();
+        if (!["pdf", "pptx"].includes(ext)) continue;
+        const { data: signed } = await supabase.storage
+          .from(BUCKET).createSignedUrl(`${s.name}/${f.name}`, 60 * 60);
+        ficheiros.push({
+          nome: f.name,
+          ext,
+          tamanho: f.metadata?.size ?? null,
+          atualizado: f.updated_at || f.created_at || null,
+          url: signed?.signedUrl || null,
+        });
+      }
+      if (ficheiros.length) {
+        ficheiros.sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+        out.push({ semana: s.name, ficheiros });
+      }
+    }
+    out.sort((a: any, b: any) => b.semana.localeCompare(a.semana));
+    return c.json(out);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
 app.get("/relatorios-semanais/:id", async (c: any) => {
   try {
     const { rows: [r] } = await pool.query("SELECT * FROM relatorios_semanais WHERE id = $1", [c.req.param("id")]);

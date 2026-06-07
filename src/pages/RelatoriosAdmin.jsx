@@ -1,8 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
-import { FileDown, Sparkles, Trash2, Calendar, Loader2, Plus, RefreshCw, Zap, FileText } from 'lucide-react'
+import { FileDown, Sparkles, Trash2, Calendar, Loader2, Plus, RefreshCw, Zap, FileText, Presentation } from 'lucide-react'
 import { apiFetch, getToken, resolveApiUrl } from '../lib/api.js'
 
 const GOLD = '#C9A84C'
+
+function fmtSize(b) {
+  if (b == null) return ''
+  if (b < 1024) return `${b} B`
+  if (b < 1048576) return `${(b / 1024).toFixed(0)} KB`
+  return `${(b / 1048576).toFixed(1)} MB`
+}
 
 function fmtDate(d) {
   if (!d) return '—'
@@ -28,6 +35,7 @@ function currentSemanaIso() {
 
 export function RelatoriosAdmin() {
   const [relatorios, setRelatorios] = useState([])
+  const [documentos, setDocumentos] = useState([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -42,6 +50,11 @@ export function RelatoriosAdmin() {
       const r = await apiFetch('/api/crm/relatorios-semanais')
       const data = await r.json()
       setRelatorios(Array.isArray(data) ? data : [])
+      try {
+        const rd = await apiFetch('/api/crm/relatorios-documentos')
+        const dd = await rd.json()
+        setDocumentos(Array.isArray(dd) ? dd : [])
+      } catch { setDocumentos([]) }
       setError(null)
     } catch (e) {
       setError(e.message)
@@ -183,6 +196,54 @@ export function RelatoriosAdmin() {
           </div>
         </div>
       </div>
+
+      {/* Documentos da reuniao — ficheiros PDF/PPTX por semana (Supabase Storage) */}
+      {documentos.length > 0 && (
+        <div className="mb-6 rounded-2xl border border-brand-gold/30 bg-gradient-to-br from-neutral-50 to-white dark:from-neutral-900 dark:to-neutral-900/40 p-5">
+          <div className="flex items-start gap-3 mb-4">
+            <div className="p-2.5 rounded-lg" style={{ backgroundColor: 'rgba(201,168,76,0.15)' }}>
+              <FileDown className="w-5 h-5" style={{ color: GOLD }} />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-neutral-800 dark:text-neutral-100">Documentos da reunião</h2>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 max-w-xl">
+                Relatórios e apresentações por semana (PDF e PowerPoint). Documentos confidenciais Somnium Properties.
+              </p>
+            </div>
+          </div>
+          <div className="space-y-4">
+            {documentos.map((g) => (
+              <div key={g.semana}>
+                <div className="flex items-center gap-2 mb-2">
+                  <Calendar className="w-3.5 h-3.5" style={{ color: GOLD }} />
+                  <span className="text-overline uppercase tracking-widest font-semibold text-neutral-500 dark:text-neutral-400">{g.semana}</span>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {g.ficheiros.map((f) => (
+                    <button
+                      key={f.nome}
+                      onClick={() => f.url && window.open(f.url, '_blank', 'noopener')}
+                      disabled={!f.url}
+                      className="group flex items-center gap-3 p-3 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 hover:border-brand-gold/50 transition-all text-left disabled:opacity-50"
+                    >
+                      <div className="p-2 rounded-lg shrink-0" style={{ backgroundColor: 'rgba(201,168,76,0.12)' }}>
+                        {f.ext === 'pptx'
+                          ? <Presentation className="w-4 h-4" style={{ color: GOLD }} />
+                          : <FileText className="w-4 h-4" style={{ color: GOLD }} />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100 truncate">{f.nome}</p>
+                        <p className="text-xs text-neutral-400">{f.ext.toUpperCase()}{f.tamanho ? ` · ${fmtSize(f.tamanho)}` : ''}</p>
+                      </div>
+                      <FileDown className="w-4 h-4 text-neutral-300 group-hover:text-brand-gold transition-colors shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Action bar */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
