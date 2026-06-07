@@ -184,7 +184,7 @@ function parseHtml(html, url) {
   }
 
   // Referência do anúncio
-  const refMatch = url.match(/\/(\d{7,10})\/?/) || html.match(/ref[eê]r[eê]ncia[^>]*>[\s:]*([A-Z0-9\-]+)/i)
+  const refMatch = url.match(/\/(\d{7,10})\/?/) || html.match(/ref[eê]r[eê]ncia[^>]*>[\s:]*([A-Z0-9-]+)/i)
   if (refMatch) result.referencia = refMatch[1]
 
   // Ano de construção

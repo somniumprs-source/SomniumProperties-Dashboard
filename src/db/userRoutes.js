@@ -402,7 +402,7 @@ router.post('/:id/magic-link', async (req, res) => {
     if (error) {
       const msg = (error.message || '').toLowerCase()
       if (msg.includes('not found') || msg.includes('does not exist') || msg.includes('user')) {
-        ;({ data, error } = await supabaseAdmin.auth.admin.generateLink({
+        ({ data, error } = await supabaseAdmin.auth.admin.generateLink({
           type: 'invite', email: u.email, options: redirectTo ? { redirectTo } : undefined,
         }))
       }

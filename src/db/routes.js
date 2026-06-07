@@ -399,7 +399,7 @@ crudRoutes('/imoveis', Imoveis, {
           let analise = null
           try { const { rows: [a] } = await pool.query('SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1', [item.id]); analise = a } catch {}
           if (tipo === 'ficha_visita') { try { item._fichaVisita = await getFichaVisitaParaImovel(item.id) } catch {} }
-          await persistDocumento(item, tipo, { trigger: `estado:${body.estado}`, generatedBy: req.user?.email || 'system', analise })
+          await persistDocumento(item, tipo, { trigger: `estado:${body.estado}`, generatedBy: 'system', analise })
           if (driveConfigured()) {
             const pdfDoc = await generateDoc(tipo, item, analise)
             if (pdfDoc) await uploadDocToFolder(item.id, pdfDoc, `${tipo}.pdf`)
@@ -2475,7 +2475,7 @@ router.post('/automation/score-consultores', async (req, res) => {
       const meusImoveis = imoveis.filter(i => i.nome_consultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase())
       const leads = meusImoveis.length
       // Qualidade baseada no estado do pipeline
-      const imoveisAvancados = imoveisEntregues.filter(im => qualidadeImovel(im.estado) >= 0.75).length
+      const imoveisAvancados = meusImoveis.filter(im => qualidadeImovel(im.estado) >= 0.75).length
       const imoveisMedios = meusImoveis.filter(im => qualidadeImovel(im.estado) >= 0.5).length
 
       score += Math.min(leads * 3, 30)
@@ -5388,7 +5388,7 @@ router.get('/projetos/portfolio/kpis', async (req, res) => {
     const isRestricted = u && RECORD_RESTRICTED_ROLES.has(u.role)
 
     const categoria = (req.query.categoria || '').trim()  // '' = todos os modelos de negócio
-    const conds = []
+    const conds = ['n.deleted_at IS NULL']  // ignorar negócios na lixeira (senão KPIs somam apagados)
     const params = []
     if (isRestricted) {
       params.push(u.id)

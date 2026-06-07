@@ -40,6 +40,13 @@ falhar() {
   exit 0
 }
 
+# 0) Guard: KPIs/agregados sobre `negocios` têm de filtrar deleted_at.
+#    Bloqueia a regressão do bug que somava negócios apagados nos KPIs.
+if ! GUARD_OUT="$(node "$REPO/.claude/guard-deleted-at.cjs" 2>&1)"; then
+  echo "$GUARD_OUT" >>"$LOG"
+  falhar "GUARD deleted_at FALHOU" "uma query de KPIs/agregados sobre negocios não filtra deleted_at — $(echo "$GUARD_OUT" | tail -1)"
+fi
+
 # 1) Build é o gate.
 if ! npm run build >"$LOG" 2>&1; then
   falhar "BUILD FALHOU" "o build de produção rebentou; nada foi commited"

@@ -2505,9 +2505,14 @@ function MiniDate({ iso }) {
 
 // Card "Próximo passo" — accionável.
 function InvestidorProximoPasso({ data, onUpdate }) {
-  if (!data.proxima_acao && !data.data_proxima_acao) return null
   const dataIso = (data.data_proxima_acao || '').slice(0, 10)
   const today = new Date().toISOString().slice(0, 10)
+  const [reagendarOpen, setReagendarOpen] = useState(false)
+  const [novaData, setNovaData] = useState(dataIso || today)
+  const [busy, setBusy] = useState(false)
+
+  if (!data.proxima_acao && !data.data_proxima_acao) return null
+
   const atrasado = dataIso && dataIso < today
   const diasAte = dataIso ? Math.floor((new Date(dataIso) - new Date(today)) / 86400000) : null
   const acao = (data.proxima_acao || '').toLowerCase()
@@ -2516,10 +2521,6 @@ function InvestidorProximoPasso({ data, onUpdate }) {
                    : acao.includes('reuni') ? Calendar
                    : acao.includes('whats') ? MessageCircle
                    : Target
-
-  const [reagendarOpen, setReagendarOpen] = useState(false)
-  const [novaData, setNovaData] = useState(dataIso || today)
-  const [busy, setBusy] = useState(false)
 
   async function reagendar() {
     if (!novaData || busy) return

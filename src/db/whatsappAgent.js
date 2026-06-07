@@ -890,8 +890,7 @@ export function receiveWhatsAppMessage(from, body, isFromAgent = true) {
   if (isUrgent(body)) buffer.urgente = true
 }
 
-// ── Enviar mensagem WhatsApp (para follow-ups) ──────────────
-export { sendWhatsApp }
+// sendWhatsApp ja e exportado na sua declaracao (linha ~73).
 
 // ── Verificar se está configurado ───────────────────────────
 export function isConfigured() {

@@ -2746,7 +2746,7 @@ app.post("/automation/score-investidores", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// port de routes.js 2278-2317 — NB: referencia verbatim `imoveisEntregues` nao definido (bug original preservado)
+// port de routes.js — score de consultores.
 app.post("/automation/score-consultores", async (c: any) => {
   try {
     const { rows: consultores } = await pool.query("SELECT * FROM consultores");
@@ -2756,11 +2756,7 @@ app.post("/automation/score-consultores", async (c: any) => {
       let score = 0;
       const meusImoveis = imoveis.filter((i: any) => i.nome_consultor?.trim().toLowerCase() === cn.nome?.trim().toLowerCase());
       const leads = meusImoveis.length;
-      // Bug original preservado verbatim: `imoveisEntregues` nao esta definido neste
-      // handler (so existe em score-prioridade). Em runtime lanca ReferenceError,
-      // apanhado pelo try/catch -> 500, tal como no Express. @ts-ignore so para esta linha.
-      // @ts-ignore preservacao do comportamento original (identificador inexistente)
-      const imoveisAvancados = imoveisEntregues.filter((im: any) => qualidadeImovel(im.estado) >= 0.75).length;
+      const imoveisAvancados = meusImoveis.filter((im: any) => qualidadeImovel(im.estado) >= 0.75).length;
       const imoveisMedios = meusImoveis.filter((im: any) => qualidadeImovel(im.estado) >= 0.5).length;
 
       score += Math.min(leads * 3, 30);
@@ -5226,7 +5222,7 @@ app.get("/projetos/portfolio/kpis", async (c: any) => {
 
     const categoria = (c.req.query("categoria") || "").trim();  // '' = todos os modelos de negócio
     const regiaoActiva = c.get("regiaoActiva");
-    const conds: string[] = [];
+    const conds: string[] = ["n.deleted_at IS NULL"];  // ignorar negócios na lixeira (senão KPIs somam apagados)
     const params: any[] = [];
     if (isRestricted) {
       params.push(u.id);

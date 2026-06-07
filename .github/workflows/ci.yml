@@ -1,0 +1,63 @@
+name: CI
+
+# Valida o codigo ANTES de chegar a producao: lint, build do frontend, e parse
+# de TODOS os ficheiros backend. O `node --check` apanha erros de sintaxe (ex:
+# duplicate export, await fora de async) que o `vite build` nao ve, porque o
+# backend (server.js, src/db/*, src/server/*) nao entra no bundle do frontend.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  node:
+    name: Lint + Build + Parse backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Lint (falha so em erros, nao em avisos)
+        run: npm run lint
+      - name: Build de producao (frontend)
+        run: npm run build
+      - name: Parse de todos os ficheiros backend (node --check)
+        run: |
+          set -e
+          erros=0
+          while IFS= read -r -d '' f; do
+            if ! node --check "$f" 2>/tmp/check.err; then
+              echo "::error file=$f::$(tail -1 /tmp/check.err)"
+              erros=$((erros + 1))
+            fi
+          done < <(find server.js src scripts -name '*.js' -o -name '*.mjs' 2>/dev/null | grep -v node_modules | tr '\n' '\0')
+          if [ "$erros" -gt 0 ]; then
+            echo "::error::$erros ficheiro(s) backend com erro de sintaxe."
+            exit 1
+          fi
+          echo "Todos os ficheiros backend fazem parse."
+
+  deno:
+    name: Type-check Edge Functions (advisory)
+    runs-on: ubuntu-latest
+    # Advisory: nao bloqueia o merge. As Edge Functions (producao) usam Deno;
+    # este passo apanha erros de tipo no index.ts ANTES do deploy. Marcado como
+    # nao-bloqueante porque imports remotos (npm:/jsr:/https) podem variar.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: deno check das funcoes criticas
+        run: |
+          for fn in crm dashboard users sops calendar voice; do
+            echo "::group::deno check $fn"
+            deno check "supabase/functions/$fn/index.ts" || echo "::warning::deno check falhou em $fn"
+            echo "::endgroup::"
+          done

@@ -30,8 +30,9 @@ const CAT_COLORS = {
 const CATEGORIAS = ['Wholesalling', 'CAEP', 'Mediação Imobiliária', 'Fix and Flip']
 
 // Modelos de negócio com ícone Lucide profissional + descrição
+// Nota: não há card "Todos" — a vista agregada (Portfolio) já mostra o total
+// quando nenhum modelo está seleccionado (filterCat === '').
 const MODELOS_NEGOCIO = [
-  { key: '',                       nome: 'Todos',         Icon: LayoutGrid, desc: 'Todos os modelos de negócio' },
   { key: 'Fix and Flip',           nome: 'Fix and Flip',  Icon: Hammer,     desc: 'Reabilitação completa' },
   { key: 'CAEP',                   nome: 'CAEP',          Icon: Handshake,  desc: 'Contrato de Associação em Participação' },
   { key: 'Mediação Imobiliária',   nome: 'Mediação',      Icon: Home,       desc: 'Intermediação imobiliária' },
@@ -286,7 +287,7 @@ export function Projectos() {
         {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>}
 
         {/* Caixas individuais por modelo de negócio — em série no topo, clicáveis */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {MODELOS_NEGOCIO.map(m => {
             const projDoModelo = m.key === '' ? lista : lista.filter(n => n.categoria === m.key)
             const contagem = projDoModelo.length
@@ -295,7 +296,7 @@ export function Projectos() {
             const ativo = filterCat === m.key
             const corCat = CAT_COLORS[m.key] || '#C9A84C'
             return (
-              <button key={m.key || 'todos'} onClick={() => setFilterCat(m.key)}
+              <button key={m.key} onClick={() => setFilterCat(filterCat === m.key ? '' : m.key)}
                 title={m.desc}
                 className={`group relative text-left p-4 rounded-xl border-2 transition-all overflow-hidden
                   ${ativo

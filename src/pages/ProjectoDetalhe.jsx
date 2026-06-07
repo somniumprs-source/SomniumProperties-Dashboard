@@ -1218,7 +1218,7 @@ function TabInvestidores({ negocio, readOnly }) {
       apiFetch('/api/crm/investidores?limit=500'),
     ])
     if (r1.ok) setLista((await r1.json()).investidores || [])
-    if (r2.ok) setTodosInvestidores(((await r2.json()).data || []).filter(i => i.tipo_principal !== 'Inactivo'))
+    if (r2.ok) setTodosInvestidores(((await r2.json()).data || []).filter(i => i.status !== 'Inactivo'))
   }
   useEffect(() => { load() }, [negocio.id])
 
