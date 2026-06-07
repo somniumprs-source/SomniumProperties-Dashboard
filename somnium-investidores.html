@@ -461,6 +461,19 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
   .btn-cta1{font-size:12px;padding:13px 24px}
   .ft-legal{font-size:11px}
 }
+/* MODAL · privacidade */
+.modal-ov{display:none;position:fixed;inset:0;z-index:80;background:rgba(13,13,13,.55);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);padding:20px;align-items:center;justify-content:center}
+.modal-ov.open{display:flex}
+.modal-card{background:var(--bg-2);border:1px solid var(--line);border-radius:12px;max-width:560px;width:100%;max-height:86vh;overflow-y:auto;padding:32px 34px;box-shadow:0 24px 60px rgba(13,13,13,.25);position:relative}
+.modal-card h3{font-family:var(--serif);font-size:24px;font-weight:500;color:var(--dark);margin-bottom:6px;letter-spacing:-.005em}
+.modal-sub{font-size:12px;color:var(--muted);margin-bottom:18px}
+.modal-card h4{font-size:13px;font-weight:600;color:var(--dark);margin:16px 0 4px}
+.modal-card p{font-size:13px;color:var(--text);line-height:1.6}
+.modal-card p a{color:var(--gold);text-decoration:none;border-bottom:1px solid currentColor}
+.modal-close{position:absolute;top:16px;right:16px;width:30px;height:30px;border:1px solid var(--line);background:var(--bg-2);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:all .15s}
+.modal-close:hover{border-color:var(--gold);color:var(--dark)}
+@media(max-width:540px){.modal-card{padding:26px 20px}}
+
 /* STICKY CTA · so mobile */
 .sticky-cta{display:none}
 @media (max-width:760px){
@@ -536,13 +549,13 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
             <input class="finput" id="f_email" type="email" placeholder="email@exemplo.com" autocomplete="email" />
           </div>
           <div class="fgroup">
-            <label class="flabel" for="f_tel">Telemóvel</label>
+            <label class="flabel" for="f_tel">Telemóvel <span style="color:var(--danger)">*</span></label>
             <input class="finput" id="f_tel" type="tel" placeholder="+351 9XX XXX XXX" autocomplete="tel" />
           </div>
           <label class="fcheck">
             <input type="checkbox" id="f_rgpd" />
             <span class="fcheck-box"></span>
-            <span class="fcheck-text">Autorizo a Somnium Properties a contactar-me e a tratar os meus dados, conforme a <a href="#" onclick="event.preventDefault()">política de privacidade</a>.</span>
+            <span class="fcheck-text">Autorizo a Somnium Properties a contactar-me e a tratar os meus dados, conforme a <a href="#" onclick="event.preventDefault();openPrivacy()">política de privacidade</a>.</span>
           </label>
           <input type="text" id="f_hp" name="_hp" autocomplete="off" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px;top:-9999px;opacity:0;height:0;width:0" />
           <div class="fnav">
@@ -715,18 +728,24 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
   </div>
 </section>
 
-<!-- CTA INLINE · após Modelos -->
-<section class="cta-inline">
-  <div class="cta-inline-wrap">
-    <div>
-      <p class="cta-inline-eye">Próximo passo</p>
-      <h3 class="cta-inline-title">Veja se algum modelo faz sentido para si.</h3>
-      <p class="cta-inline-sub">Preencha o formulário e marcamos a reunião nas próximas 24 horas.</p>
+<!-- GEOGRAFIA -->
+<section class="sec">
+  <div class="sec-hdr" style="margin:0 auto 32px;text-align:center;max-width:580px">
+    <span class="sec-eye" style="margin-left:auto;margin-right:auto">Geografia</span>
+    <h2 class="sec-title">Dois mercados.<br><em>Conhecimento profundo.</em></h2>
+    <p class="sec-lede" style="margin-left:auto;margin-right:auto;text-align:center">Operamos onde temos rede comercial, técnica e jurídica consolidada. Sem expansão por oportunismo. Em Vila Nova de Gaia trabalhamos com investidores ativos, em modelo de Cedência de Posição.</p>
+  </div>
+  <div class="geo-grid" style="grid-template-columns:repeat(2,1fr);max-width:780px;margin-left:auto;margin-right:auto">
+    <div class="geo-card">
+      <div class="geo-name">Coimbra</div>
+      <div class="geo-tag">Periferia · Residencial</div>
+      <p class="geo-desc">Operação própria, nos dois modelos. Foco na periferia, não no centro histórico. Procura constante de habitação para famílias e jovens profissionais. Liquidez elevada para revenda.</p>
     </div>
-    <a href="#formulario" class="btn-cta1">
-      Marcar reunião
-      <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 10h10M11 6l4 4-4 4"/></svg>
-    </a>
+    <div class="geo-card">
+      <div class="geo-name">Vila Nova de Gaia</div>
+      <div class="geo-tag">Grande Porto · Investidor ativo</div>
+      <p class="geo-desc">Para investidores ativos em modelo de Cedência de Posição. Mercado de procura forte no eixo do Porto, com liquidez elevada para revenda.</p>
+    </div>
   </div>
 </section>
 
@@ -995,23 +1014,6 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
     </div>
   </div>
 
-  <div class="dash-pills">
-    <div class="dpill">
-      <div class="dpill-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 17V7l7-4 7 4v10"/><path d="M9 17v-5h2v5"/></svg></div>
-      <div class="dpill-t">Pipeline visível</div>
-      <div class="dpill-d">Sabe sempre em que fase está o projeto. 17 estados rastreados internamente, traduzidos em 4 marcos para o investidor.</div>
-    </div>
-    <div class="dpill">
-      <div class="dpill-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 16l4-4 3 3 7-7"/><path d="M14 8h3v3"/></svg></div>
-      <div class="dpill-t">Métricas que importam</div>
-      <div class="dpill-d">Quanto rende o seu capital, em números claros: retorno projetado e atual, capital alocado e ganho estimado. Sem ruído.</div>
-    </div>
-    <div class="dpill">
-      <div class="dpill-ico"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M5 3h8l3 3v11H5z"/><path d="M13 3v3h3"/><path d="M8 11h5M8 14h5"/></svg></div>
-      <div class="dpill-t">Relatório por marco</div>
-      <div class="dpill-d">Em cada marco contratual, recebe PDF com fotos do imóvel, números atualizados e justificação da decisão.</div>
-    </div>
-  </div>
 </section>
 
 <!-- VALUE STACK -->
@@ -1212,27 +1214,6 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
   </div>
 </section>
 
-<!-- GEOGRAFIA -->
-<section class="sec">
-  <div class="sec-hdr" style="margin:0 auto 32px;text-align:center;max-width:580px">
-    <span class="sec-eye" style="margin-left:auto;margin-right:auto">Geografia</span>
-    <h2 class="sec-title">Dois mercados.<br><em>Conhecimento profundo.</em></h2>
-    <p class="sec-lede" style="margin-left:auto;margin-right:auto;text-align:center">Operamos onde temos rede comercial, técnica e jurídica consolidada. Sem expansão por oportunismo. Em Vila Nova de Gaia trabalhamos com investidores ativos, em modelo de Cedência de Posição.</p>
-  </div>
-  <div class="geo-grid" style="grid-template-columns:repeat(2,1fr);max-width:780px;margin-left:auto;margin-right:auto">
-    <div class="geo-card">
-      <div class="geo-name">Coimbra</div>
-      <div class="geo-tag">Periferia · Residencial</div>
-      <p class="geo-desc">Operação própria, nos dois modelos. Foco na periferia, não no centro histórico. Procura constante de habitação para famílias e jovens profissionais. Liquidez elevada para revenda.</p>
-    </div>
-    <div class="geo-card">
-      <div class="geo-name">Vila Nova de Gaia</div>
-      <div class="geo-tag">Grande Porto · Investidor ativo</div>
-      <p class="geo-desc">Para investidores ativos em modelo de Cedência de Posição. Mercado de procura forte no eixo do Porto, com liquidez elevada para revenda.</p>
-    </div>
-  </div>
-</section>
-
 <!-- COMO FUNCIONA -->
 <section class="sec-warm">
   <div class="sec-warm-wrap" id="processo">
@@ -1349,8 +1330,41 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
   </a>
 </div>
 
+<!-- MODAL · POLÍTICA DE PRIVACIDADE -->
+<div class="modal-ov" id="privacyModal" role="dialog" aria-modal="true" aria-labelledby="privacyTitle" onclick="if(event.target===this)closePrivacy()">
+  <div class="modal-card">
+    <button class="modal-close" aria-label="Fechar" onclick="closePrivacy()">
+      <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+    </button>
+    <h3 id="privacyTitle">Política de Privacidade</h3>
+    <p class="modal-sub">Tratamento de dados pessoais · RGPD</p>
+
+    <h4>Responsável pelo tratamento</h4>
+    <p>Somnium Properties, com sede em Coimbra, Portugal. Contacto: <a href="mailto:somniumprs@gmail.com">somniumprs@gmail.com</a>.</p>
+
+    <h4>Que dados recolhemos</h4>
+    <p>Nome, email, telemóvel e a informação de perfil de investimento que indica no formulário (experiência, capital disponível, objetivo e, se aplicável, dados de projeto).</p>
+
+    <h4>Finalidade</h4>
+    <p>Contactá-lo para avaliar o seu perfil e agendar uma reunião sobre oportunidades de investimento da Somnium Properties. Não usamos os seus dados para outros fins nem os vendemos a terceiros.</p>
+
+    <h4>Base legal</h4>
+    <p>O consentimento que dá ao submeter o formulário. Pode retirá-lo a qualquer momento.</p>
+
+    <h4>Conservação</h4>
+    <p>Conservamos os dados enquanto durar a relação de contacto comercial ou até solicitar a sua eliminação.</p>
+
+    <h4>Os seus direitos</h4>
+    <p>Tem direito de acesso, retificação, eliminação, oposição e portabilidade dos seus dados. Para exercer qualquer um, escreva para <a href="mailto:somniumprs@gmail.com">somniumprs@gmail.com</a>.</p>
+  </div>
+</div>
+
 <script>
 const SOMNIUM_API = 'https://mjgusjuougzoeiyavsor.functions.supabase.co';
+
+function openPrivacy() { document.getElementById('privacyModal').classList.add('open'); }
+function closePrivacy() { document.getElementById('privacyModal').classList.remove('open'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePrivacy(); });
 const sel = {};
 let cur = 0;
 
@@ -1392,9 +1406,13 @@ function goStep(n) {
   if (n === 1) {
     const nome  = document.getElementById('f_nome');
     const email = document.getElementById('f_email');
+    const tel   = document.getElementById('f_tel');
     const rgpd  = document.getElementById('f_rgpd');
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim());
+    const telDigits = tel.value.replace(/\D/g, '');
     if (!nome.value.trim())  { shake(nome); nome.focus(); return; }
-    if (!email.value.trim()) { shake(email); email.focus(); return; }
+    if (!emailOk)            { shake(email); email.focus(); return; }
+    if (telDigits.length < 9) { shake(tel); tel.focus(); return; }
     if (!rgpd.checked) {
       const box = rgpd.nextElementSibling;
       box.style.borderColor = 'var(--danger)';
