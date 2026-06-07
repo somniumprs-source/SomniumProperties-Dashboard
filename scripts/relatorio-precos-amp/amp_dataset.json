@@ -37,6 +37,84 @@
       "yield_media": 3.7,
       "comparaveis_preco_medio": 274316.0,
       "comparaveis_m2_medio": 3469.0,
+      "crescimento_pct": 11.91,
+      "nivel_crescimento": "Positivo",
+      "pontos_interesse": [
+        {
+          "nome": "Ana Coffee & Lunch",
+          "km": 0.25
+        },
+        {
+          "nome": "Feira Belha",
+          "km": 0.31
+        },
+        {
+          "nome": "Anfiteatro do Largo França Borges",
+          "km": 0.31
+        },
+        {
+          "nome": "Farmácia Aliança",
+          "km": 0.32
+        },
+        {
+          "nome": "Mário Luso",
+          "km": 0.33
+        },
+        {
+          "nome": "Farmácia Central dos Carvalhos",
+          "km": 0.33
+        },
+        {
+          "nome": "Santander",
+          "km": 0.35
+        },
+        {
+          "nome": "Farmácia Moreira",
+          "km": 0.37
+        },
+        {
+          "nome": "Clínica Nossa Senhora da Saúde",
+          "km": 0.39
+        },
+        {
+          "nome": "CTT",
+          "km": 0.44
+        },
+        {
+          "nome": "Caixa Geral de Depósitos",
+          "km": 0.45
+        },
+        {
+          "nome": "Millennium bcp",
+          "km": 0.47
+        },
+        {
+          "nome": "Clínica Nossa Senhora da Saúde",
+          "km": 0.48
+        },
+        {
+          "nome": "Novo Banco",
+          "km": 0.5
+        },
+        {
+          "nome": "VNG-00008",
+          "km": 0.55
+        },
+        {
+          "nome": "Churrasqueira dos Carvalhos. 1o andar",
+          "km": 0.58
+        },
+        {
+          "nome": "Continente Bom Dia Carvalhos",
+          "km": 0.8
+        }
+      ],
+      "fotos": [
+        "https://images.egorealestate.com/Z640x480/OAYES/S5/C16852/P29906264/Tphoto/ID5855c801-0000-0500-0000-00001923b801.jpg?a=99c02eb1-cf69-b2990-7324e-2626441695186320311841",
+        "https://media.egorealestate.com/Original/12d505ad-2f63-481f-8fa9-6914a3dede83.jpg",
+        "https://images.egorealestate.com/Z1280x960/OAYES/S5/C16852/P29906264/Tphoto/ID5855c801-0000-0500-0000-00001923b801.jpg",
+        "https://media.egorealestate.com/ORIGINAL/3fe1c3e7-4714-43d4-a856-f8dc04ab5d0a.png"
+      ],
       "estudo_ficheiro": "Report - b3576940cf554c239015a75d9f2aaa91.pdf"
     },
     {
@@ -63,6 +141,131 @@
       "yield_media": 3.8,
       "comparaveis_preco_medio": 328195.0,
       "comparaveis_m2_medio": 3533.0,
+      "crescimento_pct": 15.21,
+      "nivel_crescimento": "Positivo",
+      "pontos_interesse": [
+        {
+          "nome": "DeRose Method Gaia",
+          "km": 0.33
+        },
+        {
+          "nome": "Farmácia Gaia Nova",
+          "km": 0.43
+        },
+        {
+          "nome": "Posto dos Correios",
+          "km": 0.58
+        },
+        {
+          "nome": "Farmácia Magalhães",
+          "km": 0.58
+        },
+        {
+          "nome": "Banco Montepio",
+          "km": 0.62
+        },
+        {
+          "nome": "Confeitaria Tropicalis",
+          "km": 0.62
+        },
+        {
+          "nome": "Casa Adão",
+          "km": 0.69
+        },
+        {
+          "nome": "Cais de Gaia",
+          "km": 0.69
+        },
+        {
+          "nome": "Ta Se Bem",
+          "km": 0.71
+        },
+        {
+          "nome": "Farmácia das Devesas",
+          "km": 0.8
+        },
+        {
+          "nome": "pip",
+          "km": 0.81
+        },
+        {
+          "nome": "Forno Velho",
+          "km": 0.92
+        },
+        {
+          "nome": "Café São Nicolau",
+          "km": 0.93
+        },
+        {
+          "nome": "Verso em Pedra",
+          "km": 0.93
+        },
+        {
+          "nome": "Biclas & Triclas - Rent a Bike and Tours",
+          "km": 0.93
+        },
+        {
+          "nome": "Arquivo e Museu das Alfândegas",
+          "km": 0.94
+        },
+        {
+          "nome": "Rabelos 370 Restaurante Bar",
+          "km": 0.94
+        },
+        {
+          "nome": "Café Vime",
+          "km": 0.94
+        },
+        {
+          "nome": "Tram",
+          "km": 0.95
+        },
+        {
+          "nome": "Bacalhoreiro",
+          "km": 0.95
+        },
+        {
+          "nome": "Bacalhau",
+          "km": 0.97
+        },
+        {
+          "nome": "Mariana",
+          "km": 0.97
+        },
+        {
+          "nome": "Casa da Horta",
+          "km": 0.97
+        },
+        {
+          "nome": "Mal Cozinhado",
+          "km": 0.97
+        },
+        {
+          "nome": "Armazém 22",
+          "km": 0.98
+        },
+        {
+          "nome": "Vinas d'Alho",
+          "km": 0.98
+        },
+        {
+          "nome": "Intrigo",
+          "km": 0.98
+        },
+        {
+          "nome": "Tribunal das Varas Criminais do Porto",
+          "km": 0.99
+        },
+        {
+          "nome": "Cometa",
+          "km": 0.99
+        },
+        {
+          "nome": "O Muro",
+          "km": 1.0
+        }
+      ],
+      "fotos": [],
       "estudo_ficheiro": "Report - e94481ddc4d94ddf830ffdce9c02c268.pdf"
     },
     {
@@ -89,6 +292,136 @@
       "yield_media": 4.4,
       "comparaveis_preco_medio": 288500.0,
       "comparaveis_m2_medio": 2800.0,
+      "crescimento_pct": 13.45,
+      "nivel_crescimento": "Positivo",
+      "pontos_interesse": [
+        {
+          "nome": "Farmácia das Devesas",
+          "km": 0.23
+        },
+        {
+          "nome": "O Forno",
+          "km": 0.36
+        },
+        {
+          "nome": "Hospital Veterinário de Santa Marinha",
+          "km": 0.48
+        },
+        {
+          "nome": "Café Novo Barão II",
+          "km": 0.49
+        },
+        {
+          "nome": "Banco CTT",
+          "km": 0.51
+        },
+        {
+          "nome": "Santander",
+          "km": 0.52
+        },
+        {
+          "nome": "Doce Real - Pão Quente, Pastelaria",
+          "km": 0.66
+        },
+        {
+          "nome": "Vera Lucia",
+          "km": 0.67
+        },
+        {
+          "nome": "Grill de Coimbrões",
+          "km": 0.68
+        },
+        {
+          "nome": "O Saquinho",
+          "km": 0.69
+        },
+        {
+          "nome": "Café Pirata",
+          "km": 0.69
+        },
+        {
+          "nome": "Broas e broinhas",
+          "km": 0.69
+        },
+        {
+          "nome": "VNG-00100",
+          "km": 0.69
+        },
+        {
+          "nome": "Farmácia Gaia Nova",
+          "km": 0.7
+        },
+        {
+          "nome": "Santander",
+          "km": 0.71
+        },
+        {
+          "nome": "O Alfaiate",
+          "km": 0.71
+        },
+        {
+          "nome": "Farmácia de Coimbrões",
+          "km": 0.71
+        },
+        {
+          "nome": "VNG-00197",
+          "km": 0.73
+        },
+        {
+          "nome": "Santander",
+          "km": 0.74
+        },
+        {
+          "nome": "Farmácia de Coimbrões",
+          "km": 0.76
+        },
+        {
+          "nome": "Bogami Desperta Café Snack-Bar",
+          "km": 0.78
+        },
+        {
+          "nome": "DeRose Method Gaia",
+          "km": 0.8
+        },
+        {
+          "nome": "VNG-00011",
+          "km": 0.84
+        },
+        {
+          "nome": "Pizzamail Pizzaria (Santa Marinha)",
+          "km": 0.86
+        },
+        {
+          "nome": "De Bolo e Alma",
+          "km": 0.87
+        },
+        {
+          "nome": "Amicão Consultório Veterinário",
+          "km": 0.91
+        },
+        {
+          "nome": "O Silva",
+          "km": 0.91
+        },
+        {
+          "nome": "Candalita 2",
+          "km": 0.91
+        },
+        {
+          "nome": "Arcada",
+          "km": 0.93
+        },
+        {
+          "nome": "Cervejaria Jardim",
+          "km": 0.94
+        }
+      ],
+      "fotos": [
+        "https://media2.era.pt/ImageResizeHandler.ashx?tipo=4&amp;checkMax=1&amp;imovel=1523727&amp;foto=18714166&amp;m=2&amp;f=1",
+        "https://media2.era.pt/ImageResizeHandler.ashx?tipo=4&amp;checkMax=1&amp;imovel=1523727&amp;foto=18714166&amp;m=2&amp;f=1",
+        "https://media2.era.pt/ImageResizeHandler.ashx?tipo=4&amp;checkMax=1&amp;imovel=1523727&amp;foto=18714166&amp;m=2&amp;f=1",
+        "https://media2.era.pt/ImageResizeHandler.ashx?tipo=4&amp;checkMax=1&amp;imovel=1523727&amp;foto=18714166&amp;m=2&amp;f=1"
+      ],
       "estudo_ficheiro": "Report - 6117bd990d494bcc9e0238e5ef520919.pdf"
     },
     {
@@ -115,6 +448,123 @@
       "yield_media": 5.4,
       "comparaveis_preco_medio": 237309.0,
       "comparaveis_m2_medio": 3987.0,
+      "crescimento_pct": 29.9,
+      "nivel_crescimento": "Muito Positivo",
+      "pontos_interesse": [
+        {
+          "nome": "Café Caxito",
+          "km": 0.16
+        },
+        {
+          "nome": "Colours",
+          "km": 0.24
+        },
+        {
+          "nome": "Nepal",
+          "km": 0.25
+        },
+        {
+          "nome": "Alves de Oliveira",
+          "km": 0.28
+        },
+        {
+          "nome": "Ramadinha",
+          "km": 0.45
+        },
+        {
+          "nome": "Domino's",
+          "km": 0.53
+        },
+        {
+          "nome": "Janota",
+          "km": 0.57
+        },
+        {
+          "nome": "Forminguinha Doce",
+          "km": 0.64
+        },
+        {
+          "nome": "Pachá",
+          "km": 0.64
+        },
+        {
+          "nome": "Arde Brasa",
+          "km": 0.65
+        },
+        {
+          "nome": "Pingo Doce Oliveira do Douro (R. Maria Basto)",
+          "km": 0.65
+        },
+        {
+          "nome": "Chez mois",
+          "km": 0.65
+        },
+        {
+          "nome": "Correios",
+          "km": 0.67
+        },
+        {
+          "nome": "Bonaparte",
+          "km": 0.67
+        },
+        {
+          "nome": "VNG-00134",
+          "km": 0.69
+        },
+        {
+          "nome": "Farmácia Oliveira",
+          "km": 0.72
+        },
+        {
+          "nome": "Intermarché Oliveira do Douro",
+          "km": 0.74
+        },
+        {
+          "nome": "ALDI MAFAMUDE",
+          "km": 0.76
+        },
+        {
+          "nome": "AMO",
+          "km": 0.77
+        },
+        {
+          "nome": "UCSP Oliveira do Douro",
+          "km": 0.79
+        },
+        {
+          "nome": "projecto x",
+          "km": 0.79
+        },
+        {
+          "nome": "Santander",
+          "km": 0.79
+        },
+        {
+          "nome": "Medical Douro - Clínica Médico Dentária",
+          "km": 0.79
+        },
+        {
+          "nome": "McDonald's",
+          "km": 0.81
+        },
+        {
+          "nome": "VNG-00068",
+          "km": 0.83
+        },
+        {
+          "nome": "SPAR Oliveira do Douro",
+          "km": 0.86
+        },
+        {
+          "nome": "Mercadona Gaia (Av. Dom João II)",
+          "km": 0.86
+        },
+        {
+          "nome": "Café Christina",
+          "km": 0.95
+        }
+      ],
+      "fotos": [],
       "estudo_ficheiro": "Report - 14c46f24abda4624a2855e95742c661d.pdf"
     },
     {
@@ -141,6 +591,133 @@
       "yield_media": 4.9,
       "comparaveis_preco_medio": 355550.0,
       "comparaveis_m2_medio": 2724.0,
+      "crescimento_pct": 30.21,
+      "nivel_crescimento": "Muito Positivo",
+      "pontos_interesse": [
+        {
+          "nome": "Mimo (Take-away)",
+          "km": 0.02
+        },
+        {
+          "nome": "Lulu",
+          "km": 0.02
+        },
+        {
+          "nome": "Barca D'ouro",
+          "km": 0.15
+        },
+        {
+          "nome": "Pizzaria Casa Mia",
+          "km": 0.22
+        },
+        {
+          "nome": "Clínica Veterinária da Quinta das Rosas",
+          "km": 0.27
+        },
+        {
+          "nome": "Farmácia Invicta",
+          "km": 0.32
+        },
+        {
+          "nome": "Cervejaria Beergaia",
+          "km": 0.39
+        },
+        {
+          "nome": "Restaurante Chinês Rosa II",
+          "km": 0.42
+        },
+        {
+          "nome": "Restaurante O Nordeste Transmontano",
+          "km": 0.48
+        },
+        {
+          "nome": "Mozart Piano Bar",
+          "km": 0.48
+        },
+        {
+          "nome": "Junta de Freguesia de Vilar do Paraíso",
+          "km": 0.53
+        },
+        {
+          "nome": "Salpico De Mel",
+          "km": 0.61
+        },
+        {
+          "nome": "Baha'i",
+          "km": 0.69
+        },
+        {
+          "nome": "Porta Alta",
+          "km": 0.73
+        },
+        {
+          "nome": "Forno de Vilar",
+          "km": 0.75
+        },
+        {
+          "nome": "Belos Ares",
+          "km": 0.78
+        },
+        {
+          "nome": "Confeitaria Monte Branco - Pastelaria Cafetaria Snack- Bar",
+          "km": 0.84
+        },
+        {
+          "nome": "Millennium bcp",
+          "km": 0.84
+        },
+        {
+          "nome": "Banco BPI",
+          "km": 0.84
+        },
+        {
+          "nome": "Farmácia Santo Ovídio",
+          "km": 0.86
+        },
+        {
+          "nome": "Santander",
+          "km": 0.87
+        },
+        {
+          "nome": "Caixa Geral de Depósitos",
+          "km": 0.88
+        },
+        {
+          "nome": "Café Marbel",
+          "km": 0.9
+        },
+        {
+          "nome": "Telepizza",
+          "km": 0.91
+        },
+        {
+          "nome": "Café Clube dos Caçadores",
+          "km": 0.95
+        },
+        {
+          "nome": "Assembleia de Deus Missão portugal",
+          "km": 0.95
+        },
+        {
+          "nome": "W.P. Car Wash Center",
+          "km": 0.96
+        },
+        {
+          "nome": "Time Out",
+          "km": 0.99
+        },
+        {
+          "nome": "Café D'Alma",
+          "km": 0.99
+        },
+        {
+          "nome": "O Geladinho Do Paraíso",
+          "km": 1.0
+        }
+      ],
+      "fotos": [
+        "https://i.casayes.pt/ds-l/listings/city-casas/IR63uGA2hKI/ZOriginal_OAYES_S5_C11061_P22870393_Tphoto_ID79f95c01-0000-0500-0000-0000101237f5.jpg"
+      ],
       "estudo_ficheiro": "Report - 3720962d53b9412580d27ab7828e03c6.pdf"
     },
     {
@@ -167,6 +744,136 @@
       "yield_media": 4.3,
       "comparaveis_preco_medio": 293050.0,
       "comparaveis_m2_medio": 2913.0,
+      "crescimento_pct": 12.35,
+      "nivel_crescimento": "Positivo",
+      "pontos_interesse": [
+        {
+          "nome": "Farmácia das Devesas",
+          "km": 0.13
+        },
+        {
+          "nome": "O Forno",
+          "km": 0.4
+        },
+        {
+          "nome": "Broas e broinhas",
+          "km": 0.53
+        },
+        {
+          "nome": "Farmácia Gaia Nova",
+          "km": 0.54
+        },
+        {
+          "nome": "Café Novo Barão II",
+          "km": 0.57
+        },
+        {
+          "nome": "Banco CTT",
+          "km": 0.58
+        },
+        {
+          "nome": "Hospital Veterinário de Santa Marinha",
+          "km": 0.62
+        },
+        {
+          "nome": "Clínica Lage Neto",
+          "km": 0.63
+        },
+        {
+          "nome": "DeRose Method Gaia",
+          "km": 0.63
+        },
+        {
+          "nome": "O Alfaiate",
+          "km": 0.65
+        },
+        {
+          "nome": "Grill de Coimbrões",
+          "km": 0.67
+        },
+        {
+          "nome": "Vera Lucia",
+          "km": 0.67
+        },
+        {
+          "nome": "Santander",
+          "km": 0.68
+        },
+        {
+          "nome": "O Saquinho",
+          "km": 0.68
+        },
+        {
+          "nome": "Farmácia de Coimbrões",
+          "km": 0.69
+        },
+        {
+          "nome": "Doce Real - Pão Quente, Pastelaria",
+          "km": 0.75
+        },
+        {
+          "nome": "Café Pirata",
+          "km": 0.78
+        },
+        {
+          "nome": "Farmácia de Coimbrões",
+          "km": 0.8
+        },
+        {
+          "nome": "VNG-00011",
+          "km": 0.82
+        },
+        {
+          "nome": "VNG-00100",
+          "km": 0.83
+        },
+        {
+          "nome": "Santander",
+          "km": 0.84
+        },
+        {
+          "nome": "VNG-00197",
+          "km": 0.87
+        },
+        {
+          "nome": "Santander",
+          "km": 0.88
+        },
+        {
+          "nome": "Pizzamail Pizzaria (Santa Marinha)",
+          "km": 0.89
+        },
+        {
+          "nome": "Bogami Desperta Café Snack-Bar",
+          "km": 0.92
+        },
+        {
+          "nome": "Herença Magna",
+          "km": 0.92
+        },
+        {
+          "nome": "Amicão Consultório Veterinário",
+          "km": 0.93
+        },
+        {
+          "nome": "Candalita 2",
+          "km": 0.93
+        },
+        {
+          "nome": "Confeitaria Tropicalis",
+          "km": 0.99
+        },
+        {
+          "nome": "Perto do Cais",
+          "km": 1.0
+        }
+      ],
+      "fotos": [
+        "https://images.egorealestate.com/Z640x480/OAYES/S5/C3304/P30213329/Tphoto/IDd104cd01-0000-0500-0000-000019846a22.jpg?a=d6e0828a-eb1a-d1332-2424e-3029570607187166310843",
+        "https://media.egorealestate.com/Original/fe1131fa-0b8a-4e6d-b438-e7d03f9b5bda.jpg",
+        "https://images.egorealestate.com/Z1280x960/OAYES/S5/C3304/P30213329/Tphoto/IDd104cd01-0000-0500-0000-000019846a22.jpg",
+        "https://media.egorealestate.com/ORIGINAL/2c506daa-eae1-4ade-bf1e-8009acb6ac46.png"
+      ],
       "estudo_ficheiro": "Report - 47e9e4a2fecc4237aee1ff3c12ab2fde.pdf"
     },
     {
@@ -193,6 +900,133 @@
       "yield_media": 4.8,
       "comparaveis_preco_medio": 250945.0,
       "comparaveis_m2_medio": 3868.0,
+      "crescimento_pct": 12.93,
+      "nivel_crescimento": "Positivo",
+      "pontos_interesse": [
+        {
+          "nome": "Maximus",
+          "km": 0.17
+        },
+        {
+          "nome": "Santander",
+          "km": 0.17
+        },
+        {
+          "nome": "Braseiro dos 4 Caminhos",
+          "km": 0.21
+        },
+        {
+          "nome": "Convenção - Canidelo",
+          "km": 0.24
+        },
+        {
+          "nome": "Farmácia Rodrigues Rocha",
+          "km": 0.25
+        },
+        {
+          "nome": "maximus",
+          "km": 0.32
+        },
+        {
+          "nome": "Farmácia Ferreira",
+          "km": 0.34
+        },
+        {
+          "nome": "Banco BPI",
+          "km": 0.43
+        },
+        {
+          "nome": "Ortom",
+          "km": 0.45
+        },
+        {
+          "nome": "Auchan",
+          "km": 0.47
+        },
+        {
+          "nome": "VNG-00060",
+          "km": 0.53
+        },
+        {
+          "nome": "Farmácia São Paio",
+          "km": 0.7
+        },
+        {
+          "nome": "VNG-00175",
+          "km": 0.75
+        },
+        {
+          "nome": "Novo Banco",
+          "km": 0.77
+        },
+        {
+          "nome": "O Alfaiate",
+          "km": 0.81
+        },
+        {
+          "nome": "VNG-00199",
+          "km": 0.86
+        },
+        {
+          "nome": "Farmácia de Canidelo",
+          "km": 0.87
+        },
+        {
+          "nome": "Confeitaria Tropicalis",
+          "km": 0.87
+        },
+        {
+          "nome": "Farmácia de Coimbrões",
+          "km": 0.87
+        },
+        {
+          "nome": "Amicão Consultório Veterinário",
+          "km": 0.89
+        },
+        {
+          "nome": "Candalita 2",
+          "km": 0.9
+        },
+        {
+          "nome": "Grill de Coimbrões",
+          "km": 0.9
+        },
+        {
+          "nome": "VNG-00168",
+          "km": 0.91
+        },
+        {
+          "nome": "Banco Montepio",
+          "km": 0.91
+        },
+        {
+          "nome": "O Saquinho",
+          "km": 0.92
+        },
+        {
+          "nome": "VNG-00171",
+          "km": 0.92
+        },
+        {
+          "nome": "Posto dos Correios",
+          "km": 0.93
+        },
+        {
+          "nome": "Farmácia Magalhães",
+          "km": 0.93
+        },
+        {
+          "nome": "Vera Lucia",
+          "km": 0.94
+        },
+        {
+          "nome": "Pizzamail Pizzaria (Santa Marinha)",
+          "km": 0.95
+        }
+      ],
+      "fotos": [
+        "https://i.casayes.pt/ds-l/listings/city-casas/3GWv88YnN0p/ZOriginal_OAYES_S5_C11061_P23986454_Tphoto_ID16016e01-0000-0500-0000-00001205b1e8.jpg"
+      ],
       "estudo_ficheiro": "Report - 10ac064ea16b4ca18e66c7905072fb11.pdf"
     },
     {
@@ -219,6 +1053,56 @@
       "yield_media": 3.5,
       "comparaveis_preco_medio": 410550.0,
       "comparaveis_m2_medio": 1956.0,
+      "crescimento_pct": 0.0,
+      "nivel_crescimento": "Neutro",
+      "pontos_interesse": [
+        {
+          "nome": "Café Carmo",
+          "km": 0.34
+        },
+        {
+          "nome": "Centro Social Paroquial de Perosinho",
+          "km": 0.45
+        },
+        {
+          "nome": "Perestroika café",
+          "km": 0.52
+        },
+        {
+          "nome": "Lidl V.N. Gaia - Mafamude",
+          "km": 0.52
+        },
+        {
+          "nome": "Escola de Música de Perosinho",
+          "km": 0.77
+        },
+        {
+          "nome": "Churrasqueira dos Carvalhos. 1o andar",
+          "km": 0.81
+        },
+        {
+          "nome": "VNG-00008",
+          "km": 0.83
+        },
+        {
+          "nome": "Clínica Nossa Senhora da Saúde",
+          "km": 0.89
+        },
+        {
+          "nome": "Caixa Geral de Depósitos",
+          "km": 0.92
+        },
+        {
+          "nome": "Clínica Nossa Senhora da Saúde",
+          "km": 0.97
+        }
+      ],
+      "fotos": [
+        "https://images.egorealestate.com/Z640x480/OAYES/S5/C7136/P29963999/Tphoto/IDdf36c901-0000-0500-0000-000019391480.jpg?a=742eda98-5c7c-b2996-7324e-9399956805707175311841",
+        "https://media.egorealestate.com/Original/0d83c663-d13b-4efb-9e57-07fe797ba09c.jpg",
+        "https://images.egorealestate.com/Z1280x960/OAYES/S5/C7136/P29963999/Tphoto/IDdf36c901-0000-0500-0000-000019391480.jpg",
+        "https://media.egorealestate.com/ORIGINAL/93543887-4aae-4088-a827-76851398690e.png"
+      ],
       "estudo_ficheiro": "Report - 95fc796b175c471c9ba40df874157d3f.pdf"
     },
     {
@@ -245,6 +1129,131 @@
       "yield_media": 5.0,
       "comparaveis_preco_medio": 275115.0,
       "comparaveis_m2_medio": 2975.0,
+      "crescimento_pct": 30.47,
+      "nivel_crescimento": "Muito Positivo",
+      "pontos_interesse": [
+        {
+          "nome": "VNG-00112",
+          "km": 0.19
+        },
+        {
+          "nome": "palmeira doce",
+          "km": 0.2
+        },
+        {
+          "nome": "torta de noz",
+          "km": 0.24
+        },
+        {
+          "nome": "Associação de karate-bo de Gaia",
+          "km": 0.27
+        },
+        {
+          "nome": "Bloco de notas",
+          "km": 0.28
+        },
+        {
+          "nome": "Cozinha do sogro",
+          "km": 0.29
+        },
+        {
+          "nome": "Congregação Cristã",
+          "km": 0.34
+        },
+        {
+          "nome": "Auchan SUPER Mafamude (Nova Laborim)",
+          "km": 0.34
+        },
+        {
+          "nome": "Spirit",
+          "km": 0.36
+        },
+        {
+          "nome": "Colibri",
+          "km": 0.36
+        },
+        {
+          "nome": "Modelo Continente Gaia",
+          "km": 0.45
+        },
+        {
+          "nome": "Torcatus Restaurante.Tapas",
+          "km": 0.45
+        },
+        {
+          "nome": "Creche A Casa da Avó",
+          "km": 0.48
+        },
+        {
+          "nome": "Café Laborim",
+          "km": 0.55
+        },
+        {
+          "nome": "Farmácia Monte da Virgem",
+          "km": 0.58
+        },
+        {
+          "nome": "Novo rumo",
+          "km": 0.59
+        },
+        {
+          "nome": "VNG-00202",
+          "km": 0.64
+        },
+        {
+          "nome": "Lidl V.N. Gaia - Monte da Virgem",
+          "km": 0.66
+        },
+        {
+          "nome": "Associação de Socorros Mútuos de Serzedo",
+          "km": 0.68
+        },
+        {
+          "nome": "O Belmonte",
+          "km": 0.72
+        },
+        {
+          "nome": "BPI",
+          "km": 0.8
+        },
+        {
+          "nome": "Belos Ares",
+          "km": 0.81
+        },
+        {
+          "nome": "Porta Alta",
+          "km": 0.85
+        },
+        {
+          "nome": "ALDI MONTE DA VIRGEM",
+          "km": 0.9
+        },
+        {
+          "nome": "Atlético Club da Rechousa",
+          "km": 0.91
+        },
+        {
+          "nome": "VNG-00093",
+          "km": 0.94
+        },
+        {
+          "nome": "Farmácia da Misericórdia",
+          "km": 0.95
+        },
+        {
+          "nome": "Auchan Vila Nova de Gaia (Vila D'Este)",
+          "km": 0.95
+        },
+        {
+          "nome": "Pingo Doce Gaia (Quinta de Cravel)",
+          "km": 0.98
+        },
+        {
+          "nome": "Churrasqueira Cidade",
+          "km": 0.98
+        }
+      ],
+      "fotos": [],
       "estudo_ficheiro": "Report - 64d3a993c8de474c90ad94c252c7e6e6.pdf"
     },
     {
@@ -271,6 +1280,134 @@
       "yield_media": 5.0,
       "comparaveis_preco_medio": 263920.0,
       "comparaveis_m2_medio": 3563.0,
+      "crescimento_pct": 29.11,
+      "nivel_crescimento": "Muito Positivo",
+      "pontos_interesse": [
+        {
+          "nome": "O Piri-piri",
+          "km": 0.14
+        },
+        {
+          "nome": "One Piece",
+          "km": 0.14
+        },
+        {
+          "nome": "Caixa Geral de Depósitos",
+          "km": 0.28
+        },
+        {
+          "nome": "A Bolacheira",
+          "km": 0.29
+        },
+        {
+          "nome": "Carpa",
+          "km": 0.3
+        },
+        {
+          "nome": "Telepizza",
+          "km": 0.32
+        },
+        {
+          "nome": "J'Agora Café",
+          "km": 0.35
+        },
+        {
+          "nome": "Charanga",
+          "km": 0.39
+        },
+        {
+          "nome": "Calvary chapel",
+          "km": 0.39
+        },
+        {
+          "nome": "Café Cocos",
+          "km": 0.39
+        },
+        {
+          "nome": "Mórmons",
+          "km": 0.4
+        },
+        {
+          "nome": "Café Glass",
+          "km": 0.42
+        },
+        {
+          "nome": "Cafetaria Via Gaia",
+          "km": 0.42
+        },
+        {
+          "nome": "Santander",
+          "km": 0.42
+        },
+        {
+          "nome": "Biblioteca Pública Municipal de Vila Nova de Gaia",
+          "km": 0.42
+        },
+        {
+          "nome": "Time Out",
+          "km": 0.45
+        },
+        {
+          "nome": "Bonjour",
+          "km": 0.47
+        },
+        {
+          "nome": "Banco BPI",
+          "km": 0.48
+        },
+        {
+          "nome": "Café Casbar",
+          "km": 0.48
+        },
+        {
+          "nome": "Davilina",
+          "km": 0.49
+        },
+        {
+          "nome": "Assembleia de Deus Missão portugal",
+          "km": 0.52
+        },
+        {
+          "nome": "Confeitaria Monte Branco - Pastelaria Cafetaria Snack- Bar",
+          "km": 0.56
+        },
+        {
+          "nome": "Millennium bcp",
+          "km": 0.59
+        },
+        {
+          "nome": "Café Marbel",
+          "km": 0.59
+        },
+        {
+          "nome": "Farmácia Couto",
+          "km": 0.59
+        },
+        {
+          "nome": "Café Angola",
+          "km": 0.61
+        },
+        {
+          "nome": "Davilina - Snack-bar",
+          "km": 0.65
+        },
+        {
+          "nome": "Trigão",
+          "km": 0.71
+        },
+        {
+          "nome": "Café Clube dos Caçadores",
+          "km": 0.72
+        },
+        {
+          "nome": "O Charco - Restaurante Pastelaria Cafetaria",
+          "km": 0.89
+        }
+      ],
+      "fotos": [
+        "https://www.kwportugal.pt/api/opengraph/pt/Imovel/Venda/Apartamento/Porto/Vila-Nova-de-Gaia/Mafamude-e-Vilar-do-Paraiso/68192",
+        "https://imgs.soukwportugal.pt/34642/properties/6cb10e6a-c749-4a38-a481-538b6e694753.jpg"
+      ],
       "estudo_ficheiro": "Report - b892016dc4ed4023a4dcc76b87870d49.pdf"
     },
     {
@@ -297,6 +1434,133 @@
       "yield_media": 6.1,
       "comparaveis_preco_medio": 178000.0,
       "comparaveis_m2_medio": 3003.0,
+      "crescimento_pct": 30.0,
+      "nivel_crescimento": "Muito Positivo",
+      "pontos_interesse": [
+        {
+          "nome": "Café O Oedro",
+          "km": 0.21
+        },
+        {
+          "nome": "Clínica Veterinária da Quinta das Rosas",
+          "km": 0.23
+        },
+        {
+          "nome": "Restaurante O Tenista",
+          "km": 0.25
+        },
+        {
+          "nome": "Mimo (Take-away)",
+          "km": 0.35
+        },
+        {
+          "nome": "Lulu",
+          "km": 0.36
+        },
+        {
+          "nome": "Barca D'ouro",
+          "km": 0.37
+        },
+        {
+          "nome": "Porta Alta",
+          "km": 0.4
+        },
+        {
+          "nome": "Pizzaria Casa Mia",
+          "km": 0.41
+        },
+        {
+          "nome": "Belos Ares",
+          "km": 0.47
+        },
+        {
+          "nome": "Restaurante O Nordeste Transmontano",
+          "km": 0.47
+        },
+        {
+          "nome": "Alternativa",
+          "km": 0.51
+        },
+        {
+          "nome": "Farmácia Invicta",
+          "km": 0.54
+        },
+        {
+          "nome": "Cervejaria Beergaia",
+          "km": 0.6
+        },
+        {
+          "nome": "Baha'i",
+          "km": 0.6
+        },
+        {
+          "nome": "Restaurante Chinês Rosa II",
+          "km": 0.62
+        },
+        {
+          "nome": "Millennium bcp",
+          "km": 0.65
+        },
+        {
+          "nome": "Confeitaria Monte Branco - Pastelaria Cafetaria Snack- Bar",
+          "km": 0.66
+        },
+        {
+          "nome": "Café Clube dos Caçadores",
+          "km": 0.69
+        },
+        {
+          "nome": "Mozart Piano Bar",
+          "km": 0.69
+        },
+        {
+          "nome": "Café Marbel",
+          "km": 0.7
+        },
+        {
+          "nome": "Caixa Geral de Depósitos",
+          "km": 0.7
+        },
+        {
+          "nome": "Banco BPI",
+          "km": 0.7
+        },
+        {
+          "nome": "Junta de Freguesia de Vilar do Paraíso",
+          "km": 0.73
+        },
+        {
+          "nome": "Farmácia Santo Ovídio",
+          "km": 0.73
+        },
+        {
+          "nome": "Santander",
+          "km": 0.75
+        },
+        {
+          "nome": "Assembleia de Deus Missão portugal",
+          "km": 0.77
+        },
+        {
+          "nome": "Time Out",
+          "km": 0.82
+        },
+        {
+          "nome": "Telepizza",
+          "km": 0.83
+        },
+        {
+          "nome": "Salpico De Mel",
+          "km": 0.84
+        },
+        {
+          "nome": "Forno de Vilar",
+          "km": 1.0
+        }
+      ],
+      "fotos": [
+        "https://i.maxwork.pt/ds-l/listings/12355/7136253/548b50dc-898d-43b6-82c3-133c31ecfd08.jpg"
+      ],
       "estudo_ficheiro": "Report - bc8d4a12c09841b990e25672a65337ef.pdf"
     },
     {
@@ -323,6 +1587,136 @@
       "yield_media": 4.2,
       "comparaveis_preco_medio": 274833.0,
       "comparaveis_m2_medio": 3607.0,
+      "crescimento_pct": 15.0,
+      "nivel_crescimento": "Positivo",
+      "pontos_interesse": [
+        {
+          "nome": "Farmácia Avenida",
+          "km": 0.26
+        },
+        {
+          "nome": "Polícia de Segurança Pública - Esquadra de Vila Nova de Gaia",
+          "km": 0.56
+        },
+        {
+          "nome": "Dom Tonho - Gaia",
+          "km": 0.58
+        },
+        {
+          "nome": "Parque de Estacionamento Centro Cívico",
+          "km": 0.65
+        },
+        {
+          "nome": "Café Veneza - Restaurante Snack-Bar",
+          "km": 0.67
+        },
+        {
+          "nome": "Blue Dragon",
+          "km": 0.7
+        },
+        {
+          "nome": "Símbolo - Pão Quente Restaurante",
+          "km": 0.71
+        },
+        {
+          "nome": "Abanca",
+          "km": 0.73
+        },
+        {
+          "nome": "BPI",
+          "km": 0.74
+        },
+        {
+          "nome": "O Charco - Restaurante Pastelaria Cafetaria",
+          "km": 0.74
+        },
+        {
+          "nome": "Parque de Estacionamento Centro Cívico",
+          "km": 0.74
+        },
+        {
+          "nome": "Mira Douro",
+          "km": 0.75
+        },
+        {
+          "nome": "Fish Fish",
+          "km": 0.75
+        },
+        {
+          "nome": "Avó Maria",
+          "km": 0.78
+        },
+        {
+          "nome": "Prioridade",
+          "km": 0.79
+        },
+        {
+          "nome": "Peza Arroz - Filha da Mãe Preta",
+          "km": 0.8
+        },
+        {
+          "nome": "Montanha",
+          "km": 0.83
+        },
+        {
+          "nome": "Cantinho das Oliveiras",
+          "km": 0.85
+        },
+        {
+          "nome": "Casa do Sabor Caseiro",
+          "km": 0.86
+        },
+        {
+          "nome": "Unidade de Saúde Familiar Camélias",
+          "km": 0.88
+        },
+        {
+          "nome": "Postigo do Carvão",
+          "km": 0.9
+        },
+        {
+          "nome": "Ora Viva",
+          "km": 0.92
+        },
+        {
+          "nome": "Casa Kanimambo",
+          "km": 0.92
+        },
+        {
+          "nome": "Trigão",
+          "km": 0.93
+        },
+        {
+          "nome": "Farol da Boa Nova",
+          "km": 0.93
+        },
+        {
+          "nome": "O Muro",
+          "km": 0.98
+        },
+        {
+          "nome": "Adega São Nicolau",
+          "km": 0.98
+        },
+        {
+          "nome": "Crédito Agrícola",
+          "km": 0.98
+        },
+        {
+          "nome": "Barbedo's",
+          "km": 0.99
+        },
+        {
+          "nome": "Davilina - Snack-bar",
+          "km": 0.99
+        }
+      ],
+      "fotos": [
+        "https://multimedia.hcpro.pt/hcpro/8657/properties/6197431/foto/watermark/jyl7emqfsa9tn6g9.jpg",
+        "https://multimedia.hcpro.pt/hcpro/8657/properties/6197431/foto/watermark/td2l55s2bo1xa387.jpg",
+        "https://multimedia.hcpro.pt/hcpro/8657/properties/6197431/foto/watermark/w9377bzo4t5gld4f.jpg",
+        "https://multimedia.hcpro.pt/hcpro/8657/properties/6197431/foto/watermark/ir8fk2g3oufz2drr.jpg"
+      ],
       "estudo_ficheiro": "Report - 9bb20ebfaceb4ae78479d6b8288a6a77.pdf"
     },
     {
@@ -349,6 +1743,32 @@
       "yield_media": 4.3,
       "comparaveis_preco_medio": 419113.0,
       "comparaveis_m2_medio": 2768.0,
+      "crescimento_pct": null,
+      "nivel_crescimento": "Muito Negativo",
+      "pontos_interesse": [
+        {
+          "nome": "Academia Musical Sandim",
+          "km": 0.4
+        },
+        {
+          "nome": "Montepio",
+          "km": 0.56
+        },
+        {
+          "nome": "Meu Super Sandim",
+          "km": 0.67
+        },
+        {
+          "nome": "Mini Jota",
+          "km": 0.75
+        }
+      ],
+      "fotos": [
+        "https://media2.era.pt/ImageResizeHandler.ashx?tipo=4&amp;checkMax=1&amp;imovel=1530086&amp;foto=18841168&amp;m=2&amp;f=1",
+        "https://media2.era.pt/ImageResizeHandler.ashx?tipo=4&amp;checkMax=1&amp;imovel=1530086&amp;foto=18841168&amp;m=2&amp;f=1",
+        "https://media2.era.pt/ImageResizeHandler.ashx?tipo=4&amp;checkMax=1&amp;imovel=1530086&amp;foto=18841168&amp;m=2&amp;f=1",
+        "https://media2.era.pt/ImageResizeHandler.ashx?tipo=4&amp;checkMax=1&amp;imovel=1530086&amp;foto=18841168&amp;m=2&amp;f=1"
+      ],
       "estudo_ficheiro": "Report - fe4b2e4296cd45349eed7f447ed0e8e3.pdf"
     },
     {
@@ -375,6 +1795,133 @@
       "yield_media": 5.4,
       "comparaveis_preco_medio": 326165.0,
       "comparaveis_m2_medio": 3356.0,
+      "crescimento_pct": 30.47,
+      "nivel_crescimento": "Muito Positivo",
+      "pontos_interesse": [
+        {
+          "nome": "Café Clube dos Caçadores",
+          "km": 0.15
+        },
+        {
+          "nome": "Café Marbel",
+          "km": 0.24
+        },
+        {
+          "nome": "Assembleia de Deus Missão portugal",
+          "km": 0.25
+        },
+        {
+          "nome": "Time Out",
+          "km": 0.29
+        },
+        {
+          "nome": "Millennium bcp",
+          "km": 0.3
+        },
+        {
+          "nome": "Confeitaria Monte Branco - Pastelaria Cafetaria Snack- Bar",
+          "km": 0.32
+        },
+        {
+          "nome": "Banco BPI",
+          "km": 0.38
+        },
+        {
+          "nome": "Farmácia Santo Ovídio",
+          "km": 0.41
+        },
+        {
+          "nome": "Santander",
+          "km": 0.43
+        },
+        {
+          "nome": "Telepizza",
+          "km": 0.51
+        },
+        {
+          "nome": "Baha'i",
+          "km": 0.53
+        },
+        {
+          "nome": "BPI",
+          "km": 0.58
+        },
+        {
+          "nome": "One Piece",
+          "km": 0.69
+        },
+        {
+          "nome": "Mórmons",
+          "km": 0.71
+        },
+        {
+          "nome": "Restaurante O Nordeste Transmontano",
+          "km": 0.72
+        },
+        {
+          "nome": "Calvary chapel",
+          "km": 0.74
+        },
+        {
+          "nome": "O Piri-piri",
+          "km": 0.76
+        },
+        {
+          "nome": "Cafetaria Via Gaia",
+          "km": 0.78
+        },
+        {
+          "nome": "Charanga",
+          "km": 0.79
+        },
+        {
+          "nome": "A Bolacheira",
+          "km": 0.8
+        },
+        {
+          "nome": "Caixa Geral de Depósitos",
+          "km": 0.8
+        },
+        {
+          "nome": "Biblioteca Pública Municipal de Vila Nova de Gaia",
+          "km": 0.82
+        },
+        {
+          "nome": "Carpa",
+          "km": 0.85
+        },
+        {
+          "nome": "Bonjour",
+          "km": 0.9
+        },
+        {
+          "nome": "J'Agora Café",
+          "km": 0.9
+        },
+        {
+          "nome": "Café Casbar",
+          "km": 0.91
+        },
+        {
+          "nome": "Café Liberty",
+          "km": 0.91
+        },
+        {
+          "nome": "Café Cocos",
+          "km": 0.92
+        },
+        {
+          "nome": "Café Glass",
+          "km": 0.92
+        },
+        {
+          "nome": "Belos Ares",
+          "km": 0.98
+        }
+      ],
+      "fotos": [
+        "https://media2.era.pt/ImageResizeHandler.ashx?tipo=4&amp;checkMax=1&amp;imovel=1531529&amp;foto=18824046&amp;m=2&amp;f=1"
+      ],
       "estudo_ficheiro": "Report - 2d4d2c3c6d83492d9256e9cc7a27d92d.pdf"
     }
   ]

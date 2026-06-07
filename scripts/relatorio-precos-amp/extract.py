@@ -68,6 +68,51 @@ def extrai_freguesia(doc):
     m = re.search(r"freguesias?\s+de\s+([^.\n]+)", full)
     return normaliza_freguesia(m.group(1)) if m else None
 
+def extrai_tendencia(full):
+    cres = first(r"Crescimento\s*\n([\d.,]+)\s*%", full)
+    niv = first(r"Nível de crescimento\s*\n([^\n]+)", full)
+    return num(cres), (niv.strip() if niv else None)
+
+def extrai_pois(doc):
+    page = next((doc[i].get_text() for i in range(doc.page_count) if "PONTOS DE INTERESSE" in doc[i].get_text()), "")
+    lines = [l.strip() for l in page.split("\n") if l.strip()]
+    pois, buf, started = [], [], False
+    for l in lines:
+        if "PONTOS DE INTERESSE" in l:
+            started = True; continue
+        if not started:
+            continue
+        m = re.match(r"^([\d.]+)\s*km$", l)
+        if m:
+            if buf:
+                pois.append({"nome": " ".join(buf).strip(" .•"), "km": float(m.group(1))}); buf = []
+        elif re.match(r"^(Somnium|somnium|maio|Pontos|Tipo de|Morada|R\.)", l):
+            continue
+        else:
+            buf.append(l)
+    return pois
+
+def fotos_imovel(im):
+    """URLs acessiveis das fotos (nao-Report): path http, senao source_url. Max 4."""
+    fotos = im.get("fotos") or "[]"
+    if isinstance(fotos, str):
+        try: fotos = json.loads(fotos)
+        except Exception: fotos = []
+    urls = []
+    for f in fotos:
+        if not f or not str(f.get("type", "")).startswith("image"):
+            continue
+        if str(f.get("name", "")).lower().startswith("report"):
+            continue
+        p = f.get("path") or ""
+        if p.startswith("http"):
+            urls.append(p)
+        elif f.get("source_url", "").startswith("http"):
+            urls.append(f["source_url"])
+        if len(urls) >= 4:
+            break
+    return urls
+
 cols = "id,nome,zona,concelho,freguesia,tipologia,area_bruta,ask_price,fotos"
 imoveis = get(f"{BASE}/imoveis?regiao=eq.AMP&select={cols}")
 
@@ -130,6 +175,9 @@ for im in imoveis:
     ask = im.get("ask_price")
     ask = float(ask) if ask else None
     delta = ((ask - market_total) / market_total * 100) if (ask and market_total) else None
+    cresc, nivel = extrai_tendencia(full)
+    pois = extrai_pois(doc)
+    fotos_urls = fotos_imovel(im)
     dataset.append({
         "id": im["id"], "nome": im["nome"], "tipo": (tipo or "").title() or None,
         "tipologia": tipologia, "area_m2": area, "morada": morada,
@@ -142,6 +190,8 @@ for im in imoveis:
         "valor_max": vmax_total, "valor_max_m2": vmax_m2,
         "renda_media": renda, "yield_media": yld,
         "comparaveis_preco_medio": comp_preco, "comparaveis_m2_medio": comp_m2,
+        "crescimento_pct": cresc, "nivel_crescimento": nivel,
+        "pontos_interesse": pois, "fotos": fotos_urls,
         "estudo_ficheiro": rep["name"],
     })
 
