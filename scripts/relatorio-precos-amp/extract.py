@@ -90,6 +90,24 @@ def extrai_tendencia(full):
     niv = first(r"Nível de crescimento\s*\n([^\n]+)", full)
     return num(cres), (niv.strip() if niv else None)
 
+POI_CATS = [
+    ("saude", ["farmác", "farmac", "hospital", "clínic", "clinic", "saúde", "saude", "veterin", "dent", "médic", "medic"]),
+    ("ensino", ["escola", "colég", "coleg", "infant", "universidade", "agrupamento", "externato", "creche", "jardim de infância"]),
+    ("comercio", ["continente", "pingo doce", "lidl", "mercadona", "minipreço", "minipreco", "supermercado", "mercado",
+                  "centro comercial", "el corte", "intermarché", "auchan", "shopping", "talho", "padaria"]),
+    ("restauracao", ["café", "cafe", "restaurante", "churrasqueira", "confeitaria", "pastelaria", "snack", "lunch",
+                     "coffee", "tasca", "cervejaria", "pizz", "burger", "gelataria", "bar "]),
+    ("banca", ["banco", "santander", "caixa", "millennium", "montepio", "novo banco", "bcp", "cgd", "bpi", "crédito", "ctt"]),
+    ("transporte", ["metro", "estação", "estacao", "comboio", "autocarro", "paragem", "terminal", "gare", "apeadeiro"]),
+    ("lazer", ["jardim", "parque", "praia", "piscina", "ginás", "ginas", "anfiteatro", "museu", "igreja", "feira", "marina", "estádio", "estadio"]),
+]
+def categoriza_poi(nome):
+    n = nome.lower()
+    for cat, kws in POI_CATS:
+        if any(k in n for k in kws):
+            return cat
+    return "outros"
+
 def extrai_pois(doc):
     page = next((doc[i].get_text() for i in range(doc.page_count) if "PONTOS DE INTERESSE" in doc[i].get_text()), "")
     lines = [l.strip() for l in page.split("\n") if l.strip()]
@@ -102,12 +120,20 @@ def extrai_pois(doc):
         m = re.match(r"^([\d.]+)\s*km$", l)
         if m:
             if buf:
-                pois.append({"nome": " ".join(buf).strip(" .•"), "km": float(m.group(1))}); buf = []
+                nm = " ".join(buf).strip(" .•")
+                pois.append({"nome": nm, "km": float(m.group(1)), "cat": categoriza_poi(nm)}); buf = []
         elif re.match(r"^(Somnium|somnium|maio|Pontos|Tipo de|Morada|R\.)", l):
             continue
         else:
             buf.append(l)
     return pois
+
+def extrai_mercado(full):
+    nan = first(r"com os\s+(\d+)\s+an[uú]ncios", full)
+    tm = first(r"(\d+)\s*meses\s*\ntempo médio no mercado", full)
+    raio = first(r"(\d+)\s*km\s*\nraio de procura", full)
+    ncomp = len(re.findall(r"Dias no mercado:", full))
+    return (int(nan) if nan else None, int(tm) if tm else None, int(raio) if raio else None, ncomp or None)
 
 def fotos_imovel(im):
     """URLs acessiveis das fotos (nao-Report): path http, senao source_url. Max 4."""
@@ -196,6 +222,7 @@ for im in imoveis:
     zona_m2_min, zona_m2_max = extrai_zona_banda(doc)
     zona_m2_ref = (zona_m2_min + zona_m2_max) / 2 if (zona_m2_min and zona_m2_max) else None
     pois = extrai_pois(doc)
+    n_anuncios, tempo_merc, raio_km, n_comp = extrai_mercado(full)
     fotos_urls = fotos_imovel(im)
     dataset.append({
         "id": im["id"], "nome": im["nome"], "tipo": (tipo or "").title() or None,
