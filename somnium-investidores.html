@@ -110,6 +110,8 @@ button{font:inherit}
 .form-card{background:var(--bg-2);border:1px solid var(--line);padding:32px 30px;border-radius:10px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 12px 32px rgba(13,13,13,.06)}
 .form-title{font-size:18px;font-weight:600;color:var(--dark);margin-bottom:4px;letter-spacing:-.005em}
 .form-sub{font-size:13px;color:var(--muted);margin-bottom:22px}
+.ferror{display:none;font-size:11px;color:var(--danger);margin-top:5px;font-weight:500}
+.ferror.show{display:block}
 
 .step-bar{display:flex;gap:6px;margin-bottom:22px}
 .step-dot{flex:1;height:3px;background:var(--line);border-radius:99px;transition:background .3s}
@@ -610,15 +612,18 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
         <div class="fstep active" id="fs0">
           <div class="fgroup">
             <label class="flabel" for="f_nome">Nome <span style="color:var(--danger)">*</span></label>
-            <input class="finput" id="f_nome" type="text" placeholder="O seu nome" autocomplete="name" />
+            <input class="finput" id="f_nome" type="text" placeholder="O seu nome" autocomplete="name" aria-describedby="e_nome" />
+            <span class="ferror" id="e_nome">Indique o seu nome.</span>
           </div>
           <div class="fgroup">
             <label class="flabel" for="f_email">Email <span style="color:var(--danger)">*</span></label>
-            <input class="finput" id="f_email" type="email" placeholder="email@exemplo.com" autocomplete="email" />
+            <input class="finput" id="f_email" type="email" placeholder="email@exemplo.com" autocomplete="email" aria-describedby="e_email" />
+            <span class="ferror" id="e_email">Indique um email válido.</span>
           </div>
           <div class="fgroup">
             <label class="flabel" for="f_tel">Telemóvel <span style="color:var(--danger)">*</span></label>
-            <input class="finput" id="f_tel" type="tel" placeholder="+351 9XX XXX XXX" autocomplete="tel" />
+            <input class="finput" id="f_tel" type="tel" placeholder="+351 9XX XXX XXX" autocomplete="tel" aria-describedby="e_tel" />
+            <span class="ferror" id="e_tel">Indique um telemóvel válido (mín. 9 dígitos).</span>
           </div>
           <label class="fcheck">
             <input type="checkbox" id="f_rgpd" />
@@ -1306,17 +1311,33 @@ function shakePills(id) {
   setTimeout(() => { g.style.transform = ''; }, 160);
 }
 
+function fieldErr(input, errId) {
+  const e = document.getElementById(errId);
+  if (e) e.classList.add('show');
+  if (input) {
+    input.setAttribute('aria-invalid', 'true');
+    input.addEventListener('input', function clr() {
+      if (e) e.classList.remove('show');
+      input.removeAttribute('aria-invalid');
+      input.removeEventListener('input', clr);
+    });
+  }
+  shake(input);
+  if (input) input.focus();
+}
+
 function goStep(n) {
   if (n === 1) {
     const nome  = document.getElementById('f_nome');
     const email = document.getElementById('f_email');
     const tel   = document.getElementById('f_tel');
     const rgpd  = document.getElementById('f_rgpd');
+    ['e_nome','e_email','e_tel'].forEach(id => document.getElementById(id)?.classList.remove('show'));
     const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim());
     const telDigits = tel.value.replace(/\D/g, '');
-    if (!nome.value.trim())  { shake(nome); nome.focus(); return; }
-    if (!emailOk)            { shake(email); email.focus(); return; }
-    if (telDigits.length < 9) { shake(tel); tel.focus(); return; }
+    if (!nome.value.trim())   { fieldErr(nome, 'e_nome'); return; }
+    if (!emailOk)             { fieldErr(email, 'e_email'); return; }
+    if (telDigits.length < 9) { fieldErr(tel, 'e_tel'); return; }
     if (!rgpd.checked) {
       const box = rgpd.nextElementSibling;
       box.style.borderColor = 'var(--danger)';

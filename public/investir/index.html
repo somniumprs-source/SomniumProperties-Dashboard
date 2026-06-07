@@ -6,6 +6,45 @@
 <meta name="description" content="Somnium Properties. Investimento imobiliário com método em Coimbra e, para investidores ativos, em Vila Nova de Gaia. Modelo CAEP, contratos por projeto, gestão integral.">
 <meta name="theme-color" content="#C9A84C">
 <title>Somnium Properties · Invista Connosco</title>
+
+<!-- Favicon (inline, sem ficheiro) -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d0d0d'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' fill='%23C9A84C' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E">
+
+<!-- Open Graph / partilha (WhatsApp, redes) -->
+<meta property="og:type" content="website">
+<meta property="og:locale" content="pt_PT">
+<meta property="og:site_name" content="Somnium Properties">
+<meta property="og:url" content="https://somnium-properties-dashboard.vercel.app/investir">
+<meta property="og:title" content="Invista com método em imobiliário · Somnium Properties">
+<meta property="og:description" content="Imobiliário em Coimbra e Vila Nova de Gaia, analisado e estruturado pela Somnium. Retorno por contrato, gestão integral, tickets desde 25 000 €.">
+<meta property="og:image" content="https://somnium-properties-dashboard.vercel.app/investir/assets/landing/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Invista com método em imobiliário · Somnium Properties">
+<meta name="twitter:description" content="Retorno por contrato, gestão integral, tickets desde 25 000 €. Coimbra e Vila Nova de Gaia.">
+<meta name="twitter:image" content="https://somnium-properties-dashboard.vercel.app/investir/assets/landing/og-image.jpg">
+
+<!-- Analytics · preencher os IDs para activar (sem IDs nada dispara) -->
+<script>
+  window.ANALYTICS = { ga4: '', pixel: '' };
+  (function () {
+    var a = window.ANALYTICS;
+    if (a.ga4) {
+      var s = document.createElement('script');
+      s.async = true; s.src = 'https://www.googletagmanager.com/gtag/js?id=' + a.ga4;
+      document.head.appendChild(s);
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = function () { dataLayer.push(arguments); };
+      gtag('js', new Date()); gtag('config', a.ga4);
+    }
+    if (a.pixel) {
+      !function (f, b, e, v, n, t, s) { if (f.fbq) return; n = f.fbq = function () { n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments); }; if (!f._fbq) f._fbq = n; n.push = n; n.loaded = !0; n.version = '2.0'; n.queue = []; t = b.createElement(e); t.async = !0; t.src = v; s = b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t, s); }(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
+      fbq('init', a.pixel); fbq('track', 'PageView');
+    }
+  })();
+</script>
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
@@ -54,10 +93,25 @@ button{font:inherit}
 .trust-item{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text);font-weight:500}
 .trust-item svg{color:var(--gold);flex-shrink:0}
 
+/* HERO STATS · dream outcome */
+.hero-stats{display:flex;margin-top:26px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg-2)}
+.hero-stat{flex:1;padding:13px 14px;text-align:center;border-right:1px solid var(--line-soft)}
+.hero-stat:last-child{border-right:none}
+.hero-stat-v{font-family:var(--serif);font-size:23px;font-weight:500;color:var(--dark);line-height:1;letter-spacing:-.01em}
+.hero-stat-v em{font-style:normal;color:var(--gold)}
+.hero-stat-v small{font-size:13px;font-weight:500}
+.hero-stat-l{font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-top:6px;line-height:1.3}
+.hero-disclaim{font-size:10.5px;color:var(--soft);line-height:1.5;margin-top:9px}
+.hero-scarcity{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:600;color:var(--gold);margin-bottom:14px}
+.hero-scarcity::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 0 rgba(201,168,76,.5);animation:scarcityPulse 1.8s ease-in-out infinite}
+@media(max-width:540px){.hero-stat{padding:11px 8px}.hero-stat-v{font-size:19px}.hero-stat-l{font-size:8.5px}}
+
 /* FORM CARD */
 .form-card{background:var(--bg-2);border:1px solid var(--line);padding:32px 30px;border-radius:10px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 12px 32px rgba(13,13,13,.06)}
 .form-title{font-size:18px;font-weight:600;color:var(--dark);margin-bottom:4px;letter-spacing:-.005em}
 .form-sub{font-size:13px;color:var(--muted);margin-bottom:22px}
+.ferror{display:none;font-size:11px;color:var(--danger);margin-top:5px;font-weight:500}
+.ferror.show{display:block}
 
 .step-bar{display:flex;gap:6px;margin-bottom:22px}
 .step-dot{flex:1;height:3px;background:var(--line);border-radius:99px;transition:background .3s}
@@ -496,8 +550,23 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
       Nós temos os <em>negócios</em>.
     </h1>
     <p class="hero-body">
-      Imobiliário em Coimbra e Vila Nova de Gaia, analisado e estruturado pela Somnium. Entre de forma passiva, com retorno por contrato, ou assuma o controlo do projeto. Tickets a partir de <strong style="color:var(--dark)">25 000 €</strong>.
+      O capital parado em depósitos perde poder de compra todos os meses. Pomo-lo a trabalhar em imobiliário em Coimbra e Vila Nova de Gaia, analisado e estruturado pela Somnium. Entre de forma passiva, com retorno por contrato, ou assuma o controlo do projeto. Tickets a partir de <strong style="color:var(--dark)">25 000 €</strong>.
     </p>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="hero-stat-v"><em>~15%</em></div>
+        <div class="hero-stat-l">Retorno-alvo / projeto</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-v">6–12<small>m</small></div>
+        <div class="hero-stat-l">Prazo típico</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-v">25<small> K€</small></div>
+        <div class="hero-stat-l">Ticket mínimo</div>
+      </div>
+    </div>
+    <p class="hero-disclaim">Retorno-alvo definido por contrato CAEP. Alvo, não garantido — investimento sujeito a risco de mercado.</p>
     <div class="trust-row">
       <div class="trust-item">
         <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 12l2 2 4-4"/><rect x="3" y="3" width="14" height="14" rx="2"/></svg>
@@ -528,8 +597,10 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
       </div>
 
       <div id="formBody">
+        <div class="hero-scarcity">3 vagas este trimestre</div>
         <div class="form-title">Marcar reunião</div>
-        <div class="form-sub">2 minutos · Sem compromisso · Informação confidencial</div>
+        <div class="form-sub">2 minutos · Sem compromisso · Confidencial</div>
+        <div style="font-size:12px;color:var(--text);line-height:1.5;background:var(--gold-bg);border-radius:6px;padding:9px 11px;margin-bottom:18px">Na reunião recebe a <strong style="color:var(--dark)">Análise de Investimento Somnium</strong>: stress test em 3 cenários, comparáveis de mercado e análise técnica. Sem custo.</div>
 
         <div class="step-bar">
           <div class="step-dot active" id="d0"></div>
@@ -541,15 +612,18 @@ footer{background:var(--bg-warm);border-top:1px solid var(--line);padding:32px 5
         <div class="fstep active" id="fs0">
           <div class="fgroup">
             <label class="flabel" for="f_nome">Nome <span style="color:var(--danger)">*</span></label>
-            <input class="finput" id="f_nome" type="text" placeholder="O seu nome" autocomplete="name" />
+            <input class="finput" id="f_nome" type="text" placeholder="O seu nome" autocomplete="name" aria-describedby="e_nome" />
+            <span class="ferror" id="e_nome">Indique o seu nome.</span>
           </div>
           <div class="fgroup">
             <label class="flabel" for="f_email">Email <span style="color:var(--danger)">*</span></label>
-            <input class="finput" id="f_email" type="email" placeholder="email@exemplo.com" autocomplete="email" />
+            <input class="finput" id="f_email" type="email" placeholder="email@exemplo.com" autocomplete="email" aria-describedby="e_email" />
+            <span class="ferror" id="e_email">Indique um email válido.</span>
           </div>
           <div class="fgroup">
             <label class="flabel" for="f_tel">Telemóvel <span style="color:var(--danger)">*</span></label>
-            <input class="finput" id="f_tel" type="tel" placeholder="+351 9XX XXX XXX" autocomplete="tel" />
+            <input class="finput" id="f_tel" type="tel" placeholder="+351 9XX XXX XXX" autocomplete="tel" aria-describedby="e_tel" />
+            <span class="ferror" id="e_tel">Indique um telemóvel válido (mín. 9 dígitos).</span>
           </div>
           <label class="fcheck">
             <input type="checkbox" id="f_rgpd" />
@@ -1237,17 +1311,33 @@ function shakePills(id) {
   setTimeout(() => { g.style.transform = ''; }, 160);
 }
 
+function fieldErr(input, errId) {
+  const e = document.getElementById(errId);
+  if (e) e.classList.add('show');
+  if (input) {
+    input.setAttribute('aria-invalid', 'true');
+    input.addEventListener('input', function clr() {
+      if (e) e.classList.remove('show');
+      input.removeAttribute('aria-invalid');
+      input.removeEventListener('input', clr);
+    });
+  }
+  shake(input);
+  if (input) input.focus();
+}
+
 function goStep(n) {
   if (n === 1) {
     const nome  = document.getElementById('f_nome');
     const email = document.getElementById('f_email');
     const tel   = document.getElementById('f_tel');
     const rgpd  = document.getElementById('f_rgpd');
+    ['e_nome','e_email','e_tel'].forEach(id => document.getElementById(id)?.classList.remove('show'));
     const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim());
     const telDigits = tel.value.replace(/\D/g, '');
-    if (!nome.value.trim())  { shake(nome); nome.focus(); return; }
-    if (!emailOk)            { shake(email); email.focus(); return; }
-    if (telDigits.length < 9) { shake(tel); tel.focus(); return; }
+    if (!nome.value.trim())   { fieldErr(nome, 'e_nome'); return; }
+    if (!emailOk)             { fieldErr(email, 'e_email'); return; }
+    if (telDigits.length < 9) { fieldErr(tel, 'e_tel'); return; }
     if (!rgpd.checked) {
       const box = rgpd.nextElementSibling;
       box.style.borderColor = 'var(--danger)';
@@ -1300,6 +1390,9 @@ async function submitForm() {
       body: JSON.stringify(payload),
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
+    // Evento de conversao (so dispara se o tracking estiver configurado)
+    if (window.gtag) gtag('event', 'generate_lead', { form: 'landing-investidores' });
+    if (window.fbq)  fbq('track', 'Lead');
     document.getElementById('formBody').style.display = 'none';
     document.getElementById('formOk').style.display   = 'block';
   } catch (e) {
