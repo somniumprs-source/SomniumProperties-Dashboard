@@ -97,6 +97,10 @@ def agg(arr):
         "valor_med": med([d.get("valor_mercado") for d in arr]),
         "yield_med": st.mean(yl) if yl else None, "delta_med": st.mean(dl) if dl else None,
         "cresc_med": st.median(cr) if cr else None, "pois": pois, "fotos": fotos,
+        "anuncios_med": med([d.get("anuncios_area") for d in arr]),
+        "tempo_med": med([d.get("tempo_mercado_meses") for d in arr]),
+        "ncomp_med": med([d.get("n_comparaveis") for d in arr]),
+        "raio_med": med([d.get("raio_km") for d in arr]),
         "tipo_dom": max(set(tipos), key=tipos.count) if tipos else "—",
         "tipologias": ", ".join(sorted({d["tipologia"] for d in arr if d.get("tipologia")})),
     }
@@ -344,28 +348,99 @@ for r in zona_rows:
     story.append(it)
     story.append(Spacer(1, 6))
 
-    # POIs + fotos lado a lado
-    blocos = []
-    if r["pois"]:
-        top = r["pois"][:6]
-        txt = "<br/>".join(f"• {p['nome']} <font color='#999'>({str(round(p['km'],2)).replace('.', ',')} km)</font>" for p in top)
-        blocos.append([Paragraph("Pontos de interesse próximos", H2), Paragraph(txt, POIST)])
+    # fotos dos nossos imoveis na zona
     if r["fotos"]:
         thumbs = []
         for fp in r["fotos"][:3]:
             if os.path.exists(fp):
-                thumbs.append(fit_image(fp, 50*mm, 30*mm))
+                thumbs.append(fit_image(fp, 56*mm, 36*mm))
         if thumbs:
-            ph = Table([thumbs], colWidths=[doc.width/2/max(len(thumbs),1)]*len(thumbs))
-            ph.setStyle(TableStyle([("ALIGN",(0,0),(-1,-1),"CENTER"),("LEFTPADDING",(0,0),(-1,-1),2),("RIGHTPADDING",(0,0),(-1,-1),2)]))
-            blocos.append([Paragraph("Imóveis na zona", H2), ph])
-    if blocos:
-        if len(blocos) == 2:
-            row = Table([[blocos[0][0], blocos[1][0]], [blocos[0][1], blocos[1][1]]], colWidths=[doc.width/2]*2)
-            row.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"TOP"),("LEFTPADDING",(0,0),(0,-1),0),("LEFTPADDING",(1,0),(1,-1),8)]))
-            story.append(KeepTogether(row))
-        else:
-            story.append(KeepTogether(blocos[0]))
+            ph = Table([thumbs], colWidths=[doc.width/max(len(thumbs),1)]*len(thumbs))
+            ph.setStyle(TableStyle([("ALIGN",(0,0),(-1,-1),"CENTER"),("LEFTPADDING",(0,0),(-1,-1),3),("RIGHTPADDING",(0,0),(-1,-1),3)]))
+            story.append(Paragraph("Imóveis nossos nesta zona", H2))
+            story.append(KeepTogether(ph))
+
+    # ===== pagina 2 da zona: conhecer ao pormenor =====
+    story.append(PageBreak())
+    story.append(Paragraph(f"{z} — a zona ao pormenor", H1))
+    story.append(Paragraph(PERFIL.get(z, ""), ZTAG))
+
+    if ctx.get("acessos"):
+        story.append(Paragraph("Acessos e transportes", H2))
+        story.append(Paragraph(ctx["acessos"], BODY))
+
+    amen = ctx.get("amenidades") or {}
+    if amen:
+        story.append(Paragraph("Amenidades e serviços", H2))
+        items = list(amen.items())
+        def amcell(cat, txt):
+            return Paragraph(f"<b><font color='#C9A84C'>{cat}</font></b><br/>{txt}", BODY)
+        grid = [[amcell(*items[i]) if i < len(items) else "",
+                 amcell(*items[i+1]) if i+1 < len(items) else ""] for i in range(0, len(items), 2)]
+        at = Table(grid, colWidths=[doc.width/2]*2)
+        at.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"TOP"),("BACKGROUND",(0,0),(-1,-1),LIGHT),
+                                ("BOX",(0,0),(-1,-1),0.5,LINE),("INNERGRID",(0,0),(-1,-1),0.5,LINE),
+                                ("LEFTPADDING",(0,0),(-1,-1),9),("RIGHTPADDING",(0,0),(-1,-1),9),
+                                ("TOPPADDING",(0,0),(-1,-1),7),("BOTTOMPADDING",(0,0),(-1,-1),7)]))
+        story.append(at)
+        story.append(Spacer(1, 8))
+
+    # mercado e procura
+    story.append(Paragraph("Mercado e procura", H2))
+    def mcard(t, v, s):
+        return Table([[Paragraph(t, KICK)],
+                      [Paragraph(v, ParagraphStyle("mv", fontName="Helvetica-Bold", fontSize=15, textColor=DARK))],
+                      [Paragraph(s, SMALL)]], colWidths=[doc.width/4 - 6])
+    anun = "—" if r["anuncios_med"] is None else f"{r['anuncios_med']:.0f}"
+    tmp = "—" if r["tempo_med"] is None else (f"{r['tempo_med']:.0f} mês" if r["tempo_med"] == 1 else f"{r['tempo_med']:.0f} meses")
+    ncp = "—" if r["ncomp_med"] is None else f"{r['ncomp_med']:.0f}"
+    rai = "—" if r["raio_med"] is None else f"{r['raio_med']:.0f} km"
+    mcards = Table([[mcard("PROCURA NA ÁREA", anun, "anúncios recentes (raio do estudo)"),
+                     mcard("TEMPO NO MERCADO", tmp, "média dos comparáveis"),
+                     mcard("COMPARÁVEIS", ncp, "imóveis analisados"),
+                     mcard("RAIO DE ANÁLISE", rai, "abrangência do estudo")]],
+                   colWidths=[doc.width/4]*4)
+    mcards.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),LIGHT),("BOX",(0,0),(-1,-1),0.5,LINE),
+                                ("LINEAFTER",(0,0),(-2,-1),0.5,LINE),("VALIGN",(0,0),(-1,-1),"TOP"),
+                                ("TOPPADDING",(0,0),(-1,-1),7),("BOTTOMPADDING",(0,0),(-1,-1),7),("LEFTPADDING",(0,0),(-1,-1),8)]))
+    story.append(mcards)
+    tempo_txt = "rápido" if (r["tempo_med"] or 9) <= 2 else ("moderado" if (r["tempo_med"] or 9) <= 4 else "mais lento")
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(f"Leitura: escoamento <b>{tempo_txt}</b> ({tmp} no mercado) e procura activa "
+                           f"(~{anun} anúncios na área no momento do estudo).", SMALL))
+    story.append(Spacer(1, 8))
+
+    # fortes / a ter em conta
+    fortes = ctx.get("fortes") or []; fraco = ctx.get("fraco") or ""
+    if fortes or fraco:
+        fortes_txt = "<br/>".join(f"• {x}" for x in fortes) or "—"
+        fcell = Paragraph(f"<b><font color='#2e7d32'>Pontos fortes</font></b><br/>{fortes_txt}", BODY)
+        wcell = Paragraph(f"<b><font color='#c62828'>A ter em conta</font></b><br/>{fraco or '—'}", BODY)
+        ff = Table([[fcell, wcell]], colWidths=[doc.width/2]*2)
+        ff.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"TOP"),("BACKGROUND",(0,0),(-1,-1),colors.HexColor("#faf6ea")),
+                                ("BOX",(0,0),(-1,-1),0.5,LINE),("INNERGRID",(0,0),(-1,-1),0.5,LINE),
+                                ("LEFTPADDING",(0,0),(-1,-1),10),("RIGHTPADDING",(0,0),(-1,-1),10),
+                                ("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8)]))
+        story.append(ff)
+        story.append(Spacer(1, 8))
+
+    # servicos proximos medidos (POIs categorizados, do estudo)
+    if r["pois"]:
+        CAT_LABEL = {"saude": "Saúde", "ensino": "Ensino", "comercio": "Comércio", "restauracao": "Restauração",
+                     "banca": "Banca/correios", "transporte": "Transportes", "lazer": "Lazer", "outros": "Outros"}
+        bycat = {}
+        for p in r["pois"]:
+            bycat.setdefault(p.get("cat", "outros"), []).append(p)
+        ordem = ["saude", "ensino", "comercio", "restauracao", "transporte", "lazer", "banca"]
+        linhas = []
+        for c in ordem:
+            if c in bycat:
+                exs = sorted(bycat[c], key=lambda p: p.get("km", 9))[:3]
+                txt = ", ".join(f"{p['nome']} ({str(round(p['km'],2)).replace('.', ',')} km)" for p in exs)
+                linhas.append(f"<b>{CAT_LABEL[c]}:</b> {txt}")
+        if linhas:
+            story.append(Paragraph("Serviços próximos medidos no estudo", H2))
+            story.append(Paragraph("<br/>".join(linhas), POIST))
 
 # ---- metodologia ----
 story.append(PageBreak())
