@@ -109,7 +109,7 @@ def fotos_imovel(im):
             urls.append(p)
         elif f.get("source_url", "").startswith("http"):
             urls.append(f["source_url"])
-        if len(urls) >= 4:
+        if len(urls) >= 12:
             break
     return urls
 
