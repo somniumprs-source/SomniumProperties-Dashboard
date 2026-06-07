@@ -155,20 +155,32 @@ export function RelatoriosAdmin() {
               </p>
             </div>
           </div>
-          <a
-            href="#"
-            onClick={async (e) => {
-              e.preventDefault()
-              const t = await getToken()
-              window.open(resolveApiUrl(`/api/crm/relatorios/expansao-gaia?token=${t || ''}`), '_blank')
-            }}
-            rel="noopener"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap"
-            style={{ backgroundColor: GOLD, color: '#0d0d0d' }}
-          >
-            <FileDown className="w-4 h-4" />
-            Relatório de Expansão — Vila Nova de Gaia
-          </a>
+          <div className="flex flex-col gap-2 shrink-0">
+            <a
+              href="#"
+              onClick={async (e) => {
+                e.preventDefault()
+                const t = await getToken()
+                window.open(resolveApiUrl(`/api/crm/relatorios/expansao-gaia?token=${t || ''}`), '_blank')
+              }}
+              rel="noopener"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap"
+              style={{ backgroundColor: GOLD, color: '#0d0d0d' }}
+            >
+              <FileDown className="w-4 h-4" />
+              Relatório de Expansão — Vila Nova de Gaia
+            </a>
+            <a
+              href="/relatorios/Relatorio_Precos_Mercado_AMP.pdf"
+              target="_blank"
+              rel="noopener"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap"
+              style={{ backgroundColor: GOLD, color: '#0d0d0d' }}
+            >
+              <FileDown className="w-4 h-4" />
+              Guia de Zonas — Preços de Mercado (AMP)
+            </a>
+          </div>
         </div>
       </div>
 

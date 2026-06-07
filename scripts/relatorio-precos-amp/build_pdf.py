@@ -462,4 +462,12 @@ if falh: nota += f" Estudo inacessível no armazenamento ({len(falh)}): " + "; "
 story.append(Paragraph(nota, SMALL))
 
 doc.build(story)
-print("PDF gerado:", os.path.join(ROOT, "Relatorio_Precos_Mercado_AMP.pdf"))
+out_root = os.path.join(ROOT, "Relatorio_Precos_Mercado_AMP.pdf")
+print("PDF gerado:", out_root)
+
+# copia para a pasta servida pela app (Administracao -> Relatorios -> Estudos Estrategicos)
+import shutil
+public_dir = os.path.join(ROOT, "public", "relatorios")
+os.makedirs(public_dir, exist_ok=True)
+shutil.copy(out_root, os.path.join(public_dir, "Relatorio_Precos_Mercado_AMP.pdf"))
+print("Copiado para:", os.path.join(public_dir, "Relatorio_Precos_Mercado_AMP.pdf"))
