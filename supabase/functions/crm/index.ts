@@ -3775,6 +3775,20 @@ app.get("/relatorios-documentos", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
+// Eliminar um documento de reuniao do Storage (bucket Relatorios)
+app.delete("/relatorios-documentos", async (c: any) => {
+  try {
+    if (!supabase) return c.json({ error: "Storage indisponível" }, 503);
+    const { semana, nome } = await c.req.json().catch(() => ({}));
+    if (!semana || !nome || !/^\d{4}-W\d{2}$/.test(semana)) return c.json({ error: "semana/nome inválidos" }, 400);
+    if (String(nome).includes("/") || String(nome).includes("..")) return c.json({ error: "nome inválido" }, 400);
+    const caminho = `${semana}/${nome}`;
+    const { error } = await supabase.storage.from("Relatorios").remove([caminho]);
+    if (error) throw error;
+    return c.json({ ok: true, removido: caminho });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
 app.get("/relatorios-semanais/:id", async (c: any) => {
   try {
     const { rows: [r] } = await pool.query("SELECT * FROM relatorios_semanais WHERE id = $1", [c.req.param("id")]);

@@ -121,6 +121,19 @@ export function RelatoriosAdmin() {
     } catch (e) { alert(e.message) }
   }
 
+  async function eliminarDocumento(semana, nome) {
+    if (!confirm(`Eliminar "${nome}"?\n\nO ficheiro é removido permanentemente do armazenamento e não pode ser recuperado.`)) return
+    try {
+      const r = await apiFetch('/api/crm/relatorios-documentos', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ semana, nome }),
+      })
+      if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || 'Erro ao eliminar') }
+      await load()
+    } catch (e) { alert(e.message) }
+  }
+
   const totalRelatorios = relatorios.length
   const totalReunioes = relatorios.reduce((s, r) => s + (Number(r.num_reunioes) || 0), 0)
   const recentes = relatorios.filter(r => {
@@ -220,23 +233,34 @@ export function RelatoriosAdmin() {
                 </div>
                 <div className="grid sm:grid-cols-2 gap-2">
                   {g.ficheiros.map((f) => (
-                    <button
+                    <div
                       key={f.nome}
-                      onClick={() => f.url && window.open(f.url, '_blank', 'noopener')}
-                      disabled={!f.url}
-                      className="group flex items-center gap-3 p-3 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 hover:border-brand-gold/50 transition-all text-left disabled:opacity-50"
+                      className="group flex items-center gap-2 p-3 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 hover:border-brand-gold/50 transition-all"
                     >
-                      <div className="p-2 rounded-lg shrink-0" style={{ backgroundColor: 'rgba(201,168,76,0.12)' }}>
-                        {f.ext === 'pptx'
-                          ? <Presentation className="w-4 h-4" style={{ color: GOLD }} />
-                          : <FileText className="w-4 h-4" style={{ color: GOLD }} />}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100 truncate">{f.nome}</p>
-                        <p className="text-xs text-neutral-400">{f.ext.toUpperCase()}{f.tamanho ? ` · ${fmtSize(f.tamanho)}` : ''}</p>
-                      </div>
-                      <FileDown className="w-4 h-4 text-neutral-300 group-hover:text-brand-gold transition-colors shrink-0" />
-                    </button>
+                      <button
+                        onClick={() => f.url && window.open(f.url, '_blank', 'noopener')}
+                        disabled={!f.url}
+                        className="flex items-center gap-3 flex-1 min-w-0 text-left disabled:opacity-50"
+                      >
+                        <div className="p-2 rounded-lg shrink-0" style={{ backgroundColor: 'rgba(201,168,76,0.12)' }}>
+                          {f.ext === 'pptx'
+                            ? <Presentation className="w-4 h-4" style={{ color: GOLD }} />
+                            : <FileText className="w-4 h-4" style={{ color: GOLD }} />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100 truncate">{f.nome}</p>
+                          <p className="text-xs text-neutral-400">{f.ext.toUpperCase()}{f.tamanho ? ` · ${fmtSize(f.tamanho)}` : ''}</p>
+                        </div>
+                        <FileDown className="w-4 h-4 text-neutral-300 group-hover:text-brand-gold transition-colors shrink-0" />
+                      </button>
+                      <button
+                        onClick={() => eliminarDocumento(g.semana, f.nome)}
+                        title="Eliminar documento"
+                        className="p-2 rounded-lg text-neutral-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors shrink-0"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
