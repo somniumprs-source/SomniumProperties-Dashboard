@@ -238,6 +238,7 @@ for im in imoveis:
         "comparaveis_preco_medio": comp_preco, "comparaveis_m2_medio": comp_m2,
         "crescimento_pct": cresc, "nivel_crescimento": nivel,
         "zona_m2_min": zona_m2_min, "zona_m2_max": zona_m2_max, "zona_m2_ref": zona_m2_ref,
+        "anuncios_area": n_anuncios, "tempo_mercado_meses": tempo_merc, "raio_km": raio_km, "n_comparaveis": n_comp,
         "pontos_interesse": pois, "fotos": fotos_urls,
         "estudo_ficheiro": rep["name"],
     })
