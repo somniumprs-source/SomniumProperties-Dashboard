@@ -30,7 +30,7 @@ import { isConfigured as firefliesConfigured, syncFireflies } from "../_shared/f
 import { isConfigured as formsConfigured, syncForms } from "../_shared/formsSync.ts";
 import { runEstudoLocalizacao } from "../_shared/estudoLocalizacao.ts";
 import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
-import { removeFromStorage, supabase, uploadPublic } from "../_shared/storage.ts";
+import { removeFromStorage, supabase, uploadPublic, uploadPrivate } from "../_shared/storage.ts";
 import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { isWholesaling } from "../_shared/modelos.ts";
 import { syncAllFromNotion, syncFromNotion, syncToNotion } from "../_shared/sync.ts";

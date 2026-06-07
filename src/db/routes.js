@@ -98,6 +98,16 @@ const uploadImovel = multer({
 })
 export { uploadImovel }
 
+// Documentos de reunioes (PDF/PPTX/DOCX/XLSX) — em memoria, vao direto para o Storage.
+const uploadDocs = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = /\.(pdf|pptx|ppt|docx|doc|xlsx|xls)$/i
+    cb(null, allowed.test(path.extname(file.originalname)))
+  },
+})
+
 // ── Auth helper para CRM (CRM bypassa auth global, mas precisamos para filtros) ──
 const _supabaseCrm = process.env.SUPABASE_SERVICE_KEY
   ? createClient(process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.supabase.co', process.env.SUPABASE_SERVICE_KEY)
@@ -3646,6 +3656,157 @@ router.delete('/relatorios-documentos', async (req, res) => {
     const { error } = await supabaseStorage.storage.from('Relatorios').remove([caminho])
     if (error) throw error
     res.json({ ok: true, removido: caminho })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ════════════════════════════════════════════════════════════════
+// REUNIOES DOCUMENTOS — reunioes editaveis com upload de ficheiros
+// Ficheiros no bucket privado "Relatorios" do Storage em <pasta>/<ficheiro>.
+// ════════════════════════════════════════════════════════════════
+const REUNIOES_BUCKET = 'Relatorios'
+
+function semanaIsoDeData(dataIso) {
+  if (!dataIso) return null
+  try {
+    const d = new Date(dataIso)
+    const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+    const dayNum = date.getUTCDay() || 7
+    date.setUTCDate(date.getUTCDate() + 4 - dayNum)
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1))
+    const weekNum = Math.ceil(((date - yearStart) / 86400000 + 1) / 7)
+    return `${date.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`
+  } catch { return null }
+}
+
+async function listarFicheirosReuniao(pasta) {
+  if (!supabaseStorage || !pasta) return []
+  const { data: files } = await supabaseStorage.storage.from(REUNIOES_BUCKET).list(pasta, { limit: 200 })
+  const out = []
+  for (const f of (files || [])) {
+    if (f.id === null) continue // subpastas
+    const ext = (f.name.split('.').pop() || '').toLowerCase()
+    const { data: signed } = await supabaseStorage.storage
+      .from(REUNIOES_BUCKET).createSignedUrl(`${pasta}/${f.name}`, 60 * 60)
+    out.push({
+      nome: f.name,
+      ext,
+      tamanho: f.metadata?.size ?? null,
+      atualizado: f.updated_at || f.created_at || null,
+      url: signed?.signedUrl || null,
+    })
+  }
+  out.sort((a, b) => a.nome.localeCompare(b.nome))
+  return out
+}
+
+// GET lista reunioes + ficheiros. Auto-importa pastas de semana legadas como reunioes.
+router.get('/reunioes-documentos', async (_req, res) => {
+  try {
+    const { rows: existentes } = await pool.query('SELECT pasta FROM reunioes_documentos')
+    const pastasExistentes = new Set(existentes.map(r => r.pasta))
+
+    // Auto-import: pastas de semana antigas no bucket sem reuniao associada.
+    if (supabaseStorage) {
+      const { data: folders } = await supabaseStorage.storage
+        .from(REUNIOES_BUCKET).list('', { limit: 200, sortBy: { column: 'name', order: 'desc' } })
+      const semanas = (folders || []).filter(f => f.id === null && /^\d{4}-W\d{2}$/.test(f.name))
+      for (const s of semanas) {
+        if (pastasExistentes.has(s.name)) continue
+        const ficheiros = await listarFicheirosReuniao(s.name)
+        if (!ficheiros.length) continue
+        const id = randomUUID()
+        await pool.query(
+          `INSERT INTO reunioes_documentos (id, titulo, data, semana_iso, pasta) VALUES ($1, $2, NULL, $3, $4)`,
+          [id, `Reunião ${s.name}`, s.name, s.name]
+        )
+        pastasExistentes.add(s.name)
+      }
+    }
+
+    const { rows } = await pool.query(
+      'SELECT * FROM reunioes_documentos ORDER BY COALESCE(data, semana_iso, created_at) DESC, created_at DESC'
+    )
+    const out = []
+    for (const r of rows) {
+      out.push({ ...r, ficheiros: await listarFicheirosReuniao(r.pasta) })
+    }
+    res.json(out)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/reunioes-documentos', async (req, res) => {
+  try {
+    const { titulo, data, notas } = req.body || {}
+    if (!titulo || !titulo.trim()) return res.status(400).json({ error: 'Título obrigatório' })
+    const id = randomUUID()
+    const pasta = `reunioes/${id}`
+    const { rows: [r] } = await pool.query(
+      `INSERT INTO reunioes_documentos (id, titulo, data, semana_iso, notas, pasta)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [id, titulo.trim(), data || null, semanaIsoDeData(data), notas || null, pasta]
+    )
+    res.status(201).json({ ...r, ficheiros: [] })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.put('/reunioes-documentos/:id', async (req, res) => {
+  try {
+    const { titulo, data, notas } = req.body || {}
+    const sets = ['updated_at = $1']
+    const params = [new Date().toISOString()]
+    if (titulo !== undefined) { params.push(titulo); sets.push(`titulo = $${params.length}`) }
+    if (data !== undefined) {
+      params.push(data || null); sets.push(`data = $${params.length}`)
+      params.push(semanaIsoDeData(data)); sets.push(`semana_iso = $${params.length}`)
+    }
+    if (notas !== undefined) { params.push(notas || null); sets.push(`notas = $${params.length}`) }
+    params.push(req.params.id)
+    const { rows: [r] } = await pool.query(
+      `UPDATE reunioes_documentos SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`, params
+    )
+    if (!r) return res.status(404).json({ error: 'Reunião não encontrada' })
+    res.json({ ...r, ficheiros: await listarFicheirosReuniao(r.pasta) })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/reunioes-documentos/:id', async (req, res) => {
+  try {
+    const { rows: [r] } = await pool.query('SELECT pasta FROM reunioes_documentos WHERE id = $1', [req.params.id])
+    if (!r) return res.status(404).json({ error: 'Não encontrada' })
+    if (supabaseStorage) {
+      const { data: files } = await supabaseStorage.storage.from(REUNIOES_BUCKET).list(r.pasta, { limit: 200 })
+      const paths = (files || []).filter(f => f.id !== null).map(f => `${r.pasta}/${f.name}`)
+      if (paths.length) await supabaseStorage.storage.from(REUNIOES_BUCKET).remove(paths).catch(() => {})
+    }
+    await pool.query('DELETE FROM reunioes_documentos WHERE id = $1', [req.params.id])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/reunioes-documentos/:id/ficheiros', uploadDocs.array('ficheiros', 20), async (req, res) => {
+  try {
+    if (!supabaseStorage) return res.status(503).json({ error: 'Storage indisponível (sem SUPABASE_SERVICE_KEY)' })
+    const { rows: [r] } = await pool.query('SELECT pasta FROM reunioes_documentos WHERE id = $1', [req.params.id])
+    if (!r) return res.status(404).json({ error: 'Reunião não encontrada' })
+    if (!req.files?.length) return res.status(400).json({ error: 'Nenhum ficheiro recebido' })
+    for (const file of req.files) {
+      const safe = file.originalname.replace(/[^\w.\- ]+/g, '_')
+      await supabaseStorage.storage.from(REUNIOES_BUCKET)
+        .upload(`${r.pasta}/${safe}`, file.buffer, { contentType: file.mimetype, upsert: true })
+    }
+    await pool.query('UPDATE reunioes_documentos SET updated_at = $1 WHERE id = $2', [new Date().toISOString(), req.params.id])
+    res.json({ ficheiros: await listarFicheirosReuniao(r.pasta) })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/reunioes-documentos/:id/ficheiros/:nome', async (req, res) => {
+  try {
+    if (!supabaseStorage) return res.status(503).json({ error: 'Storage indisponível' })
+    const { rows: [r] } = await pool.query('SELECT pasta FROM reunioes_documentos WHERE id = $1', [req.params.id])
+    if (!r) return res.status(404).json({ error: 'Reunião não encontrada' })
+    const nome = decodeURIComponent(req.params.nome)
+    await supabaseStorage.storage.from(REUNIOES_BUCKET).remove([`${r.pasta}/${nome}`])
+    res.json({ ficheiros: await listarFicheirosReuniao(r.pasta) })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
