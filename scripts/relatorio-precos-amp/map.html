@@ -1,0 +1,35 @@
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  html,body{margin:0;padding:0;background:#fff}
+  #map{width:1240px;height:1040px}
+  .lbl{background:#0d0d0d;color:#C9A84C;border:1.5px solid #C9A84C;border-radius:6px;
+        padding:2px 6px;font:700 13px/1 Arial;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+  .legend{position:absolute;bottom:24px;left:24px;z-index:1000;background:#0d0d0d;color:#fff;padding:14px 16px;border-radius:10px;font:13px Arial;box-shadow:0 2px 10px rgba(0,0,0,.4)}.legend b{color:#C9A84C;font-size:14px}.legend .row{display:flex;align-items:center;gap:8px;margin-top:6px}.legend .sw{width:16px;height:16px;border-radius:50%;border:2px solid #fff}
+</style></head><body>
+<div id="map"></div>
+<div class="legend"><b>Mercado da zona (€/m²)</b><div class="row"><span class="sw" style="background:#2e7d32"></span> 1,204 (mais baixo)</div><div class="row"><span class="sw" style="background:#f9a825"></span> ~2,680</div><div class="row"><span class="sw" style="background:#c62828"></span> 4,155 (mais alto)</div></div>
+<script>
+var VMIN=1204.5, VMAX=4155.0;
+function color(v){
+  var t=(v-VMIN)/((VMAX-VMIN)||1);
+  var r,g,b;
+  if(t<0.5){var k=t/0.5; r=Math.round(46+(249-46)*k); g=Math.round(125+(168-125)*k); b=Math.round(50+(37-50)*k);}
+  else{var k=(t-0.5)/0.5; r=Math.round(249+(198-249)*k); g=Math.round(168+(40-168)*k); b=Math.round(37+(40-37)*k);}
+  return 'rgb('+r+','+g+','+b+')';
+}
+var map=L.map('map',{zoomControl:false,attributionControl:false});
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(map);
+var pts=[{"lat": 41.06742149999999, "lng": -8.568821699999999, "m2": 1814.5, "ask": 200000.0}, {"lat": 41.13488359999999, "lng": -8.6248943, "m2": 3785.0, "ask": 215000.0}, {"lat": 41.12590420126992, "lng": -8.62366611822327, "m2": 3760.5, "ask": 235000.0}, {"lat": 41.128972, "lng": -8.5888344, "m2": 2802.0, "ask": 190000.0}, {"lat": 41.1119017, "lng": -8.6157313, "m2": 3230.5, "ask": 180000.0}, {"lat": 41.127368094119845, "lng": -8.624111248025145, "m2": 3758.0, "ask": 230000.0}, {"lat": 41.1298507, "lng": -8.6410323, "m2": 4155.0, "ask": 165000.0}, {"lat": 41.06203199999999, "lng": -8.583442400000001, "m2": 1968.0, "ask": 199000.0}, {"lat": 41.10444141221794, "lng": -8.599724396673366, "m2": 3206.5, "ask": 235000.0}, {"lat": 41.1209327, "lng": -8.6080235, "m2": 3215.0, "ask": 220000.0}, {"lat": 41.1109656, "lng": -8.6115871, "m2": 3227.5, "ask": 210000.0}, {"lat": 41.1354367, "lng": -8.6052442, "m2": 3789.0, "ask": 198000.0}, {"lat": 41.0340591, "lng": -8.512718399999999, "m2": 1204.5, "ask": 210000.0}, {"lat": 41.1154428, "lng": -8.603500799999999, "m2": 3206.5, "ask": 225000.0}];
+var SHOW_LABELS=false;
+var group=[];
+pts.forEach(function(p){
+  var m=L.circleMarker([p.lat,p.lng],{radius:13,color:'#0d0d0d',weight:2,fillColor:color(p.m2),fillOpacity:0.92}).addTo(map);
+  if(SHOW_LABELS && p.ask){ m.bindTooltip(Math.round(p.ask/1000)+'k €',{permanent:true,direction:'top',className:'lbl',offset:[0,-6]}); }
+  group.push([p.lat,p.lng]);
+});
+if(group.length===1){ map.setView(group[0],14); }
+else { map.fitBounds(group,{padding:[40,40]}); if(map.getZoom()<13){map.setZoom(map.getZoom()+1);} }
+setTimeout(function(){window.__ready=true;},300);
+</script></body></html>

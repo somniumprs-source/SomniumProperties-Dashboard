@@ -68,6 +68,23 @@ def extrai_freguesia(doc):
     m = re.search(r"freguesias?\s+de\s+([^.\n]+)", full)
     return normaliza_freguesia(m.group(1)) if m else None
 
+def extrai_zona_banda(doc):
+    """Banda €/m² da zona (eixo da pagina temporal: 'Preço por metro quadrado
+    (unitário) para <Tipo> de <freguesia>'). E nivel zona+tipologia, independente
+    da condicao do nosso imovel — a referencia honesta de mercado da freguesia."""
+    page = next((doc[i].get_text() for i in range(doc.page_count)
+                 if "Preço por metro quadrado" in doc[i].get_text()), "")
+    if not page:
+        return None, None
+    # so a partir da frase do titulo do grafico, e ate aos rotulos de data (MM/YY)
+    after = page.split("Preço por metro quadrado", 1)[1]
+    after = re.split(r"\d{2}/\d{2}", after, 1)[0]
+    ticks = [num(x) for x in re.findall(r"([\d\s.,  ]+)€/m²", after)]
+    ticks = [t for t in ticks if t]
+    if len(ticks) >= 2:
+        return min(ticks), max(ticks)
+    return None, None
+
 def extrai_tendencia(full):
     cres = first(r"Crescimento\s*\n([\d.,]+)\s*%", full)
     niv = first(r"Nível de crescimento\s*\n([^\n]+)", full)
@@ -176,6 +193,8 @@ for im in imoveis:
     ask = float(ask) if ask else None
     delta = ((ask - market_total) / market_total * 100) if (ask and market_total) else None
     cresc, nivel = extrai_tendencia(full)
+    zona_m2_min, zona_m2_max = extrai_zona_banda(doc)
+    zona_m2_ref = (zona_m2_min + zona_m2_max) / 2 if (zona_m2_min and zona_m2_max) else None
     pois = extrai_pois(doc)
     fotos_urls = fotos_imovel(im)
     dataset.append({
@@ -191,6 +210,7 @@ for im in imoveis:
         "renda_media": renda, "yield_media": yld,
         "comparaveis_preco_medio": comp_preco, "comparaveis_m2_medio": comp_m2,
         "crescimento_pct": cresc, "nivel_crescimento": nivel,
+        "zona_m2_min": zona_m2_min, "zona_m2_max": zona_m2_max, "zona_m2_ref": zona_m2_ref,
         "pontos_interesse": pois, "fotos": fotos_urls,
         "estudo_ficheiro": rep["name"],
     })

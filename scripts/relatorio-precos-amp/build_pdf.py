@@ -43,6 +43,16 @@ SHORT = {
 }
 def short(z): return SHORT.get(z, z)
 
+PERFIL = {
+    "Santa Marinha e São Pedro da Afurada": "Premium ribeirinho",
+    "Mafamude e Vilar do Paraíso": "Central urbano",
+    "Oliveira do Douro": "Residencial (rio)",
+    "Canidelo": "Litoral / praia",
+    "Pedroso e Seixezelo": "Periférico (Carvalhos)",
+    "Serzedo e Perosinho": "Periférico",
+    "Sandim, Olival, Lever e Crestuma": "Rural",
+}
+
 def col_m2(v, vmin, vmax):
     t = (v - vmin) / ((vmax - vmin) or 1)
     if t < 0.5:
@@ -56,13 +66,19 @@ zonas = {}
 for d in ims:
     zonas.setdefault(d.get("freguesia") or "(sem zona)", []).append(d)
 
+def med(xs):
+    xs = [x for x in xs if x is not None]
+    return st.median(xs) if xs else None
+
 def agg(arr):
-    m2 = [d["valor_mercado_m2"] for d in arr if d.get("valor_mercado_m2")]
+    nosso = [d["valor_mercado_m2"] for d in arr if d.get("valor_mercado_m2")]
+    zref = [d["zona_m2_ref"] for d in arr if d.get("zona_m2_ref")]
+    zmin = [d["zona_m2_min"] for d in arr if d.get("zona_m2_min")]
+    zmax = [d["zona_m2_max"] for d in arr if d.get("zona_m2_max")]
     yl = [d["yield_media"] for d in arr if d.get("yield_media")]
     dl = [d["delta_ask_mercado_pct"] for d in arr if d.get("delta_ask_mercado_pct") is not None]
     cr = [d["crescimento_pct"] for d in arr if d.get("crescimento_pct") is not None]
-    pois = []
-    seen = set()
+    pois, seen = [], set()
     for d in arr:
         for p in (d.get("pontos_interesse") or []):
             nm = p["nome"]
@@ -72,24 +88,32 @@ def agg(arr):
     fotos = []
     for d in arr:
         fotos += fotos_local.get(d["id"], [])
+    tipos = [d.get("tipo") for d in arr if d.get("tipo")]
     return {
-        "n": len(arr), "m2_med": st.mean(m2) if m2 else None,
-        "m2_min": min(m2) if m2 else None, "m2_max": max(m2) if m2 else None,
+        "n": len(arr),
+        "zona_ref": med(zref), "zona_min": min(zmin) if zmin else None, "zona_max": max(zmax) if zmax else None,
+        "nosso_m2": med(nosso),
+        "ask_med": med([d.get("ask_price") for d in arr]),
+        "valor_med": med([d.get("valor_mercado") for d in arr]),
         "yield_med": st.mean(yl) if yl else None, "delta_med": st.mean(dl) if dl else None,
-        "cresc_med": st.mean(cr) if cr else None, "pois": pois, "fotos": fotos,
+        "cresc_med": st.median(cr) if cr else None, "pois": pois, "fotos": fotos,
+        "tipo_dom": max(set(tipos), key=tipos.count) if tipos else "—",
         "tipologias": ", ".join(sorted({d["tipologia"] for d in arr if d.get("tipologia")})),
     }
 
 zona_rows = [{"zona": z, "imoveis": arr, **agg(arr)} for z, arr in zonas.items()]
-zona_rows.sort(key=lambda r: (r["m2_med"] or 0), reverse=True)
+# ordenar pelo nivel de mercado da ZONA (€/m² do Alfredo), nao pelo nosso imovel
+zona_rows.sort(key=lambda r: (r["zona_ref"] or r["nosso_m2"] or 0), reverse=True)
+media_zonas = st.mean([r["zona_ref"] for r in zona_rows if r["zona_ref"]])
 todos_m2 = [d["valor_mercado_m2"] for d in ims if d.get("valor_mercado_m2")]
-media_amp = st.mean(todos_m2)
 todos_yield = [d["yield_media"] for d in ims if d.get("yield_media")]
 comp = [d for d in ims if d.get("ask_price") and d.get("valor_mercado")]
 deltas = [d["delta_ask_mercado_pct"] for d in comp]
 delta_med = st.mean(deltas); n_abaixo = len([x for x in deltas if x < 0])
 ask_total = sum(d["ask_price"] for d in comp); merc_total = sum(d["valor_mercado"] for d in comp)
-VMIN, VMAX = min(todos_m2), max(todos_m2)
+# escala de cor pelo nivel de mercado da zona (€/m² Alfredo)
+_zrefs = [r["zona_ref"] for r in zona_rows if r["zona_ref"]]
+VMIN, VMAX = min(_zrefs), max(_zrefs)
 
 # ---- estilos ----
 H1 = ParagraphStyle("H1", fontName="Helvetica-Bold", fontSize=17, textColor=DARK, spaceAfter=3, leading=20)
@@ -149,7 +173,7 @@ def grafico_barras():
     d = Drawing(doc.width, 215)
     bc = VerticalBarChart()
     bc.x = 28; bc.y = 38; bc.width = doc.width - 50; bc.height = 150
-    vals = [r["m2_med"] for r in zona_rows]
+    vals = [r["zona_ref"] for r in zona_rows]
     bc.data = [vals]
     bc.categoryAxis.categoryNames = [short(r["zona"]) for r in zona_rows]
     bc.categoryAxis.labels.fontSize = 7; bc.categoryAxis.labels.angle = 18
@@ -173,43 +197,45 @@ story = [NextPageTemplate("body"), PageBreak()]
 story.append(Paragraph("Onde fica e como se lê a região", H1))
 story.append(Paragraph(ZC.INTRO_AMP, BODY))
 story.append(Spacer(1, 8))
-story.append(Paragraph("Mapa da carteira — preço de mercado por imóvel", H2))
+story.append(Paragraph("Mapa da carteira — nível de mercado por zona", H2))
 mp = os.path.join(HERE, "map.png")
 if os.path.exists(mp):
     img = fit_image(mp, doc.width, 360); img.hAlign = "CENTER"; story.append(img)
 story.append(PageBreak())
 
 story.append(Paragraph("Comparação entre zonas", H1))
-story.append(Paragraph("Preço de mercado médio por freguesia (€/m²). A cor acompanha o nível de preço, do verde "
-                       "(mais acessível) ao vermelho (mais caro).", BODY))
+story.append(Paragraph("Nível de mercado de cada freguesia em €/m² (estimativa do Alfredo para a zona e tipologia, "
+                       "<b>independente dos nossos imóveis</b>). A cor acompanha o nível de preço, do verde (mais "
+                       "acessível) ao vermelho (mais caro). O preço de compra varia também com a área e o estado.", BODY))
 story.append(grafico_barras())
 story.append(Spacer(1, 6))
 
-# tabela ranking
-head = ["Zona", "Posição", "€/m² médio", "vs média AMP", "Ask vs mercado", "Tendência", "Imóveis"]
+# tabela ranking — lidera com preco absoluto + nivel de mercado da zona + amostra
+head = ["Zona", "Perfil", "Preço pedido típ.", "Valor merc. típ.", "Mercado zona", "Ask vs merc.", "Imóveis"]
 rrows = [head]; rank_cmds = []
 for i, r in enumerate(zona_rows, start=1):
-    vsamp = (r["m2_med"] - media_amp) / media_amp * 100 if r["m2_med"] else None
-    vs_txt = "—" if vsamp is None else f"{vsamp:+.0f}%".replace("-", "−")
     dl = r["delta_med"]; dl_txt = "—" if dl is None else f"{dl:+.0f}%".replace("-", "−")
-    cr = r["cresc_med"]; cr_txt = "—" if cr is None else f"+{cr:.0f}%/ano"
-    rrows.append([short(r["zona"]), ZC.get(r["zona"])["etiqueta"].split()[0], eurm2(r["m2_med"]),
-                  vs_txt, dl_txt, cr_txt, str(r["n"])])
+    n_txt = f"{r['n']}" + ("  ⚠" if r["n"] == 1 else "")
+    rrows.append([short(r["zona"]), PERFIL.get(r["zona"], "—"), eur(r["ask_med"]),
+                  eur(r["valor_med"]), eurm2(r["zona_ref"]), dl_txt, n_txt])
     if dl is not None:
-        rank_cmds.append(("TEXTCOLOR", (4, i), (4, i), GREEN if dl < 0 else RED))
-rt = Table(rrows, colWidths=[34*mm, 22*mm, 24*mm, 24*mm, 26*mm, 26*mm, 18*mm], repeatRows=1)
+        rank_cmds.append(("TEXTCOLOR", (5, i), (5, i), GREEN if dl < 0 else RED))
+rt = Table(rrows, colWidths=[31*mm, 27*mm, 26*mm, 26*mm, 24*mm, 20*mm, 18*mm], repeatRows=1)
 rt.setStyle(TableStyle([
     ("BACKGROUND",(0,0),(-1,0),DARK),("TEXTCOLOR",(0,0),(-1,0),GOLD),
     ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),("FONTSIZE",(0,0),(-1,0),8),
     ("FONTNAME",(0,1),(-1,-1),"Helvetica"),("FONTSIZE",(0,1),(-1,-1),8),
-    ("FONTNAME",(2,1),(2,-1),"Helvetica-Bold"),("TEXTCOLOR",(2,1),(2,-1),DARK),
-    ("FONTNAME",(4,1),(4,-1),"Helvetica-Bold"),
+    ("FONTNAME",(2,1),(3,-1),"Helvetica-Bold"),("TEXTCOLOR",(2,1),(3,-1),DARK),
+    ("FONTNAME",(4,1),(4,-1),"Helvetica-Bold"),("TEXTCOLOR",(4,1),(4,-1),GOLD if False else DARK),
+    ("FONTNAME",(5,1),(5,-1),"Helvetica-Bold"),
     ("ROWBACKGROUNDS",(0,1),(-1,-1),[WHITE, LIGHT]),
     ("ALIGN",(1,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
     ("GRID",(0,0),(-1,-1),0.4,LINE),("LINEBELOW",(0,0),(-1,0),1,GOLD),
     ("TOPPADDING",(0,0),(-1,-1),5),("BOTTOMPADDING",(0,0),(-1,-1),5),("LEFTPADDING",(0,0),(0,-1),7),
 ] + rank_cmds))
 story.append(rt)
+story.append(Paragraph("⚠ amostra de 1 imóvel — valor indicativo, não representativo da freguesia. "
+                       "“Preço típico” = mediana dos nossos imóveis na zona.", SMALL))
 story.append(Spacer(1, 8))
 co_style = ParagraphStyle("co", fontName="Helvetica", fontSize=9.5, textColor=DARK, leading=14)
 callout = Table([[Paragraph(
@@ -227,14 +253,15 @@ story.append(callout)
 for r in zona_rows:
     z = r["zona"]; ctx = ZC.get(z)
     story.append(PageBreak())
-    vsamp = (r["m2_med"] - media_amp) / media_amp * 100 if r["m2_med"] else 0
-    # cabecalho
-    badge = Table([[Paragraph(eurm2(r["m2_med"]), ParagraphStyle("b", fontName="Helvetica-Bold", fontSize=14, textColor=WHITE, alignment=1))]],
-                  colWidths=[34*mm])
-    badge.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),col_m2(r["m2_med"], VMIN, VMAX)),
-                               ("TOPPADDING",(0,0),(-1,-1),7),("BOTTOMPADDING",(0,0),(-1,-1),7),("BOX",(0,0),(-1,-1),1,DARK)]))
+    vs = (r["zona_ref"] - media_zonas) / media_zonas * 100 if r["zona_ref"] else 0
+    # cabecalho — badge mostra o nivel de mercado da ZONA
+    badge = Table([[Paragraph(eurm2(r["zona_ref"]), ParagraphStyle("b", fontName="Helvetica-Bold", fontSize=14, textColor=WHITE, alignment=1)),],
+                   [Paragraph("mercado da zona", ParagraphStyle("bs", fontName="Helvetica", fontSize=6.5, textColor=WHITE, alignment=1))]],
+                  colWidths=[36*mm])
+    badge.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),col_m2(r["zona_ref"], VMIN, VMAX)),
+                               ("TOPPADDING",(0,0),(-1,0),7),("BOTTOMPADDING",(0,1),(-1,1),6),("BOX",(0,0),(-1,-1),1,DARK)]))
     titcol = [Paragraph(z, H1), Paragraph(ctx["etiqueta"], ZTAG)]
-    header = Table([[titcol, badge]], colWidths=[doc.width-38*mm, 38*mm])
+    header = Table([[titcol, badge]], colWidths=[doc.width-40*mm, 40*mm])
     header.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"MIDDLE"),("ALIGN",(1,0),(1,0),"RIGHT")]))
     story.append(header)
     story.append(Paragraph(ctx["descricao"], BODY))
@@ -245,24 +272,44 @@ for r in zona_rows:
         return Table([[Paragraph(t, KICK)],
                       [Paragraph(v, ParagraphStyle("v", fontName="Helvetica-Bold", fontSize=14, textColor=DARK))],
                       [Paragraph(s, SMALL)]], colWidths=[doc.width/4 - 6])
-    vs_txt = f"{vsamp:+.0f}%".replace("-", "−")
-    cr_txt = "—" if r["cresc_med"] is None else f"+{r['cresc_med']:.0f}%/ano"
-    if r["n"] == 1:
-        rng_sub = "1 imóvel avaliado"
-    elif r["m2_min"] is None:
-        rng_sub = "—"
-    else:
-        rng_sub = f"{r['m2_min']:,.0f}–{r['m2_max']:,.0f}".replace(",", " ") + " (min–máx)"
-    cards = Table([[card("€/M² MÉDIO", eurm2(r["m2_med"]), rng_sub),
-                    card("VS MÉDIA AMP", vs_txt, "face às 7 zonas"),
-                    card("TENDÊNCIA", cr_txt, "crescimento estimado"),
-                    card("IMÓVEIS NOSSOS", str(r["n"]), r["tipologias"] or "—")]],
+    vs_txt = f"{vs:+.0f}%".replace("-", "−")
+    band = "—" if r["zona_min"] is None else f"{r['zona_min']:,.0f}–{r['zona_max']:,.0f}".replace(",", " ") + " €/m²"
+    amostra = str(r["n"]) + ("  ⚠" if r["n"] == 1 else "")
+    cards = Table([[card("MERCADO DA ZONA", eurm2(r["zona_ref"]), f"{band}  ({vs_txt} vs média)"),
+                    card("PREÇO TÍPICO", eur(r["valor_med"]), "pedido " + eur(r["ask_med"])),
+                    card("O NOSSO PRODUTO", eurm2(r["nosso_m2"]), "estimativa do estudo"),
+                    card("AMOSTRA", amostra, r["tipologias"] or "—")]],
                   colWidths=[doc.width/4]*4)
     cards.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),LIGHT),("BOX",(0,0),(-1,-1),0.5,LINE),
                                ("LINEAFTER",(0,0),(-2,-1),0.5,LINE),("VALIGN",(0,0),(-1,-1),"TOP"),
                                ("TOPPADDING",(0,0),(-1,-1),7),("BOTTOMPADDING",(0,0),(-1,-1),7),
                                ("LEFTPADDING",(0,0),(-1,-1),8)]))
     story.append(cards)
+    story.append(Spacer(1, 7))
+
+    # o que significa para nos
+    margem = (r["valor_med"] - r["ask_med"]) if (r["valor_med"] and r["ask_med"]) else None
+    dl = r["delta_med"]
+    quantos = "Temos aqui 1 imóvel" if r["n"] == 1 else f"Temos aqui {r['n']} imóveis"
+    sig = (f"<b>O que significa para nós.</b> O mercado desta zona ronda os <b>{eurm2(r['zona_ref'])}</b>. "
+           f"{quantos}, com preço pedido típico de <b>{eur(r['ask_med'])}</b> e valor de mercado estimado de "
+           f"<b>{eur(r['valor_med'])}</b>")
+    if dl is not None:
+        sentido = "abaixo" if dl < 0 else "acima"
+        sig += f" (≈{abs(dl):.0f}% {sentido} do mercado"
+        sig += f", margem ~{eur(margem)})." if (margem and dl < 0) else ")."
+    else:
+        sig += "."
+    if r["nosso_m2"] and r["zona_max"] and r["nosso_m2"] > r["zona_max"]:
+        sig += " O nosso produto, renovado, posiciona-se acima do nível médio da zona — é aí que está a valorização."
+    if r["cresc_med"] is not None:
+        nivel = next((d.get("nivel_crescimento") for d in r["imoveis"] if d.get("nivel_crescimento")), "Positivo").lower()
+        sig += f" Tendência de preço na zona: {nivel} (≈+{r['cresc_med']:.0f}% nos últimos ~12 meses, estimativa volátil)."
+    sigbox = Table([[Paragraph(sig, ParagraphStyle("sig", fontName="Helvetica", fontSize=9, textColor=DARK, leading=13))]], colWidths=[doc.width])
+    sigbox.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),colors.HexColor("#faf6ea")),
+                                ("LINEBEFORE",(0,0),(0,-1),3,GOLD),("LEFTPADDING",(0,0),(-1,-1),10),
+                                ("RIGHTPADDING",(0,0),(-1,-1),10),("TOPPADDING",(0,0),(-1,-1),7),("BOTTOMPADDING",(0,0),(-1,-1),7)]))
+    story.append(sigbox)
     story.append(Spacer(1, 8))
 
     # mini-mapa
@@ -325,13 +372,17 @@ for r in zona_rows:
 story.append(PageBreak())
 story.append(Paragraph("Nota metodológica", H2))
 sem = data.get("sem_estudo", []); falh = data.get("estudos_falhados", [])
-nota = (f"Os valores resultam dos estudos de mercado automáticos (Alfredo AI — Real Estate Analytics) anexados a "
-        f"cada imóvel na aba de documentação do CRM. Por imóvel extraiu-se o Valor de Mercado estimado, o preço "
-        f"unitário (€/m²), o intervalo mínimo–máximo, a renda/yield, a tendência de preço e os pontos de interesse. "
-        f"A agregação por zona usa a freguesia oficial identificada em cada estudo (não a designação livre do CRM). "
-        f"O contexto descritivo de cada zona combina dados dos estudos com informação geográfica de referência sobre "
-        f"Vila Nova de Gaia. Foram analisados {data['com_estudo']} de {data['total_imoveis']} imóveis da região AMP. "
-        f"As fotografias provêm dos anúncios de origem e servem apenas de ilustração.")
+nota = (f"Fontes: estudos de mercado automáticos (Alfredo AI — Real Estate Analytics) anexados a cada imóvel no CRM. "
+        f"Distinguem-se duas métricas, para evitar confusões: <b>(1) Mercado da zona (€/m²)</b> — nível de preço da "
+        f"freguesia para a tipologia, lido da página de evolução temporal do estudo; é independente dos nossos imóveis "
+        f"e é o valor usado no gráfico, no ranking e no badge de cada zona. <b>(2) O nosso produto</b> — valor de "
+        f"mercado e €/m² estimados para o imóvel concreto (muitas vezes renovado, logo acima do nível médio da zona); "
+        f"daqui sai o “preço típico” (mediana) e a comparação com o preço pedido. A agregação por zona usa a freguesia "
+        f"oficial de cada estudo. Atenção à amostra: 5 das 7 zonas têm 1 imóvel (marcado ⚠) — nesses casos os valores "
+        f"dos nossos imóveis são indicativos. A tendência vem de séries curtas (~12 meses) e voláteis. O contexto "
+        f"descritivo combina dados dos estudos com informação geográfica de referência sobre Vila Nova de Gaia. "
+        f"Foram analisados {data['com_estudo']} de {data['total_imoveis']} imóveis da região AMP. As fotografias provêm "
+        f"dos anúncios de origem e servem apenas de ilustração.")
 if sem: nota += f" Sem estudo de mercado anexado ({len(sem)}): " + "; ".join(sem) + "."
 if falh: nota += f" Estudo inacessível no armazenamento ({len(falh)}): " + "; ".join(falh) + "."
 story.append(Paragraph(nota, SMALL))

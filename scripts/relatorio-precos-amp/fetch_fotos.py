@@ -12,9 +12,10 @@ os.makedirs(CACHE, exist_ok=True)
 data = json.load(open(os.path.join(HERE, "amp_dataset.json"), encoding="utf-8"))
 
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
-MIN_CORES = 800   # logotipos de agencia ~429 cores; fotos reais > 1000
+MIN_CORES = 1100   # logotipos/banners de agencia tem poucas cores; fotos reais > 1000
+MAX_RATIO = 2.1    # banners sao muito largos; fotos de imovel ~1.3-1.8
 MAX_KEEP = 3
-MAX_TRY = 9
+MAX_TRY = 10
 
 def carregar(url):
     req = urllib.request.Request(url, headers={"User-Agent": UA})
@@ -38,6 +39,8 @@ for d in data["imoveis"]:
             fail += 1; continue
         nc = assinatura(img)
         if nc < MIN_CORES:        # logotipo / placeholder
+            skip += 1; continue
+        if img.width / max(img.height, 1) > MAX_RATIO:   # banner largo
             skip += 1; continue
         if nc in sigs:            # duplicado (mesmo logo/imagem repetida)
             skip += 1; continue

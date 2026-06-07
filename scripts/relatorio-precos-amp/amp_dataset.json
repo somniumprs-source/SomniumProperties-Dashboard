@@ -39,6 +39,9 @@
       "comparaveis_m2_medio": 3469.0,
       "crescimento_pct": 11.91,
       "nivel_crescimento": "Positivo",
+      "zona_m2_min": 1429.0,
+      "zona_m2_max": 2200.0,
+      "zona_m2_ref": 1814.5,
       "pontos_interesse": [
         {
           "nome": "Ana Coffee & Lunch",
@@ -151,6 +154,9 @@
       "comparaveis_m2_medio": 3533.0,
       "crescimento_pct": 15.21,
       "nivel_crescimento": "Positivo",
+      "zona_m2_min": 3428.0,
+      "zona_m2_max": 4142.0,
+      "zona_m2_ref": 3785.0,
       "pontos_interesse": [
         {
           "nome": "DeRose Method Gaia",
@@ -302,6 +308,9 @@
       "comparaveis_m2_medio": 2800.0,
       "crescimento_pct": 13.45,
       "nivel_crescimento": "Positivo",
+      "zona_m2_min": 3445.0,
+      "zona_m2_max": 4076.0,
+      "zona_m2_ref": 3760.5,
       "pontos_interesse": [
         {
           "nome": "Farmácia das Devesas",
@@ -459,6 +468,9 @@
       "comparaveis_m2_medio": 3987.0,
       "crescimento_pct": 29.9,
       "nivel_crescimento": "Muito Positivo",
+      "zona_m2_min": 2365.0,
+      "zona_m2_max": 3239.0,
+      "zona_m2_ref": 2802.0,
       "pontos_interesse": [
         {
           "nome": "Café Caxito",
@@ -602,6 +614,9 @@
       "comparaveis_m2_medio": 2724.0,
       "crescimento_pct": 30.21,
       "nivel_crescimento": "Muito Positivo",
+      "zona_m2_min": 2722.0,
+      "zona_m2_max": 3739.0,
+      "zona_m2_ref": 3230.5,
       "pontos_interesse": [
         {
           "nome": "Mimo (Take-away)",
@@ -755,6 +770,9 @@
       "comparaveis_m2_medio": 2913.0,
       "crescimento_pct": 12.35,
       "nivel_crescimento": "Positivo",
+      "zona_m2_min": 3454.0,
+      "zona_m2_max": 4062.0,
+      "zona_m2_ref": 3758.0,
       "pontos_interesse": [
         {
           "nome": "Farmácia das Devesas",
@@ -919,6 +937,9 @@
       "comparaveis_m2_medio": 3868.0,
       "crescimento_pct": 12.93,
       "nivel_crescimento": "Positivo",
+      "zona_m2_min": 3721.0,
+      "zona_m2_max": 4589.0,
+      "zona_m2_ref": 4155.0,
       "pontos_interesse": [
         {
           "nome": "Maximus",
@@ -1072,6 +1093,9 @@
       "comparaveis_m2_medio": 1956.0,
       "crescimento_pct": 0.0,
       "nivel_crescimento": "Neutro",
+      "zona_m2_min": 1806.0,
+      "zona_m2_max": 2130.0,
+      "zona_m2_ref": 1968.0,
       "pontos_interesse": [
         {
           "nome": "Café Carmo",
@@ -1156,6 +1180,9 @@
       "comparaveis_m2_medio": 2975.0,
       "crescimento_pct": 30.47,
       "nivel_crescimento": "Muito Positivo",
+      "zona_m2_min": 2698.0,
+      "zona_m2_max": 3715.0,
+      "zona_m2_ref": 3206.5,
       "pontos_interesse": [
         {
           "nome": "VNG-00112",
@@ -1307,6 +1334,9 @@
       "comparaveis_m2_medio": 3563.0,
       "crescimento_pct": 29.11,
       "nivel_crescimento": "Muito Positivo",
+      "zona_m2_min": 2725.0,
+      "zona_m2_max": 3705.0,
+      "zona_m2_ref": 3215.0,
       "pontos_interesse": [
         {
           "nome": "O Piri-piri",
@@ -1461,6 +1491,9 @@
       "comparaveis_m2_medio": 3003.0,
       "crescimento_pct": 30.0,
       "nivel_crescimento": "Muito Positivo",
+      "zona_m2_min": 2722.0,
+      "zona_m2_max": 3733.0,
+      "zona_m2_ref": 3227.5,
       "pontos_interesse": [
         {
           "nome": "Café O Oedro",
@@ -1614,6 +1647,9 @@
       "comparaveis_m2_medio": 3607.0,
       "crescimento_pct": 15.0,
       "nivel_crescimento": "Positivo",
+      "zona_m2_min": 3442.0,
+      "zona_m2_max": 4136.0,
+      "zona_m2_ref": 3789.0,
       "pontos_interesse": [
         {
           "nome": "Farmácia Avenida",
@@ -1778,6 +1814,9 @@
       "comparaveis_m2_medio": 2768.0,
       "crescimento_pct": null,
       "nivel_crescimento": "Muito Negativo",
+      "zona_m2_min": 608.0,
+      "zona_m2_max": 1801.0,
+      "zona_m2_ref": 1204.5,
       "pontos_interesse": [
         {
           "nome": "Academia Musical Sandim",
@@ -1832,6 +1871,9 @@
       "comparaveis_m2_medio": 3356.0,
       "crescimento_pct": 30.47,
       "nivel_crescimento": "Muito Positivo",
+      "zona_m2_min": 2698.0,
+      "zona_m2_max": 3715.0,
+      "zona_m2_ref": 3206.5,
       "pontos_interesse": [
         {
           "nome": "Café Clube dos Caçadores",
