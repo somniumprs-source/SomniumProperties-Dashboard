@@ -268,13 +268,11 @@ app.post("/", async (c: any) => {
     let deliveryNote: string | null = null;
 
     if (supabaseAdmin) {
-      // Investidores aterram direto na página de projectos (link mais útil).
-      // Se o Supabase não tiver este redirect na allowlist, faz fallback para o
-      // Site URL — autentica na raiz na mesma, nunca parte o login.
-      const baseRedirect = resolveRedirectTo(c);
-      const redirectTo = role === "investidor"
-        ? `${(baseRedirect || "").replace(/\/$/, "")}/projectos`
-        : baseRedirect;
+      // Redirect SEMPRE para a raiz (Site URL — garantidamente na allowlist do
+      // Supabase). O encaminhamento do investidor para /projectos é feito no
+      // cliente após login (ver AppRoutes), para não depender de paths extra
+      // estarem na allowlist de Redirect URLs.
+      const redirectTo = resolveRedirectTo(c);
       if (password) {
         const { data, error } = await supabaseAdmin.auth.admin.createUser({ email, password, email_confirm: true });
         if (error) return c.json({ error: `Supabase: ${error.message}` }, 400);

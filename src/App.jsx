@@ -36,7 +36,7 @@ function PageFallback() {
 }
 
 function AppRoutes() {
-  const { isAuthenticated, loading } = useAuth()
+  const { isAuthenticated, loading, isInvestidor } = useAuth()
 
   if (loading) {
     return (
@@ -69,7 +69,7 @@ function AppRoutes() {
       <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route element={<Layout />}>
-            <Route index element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+            <Route index element={isInvestidor ? <Navigate to="/projectos" replace /> : <ErrorBoundary><Dashboard /></ErrorBoundary>} />
             <Route path="/crm" element={<ErrorBoundary><CRM /></ErrorBoundary>} />
             <Route path="/projectos" element={<ErrorBoundary><Projectos /></ErrorBoundary>} />
             <Route path="/projectos/calendario" element={<ErrorBoundary><ProjectosCalendario /></ErrorBoundary>} />
