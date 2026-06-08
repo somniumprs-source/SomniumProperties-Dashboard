@@ -2192,11 +2192,13 @@ router.get('/kpis/:tab', async (req, res) => {
       const { rows: [totals] } = await pool.query(`SELECT COUNT(*) as total FROM consultores ${wReg}`, params)
       res.json({ byEstatuto: rows, total: parseInt(totals.total) })
     } else if (tab === 'negocios') {
+      // negocios tem soft-delete (migração 0020): excluir lixeira senão os KPIs somam apagados.
+      const wRegNeg = regiao ? 'WHERE regiao = $1 AND deleted_at IS NULL' : 'WHERE deleted_at IS NULL'
       const { rows: [totals] } = await pool.query(`
         SELECT COUNT(*) as total, COALESCE(SUM(lucro_estimado),0) as lucro_est,
           COALESCE(SUM(lucro_real),0) as lucro_real,
           COUNT(CASE WHEN fase = 'Vendido' THEN 1 END) as vendidos
-        FROM negocios ${wReg}
+        FROM negocios ${wRegNeg}
       `, params)
       res.json(totals)
     } else if (tab === 'despesas') {
@@ -3352,6 +3354,7 @@ router.post('/backup/restore/:id', async (req, res) => {
         || (backup.consultores || []).some(r => r.regiao === 'AMP')
         || (backup.negocios || []).some(r => r.regiao === 'AMP')
     // Detectar dados AMP actuais que seriam apagados num restore global
+    // guard:deleted-at-ok — conta linhas FÍSICAS (incl. lixeira) p/ avisar de perda real num restore
     const { rows: ampActual } = await pool.query(
       `SELECT (SELECT COUNT(*)::int FROM imoveis WHERE regiao = 'AMP') AS imoveis,
               (SELECT COUNT(*)::int FROM consultores WHERE regiao = 'AMP') AS consultores,
