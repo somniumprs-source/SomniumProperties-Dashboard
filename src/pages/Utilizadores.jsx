@@ -388,11 +388,13 @@ function InviteForm({ onClose, onCreated }) {
       const j = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
 
-      // Ligar investidor existente ao user criado (se aplicável)
-      if (form.role === 'investidor' && form.investidor_id && j.user?.id) {
+      // Ligar investidor existente ao user criado (se aplicável). O POST /users
+      // devolve o utilizador no topo (j.id), não em j.user. Ao gravar user_id,
+      // o backend concede automaticamente acesso aos projectos do investidor.
+      if (form.role === 'investidor' && form.investidor_id && j.id) {
         await apiFetch(`/api/crm/investidores/${form.investidor_id}`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: j.user.id }),
+          body: JSON.stringify({ user_id: j.id }),
         }).catch(() => {})
       }
 

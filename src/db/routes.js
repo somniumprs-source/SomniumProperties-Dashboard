@@ -667,7 +667,36 @@ router.get('/imoveis/:id/relatorio-investidor', async (req, res) => {
   }
 })
 
-crudRoutes('/investidores', Investidores)
+// Concede ao user ligado a um investidor acesso (tabela `acessos`) a todos os
+// negocios em que esse investidor participa — via projeto_investidores ou via
+// negocios.investidor_ids (JSON). Idempotente. Sem user_id ligado, nao faz nada.
+async function syncInvestidorAcessos(investidorId) {
+  const { rows: [inv] } = await pool.query('SELECT user_id FROM investidores WHERE id = $1', [investidorId])
+  if (!inv?.user_id) return 0
+  const { rows: negocios } = await pool.query(
+    `SELECT DISTINCT n.id FROM negocios n
+     LEFT JOIN projeto_investidores pi ON pi.negocio_id = n.id AND pi.investidor_id = $1
+     WHERE n.deleted_at IS NULL
+       AND (pi.investidor_id IS NOT NULL OR n.investidor_ids LIKE $2)`,
+    [investidorId, `%${investidorId}%`]
+  )
+  for (const n of negocios) {
+    await pool.query(
+      `INSERT INTO acessos (id, user_id, entidade, entidade_id, granted_by)
+       VALUES ($1, $2, 'negocio', $3, 'auto:investidor')
+       ON CONFLICT (user_id, entidade, entidade_id) DO NOTHING`,
+      [randomUUID(), inv.user_id, n.id]
+    )
+  }
+  return negocios.length
+}
+
+crudRoutes('/investidores', Investidores, {
+  onUpdate: async (item, body) => {
+    // Ao ligar um investidor a um utilizador, dar-lhe logo acesso aos projectos.
+    if (body?.user_id) await syncInvestidorAcessos(item.id)
+  },
+})
 
 // ── Documentos enviados a investidores (historico) ──────────
 router.get('/investidores/:id/documentos', async (req, res) => {
@@ -4683,6 +4712,8 @@ router.post('/projetos/:negocioId/investidores', async (req, res) => {
        RETURNING *`,
       [id, req.params.negocioId, investidor_id, Number(capital) || 0, Number(percentagem) || 0, notas || null]
     )
+    // Se este investidor tem um utilizador ligado, dar-lhe acesso a este projecto.
+    syncInvestidorAcessos(investidor_id).catch(e => console.error('[projeto-investidor] syncAcessos:', e.message))
     res.status(201).json(rows[0])
   } catch (e) { res.status(500).json({ error: e.message }) }
 })

@@ -944,7 +944,40 @@ app.get("/imoveis/:id/relatorio-investidor", async (c: any) => {
   }
 });
 
-crudRoutes("/investidores", Investidores);
+// Concede ao user ligado a um investidor acesso (tabela `acessos`) a todos os
+// negocios em que esse investidor participa — via projeto_investidores ou via
+// negocios.investidor_ids (JSON). Idempotente. Sem user_id ligado, nao faz nada.
+// É o que faz o role "investidor" (RECORD_RESTRICTED) ver os seus projectos em
+// /projetos/meus, que filtra por acessos (entidade='negocio').
+async function syncInvestidorAcessos(investidorId: string): Promise<number> {
+  const { rows: [inv] } = await pool.query("SELECT user_id FROM investidores WHERE id = $1", [investidorId]);
+  if (!inv?.user_id) return 0;
+  const { rows: negocios } = await pool.query(
+    `SELECT DISTINCT n.id FROM negocios n
+     LEFT JOIN projeto_investidores pi ON pi.negocio_id = n.id AND pi.investidor_id = $1
+     WHERE n.deleted_at IS NULL
+       AND (pi.investidor_id IS NOT NULL OR n.investidor_ids LIKE $2)`,
+    [investidorId, `%${investidorId}%`],
+  );
+  let granted = 0;
+  for (const n of negocios) {
+    await pool.query(
+      `INSERT INTO acessos (id, user_id, entidade, entidade_id, granted_by)
+       VALUES ($1, $2, 'negocio', $3, 'auto:investidor')
+       ON CONFLICT (user_id, entidade, entidade_id) DO NOTHING`,
+      [crypto.randomUUID(), inv.user_id, n.id],
+    );
+    granted++;
+  }
+  return granted;
+}
+
+crudRoutes("/investidores", Investidores, {
+  onUpdate: async (item: any, body: any) => {
+    // Ao ligar um investidor a um utilizador, dar-lhe logo acesso aos projectos.
+    if (body?.user_id) await syncInvestidorAcessos(item.id);
+  },
+});
 
 // ── Documentos enviados a investidores (historico) — port de routes.js 655-693 ──
 app.get("/investidores/:id/documentos", async (c: any) => {
@@ -4627,6 +4660,8 @@ app.post("/projetos/:negocioId/investidores", async (c: any) => {
        RETURNING *`,
       [id, c.req.param("negocioId"), investidor_id, Number(capital) || 0, Number(percentagem) || 0, notas || null],
     );
+    // Se este investidor tem um utilizador ligado, dar-lhe acesso a este projecto.
+    syncInvestidorAcessos(investidor_id).catch((e: any) => console.error("[projeto-investidor] syncAcessos:", e.message));
     return c.json(rows[0], 201);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });

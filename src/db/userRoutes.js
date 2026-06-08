@@ -263,7 +263,13 @@ router.post('/', async (req, res) => {
     let deliveryNote = null
 
     if (supabaseAdmin) {
-      const redirectTo = resolveRedirectTo(req)
+      // Investidores aterram direto na página de projectos (link mais útil).
+      // Se o Supabase não tiver este redirect na allowlist, faz fallback para o
+      // Site URL — autentica na raiz na mesma, nunca parte o login.
+      const baseRedirect = resolveRedirectTo(req)
+      const redirectTo = role === 'investidor'
+        ? `${(baseRedirect || '').replace(/\/$/, '')}/projectos`
+        : baseRedirect
       if (password) {
         const { data, error } = await supabaseAdmin.auth.admin.createUser({
           email, password, email_confirm: true,
