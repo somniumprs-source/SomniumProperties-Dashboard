@@ -1462,7 +1462,7 @@ export async function initSchema() {
     await client.query(`
       INSERT INTO users (id, email, nome, iniciais, cor, role, ativo)
       VALUES ('owner', 'somniumprs@gmail.com', 'João Abreu', 'JA', '#C9A84C', 'admin', true)
-      ON CONFLICT (email) DO UPDATE SET role = 'admin', ativo = true
+      ON CONFLICT (id) DO UPDATE SET role = 'admin', ativo = true
     `)
     console.log('[pg] Schema criado/verificado')
   } finally {

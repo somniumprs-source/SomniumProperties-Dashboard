@@ -130,7 +130,7 @@ async function resolveAppUser(c: any): Promise<any | null> {
     await pool.query(
       `INSERT INTO users (id, email, nome, iniciais, role, ativo)
        VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (email) DO NOTHING`,
+       ON CONFLICT (id) DO NOTHING`,
       [authUser.id, email, email.split("@")[0], iniciaisFromNome(email), isOwner ? "admin" : "comercial", isOwner],
     );
     u = await getUserByEmail(email);
@@ -316,7 +316,7 @@ app.post("/", async (c: any) => {
     const r = await pool.query(
       `INSERT INTO users (id, email, nome, iniciais, cor, role, ativo)
        VALUES ($1, $2, $3, $4, $5, $6, true)
-       ON CONFLICT (email) DO UPDATE SET nome = EXCLUDED.nome, role = EXCLUDED.role, cor = EXCLUDED.cor, ativo = true
+       ON CONFLICT (id) DO UPDATE SET nome = EXCLUDED.nome, role = EXCLUDED.role, cor = EXCLUDED.cor, ativo = true
        RETURNING *`,
       [authUserId, email, nome, iniciais, cor, role],
     );

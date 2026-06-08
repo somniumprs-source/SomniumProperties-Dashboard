@@ -314,7 +314,7 @@ router.post('/', async (req, res) => {
     const r = await pool.query(
       `INSERT INTO users (id, email, nome, iniciais, cor, role, ativo)
        VALUES ($1, $2, $3, $4, $5, $6, true)
-       ON CONFLICT (email) DO UPDATE SET nome = EXCLUDED.nome, role = EXCLUDED.role, cor = EXCLUDED.cor, ativo = true
+       ON CONFLICT (id) DO UPDATE SET nome = EXCLUDED.nome, role = EXCLUDED.role, cor = EXCLUDED.cor, ativo = true
        RETURNING *`,
       [authUserId, email, nome, iniciais, cor, role]
     )
