@@ -3438,7 +3438,8 @@ function renderPropostaCedenciaPosicao(b, im, a) {
   const meses = deal.meses || 6
   const obra = deal.obra_com_iva ?? deal.obra ?? 0
   const detencao = deal.total_detencao || 0
-  const comissaoVenda = deal.comissao_com_iva || 0
+  // Comissão de venda: fica fora do capital a adiantar — só desconta no lucro
+  // (já embutida em deal.lucro_bruto). Não entra no Investimento Total.
   const vvr = deal.vvr || 0
 
   // Bundle dos custos de aquisicao - investidor nao ve preco de compra
@@ -3454,12 +3455,11 @@ function renderPropostaCedenciaPosicao(b, im, a) {
   // comissão de 10% sobre o lucro — o investidor recebe o lucro líquido calculado
   // já sobre compra+fee.
   const lucroLiquidoInvestidor = lucroLiquidoOriginal
-  // Custo bruto do projecto (inclui a comissão de venda, para transparência).
-  const custoTotalProjecto = totalAquisicao + obra + detencao + comissaoVenda
-  // A comissão de venda é paga com o sinal do comprador no CPCV de venda — só sai
-  // numa fase final do negócio, não é capital que o investidor tenha de adiantar.
-  // Por isso o Investimento Total (capital a adiantar) exclui-a.
-  const investimentoTotal = custoTotalProjecto - comissaoVenda
+  // A comissão de venda NÃO é capital a adiantar: é paga com o sinal do comprador
+  // numa fase final do negócio e já está descontada no lucro (lucro_bruto = vvr −
+  // custoTotal, que inclui a comissão). Por isso fica totalmente fora do
+  // Investimento Total — não aparece nos custos para o investidor.
+  const investimentoTotal = totalAquisicao + obra + detencao
 
   // Retorno ajustado: usa investimento total (sem financiamento) como base
   const retornoTotal = investimentoTotal > 0 ? Math.round((lucroLiquidoInvestidor / investimentoTotal) * 1000) / 10 : 0
@@ -3522,18 +3522,12 @@ function renderPropostaCedenciaPosicao(b, im, a) {
   b.newPage()
   b.header('ESTRUTURA FINANCEIRA DA OPERAÇÃO')
   b.subheader('Custos para o Investidor')
-  {
-    const rows = [
-      { label: 'Valor da Cedência da Posição (todo o custo de aquisição)', value: EUR(totalAquisicao) },
-      { label: 'Obra com IVA', value: EUR(obra) },
-      { label: `Detenção (${meses} meses)`, value: EUR(detencao) },
-      { label: 'Comissão Imobiliária (venda)', value: EUR(comissaoVenda) },
-      { label: 'Custo Total do Projecto', value: EUR(custoTotalProjecto), total: true },
-    ]
-    if (comissaoVenda > 0) rows.push({ label: '(−) Comissão paga pelo sinal do comprador (na venda)', value: `−${EUR(comissaoVenda)}` })
-    rows.push({ label: 'Investimento Total (a adiantar)', value: EUR(investimentoTotal), total: true })
-    b.simpleTable(rows)
-  }
+  b.simpleTable([
+    { label: 'Valor da Cedência da Posição (todo o custo de aquisição)', value: EUR(totalAquisicao) },
+    { label: 'Obra com IVA', value: EUR(obra) },
+    { label: `Detenção (${meses} meses)`, value: EUR(detencao) },
+    { label: 'Investimento Total (a adiantar)', value: EUR(investimentoTotal), total: true },
+  ])
   b.space(3)
 
   b.subheader('Resultado para o Investidor')
