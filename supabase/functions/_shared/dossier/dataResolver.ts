@@ -38,6 +38,11 @@ function buildCalcInputs(imovel: any, analise: any): any {
   if (a.compra != null) inputs.compra = a.compra
   else if (im.valor_proposta != null) inputs.compra = im.valor_proposta
   else if (im.ask_price != null) inputs.compra = im.ask_price
+  // Wholesaling: o fee de cedencia soma-se a compra apresentada ao investidor
+  // (compra = valor_proposta + fee). Fonte unica = imoveis.fee_cedencia; a
+  // analise herda-o, por isso preferimos a.fee_cedencia e so caimos no imovel.
+  if (a.fee_cedencia != null) inputs.fee_cedencia = a.fee_cedencia
+  else if (im.fee_cedencia != null) inputs.fee_cedencia = im.fee_cedencia
   if (a.vpt != null) inputs.vpt = a.vpt
   if (a.finalidade) inputs.finalidade = a.finalidade
   if (a.escritura != null) inputs.escritura = a.escritura
@@ -117,7 +122,12 @@ export function resolveDealData(imovel: any, analise: any, _orcamento?: any): an
     warnings.push('Inputs minimos (compra, vvr) ausentes — fallback aos agregados gravados na analise.')
   }
 
-  const compra = num(computed?.compra ?? inputs.compra)
+  // `compra` apresentada ao investidor = compra base + fee de cedencia (Wholesaling).
+  // O calcEngine ja soma o fee internamente (compra+fee alimenta IMT/selo/ROI) mas
+  // nao devolve `compra`, por isso compomos aqui o valor a mostrar. Para os outros
+  // modelos fee_cedencia e 0 e o valor fica igual.
+  const compraBase = num(inputs.compra ?? a.compra)
+  const compra = compraBase == null ? null : compraBase + numOr(inputs.fee_cedencia, 0)
   const obra = num(a.obra_com_iva ?? computed?.obra_com_iva ?? a.obra ?? inputs.obra)
   const vvr = num(computed?.vvr ?? inputs.vvr ?? a.vvr)
   const meses = parseInt(a.meses ?? inputs.meses ?? 6, 10)
