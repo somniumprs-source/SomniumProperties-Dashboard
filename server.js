@@ -2273,6 +2273,159 @@ app.get('/api/comercial/metricas-temporais', async (req, res) => {
 })
 
 // ════════════════════════════════════════════════════════════════
+// DASHBOARD COMERCIAL — métricas/KPI por período (semana/mês/trimestre/ano)
+// com comparação vs período anterior. 3 entidades: Imóveis, Consultores,
+// Investidores. Consome o modelo de dados do CRM.
+// ════════════════════════════════════════════════════════════════
+app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
+  try {
+    const periodo = ['semana','mes','trimestre','ano'].includes(req.query.periodo) ? req.query.periodo : 'mes'
+    const regiao = req.regiaoActiva || undefined
+
+    const [imoveisAll, investidoresRaw, consultores, negocios, ci, ii, pi] = await Promise.all([
+      getImóveis({ regiao }).catch(() => []),
+      getInvestidores({ regiao }).catch(() => []),
+      getConsultores({ regiao }).catch(() => []),
+      getNegócios({ regiao }).catch(() => []),
+      pool.query(`SELECT canal, direcao, data_hora FROM consultor_interacoes`).catch(() => ({ rows: [] })),
+      pool.query(`SELECT finalidade, data_hora FROM investidor_interacoes`).catch(() => ({ rows: [] })),
+      pool.query(`SELECT capital FROM projeto_investidores WHERE capital > 0`).catch(() => ({ rows: [] })),
+    ])
+    const investidores = investidoresRaw.filter(isInvestidorPrincipal)
+    const ciRows = ci.rows, iiRows = ii.rows, piRows = pi.rows
+
+    // ── Períodos: actual e anterior ──────────────────────────
+    const now = new Date(), Y = now.getFullYear(), M = now.getMonth()
+    function range(p, off = 0) {
+      if (p === 'semana') {
+        const wd = now.getDay()
+        const s = new Date(now); s.setDate(now.getDate() - (wd === 0 ? 6 : wd - 1) + off * 7); s.setHours(0,0,0,0)
+        const e = new Date(s); e.setDate(s.getDate() + 6); e.setHours(23,59,59,999)
+        return [s, e]
+      }
+      if (p === 'mes')       return [new Date(Y, M + off, 1), new Date(Y, M + off + 1, 0, 23,59,59,999)]
+      if (p === 'trimestre') { const q = Math.floor(M / 3) + off; return [new Date(Y, q*3, 1), new Date(Y, q*3 + 3, 0, 23,59,59,999)] }
+      return [new Date(Y + off, 0, 1), new Date(Y + off, 11, 31, 23,59,59,999)]
+    }
+    const [start, end] = range(periodo, 0)
+    const [prevStart, prevEnd] = range(periodo, -1)
+
+    const inP = (ds, s, e) => { if (!ds) return false; const d = new Date(ds); return !isNaN(d) && d >= s && d <= e }
+    const pctDelta = (cur, prev) => (prev > 0 ? round2((cur - prev) / prev * 100) : null)
+    const avg = (arr) => { const v = arr.filter(x => x != null && Number.isFinite(x)); return v.length ? round2(v.reduce((a,b)=>a+b,0)/v.length) : null }
+    const fechado = (i) => !!i.dataPropostaAceite
+
+    // ════════ IMÓVEIS ════════
+    const countIm = (s, e) => ({
+      adicionados: imoveisAll.filter(i => inP(i.dataAdicionado, s, e)).length,
+      chamadas:    imoveisAll.filter(i => inP(i.dataChamada, s, e)).length,
+      visitas:     imoveisAll.filter(i => inP(i.dataVisita, s, e)).length,
+      em:          imoveisAll.filter(i => inP(i.dataEstudoMercado, s, e)).length,
+      propostas:   imoveisAll.filter(i => inP(i.dataProposta, s, e)).length,
+    })
+    const imCur = countIm(start, end), imPrev = countIm(prevStart, prevEnd)
+    const imMetricas = {}
+    for (const k of Object.keys(imCur)) imMetricas[k] = { valor: imCur[k], delta: pctDelta(imCur[k], imPrev[k]) }
+    const backlogPorContactar = imoveisAll.filter(i => i.dataAdicionado && !i.dataChamada).length
+
+    const coorte = imoveisAll.filter(i => inP(i.dataAdicionado, start, end))
+    const origemMap = {}
+    for (const i of coorte) { const o = i.origem || 'Não registado'; origemMap[o] = (origemMap[o] || 0) + 1 }
+    const origem = Object.entries(origemMap).map(([origem, total]) => ({ origem, total })).sort((a,b) => b.total - a.total)
+
+    const cohortAdd = coorte.length
+    const winRate = cohortAdd > 0 ? round2(coorte.filter(fechado).length / cohortAdd * 100) : null
+    const taxaConvIm = cohortAdd > 0 ? round2(coorte.filter(i => i.dataProposta).length / cohortAdd * 100) : null
+    const descontoMedio = avg(imoveisAll
+      .filter(i => inP(i.dataProposta, start, end) && i.askPrice > 0 && i.valorProposta > 0)
+      .map(i => (i.askPrice - i.valorProposta) / i.askPrice * 100))
+    const cicloVendasDias = avg(imoveisAll.map(i => {
+      if (!i.dataAdicionado || !i.dataPropostaAceite) return null
+      const d = (new Date(i.dataPropostaAceite) - new Date(i.dataAdicionado)) / 86400000
+      return d >= 0 && d < 730 ? d : null
+    }))
+    const ticketMedio = avg(negocios
+      .filter(n => inP(n.dataVenda, start, end) || inP(n.dataCompra, start, end))
+      .map(n => n.lucroReal || n.lucroEstimado || null))
+
+    // ════════ CONSULTORES ════════
+    const isChamada = (canal) => /chamada|telefone|call/i.test(canal || '')
+    const consChamadas        = ciRows.filter(r => isChamada(r.canal) && inP(r.data_hora, start, end)).length
+    const consChamadasSomnium = ciRows.filter(r => isChamada(r.canal) && r.direcao === 'Enviado' && inP(r.data_hora, start, end)).length
+    const consNovos = consultores.filter(c => inP(c.dataInicio, start, end)).length
+
+    const ultimoImovel = {}
+    for (const i of imoveisAll) {
+      if (!i.nomeConsultor || !i.dataAdicionado) continue
+      const t = new Date(i.dataAdicionado).getTime()
+      if (!isNaN(t) && (!ultimoImovel[i.nomeConsultor] || t > ultimoImovel[i.nomeConsultor])) ultimoImovel[i.nomeConsultor] = t
+    }
+    const parceiros = consultores.filter(c => /parceir/i.test(c.estatuto || ''))
+    const consInativos60 = parceiros.filter(c => {
+      const last = ultimoImovel[c.nome] || (c.dataInicio ? new Date(c.dataInicio).getTime() : null)
+      return last ? (Date.now() - last) / 86400000 > 60 : false
+    }).length
+    const churnConsultores = parceiros.length > 0 ? round2(consInativos60 / parceiros.length * 100) : null
+    const imComConsultor = imoveisAll.filter(i => i.nomeConsultor)
+    const taxaConvConsultor = imComConsultor.length > 0 ? round2(imComConsultor.filter(fechado).length / imComConsultor.length * 100) : null
+    const premium = consultores
+      .map(c => ({ nome: c.nome, lucroGerado: round2(c.lucroGerado || 0), imoveis: c.imoveisEnviados || 0 }))
+      .filter(c => c.lucroGerado > 0 || c.imoveis > 0)
+      .sort((a,b) => b.lucroGerado - a.lucroGerado || b.imoveis - a.imoveis)
+      .slice(0, 5)
+
+    // ════════ INVESTIDORES ════════
+    const discoveryCalls = iiRows.filter(r => r.finalidade === 'discovery' && inP(r.data_hora, start, end)).length
+    const followUpCalls  = iiRows.filter(r => r.finalidade === 'follow_up' && inP(r.data_hora, start, end)).length
+    const discoveryPrev  = iiRows.filter(r => r.finalidade === 'discovery' && inP(r.data_hora, prevStart, prevEnd)).length
+    const followUpPrev   = iiRows.filter(r => r.finalidade === 'follow_up' && inP(r.data_hora, prevStart, prevEnd)).length
+    const invNovos = investidores.filter(i => inP(i.dataPrimeiroContacto, start, end)).length
+
+    const emParceria = (i) => i.status === 'Em Parceria' || i.montanteInvestido > 0 || i.numeroNegocios > 0
+    const parceria = investidores.filter(emParceria)
+    const taxaConvInvestidor = investidores.length > 0 ? round2(parceria.length / investidores.length * 100) : null
+    const ticketMedioSlot = avg(piRows.map(r => Number(r.capital) || null))
+    const capitalMobilizado = round2(parceria.reduce((s,i) => s + (i.montanteInvestido || 0), 0))
+    const churned = parceria.filter(i => i.naoReinveste && inP(i.dataNaoReinveste, start, end))
+    const churnInvestidores = parceria.length > 0 ? round2(churned.length / parceria.length * 100) : null
+    const capitalChurn = round2(churned.reduce((s,i) => s + (i.montanteInvestido || 0), 0))
+    const capitalChurnPct = capitalMobilizado > 0 ? round2(capitalChurn / capitalMobilizado * 100) : null
+
+    res.json({
+      periodo,
+      intervalo: { de: start.toISOString().slice(0,10), ate: end.toISOString().slice(0,10) },
+      imoveis: {
+        metricas: { ...imMetricas, backlogPorContactar },
+        origem,
+        kpi: { ticketMedio, taxaConversao: taxaConvIm, winRate, descontoMedio, cicloVendasDias },
+      },
+      consultores: {
+        metricas: {
+          chamadas: { valor: consChamadas },
+          novos: { valor: consNovos },
+          chamadasSomnium: { valor: consChamadasSomnium },
+        },
+        kpi: { taxaConversao: taxaConvConsultor, churn: churnConsultores },
+        premium,
+      },
+      investidores: {
+        metricas: {
+          discoveryCalls: { valor: discoveryCalls, delta: pctDelta(discoveryCalls, discoveryPrev) },
+          followUpCalls:  { valor: followUpCalls, delta: pctDelta(followUpCalls, followUpPrev) },
+          novos: { valor: invNovos },
+        },
+        kpi: { taxaConversao: taxaConvInvestidor, ticketMedioSlot, churn: churnInvestidores, capitalChurn, capitalChurnPct },
+        capitalMobilizado,
+      },
+      updatedAt: new Date().toISOString(),
+    })
+  } catch (err) {
+    console.error('[comercial/dashboard]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ════════════════════════════════════════════════════════════════
 // MARKETING
 // ════════════════════════════════════════════════════════════════
 app.get('/api/kpis/marketing', endpointCache(300000), async (req, res) => {

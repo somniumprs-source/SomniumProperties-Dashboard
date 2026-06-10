@@ -1,13 +1,23 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { TrendingUp, Database, Clock, Calculator } from 'lucide-react'
+import { TrendingUp, Database, Clock, Calculator, Megaphone } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { DepartmentSection } from '../components/dashboard/DepartmentSection.jsx'
+import { ComercialDashboard } from '../components/dashboard/ComercialDashboard.jsx'
 import { useKPIs } from '../hooks/useKPIs.js'
 import { KPISkeleton } from '../components/ui/Skeleton.jsx'
 import { Stagger } from '../components/ui/Stagger.jsx'
+import { Tabs } from '../components/ui/Tabs.jsx'
 import { apiFetch } from '../lib/api.js'
 import { EUR, statusColor } from '../constants.js'
 import { RegiaoToggle } from '../components/RegiaoBadge.jsx'
+
+// Dashboard organizado por departamentos (dentro de Administração).
+const DEPT_TABS = [
+  { key: 'comercial',  label: 'Comercial',  icon: Database },
+  { key: 'operacoes',  label: 'Operações',  icon: Clock },
+  { key: 'financeiro', label: 'Financeiro', icon: TrendingUp },
+  { key: 'marketing',  label: 'Marketing',  icon: Megaphone },
+]
 
 const REFRESH_INTERVAL_MS = 30_000
 
@@ -26,6 +36,7 @@ const PULSE_COLOR = { excelente: '#22c55e', bom: '#C9A84C', 'atenção': '#f59e0
 const PULSE_BG = { excelente: 'rgba(34,197,94,0.1)', bom: 'rgba(201,168,76,0.1)', 'atenção': 'rgba(245,158,11,0.1)', 'crítico': 'rgba(239,68,68,0.1)' }
 
 export function Dashboard() {
+  const [dept, setDept] = useState('comercial')
   const [regiao, setRegiaoState] = useState(() => readRegiaoFromStorage())
   const setRegiao = (r) => {
     setRegiaoState(r)
@@ -105,30 +116,7 @@ export function Dashboard() {
 
   const sections = [
     {
-      title: 'CRM — Pipeline',
-      icon: Database,
-      color: 'bg-indigo-600',
-      link: '/crm',
-      kpis: [
-        { label: 'Imóveis Ativos',    value: comKpis?.imóveisAtivos ?? '—',       meta: 20,  status: comKpis ? statusFromValue(comKpis.imóveisAtivos, 20) : 'yellow',        trend: 'neutral', unit: '' },
-        { label: 'Investidores',      value: comKpis?.investidoresTotal ?? '—',    meta: 50,  status: comKpis ? statusFromValue(comKpis.investidoresTotal, 50) : 'yellow',    trend: 'neutral', unit: '' },
-        { label: 'Em Parceria',       value: comKpis?.investParceria ?? '—',       meta: 5,   status: comKpis ? statusFromValue(comKpis.investParceria, 5) : 'yellow',        trend: 'neutral', unit: '' },
-        { label: 'Capital Disponível',value: comKpis ? formatEur(comKpis.capitalDisponivel) : '—', meta: formatEur(500000), status: comKpis ? statusFromValue(comKpis.capitalDisponivel, 500000) : 'yellow', trend: 'neutral', unit: '' },
-      ],
-    },
-    {
-      title: 'Financeiro',
-      icon: TrendingUp,
-      color: 'bg-emerald-600',
-      link: '/financeiro',
-      kpis: [
-        { label: 'Pipeline de Lucro',  value: finKpis ? formatEur(finKpis.lucroEstimadoTotal) : '—', meta: formatEur(100000), status: finKpis ? statusFromValue(finKpis.lucroEstimadoTotal, 100000) : 'yellow', trend: 'neutral', unit: '' },
-        { label: 'Lucro Real',         value: finKpis ? formatEur(finKpis.lucroRealTotal) : '—',     meta: formatEur(50000),  status: finKpis ? statusFromValue(finKpis.lucroRealTotal, 50000) : 'yellow',        trend: 'neutral', unit: '' },
-        { label: 'A Receber',          value: finKpis ? formatEur(finKpis.lucroPendente) : '—',      meta: '—',               status: finKpis?.lucroPendente > 0 ? 'yellow' : 'green',                            trend: 'neutral', unit: '' },
-        { label: 'Burn Rate / Mês',    value: finKpis ? formatEur(finKpis.burnRate) : '—',           meta: formatEur(500),    status: finKpis ? statusFromValue(finKpis.burnRate, 500, false) : 'yellow',          trend: 'neutral', unit: '' },
-      ],
-    },
-    {
+      dept: 'operacoes',
       title: 'Operações',
       icon: Clock,
       color: 'bg-orange-600',
@@ -140,7 +128,21 @@ export function Dashboard() {
         { label: 'Runway (meses)',    value: finKpis?.runway != null ? `${Math.round(finKpis.runway)}` : '—', meta: '12', unit: '', status: finKpis?.runway > 12 ? 'green' : 'yellow', trend: 'neutral' },
       ],
     },
+    {
+      dept: 'financeiro',
+      title: 'Financeiro',
+      icon: TrendingUp,
+      color: 'bg-emerald-600',
+      link: '/financeiro',
+      kpis: [
+        { label: 'Pipeline de Lucro',  value: finKpis ? formatEur(finKpis.lucroEstimadoTotal) : '—', meta: formatEur(100000), status: finKpis ? statusFromValue(finKpis.lucroEstimadoTotal, 100000) : 'yellow', trend: 'neutral', unit: '' },
+        { label: 'Lucro Real',         value: finKpis ? formatEur(finKpis.lucroRealTotal) : '—',     meta: formatEur(50000),  status: finKpis ? statusFromValue(finKpis.lucroRealTotal, 50000) : 'yellow',        trend: 'neutral', unit: '' },
+        { label: 'A Receber',          value: finKpis ? formatEur(finKpis.lucroPendente) : '—',      meta: '—',               status: finKpis?.lucroPendente > 0 ? 'yellow' : 'green',                            trend: 'neutral', unit: '' },
+        { label: 'Burn Rate / Mês',    value: finKpis ? formatEur(finKpis.burnRate) : '—',           meta: formatEur(500),    status: finKpis ? statusFromValue(finKpis.burnRate, 500, false) : 'yellow',          trend: 'neutral', unit: '' },
+      ],
+    },
     ...(anaKpis?.total > 0 ? [{
+      dept: 'financeiro',
       title: 'Análises de Rentabilidade',
       icon: Calculator,
       color: 'bg-yellow-600',
@@ -153,6 +155,7 @@ export function Dashboard() {
       ],
     }] : []),
   ]
+  const deptSections = sections.filter(s => s.dept === dept)
 
   return (
     <>
@@ -287,15 +290,33 @@ export function Dashboard() {
           )
         })()}
 
-        {/* Sections */}
-        {!loading && (
-        <Stagger className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
-          {sections.map((s) => (
-            <Stagger.Item key={s.title}>
-              <DepartmentSection {...s} />
-            </Stagger.Item>
-          ))}
-        </Stagger>
+        {/* Seletor de departamento — pílulas (estilo toggle do CRM) */}
+        <div className="flex justify-center sm:justify-start">
+          <Tabs variant="segmented" items={DEPT_TABS} value={dept} onChange={setDept} />
+        </div>
+
+        {/* Conteúdo por departamento */}
+        {dept === 'comercial' && <ComercialDashboard regiao={regiao} />}
+
+        {dept !== 'comercial' && !loading && deptSections.length > 0 && (
+          <Stagger className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+            {deptSections.map((s) => (
+              <Stagger.Item key={s.title}>
+                <DepartmentSection {...s} />
+              </Stagger.Item>
+            ))}
+          </Stagger>
+        )}
+
+        {dept === 'marketing' && (
+          <div className="flex flex-col items-center justify-center text-center py-16 rounded-2xl border border-dashed border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3"
+              style={{ backgroundColor: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.25)' }}>
+              <Megaphone className="w-6 h-6" style={{ color: '#C9A84C' }} />
+            </div>
+            <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-200">Marketing — a montar</p>
+            <p className="text-xs text-neutral-500 mt-1 max-w-sm">Métricas, KPIs e OKRs de marketing entram na próxima fase, no mesmo formato do Comercial.</p>
+          </div>
         )}
       </div>
     </>

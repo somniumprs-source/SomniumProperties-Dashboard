@@ -124,6 +124,8 @@ function mapInvestidor(r) {
     dataAprovacaoNegocio: r.data_aprovacao_negocio,
     duplicadoDe: r.duplicado_de || null,
     tipoPrincipal: r.tipo_principal || null,
+    naoReinveste: !!r.nao_reinveste,
+    dataNaoReinveste: r.data_nao_reinveste || null,
     diasSemContacto: (() => {
       const u = r.data_ultimo_contacto ?? r.data_reuniao ?? r.data_primeiro_contacto
       if (!u) return null

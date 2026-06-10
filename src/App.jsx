@@ -26,6 +26,7 @@ const RelatoriosAdmin = lazy(() => import('./pages/RelatoriosAdmin.jsx').then(m 
 const Administracao = lazy(() => import('./pages/Administracao.jsx').then(m => ({ default: m.Administracao })))
 const AdministracaoSOP = lazy(() => import('./pages/AdministracaoSOP.jsx').then(m => ({ default: m.AdministracaoSOP })))
 const AdministracaoMultiRegiao = lazy(() => import('./pages/AdministracaoMultiRegiao.jsx').then(m => ({ default: m.AdministracaoMultiRegiao })))
+const Marketing = lazy(() => import('./pages/Marketing.jsx').then(m => ({ default: m.Marketing })))
 
 function PageFallback() {
   return (
@@ -76,6 +77,7 @@ function AppRoutes() {
             <Route path="/projectos/:id" element={<ErrorBoundary><ProjectoDetalhe /></ErrorBoundary>} />
             <Route path="/financeiro" element={<ErrorBoundary><Financeiro /></ErrorBoundary>} />
             <Route path="/operacoes" element={<ErrorBoundary><Operacoes /></ErrorBoundary>} />
+            <Route path="/marketing" element={<ErrorBoundary><Marketing /></ErrorBoundary>} />
             <Route path="/metricas" element={<ErrorBoundary><Metricas /></ErrorBoundary>} />
             <Route path="/alertas" element={<ErrorBoundary><Alertas /></ErrorBoundary>} />
             <Route path="/administracao" element={<ErrorBoundary><Administracao /></ErrorBoundary>}>
@@ -89,7 +91,6 @@ function AppRoutes() {
             {/* Redirects de páginas removidas / renomeadas */}
             <Route path="/relatorios-admin" element={<Navigate to="/administracao/relatorios" replace />} />
             <Route path="/comercial" element={<Navigate to="/crm" replace />} />
-            <Route path="/marketing" element={<Navigate to="/crm" replace />} />
           </Route>
         </Routes>
       </Suspense>

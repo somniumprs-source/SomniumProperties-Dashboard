@@ -25,7 +25,7 @@ const app = createApp("/users");
 const ROLES = ["admin", "comercial", "financeiro", "operacoes", "parceiro", "investidor"];
 
 const ROLE_AREAS: Record<string, string[]> = {
-  admin: ["dashboard", "crm", "projectos", "financeiro", "operacoes", "metricas", "alertas", "admin"],
+  admin: ["dashboard", "crm", "projectos", "financeiro", "operacoes", "metricas", "alertas", "administracao", "marketing", "admin"],
   comercial: ["dashboard", "crm", "projectos", "metricas"],
   financeiro: ["dashboard", "financeiro", "metricas"],
   operacoes: ["dashboard", "operacoes", "alertas", "metricas"],

@@ -1,19 +1,33 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
-import { LayoutDashboard, TrendingUp, Database, Bell, Clock, BarChart3, Menu, X, LogOut, Briefcase, Shield, ScrollText, History, UserCheck, ChevronDown } from 'lucide-react'
+import { LayoutDashboard, TrendingUp, Database, Bell, Clock, BarChart3, Menu, X, LogOut, Briefcase, Shield, ScrollText, History, UserCheck, ChevronDown, FileText, BookOpen, Map, Megaphone } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { apiFetch } from '../../lib/api.js'
 import { prefetchRoute } from '../../lib/prefetch.js'
 
+// Estrutura da plataforma por departamento. Itens com `children` viram
+// grupos expansíveis na sidebar; o resto são links directos.
 const nav = [
-  { to: '/',                   label: 'Dashboard',  Icon: LayoutDashboard, end: true, area: 'dashboard' },
-  { to: '/crm',                label: 'CRM',        Icon: Database, badgeKey: 'crm', area: 'crm' },
-  { to: '/projectos',          label: 'Projectos',  Icon: Briefcase, area: 'projectos' },
-  { to: '/financeiro',         label: 'Financeiro', Icon: TrendingUp, area: 'financeiro' },
-  { to: '/operacoes',          label: 'Operações',  Icon: Clock, badgeKey: 'tarefas', area: 'operacoes' },
-  { to: '/metricas',           label: 'Métricas',   Icon: BarChart3, area: 'metricas' },
+  {
+    label: 'Administração', Icon: ScrollText, area: 'administracao',
+    children: [
+      { to: '/',                         label: 'Dashboard',    Icon: LayoutDashboard, end: true, area: 'dashboard' },
+      { to: '/administracao/relatorios', label: 'Relatórios',   Icon: FileText, area: 'administracao' },
+      { to: '/administracao/sop',        label: 'SOPs',         Icon: BookOpen, area: 'administracao' },
+      { to: '/administracao/regiao',     label: 'Multi-Região', Icon: Map, area: 'administracao' },
+    ],
+  },
+  { to: '/crm', label: 'Departamento Comercial', Icon: Database, badgeKey: 'crm', area: 'crm' },
+  {
+    label: 'Operações', Icon: Clock, area: 'operacoes', badgeKey: 'tarefas',
+    children: [
+      { to: '/operacoes', label: 'Operações', Icon: Clock, area: 'operacoes' },
+      { to: '/projectos', label: 'Projectos', Icon: Briefcase, area: 'projectos' },
+    ],
+  },
+  { to: '/financeiro',         label: 'Departamento Financeiro', Icon: TrendingUp, area: 'financeiro' },
+  { to: '/marketing',          label: 'Marketing e Marca Pessoal', Icon: Megaphone, area: 'marketing' },
   { to: '/alertas',            label: 'Alertas',    Icon: Bell, badgeKey: 'alertas', area: 'alertas' },
-  { to: '/administracao',      label: 'Administração', Icon: ScrollText, area: 'administracao' },
   { to: '/admin/utilizadores', label: 'Utilizadores', Icon: Shield, area: 'admin' },
   { to: '/admin/auditoria',    label: 'Auditoria',   Icon: History, area: 'admin' },
 ]
@@ -24,10 +38,20 @@ export function Sidebar() {
   const [open, setOpen] = useState(false)
   // Filtro por areas declaradas pelo backend. Admin vê tudo.
   // Para roles restritos (investidor, parceiro), respeitar `areas`.
-  const visibleNav = nav.filter(item => {
-    if (role === 'admin' || !role) return item.area !== 'admin' || role === 'admin'
-    return areas.includes(item.area)
-  })
+  const canSee = (area) => {
+    if (role === 'admin') return true
+    if (!role) return area !== 'admin'
+    return areas.includes(area)
+  }
+  // Grupos: visíveis se o utilizador puder ver pelo menos um sub-item
+  // (ou o próprio grupo). Sub-itens não permitidos são removidos.
+  const visibleNav = nav.map(item => {
+    if (item.children) {
+      const children = item.children.filter(c => canSee(c.area) || canSee(item.area))
+      return children.length ? { ...item, children } : null
+    }
+    return canSee(item.area) ? item : null
+  }).filter(Boolean)
 
   useEffect(() => {
     const load = async () => {
@@ -75,39 +99,10 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex flex-col gap-0.5 px-3 flex-1">
-        {visibleNav.map(({ to, label, Icon, end, badgeKey }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            onClick={handleNav}
-            onMouseEnter={() => prefetchRoute(to)}
-            onFocus={() => prefetchRoute(to)}
-            onTouchStart={() => prefetchRoute(to)}
-            className={({ isActive }) =>
-              `group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
-                isActive ? 'active-nav' : 'text-neutral-500 hover:text-white'
-              }`
-            }
-            style={({ isActive }) => isActive ? {
-              background: 'linear-gradient(90deg, rgba(201,168,76,0.15) 0%, rgba(201,168,76,0.05) 100%)',
-              color: '#C9A84C',
-              borderLeft: '2px solid #C9A84C',
-            } : { borderLeft: '2px solid transparent' }}
-          >
-            {({ isActive }) => (
-              <>
-                <Icon className="w-4 h-4 shrink-0 transition-colors"
-                  style={{ color: isActive ? '#C9A84C' : undefined }} />
-                {label}
-                {badgeKey && badges[badgeKey] > 0 && (
-                  <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                    {badges[badgeKey] > 9 ? '9+' : badges[badgeKey]}
-                  </span>
-                )}
-              </>
-            )}
-          </NavLink>
+        {visibleNav.map(item => (
+          item.children
+            ? <NavGroup key={item.label} group={item} badges={badges} onNav={handleNav} />
+            : <NavLeaf key={item.to} item={item} badges={badges} onNav={handleNav} />
         ))}
       </nav>
 
@@ -177,6 +172,90 @@ export function Sidebar() {
         {sidebarContent}
       </aside>
     </>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
+// Item de navegação (link directo). `nested` indenta sub-itens de grupo.
+// ════════════════════════════════════════════════════════════════
+function NavLeaf({ item, badges, onNav, nested }) {
+  const { to, label, Icon, end, badgeKey } = item
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      onClick={onNav}
+      onMouseEnter={() => prefetchRoute(to)}
+      onFocus={() => prefetchRoute(to)}
+      onTouchStart={() => prefetchRoute(to)}
+      className={({ isActive }) =>
+        `group flex items-center gap-3 ${nested ? 'pl-9 pr-3' : 'px-3'} py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+          isActive ? 'active-nav' : 'text-neutral-500 hover:text-white'
+        }`
+      }
+      style={({ isActive }) => isActive ? {
+        background: 'linear-gradient(90deg, rgba(201,168,76,0.15) 0%, rgba(201,168,76,0.05) 100%)',
+        color: '#C9A84C',
+        borderLeft: '2px solid #C9A84C',
+      } : { borderLeft: '2px solid transparent' }}
+    >
+      {({ isActive }) => (
+        <>
+          <Icon className="w-4 h-4 shrink-0 transition-colors"
+            style={{ color: isActive ? '#C9A84C' : undefined }} />
+          {label}
+          {badgeKey && badges[badgeKey] > 0 && (
+            <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+              {badges[badgeKey] > 9 ? '9+' : badges[badgeKey]}
+            </span>
+          )}
+        </>
+      )}
+    </NavLink>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
+// Grupo expansível (departamento com sub-secções). Auto-abre quando
+// uma sub-rota está activa.
+// ════════════════════════════════════════════════════════════════
+function NavGroup({ group, badges, onNav }) {
+  const location = useLocation()
+  const { Icon, label, badgeKey } = group
+  const childActive = group.children.some(c =>
+    c.end ? location.pathname === c.to : location.pathname.startsWith(c.to)
+  )
+  const [expanded, setExpanded] = useState(childActive)
+  useEffect(() => { if (childActive) setExpanded(true) }, [childActive])
+
+  const badgeCount = badgeKey ? (badges[badgeKey] || 0) : 0
+
+  return (
+    <div>
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className={`group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+          childActive ? 'text-white' : 'text-neutral-500 hover:text-white'
+        }`}
+        style={{ borderLeft: '2px solid transparent' }}
+      >
+        <Icon className="w-4 h-4 shrink-0" style={{ color: childActive ? '#C9A84C' : undefined }} />
+        <span className="flex-1 text-left">{label}</span>
+        {badgeCount > 0 && (
+          <span className="bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+            {badgeCount > 9 ? '9+' : badgeCount}
+          </span>
+        )}
+        <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${expanded ? '' : '-rotate-90'}`} style={{ color: '#666' }} />
+      </button>
+      {expanded && (
+        <div className="flex flex-col gap-0.5 mt-0.5">
+          {group.children.map(c => (
+            <NavLeaf key={c.to} item={c} badges={badges} onNav={onNav} nested />
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
