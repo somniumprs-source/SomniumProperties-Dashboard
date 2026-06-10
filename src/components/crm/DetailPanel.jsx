@@ -14,6 +14,7 @@ import { isWholesaling } from '../../lib/modelos.js'
 const AnaliseTab = lazy(() => import('../analise/AnaliseTab.jsx').then(m => ({ default: m.AnaliseTab })))
 const ObraTab = lazy(() => import('../obra/ObraTab.jsx').then(m => ({ default: m.ObraTab })))
 const InteracoesTab = lazy(() => import('./InteracoesTab.jsx').then(m => ({ default: m.InteracoesTab })))
+const InteracoesInvestidorTab = lazy(() => import('./InteracoesInvestidorTab.jsx').then(m => ({ default: m.InteracoesInvestidorTab })))
 const MatchingInvestidoresTab = lazy(() => import('./MatchingInvestidoresTab.jsx').then(m => ({ default: m.MatchingInvestidoresTab })))
 const WhatsAppTab = lazy(() => import('./WhatsAppTab.jsx').then(m => ({ default: m.WhatsAppTab })))
 const FicheirosTab = lazy(() => import('./FicheirosTab.jsx').then(m => ({ default: m.FicheirosTab })))
@@ -809,6 +810,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
     { key: 'checklist', label: 'Checklist', icon: '📋', show: type === 'Imóveis' },
     { key: 'whatsapp', label: 'WhatsApp', icon: '📱', show: type === 'Consultores' },
     { key: 'interacoes', label: `Interacções (${data?.interacoes?.length ?? 0})`, icon: '💬', show: type === 'Consultores' },
+    { key: 'interacoes_inv', label: 'Chamadas', icon: '📞', show: type === 'Investidores' },
     { key: 'documentos', label: `Documentos (${data?.documentos?.length ?? 0})`, icon: '📎', show: type === 'Investidores' },
     { key: 'relatorios', label: `Reuniões (${reunioes.length})`, icon: '📄', show: (type === 'Investidores' || type === 'Consultores') },
     { key: 'avaliacao', label: 'Avaliação', icon: '🎯', show: type === 'Investidores' },
@@ -950,6 +952,12 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       ) : type === 'Imóveis' && activeTab === 'relatorios_imovel' ? (
         <div className="p-4 sm:p-6">
           <RelatoriosImovelTab imovelId={data.id} estado={data.estado} driveFolderId={data.drive_folder_id} imovelNome={data.nome} />
+        </div>
+
+      /* Chamadas / interações de investidor (Discovery / Follow Up) */
+      ) : type === 'Investidores' && activeTab === 'interacoes_inv' ? (
+        <div className="p-4 sm:p-6">
+          <InteracoesInvestidorTab investidorId={data.id} onUpdate={loadData} />
         </div>
 
       /* Documentos enviados a investidor */
@@ -2725,7 +2733,25 @@ function InvestidorEditSections({ data, form, setField }) {
       </div>
     </Section>
 
-    {/* 7. Bloqueios — só se já tem dados ou se status sugere */}
+    {/* 7. Reinvestimento / Churn — declaração explícita de saída */}
+    <Section icon="🔁" title="Reinvestimento" fields={['nao_reinveste','data_nao_reinveste']} form={form} defaultOpen>
+      <label className="flex items-center gap-2 col-span-2 md:col-span-3 cursor-pointer">
+        <input type="checkbox" checked={!!form.nao_reinveste}
+          onChange={e => {
+            const v = e.target.checked
+            setField('nao_reinveste', v ? 1 : 0)
+            if (v && !form.data_nao_reinveste) setField('data_nao_reinveste', new Date().toISOString().slice(0, 10))
+            if (!v) setField('data_nao_reinveste', null)
+          }}
+          className="w-4 h-4 rounded border-gray-300 text-yellow-600 focus:ring-yellow-400" />
+        <span className="text-sm text-gray-700">Declarou que <strong>não vai reinvestir</strong> connosco (conta para churn)</span>
+      </label>
+      {!!form.nao_reinveste && (
+        <EF label="Data da declaração" field="data_nao_reinveste" form={form} set={setField} type="date" />
+      )}
+    </Section>
+
+    {/* 8. Bloqueios — só se já tem dados ou se status sugere */}
     {(temBloqueios || form.motivo_nao_aprovacao || form.motivo_inatividade) && (
       <Section icon="⚠" title="Bloqueios / Excepções" fields={sec.bloqueios} form={form} defaultOpen>
         <EF label="Motivo Não Aprovação" field="motivo_nao_aprovacao" form={form} set={setField} />

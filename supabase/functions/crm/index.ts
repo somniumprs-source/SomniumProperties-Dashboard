@@ -15,7 +15,7 @@ import pool from "../_shared/pg.ts";
 import { withAuditUser } from "../_shared/audit.ts";
 import {
   Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas,
-  ConsultorInteracoes, ConsultorFollowups, DocumentosInvestidor, Visitas,
+  ConsultorInteracoes, InvestidorInteracoes, ConsultorFollowups, DocumentosInvestidor, Visitas,
   Empreiteiros, getDashboardStats, ensureColumn,
 } from "../_shared/crud.ts";
 import { getVisitasEnriquecidas, syncDataVisitaDerivada, getFichaVisitaParaImovel } from "../_shared/queries.ts";
@@ -1397,6 +1397,7 @@ app.get("/tarefas/count-atrasadas", async (c: any) => {
 
 crudRoutes("/tarefas", Tarefas);
 crudRoutes("/consultor-interacoes", ConsultorInteracoes);
+crudRoutes("/investidor-interacoes", InvestidorInteracoes);
 crudRoutes("/empreiteiros", Empreiteiros);
 
 // ── Visitas — CRUD com sync de imoveis.data_visita — port de routes.js 1021-1060 ──
@@ -1525,6 +1526,16 @@ app.get("/consultores/:id/interacoes", async (c: any) => {
       `SELECT ci.*, i.nome as imovel_nome FROM consultor_interacoes ci
        LEFT JOIN imoveis i ON i.id = ci.imovel_id
        WHERE ci.consultor_id = $1 ORDER BY ci.data_hora DESC`,
+      [c.req.param("id")],
+    );
+    return c.json(rows);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.get("/investidores/:id/interacoes", async (c: any) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM investidor_interacoes WHERE investidor_id = $1 ORDER BY data_hora DESC`,
       [c.req.param("id")],
     );
     return c.json(rows);

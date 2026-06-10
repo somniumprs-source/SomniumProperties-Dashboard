@@ -15,7 +15,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.s
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
 const supabaseStorage = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null
 export { supabaseStorage }
-import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, ConsultorFollowups, DocumentosInvestidor, Visitas, Empreiteiros, getDashboardStats } from './crud.js'
+import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, InvestidorInteracoes, ConsultorFollowups, DocumentosInvestidor, Visitas, Empreiteiros, getDashboardStats } from './crud.js'
 import pool from './pg.js'
 import { getVisitasEnriquecidas, syncDataVisitaDerivada, getFichaVisitaParaImovel } from './queries.js'
 import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
@@ -1176,6 +1176,7 @@ router.get('/tarefas/count-atrasadas', async (_req, res) => {
 
 crudRoutes('/tarefas', Tarefas)
 crudRoutes('/consultor-interacoes', ConsultorInteracoes)
+crudRoutes('/investidor-interacoes', InvestidorInteracoes)
 crudRoutes('/empreiteiros', Empreiteiros)
 
 // ── Visitas — CRUD com sync de imoveis.data_visita ───────────
@@ -1308,6 +1309,16 @@ router.get('/consultores/:id/interacoes', async (req, res) => {
       `SELECT ci.*, i.nome as imovel_nome FROM consultor_interacoes ci
        LEFT JOIN imoveis i ON i.id = ci.imovel_id
        WHERE ci.consultor_id = $1 ORDER BY ci.data_hora DESC`,
+      [req.params.id]
+    )
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/investidores/:id/interacoes', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM investidor_interacoes WHERE investidor_id = $1 ORDER BY data_hora DESC`,
       [req.params.id]
     )
     res.json(rows)
