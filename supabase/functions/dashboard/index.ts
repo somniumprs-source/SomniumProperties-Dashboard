@@ -1265,14 +1265,15 @@ app.get("/comercial/dashboard", async (c: any) => {
     const periodo = ["semana", "mes", "trimestre", "ano"].includes(pq) ? pq : "mes";
     const regiao = c.req.header("x-regiao") || undefined;
 
-    const [imoveisAll, investidoresRaw, consultores, negocios, ci, ii, pi] = await Promise.all([
+    const [imoveisAll, investidoresRaw, consultores, negocios, despesas, ci, ii, pi] = await Promise.all([
       getImóveis({ regiao }).catch(() => [] as any[]),
       getInvestidores({ regiao }).catch(() => [] as any[]),
       getConsultores({ regiao }).catch(() => [] as any[]),
       getNegócios({ regiao }).catch(() => [] as any[]),
+      getDespesas({ regiao }).catch(() => [] as any[]),
       pool.query(`SELECT canal, direcao, data_hora FROM consultor_interacoes`).catch(() => ({ rows: [] as any[] })),
       pool.query(`SELECT finalidade, data_hora FROM investidor_interacoes`).catch(() => ({ rows: [] as any[] })),
-      pool.query(`SELECT capital FROM projeto_investidores WHERE capital > 0`).catch(() => ({ rows: [] as any[] })),
+      pool.query(`SELECT negocio_id, capital FROM projeto_investidores WHERE capital > 0`).catch(() => ({ rows: [] as any[] })),
     ]);
     const investidores = investidoresRaw.filter(isInvestidorPrincipal);
     const ciRows = ci.rows, iiRows = ii.rows, piRows = pi.rows;
@@ -1291,13 +1292,19 @@ app.get("/comercial/dashboard", async (c: any) => {
     }
     const [start, end] = range(periodo, 0);
     const [prevStart, prevEnd] = range(periodo, -1);
+    const diasPeriodo = Math.max(1, (end as any - (start as any)) / 86400000);
+    const mesesPeriodo = diasPeriodo / 30.44;
+    const fatorAnual = 365 / diasPeriodo;
 
     const inP = (ds: any, s: Date, e: Date) => { if (!ds) return false; const d = new Date(ds); return !isNaN(d as any) && d >= s && d <= e; };
     const pctDelta = (cur: number, prev: number) => (prev > 0 ? round2((cur - prev) / prev * 100) : null);
     const avg = (arr: any[]) => { const v = arr.filter((x) => x != null && Number.isFinite(x)); return v.length ? round2(v.reduce((a, b) => a + b, 0) / v.length) : null; };
     const fechado = (i: any) => !!i.dataPropostaAceite;
+    const ESTADOS_NEG = new Set(["Descartado", "Nao interessa", "Não interessa", "Cancelado"]);
+    const lucroDe = (n: any) => n.lucroReal || n.lucroEstimado || 0;
+    const negFechouNoPeriodo = (n: any) => inP(n.dataVenda, start, end) || inP(n.dataCompra, start, end);
 
-    // ════════ IMÓVEIS ════════
+    // ════════ PILAR 1 — ORIGINAÇÃO & FUNIL ════════
     const countIm = (s: Date, e: Date) => ({
       adicionados: imoveisAll.filter((i) => inP(i.dataAdicionado, s, e)).length,
       chamadas: imoveisAll.filter((i) => inP(i.dataChamada, s, e)).length,
@@ -1306,36 +1313,92 @@ app.get("/comercial/dashboard", async (c: any) => {
       propostas: imoveisAll.filter((i) => inP(i.dataProposta, s, e)).length,
     });
     const imCur = countIm(start, end), imPrev = countIm(prevStart, prevEnd);
-    const imMetricas: any = {};
-    for (const k of Object.keys(imCur)) imMetricas[k] = { valor: (imCur as any)[k], delta: pctDelta((imCur as any)[k], (imPrev as any)[k]) };
+    const atividadeImoveis: any = {};
+    for (const k of Object.keys(imCur)) atividadeImoveis[k] = { valor: (imCur as any)[k], delta: pctDelta((imCur as any)[k], (imPrev as any)[k]) };
     const backlogPorContactar = imoveisAll.filter((i) => i.dataAdicionado && !i.dataChamada).length;
 
     const coorte = imoveisAll.filter((i) => inP(i.dataAdicionado, start, end));
+    const cohortAdd = coorte.length;
+    const comChamada = coorte.filter((i) => i.dataChamada).length;
+    const comVisita = coorte.filter((i) => i.dataVisita).length;
+    const comEstudo = coorte.filter((i) => i.dataEstudoMercado).length;
+    const comProposta = coorte.filter((i) => i.dataProposta).length;
+    const conversao = {
+      chamada: cohortAdd > 0 ? round2(comChamada / cohortAdd * 100) : null,
+      visita: cohortAdd > 0 ? round2(comVisita / cohortAdd * 100) : null,
+      analise: cohortAdd > 0 ? round2(comEstudo / cohortAdd * 100) : null,
+      proposta: cohortAdd > 0 ? round2(comProposta / cohortAdd * 100) : null,
+    };
+    const aprovacaoAnalise = comEstudo > 0 ? round2(comProposta / comEstudo * 100) : null;
+    const taxaFecho = cohortAdd > 0 ? round2(coorte.filter(fechado).length / cohortAdd * 100) : null;
     const origemMap: any = {};
     for (const i of coorte) { const o = i.origem || "Não registado"; origemMap[o] = (origemMap[o] || 0) + 1; }
     const origem = Object.entries(origemMap).map(([origem, total]) => ({ origem, total })).sort((a: any, b: any) => b.total - a.total);
 
-    const cohortAdd = coorte.length;
-    const winRate = cohortAdd > 0 ? round2(coorte.filter(fechado).length / cohortAdd * 100) : null;
-    const taxaConvIm = cohortAdd > 0 ? round2(coorte.filter((i) => i.dataProposta).length / cohortAdd * 100) : null;
+    // ════════ PILAR 2 — UNIT ECONOMICS ════════
+    const negPeriodo = negocios.filter(negFechouNoPeriodo);
+    const dealsPeriodo = negPeriodo.length;
+    const lucroLiquido = round2(negPeriodo.reduce((s: number, n: any) => s + lucroDe(n), 0));
+    const lucroMedio = avg(negPeriodo.map((n: any) => lucroDe(n) || null));
+    const margemPct = avg(negPeriodo.filter((n: any) => n.capitalTotal > 0).map((n: any) => lucroDe(n) / n.capitalTotal * 100));
+    const burnMensal = round2(despesas.reduce((s: number, d: any) => s + (d.custoMensal || 0), 0));
+    const cac = dealsPeriodo > 0 ? round2(burnMensal * mesesPeriodo / dealsPeriodo) : null;
+    const roiMedio = avg(imoveisAll.filter((i) => i.roi > 0).map((i) => i.roi));
+    const roiAnualizadoMedio = avg(imoveisAll.filter((i) => i.roiAnualizado > 0).map((i) => i.roiAnualizado));
     const descontoMedio = avg(imoveisAll
       .filter((i) => inP(i.dataProposta, start, end) && i.askPrice > 0 && i.valorProposta > 0)
       .map((i) => (i.askPrice - i.valorProposta) / i.askPrice * 100));
-    const cicloVendasDias = avg(imoveisAll.map((i) => {
+
+    // ════════ PILAR 3 — VELOCIDADE & EFICIÊNCIA DO CAPITAL ════════
+    const diasAteFechar = avg(imoveisAll.map((i) => {
       if (!i.dataAdicionado || !i.dataPropostaAceite) return null;
       const d = (new Date(i.dataPropostaAceite) as any - (new Date(i.dataAdicionado) as any)) / 86400000;
       return d >= 0 && d < 730 ? d : null;
     }));
-    const ticketMedio = avg(negocios
-      .filter((n) => inP(n.dataVenda, start, end) || inP(n.dataCompra, start, end))
-      .map((n) => n.lucroReal || n.lucroEstimado || null));
+    const throughput = round2(dealsPeriodo / mesesPeriodo);
+    const capitalPorNegocio: any = {};
+    for (const r of piRows) { const k = r.negocio_id; capitalPorNegocio[k] = (capitalPorNegocio[k] || 0) + (Number(r.capital) || 0); }
+    const negFechadosIds = new Set(negPeriodo.map((n: any) => n.id));
+    const capitalRealizado = Object.entries(capitalPorNegocio).reduce((s: number, [nid, cap]: any) => s + (negFechadosIds.has(nid) ? cap : 0), 0);
 
-    // ════════ CONSULTORES ════════
+    // ════════ PILAR 4 — CAPITAL & RELAÇÕES ════════
+    const emParceria = (i: any) => i.status === "Em Parceria" || i.montanteInvestido > 0 || i.numeroNegocios > 0;
+    const parceria = investidores.filter(emParceria);
+    const capitalMobilizado = round2(parceria.reduce((s: number, i: any) => s + (i.montanteInvestido || 0), 0));
+    const capitalTurns = capitalMobilizado > 0 ? round2(capitalRealizado / capitalMobilizado * fatorAnual) : null;
+    const roicAnualizado = capitalMobilizado > 0 ? round2(lucroLiquido / capitalMobilizado * fatorAnual * 100) : null;
+    const dryPowder = round2(investidores
+      .filter((i: any) => !i.naoReinveste && (i.capitalMax || 0) > 0)
+      .reduce((s: number, i: any) => s + Math.max(0, (i.capitalMax || 0) - (i.montanteInvestido || 0)), 0));
+    const entradas = round2(investidores.filter((i: any) => inP(i.dataCapitalTransferido, start, end)).reduce((s: number, i: any) => s + (i.montanteInvestido || 0), 0));
+    const churned = parceria.filter((i: any) => i.naoReinveste && inP(i.dataNaoReinveste, start, end));
+    const capitalPerdido = round2(churned.reduce((s: number, i: any) => s + (i.montanteInvestido || 0), 0));
+    const capitalPerdidoPct = capitalMobilizado > 0 ? round2(capitalPerdido / capitalMobilizado * 100) : null;
+    const netFlow = round2(entradas - capitalPerdido);
+    const reinvestimento = parceria.length > 0 ? round2(parceria.filter((i: any) => (i.numeroNegocios || 0) > 1).length / parceria.length * 100) : null;
+    const top3 = [...parceria].sort((a: any, b: any) => (b.montanteInvestido || 0) - (a.montanteInvestido || 0)).slice(0, 3).reduce((s: number, i: any) => s + (i.montanteInvestido || 0), 0);
+    const concentracaoTop3 = capitalMobilizado > 0 ? round2(top3 / capitalMobilizado * 100) : null;
+    const saidaInvestidores = parceria.length > 0 ? round2(churned.length / parceria.length * 100) : null;
+    const taxaConvInvestidor = investidores.length > 0 ? round2(parceria.length / investidores.length * 100) : null;
+    const ticketMedioSlot = avg(piRows.map((r: any) => Number(r.capital) || null));
+
+    // ════════ PIPELINE PONDERADO POR PROBABILIDADE ════════
+    const probDe = (i: any) => i.dataProposta ? 0.6 : i.dataEstudoMercado ? 0.4 : i.dataVisita ? 0.25 : i.dataChamada ? 0.1 : i.dataAdicionado ? 0.05 : 0;
+    const lucroEstNegPorImovel: any = {};
+    for (const n of negocios) { const iid = Array.isArray(n.imovel) ? n.imovel[0] : null; if (iid) lucroEstNegPorImovel[iid] = (n.lucroEstimado || 0); }
+    const pipelinePonderado = round2(imoveisAll
+      .filter((i) => !ESTADOS_NEG.has(i.estado) && !i.dataPropostaAceite && i.dataAdicionado)
+      .reduce((s: number, i: any) => {
+        let lucroEst = lucroEstNegPorImovel[i.id] || 0;
+        if (!lucroEst) lucroEst = Math.max(0, (i.valorVendaRemodelado || 0) - (i.askPrice || 0) - (i.custoObra || 0));
+        return s + lucroEst * probDe(i);
+      }, 0));
+
+    // ════════ ATIVIDADE / CANAIS ════════
     const isChamada = (canal: any) => /chamada|telefone|call/i.test(canal || "");
     const consChamadas = ciRows.filter((r: any) => isChamada(r.canal) && inP(r.data_hora, start, end)).length;
     const consChamadasSomnium = ciRows.filter((r: any) => isChamada(r.canal) && r.direcao === "Enviado" && inP(r.data_hora, start, end)).length;
     const consNovos = consultores.filter((cc: any) => inP(cc.dataInicio, start, end)).length;
-
     const ultimoImovel: any = {};
     for (const i of imoveisAll) {
       if (!i.nomeConsultor || !i.dataAdicionado) continue;
@@ -1347,57 +1410,55 @@ app.get("/comercial/dashboard", async (c: any) => {
       const last = ultimoImovel[cc.nome] || (cc.dataInicio ? new Date(cc.dataInicio).getTime() : null);
       return last ? (Date.now() - last) / 86400000 > 60 : false;
     }).length;
-    const churnConsultores = parceiros.length > 0 ? round2(consInativos60 / parceiros.length * 100) : null;
+    const parceirosInativos = parceiros.length > 0 ? round2(consInativos60 / parceiros.length * 100) : null;
     const imComConsultor = imoveisAll.filter((i) => i.nomeConsultor);
     const taxaConvConsultor = imComConsultor.length > 0 ? round2(imComConsultor.filter(fechado).length / imComConsultor.length * 100) : null;
+    const ativacaoConsultor = consultores.length > 0 ? round2(consultores.filter((cc: any) => (cc.imoveisEnviados || 0) > 0).length / consultores.length * 100) : null;
+    const tempoRespostaConsultor = avg(consultores.map((cc: any) => (cc.tempoMedioResposta != null ? Number(cc.tempoMedioResposta) : null)));
     const premium = consultores
       .map((cc: any) => ({ nome: cc.nome, lucroGerado: round2(cc.lucroGerado || 0), imoveis: cc.imoveisEnviados || 0 }))
       .filter((cc: any) => cc.lucroGerado > 0 || cc.imoveis > 0)
       .sort((a: any, b: any) => b.lucroGerado - a.lucroGerado || b.imoveis - a.imoveis)
       .slice(0, 5);
+    const imovelOrigem: any = {}; for (const i of imoveisAll) imovelOrigem[i.id] = i.origem || "Não registado";
+    const lucroFonteMap: any = {};
+    for (const n of negPeriodo) { const iid = Array.isArray(n.imovel) ? n.imovel[0] : null; const o = imovelOrigem[iid] || "Não registado"; lucroFonteMap[o] = (lucroFonteMap[o] || 0) + lucroDe(n); }
+    const lucroPorFonte = Object.entries(lucroFonteMap).map(([origem, lucro]: any) => ({ origem, lucro: round2(lucro) })).filter((x: any) => x.lucro > 0).sort((a: any, b: any) => b.lucro - a.lucro).slice(0, 5);
 
-    // ════════ INVESTIDORES ════════
     const discoveryCalls = iiRows.filter((r: any) => r.finalidade === "discovery" && inP(r.data_hora, start, end)).length;
     const followUpCalls = iiRows.filter((r: any) => r.finalidade === "follow_up" && inP(r.data_hora, start, end)).length;
     const discoveryPrev = iiRows.filter((r: any) => r.finalidade === "discovery" && inP(r.data_hora, prevStart, prevEnd)).length;
     const followUpPrev = iiRows.filter((r: any) => r.finalidade === "follow_up" && inP(r.data_hora, prevStart, prevEnd)).length;
     const invNovos = investidores.filter((i: any) => inP(i.dataPrimeiroContacto, start, end)).length;
 
-    const emParceria = (i: any) => i.status === "Em Parceria" || i.montanteInvestido > 0 || i.numeroNegocios > 0;
-    const parceria = investidores.filter(emParceria);
-    const taxaConvInvestidor = investidores.length > 0 ? round2(parceria.length / investidores.length * 100) : null;
-    const ticketMedioSlot = avg(piRows.map((r: any) => Number(r.capital) || null));
-    const capitalMobilizado = round2(parceria.reduce((s: number, i: any) => s + (i.montanteInvestido || 0), 0));
-    const churned = parceria.filter((i: any) => i.naoReinveste && inP(i.dataNaoReinveste, start, end));
-    const churnInvestidores = parceria.length > 0 ? round2(churned.length / parceria.length * 100) : null;
-    const capitalChurn = round2(churned.reduce((s: number, i: any) => s + (i.montanteInvestido || 0), 0));
-    const capitalChurnPct = capitalMobilizado > 0 ? round2(capitalChurn / capitalMobilizado * 100) : null;
-
     return c.json({
       periodo,
       intervalo: { de: start.toISOString().slice(0, 10), ate: end.toISOString().slice(0, 10) },
-      imoveis: {
-        metricas: { ...imMetricas, backlogPorContactar },
-        origem,
-        kpi: { ticketMedio, taxaConversao: taxaConvIm, winRate, descontoMedio, cicloVendasDias },
+      northStar: { roicAnualizado, lucroLiquido },
+      funil: {
+        atividade: atividadeImoveis,
+        backlogPorContactar,
+        dealFlow: cohortAdd,
+        aprovacaoAnalise, chegamProposta: conversao.proposta, taxaFecho,
+        conversao, origem,
+      },
+      economia: { lucroMedio, margemPct, cac, roiMedio, roiAnualizadoMedio, descontoMedio },
+      velocidade: { diasAteFechar, capitalTurns, throughput },
+      capital: {
+        mobilizado: capitalMobilizado, disponivel: dryPowder, netFlow,
+        reinvestimento, concentracaoTop3, capitalPerdido, capitalPerdidoPct,
+        saidaInvestidores, taxaConvInvestidor, ticketMedioSlot,
+      },
+      pipelinePonderado,
+      atividade: {
+        discoveryCalls: { valor: discoveryCalls, delta: pctDelta(discoveryCalls, discoveryPrev) },
+        followUpCalls: { valor: followUpCalls, delta: pctDelta(followUpCalls, followUpPrev) },
+        novosInvestidores: invNovos,
+        chamadasConsultor: consChamadas, chamadasSomnium: consChamadasSomnium, novosConsultores: consNovos,
       },
       consultores: {
-        metricas: {
-          chamadas: { valor: consChamadas },
-          novos: { valor: consNovos },
-          chamadasSomnium: { valor: consChamadasSomnium },
-        },
-        kpi: { taxaConversao: taxaConvConsultor, churn: churnConsultores },
-        premium,
-      },
-      investidores: {
-        metricas: {
-          discoveryCalls: { valor: discoveryCalls, delta: pctDelta(discoveryCalls, discoveryPrev) },
-          followUpCalls: { valor: followUpCalls, delta: pctDelta(followUpCalls, followUpPrev) },
-          novos: { valor: invNovos },
-        },
-        kpi: { taxaConversao: taxaConvInvestidor, ticketMedioSlot, churn: churnInvestidores, capitalChurn, capitalChurnPct },
-        capitalMobilizado,
+        taxaConversao: taxaConvConsultor, parceirosInativos, ativacao: ativacaoConsultor, tempoResposta: tempoRespostaConsultor,
+        premium, lucroPorFonte,
       },
       updatedAt: new Date().toISOString(),
     });
