@@ -47,18 +47,13 @@ export function Dashboard() {
   }
   const { kpis, loading, error, refresh: refreshKpis } = useKPIs(regiao)
   const [pulse, setPulse] = useState(null)
-  const [metricas, setMetricas] = useState(null)
   const [lastRefresh, setLastRefresh] = useState(null)
   const inFlightRef = useRef(false)
 
   const refreshPulseMetricas = useCallback(async () => {
     try {
-      const [pRes, mRes] = await Promise.all([
-        apiFetch('/api/weekly-pulse', { regiao }),
-        apiFetch('/api/metricas', { regiao }),
-      ])
+      const pRes = await apiFetch('/api/weekly-pulse', { regiao })
       if (pRes.ok) setPulse(await pRes.json())
-      if (mRes.ok) setMetricas(await mRes.json())
     } catch { /* offline / network — manter ultima leitura */ }
   }, [regiao])
 
@@ -209,86 +204,16 @@ export function Dashboard() {
           </div>
         </div>
 
-        {/* Weekly Pulse Detail */}
-        {pulse && (
-          <div className="rounded-xl p-5 border" style={{ backgroundColor: PULSE_BG[pulse.status], borderColor: PULSE_COLOR[pulse.status] + '33' }}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-700">Pulso Semanal ({pulse.semana.de} a {pulse.semana.ate})</h3>
-              <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ backgroundColor: PULSE_COLOR[pulse.status] + '22', color: PULSE_COLOR[pulse.status] }}>
-                {pulse.score}/100
-              </span>
-            </div>
-            <Stagger className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-3 text-center">
-              {[
-                { label: 'Imóveis Novos', value: pulse.atividades.imoveisAdicionados, good: true },
-                { label: 'Chamadas', value: pulse.atividades.chamadasFeitas, good: true },
-                { label: 'Visitas', value: pulse.atividades.visitasFeitas, good: true },
-                { label: 'Propostas', value: pulse.atividades.propostasEnviadas, good: true },
-                { label: 'Deals', value: pulse.atividades.dealsFechados, good: true },
-              ].map(item => (
-                <Stagger.Item key={item.label} className="bg-white dark:bg-neutral-900 rounded-lg p-2.5 shadow-xs border border-gray-100 dark:border-neutral-800">
-                  <p className="text-lg font-bold text-gray-900">{item.value}</p>
-                  <p className="text-xs text-gray-500">{item.label}</p>
-                </Stagger.Item>
-              ))}
-            </Stagger>
-            {(pulse.alertas.imoveisParados > 0 || pulse.alertas.investSemContacto > 0 || pulse.alertas.consFollowUpAtrasado > 0) && (
-              <div className="mt-3 flex gap-4 text-xs">
-                {pulse.alertas.imoveisParados > 0 && <span className="text-red-600">{pulse.alertas.imoveisParados} imóveis parados</span>}
-                {pulse.alertas.investSemContacto > 0 && <span className="text-orange-600">{pulse.alertas.investSemContacto} investidores sem contacto</span>}
-                {pulse.alertas.consFollowUpAtrasado > 0 && <span className="text-yellow-700">{pulse.alertas.consFollowUpAtrasado} follow-ups atrasados</span>}
-              </div>
-            )}
+        {/* Header de saúde — alertas transversais (o score está no banner).
+            Atividade detalhada vive no bloco de cada departamento, com período. */}
+        {pulse && (pulse.alertas.imoveisParados > 0 || pulse.alertas.investSemContacto > 0 || pulse.alertas.consFollowUpAtrasado > 0) && (
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-xl px-4 py-3 border bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-xs">
+            <span className="font-semibold text-neutral-400 uppercase tracking-widest text-[10px]">Saúde</span>
+            {pulse.alertas.imoveisParados > 0 && <span className="text-red-600">⚠ {pulse.alertas.imoveisParados} imóveis parados</span>}
+            {pulse.alertas.investSemContacto > 0 && <span className="text-orange-600">⚠ {pulse.alertas.investSemContacto} investidores sem contacto</span>}
+            {pulse.alertas.consFollowUpAtrasado > 0 && <span className="text-yellow-700">⚠ {pulse.alertas.consFollowUpAtrasado} follow-ups atrasados</span>}
           </div>
         )}
-
-        {/* Leading Indicators — Weekly Activity Score */}
-        {metricas?.avancado?.weeklyActivity && (() => {
-          const wa = metricas.avancado.weeklyActivity
-          const LABELS = {
-            imoveisAdicionados: 'Imóveis adicionados',
-            chamadasFeitas: 'Chamadas feitas',
-            visitasRealizadas: 'Visitas realizadas',
-            followUpsInvestidores: 'Follow-ups investidores',
-            followUpsConsultores: 'Follow-ups consultores',
-            reunioesInvestidores: 'Reuniões investidores',
-          }
-          return (
-            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-700">Leading Indicators — Esta Semana</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">As metricas que preveem receita futura</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-2xl font-bold ${wa.score >= 70 ? 'text-green-600' : wa.score >= 40 ? 'text-yellow-600' : 'text-red-500'}`}>
-                    {wa.score}%
-                  </span>
-                  <span className="text-xs text-gray-400">Activity Score</span>
-                </div>
-              </div>
-              <Stagger className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                {Object.entries(wa).filter(([k]) => k !== 'score').map(([key, v]) => {
-                  const pct = v.meta > 0 ? Math.min(100, Math.round(v.valor / v.meta * 100)) : 0
-                  return (
-                    <Stagger.Item key={key} className="flex flex-col gap-1.5">
-                      <div className="flex justify-between items-baseline">
-                        <span className="text-xs text-gray-500">{LABELS[key] || key}</span>
-                        <span className={`text-sm font-bold ${pct >= 100 ? 'text-green-600' : pct >= 50 ? 'text-yellow-600' : 'text-red-500'}`}>
-                          {v.valor}/{v.meta}
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-100 rounded-full h-2">
-                        <div className={`h-2 rounded-full transition-all ${pct >= 100 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-400' : 'bg-red-400'}`}
-                          style={{ width: `${pct}%` }} />
-                      </div>
-                    </Stagger.Item>
-                  )
-                })}
-              </Stagger>
-            </div>
-          )
-        })()}
 
         {/* Seletor de departamento — pílulas (estilo toggle do CRM) */}
         <div className="flex justify-center sm:justify-start">
