@@ -3,6 +3,8 @@ import { TrendingUp, Database, Clock, Calculator, Megaphone } from 'lucide-react
 import { Header } from '../components/layout/Header.jsx'
 import { DepartmentSection } from '../components/dashboard/DepartmentSection.jsx'
 import { ComercialDashboard } from '../components/dashboard/ComercialDashboard.jsx'
+import { FinanceiroDashboard } from '../components/dashboard/FinanceiroDashboard.jsx'
+import { PeriodSelector } from '../components/dashboard/PeriodSelector.jsx'
 import { useKPIs } from '../hooks/useKPIs.js'
 import { KPISkeleton } from '../components/ui/Skeleton.jsx'
 import { Stagger } from '../components/ui/Stagger.jsx'
@@ -37,6 +39,8 @@ const PULSE_BG = { excelente: 'rgba(34,197,94,0.1)', bom: 'rgba(201,168,76,0.1)'
 
 export function Dashboard() {
   const [dept, setDept] = useState('comercial')
+  const [periodo, setPeriodo] = useState('mes')
+  const [dashData, setDashData] = useState(null)
   const [regiao, setRegiaoState] = useState(() => readRegiaoFromStorage())
   const setRegiao = (r) => {
     setRegiaoState(r)
@@ -98,6 +102,18 @@ export function Dashboard() {
       window.removeEventListener('somnium:refresh', onMutation)
     }
   }, [refreshAll])
+
+  // Dashboard por departamentos (Comercial + Financeiro) — um seletor de
+  // período comanda este snapshot. Re-fetch quando muda período ou região.
+  useEffect(() => {
+    let cancel = false
+    apiFetch(`/api/comercial/dashboard?periodo=${periodo}`, { regiao })
+      .then(r => (r.ok ? r.json() : null))
+      .then(j => { if (!cancel && j && !j.error) setDashData(j) })
+      .catch(() => {})
+    return () => { cancel = true }
+  }, [periodo, regiao])
+  const ns = dashData?.northStar
 
   const updatedAt = lastRefresh
     ? new Date(lastRefresh).toLocaleTimeString('pt-PT')
@@ -194,8 +210,8 @@ export function Dashboard() {
                 </div>
               )}
               <div className="text-right">
-                <p className="text-2xl font-bold font-mono text-brand-gold">{loading ? '...' : 'Online'}</p>
-                <p className="text-overline mt-0.5 uppercase tracking-widest font-semibold text-white/40">Estado</p>
+                <p className="text-3xl font-bold font-mono text-brand-gold">{ns?.roicAnualizado != null ? `${ns.roicAnualizado}%` : '—'}</p>
+                <p className="text-overline mt-0.5 uppercase tracking-widest font-semibold text-white/40">ROIC anual · North Star</p>
               </div>
             </div>
             <div className="absolute right-6 top-1/2 -translate-y-1/2 opacity-5 pointer-events-none">
@@ -215,22 +231,36 @@ export function Dashboard() {
           </div>
         )}
 
-        {/* Seletor de departamento — pílulas (estilo toggle do CRM) */}
-        <div className="flex justify-center sm:justify-start">
+        {/* Seletor de departamento (pílulas) + seletor de período global */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <Tabs variant="segmented" items={DEPT_TABS} value={dept} onChange={setDept} />
+          {(dept === 'comercial' || dept === 'financeiro') && (
+            <div className="flex items-center gap-3">
+              {dashData?.intervalo && (
+                <span className="text-[11px] text-neutral-400 hidden sm:inline">{dashData.intervalo.de} a {dashData.intervalo.ate}</span>
+              )}
+              <PeriodSelector value={periodo} onChange={setPeriodo} />
+            </div>
+          )}
         </div>
 
         {/* Conteúdo por departamento */}
-        {dept === 'comercial' && <ComercialDashboard regiao={regiao} />}
+        {dept === 'comercial' && <ComercialDashboard data={dashData} />}
+        {dept === 'financeiro' && <FinanceiroDashboard data={dashData} />}
 
-        {dept !== 'comercial' && !loading && deptSections.length > 0 && (
-          <Stagger className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
-            {deptSections.map((s) => (
-              <Stagger.Item key={s.title}>
-                <DepartmentSection {...s} />
-              </Stagger.Item>
-            ))}
-          </Stagger>
+        {(dept === 'financeiro' || dept === 'operacoes') && !loading && deptSections.length > 0 && (
+          <>
+            {dept === 'financeiro' && (
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-neutral-400 -mb-2">Tesouraria & Análises (totais atuais)</p>
+            )}
+            <Stagger className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+              {deptSections.map((s) => (
+                <Stagger.Item key={s.title}>
+                  <DepartmentSection {...s} />
+                </Stagger.Item>
+              ))}
+            </Stagger>
+          </>
         )}
 
         {dept === 'marketing' && (
