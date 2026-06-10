@@ -94,11 +94,11 @@ export function ComercialDashboard({ regiao }) {
             sub="backlog 1.º contacto" tone={im?.metricas?.backlogPorContactar ? 'amber' : 'green'} size="md" />
         </Group>
         <Group label="KPI">
-          <KpiCard label="Lucro médio / negócio" value={EUR(im?.kpi?.ticketMedio)} tone="green" size="md" />
-          <KpiCard label="Chegam a proposta" value={fmtPct(im?.kpi?.taxaConversao)} tone="indigo" size="md" />
-          <KpiCard label="Taxa de fecho" value={fmtPct(im?.kpi?.winRate)} tone="indigo" size="md" />
-          <KpiCard label="Desconto médio" value={fmtPct(im?.kpi?.descontoMedio)} tone="amber" size="md" />
-          <KpiCard label="Dias até fechar" value={fmtNum(im?.kpi?.cicloVendasDias)} sub="média lead → fecho" tone="blue" size="md" />
+          <KpiCard label="Lucro médio / negócio" value={EUR(im?.kpi?.ticketMedio)} sub="Ticket médio" tone="green" size="md" />
+          <KpiCard label="Chegam a proposta" value={fmtPct(im?.kpi?.taxaConversao)} sub="Taxa de conversão" tone="indigo" size="md" />
+          <KpiCard label="Taxa de fecho" value={fmtPct(im?.kpi?.winRate)} sub="Win rate" tone="indigo" size="md" />
+          <KpiCard label="Desconto médio" value={fmtPct(im?.kpi?.descontoMedio)} sub="Discount rate" tone="amber" size="md" />
+          <KpiCard label="Dias até fechar" value={fmtNum(im?.kpi?.cicloVendasDias)} sub="Sales cycle" tone="blue" size="md" />
         </Group>
         {im?.origem?.length > 0 && (
           <div>
@@ -130,7 +130,7 @@ export function ComercialDashboard({ regiao }) {
         </Group>
         <Group label="KPI">
           <KpiCard label="Taxa de conversão" value={fmtPct(co?.kpi?.taxaConversao)} tone="indigo" size="md" />
-          <KpiCard label="Parceiros inativos" value={fmtPct(co?.kpi?.churn)} sub="60d sem enviar imóvel" tone={co?.kpi?.churn > 0 ? 'red' : 'green'} size="md" />
+          <KpiCard label="Parceiros inativos" value={fmtPct(co?.kpi?.churn)} sub="Churn · 60d s/ imóvel" tone={co?.kpi?.churn > 0 ? 'red' : 'green'} size="md" />
         </Group>
         {co?.premium?.length > 0 && (
           <div>
@@ -160,10 +160,10 @@ export function ComercialDashboard({ regiao }) {
         </Group>
         <Group label="KPI">
           <KpiCard label="Taxa de conversão" value={fmtPct(inv?.kpi?.taxaConversao)} tone="indigo" size="md" />
-          <KpiCard label="Investimento médio / slot" value={EUR(inv?.kpi?.ticketMedioSlot)} tone="green" size="md" />
-          <KpiCard label="Saída de investidores" value={fmtPct(inv?.kpi?.churn)} tone={inv?.kpi?.churn > 0 ? 'red' : 'green'} size="md" />
+          <KpiCard label="Investimento médio / slot" value={EUR(inv?.kpi?.ticketMedioSlot)} sub="Ticket / slot" tone="green" size="md" />
+          <KpiCard label="Saída de investidores" value={fmtPct(inv?.kpi?.churn)} sub="Churn" tone={inv?.kpi?.churn > 0 ? 'red' : 'green'} size="md" />
           <KpiCard label="Capital perdido" value={EUR(inv?.kpi?.capitalChurn)}
-            sub={inv?.kpi?.capitalChurnPct != null ? `${inv.kpi.capitalChurnPct}% do mobilizado` : null}
+            sub={inv?.kpi?.capitalChurnPct != null ? `Capital churn · ${inv.kpi.capitalChurnPct}% mobilizado` : 'Capital churn'}
             tone={inv?.kpi?.capitalChurn > 0 ? 'red' : 'green'} size="md" />
           <KpiCard label="Capital mobilizado" value={EUR(inv?.capitalMobilizado)} tone="gold" size="md" />
         </Group>
