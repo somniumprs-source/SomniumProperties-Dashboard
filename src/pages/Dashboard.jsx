@@ -8,17 +8,17 @@ import { PeriodSelector } from '../components/dashboard/PeriodSelector.jsx'
 import { useKPIs } from '../hooks/useKPIs.js'
 import { KPISkeleton } from '../components/ui/Skeleton.jsx'
 import { Stagger } from '../components/ui/Stagger.jsx'
-import { Tabs } from '../components/ui/Tabs.jsx'
+import { KpiCard } from '../components/ui/KpiCard.jsx'
 import { apiFetch } from '../lib/api.js'
 import { EUR, statusColor } from '../constants.js'
 import { RegiaoToggle } from '../components/RegiaoBadge.jsx'
 
 // Dashboard organizado por departamentos (dentro de Administração).
 const DEPT_TABS = [
-  { key: 'comercial',  label: 'Comercial',  icon: Database },
-  { key: 'operacoes',  label: 'Operações',  icon: Clock },
-  { key: 'financeiro', label: 'Financeiro', icon: TrendingUp },
-  { key: 'marketing',  label: 'Marketing',  icon: Megaphone },
+  { key: 'comercial',  label: 'Comercial',  icon: Database,   tone: 'gold' },
+  { key: 'operacoes',  label: 'Operações',  icon: Clock,      tone: 'amber' },
+  { key: 'financeiro', label: 'Financeiro', icon: TrendingUp, tone: 'green' },
+  { key: 'marketing',  label: 'Marketing',  icon: Megaphone,  tone: 'indigo' },
 ]
 
 const REFRESH_INTERVAL_MS = 30_000
@@ -124,6 +124,14 @@ export function Dashboard() {
   const finKpis = kpis?.financeiro
   const comKpis = kpis?.comercial
   const anaKpis = finKpis?.analises
+
+  // Número de cabeçalho de cada card de departamento (valor grande + caption).
+  const deptMeta = {
+    comercial:  { value: dashData?.funil?.atividade?.adicionados?.valor ?? '—', sub: 'Adicionados' },
+    operacoes:  { value: finKpis?.negóciosAtivos ?? '—', sub: 'Projetos ativos' },
+    financeiro: { value: finKpis ? formatEur(finKpis.lucroEstimadoTotal) : '—', sub: 'Pipeline de lucro' },
+    marketing:  { value: '—', sub: 'Em breve' },
+  }
 
   const sections = [
     {
@@ -231,11 +239,25 @@ export function Dashboard() {
           </div>
         )}
 
-        {/* Seletor de departamento (pílulas) + seletor de período global */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <Tabs variant="segmented" items={DEPT_TABS} value={dept} onChange={setDept} />
+        {/* Seletor de departamento (cards, estilo CRM) + seletor de período global */}
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {DEPT_TABS.map((t) => (
+              <KpiCard
+                key={t.key}
+                icon={t.icon}
+                label={t.label}
+                value={deptMeta[t.key]?.value}
+                sub={deptMeta[t.key]?.sub}
+                tone={t.tone}
+                size="md"
+                active={dept === t.key}
+                onClick={() => setDept(t.key)}
+              />
+            ))}
+          </div>
           {(dept === 'comercial' || dept === 'financeiro') && (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center justify-end gap-3">
               {dashData?.intervalo && (
                 <span className="text-[11px] text-neutral-400 hidden sm:inline">{dashData.intervalo.de} a {dashData.intervalo.ate}</span>
               )}

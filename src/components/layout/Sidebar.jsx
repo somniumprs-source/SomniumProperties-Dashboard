@@ -12,6 +12,7 @@ const nav = [
     label: 'Administração', Icon: ScrollText, area: 'administracao',
     children: [
       { to: '/',                         label: 'Dashboard',    Icon: LayoutDashboard, end: true, area: 'dashboard' },
+      { to: '/operacoes',                label: 'Tarefas',      Icon: Clock, badgeKey: 'tarefas', area: 'operacoes' },
       { to: '/administracao/relatorios', label: 'Relatórios',   Icon: FileText, area: 'administracao' },
       { to: '/administracao/sop',        label: 'SOPs',         Icon: BookOpen, area: 'administracao' },
       { to: '/administracao/regiao',     label: 'Multi-Região', Icon: Map, area: 'administracao' },
@@ -19,9 +20,8 @@ const nav = [
   },
   { to: '/crm', label: 'Departamento Comercial', Icon: Database, badgeKey: 'crm', area: 'crm' },
   {
-    label: 'Operações', Icon: Clock, area: 'operacoes', badgeKey: 'tarefas',
+    label: 'Operações', Icon: Clock, area: 'operacoes',
     children: [
-      { to: '/operacoes', label: 'Operações', Icon: Clock, area: 'operacoes' },
       { to: '/projectos', label: 'Projectos', Icon: Briefcase, area: 'projectos' },
     ],
   },
