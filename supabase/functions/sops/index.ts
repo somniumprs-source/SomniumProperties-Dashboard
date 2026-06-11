@@ -103,8 +103,30 @@ app.delete("/:id", async (c: any) => {
   }
 });
 
-// ── POST /sops/import-drive (sopDriveImport — Drive nao portado) -> 501 ──
-app.post("/import-drive", (c: any) => c.json({ error: "Not implemented — porting em curso", todo: true }, 501));
+// ── POST /sops/import-drive — sincroniza metadados de SOPs do Drive (port 96-119) ──
+app.post("/import-drive", async (c: any) => {
+  try {
+    if (!driveConfigured()) {
+      return c.json({ error: "Google Drive não configurado no servidor." }, 503);
+    }
+    const { folderId: rawFolder, departamento, overwrite } = await c.req.json().catch(() => ({}));
+    const folderId = parseFolderId(rawFolder);
+    if (!folderId) return c.json({ error: "folderId / URL Drive inválido" }, 400);
+    if (!DEPARTAMENTOS_VALIDOS.includes(departamento)) {
+      return c.json({ error: `departamento inválido: ${departamento}` }, 400);
+    }
+    const stats = await importFolderToSops({
+      folderId,
+      departamento,
+      overwrite: !!overwrite,
+      user: userEmail(c),
+    });
+    return c.json({ ok: true, ...stats });
+  } catch (e) {
+    console.error("[sops] import-drive erro:", e);
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
 
 app.get("/_health", (c) => c.json({ ok: true, fn: "sops" }));
 
