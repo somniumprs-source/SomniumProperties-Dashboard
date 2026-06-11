@@ -129,6 +129,14 @@ router.put('/imoveis/:imovelId/orcamento-obra', async (req, res) => {
       [calc.total_geral, now, imovelId]
     )
 
+    // Sync ARU -> análise activa: a "Zona ARU" é partilhada com o campo `aru`
+    // da análise, que define o IVA 6%/23% nos documentos de investidor.
+    // Documentos e Calculadora recalculam ao vivo a partir de `aru`.
+    await pool.query(
+      'UPDATE analises SET aru = $1 WHERE imovel_id = $2 AND activa = true AND aru IS DISTINCT FROM $1',
+      [zonaAru, imovelId]
+    )
+
     res.json({ ...saved, calc, existe: true })
   } catch (e) {
     console.error('[orcamento-obra] PUT erro:', e)

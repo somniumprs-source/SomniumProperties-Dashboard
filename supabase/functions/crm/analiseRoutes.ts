@@ -9,6 +9,7 @@
 import pool from "../_shared/pg.ts";
 import { ensureColumn } from "../_shared/crud.ts";
 import { calcAnalise, calcStressTests, calcCAEP, quickCheck } from "../_shared/calcEngine.ts";
+import { calcOrcamentoObra } from "../_shared/orcamentoObraEngine.ts";
 import { uploadPublic, removeFromStorage } from "../_shared/storage.ts";
 import { isWholesaling } from "../_shared/modelos.ts";
 
@@ -323,6 +324,32 @@ export function registerAnaliseRoutes(app: any) {
 
       // Se activa, propagar
       if (existing.activa) await propagarParaImovel(existing.imovel_id, calculados, merged);
+
+      // Sync ARU -> orçamento de obra: a "Zona ARU" é partilhada entre a análise
+      // (campo aru) e o orçamento (zona_aru). Espelhar o flag e recalcular os
+      // totais do orçamento (o GET do orçamento não recalcula). Só dispara quando
+      // o ARU muda, para não perturbar saves normais da análise.
+      try {
+        const { rows: [orc] } = await pool.query("SELECT * FROM orcamentos_obra WHERE imovel_id = $1", [existing.imovel_id]);
+        if (orc && orc.zona_aru !== !!merged.aru) {
+          const zonaAru = !!merged.aru;
+          const co = calcOrcamentoObra({
+            pisos: orc.pisos || [], seccoes: orc.seccoes || {}, iva_perc: orc.iva_perc,
+            zona_aru: zonaAru, tipo_obra: orc.tipo_obra, bdi: orc.bdi || {},
+          });
+          const ct = co.totais;
+          await pool.query(
+            `UPDATE orcamentos_obra SET zona_aru = $1, regime_fiscal = $2,
+               total_obra = $3, total_licenciamento = $4, total_geral = $5,
+               total_iva = $6, total_iva_autoliquidado = $7, total_retencoes_irs = $8, total_a_pagar = $9,
+               updated_at = $10 WHERE imovel_id = $11`,
+            [zonaAru, zonaAru ? "aru" : "normal",
+             co.total_obra, co.total_licenciamento, co.total_geral,
+             ct.iva_geral, ct.iva_autoliquidado, ct.retencoes_irs, ct.a_pagar,
+             now, existing.imovel_id],
+          );
+        }
+      } catch (e) { console.error("[analise] sync ARU -> orçamento falhou:", (e as Error).message); }
 
       // Audit
       await pool.query(
