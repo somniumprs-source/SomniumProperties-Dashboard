@@ -3450,13 +3450,13 @@ function renderPropostaCedenciaPosicao(b, im, a) {
     (deal.escritura || 0) + (parseFloat(a.cpcv_compra) || 0) + (deal.due_diligence || 0)
   )
 
-  const lucroLiquidoOriginal = deal.lucro_liquido || 0
   const lucroBrutoOriginal = deal.lucro_bruto || 0
   // Modelo Wholesaling: a remuneração da Somnium é o Valor de Cedência (fee), já
   // embutido no custo de aquisição (compra apresentada = compra + fee). Não há
-  // comissão de 10% sobre o lucro — o investidor recebe o lucro líquido calculado
-  // já sobre compra+fee.
-  const lucroLiquidoInvestidor = lucroLiquidoOriginal
+  // comissão de 10% sobre o lucro — o investidor recebe o lucro bruto calculado
+  // já sobre compra+fee. Este documento apresenta valores brutos; a fiscalidade
+  // fica a cargo do investidor conforme a estrutura jurídica que adoptar.
+  const lucroBrutoInvestidor = lucroBrutoOriginal
   // A comissão de venda NÃO é capital a adiantar: é paga com o sinal do comprador
   // numa fase final do negócio e já está descontada no lucro (lucro_bruto = vvr −
   // custoTotal, que inclui a comissão). Por isso fica totalmente fora do
@@ -3464,7 +3464,7 @@ function renderPropostaCedenciaPosicao(b, im, a) {
   const investimentoTotal = totalAquisicao + obra + detencao
 
   // Retorno ajustado: usa investimento total (sem financiamento) como base
-  const retornoTotal = investimentoTotal > 0 ? Math.round((lucroLiquidoInvestidor / investimentoTotal) * 1000) / 10 : 0
+  const retornoTotal = investimentoTotal > 0 ? Math.round((lucroBrutoInvestidor / investimentoTotal) * 1000) / 10 : 0
   const retornoAnualizado = meses > 0 ? Math.round((retornoTotal * 12 / meses) * 10) / 10 : 0
 
   b.header('OPORTUNIDADE — CEDÊNCIA DE POSIÇÃO CONTRATUAL')
@@ -3481,7 +3481,7 @@ function renderPropostaCedenciaPosicao(b, im, a) {
   b.header('SUMÁRIO EXECUTIVO')
   b.bigNumbers([
     { label: 'Investimento Total', value: EUR(investimentoTotal), sub: 'Tudo incluído' },
-    { label: 'Lucro Líquido Estimado', value: EUR(lucroLiquidoInvestidor), sub: 'Líquido para o investidor' },
+    { label: 'Lucro Bruto Estimado', value: EUR(lucroBrutoInvestidor), sub: 'Valor bruto para o investidor' },
     { label: 'Retorno Anualizado', value: PCT(retornoAnualizado), sub: `base ${meses} meses` },
   ])
   b.space(2)
@@ -3535,20 +3535,18 @@ function renderPropostaCedenciaPosicao(b, im, a) {
   b.subheader('Resultado para o Investidor')
   b.simpleTable([
     { label: 'Valor de Venda Alvo (VVR)', value: EUR(vvr) },
-    { label: 'Lucro Bruto Estimado', value: EUR(lucroBrutoOriginal) },
-    { label: `Impostos (${deal.regime_fiscal || 'Empresa'})`, value: EUR(deal.impostos) },
-    { label: 'Lucro Líquido para o Investidor', value: EUR(lucroLiquidoInvestidor), total: true },
+    { label: 'Lucro Bruto para o Investidor', value: EUR(lucroBrutoInvestidor), total: true },
   ])
   b.space(3)
 
   b.bigNumbers([
     { label: 'Retorno Total', value: PCT(retornoTotal) },
     { label: 'Retorno Anualizado', value: PCT(retornoAnualizado) },
-    { label: 'Lucro por Mês', value: meses > 0 ? `${EUR_S(Math.round(lucroLiquidoInvestidor / meses))}/mês` : '—' },
+    { label: 'Lucro por Mês', value: meses > 0 ? `${EUR_S(Math.round(lucroBrutoInvestidor / meses))}/mês` : '—' },
   ])
   b.space(4)
 
-  b.note(`Pressupostos: Cessão de posição contratual (artigo 424.º CC). Regime fiscal: ${deal.regime_fiscal || 'Empresa'}. Prazo: ${meses} meses. O Valor de Cedência de Posição está incluído no custo de aquisição apresentado.`)
+  b.note(`Pressupostos: Cessão de posição contratual (artigo 424.º CC). Prazo: ${meses} meses. Valores apresentados em bruto, antes de fiscalidade; a carga fiscal aplicável depende da estrutura jurídica adoptada pelo investidor. O Valor de Cedência de Posição está incluído no custo de aquisição apresentado.`)
 
   b.newPage()
   b.header('ENQUADRAMENTO LEGAL — CEDÊNCIA DE POSIÇÃO')
@@ -3570,9 +3568,9 @@ function renderPropostaCedenciaPosicao(b, im, a) {
   ])
   b.space(4)
 
-  // Pressupostos e glossario partilhados
+  // Pressupostos e glossario partilhados (em modo bruto: sem referencias a lucro liquido)
   try {
-    renderAssumptionsAndGlossary(b, deal)
+    renderAssumptionsAndGlossary(b, deal, { brutoOnly: true })
   } catch (e) {
     console.error('[cedencia] glossario falhou:', e.message)
   }
@@ -3959,12 +3957,12 @@ const GENERATORS = {
   proposta_cedencia_posicao: (im, analise) => {
     const a = analise || {}
     const meses = a.meses || 6
-    const lucroInvestidor = a.lucro_liquido || 0
+    const lucroInvestidor = a.lucro_bruto || 0
     const b = new DocBuilder('Proposta de Cedência de Posição', `Oportunidade · ${im.zona || ''}`, im, {
       style: 'investor',
       withIndex: true,
       heroItems: [
-        { label: 'Lucro Líquido (Investidor)', value: EUR(lucroInvestidor), sub: 'Estimado, após cedência' },
+        { label: 'Lucro Bruto (Investidor)', value: EUR(lucroInvestidor), sub: 'Estimado, antes de fiscalidade' },
         { label: 'Prazo Estimado', value: `${meses} meses` },
         { label: 'Modelo', value: 'Cedência de Posição', sub: 'Wholesaling' },
       ],
