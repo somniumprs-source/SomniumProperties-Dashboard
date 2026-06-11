@@ -54,6 +54,9 @@ export function useOrcamentoObra(imovelId) {
               seccoes: next.seccoes,
               notas: next.notas,
               iva_perc: next.iva_perc,
+              zona_aru: next.zona_aru,
+              tipo_obra: next.tipo_obra,
+              bdi: next.bdi,
             }),
           })
           if (r.ok) {
