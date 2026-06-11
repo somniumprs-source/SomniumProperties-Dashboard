@@ -1,9 +1,9 @@
 // Edge Function "sops" — port de src/db/sopRoutes.js (Express -> Hono).
-// CRUD da biblioteca de SOPs. O endpoint POST /import-drive depende do modulo
-// sopDriveImport (Google Drive) ainda nao portado -> 501.
+// CRUD da biblioteca de SOPs + sincronizacao com Google Drive (import-drive).
 import { createApp } from "../_shared/hono.ts";
 import { requireAuth } from "../_shared/auth.ts";
 import pool from "../_shared/pg.ts";
+import { importFolderToSops, isConfigured as driveConfigured, parseFolderId } from "../_shared/sopDriveImport.ts";
 
 const app = createApp("/sops");
 

@@ -3223,6 +3223,173 @@ app.get("/okrs/fontes", (c: any) => {
   ]);
 });
 
+// Criar OKR
+app.post("/okrs", async (c: any) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { trimestre, objectivo, ordem, krs, regiao: regiaoBody } = body;
+    if (!trimestre || !objectivo) return c.json({ error: "trimestre e objectivo são obrigatórios" }, 400);
+    // OKR herda região: explícita no body > região activa do operador > NULL (global).
+    const regiao = regiaoBody === null ? null : (regiaoBody || regiaoFrom(c) || null);
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await pool.query(
+      "INSERT INTO okrs (id, trimestre, objectivo, ordem, regiao, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7)",
+      [id, trimestre, objectivo, ordem || 0, regiao, now, now],
+    );
+    if (krs?.length) {
+      for (let i = 0; i < krs.length; i++) {
+        const kr = krs[i];
+        const krId = crypto.randomUUID();
+        await pool.query(
+          "INSERT INTO okr_krs (id, okr_id, kr, meta, unidade, tipo, fonte, invertido, ordem, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+          [krId, id, kr.kr, kr.meta || 1, kr.unidade || "", kr.tipo || "acumulado", kr.fonte || null, kr.invertido || false, i, now, now],
+        );
+      }
+    }
+    return c.json({ id, trimestre, objectivo }, 201);
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+// Seed OKRs Q2 2026 se tabela vazia
+app.post("/okrs/seed-q2", async (c: any) => {
+  try {
+    const { rows } = await pool.query("SELECT COUNT(*) as c FROM okrs WHERE trimestre = 'Q2 2026'");
+    if (parseInt(rows[0].c) > 0) return c.json({ ok: true, message: "OKRs Q2 já existem" });
+
+    const now = new Date().toISOString();
+    const okrsData = [
+      { obj: "Fechar o primeiro deal WH", krs: [
+        { kr: "10 imóveis adicionados/semana × 4 semanas", meta: 10, unidade: "/sem", fonte: "imoveis_semana" },
+        { kr: "4 visitas realizadas", meta: 4, fonte: "imoveis_com_visita" },
+        { kr: "2 propostas enviadas", meta: 2, fonte: "imoveis_com_proposta" },
+        { kr: "1 contrato assinado", meta: 1, fonte: "negocios_total" },
+      ] },
+      { obj: "Captar primeiro capital passivo", krs: [
+        { kr: "3 reuniões com investidores A/B", meta: 3, fonte: "investidores_ab_reuniao" },
+        { kr: "1 NDA assinado", meta: 1, fonte: "investidores_nda" },
+        { kr: "1 transferência de capital", meta: 1, fonte: "investidores_capital" },
+      ] },
+      { obj: "Activar rede de consultores", krs: [
+        { kr: "10 follow-ups/semana × 4 semanas", meta: 10, unidade: "/sem", fonte: "consultores_followup_semana" },
+        { kr: "5 consultores com follow-up em dia", meta: 5, fonte: "consultores_followup_em_dia" },
+        { kr: "Data Primeira Call em consultores ativos", meta: 0, fonte: "consultores_com_call" },
+      ] },
+      { obj: "Disciplina de dados ≥ 80%", krs: [
+        { kr: "0 imóveis ativos sem Modelo Negócio", meta: 0, fonte: "imoveis_sem_modelo", invertido: true },
+        { kr: "100% investidores A/B com contacto", meta: 0, fonte: "investidores_ab_contacto" },
+      ] },
+    ];
+    for (let i = 0; i < okrsData.length; i++) {
+      const o = okrsData[i];
+      const okrId = crypto.randomUUID();
+      await pool.query(
+        "INSERT INTO okrs (id, trimestre, objectivo, ordem, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6)",
+        [okrId, "Q2 2026", o.obj, i, now, now],
+      );
+      for (let j = 0; j < o.krs.length; j++) {
+        const kr: any = o.krs[j];
+        const krId = crypto.randomUUID();
+        await pool.query(
+          "INSERT INTO okr_krs (id, okr_id, kr, meta, unidade, tipo, fonte, invertido, ordem, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+          [krId, okrId, kr.kr, kr.meta, kr.unidade || "", "acumulado", kr.fonte, kr.invertido || false, j, now, now],
+        );
+      }
+    }
+    return c.json({ ok: true, created: okrsData.length });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+// Actualizar OKR
+app.put("/okrs/:id", async (c: any) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { objectivo, ordem, regiao } = body;
+    const now = new Date().toISOString();
+    // regiao undefined = não tocar; null explícito = converter em global.
+    const setRegiao = Object.prototype.hasOwnProperty.call(body, "regiao");
+    if (setRegiao) {
+      await pool.query(
+        "UPDATE okrs SET objectivo = COALESCE($1, objectivo), ordem = COALESCE($2, ordem), regiao = $3, updated_at = $4 WHERE id = $5",
+        [objectivo, ordem, regiao || null, now, c.req.param("id")],
+      );
+    } else {
+      await pool.query(
+        "UPDATE okrs SET objectivo = COALESCE($1, objectivo), ordem = COALESCE($2, ordem), updated_at = $3 WHERE id = $4",
+        [objectivo, ordem, now, c.req.param("id")],
+      );
+    }
+    return c.json({ ok: true });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+// Apagar OKR (cascade apaga KRs)
+app.delete("/okrs/:id", async (c: any) => {
+  try {
+    await pool.query("DELETE FROM okrs WHERE id = $1", [c.req.param("id")]);
+    return c.json({ ok: true });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+// Criar KR individual
+app.post("/okrs/:okrId/krs", async (c: any) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { kr, meta, unidade, tipo, fonte, invertido, ordem } = body;
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await pool.query(
+      "INSERT INTO okr_krs (id, okr_id, kr, meta, unidade, tipo, fonte, invertido, ordem, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+      [id, c.req.param("okrId"), kr, meta || 1, unidade || "", tipo || "acumulado", fonte || null, invertido || false, ordem || 0, now, now],
+    );
+    return c.json({ id }, 201);
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+// Actualizar KR individual
+app.put("/okr-krs/:id", async (c: any) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { kr, meta, unidade, tipo, fonte, invertido, ordem } = body;
+    const sets: string[] = [];
+    const params: any[] = [];
+    if (kr !== undefined) { sets.push(`kr = $${params.length + 1}`); params.push(kr); }
+    if (meta !== undefined) { sets.push(`meta = $${params.length + 1}`); params.push(meta); }
+    if (unidade !== undefined) { sets.push(`unidade = $${params.length + 1}`); params.push(unidade); }
+    if (tipo !== undefined) { sets.push(`tipo = $${params.length + 1}`); params.push(tipo); }
+    if (fonte !== undefined) { sets.push(`fonte = $${params.length + 1}`); params.push(fonte); }
+    if (invertido !== undefined) { sets.push(`invertido = $${params.length + 1}`); params.push(invertido); }
+    if (ordem !== undefined) { sets.push(`ordem = $${params.length + 1}`); params.push(ordem); }
+    if (sets.length === 0) return c.json({ error: "nada para actualizar" }, 400);
+    sets.push(`updated_at = $${params.length + 1}`); params.push(new Date().toISOString());
+    params.push(c.req.param("id"));
+    await pool.query(`UPDATE okr_krs SET ${sets.join(",")} WHERE id = $${params.length}`, params);
+    return c.json({ ok: true });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+// Apagar KR individual
+app.delete("/okr-krs/:id", async (c: any) => {
+  try {
+    await pool.query("DELETE FROM okr_krs WHERE id = $1", [c.req.param("id")]);
+    return c.json({ ok: true });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
 // ════════════════════════════════════════════════════════════════
 // ALERTAS
 // ════════════════════════════════════════════════════════════════
