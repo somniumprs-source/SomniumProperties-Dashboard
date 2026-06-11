@@ -588,13 +588,22 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
   const faseActual = FASE_TABS.find(f => f.estados.includes(estadoClean))
 
   const [subTab, setSubTab] = useState(faseActual?.key || 'adicionado')
-  // Token cacheado para os links: getToken() é async (Supabase); se for chamado
-  // dentro do onClick, o `await` quebra a cadeia de user-gesture e o Safari
-  // bloqueia silenciosamente o window.open. Cachamos no mount para que os
-  // hrefs sejam construídos sincronamente.
-  const [token, setToken] = useState('')
-  useEffect(() => { getToken().then(setToken) }, [])
-  const qs = token ? `?token=${token}` : ''
+
+  // Abre o documento com um token FRESCO no momento do clique. Cachar o token no
+  // mount tornava o link inválido (JWT expira ~1h -> 401 "Sessão inválida") ou
+  // vazio se a sessão ainda não estava pronta no mount (-> 401 "Autenticação
+  // necessária"). Para não quebrar o user-gesture do Safari (que bloqueia o
+  // window.open após um await), abrimos primeiro um separador em branco de forma
+  // síncrona e só depois navegamos para o URL já com o token.
+  async function abrirDocumento(tipo, { refresh = false } = {}) {
+    const win = window.open('', '_blank')
+    const token = await getToken()
+    const sep = refresh ? '?refresh=1' : ''
+    const tok = token ? `${refresh ? '&' : '?'}token=${token}` : ''
+    const url = resolveApiUrl(`/api/crm/imoveis/${imovelId}/documento/${tipo}${sep}`) + tok
+    if (win) win.location = url
+    else window.open(url, '_blank', 'noopener,noreferrer')
+  }
 
   const activeTab = FASE_TABS.find(f => f.key === subTab)
   const visibleDocs = activeTab?.docs || []
@@ -632,21 +641,19 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-neutral-700">{d.label}</p>
             </div>
-            <a
-              href={resolveApiUrl(`/api/crm/imoveis/${imovelId}/documento/${d.tipo}?refresh=1`) + (token ? `&token=${token}` : '')}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              type="button"
+              onClick={() => abrirDocumento(d.tipo, { refresh: true })}
               title="Forçar regeneração (ignora versão em cache)"
               className="px-2 py-1.5 text-[11px] font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors shrink-0 opacity-50 group-hover:opacity-100">
               Regerar
-            </a>
-            <a
-              href={resolveApiUrl(`/api/crm/imoveis/${imovelId}/documento/${d.tipo}`) + qs}
-              target="_blank"
-              rel="noopener noreferrer"
+            </button>
+            <button
+              type="button"
+              onClick={() => abrirDocumento(d.tipo)}
               className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors shrink-0 opacity-50 group-hover:opacity-100">
               Abrir
-            </a>
+            </button>
           </div>
         ))}
       </div>
