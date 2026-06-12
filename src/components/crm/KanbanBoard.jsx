@@ -75,7 +75,7 @@ const KanbanCard = memo(function KanbanCard({ item, dragging, onDragStart, onDra
       onDragEnd={onDragEnd}
       onClick={() => onCardClick?.(item.id)}
       style={{ viewTransitionName: viewName }}
-      className={`bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-800 p-3 shadow-xs cursor-pointer hover:shadow-md hover:border-indigo-300 transition-all group/card relative ${
+      className={`bg-white dark:bg-neutral-900 rounded-md border border-gray-200 dark:border-neutral-800 p-2 shadow-xs cursor-pointer hover:shadow-md hover:border-indigo-300 transition-all group/card relative ${
         dragging ? 'opacity-50 cursor-grabbing scale-[0.98]' : ''
       }`}
     >
@@ -184,7 +184,7 @@ function KanbanBoardImpl({ columns, items, groupField, renderCard, onMove, onCar
             </div>
 
             {/* Cards */}
-            <div className="flex-1 p-2 space-y-2 overflow-y-auto" style={{ maxHeight: '500px' }}>
+            <div className="flex-1 p-1.5 space-y-1.5 overflow-y-auto" style={{ maxHeight: '600px' }}>
               {colItems.map(item => (
                 <KanbanCard
                   key={item.id}

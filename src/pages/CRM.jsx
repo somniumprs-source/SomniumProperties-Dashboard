@@ -773,18 +773,18 @@ export function CRM() {
         const cp = checklistProgressCache[item.id]?.[item.estado]
         return (
           <div>
-            <p className="text-sm font-semibold text-gray-800 truncate">{item.nome}</p>
-            <p className="text-xs text-gray-500 mt-1">{item.zona ?? '—'} · {item.tipologia ?? '—'}</p>
-            {item.ask_price > 0 && <p className="text-xs font-mono text-indigo-600 mt-1">{EUR(item.ask_price)}</p>}
-            {item.roi > 0 && <p className="text-xs text-green-600">ROI: {item.roi}%</p>}
+            <p className="text-[13px] font-semibold text-gray-800 truncate">{item.nome}</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">{item.zona ?? '—'} · {item.tipologia ?? '—'}</p>
+            {item.ask_price > 0 && <p className="text-[11px] font-mono text-indigo-600 mt-0.5">{EUR(item.ask_price)}</p>}
+            {item.roi > 0 && <p className="text-[11px] text-green-600">ROI: {item.roi}%</p>}
             {item.nome_consultor && (
-              <p className="text-xs text-blue-500 mt-1 cursor-pointer hover:text-blue-700 hover:underline transition-colors"
+              <p className="text-[11px] text-blue-500 mt-0.5 cursor-pointer hover:text-blue-700 hover:underline transition-colors"
                 onClick={(e) => { e.stopPropagation(); navigateToConsultor(item.nome_consultor) }}>
                 {item.nome_consultor}
               </p>
             )}
             {cp && cp.total > 0 && (
-              <div className="mt-2">
+              <div className="mt-1.5">
                 <div className="flex items-center justify-between text-[10px] mb-0.5">
                   <span className="text-gray-400">{cp.done}/{cp.total}</span>
                   {cp.done < cp.total && <span className="text-amber-500 font-medium">Pendente</span>}
@@ -844,19 +844,19 @@ export function CRM() {
         return (
           <div className="group relative">
             <div className="flex items-start gap-2">
-              <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${tipoBg} text-white flex items-center justify-center text-[10px] font-bold shrink-0`}>
+              <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${tipoBg} text-white flex items-center justify-center text-[10px] font-bold shrink-0`}>
                 {iniciais}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1 mb-0.5">
                   <ClassBadge cls={item.classificacao} />
-                  <p className="text-sm font-semibold text-gray-800 truncate">{item.nome}</p>
+                  <p className="text-[13px] font-semibold text-gray-800 truncate">{item.nome}</p>
                 </div>
                 <p className="text-[11px] text-gray-500 truncate" title={areaAtuacao.join(', ')}>{areaLabel || '—'}</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
               {capCompact && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-mono inline-flex items-center gap-1">
                   <Wallet className="w-2.5 h-2.5" /> {capCompact}
@@ -908,7 +908,7 @@ export function CRM() {
             <div className="flex items-center gap-2">
               {alertDot && <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${alertDot}`} />}
               <ClassBadge cls={item.classificacao} />
-              <p className="text-sm font-semibold text-gray-800 truncate flex-1">{item.nome}</p>
+              <p className="text-[13px] font-semibold text-gray-800 truncate flex-1">{item.nome}</p>
               {unreadCounts[item.id] > 0 && (
                 <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
                   style={{ backgroundColor: '#25D366' }}>
@@ -916,12 +916,12 @@ export function CRM() {
                 </span>
               )}
             </div>
-            {imobs && <p className="text-xs text-gray-500 mt-1">{imobs}</p>}
-            {item.contacto && <p className="text-xs text-gray-400 mt-1">{item.contacto}</p>}
+            {imobs && <p className="text-[11px] text-gray-500 mt-0.5">{imobs}</p>}
+            {item.contacto && <p className="text-[11px] text-gray-400 mt-0.5">{item.contacto}</p>}
             {(item._totalImoveis > 0 || item.imoveis_enviados > 0) && (
-              <p className="text-xs text-indigo-600 mt-1">{item._totalImoveis ?? item.imoveis_enviados} leads</p>
+              <p className="text-[11px] text-indigo-600 mt-0.5">{item._totalImoveis ?? item.imoveis_enviados} leads</p>
             )}
-            {item.score_prioridade > 0 && <p className="text-xs text-amber-600 mt-0.5">Score: {item.score_prioridade}</p>}
+            {item.score_prioridade > 0 && <p className="text-[11px] text-amber-600 mt-0.5">Score: {item.score_prioridade}</p>}
           </div>
         )
       },
@@ -931,10 +931,10 @@ export function CRM() {
       groupField: 'estado',
       renderCard: (item) => (
         <div>
-          <p className="text-sm font-semibold text-gray-800 truncate">{item.nome}</p>
-          {item.empresa && <p className="text-xs text-gray-500 mt-1">{item.empresa}</p>}
-          {item.score > 0 && <p className="text-xs font-mono text-indigo-600 mt-1">Score: {item.score}</p>}
-          {item.custo_medio_m2 > 0 && <p className="text-xs text-gray-400 mt-1">{EUR(item.custo_medio_m2)}/m²</p>}
+          <p className="text-[13px] font-semibold text-gray-800 truncate">{item.nome}</p>
+          {item.empresa && <p className="text-[11px] text-gray-500 mt-0.5">{item.empresa}</p>}
+          {item.score > 0 && <p className="text-[11px] font-mono text-indigo-600 mt-0.5">Score: {item.score}</p>}
+          {item.custo_medio_m2 > 0 && <p className="text-[11px] text-gray-400 mt-0.5">{EUR(item.custo_medio_m2)}/m²</p>}
         </div>
       ),
     },
