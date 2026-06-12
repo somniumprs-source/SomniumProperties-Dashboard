@@ -1849,6 +1849,27 @@ function ImovelEditSections({ data, form, setField }) {
     <Section icon="📋" title="Identificação" fields={sec.identificacao} form={form} defaultOpen>
       <EF label="Nome" field="nome" form={form} set={setField} />
       <EF label="Estado" field="estado" form={form} set={setField} type="select" options={ESTADOS_PIPELINE} />
+      {(() => {
+        // Ao escolher Follow Up / Não interessa no dropdown, abrir aqui mesmo o campo
+        // de justificação (obrigatório no saveEdit) — antes só aparecia ao arrastar no Kanban.
+        const est = (form.estado || '').replace(/^\d+-\s*/, '').trim()
+        const isFup = /follow ?up/i.test(est)
+        const isNi = /n[ãa]o interessa/i.test(est)
+        if (!isFup && !isNi) return null
+        const field = isFup ? 'motivo_follow_up' : 'motivo_nao_interessa'
+        return (
+          <div className="col-span-2 md:col-span-3">
+            <label className="text-xs font-medium text-amber-600 block mb-1">
+              {isFup ? 'Motivo Follow Up *' : 'Motivo Não Interessa *'}
+            </label>
+            <textarea value={form[field] || ''} onChange={e => setField(field, e.target.value)} rows={2}
+              autoFocus
+              placeholder={isFup ? 'Ex: Aguardar resposta do proprietário…' : 'Ex: preço acima do mercado, sem margem…'}
+              className="w-full px-3 py-2 rounded-lg border border-amber-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
+            <p className="text-[11px] text-amber-500 mt-1">⚠ Obrigatório para gravar este estado.</p>
+          </div>
+        )
+      })()}
       <EF label="REF Interna" field="ref_interna" form={form} set={setField} />
       <EF label="Link" field="link" form={form} set={setField} />
       <div>
