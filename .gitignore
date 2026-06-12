@@ -26,3 +26,6 @@ Relatorios/RelatoriosSemanais/*
 
 # Aviso do Stop hook (auto-push) — nunca versionar
 AUTO_PUSH_FALHOU.txt
+
+# Manifesto por-sessão do Stop hook (ficheiros tocados pelo Claude)
+.claude/.touched/
