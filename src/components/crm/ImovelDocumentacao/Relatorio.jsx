@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { FileDown, FileText } from 'lucide-react'
-import { getToken, resolveApiUrl } from '../../../lib/api.js'
+import { FileDown, FileText, Eye } from 'lucide-react'
+import { openPdf } from '../../../lib/api.js'
 import { ESTADOS, SEVERIDADE, estadoFromValido, DADOS_CHAVE_LABELS } from './documentacao.config.js'
 
 /**
@@ -21,12 +21,10 @@ export function Relatorio({ imovelId, analises, flags, inconsistencias, resumoEs
         ? { txt: 'Há alertas a verificar na documentação antes de avançar.', cor: '#e67e22', bg: '#fdf2e8' }
         : { txt: 'Documentação analisada sem problemas detectados.', cor: '#27ae60', bg: '#eafaf0' }
 
-  async function exportarPdf() {
+  async function exportarPdf({ download = false } = {}) {
     setExporting(true)
     try {
-      const token = await getToken()
-      const qs = token ? `&token=${token}` : ''
-      window.open(resolveApiUrl(`/api/crm/imoveis/${imovelId}/documento/relatorio_documental?refresh=1`) + qs, '_blank')
+      await openPdf(`/api/crm/imoveis/${imovelId}/documento/relatorio_documental?refresh=1`, { download })
     } finally {
       setExporting(false)
     }
@@ -51,12 +49,21 @@ export function Relatorio({ imovelId, analises, flags, inconsistencias, resumoEs
             </div>
           ))}
         </div>
-        <button onClick={exportarPdf} disabled={exporting}
-          className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg text-white disabled:opacity-50 shrink-0"
-          style={{ backgroundColor: '#0a0a0a' }}>
-          <FileDown className="w-4 h-4" style={{ color: '#C9A84C' }} />
-          {exporting ? 'A gerar…' : 'Exportar PDF'}
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={() => exportarPdf({ download: false })} disabled={exporting}
+            className="flex items-center gap-2 px-3 py-2.5 text-sm font-semibold rounded-lg border border-neutral-200 text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+            title="Abrir o PDF numa nova aba">
+            <Eye className="w-4 h-4" style={{ color: '#C9A84C' }} />
+            Ver
+          </button>
+          <button onClick={() => exportarPdf({ download: true })} disabled={exporting}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg text-white disabled:opacity-50"
+            style={{ backgroundColor: '#0a0a0a' }}
+            title="Descarregar o PDF para enviar a investidores">
+            <FileDown className="w-4 h-4" style={{ color: '#C9A84C' }} />
+            {exporting ? 'A gerar…' : 'Download PDF'}
+          </button>
+        </div>
       </div>
 
       {/* Conclusão */}

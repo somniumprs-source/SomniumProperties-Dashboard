@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { FileDown, Sparkles, Trash2, Calendar, Loader2, Plus, RefreshCw, Zap, FileText, Presentation, Upload, Pencil, X, CalendarPlus } from 'lucide-react'
+import { FileDown, Sparkles, Trash2, Calendar, Loader2, Plus, RefreshCw, Zap, FileText, Presentation, Upload, Pencil, X, CalendarPlus, Eye } from 'lucide-react'
 import { apiFetch, getToken, resolveApiUrl } from '../lib/api.js'
 
 const GOLD = '#C9A84C'
@@ -118,9 +118,10 @@ export function RelatoriosAdmin() {
     setSyncing(false)
   }
 
-  async function abrirPdf(id) {
+  async function abrirPdf(id, { download = false } = {}) {
     const token = await getToken()
-    window.open(resolveApiUrl(`/api/crm/relatorios-semanais/${id}/pdf?token=${token}`), '_blank')
+    const dl = download ? '&download=1' : ''
+    window.open(resolveApiUrl(`/api/crm/relatorios-semanais/${id}/pdf?token=${token}${dl}`), '_blank')
   }
 
   async function eliminar(id) {
@@ -240,20 +241,38 @@ export function RelatoriosAdmin() {
             </div>
           </div>
           <div className="flex flex-col gap-2 shrink-0">
-            <a
-              href="#"
-              onClick={async (e) => {
-                e.preventDefault()
-                const t = await getToken()
-                window.open(resolveApiUrl(`/api/crm/relatorios/expansao-gaia?token=${t || ''}`), '_blank')
-              }}
-              rel="noopener"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap"
-              style={{ backgroundColor: GOLD, color: '#0d0d0d' }}
-            >
-              <FileDown className="w-4 h-4" />
-              Relatório de Expansão — Vila Nova de Gaia
-            </a>
+            <div className="flex items-center gap-2">
+              <a
+                href="#"
+                onClick={async (e) => {
+                  e.preventDefault()
+                  const t = await getToken()
+                  window.open(resolveApiUrl(`/api/crm/relatorios/expansao-gaia?token=${t || ''}`), '_blank')
+                }}
+                rel="noopener"
+                title="Abrir numa nova aba"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap flex-1"
+                style={{ backgroundColor: GOLD, color: '#0d0d0d' }}
+              >
+                <Eye className="w-4 h-4" />
+                Relatório de Expansão — Vila Nova de Gaia
+              </a>
+              <a
+                href="#"
+                onClick={async (e) => {
+                  e.preventDefault()
+                  const t = await getToken()
+                  window.open(resolveApiUrl(`/api/crm/relatorios/expansao-gaia?token=${t || ''}&download=1`), '_blank')
+                }}
+                rel="noopener"
+                title="Descarregar o PDF"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap"
+                style={{ backgroundColor: '#0d0d0d', color: GOLD }}
+              >
+                <FileDown className="w-4 h-4" />
+                PDF
+              </a>
+            </div>
             <a
               href="/relatorios/Relatorio_Precos_Mercado_AMP.pdf"
               target="_blank"
@@ -625,14 +644,25 @@ export function RelatoriosAdmin() {
                   </div>
 
                   <div className="pt-2 border-t border-neutral-100 dark:border-neutral-800 flex items-center justify-between">
-                    <button
-                      onClick={() => abrirPdf(r.id)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors"
-                      style={{ borderColor: GOLD, color: GOLD }}
-                    >
-                      <FileDown className="w-3.5 h-3.5" />
-                      Abrir PDF
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => abrirPdf(r.id)}
+                        title="Abrir o PDF numa nova aba"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-100 transition-colors"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        Ver
+                      </button>
+                      <button
+                        onClick={() => abrirPdf(r.id, { download: true })}
+                        title="Descarregar o PDF"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors"
+                        style={{ borderColor: GOLD, color: GOLD }}
+                      >
+                        <FileDown className="w-3.5 h-3.5" />
+                        Download
+                      </button>
+                    </div>
                     <button
                       onClick={async () => {
                         setGenerating(true)

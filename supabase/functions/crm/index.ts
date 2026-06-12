@@ -81,6 +81,12 @@ declare module "@hono/hono" {
 
 const app = createApp("/crm");
 
+// Cabecalho Content-Disposition para PDFs: por defeito abre na pre-visualizacao
+// (inline); com ?download=1 forca o descarregamento (attachment) para enviar a
+// investidores ou guardar para analise.
+const pdfDisposition = (c: any, filename: string) =>
+  `${c.req.query("download") ? "attachment" : "inline"}; filename="${filename}"`;
+
 // Notion sync agora real (de ../_shared/sync.ts). No-op gracioso sem NOTION_API_KEY.
 
 const REGIOES_VALIDAS = new Set(["Coimbra", "AMP"]);
@@ -860,7 +866,7 @@ app.get("/imoveis/:id/documento/:tipo", async (c: any) => {
     const nome = (imovel.nome || "doc").replace(/[^a-zA-Z0-9À-ú ]/g, "").replace(/\s+/g, "_");
     return c.body(out.buffer, 200, {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="${tipo}_${nome}.pdf"`,
+      "Content-Disposition": pdfDisposition(c, `${tipo}_${nome}.pdf`),
     });
   } catch (e) {
     console.error(`[documento ${tipo} imovel=${id}] FALHOU:`, (e as Error).message, "\n", (e as Error).stack);
@@ -910,7 +916,7 @@ app.get("/imoveis/:id/relatorio", async (c: any) => {
     const buffer = await streamToBuffer(generateImovelPDF(imovel, analise || null));
     return c.body(buffer, 200, {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="Relatorio_${nome}.pdf"`,
+      "Content-Disposition": pdfDisposition(c, `Relatorio_${nome}.pdf`),
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, 500);
@@ -936,7 +942,7 @@ app.get("/imoveis/:id/relatorio-investidor", async (c: any) => {
     const buffer = await streamToBuffer(doc);
     return c.body(buffer, 200, {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="Dossier_Investimento_${nome}.pdf"`,
+      "Content-Disposition": pdfDisposition(c, `Dossier_Investimento_${nome}.pdf`),
     });
   } catch (e) {
     console.error(`[relatorio-investidor imovel=${id}] FALHOU:`, (e as Error).message, "\n", (e as Error).stack);
@@ -2057,7 +2063,7 @@ app.get("/reunioes/:id/relatorio", async (c: any) => {
     const buffer = await streamToBuffer(generateMeetingPDF(reuniao, analise, investidor));
     return c.body(buffer, 200, {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="Relatorio_Reuniao_${nome}.pdf"`,
+      "Content-Disposition": pdfDisposition(c, `Relatorio_Reuniao_${nome}.pdf`),
     });
   } catch (e) {
     return c.json({ error: (e as Error).message }, 500);
@@ -4026,7 +4032,7 @@ app.get("/relatorios-semanais/:id/pdf", async (c: any) => {
     const buffer = await streamToBuffer(doc);
     return c.body(buffer, 200, {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="Relatorio_Semanal_${r.semana_iso}.pdf"`,
+      "Content-Disposition": pdfDisposition(c, `Relatorio_Semanal_${r.semana_iso}.pdf`),
     });
   } catch (e) { console.error("[relatorios-semanais/pdf]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
 });
@@ -4355,7 +4361,7 @@ app.get("/projetos/:negocioId/pdf/ficha/:faseId", async (c: any) => {
     const buf = await streamToBuffer(generateFichaAcompanhamento({ negocio: data.negocio, imovel: data.imovel, fase, tarefas, fotos }));
     return c.body(buf, 200, {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="ficha-${fase.fase_key}-${data.negocio.movimento.replace(/[^\w]/g, "_")}.pdf"`,
+      "Content-Disposition": pdfDisposition(c, `ficha-${fase.fase_key}-${data.negocio.movimento.replace(/[^\w]/g, "_")}.pdf`),
     });
   } catch (e) { console.error("[pdf/ficha]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
 });
@@ -4368,7 +4374,7 @@ app.get("/projetos/:negocioId/pdf/relatorio", async (c: any) => {
     const buf = await streamToBuffer(generateRelatorioAcompanhamento(data));
     return c.body(buf, 200, {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="relatorio-obra-${data.negocio.movimento.replace(/[^\w]/g, "_")}.pdf"`,
+      "Content-Disposition": pdfDisposition(c, `relatorio-obra-${data.negocio.movimento.replace(/[^\w]/g, "_")}.pdf`),
     });
   } catch (e) { console.error("[pdf/relatorio]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
 });
@@ -4381,7 +4387,7 @@ app.get("/projetos/:negocioId/pdf/memoria", async (c: any) => {
     const buf = await streamToBuffer(generateMemoriaDescritiva(data));
     return c.body(buf, 200, {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="memoria-acabamentos-${data.negocio.movimento.replace(/[^\w]/g, "_")}.pdf"`,
+      "Content-Disposition": pdfDisposition(c, `memoria-acabamentos-${data.negocio.movimento.replace(/[^\w]/g, "_")}.pdf`),
     });
   } catch (e) { console.error("[pdf/memoria]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
 });
@@ -4415,7 +4421,7 @@ app.get("/projetos/:negocioId/pdf/saida", async (c: any) => {
     const buf = await streamToBuffer(generateRelatorioSaida({ ...data, investidores }));
     return c.body(buf, 200, {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="saida-caep-${data.negocio.movimento.replace(/[^\w]/g, "_")}.pdf"`,
+      "Content-Disposition": pdfDisposition(c, `saida-caep-${data.negocio.movimento.replace(/[^\w]/g, "_")}.pdf`),
     });
   } catch (e) { console.error("[pdf/saida]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
 });
@@ -4429,7 +4435,7 @@ app.get("/relatorios/expansao-gaia", async (c: any) => {
     const buffer = await streamToBuffer(doc);
     return c.body(buffer, 200, {
       "Content-Type": "application/pdf",
-      "Content-Disposition": 'inline; filename="relatorio-expansao-gaia.pdf"',
+      "Content-Disposition": pdfDisposition(c, "relatorio-expansao-gaia.pdf"),
     });
   } catch (e) { console.error("[pdf/expansao-gaia]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
 });

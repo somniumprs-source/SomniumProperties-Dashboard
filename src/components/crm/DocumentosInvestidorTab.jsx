@@ -3,8 +3,8 @@
  * Lista cronologica + formulario inline para registar novos envios.
  */
 import { useState } from 'react'
-import { FileText, Plus, Trash2, ExternalLink } from 'lucide-react'
-import { apiFetch, getToken, resolveApiUrl } from '../../lib/api.js'
+import { FileText, Plus, Trash2, ExternalLink, FileDown } from 'lucide-react'
+import { apiFetch, openPdf } from '../../lib/api.js'
 import { fmtDate } from '../../constants.js'
 
 const TIPO_LABELS = {
@@ -131,23 +131,24 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
               </div>
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 {doc.imovel_id && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      // Abrir separador em branco síncrono antes do await preserva o
-                      // user-gesture (Safari bloqueia window.open após await). Token
-                      // fresco aqui evita 401 por JWT expirado.
-                      const win = window.open('', '_blank')
-                      const token = await getToken()
-                      const url = resolveApiUrl(`/api/crm/imoveis/${doc.imovel_id}/relatorio-investidor${token ? `?token=${token}` : ''}`)
-                      if (win) win.location = url
-                      else window.open(url, '_blank', 'noopener,noreferrer')
-                    }}
-                    className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600"
-                    title="Abrir PDF"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => openPdf(`/api/crm/imoveis/${doc.imovel_id}/relatorio-investidor`)}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600"
+                      title="Abrir PDF numa nova aba"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openPdf(`/api/crm/imoveis/${doc.imovel_id}/relatorio-investidor`, { download: true })}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600"
+                      title="Descarregar PDF para enviar a investidores"
+                    >
+                      <FileDown className="w-3.5 h-3.5" />
+                    </button>
+                  </>
                 )}
                 <button
                   onClick={() => handleDelete(doc.id)}

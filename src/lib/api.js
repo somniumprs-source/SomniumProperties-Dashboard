@@ -1,8 +1,10 @@
 import { supabase, authEnabled } from './supabase.js'
 import { getRegiaoActivaFromStorage } from '../contexts/RegiaoContext.jsx'
 // Re-export: links de PDF/descarga (window.open) usam isto para apontar para a
-// Edge Function correcta quando VITE_API_URL esta definido.
-export { resolveApiUrl, API_BASE } from './apiUrl.js'
+// Edge Function correcta quando VITE_API_URL esta definido. Importado também
+// localmente para os helpers de PDF (buildPdfUrl/openPdf) abaixo.
+import { resolveApiUrl, API_BASE } from './apiUrl.js'
+export { resolveApiUrl, API_BASE }
 
 /**
  * Devolve o access token actual da sessão Supabase (string vazia se não houver).
@@ -86,4 +88,34 @@ export async function apiFetch(url, options = {}) {
   } finally {
     if (timer) clearTimeout(timer)
   }
+}
+
+/**
+ * Constrói o URL de um PDF do CRM, resolvendo a Edge Function correcta e
+ * juntando, se necessário, o token de sessão e o flag `download`.
+ *
+ * - `download: false` (default) → o backend devolve `inline` (abre na pré-visualização).
+ * - `download: true` → acrescenta `?download=1`, o backend devolve `attachment`
+ *   (descarrega o ficheiro, pronto para enviar a investidores ou guardar).
+ */
+export async function buildPdfUrl(path, { download = false } = {}) {
+  const token = await getToken()
+  const params = []
+  if (download) params.push('download=1')
+  if (token) params.push(`token=${encodeURIComponent(token)}`)
+  if (params.length) {
+    path += (path.includes('?') ? '&' : '?') + params.join('&')
+  }
+  return resolveApiUrl(path)
+}
+
+/**
+ * Abre um PDF do CRM numa nova aba (`download: false`, default) ou força o
+ * descarregamento (`download: true`). Centraliza o token + resolveApiUrl para
+ * todos os botões "Ver" / "Download PDF" da aplicação.
+ */
+export async function openPdf(path, opts = {}) {
+  const url = await buildPdfUrl(path, opts)
+  if (typeof window !== 'undefined') window.open(url, '_blank')
+  return url
 }

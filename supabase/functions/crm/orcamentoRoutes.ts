@@ -156,7 +156,7 @@ export function registerOrcamentoRoutes(app: any) {
 
       return c.body(buf, 200, {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="orcamento_obra_${safeNome}.pdf"`,
+        "Content-Disposition": `${c.req.query("download") ? "attachment" : "inline"}; filename="orcamento_obra_${safeNome}.pdf"`,
       });
     } catch (e) {
       console.error("[orcamento-obra] PDF erro:", e);

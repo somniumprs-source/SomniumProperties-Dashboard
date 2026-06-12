@@ -4,7 +4,7 @@
  * 25 secções colapsáveis com tabela editável de linhas livres.
  */
 import { useMemo, useState } from 'react'
-import { FileDown, Loader2, AlertTriangle, Settings2 } from 'lucide-react'
+import { FileDown, Loader2, AlertTriangle, Settings2, Eye } from 'lucide-react'
 import { useOrcamentoObra } from './useOrcamentoObra.js'
 import { PisosManager } from './PisosManager.jsx'
 import { SeccaoCard } from './SeccaoCard.jsx'
@@ -54,9 +54,13 @@ export function ObraTab({ imovelId, imovelNome }) {
   const setTipoObra = (v) => update({ tipo_obra: v })
   const setBdi = (patch) => update(prev => ({ ...prev, bdi: { ...(prev.bdi || {}), ...patch } }))
 
-  const abrirPDF = async () => {
+  const abrirPDF = async ({ download = false } = {}) => {
     const token = await getToken()
-    const url = resolveApiUrl(`/api/crm/imoveis/${imovelId}/orcamento-obra/pdf${token ? `?token=${token}` : ''}`)
+    const params = []
+    if (token) params.push(`token=${token}`)
+    if (download) params.push('download=1')
+    const qs = params.length ? `?${params.join('&')}` : ''
+    const url = resolveApiUrl(`/api/crm/imoveis/${imovelId}/orcamento-obra/pdf${qs}`)
     window.open(url, '_blank')
   }
 
@@ -110,12 +114,21 @@ export function ObraTab({ imovelId, imovelNome }) {
               <Settings2 className="w-3.5 h-3.5" /> BDI
             </button>
             <button
-              onClick={abrirPDF}
+              onClick={() => abrirPDF({ download: false })}
               disabled={!orcamento.existe}
+              title="Abrir o PDF numa nova aba"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Eye className="w-3.5 h-3.5" /> Ver PDF
+            </button>
+            <button
+              onClick={() => abrirPDF({ download: true })}
+              disabled={!orcamento.existe}
+              title="Descarregar o PDF"
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ backgroundColor: BLACK, color: GOLD, border: `1px solid ${GOLD}33` }}
             >
-              <FileDown className="w-3.5 h-3.5" /> Exportar PDF
+              <FileDown className="w-3.5 h-3.5" /> Download
             </button>
           </div>
         </div>

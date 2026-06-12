@@ -65,6 +65,13 @@ const uploadsDir = path.resolve(__dirname, '../../public/uploads/despesas')
 const imoveisUploadsDir = path.resolve(__dirname, '../../public/uploads/imoveis')
 const REPO_ROOT = path.resolve(__dirname, '../..')
 
+// Cabeçalho Content-Disposition para PDFs: por defeito abre na pré-visualização
+// (inline); com ?download=1 força o descarregamento (attachment) para enviar a
+// investidores ou guardar para análise. Mantém o comportamento anterior quando
+// o parâmetro não está presente.
+const pdfDisposition = (req, filename) =>
+  `${req.query.download ? 'attachment' : 'inline'}; filename="${filename}"`
+
 // Garantir que a pasta de uploads de imóveis existe
 import { mkdirSync } from 'fs'
 try { mkdirSync(imoveisUploadsDir, { recursive: true }) } catch {}
@@ -577,7 +584,7 @@ router.get('/imoveis/:id/documento/:tipo', async (req, res) => {
 
     const nome = (imovel.nome || 'doc').replace(/[^a-zA-Z0-9À-ú ]/g, '').replace(/\s+/g, '_')
     res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `inline; filename="${req.params.tipo}_${nome}.pdf"`)
+    res.setHeader('Content-Disposition', pdfDisposition(req, `${req.params.tipo}_${nome}.pdf`))
     res.end(out.buffer)
   } catch (e) {
     console.error(`[documento ${req.params.tipo} imovel=${req.params.id}] FALHOU:`, e.message, '\n', e.stack)
@@ -627,7 +634,7 @@ router.get('/imoveis/:id/relatorio', async (req, res) => {
 
     const nome = (imovel.nome || 'imovel').replace(/[^a-zA-Z0-9À-ú ]/g, '').replace(/\s+/g, '_')
     res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `inline; filename="Relatorio_${nome}.pdf"`)
+    res.setHeader('Content-Disposition', pdfDisposition(req, `Relatorio_${nome}.pdf`))
 
     const doc = generateImovelPDF(imovel, analise || null)
     streamPdfToResAndPersist(doc, res, {
@@ -655,7 +662,7 @@ router.get('/imoveis/:id/relatorio-investidor', async (req, res) => {
     const { generateCompiledReport } = await import('./pdfImovelDocs.js')
     const nome = (imovel.nome || 'imovel').replace(/[^a-zA-Z0-9À-ú ]/g, '').replace(/\s+/g, '_')
     res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `inline; filename="Dossier_Investimento_${nome}.pdf"`)
+    res.setHeader('Content-Disposition', pdfDisposition(req, `Dossier_Investimento_${nome}.pdf`))
     const doc = await generateCompiledReport(imovel, analise || null, seccoes)
     streamPdfToResAndPersist(doc, res, {
       storagePath: `imoveis/${imovel.id}/dossier_investimento.pdf`,
@@ -1838,7 +1845,7 @@ router.get('/reunioes/:id/relatorio', async (req, res) => {
 
     const nome = (reuniao.titulo || 'reuniao').replace(/[^a-zA-Z0-9À-ú ]/g, '').replace(/\s+/g, '_')
     res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `inline; filename="Relatorio_Reuniao_${nome}.pdf"`)
+    res.setHeader('Content-Disposition', pdfDisposition(req, `Relatorio_Reuniao_${nome}.pdf`))
 
     const doc = generateMeetingPDF(reuniao, analise, investidor)
     streamPdfToResAndPersist(doc, res, {
@@ -3868,7 +3875,7 @@ router.get('/relatorios-semanais/:id/pdf', async (req, res) => {
 
     const fname = `Relatorio_Semanal_${r.semana_iso}.pdf`
     res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `inline; filename="${fname}"`)
+    res.setHeader('Content-Disposition', pdfDisposition(req, fname))
 
     // Se ha PDF original importado e existe no disco, servir directamente
     if (r.pdf_original_path) {
@@ -4282,7 +4289,7 @@ router.get('/projetos/:negocioId/pdf/ficha/:faseId', async (req, res) => {
     const fotos = data.fotos.filter(f => f.fase_id === fase.id)
 
     res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `inline; filename="ficha-${fase.fase_key}-${data.negocio.movimento.replace(/[^\w]/g, '_')}.pdf"`)
+    res.setHeader('Content-Disposition', pdfDisposition(req, `ficha-${fase.fase_key}-${data.negocio.movimento.replace(/[^\w]/g, '_')}.pdf`))
     const doc = generateFichaAcompanhamento({ negocio: data.negocio, imovel: data.imovel, fase, tarefas, fotos })
     doc.pipe(res)
   } catch (e) { console.error('[pdf/ficha]', e.message); res.status(500).json({ error: e.message }) }
@@ -4294,7 +4301,7 @@ router.get('/projetos/:negocioId/pdf/relatorio', async (req, res) => {
     const data = await loadProjetoCompleto(req.params.negocioId)
     if (!data) return res.status(404).json({ error: 'Projecto não encontrado' })
     res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `inline; filename="relatorio-obra-${data.negocio.movimento.replace(/[^\w]/g, '_')}.pdf"`)
+    res.setHeader('Content-Disposition', pdfDisposition(req, `relatorio-obra-${data.negocio.movimento.replace(/[^\w]/g, '_')}.pdf`))
     const doc = generateRelatorioAcompanhamento(data)
     doc.pipe(res)
   } catch (e) { console.error('[pdf/relatorio]', e.message); res.status(500).json({ error: e.message }) }
@@ -4306,7 +4313,7 @@ router.get('/projetos/:negocioId/pdf/memoria', async (req, res) => {
     const data = await loadProjetoCompleto(req.params.negocioId)
     if (!data) return res.status(404).json({ error: 'Projecto não encontrado' })
     res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `inline; filename="memoria-acabamentos-${data.negocio.movimento.replace(/[^\w]/g, '_')}.pdf"`)
+    res.setHeader('Content-Disposition', pdfDisposition(req, `memoria-acabamentos-${data.negocio.movimento.replace(/[^\w]/g, '_')}.pdf`))
     const doc = generateMemoriaDescritiva(data)
     doc.pipe(res)
   } catch (e) { console.error('[pdf/memoria]', e.message); res.status(500).json({ error: e.message }) }
@@ -4341,7 +4348,7 @@ router.get('/projetos/:negocioId/pdf/saida', async (req, res) => {
       }
     }
     res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `inline; filename="saida-caep-${data.negocio.movimento.replace(/[^\w]/g, '_')}.pdf"`)
+    res.setHeader('Content-Disposition', pdfDisposition(req, `saida-caep-${data.negocio.movimento.replace(/[^\w]/g, '_')}.pdf`))
     const doc = generateRelatorioSaida({ ...data, investidores })
     doc.pipe(res)
   } catch (e) { console.error('[pdf/saida]', e.message); res.status(500).json({ error: e.message }) }
@@ -4350,10 +4357,10 @@ router.get('/projetos/:negocioId/pdf/saida', async (req, res) => {
 // ── Relatorio Executivo de Expansao para Vila Nova de Gaia ──
 // Documento estrategico (10-15 paginas) para apresentar a investidores,
 // equipa e parceiros locais. Dataset em ./expansaoGaiaData.js.
-router.get('/relatorios/expansao-gaia', async (_req, res) => {
+router.get('/relatorios/expansao-gaia', async (req, res) => {
   try {
     res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', 'inline; filename="relatorio-expansao-gaia.pdf"')
+    res.setHeader('Content-Disposition', pdfDisposition(req, 'relatorio-expansao-gaia.pdf'))
     const doc = generateRelatorioExpansaoGaia()
     doc.pipe(res)
   } catch (e) {

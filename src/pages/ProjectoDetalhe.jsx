@@ -4,10 +4,10 @@ import {
   ArrowLeft, Calendar, CheckCircle2, Circle, Plus, Trash2, Upload, X,
   Building2, Wallet, ImageIcon, FileText, Users, BarChart3, ChevronRight,
   FileDown, AlertTriangle, Sparkles, RefreshCw, Home, Layers,
-  History, MessageSquare, TrendingUp, FileSpreadsheet, Pencil,
+  History, MessageSquare, TrendingUp, FileSpreadsheet, Pencil, Eye,
 } from 'lucide-react'
 import { ProjectoForm } from './Projectos.jsx'
-import { apiFetch, getToken, resolveApiUrl } from '../lib/api.js'
+import { apiFetch, getToken, resolveApiUrl, openPdf } from '../lib/api.js'
 import { Header } from '../components/layout/Header.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { Card } from '../components/ui/Card.jsx'
@@ -1022,10 +1022,9 @@ function TabDocumentos({ negocio, imovel, fases, readOnly }) {
   }
   useEffect(() => { load() }, [negocio.id])
 
-  async function abrirPDF(url) {
+  async function abrirPDF(url, { download = false } = {}) {
     try {
-      const token = await getToken().catch(() => null)
-      window.open(resolveApiUrl(`${url}${token ? `?token=${token}` : ''}`), '_blank')
+      await openPdf(url, { download })
     } catch (e) { alert('Erro: ' + e.message) }
   }
 
@@ -1094,10 +1093,16 @@ function TabDocumentos({ negocio, imovel, fases, readOnly }) {
                     <p className="text-sm font-medium text-gray-800">{t.nome}</p>
                     <p className="text-[11px] text-gray-500 mt-0.5">{t.desc}</p>
                   </div>
-                  <button onClick={() => abrirPDF(t.url)}
-                    className="px-3 py-1.5 text-xs rounded-lg bg-brand-dark text-brand-gold hover:bg-brand-dark-light inline-flex items-center gap-1.5">
-                    <FileDown className="w-3.5 h-3.5" /> Gerar
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button onClick={() => abrirPDF(t.url)} title="Abrir numa nova aba"
+                      className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 inline-flex items-center gap-1.5">
+                      <Eye className="w-3.5 h-3.5" /> Ver
+                    </button>
+                    <button onClick={() => abrirPDF(t.url, { download: true })} title="Descarregar PDF para enviar"
+                      className="px-3 py-1.5 text-xs rounded-lg bg-brand-dark text-brand-gold hover:bg-brand-dark-light inline-flex items-center gap-1.5">
+                      <FileDown className="w-3.5 h-3.5" /> Download
+                    </button>
+                  </div>
                 </div>
               ))
             )
@@ -1118,9 +1123,14 @@ function TabDocumentos({ negocio, imovel, fases, readOnly }) {
                     {fases.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
                   </select>
                   <button onClick={() => faseFichaSel && abrirPDF(`/api/crm/projetos/${negocio.id}/pdf/ficha/${faseFichaSel}`)}
-                    disabled={!faseFichaSel}
+                    disabled={!faseFichaSel} title="Abrir numa nova aba"
+                    className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5">
+                    <Eye className="w-3.5 h-3.5" /> Ver
+                  </button>
+                  <button onClick={() => faseFichaSel && abrirPDF(`/api/crm/projetos/${negocio.id}/pdf/ficha/${faseFichaSel}`, { download: true })}
+                    disabled={!faseFichaSel} title="Descarregar PDF para enviar"
                     className="px-3 py-1.5 text-xs rounded-lg bg-brand-dark text-brand-gold hover:bg-brand-dark-light disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center gap-1.5">
-                    <FileDown className="w-3.5 h-3.5" /> Gerar
+                    <FileDown className="w-3.5 h-3.5" /> Download
                   </button>
                 </div>
               </div>
@@ -1130,10 +1140,16 @@ function TabDocumentos({ negocio, imovel, fases, readOnly }) {
                     <p className="text-sm font-medium text-gray-800">{t.nome}</p>
                     <p className="text-[11px] text-gray-500 mt-0.5">{t.desc}</p>
                   </div>
-                  <button onClick={() => abrirPDF(t.url)}
-                    className="px-3 py-1.5 text-xs rounded-lg bg-brand-dark text-brand-gold hover:bg-brand-dark-light inline-flex items-center gap-1.5">
-                    <FileDown className="w-3.5 h-3.5" /> Gerar
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button onClick={() => abrirPDF(t.url)} title="Abrir numa nova aba"
+                      className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 inline-flex items-center gap-1.5">
+                      <Eye className="w-3.5 h-3.5" /> Ver
+                    </button>
+                    <button onClick={() => abrirPDF(t.url, { download: true })} title="Descarregar PDF para enviar"
+                      className="px-3 py-1.5 text-xs rounded-lg bg-brand-dark text-brand-gold hover:bg-brand-dark-light inline-flex items-center gap-1.5">
+                      <FileDown className="w-3.5 h-3.5" /> Download
+                    </button>
+                  </div>
                 </div>
               ))}
             </>

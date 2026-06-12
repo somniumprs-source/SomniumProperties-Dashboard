@@ -3,7 +3,7 @@
  * Mostra: campos editáveis + relações + timeline + tarefas + reuniões.
  */
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
-import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, RefreshCw, MoreVertical, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin } from 'lucide-react'
+import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, RefreshCw, MoreVertical, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin, Eye } from 'lucide-react'
 import { apiFetch, resolveApiUrl } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { PartilharAcesso } from '../PartilharAcesso.jsx'
@@ -595,12 +595,16 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
   // necessária"). Para não quebrar o user-gesture do Safari (que bloqueia o
   // window.open após um await), abrimos primeiro um separador em branco de forma
   // síncrona e só depois navegamos para o URL já com o token.
-  async function abrirDocumento(tipo, { refresh = false } = {}) {
+  // `download: true` -> ?download=1 (Content-Disposition: attachment), para enviar a investidores.
+  async function abrirDocumento(tipo, { refresh = false, download = false } = {}) {
     const win = window.open('', '_blank')
     const token = await getToken()
-    const sep = refresh ? '?refresh=1' : ''
-    const tok = token ? `${refresh ? '&' : '?'}token=${token}` : ''
-    const url = resolveApiUrl(`/api/crm/imoveis/${imovelId}/documento/${tipo}${sep}`) + tok
+    const params = []
+    if (refresh) params.push('refresh=1')
+    if (download) params.push('download=1')
+    if (token) params.push(`token=${token}`)
+    const qs = params.length ? `?${params.join('&')}` : ''
+    const url = resolveApiUrl(`/api/crm/imoveis/${imovelId}/documento/${tipo}`) + qs
     if (win) win.location = url
     else window.open(url, '_blank', 'noopener,noreferrer')
   }
@@ -651,8 +655,17 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
             <button
               type="button"
               onClick={() => abrirDocumento(d.tipo)}
+              title="Abrir o PDF numa nova aba"
               className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors shrink-0 opacity-50 group-hover:opacity-100">
               Abrir
+            </button>
+            <button
+              type="button"
+              onClick={() => abrirDocumento(d.tipo, { download: true })}
+              title="Descarregar o PDF para enviar a investidores"
+              className="px-3 py-1.5 text-[11px] font-medium rounded-lg text-brand-gold hover:opacity-90 transition-colors shrink-0 opacity-70 group-hover:opacity-100"
+              style={{ backgroundColor: '#1A1A1A' }}>
+              PDF
             </button>
           </div>
         ))}
@@ -1408,6 +1421,16 @@ function RelatoriosTab({ reunioes, investidorNome }) {
                   const token = await getToken()
                   window.open(resolveApiUrl(`/api/crm/reunioes/${r.id}/relatorio?token=${token}`), '_blank')
                 }}
+                  title="Abrir o PDF numa nova aba"
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-white border border-gray-200 text-gray-600 hover:border-gray-300">
+                  <Eye className="w-3 h-3" /> Ver
+                </button>
+                <button onClick={async (e) => {
+                  e.stopPropagation()
+                  const token = await getToken()
+                  window.open(resolveApiUrl(`/api/crm/reunioes/${r.id}/relatorio?token=${token}&download=1`), '_blank')
+                }}
+                  title="Descarregar o PDF"
                   className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-white border border-gray-200 text-gray-600 hover:border-gray-300">
                   <FileDown className="w-3 h-3" /> PDF
                 </button>

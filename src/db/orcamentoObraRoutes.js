@@ -158,7 +158,7 @@ router.get('/imoveis/:imovelId/orcamento-obra/pdf', async (req, res) => {
 
     const safeNome = String(imovel.nome || 'imovel').replace(/[^a-z0-9]+/gi, '_').slice(0, 40)
     res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `inline; filename="orcamento_obra_${safeNome}.pdf"`)
+    res.setHeader('Content-Disposition', `${req.query.download ? 'attachment' : 'inline'}; filename="orcamento_obra_${safeNome}.pdf"`)
     const doc = generateOrcamentoObraPDF(imovel, orcamento)
     streamPdfToResAndPersist(doc, res, {
       storagePath: `orcamentos-obra/${imovel.id}.pdf`,
