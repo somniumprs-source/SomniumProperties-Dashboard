@@ -13,20 +13,37 @@ if (authEnabled && supabase) {
   let _tokenExpiry = 0
   let _recovering = false
 
+  // TTL do cache derivado da expiração REAL do JWT (session.expires_at, em
+  // segundos), renovando 60s antes. Antes usávamos uma janela cega de 5 min,
+  // que podia servir um token já expirado (cacheado <5min mas perto do fim de
+  // vida). Fallback de 5 min se expires_at não vier.
+  const expiryFor = (session) => {
+    const exp = session?.expires_at ? session.expires_at * 1000 - 60000 : 0
+    return exp > Date.now() ? exp : Date.now() + 300000
+  }
+  const cacheSession = (session) => {
+    if (session?.access_token) { _cachedToken = session.access_token; _tokenExpiry = expiryFor(session) }
+  }
+
   // Manter o cache local sincronizado com a sessão Supabase. Sem isto, depois
   // de o SDK refrescar o JWT (TOKEN_REFRESHED), o interceptor continuava a
-  // enviar o token velho durante até 5 min — em PWA standalone no telemóvel
-  // (sessão dormente vários dias) bastava para o backend devolver 401 em todas
-  // as chamadas /api/* e o Dashboard ficar preso em "A carregar dados...".
+  // enviar o token velho — em PWA standalone no telemóvel (sessão dormente
+  // vários dias) bastava para o backend devolver 401 em todas as chamadas.
   supabase.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_OUT' || !session?.access_token) {
-      _cachedToken = null
-      _tokenExpiry = 0
-      return
-    }
-    _cachedToken = session.access_token
-    _tokenExpiry = Date.now() + 300000
+    if (event === 'SIGNED_OUT' || !session?.access_token) { _cachedToken = null; _tokenExpiry = 0; return }
+    cacheSession(session)
   })
+
+  // Força a renovação da sessão (refresh token) e devolve o access_token novo,
+  // ou null se a sessão estiver mesmo morta. É a peça-chave: um getSession()
+  // devolveria o MESMO JWT expirado; só refreshSession() obtém um válido.
+  async function forceRefreshToken() {
+    try {
+      const { data, error } = await supabase.auth.refreshSession()
+      if (!error && data?.session?.access_token) { cacheSession(data.session); return data.session.access_token }
+    } catch { /* ignore */ }
+    return null
+  }
 
   async function recoverFromUnauthorized() {
     if (_recovering) return
@@ -52,21 +69,21 @@ if (authEnabled && supabase) {
     const next = { ...options, headers: withActiveUserHeader({ ...options.headers, 'Authorization': `Bearer ${token}` }) }
     const res = await _originalFetch(url, next)
     if (res.status === 401) {
-      // Token recusado pelo backend: invalidar cache, tentar uma vez com sessão
-      // fresca (pode haver TOKEN_REFRESHED em curso), e se ainda assim 401, fazer
-      // signOut para o utilizador voltar a entrar em vez de ver loading eterno.
+      // Token recusado: invalidar cache e RENOVAR a sessão (não apenas reler —
+      // o JWT pode ter expirado, e getSession devolveria o mesmo token morto).
       _cachedToken = null
       _tokenExpiry = 0
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        const fresh = session?.access_token
-        if (fresh && fresh !== token) {
-          _cachedToken = fresh
-          _tokenExpiry = Date.now() + 300000
+      const fresh = await forceRefreshToken()
+      if (fresh) {
+        if (fresh !== token) {
           const retry = await _originalFetch(url, { ...options, headers: withActiveUserHeader({ ...options.headers, 'Authorization': `Bearer ${fresh}` }) })
           if (retry.status !== 401) return retry
         }
-      } catch { /* ignore */ }
+        // Refresh deu um token VÁLIDO mas o endpoint continua a recusar: é um
+        // problema específico do endpoint, não da sessão → NÃO expulsar o user.
+        return res
+      }
+      // Sem token novo → sessão mesmo morta → re-login.
       recoverFromUnauthorized()
       return res
     }
@@ -83,12 +100,13 @@ if (authEnabled && supabase) {
       if (_cachedToken && now < _tokenExpiry) {
         return fetchWithToken(target, options, _cachedToken)
       }
-      return supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session?.access_token) {
-          _cachedToken = session.access_token
-          _tokenExpiry = now + 300000
-          return fetchWithToken(target, options, session.access_token)
-        }
+      return supabase.auth.getSession().then(async ({ data: { session } }) => {
+        let token = session?.access_token
+        if (token) cacheSession(session)
+        // Sessão transitoriamente indisponível (PWA a retomar de background):
+        // tentar renovar antes de desistir, em vez de sair sem Authorization.
+        else token = await forceRefreshToken()
+        if (token) return fetchWithToken(target, options, token)
         return _originalFetch(target, options)
       }).catch(() => _originalFetch(target, options))
     }

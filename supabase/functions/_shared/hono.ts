@@ -10,7 +10,7 @@ export function createApp(basePath: string) {
 
   app.use("*", cors({
     origin: (origin) => origin ?? "*", // reflecte a origem (frontend fora do Supabase)
-    allowHeaders: ["Authorization", "Content-Type", "X-Regiao", "X-Api-Key"],
+    allowHeaders: ["Authorization", "Content-Type", "X-Regiao", "X-Api-Key", "X-User-Id"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
   }));

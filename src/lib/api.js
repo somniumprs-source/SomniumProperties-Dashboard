@@ -146,11 +146,14 @@ function filenameFromPath(path, fallbackExt = 'pdf') {
 }
 
 // Tenta extrair o filename do header Content-Disposition da resposta.
+// Prefere a forma RFC 5987 `filename*=UTF-8''...` (com acentos) à `filename=`.
 function filenameFromResponse(res) {
   try {
     const cd = res.headers.get('content-disposition') || ''
-    const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)/i)
-    if (m && m[1]) return decodeURIComponent(m[1])
+    const ext = cd.match(/filename\*=(?:UTF-8'')?["']?([^"';]+)/i)
+    if (ext && ext[1]) { try { return decodeURIComponent(ext[1]) } catch { return ext[1] } }
+    const basic = cd.match(/filename=["']?([^"';]+)/i)
+    if (basic && basic[1]) { try { return decodeURIComponent(basic[1]) } catch { return basic[1] } }
   } catch {}
   return null
 }
@@ -179,8 +182,19 @@ export async function openDocument(path, { download = false, filename, refresh =
   // Abrir o separador em branco JÁ (síncrono) preserva o user-gesture do Safari,
   // que bloqueia window.open depois de um await. Só para visualização.
   const win = (!download && hasWindow) ? window.open('', '_blank') : null
-  const paintWin = (html) => { try { if (win && !win.closed) win.document.body.innerHTML = html } catch {} }
-  paintWin('<p style="font-family:system-ui,sans-serif;padding:24px;color:#555">A preparar o documento…</p>')
+  // Em PWA standalone iOS (como a equipa usa no telemóvel) o window.open devolve
+  // null mesmo dentro do gesto. Sem isto, o fallback corre pós-await e é
+  // bloqueado pelo popup blocker → o clique não fazia nada, sem erro visível.
+  // Nesse caso degradamos graciosamente para DESCARREGAR o ficheiro.
+  const fallbackDownload = !download && hasWindow && !win
+  // document.open/write/close é o caminho fiável para pintar num about:blank
+  // recém-aberto (o document.body pode ainda não existir).
+  const paintWin = (html) => {
+    try {
+      if (win && !win.closed) { win.document.open(); win.document.write(html); win.document.close() }
+    } catch { /* janela cross-origin/fechada */ }
+  }
+  paintWin('<!doctype html><meta charset="utf-8"><p style="font-family:system-ui,sans-serif;padding:24px;color:#555">A preparar o documento…</p>')
 
   let url = path
   if (refresh) url += (url.includes('?') ? '&' : '?') + 'refresh=1'
@@ -190,31 +204,53 @@ export async function openDocument(path, { download = false, filename, refresh =
     res = await apiFetch(url, { timeoutMs })
   } catch (e) {
     const msg = e?.name === 'AbortError' ? 'O documento demorou demasiado a gerar. Tenta novamente.' : 'Sem ligação ao servidor. Verifica a internet e tenta novamente.'
-    paintWin(`<p style="font-family:system-ui,sans-serif;padding:24px;color:#b00020">${msg}</p>`)
+    paintWin(`<!doctype html><meta charset="utf-8"><p style="font-family:system-ui,sans-serif;padding:24px;color:#b00020">${msg}</p>`)
     throw new Error(msg)
   }
 
   if (!res.ok) {
+    // Lê o corpo UMA vez; tenta JSON, mas aceita texto cru (ex.: erro XML do Storage).
     let msg = `Não foi possível abrir o documento (HTTP ${res.status}).`
-    try { const j = await res.clone().json(); if (j?.error) msg = j.error } catch {}
-    paintWin(`<p style="font-family:system-ui,sans-serif;padding:24px;color:#b00020">${msg}</p>`)
+    try {
+      const txt = await res.text()
+      try { const j = JSON.parse(txt); if (j?.error) msg = j.error } catch { if (txt && txt.length < 300) msg = txt }
+    } catch { /* sem corpo legível */ }
+    paintWin(`<!doctype html><meta charset="utf-8"><p style="font-family:system-ui,sans-serif;padding:24px;color:#b00020">${msg}</p>`)
     throw new Error(msg)
   }
 
   const blob = await res.blob()
+
+  // Sanidade para VISUALIZAÇÃO: um documento (PDF) nunca devia chegar como
+  // JSON/HTML/texto. Se chegar, é um erro disfarçado (ex.: objecto em falta no
+  // Storage servido com 200) — mostra-o em vez de abrir lixo. (No download
+  // aceitamos qualquer tipo: o backup é legitimamente JSON.)
+  if (!download && !fallbackDownload) {
+    const ct = (blob.type || '').toLowerCase()
+    if (ct.startsWith('application/json') || ct.startsWith('text/html') || (ct.startsWith('text/') && blob.size < 4096)) {
+      let msg = 'O servidor não devolveu um documento válido. Tenta regenerar.'
+      try { const txt = await blob.text(); const j = JSON.parse(txt); if (j?.error) msg = j.error } catch { /* mantém genérico */ }
+      paintWin(`<!doctype html><meta charset="utf-8"><p style="font-family:system-ui,sans-serif;padding:24px;color:#b00020">${msg}</p>`)
+      throw new Error(msg)
+    }
+  }
+
   const objUrl = URL.createObjectURL(blob)
-  if (download) {
+  if (download || fallbackDownload) {
     const a = document.createElement('a')
     a.href = objUrl
     a.download = filename || filenameFromResponse(res) || filenameFromPath(path)
+    a.rel = 'noopener'
     document.body.appendChild(a); a.click(); a.remove()
-  } else if (win && !win.closed) {
-    win.location = objUrl
-  } else if (hasWindow) {
-    window.open(objUrl, '_blank', 'noopener,noreferrer')
+    // O blob já foi entregue ao gestor de downloads de imediato — revoga cedo
+    // para não reter ficheiros grandes (backup/PDF) em memória durante minutos.
+    setTimeout(() => { try { URL.revokeObjectURL(objUrl) } catch {} }, 15000)
+  } else {
+    if (win && !win.closed) win.location = objUrl
+    else if (hasWindow) window.open(objUrl, '_blank', 'noopener,noreferrer')
+    // Visualização: dar tempo ao viewer nativo de carregar antes de revogar.
+    setTimeout(() => { try { URL.revokeObjectURL(objUrl) } catch {} }, timeoutMs)
   }
-  // Revogar depois de o browser ter tido tempo de carregar o documento.
-  setTimeout(() => { try { URL.revokeObjectURL(objUrl) } catch {} }, timeoutMs)
   return objUrl
 }
 
