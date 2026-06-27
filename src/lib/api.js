@@ -39,7 +39,10 @@ function scheduleRefreshSignal() {
  * Para filtrar por região, o caller passa `options.regiao = 'Coimbra' | 'AMP'`
  * — o wrapper injecta o header `X-Regiao`. Sem regiao = sem filtro.
  *
- * Emite o evento "somnium:refresh" depois de mutações OK.
+ * Emite o evento "somnium:refresh" depois de mutações OK, excepto quando o
+ * caller passa `skipRefresh: true` — usado pelos autosaves debounced (Análise,
+ * Orçamento de Obra) para não forçarem o re-fetch da lista a cada gravação
+ * (o que fazia a página saltar para o topo). A lista actualiza ao fechar a ficha.
  */
 // Timeout default: 30s. Antes ficavam requests penduradas indefinidamente
 // quando o backend não respondia (Render cold-start, Supabase pool exausto),
@@ -48,7 +51,7 @@ function scheduleRefreshSignal() {
 const DEFAULT_TIMEOUT_MS = 30_000
 
 export async function apiFetch(url, options = {}) {
-  const { regiao, timeoutMs = DEFAULT_TIMEOUT_MS, ...rest } = options
+  const { regiao, timeoutMs = DEFAULT_TIMEOUT_MS, skipRefresh = false, ...rest } = options
   const headers = { ...rest.headers }
   // Prioridade: regiao explícito > sessionStorage da página actual (apenas
   // se URL for `/api/crm/*` para limitar a entidades regionais).
@@ -81,7 +84,7 @@ export async function apiFetch(url, options = {}) {
   try {
     const res = await fetch(url, { ...rest, headers, signal })
     const method = (options.method || 'GET').toUpperCase()
-    if (res.ok && (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE')) {
+    if (res.ok && !skipRefresh && (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE')) {
       scheduleRefreshSignal()
     }
     return res

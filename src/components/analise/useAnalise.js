@@ -29,6 +29,9 @@ export function useAnalise(imovelId) {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(fields),
+        // Autosave: não dispara refresh global da lista (evita salto p/ topo).
+        // A lista actualiza quando o utilizador fecha a ficha (onClose -> load).
+        skipRefresh: true,
       })
       if (!r.ok) {
         const text = await r.text().catch(() => '')

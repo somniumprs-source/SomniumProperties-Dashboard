@@ -58,6 +58,9 @@ export function useOrcamentoObra(imovelId) {
               tipo_obra: next.tipo_obra,
               bdi: next.bdi,
             }),
+            // Autosave: não dispara refresh global da lista (evita salto p/ topo).
+            // A lista actualiza quando o utilizador fecha a ficha (onClose -> load).
+            skipRefresh: true,
           })
           if (r.ok) {
             const saved = await r.json()
