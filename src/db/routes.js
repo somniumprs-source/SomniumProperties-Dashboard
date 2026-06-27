@@ -1379,7 +1379,7 @@ async function analisarTranscricaoIA(transcricao, consultorNome) {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 2000,
+    max_tokens: 4096,
     messages: [{ role: 'user', content: `${buildGravacaoPrompt(consultorNome)}\n\n--- TRANSCRICAO ---\n${transcricao}` }],
   })
   const respText = response.content?.[0]?.text || '{}'
