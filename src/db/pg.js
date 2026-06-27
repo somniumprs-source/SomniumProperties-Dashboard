@@ -540,14 +540,17 @@ export async function initSchema() {
       CREATE TABLE IF NOT EXISTS consultor_followups (
         id TEXT PRIMARY KEY,
         consultor_id TEXT NOT NULL,
+        imovel_id TEXT,
         data TEXT NOT NULL,
         motivo TEXT,
         proximo_follow_up TEXT,
         created_at TEXT DEFAULT (NOW()::TEXT),
         updated_at TEXT DEFAULT (NOW()::TEXT)
       );
+      ALTER TABLE consultor_followups ADD COLUMN IF NOT EXISTS imovel_id TEXT;
       CREATE INDEX IF NOT EXISTS idx_followups_consultor ON consultor_followups(consultor_id);
       CREATE INDEX IF NOT EXISTS idx_followups_data ON consultor_followups(data DESC);
+      CREATE INDEX IF NOT EXISTS idx_followups_imovel ON consultor_followups(imovel_id);
 
       -- Gravacoes de chamadas com consultores (audio no Storage; transcricao
       -- por Whisper local + analise comercial por Claude para optimizar scripts).
@@ -568,9 +571,11 @@ export async function initSchema() {
         updated_at TEXT DEFAULT (NOW()::TEXT)
       );
       ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS followup_id TEXT;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS imovel_id TEXT;
       CREATE INDEX IF NOT EXISTS idx_gravacoes_consultor ON consultor_gravacoes(consultor_id);
       CREATE INDEX IF NOT EXISTS idx_gravacoes_estado ON consultor_gravacoes(estado);
       CREATE INDEX IF NOT EXISTS idx_gravacoes_followup ON consultor_gravacoes(followup_id);
+      CREATE INDEX IF NOT EXISTS idx_gravacoes_imovel ON consultor_gravacoes(imovel_id);
 
       -- Migrar follow-ups legados (campos directos no consultor) para o histórico
       INSERT INTO consultor_followups (id, consultor_id, data, motivo, proximo_follow_up, created_at, updated_at)

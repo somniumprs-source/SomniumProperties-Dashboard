@@ -22,8 +22,9 @@ export function FollowUpsSection({ consultorId, onUpdate }) {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ data: todayISO(), motivo: '', proximo_follow_up: '' })
+  const [form, setForm] = useState({ data: todayISO(), motivo: '', proximo_follow_up: '', imovel_id: '' })
   const [audioFile, setAudioFile] = useState(null)
+  const [imoveis, setImoveis] = useState([])
   const [busy, setBusy] = useState({})       // { [gravacaoId]: 'analisar' | 'apagar' | 'retomar' }
   const fileRef = useRef(null)
 
@@ -47,6 +48,16 @@ export function FollowUpsSection({ consultorId, onUpdate }) {
   }, [consultorId, loadGravacoes])
 
   useEffect(() => { if (consultorId) load() }, [consultorId, load])
+
+  // Lista de imoveis para o seletor "Imovel relacionado".
+  useEffect(() => {
+    let activo = true
+    apiFetch('/api/crm/imoveis')
+      .then(r => r.json())
+      .then(d => { if (activo) setImoveis(Array.isArray(d) ? d : []) })
+      .catch(() => { if (activo) setImoveis([]) })
+    return () => { activo = false }
+  }, [])
 
   // Polling enquanto houver gravacoes em processamento.
   const temPendentes = gravacoes.some(g => ['pendente', 'a_transcrever', 'a_analisar'].includes(g.estado))
@@ -73,6 +84,7 @@ export function FollowUpsSection({ consultorId, onUpdate }) {
           data: form.data,
           motivo: form.motivo?.trim() || null,
           proximo_follow_up: form.proximo_follow_up || null,
+          imovel_id: form.imovel_id || null,
         }),
       })
       if (!r.ok) {
@@ -87,6 +99,7 @@ export function FollowUpsSection({ consultorId, onUpdate }) {
           const fd = new FormData()
           fd.append('audio', audioFile)
           fd.append('followup_id', novo.id)
+          if (form.imovel_id) fd.append('imovel_id', form.imovel_id)
           fd.append('titulo', form.motivo?.trim() || `Follow-up ${fmt(form.data)}`)
           fd.append('data_chamada', form.data)
           const ru = await apiFetch(`/api/crm/consultores/${consultorId}/gravacoes`, { method: 'POST', body: fd })
@@ -99,7 +112,7 @@ export function FollowUpsSection({ consultorId, onUpdate }) {
         }
       }
 
-      setForm({ data: todayISO(), motivo: '', proximo_follow_up: '' })
+      setForm({ data: todayISO(), motivo: '', proximo_follow_up: '', imovel_id: '' })
       clearAudio()
       setShowForm(false)
       await load()
@@ -197,6 +210,18 @@ export function FollowUpsSection({ consultorId, onUpdate }) {
             <textarea value={form.motivo} rows={2}
               onChange={e => setForm(p => ({ ...p, motivo: e.target.value }))} className={inputClass}
               placeholder="O que se falou, próximos passos..." />
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Imóvel relacionado (opcional)</label>
+            <select value={form.imovel_id}
+              onChange={e => setForm(p => ({ ...p, imovel_id: e.target.value }))} className={inputClass}>
+              <option value="">— Sem imóvel associado —</option>
+              {imoveis.map(im => (
+                <option key={im.id} value={im.id}>{im.nome || im.morada || im.titulo || im.id}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-gray-400 mt-1">Se a conversa foi sobre um imóvel, escolhe-o: fica também registada na ficha desse imóvel.</p>
           </div>
 
           {/* Anexar gravacao da conversa */}

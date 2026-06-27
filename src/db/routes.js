@@ -1256,11 +1256,12 @@ router.get('/consultores/:id/followups', async (req, res) => {
 router.post('/consultores/:id/followups', async (req, res) => {
   try {
     const consultorId = req.params.id
-    const { data, motivo, proximo_follow_up } = req.body
+    const { data, motivo, proximo_follow_up, imovel_id } = req.body
     if (!data) return res.status(400).json({ error: 'Data do follow-up é obrigatória' })
 
     const item = await ConsultorFollowups.create({
       consultor_id: consultorId,
+      imovel_id: imovel_id || null,
       data,
       motivo: motivo || null,
       proximo_follow_up: proximo_follow_up || null,
@@ -1414,10 +1415,10 @@ router.post('/consultores/:id/gravacoes', uploadRateLimit, uploadAudio.single('a
     const now = new Date().toISOString()
     const { rows: [row] } = await pool.query(
       `INSERT INTO consultor_gravacoes
-        (id, consultor_id, followup_id, titulo, data_chamada, ficheiro_path, ficheiro_nome, estado, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'pendente',$8,$8) RETURNING *`,
-      [id, req.params.id, req.body.followup_id || null, req.body.titulo || req.file.originalname,
-       req.body.data_chamada || now, storagePath, req.file.originalname, now]
+        (id, consultor_id, followup_id, imovel_id, titulo, data_chamada, ficheiro_path, ficheiro_nome, estado, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pendente',$9,$9) RETURNING *`,
+      [id, req.params.id, req.body.followup_id || null, req.body.imovel_id || null,
+       req.body.titulo || req.file.originalname, req.body.data_chamada || now, storagePath, req.file.originalname, now]
     )
     res.json(row)
   } catch (e) { res.status(500).json({ error: e.message }) }
@@ -1594,6 +1595,30 @@ router.get('/imoveis/:id/interacoes', async (req, res) => {
       `SELECT ci.*, c.nome as consultor_nome FROM consultor_interacoes ci
        LEFT JOIN consultores c ON c.id = ci.consultor_id
        WHERE ci.imovel_id = $1 ORDER BY ci.data_hora DESC`,
+      [req.params.id]
+    )
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Conversas (follow-ups + gravacoes) ligadas a um imovel ───
+// Espelha na ficha do imovel as conversas registadas no consultor com este imovel.
+router.get('/imoveis/:id/followups', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT f.*, c.nome AS consultor_nome FROM consultor_followups f
+       LEFT JOIN consultores c ON c.id = f.consultor_id
+       WHERE f.imovel_id = $1 ORDER BY f.data DESC, f.created_at DESC`,
+      [req.params.id]
+    )
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/imoveis/:id/gravacoes', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM consultor_gravacoes WHERE imovel_id = $1 ORDER BY data_chamada DESC, created_at DESC`,
       [req.params.id]
     )
     res.json(rows)

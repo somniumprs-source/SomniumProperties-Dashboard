@@ -1468,11 +1468,13 @@ app.get("/consultores/:id/followups", async (c: any) => {
 app.post("/consultores/:id/followups", async (c: any) => {
   try {
     const consultorId = c.req.param("id");
-    const { data, motivo, proximo_follow_up } = await c.req.json().catch(() => ({}));
+    await ensureGravacoesTable();
+    const { data, motivo, proximo_follow_up, imovel_id } = await c.req.json().catch(() => ({}));
     if (!data) return c.json({ error: "Data do follow-up é obrigatória" }, 400);
 
     const item = await ConsultorFollowups.create({
       consultor_id: consultorId,
+      imovel_id: imovel_id || null,
       data,
       motivo: motivo || null,
       proximo_follow_up: proximo_follow_up || null,
@@ -1566,9 +1568,13 @@ async function ensureGravacoesTable() {
       updated_at TEXT DEFAULT (NOW()::TEXT)
     );
     ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS followup_id TEXT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS imovel_id TEXT;
     CREATE INDEX IF NOT EXISTS idx_gravacoes_consultor ON consultor_gravacoes(consultor_id);
     CREATE INDEX IF NOT EXISTS idx_gravacoes_estado ON consultor_gravacoes(estado);
     CREATE INDEX IF NOT EXISTS idx_gravacoes_followup ON consultor_gravacoes(followup_id);
+    CREATE INDEX IF NOT EXISTS idx_gravacoes_imovel ON consultor_gravacoes(imovel_id);
+    ALTER TABLE consultor_followups ADD COLUMN IF NOT EXISTS imovel_id TEXT;
+    CREATE INDEX IF NOT EXISTS idx_followups_imovel ON consultor_followups(imovel_id);
   `);
   _gravacoesTableEnsured = true;
 }
@@ -1665,11 +1671,12 @@ app.post("/consultores/:id/gravacoes", async (c: any) => {
     const titulo = (typeof form.get("titulo") === "string" && form.get("titulo")) || file.name;
     const dataChamada = (typeof form.get("data_chamada") === "string" && form.get("data_chamada")) || now;
     const followupId = (typeof form.get("followup_id") === "string" && form.get("followup_id")) || null;
+    const imovelId = (typeof form.get("imovel_id") === "string" && form.get("imovel_id")) || null;
     const { rows: [row] } = await pool.query(
       `INSERT INTO consultor_gravacoes
-        (id, consultor_id, followup_id, titulo, data_chamada, ficheiro_path, ficheiro_nome, estado, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'pendente',$8,$8) RETURNING *`,
-      [id, consultorId, followupId, titulo, dataChamada, storagePath, file.name, now],
+        (id, consultor_id, followup_id, imovel_id, titulo, data_chamada, ficheiro_path, ficheiro_nome, estado, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pendente',$9,$9) RETURNING *`,
+      [id, consultorId, followupId, imovelId, titulo, dataChamada, storagePath, file.name, now],
     );
     return c.json(row);
   } catch (e) {
@@ -1837,6 +1844,31 @@ app.get("/imoveis/:id/interacoes", async (c: any) => {
       `SELECT ci.*, c.nome as consultor_nome FROM consultor_interacoes ci
        LEFT JOIN consultores c ON c.id = ci.consultor_id
        WHERE ci.imovel_id = $1 ORDER BY ci.data_hora DESC`,
+      [c.req.param("id")],
+    );
+    return c.json(rows);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── Conversas (follow-ups + gravacoes) ligadas a um imovel ───
+app.get("/imoveis/:id/followups", async (c: any) => {
+  try {
+    await ensureGravacoesTable();
+    const { rows } = await pool.query(
+      `SELECT f.*, c.nome AS consultor_nome FROM consultor_followups f
+       LEFT JOIN consultores c ON c.id = f.consultor_id
+       WHERE f.imovel_id = $1 ORDER BY f.data DESC, f.created_at DESC`,
+      [c.req.param("id")],
+    );
+    return c.json(rows);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.get("/imoveis/:id/gravacoes", async (c: any) => {
+  try {
+    await ensureGravacoesTable();
+    const { rows } = await pool.query(
+      `SELECT * FROM consultor_gravacoes WHERE imovel_id = $1 ORDER BY data_chamada DESC, created_at DESC`,
       [c.req.param("id")],
     );
     return c.json(rows);
