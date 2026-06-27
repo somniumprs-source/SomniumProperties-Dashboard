@@ -9,13 +9,55 @@ export { resolveApiUrl, API_BASE }
 /**
  * Devolve o access token actual da sessão Supabase (string vazia se não houver).
  * Útil para construir URLs com `?token=...` em window.open de PDFs.
+ *
+ * Os links de PDF abrem num separador novo (window.open) e por isso NÃO passam
+ * pelo interceptor de fetch de main.jsx — não têm o cache de token que esse
+ * interceptor mantém. Em PWA/mobile (e durante a renovação do JWT) o
+ * `getSession()` devolve vazio por instantes; sem rede de segurança o link de
+ * PDF saía sem `?token=` e o backend respondia "Autenticação necessária".
+ * Aqui replicamos a mesma resiliência: cache do último token válido (janela de
+ * 5 min, igual ao interceptor) alimentado por onAuthStateChange, + refresh
+ * forçado como fallback intermédio.
  */
+const TOKEN_GRACE_MS = 5 * 60_000
+let _lastToken = ''
+let _lastTokenAt = 0
+if (authEnabled && supabase) {
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (session?.access_token) {
+      _lastToken = session.access_token
+      _lastTokenAt = Date.now()
+    } else if (event === 'SIGNED_OUT') {
+      _lastToken = ''
+      _lastTokenAt = 0
+    }
+  })
+}
+
 export async function getToken() {
+  if (!authEnabled || !supabase) return ''
   try {
-    if (!authEnabled || !supabase) return ''
     const { data: { session } } = await supabase.auth.getSession()
-    return session?.access_token || ''
-  } catch { return '' }
+    const tok = session?.access_token || ''
+    if (tok) {
+      _lastToken = tok
+      _lastTokenAt = Date.now()
+      return tok
+    }
+    // Sessão transitoriamente indisponível: tentar renovar com o refresh token.
+    try {
+      const { data } = await supabase.auth.refreshSession()
+      const fresh = data?.session?.access_token || ''
+      if (fresh) {
+        _lastToken = fresh
+        _lastTokenAt = Date.now()
+        return fresh
+      }
+    } catch { /* cai para o cache */ }
+  } catch { /* cai para o cache */ }
+  // Último recurso: usar o token cacheado se ainda estiver dentro da janela.
+  if (_lastToken && Date.now() - _lastTokenAt < TOKEN_GRACE_MS) return _lastToken
+  return ''
 }
 
 // Após mutações bem sucedidas, sinalizar o dashboard (e outros listeners) para
