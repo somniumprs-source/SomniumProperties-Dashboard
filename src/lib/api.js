@@ -59,6 +59,23 @@ export async function getToken() {
   return ''
 }
 
+// Escapa texto para interpolação segura em HTML. Os documentos abrem num
+// about:blank que herda a origem da app (same-origin), por isso uma mensagem
+// de erro vinda do backend escrita sem escape via document.write seria XSS
+// executável. Toda a interpolação dinâmica passa por aqui.
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ))
+}
+
+// Ponte global para notificações (toast). O ToastProvider regista um listener
+// deste evento. Usado por helpers fora da árvore React (ex.: openDocument) para
+// garantir que NENHUM clique falha em silêncio, mesmo sem janela onde pintar.
+function notifyUser(message, type = 'error') {
+  try { window.dispatchEvent(new CustomEvent('somnium:toast', { detail: { message, type } })) } catch { /* ambiente sem window */ }
+}
+
 // Após mutações bem sucedidas, sinalizar o dashboard (e outros listeners) para
 // refrescar. Debounced para coalescer rajadas (ex.: gravar vários campos em sequência).
 let _refreshTimer = null
@@ -188,13 +205,29 @@ export async function openDocument(path, { download = false, filename, refresh =
   // Nesse caso degradamos graciosamente para DESCARREGAR o ficheiro.
   const fallbackDownload = !download && hasWindow && !win
   // document.open/write/close é o caminho fiável para pintar num about:blank
-  // recém-aberto (o document.body pode ainda não existir).
-  const paintWin = (html) => {
+  // recém-aberto (o document.body pode ainda não existir). `text` é SEMPRE
+  // escapado (escapeHtml) — about:blank é same-origin, logo HTML não escapado
+  // seria XSS executável.
+  const paintErr = (text) => {
     try {
-      if (win && !win.closed) { win.document.open(); win.document.write(html); win.document.close() }
+      if (win && !win.closed) {
+        win.document.open()
+        win.document.write(`<!doctype html><meta charset="utf-8"><p style="font-family:system-ui,sans-serif;padding:24px;color:#b00020">${escapeHtml(text)}</p>`)
+        win.document.close()
+      }
     } catch { /* janela cross-origin/fechada */ }
   }
-  paintWin('<!doctype html><meta charset="utf-8"><p style="font-family:system-ui,sans-serif;padding:24px;color:#555">A preparar o documento…</p>')
+  // Falha: pinta no separador (se houver) E notifica por toast (cobre download
+  // e PWA sem janela). Garante que nenhum clique falha em silêncio.
+  const fail = (msg) => { paintErr(msg); notifyUser(msg, 'error'); return new Error(msg) }
+
+  try {
+    if (win && !win.closed) {
+      win.document.open()
+      win.document.write('<!doctype html><meta charset="utf-8"><p style="font-family:system-ui,sans-serif;padding:24px;color:#555">A preparar o documento…</p>')
+      win.document.close()
+    }
+  } catch { /* ignore */ }
 
   let url = path
   if (refresh) url += (url.includes('?') ? '&' : '?') + 'refresh=1'
@@ -203,9 +236,7 @@ export async function openDocument(path, { download = false, filename, refresh =
   try {
     res = await apiFetch(url, { timeoutMs })
   } catch (e) {
-    const msg = e?.name === 'AbortError' ? 'O documento demorou demasiado a gerar. Tenta novamente.' : 'Sem ligação ao servidor. Verifica a internet e tenta novamente.'
-    paintWin(`<!doctype html><meta charset="utf-8"><p style="font-family:system-ui,sans-serif;padding:24px;color:#b00020">${msg}</p>`)
-    throw new Error(msg)
+    throw fail(e?.name === 'AbortError' ? 'O documento demorou demasiado a gerar. Tenta novamente.' : 'Sem ligação ao servidor. Verifica a internet e tenta novamente.')
   }
 
   if (!res.ok) {
@@ -215,8 +246,7 @@ export async function openDocument(path, { download = false, filename, refresh =
       const txt = await res.text()
       try { const j = JSON.parse(txt); if (j?.error) msg = j.error } catch { if (txt && txt.length < 300) msg = txt }
     } catch { /* sem corpo legível */ }
-    paintWin(`<!doctype html><meta charset="utf-8"><p style="font-family:system-ui,sans-serif;padding:24px;color:#b00020">${msg}</p>`)
-    throw new Error(msg)
+    throw fail(msg)
   }
 
   const blob = await res.blob()
@@ -230,8 +260,7 @@ export async function openDocument(path, { download = false, filename, refresh =
     if (ct.startsWith('application/json') || ct.startsWith('text/html') || (ct.startsWith('text/') && blob.size < 4096)) {
       let msg = 'O servidor não devolveu um documento válido. Tenta regenerar.'
       try { const txt = await blob.text(); const j = JSON.parse(txt); if (j?.error) msg = j.error } catch { /* mantém genérico */ }
-      paintWin(`<!doctype html><meta charset="utf-8"><p style="font-family:system-ui,sans-serif;padding:24px;color:#b00020">${msg}</p>`)
-      throw new Error(msg)
+      throw fail(msg)
     }
   }
 
@@ -242,9 +271,11 @@ export async function openDocument(path, { download = false, filename, refresh =
     a.download = filename || filenameFromResponse(res) || filenameFromPath(path)
     a.rel = 'noopener'
     document.body.appendChild(a); a.click(); a.remove()
-    // O blob já foi entregue ao gestor de downloads de imediato — revoga cedo
-    // para não reter ficheiros grandes (backup/PDF) em memória durante minutos.
-    setTimeout(() => { try { URL.revokeObjectURL(objUrl) } catch {} }, 15000)
+    // Avisar quando degradámos "Ver" para download por popup bloqueado (PWA iOS).
+    if (fallbackDownload) notifyUser('Janela bloqueada — o documento foi descarregado.', 'info')
+    // Revoga generosamente: a maioria dos browsers segura os bytes ao iniciar o
+    // download, mas um diálogo "Guardar como" lento pode demorar > 15s. 60s cobre.
+    setTimeout(() => { try { URL.revokeObjectURL(objUrl) } catch {} }, 60000)
   } else {
     if (win && !win.closed) win.location = objUrl
     else if (hasWindow) window.open(objUrl, '_blank', 'noopener,noreferrer')

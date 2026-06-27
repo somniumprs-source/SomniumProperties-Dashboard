@@ -3469,6 +3469,8 @@ app.post("/undo/:auditId", async (c: any) => {
 const BACKUP_TABLES = ["imoveis", "investidores", "consultores", "negocios", "despesas", "tarefas"];
 
 app.get("/backup", async (c: any) => {
+  const denied = await requireAdminAudit(c);
+  if (denied) return denied;
   try {
     const backup: any = {};
     let total = 0;
@@ -3490,6 +3492,8 @@ app.get("/backup", async (c: any) => {
 });
 
 app.post("/backup/auto", async (c: any) => {
+  const denied = await requireAdminAudit(c);
+  if (denied) return denied;
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS backups (
@@ -3516,6 +3520,8 @@ app.post("/backup/auto", async (c: any) => {
 });
 
 app.get("/backup/list", async (c: any) => {
+  const denied = await requireAdminAudit(c);
+  if (denied) return denied;
   try {
     await pool.query(`CREATE TABLE IF NOT EXISTS backups (id SERIAL PRIMARY KEY, data JSONB NOT NULL, total_registos INT DEFAULT 0, created_at TEXT DEFAULT (NOW()::TEXT))`);
     const { rows } = await pool.query("SELECT id, total_registos, created_at FROM backups ORDER BY created_at DESC LIMIT 30");
@@ -3524,6 +3530,8 @@ app.get("/backup/list", async (c: any) => {
 });
 
 app.post("/backup/restore/:id", async (c: any) => {
+  const denied = await requireAdminAudit(c);
+  if (denied) return denied;
   try {
     const body = await c.req.json().catch(() => ({}));
     const { rows } = await pool.query("SELECT * FROM backups WHERE id = $1", [c.req.param("id")]);
@@ -3602,6 +3610,8 @@ app.post("/backup/restore/:id", async (c: any) => {
 });
 
 app.get("/backup/:id/download", async (c: any) => {
+  const denied = await requireAdminAudit(c);
+  if (denied) return denied;
   try {
     const { rows } = await pool.query("SELECT * FROM backups WHERE id = $1", [c.req.param("id")]);
     if (!rows[0]) return c.json({ error: "Backup não encontrado" }, 404);

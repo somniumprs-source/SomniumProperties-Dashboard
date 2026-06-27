@@ -24,6 +24,14 @@ export function ToastProvider({ children }) {
 
   const dismiss = (id) => setToasts(prev => prev.filter(t => t.id !== id))
 
+  // Ponte global: helpers fora da árvore React (ex.: openDocument em lib/api.js)
+  // disparam `somnium:toast` para garantir feedback mesmo sem acesso ao contexto.
+  useEffect(() => {
+    const onToast = (e) => { const d = e.detail || {}; if (d.message) addToast(d.message, d.type || 'info', d.type === 'error' ? 5000 : 3000) }
+    window.addEventListener('somnium:toast', onToast)
+    return () => window.removeEventListener('somnium:toast', onToast)
+  }, [addToast])
+
   return (
     <ToastContext.Provider value={addToast}>
       {children}

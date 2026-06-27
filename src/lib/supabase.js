@@ -10,7 +10,9 @@ export const supabase = authEnabled
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: true,
+        // Sem OAuth/magic-link (só email+password). Desligar evita que um link
+        // com #access_token=... na URL fixe uma sessão (session fixation).
+        detectSessionInUrl: false,
       },
     })
   : null
@@ -29,5 +31,8 @@ if (authEnabled && supabase && typeof document !== 'undefined') {
     } catch { /* APIs ausentes em runtime antigo */ }
   }
   document.addEventListener('visibilitychange', syncAutoRefresh)
+  // pageshow apanha o retorno do bfcache no iOS, onde visibilitychange nem
+  // sempre dispara ao reabrir a PWA. syncAutoRefresh é idempotente.
+  window.addEventListener('pageshow', syncAutoRefresh)
   syncAutoRefresh()
 }

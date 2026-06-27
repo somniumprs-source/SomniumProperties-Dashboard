@@ -13,6 +13,7 @@ export function createApp(basePath: string) {
     allowHeaders: ["Authorization", "Content-Type", "X-Regiao", "X-Api-Key", "X-User-Id"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
+    maxAge: 86400, // cacheia o preflight 24h — evita um OPTIONS por cada GET de documento/lista
   }));
 
   app.onError((err, c) => {

@@ -118,11 +118,8 @@ export function RelatoriosAdmin() {
   }
 
   async function abrirPdf(id, { download = false } = {}) {
-    try {
-      await openDocument(`/api/crm/relatorios-semanais/${id}/pdf`, { download })
-    } catch (e) {
-      setError(e.message)
-    }
+    // openDocument trata o seu próprio feedback de erro (toast global).
+    try { await openDocument(`/api/crm/relatorios-semanais/${id}/pdf`, { download }) } catch { /* já notificado */ }
   }
 
   async function eliminar(id) {
@@ -245,7 +242,7 @@ export function RelatoriosAdmin() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => openDocument('/api/crm/relatorios/expansao-gaia').catch(e => setError(e.message))}
+                onClick={() => openDocument('/api/crm/relatorios/expansao-gaia').catch(() => {})}
                 title="Abrir numa nova aba"
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap flex-1"
                 style={{ backgroundColor: GOLD, color: '#0d0d0d' }}
@@ -255,7 +252,7 @@ export function RelatoriosAdmin() {
               </button>
               <button
                 type="button"
-                onClick={() => openDocument('/api/crm/relatorios/expansao-gaia', { download: true }).catch(e => setError(e.message))}
+                onClick={() => openDocument('/api/crm/relatorios/expansao-gaia', { download: true }).catch(() => {})}
                 title="Descarregar o PDF"
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap"
                 style={{ backgroundColor: '#0d0d0d', color: GOLD }}

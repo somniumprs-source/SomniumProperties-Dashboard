@@ -17,8 +17,10 @@ if (authEnabled && supabase) {
   // segundos), renovando 60s antes. Antes usávamos uma janela cega de 5 min,
   // que podia servir um token já expirado (cacheado <5min mas perto do fim de
   // vida). Fallback de 5 min se expires_at não vier.
+  // Margem de 90s = igual à EXPIRY_MARGIN_MS do SDK, para renovarmos o cache
+  // ANTES de o servidor recusar e nunca dependermos de clock skew do device.
   const expiryFor = (session) => {
-    const exp = session?.expires_at ? session.expires_at * 1000 - 60000 : 0
+    const exp = session?.expires_at ? session.expires_at * 1000 - 90000 : 0
     return exp > Date.now() ? exp : Date.now() + 300000
   }
   const cacheSession = (session) => {
@@ -51,7 +53,14 @@ if (authEnabled && supabase) {
     _cachedToken = null
     _tokenExpiry = 0
     try { await supabase.auth.signOut() } catch { /* ignore */ }
-    // Reload força reinício do AuthProvider → ecrã de login.
+    // Guard anti-loop que SOBREVIVE ao reload (_recovering perde-se no reload):
+    // no máximo 1 reload por janela de 30s. Sem isto, uma chamada /api que dê
+    // 401 logo no arranque (sem sessão) entraria em reload infinito.
+    try {
+      const last = Number(sessionStorage.getItem('somnium:auth_reload_at') || 0)
+      if (Date.now() - last < 30000) return // já recarregámos há pouco → mostra login sem reload
+      sessionStorage.setItem('somnium:auth_reload_at', String(Date.now()))
+    } catch { /* sessionStorage indisponível → segue para reload */ }
     if (typeof window !== 'undefined') window.location.reload()
   }
 
@@ -75,7 +84,10 @@ if (authEnabled && supabase) {
       _tokenExpiry = 0
       const fresh = await forceRefreshToken()
       if (fresh) {
-        if (fresh !== token) {
+        // Não re-tentar pedidos cujo corpo não é re-enviável (FormData/stream já
+        // consumido por um upload) — re-enviar mandaria um corpo vazio/parcial.
+        const bodyReusable = options.body == null || typeof options.body === 'string'
+        if (fresh !== token && bodyReusable) {
           const retry = await _originalFetch(url, { ...options, headers: withActiveUserHeader({ ...options.headers, 'Authorization': `Bearer ${fresh}` }) })
           if (retry.status !== 401) return retry
         }

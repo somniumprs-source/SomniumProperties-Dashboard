@@ -68,8 +68,11 @@ export function AuthProvider({ children }) {
         console.error('[auth] getSession falhou:', err)
         setLoading(false)
       })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, s) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, s) => {
       setSession(s)
+      // TOKEN_REFRESHED (renovação ~horária do JWT) não muda o perfil — evitar
+      // o fetch redundante a /api/users/me a cada renovação.
+      if (event === 'TOKEN_REFRESHED') return
       if (s) await refreshProfile(s); else setProfile(null)
     })
     return () => { clearTimeout(timeoutId); subscription.unsubscribe() }

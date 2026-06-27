@@ -1000,9 +1000,10 @@ export function CRM() {
 
       // Auto-gerar relatório PDF ao criar imóvel
       if (isNew && tab === 'Imóveis' && saved.id) {
+        // openDocument trata o seu próprio feedback de erro (toast); aqui só o sucesso.
         openDocument(`/api/crm/imoveis/${saved.id}/relatorio`)
           .then(() => toast('Relatório PDF gerado automaticamente', 'success'))
-          .catch(e => { console.error('[relatorio auto]', e.message); toast('Não foi possível gerar o PDF automaticamente', 'error') })
+          .catch(e => console.error('[relatorio auto]', e.message))
       }
 
       setEditing(null)
@@ -1208,7 +1209,7 @@ export function CRM() {
               </div>
             )}
             <Button onClick={() => setEditing({})} icon={Plus}>Novo</Button>
-            <button type="button" onClick={() => openDocument('/api/crm/backup', { download: true, filename: 'backup.json' }).catch(e => toast(e.message, 'error'))} className="hidden sm:block px-3 py-2 bg-gray-100 text-gray-600 text-xs font-medium rounded-xl hover:bg-gray-200 transition-colors">
+            <button type="button" onClick={() => openDocument('/api/crm/backup', { download: true, filename: 'backup.json' }).catch(() => {})} className="hidden sm:block px-3 py-2 bg-gray-100 text-gray-600 text-xs font-medium rounded-xl hover:bg-gray-200 transition-colors">
               Backup
             </button>
           </div>

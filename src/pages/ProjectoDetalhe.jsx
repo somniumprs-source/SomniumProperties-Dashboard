@@ -1023,9 +1023,8 @@ function TabDocumentos({ negocio, imovel, fases, readOnly }) {
   useEffect(() => { load() }, [negocio.id])
 
   async function abrirPDF(url, { download = false } = {}) {
-    try {
-      await openDocument(url, { download })
-    } catch (e) { alert('Erro: ' + e.message) }
+    // openDocument trata o seu próprio feedback de erro (toast global).
+    try { await openDocument(url, { download }) } catch { /* já notificado */ }
   }
 
   async function uploadDocs(e) {

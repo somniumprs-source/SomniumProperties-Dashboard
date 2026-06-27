@@ -25,7 +25,7 @@ export function Relatorio({ imovelId, analises, flags, inconsistencias, resumoEs
     setExporting(true)
     try {
       await openDocument(`/api/crm/imoveis/${imovelId}/documento/relatorio_documental`, { download, refresh: true })
-    } finally {
+    } catch { /* openDocument já notificou por toast */ } finally {
       setExporting(false)
     }
   }

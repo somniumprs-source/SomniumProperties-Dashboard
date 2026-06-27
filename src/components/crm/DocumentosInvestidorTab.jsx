@@ -134,7 +134,7 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
                   <>
                     <button
                       type="button"
-                      onClick={() => openDocument(`/api/crm/imoveis/${doc.imovel_id}/relatorio-investidor`)}
+                      onClick={() => openDocument(`/api/crm/imoveis/${doc.imovel_id}/relatorio-investidor`).catch(() => {})}
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600"
                       title="Abrir PDF numa nova aba"
                     >
@@ -142,7 +142,7 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
                     </button>
                     <button
                       type="button"
-                      onClick={() => openDocument(`/api/crm/imoveis/${doc.imovel_id}/relatorio-investidor`, { download: true })}
+                      onClick={() => openDocument(`/api/crm/imoveis/${doc.imovel_id}/relatorio-investidor`, { download: true }).catch(() => {})}
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600"
                       title="Descarregar PDF para enviar a investidores"
                     >
