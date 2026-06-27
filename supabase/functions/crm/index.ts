@@ -1539,6 +1539,244 @@ app.get("/consultores/:id/interacoes", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
+// ── Gravacoes de chamadas (audio → transcricao Whisper local → analise IA) ─────
+const GRAVACOES_BUCKET = "Gravacoes";
+let _gravacoesTableEnsured = false;
+async function ensureGravacoesTable() {
+  if (_gravacoesTableEnsured) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS consultor_gravacoes (
+      id TEXT PRIMARY KEY,
+      consultor_id TEXT NOT NULL,
+      titulo TEXT,
+      data_chamada TEXT,
+      ficheiro_path TEXT,
+      ficheiro_nome TEXT,
+      duracao_seg INTEGER,
+      estado TEXT NOT NULL DEFAULT 'pendente',
+      erro TEXT,
+      transcricao TEXT,
+      analise JSONB,
+      created_at TEXT DEFAULT (NOW()::TEXT),
+      updated_at TEXT DEFAULT (NOW()::TEXT)
+    );
+    CREATE INDEX IF NOT EXISTS idx_gravacoes_consultor ON consultor_gravacoes(consultor_id);
+    CREATE INDEX IF NOT EXISTS idx_gravacoes_estado ON consultor_gravacoes(estado);
+  `);
+  _gravacoesTableEnsured = true;
+}
+
+function buildGravacaoPrompt(consultorNome: string) {
+  return `Es um analista comercial senior da Somnium Properties (investimento imobiliario em Coimbra, Portugal). Recebes a transcricao de uma chamada telefonica entre a nossa equipa e o consultor imobiliario ${consultorNome || "(desconhecido)"}.
+
+Analisa a chamada com o objectivo de OPTIMIZAR os nossos scripts comerciais. Responde APENAS com um objecto JSON valido (sem texto antes ou depois, sem markdown), com esta estrutura exacta:
+
+{
+  "resumo": "2-3 frases sobre o que aconteceu na chamada",
+  "sentimento": "positivo" | "neutro" | "negativo",
+  "classificacao": 1-5 (qualidade global da nossa abordagem),
+  "objeccoes": [{ "objeccao": "objeccao levantada pelo consultor", "resposta_dada": "como respondemos", "eficaz": true, "sugestao": "como responder melhor da proxima vez" }],
+  "pontos_fortes": ["o que corremos bem"],
+  "pontos_fracos": ["onde falhamos ou perdemos o controlo da conversa"],
+  "frases_eficazes": ["frases nossas que funcionaram e vale a pena reutilizar no script"],
+  "melhorias_script": ["alteracoes concretas a fazer ao script comercial"],
+  "proximo_passo": "accao recomendada com este consultor"
+}
+
+Escreve em portugues de Portugal, directo e profissional. Se a transcricao for insuficiente, devolve listas vazias mas mantem a estrutura.`;
+}
+
+async function analisarTranscricaoIA(transcricao: string, consultorNome: string) {
+  if (!Deno.env.get("ANTHROPIC_API_KEY")) throw new Error("ANTHROPIC_API_KEY nao configurada");
+  const client = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") });
+  const response = await client.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 2000,
+    messages: [{ role: "user", content: `${buildGravacaoPrompt(consultorNome)}\n\n--- TRANSCRICAO ---\n${transcricao}` }],
+  });
+  const respText = (response.content?.[0] as any)?.text || "{}";
+  const jsonMatch = respText.match(/\{[\s\S]*\}/);
+  return JSON.parse(jsonMatch?.[0] || respText);
+}
+
+async function nomeConsultor(id: string): Promise<string> {
+  try {
+    const { rows: [r] } = await pool.query("SELECT nome FROM consultores WHERE id = $1", [id]);
+    return r?.nome || "";
+  } catch { return ""; }
+}
+
+// Upload de uma gravacao de chamada para um consultor.
+app.post("/consultores/:id/gravacoes", async (c: any) => {
+  try {
+    await ensureGravacoesTable();
+    if (!supabase) return c.json({ error: "Storage indisponivel" }, 503);
+    const consultorId = c.req.param("id");
+    const { rows: [cons] } = await pool.query("SELECT id, nome FROM consultores WHERE id = $1", [consultorId]);
+    if (!cons) return c.json({ error: "Consultor nao encontrado" }, 404);
+
+    const form = await c.req.formData();
+    const fileRaw = form.get("audio");
+    const file = fileRaw instanceof File ? fileRaw : null;
+    if (!file) return c.json({ error: "Nenhum ficheiro de audio recebido" }, 400);
+    if (file.size > 200 * 1024 * 1024) return c.json({ error: "Ficheiro demasiado grande (max. 200MB)." }, 400);
+
+    const id = crypto.randomUUID();
+    const ext = (file.name.match(/\.[a-z0-9]+$/i)?.[0] || ".mp3").toLowerCase();
+    const storagePath = `${consultorId}/${id}${ext}`;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    await uploadPrivate(GRAVACOES_BUCKET, storagePath, bytes, file.type || "application/octet-stream");
+
+    const now = new Date().toISOString();
+    const titulo = (typeof form.get("titulo") === "string" && form.get("titulo")) || file.name;
+    const dataChamada = (typeof form.get("data_chamada") === "string" && form.get("data_chamada")) || now;
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO consultor_gravacoes
+        (id, consultor_id, titulo, data_chamada, ficheiro_path, ficheiro_nome, estado, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,'pendente',$7,$7) RETURNING *`,
+      [id, consultorId, titulo, dataChamada, storagePath, file.name, now],
+    );
+    return c.json(row);
+  } catch (e) {
+    console.error("[gravacoes upload]", (e as Error).message);
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+// Lista de gravacoes de um consultor.
+app.get("/consultores/:id/gravacoes", async (c: any) => {
+  try {
+    await ensureGravacoesTable();
+    const { rows } = await pool.query(
+      `SELECT * FROM consultor_gravacoes WHERE consultor_id = $1 ORDER BY data_chamada DESC, created_at DESC`,
+      [c.req.param("id")],
+    );
+    return c.json(rows);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// Worker: gravacoes a aguardar transcricao, com signed URL para o audio.
+app.get("/gravacoes/pendentes", async (c: any) => {
+  try {
+    await ensureGravacoesTable();
+    if (!supabase) return c.json([]);
+    const { rows } = await pool.query(
+      `SELECT g.id, g.consultor_id, g.ficheiro_path, g.ficheiro_nome, c.nome AS consultor_nome
+       FROM consultor_gravacoes g LEFT JOIN consultores c ON c.id = g.consultor_id
+       WHERE g.estado = 'pendente' ORDER BY g.created_at ASC LIMIT 5`,
+    );
+    const out: any[] = [];
+    for (const r of rows) {
+      const { data: signed } = await supabase.storage.from(GRAVACOES_BUCKET).createSignedUrl(r.ficheiro_path, 60 * 60);
+      out.push({ ...r, audio_url: signed?.signedUrl || null });
+    }
+    return c.json(out);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// Worker: marcar como em transcricao (lock optimista).
+app.post("/gravacoes/:id/iniciar-transcricao", async (c: any) => {
+  try {
+    const { rows: [row] } = await pool.query(
+      `UPDATE consultor_gravacoes SET estado = 'a_transcrever', updated_at = $2
+       WHERE id = $1 AND estado = 'pendente' RETURNING id`,
+      [c.req.param("id"), new Date().toISOString()],
+    );
+    return c.json({ ok: !!row });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// Worker: gravar transcricao e disparar analise IA automaticamente.
+app.post("/gravacoes/:id/transcricao", async (c: any) => {
+  const id = c.req.param("id");
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const transcricao = typeof body.transcricao === "string" ? body.transcricao : "";
+    if (!transcricao.trim()) return c.json({ error: "Transcricao vazia" }, 400);
+    const now = new Date().toISOString();
+    const { rows: [g] } = await pool.query(
+      `UPDATE consultor_gravacoes SET transcricao = $2, duracao_seg = $3, estado = 'transcrito', erro = NULL, updated_at = $4
+       WHERE id = $1 RETURNING *`,
+      [id, transcricao, body.duracao_seg ?? null, now],
+    );
+    if (!g) return c.json({ error: "Gravacao nao encontrada" }, 404);
+
+    try {
+      const analise = await analisarTranscricaoIA(transcricao, await nomeConsultor(g.consultor_id));
+      await pool.query(
+        `UPDATE consultor_gravacoes SET analise = $2, estado = 'analisado', updated_at = $3 WHERE id = $1`,
+        [id, JSON.stringify(analise), new Date().toISOString()],
+      );
+    } catch (e) {
+      await pool.query(
+        `UPDATE consultor_gravacoes SET erro = $2, updated_at = $3 WHERE id = $1`,
+        [id, `Analise: ${(e as Error).message}`, new Date().toISOString()],
+      );
+    }
+    const { rows: [final] } = await pool.query("SELECT * FROM consultor_gravacoes WHERE id = $1", [id]);
+    return c.json(final);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// Worker: reportar falha de transcricao.
+app.post("/gravacoes/:id/falha", async (c: any) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { rows: [row] } = await pool.query(
+      `UPDATE consultor_gravacoes SET estado = 'erro', erro = $2, updated_at = $3 WHERE id = $1 RETURNING id`,
+      [c.req.param("id"), String(body.erro || "Falha na transcricao").slice(0, 500), new Date().toISOString()],
+    );
+    return c.json({ ok: !!row });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// Repor uma gravacao em erro para 'pendente' (re-tentar transcricao).
+app.post("/gravacoes/:id/retomar", async (c: any) => {
+  try {
+    const { rows: [row] } = await pool.query(
+      `UPDATE consultor_gravacoes SET estado = 'pendente', erro = NULL, updated_at = $2
+       WHERE id = $1 AND estado IN ('erro','a_transcrever') RETURNING *`,
+      [c.req.param("id"), new Date().toISOString()],
+    );
+    if (!row) return c.json({ error: "Gravacao nao encontrada ou nao retomavel" }, 404);
+    return c.json(row);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// (Re)correr a analise comercial sobre a transcricao existente.
+app.post("/gravacoes/:id/analisar", async (c: any) => {
+  const id = c.req.param("id");
+  try {
+    await ensureGravacoesTable();
+    const { rows: [g] } = await pool.query("SELECT * FROM consultor_gravacoes WHERE id = $1", [id]);
+    if (!g) return c.json({ error: "Gravacao nao encontrada" }, 404);
+    if (!g.transcricao?.trim()) return c.json({ error: "Sem transcricao para analisar" }, 400);
+    await pool.query(`UPDATE consultor_gravacoes SET estado = 'a_analisar', updated_at = $2 WHERE id = $1`,
+      [id, new Date().toISOString()]);
+    const analise = await analisarTranscricaoIA(g.transcricao, await nomeConsultor(g.consultor_id));
+    const { rows: [final] } = await pool.query(
+      `UPDATE consultor_gravacoes SET analise = $2, estado = 'analisado', erro = NULL, updated_at = $3 WHERE id = $1 RETURNING *`,
+      [id, JSON.stringify(analise), new Date().toISOString()],
+    );
+    return c.json(final);
+  } catch (e) {
+    await pool.query(`UPDATE consultor_gravacoes SET estado = 'transcrito', erro = $2, updated_at = $3 WHERE id = $1`,
+      [id, `Analise: ${(e as Error).message}`, new Date().toISOString()]).catch(() => {});
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+// Apagar uma gravacao (Storage + BD).
+app.delete("/gravacoes/:id", async (c: any) => {
+  try {
+    const { rows: [g] } = await pool.query("SELECT ficheiro_path FROM consultor_gravacoes WHERE id = $1", [c.req.param("id")]);
+    if (!g) return c.json({ error: "Gravacao nao encontrada" }, 404);
+    if (g.ficheiro_path) await removeFromStorage(GRAVACOES_BUCKET, g.ficheiro_path);
+    await pool.query("DELETE FROM consultor_gravacoes WHERE id = $1", [c.req.param("id")]);
+    return c.json({ ok: true });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
 app.get("/investidores/:id/interacoes", async (c: any) => {
   try {
     const { rows } = await pool.query(

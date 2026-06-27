@@ -549,6 +549,26 @@ export async function initSchema() {
       CREATE INDEX IF NOT EXISTS idx_followups_consultor ON consultor_followups(consultor_id);
       CREATE INDEX IF NOT EXISTS idx_followups_data ON consultor_followups(data DESC);
 
+      -- Gravacoes de chamadas com consultores (audio no Storage; transcricao
+      -- por Whisper local + analise comercial por Claude para optimizar scripts).
+      CREATE TABLE IF NOT EXISTS consultor_gravacoes (
+        id TEXT PRIMARY KEY,
+        consultor_id TEXT NOT NULL,
+        titulo TEXT,
+        data_chamada TEXT,
+        ficheiro_path TEXT,
+        ficheiro_nome TEXT,
+        duracao_seg INTEGER,
+        estado TEXT NOT NULL DEFAULT 'pendente',
+        erro TEXT,
+        transcricao TEXT,
+        analise JSONB,
+        created_at TEXT DEFAULT (NOW()::TEXT),
+        updated_at TEXT DEFAULT (NOW()::TEXT)
+      );
+      CREATE INDEX IF NOT EXISTS idx_gravacoes_consultor ON consultor_gravacoes(consultor_id);
+      CREATE INDEX IF NOT EXISTS idx_gravacoes_estado ON consultor_gravacoes(estado);
+
       -- Migrar follow-ups legados (campos directos no consultor) para o histórico
       INSERT INTO consultor_followups (id, consultor_id, data, motivo, proximo_follow_up, created_at, updated_at)
       SELECT gen_random_uuid()::text, c.id, c.data_follow_up, c.motivo_follow_up, c.data_proximo_follow_up,

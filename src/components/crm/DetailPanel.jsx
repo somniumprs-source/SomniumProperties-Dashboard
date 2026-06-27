@@ -17,6 +17,7 @@ const InteracoesTab = lazy(() => import('./InteracoesTab.jsx').then(m => ({ defa
 const InteracoesInvestidorTab = lazy(() => import('./InteracoesInvestidorTab.jsx').then(m => ({ default: m.InteracoesInvestidorTab })))
 const MatchingInvestidoresTab = lazy(() => import('./MatchingInvestidoresTab.jsx').then(m => ({ default: m.MatchingInvestidoresTab })))
 const WhatsAppTab = lazy(() => import('./WhatsAppTab.jsx').then(m => ({ default: m.WhatsAppTab })))
+const GravacoesTab = lazy(() => import('./GravacoesTab.jsx').then(m => ({ default: m.GravacoesTab })))
 const FicheirosTab = lazy(() => import('./FicheirosTab.jsx').then(m => ({ default: m.FicheirosTab })))
 const ChecklistTab = lazy(() => import('./ChecklistTab.jsx').then(m => ({ default: m.ChecklistTab })))
 const VisitasTab = lazy(() => import('./VisitasTab.jsx').then(m => ({ default: m.VisitasTab })))
@@ -818,6 +819,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
     { key: 'checklist', label: 'Checklist', icon: '📋', show: type === 'Imóveis' },
     { key: 'whatsapp', label: 'WhatsApp', icon: '📱', show: type === 'Consultores' },
     { key: 'interacoes', label: `Interacções (${data?.interacoes?.length ?? 0})`, icon: '💬', show: type === 'Consultores' },
+    { key: 'gravacoes', label: 'Gravações', icon: '🎙️', show: type === 'Consultores' },
     { key: 'interacoes_inv', label: 'Chamadas', icon: '📞', show: type === 'Investidores' },
     { key: 'documentos', label: `Documentos (${data?.documentos?.length ?? 0})`, icon: '📎', show: type === 'Investidores' },
     { key: 'relatorios', label: `Reuniões (${reunioes.length})`, icon: '📄', show: (type === 'Investidores' || type === 'Consultores') },
@@ -916,6 +918,11 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
         <div className="p-4 sm:p-6">
           <InteracoesTab consultorId={data.id} onUpdate={loadData} controloManual={data.controlo_manual}
             autoOpenForm={openContactoForm} onAutoOpenConsumed={() => setOpenContactoForm(false)} />
+        </div>
+
+      ) : type === 'Consultores' && activeTab === 'gravacoes' ? (
+        <div className="p-4 sm:p-6">
+          <GravacoesTab consultorId={data.id} consultorNome={data.nome} />
         </div>
 
       ) : type === 'Imóveis' && activeTab === 'checklist' ? (

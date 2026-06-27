@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.somnium.transcrever-gravacoes</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/node</string>
+        <string>/Users/alexandremendes/Desktop/Somnium Properties/transcrever-gravacoes.mjs</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/alexandremendes/Desktop/Somnium Properties</string>
+
+    <!-- Corre a cada 3 minutos: apanha gravacoes pendentes e transcreve. -->
+    <key>StartInterval</key>
+    <integer>180</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/alexandremendes/Desktop/Somnium Properties/transcrever-gravacoes-stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/alexandremendes/Desktop/Somnium Properties/transcrever-gravacoes-stderr.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/alexandremendes/Library/Python/3.9/bin</string>
+
+        <!-- Base das Edge Functions (producao). Deixa como esta salvo se mudar de projecto. -->
+        <key>SOMNIUM_API_BASE</key>
+        <string>https://mjgusjuougzoeiyavsor.supabase.co/functions/v1</string>
+
+        <!-- Motor de transcricao:
+             Opcao A (recomendada, rapida no Mac): whisper.cpp.
+               Descomenta WHISPER_MODEL com o caminho do modelo ggml descarregado.
+             Opcao B (fallback simples): whisper python (pip install openai-whisper).
+               Deixa WHISPER_MODEL vazio; usa WHISPER_PY_MODEL (default: medium). -->
+        <!-- <key>WHISPER_MODEL</key>
+        <string>/Users/alexandremendes/whisper-models/ggml-large-v3.bin</string> -->
+
+        <key>WHISPER_PY_MODEL</key>
+        <string>medium</string>
+    </dict>
+</dict>
+</plist>

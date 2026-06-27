@@ -115,6 +115,17 @@ const uploadDocs = multer({
   },
 })
 
+// Gravacoes de chamadas (audio) — em memoria, vao direto para o Storage privado.
+// Limite generoso (200MB) porque uma chamada longa em WAV pode ser pesada.
+const uploadAudio = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 200 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = /\.(mp3|m4a|wav|aac|ogg|opus|flac|mp4|webm)$/i
+    cb(null, allowed.test(path.extname(file.originalname)))
+  },
+})
+
 // ── Auth helper para CRM (CRM bypassa auth global, mas precisamos para filtros) ──
 const _supabaseCrm = process.env.SUPABASE_SERVICE_KEY
   ? createClient(process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.supabase.co', process.env.SUPABASE_SERVICE_KEY)
@@ -1306,6 +1317,214 @@ router.delete('/consultores/:id/followups/:followupId', async (req, res) => {
       data_proximo_follow_up: rows[0]?.proximo_follow_up || null,
     })
 
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Gravacoes de chamadas (audio → transcricao Whisper → analise IA) ──────────
+const GRAVACOES_BUCKET = 'Gravacoes'
+
+// Prompt da analise comercial. Foco: optimizar os scripts comerciais da Somnium.
+function buildGravacaoPrompt(consultorNome) {
+  return `Es um analista comercial senior da Somnium Properties (investimento imobiliario em Coimbra, Portugal). Recebes a transcricao de uma chamada telefonica entre a nossa equipa e o consultor imobiliario ${consultorNome || '(desconhecido)'}.
+
+Analisa a chamada com o objectivo de OPTIMIZAR os nossos scripts comerciais. Responde APENAS com um objecto JSON valido (sem texto antes ou depois, sem markdown), com esta estrutura exacta:
+
+{
+  "resumo": "2-3 frases sobre o que aconteceu na chamada",
+  "sentimento": "positivo" | "neutro" | "negativo",
+  "classificacao": 1-5 (qualidade global da nossa abordagem),
+  "objeccoes": [{ "objeccao": "objeccao levantada pelo consultor", "resposta_dada": "como respondemos", "eficaz": true|false, "sugestao": "como responder melhor da proxima vez" }],
+  "pontos_fortes": ["o que corremos bem"],
+  "pontos_fracos": ["onde falhamos ou perdemos o controlo da conversa"],
+  "frases_eficazes": ["frases nossas que funcionaram e vale a pena reutilizar no script"],
+  "melhorias_script": ["alteracoes concretas a fazer ao script comercial"],
+  "proximo_passo": "accao recomendada com este consultor"
+}
+
+Escreve em portugues de Portugal, directo e profissional. Se a transcricao for insuficiente, devolve listas vazias mas mantem a estrutura.`
+}
+
+// Corre a analise da transcricao com o Claude. Devolve o objecto parseado ou lanca.
+async function analisarTranscricaoIA(transcricao, consultorNome) {
+  if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY nao configurada')
+  const Anthropic = (await import('@anthropic-ai/sdk')).default
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 2000,
+    messages: [{ role: 'user', content: `${buildGravacaoPrompt(consultorNome)}\n\n--- TRANSCRICAO ---\n${transcricao}` }],
+  })
+  const respText = response.content?.[0]?.text || '{}'
+  const jsonMatch = respText.match(/\{[\s\S]*\}/)
+  return JSON.parse(jsonMatch?.[0] || respText)
+}
+
+// Upload de uma gravacao de chamada para um consultor.
+router.post('/consultores/:id/gravacoes', uploadRateLimit, uploadAudio.single('audio'), async (req, res) => {
+  try {
+    if (!supabaseStorage) return res.status(503).json({ error: 'Supabase Storage nao configurado' })
+    const cons = await Consultores.getById(req.params.id)
+    if (!cons) return res.status(404).json({ error: 'Consultor nao encontrado' })
+    if (!req.file) return res.status(400).json({ error: 'Nenhum ficheiro de audio recebido' })
+
+    // Garantir bucket privado (partilhado com producao no mesmo projecto Supabase).
+    try {
+      const { data: buckets } = await supabaseStorage.storage.listBuckets()
+      if (!(buckets || []).some(b => b.name === GRAVACOES_BUCKET)) {
+        await supabaseStorage.storage.createBucket(GRAVACOES_BUCKET, { public: false })
+      }
+    } catch { /* segue; o upload devolve erro claro se faltar */ }
+
+    const id = randomUUID()
+    const ext = (path.extname(req.file.originalname) || '.mp3').toLowerCase()
+    const storagePath = `${req.params.id}/${id}${ext}`
+    const { error: upErr } = await supabaseStorage.storage
+      .from(GRAVACOES_BUCKET)
+      .upload(storagePath, req.file.buffer, { contentType: req.file.mimetype || 'application/octet-stream', upsert: true })
+    if (upErr) return res.status(500).json({ error: `Storage: ${upErr.message}` })
+
+    const now = new Date().toISOString()
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO consultor_gravacoes
+        (id, consultor_id, titulo, data_chamada, ficheiro_path, ficheiro_nome, estado, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,'pendente',$7,$7) RETURNING *`,
+      [id, req.params.id, req.body.titulo || req.file.originalname, req.body.data_chamada || now,
+       storagePath, req.file.originalname, now]
+    )
+    res.json(row)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Lista de gravacoes de um consultor (sem o blob; com transcricao/analise).
+router.get('/consultores/:id/gravacoes', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM consultor_gravacoes WHERE consultor_id = $1 ORDER BY data_chamada DESC, created_at DESC`,
+      [req.params.id]
+    )
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Worker: gravacoes a aguardar transcricao, com signed URL para descarregar o audio.
+router.get('/gravacoes/pendentes', async (req, res) => {
+  try {
+    if (!supabaseStorage) return res.json([])
+    const { rows } = await pool.query(
+      `SELECT g.id, g.consultor_id, g.ficheiro_path, g.ficheiro_nome, c.nome AS consultor_nome
+       FROM consultor_gravacoes g LEFT JOIN consultores c ON c.id = g.consultor_id
+       WHERE g.estado = 'pendente' ORDER BY g.created_at ASC LIMIT 5`
+    )
+    const out = []
+    for (const r of rows) {
+      const { data: signed } = await supabaseStorage.storage
+        .from(GRAVACOES_BUCKET).createSignedUrl(r.ficheiro_path, 60 * 60)
+      out.push({ ...r, audio_url: signed?.signedUrl || null })
+    }
+    res.json(out)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Worker: marcar como em transcricao (evita corridas se houver 2 workers).
+router.post('/gravacoes/:id/iniciar-transcricao', async (req, res) => {
+  try {
+    const { rows: [row] } = await pool.query(
+      `UPDATE consultor_gravacoes SET estado = 'a_transcrever', updated_at = $2
+       WHERE id = $1 AND estado = 'pendente' RETURNING id`,
+      [req.params.id, new Date().toISOString()]
+    )
+    res.json({ ok: !!row })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Worker: gravar a transcricao e disparar a analise IA automaticamente.
+router.post('/gravacoes/:id/transcricao', async (req, res) => {
+  try {
+    const { transcricao, duracao_seg } = req.body || {}
+    if (!transcricao?.trim()) return res.status(400).json({ error: 'Transcricao vazia' })
+    const now = new Date().toISOString()
+    const { rows: [g] } = await pool.query(
+      `UPDATE consultor_gravacoes SET transcricao = $2, duracao_seg = $3, estado = 'transcrito', erro = NULL, updated_at = $4
+       WHERE id = $1 RETURNING *`,
+      [req.params.id, transcricao, duracao_seg ?? null, now]
+    )
+    if (!g) return res.status(404).json({ error: 'Gravacao nao encontrada' })
+
+    // Analise comercial (best-effort): falha nao bloqueia a transcricao.
+    try {
+      const cons = await Consultores.getById(g.consultor_id)
+      const analise = await analisarTranscricaoIA(transcricao, cons?.nome)
+      await pool.query(
+        `UPDATE consultor_gravacoes SET analise = $2, estado = 'analisado', updated_at = $3 WHERE id = $1`,
+        [req.params.id, JSON.stringify(analise), new Date().toISOString()]
+      )
+    } catch (e) {
+      await pool.query(
+        `UPDATE consultor_gravacoes SET erro = $2, updated_at = $3 WHERE id = $1`,
+        [req.params.id, `Analise: ${e.message}`, new Date().toISOString()]
+      )
+    }
+    const { rows: [final] } = await pool.query('SELECT * FROM consultor_gravacoes WHERE id = $1', [req.params.id])
+    res.json(final)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Worker: reportar falha de transcricao (audio corrompido, whisper falhou, etc.).
+router.post('/gravacoes/:id/falha', async (req, res) => {
+  try {
+    const { rows: [row] } = await pool.query(
+      `UPDATE consultor_gravacoes SET estado = 'erro', erro = $2, updated_at = $3 WHERE id = $1 RETURNING id`,
+      [req.params.id, (req.body?.erro || 'Falha na transcricao').slice(0, 500), new Date().toISOString()]
+    )
+    res.json({ ok: !!row })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Repor uma gravacao em erro para 'pendente' (re-tentar transcricao).
+router.post('/gravacoes/:id/retomar', async (req, res) => {
+  try {
+    const { rows: [row] } = await pool.query(
+      `UPDATE consultor_gravacoes SET estado = 'pendente', erro = NULL, updated_at = $2
+       WHERE id = $1 AND estado IN ('erro','a_transcrever') RETURNING *`,
+      [req.params.id, new Date().toISOString()]
+    )
+    if (!row) return res.status(404).json({ error: 'Gravacao nao encontrada ou nao retomavel' })
+    res.json(row)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// (Re)correr a analise comercial sobre a transcricao existente.
+router.post('/gravacoes/:id/analisar', async (req, res) => {
+  try {
+    const { rows: [g] } = await pool.query('SELECT * FROM consultor_gravacoes WHERE id = $1', [req.params.id])
+    if (!g) return res.status(404).json({ error: 'Gravacao nao encontrada' })
+    if (!g.transcricao?.trim()) return res.status(400).json({ error: 'Sem transcricao para analisar' })
+    await pool.query(`UPDATE consultor_gravacoes SET estado = 'a_analisar', updated_at = $2 WHERE id = $1`,
+      [req.params.id, new Date().toISOString()])
+    const cons = await Consultores.getById(g.consultor_id)
+    const analise = await analisarTranscricaoIA(g.transcricao, cons?.nome)
+    const { rows: [final] } = await pool.query(
+      `UPDATE consultor_gravacoes SET analise = $2, estado = 'analisado', erro = NULL, updated_at = $3 WHERE id = $1 RETURNING *`,
+      [req.params.id, JSON.stringify(analise), new Date().toISOString()]
+    )
+    res.json(final)
+  } catch (e) {
+    await pool.query(`UPDATE consultor_gravacoes SET estado = 'transcrito', erro = $2, updated_at = $3 WHERE id = $1`,
+      [req.params.id, `Analise: ${e.message}`, new Date().toISOString()]).catch(() => {})
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Apagar uma gravacao (Storage + BD).
+router.delete('/gravacoes/:id', async (req, res) => {
+  try {
+    const { rows: [g] } = await pool.query('SELECT ficheiro_path FROM consultor_gravacoes WHERE id = $1', [req.params.id])
+    if (!g) return res.status(404).json({ error: 'Gravacao nao encontrada' })
+    if (supabaseStorage && g.ficheiro_path) {
+      await supabaseStorage.storage.from(GRAVACOES_BUCKET).remove([g.ficheiro_path]).catch(() => {})
+    }
+    await pool.query('DELETE FROM consultor_gravacoes WHERE id = $1', [req.params.id])
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
