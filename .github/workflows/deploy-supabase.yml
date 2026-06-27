@@ -10,6 +10,13 @@ on:
       - "supabase/config.toml"
   workflow_dispatch: {}
 
+# Serializa deploys do mesmo branch (evita duas publicacoes a correr em paralelo
+# contra o Supabase). Nao cancela em curso: cada push publica funcoes diferentes
+# e cancelar a meio podia deixar uma funcao por publicar.
+concurrency:
+  group: deploy-edge-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -18,6 +25,9 @@ jobs:
       SUPABASE_PROJECT_REF: mjgusjuougzoeiyavsor
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Precisamos do commit anterior para fazer o diff das funcoes alteradas.
+          fetch-depth: 2
       - uses: supabase/setup-cli@v1
         with:
           # Fixado: a v2.102.0 (29-05-2026) passou a rejeitar bundles grandes
@@ -25,23 +35,74 @@ jobs:
           # partindo o deploy. A v2.101.0 (a ultima que correu com sucesso) nao
           # tem esse problema. Rever quando o Supabase corrigir em versoes futuras.
           version: 2.101.0
-      - name: Deploy Edge Functions (uma a uma, resiliente)
-        # Deploy funcao-a-funcao em vez de em bloco: uma funcao que falhe (ex:
-        # crons grandes que batem no limite 413 do Supabase) nao bloqueia o
-        # deploy das restantes (crm, dashboard, ...). Falha o job no fim apenas
-        # se uma funcao CRITICA nao publicou; crons grandes apenas avisam.
+
+      - name: Preflight — validar token Supabase
+        # Causa #1 historica de falhas: SUPABASE_ACCESS_TOKEN invalido/expirado,
+        # que devolve 401 em TODAS as funcoes. Verificamos uma vez ao inicio com
+        # uma mensagem accionavel, em vez de 24 falhas confusas pelo meio.
+        run: |
+          if ! supabase functions list --project-ref "$SUPABASE_PROJECT_REF" >/dev/null 2>err.log; then
+            if grep -qi "401\|Unauthorized" err.log; then
+              echo "::error::SUPABASE_ACCESS_TOKEN invalido ou expirado (401). Renovar o token no dashboard Supabase e correr: gh secret set SUPABASE_ACCESS_TOKEN"
+            else
+              echo "::error::Nao foi possivel contactar a API do Supabase:"; cat err.log
+            fi
+            exit 1
+          fi
+          echo "Token Supabase valido."
+
+      - name: Determinar funcoes a publicar
+        id: alvo
+        # So publica as funcoes que mudaram neste push. Reduz tempo e superficie
+        # de falha (um push ao crm publica so o crm). Regras:
+        #  - workflow_dispatch ou sem commit anterior -> publica tudo.
+        #  - mudou _shared/ ou config.toml -> afecta todas -> publica tudo.
+        #  - caso contrario -> so as pastas de funcao alteradas.
+        run: |
+          TODAS=$(for d in supabase/functions/*/; do b=$(basename "$d"); [ "$b" = "_shared" ] && continue; echo "$b"; done | sort | tr '\n' ' ')
+
+          if [ "${{ github.event_name }}" != "push" ] || ! git rev-parse HEAD^ >/dev/null 2>&1; then
+            echo "Motivo: dispatch manual ou sem commit anterior -> publicar tudo."
+            echo "funcoes=$TODAS" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          MUDADOS=$(git diff --name-only HEAD^ HEAD -- supabase/functions/ supabase/config.toml || true)
+
+          if echo "$MUDADOS" | grep -qE "supabase/functions/_shared/|supabase/config\.toml"; then
+            echo "Motivo: _shared/ ou config.toml mudaram (afectam todas) -> publicar tudo."
+            echo "funcoes=$TODAS" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          FNS=$(echo "$MUDADOS" | sed -nE 's#^supabase/functions/([^/]+)/.*#\1#p' | grep -v '^_shared$' | sort -u | tr '\n' ' ')
+          echo "Funcoes alteradas: ${FNS:-(nenhuma)}"
+          echo "funcoes=$FNS" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy Edge Functions (so alteradas, com retry)
+        if: steps.alvo.outputs.funcoes != ''
+        # Deploy funcao-a-funcao com ate 3 tentativas (apanha 401/5xx transitorios
+        # do Supabase sem chumbar o job). Falha o job no fim apenas se uma funcao
+        # CRITICA nao publicou; crons grandes (>limite) apenas avisam.
         run: |
           CRITICAS="crm dashboard users sops calendar voice"
           falhas_criticas=""
           avisos=""
-          for dir in supabase/functions/*/; do
-            fn=$(basename "$dir")
-            [ "$fn" = "_shared" ] && continue
+          for fn in ${{ steps.alvo.outputs.funcoes }}; do
+            [ -d "supabase/functions/$fn" ] || { echo "ignorado (pasta removida): $fn"; continue; }
             echo "::group::deploy $fn"
-            if supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF"; then
-              echo "OK: $fn"
-            else
-              echo "FALHOU: $fn"
+            ok=""
+            for tentativa in 1 2 3; do
+              if supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF"; then
+                echo "OK: $fn (tentativa $tentativa)"
+                ok=1
+                break
+              fi
+              echo "Tentativa $tentativa falhou para $fn."
+              [ "$tentativa" -lt 3 ] && { echo "Nova tentativa em 10s..."; sleep 10; }
+            done
+            if [ -z "$ok" ]; then
+              echo "FALHOU: $fn (apos 3 tentativas)"
               if echo " $CRITICAS " | grep -q " $fn "; then
                 falhas_criticas="$falhas_criticas $fn"
               else
