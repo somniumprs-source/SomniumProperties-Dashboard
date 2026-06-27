@@ -29,23 +29,31 @@
 
     <key>EnvironmentVariables</key>
     <dict>
+        <!-- ~/bin tem o ffmpeg (usado pelo whisper); ~/Library/Python/3.9/bin tem o whisper. -->
         <key>PATH</key>
-        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/alexandremendes/Library/Python/3.9/bin</string>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/alexandremendes/bin:/Users/alexandremendes/Library/Python/3.9/bin</string>
 
         <!-- Base das Edge Functions (producao). Deixa como esta salvo se mudar de projecto. -->
         <key>SOMNIUM_API_BASE</key>
         <string>https://mjgusjuougzoeiyavsor.supabase.co/functions/v1</string>
 
-        <!-- Motor de transcricao:
-             Opcao A (recomendada, rapida no Mac): whisper.cpp.
-               Descomenta WHISPER_MODEL com o caminho do modelo ggml descarregado.
-             Opcao B (fallback simples): whisper python (pip install openai-whisper).
-               Deixa WHISPER_MODEL vazio; usa WHISPER_PY_MODEL (default: medium). -->
-        <!-- <key>WHISPER_MODEL</key>
-        <string>/Users/alexandremendes/whisper-models/ggml-large-v3.bin</string> -->
+        <!-- Autenticacao do worker no crm (rotas /gravacoes). Preencher com o valor
+             de INTERNAL_API_KEY do .env do dashboard (NAO commitar com valor real). -->
+        <key>INTERNAL_API_KEY</key>
+        <string></string>
+
+        <!-- Motor: whisper python (openai-whisper). Modelo small = bom equilibrio
+             qualidade/velocidade para 8GB RAM em CPU. Sobe para medium se quiseres
+             mais qualidade (mais lento). Para usar whisper.cpp (mais rapido), define
+             WHISPER_MODEL com o caminho de um modelo ggml e instala whisper-cli. -->
+        <key>WHISPER_PY</key>
+        <string>/Users/alexandremendes/Library/Python/3.9/bin/whisper</string>
 
         <key>WHISPER_PY_MODEL</key>
-        <string>medium</string>
+        <string>small</string>
+
+        <key>FFMPEG_BIN</key>
+        <string>/Users/alexandremendes/bin/ffmpeg</string>
     </dict>
 </dict>
 </plist>

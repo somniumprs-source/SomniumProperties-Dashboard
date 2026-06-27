@@ -10,7 +10,7 @@
 // first-match-wins tal como o Express, por isso os endpoints especificos
 // continuam registados ANTES dos crudRoutes/:id correspondentes.
 import { createApp } from "../_shared/hono.ts";
-import { requireAuth } from "../_shared/auth.ts";
+import { requireAuth, requireInternalKey } from "../_shared/auth.ts";
 import pool from "../_shared/pg.ts";
 import { withAuditUser } from "../_shared/audit.ts";
 import {
@@ -420,6 +420,10 @@ async function refreshEstudoLocalizacaoSeNecessario(imovel: any): Promise<any> {
 // (Substitui a proteccao do middleware global do Express no Render.) ──
 app.use("*", async (c, next) => {
   if (c.req.path.endsWith("/_health")) return await next();
+  // Worker de transcricao (launchd) autentica por INTERNAL_API_KEY (x-api-key)
+  // nas rotas /gravacoes/* — nao tem sessao Supabase. requireInternalKey devolve
+  // true em dev (sem key configurada). Demais rotas exigem JWT como sempre.
+  if (c.req.path.includes("/gravacoes") && requireInternalKey(c)) return await next();
   return await requireAuth(c, next);
 });
 

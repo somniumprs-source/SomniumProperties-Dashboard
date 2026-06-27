@@ -29,6 +29,7 @@ import { join } from 'node:path'
 
 const API_BASE = (process.env.SOMNIUM_API_BASE || 'https://mjgusjuougzoeiyavsor.supabase.co/functions/v1').replace(/\/$/, '')
 const ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || ''
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || ''
 const WHISPER_MODEL = process.env.WHISPER_MODEL || ''
 const WHISPER_BIN = process.env.WHISPER_BIN || 'whisper-cli'
 const WHISPER_PY = process.env.WHISPER_PY || 'whisper'
@@ -41,6 +42,9 @@ const err = (...a) => console.error(`[${new Date().toISOString()}]`, ...a)
 
 function apiHeaders(extra = {}) {
   const h = { ...extra }
+  // O crm aceita a INTERNAL_API_KEY (x-api-key) nas rotas /gravacoes.
+  if (INTERNAL_API_KEY) h['x-api-key'] = INTERNAL_API_KEY
+  // apikey/anon: opcional, util se o gateway das functions a exigir.
   if (ANON_KEY) { h['apikey'] = ANON_KEY; h['Authorization'] = `Bearer ${ANON_KEY}` }
   return h
 }
