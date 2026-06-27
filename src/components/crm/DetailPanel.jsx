@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
 import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, RefreshCw, MoreVertical, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin, Eye } from 'lucide-react'
-import { apiFetch, resolveApiUrl } from '../../lib/api.js'
+import { apiFetch, openDocument } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { PartilharAcesso } from '../PartilharAcesso.jsx'
 import { FollowUpsSection } from './FollowUpsSection.jsx'
@@ -32,7 +32,6 @@ function TabFallback() {
 import { Combobox } from '../ui/Combobox.jsx'
 import coimbraFreguesiasData from '../../constants/coimbra-freguesias.json'
 import ampFreguesiasData from '../../constants/amp-freguesias.json'
-import { supabase } from '../../lib/supabase.js'
 import { CLASS_COLOR, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, ORIGENS_INVESTIDORES, fmtDate, fmtDateRelative } from '../../constants.js'
 
 // Hook simples — carrega lookups uma vez e mantém em memória
@@ -524,12 +523,6 @@ export function MotivoNaoInteressaInline({ motivoActual, onSave }) {
   )
 }
 
-async function getToken() {
-  try {
-    const { data: { session } } = await supabase?.auth?.getSession() || { data: {} }
-    return session?.access_token || ''
-  } catch { return '' }
-}
 
 // ── Tab Documentos para Imóveis ─────────────────────────────
 const DOC_LABELS = {
@@ -597,16 +590,11 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
   // síncrona e só depois navegamos para o URL já com o token.
   // `download: true` -> ?download=1 (Content-Disposition: attachment), para enviar a investidores.
   async function abrirDocumento(tipo, { refresh = false, download = false } = {}) {
-    const win = window.open('', '_blank')
-    const token = await getToken()
-    const params = []
-    if (refresh) params.push('refresh=1')
-    if (download) params.push('download=1')
-    if (token) params.push(`token=${token}`)
-    const qs = params.length ? `?${params.join('&')}` : ''
-    const url = resolveApiUrl(`/api/crm/imoveis/${imovelId}/documento/${tipo}`) + qs
-    if (win) win.location = url
-    else window.open(url, '_blank', 'noopener,noreferrer')
+    try {
+      await openDocument(`/api/crm/imoveis/${imovelId}/documento/${tipo}`, { refresh, download })
+    } catch (e) {
+      console.error('[documento]', tipo, e.message)
+    }
   }
 
   const activeTab = FASE_TABS.find(f => f.key === subTab)
@@ -889,10 +877,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
             </button>
           )}
           {type === 'Imóveis' && !editing && (
-            <button onClick={async () => {
-              const token = await getToken()
-              window.open(resolveApiUrl(`/api/crm/imoveis/${id}/relatorio?token=${token}`), '_blank')
-            }}
+            <button onClick={() => openDocument(`/api/crm/imoveis/${id}/relatorio`).catch(e => console.error('[relatorio imovel]', e.message))}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer"
               style={{ backgroundColor: '#1a1a1a', color: '#C9A84C', border: '1px solid #C9A84C33' }}>
               <FileDown className="w-3.5 h-3.5" /> PDF
@@ -1416,19 +1401,17 @@ function RelatoriosTab({ reunioes, investidorNome }) {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <button onClick={async (e) => {
+                <button onClick={(e) => {
                   e.stopPropagation()
-                  const token = await getToken()
-                  window.open(resolveApiUrl(`/api/crm/reunioes/${r.id}/relatorio?token=${token}`), '_blank')
+                  openDocument(`/api/crm/reunioes/${r.id}/relatorio`).catch(err => console.error('[reuniao pdf]', err.message))
                 }}
                   title="Abrir o PDF numa nova aba"
                   className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-white border border-gray-200 text-gray-600 hover:border-gray-300">
                   <Eye className="w-3 h-3" /> Ver
                 </button>
-                <button onClick={async (e) => {
+                <button onClick={(e) => {
                   e.stopPropagation()
-                  const token = await getToken()
-                  window.open(resolveApiUrl(`/api/crm/reunioes/${r.id}/relatorio?token=${token}&download=1`), '_blank')
+                  openDocument(`/api/crm/reunioes/${r.id}/relatorio`, { download: true }).catch(err => console.error('[reuniao pdf download]', err.message))
                 }}
                   title="Descarregar o PDF"
                   className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-white border border-gray-200 text-gray-600 hover:border-gray-300">

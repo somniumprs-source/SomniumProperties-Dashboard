@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Header } from '../components/layout/Header.jsx'
-import { apiFetch, resolveApiUrl } from '../lib/api.js'
+import { apiFetch, openDocument } from '../lib/api.js'
 import { EUR, PCT } from '../constants.js'
 import { Button } from '../components/ui/Button.jsx'
 import { KpiCard } from '../components/ui/KpiCard.jsx'
@@ -361,8 +361,8 @@ export function Alertas() {
                       <td className="py-2 px-3 text-right font-mono">{b.total_registos}</td>
                       <td className="py-2 px-3 text-right">
                         <div className="flex gap-2 justify-end">
-                          <a href={resolveApiUrl(`/api/crm/backup/${b.id}/download`)} target="_blank" rel="noreferrer"
-                            className="text-xs text-indigo-600 hover:underline">Descarregar</a>
+                          <button type="button" onClick={() => openDocument(`/api/crm/backup/${b.id}/download`, { download: true }).catch(e => console.error('[backup download]', e.message))}
+                            className="text-xs text-indigo-600 hover:underline">Descarregar</button>
                           <button onClick={() => restoreBackup(b.id)} className="text-xs text-orange-600 hover:underline">Restaurar</button>
                         </div>
                       </td>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { FileDown, Sparkles, Trash2, Calendar, Loader2, Plus, RefreshCw, Zap, FileText, Presentation, Upload, Pencil, X, CalendarPlus, Eye } from 'lucide-react'
-import { apiFetch, getToken, resolveApiUrl } from '../lib/api.js'
+import { apiFetch, openDocument } from '../lib/api.js'
 
 const GOLD = '#C9A84C'
 
@@ -89,8 +89,7 @@ export function RelatoriosAdmin() {
       setShowForm(false)
       await load()
       if (data.id) {
-        const token = await getToken()
-        window.open(resolveApiUrl(`/api/crm/relatorios-semanais/${data.id}/pdf?token=${token}`), '_blank')
+        await abrirPdf(data.id)
       }
     } catch (e) {
       setError(e.message)
@@ -119,9 +118,11 @@ export function RelatoriosAdmin() {
   }
 
   async function abrirPdf(id, { download = false } = {}) {
-    const token = await getToken()
-    const dl = download ? '&download=1' : ''
-    window.open(resolveApiUrl(`/api/crm/relatorios-semanais/${id}/pdf?token=${token}${dl}`), '_blank')
+    try {
+      await openDocument(`/api/crm/relatorios-semanais/${id}/pdf`, { download })
+    } catch (e) {
+      setError(e.message)
+    }
   }
 
   async function eliminar(id) {
@@ -242,36 +243,26 @@ export function RelatoriosAdmin() {
           </div>
           <div className="flex flex-col gap-2 shrink-0">
             <div className="flex items-center gap-2">
-              <a
-                href="#"
-                onClick={async (e) => {
-                  e.preventDefault()
-                  const t = await getToken()
-                  window.open(resolveApiUrl(`/api/crm/relatorios/expansao-gaia?token=${t || ''}`), '_blank')
-                }}
-                rel="noopener"
+              <button
+                type="button"
+                onClick={() => openDocument('/api/crm/relatorios/expansao-gaia').catch(e => setError(e.message))}
                 title="Abrir numa nova aba"
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap flex-1"
                 style={{ backgroundColor: GOLD, color: '#0d0d0d' }}
               >
                 <Eye className="w-4 h-4" />
                 Relatório de Expansão — Vila Nova de Gaia
-              </a>
-              <a
-                href="#"
-                onClick={async (e) => {
-                  e.preventDefault()
-                  const t = await getToken()
-                  window.open(resolveApiUrl(`/api/crm/relatorios/expansao-gaia?token=${t || ''}&download=1`), '_blank')
-                }}
-                rel="noopener"
+              </button>
+              <button
+                type="button"
+                onClick={() => openDocument('/api/crm/relatorios/expansao-gaia', { download: true }).catch(e => setError(e.message))}
                 title="Descarregar o PDF"
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap"
                 style={{ backgroundColor: '#0d0d0d', color: GOLD }}
               >
                 <FileDown className="w-4 h-4" />
                 PDF
-              </a>
+              </button>
             </div>
             <a
               href="/relatorios/Relatorio_Precos_Mercado_AMP.pdf"

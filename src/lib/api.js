@@ -1,8 +1,7 @@
 import { supabase, authEnabled } from './supabase.js'
 import { getRegiaoActivaFromStorage } from '../contexts/RegiaoContext.jsx'
-// Re-export: links de PDF/descarga (window.open) usam isto para apontar para a
-// Edge Function correcta quando VITE_API_URL esta definido. Importado também
-// localmente para os helpers de PDF (buildPdfUrl/openPdf) abaixo.
+// Re-export: aponta `/api/*` para a Edge Function correcta quando VITE_API_URL
+// está definido. Continua exportado para quem o importe directamente.
 import { resolveApiUrl, API_BASE } from './apiUrl.js'
 export { resolveApiUrl, API_BASE }
 
@@ -135,32 +134,87 @@ export async function apiFetch(url, options = {}) {
   }
 }
 
-/**
- * Constrói o URL de um PDF do CRM, resolvendo a Edge Function correcta e
- * juntando, se necessário, o token de sessão e o flag `download`.
- *
- * - `download: false` (default) → o backend devolve `inline` (abre na pré-visualização).
- * - `download: true` → acrescenta `?download=1`, o backend devolve `attachment`
- *   (descarrega o ficheiro, pronto para enviar a investidores ou guardar).
- */
-export async function buildPdfUrl(path, { download = false } = {}) {
-  const token = await getToken()
-  const params = []
-  if (download) params.push('download=1')
-  if (token) params.push(`token=${encodeURIComponent(token)}`)
-  if (params.length) {
-    path += (path.includes('?') ? '&' : '?') + params.join('&')
-  }
-  return resolveApiUrl(path)
+// Deriva um nome de ficheiro a partir do path do endpoint (último segmento
+// significativo), para o atributo `download` quando o backend não envia
+// Content-Disposition (ex.: respostas servidas via redirect do Storage).
+function filenameFromPath(path, fallbackExt = 'pdf') {
+  try {
+    const clean = String(path).split('?')[0].replace(/\/+$/, '')
+    const seg = clean.split('/').filter(Boolean).pop() || 'documento'
+    return /\.[a-z0-9]{2,4}$/i.test(seg) ? seg : `${seg}.${fallbackExt}`
+  } catch { return `documento.${fallbackExt}` }
+}
+
+// Tenta extrair o filename do header Content-Disposition da resposta.
+function filenameFromResponse(res) {
+  try {
+    const cd = res.headers.get('content-disposition') || ''
+    const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)/i)
+    if (m && m[1]) return decodeURIComponent(m[1])
+  } catch {}
+  return null
 }
 
 /**
- * Abre um PDF do CRM numa nova aba (`download: false`, default) ou força o
- * descarregamento (`download: true`). Centraliza o token + resolveApiUrl para
- * todos os botões "Ver" / "Download PDF" da aplicação.
+ * CAMINHO ÚNICO para abrir/descarregar QUALQUER documento do backend (PDF,
+ * Excel, backup...). Substitui o antigo padrão `?token=` na query, que abria
+ * fora do interceptor de fetch e por isso falhava com "Autenticação necessária"
+ * sempre que o getSession tropeçava (PWA/mobile, renovação do JWT).
+ *
+ * Aqui o documento é buscado pelo `apiFetch` — exactamente o mesmo caminho
+ * autenticado de todas as outras chamadas (header Authorization + cache de
+ * token + refresh, via interceptor de main.jsx). Os bytes são lidos como blob
+ * e abertos via object URL. Assim os documentos deixam de poder partir
+ * isoladamente: se a auth falhar, falha como tudo o resto.
+ *
+ * O `apiFetch` segue transparentemente o 302 do backend para o Storage público
+ * (CORS `*`), por isso funciona quer o backend devolva os bytes directamente
+ * quer redireccione para o Supabase Storage.
+ *
+ * @param {string} path  ex.: `/api/crm/imoveis/123/relatorio`
+ * @param {{download?: boolean, filename?: string, refresh?: boolean, timeoutMs?: number}} opts
  */
-export async function openPdf(path, opts = {}) {
-  const url = await buildPdfUrl(path, opts)
-  if (typeof window !== 'undefined') window.open(url, '_blank')
-  return url
+export async function openDocument(path, { download = false, filename, refresh = false, timeoutMs = 120000 } = {}) {
+  const hasWindow = typeof window !== 'undefined'
+  // Abrir o separador em branco JÁ (síncrono) preserva o user-gesture do Safari,
+  // que bloqueia window.open depois de um await. Só para visualização.
+  const win = (!download && hasWindow) ? window.open('', '_blank') : null
+  const paintWin = (html) => { try { if (win && !win.closed) win.document.body.innerHTML = html } catch {} }
+  paintWin('<p style="font-family:system-ui,sans-serif;padding:24px;color:#555">A preparar o documento…</p>')
+
+  let url = path
+  if (refresh) url += (url.includes('?') ? '&' : '?') + 'refresh=1'
+
+  let res
+  try {
+    res = await apiFetch(url, { timeoutMs })
+  } catch (e) {
+    const msg = e?.name === 'AbortError' ? 'O documento demorou demasiado a gerar. Tenta novamente.' : 'Sem ligação ao servidor. Verifica a internet e tenta novamente.'
+    paintWin(`<p style="font-family:system-ui,sans-serif;padding:24px;color:#b00020">${msg}</p>`)
+    throw new Error(msg)
+  }
+
+  if (!res.ok) {
+    let msg = `Não foi possível abrir o documento (HTTP ${res.status}).`
+    try { const j = await res.clone().json(); if (j?.error) msg = j.error } catch {}
+    paintWin(`<p style="font-family:system-ui,sans-serif;padding:24px;color:#b00020">${msg}</p>`)
+    throw new Error(msg)
+  }
+
+  const blob = await res.blob()
+  const objUrl = URL.createObjectURL(blob)
+  if (download) {
+    const a = document.createElement('a')
+    a.href = objUrl
+    a.download = filename || filenameFromResponse(res) || filenameFromPath(path)
+    document.body.appendChild(a); a.click(); a.remove()
+  } else if (win && !win.closed) {
+    win.location = objUrl
+  } else if (hasWindow) {
+    window.open(objUrl, '_blank', 'noopener,noreferrer')
+  }
+  // Revogar depois de o browser ter tido tempo de carregar o documento.
+  setTimeout(() => { try { URL.revokeObjectURL(objUrl) } catch {} }, timeoutMs)
+  return objUrl
 }
+

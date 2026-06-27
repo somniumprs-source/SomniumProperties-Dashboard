@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { FileDown, FileText, Eye } from 'lucide-react'
-import { openPdf } from '../../../lib/api.js'
+import { openDocument } from '../../../lib/api.js'
 import { ESTADOS, SEVERIDADE, estadoFromValido, DADOS_CHAVE_LABELS } from './documentacao.config.js'
 
 /**
@@ -24,7 +24,7 @@ export function Relatorio({ imovelId, analises, flags, inconsistencias, resumoEs
   async function exportarPdf({ download = false } = {}) {
     setExporting(true)
     try {
-      await openPdf(`/api/crm/imoveis/${imovelId}/documento/relatorio_documental?refresh=1`, { download })
+      await openDocument(`/api/crm/imoveis/${imovelId}/documento/relatorio_documental`, { download, refresh: true })
     } finally {
       setExporting(false)
     }

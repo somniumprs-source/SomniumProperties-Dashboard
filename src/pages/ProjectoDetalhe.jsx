@@ -7,7 +7,7 @@ import {
   History, MessageSquare, TrendingUp, FileSpreadsheet, Pencil, Eye,
 } from 'lucide-react'
 import { ProjectoForm } from './Projectos.jsx'
-import { apiFetch, getToken, resolveApiUrl, openPdf } from '../lib/api.js'
+import { apiFetch, getToken, openDocument } from '../lib/api.js'
 import { Header } from '../components/layout/Header.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { Card } from '../components/ui/Card.jsx'
@@ -197,10 +197,10 @@ export function ProjectoDetalhe() {
             {!isReadOnly && !semFases && (
               <SyncGCalButton negocioId={id} />
             )}
-            <a href={resolveApiUrl(`/api/crm/projetos/${id}/export-excel`)} download
+            <button type="button" onClick={() => openDocument(`/api/crm/projetos/${id}/export-excel`, { download: true }).catch(e => console.error('[export-excel]', e.message))}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50">
               <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
-            </a>
+            </button>
             {!isReadOnly && <PartilharAcesso entidade="negocio" entidadeId={id} nome={negocio.movimento} />}
             {!isReadOnly && (
               <Button size="sm" variant="ghost" icon={Pencil} onClick={() => setEditing(true)}>Editar</Button>
@@ -1024,7 +1024,7 @@ function TabDocumentos({ negocio, imovel, fases, readOnly }) {
 
   async function abrirPDF(url, { download = false } = {}) {
     try {
-      await openPdf(url, { download })
+      await openDocument(url, { download })
     } catch (e) { alert('Erro: ' + e.message) }
   }
 
