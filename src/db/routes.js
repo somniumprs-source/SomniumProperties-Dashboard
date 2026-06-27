@@ -1438,10 +1438,15 @@ router.get('/consultores/:id/gravacoes', async (req, res) => {
 router.get('/gravacoes/pendentes', async (req, res) => {
   try {
     if (!supabaseStorage) return res.json([])
+    // Inclui pendentes + gravacoes presas em a_transcrever ha >15min (worker que
+    // crashou a meio): de outra forma ficariam encravadas para sempre.
+    const staleCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString()
     const { rows } = await pool.query(
       `SELECT g.id, g.consultor_id, g.ficheiro_path, g.ficheiro_nome, c.nome AS consultor_nome
        FROM consultor_gravacoes g LEFT JOIN consultores c ON c.id = g.consultor_id
-       WHERE g.estado = 'pendente' ORDER BY g.created_at ASC LIMIT 5`
+       WHERE g.estado = 'pendente' OR (g.estado = 'a_transcrever' AND g.updated_at < $1)
+       ORDER BY g.created_at ASC LIMIT 5`,
+      [staleCutoff]
     )
     const out = []
     for (const r of rows) {
@@ -1456,10 +1461,13 @@ router.get('/gravacoes/pendentes', async (req, res) => {
 // Worker: marcar como em transcricao (evita corridas se houver 2 workers).
 router.post('/gravacoes/:id/iniciar-transcricao', async (req, res) => {
   try {
+    // Permite re-adquirir um lock obsoleto (a_transcrever ha >15min) sem roubar
+    // um lock fresco de outro worker concorrente.
+    const staleCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString()
     const { rows: [row] } = await pool.query(
       `UPDATE consultor_gravacoes SET estado = 'a_transcrever', updated_at = $2
-       WHERE id = $1 AND estado = 'pendente' RETURNING id`,
-      [req.params.id, new Date().toISOString()]
+       WHERE id = $1 AND (estado = 'pendente' OR (estado = 'a_transcrever' AND updated_at < $3)) RETURNING id`,
+      [req.params.id, new Date().toISOString(), staleCutoff]
     )
     res.json({ ok: !!row })
   } catch (e) { res.status(500).json({ error: e.message }) }

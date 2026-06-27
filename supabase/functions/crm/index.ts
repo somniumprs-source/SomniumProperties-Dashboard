@@ -1695,10 +1695,15 @@ app.get("/gravacoes/pendentes", async (c: any) => {
   try {
     await ensureGravacoesTable();
     if (!supabase) return c.json([]);
+    // Inclui pendentes + gravacoes presas em a_transcrever ha >15min (worker que
+    // crashou a meio): de outra forma ficariam encravadas para sempre.
+    const staleCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
     const { rows } = await pool.query(
       `SELECT g.id, g.consultor_id, g.ficheiro_path, g.ficheiro_nome, c.nome AS consultor_nome
        FROM consultor_gravacoes g LEFT JOIN consultores c ON c.id = g.consultor_id
-       WHERE g.estado = 'pendente' ORDER BY g.created_at ASC LIMIT 5`,
+       WHERE g.estado = 'pendente' OR (g.estado = 'a_transcrever' AND g.updated_at < $1)
+       ORDER BY g.created_at ASC LIMIT 5`,
+      [staleCutoff],
     );
     const out: any[] = [];
     for (const r of rows) {
@@ -1712,10 +1717,13 @@ app.get("/gravacoes/pendentes", async (c: any) => {
 // Worker: marcar como em transcricao (lock optimista).
 app.post("/gravacoes/:id/iniciar-transcricao", async (c: any) => {
   try {
+    // Permite re-adquirir um lock obsoleto (a_transcrever ha >15min) sem roubar
+    // um lock fresco de outro worker concorrente.
+    const staleCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
     const { rows: [row] } = await pool.query(
       `UPDATE consultor_gravacoes SET estado = 'a_transcrever', updated_at = $2
-       WHERE id = $1 AND estado = 'pendente' RETURNING id`,
-      [c.req.param("id"), new Date().toISOString()],
+       WHERE id = $1 AND (estado = 'pendente' OR (estado = 'a_transcrever' AND updated_at < $3)) RETURNING id`,
+      [c.req.param("id"), new Date().toISOString(), staleCutoff],
     );
     return c.json({ ok: !!row });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }

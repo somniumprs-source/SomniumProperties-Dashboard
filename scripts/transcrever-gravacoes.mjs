@@ -37,8 +37,17 @@ const WHISPER_PY_MODEL = process.env.WHISPER_PY_MODEL || 'medium'
 const FFMPEG = process.env.FFMPEG_BIN || 'ffmpeg'
 const FFPROBE = process.env.FFPROBE_BIN || 'ffprobe'
 
-const log = (...a) => console.log(`[${new Date().toISOString()}]`, ...a)
-const err = (...a) => console.error(`[${new Date().toISOString()}]`, ...a)
+// Sob launchd, o fd de log redireccionado pode devolver EAGAIN/UNKNOWN numa
+// escrita; sem listener de 'error' isso emite um 'error' nao tratado e mata o
+// worker a meio (deixando a gravacao presa em a_transcrever). Tornamos a escrita
+// resiliente: ignoramos erros de escrita no stdout/stderr.
+process.stdout.on('error', () => {})
+process.stderr.on('error', () => {})
+const safeWrite = (stream, ...a) => {
+  try { stream.write(`[${new Date().toISOString()}] ${a.map(x => typeof x === 'string' ? x : JSON.stringify(x)).join(' ')}\n`) } catch { /* ignore */ }
+}
+const log = (...a) => safeWrite(process.stdout, ...a)
+const err = (...a) => safeWrite(process.stderr, ...a)
 
 function apiHeaders(extra = {}) {
   const h = { ...extra }
