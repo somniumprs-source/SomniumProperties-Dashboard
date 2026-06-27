@@ -36,7 +36,7 @@ import { isWholesaling } from "../_shared/modelos.ts";
 import { syncAllFromNotion, syncFromNotion, syncToNotion } from "../_shared/sync.ts";
 import {
   createImovelFolder, isConfigured as driveConfigured, listImovelFiles,
-  moveImovelFolder, uploadDocToFolder, downloadDriveFile,
+  moveImovelFolder, uploadDocToFolder, uploadUserFileToFolder, uploadComprovativoToFolder, downloadDriveFile,
 } from "../_shared/driveSync.ts";
 import {
   autoOrganize, ensureLabels, isConfigured as gmailConfigured, organizeBatch, organizeMessage,
@@ -726,7 +726,7 @@ crudRoutes("/imoveis", Imoveis, {
           await persistDocumento(item, tipo, { trigger: `estado:${body.estado}`, generatedBy: "system", analise });
           if (driveConfigured()) {
             const pdfDoc = await generateDoc(tipo, item, analise);
-            if (pdfDoc) await uploadDocToFolder(item.id, pdfDoc, `${tipo}.pdf`);
+            if (pdfDoc) await uploadDocToFolder(item.id, pdfDoc, `${tipo}.pdf`, { tipo });
           }
         } catch (e) { console.error(`[docs] Erro ${tipo}:`, (e as Error).message); }
       }
@@ -1914,6 +1914,7 @@ app.post("/imoveis/:id/fotos", async (c: any) => {
     if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
 
     let fotos = imovel.fotos ? JSON.parse(imovel.fotos) : [];
+    const driveJobs: Promise<unknown>[] = [];
     for (const file of files) {
       const bytes = new Uint8Array(await file.arrayBuffer());
       // Storage keys do Supabase rejeitam caracteres não-ASCII (ç, ã, espaços, etc.).
@@ -1921,6 +1922,17 @@ app.post("/imoveis/:id/fotos", async (c: any) => {
       const ext = file.name?.match(/\.[^.]+$/)?.[0] || "";
       const storagePath = `imoveis/${id}/${crypto.randomUUID()}${ext}`;
       const filePath = await uploadPublic("Imoveis", storagePath, bytes, file.type || "application/octet-stream");
+
+      // Espelho no Google Drive (fonte primária continua a ser o Storage)
+      if (driveConfigured()) {
+        driveJobs.push(
+          uploadUserFileToFolder(id, bytes, file.name || `ficheiro${ext}`, {
+            isPhoto: folder !== "documentos",
+            mimeType: file.type || "application/octet-stream",
+          }).catch((e: Error) => console.error("[drive] espelho upload:", e.message)),
+        );
+      }
+
       fotos.push({
         id: crypto.randomUUID(),
         name: file.name,
@@ -1933,6 +1945,8 @@ app.post("/imoveis/:id/fotos", async (c: any) => {
       });
     }
     await Imoveis.update(id, { fotos: JSON.stringify(fotos) });
+    // Best-effort: espelho no Drive não bloqueia o sucesso da resposta
+    if (driveJobs.length) await Promise.allSettled(driveJobs);
     return c.json({ ok: true, fotos });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
@@ -4954,6 +4968,12 @@ app.post("/projetos/despesas/:despesaId/comprovativo", async (c: any) => {
       [url, file.name, despesaId],
     );
     if (!rows.length) return c.json({ error: "Despesa não encontrada" }, 404);
+    // Espelho no Google Drive (best-effort — não bloqueia a resposta)
+    if (driveConfigured()) {
+      try {
+        await uploadComprovativoToFolder(despesaId, bytes, file.name, file.type || "application/octet-stream");
+      } catch (e) { console.error("[drive] espelho comprovativo:", (e as Error).message); }
+    }
     return c.json(rows[0]);
   } catch (e) { console.error("[comprovativo]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
 });

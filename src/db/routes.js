@@ -22,7 +22,7 @@ import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
 import { syncForms, isConfigured as formsConfigured } from './formsSync.js'
-import { createImovelFolder, moveImovelFolder, uploadDocToFolder, isConfigured as driveConfigured, downloadDriveFile } from './driveSync.js'
+import { createImovelFolder, moveImovelFolder, uploadDocToFolder, uploadUserFileToFolder, uploadComprovativoToFolder, isConfigured as driveConfigured, downloadDriveFile } from './driveSync.js'
 import { generateDoc, getDocsForEstado, docEmbedeLocalizacao } from './pdfImovelDocs.js'
 import { onImovelCreated, listDocumentos, persistDocumento, streamPdfToResAndPersist } from './documentLifecycle.js'
 import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
@@ -420,7 +420,7 @@ crudRoutes('/imoveis', Imoveis, {
           await persistDocumento(item, tipo, { trigger: `estado:${body.estado}`, generatedBy: 'system', analise })
           if (driveConfigured()) {
             const pdfDoc = await generateDoc(tipo, item, analise)
-            if (pdfDoc) await uploadDocToFolder(item.id, pdfDoc, `${tipo}.pdf`)
+            if (pdfDoc) await uploadDocToFolder(item.id, pdfDoc, `${tipo}.pdf`, { tipo })
           }
         } catch (e) { console.error(`[docs] Erro ${tipo}:`, e.message) }
       }
@@ -1658,13 +1658,14 @@ router.post('/imoveis/:id/fotos', uploadRateLimit, uploadImovel.array('fotos', 2
     // Múltiplos ficheiros podem partilhar o mesmo slot.
     const slot = req.body?.slot ? String(req.body.slot).trim() : undefined
     let fotos = imovel.fotos ? JSON.parse(imovel.fotos) : []
+    const driveJobs = []
     for (const file of req.files) {
       let filePath = `/uploads/imoveis/${file.filename}`
+      const fileBuffer = await readFile(file.path)
 
       // Upload para Supabase Storage (persistente) se configurado
       if (supabaseStorage) {
         const storagePath = `imoveis/${req.params.id}/${file.filename}`
-        const fileBuffer = await readFile(file.path)
         const { error } = await supabaseStorage.storage
           .from('Imoveis')
           .upload(storagePath, fileBuffer, { contentType: file.mimetype, upsert: true })
@@ -1679,6 +1680,16 @@ router.post('/imoveis/:id/fotos', uploadRateLimit, uploadImovel.array('fotos', 2
         }
       }
 
+      // Espelho no Google Drive (fonte primária continua a ser o Storage)
+      if (driveConfigured()) {
+        driveJobs.push(
+          uploadUserFileToFolder(req.params.id, fileBuffer, file.originalname, {
+            isPhoto: folder !== 'documentos',
+            mimeType: file.mimetype,
+          }).catch(e => console.error('[drive] espelho upload:', e.message)),
+        )
+      }
+
       fotos.push({
         id: randomUUID(),
         name: file.originalname,
@@ -1691,6 +1702,8 @@ router.post('/imoveis/:id/fotos', uploadRateLimit, uploadImovel.array('fotos', 2
       })
     }
     await Imoveis.update(req.params.id, { fotos: JSON.stringify(fotos) })
+    // Best-effort: espelho no Drive não bloqueia o sucesso da resposta
+    if (driveJobs.length) await Promise.allSettled(driveJobs)
     res.json({ ok: true, fotos })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -2020,8 +2033,11 @@ router.get('/imoveis/:id/drive-files', async (req, res) => {
       }))
 
       result.files.push(...files)
-      if (folder.name === 'Fotos') result.fotos.push(...files)
-      if (folder.name === 'Documentos') result.documentos.push(...files)
+      // Categorização tolerante a nomes legados (imóveis antigos)
+      const isFoto = folder.name === '05 Fotos' || folder.name === 'Fotos'
+      const isDoc = ['01 Documentação Legal', '02 Análises e Estudos', '03 Propostas', '04 Fichas e Follow-up', 'Documentos', 'Estudo de Mercado'].includes(folder.name)
+      if (isFoto) result.fotos.push(...files)
+      if (isDoc) result.documentos.push(...files)
     }
 
     res.json(result)
@@ -4965,6 +4981,13 @@ router.post('/projetos/despesas/:despesaId/comprovativo', uploadRateLimit, uploa
       [url, req.file.originalname, req.params.despesaId]
     )
     if (!rows.length) return res.status(404).json({ error: 'Despesa não encontrada' })
+    // Espelho no Google Drive (best-effort — não bloqueia a resposta)
+    if (driveConfigured()) {
+      try {
+        const fileBuffer = await readFile(req.file.path)
+        await uploadComprovativoToFolder(req.params.despesaId, fileBuffer, req.file.originalname, req.file.mimetype)
+      } catch (e) { console.error('[drive] espelho comprovativo:', e.message) }
+    }
     res.json(rows[0])
   } catch (e) { console.error('[comprovativo]', e.message); res.status(500).json({ error: e.message }) }
 })

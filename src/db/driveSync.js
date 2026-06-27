@@ -40,6 +40,111 @@ export function isConfigured() {
   return isGoogleConfigured()
 }
 
+// ── Taxonomia das subpastas (por finalidade) dentro da pasta de cada imóvel ──
+const SUB_DOCS_LEGAL  = '01 Documentação Legal'
+const SUB_ANALISES    = '02 Análises e Estudos'
+const SUB_PROPOSTAS   = '03 Propostas'
+const SUB_FICHAS      = '04 Fichas e Follow-up'
+const SUB_FOTOS       = '05 Fotos'
+const SUB_FINANCEIRO  = '06 Financeiro'
+
+const SUBFOLDERS = [SUB_DOCS_LEGAL, SUB_ANALISES, SUB_PROPOSTAS, SUB_FICHAS, SUB_FOTOS, SUB_FINANCEIRO]
+
+// Tipo de documento gerado → subpasta de destino
+const DOC_SUBFOLDER_MAP = {
+  analise_rentabilidade:          SUB_ANALISES,
+  estudo_comparaveis:             SUB_ANALISES,
+  relatorio_documental:           SUB_ANALISES,
+  relatorio_investimento:         SUB_ANALISES,
+  relatorio_comparaveis:          SUB_ANALISES,
+  relatorio_stress:               SUB_ANALISES,
+  relatorio_caep:                 SUB_ANALISES,
+  proposta_formal:                SUB_PROPOSTAS,
+  dossier_investidor:             SUB_PROPOSTAS,
+  proposta_investimento_anonima:  SUB_PROPOSTAS,
+  proposta_cedencia_posicao:      SUB_PROPOSTAS,
+  ficha_imovel:                   SUB_FICHAS,
+  ficha_visita:                   SUB_FICHAS,
+  resumo_negociacao:              SUB_FICHAS,
+  ficha_follow_up:                SUB_FICHAS,
+  ficha_descarte:                 SUB_FICHAS,
+}
+
+// Pasta de topo para comprovativos de despesas sem imóvel associado.
+let financeiroGeralFolderId = process.env.DRIVE_FINANCEIRO_FOLDER_ID || null
+
+function escapeQ(s) {
+  return String(s).replace(/'/g, "\\'")
+}
+
+// Normaliza stream Node / Buffer / Uint8Array / ArrayBuffer → Buffer.
+async function toBuffer(data) {
+  if (Buffer.isBuffer(data)) return data
+  if (data instanceof Uint8Array) return Buffer.from(data)
+  if (data instanceof ArrayBuffer) return Buffer.from(new Uint8Array(data))
+  if (data && typeof data.on === 'function') {
+    const chunks = []
+    await new Promise((resolve, reject) => {
+      data.on('data', c => chunks.push(c))
+      data.on('end', resolve)
+      data.on('error', reject)
+    })
+    return Buffer.concat(chunks)
+  }
+  return Buffer.from(data)
+}
+
+// Procura subpasta por nome dentro de parentFolderId; cria se faltar (idempotente).
+async function ensureSubfolder(drive, parentFolderId, nome) {
+  const list = await drive.files.list({
+    q: `'${parentFolderId}' in parents and name='${escapeQ(nome)}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    fields: 'files(id)',
+    supportsAllDrives: true,
+  })
+  const existing = list.data.files?.[0]?.id
+  if (existing) return existing
+  const created = await drive.files.create({
+    requestBody: { name: nome, mimeType: 'application/vnd.google-apps.folder', parents: [parentFolderId] },
+    fields: 'id',
+    supportsAllDrives: true,
+  })
+  return created.data.id
+}
+
+// Upload de bytes para um folderId exacto. dedup=true apaga ficheiro homónimo antes.
+async function uploadBytesToFolder(drive, folderId, bytes, fileName, mimeType, { dedup = true } = {}) {
+  if (dedup) {
+    const existing = await drive.files.list({
+      q: `'${folderId}' in parents and name='${escapeQ(fileName)}' and trashed=false`,
+      fields: 'files(id)',
+      supportsAllDrives: true,
+    })
+    for (const f of existing.data.files || []) {
+      await drive.files.delete({ fileId: f.id, supportsAllDrives: true }).catch(() => {})
+    }
+  }
+  const { Readable } = await import('stream')
+  const file = await drive.files.create({
+    requestBody: { name: fileName, mimeType, parents: [folderId] },
+    media: { mimeType, body: Readable.from(bytes) },
+    fields: 'id',
+    supportsAllDrives: true,
+  })
+  return file.data.id
+}
+
+// Upload para uma subpasta (por nome) da pasta do imóvel, criando-a se faltar.
+async function uploadBytesToSubfolder(drive, imovelFolderId, subfolderName, bytes, fileName, mimeType, opts) {
+  const target = (await ensureSubfolder(drive, imovelFolderId, subfolderName)) || imovelFolderId
+  return uploadBytesToFolder(drive, target, bytes, fileName, mimeType, opts)
+}
+
+async function ensureFinanceiroGeralFolder(drive) {
+  if (financeiroGeralFolderId) return financeiroGeralFolderId
+  financeiroGeralFolderId = await ensureSubfolder(drive, PIPELINE_FOLDER_ID, 'Financeiro Geral')
+  return financeiroGeralFolderId
+}
+
 /**
  * Descarrega os bytes de um ficheiro do Drive (autenticado). Necessário para a
  * análise por IA de documentos que vivem no Drive — o webContentLink não é
@@ -58,65 +163,94 @@ export async function downloadDriveFile(fileId) {
 }
 
 /**
- * Upload de documento PDF para a pasta Documentos do imóvel no Drive.
+ * Upload de documento PDF gerado para a subpasta certa do imóvel no Drive.
+ * `pdfData` aceita stream Node | Buffer | Uint8Array | ArrayBuffer.
+ * `opts.tipo` determina a subpasta via DOC_SUBFOLDER_MAP (fallback Documentação Legal).
  */
-export async function uploadDocToFolder(imovelId, pdfStream, fileName) {
+export async function uploadDocToFolder(imovelId, pdfData, fileName, opts = {}) {
   const drive = getDrive()
   if (!drive) return null
 
   try {
-    // Buscar drive_folder_id do imóvel
     const { rows: [imovel] } = await pool.query('SELECT drive_folder_id, nome FROM imoveis WHERE id = $1', [imovelId])
     if (!imovel?.drive_folder_id) return null
 
-    // Encontrar subpasta "Documentos"
-    const list = await drive.files.list({
-      q: `'${imovel.drive_folder_id}' in parents and name='Documentos' and mimeType='application/vnd.google-apps.folder'`,
-      fields: 'files(id)',
-      supportsAllDrives: true,
-    })
-    let docsFolder = list.data.files?.[0]?.id
-    if (!docsFolder) docsFolder = imovel.drive_folder_id // fallback: pasta raiz do imóvel
+    const subfolder = (opts.tipo && DOC_SUBFOLDER_MAP[opts.tipo]) || SUB_DOCS_LEGAL
+    const mimeType = opts.mimeType || 'application/pdf'
+    const buffer = await toBuffer(pdfData)
 
-    // Verificar se já existe ficheiro com mesmo nome e apagar
-    const existing = await drive.files.list({
-      q: `'${docsFolder}' in parents and name='${fileName}'`,
-      fields: 'files(id)',
-      supportsAllDrives: true,
-    })
-    for (const f of existing.data.files || []) {
-      await drive.files.delete({ fileId: f.id, supportsAllDrives: true }).catch(() => {})
-    }
-
-    // Recolher PDF stream para buffer
-    const { Readable } = await import('stream')
-    const chunks = []
-    await new Promise((resolve, reject) => {
-      pdfStream.on('data', c => chunks.push(c))
-      pdfStream.on('end', resolve)
-      pdfStream.on('error', reject)
-    })
-    const buffer = Buffer.concat(chunks)
-
-    // Upload
-    const file = await drive.files.create({
-      requestBody: {
-        name: fileName,
-        mimeType: 'application/pdf',
-        parents: [docsFolder],
-      },
-      media: {
-        mimeType: 'application/pdf',
-        body: Readable.from(buffer),
-      },
-      fields: 'id',
-      supportsAllDrives: true,
-    })
-
-    console.log(`[drive] Upload: ${fileName} → ${imovel.nome} (${file.data.id})`)
-    return file.data.id
+    const id = await uploadBytesToSubfolder(drive, imovel.drive_folder_id, subfolder, buffer, fileName, mimeType)
+    console.log(`[drive] Upload: ${fileName} → ${imovel.nome}/${subfolder} (${id})`)
+    return id
   } catch (e) {
     console.error('[drive] Upload erro:', e.message)
+    return null
+  }
+}
+
+/**
+ * Espelha um ficheiro carregado pelo utilizador na subpasta certa do imóvel.
+ * isPhoto=true → "05 Fotos"; caso contrário → "01 Documentação Legal".
+ * Sem dedup (vários ficheiros podem partilhar nome original).
+ */
+export async function uploadUserFileToFolder(imovelId, bytes, fileName, { isPhoto = false, mimeType } = {}) {
+  const drive = getDrive()
+  if (!drive) return null
+
+  try {
+    const { rows: [imovel] } = await pool.query('SELECT drive_folder_id, nome FROM imoveis WHERE id = $1', [imovelId])
+    if (!imovel?.drive_folder_id) return null
+
+    const subfolder = isPhoto ? SUB_FOTOS : SUB_DOCS_LEGAL
+    const buffer = await toBuffer(bytes)
+    const id = await uploadBytesToSubfolder(
+      drive, imovel.drive_folder_id, subfolder, buffer, fileName, mimeType || 'application/octet-stream', { dedup: false },
+    )
+    console.log(`[drive] Upload utilizador: ${fileName} → ${imovel.nome}/${subfolder} (${id})`)
+    return id
+  } catch (e) {
+    console.error('[drive] Upload utilizador erro:', e.message)
+    return null
+  }
+}
+
+/**
+ * Espelha um comprovativo de despesa no Drive. Resolve o imóvel via
+ * despesa → negócio → imóvel; com imóvel vai para "06 Financeiro" desse imóvel,
+ * sem imóvel vai para "Financeiro Geral"/ano.
+ */
+export async function uploadComprovativoToFolder(despesaId, bytes, fileName, mimeType, opts = {}) {
+  const drive = getDrive()
+  if (!drive) return null
+
+  try {
+    const { rows: [row] } = await pool.query(
+      `SELECT d.id, i.drive_folder_id, i.nome AS imovel_nome
+         FROM despesas d
+         LEFT JOIN negocios n ON d.negocio_id = n.id
+         LEFT JOIN imoveis i ON n.imovel_id = i.id
+        WHERE d.id = $1`,
+      [despesaId],
+    )
+    const buffer = await toBuffer(bytes)
+    const mt = mimeType || 'application/octet-stream'
+
+    if (row?.drive_folder_id) {
+      const id = await uploadBytesToSubfolder(drive, row.drive_folder_id, SUB_FINANCEIRO, buffer, fileName, mt, { dedup: false })
+      console.log(`[drive] Comprovativo: ${fileName} → ${row.imovel_nome}/${SUB_FINANCEIRO} (${id})`)
+      return id
+    }
+
+    // Sem imóvel → Financeiro Geral / ano
+    const geral = await ensureFinanceiroGeralFolder(drive)
+    if (!geral) return null
+    const ano = opts.ano || String(new Date().getFullYear())
+    const anoFolder = await ensureSubfolder(drive, geral, ano)
+    const id = await uploadBytesToFolder(drive, anoFolder, buffer, fileName, mt, { dedup: false })
+    console.log(`[drive] Comprovativo (Financeiro Geral ${ano}): ${fileName} (${id})`)
+    return id
+  } catch (e) {
+    console.error('[drive] Comprovativo erro:', e.message)
     return null
   }
 }
@@ -145,8 +279,8 @@ export async function createImovelFolder(imovelId, nome, estado) {
     })
     const folderId = folder.data.id
 
-    // Criar subpastas
-    for (const sub of ['Documentos', 'Fotos', 'Estudo de Mercado']) {
+    // Criar subpastas (por finalidade)
+    for (const sub of SUBFOLDERS) {
       await drive.files.create({
         requestBody: {
           name: sub,
