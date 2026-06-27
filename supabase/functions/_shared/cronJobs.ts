@@ -134,7 +134,7 @@ async function runFollowUp() {
         try {
           const client = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") });
           const resp = await client.messages.create({
-            model: "claude-sonnet-4-20250514",
+            model: "claude-sonnet-4-6",
             max_tokens: 300,
             system:
               `És o Alexandre da Somnium Properties. Escreve uma mensagem curta (max 3 linhas) de follow-up para um consultor imobiliário. Tom: profissional mas acessível. Objectivo: perguntar se tem imóveis novos para partilhar. Nunca "conforme" ou "relativamente". Sê directo.`,

@@ -39,7 +39,7 @@ async function analyzeWithClaude(reuniao, transcricao, resumo) {
   const client = new Anthropic({ apiKey: ANTHROPIC_KEY })
 
   const message = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     max_tokens: 2000,
     messages: [{
       role: 'user',
@@ -365,7 +365,7 @@ async function analyzeConsultorWithClaude(reuniao, transcricao, resumo) {
   const client = new Anthropic({ apiKey: ANTHROPIC_KEY })
 
   const message = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     max_tokens: 2000,
     messages: [{
       role: 'user',

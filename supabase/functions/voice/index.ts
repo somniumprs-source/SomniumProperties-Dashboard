@@ -38,7 +38,7 @@ app.post("/process", async (c: any) => {
     const imNomes = imoveis.map((i: any) => `${i.nome} (${i.estado})`).join(", ");
 
     const response = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 500,
       system: `Interpretas comandos de voz em português para um CRM imobiliário. Data de hoje: ${hoje}.
 

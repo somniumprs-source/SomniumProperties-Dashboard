@@ -1351,7 +1351,7 @@ async function analisarTranscricaoIA(transcricao, consultorNome) {
   const Anthropic = (await import('@anthropic-ai/sdk')).default
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     max_tokens: 2000,
     messages: [{ role: 'user', content: `${buildGravacaoPrompt(consultorNome)}\n\n--- TRANSCRICAO ---\n${transcricao}` }],
   })
@@ -1782,7 +1782,7 @@ router.post('/imoveis/:id/documentos/analise', uploadRateLimit, uploadImovel.sin
     const tipoImovel = req.body?.tipoImovel || imovel.predio_tipo || imovel.tipologia || ''
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1500,
       messages: [{ role: 'user', content: [fileBlock, { type: 'text', text: buildDocPrompt(tipoImovel) }] }],
     })

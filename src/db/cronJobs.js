@@ -99,7 +99,7 @@ async function runFollowUp() {
           const Anthropic = (await import('@anthropic-ai/sdk')).default
           const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
           const resp = await client.messages.create({
-            model: 'claude-sonnet-4-20250514',
+            model: 'claude-sonnet-4-6',
             max_tokens: 300,
             system: `És o Alexandre da Somnium Properties. Escreve uma mensagem curta (max 3 linhas) de follow-up para um consultor imobiliário. Tom: profissional mas acessível. Objectivo: perguntar se tem imóveis novos para partilhar. Nunca "conforme" ou "relativamente". Sê directo.`,
             messages: [{ role: 'user', content: `Consultor: ${c.nome}\nÚltimo contacto: há ${diasSem} dias\nHistórico:\n${histText || '(sem histórico)'}\n\nEscreve APENAS a mensagem (sem JSON, sem explicação).` }]

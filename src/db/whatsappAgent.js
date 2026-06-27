@@ -684,7 +684,7 @@ ${urgente ? '⚠️ URGÊNCIA DETECTADA — prioridade máxima' : ''}
     // região do consultor — Coimbra vs AMP).
     const systemPromptRegional = buildSystemPrompt(consultor.regiao || 'Coimbra')
     const response = await withRetry(() => client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2000,
       temperature: 0,
       messages: [
