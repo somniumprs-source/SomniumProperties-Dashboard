@@ -1552,6 +1552,7 @@ async function ensureGravacoesTable() {
     CREATE TABLE IF NOT EXISTS consultor_gravacoes (
       id TEXT PRIMARY KEY,
       consultor_id TEXT NOT NULL,
+      followup_id TEXT,
       titulo TEXT,
       data_chamada TEXT,
       ficheiro_path TEXT,
@@ -1564,21 +1565,50 @@ async function ensureGravacoesTable() {
       created_at TEXT DEFAULT (NOW()::TEXT),
       updated_at TEXT DEFAULT (NOW()::TEXT)
     );
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS followup_id TEXT;
     CREATE INDEX IF NOT EXISTS idx_gravacoes_consultor ON consultor_gravacoes(consultor_id);
     CREATE INDEX IF NOT EXISTS idx_gravacoes_estado ON consultor_gravacoes(estado);
+    CREATE INDEX IF NOT EXISTS idx_gravacoes_followup ON consultor_gravacoes(followup_id);
   `);
   _gravacoesTableEnsured = true;
 }
 
 function buildGravacaoPrompt(consultorNome: string) {
-  return `Es um analista comercial senior da Somnium Properties (investimento imobiliario em Coimbra, Portugal). Recebes a transcricao de uma chamada telefonica entre a nossa equipa e o consultor imobiliario ${consultorNome || "(desconhecido)"}.
+  return `Es um analista comercial senior da Somnium Properties (investimento imobiliario em Coimbra, Portugal). Recebes a transcricao de uma DISCOVERY CALL entre a nossa equipa e o consultor imobiliario ${consultorNome || "(desconhecido)"}.
 
-Analisa a chamada com o objectivo de OPTIMIZAR os nossos scripts comerciais. Responde APENAS com um objecto JSON valido (sem texto antes ou depois, sem markdown), com esta estrutura exacta:
+A nossa equipa segue o SCRIPT DE DISCOVERY (SOP 1), com 5 fases:
+- FASE 0 - Abertura: identificar-se como grupo de investidores, referir o imovel/zona visto no portal, e enquadrar que ha 3-4 questoes a perceber antes de fazer uma proposta seria.
+- FASE 1 - Filtrar (objectivo real): porque decidiu vender; o proprietario tem pressa; ha problema se nao vender nos proximos meses; o imovel esta fechado ou ainda em uso.
+- FASE 2 - Motivacao (desejo): o que o proprietario quer fazer depois de vender; isso depende desta venda; quer resolver rapido ou nao tem pressao; ja esta cansado do processo.
+- FASE 3 - Desafios (dor real): o que custa mais no processo de venda; imovel antigo / precisa de obras; ha quanto tempo esta no mercado e se houve visitas a serio; heranca ou varios donos e se estao alinhados.
+- FASE 4 - Conectar ao resultado (sem pitch): confirmar que uma proposta simples, sem bancos e sem complicacoes, ajudava a resolver a situacao.
+PROXIMO PASSO (Coimbra-style): pedir ao consultor que sonde o proprietario para uma proposta directa, fora do processo normal de mercado.
+METRICAS que interessam recolher: tempo no mercado, estado do imovel (habitar/obras), situacao legal (heranca/arrendado), custos mensais, dependencia da venda.
+SINAIS DE DESCARTAR (frases tipicas em Coimbra): "nao tem pressa nenhuma", "esta confortavel", "so vende por X", "nao quer investidores".
+MINDSET: em Coimbra ninguem gosta de conversa de vendedor; ganha-se confianca por ser directo, nao insistir e dizer "nao faz sentido" quando nao faz.
+
+Avalia a chamada CONTRA este SOP 1, com o objectivo de OPTIMIZAR os nossos scripts e treinar a equipa. Responde APENAS com um objecto JSON valido (sem texto antes ou depois, sem markdown), com esta estrutura exacta:
 
 {
   "resumo": "2-3 frases sobre o que aconteceu na chamada",
   "sentimento": "positivo" | "neutro" | "negativo",
-  "classificacao": 1-5 (qualidade global da nossa abordagem),
+  "classificacao": 1-5 (qualidade global da nossa abordagem face ao SOP 1),
+  "fases_sop1": [
+    { "fase": "0 - Abertura", "cumprida": true, "observacao": "o que correu bem ou falhou nesta fase" },
+    { "fase": "1 - Filtrar", "cumprida": true, "observacao": "" },
+    { "fase": "2 - Motivacao", "cumprida": true, "observacao": "" },
+    { "fase": "3 - Desafios", "cumprida": true, "observacao": "" },
+    { "fase": "4 - Conectar ao resultado", "cumprida": true, "observacao": "" }
+  ],
+  "perguntas_discovery_falhadas": ["perguntas-chave do SOP 1 que deviamos ter feito e nao fizemos"],
+  "metricas_recolhidas": {
+    "tempo_mercado": "valor mencionado ou null",
+    "estado_imovel": "valor ou null",
+    "situacao_legal": "valor ou null",
+    "custos_mensais": "valor ou null",
+    "dependencia_venda": "valor ou null"
+  },
+  "descartar": { "deve_descartar": true, "motivo": "porque, com base nos sinais de descarte de Coimbra" },
   "objeccoes": [{ "objeccao": "objeccao levantada pelo consultor", "resposta_dada": "como respondemos", "eficaz": true, "sugestao": "como responder melhor da proxima vez" }],
   "pontos_fortes": ["o que corremos bem"],
   "pontos_fracos": ["onde falhamos ou perdemos o controlo da conversa"],
@@ -1587,7 +1617,7 @@ Analisa a chamada com o objectivo de OPTIMIZAR os nossos scripts comerciais. Res
   "proximo_passo": "accao recomendada com este consultor"
 }
 
-Escreve em portugues de Portugal, directo e profissional. Se a transcricao for insuficiente, devolve listas vazias mas mantem a estrutura.`;
+Escreve em portugues de Portugal, directo e profissional. Se a transcricao for insuficiente, devolve listas vazias / null mas mantem a estrutura.`;
 }
 
 async function analisarTranscricaoIA(transcricao: string, consultorNome: string) {
@@ -1634,11 +1664,12 @@ app.post("/consultores/:id/gravacoes", async (c: any) => {
     const now = new Date().toISOString();
     const titulo = (typeof form.get("titulo") === "string" && form.get("titulo")) || file.name;
     const dataChamada = (typeof form.get("data_chamada") === "string" && form.get("data_chamada")) || now;
+    const followupId = (typeof form.get("followup_id") === "string" && form.get("followup_id")) || null;
     const { rows: [row] } = await pool.query(
       `INSERT INTO consultor_gravacoes
-        (id, consultor_id, titulo, data_chamada, ficheiro_path, ficheiro_nome, estado, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,'pendente',$7,$7) RETURNING *`,
-      [id, consultorId, titulo, dataChamada, storagePath, file.name, now],
+        (id, consultor_id, followup_id, titulo, data_chamada, ficheiro_path, ficheiro_nome, estado, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'pendente',$8,$8) RETURNING *`,
+      [id, consultorId, followupId, titulo, dataChamada, storagePath, file.name, now],
     );
     return c.json(row);
   } catch (e) {

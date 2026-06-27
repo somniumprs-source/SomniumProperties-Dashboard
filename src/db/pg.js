@@ -554,6 +554,7 @@ export async function initSchema() {
       CREATE TABLE IF NOT EXISTS consultor_gravacoes (
         id TEXT PRIMARY KEY,
         consultor_id TEXT NOT NULL,
+        followup_id TEXT,
         titulo TEXT,
         data_chamada TEXT,
         ficheiro_path TEXT,
@@ -566,8 +567,10 @@ export async function initSchema() {
         created_at TEXT DEFAULT (NOW()::TEXT),
         updated_at TEXT DEFAULT (NOW()::TEXT)
       );
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS followup_id TEXT;
       CREATE INDEX IF NOT EXISTS idx_gravacoes_consultor ON consultor_gravacoes(consultor_id);
       CREATE INDEX IF NOT EXISTS idx_gravacoes_estado ON consultor_gravacoes(estado);
+      CREATE INDEX IF NOT EXISTS idx_gravacoes_followup ON consultor_gravacoes(followup_id);
 
       -- Migrar follow-ups legados (campos directos no consultor) para o histórico
       INSERT INTO consultor_followups (id, consultor_id, data, motivo, proximo_follow_up, created_at, updated_at)

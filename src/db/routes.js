@@ -1326,14 +1326,41 @@ const GRAVACOES_BUCKET = 'Gravacoes'
 
 // Prompt da analise comercial. Foco: optimizar os scripts comerciais da Somnium.
 function buildGravacaoPrompt(consultorNome) {
-  return `Es um analista comercial senior da Somnium Properties (investimento imobiliario em Coimbra, Portugal). Recebes a transcricao de uma chamada telefonica entre a nossa equipa e o consultor imobiliario ${consultorNome || '(desconhecido)'}.
+  return `Es um analista comercial senior da Somnium Properties (investimento imobiliario em Coimbra, Portugal). Recebes a transcricao de uma DISCOVERY CALL entre a nossa equipa e o consultor imobiliario ${consultorNome || '(desconhecido)'}.
 
-Analisa a chamada com o objectivo de OPTIMIZAR os nossos scripts comerciais. Responde APENAS com um objecto JSON valido (sem texto antes ou depois, sem markdown), com esta estrutura exacta:
+A nossa equipa segue o SCRIPT DE DISCOVERY (SOP 1), com 5 fases:
+- FASE 0 - Abertura: identificar-se como grupo de investidores, referir o imovel/zona visto no portal, e enquadrar que ha 3-4 questoes a perceber antes de fazer uma proposta seria.
+- FASE 1 - Filtrar (objectivo real): porque decidiu vender; o proprietario tem pressa; ha problema se nao vender nos proximos meses; o imovel esta fechado ou ainda em uso.
+- FASE 2 - Motivacao (desejo): o que o proprietario quer fazer depois de vender; isso depende desta venda; quer resolver rapido ou nao tem pressao; ja esta cansado do processo.
+- FASE 3 - Desafios (dor real): o que custa mais no processo de venda; imovel antigo / precisa de obras; ha quanto tempo esta no mercado e se houve visitas a serio; heranca ou varios donos e se estao alinhados.
+- FASE 4 - Conectar ao resultado (sem pitch): confirmar que uma proposta simples, sem bancos e sem complicacoes, ajudava a resolver a situacao.
+PROXIMO PASSO (Coimbra-style): pedir ao consultor que sonde o proprietario para uma proposta directa, fora do processo normal de mercado.
+METRICAS que interessam recolher: tempo no mercado, estado do imovel (habitar/obras), situacao legal (heranca/arrendado), custos mensais, dependencia da venda.
+SINAIS DE DESCARTAR (frases tipicas em Coimbra): "nao tem pressa nenhuma", "esta confortavel", "so vende por X", "nao quer investidores".
+MINDSET: em Coimbra ninguem gosta de conversa de vendedor; ganha-se confianca por ser directo, nao insistir e dizer "nao faz sentido" quando nao faz.
+
+Avalia a chamada CONTRA este SOP 1, com o objectivo de OPTIMIZAR os nossos scripts e treinar a equipa. Responde APENAS com um objecto JSON valido (sem texto antes ou depois, sem markdown), com esta estrutura exacta:
 
 {
   "resumo": "2-3 frases sobre o que aconteceu na chamada",
   "sentimento": "positivo" | "neutro" | "negativo",
-  "classificacao": 1-5 (qualidade global da nossa abordagem),
+  "classificacao": 1-5 (qualidade global da nossa abordagem face ao SOP 1),
+  "fases_sop1": [
+    { "fase": "0 - Abertura", "cumprida": true|false, "observacao": "o que correu bem ou falhou nesta fase" },
+    { "fase": "1 - Filtrar", "cumprida": true|false, "observacao": "" },
+    { "fase": "2 - Motivacao", "cumprida": true|false, "observacao": "" },
+    { "fase": "3 - Desafios", "cumprida": true|false, "observacao": "" },
+    { "fase": "4 - Conectar ao resultado", "cumprida": true|false, "observacao": "" }
+  ],
+  "perguntas_discovery_falhadas": ["perguntas-chave do SOP 1 que deviamos ter feito e nao fizemos"],
+  "metricas_recolhidas": {
+    "tempo_mercado": "valor mencionado ou null",
+    "estado_imovel": "valor ou null",
+    "situacao_legal": "valor ou null",
+    "custos_mensais": "valor ou null",
+    "dependencia_venda": "valor ou null"
+  },
+  "descartar": { "deve_descartar": true|false, "motivo": "porque, com base nos sinais de descarte de Coimbra" },
   "objeccoes": [{ "objeccao": "objeccao levantada pelo consultor", "resposta_dada": "como respondemos", "eficaz": true|false, "sugestao": "como responder melhor da proxima vez" }],
   "pontos_fortes": ["o que corremos bem"],
   "pontos_fracos": ["onde falhamos ou perdemos o controlo da conversa"],
@@ -1342,7 +1369,7 @@ Analisa a chamada com o objectivo de OPTIMIZAR os nossos scripts comerciais. Res
   "proximo_passo": "accao recomendada com este consultor"
 }
 
-Escreve em portugues de Portugal, directo e profissional. Se a transcricao for insuficiente, devolve listas vazias mas mantem a estrutura.`
+Escreve em portugues de Portugal, directo e profissional. Se a transcricao for insuficiente, devolve listas vazias / null mas mantem a estrutura.`
 }
 
 // Corre a analise da transcricao com o Claude. Devolve o objecto parseado ou lanca.
@@ -1387,10 +1414,10 @@ router.post('/consultores/:id/gravacoes', uploadRateLimit, uploadAudio.single('a
     const now = new Date().toISOString()
     const { rows: [row] } = await pool.query(
       `INSERT INTO consultor_gravacoes
-        (id, consultor_id, titulo, data_chamada, ficheiro_path, ficheiro_nome, estado, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,'pendente',$7,$7) RETURNING *`,
-      [id, req.params.id, req.body.titulo || req.file.originalname, req.body.data_chamada || now,
-       storagePath, req.file.originalname, now]
+        (id, consultor_id, followup_id, titulo, data_chamada, ficheiro_path, ficheiro_nome, estado, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'pendente',$8,$8) RETURNING *`,
+      [id, req.params.id, req.body.followup_id || null, req.body.titulo || req.file.originalname,
+       req.body.data_chamada || now, storagePath, req.file.originalname, now]
     )
     res.json(row)
   } catch (e) { res.status(500).json({ error: e.message }) }
