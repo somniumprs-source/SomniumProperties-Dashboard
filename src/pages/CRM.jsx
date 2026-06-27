@@ -13,6 +13,7 @@ import { Tabs } from '../components/ui/Tabs.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { KpiCard } from '../components/ui/KpiCard.jsx'
 import { MultiSelect } from '../components/ui/MultiSelect.jsx'
+import { Combobox } from '../components/ui/Combobox.jsx'
 import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
 import { apiFetch, resolveApiUrl } from '../lib/api.js'
 import { useUnreadCounts } from '../hooks/useUnreadCounts.js'
@@ -1812,9 +1813,7 @@ const FIELD_DEFS = {
     // — Localização —
     { key: 'distrito', label: 'Distrito', type: 'text' },
     { key: 'concelho', label: 'Concelho', type: 'text' },
-    { key: 'freguesia', label: 'Freguesia', type: 'text' },
-    { key: 'zona', label: 'Zona / Bairro', type: 'text' },
-    { key: 'zonas', label: 'Zonas (freguesias)', type: 'multiselect_freguesias' },
+    { key: 'freguesia', label: 'Freguesia', type: 'combobox_freguesias' },
     // — Caracterização Física —
     { key: 'tipologia', label: 'Tipologia (T1, T2, T3…)', type: 'text' },
     { key: 'predio_tipo', label: 'Tipo de Prédio', type: 'select', options: ['Edifício multifamiliar','Moradia','Terreno','Prédio para reabilitação','Outro'] },
@@ -2015,6 +2014,12 @@ const FREGUESIAS_POR_REGIAO = {
       'Vilar de Andorinho',
       'Vilar do Paraíso',
     ],
+    'Matosinhos': [
+      'Custóias, Leça do Balio e Guifões',
+      'Matosinhos e Leça da Palmeira',
+      'Perafita, Lavra e Santa Cruz do Bispo',
+      'São Mamede de Infesta e Senhora da Hora',
+    ],
   },
   Coimbra: FREGUESIAS,
 }
@@ -2174,6 +2179,16 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
                 options={FREGUESIAS_POR_REGIAO[form.regiao || regiao] || FREGUESIAS_POR_REGIAO.Coimbra}
                 onChange={v => handleChange(f.key, v)}
                 placeholder={`Selecionar ${f.label.toLowerCase()}...`}
+              />
+            ) : f.type === 'combobox_freguesias' ? (
+              <Combobox
+                value={form[f.key]}
+                onChange={v => handleChange(f.key, v)}
+                options={(() => {
+                  const src = FREGUESIAS_POR_REGIAO[form.regiao || regiao] || FREGUESIAS_POR_REGIAO.Coimbra
+                  return Array.isArray(src) ? src : Object.values(src).flat()
+                })()}
+                placeholder="Pesquisar freguesia..."
               />
             ) : f.type === 'chips_autocomplete' ? (
               <ChipsAutocomplete
