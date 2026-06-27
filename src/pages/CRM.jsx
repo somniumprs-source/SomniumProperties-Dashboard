@@ -1931,6 +1931,8 @@ const FIELD_DEFS = {
 function RelationOrNew({ value, options, display, createEndpoint, onChange, onCreated }) {
   const [mode, setMode] = useState('select') // 'select' | 'new'
   const [newName, setNewName] = useState('')
+  const [newContacto, setNewContacto] = useState('')
+  const [newEmail, setNewEmail] = useState('')
   const [creating, setCreating] = useState(false)
   const inputClass = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
 
@@ -1938,28 +1940,40 @@ function RelationOrNew({ value, options, display, createEndpoint, onChange, onCr
     if (!newName.trim()) return
     setCreating(true)
     try {
-      const r = await fetch(createEndpoint, {
+      const r = await apiFetch(createEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: newName.trim() }),
+        body: JSON.stringify({
+          nome: newName.trim(),
+          contacto: newContacto.trim() || null,
+          email: newEmail.trim() || null,
+        }),
       })
       const data = await r.json()
       onChange(data.nome || newName.trim())
       onCreated()
       setMode('select')
       setNewName('')
+      setNewContacto('')
+      setNewEmail('')
     } catch {}
     setCreating(false)
   }
 
   if (mode === 'new') {
     return (
-      <div className="flex gap-2">
-        <input type="text" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome do novo consultor" className={inputClass} />
-        <button onClick={handleCreate} disabled={creating} className="px-3 py-2 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 shrink-0">
-          {creating ? '...' : 'Criar'}
-        </button>
-        <button onClick={() => setMode('select')} className="px-3 py-2 bg-gray-100 text-gray-600 text-xs rounded-lg shrink-0">Cancelar</button>
+      <div className="space-y-2 p-3 rounded-xl border border-indigo-200 bg-indigo-50/40">
+        <input type="text" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome do novo consultor *" className={inputClass} autoFocus />
+        <div className="grid grid-cols-2 gap-2">
+          <input type="tel" value={newContacto} onChange={e => setNewContacto(e.target.value)} placeholder="Contacto (9XX XXX XXX)" className={inputClass} />
+          <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="Email" className={inputClass} />
+        </div>
+        <div className="flex gap-2">
+          <button onClick={handleCreate} disabled={creating || !newName.trim()} className="px-3 py-2 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 shrink-0">
+            {creating ? '...' : 'Criar'}
+          </button>
+          <button onClick={() => setMode('select')} className="px-3 py-2 bg-gray-100 text-gray-600 text-xs rounded-lg shrink-0">Cancelar</button>
+        </div>
       </div>
     )
   }

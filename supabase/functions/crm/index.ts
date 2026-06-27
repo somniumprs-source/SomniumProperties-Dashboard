@@ -1031,7 +1031,7 @@ app.delete("/investidores/:id/documentos/:docId", async (c: any) => {
 // Find-or-create consultor (dedup por nome/contacto) — port de routes.js 698-727
 app.post("/consultores/find-or-create", async (c: any) => {
   try {
-    const { nome, imobiliaria, contacto } = await c.req.json().catch(() => ({}));
+    const { nome, imobiliaria, contacto, email } = await c.req.json().catch(() => ({}));
     if (!nome?.trim()) return c.json({ error: "Nome é obrigatório" }, 400);
 
     if (contacto?.trim()) {
@@ -1052,6 +1052,7 @@ app.post("/consultores/find-or-create", async (c: any) => {
       estado_avaliacao: "Em avaliação",
       imobiliaria: imobiliaria || null,
       contacto: contacto || null,
+      email: email || null,
     });
     return c.json(item, 201);
   } catch (e) { return c.json({ error: (e as Error).message }, 400); }

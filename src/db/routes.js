@@ -751,7 +751,7 @@ router.delete('/investidores/:id/documentos/:docId', async (req, res) => {
 // Find-or-create consultor (dedup por nome/contacto)
 router.post('/consultores/find-or-create', async (req, res) => {
   try {
-    const { nome, imobiliaria, contacto } = req.body
+    const { nome, imobiliaria, contacto, email } = req.body
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' })
 
     // 1. Match por contacto (telefone exacto)
@@ -775,6 +775,7 @@ router.post('/consultores/find-or-create', async (req, res) => {
       estado_avaliacao: 'Em avaliação',
       imobiliaria: imobiliaria || null,
       contacto: contacto || null,
+      email: email || null,
     })
     res.status(201).json(item)
   } catch (e) { res.status(400).json({ error: e.message }) }
