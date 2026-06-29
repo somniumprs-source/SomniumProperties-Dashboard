@@ -133,31 +133,37 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 )
 
 // Registar Service Worker para PWA.
-// Quando um SW novo toma controlo (apos deploy) recarregamos uma vez
-// para garantir que o utilizador apanha o HTML/JS mais recente sem
-// precisar de limpar cache manualmente. So fazemos reload se ja havia
-// um SW anterior — primeira visita nao precisa.
+// NAO forcamos reload quando ha versao nova. O SW ja serve network-first para
+// HTML e JS/CSS (ver public/sw.js), logo o utilizador recebe sempre o codigo
+// mais recente da rede, e o ChunkErrorBoundary recupera de chunks antigos.
+// Antes recarregavamos a app no `controllerchange`, o que causava reloads em
+// ciclo (a app "saltava" a cada ~60s) quando a CDN servia versoes a alternar
+// e o SW reassumia o controlo a meio da sessao. Agora apenas avisamos UMA vez
+// com um toast e deixamos o utilizador recarregar quando lhe convier.
 if ('serviceWorker' in navigator) {
-  const hadControllerOnLoad = navigator.serviceWorker.controller !== null
-  let refreshing = false
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!hadControllerOnLoad || refreshing) return
-    refreshing = true
-    window.location.reload()
-  })
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').then((reg) => {
       // Verificar versão nova a cada 60s — apanha deploys sem precisar fechar tab.
       setInterval(() => { reg.update().catch(() => {}) }, 60_000)
-      // Se há um SW "waiting" (já instalado mas não activo), forçar skipWaiting.
-      if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' })
+      let avisou = false
+      const avisarVersaoNova = () => {
+        if (avisou) return
+        avisou = true
+        try {
+          window.dispatchEvent(new CustomEvent('somnium:toast', {
+            detail: { message: 'Nova versão disponível — recarrega a página quando quiseres.', type: 'info' },
+          }))
+        } catch { /* ambiente sem CustomEvent */ }
+      }
+      // Já há um SW instalado à espera de uma sessão anterior: avisar.
+      if (reg.waiting && navigator.serviceWorker.controller) avisarVersaoNova()
       reg.addEventListener('updatefound', () => {
         const newSW = reg.installing
         if (!newSW) return
         newSW.addEventListener('statechange', () => {
+          // installed + ja havia controller = ACTUALIZACAO (nao a 1a visita).
           if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
-            // Há nova versão pronta — pedir activação imediata.
-            newSW.postMessage({ type: 'SKIP_WAITING' })
+            avisarVersaoNova()
           }
         })
       })
