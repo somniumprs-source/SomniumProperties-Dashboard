@@ -2006,6 +2006,13 @@ function renderAnaliseRentabilidade(b, im, a, opts = {}) {
   const obra = a.obra_com_iva || a.obra || im.custo_estimado_obra || 0
   const vvr = a.vvr || im.valor_venda_remodelado || 0
   const m = calcMetricsExtra(a, im)
+  // Mediação própria (Somnium é a mediadora): comissão tratada como receita
+  // distribuída à parte. Config/resultado vivem no JSON caep.mediacao.
+  const medAnalise = (() => {
+    const raw = a.caep
+    const parsed = typeof raw === 'string' ? JSON.parse(raw || 'null') : raw
+    return parsed && parsed.mediacao && parsed.mediacao.ativo ? parsed.mediacao : null
+  })()
 
   // Skip Resumo Executivo quando chamado do Dossier — duplicaria com:
   //   - OPORTUNIDADE DE INVESTIMENTO (tese)
@@ -2090,6 +2097,9 @@ function renderAnaliseRentabilidade(b, im, a, opts = {}) {
     { label: 'Valor de Venda por m²', value: EUR_M2(m.vvr_m2) },
     { label: 'Total Custos Venda', value: EUR(a.total_venda), total: true },
   ])
+  if (medAnalise) {
+    b.note(`Mediação própria: a Somnium é a mediadora. A comissão de ${PCT(a.comissao_perc)} sobre o VVR é tratada como receita do negócio (líquida de IVA: ${EUR(medAnalise.total)}) e distribuída à parte — ver relatório de parceria.`)
+  }
   b.space(4)
 
   b.header('F. FISCALIDADE')
@@ -2134,6 +2144,12 @@ function renderAnaliseRentabilidade(b, im, a, opts = {}) {
     { label: 'Margem sobre Custo Total', value: PCT_DEC(m.margem_custo_total), color: colorMargem(m.margem_custo_total) },
     { label: 'Rácio Risco / Retorno (por 1€ arriscado)', value: RACIO(m.racio_risco_retorno) },
   ])
+  if (medAnalise) {
+    b.simpleTable([
+      { label: 'Receita de Mediação Somnium (líquida de IVA)', value: EUR(medAnalise.total) },
+      { label: 'Rentabilidade do Negócio (Lucro Bruto + Mediação)', value: EUR((a.lucro_bruto || 0) + (medAnalise.total || 0)), total: true },
+    ])
+  }
   b.space(4)
 
   if (m.has_financiamento) {
@@ -3233,6 +3249,23 @@ function renderRelatorioCaep(b, im, an) {
           _values: [`#${i + 1}`, inv.nome || `Inv. ${i + 1}`, inv.tipo === 'empresa' ? 'Empresa' : 'Particular', `${inv.perc_lucro || 0}%`, EUR(inv.lucro_bruto), EUR(inv.impostos), EUR(inv.lucro_liquido), inv.roi ? `${inv.roi}%` : '—']
         })),
         { _values: ['', 'Total distribuído', '', '', '', '', EUR((parsed.investidores.reduce((s, inv) => s + (inv.lucro_liquido || 0), 0)) + parsed.quota_somnium), ''], _total: true },
+      ]
+    )
+  }
+
+  // ── Distribuição da mediação (pote separado, em bruto) ──
+  if (parsed.mediacao?.ativo) {
+    const med = parsed.mediacao
+    b.space(3)
+    b.header('DISTRIBUIÇÃO DA MEDIAÇÃO')
+    b.text(`A Somnium é a mediadora do negócio. Comissão de ${PCT(med.comissao_perc)} sobre o VVR (líquida de IVA): ${EUR(med.total)}. Valores em bruto, somam-se ao lucro de cada parte.`)
+    b.space(2)
+    b.colTable(
+      [['Parte', 200], ['%', 70], ['Valor', 110]],
+      [
+        { _values: ['Somnium Properties', `${med.perc_somnium}%`, EUR(med.quota_somnium)] },
+        ...(med.investidores || []).map(mi => ({ _values: [mi.nome || 'Investidor', `${mi.perc}%`, EUR(mi.valor)] })),
+        { _values: ['Total mediação', '', EUR(med.total)], _total: true },
       ]
     )
   }

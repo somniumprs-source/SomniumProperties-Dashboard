@@ -472,6 +472,17 @@ export function calcCAEP(inputs: any, caepConfig: any): any {
     }
   })
 
+  // Mediação própria — pote separado (50/25/25 em bruto), somado a cada parte.
+  const mediacao = calcMediacao(inputs, caepConfig.mediacao)
+  if (mediacao) {
+    for (const d of detalhes) {
+      const m = mediacao.investidores.find((mi: any) => mi.nome === d.nome)
+      const valor = m ? m.valor : 0
+      d.mediacao = valor
+      d.total_com_mediacao = round2(d.lucro_bruto + valor)
+    }
+  }
+
   return {
     perc_somnium: percSomnium,
     base_distribuicao: baseDistribuicao,
@@ -479,6 +490,8 @@ export function calcCAEP(inputs: any, caepConfig: any): any {
     capital_total: capitalTotal,
     investidores: detalhes,
     lucro_base: lucroBase,
+    mediacao,
+    quota_somnium_total: round2(quotaSomnium + (mediacao ? mediacao.quota_somnium : 0)),
   }
 }
 
@@ -532,6 +545,33 @@ export function quickCheck({ compra, obra, vvr, meses }: any): any {
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
+}
+
+// Distribuição da comissão de mediação própria (pote separado, em bruto).
+// Total = VVR × comissão% (líquida de IVA). Repartido por % fixas: Somnium +
+// cada investidor. Não passa por IRC/retenção (pass-through).
+function calcMediacao(inputs: any, medCfg: any): any {
+  if (!medCfg || !medCfg.ativo) return null
+  const vvr = parseFloat(inputs.vvr) || 0
+  const comissaoPerc = isNaN(parseFloat(inputs.comissao_perc)) ? 2.5 : parseFloat(inputs.comissao_perc)
+  const total = round2(vvr * comissaoPerc / 100)
+  const percSomnium = isNaN(parseFloat(medCfg.perc_somnium)) ? 50 : parseFloat(medCfg.perc_somnium)
+  const quotaSomnium = round2(total * percSomnium / 100)
+  const investidores = (medCfg.investidores || []).map((mi: any) => {
+    const perc = parseFloat(mi.perc) || 0
+    return { nome: mi.nome, perc, valor: round2(total * perc / 100) }
+  })
+  const somaPerc = round2(percSomnium + investidores.reduce((s: number, m: any) => s + m.perc, 0))
+  return {
+    ativo: true,
+    comissao_perc: comissaoPerc,
+    total,
+    perc_somnium: percSomnium,
+    quota_somnium: quotaSomnium,
+    investidores,
+    soma_perc: somaPerc,
+    valido: somaPerc === 100,
+  }
 }
 
 // Anualização robusta de um retorno periódico.
