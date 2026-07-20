@@ -3,7 +3,7 @@
  * Mostra: campos editáveis + relações + timeline + tarefas + reuniões.
  */
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
-import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, RefreshCw, MoreVertical, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin, Eye } from 'lucide-react'
+import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, RefreshCw, MoreVertical, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin, Eye, Trash2 } from 'lucide-react'
 import { apiFetch, openDocument } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { PartilharAcesso } from '../PartilharAcesso.jsx'
@@ -670,6 +670,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
   const [openContactoForm, setOpenContactoForm] = useState(false)
   // Sugestões para autocomplete (imobiliárias + zonas) — alimentado pelos
@@ -705,6 +706,23 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
 
   const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores' }[type]
   const prevTab = useRef(activeTab)
+
+  // Apagar a entidade directamente a partir da ficha aberta (sem voltar à lista).
+  async function handleDelete() {
+    if (deleting) return
+    if (!confirm(`Apagar "${data?.nome || 'este registo'}"? Esta acção não pode ser desfeita.`)) return
+    setDeleting(true)
+    try {
+      const r = await apiFetch(`/api/crm/${endpoint}/${id}`, { method: 'DELETE' })
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Falha ao apagar')
+      toast('Registo apagado', 'success')
+      window.dispatchEvent(new CustomEvent('somnium:refresh'))
+      onClose?.()  // onClose já recarrega a lista
+    } catch (e) {
+      toast(e.message || 'Erro ao apagar', 'error')
+      setDeleting(false)
+    }
+  }
 
   // Mark-seen: quando o utilizador abre o tab WhatsApp, marca como lido
   useEffect(() => {
@@ -866,6 +884,14 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
               style={{ backgroundColor: '#1a1a1a', color: '#C9A84C', border: '1px solid #C9A84C33' }}>
               <Pencil className="w-3.5 h-3.5" /> Editar
+            </button>
+          )}
+          {type === 'Investidores' && !editing && (
+            <button onClick={handleDelete} disabled={deleting}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ backgroundColor: '#1a1a1a', color: '#f87171', border: '1px solid #f8717133' }}
+              title="Apagar este investidor">
+              <Trash2 className="w-3.5 h-3.5" /> {deleting ? 'A apagar...' : 'Apagar'}
             </button>
           )}
           {type === 'Consultores' && !editing && (
