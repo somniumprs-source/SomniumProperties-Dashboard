@@ -76,23 +76,28 @@ export function RegistoManualFieldset({ registo, onChange }) {
       </Bloco>
 
       <Bloco titulo="Discovery Call — Scorecard de Qualificação">
-        <div className="space-y-2">
+        <div className="space-y-3">
           {DC_CRITERIOS.map(c => (
-            <div key={c.key} className="flex items-center justify-between gap-2">
-              <span className="text-xs text-gray-600">{c.label}</span>
-              <div className="flex gap-1">
-                {[0, 1, 2].map(n => {
-                  const active = registo[c.key] === n
-                  return (
-                    <button key={n} type="button"
-                      onClick={() => onChange(c.key, active ? null : n)}
-                      className={`w-7 h-7 rounded-md text-xs font-semibold border transition-colors ${active ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-yellow-300'}`}
-                      style={active ? { backgroundColor: '#C9A84C' } : undefined}>
-                      {n}
-                    </button>
-                  )
-                })}
+            <div key={c.key} className="space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-gray-600">{c.label}</span>
+                <div className="flex gap-1">
+                  {[0, 1, 2].map(n => {
+                    const active = registo[c.key] === n
+                    return (
+                      <button key={n} type="button"
+                        onClick={() => onChange(c.key, active ? null : n)}
+                        className={`w-7 h-7 rounded-md text-xs font-semibold border transition-colors ${active ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-yellow-300'}`}
+                        style={active ? { backgroundColor: '#C9A84C' } : undefined}>
+                        {n}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
+              <input type="text" value={registo[c.notaKey] || ''} onChange={e => onChange(c.notaKey, e.target.value)}
+                placeholder="Justificação da pontuação (opcional)"
+                className="w-full px-2 py-1 text-xs rounded-md border border-gray-200 focus:outline-none focus:ring-1 focus:ring-yellow-300" />
             </div>
           ))}
           <div className="flex items-center justify-between pt-2 mt-1 border-t border-gray-100">

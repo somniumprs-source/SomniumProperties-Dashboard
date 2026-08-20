@@ -1594,6 +1594,12 @@ async function ensureGravacoesTable() {
     ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_pontuacao_total SMALLINT;
     ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_onus_verificado BOOLEAN;
     ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_direito_preferencia_esclarecido BOOLEAN;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_notas_objetivo TEXT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_notas_motivo_real TEXT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_notas_dor_desafio TEXT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_notas_impacto TEXT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_notas_urgencia TEXT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_notas_tentativas_anteriores TEXT;
     ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cl_resultado TEXT;
     ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cl_valor_ancora NUMERIC;
     ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cl_valor_contraproposta NUMERIC;
@@ -1615,8 +1621,9 @@ const CC_RESULTADOS = ["atendeu", "nao_atendeu", "recusou", "numero_errado"];
 const SIM_NAO_NP = ["sim", "nao", "nao_perguntado"];
 const CL_RESULTADOS = ["aceite", "recusa_definitiva", "vou_pensar_com_data", "vou_pensar_sem_data"];
 const DC_SCORE_FIELDS = ["dc_score_objetivo", "dc_score_motivo_real", "dc_score_dor_desafio", "dc_score_impacto", "dc_score_urgencia", "dc_score_tentativas_anteriores"];
+const DC_NOTAS_FIELDS = ["dc_notas_objetivo", "dc_notas_motivo_real", "dc_notas_dor_desafio", "dc_notas_impacto", "dc_notas_urgencia", "dc_notas_tentativas_anteriores"];
 const REGISTO_MANUAL_KEYS = [
-  "cc_resultado", "cc_aceita_negociar", ...DC_SCORE_FIELDS,
+  "cc_resultado", "cc_aceita_negociar", ...DC_SCORE_FIELDS, ...DC_NOTAS_FIELDS,
   "dc_onus_verificado", "dc_direito_preferencia_esclarecido",
   "cl_resultado", "cl_valor_ancora", "cl_valor_contraproposta", "cl_deadline", "cl_formalizado_escrito_mesmo_dia",
   "pp_compromisso_confirmado", "pp_criterios_pesquisa_enviados", "pp_negocios_fechados",
@@ -1662,6 +1669,7 @@ function sanitizeRegistoManual(input: Record<string, any>, current: Record<strin
   out.cc_aceita_negociar = SIM_NAO_NP.includes(pick("cc_aceita_negociar")) ? pick("cc_aceita_negociar") : null;
 
   for (const f of DC_SCORE_FIELDS) out[f] = clampScore(pick(f));
+  for (const f of DC_NOTAS_FIELDS) out[f] = String(pick(f) ?? "").trim() || null;
   out.dc_onus_verificado = toBool(pick("dc_onus_verificado"));
   out.dc_direito_preferencia_esclarecido = toBool(pick("dc_direito_preferencia_esclarecido"));
   const scoresPresentes = DC_SCORE_FIELDS.some((f) => out[f] !== null);
@@ -1808,6 +1816,7 @@ app.post("/consultores/:id/gravacoes", async (c: any) => {
          tipo_chamada, registo_fonte, registo_confirmado_em, registo_confirmado_por,
          cc_resultado, cc_aceita_negociar,
          dc_score_objetivo, dc_score_motivo_real, dc_score_dor_desafio, dc_score_impacto, dc_score_urgencia, dc_score_tentativas_anteriores,
+         dc_notas_objetivo, dc_notas_motivo_real, dc_notas_dor_desafio, dc_notas_impacto, dc_notas_urgencia, dc_notas_tentativas_anteriores,
          dc_pontuacao_total, dc_onus_verificado, dc_direito_preferencia_esclarecido,
          cl_resultado, cl_valor_ancora, cl_valor_contraproposta, cl_deadline, cl_formalizado_escrito_mesmo_dia,
          pp_compromisso_confirmado, pp_criterios_pesquisa_enviados, pp_negocios_fechados,
@@ -1816,15 +1825,17 @@ app.post("/consultores/:id/gravacoes", async (c: any) => {
          $10,$11,$12,$13,
          $14,$15,
          $16,$17,$18,$19,$20,$21,
-         $22,$23,$24,
-         $25,$26,$27,$28,$29,
-         $30,$31,$32,
-         $33,$33)
+         $22,$23,$24,$25,$26,$27,
+         $28,$29,$30,
+         $31,$32,$33,$34,$35,
+         $36,$37,$38,
+         $39,$39)
        RETURNING *`,
       [id, consultorId, followupId, imovelId, titulo, dataChamada, storagePath, file?.name || null, estado,
        registo.tipo_chamada, "manual", registo.tipo_chamada ? now : null, registo.tipo_chamada ? registoConfirmadoPor : null,
        registo.cc_resultado, registo.cc_aceita_negociar,
        registo.dc_score_objetivo, registo.dc_score_motivo_real, registo.dc_score_dor_desafio, registo.dc_score_impacto, registo.dc_score_urgencia, registo.dc_score_tentativas_anteriores,
+       registo.dc_notas_objetivo, registo.dc_notas_motivo_real, registo.dc_notas_dor_desafio, registo.dc_notas_impacto, registo.dc_notas_urgencia, registo.dc_notas_tentativas_anteriores,
        registo.dc_pontuacao_total, registo.dc_onus_verificado, registo.dc_direito_preferencia_esclarecido,
        registo.cl_resultado, registo.cl_valor_ancora, registo.cl_valor_contraproposta, registo.cl_deadline, registo.cl_formalizado_escrito_mesmo_dia,
        registo.pp_compromisso_confirmado, registo.pp_criterios_pesquisa_enviados, registo.pp_negocios_fechados,
@@ -1857,14 +1868,16 @@ app.patch("/gravacoes/:id/registo", async (c: any) => {
         tipo_chamada = $2, registo_fonte = $3, registo_confirmado_em = $4, registo_confirmado_por = $5,
         cc_resultado = $6, cc_aceita_negociar = $7,
         dc_score_objetivo = $8, dc_score_motivo_real = $9, dc_score_dor_desafio = $10, dc_score_impacto = $11, dc_score_urgencia = $12, dc_score_tentativas_anteriores = $13,
-        dc_pontuacao_total = $14, dc_onus_verificado = $15, dc_direito_preferencia_esclarecido = $16,
-        cl_resultado = $17, cl_valor_ancora = $18, cl_valor_contraproposta = $19, cl_deadline = $20, cl_formalizado_escrito_mesmo_dia = $21,
-        pp_compromisso_confirmado = $22, pp_criterios_pesquisa_enviados = $23, pp_negocios_fechados = $24,
-        updated_at = $25
+        dc_notas_objetivo = $14, dc_notas_motivo_real = $15, dc_notas_dor_desafio = $16, dc_notas_impacto = $17, dc_notas_urgencia = $18, dc_notas_tentativas_anteriores = $19,
+        dc_pontuacao_total = $20, dc_onus_verificado = $21, dc_direito_preferencia_esclarecido = $22,
+        cl_resultado = $23, cl_valor_ancora = $24, cl_valor_contraproposta = $25, cl_deadline = $26, cl_formalizado_escrito_mesmo_dia = $27,
+        pp_compromisso_confirmado = $28, pp_criterios_pesquisa_enviados = $29, pp_negocios_fechados = $30,
+        updated_at = $31
        WHERE id = $1 RETURNING *`,
       [id, registo.tipo_chamada, registoFonte, now, body?.registo_confirmado_por || null,
        registo.cc_resultado, registo.cc_aceita_negociar,
        registo.dc_score_objetivo, registo.dc_score_motivo_real, registo.dc_score_dor_desafio, registo.dc_score_impacto, registo.dc_score_urgencia, registo.dc_score_tentativas_anteriores,
+       registo.dc_notas_objetivo, registo.dc_notas_motivo_real, registo.dc_notas_dor_desafio, registo.dc_notas_impacto, registo.dc_notas_urgencia, registo.dc_notas_tentativas_anteriores,
        registo.dc_pontuacao_total, registo.dc_onus_verificado, registo.dc_direito_preferencia_esclarecido,
        registo.cl_resultado, registo.cl_valor_ancora, registo.cl_valor_contraproposta, registo.cl_deadline, registo.cl_formalizado_escrito_mesmo_dia,
        registo.pp_compromisso_confirmado, registo.pp_criterios_pesquisa_enviados, registo.pp_negocios_fechados,

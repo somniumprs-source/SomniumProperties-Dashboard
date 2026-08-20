@@ -595,6 +595,12 @@ export async function initSchema() {
       ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_pontuacao_total SMALLINT;
       ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_onus_verificado BOOLEAN;
       ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_direito_preferencia_esclarecido BOOLEAN;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_notas_objetivo TEXT;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_notas_motivo_real TEXT;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_notas_dor_desafio TEXT;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_notas_impacto TEXT;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_notas_urgencia TEXT;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_notas_tentativas_anteriores TEXT;
       ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cl_resultado TEXT;
       ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cl_valor_ancora NUMERIC;
       ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cl_valor_contraproposta NUMERIC;

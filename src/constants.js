@@ -233,12 +233,12 @@ export const SIM_NAO_NP_LABEL = { sim: 'Sim', nao: 'Não', nao_perguntado: 'Não
 
 // Discovery Call — scorecard de qualificação 0-12 (6 critérios x 0-2)
 export const DC_CRITERIOS = [
-  { key: 'dc_score_objetivo', label: 'Objectivo' },
-  { key: 'dc_score_motivo_real', label: 'Motivo Real' },
-  { key: 'dc_score_dor_desafio', label: 'Dor / Desafio' },
-  { key: 'dc_score_impacto', label: 'Impacto' },
-  { key: 'dc_score_urgencia', label: 'Urgência' },
-  { key: 'dc_score_tentativas_anteriores', label: 'Tentativas Anteriores' },
+  { key: 'dc_score_objetivo', notaKey: 'dc_notas_objetivo', label: 'Objectivo' },
+  { key: 'dc_score_motivo_real', notaKey: 'dc_notas_motivo_real', label: 'Motivo Real' },
+  { key: 'dc_score_dor_desafio', notaKey: 'dc_notas_dor_desafio', label: 'Dor / Desafio' },
+  { key: 'dc_score_impacto', notaKey: 'dc_notas_impacto', label: 'Impacto' },
+  { key: 'dc_score_urgencia', notaKey: 'dc_notas_urgencia', label: 'Urgência' },
+  { key: 'dc_score_tentativas_anteriores', notaKey: 'dc_notas_tentativas_anteriores', label: 'Tentativas Anteriores' },
 ]
 
 // Bandas de decisão do scorecard (SOP 2, Secção 4).
@@ -267,6 +267,9 @@ export const REGISTO_FIELD_LABEL = {
   cc_resultado: 'Resultado', cc_aceita_negociar: 'Aceita negociar',
   dc_score_objetivo: 'Objectivo', dc_score_motivo_real: 'Motivo Real', dc_score_dor_desafio: 'Dor / Desafio',
   dc_score_impacto: 'Impacto', dc_score_urgencia: 'Urgência', dc_score_tentativas_anteriores: 'Tentativas Anteriores',
+  dc_notas_objetivo: 'Justificação — Objectivo', dc_notas_motivo_real: 'Justificação — Motivo Real',
+  dc_notas_dor_desafio: 'Justificação — Dor / Desafio', dc_notas_impacto: 'Justificação — Impacto',
+  dc_notas_urgencia: 'Justificação — Urgência', dc_notas_tentativas_anteriores: 'Justificação — Tentativas Anteriores',
   dc_onus_verificado: 'Ónus/hipotecas verificado', dc_direito_preferencia_esclarecido: 'Direito de preferência esclarecido',
   cl_resultado: 'Resultado', cl_valor_ancora: 'Valor de âncora', cl_valor_contraproposta: 'Contra-proposta',
   cl_deadline: 'Deadline', cl_formalizado_escrito_mesmo_dia: 'Formalizado por escrito',
