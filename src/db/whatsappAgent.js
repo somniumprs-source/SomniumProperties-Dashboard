@@ -775,15 +775,25 @@ ${urgente ? '⚠️ URGÊNCIA DETECTADA — prioridade máxima' : ''}
           decision.documentacao_pedida ? 'Documentação pedida ao consultor' : null,
         ].filter(Boolean).join('\n')
 
+        // Este INSERT nao passa pelo crud.create() generico (usado pelo POST
+        // /api/crm/imoveis), por isso replica aqui a mesma auto-geracao de
+        // REF Interna sequencial por regiao.
+        const regiaoImovel = consultor.regiao || 'Coimbra'
+        const { rows: maxRefRows } = await pool.query(
+          `SELECT COALESCE(MAX(ref_interna::int), 0) AS max FROM imoveis WHERE regiao IS NOT DISTINCT FROM $1 AND ref_interna ~ '^[0-9]+$'`,
+          [regiaoImovel]
+        )
+        const refInterna = String(Number(maxRefRows[0].max) + 1).padStart(4, '0')
+
         await pool.query(
-          `INSERT INTO imoveis (id, nome, estado, nome_consultor, origem, tipo_oportunidade, link, tipologia, zona, ask_price, area_bruta, notas, created_at, updated_at, data_adicionado)
-           VALUES ($1, $2, 'Pré-aprovação', $3, 'Consultor', $4, $5, $6, $7, $8, $9, $10, $11, $11, $12)`,
+          `INSERT INTO imoveis (id, nome, estado, nome_consultor, origem, tipo_oportunidade, link, tipologia, zona, ask_price, area_bruta, notas, regiao, ref_interna, created_at, updated_at, data_adicionado)
+           VALUES ($1, $2, 'Pré-aprovação', $3, 'Consultor', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13, $14)`,
           [
             imovelId, nomeImovel, consultor.nome,
             im.tipo === 'PORTAL' ? 'Portal' : 'Off-Market',
             im.link_anuncio || portalLink?.url || null,
             im.tipologia, im.zona, im.ask_price, im.area_m2,
-            notasAgente, now.toISOString(), now.toISOString().slice(0, 10),
+            notasAgente, regiaoImovel, refInterna, now.toISOString(), now.toISOString().slice(0, 10),
           ]
         )
         console.log(`[agent] Imóvel criado em Pré-aprovação: ${imovelId}`)
