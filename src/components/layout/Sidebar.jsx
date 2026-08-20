@@ -1,6 +1,6 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
-import { LayoutDashboard, TrendingUp, Database, Bell, Clock, BarChart3, Menu, X, LogOut, Briefcase, Shield, ScrollText, History, UserCheck, ChevronDown, FileText, BookOpen, Map, Megaphone } from 'lucide-react'
+import { LayoutDashboard, TrendingUp, Database, Bell, Clock, BarChart3, Menu, X, LogOut, Briefcase, Shield, ScrollText, History, UserCheck, ChevronDown, FileText, BookOpen, Map, Megaphone, Phone } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { apiFetch } from '../../lib/api.js'
 import { prefetchRoute } from '../../lib/prefetch.js'
@@ -16,6 +16,7 @@ const nav = [
       { to: '/administracao/relatorios', label: 'Relatórios',   Icon: FileText, area: 'administracao' },
       { to: '/administracao/sop',        label: 'SOPs',         Icon: BookOpen, area: 'administracao' },
       { to: '/administracao/regiao',     label: 'Multi-Região', Icon: Map, area: 'administracao' },
+      { to: '/administracao/chamadas',   label: 'Qualidade de Chamadas', Icon: Phone, area: 'administracao' },
     ],
   },
   { to: '/crm', label: 'Departamento Comercial', Icon: Database, badgeKey: 'crm', area: 'crm' },
