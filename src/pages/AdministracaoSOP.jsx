@@ -62,18 +62,23 @@ export function AdministracaoSOP() {
     if (syncing) return
     setSyncing(true)
     try {
-      const subfolders = [
-        { id: '1I35yShyNBWgE6Co8WePG5SlrHAas5pyE', dep: 'comercial' },
-        { id: '1kQ33VoPcKHX8CYWBCJT2e0XQfSVbs5iR', dep: 'comercial' },
+      const folders = [
+        { folderId: '1I35yShyNBWgE6Co8WePG5SlrHAas5pyE', departamento: 'comercial' },
+        { folderId: '1kQ33VoPcKHX8CYWBCJT2e0XQfSVbs5iR', departamento: 'comercial' },
       ]
-      for (const sub of subfolders) {
-        await apiFetch('/api/sops/import-drive', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ folderId: sub.id, departamento: sub.dep, overwrite: true }),
-        })
-      }
+      const r = await apiFetch('/api/sops/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folders }),
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error || 'Falha ao sincronizar')
       await loadList()
+      const partes = []
+      if (data.importados) partes.push(`${data.importados} novo(s)`)
+      if (data.actualizados) partes.push(`${data.actualizados} actualizado(s)`)
+      if (data.removidos) partes.push(`${data.removidos} removido(s) (já não existem no Drive)`)
+      if (partes.length) alert(`Sincronização concluída: ${partes.join(', ')}.`)
     } catch (e) { alert(e.message) }
     setSyncing(false)
   }

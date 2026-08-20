@@ -4,7 +4,7 @@
  */
 import { Router } from 'express'
 import pool from './pg.js'
-import { importFolderToSops, parseFolderId, isConfigured as driveConfigured } from './sopDriveImport.js'
+import { importFolderToSops, syncSopsFromDrive, parseFolderId, isConfigured as driveConfigured } from './sopDriveImport.js'
 
 const router = Router()
 const DEPARTAMENTOS_VALIDOS = ['comercial', 'financeiro', 'administrativo', 'geral']
@@ -114,6 +114,34 @@ router.post('/import-drive', async (req, res) => {
     res.json({ ok: true, ...stats })
   } catch (e) {
     console.error('[sops] import-drive erro:', e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// POST /api/sops/sync — sincroniza várias pastas do Drive numa operação
+// atómica: casa por número de SOP (não por drive_file_id) e remove da BD
+// as linhas dos departamentos sincronizados que já não existem no Drive.
+router.post('/sync', async (req, res) => {
+  try {
+    if (!driveConfigured()) {
+      return res.status(503).json({ error: 'Google Drive não configurado no servidor.' })
+    }
+    const { folders: rawFolders } = req.body || {}
+    if (!Array.isArray(rawFolders) || !rawFolders.length) {
+      return res.status(400).json({ error: 'folders (array) é obrigatório' })
+    }
+    const folders = rawFolders.map(({ folderId: rawFolder, departamento }) => {
+      const folderId = parseFolderId(rawFolder)
+      if (!folderId) throw new Error('folderId / URL Drive inválido')
+      if (!DEPARTAMENTOS_VALIDOS.includes(departamento)) {
+        throw new Error(`departamento inválido: ${departamento}`)
+      }
+      return { folderId, departamento }
+    })
+    const stats = await syncSopsFromDrive({ folders, user: userEmail(req) })
+    res.json({ ok: true, ...stats })
+  } catch (e) {
+    console.error('[sops] sync erro:', e)
     res.status(500).json({ error: e.message })
   }
 })
