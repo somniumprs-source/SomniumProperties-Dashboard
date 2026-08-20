@@ -1608,16 +1608,15 @@ async function ensureGravacoesTable() {
   _gravacoesTableEnsured = true;
 }
 
-// SOP 2: tipo de chamada + campos manuais estruturados por tipo. O registo
-// manual e SEMPRE a fonte de verdade (nunca escrito pela IA directamente —
-// so o utilizador, via 'Aceitar sugestao', o confirma).
-const TIPOS_CHAMADA = ["cold_call", "discovery_call", "close_call", "pivot_parceria"];
+// SOP 2: campos manuais estruturados por fase. O registo manual e SEMPRE a
+// fonte de verdade (nunca escrito pela IA directamente — so o utilizador,
+// via 'Aceitar sugestao', o confirma).
 const CC_RESULTADOS = ["atendeu", "nao_atendeu", "recusou", "numero_errado"];
 const SIM_NAO_NP = ["sim", "nao", "nao_perguntado"];
 const CL_RESULTADOS = ["aceite", "recusa_definitiva", "vou_pensar_com_data", "vou_pensar_sem_data"];
 const DC_SCORE_FIELDS = ["dc_score_objetivo", "dc_score_motivo_real", "dc_score_dor_desafio", "dc_score_impacto", "dc_score_urgencia", "dc_score_tentativas_anteriores"];
 const REGISTO_MANUAL_KEYS = [
-  "tipo_chamada", "cc_resultado", "cc_aceita_negociar", ...DC_SCORE_FIELDS,
+  "cc_resultado", "cc_aceita_negociar", ...DC_SCORE_FIELDS,
   "dc_onus_verificado", "dc_direito_preferencia_esclarecido",
   "cl_resultado", "cl_valor_ancora", "cl_valor_contraproposta", "cl_deadline", "cl_formalizado_escrito_mesmo_dia",
   "pp_compromisso_confirmado", "pp_criterios_pesquisa_enviados", "pp_negocios_fechados",
@@ -1639,14 +1638,26 @@ function toNum(v: any): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+// Uma chamada real cobre muitas vezes mais do que uma fase do SOP2 na mesma
+// conversa (ex: cold call que passa logo a discovery) — por isso nao ha um
+// "tipo" escolhido pelo utilizador. Derivamos aqui a fase mais avancada
+// coberta, so para etiqueta/agrupamento; os KPIs usam antes presenca de
+// campo a campo (ver GET /gravacoes/kpis), nao este valor.
+function derivarTipoChamada(out: Record<string, any>): string | null {
+  if (out.cl_resultado) return "close_call";
+  if (DC_SCORE_FIELDS.some((f) => out[f] !== null)) return "discovery_call";
+  if (out.cc_resultado) return "cold_call";
+  if (out.pp_compromisso_confirmado !== null || out.pp_criterios_pesquisa_enviados !== null || out.pp_negocios_fechados !== null) return "pivot_parceria";
+  return null;
+}
+
 // Junta `input` (payload novo, so chaves presentes) com `current` (valores ja
 // gravados na BD) e devolve o conjunto completo de colunas do registo manual,
-// validado e com dc_pontuacao_total recalculado no servidor.
+// validado e com dc_pontuacao_total/tipo_chamada recalculados no servidor.
 function sanitizeRegistoManual(input: Record<string, any>, current: Record<string, any> = {}) {
   const pick = (key: string) => (Object.prototype.hasOwnProperty.call(input, key) ? input[key] : current[key]);
   const out: Record<string, any> = {};
 
-  out.tipo_chamada = TIPOS_CHAMADA.includes(pick("tipo_chamada")) ? pick("tipo_chamada") : null;
   out.cc_resultado = CC_RESULTADOS.includes(pick("cc_resultado")) ? pick("cc_resultado") : null;
   out.cc_aceita_negociar = SIM_NAO_NP.includes(pick("cc_aceita_negociar")) ? pick("cc_aceita_negociar") : null;
 
@@ -1667,105 +1678,79 @@ function sanitizeRegistoManual(input: Record<string, any>, current: Record<strin
   const ppNeg = toNum(pick("pp_negocios_fechados"));
   out.pp_negocios_fechados = ppNeg === null ? null : Math.round(ppNeg);
 
+  out.tipo_chamada = derivarTipoChamada(out);
+
   return out;
 }
 
-// Contexto (guiao + campos de sugestao) por tipo de chamada do SOP 2. O prompt
-// e a analise mudam consoante o tipo — uma Cold Call de 3 minutos nao se avalia
-// com os criterios de uma Discovery Call de 20.
-const GRAVACAO_PROMPT_CONTEXTOS: Record<string, { nomeChamada: string; guiao: string; camposSugestao: string }> = {
-  cold_call: {
-    nomeChamada: "COLD CALL",
-    guiao: `Objectivo (2-4 minutos): confirmar se vale a pena investir tempo e ganhar permissao para aprofundar numa Discovery Call — NAO e para "vender" nem para recolher todos os detalhes do imovel.
-Guiao esperado:
-- Abertura directa, sem pedir permissao: identificar-se como Somnium Properties (grupo de investidores em Coimbra), referir o imovel/zona visto no portal, e dizer que ha genuino interesse em avancar rapidamente, fora do processo normal de mercado.
-- Motivo da chamada numa frase.
-- Pergunta de qualificacao unica: "Estao abertos a uma proposta directa, fora do processo normal, se fizer sentido em valor?"
-- Tratar no maximo 1 objeccao (nao insistir).
-- Fechar com proximo passo concreto e hora definida (nunca deixar em aberto).
-Regras de qualidade a avaliar: NAO deve terminar a abertura com "tem 2 minutos?" nem usar "faz sentido?" como muleta vaga — sao formas faceis do interlocutor dizer nao. NAO deve negociar valor nesta chamada (o valor so se discute na Discovery/Close Call).
-Objeccoes tipicas em Coimbra: "nao tenho pressa nenhuma", "ja tenho comprador/esta em processo", "nao vendo abaixo do anuncio", "nao trabalho com investidores" — a resposta certa nunca insiste nem negoceia valor, so tenta manter a porta aberta para uma Discovery Call.`,
-    camposSugestao: `  "sugestao_cc_resultado": "atendeu" | "nao_atendeu" | "recusou" | "numero_errado",
-  "sugestao_cc_aceita_negociar": "sim" | "nao" | "nao_perguntado"`,
-  },
-  discovery_call: {
-    nomeChamada: "DISCOVERY CALL",
-    guiao: `Objectivo: aprofundar a situacao real do proprietario SEM pitch de venda — o foco e encontrar um problema real que a proposta resolve, nao justificar um valor.
-Estrutura esperada em 3 blocos:
-1. Objectivo — o que pretende fazer depois de vender; ha algum prazo definido.
-2. Motivo Real — aprofundar a resposta superficial ("E isso permitia-lhe fazer o quê?") ate chegar a um motivo especifico, nao ficar no generico "preciso vender".
-3. Desafios (a dor real) — clarificacao, quantificacao ("Quanto lhe custa por mes manter o imovel assim?"), tentativas anteriores, duracao do problema, impacto actual (financeiro, tempo, emocional).
-Regras de conduta a avaliar: regra 70/30 (o proprietario deve falar a maior parte do tempo); uso de silencio depois de perguntas de quantificacao; a pergunta "E depois?" como tecnica de aprofundamento. Antes de terminar deve confirmar-se sempre: recapitulacao curta + "Ha algo importante que me esteja a escapar?".
-Duas verificacoes obrigatorias antes de qualquer proposta: onus/hipotecas (via Certidao Permanente) e direito de preferencia (se o imovel esta arrendado) — avalia se foram feitas ou pelo menos mencionadas na chamada.
-Sinais de descartar (nao avancar): "nao tem pressa nenhuma" (repetido), "esta confortavel", "so vende por X" claramente acima do suportavel, "nao quer investidores" mantido mesmo depois da cold call.
-Rubrica do scorecard (0-2 por criterio): 0 = nao abordado/sem informacao; 1 = abordado superficialmente; 2 = aprofundado com detalhe concreto e quantificado.`,
-    camposSugestao: `  "sugestao_dc_score_objetivo": 0-2, "sugestao_dc_score_motivo_real": 0-2, "sugestao_dc_score_dor_desafio": 0-2,
-  "sugestao_dc_score_impacto": 0-2, "sugestao_dc_score_urgencia": 0-2, "sugestao_dc_score_tentativas_anteriores": 0-2,
-  "sugestao_dc_onus_verificado": true|false,
-  "sugestao_dc_direito_preferencia_esclarecido": true|false`,
-  },
-  close_call: {
-    nomeChamada: "CLOSE CALL",
-    guiao: `Objectivo: obter resposta definitiva (aceite ou recusa clara) — um "sim" verbal NAO e proposta aceite (reversivel ate documento assinado); "vou pensar" sem data de resposta NAO e resultado aceitavel.
-Guiao esperado:
-- Recapitulacao primeiro, usando as informacoes da discovery, antes de apresentar qualquer valor — nunca apresentar valor directo sem recapitulacao.
-- Apresentar a proposta com ancoragem: dizer o valor uma vez, com clareza, sem desculpar antes nem justificar depois.
-- Silencio activo depois de dizer o numero.
-- Tratar contra-proposta com concessao condicional (ex: "consigo chegar a [valor] se fecharmos ate [data]").
-- Pedir a decisao directamente.
-- Se nao fechar na hora, definir deadline com justificacao real (nunca deixar em aberto).
-- Formalizar aceitacao por escrito no mesmo dia.
-Objeccoes tipicas: "esperava mais, o anuncio diz outro valor" (reconduzir a dor identificada na discovery, nunca ao valor isolado); "preciso de falar com a familia/socio" (deixar proposta valida ate data definida, nunca aceitar "vou pensar" sem data); "vou ver com outro comprador/consultor" (criar urgencia real com prazo de validade); "nao sei se conseguem pagar tao depressa" (apresentar prova de fundos proactivamente).`,
-    camposSugestao: `  "sugestao_cl_resultado": "aceite" | "recusa_definitiva" | "vou_pensar_com_data" | "vou_pensar_sem_data",
-  "sugestao_cl_valor_ancora": numero ou null,
-  "sugestao_cl_valor_contraproposta": numero ou null,
-  "sugestao_cl_deadline": "YYYY-MM-DD ou null",
-  "sugestao_cl_formalizado_escrito_mesmo_dia": true|false`,
-  },
-  pivot_parceria: {
-    nomeChamada: "PIVOT PARA PARCERIA",
-    guiao: `Aplica-se quando o interlocutor e um consultor/agente imobiliario (nao o proprietario directo) — corre independentemente do resultado sobre o imovel especifico desta chamada. NAO fecha o imovel em causa — posiciona a Somnium como comprador de referencia para negocios off-market futuros.
-Criterios de pesquisa a comunicar: tipologia T1-T6 ou moradias; zonas Coimbra e arredores, Vila Nova de Gaia, Porto e arredores; valor maximo de aquisicao 300 mil euros; estado a precisar de obras (construcao anterior a 2000 ou preco/m2 abaixo da media).
-Incentivo por historico de negocios: 1o e 2o negocio fechado com o mesmo consultor da direito de preferencia para vender o imovel apos remodelacao; a partir do 3o negocio, fee percentual sobre a margem da Somnium (adicional a comissao normal).
-Criterio de sucesso: o consultor tem de confirmar EXPLICITAMENTE um compromisso de contacto futuro — uma resposta vaga tipo "mantenho-vos em mente" NAO conta como sucesso.`,
-    camposSugestao: `  "sugestao_pp_compromisso_confirmado": true|false,
-  "sugestao_pp_criterios_pesquisa_enviados": true|false,
-  "sugestao_pp_negocios_fechados": numero ou null`,
-  },
-};
+// Guiao unico do SOP 2: uma chamada real cobre muitas vezes varias fases
+// seguidas na mesma conversa (ex: cold call que passa logo a discovery), por
+// isso a IA avalia contra as 4 fases em conjunto e so preenche sugestao_*
+// para as que reconhecer na transcricao — as outras ficam a null.
+const GRAVACAO_GUIAO_SOP2 = `FASE 1 — COLD CALL (2-4 minutos): confirmar se vale a pena investir tempo e ganhar permissao para aprofundar — NAO e para "vender" nem para recolher todos os detalhes do imovel.
+Guiao esperado: abertura directa sem pedir permissao (identificar-se como Somnium Properties, grupo de investidores em Coimbra, referir o imovel/zona visto no portal, dizer que ha genuino interesse em avancar rapidamente fora do processo normal de mercado); motivo da chamada numa frase; pergunta de qualificacao unica ("Estao abertos a uma proposta directa, fora do processo normal, se fizer sentido em valor?"); tratar no maximo 1 objeccao; fechar com proximo passo concreto e hora definida.
+Regras de qualidade: NAO deve terminar a abertura com "tem 2 minutos?" nem usar "faz sentido?" como muleta vaga. NAO deve negociar valor nesta fase (o valor so se discute na Discovery/Close).
+Objeccoes tipicas: "nao tenho pressa nenhuma", "ja tenho comprador/esta em processo", "nao vendo abaixo do anuncio", "nao trabalho com investidores" — resposta certa nunca insiste nem negoceia valor, so tenta manter a porta aberta.
+
+FASE 2 — DISCOVERY CALL: aprofundar a situacao real do proprietario SEM pitch de venda — o foco e encontrar um problema real que a proposta resolve, nao justificar um valor.
+Estrutura esperada em 3 blocos: (1) Objectivo — o que pretende fazer depois de vender, ha prazo definido; (2) Motivo Real — aprofundar a resposta superficial ("E isso permitia-lhe fazer o quê?") ate um motivo especifico; (3) Desafios/dor real — clarificacao, quantificacao ("Quanto lhe custa por mes manter o imovel assim?"), tentativas anteriores, duracao do problema, impacto actual.
+Regras de conduta: regra 70/30 (o proprietario fala a maior parte do tempo); silencio depois de perguntas de quantificacao; "E depois?" como tecnica de aprofundamento; confirmar sempre no fim com recapitulacao curta + "Ha algo importante que me esteja a escapar?".
+Duas verificacoes obrigatorias antes de proposta: onus/hipotecas (Certidao Permanente) e direito de preferencia (se arrendado).
+Sinais de descartar: "nao tem pressa nenhuma" (repetido), "esta confortavel", "so vende por X" acima do suportavel, "nao quer investidores" mantido.
+Rubrica do scorecard (0-2 por criterio): 0 = nao abordado; 1 = superficial; 2 = aprofundado com detalhe concreto e quantificado.
+
+FASE 3 — CLOSE CALL: obter resposta definitiva — um "sim" verbal NAO e proposta aceite (reversivel ate documento assinado); "vou pensar" sem data de resposta NAO e resultado aceitavel.
+Guiao esperado: recapitulacao primeiro (usando a discovery) antes de qualquer valor; apresentar a proposta com ancoragem (dizer o valor uma vez, com clareza, sem desculpar nem justificar); silencio activo depois do numero; contra-proposta com concessao condicional; pedir a decisao directamente; se nao fechar, deadline com justificacao real; formalizar aceitacao por escrito no mesmo dia.
+Objeccoes tipicas: "esperava mais, o anuncio diz outro valor" (reconduzir a dor da discovery, nunca ao valor isolado); "preciso de falar com a familia/socio" (deixar proposta valida ate data definida); "vou ver com outro comprador" (criar urgencia real); "nao sei se conseguem pagar tao depressa" (prova de fundos proactiva).
+
+FASE 4 — PIVOT PARA PARCERIA: aplica-se quando o interlocutor e um consultor/agente (nao o proprietario directo), independentemente do resultado sobre o imovel desta chamada — posiciona a Somnium como comprador de referencia para negocios off-market futuros.
+Criterios a comunicar: tipologia T1-T6 ou moradias; zonas Coimbra e arredores, Vila Nova de Gaia, Porto e arredores; valor maximo 300 mil euros; estado a precisar de obras.
+Criterio de sucesso: o consultor confirma EXPLICITAMENTE um compromisso de contacto futuro — resposta vaga ("mantenho-vos em mente") nao conta.`;
 
 // Prompt da analise comercial (SOP 2). Foco: optimizar os scripts comerciais
 // da Somnium e sugerir o preenchimento do registo manual (nunca substitui-lo).
-function buildGravacaoPrompt(consultorNome: string, tipoChamada?: string) {
-  const ctx = GRAVACAO_PROMPT_CONTEXTOS[tipoChamada || ""] || GRAVACAO_PROMPT_CONTEXTOS.discovery_call;
-  return `Es um analista comercial senior da Somnium Properties (investimento imobiliario em Coimbra, Portugal). Recebes a transcricao de uma ${ctx.nomeChamada} (SOP 2) entre a nossa equipa e ${consultorNome || "(desconhecido)"}.
+function buildGravacaoPrompt(consultorNome: string) {
+  return `Es um analista comercial senior da Somnium Properties (investimento imobiliario em Coimbra, Portugal). Recebes a transcricao de uma chamada entre a nossa equipa e ${consultorNome || "(desconhecido)"}, avaliada contra o SOP 2 (Angariacao de Negocios). Uma chamada real cobre muitas vezes mais do que uma fase seguida (ex: cold call que passa logo a discovery na mesma conversa) — identifica quais das 4 fases abaixo estao realmente presentes na transcricao e avalia so essas.
 
-${ctx.guiao}
+${GRAVACAO_GUIAO_SOP2}
 
-Avalia a chamada CONTRA este guiao, com o objectivo de OPTIMIZAR os nossos scripts e treinar a equipa. As colunas "sugestao_*" abaixo sao apenas uma SUGESTAO para o registo manual — o registo manual e sempre a fonte de verdade e so e alterado se um humano confirmar. Responde APENAS com um objecto JSON valido (sem texto antes ou depois, sem markdown), com esta estrutura exacta:
+Avalia a chamada CONTRA o(s) guiao(oes) das fases que identificares, com o objectivo de OPTIMIZAR os nossos scripts e treinar a equipa. As colunas "sugestao_*" abaixo sao apenas uma SUGESTAO para o registo manual — o registo manual e sempre a fonte de verdade e so e alterado se um humano confirmar. Responde APENAS com um objecto JSON valido (sem texto antes ou depois, sem markdown), com esta estrutura exacta — preenche so os campos das fases que a transcricao realmente cobre, deixa os restantes a null:
 
 {
   "resumo": "2-3 frases sobre o que aconteceu na chamada",
   "sentimento": "positivo" | "neutro" | "negativo",
-  "classificacao": 1-5 (qualidade global da nossa execucao face ao guiao),
+  "classificacao": 1-5 (qualidade global da nossa execucao face ao(s) guiao(oes) aplicavel(eis)),
   "pontos_fortes": ["o que correu bem"],
   "pontos_fracos": ["onde falhamos ou perdemos o controlo da conversa"],
   "objeccoes": [{ "objeccao": "objeccao levantada", "resposta_dada": "como respondemos", "eficaz": true|false, "sugestao": "como responder melhor da proxima vez" }],
   "proximo_passo": "accao recomendada",
-  "sugestao_justificacao": "1-2 frases a justificar as sugestoes abaixo, com base na transcricao",
-${ctx.camposSugestao}
+  "sugestao_justificacao": "1-2 frases a justificar as sugestoes abaixo e a dizer que fases identificaste na chamada",
+  "sugestao_cc_resultado": "atendeu" | "nao_atendeu" | "recusou" | "numero_errado" | null,
+  "sugestao_cc_aceita_negociar": "sim" | "nao" | "nao_perguntado" | null,
+  "sugestao_dc_score_objetivo": 0-2 ou null, "sugestao_dc_score_motivo_real": 0-2 ou null, "sugestao_dc_score_dor_desafio": 0-2 ou null,
+  "sugestao_dc_score_impacto": 0-2 ou null, "sugestao_dc_score_urgencia": 0-2 ou null, "sugestao_dc_score_tentativas_anteriores": 0-2 ou null,
+  "sugestao_dc_onus_verificado": true|false|null,
+  "sugestao_dc_direito_preferencia_esclarecido": true|false|null,
+  "sugestao_cl_resultado": "aceite" | "recusa_definitiva" | "vou_pensar_com_data" | "vou_pensar_sem_data" | null,
+  "sugestao_cl_valor_ancora": numero ou null,
+  "sugestao_cl_valor_contraproposta": numero ou null,
+  "sugestao_cl_deadline": "YYYY-MM-DD ou null",
+  "sugestao_cl_formalizado_escrito_mesmo_dia": true|false|null,
+  "sugestao_pp_compromisso_confirmado": true|false|null,
+  "sugestao_pp_criterios_pesquisa_enviados": true|false|null,
+  "sugestao_pp_negocios_fechados": numero ou null
 }
 
-Escreve em portugues de Portugal, directo e profissional. Se a transcricao for insuficiente para avaliar algum campo de sugestao, devolve null nesse campo mas mantem a estrutura.`;
+Escreve em portugues de Portugal, directo e profissional. Se a chamada nao cobrir uma fase, deixa TODOS os campos sugestao_* dessa fase a null — nao inventes.`;
 }
 
-async function analisarTranscricaoIA(transcricao: string, consultorNome: string, tipoChamada?: string) {
+async function analisarTranscricaoIA(transcricao: string, consultorNome: string) {
   if (!Deno.env.get("ANTHROPIC_API_KEY")) throw new Error("ANTHROPIC_API_KEY nao configurada");
   const client = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") });
   const response = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 4096,
-    messages: [{ role: "user", content: `${buildGravacaoPrompt(consultorNome, tipoChamada)}\n\n--- TRANSCRICAO ---\n${transcricao}` }],
+    messages: [{ role: "user", content: `${buildGravacaoPrompt(consultorNome)}\n\n--- TRANSCRICAO ---\n${transcricao}` }],
   });
   const respText = (response.content?.[0] as any)?.text || "{}";
   const jsonMatch = respText.match(/\{[\s\S]*\}/);
@@ -1956,7 +1941,7 @@ app.post("/gravacoes/:id/transcricao", async (c: any) => {
     if (!g) return c.json({ error: "Gravacao nao encontrada" }, 404);
 
     try {
-      const analise = await analisarTranscricaoIA(transcricao, await nomeConsultor(g.consultor_id), g.tipo_chamada);
+      const analise = await analisarTranscricaoIA(transcricao, await nomeConsultor(g.consultor_id));
       await pool.query(
         `UPDATE consultor_gravacoes SET analise = $2, estado = 'analisado', updated_at = $3 WHERE id = $1`,
         [id, JSON.stringify(analise), new Date().toISOString()],
@@ -2007,7 +1992,7 @@ app.post("/gravacoes/:id/analisar", async (c: any) => {
     if (!g.transcricao?.trim()) return c.json({ error: "Sem transcricao para analisar" }, 400);
     await pool.query(`UPDATE consultor_gravacoes SET estado = 'a_analisar', updated_at = $2 WHERE id = $1`,
       [id, new Date().toISOString()]);
-    const analise = await analisarTranscricaoIA(g.transcricao, await nomeConsultor(g.consultor_id), g.tipo_chamada);
+    const analise = await analisarTranscricaoIA(g.transcricao, await nomeConsultor(g.consultor_id));
     const { rows: [final] } = await pool.query(
       `UPDATE consultor_gravacoes SET analise = $2, estado = 'analisado', erro = NULL, updated_at = $3 WHERE id = $1 RETURNING *`,
       [id, JSON.stringify(analise), new Date().toISOString()],
@@ -2066,24 +2051,27 @@ app.get("/gravacoes/kpis", async (c: any) => {
   try {
     const desde = c.req.query("desde") || "1970-01-01";
     const ate = c.req.query("ate") || "2999-12-31";
+    // Presenca de campo, nao "tipo_chamada = X": a mesma chamada cobre muitas
+    // vezes mais do que uma fase (cold call que passa logo a discovery), por
+    // isso uma linha pode contar para varios KPIs ao mesmo tempo.
     const { rows: [r] } = await pool.query(
       `WITH base AS (
         SELECT * FROM consultor_gravacoes WHERE tipo_chamada IS NOT NULL AND data_chamada BETWEEN $1 AND $2
       ), por_consultor AS (
         SELECT consultor_id,
-          MIN(data_chamada) FILTER (WHERE tipo_chamada = 'cold_call') AS inicio,
-          MAX(data_chamada) FILTER (WHERE tipo_chamada IN ('close_call','pivot_parceria')) AS fim
+          MIN(data_chamada) FILTER (WHERE cc_resultado IS NOT NULL) AS inicio,
+          MAX(data_chamada) FILTER (WHERE cl_resultado IS NOT NULL OR pp_compromisso_confirmado IS NOT NULL) AS fim
         FROM base GROUP BY consultor_id
       )
       SELECT
-        COUNT(*) FILTER (WHERE tipo_chamada = 'cold_call') AS cold_total,
-        COUNT(*) FILTER (WHERE tipo_chamada = 'cold_call' AND cc_resultado = 'atendeu') AS cold_atendeu,
-        COUNT(*) FILTER (WHERE tipo_chamada = 'discovery_call') AS discovery_total,
-        AVG(dc_pontuacao_total) FILTER (WHERE tipo_chamada = 'discovery_call') AS dc_media,
-        COUNT(*) FILTER (WHERE tipo_chamada = 'close_call') AS close_total,
-        COUNT(*) FILTER (WHERE tipo_chamada = 'close_call' AND cl_resultado = 'aceite') AS close_aceite,
-        COUNT(DISTINCT consultor_id) FILTER (WHERE tipo_chamada = 'pivot_parceria') AS pivot_contactados,
-        COUNT(DISTINCT consultor_id) FILTER (WHERE tipo_chamada = 'pivot_parceria' AND pp_compromisso_confirmado = true) AS pivot_confirmados,
+        COUNT(*) FILTER (WHERE cc_resultado IS NOT NULL) AS cold_total,
+        COUNT(*) FILTER (WHERE cc_resultado = 'atendeu') AS cold_atendeu,
+        COUNT(*) FILTER (WHERE dc_pontuacao_total IS NOT NULL) AS discovery_total,
+        AVG(dc_pontuacao_total) AS dc_media,
+        COUNT(*) FILTER (WHERE cl_resultado IS NOT NULL) AS close_total,
+        COUNT(*) FILTER (WHERE cl_resultado = 'aceite') AS close_aceite,
+        COUNT(DISTINCT consultor_id) FILTER (WHERE pp_compromisso_confirmado IS NOT NULL OR pp_criterios_pesquisa_enviados IS NOT NULL) AS pivot_contactados,
+        COUNT(DISTINCT consultor_id) FILTER (WHERE pp_compromisso_confirmado = true) AS pivot_confirmados,
         (SELECT AVG(EXTRACT(EPOCH FROM (fim::timestamptz - inicio::timestamptz)) / 86400.0)
          FROM por_consultor WHERE inicio IS NOT NULL AND fim IS NOT NULL AND fim >= inicio) AS tempo_medio_ciclo_dias
       FROM base`,

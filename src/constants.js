@@ -295,11 +295,33 @@ export const CAMPOS_POR_TIPO = {
   pivot_parceria: ['pp_compromisso_confirmado', 'pp_criterios_pesquisa_enviados', 'pp_negocios_fechados'],
 }
 
-// Resumo de uma linha (uma chamada) para leitura rápida em tabela.
+// Uma chamada real cobre muitas vezes mais do que uma fase (ex: cold call que
+// passa logo a discovery na mesma conversa) — por isso uma linha nao tem um
+// "tipo" unico: verificamos directamente que campos ficaram preenchidos.
+export function temDiscovery(g) {
+  return DC_CRITERIOS.some(c => g[c.key] != null) || g.dc_onus_verificado != null || g.dc_direito_preferencia_esclarecido != null
+}
+export function temPivot(g) {
+  return g.pp_compromisso_confirmado != null || g.pp_criterios_pesquisa_enviados != null || g.pp_negocios_fechados != null
+}
+
+// Fases cobertas por uma chamada (para mostrar 1+ badges por linha).
+export function estagiosCobertos(g) {
+  const out = []
+  if (g.cc_resultado) out.push('cold_call')
+  if (temDiscovery(g)) out.push('discovery_call')
+  if (g.cl_resultado) out.push('close_call')
+  if (temPivot(g)) out.push('pivot_parceria')
+  return out
+}
+
+// Resumo de uma linha (uma chamada) para leitura rápida em tabela — concatena
+// o resultado de todas as fases preenchidas nesta chamada.
 export function resultadoResumo(g) {
-  if (g.tipo_chamada === 'cold_call') return CC_RESULTADO_LABEL[g.cc_resultado] || '—'
-  if (g.tipo_chamada === 'discovery_call') return g.dc_pontuacao_total != null ? `${g.dc_pontuacao_total}/12` : '—'
-  if (g.tipo_chamada === 'close_call') return CL_RESULTADO_LABEL[g.cl_resultado] || '—'
-  if (g.tipo_chamada === 'pivot_parceria') return g.pp_compromisso_confirmado ? 'Compromisso confirmado' : '—'
-  return '—'
+  const partes = []
+  if (g.cc_resultado) partes.push(CC_RESULTADO_LABEL[g.cc_resultado] || g.cc_resultado)
+  if (g.dc_pontuacao_total != null) partes.push(`${g.dc_pontuacao_total}/12`)
+  if (g.cl_resultado) partes.push(CL_RESULTADO_LABEL[g.cl_resultado] || g.cl_resultado)
+  if (g.pp_compromisso_confirmado) partes.push('Compromisso confirmado')
+  return partes.length ? partes.join(' · ') : '—'
 }

@@ -1,10 +1,14 @@
 /**
  * Registo de Chamada (SOP 2) — separador próprio na ficha do consultor, ao
  * lado de "Ficha do consultor". Tabela para preenchimento rápido: uma linha
- * por chamada (Cold/Discovery/Close Call ou Pivot para Parceria), com data +
- * métricas do tipo. Não depende de follow-ups nem de gravação de áudio — é
- * um registo directo. A leitura agregada destes dados fica na aba
- * "Avaliação de Calls" dentro de Administração.
+ * por chamada, com data + todas as métricas disponíveis (Cold Call, Discovery
+ * Call, Close Call, Pivot para Parceria) juntas no mesmo formulário — a mesma
+ * chamada cobre muitas vezes várias fases seguidas (cold call que passa logo
+ * a discovery, por exemplo), por isso não se obriga a escolher um tipo à
+ * partida: o utilizador preenche só os campos que se aplicaram. Não depende
+ * de follow-ups nem de gravação de áudio — é um registo directo. A leitura
+ * agregada destes dados fica na aba "Avaliação de Calls" dentro de
+ * Administração.
  */
 import { useState, useEffect, useCallback, Fragment } from 'react'
 import { Plus, Trash2, Pencil, Check, Loader2, Phone } from 'lucide-react'
@@ -12,12 +16,49 @@ import { apiFetch } from '../../lib/api.js'
 import { RegistoManualFieldset, inputClass } from './RegistoManualFieldset.jsx'
 import { ScorecardBars } from './ScorecardBars.jsx'
 import {
-  TIPOS_CHAMADA, TIPO_CHAMADA_LABEL, TIPO_CHAMADA_COLOR, REGISTO_FIELD_LABEL,
-  CAMPOS_POR_TIPO, fmtRegistoValor, resultadoResumo, fmtDate,
+  TIPO_CHAMADA_LABEL, TIPO_CHAMADA_COLOR, REGISTO_FIELD_LABEL, CAMPOS_POR_TIPO,
+  fmtRegistoValor, resultadoResumo, estagiosCobertos, temDiscovery, fmtDate,
 } from '../../constants.js'
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
 const REGISTO_KEYS = Object.keys(REGISTO_FIELD_LABEL)
+const registoPreenchido = r => REGISTO_KEYS.some(k => r[k] !== undefined && r[k] !== null && r[k] !== '')
+
+function EstagiosBadges({ g }) {
+  const estagios = estagiosCobertos(g)
+  if (estagios.length === 0) return <span className="text-xs text-gray-400">—</span>
+  return (
+    <div className="flex flex-wrap gap-1">
+      {estagios.map(e => (
+        <span key={e} className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap ${TIPO_CHAMADA_COLOR[e] || 'bg-gray-100 text-gray-600'}`}>
+          {TIPO_CHAMADA_LABEL[e]}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function DetalheChamada({ g }) {
+  const estagios = estagiosCobertos(g)
+  if (estagios.length === 0) return <p className="text-xs text-gray-400">Sem campos preenchidos.</p>
+  return (
+    <div className="space-y-3">
+      {temDiscovery(g) && <ScorecardBars g={g} />}
+      {estagios.filter(e => e !== 'discovery_call').map(e => (
+        <div key={e}>
+          <p className="text-xs font-semibold text-gray-600 mb-1">{TIPO_CHAMADA_LABEL[e]}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            {(CAMPOS_POR_TIPO[e] || []).filter(k => g[k] != null).map(k => (
+              <div key={k} className="text-xs text-gray-600">
+                <span className="text-gray-400">{REGISTO_FIELD_LABEL[k]}:</span> {fmtRegistoValor(k, g[k])}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export function RegistoChamadasTab({ consultorId, onUpdate }) {
   const [chamadas, setChamadas] = useState([])
@@ -25,7 +66,6 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
   const [adding, setAdding] = useState(false)
   const [saving, setSaving] = useState(false)
   const [novaData, setNovaData] = useState(todayISO())
-  const [novoTipo, setNovoTipo] = useState('')
   const [novoRegisto, setNovoRegisto] = useState({})
   const [expandedId, setExpandedId] = useState(null)
   const [editId, setEditId] = useState(null)
@@ -44,13 +84,12 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
   useEffect(() => { if (consultorId) load() }, [consultorId, load])
 
   async function adicionar() {
-    if (!novaData || !novoTipo) return
+    if (!novaData || !registoPreenchido(novoRegisto)) return
     setSaving(true)
     try {
       const fd = new FormData()
       fd.append('data_chamada', novaData)
-      fd.append('tipo_chamada', novoTipo)
-      fd.append('titulo', `${TIPO_CHAMADA_LABEL[novoTipo]} — ${novaData}`)
+      fd.append('titulo', `Chamada — ${novaData}`)
       for (const k of REGISTO_KEYS) {
         const v = novoRegisto[k]
         if (v === undefined || v === null || v === '') continue
@@ -61,7 +100,6 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
       if (!r.ok) throw new Error(data.error || 'Falha ao registar chamada')
       setChamadas(p => [data, ...p])
       setNovaData(todayISO())
-      setNovoTipo('')
       setNovoRegisto({})
       setAdding(false)
       onUpdate?.()
@@ -71,7 +109,7 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
 
   function iniciarEdicao(g) {
     setEditId(g.id)
-    setEditRegisto({ tipo_chamada: g.tipo_chamada, ...Object.fromEntries(REGISTO_KEYS.map(k => [k, g[k]])) })
+    setEditRegisto(Object.fromEntries(REGISTO_KEYS.map(k => [k, g[k]])))
     setExpandedId(g.id)
   }
 
@@ -108,7 +146,7 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
           <Phone className="w-4 h-4 text-gray-400" />
           <div>
             <p className="text-sm font-semibold text-gray-800">Registo de Chamada</p>
-            <p className="text-xs text-gray-400">Cold Call, Discovery Call, Close Call e Pivot para Parceria — registo directo, sem áudio</p>
+            <p className="text-xs text-gray-400">Um só formulário com todas as métricas — preenche só as fases que se aplicaram a esta chamada</p>
           </div>
         </div>
         <button type="button" onClick={() => setAdding(a => !a)}
@@ -119,30 +157,20 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
 
       {adding && (
         <div className="bg-gray-50 rounded-xl p-3 space-y-3 border border-gray-200">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Data da chamada</label>
-              <input type="date" value={novaData} onChange={e => setNovaData(e.target.value)} className={inputClass} />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Tipo de chamada</label>
-              <select value={novoTipo} onChange={e => { setNovoTipo(e.target.value); setNovoRegisto({}) }} className={inputClass}>
-                <option value="">— Escolher —</option>
-                {TIPOS_CHAMADA.map(t => <option key={t} value={t}>{TIPO_CHAMADA_LABEL[t]}</option>)}
-              </select>
-            </div>
+          <div className="sm:w-1/2">
+            <label className="block text-xs text-gray-500 mb-1">Data da chamada</label>
+            <input type="date" value={novaData} onChange={e => setNovaData(e.target.value)} className={inputClass} />
           </div>
 
-          <RegistoManualFieldset tipoChamada={novoTipo} registo={novoRegisto}
-            onChange={(k, v) => setNovoRegisto(p => ({ ...p, [k]: v }))} />
+          <RegistoManualFieldset registo={novoRegisto} onChange={(k, v) => setNovoRegisto(p => ({ ...p, [k]: v }))} />
 
           <div className="flex gap-2">
-            <button type="button" onClick={adicionar} disabled={saving || !novoTipo}
+            <button type="button" onClick={adicionar} disabled={saving || !novaData || !registoPreenchido(novoRegisto)}
               className="px-4 py-2 text-white text-xs font-medium rounded-lg bg-yellow-500 hover:bg-yellow-600 disabled:opacity-50 flex items-center gap-1.5">
               {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               {saving ? 'A registar...' : 'Registar'}
             </button>
-            <button type="button" onClick={() => { setAdding(false); setNovoTipo(''); setNovoRegisto({}) }}
+            <button type="button" onClick={() => { setAdding(false); setNovoRegisto({}) }}
               className="px-4 py-2 bg-gray-100 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-200">
               Cancelar
             </button>
@@ -162,7 +190,7 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
             <thead>
               <tr className="bg-gray-50 text-left text-[10px] uppercase tracking-wide text-gray-400">
                 <th className="px-3 py-2 font-semibold">Data</th>
-                <th className="px-3 py-2 font-semibold">Tipo</th>
+                <th className="px-3 py-2 font-semibold">Fases cobertas</th>
                 <th className="px-3 py-2 font-semibold">Resultado</th>
                 <th className="px-3 py-2 font-semibold w-20">Acções</th>
               </tr>
@@ -173,11 +201,7 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
                   <tr className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
                     onClick={() => setExpandedId(p => p === g.id ? null : g.id)}>
                     <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{fmtDate(g.data_chamada)}</td>
-                    <td className="px-3 py-2.5">
-                      <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap ${TIPO_CHAMADA_COLOR[g.tipo_chamada] || 'bg-gray-100 text-gray-600'}`}>
-                        {TIPO_CHAMADA_LABEL[g.tipo_chamada] || g.tipo_chamada}
-                      </span>
-                    </td>
+                    <td className="px-3 py-2.5"><EstagiosBadges g={g} /></td>
                     <td className="px-3 py-2.5 text-gray-700">{resultadoResumo(g)}</td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-1">
@@ -197,7 +221,7 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
                       <td colSpan={4} className="px-3 py-3">
                         {editId === g.id ? (
                           <div className="space-y-2">
-                            <RegistoManualFieldset tipoChamada={editRegisto.tipo_chamada} registo={editRegisto}
+                            <RegistoManualFieldset registo={editRegisto}
                               onChange={(k, v) => setEditRegisto(p => ({ ...p, [k]: v }))} />
                             <div className="flex gap-2">
                               <button type="button" onClick={() => guardarEdicao(g.id)} disabled={saving}
@@ -210,16 +234,8 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
                               </button>
                             </div>
                           </div>
-                        ) : g.tipo_chamada === 'discovery_call' ? (
-                          <ScorecardBars g={g} />
                         ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                            {(CAMPOS_POR_TIPO[g.tipo_chamada] || []).map(k => (
-                              <div key={k} className="text-xs text-gray-600">
-                                <span className="text-gray-400">{REGISTO_FIELD_LABEL[k]}:</span> {fmtRegistoValor(k, g[k])}
-                              </div>
-                            ))}
-                          </div>
+                          <DetalheChamada g={g} />
                         )}
                       </td>
                     </tr>

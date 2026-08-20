@@ -9,7 +9,10 @@ import {
   Trash2, Loader2, FileText, Sparkles, RefreshCw, Pencil, Check,
   ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, XCircle, ThumbsUp, ThumbsDown,
 } from 'lucide-react'
-import { TIPO_CHAMADA_LABEL, TIPO_CHAMADA_COLOR, REGISTO_FIELD_LABEL, fmtRegistoValor, CAMPOS_POR_TIPO } from '../../constants.js'
+import {
+  TIPO_CHAMADA_LABEL, TIPO_CHAMADA_COLOR, REGISTO_FIELD_LABEL, fmtRegistoValor, CAMPOS_POR_TIPO,
+  estagiosCobertos, temDiscovery,
+} from '../../constants.js'
 import { ScorecardBars } from './ScorecardBars.jsx'
 import { RegistoManualFieldset } from './RegistoManualFieldset.jsx'
 
@@ -90,7 +93,7 @@ export function GravacaoCard({ g, busy, onAnalisar, onRetomar, onApagar, onRegis
     : []
 
   function iniciarEdicao() {
-    setRascunho({ tipo_chamada: g.tipo_chamada || '', ...Object.fromEntries(Object.keys(REGISTO_FIELD_LABEL).map(k => [k, g[k]])) })
+    setRascunho(Object.fromEntries(Object.keys(REGISTO_FIELD_LABEL).map(k => [k, g[k]])))
     setEditando(true)
   }
 
@@ -101,12 +104,14 @@ export function GravacaoCard({ g, busy, onAnalisar, onRetomar, onApagar, onRegis
   }
 
   async function aceitarSugestao() {
-    const payload = { tipo_chamada: g.tipo_chamada }
+    const payload = {}
     for (const [k, v] of sugestoes) payload[k.replace(/^sugestao_/, '')] = v
     setSalvando(true)
     try { await onRegistoSalvar?.(g.id, payload, 'ia_sugestao_confirmada') }
     finally { setSalvando(false) }
   }
+
+  const estagios = estagiosCobertos(g)
 
   return (
     <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
@@ -119,11 +124,11 @@ export function GravacaoCard({ g, busy, onAnalisar, onRetomar, onApagar, onRegis
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 flex-wrap">
             <p className="text-sm font-medium text-gray-800 truncate">{g.titulo || g.ficheiro_nome || 'Gravacao'}</p>
-            {g.tipo_chamada && (
-              <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${TIPO_CHAMADA_COLOR[g.tipo_chamada] || 'bg-gray-100 text-gray-600'}`}>
-                {TIPO_CHAMADA_LABEL[g.tipo_chamada] || g.tipo_chamada}
+            {estagios.map(e => (
+              <span key={e} className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${TIPO_CHAMADA_COLOR[e] || 'bg-gray-100 text-gray-600'}`}>
+                {TIPO_CHAMADA_LABEL[e]}
               </span>
-            )}
+            ))}
           </div>
           <p className="text-xs text-gray-400">{fmtData(g.data_chamada)}{dur ? ` · ${dur}` : ''}</p>
         </div>
@@ -161,7 +166,7 @@ export function GravacaoCard({ g, busy, onAnalisar, onRetomar, onApagar, onRegis
           )}
 
           {/* Registo manual (SOP 2) — sempre a fonte de verdade, nunca escrito pela IA */}
-          {g.tipo_chamada && (
+          {(estagios.length > 0 || editando) && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
@@ -181,8 +186,7 @@ export function GravacaoCard({ g, busy, onAnalisar, onRetomar, onApagar, onRegis
 
               {editando ? (
                 <div className="space-y-2">
-                  <RegistoManualFieldset tipoChamada={rascunho.tipo_chamada} registo={rascunho}
-                    onChange={(k, v) => setRascunho(p => ({ ...p, [k]: v }))} />
+                  <RegistoManualFieldset registo={rascunho} onChange={(k, v) => setRascunho(p => ({ ...p, [k]: v }))} />
                   <div className="flex gap-2">
                     <button onClick={guardarEdicao} disabled={salvando}
                       className="px-3 py-1.5 text-xs font-medium rounded-lg text-white flex items-center gap-1.5 disabled:opacity-50" style={{ backgroundColor: '#C9A84C' }}>
@@ -193,13 +197,19 @@ export function GravacaoCard({ g, busy, onAnalisar, onRetomar, onApagar, onRegis
                     </button>
                   </div>
                 </div>
-              ) : g.tipo_chamada === 'discovery_call' ? (
-                <ScorecardBars g={g} />
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                  {(CAMPOS_POR_TIPO[g.tipo_chamada] || []).map(k => (
-                    <div key={k} className="text-xs text-gray-600">
-                      <span className="text-gray-400">{REGISTO_FIELD_LABEL[k]}:</span> {fmtRegistoValor(k, g[k])}
+                <div className="space-y-3">
+                  {temDiscovery(g) && <ScorecardBars g={g} />}
+                  {estagios.filter(e => e !== 'discovery_call').map(e => (
+                    <div key={e}>
+                      <p className="text-xs font-semibold text-gray-600 mb-1">{TIPO_CHAMADA_LABEL[e]}</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        {(CAMPOS_POR_TIPO[e] || []).filter(k => g[k] != null).map(k => (
+                          <div key={k} className="text-xs text-gray-600">
+                            <span className="text-gray-400">{REGISTO_FIELD_LABEL[k]}:</span> {fmtRegistoValor(k, g[k])}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>
