@@ -986,8 +986,15 @@ export function CRM() {
       toast('Preenche o nome/título', 'error')
       return
     }
+    const isNew = !item.id
+    // Tabs regionais (Imóveis, Consultores, Construtores) exigem Coimbra ou
+    // AMP ao criar — em "Geral" o registo ficava sem regiao, quebrando a
+    // isolação regional e (nos imóveis) a sequência de REF Interna.
+    if (isNew && TABS_REGIONAIS.has(tab) && !(item.regiao || regiaoActiva)) {
+      toast('Escolhe Coimbra ou AMP antes de criar — em "Geral" não é possível atribuir região ao novo registo', 'error')
+      return
+    }
     try {
-      const isNew = !item.id
       const url = isNew ? `/api/crm/${endpoint}` : `/api/crm/${endpoint}/${item.id}`
       const method = isNew ? 'POST' : 'PUT'
       // Propagar a região activa — o middleware regional do backend usa o
