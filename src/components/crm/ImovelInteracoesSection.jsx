@@ -90,6 +90,18 @@ export function ImovelInteracoesSection({ imovelId, consultores, onUpdate }) {
       setGravacoes(p => p.filter(g => g.id !== id))
     } catch (err) { alert(err.message || 'Falha ao apagar'); setBusy(p => ({ ...p, [id]: null })) }
   }
+  async function salvarRegisto(id, payload, fonte) {
+    try {
+      const r = await apiFetch(`/api/crm/gravacoes/${id}/registo`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, registo_fonte: fonte }),
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'Falha ao guardar registo')
+      setGravacoes(p => p.map(g => g.id === id ? d : g))
+    } catch (err) { alert(err.message || 'Falha ao guardar registo') }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -251,7 +263,7 @@ export function ImovelInteracoesSection({ imovelId, consultores, onUpdate }) {
             const fuIds = new Set(followups.map(f => f.id))
             const gravByFu = id => gravacoes.filter(g => g.followup_id === id)
             const orfas = gravacoes.filter(g => !g.followup_id || !fuIds.has(g.followup_id))
-            const gravProps = id => ({ busy: busy[id], onAnalisar: analisarGravacao, onRetomar: retomarGravacao, onApagar: apagarGravacao })
+            const gravProps = id => ({ busy: busy[id], onAnalisar: analisarGravacao, onRetomar: retomarGravacao, onApagar: apagarGravacao, onRegistoSalvar: salvarRegisto })
             if (followups.length === 0 && orfas.length === 0) return null
             return (
               <div className="pt-3 mt-1 border-t border-gray-100">

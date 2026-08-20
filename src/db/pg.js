@@ -577,6 +577,35 @@ export async function initSchema() {
       CREATE INDEX IF NOT EXISTS idx_gravacoes_followup ON consultor_gravacoes(followup_id);
       CREATE INDEX IF NOT EXISTS idx_gravacoes_imovel ON consultor_gravacoes(imovel_id);
 
+      -- SOP 2 (Cold/Discovery/Close Call + Pivot para Parceria): tipo de chamada
+      -- e campos manuais estruturados por tipo. Campo manual e sempre a fonte de
+      -- verdade — a IA so sugere dentro de analise (JSONB). Ver migration 0027.
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS tipo_chamada TEXT;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS registo_fonte TEXT DEFAULT 'manual';
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS registo_confirmado_em TEXT;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS registo_confirmado_por TEXT;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cc_resultado TEXT;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cc_aceita_negociar TEXT;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_score_objetivo SMALLINT;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_score_motivo_real SMALLINT;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_score_dor_desafio SMALLINT;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_score_impacto SMALLINT;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_score_urgencia SMALLINT;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_score_tentativas_anteriores SMALLINT;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_pontuacao_total SMALLINT;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_onus_verificado BOOLEAN;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_direito_preferencia_esclarecido BOOLEAN;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cl_resultado TEXT;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cl_valor_ancora NUMERIC;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cl_valor_contraproposta NUMERIC;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cl_deadline TEXT;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cl_formalizado_escrito_mesmo_dia BOOLEAN;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS pp_compromisso_confirmado BOOLEAN;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS pp_criterios_pesquisa_enviados BOOLEAN;
+      ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS pp_negocios_fechados INTEGER;
+      CREATE INDEX IF NOT EXISTS idx_gravacoes_tipo_chamada ON consultor_gravacoes(tipo_chamada);
+      CREATE INDEX IF NOT EXISTS idx_gravacoes_data_chamada ON consultor_gravacoes(data_chamada);
+
       -- Migrar follow-ups legados (campos directos no consultor) para o histórico
       INSERT INTO consultor_followups (id, consultor_id, data, motivo, proximo_follow_up, created_at, updated_at)
       SELECT gen_random_uuid()::text, c.id, c.data_follow_up, c.motivo_follow_up, c.data_proximo_follow_up,

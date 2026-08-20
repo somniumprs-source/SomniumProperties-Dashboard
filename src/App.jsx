@@ -26,6 +26,7 @@ const RelatoriosAdmin = lazy(() => import('./pages/RelatoriosAdmin.jsx').then(m 
 const Administracao = lazy(() => import('./pages/Administracao.jsx').then(m => ({ default: m.Administracao })))
 const AdministracaoSOP = lazy(() => import('./pages/AdministracaoSOP.jsx').then(m => ({ default: m.AdministracaoSOP })))
 const AdministracaoMultiRegiao = lazy(() => import('./pages/AdministracaoMultiRegiao.jsx').then(m => ({ default: m.AdministracaoMultiRegiao })))
+const AdministracaoChamadas = lazy(() => import('./pages/AdministracaoChamadas.jsx').then(m => ({ default: m.AdministracaoChamadas })))
 const Marketing = lazy(() => import('./pages/Marketing.jsx').then(m => ({ default: m.Marketing })))
 
 function PageFallback() {
@@ -85,6 +86,7 @@ function AppRoutes() {
               <Route path="relatorios" element={<RelatoriosAdmin />} />
               <Route path="sop" element={<AdministracaoSOP />} />
               <Route path="regiao" element={<AdministracaoMultiRegiao />} />
+              <Route path="chamadas" element={<AdministracaoChamadas />} />
             </Route>
             <Route path="/admin/utilizadores" element={<ErrorBoundary><Utilizadores /></ErrorBoundary>} />
             <Route path="/admin/auditoria" element={<ErrorBoundary><Auditoria /></ErrorBoundary>} />

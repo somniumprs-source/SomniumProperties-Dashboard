@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { FileText, BookOpen, Map } from 'lucide-react'
+import { FileText, BookOpen, Map, Phone } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
 
@@ -7,12 +7,14 @@ const TABS = [
   { key: 'sop',        label: 'SOP',                icon: BookOpen },
   { key: 'relatorios', label: 'Relatórios',           icon: FileText },
   { key: 'regiao',     label: 'Multi-Região',        icon: Map },
+  { key: 'chamadas',   label: 'Qualidade de Chamadas', icon: Phone },
 ]
 
 const SUBTITLES = {
   sop:        'Procedimentos operacionais por departamento',
   relatorios: 'Sínteses semanais de reuniões e estudos estratégicos da Somnium Properties',
   regiao:     'Mercado de referência, compliance, hot zones e benchmarking por região',
+  chamadas:   'KPIs de Cold/Discovery/Close Call e Pivot para Parceria (SOP 2)',
 }
 
 export function Administracao() {

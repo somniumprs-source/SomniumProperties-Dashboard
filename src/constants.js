@@ -206,3 +206,83 @@ export function fmtDateRelative(iso) {
   if (diff < 30) return `Há ${Math.floor(diff / 7)} sem.`
   return fmtDate(iso)
 }
+
+// ── SOP 2 — Avaliação de Calls (Cold/Discovery/Close Call + Pivot Parceria) ──
+export const TIPOS_CHAMADA = ['cold_call', 'discovery_call', 'close_call', 'pivot_parceria']
+
+export const TIPO_CHAMADA_LABEL = {
+  cold_call: 'Cold Call',
+  discovery_call: 'Discovery Call',
+  close_call: 'Close Call',
+  pivot_parceria: 'Pivot para Parceria',
+}
+
+export const TIPO_CHAMADA_COLOR = {
+  cold_call: 'bg-gray-100 text-gray-600',
+  discovery_call: 'bg-yellow-100 text-yellow-700',
+  close_call: 'bg-gray-800 text-white',
+  pivot_parceria: 'bg-purple-100 text-purple-700',
+}
+
+export const CC_RESULTADOS = ['atendeu', 'nao_atendeu', 'recusou', 'numero_errado']
+export const CC_RESULTADO_LABEL = {
+  atendeu: 'Atendeu', nao_atendeu: 'Não atendeu', recusou: 'Recusou', numero_errado: 'Número errado',
+}
+export const SIM_NAO_NP = ['sim', 'nao', 'nao_perguntado']
+export const SIM_NAO_NP_LABEL = { sim: 'Sim', nao: 'Não', nao_perguntado: 'Não chegou a perguntar-se' }
+
+// Discovery Call — scorecard de qualificação 0-12 (6 critérios x 0-2)
+export const DC_CRITERIOS = [
+  { key: 'dc_score_objetivo', label: 'Objectivo' },
+  { key: 'dc_score_motivo_real', label: 'Motivo Real' },
+  { key: 'dc_score_dor_desafio', label: 'Dor / Desafio' },
+  { key: 'dc_score_impacto', label: 'Impacto' },
+  { key: 'dc_score_urgencia', label: 'Urgência' },
+  { key: 'dc_score_tentativas_anteriores', label: 'Tentativas Anteriores' },
+]
+
+// Bandas de decisão do scorecard (SOP 2, Secção 4).
+export function bandaScorecard(total) {
+  if (total == null) return null
+  if (total <= 7) return { label: 'Aprofundar', cls: 'bg-red-100 text-red-700' }
+  if (total <= 10) return { label: 'Avançar com atenção', cls: 'bg-amber-100 text-amber-700' }
+  return { label: 'Avançar com confiança', cls: 'bg-green-100 text-green-700' }
+}
+
+export const CL_RESULTADOS = ['aceite', 'recusa_definitiva', 'vou_pensar_com_data', 'vou_pensar_sem_data']
+export const CL_RESULTADO_LABEL = {
+  aceite: 'Aceite', recusa_definitiva: 'Recusa definitiva',
+  vou_pensar_com_data: '"Vou pensar" (com data)', vou_pensar_sem_data: '"Vou pensar" (sem data)',
+}
+export const CL_RESULTADO_COLOR = {
+  aceite: 'bg-green-100 text-green-700',
+  recusa_definitiva: 'bg-red-100 text-red-700',
+  vou_pensar_com_data: 'bg-amber-100 text-amber-700',
+  vou_pensar_sem_data: 'bg-red-100 text-red-700', // SOP2: resultado fraco/inválido, nao so "a aguardar"
+}
+
+// Rótulo humano de cada coluna do registo manual (usado na sugestão da IA e em
+// qualquer listagem genérica dos campos SOP2).
+export const REGISTO_FIELD_LABEL = {
+  cc_resultado: 'Resultado', cc_aceita_negociar: 'Aceita negociar',
+  dc_score_objetivo: 'Objectivo', dc_score_motivo_real: 'Motivo Real', dc_score_dor_desafio: 'Dor / Desafio',
+  dc_score_impacto: 'Impacto', dc_score_urgencia: 'Urgência', dc_score_tentativas_anteriores: 'Tentativas Anteriores',
+  dc_onus_verificado: 'Ónus/hipotecas verificado', dc_direito_preferencia_esclarecido: 'Direito de preferência esclarecido',
+  cl_resultado: 'Resultado', cl_valor_ancora: 'Valor de âncora', cl_valor_contraproposta: 'Contra-proposta',
+  cl_deadline: 'Deadline', cl_formalizado_escrito_mesmo_dia: 'Formalizado por escrito',
+  pp_compromisso_confirmado: 'Compromisso confirmado', pp_criterios_pesquisa_enviados: 'Critérios enviados', pp_negocios_fechados: 'Negócios já fechados',
+}
+
+// Formata o valor de um campo do registo manual para leitura humana (usa os
+// mapas de enum acima quando existem; booleanos como Sim/Não; resto em bruto).
+export function fmtRegistoValor(key, v) {
+  if (v === null || v === undefined || v === '') return '—'
+  if (typeof v === 'boolean') return v ? 'Sim' : 'Não'
+  if (key === 'cc_resultado') return CC_RESULTADO_LABEL[v] || v
+  if (key === 'cc_aceita_negociar') return SIM_NAO_NP_LABEL[v] || v
+  if (key === 'cl_resultado') return CL_RESULTADO_LABEL[v] || v
+  if (key === 'cl_valor_ancora' || key === 'cl_valor_contraproposta') return EUR(Number(v))
+  if (key === 'cl_deadline') return fmtDate(v)
+  if (key.startsWith('dc_score_')) return `${v}/2`
+  return String(v)
+}

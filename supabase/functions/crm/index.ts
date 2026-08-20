@@ -1575,64 +1575,197 @@ async function ensureGravacoesTable() {
     CREATE INDEX IF NOT EXISTS idx_gravacoes_imovel ON consultor_gravacoes(imovel_id);
     ALTER TABLE consultor_followups ADD COLUMN IF NOT EXISTS imovel_id TEXT;
     CREATE INDEX IF NOT EXISTS idx_followups_imovel ON consultor_followups(imovel_id);
+
+    -- SOP 2 (Cold/Discovery/Close Call + Pivot para Parceria): tipo de chamada
+    -- e campos manuais estruturados por tipo. Campo manual e sempre a fonte de
+    -- verdade — a IA so sugere dentro de \`analise\` (JSONB). Ver migration 0027.
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS tipo_chamada TEXT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS registo_fonte TEXT DEFAULT 'manual';
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS registo_confirmado_em TEXT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS registo_confirmado_por TEXT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cc_resultado TEXT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cc_aceita_negociar TEXT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_score_objetivo SMALLINT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_score_motivo_real SMALLINT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_score_dor_desafio SMALLINT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_score_impacto SMALLINT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_score_urgencia SMALLINT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_score_tentativas_anteriores SMALLINT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_pontuacao_total SMALLINT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_onus_verificado BOOLEAN;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_direito_preferencia_esclarecido BOOLEAN;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cl_resultado TEXT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cl_valor_ancora NUMERIC;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cl_valor_contraproposta NUMERIC;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cl_deadline TEXT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cl_formalizado_escrito_mesmo_dia BOOLEAN;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS pp_compromisso_confirmado BOOLEAN;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS pp_criterios_pesquisa_enviados BOOLEAN;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS pp_negocios_fechados INTEGER;
+    CREATE INDEX IF NOT EXISTS idx_gravacoes_tipo_chamada ON consultor_gravacoes(tipo_chamada);
+    CREATE INDEX IF NOT EXISTS idx_gravacoes_data_chamada ON consultor_gravacoes(data_chamada);
   `);
   _gravacoesTableEnsured = true;
 }
 
-function buildGravacaoPrompt(consultorNome: string) {
-  return `Es um analista comercial senior da Somnium Properties (investimento imobiliario em Coimbra, Portugal). Recebes a transcricao de uma DISCOVERY CALL entre a nossa equipa e o consultor imobiliario ${consultorNome || "(desconhecido)"}.
+// SOP 2: tipo de chamada + campos manuais estruturados por tipo. O registo
+// manual e SEMPRE a fonte de verdade (nunca escrito pela IA directamente —
+// so o utilizador, via 'Aceitar sugestao', o confirma).
+const TIPOS_CHAMADA = ["cold_call", "discovery_call", "close_call", "pivot_parceria"];
+const CC_RESULTADOS = ["atendeu", "nao_atendeu", "recusou", "numero_errado"];
+const SIM_NAO_NP = ["sim", "nao", "nao_perguntado"];
+const CL_RESULTADOS = ["aceite", "recusa_definitiva", "vou_pensar_com_data", "vou_pensar_sem_data"];
+const DC_SCORE_FIELDS = ["dc_score_objetivo", "dc_score_motivo_real", "dc_score_dor_desafio", "dc_score_impacto", "dc_score_urgencia", "dc_score_tentativas_anteriores"];
+const REGISTO_MANUAL_KEYS = [
+  "tipo_chamada", "cc_resultado", "cc_aceita_negociar", ...DC_SCORE_FIELDS,
+  "dc_onus_verificado", "dc_direito_preferencia_esclarecido",
+  "cl_resultado", "cl_valor_ancora", "cl_valor_contraproposta", "cl_deadline", "cl_formalizado_escrito_mesmo_dia",
+  "pp_compromisso_confirmado", "pp_criterios_pesquisa_enviados", "pp_negocios_fechados",
+];
 
-A nossa equipa segue o SCRIPT DE DISCOVERY (SOP 1), com 5 fases:
-- FASE 0 - Abertura: identificar-se como grupo de investidores, referir o imovel/zona visto no portal, e enquadrar que ha 3-4 questoes a perceber antes de fazer uma proposta seria.
-- FASE 1 - Filtrar (objectivo real): porque decidiu vender; o proprietario tem pressa; ha problema se nao vender nos proximos meses; o imovel esta fechado ou ainda em uso.
-- FASE 2 - Motivacao (desejo): o que o proprietario quer fazer depois de vender; isso depende desta venda; quer resolver rapido ou nao tem pressao; ja esta cansado do processo.
-- FASE 3 - Desafios (dor real): o que custa mais no processo de venda; imovel antigo / precisa de obras; ha quanto tempo esta no mercado e se houve visitas a serio; heranca ou varios donos e se estao alinhados.
-- FASE 4 - Conectar ao resultado (sem pitch): confirmar que uma proposta simples, sem bancos e sem complicacoes, ajudava a resolver a situacao.
-PROXIMO PASSO (Coimbra-style): pedir ao consultor que sonde o proprietario para uma proposta directa, fora do processo normal de mercado.
-METRICAS que interessam recolher: tempo no mercado, estado do imovel (habitar/obras), situacao legal (heranca/arrendado), custos mensais, dependencia da venda.
-SINAIS DE DESCARTAR (frases tipicas em Coimbra): "nao tem pressa nenhuma", "esta confortavel", "so vende por X", "nao quer investidores".
-MINDSET: em Coimbra ninguem gosta de conversa de vendedor; ganha-se confianca por ser directo, nao insistir e dizer "nao faz sentido" quando nao faz.
+function clampScore(v: any): number | null {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, Math.min(2, Math.round(n)));
+}
+function toBool(v: any): boolean | null {
+  if (v === true || v === "true" || v === "1" || v === 1) return true;
+  if (v === false || v === "false" || v === "0" || v === 0) return false;
+  return null;
+}
+function toNum(v: any): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
 
-Avalia a chamada CONTRA este SOP 1, com o objectivo de OPTIMIZAR os nossos scripts e treinar a equipa. Responde APENAS com um objecto JSON valido (sem texto antes ou depois, sem markdown), com esta estrutura exacta:
+// Junta `input` (payload novo, so chaves presentes) com `current` (valores ja
+// gravados na BD) e devolve o conjunto completo de colunas do registo manual,
+// validado e com dc_pontuacao_total recalculado no servidor.
+function sanitizeRegistoManual(input: Record<string, any>, current: Record<string, any> = {}) {
+  const pick = (key: string) => (Object.prototype.hasOwnProperty.call(input, key) ? input[key] : current[key]);
+  const out: Record<string, any> = {};
+
+  out.tipo_chamada = TIPOS_CHAMADA.includes(pick("tipo_chamada")) ? pick("tipo_chamada") : null;
+  out.cc_resultado = CC_RESULTADOS.includes(pick("cc_resultado")) ? pick("cc_resultado") : null;
+  out.cc_aceita_negociar = SIM_NAO_NP.includes(pick("cc_aceita_negociar")) ? pick("cc_aceita_negociar") : null;
+
+  for (const f of DC_SCORE_FIELDS) out[f] = clampScore(pick(f));
+  out.dc_onus_verificado = toBool(pick("dc_onus_verificado"));
+  out.dc_direito_preferencia_esclarecido = toBool(pick("dc_direito_preferencia_esclarecido"));
+  const scoresPresentes = DC_SCORE_FIELDS.some((f) => out[f] !== null);
+  out.dc_pontuacao_total = scoresPresentes ? DC_SCORE_FIELDS.reduce((sum, f) => sum + (out[f] || 0), 0) : null;
+
+  out.cl_resultado = CL_RESULTADOS.includes(pick("cl_resultado")) ? pick("cl_resultado") : null;
+  out.cl_valor_ancora = toNum(pick("cl_valor_ancora"));
+  out.cl_valor_contraproposta = toNum(pick("cl_valor_contraproposta"));
+  out.cl_deadline = pick("cl_deadline") || null;
+  out.cl_formalizado_escrito_mesmo_dia = toBool(pick("cl_formalizado_escrito_mesmo_dia"));
+
+  out.pp_compromisso_confirmado = toBool(pick("pp_compromisso_confirmado"));
+  out.pp_criterios_pesquisa_enviados = toBool(pick("pp_criterios_pesquisa_enviados"));
+  const ppNeg = toNum(pick("pp_negocios_fechados"));
+  out.pp_negocios_fechados = ppNeg === null ? null : Math.round(ppNeg);
+
+  return out;
+}
+
+// Contexto (guiao + campos de sugestao) por tipo de chamada do SOP 2. O prompt
+// e a analise mudam consoante o tipo — uma Cold Call de 3 minutos nao se avalia
+// com os criterios de uma Discovery Call de 20.
+const GRAVACAO_PROMPT_CONTEXTOS: Record<string, { nomeChamada: string; guiao: string; camposSugestao: string }> = {
+  cold_call: {
+    nomeChamada: "COLD CALL",
+    guiao: `Objectivo (2-4 minutos): confirmar se vale a pena investir tempo e ganhar permissao para aprofundar numa Discovery Call — NAO e para "vender" nem para recolher todos os detalhes do imovel.
+Guiao esperado:
+- Abertura directa, sem pedir permissao: identificar-se como Somnium Properties (grupo de investidores em Coimbra), referir o imovel/zona visto no portal, e dizer que ha genuino interesse em avancar rapidamente, fora do processo normal de mercado.
+- Motivo da chamada numa frase.
+- Pergunta de qualificacao unica: "Estao abertos a uma proposta directa, fora do processo normal, se fizer sentido em valor?"
+- Tratar no maximo 1 objeccao (nao insistir).
+- Fechar com proximo passo concreto e hora definida (nunca deixar em aberto).
+Regras de qualidade a avaliar: NAO deve terminar a abertura com "tem 2 minutos?" nem usar "faz sentido?" como muleta vaga — sao formas faceis do interlocutor dizer nao. NAO deve negociar valor nesta chamada (o valor so se discute na Discovery/Close Call).
+Objeccoes tipicas em Coimbra: "nao tenho pressa nenhuma", "ja tenho comprador/esta em processo", "nao vendo abaixo do anuncio", "nao trabalho com investidores" — a resposta certa nunca insiste nem negoceia valor, so tenta manter a porta aberta para uma Discovery Call.`,
+    camposSugestao: `  "sugestao_cc_resultado": "atendeu" | "nao_atendeu" | "recusou" | "numero_errado",
+  "sugestao_cc_aceita_negociar": "sim" | "nao" | "nao_perguntado"`,
+  },
+  discovery_call: {
+    nomeChamada: "DISCOVERY CALL",
+    guiao: `Objectivo: aprofundar a situacao real do proprietario SEM pitch de venda — o foco e encontrar um problema real que a proposta resolve, nao justificar um valor.
+Estrutura esperada em 3 blocos:
+1. Objectivo — o que pretende fazer depois de vender; ha algum prazo definido.
+2. Motivo Real — aprofundar a resposta superficial ("E isso permitia-lhe fazer o quê?") ate chegar a um motivo especifico, nao ficar no generico "preciso vender".
+3. Desafios (a dor real) — clarificacao, quantificacao ("Quanto lhe custa por mes manter o imovel assim?"), tentativas anteriores, duracao do problema, impacto actual (financeiro, tempo, emocional).
+Regras de conduta a avaliar: regra 70/30 (o proprietario deve falar a maior parte do tempo); uso de silencio depois de perguntas de quantificacao; a pergunta "E depois?" como tecnica de aprofundamento. Antes de terminar deve confirmar-se sempre: recapitulacao curta + "Ha algo importante que me esteja a escapar?".
+Duas verificacoes obrigatorias antes de qualquer proposta: onus/hipotecas (via Certidao Permanente) e direito de preferencia (se o imovel esta arrendado) — avalia se foram feitas ou pelo menos mencionadas na chamada.
+Sinais de descartar (nao avancar): "nao tem pressa nenhuma" (repetido), "esta confortavel", "so vende por X" claramente acima do suportavel, "nao quer investidores" mantido mesmo depois da cold call.
+Rubrica do scorecard (0-2 por criterio): 0 = nao abordado/sem informacao; 1 = abordado superficialmente; 2 = aprofundado com detalhe concreto e quantificado.`,
+    camposSugestao: `  "sugestao_dc_score_objetivo": 0-2, "sugestao_dc_score_motivo_real": 0-2, "sugestao_dc_score_dor_desafio": 0-2,
+  "sugestao_dc_score_impacto": 0-2, "sugestao_dc_score_urgencia": 0-2, "sugestao_dc_score_tentativas_anteriores": 0-2,
+  "sugestao_dc_onus_verificado": true|false,
+  "sugestao_dc_direito_preferencia_esclarecido": true|false`,
+  },
+  close_call: {
+    nomeChamada: "CLOSE CALL",
+    guiao: `Objectivo: obter resposta definitiva (aceite ou recusa clara) — um "sim" verbal NAO e proposta aceite (reversivel ate documento assinado); "vou pensar" sem data de resposta NAO e resultado aceitavel.
+Guiao esperado:
+- Recapitulacao primeiro, usando as informacoes da discovery, antes de apresentar qualquer valor — nunca apresentar valor directo sem recapitulacao.
+- Apresentar a proposta com ancoragem: dizer o valor uma vez, com clareza, sem desculpar antes nem justificar depois.
+- Silencio activo depois de dizer o numero.
+- Tratar contra-proposta com concessao condicional (ex: "consigo chegar a [valor] se fecharmos ate [data]").
+- Pedir a decisao directamente.
+- Se nao fechar na hora, definir deadline com justificacao real (nunca deixar em aberto).
+- Formalizar aceitacao por escrito no mesmo dia.
+Objeccoes tipicas: "esperava mais, o anuncio diz outro valor" (reconduzir a dor identificada na discovery, nunca ao valor isolado); "preciso de falar com a familia/socio" (deixar proposta valida ate data definida, nunca aceitar "vou pensar" sem data); "vou ver com outro comprador/consultor" (criar urgencia real com prazo de validade); "nao sei se conseguem pagar tao depressa" (apresentar prova de fundos proactivamente).`,
+    camposSugestao: `  "sugestao_cl_resultado": "aceite" | "recusa_definitiva" | "vou_pensar_com_data" | "vou_pensar_sem_data",
+  "sugestao_cl_valor_ancora": numero ou null,
+  "sugestao_cl_valor_contraproposta": numero ou null,
+  "sugestao_cl_deadline": "YYYY-MM-DD ou null",
+  "sugestao_cl_formalizado_escrito_mesmo_dia": true|false`,
+  },
+  pivot_parceria: {
+    nomeChamada: "PIVOT PARA PARCERIA",
+    guiao: `Aplica-se quando o interlocutor e um consultor/agente imobiliario (nao o proprietario directo) — corre independentemente do resultado sobre o imovel especifico desta chamada. NAO fecha o imovel em causa — posiciona a Somnium como comprador de referencia para negocios off-market futuros.
+Criterios de pesquisa a comunicar: tipologia T1-T6 ou moradias; zonas Coimbra e arredores, Vila Nova de Gaia, Porto e arredores; valor maximo de aquisicao 300 mil euros; estado a precisar de obras (construcao anterior a 2000 ou preco/m2 abaixo da media).
+Incentivo por historico de negocios: 1o e 2o negocio fechado com o mesmo consultor da direito de preferencia para vender o imovel apos remodelacao; a partir do 3o negocio, fee percentual sobre a margem da Somnium (adicional a comissao normal).
+Criterio de sucesso: o consultor tem de confirmar EXPLICITAMENTE um compromisso de contacto futuro — uma resposta vaga tipo "mantenho-vos em mente" NAO conta como sucesso.`,
+    camposSugestao: `  "sugestao_pp_compromisso_confirmado": true|false,
+  "sugestao_pp_criterios_pesquisa_enviados": true|false,
+  "sugestao_pp_negocios_fechados": numero ou null`,
+  },
+};
+
+// Prompt da analise comercial (SOP 2). Foco: optimizar os scripts comerciais
+// da Somnium e sugerir o preenchimento do registo manual (nunca substitui-lo).
+function buildGravacaoPrompt(consultorNome: string, tipoChamada?: string) {
+  const ctx = GRAVACAO_PROMPT_CONTEXTOS[tipoChamada || ""] || GRAVACAO_PROMPT_CONTEXTOS.discovery_call;
+  return `Es um analista comercial senior da Somnium Properties (investimento imobiliario em Coimbra, Portugal). Recebes a transcricao de uma ${ctx.nomeChamada} (SOP 2) entre a nossa equipa e ${consultorNome || "(desconhecido)"}.
+
+${ctx.guiao}
+
+Avalia a chamada CONTRA este guiao, com o objectivo de OPTIMIZAR os nossos scripts e treinar a equipa. As colunas "sugestao_*" abaixo sao apenas uma SUGESTAO para o registo manual — o registo manual e sempre a fonte de verdade e so e alterado se um humano confirmar. Responde APENAS com um objecto JSON valido (sem texto antes ou depois, sem markdown), com esta estrutura exacta:
 
 {
   "resumo": "2-3 frases sobre o que aconteceu na chamada",
   "sentimento": "positivo" | "neutro" | "negativo",
-  "classificacao": 1-5 (qualidade global da nossa abordagem face ao SOP 1),
-  "fases_sop1": [
-    { "fase": "0 - Abertura", "cumprida": true, "observacao": "o que correu bem ou falhou nesta fase" },
-    { "fase": "1 - Filtrar", "cumprida": true, "observacao": "" },
-    { "fase": "2 - Motivacao", "cumprida": true, "observacao": "" },
-    { "fase": "3 - Desafios", "cumprida": true, "observacao": "" },
-    { "fase": "4 - Conectar ao resultado", "cumprida": true, "observacao": "" }
-  ],
-  "perguntas_discovery_falhadas": ["perguntas-chave do SOP 1 que deviamos ter feito e nao fizemos"],
-  "metricas_recolhidas": {
-    "tempo_mercado": "valor mencionado ou null",
-    "estado_imovel": "valor ou null",
-    "situacao_legal": "valor ou null",
-    "custos_mensais": "valor ou null",
-    "dependencia_venda": "valor ou null"
-  },
-  "descartar": { "deve_descartar": true, "motivo": "porque, com base nos sinais de descarte de Coimbra" },
-  "objeccoes": [{ "objeccao": "objeccao levantada pelo consultor", "resposta_dada": "como respondemos", "eficaz": true, "sugestao": "como responder melhor da proxima vez" }],
-  "pontos_fortes": ["o que corremos bem"],
+  "classificacao": 1-5 (qualidade global da nossa execucao face ao guiao),
+  "pontos_fortes": ["o que correu bem"],
   "pontos_fracos": ["onde falhamos ou perdemos o controlo da conversa"],
-  "frases_eficazes": ["frases nossas que funcionaram e vale a pena reutilizar no script"],
-  "melhorias_script": ["alteracoes concretas a fazer ao script comercial"],
-  "proximo_passo": "accao recomendada com este consultor"
+  "objeccoes": [{ "objeccao": "objeccao levantada", "resposta_dada": "como respondemos", "eficaz": true|false, "sugestao": "como responder melhor da proxima vez" }],
+  "proximo_passo": "accao recomendada",
+  "sugestao_justificacao": "1-2 frases a justificar as sugestoes abaixo, com base na transcricao",
+${ctx.camposSugestao}
 }
 
-Escreve em portugues de Portugal, directo e profissional. Se a transcricao for insuficiente, devolve listas vazias / null mas mantem a estrutura.`;
+Escreve em portugues de Portugal, directo e profissional. Se a transcricao for insuficiente para avaliar algum campo de sugestao, devolve null nesse campo mas mantem a estrutura.`;
 }
 
-async function analisarTranscricaoIA(transcricao: string, consultorNome: string) {
+async function analisarTranscricaoIA(transcricao: string, consultorNome: string, tipoChamada?: string) {
   if (!Deno.env.get("ANTHROPIC_API_KEY")) throw new Error("ANTHROPIC_API_KEY nao configurada");
   const client = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") });
   const response = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 4096,
-    messages: [{ role: "user", content: `${buildGravacaoPrompt(consultorNome)}\n\n--- TRANSCRICAO ---\n${transcricao}` }],
+    messages: [{ role: "user", content: `${buildGravacaoPrompt(consultorNome, tipoChamada)}\n\n--- TRANSCRICAO ---\n${transcricao}` }],
   });
   const respText = (response.content?.[0] as any)?.text || "{}";
   const jsonMatch = respText.match(/\{[\s\S]*\}/);
@@ -1646,11 +1779,12 @@ async function nomeConsultor(id: string): Promise<string> {
   } catch { return ""; }
 }
 
-// Upload de uma gravacao de chamada para um consultor.
+// Upload de uma gravacao de chamada para um consultor. O audio e opcional —
+// uma Cold Call "nao atendeu", por exemplo, nao tem nada para gravar; nesse
+// caso o registo fica em estado 'sem_audio', so com os campos manuais do SOP2.
 app.post("/consultores/:id/gravacoes", async (c: any) => {
   try {
     await ensureGravacoesTable();
-    if (!supabase) return c.json({ error: "Storage indisponivel" }, 503);
     const consultorId = c.req.param("id");
     const { rows: [cons] } = await pool.query("SELECT id, nome FROM consultores WHERE id = $1", [consultorId]);
     if (!cons) return c.json({ error: "Consultor nao encontrado" }, 404);
@@ -1658,31 +1792,101 @@ app.post("/consultores/:id/gravacoes", async (c: any) => {
     const form = await c.req.formData();
     const fileRaw = form.get("audio");
     const file = fileRaw instanceof File ? fileRaw : null;
-    if (!file) return c.json({ error: "Nenhum ficheiro de audio recebido" }, 400);
-    if (file.size > 200 * 1024 * 1024) return c.json({ error: "Ficheiro demasiado grande (max. 200MB)." }, 400);
+    if (file && file.size > 200 * 1024 * 1024) return c.json({ error: "Ficheiro demasiado grande (max. 200MB)." }, 400);
+
+    let storagePath: string | null = null;
+    if (file) {
+      if (!supabase) return c.json({ error: "Storage indisponivel" }, 503);
+      const fid = crypto.randomUUID();
+      const ext = (file.name.match(/\.[a-z0-9]+$/i)?.[0] || ".mp3").toLowerCase();
+      storagePath = `${consultorId}/${fid}${ext}`;
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      await uploadPrivate(GRAVACOES_BUCKET, storagePath, bytes, file.type || "application/octet-stream");
+    }
 
     const id = crypto.randomUUID();
-    const ext = (file.name.match(/\.[a-z0-9]+$/i)?.[0] || ".mp3").toLowerCase();
-    const storagePath = `${consultorId}/${id}${ext}`;
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    await uploadPrivate(GRAVACOES_BUCKET, storagePath, bytes, file.type || "application/octet-stream");
-
     const now = new Date().toISOString();
-    const titulo = (typeof form.get("titulo") === "string" && form.get("titulo")) || file.name;
+    const titulo = (typeof form.get("titulo") === "string" && form.get("titulo")) || file?.name || "Registo de chamada";
     const dataChamada = (typeof form.get("data_chamada") === "string" && form.get("data_chamada")) || now;
     const followupId = (typeof form.get("followup_id") === "string" && form.get("followup_id")) || null;
     const imovelId = (typeof form.get("imovel_id") === "string" && form.get("imovel_id")) || null;
+    const estado = file ? "pendente" : "sem_audio";
+
+    const registoInput: Record<string, any> = {};
+    for (const key of REGISTO_MANUAL_KEYS) if (form.has(key)) registoInput[key] = form.get(key);
+    const registo = sanitizeRegistoManual(registoInput);
+    const registoConfirmadoPor = (typeof form.get("registo_confirmado_por") === "string" && form.get("registo_confirmado_por")) || null;
+
     const { rows: [row] } = await pool.query(
       `INSERT INTO consultor_gravacoes
-        (id, consultor_id, followup_id, imovel_id, titulo, data_chamada, ficheiro_path, ficheiro_nome, estado, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pendente',$9,$9) RETURNING *`,
-      [id, consultorId, followupId, imovelId, titulo, dataChamada, storagePath, file.name, now],
+        (id, consultor_id, followup_id, imovel_id, titulo, data_chamada, ficheiro_path, ficheiro_nome, estado,
+         tipo_chamada, registo_fonte, registo_confirmado_em, registo_confirmado_por,
+         cc_resultado, cc_aceita_negociar,
+         dc_score_objetivo, dc_score_motivo_real, dc_score_dor_desafio, dc_score_impacto, dc_score_urgencia, dc_score_tentativas_anteriores,
+         dc_pontuacao_total, dc_onus_verificado, dc_direito_preferencia_esclarecido,
+         cl_resultado, cl_valor_ancora, cl_valor_contraproposta, cl_deadline, cl_formalizado_escrito_mesmo_dia,
+         pp_compromisso_confirmado, pp_criterios_pesquisa_enviados, pp_negocios_fechados,
+         created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,
+         $10,$11,$12,$13,
+         $14,$15,
+         $16,$17,$18,$19,$20,$21,
+         $22,$23,$24,
+         $25,$26,$27,$28,$29,
+         $30,$31,$32,
+         $33,$33)
+       RETURNING *`,
+      [id, consultorId, followupId, imovelId, titulo, dataChamada, storagePath, file?.name || null, estado,
+       registo.tipo_chamada, "manual", registo.tipo_chamada ? now : null, registo.tipo_chamada ? registoConfirmadoPor : null,
+       registo.cc_resultado, registo.cc_aceita_negociar,
+       registo.dc_score_objetivo, registo.dc_score_motivo_real, registo.dc_score_dor_desafio, registo.dc_score_impacto, registo.dc_score_urgencia, registo.dc_score_tentativas_anteriores,
+       registo.dc_pontuacao_total, registo.dc_onus_verificado, registo.dc_direito_preferencia_esclarecido,
+       registo.cl_resultado, registo.cl_valor_ancora, registo.cl_valor_contraproposta, registo.cl_deadline, registo.cl_formalizado_escrito_mesmo_dia,
+       registo.pp_compromisso_confirmado, registo.pp_criterios_pesquisa_enviados, registo.pp_negocios_fechados,
+       now],
     );
     return c.json(row);
   } catch (e) {
     console.error("[gravacoes upload]", (e as Error).message);
     return c.json({ error: (e as Error).message }, 500);
   }
+});
+
+// Actualizar o registo manual (SOP2) de uma gravacao ja existente — criar,
+// corrigir, ou "aceitar sugestao da IA" (o frontend copia analise.sugestao_*
+// para o payload). Nunca mexe em analise/transcricao/estado.
+app.patch("/gravacoes/:id/registo", async (c: any) => {
+  const id = c.req.param("id");
+  try {
+    await ensureGravacoesTable();
+    const { rows: [current] } = await pool.query("SELECT * FROM consultor_gravacoes WHERE id = $1", [id]);
+    if (!current) return c.json({ error: "Gravacao nao encontrada" }, 404);
+
+    const body = await c.req.json().catch(() => ({}));
+    const registo = sanitizeRegistoManual(body || {}, current);
+    const now = new Date().toISOString();
+    const registoFonte = body?.registo_fonte === "ia_sugestao_confirmada" ? "ia_sugestao_confirmada" : "manual";
+
+    const { rows: [row] } = await pool.query(
+      `UPDATE consultor_gravacoes SET
+        tipo_chamada = $2, registo_fonte = $3, registo_confirmado_em = $4, registo_confirmado_por = $5,
+        cc_resultado = $6, cc_aceita_negociar = $7,
+        dc_score_objetivo = $8, dc_score_motivo_real = $9, dc_score_dor_desafio = $10, dc_score_impacto = $11, dc_score_urgencia = $12, dc_score_tentativas_anteriores = $13,
+        dc_pontuacao_total = $14, dc_onus_verificado = $15, dc_direito_preferencia_esclarecido = $16,
+        cl_resultado = $17, cl_valor_ancora = $18, cl_valor_contraproposta = $19, cl_deadline = $20, cl_formalizado_escrito_mesmo_dia = $21,
+        pp_compromisso_confirmado = $22, pp_criterios_pesquisa_enviados = $23, pp_negocios_fechados = $24,
+        updated_at = $25
+       WHERE id = $1 RETURNING *`,
+      [id, registo.tipo_chamada, registoFonte, now, body?.registo_confirmado_por || null,
+       registo.cc_resultado, registo.cc_aceita_negociar,
+       registo.dc_score_objetivo, registo.dc_score_motivo_real, registo.dc_score_dor_desafio, registo.dc_score_impacto, registo.dc_score_urgencia, registo.dc_score_tentativas_anteriores,
+       registo.dc_pontuacao_total, registo.dc_onus_verificado, registo.dc_direito_preferencia_esclarecido,
+       registo.cl_resultado, registo.cl_valor_ancora, registo.cl_valor_contraproposta, registo.cl_deadline, registo.cl_formalizado_escrito_mesmo_dia,
+       registo.pp_compromisso_confirmado, registo.pp_criterios_pesquisa_enviados, registo.pp_negocios_fechados,
+       now],
+    );
+    return c.json(row);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
 // Lista de gravacoes de um consultor.
@@ -1752,7 +1956,7 @@ app.post("/gravacoes/:id/transcricao", async (c: any) => {
     if (!g) return c.json({ error: "Gravacao nao encontrada" }, 404);
 
     try {
-      const analise = await analisarTranscricaoIA(transcricao, await nomeConsultor(g.consultor_id));
+      const analise = await analisarTranscricaoIA(transcricao, await nomeConsultor(g.consultor_id), g.tipo_chamada);
       await pool.query(
         `UPDATE consultor_gravacoes SET analise = $2, estado = 'analisado', updated_at = $3 WHERE id = $1`,
         [id, JSON.stringify(analise), new Date().toISOString()],
@@ -1803,7 +2007,7 @@ app.post("/gravacoes/:id/analisar", async (c: any) => {
     if (!g.transcricao?.trim()) return c.json({ error: "Sem transcricao para analisar" }, 400);
     await pool.query(`UPDATE consultor_gravacoes SET estado = 'a_analisar', updated_at = $2 WHERE id = $1`,
       [id, new Date().toISOString()]);
-    const analise = await analisarTranscricaoIA(g.transcricao, await nomeConsultor(g.consultor_id));
+    const analise = await analisarTranscricaoIA(g.transcricao, await nomeConsultor(g.consultor_id), g.tipo_chamada);
     const { rows: [final] } = await pool.query(
       `UPDATE consultor_gravacoes SET analise = $2, estado = 'analisado', erro = NULL, updated_at = $3 WHERE id = $1 RETURNING *`,
       [id, JSON.stringify(analise), new Date().toISOString()],
@@ -1824,6 +2028,110 @@ app.delete("/gravacoes/:id", async (c: any) => {
     if (g.ficheiro_path) await removeFromStorage(GRAVACOES_BUCKET, g.ficheiro_path);
     await pool.query("DELETE FROM consultor_gravacoes WHERE id = $1", [c.req.param("id")]);
     return c.json({ ok: true });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── KPIs de chamadas (SOP 2) ──────────────────────────────────
+const round1 = (n: number) => Math.round(n * 10) / 10;
+const SINTOMA_AMOSTRA_MIN = 10;
+
+// Leitura de funil por sintoma (SOP 2, Seccao 7). Os limiares (40%, 7 pontos)
+// sao um ponto de partida razoavel, nao valores-alvo oficiais do SOP — o
+// proprio documento nao define metas numericas, so a logica de diagnostico.
+function diagnosticarFunil(kpis: Record<string, number | null>, amostras: Record<string, number>) {
+  const out: { sintoma: string; severidade: string; texto: string }[] = [];
+  if (amostras.cold_total >= SINTOMA_AMOSTRA_MIN && kpis.taxa_contacto != null && kpis.taxa_contacto < 40) {
+    out.push({ sintoma: "Taxa de contacto baixa", severidade: "media",
+      texto: "Boa amostra de Cold Calls mas atendimento baixo — provavel problema de horario das chamadas, nao do guiao." });
+  }
+  if (amostras.cold_atendeu >= SINTOMA_AMOSTRA_MIN && kpis.taxa_contacto != null && kpis.taxa_contacto >= 40
+      && kpis.taxa_passagem_discovery != null && kpis.taxa_passagem_discovery < 40) {
+    out.push({ sintoma: "Passagem a Discovery baixa", severidade: "alta",
+      texto: "Bom atendimento mas poucas Discovery Calls agendadas — provavel problema na abertura ou na pergunta de qualificacao da Cold Call." });
+  }
+  if (amostras.discovery_total >= SINTOMA_AMOSTRA_MIN && kpis.pontuacao_media_qualificacao != null && kpis.pontuacao_media_qualificacao < 7) {
+    out.push({ sintoma: "Pontuacao de qualificacao sistematicamente baixa", severidade: "alta",
+      texto: "Discovery Call provavelmente cortada cedo demais — reforcar os 3 blocos (Objectivo, Motivo Real, Desafios)." });
+  }
+  if (amostras.close_total >= 5 && kpis.pontuacao_media_qualificacao != null && kpis.pontuacao_media_qualificacao >= 8
+      && kpis.taxa_fecho != null && kpis.taxa_fecho < 40) {
+    out.push({ sintoma: "Taxa de fecho baixa com boa qualificacao", severidade: "alta",
+      texto: "O problema esta na Close Call (ancoragem, tratamento de objeccoes), nao na Discovery." });
+  }
+  return out;
+}
+
+// KPIs agregados + diagnostico de funil (SOP 2, Framework de Metricas Simplificado).
+app.get("/gravacoes/kpis", async (c: any) => {
+  try {
+    const desde = c.req.query("desde") || "1970-01-01";
+    const ate = c.req.query("ate") || "2999-12-31";
+    const { rows: [r] } = await pool.query(
+      `WITH base AS (
+        SELECT * FROM consultor_gravacoes WHERE tipo_chamada IS NOT NULL AND data_chamada BETWEEN $1 AND $2
+      ), por_consultor AS (
+        SELECT consultor_id,
+          MIN(data_chamada) FILTER (WHERE tipo_chamada = 'cold_call') AS inicio,
+          MAX(data_chamada) FILTER (WHERE tipo_chamada IN ('close_call','pivot_parceria')) AS fim
+        FROM base GROUP BY consultor_id
+      )
+      SELECT
+        COUNT(*) FILTER (WHERE tipo_chamada = 'cold_call') AS cold_total,
+        COUNT(*) FILTER (WHERE tipo_chamada = 'cold_call' AND cc_resultado = 'atendeu') AS cold_atendeu,
+        COUNT(*) FILTER (WHERE tipo_chamada = 'discovery_call') AS discovery_total,
+        AVG(dc_pontuacao_total) FILTER (WHERE tipo_chamada = 'discovery_call') AS dc_media,
+        COUNT(*) FILTER (WHERE tipo_chamada = 'close_call') AS close_total,
+        COUNT(*) FILTER (WHERE tipo_chamada = 'close_call' AND cl_resultado = 'aceite') AS close_aceite,
+        COUNT(DISTINCT consultor_id) FILTER (WHERE tipo_chamada = 'pivot_parceria') AS pivot_contactados,
+        COUNT(DISTINCT consultor_id) FILTER (WHERE tipo_chamada = 'pivot_parceria' AND pp_compromisso_confirmado = true) AS pivot_confirmados,
+        (SELECT AVG(EXTRACT(EPOCH FROM (fim::timestamptz - inicio::timestamptz)) / 86400.0)
+         FROM por_consultor WHERE inicio IS NOT NULL AND fim IS NOT NULL AND fim >= inicio) AS tempo_medio_ciclo_dias
+      FROM base`,
+      [desde, ate],
+    );
+    const amostras = {
+      cold_total: Number(r.cold_total) || 0,
+      cold_atendeu: Number(r.cold_atendeu) || 0,
+      discovery_total: Number(r.discovery_total) || 0,
+      close_total: Number(r.close_total) || 0,
+      pivot_contactados: Number(r.pivot_contactados) || 0,
+    };
+    const kpis = {
+      taxa_contacto: amostras.cold_total ? round1(amostras.cold_atendeu / amostras.cold_total * 100) : null,
+      taxa_passagem_discovery: amostras.cold_atendeu ? round1(amostras.discovery_total / amostras.cold_atendeu * 100) : null,
+      pontuacao_media_qualificacao: r.dc_media != null ? round1(Number(r.dc_media)) : null,
+      taxa_fecho: amostras.close_total ? round1(Number(r.close_aceite) / amostras.close_total * 100) : null,
+      tempo_medio_ciclo_dias: r.tempo_medio_ciclo_dias != null ? round1(Number(r.tempo_medio_ciclo_dias)) : null,
+      taxa_conversao_parceiro: amostras.pivot_contactados ? round1(Number(r.pivot_confirmados) / amostras.pivot_contactados * 100) : null,
+    };
+    return c.json({ periodo: { desde, ate }, kpis, amostras, diagnostico: diagnosticarFunil(kpis, amostras) });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// Registo de chamadas (SOP 2), filtravel — usado na tabela da aba de Administracao.
+app.get("/gravacoes", async (c: any) => {
+  try {
+    const desde = c.req.query("desde");
+    const ate = c.req.query("ate");
+    const tipoChamada = c.req.query("tipo_chamada");
+    const consultorId = c.req.query("consultor_id");
+    const conds = ["g.tipo_chamada IS NOT NULL"];
+    const params: any[] = [];
+    if (desde) { params.push(desde); conds.push(`g.data_chamada >= $${params.length}`); }
+    if (ate) { params.push(ate); conds.push(`g.data_chamada <= $${params.length}`); }
+    if (tipoChamada) { params.push(tipoChamada); conds.push(`g.tipo_chamada = $${params.length}`); }
+    if (consultorId) { params.push(consultorId); conds.push(`g.consultor_id = $${params.length}`); }
+    const { rows } = await pool.query(
+      `SELECT g.*, c.nome AS consultor_nome, i.nome AS imovel_nome
+       FROM consultor_gravacoes g
+       LEFT JOIN consultores c ON c.id = g.consultor_id
+       LEFT JOIN imoveis i ON i.id = g.imovel_id
+       WHERE ${conds.join(" AND ")}
+       ORDER BY g.data_chamada DESC, g.created_at DESC
+       LIMIT 200`,
+      params,
+    );
+    return c.json(rows);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 

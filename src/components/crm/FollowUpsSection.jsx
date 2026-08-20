@@ -1,19 +1,37 @@
 /**
  * Histórico de Follow-ups por consultor.
  * Lista cronológica (mais recente primeiro) + formulário inline para registar nova
- * entrada. Ao registar pode anexar-se logo a gravação da conversa: o áudio é
- * transcrito (Whisper local) e analisado contra o SOP 1 por Claude, e fica
- * ligado à entrada de follow-up.
+ * entrada. Ao registar, pode indicar-se o tipo de chamada (SOP 2: Cold/Discovery/
+ * Close Call ou Pivot para Parceria) com os respectivos campos manuais — sempre
+ * a fonte de verdade — e opcionalmente anexar a gravação da conversa, que é
+ * transcrita (Whisper local) e analisada por Claude para sugerir o preenchimento.
  */
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Plus, Trash2, CalendarClock, Mic, Upload, Loader2, X } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { GravacaoCard } from './GravacaoCard.jsx'
+import { RegistoManualFieldset, inputClass } from './RegistoManualFieldset.jsx'
+import { TIPOS_CHAMADA, TIPO_CHAMADA_LABEL, DC_CRITERIOS } from '../../constants.js'
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
 const fmt = d => {
   if (!d) return '—'
   try { return new Date(d).toLocaleDateString('pt-PT') } catch { return d }
+}
+
+const REGISTO_MANUAL_KEYS = [
+  'cc_resultado', 'cc_aceita_negociar',
+  ...DC_CRITERIOS.map(c => c.key), 'dc_onus_verificado', 'dc_direito_preferencia_esclarecido',
+  'cl_resultado', 'cl_valor_ancora', 'cl_valor_contraproposta', 'cl_deadline', 'cl_formalizado_escrito_mesmo_dia',
+  'pp_compromisso_confirmado', 'pp_criterios_pesquisa_enviados', 'pp_negocios_fechados',
+]
+
+function appendRegisto(fd, registo) {
+  for (const k of REGISTO_MANUAL_KEYS) {
+    const v = registo[k]
+    if (v === undefined || v === null || v === '') continue
+    fd.append(k, String(v))
+  }
 }
 
 export function FollowUpsSection({ consultorId, onUpdate }) {
@@ -22,7 +40,8 @@ export function FollowUpsSection({ consultorId, onUpdate }) {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ data: todayISO(), motivo: '', proximo_follow_up: '', imovel_id: '' })
+  const [form, setForm] = useState({ data: todayISO(), motivo: '', proximo_follow_up: '', imovel_id: '', tipo_chamada: '' })
+  const [registo, setRegisto] = useState({})
   const [audioFile, setAudioFile] = useState(null)
   const [imoveis, setImoveis] = useState([])
   const [busy, setBusy] = useState({})       // { [gravacaoId]: 'analisar' | 'apagar' | 'retomar' }
@@ -93,26 +112,32 @@ export function FollowUpsSection({ consultorId, onUpdate }) {
       }
       const novo = await r.json().catch(() => ({}))
 
-      // Anexar a gravacao da conversa, ligada a esta entrada de follow-up.
-      if (audioFile && novo?.id) {
+      // Registar a chamada (SOP 2) ligada a esta entrada de follow-up — com ou
+      // sem audio: uma Cold Call "nao atendeu", p.ex., nao tem nada para gravar.
+      if ((audioFile || form.tipo_chamada) && novo?.id) {
         try {
           const fd = new FormData()
-          fd.append('audio', audioFile)
+          if (audioFile) fd.append('audio', audioFile)
           fd.append('followup_id', novo.id)
           if (form.imovel_id) fd.append('imovel_id', form.imovel_id)
           fd.append('titulo', form.motivo?.trim() || `Follow-up ${fmt(form.data)}`)
           fd.append('data_chamada', form.data)
+          if (form.tipo_chamada) {
+            fd.append('tipo_chamada', form.tipo_chamada)
+            appendRegisto(fd, registo)
+          }
           const ru = await apiFetch(`/api/crm/consultores/${consultorId}/gravacoes`, { method: 'POST', body: fd })
           if (!ru.ok) {
             const eu = await ru.json().catch(() => ({}))
-            throw new Error(eu.error || 'Falha no upload da gravacao')
+            throw new Error(eu.error || 'Falha no registo da chamada')
           }
         } catch (err) {
-          alert(`Follow-up registado, mas a gravacao falhou: ${err.message || 'erro'}`)
+          alert(`Follow-up registado, mas o registo da chamada falhou: ${err.message || 'erro'}`)
         }
       }
 
-      setForm({ data: todayISO(), motivo: '', proximo_follow_up: '', imovel_id: '' })
+      setForm({ data: todayISO(), motivo: '', proximo_follow_up: '', imovel_id: '', tipo_chamada: '' })
+      setRegisto({})
       clearAudio()
       setShowForm(false)
       await load()
@@ -165,7 +190,19 @@ export function FollowUpsSection({ consultorId, onUpdate }) {
     } catch (err) { alert(err.message || 'Falha ao apagar'); setBusy(p => ({ ...p, [id]: null })) }
   }
 
-  const inputClass = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300'
+  // Guardar registo manual (edicao directa no card ou "Aceitar sugestao" da IA).
+  async function salvarRegisto(id, payload, fonte) {
+    try {
+      const r = await apiFetch(`/api/crm/gravacoes/${id}/registo`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, registo_fonte: fonte }),
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error || 'Falha ao guardar registo')
+      setGravacoes(p => p.map(g => g.id === id ? data : g))
+    } catch (err) { alert(err.message || 'Falha ao guardar registo') }
+  }
 
   const itemIds = new Set(items.map(it => it.id))
   const gravacoesByFollowup = id => gravacoes.filter(g => g.followup_id === id)
@@ -173,6 +210,7 @@ export function FollowUpsSection({ consultorId, onUpdate }) {
 
   const gravProps = id => ({
     busy: busy[id], onAnalisar: analisarGravacao, onRetomar: retomarGravacao, onApagar: apagarGravacao,
+    onRegistoSalvar: salvarRegisto,
   })
 
   return (
@@ -224,6 +262,19 @@ export function FollowUpsSection({ consultorId, onUpdate }) {
             <p className="text-[11px] text-gray-400 mt-1">Se a conversa foi sobre um imóvel, escolhe-o: fica também registada na ficha desse imóvel.</p>
           </div>
 
+          {/* Tipo de chamada (SOP 2) + campos manuais por tipo */}
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Tipo de chamada (SOP 2)</label>
+            <select value={form.tipo_chamada}
+              onChange={e => { setForm(p => ({ ...p, tipo_chamada: e.target.value })); setRegisto({}) }} className={inputClass}>
+              <option value="">— Sem registo SOP 2 (só follow-up) —</option>
+              {TIPOS_CHAMADA.map(t => <option key={t} value={t}>{TIPO_CHAMADA_LABEL[t]}</option>)}
+            </select>
+          </div>
+
+          <RegistoManualFieldset tipoChamada={form.tipo_chamada} registo={registo}
+            onChange={(k, v) => setRegisto(p => ({ ...p, [k]: v }))} />
+
           {/* Anexar gravacao da conversa */}
           <div>
             <label className="block text-xs text-gray-500 mb-1">Gravação da conversa (opcional)</label>
@@ -244,7 +295,7 @@ export function FollowUpsSection({ consultorId, onUpdate }) {
                 <Upload className="w-3.5 h-3.5" /> Anexar gravação (mp3, m4a, wav…)
               </label>
             )}
-            <p className="text-[11px] text-gray-400 mt-1">Transcrição automática (Whisper local) e análise comercial contra o SOP 1.</p>
+            <p className="text-[11px] text-gray-400 mt-1">Opcional — se anexares, é transcrita (Whisper local) e a IA sugere um preenchimento para o registo acima (nunca o substitui sem confirmares).</p>
           </div>
 
           <div className="flex gap-2">
@@ -253,7 +304,7 @@ export function FollowUpsSection({ consultorId, onUpdate }) {
               {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               {saving ? 'A registar...' : 'Registar'}
             </button>
-            <button type="button" onClick={() => { setShowForm(false); clearAudio() }}
+            <button type="button" onClick={() => { setShowForm(false); clearAudio(); setRegisto({}) }}
               className="px-4 py-2 bg-gray-100 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-200">
               Cancelar
             </button>

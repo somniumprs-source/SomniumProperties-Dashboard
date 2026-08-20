@@ -1,13 +1,17 @@
 /**
- * Cartao de uma gravacao de chamada: cabecalho com estado + accoes e corpo
- * expandivel com a analise comercial (avaliada contra o SOP 1) e a transcricao.
- * Usado dentro do historico de follow-ups do consultor.
+ * Cartao de uma gravacao/registo de chamada: cabecalho com tipo (SOP 2) +
+ * estado + accoes, e corpo expandivel com o registo manual (fonte de verdade),
+ * a sugestao da IA (se houver) e a transcricao. Usado no historico de
+ * follow-ups do consultor e nas conversas ligadas a um imovel.
  */
 import { useState } from 'react'
 import {
-  Trash2, Loader2, FileText, Sparkles, RefreshCw,
+  Trash2, Loader2, FileText, Sparkles, RefreshCw, Pencil, Check,
   ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, XCircle, ThumbsUp, ThumbsDown,
 } from 'lucide-react'
+import { TIPO_CHAMADA_LABEL, TIPO_CHAMADA_COLOR, REGISTO_FIELD_LABEL, fmtRegistoValor } from '../../constants.js'
+import { ScorecardBars } from './ScorecardBars.jsx'
+import { RegistoManualFieldset } from './RegistoManualFieldset.jsx'
 
 const ESTADO_META = {
   pendente:      { label: 'Em fila',        cls: 'bg-amber-50 text-amber-700 border-amber-200', spin: false },
@@ -16,6 +20,15 @@ const ESTADO_META = {
   a_analisar:    { label: 'A analisar…',    cls: 'bg-blue-50 text-blue-700 border-blue-200',    spin: true },
   analisado:     { label: 'Analisado',      cls: 'bg-green-50 text-green-700 border-green-200',  spin: false },
   erro:          { label: 'Erro',           cls: 'bg-red-50 text-red-700 border-red-200',        spin: false },
+  sem_audio:     { label: 'Sem áudio · registo manual', cls: 'bg-gray-100 text-gray-600 border-gray-200', spin: false },
+}
+
+// Campos manuais (colunas registo_*) por tipo de chamada, na ordem a mostrar.
+const CAMPOS_POR_TIPO = {
+  cold_call: ['cc_resultado', 'cc_aceita_negociar'],
+  discovery_call: ['dc_onus_verificado', 'dc_direito_preferencia_esclarecido'],
+  close_call: ['cl_resultado', 'cl_valor_ancora', 'cl_valor_contraproposta', 'cl_deadline', 'cl_formalizado_escrito_mesmo_dia'],
+  pivot_parceria: ['pp_compromisso_confirmado', 'pp_criterios_pesquisa_enviados', 'pp_negocios_fechados'],
 }
 
 const SENTIMENTO_META = {
@@ -67,14 +80,40 @@ function ListaBloco({ titulo, itens, icon }) {
   )
 }
 
-export function GravacaoCard({ g, busy, onAnalisar, onRetomar, onApagar, defaultOpen = false }) {
+export function GravacaoCard({ g, busy, onAnalisar, onRetomar, onApagar, onRegistoSalvar, defaultOpen = false }) {
   const [isOpen, setIsOpen] = useState(defaultOpen)
+  const [editando, setEditando] = useState(false)
+  const [rascunho, setRascunho] = useState(null)
+  const [salvando, setSalvando] = useState(false)
   const em = ESTADO_META[g.estado] || ESTADO_META.pendente
   const analise = g.analise && typeof g.analise === 'object' ? g.analise : null
   const dur = fmtDuracao(g.duracao_seg)
   const metricas = analise?.metricas_recolhidas && typeof analise.metricas_recolhidas === 'object'
     ? Object.entries(analise.metricas_recolhidas).filter(([, v]) => v != null && v !== '' && String(v).toLowerCase() !== 'null')
     : []
+
+  const sugestoes = analise
+    ? Object.entries(analise).filter(([k, v]) => k.startsWith('sugestao_') && k !== 'sugestao_justificacao' && v !== null && v !== undefined)
+    : []
+
+  function iniciarEdicao() {
+    setRascunho({ tipo_chamada: g.tipo_chamada || '', ...Object.fromEntries(Object.keys(REGISTO_FIELD_LABEL).map(k => [k, g[k]])) })
+    setEditando(true)
+  }
+
+  async function guardarEdicao() {
+    setSalvando(true)
+    try { await onRegistoSalvar?.(g.id, rascunho, 'manual'); setEditando(false) }
+    finally { setSalvando(false) }
+  }
+
+  async function aceitarSugestao() {
+    const payload = { tipo_chamada: g.tipo_chamada }
+    for (const [k, v] of sugestoes) payload[k.replace(/^sugestao_/, '')] = v
+    setSalvando(true)
+    try { await onRegistoSalvar?.(g.id, payload, 'ia_sugestao_confirmada') }
+    finally { setSalvando(false) }
+  }
 
   return (
     <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
@@ -85,7 +124,14 @@ export function GravacaoCard({ g, busy, onAnalisar, onRetomar, onApagar, default
           {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </button>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-gray-800 truncate">{g.titulo || g.ficheiro_nome || 'Gravacao'}</p>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="text-sm font-medium text-gray-800 truncate">{g.titulo || g.ficheiro_nome || 'Gravacao'}</p>
+            {g.tipo_chamada && (
+              <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${TIPO_CHAMADA_COLOR[g.tipo_chamada] || 'bg-gray-100 text-gray-600'}`}>
+                {TIPO_CHAMADA_LABEL[g.tipo_chamada] || g.tipo_chamada}
+              </span>
+            )}
+          </div>
           <p className="text-xs text-gray-400">{fmtData(g.data_chamada)}{dur ? ` · ${dur}` : ''}</p>
         </div>
         <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border ${em.cls} shrink-0`}>
@@ -121,11 +167,82 @@ export function GravacaoCard({ g, busy, onAnalisar, onRetomar, onApagar, default
             </div>
           )}
 
+          {/* Registo manual (SOP 2) — sempre a fonte de verdade, nunca escrito pela IA */}
+          {g.tipo_chamada && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                  Registo manual
+                  {g.registo_fonte === 'ia_sugestao_confirmada' && (
+                    <span className="text-[10px] font-normal text-gray-400">
+                      (sugestão da IA confirmada{g.registo_confirmado_em ? ` em ${fmtData(g.registo_confirmado_em)}` : ''})
+                    </span>
+                  )}
+                </p>
+                {!editando && (
+                  <button onClick={iniciarEdicao} className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100" title="Editar registo">
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {editando ? (
+                <div className="space-y-2">
+                  <RegistoManualFieldset tipoChamada={rascunho.tipo_chamada} registo={rascunho}
+                    onChange={(k, v) => setRascunho(p => ({ ...p, [k]: v }))} />
+                  <div className="flex gap-2">
+                    <button onClick={guardarEdicao} disabled={salvando}
+                      className="px-3 py-1.5 text-xs font-medium rounded-lg text-white flex items-center gap-1.5 disabled:opacity-50" style={{ backgroundColor: '#C9A84C' }}>
+                      {salvando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Guardar
+                    </button>
+                    <button onClick={() => setEditando(false)} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : g.tipo_chamada === 'discovery_call' ? (
+                <ScorecardBars g={g} />
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {(CAMPOS_POR_TIPO[g.tipo_chamada] || []).map(k => (
+                    <div key={k} className="text-xs text-gray-600">
+                      <span className="text-gray-400">{REGISTO_FIELD_LABEL[k]}:</span> {fmtRegistoValor(k, g[k])}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Sugestão da IA — nunca escreve directamente no registo manual */}
+          {sugestoes.length > 0 && !editando && (
+            <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-2.5 space-y-2">
+              <p className="text-xs font-semibold text-indigo-700 flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5" /> Sugestão da IA
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                {sugestoes.map(([k, v]) => {
+                  const campo = k.replace(/^sugestao_/, '')
+                  return (
+                    <div key={k} className="text-xs text-indigo-700">
+                      <span className="text-indigo-400">{REGISTO_FIELD_LABEL[campo] || campo}:</span> {fmtRegistoValor(campo, v)}
+                    </div>
+                  )
+                })}
+              </div>
+              {analise.sugestao_justificacao && <p className="text-xs text-indigo-600 italic">{analise.sugestao_justificacao}</p>}
+              <button onClick={aceitarSugestao} disabled={salvando}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5">
+                {salvando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Aceitar sugestão
+              </button>
+            </div>
+          )}
+
           {analise ? (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-semibold text-gray-700 flex items-center gap-1">
-                  <Sparkles className="w-3.5 h-3.5" style={{ color: '#C9A84C' }} /> Analise comercial (SOP 1)
+                  <Sparkles className="w-3.5 h-3.5" style={{ color: '#C9A84C' }} /> Análise comercial {!g.tipo_chamada && '(SOP 1)'}
                 </span>
                 {analise.classificacao != null && <Estrelas n={analise.classificacao} />}
                 {analise.sentimento && SENTIMENTO_META[analise.sentimento] && (
@@ -145,8 +262,8 @@ export function GravacaoCard({ g, busy, onAnalisar, onRetomar, onApagar, default
 
               {analise.resumo && <p className="text-sm text-gray-700">{analise.resumo}</p>}
 
-              {/* Fases do SOP 1 */}
-              {Array.isArray(analise.fases_sop1) && analise.fases_sop1.length > 0 && (
+              {/* Fases do SOP 1 (histórico pré-SOP2) */}
+              {!g.tipo_chamada && Array.isArray(analise.fases_sop1) && analise.fases_sop1.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-gray-600 mb-1.5">Fases do script (SOP 1)</p>
                   <div className="space-y-1">
@@ -162,8 +279,8 @@ export function GravacaoCard({ g, busy, onAnalisar, onRetomar, onApagar, default
                 </div>
               )}
 
-              {/* Metricas recolhidas */}
-              {metricas.length > 0 && (
+              {/* Metricas recolhidas (histórico pré-SOP2) */}
+              {!g.tipo_chamada && metricas.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-gray-600 mb-1.5">Metricas recolhidas</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
@@ -176,8 +293,10 @@ export function GravacaoCard({ g, busy, onAnalisar, onRetomar, onApagar, default
                 </div>
               )}
 
-              <ListaBloco titulo="Perguntas de discovery falhadas" itens={analise.perguntas_discovery_falhadas}
-                icon={<AlertTriangle className="w-3.5 h-3.5 text-amber-600" />} />
+              {!g.tipo_chamada && (
+                <ListaBloco titulo="Perguntas de discovery falhadas" itens={analise.perguntas_discovery_falhadas}
+                  icon={<AlertTriangle className="w-3.5 h-3.5 text-amber-600" />} />
+              )}
 
               {Array.isArray(analise.objeccoes) && analise.objeccoes.length > 0 && (
                 <div>
