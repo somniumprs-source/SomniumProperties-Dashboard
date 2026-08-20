@@ -161,6 +161,17 @@ function createCRUD(table, { searchFields = ['nome'], defaultSort = 'created_at 
       if (table === 'consultores' && !data.data_inicio) data.data_inicio = today
       if (table === 'negocios' && !data.data) data.data = today
 
+      // Auto-gerar REF Interna sequencial por regiao (0001, 0002, ...) quando
+      // nao vem preenchida do form.
+      if (table === 'imoveis' && !data.ref_interna) {
+        const regiaoRef = data.regiao ?? regiaoActiva ?? null
+        const { rows: maxRows } = await pool.query(
+          `SELECT COALESCE(MAX(ref_interna::int), 0) AS max FROM imoveis WHERE regiao IS NOT DISTINCT FROM $1 AND ref_interna ~ '^[0-9]+$'`,
+          [regiaoRef]
+        )
+        data.ref_interna = String(Number(maxRows[0].max) + 1).padStart(4, '0')
+      }
+
       // Filtrar colunas inexistentes (ex: middleware injecta `regiao` em tabelas sem essa coluna)
       const tableCols = await getColumns(table)
       const jsonbCols = await getJsonbColumns(table)
