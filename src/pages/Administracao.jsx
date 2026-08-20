@@ -7,7 +7,7 @@ const TABS = [
   { key: 'sop',        label: 'SOP',                icon: BookOpen },
   { key: 'relatorios', label: 'Relatórios',           icon: FileText },
   { key: 'regiao',     label: 'Multi-Região',        icon: Map },
-  { key: 'chamadas',   label: 'Qualidade de Chamadas', icon: Phone },
+  { key: 'chamadas',   label: 'Avaliação de Calls', icon: Phone },
 ]
 
 const SUBTITLES = {

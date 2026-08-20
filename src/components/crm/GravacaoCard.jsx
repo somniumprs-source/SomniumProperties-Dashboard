@@ -9,7 +9,7 @@ import {
   Trash2, Loader2, FileText, Sparkles, RefreshCw, Pencil, Check,
   ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, XCircle, ThumbsUp, ThumbsDown,
 } from 'lucide-react'
-import { TIPO_CHAMADA_LABEL, TIPO_CHAMADA_COLOR, REGISTO_FIELD_LABEL, fmtRegistoValor } from '../../constants.js'
+import { TIPO_CHAMADA_LABEL, TIPO_CHAMADA_COLOR, REGISTO_FIELD_LABEL, fmtRegistoValor, CAMPOS_POR_TIPO } from '../../constants.js'
 import { ScorecardBars } from './ScorecardBars.jsx'
 import { RegistoManualFieldset } from './RegistoManualFieldset.jsx'
 
@@ -23,13 +23,6 @@ const ESTADO_META = {
   sem_audio:     { label: 'Sem áudio · registo manual', cls: 'bg-gray-100 text-gray-600 border-gray-200', spin: false },
 }
 
-// Campos manuais (colunas registo_*) por tipo de chamada, na ordem a mostrar.
-const CAMPOS_POR_TIPO = {
-  cold_call: ['cc_resultado', 'cc_aceita_negociar'],
-  discovery_call: ['dc_onus_verificado', 'dc_direito_preferencia_esclarecido'],
-  close_call: ['cl_resultado', 'cl_valor_ancora', 'cl_valor_contraproposta', 'cl_deadline', 'cl_formalizado_escrito_mesmo_dia'],
-  pivot_parceria: ['pp_compromisso_confirmado', 'pp_criterios_pesquisa_enviados', 'pp_negocios_fechados'],
-}
 
 const SENTIMENTO_META = {
   positivo: { label: 'Positivo', cls: 'bg-green-100 text-green-700' },

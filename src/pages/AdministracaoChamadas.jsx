@@ -11,20 +11,12 @@ import { apiFetch } from '../lib/api.js'
 import { KpiCard } from '../components/ui/KpiCard.jsx'
 import { Badge } from '../components/ui/Badge.jsx'
 import { ScrollableTable } from '../components/ui/ScrollableTable.jsx'
-import { TIPO_CHAMADA_LABEL, CC_RESULTADO_LABEL, CL_RESULTADO_LABEL, bandaScorecard, fmtDate } from '../constants.js'
+import { TIPO_CHAMADA_LABEL, bandaScorecard, fmtDate, resultadoResumo } from '../constants.js'
 
 const hoje = () => new Date().toISOString().slice(0, 10)
 const diasAtras = n => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10)
 
 const TIPO_BADGE_TONE = { cold_call: 'gray', discovery_call: 'gold', close_call: 'dark', pivot_parceria: 'purple' }
-
-function resultadoResumo(g) {
-  if (g.tipo_chamada === 'cold_call') return CC_RESULTADO_LABEL[g.cc_resultado] || '—'
-  if (g.tipo_chamada === 'discovery_call') return g.dc_pontuacao_total != null ? `${g.dc_pontuacao_total}/12` : '—'
-  if (g.tipo_chamada === 'close_call') return CL_RESULTADO_LABEL[g.cl_resultado] || '—'
-  if (g.tipo_chamada === 'pivot_parceria') return g.pp_compromisso_confirmado ? 'Compromisso confirmado' : '—'
-  return '—'
-}
 
 function BandaRow({ label, cor, n, total }) {
   const pct = total ? Math.round(n / total * 100) : 0
@@ -95,7 +87,7 @@ export function AdministracaoChamadas() {
             </div>
             <div>
               <h2 className="text-overline uppercase tracking-widest font-semibold text-brand-gold">SOP 2 · Angariação de Negócios</h2>
-              <p className="text-sm font-semibold text-white">Qualidade de Chamadas</p>
+              <p className="text-sm font-semibold text-white">Avaliação de Calls</p>
             </div>
           </div>
           <div className="flex items-center gap-2 text-xs">

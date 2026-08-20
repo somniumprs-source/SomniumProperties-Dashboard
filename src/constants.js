@@ -286,3 +286,20 @@ export function fmtRegistoValor(key, v) {
   if (key.startsWith('dc_score_')) return `${v}/2`
   return String(v)
 }
+
+// Campos manuais (colunas do registo) por tipo de chamada, na ordem a mostrar.
+export const CAMPOS_POR_TIPO = {
+  cold_call: ['cc_resultado', 'cc_aceita_negociar'],
+  discovery_call: ['dc_onus_verificado', 'dc_direito_preferencia_esclarecido'],
+  close_call: ['cl_resultado', 'cl_valor_ancora', 'cl_valor_contraproposta', 'cl_deadline', 'cl_formalizado_escrito_mesmo_dia'],
+  pivot_parceria: ['pp_compromisso_confirmado', 'pp_criterios_pesquisa_enviados', 'pp_negocios_fechados'],
+}
+
+// Resumo de uma linha (uma chamada) para leitura rápida em tabela.
+export function resultadoResumo(g) {
+  if (g.tipo_chamada === 'cold_call') return CC_RESULTADO_LABEL[g.cc_resultado] || '—'
+  if (g.tipo_chamada === 'discovery_call') return g.dc_pontuacao_total != null ? `${g.dc_pontuacao_total}/12` : '—'
+  if (g.tipo_chamada === 'close_call') return CL_RESULTADO_LABEL[g.cl_resultado] || '—'
+  if (g.tipo_chamada === 'pivot_parceria') return g.pp_compromisso_confirmado ? 'Compromisso confirmado' : '—'
+  return '—'
+}

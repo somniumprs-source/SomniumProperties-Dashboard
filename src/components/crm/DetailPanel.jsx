@@ -8,6 +8,7 @@ import { apiFetch, openDocument } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { PartilharAcesso } from '../PartilharAcesso.jsx'
 import { FollowUpsSection } from './FollowUpsSection.jsx'
+import { RegistoChamadasTab } from './RegistoChamadasTab.jsx'
 import { ImovelInteracoesSection } from './ImovelInteracoesSection.jsx'
 import { isWholesaling } from '../../lib/modelos.js'
 
@@ -825,6 +826,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
   // Tabs dinâmicos por tipo
   const tabs = [
     { key: 'detalhe', label: type === 'Imóveis' ? 'Imóvel' : type === 'Investidores' ? 'Ficha do investidor' : type === 'Consultores' ? 'Ficha do consultor' : 'Detalhe', icon: '📋', show: true },
+    { key: 'registo_chamadas', label: 'Registo de Chamada', icon: '📞', show: type === 'Consultores' },
     { key: 'ficheiros', label: 'Ficheiros', icon: '📷', show: type === 'Imóveis' },
     { key: 'analise', label: 'Análise Financeira', icon: '📊', show: type === 'Imóveis' },
     { key: 'obra', label: 'Obra', icon: '🏗️', show: type === 'Imóveis' },
@@ -937,6 +939,11 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       <Suspense fallback={<TabFallback />}>
       {type === 'Consultores' && activeTab === 'whatsapp' ? (
         <WhatsAppTab consultorId={data.id} consultorNome={data.nome} controloManual={data.controlo_manual} onUpdate={loadData} />
+
+      ) : type === 'Consultores' && activeTab === 'registo_chamadas' ? (
+        <div className="p-4 sm:p-6">
+          <RegistoChamadasTab consultorId={data.id} onUpdate={loadData} />
+        </div>
 
       ) : type === 'Consultores' && activeTab === 'interacoes' ? (
         <div className="p-4 sm:p-6">

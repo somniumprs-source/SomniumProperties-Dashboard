@@ -16,7 +16,7 @@ const nav = [
       { to: '/administracao/relatorios', label: 'Relatórios',   Icon: FileText, area: 'administracao' },
       { to: '/administracao/sop',        label: 'SOPs',         Icon: BookOpen, area: 'administracao' },
       { to: '/administracao/regiao',     label: 'Multi-Região', Icon: Map, area: 'administracao' },
-      { to: '/administracao/chamadas',   label: 'Qualidade de Chamadas', Icon: Phone, area: 'administracao' },
+      { to: '/administracao/chamadas',   label: 'Avaliação de Calls', Icon: Phone, area: 'administracao' },
     ],
   },
   { to: '/crm', label: 'Departamento Comercial', Icon: Database, badgeKey: 'crm', area: 'crm' },
