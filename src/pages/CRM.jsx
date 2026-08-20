@@ -1930,7 +1930,7 @@ const FIELD_DEFS = {
   ],
 }
 
-function RelationOrNew({ value, options, display, createEndpoint, onChange, onCreated }) {
+function RelationOrNew({ value, options, display, createEndpoint, regiao, onChange, onCreated }) {
   const [mode, setMode] = useState('select') // 'select' | 'new'
   const [newName, setNewName] = useState('')
   const [newContacto, setNewContacto] = useState('')
@@ -1944,11 +1944,13 @@ function RelationOrNew({ value, options, display, createEndpoint, onChange, onCr
     try {
       const r = await apiFetch(createEndpoint, {
         method: 'POST',
+        regiao,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nome: newName.trim(),
           contacto: newContacto.trim() || null,
           email: newEmail.trim() || null,
+          regiao,
         }),
       })
       const data = await r.json()
@@ -2229,6 +2231,7 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
                 options={lookups[f.key] ?? []}
                 display={f.display}
                 createEndpoint={f.createEndpoint}
+                regiao={form.regiao || regiao}
                 onChange={v => handleChange(f.key, v)}
                 onCreated={() => {
                   fetch(f.endpoint).then(r => r.json()).then(data => setLookups(prev => ({ ...prev, [f.key]: data }))).catch(() => {})

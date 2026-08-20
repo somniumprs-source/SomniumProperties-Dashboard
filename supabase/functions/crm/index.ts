@@ -1035,7 +1035,7 @@ app.delete("/investidores/:id/documentos/:docId", async (c: any) => {
 // Find-or-create consultor (dedup por nome/contacto) — port de routes.js 698-727
 app.post("/consultores/find-or-create", async (c: any) => {
   try {
-    const { nome, imobiliaria, contacto, email } = await c.req.json().catch(() => ({}));
+    const { nome, imobiliaria, contacto, email, regiao } = await c.req.json().catch(() => ({}));
     if (!nome?.trim()) return c.json({ error: "Nome é obrigatório" }, 400);
 
     if (contacto?.trim()) {
@@ -1050,6 +1050,9 @@ app.post("/consultores/find-or-create", async (c: any) => {
     );
     if (byName[0]) return c.json({ ...byName[0], _matched: "nome" });
 
+    // Criar novo — regiao vem do form (imóvel de origem) ou do header X-Regiao;
+    // sem isto o consultor ficava sem regiao e invisível nos lookups regionais.
+    const regiaoActiva = regiao || c.get("regiaoActiva") || null;
     const item = await Consultores.create({
       nome: nome.trim(),
       estatuto: "Cold Call",
@@ -1057,7 +1060,8 @@ app.post("/consultores/find-or-create", async (c: any) => {
       imobiliaria: imobiliaria || null,
       contacto: contacto || null,
       email: email || null,
-    });
+      regiao: regiaoActiva,
+    }, { regiaoActiva });
     return c.json(item, 201);
   } catch (e) { return c.json({ error: (e as Error).message }, 400); }
 });
