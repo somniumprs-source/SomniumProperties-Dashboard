@@ -6,7 +6,7 @@ project_id = "mjgusjuougzoeiyavsor"
 # Em local: `supabase functions serve <fn> --no-verify-jwt` para testar sem token.
 
 [functions.crm]
-verify_jwt = false
+verify_jwt = true
 
 [functions.dashboard]
 verify_jwt = true

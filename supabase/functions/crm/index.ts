@@ -3547,48 +3547,14 @@ app.post("/automation/score-investidores", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// port de routes.js — score de consultores.
-app.post("/automation/score-consultores", async (c: any) => {
-  try {
-    const { rows: consultores } = await pool.query("SELECT * FROM consultores");
-    const { rows: imoveis } = await pool.query("SELECT nome_consultor, estado FROM imoveis WHERE nome_consultor IS NOT NULL");
-    const updated: any[] = [];
-    for (const cn of consultores) {
-      let score = 0;
-      const meusImoveis = imoveis.filter((i: any) => i.nome_consultor?.trim().toLowerCase() === cn.nome?.trim().toLowerCase());
-      const leads = meusImoveis.length;
-      const imoveisAvancados = meusImoveis.filter((im: any) => qualidadeImovel(im.estado) >= 0.75).length;
-      const imoveisMedios = meusImoveis.filter((im: any) => qualidadeImovel(im.estado) >= 0.5).length;
-
-      score += Math.min(leads * 3, 30);
-      score += Math.min((cn.imoveis_off_market || 0) * 10, 30);
-      if (cn.data_proximo_follow_up && new Date(cn.data_proximo_follow_up) >= new Date()) score += 15;
-      if (cn.email) score += 5;
-      const imobs = cn.imobiliaria ? JSON.parse(cn.imobiliaria) : [];
-      if (imobs.length > 0) score += 5;
-      const zonas = cn.zonas ? JSON.parse(cn.zonas) : [];
-      if (zonas.length > 0) score += 5;
-      if (leads > 0) score += 10;
-      score += Math.min(imoveisAvancados * 8, 20);
-      score += Math.min(imoveisMedios * 3, 10);
-
-      const classificacao = CLASSE_POR_SCORE(score);
-      const needsUpdate = cn.classificacao !== classificacao || (cn.imoveis_enviados || 0) !== leads;
-      if (needsUpdate) {
-        await pool.query(
-          "UPDATE consultores SET classificacao = $1, imoveis_enviados = $2, updated_at = $3 WHERE id = $4",
-          [classificacao, leads, new Date().toISOString(), cn.id],
-        );
-        updated.push({ nome: cn.nome, score, classificacao, imoveisReais: leads, imoveisAvancados });
-      }
-    }
-    return c.json({ ok: true, atualizados: updated.length, detalhes: updated });
-  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
-});
-
 // automation/calc-roi removido — usava uma fórmula naive diferente da
 // calculadora. O ROI apresentado é sempre o da análise activa
 // (ver /sync-derivados e propagarParaImovel em analiseRoutes.ts).
+
+// automation/score-consultores removido — duplicava score-prioridade-consultores
+// (fórmula simples vs ponderada) escrevendo os dois na mesma coluna
+// consultores.classificacao com resultados diferentes (achado da auditoria).
+// score-prioridade-consultores cobre tudo o que esta fazia e mais — única fonte.
 
 // port de routes.js 2344-2461
 app.post("/automation/score-prioridade-consultores", async (c: any) => {
@@ -4071,7 +4037,7 @@ app.get("/relatorio/consultores", async (c: any) => {
 app.post("/automation/run-all", async (c: any) => {
   try {
     const results: Record<string, any> = {};
-    for (const ep of ["score-investidores", "score-consultores", "score-prioridade-consultores"]) {
+    for (const ep of ["score-investidores", "score-prioridade-consultores"]) {
       try {
         const r = await app.request(`/crm/automation/${ep}`, { method: "POST" });
         results[ep] = await r.json();

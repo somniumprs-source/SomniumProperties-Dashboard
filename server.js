@@ -74,8 +74,6 @@ async function validateTokenCoalesced(token) {
 }
 
 app.use('/api', async (req, res, next) => {
-  // CRM API — usa PostgreSQL directamente, sem auth Supabase (comportamento histórico)
-  if (req.path.startsWith('/crm/')) return next()
   // Webhook Twilio — validacao feita no handler (X-Twilio-Signature)
   if (req.path.startsWith('/webhook/')) return next()
   // Cron jobs, templates, relatórios, reactivação — protegidos por API key interna
@@ -87,8 +85,6 @@ app.use('/api', async (req, res, next) => {
     }
     return next()
   }
-  // PDFs e documentos — abrem em nova janela sem token
-  if (req.path.includes('/relatorio') || req.path.includes('/documento/')) return next()
   // Diagnostico publico de integracoes — so expoe estado, nunca credenciais
   if (req.path === '/calendar/status') return next()
   // Backfill protegido por INTERNAL_API_KEY (validado no handler)
@@ -134,32 +130,27 @@ try {
   // Middleware audit: envolve cada request /api/* com AsyncLocalStorage com
   // email da sessao + nome do perfil activo (X-User-Id). O wrapper de pool.query
   // (audit.js) usa-os para SET LOCAL nos GUC antes de writes em imoveis/etc.
-  // Para /api/crm/* (auth bypass historico), tenta resolver via header sem bloquear.
+  // req.user já está definido nesta altura para qualquer path autenticado
+  // (incluindo /api/crm/*, desde que a autenticação deixou de ter bypass ali).
   app.use('/api', async (req, res, next) => {
-    let email = req.user?.email || null
-    if (!email && supabaseAdmin && req.path.startsWith('/crm/')) {
-      const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token
-      if (token) {
-        try {
-          const cached = authCacheGet(token)
-          const user = cached || await validateTokenCoalesced(token)
-          email = user?.email || null
-        } catch {}
-      }
-    }
+    const email = req.user?.email || null
     const userId = req.headers['x-user-id'] || null
     const nome = userId ? await resolveUserNome(userId) : null
     withAuditUser(email, nome, () => next())
   })
 
   // ── Gestão de utilizadores e camadas de acesso ──
-  const { default: userRoutes, accessRouter, requireRole } = await import('./src/db/userRoutes.js')
+  const { default: userRoutes, accessRouter, requireRole, requireModule, restrictByAccess } = await import('./src/db/userRoutes.js')
   app.use('/api/users', userRoutes)
   app.use('/api/acessos', accessRouter)
-  // NOTA: o filtro por registo (restrictByAccess) e os requireModule do CRM estão desativados
-  // por agora — o auth middleware de /api/crm/* faz bypass histórico, sem token, e isso
-  // entra em conflito com middlewares que precisam de identificar o user.
-  // A gestão de partilha por imóvel/projecto continua disponível na UI mas sem enforcement backend.
+  // Camadas de acesso do CRM — montadas ANTES do router CRM para correrem primeiro.
+  // admin passa sempre; em dev sem Supabase (supabaseAdmin nulo) também passa sempre.
+  // parceiro/investidor ficam filtrados por registo via `acessos` (restrictByAccess).
+  app.use('/api/crm/imoveis', requireModule('crm.imoveis'), restrictByAccess('imovel'))
+  app.use('/api/crm/investidores', requireModule('crm.investidores'))
+  app.use('/api/crm/consultores', requireModule('crm.consultores'))
+  app.use('/api/crm/empreiteiros', requireModule('crm.empreiteiros'))
+  app.use('/api/crm/negocios', requireModule('crm.negocios'), restrictByAccess('negocio'))
 
   // Router CRM — montado DEPOIS dos guards para que estes corram primeiro
   const { default: crmRoutes } = await import('./src/db/routes.js')
@@ -178,8 +169,6 @@ try {
   app.use('/api/crm/auditoria', auditoriaRoutes)
   console.log('[crm] API CRM + Análises + Orçamento Obra + Multi-Região + SOPs + Auditoria montada (PostgreSQL)')
   // Filtros por área (admin passa sempre; em dev sem Supabase passa sempre)
-  // Bloqueios por role desactivados — qualquer utilizador autenticado vê tudo.
-  // (Roles continuam como labels na tabela users, mas sem enforcement no backend.)
   console.log('[users] Camadas de acesso activas')
 
   // ── Landing Page Webhook · Captura de leads de investidores ─
@@ -5792,178 +5781,13 @@ app.get('/api/data-health', endpointCache(300000), async (req, res) => {
 // AUTOMAÇÕES — Scoring, Auto-dates, ROI, Pipeline→Faturação
 // ════════════════════════════════════════════════════════════════
 
-// ── Scoring automático de investidores ──
-app.post('/api/automation/score-investidores', async (req, res) => {
-  try {
-    const investidores = await getInvestidores()
-    const updated = []
-
-    for (const inv of investidores) {
-      let score = 0
-      // Capital definido (+20)
-      if (inv.capitalMin > 0 || inv.capitalMax > 0) score += 20
-      // Reunião realizada (+20)
-      if (inv.dataReuniao) score += 20
-      // NDA assinado (+15)
-      if (inv.ndaAssinado) score += 15
-      // Estratégia definida (+10)
-      if (inv.estrategia?.length > 0) score += 10
-      // Tipo definido (+10)
-      if (inv.tipoInvestidor?.length > 0) score += 10
-      // Email (+5)
-      if (inv.nome) score += 5 // tem contacto
-      // Contacto (+5)
-      if (inv.dataPrimeiroContacto) score += 5
-      // Classificação automática
-      let classificacao
-      if (score >= 80) classificacao = 'A'
-      else if (score >= 60) classificacao = 'B'
-      else if (score >= 35) classificacao = 'C'
-      else classificacao = 'D'
-
-      const currentScore = inv.pontuacao
-      const currentClass = inv.classificacao?.[0]
-      if (currentScore !== score || currentClass !== classificacao) {
-        try {
-          await notion.pages.update({
-            page_id: inv.id,
-            properties: {
-              'Pontuação Classificação': { number: score },
-              'Classificação': { multi_select: [{ name: classificacao }] },
-            },
-          })
-          updated.push({ nome: inv.nome, score, classificacao, anterior: { score: currentScore, class: currentClass } })
-        } catch (e) {
-          console.error(`[score-inv] Erro ao atualizar ${inv.nome}:`, e.message)
-        }
-      }
-    }
-
-    cache.delete('inv') // Invalidate cache
-    cache.invalidate('dash:')
-    res.json({ ok: true, atualizados: updated.length, detalhes: updated })
-  } catch (err) {
-    console.error('[score-investidores]', err.message)
-    res.status(500).json({ error: err.message })
-  }
-})
-
-// ── Scoring automático de consultores ──
-app.post('/api/automation/score-consultores', async (req, res) => {
-  try {
-    const [consultoresRaw, imoveis] = await Promise.all([getConsultores().catch(() => []), getImóveis().catch(() => [])])
-    const updated = []
-
-    for (const c of consultoresRaw) {
-      let score = 0
-      const leads = imoveis.filter(i => i.nomeConsultor?.trim() === c.nome)
-      // Leads enviados (+3 por lead, max 30)
-      score += Math.min(leads.length * 3, 30)
-      // Off-market (+10 por imóvel, max 30)
-      score += Math.min((c.imoveisOffMarket || 0) * 10, 30)
-      // Follow-up em dia (+15)
-      if (c.dataProximoFollowUp && new Date(c.dataProximoFollowUp) >= new Date()) score += 15
-      // Email disponível (+5)
-      if (c.email) score += 5
-      // Imobiliária definida (+5)
-      if (c.imobiliaria?.length > 0) score += 5
-      // Zonas definidas (+5)
-      if (c.zonas?.length > 0) score += 5
-      // Tem imóveis enviados (+10)
-      if (c.imoveisEnviados > 0) score += 10
-
-      let classificacao
-      if (score >= 70) classificacao = 'A'
-      else if (score >= 45) classificacao = 'B'
-      else if (score >= 20) classificacao = 'C'
-      else classificacao = 'D'
-
-      const currentClass = c.classificacao
-      if (currentClass !== classificacao) {
-        try {
-          await notion.pages.update({
-            page_id: c.id,
-            properties: {
-              'Classificação': { select: { name: classificacao } },
-            },
-          })
-          updated.push({ nome: c.nome, score, classificacao, anterior: currentClass })
-        } catch (e) {
-          console.error(`[score-cons] Erro ao atualizar ${c.nome}:`, e.message)
-        }
-      }
-    }
-
-    cache.delete('cons')
-    cache.invalidate('dash:')
-    res.json({ ok: true, atualizados: updated.length, detalhes: updated })
-  } catch (err) {
-    console.error('[score-consultores]', err.message)
-    res.status(500).json({ error: err.message })
-  }
-})
-
-// automation/calc-roi removido — usava uma fórmula naive diferente da
-// calculadora e tentava gravar no Notion com IDs do Postgres (falhava sempre,
-// silenciosamente). O ROI apresentado é sempre o da análise activa
-// (ver /api/sync-derivados e propagarParaImovel em analiseRoutes.js).
-
-// ── Auto-preenchimento de datas ──
-app.post('/api/automation/auto-dates', async (req, res) => {
-  try {
-    const today = new Date().toISOString().slice(0, 10)
-    const [investidores, consultoresRaw] = await Promise.all([getInvestidores(), getConsultores().catch(() => [])])
-    const updated = []
-
-    // Investidores: preencher Data de Último Contacto baseado em status avançado
-    const INV_AVANCADOS = new Set([
-      'Follow Up', 'Call marcada', 'Call Marcada',
-      'Investidor Qualificado em Carteira', 'Investidor em espera',
-      'Negociação de Deal', 'Investidor Ativo',
-      'Investidor em parceria', 'Em Parceria',
-    ])
-    for (const inv of investidores) {
-      const props = {}
-      // Se tem reunião marcada mas não tem Data Reunião → não preencher (precisa ser data real)
-      // Se o status avançou mas Data de Último Contacto é vazio → preencher com hoje
-      if (!inv.dataUltimoContacto && INV_AVANCADOS.has(inv.status)) {
-        props['Data de Último Contacto'] = { date: { start: today } }
-      }
-      if (Object.keys(props).length > 0) {
-        try {
-          await notion.pages.update({ page_id: inv.id, properties: props })
-          updated.push({ db: 'Investidores', nome: inv.nome, campos: Object.keys(props) })
-        } catch (e) {
-          console.error(`[auto-dates] Erro investidor ${inv.nome}:`, e.message)
-        }
-      }
-    }
-
-    // Consultores: preencher Data Primeira Call se tem follow-up mas não tem 1ª call
-    for (const c of consultoresRaw) {
-      const props = {}
-      if (!c.dataPrimeiraCall && c.dataFollowUp) {
-        props['Data Primeira Call'] = { date: { start: c.dataFollowUp } }
-      }
-      if (Object.keys(props).length > 0) {
-        try {
-          await notion.pages.update({ page_id: c.id, properties: props })
-          updated.push({ db: 'Consultores', nome: c.nome, campos: Object.keys(props) })
-        } catch (e) {
-          console.error(`[auto-dates] Erro consultor ${c.nome}:`, e.message)
-        }
-      }
-    }
-
-    cache.delete('inv')
-    cache.delete('cons')
-    cache.invalidate('dash:')
-    res.json({ ok: true, atualizados: updated.length, detalhes: updated })
-  } catch (err) {
-    console.error('[auto-dates]', err.message)
-    res.status(500).json({ error: err.message })
-  }
-})
+// automation/score-investidores, score-consultores (versão Notion) e auto-dates
+// removidos — liam do Postgres mas tentavam gravar no Notion usando o id do
+// Postgres como page_id, falhando sempre em silêncio (nunca corrigido desde a
+// migração para Postgres). A classificação de consultores e investidores já é
+// mantida por automações equivalentes que gravam directamente no Postgres
+// (ver /api/crm/automation/score-consultores em routes.js, e a classificação
+// de investidores via formulário — ver B3/Fase 3 da auditoria).
 
 // ── Pipeline imóveis → Faturação ──
 app.post('/api/automation/pipeline-to-faturacao', async (req, res) => {
@@ -6050,28 +5874,9 @@ app.post('/api/automation/pipeline-to-faturacao', async (req, res) => {
   }
 })
 
-// ── Correr todas as automações de uma vez ──
-app.post('/api/automation/run-all', async (req, res) => {
-  try {
-    const base = 'http://localhost:3001'
-    const results = {}
-
-    const endpoints = ['auto-dates', 'score-investidores', 'score-consultores', 'pipeline-to-faturacao']
-    for (const ep of endpoints) {
-      try {
-        const r = await fetch(`${base}/api/automation/${ep}`, { method: 'POST' })
-        results[ep] = await r.json()
-      } catch (e) {
-        results[ep] = { error: e.message }
-      }
-    }
-
-    res.json({ ok: true, results })
-  } catch (err) {
-    console.error('[run-all]', err.message)
-    res.status(500).json({ error: err.message })
-  }
-})
+// automation/run-all (nesta base /api/automation) removido — duplicava
+// /api/crm/automation/run-all (routes.js), que é o que corre em produção. O
+// botão "Correr Todas" em Alertas.jsx passou a chamar esse directamente.
 
 // Em produção serve o frontend compilado (DEPOIS de todas as APIs)
 if (process.env.NODE_ENV === 'production') {

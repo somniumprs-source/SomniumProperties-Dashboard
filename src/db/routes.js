@@ -3219,50 +3219,17 @@ router.post('/automation/score-investidores', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-router.post('/automation/score-consultores', async (req, res) => {
-  try {
-    const { rows: consultores } = await pool.query('SELECT * FROM consultores')
-    const { rows: imoveis } = await pool.query('SELECT nome_consultor, estado FROM imoveis WHERE nome_consultor IS NOT NULL')
-    const updated = []
-    for (const c of consultores) {
-      let score = 0
-      // Contagem real de imóveis associados (da lista de imóveis)
-      const meusImoveis = imoveis.filter(i => i.nome_consultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase())
-      const leads = meusImoveis.length
-      // Qualidade baseada no estado do pipeline
-      const imoveisAvancados = meusImoveis.filter(im => qualidadeImovel(im.estado) >= 0.75).length
-      const imoveisMedios = meusImoveis.filter(im => qualidadeImovel(im.estado) >= 0.5).length
-
-      score += Math.min(leads * 3, 30)
-      score += Math.min((c.imoveis_off_market || 0) * 10, 30)
-      if (c.data_proximo_follow_up && new Date(c.data_proximo_follow_up) >= new Date()) score += 15
-      if (c.email) score += 5
-      const imobs = c.imobiliaria ? JSON.parse(c.imobiliaria) : []
-      if (imobs.length > 0) score += 5
-      const zonas = c.zonas ? JSON.parse(c.zonas) : []
-      if (zonas.length > 0) score += 5
-      if (leads > 0) score += 10
-      // Bónus por imóveis avançados no pipeline (negociação+, wholesaling, etc.)
-      score += Math.min(imoveisAvancados * 8, 20)
-      score += Math.min(imoveisMedios * 3, 10)
-
-      const classificacao = CLASSE_POR_SCORE(score)
-      const needsUpdate = c.classificacao !== classificacao || (c.imoveis_enviados || 0) !== leads
-      if (needsUpdate) {
-        await pool.query(
-          'UPDATE consultores SET classificacao = $1, imoveis_enviados = $2, updated_at = $3 WHERE id = $4',
-          [classificacao, leads, new Date().toISOString(), c.id]
-        )
-        updated.push({ nome: c.nome, score, classificacao, imoveisReais: leads, imoveisAvancados })
-      }
-    }
-    res.json({ ok: true, atualizados: updated.length, detalhes: updated })
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
-
 // automation/calc-roi removido — usava uma fórmula naive alternativa à da
 // calculadora financeira. O ROI apresentado é sempre o da análise activa
 // (ver /sync-derivados e propagarParaImovel em analiseRoutes.js).
+
+// automation/score-consultores removido — duplicava score-prioridade-consultores
+// (fórmula simples vs ponderada), escrevendo os dois na mesma coluna
+// consultores.classificacao com resultados diferentes (achado da auditoria,
+// confirmado: um consultor podia aparecer Classe A ou B consoante qual das
+// duas tivesse corrido por último). score-prioridade-consultores cobre tudo o
+// que esta fazia (imoveis_enviados, classificacao) e mais (score_prioridade,
+// taxa_qualidade, tempo_medio_resposta) — fica como única fonte.
 
 router.post('/automation/score-prioridade-consultores', async (req, res) => {
   try {
@@ -3876,7 +3843,7 @@ router.post('/automation/run-all', async (req, res) => {
   try {
     const base = `http://localhost:${process.env.PORT ?? 3001}`
     const results = {}
-    for (const ep of ['score-investidores', 'score-consultores', 'score-prioridade-consultores']) {
+    for (const ep of ['score-investidores', 'score-prioridade-consultores']) {
       try {
         const r = await fetch(`${base}/api/crm/automation/${ep}`, { method: 'POST' })
         results[ep] = await r.json()

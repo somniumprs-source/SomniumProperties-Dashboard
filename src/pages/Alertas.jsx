@@ -101,10 +101,10 @@ export function Alertas() {
   useEffect(() => { load() }, [])
   useRefreshOnMutation(load)
 
-  async function runAutomation(name, label) {
+  async function runAutomation(name, label, path) {
     setRunning(name); setRunResult(null)
     try {
-      const r = await apiFetch(`/api/automation/${name}`, { method: 'POST' })
+      const r = await apiFetch(path, { method: 'POST' })
       const data = await r.json()
       setRunResult({ name: label, ...data })
       load() // Refresh data
@@ -158,16 +158,14 @@ export function Alertas() {
           <Card.Header title="Automações" subtitle="Workflows operacionais" icon={Zap} />
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {[
-              { key: 'run-all',              label: 'Correr Todas',             desc: 'Executa todas as automações de uma vez' },
-              { key: 'score-investidores',   label: 'Scoring Investidores',     desc: 'Classifica A/B/C/D automaticamente' },
-              { key: 'score-consultores',    label: 'Scoring Consultores',      desc: 'Classifica A/B/C/D automaticamente' },
-              { key: 'score-prioridade-consultores', label: 'Score Prioridade',  desc: 'Calcula score 0-100 (qualidade + volume + velocidade)' },
-              { key: 'auto-dates',           label: 'Auto-Datas',              desc: 'Preenche datas em falta' },
-              { key: 'pipeline-to-faturacao', label: 'Pipeline \u2192 Fatura\u00e7\u00e3o', desc: 'Cria neg\u00f3cios de im\u00f3veis avan\u00e7ados' },
+              { key: 'run-all',              label: 'Correr Todas',             desc: 'Reclassifica investidores e consultores automaticamente', path: '/api/crm/automation/run-all' },
+              { key: 'score-investidores',   label: 'Scoring Investidores',     desc: 'Classifica A/B/C/D automaticamente', path: '/api/crm/automation/score-investidores' },
+              { key: 'score-prioridade-consultores', label: 'Scoring Consultores',  desc: 'Classifica A/B/C/D (qualidade + volume + velocidade)', path: '/api/crm/automation/score-prioridade-consultores' },
+              { key: 'pipeline-to-faturacao', label: 'Pipeline \u2192 Fatura\u00e7\u00e3o', desc: 'Cria neg\u00f3cios de im\u00f3veis avan\u00e7ados', path: '/api/automation/pipeline-to-faturacao' },
             ].map(auto => (
               <button
                 key={auto.key}
-                onClick={() => runAutomation(auto.key, auto.label)}
+                onClick={() => runAutomation(auto.key, auto.label, auto.path)}
                 disabled={running !== null}
                 className={`text-left p-4 rounded-xl border transition-all ${
                   running === auto.key ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
