@@ -192,7 +192,7 @@ export const CHECKLIST_TEMPLATES = {
   ],
 
   'Não interessa': [
-    { key: 'ni_motivo', titulo: 'Seleccionar motivo de descarte', campo_crm: 'motivo_descarte', categoria: 'Outros', tempo_estimado: 0.1, obrigatoria: true },
+    { key: 'ni_motivo', titulo: 'Seleccionar motivo de descarte', campo_crm: 'motivo_nao_interessa', categoria: 'Outros', tempo_estimado: 0.1, obrigatoria: true },
     { key: 'ni_detalhe', titulo: 'Registar detalhes do motivo nas notas (ex: "ROI 3%, mínimo 15%")', campo_crm: 'notas', categoria: 'Outros', tempo_estimado: 0.1, obrigatoria: true },
     { key: 'ni_doc', titulo: 'Gerar documento "Ficha de Descarte"', campo_crm: null, categoria: 'Outros', tempo_estimado: 0.1, obrigatoria: false },
     { key: 'ni_notificar', titulo: 'Notificar consultor do descarte (se aplicável)', campo_crm: null, categoria: 'Contacto Consultores', tempo_estimado: 0.1, obrigatoria: false },

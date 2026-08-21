@@ -1550,6 +1550,14 @@ export async function initSchema() {
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS condominio_mensal_anunciado REAL;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
+
+      -- Hierarquia de classificação do investidor (ver migration
+      -- 0032_investidores_classificacao_origem.sql).
+      DO $$ BEGIN
+        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS classificacao_origem TEXT DEFAULT 'automatica';
+        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS classificacao_definida_em TIMESTAMPTZ;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
     `)
 
     // Bootstrap: garantir que somniumprs@gmail.com (owner) existe como admin

@@ -33,7 +33,10 @@ const IMOVEL_FIELD_CONFIG = {
   'custo_estimado_obra': { label: 'Custo Obra (€)', type: 'number' },
   'modelo_negocio': { label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix & Flip','CAEP','Mediação'] },
   'nome_consultor': { label: 'Consultor', type: 'text' },
-  'motivo_descarte': { label: 'Motivo de Descarte', type: 'select', options: ['ROI insuficiente','Preço inflacionado','Zona sem procura','Problemas estruturais','Problemas legais','Proprietário não vende','Outro'] },
+  // Mesmo campo usado pelo Kanban ao mover para "Não interessa" (MoveReasonModal,
+  // CRM.jsx) — texto porque o valor real combina presets + notas livres,
+  // separados por "; ", não é um único valor de select.
+  'motivo_nao_interessa': { label: 'Motivo Não Interessa', type: 'text' },
   'data_chamada': { label: 'Data Chamada', type: 'date' },
   'data_visita': { label: 'Data Visita', type: 'date' },
   'data_estudo_mercado': { label: 'Data Estudo Mercado', type: 'date' },

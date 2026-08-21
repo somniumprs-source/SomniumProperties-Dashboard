@@ -204,6 +204,16 @@ router.get('/regiao/match/imovel/:id', async (req, res) => {
         reasons.push(`Estratégia ${modelo}`)
       }
 
+      // Campos em falta: nunca excluir um investidor do matching por falta de
+      // dados — sinalizar quais critérios não puderam ser avaliados, em vez
+      // de o fazer desaparecer silenciosamente da lista.
+      const camposEmFalta = []
+      if (!inv.capital_max) camposEmFalta.push('capital_max')
+      if (regs.length === 0) camposEmFalta.push('regioes_preferidas')
+      if (!inv.tipo_imovel_preferido) camposEmFalta.push('tipo_imovel_preferido')
+      if (!inv.roi_pretendido) camposEmFalta.push('roi_pretendido')
+      if (!inv.estrategia) camposEmFalta.push('estrategia')
+
       return {
         id: inv.id,
         nome: inv.nome,
@@ -215,10 +225,11 @@ router.get('/regiao/match/imovel/:id', async (req, res) => {
         regioes_preferidas: regs,
         score,
         reasons,
+        campos_em_falta: camposEmFalta,
       }
-    }).filter(x => x.score > 0).sort((a, b) => b.score - a.score)
+    }).sort((a, b) => b.score - a.score)
 
-    res.json({ imovel_id: im.id, regiao, total: scored.length, top: scored.slice(0, 10) })
+    res.json({ imovel_id: im.id, regiao, total: scored.length, top: scored })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 

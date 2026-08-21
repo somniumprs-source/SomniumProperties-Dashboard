@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Target, TrendingUp, MapPin, Send } from 'lucide-react'
+import { Target, TrendingUp, MapPin, Send, AlertTriangle } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { EUR } from '../../constants.js'
+
+const CAMPO_LABEL = {
+  capital_max: 'capital máximo',
+  regioes_preferidas: 'regiões preferidas',
+  tipo_imovel_preferido: 'tipo de imóvel preferido',
+  roi_pretendido: 'ROI pretendido',
+  estrategia: 'estratégia',
+}
 
 export function MatchingInvestidoresTab({ imovelId, imovelNome }) {
   const [data, setData] = useState(null)
@@ -40,7 +48,7 @@ export function MatchingInvestidoresTab({ imovelId, imovelNome }) {
 
       {data.top.length === 0 && (
         <div className="text-center py-8 text-sm text-neutral-400 bg-neutral-50 dark:bg-neutral-900 rounded-xl">
-          Nenhum investidor compatível encontrado. Verifica preenchimento de capital, ROI alvo e regiões preferidas.
+          Nenhum investidor elegível encontrado (todos "Não qualificado" ou "Inactivo").
         </div>
       )}
 
@@ -69,6 +77,12 @@ export function MatchingInvestidoresTab({ imovelId, imovelNome }) {
                       {r}
                     </span>
                   ))}
+                  {inv.campos_em_falta?.length > 0 && (
+                    <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300">
+                      <AlertTriangle className="w-3 h-3" />
+                      Faltam: {inv.campos_em_falta.map(c => CAMPO_LABEL[c] || c).join(', ')}
+                    </span>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-4 mt-2 text-xs text-neutral-500">
                   <span>Capital: {EUR(inv.capital_min)} – {EUR(inv.capital_max)}</span>

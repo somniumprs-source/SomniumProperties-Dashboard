@@ -33,6 +33,7 @@ import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
 import { removeFromStorage, supabase, uploadPublic, uploadPrivate } from "../_shared/storage.ts";
 import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { isWholesaling } from "../_shared/modelos.ts";
+import { CHECKLIST_ENFORCEMENT_START_DATE } from "../_shared/featureFlags.ts";
 
 // 'Resposta' foi renomeado para 'Recebido' numa migração antiga (ver pg.ts);
 // dados anteriores à migração ainda usam 'Resposta' — aceitar os dois.
@@ -521,7 +522,13 @@ function qualidadeImovel(estado: string): number {
 function crudRoutes(
   path: string,
   crud: any,
-  hooks: { onCreate?: (item: any) => Promise<void>; onUpdate?: (item: any, body: any) => Promise<void> } = {},
+  hooks: {
+    onCreate?: (item: any) => Promise<void>;
+    onUpdate?: (item: any, body: any) => Promise<void>;
+    // Corre ANTES de crud.update — só aí ainda se tem o registo no estado
+    // anterior sem ambiguidade. Se devolver { error }, a rota responde 400.
+    beforeUpdate?: (id: string, body: any) => Promise<{ error: string; [k: string]: any } | null>;
+  } = {},
 ) {
   const table = path.slice(1);
   app.get(path, async (c: any) => {
@@ -569,6 +576,10 @@ function crudRoutes(
       if (regiaoActiva) {
         if (table === "investidores") { if (body.regioes_preferidas === undefined) body.regioes_preferidas = JSON.stringify([regiaoActiva]); }
         else if (body.regiao === undefined) body.regiao = regiaoActiva;
+      }
+      if (hooks.beforeUpdate) {
+        const check = await hooks.beforeUpdate(c.req.param("id"), body);
+        if (check && check.error) return c.json(check, 400);
       }
       const item = await crud.update(c.req.param("id"), body, { regiaoActiva });
       if (!item) return c.json({ error: "Não encontrado" }, 404);
@@ -771,6 +782,24 @@ crudRoutes("/imoveis", Imoveis, {
         console.log(`[checklist] Auto-completadas ${toComplete.length} tarefas para ${item.nome || item.id}`);
       }
     } catch (e) { console.error("[checklist] Erro auto-complete:", (e as Error).message); }
+  },
+  // Bloqueia mudança de estado no Kanban se a checklist obrigatória do
+  // estado ACTUAL não estiver completa — só para imóveis criados depois de
+  // CHECKLIST_ENFORCEMENT_START_DATE (imóveis já existentes movem livremente).
+  beforeUpdate: async (id: string, body: any) => {
+    if (!body.estado) return null;
+    const { rows: [imovel] } = await pool.query("SELECT estado, created_at FROM imoveis WHERE id = $1", [id]);
+    if (!imovel) return null;
+    if (body.estado === imovel.estado) return null;
+    if (!imovel.created_at || imovel.created_at < CHECKLIST_ENFORCEMENT_START_DATE) return null;
+    const { rows: pendentes } = await pool.query(
+      `SELECT titulo FROM checklist_imovel WHERE imovel_id = $1 AND estado = $2 AND obrigatoria = true AND concluida = false`,
+      [id, imovel.estado],
+    );
+    if (pendentes.length > 0) {
+      return { error: "Checklist incompleta", itens_em_falta: pendentes.map((p: any) => p.titulo) };
+    }
+    return null;
   },
 });
 
@@ -3408,6 +3437,10 @@ app.post("/automation/score-investidores", async (c: any) => {
     const now = new Date().toISOString();
 
     for (const inv of rows) {
+      // Classificação definida pelo formulário de classificação (scorecard manual)
+      // manda — automações não a sobrescrevem.
+      if (inv.classificacao_origem === "manual") continue;
+
       const ultimoSc = allScorecards.find((s: any) => s.investidor_id === inv.id);
       if (ultimoSc) {
         if (inv.classificacao !== ultimoSc.classificacao || Math.abs((inv.pontuacao || 0) - ultimoSc.pontuacao_ponderada) > 1) {
@@ -3745,9 +3778,12 @@ app.post("/scorecards", async (c: any) => {
 
     const { rows: [inv] } = await pool.query("SELECT classificacao, pontuacao FROM investidores WHERE id = $1", [investidor_id]);
 
+    // classificacao_origem='manual': isto é o formulário de classificação
+    // preenchido pela equipa — a partir daqui manda sobre as automações.
     await pool.query(
       `UPDATE investidores SET classificacao = $1, pontuacao = $2,
         status = CASE WHEN status IN ('Call marcada','Follow Up') THEN 'Investidor Qualificado em Carteira' ELSE status END,
+        classificacao_origem = 'manual', classificacao_definida_em = $3,
         updated_at = $3 WHERE id = $4`,
       [classificacao, ponderado, now, investidor_id],
     );
@@ -3858,6 +3894,9 @@ app.post("/automation/reclassificar-investidores", async (c: any) => {
 
     for (const inv of investidores) {
       if (!inv.classificacao || inv.classificacao === "D") continue;
+      // Classificação definida pelo formulário de classificação (scorecard manual)
+      // manda — automações não a sobrescrevem.
+      if (inv.classificacao_origem === "manual") continue;
 
       const ultimoScorecard = allScorecards.find((s: any) => s.investidor_id === inv.id);
       if (!ultimoScorecard) continue;

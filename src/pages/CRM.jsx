@@ -948,12 +948,21 @@ export function CRM() {
     if (!kanbanConfig) return
     const field = kanbanConfig.groupField
     const item = data.find(i => i.id === id)
-    await apiFetch(`/api/crm/${endpoint}/${id}`, {
+    const r = await apiFetch(`/api/crm/${endpoint}/${id}`, {
       method: 'PUT',
       regiao: regiaoActiva,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ [field]: newColumn, ...extra }),
     })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      if (err.itens_em_falta?.length) {
+        toast(`Checklist incompleta — falta: ${err.itens_em_falta.join(', ')}`, 'error')
+      } else {
+        toast(err.error || 'Não foi possível mover', 'error')
+      }
+      return
+    }
     // Auto-task on phase change
     apiFetch('/api/crm/auto-task', {
       method: 'POST',
@@ -1845,7 +1854,6 @@ const FIELD_DEFS = {
     // — Pipeline & Negócio —
     { key: 'modelo_negocio', label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix & Flip','CAEP','Mediação'] },
     { key: 'check_qualidade', label: 'Check Qualidade', type: 'checkbox' },
-    { key: 'motivo_descarte', label: 'Motivo Descarte', type: 'select', options: ['Preço elevado','Produto final não vendável','Sem interesse do investidor','Zona fraca','ROI insuficiente','Já vendido','Outro'] },
     { key: 'data_adicionado', label: 'Data Adicionado', type: 'date' },
     { key: 'data_chamada', label: 'Data Chamada', type: 'date' },
     { key: 'data_visita', label: 'Data Visita', type: 'date' },

@@ -9,6 +9,7 @@ import { randomUUID, createHash } from 'crypto'
 import { readFile, unlink } from 'fs/promises'
 import { createClient } from '@supabase/supabase-js'
 import { isWholesaling } from '../lib/modelos.js'
+import { CHECKLIST_ENFORCEMENT_START_DATE } from '../constants/featureFlags.js'
 
 // 'Resposta' foi renomeado para 'Recebido' numa migração antiga (ver pg.js);
 // dados anteriores à migração ainda usam 'Resposta' — aceitar os dois.
@@ -245,7 +246,10 @@ function qualidadeImovel(estado) {
 }
 
 // ── Generic CRUD route factory ────────────────────────────────
-function crudRoutes(path, crud, { onCreate, onUpdate } = {}) {
+// beforeUpdate(id, body) corre ANTES de crud.update — só aí ainda se tem o
+// registo no estado anterior sem ambiguidade. Se devolver { error }, a rota
+// responde 400 e não persiste nada.
+function crudRoutes(path, crud, { onCreate, onUpdate, beforeUpdate } = {}) {
   router.get(path, async (req, res) => {
     try {
       const { limit = 100, offset = 0, sort, search, ...filter } = req.query
@@ -287,6 +291,10 @@ function crudRoutes(path, crud, { onCreate, onUpdate } = {}) {
 
   router.put(`${path}/:id`, async (req, res) => {
     try {
+      if (beforeUpdate) {
+        const check = await beforeUpdate(req.params.id, req.body)
+        if (check && check.error) return res.status(400).json(check)
+      }
       const item = await crud.update(req.params.id, req.body, { regiaoActiva: req.regiaoActiva })
       if (!item) return res.status(404).json({ error: 'Não encontrado' })
       const table = path.slice(1)
@@ -465,6 +473,24 @@ crudRoutes('/imoveis', Imoveis, {
         console.log(`[checklist] Auto-completadas ${toComplete.length} tarefas para ${item.nome || item.id}`)
       }
     } catch (e) { console.error('[checklist] Erro auto-complete:', e.message) }
+  },
+  // Bloqueia mudança de estado no Kanban se a checklist obrigatória do
+  // estado ACTUAL não estiver completa — só para imóveis criados depois de
+  // CHECKLIST_ENFORCEMENT_START_DATE (imóveis já existentes movem livremente).
+  beforeUpdate: async (id, body) => {
+    if (!body.estado) return null
+    const { rows: [imovel] } = await pool.query('SELECT estado, created_at FROM imoveis WHERE id = $1', [id])
+    if (!imovel) return null
+    if (body.estado === imovel.estado) return null
+    if (!imovel.created_at || imovel.created_at < CHECKLIST_ENFORCEMENT_START_DATE) return null
+    const { rows: pendentes } = await pool.query(
+      `SELECT titulo FROM checklist_imovel WHERE imovel_id = $1 AND estado = $2 AND obrigatoria = true AND concluida = false`,
+      [id, imovel.estado]
+    )
+    if (pendentes.length > 0) {
+      return { error: 'Checklist incompleta', itens_em_falta: pendentes.map(p => p.titulo) }
+    }
+    return null
   },
 })
 
@@ -3033,6 +3059,10 @@ router.post('/automation/score-investidores', async (req, res) => {
     const now = new Date().toISOString()
 
     for (const inv of rows) {
+      // Classificação definida pelo formulário de classificação (scorecard manual)
+      // manda — automações não a sobrescrevem.
+      if (inv.classificacao_origem === 'manual') continue
+
       // Se tem scorecard, usar a pontuação ponderada do último scorecard
       const ultimoSc = allScorecards.find(s => s.investidor_id === inv.id)
       if (ultimoSc) {
@@ -3507,9 +3537,12 @@ router.post('/scorecards', async (req, res) => {
 
     // Auto-promoção: scorecard guardado durante "Call marcada" ou "Follow Up"
     // promove para "Investidor Qualificado em Carteira" (independente do tipo).
+    // classificacao_origem='manual': isto é o formulário de classificação
+    // preenchido pela equipa — a partir daqui manda sobre as automações.
     await pool.query(
       `UPDATE investidores SET classificacao = $1, pontuacao = $2,
         status = CASE WHEN status IN ('Call marcada','Follow Up') THEN 'Investidor Qualificado em Carteira' ELSE status END,
+        classificacao_origem = 'manual', classificacao_definida_em = $3,
         updated_at = $3 WHERE id = $4`,
       [classificacao, ponderado, now, investidor_id]
     )
@@ -3624,6 +3657,9 @@ router.post('/automation/reclassificar-investidores', async (req, res) => {
 
     for (const inv of investidores) {
       if (!inv.classificacao || inv.classificacao === 'D') continue
+      // Classificação definida pelo formulário de classificação (scorecard manual)
+      // manda — automações não a sobrescrevem.
+      if (inv.classificacao_origem === 'manual') continue
 
       // Último scorecard
       const ultimoScorecard = allScorecards.find(s => s.investidor_id === inv.id)

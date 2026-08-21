@@ -315,11 +315,15 @@ export async function autoFillInvestidor(reuniaoId) {
           'Claude AI', 'transcricao_automatica', now]
       )
 
-      // Atualizar investidor com classificação do scorecard
-      await pool.query(
-        'UPDATE investidores SET classificacao = $1, pontuacao = $2, updated_at = $3 WHERE id = $4',
-        [classificacao, ponderado, now, inv.id]
-      )
+      // Atualizar investidor com classificação do scorecard — excepto se a
+      // classificação foi definida pelo formulário de classificação (manual),
+      // que manda sobre a auto-avaliação da IA.
+      if (inv.classificacao_origem !== 'manual') {
+        await pool.query(
+          'UPDATE investidores SET classificacao = $1, pontuacao = $2, updated_at = $3 WHERE id = $4',
+          [classificacao, ponderado, now, inv.id]
+        )
+      }
 
       // Registar no histórico
       await pool.query(
