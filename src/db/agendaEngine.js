@@ -33,6 +33,13 @@ const ROLES_EQUIPA = ['admin', 'comercial', 'financeiro', 'operacoes']
 const GAP_MAX_CADEIA_MIN = 60 // Pesquisa -> Cold Call: no máximo 1h de intervalo
 const PRAZO_ESTUDO_MERCADO_DIAS = 2 // 48h após a Cold Call
 
+// Datas de "próxima acção" já preenchidas ANTES desta data de corte
+// (ex: 128 follow-ups de consultores acumulados ao longo de meses no
+// sistema antigo) não geram tarefa — só contam a partir daqui, quando o
+// campo é preenchido/reescrito de novo (updated_at avança). Decisão do
+// utilizador em 21/08/2026: evitar inundar a agenda com histórico morto.
+const DATA_CORTE_ORIGEM = '2026-08-21T21:41:15.000Z'
+
 // Campos de "próxima acção" com tarefa ligada automaticamente. `historico`
 // indica se é rastreável em historico_alteracoes (data_visita está na lista
 // de campos ignorados pelo trigger — 0013_audit_log.sql — fica sempre sem
@@ -133,8 +140,8 @@ export async function gerarTarefasSinteticas(pool) {
   for (const cfg of ORIGEM_CAMPOS) {
     const { rows: entidades } = await pool.query(
       `SELECT id, nome, ${cfg.campo} AS data_valor FROM ${cfg.tabela}
-       WHERE ${cfg.campo} IS NOT NULL AND ${cfg.campo} >= $1`,
-      [hoje]
+       WHERE ${cfg.campo} IS NOT NULL AND ${cfg.campo} >= $1 AND updated_at >= $2`,
+      [hoje, DATA_CORTE_ORIGEM]
     )
     for (const ent of entidades) {
       const dataValor = String(ent.data_valor).slice(0, 10)

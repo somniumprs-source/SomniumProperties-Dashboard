@@ -7,6 +7,9 @@ import pool from "./pg.ts";
 const ROLES_EQUIPA = ["admin", "comercial", "financeiro", "operacoes"];
 const GAP_MAX_CADEIA_MIN = 60;
 const PRAZO_ESTUDO_MERCADO_DIAS = 2;
+// Datas de "próxima acção" já preenchidas ANTES desta data de corte não
+// geram tarefa — só contam a partir daqui (ver agendaEngine.js).
+const DATA_CORTE_ORIGEM = "2026-08-21T21:41:15.000Z";
 
 const ORIGEM_CAMPOS = [
   { tabela: "consultores", campo: "data_proximo_follow_up", origemTipo: "consultor", categoria: "Follow Up Consultores", duracaoHoras: 0.5, tituloPrefix: "Follow-up", historico: false },
@@ -97,8 +100,8 @@ export async function gerarTarefasSinteticas() {
   for (const cfg of ORIGEM_CAMPOS) {
     const { rows: entidades } = await pool.query(
       `SELECT id, nome, ${cfg.campo} AS data_valor FROM ${cfg.tabela}
-       WHERE ${cfg.campo} IS NOT NULL AND ${cfg.campo} >= $1`,
-      [hoje],
+       WHERE ${cfg.campo} IS NOT NULL AND ${cfg.campo} >= $1 AND updated_at >= $2`,
+      [hoje, DATA_CORTE_ORIGEM],
     );
     for (const ent of entidades) {
       const dataValor = String(ent.data_valor).slice(0, 10);
