@@ -34,6 +34,8 @@ import { removeFromStorage, supabase, uploadPublic, uploadPrivate } from "../_sh
 import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { isWholesaling } from "../_shared/modelos.ts";
 import { CHECKLIST_ENFORCEMENT_START_DATE } from "../_shared/featureFlags.ts";
+import { diasFollowUpParaRegisto } from "../_shared/followupRules.ts";
+import { criarFollowUpConsultor } from "../_shared/consultorFollowups.ts";
 
 // 'Resposta' foi renomeado para 'Recebido' numa migração antiga (ver pg.ts);
 // dados anteriores à migração ainda usam 'Resposta' — aceitar os dois.
@@ -1515,47 +1517,9 @@ app.get("/consultores/:id/followups", async (c: any) => {
 
 app.post("/consultores/:id/followups", async (c: any) => {
   try {
-    const consultorId = c.req.param("id");
     await ensureGravacoesTable();
-    const { data, motivo, proximo_follow_up, imovel_id } = await c.req.json().catch(() => ({}));
-    if (!data) return c.json({ error: "Data do follow-up é obrigatória" }, 400);
-
-    const item = await ConsultorFollowups.create({
-      consultor_id: consultorId,
-      imovel_id: imovel_id || null,
-      data,
-      motivo: motivo || null,
-      proximo_follow_up: proximo_follow_up || null,
-    });
-
-    const { rows } = await pool.query(
-      `SELECT data, motivo, proximo_follow_up FROM consultor_followups
-       WHERE consultor_id = $1 ORDER BY data DESC, created_at DESC LIMIT 1`,
-      [consultorId],
-    );
-    if (rows[0]) {
-      await Consultores.update(consultorId, {
-        data_follow_up: rows[0].data,
-        motivo_follow_up: rows[0].motivo,
-        data_proximo_follow_up: rows[0].proximo_follow_up,
-      });
-    }
-
-    const { rows: cur } = await pool.query(
-      `SELECT data_primeira_call FROM consultores WHERE id = $1`,
-      [consultorId],
-    );
-    if (cur[0] && (cur[0].data_primeira_call == null || cur[0].data_primeira_call === "")) {
-      const { rows: oldest } = await pool.query(
-        `SELECT data FROM consultor_followups
-         WHERE consultor_id = $1 ORDER BY data ASC, created_at ASC LIMIT 1`,
-        [consultorId],
-      );
-      if (oldest[0]?.data) {
-        await Consultores.update(consultorId, { data_primeira_call: oldest[0].data });
-      }
-    }
-
+    const body = await c.req.json().catch(() => ({}));
+    const item = await criarFollowUpConsultor(c.req.param("id"), body);
     return c.json(item, 201);
   } catch (e) { return c.json({ error: (e as Error).message }, 400); }
 });
@@ -1937,6 +1901,25 @@ app.patch("/gravacoes/:id/registo", async (c: any) => {
        registo.pp_compromisso_confirmado, registo.pp_criterios_pesquisa_enviados, registo.pp_negocios_fechados,
        now],
     );
+
+    // Follow-up automático por desfecho de chamada (ver C2 da auditoria) —
+    // valores de prazo em _shared/followupRules.ts ainda pendentes de
+    // confirmação com o SOP 2. Só na PRIMEIRA confirmação deste registo,
+    // para não criar um follow-up novo sempre que a chamada é reeditada.
+    try {
+      const primeiraConfirmacao = !current.registo_confirmado_em;
+      const dias = primeiraConfirmacao ? diasFollowUpParaRegisto(row) : null;
+      if (dias != null && row.consultor_id) {
+        const dataFollowUp = new Date(Date.now() + dias * 86400000).toISOString().slice(0, 10);
+        const desfecho = row.tipo_chamada === "cold_call" ? row.cc_resultado : row.cl_resultado;
+        await criarFollowUpConsultor(row.consultor_id, {
+          data: dataFollowUp,
+          motivo: `[Auto] Desfecho da chamada: ${desfecho}`,
+          imovel_id: row.imovel_id || null,
+        });
+      }
+    } catch (e) { console.error("[gravacoes/registo] follow-up automático:", (e as Error).message); }
+
     return c.json(row);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });

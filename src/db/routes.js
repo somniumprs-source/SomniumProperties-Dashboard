@@ -10,6 +10,7 @@ import { readFile, unlink } from 'fs/promises'
 import { createClient } from '@supabase/supabase-js'
 import { isWholesaling } from '../lib/modelos.js'
 import { CHECKLIST_ENFORCEMENT_START_DATE } from '../constants/featureFlags.js'
+import { diasFollowUpParaRegisto } from '../constants/followupRules.js'
 
 // 'Resposta' foi renomeado para 'Recebido' numa migração antiga (ver pg.js);
 // dados anteriores à migração ainda usam 'Resposta' — aceitar os dois.
@@ -1294,50 +1295,57 @@ router.get('/consultores/:id/followups', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// Extraído para ser reutilizável por PATCH /gravacoes/:id/registo (follow-up
+// automático por desfecho de chamada, ver C2 da auditoria) e por
+// autoFillConsultor (meetingAnalysis.js) — ambos devem criar uma entrada real
+// em consultor_followups, nunca escrever os campos legados directamente.
+export async function criarFollowUpConsultor(consultorId, { data, motivo, proximo_follow_up, imovel_id }) {
+  if (!data) throw new Error('Data do follow-up é obrigatória')
+
+  const item = await ConsultorFollowups.create({
+    consultor_id: consultorId,
+    imovel_id: imovel_id || null,
+    data,
+    motivo: motivo || null,
+    proximo_follow_up: proximo_follow_up || null,
+  })
+
+  // Sincronizar campos legados no consultor com a entrada mais recente
+  const { rows } = await pool.query(
+    `SELECT data, motivo, proximo_follow_up FROM consultor_followups
+     WHERE consultor_id = $1 ORDER BY data DESC, created_at DESC LIMIT 1`,
+    [consultorId]
+  )
+  if (rows[0]) {
+    await Consultores.update(consultorId, {
+      data_follow_up: rows[0].data,
+      motivo_follow_up: rows[0].motivo,
+      data_proximo_follow_up: rows[0].proximo_follow_up,
+    })
+  }
+
+  // Auto-preencher data_primeira_call com o follow-up mais antigo (apenas se vazio)
+  const { rows: cur } = await pool.query(
+    `SELECT data_primeira_call FROM consultores WHERE id = $1`,
+    [consultorId]
+  )
+  if (cur[0] && (cur[0].data_primeira_call == null || cur[0].data_primeira_call === '')) {
+    const { rows: oldest } = await pool.query(
+      `SELECT data FROM consultor_followups
+       WHERE consultor_id = $1 ORDER BY data ASC, created_at ASC LIMIT 1`,
+      [consultorId]
+    )
+    if (oldest[0]?.data) {
+      await Consultores.update(consultorId, { data_primeira_call: oldest[0].data })
+    }
+  }
+
+  return item
+}
+
 router.post('/consultores/:id/followups', async (req, res) => {
   try {
-    const consultorId = req.params.id
-    const { data, motivo, proximo_follow_up, imovel_id } = req.body
-    if (!data) return res.status(400).json({ error: 'Data do follow-up é obrigatória' })
-
-    const item = await ConsultorFollowups.create({
-      consultor_id: consultorId,
-      imovel_id: imovel_id || null,
-      data,
-      motivo: motivo || null,
-      proximo_follow_up: proximo_follow_up || null,
-    })
-
-    // Sincronizar campos legados no consultor com a entrada mais recente
-    const { rows } = await pool.query(
-      `SELECT data, motivo, proximo_follow_up FROM consultor_followups
-       WHERE consultor_id = $1 ORDER BY data DESC, created_at DESC LIMIT 1`,
-      [consultorId]
-    )
-    if (rows[0]) {
-      await Consultores.update(consultorId, {
-        data_follow_up: rows[0].data,
-        motivo_follow_up: rows[0].motivo,
-        data_proximo_follow_up: rows[0].proximo_follow_up,
-      })
-    }
-
-    // Auto-preencher data_primeira_call com o follow-up mais antigo (apenas se vazio)
-    const { rows: cur } = await pool.query(
-      `SELECT data_primeira_call FROM consultores WHERE id = $1`,
-      [consultorId]
-    )
-    if (cur[0] && (cur[0].data_primeira_call == null || cur[0].data_primeira_call === '')) {
-      const { rows: oldest } = await pool.query(
-        `SELECT data FROM consultor_followups
-         WHERE consultor_id = $1 ORDER BY data ASC, created_at ASC LIMIT 1`,
-        [consultorId]
-      )
-      if (oldest[0]?.data) {
-        await Consultores.update(consultorId, { data_primeira_call: oldest[0].data })
-      }
-    }
-
+    const item = await criarFollowUpConsultor(req.params.id, req.body)
     res.status(201).json(item)
   } catch (e) { res.status(400).json({ error: e.message }) }
 })
@@ -1620,6 +1628,25 @@ router.patch('/gravacoes/:id/registo', async (req, res) => {
        registo.pp_compromisso_confirmado, registo.pp_criterios_pesquisa_enviados, registo.pp_negocios_fechados,
        now]
     )
+
+    // Follow-up automático por desfecho de chamada (ver C2 da auditoria) —
+    // valores de prazo em followupRules.js ainda pendentes de confirmação
+    // com o SOP 2. Só na PRIMEIRA confirmação deste registo, para não criar
+    // um follow-up novo sempre que a chamada é reeditada.
+    try {
+      const primeiraConfirmacao = !current.registo_confirmado_em
+      const dias = primeiraConfirmacao ? diasFollowUpParaRegisto(row) : null
+      if (dias != null && row.consultor_id) {
+        const dataFollowUp = new Date(Date.now() + dias * 86400000).toISOString().slice(0, 10)
+        const desfecho = row.tipo_chamada === 'cold_call' ? row.cc_resultado : row.cl_resultado
+        await criarFollowUpConsultor(row.consultor_id, {
+          data: dataFollowUp,
+          motivo: `[Auto] Desfecho da chamada: ${desfecho}`,
+          imovel_id: row.imovel_id || null,
+        })
+      }
+    } catch (e) { console.error('[gravacoes/registo] follow-up automático:', e.message) }
+
     res.json(row)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })

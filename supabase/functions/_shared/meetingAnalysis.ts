@@ -10,6 +10,7 @@
  */
 import pool from "./pg.ts"
 import Anthropic from "@anthropic-ai/sdk"
+import { criarFollowUpConsultor } from "./consultorFollowups.ts"
 
 const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") || ''
 
@@ -459,12 +460,20 @@ export async function autoFillConsultor(reuniaoId) {
   if (!cons.equipa_remax && dados.equipa_remax) updates.equipa_remax = dados.equipa_remax
   if (!cons.classificacao && analise.classificacao_sugerida) updates.classificacao = analise.classificacao_sugerida
 
+  // Follow-up sugerido pela IA: cria sempre uma entrada real em
+  // consultor_followups (histórico), nunca escreve os campos legados
+  // directamente — senão fica invisível no histórico e pode ser apagado
+  // sem aviso da próxima vez que alguém editar um follow-up manual.
+  let followUpCriado = false
   if (dados.data_proximo_followup) {
-    const proximaData = new Date(dados.data_proximo_followup)
-    const proximaCons = cons.data_proximo_follow_up ? new Date(cons.data_proximo_follow_up) : null
-    if (!proximaCons || proximaData > proximaCons) {
-      updates.data_proximo_follow_up = dados.data_proximo_followup
-      if (dados.motivo_followup) updates.motivo_follow_up = dados.motivo_followup
+    try {
+      await criarFollowUpConsultor(cons.id, {
+        data: dados.data_proximo_followup,
+        motivo: dados.motivo_followup ? `[Fireflies] ${dados.motivo_followup}` : '[Fireflies] Sugerido pela IA',
+      })
+      followUpCriado = true
+    } catch (e) {
+      console.error('[meetingAnalysis] Erro ao criar follow-up sugerido (consultor):', e.message)
     }
   }
 
@@ -501,7 +510,7 @@ export async function autoFillConsultor(reuniaoId) {
   return {
     ...analise,
     autoFilled: true,
-    fieldsUpdated: Object.keys(updates),
+    fieldsUpdated: followUpCriado ? [...Object.keys(updates), 'follow_up'] : Object.keys(updates),
     consultor_id: cons.id,
     consultor_nome: cons.nome,
   }
