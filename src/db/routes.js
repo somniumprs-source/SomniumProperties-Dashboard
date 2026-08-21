@@ -716,17 +716,17 @@ router.get('/imoveis/:id/relatorio-investidor', async (req, res) => {
 })
 
 // Concede ao user ligado a um investidor acesso (tabela `acessos`) a todos os
-// negocios em que esse investidor participa — via projeto_investidores ou via
-// negocios.investidor_ids (JSON). Idempotente. Sem user_id ligado, nao faz nada.
+// negocios em que esse investidor participa — via projeto_investidores, a
+// unica fonte real da ligacao (negocios.investidor_ids e legado, nunca
+// escrito pela app). Idempotente. Sem user_id ligado, nao faz nada.
 async function syncInvestidorAcessos(investidorId) {
   const { rows: [inv] } = await pool.query('SELECT user_id FROM investidores WHERE id = $1', [investidorId])
   if (!inv?.user_id) return 0
   const { rows: negocios } = await pool.query(
     `SELECT DISTINCT n.id FROM negocios n
-     LEFT JOIN projeto_investidores pi ON pi.negocio_id = n.id AND pi.investidor_id = $1
-     WHERE n.deleted_at IS NULL
-       AND (pi.investidor_id IS NOT NULL OR n.investidor_ids LIKE $2)`,
-    [investidorId, `%${investidorId}%`]
+     JOIN projeto_investidores pi ON pi.negocio_id = n.id AND pi.investidor_id = $1
+     WHERE n.deleted_at IS NULL`,
+    [investidorId]
   )
   for (const n of negocios) {
     await pool.query(
@@ -2730,8 +2730,13 @@ router.get('/investidores/:id/full', async (req, res) => {
   try {
     const { rows: [inv] } = await pool.query('SELECT * FROM investidores WHERE id = $1', [req.params.id])
     if (!inv) return res.status(404).json({ error: 'Não encontrado' })
-    // Negócios onde este investidor aparece
-    const { rows: negocios } = await pool.query("SELECT * FROM negocios WHERE investidor_ids LIKE $1", [`%${inv.notion_id ?? inv.id}%`])
+    // Negócios onde este investidor aparece — via projeto_investidores, a
+    // única fonte real da ligação (investidor_ids é um campo legado, nunca
+    // escrito pela app).
+    const { rows: negocios } = await pool.query(
+      `SELECT n.* FROM negocios n JOIN projeto_investidores pi ON pi.negocio_id = n.id WHERE pi.investidor_id = $1`,
+      [inv.id]
+    )
     // Tarefas relacionadas
     const { rows: tarefas } = await pool.query("SELECT * FROM tarefas WHERE tarefa ILIKE $1 ORDER BY created_at DESC", [`%${inv.nome}%`])
     const { rows: timeline } = await pool.query("SELECT * FROM audit_log WHERE registo_id = $1 ORDER BY created_at DESC LIMIT 20", [inv.id])
@@ -3290,6 +3295,8 @@ router.get('/relatorio/investidores', async (req, res) => {
     )
     const { rows: negocios } = await pool.query('SELECT * FROM negocios')
     const { rows: reunioes } = await pool.query("SELECT id, entidade_id, data, duracao_min FROM reunioes WHERE entidade_tipo = 'investidores'")
+    // Ligação real investidor↔negócio — investidor_ids é campo legado, nunca escrito pela app.
+    const { rows: projInv } = await pool.query('SELECT negocio_id, investidor_id FROM projeto_investidores')
     const now = new Date()
 
     const statusOrder = ['Pendente de Aprovação','Potencial Investidor','Marcar call','Call marcada','Follow Up','Investidor Qualificado em Carteira','Negociação de Deal','Investidor em parceria','Investidor Ativo','Não qualificado','Inactivo']
@@ -3325,7 +3332,8 @@ router.get('/relatorio/investidores', async (req, res) => {
 
       const capitalMax = inv.capital_max || 0
       const montante = inv.montante_investido || 0
-      const meusNegocios = negocios.filter(n => (n.investidor_ids || '').includes(inv.id))
+      const meusNegocioIds = new Set(projInv.filter(pi => pi.investidor_id === inv.id).map(pi => pi.negocio_id))
+      const meusNegocios = negocios.filter(n => meusNegocioIds.has(n.id))
       const minhasReunioes = reunioes.filter(r => r.entidade_id === inv.id)
 
       const diasSemContacto = inv.data_ultimo_contacto
@@ -4914,9 +4922,9 @@ router.get('/projetos/:negocioId/pdf/saida', async (req, res) => {
     const data = await loadProjetoCompleto(req.params.negocioId)
     if (!data) return res.status(404).json({ error: 'Projecto não encontrado' })
 
-    // Preferir tabela `projeto_investidores` (capital + % reais).
-    // Fallback: investidor_ids (rateio igualitário).
-    let investidores = []
+    // Fonte única: projeto_investidores (capital + % reais). investidor_ids
+    // é um campo legado nunca escrito pela app — descontinuado (confirmado
+    // que nenhum negócio depende só dele).
     const { rows: projInv } = await pool.query(
       `SELECT pi.capital, pi.percentagem, i.nome
        FROM projeto_investidores pi
@@ -4925,17 +4933,7 @@ router.get('/projetos/:negocioId/pdf/saida', async (req, res) => {
        ORDER BY pi.capital DESC`,
       [req.params.negocioId]
     )
-    if (projInv.length > 0) {
-      investidores = projInv.map(p => ({ nome: p.nome, capital: Number(p.capital) || 0 }))
-    } else {
-      let invIds = []
-      try { invIds = typeof data.negocio.investidor_ids === 'string' ? JSON.parse(data.negocio.investidor_ids || '[]') : (data.negocio.investidor_ids || []) } catch {}
-      if (invIds.length > 0) {
-        const { rows } = await pool.query('SELECT id, nome FROM investidores WHERE id = ANY($1)', [invIds])
-        const capitalPorInv = (Number(data.negocio.capital_total) || 0) / invIds.length
-        investidores = rows.map(r => ({ id: r.id, nome: r.nome, capital: capitalPorInv }))
-      }
-    }
+    const investidores = projInv.map(p => ({ nome: p.nome, capital: Number(p.capital) || 0 }))
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', pdfDisposition(req, `saida-caep-${data.negocio.movimento.replace(/[^\w]/g, '_')}.pdf`))
     const doc = generateRelatorioSaida({ ...data, investidores })
@@ -5029,8 +5027,11 @@ async function notificarInvestidoresMudancaFase(negocioId, novaFaseKey) {
     if (!negs.length) return
     const negocio = negs[0]
 
-    let invIds = []
-    try { invIds = typeof negocio.investidor_ids === 'string' ? JSON.parse(negocio.investidor_ids || '[]') : (negocio.investidor_ids || []) } catch {}
+    // investidor_ids nunca é escrito pela app — a ligação real vive em
+    // projeto_investidores. Este fallback ficava sempre vazio, o que
+    // significava que esta notificação nunca era enviada a ninguém.
+    const { rows: piRows } = await pool.query('SELECT investidor_id FROM projeto_investidores WHERE negocio_id = $1', [negocioId])
+    const invIds = piRows.map(p => p.investidor_id)
     if (invIds.length === 0) return
 
     // Filtra investidores que TÊM a região do negócio nas suas preferências.
@@ -5635,8 +5636,11 @@ async function disparoVendaFracaoAutomatico(fracaoId) {
 
     const { rows: negs } = await pool.query('SELECT * FROM negocios WHERE id = $1', [negocioId])
     const negocio = negs[0]
-    let invIds = []
-    try { invIds = typeof negocio.investidor_ids === 'string' ? JSON.parse(negocio.investidor_ids || '[]') : (negocio.investidor_ids || []) } catch {}
+    // investidor_ids nunca é escrito pela app — a ligação real vive em
+    // projeto_investidores. Este fallback ficava sempre vazio, o que
+    // significava que este email nunca era enviado a ninguém.
+    const { rows: piRows } = await pool.query('SELECT investidor_id FROM projeto_investidores WHERE negocio_id = $1', [negocioId])
+    const invIds = piRows.map(p => p.investidor_id)
     if (invIds.length === 0) return
 
     const { rows: invs } = await pool.query(

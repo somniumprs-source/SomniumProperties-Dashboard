@@ -1226,6 +1226,8 @@ function TabInvestidores({ negocio, readOnly }) {
   const [investidorSel, setInvestidorSel] = useState('')
   const [novoCapital, setNovoCapital] = useState('')
   const [novaPerc, setNovaPerc] = useState('')
+  const [novoInvNome, setNovoInvNome] = useState('')
+  const [novoInvContacto, setNovoInvContacto] = useState('')
 
   async function load() {
     const [r1, r2] = await Promise.all([
@@ -1246,13 +1248,11 @@ function TabInvestidores({ negocio, readOnly }) {
     return (Number(l.capital) || 0) + (lucroEstimado * pctCapital)
   }
 
-  async function adicionar(e) {
-    e?.preventDefault()
-    if (!investidorSel || !novoCapital) return
+  async function ligarInvestidor(investidorId) {
     const r = await apiFetch(`/api/crm/projetos/${negocio.id}/investidores`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        investidor_id: investidorSel,
+        investidor_id: investidorId,
         capital: parseFloat(novoCapital) || 0,
         percentagem: parseFloat(novaPerc) || 0,
       }),
@@ -1260,8 +1260,45 @@ function TabInvestidores({ negocio, readOnly }) {
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
       toast?.(`Erro ao adicionar investidor: ${err.error || r.status}`, 'error', 3500)
+      return false
+    }
+    return true
+  }
+
+  async function adicionar(e) {
+    e?.preventDefault()
+    if (!novoCapital) return
+
+    // "+ Criar novo investidor": nunca ligar um nome solto sem ficha —
+    // cria a ficha primeiro e só depois liga ao projecto.
+    if (investidorSel === '__novo__') {
+      if (!novoInvNome.trim()) return
+      const rInv = await apiFetch('/api/crm/investidores', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome: novoInvNome.trim(),
+          telemovel: novoInvContacto.includes('@') ? null : novoInvContacto.trim() || null,
+          email: novoInvContacto.includes('@') ? novoInvContacto.trim() : null,
+          status: 'Lead',
+        }),
+      })
+      if (!rInv.ok) {
+        const err = await rInv.json().catch(() => ({}))
+        toast?.(`Erro ao criar investidor: ${err.error || rInv.status}`, 'error', 3500)
+        return
+      }
+      const novoInv = await rInv.json()
+      const ok = await ligarInvestidor(novoInv.id)
+      if (!ok) return
+      setInvestidorSel(''); setNovoCapital(''); setNovaPerc(''); setNovoInvNome(''); setNovoInvContacto('')
+      toast?.(`Investidor "${novoInv.nome}" criado e ligado ao projecto`, 'success', 3000)
+      load()
       return
     }
+
+    if (!investidorSel) return
+    const ok = await ligarInvestidor(investidorSel)
+    if (!ok) return
     setInvestidorSel(''); setNovoCapital(''); setNovaPerc('')
     load()
   }
@@ -1354,16 +1391,28 @@ function TabInvestidores({ negocio, readOnly }) {
               className="col-span-5 px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white">
               <option value="">Escolhe um investidor…</option>
               {disponiveis.map(i => <option key={i.id} value={i.id}>{i.nome}</option>)}
+              <option value="__novo__">+ Criar novo investidor…</option>
             </select>
             <input type="number" step="0.01" value={novoCapital} onChange={e => setNovoCapital(e.target.value)}
               placeholder="Capital €" className="col-span-3 px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white font-mono" />
             <input type="number" step="0.1" value={novaPerc} onChange={e => setNovaPerc(e.target.value)}
               placeholder="%" className="col-span-2 px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white" />
-            <button type="submit" disabled={!investidorSel || !novoCapital}
+            <button type="submit"
+              disabled={!novoCapital || (investidorSel === '__novo__' ? !novoInvNome.trim() : !investidorSel)}
               className="col-span-2 px-3 py-1.5 rounded-lg bg-brand-dark text-brand-gold text-sm disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1">
               <Plus className="w-4 h-4" /> Add
             </button>
           </div>
+          {investidorSel === '__novo__' && (
+            <div className="grid grid-cols-12 gap-2 mt-2">
+              <input type="text" value={novoInvNome} onChange={e => setNovoInvNome(e.target.value)}
+                placeholder="Nome do novo investidor" autoFocus
+                className="col-span-6 px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white" />
+              <input type="text" value={novoInvContacto} onChange={e => setNovoInvContacto(e.target.value)}
+                placeholder="Email ou telemóvel (opcional)"
+                className="col-span-6 px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white" />
+            </div>
+          )}
         </form>
       )}
     </div>
