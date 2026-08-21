@@ -2021,7 +2021,8 @@ function ImovelEditSections({ data, form, setField }) {
         <p className="text-xs text-gray-400 mb-1">Tipo de Prédio</p>
         <select value={form.predio_tipo || ''} onChange={e => {
             const v = e.target.value
-            setForm(prev => v === 'Moradia' ? { ...prev, predio_tipo: v, numero_pisos_predio: null, tem_elevador: null } : { ...prev, predio_tipo: v })
+            setField('predio_tipo', v)
+            if (v === 'Moradia') { setField('numero_pisos_predio', null); setField('tem_elevador', null) }
           }}
           className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
           <option value="">—</option>

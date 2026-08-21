@@ -684,7 +684,7 @@ export async function initSchema() {
             WHEN tipo_principal IS NULL OR tipo_principal = '' THEN '["Passivo"]'
             ELSE json_build_array(tipo_principal)::text
           END
-        WHERE tipo_principal IS NULL OR tipo_principal !~ '^\s*\[';
+        WHERE tipo_principal IS NULL OR tipo_principal !~ '^\\s*\\[';
 
       -- Migration: consolidar estados legacy ("Investidor classificado", "Investidor em espera",
       -- "Acesso a Off-Market", "Investidor Activo") nos estados actuais.
