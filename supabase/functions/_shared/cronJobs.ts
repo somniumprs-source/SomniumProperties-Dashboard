@@ -553,10 +553,43 @@ async function runArquivoRelatoriosObra() {
   }
 }
 
+// ── Pré-gerar a proposta da Agenda da semana seguinte ───────────
+// Corre ao domingo à noite (depois de a equipa marcar disponibilidade),
+// para a proposta já estar pronta na segunda-feira de manhã.
+async function runGerarAgendaSemanal() {
+  const { gerarCadeiasAngariacao, gerarEstudoDeMercado, gerarTarefasSinteticas, instanciarTemplatesDevidos, gerarProposta } =
+    await import("./agendaEngine.ts");
+
+  // Segunda-feira da semana seguinte (Europe/Lisbon).
+  const hojeLisboa = new Date(
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()) +
+      "T00:00:00Z",
+  );
+  const diaSemana = (hojeLisboa.getUTCDay() + 6) % 7; // 0=Seg
+  const diasAteProximaSegunda = 7 - diaSemana;
+  const proximaSegunda = new Date(hojeLisboa);
+  proximaSegunda.setUTCDate(proximaSegunda.getUTCDate() + diasAteProximaSegunda);
+  const semanaInicio = proximaSegunda.toISOString().slice(0, 10);
+
+  const cadeias = await gerarCadeiasAngariacao();
+  const estudosMercado = await gerarEstudoDeMercado();
+  const sinteticas = await gerarTarefasSinteticas();
+  const instanciadas = await instanciarTemplatesDevidos(semanaInicio);
+  const proposta = await gerarProposta(semanaInicio);
+
+  console.log(
+    `[cron] Agenda pré-gerada para a semana de ${semanaInicio}: ${proposta.criados.length} agendados, ` +
+      `${proposta.naoAgendadas.length} não agendados (cadeias: ${cadeias.criadas}, estudos VVR: ${estudosMercado.criadas}, ` +
+      `sintéticas: ${sinteticas.criadas}, templates: ${instanciadas.criadas})`,
+  );
+  return { semanaInicio, agendados: proposta.criados.length, naoAgendadas: proposta.naoAgendadas.length };
+}
+
 // Exports para execução manual via API / cron functions
 export {
   REACTIVATION_TEMPLATE,
   runArquivoRelatoriosObra,
+  runGerarAgendaSemanal,
   runAutoInactivoInvestidores,
   runFollowUp,
   runReclassificacaoInvestidores,

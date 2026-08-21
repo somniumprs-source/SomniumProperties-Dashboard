@@ -70,3 +70,6 @@ verify_jwt = false
 
 [functions.cron-backup]
 verify_jwt = false
+
+[functions.cron-gerar-agenda-semanal]
+verify_jwt = false
