@@ -2194,15 +2194,24 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
         next.numero_pisos_predio = null
         next.tem_elevador = null
       }
+      // Tipologia (T1, T2…) só faz sentido para Apartamento — limpar nos
+      // restantes tipos para não ficar valor escondido guardado.
+      if (key === 'predio_tipo' && value !== 'Apartamento') {
+        next.tipologia = null
+      }
       return next
     })
   }
 
   const inputClass = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
   const baseFields = quickMode ? fields.filter(f => f.quick) : fields
-  const visibleFields = form.predio_tipo === 'Moradia'
-    ? baseFields.filter(f => f.key !== 'numero_pisos_predio' && f.key !== 'tem_elevador')
-    : baseFields
+  const visibleFields = baseFields.filter(f => {
+    // Tipologia (T1, T2…) só se aplica a Apartamento.
+    if (f.key === 'tipologia') return form.predio_tipo === 'Apartamento'
+    // Moradia não tem "Nº Pisos do Prédio" nem "Elevador".
+    if (form.predio_tipo === 'Moradia' && (f.key === 'numero_pisos_predio' || f.key === 'tem_elevador')) return false
+    return true
+  })
 
   return (
     <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-6 shadow-xs">

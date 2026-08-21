@@ -2016,13 +2016,16 @@ function ImovelEditSections({ data, form, setField }) {
 
     {/* 3. Caracterização Física */}
     <Section icon="🏠" title="Caracterização Física" fields={sec.fisica} form={form}>
-      <EF label="Tipologia" field="tipologia" form={form} set={setField} />
+      {form.predio_tipo === 'Apartamento' && (
+        <EF label="Tipologia" field="tipologia" form={form} set={setField} />
+      )}
       <div>
         <p className="text-xs text-gray-400 mb-1">Tipo de Prédio</p>
         <select value={form.predio_tipo || ''} onChange={e => {
             const v = e.target.value
             setField('predio_tipo', v)
             if (v === 'Moradia') { setField('numero_pisos_predio', null); setField('tem_elevador', null) }
+            if (v !== 'Apartamento') { setField('tipologia', null) }
           }}
           className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
           <option value="">—</option>
@@ -2231,7 +2234,7 @@ function ImovelReadSections({ data, onNavigate }) {
     </Section>
 
     <Section icon="🏠" title="Caracterização Física" fields={sec.fisica} form={data}>
-      <Field label="Tipologia" value={data.tipologia} />
+      {data.predio_tipo === 'Apartamento' && <Field label="Tipologia" value={data.tipologia} />}
       <Field label="Tipo de Prédio" value={data.predio_tipo} />
       <Field label="Área Útil" value={fmtArea(data.area_util)} />
       <Field label="ABP" value={fmtArea(data.area_bruta)} />
