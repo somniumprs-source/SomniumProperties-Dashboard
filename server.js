@@ -4682,16 +4682,12 @@ app.post('/api/calendar/pull', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// P3.15 — Push de fases/tarefas de um projecto para o Google Calendar (on-demand)
-app.post('/api/crm/projetos/:negocioId/sync-gcal', async (req, res) => {
-  try {
-    if (!gcal) return res.status(503).json({ error: 'Google Calendar não configurado' })
-    const { pushProjetoToGCal } = await import('./src/db/projetoGcalSync.js')
-    const result = await pushProjetoToGCal({ gcal, calendarId: GCAL_ID, negocioId: req.params.negocioId })
-    if (!result.ok) return res.status(500).json(result)
-    res.json(result)
-  } catch (e) { console.error('[projeto-gcal]', e.message); res.status(500).json({ error: e.message }) }
-})
+// /api/crm/projetos/:negocioId/sync-gcal removido — as tarefas de fase de
+// projecto deixam de sincronizar com o Google Calendar (só a tabela `tarefas`,
+// da equipa, continua ligada ao GCal). Tinha só push manual (sem pull),
+// nunca chegou a ser portado para produção, e duplicava a forma de "uma
+// tarefa aparecer no Google Calendar" com o sync de `tarefas` (achado da
+// auditoria). O Calendário de Projectos continua disponível dentro do CRM.
 
 // Auto-sync bidirecional (~15 min, com jitter para não colidir com outros sincronizadores)
 if (gcal) {

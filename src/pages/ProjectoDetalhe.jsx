@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
-  ArrowLeft, Calendar, CheckCircle2, Circle, Plus, Trash2, Upload, X,
+  ArrowLeft, CheckCircle2, Circle, Plus, Trash2, Upload, X,
   Building2, Wallet, ImageIcon, FileText, Users, BarChart3, ChevronRight,
   FileDown, AlertTriangle, Sparkles, RefreshCw, Home, Layers,
   History, MessageSquare, TrendingUp, FileSpreadsheet, Pencil, Eye,
@@ -194,9 +194,6 @@ export function ProjectoDetalhe() {
             {!isReadOnly && semFases && (
               <Button size="sm" icon={Plus} onClick={inicializarFases}>{isWholesalling ? 'Inicializar fases' : 'Inicializar fases de obra'}</Button>
             )}
-            {!isReadOnly && !semFases && (
-              <SyncGCalButton negocioId={id} />
-            )}
             <button type="button" onClick={() => openDocument(`/api/crm/projetos/${id}/export-excel`, { download: true }).catch(e => console.error('[export-excel]', e.message))}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50">
               <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
@@ -387,29 +384,6 @@ function TabResumo({ resumo, fases }) {
   )
 }
 
-
-// ════════════════════════════════════════════════════════════════
-// Sync para Google Calendar (P3.15)
-// ════════════════════════════════════════════════════════════════
-function SyncGCalButton({ negocioId }) {
-  const [loading, setLoading] = useState(false)
-  async function syncGCal() {
-    if (!confirm('Sincronizar deadlines de fases e tarefas para o Google Calendar?')) return
-    setLoading(true)
-    try {
-      const r = await apiFetch(`/api/crm/projetos/${negocioId}/sync-gcal`, { method: 'POST' })
-      const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Erro')
-      alert(`Sync GCal:\nFases criadas: ${j.fasesCriadas}\nFases atualizadas: ${j.fasesAtualizadas}\nTarefas criadas: ${j.tarefasCriadas}\nTarefas atualizadas: ${j.tarefasAtualizadas}${j.erros ? `\nErros: ${j.erros}` : ''}`)
-    } catch (e) { alert('Erro: ' + e.message) }
-    finally { setLoading(false) }
-  }
-  return (
-    <Button size="sm" variant="secondary" icon={Calendar} onClick={syncGCal} disabled={loading}>
-      {loading ? 'A sincronizar...' : 'Sync Calendar'}
-    </Button>
-  )
-}
 
 function Field({ label, value, accent }) {
   return (

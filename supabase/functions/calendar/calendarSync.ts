@@ -2,8 +2,42 @@
 // Usa pool (pg.ts) e o cliente gcal (googleapis) passado por argumento.
 // crypto.randomUUID() e global no Deno (substitui o import('crypto')).
 import pool from "../_shared/pg.ts";
+import { sendEmail } from "../_shared/emailService.ts";
 
 const GCAL_TZ = "Europe/Lisbon";
+const CONFLICT_ALERT_EMAIL = "somniumprs@gmail.com";
+
+// Alerta por email quando a mesma tarefa foi editada nos dois lados (CRM e
+// Google Calendar) desde o último sync — o PULL sobrescreve sempre com a
+// versão do GCal (mesmo comportamento de sempre), mas agora avisa em vez de
+// perder a edição do CRM em silêncio (achado da auditoria).
+async function alertarConflitoSync(tarefaAntes: any, eventoNovo: any): Promise<void> {
+  const linhas = [
+    `A tarefa "${tarefaAntes.tarefa}" foi editada tanto no CRM como no Google Calendar antes da sincronização mais recente.`,
+    `A versão do Google Calendar substituiu a do CRM (comportamento normal do sync), mas a edição feita no CRM foi perdida:`,
+    "",
+    `Versão do CRM (perdida):`,
+    `  Tarefa: ${tarefaAntes.tarefa}`,
+    `  Início: ${tarefaAntes.inicio || "—"}`,
+    `  Fim: ${tarefaAntes.fim || "—"}`,
+    `  Funcionário: ${tarefaAntes.funcionario || "—"}`,
+    "",
+    `Versão do Google Calendar (que ficou a valer):`,
+    `  Tarefa: ${eventoNovo.summary}`,
+    `  Início: ${eventoNovo.start?.dateTime || eventoNovo.start?.date || "—"}`,
+    `  Fim: ${eventoNovo.end?.dateTime || eventoNovo.end?.date || "—"}`,
+  ];
+  const text = linhas.join("\n");
+  try {
+    await sendEmail(
+      `Conflito de sincronização — tarefa "${tarefaAntes.tarefa}"`,
+      `<pre style="font-family:monospace">${text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>`,
+      { to: CONFLICT_ALERT_EMAIL, text },
+    );
+  } catch (e) {
+    console.error("[gcal-sync] Erro ao enviar alerta de conflito:", (e as Error).message);
+  }
+}
 
 // ── PUSH: Tarefa -> Google Calendar ──────────────────────────
 export async function pushTarefaToGCal(gcal: any, calendarId: string, tarefa: any): Promise<string | null> {
@@ -113,6 +147,12 @@ export async function pullGCalToTarefas(gcal: any, calendarId: string, { days = 
         const lastSync = existing.gcal_synced_at ? new Date(existing.gcal_synced_at) : new Date(0);
 
         if (eventUpdated > lastSync) {
+          // Conflito: a tarefa também foi editada no CRM desde o último sync
+          // (não só no GCal) — a versão do CRM vai ser substituída, avisar.
+          const tarefaEditadaNoCrm = existing.updated_at && new Date(existing.updated_at) > lastSync;
+          if (tarefaEditadaNoCrm) {
+            alertarConflitoSync(existing, event).catch(() => {});
+          }
           const horas = inicio && fim ? Math.max(0, (new Date(fim).getTime() - new Date(inicio).getTime()) / 3600000) : 0;
           const funcMatch = descricao.match(/Funcion[aá]rio:\s*(.+)/i);
           const funcionario = funcMatch ? funcMatch[1].trim() : existing.funcionario;
