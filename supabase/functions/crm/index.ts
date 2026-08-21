@@ -3504,11 +3504,17 @@ app.post("/automation/score-investidores", async (c: any) => {
         continue;
       }
 
-      let tipo = "Passivo";
-      try { if (JSON.parse(inv.tipo_investidor || "[]").includes("Ativo")) tipo = "Ativo"; } catch { /* ignore */ }
+      // tipo_principal é o campo que a ficha edita (multi-valor, ex:
+      // '["Ativo","Passivo"]') — lê-se este, não o legado tipo_investidor.
+      let tiposPrincipal: any[] = [];
+      try { tiposPrincipal = JSON.parse(inv.tipo_principal || "[]"); } catch { /* ignore */ }
+      if (!Array.isArray(tiposPrincipal)) tiposPrincipal = [tiposPrincipal].filter(Boolean);
 
+      // C1: Capacidade Financeira. Investidor com os dois perfis usa o
+      // limiar mais permissivo (50k de Passivo) — considerar ambos os
+      // limiares em vez de aplicar sempre o mais exigente (200k de Ativo).
       const capital = Math.max(inv.capital_min || 0, inv.capital_max || 0);
-      const limiteMin = tipo === "Ativo" ? 200000 : 50000;
+      const limiteMin = (tiposPrincipal.includes("Ativo") && !tiposPrincipal.includes("Passivo")) ? 200000 : 50000;
       const c1 = capital >= limiteMin * 4 ? 5 : capital >= limiteMin * 2 ? 4 : capital >= limiteMin ? 3 : capital > 0 ? 2 : 1;
 
       const estrategia = inv.estrategia ? JSON.parse(inv.estrategia) : [];
@@ -3528,6 +3534,7 @@ app.post("/automation/score-investidores", async (c: any) => {
         : inv.data_reuniao ? 3
         : inv.data_primeiro_contacto ? 2 : 1;
 
+      const tipo = tiposPrincipal.includes("Ativo") ? "Ativo" : "Passivo";
       const { ponderado, classificacao } = calcularScorecard({ c1, c2, c3, c4, c5 }, tipo);
 
       if (Math.abs((inv.pontuacao || 0) - ponderado) > 1 || inv.classificacao !== classificacao) {
@@ -3870,67 +3877,9 @@ app.get("/classificacao-historico/:investidorId", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Duplicar investidor (Ativo <-> Passivo) — port de routes.js 2751-2812 ──
-app.post("/investidores/:id/duplicar", async (c: any) => {
-  try {
-    const { tipo_principal } = await c.req.json().catch(() => ({}));
-    if (!tipo_principal || !["Ativo", "Passivo"].includes(tipo_principal)) {
-      return c.json({ error: 'tipo_principal deve ser "Ativo" ou "Passivo"' }, 400);
-    }
-
-    const { rows: [original] } = await pool.query("SELECT * FROM investidores WHERE id = $1", [c.req.param("id")]);
-    if (!original) return c.json({ error: "Investidor não encontrado" }, 404);
-
-    if (original.tipo_principal === tipo_principal) {
-      return c.json({ error: `Investidor já é ${tipo_principal}` }, 400);
-    }
-
-    const { rows: existente } = await pool.query(
-      "SELECT id FROM investidores WHERE duplicado_de = $1 AND tipo_principal = $2",
-      [original.duplicado_de || original.id, tipo_principal],
-    );
-    if (existente.length > 0) {
-      return c.json({ error: `Já existe duplicado ${tipo_principal} (ID: ${existente[0].id})`, duplicado_id: existente[0].id }, 400);
-    }
-
-    const novoId = crypto.randomUUID();
-    const now = new Date().toISOString();
-    const origemId = original.duplicado_de || original.id;
-
-    await pool.query(
-      `INSERT INTO investidores (id, nome, status, origem, telemovel, email,
-        capital_min, capital_max, perfil_risco, nda_assinado,
-        data_primeiro_contacto, data_ultimo_contacto, data_reuniao,
-        tipo_principal, duplicado_de, tipo_investidor, notas,
-        created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $18)`,
-      [novoId,
-        `${original.nome} (${tipo_principal})`,
-        "Potencial Investidor",
-        original.origem,
-        original.telemovel,
-        original.email,
-        original.capital_min || 0,
-        original.capital_max || 0,
-        original.perfil_risco,
-        original.nda_assinado || 0,
-        original.data_primeiro_contacto,
-        original.data_ultimo_contacto,
-        original.data_reuniao,
-        tipo_principal,
-        origemId,
-        JSON.stringify([tipo_principal]),
-        `Duplicado de "${original.nome}" (${original.tipo_principal || "Passivo"}) — perfil ${tipo_principal}`,
-        now],
-    );
-
-    if (!original.duplicado_de) {
-      await pool.query("UPDATE investidores SET duplicado_de = $1 WHERE id = $1", [original.id]);
-    }
-
-    return c.json({ ok: true, id: novoId, nome: `${original.nome} (${tipo_principal})`, tipo_principal });
-  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
-});
+// /investidores/:id/duplicar removido (ver B3 da auditoria) — tipo_principal
+// passou a ser multi-valor (JSON array), um investidor Activo+Passivo em
+// simultâneo aparece nas duas abas sem precisar de ficha duplicada.
 
 // ── Reclassificacao periodica — port de routes.js 2816-2912 ──
 const FOLLOWUP_INVESTIDOR_RULES: Record<string, any> = {

@@ -3,7 +3,7 @@
  * Mostra: campos editáveis + relações + timeline + tarefas + reuniões.
  */
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
-import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, RefreshCw, MoreVertical, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin, Eye, Trash2 } from 'lucide-react'
+import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, RefreshCw, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin, Eye, Trash2 } from 'lucide-react'
 import { apiFetch, openDocument } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { PartilharAcesso } from '../PartilharAcesso.jsx'
@@ -1161,18 +1161,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
               })()}
             </>}
             {type === 'Investidores' && <>
-              {!editing && <InvestidorHero data={data} onCriarPerfilDuplo={async (outroTipo) => {
-                if (!confirm(`Criar perfil ${outroTipo} para ${data.nome}?`)) return
-                try {
-                  const r = await apiFetch(`/api/crm/investidores/${data.id}/duplicar`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tipo_principal: outroTipo }),
-                  })
-                  const result = await r.json()
-                  if (result.ok) { alert(`Perfil ${outroTipo} criado: ${result.nome}`) }
-                  else { alert(result.error || 'Erro ao duplicar') }
-                } catch (e) { alert('Erro: ' + e.message) }
-              }} />}
+              {!editing && <InvestidorHero data={data} />}
               {!editing && <InvestidorProximoPasso data={data} onUpdate={loadData} />}
               {editing
                 ? <InvestidorEditSections data={data} form={form} setField={setField} />
@@ -2030,7 +2019,10 @@ function ImovelEditSections({ data, form, setField }) {
       <EF label="Tipologia" field="tipologia" form={form} set={setField} />
       <div>
         <p className="text-xs text-gray-400 mb-1">Tipo de Prédio</p>
-        <select value={form.predio_tipo || ''} onChange={e => setField('predio_tipo', e.target.value)}
+        <select value={form.predio_tipo || ''} onChange={e => {
+            const v = e.target.value
+            setForm(prev => v === 'Moradia' ? { ...prev, predio_tipo: v, numero_pisos_predio: null, tem_elevador: null } : { ...prev, predio_tipo: v })
+          }}
           className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
           <option value="">—</option>
           {(lookups.predio_tipo || []).map(o => <option key={o} value={o}>{o}</option>)}
@@ -2047,15 +2039,19 @@ function ImovelEditSections({ data, form, setField }) {
           {(lookups.andar || []).map(o => <option key={o} value={o}>{o}</option>)}
         </select>
       </div>
-      <EF label="Nº Pisos do Prédio" field="numero_pisos_predio" form={form} set={setField} type="number" />
-      <div>
-        <p className="text-xs text-gray-400 mb-1">Elevador</p>
-        <select value={form.tem_elevador || ''} onChange={e => setField('tem_elevador', e.target.value)}
-          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
-          <option value="">—</option>
-          {(lookups.tem_elevador || []).map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
-      </div>
+      {form.predio_tipo !== 'Moradia' && (
+        <>
+          <EF label="Nº Pisos do Prédio" field="numero_pisos_predio" form={form} set={setField} type="number" />
+          <div>
+            <p className="text-xs text-gray-400 mb-1">Elevador</p>
+            <select value={form.tem_elevador || ''} onChange={e => setField('tem_elevador', e.target.value)}
+              className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+              <option value="">—</option>
+              {(lookups.tem_elevador || []).map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+        </>
+      )}
       <EF label="Ano de Construção" field="ano_construcao" form={form} set={setField} type="number" />
       <div>
         <p className="text-xs text-gray-400 mb-1">CRU</p>
@@ -2240,8 +2236,12 @@ function ImovelReadSections({ data, onNavigate }) {
       <Field label="ABP" value={fmtArea(data.area_bruta)} />
       <Field label="ABD" value={fmtArea(data.area_bruta_dependente)} />
       <Field label="Andar" value={data.andar} />
-      <Field label="Nº Pisos" value={data.numero_pisos_predio} />
-      <Field label="Elevador" value={data.tem_elevador} />
+      {data.predio_tipo !== 'Moradia' && (
+        <>
+          <Field label="Nº Pisos" value={data.numero_pisos_predio} />
+          <Field label="Elevador" value={data.tem_elevador} />
+        </>
+      )}
       <Field label="Ano Construção" value={data.ano_construcao} />
       <Field label="CRU" value={data.cru} />
       <Field label="Licença Utilização" value={data.licenca_utilizacao} />
@@ -2299,11 +2299,16 @@ function ImovelReadSections({ data, onNavigate }) {
 }
 
 // ── Investidor: constantes e helpers ─────────────────────────
+// tipo_principal é multi-valor (um investidor pode ser Activo e Passivo em
+// simultâneo) — guardado como JSON array (ex: '["Ativo","Passivo"]'),
+// parseado com o mesmo helper parseJsonArray usado por MultiChips.
 // Passivos: gamas tipicas de mercado (capital pago, sem trabalho operacional).
 const INV_ROI_OPTS = ['<10%', '10–15%', '15–20%', '20–25%', '>25%']
 // Ativos: aceitam risco e trabalho, intervalos sobem ate >50%.
 const INV_ROI_OPTS_ATIVO = ['<10%', '10–15%', '15–20%', '20–25%', '25–30%', '30–40%', '40–50%', '>50%']
-const roiOptsFor = (tipo) => (tipo === 'Ativo' ? INV_ROI_OPTS_ATIVO : INV_ROI_OPTS)
+// tipo_principal é multi-valor — se incluir Ativo, usa a gama mais ampla
+// (cobre também o intervalo típico de Passivo).
+const roiOptsFor = (tipo) => (parseJsonArray(tipo).includes('Ativo') ? INV_ROI_OPTS_ATIVO : INV_ROI_OPTS)
 const INV_EXPERIENCIA_OPTS = ['Nenhuma', '1–2 negócios', '3–10 negócios', '>10 negócios']
 const INV_TIPO_IMOVEL_OPTS = ['T0', 'T1', 'T2', 'T3+', 'Apartamento', 'Moradia', 'Edifício', 'Comercial', 'Terreno', 'Ruína', 'Indiferente']
 const INV_DISTRITOS_OPTS = ['Aveiro','Beja','Braga','Bragança','Castelo Branco','Coimbra','Évora','Faro','Guarda','Leiria','Lisboa','Portalegre','Porto','Santarém','Setúbal','Viana do Castelo','Vila Real','Viseu','Açores','Madeira']
@@ -2382,15 +2387,13 @@ function pipelinePosition(status, tipo) {
 }
 
 // Hero card do investidor — visível em modo leitura.
-function InvestidorHero({ data, onCriarPerfilDuplo }) {
-  const tipo = data.tipo_principal || 'Passivo'
-  const isAtivo = tipo === 'Ativo'
-  const outroTipo = isAtivo ? 'Passivo' : 'Ativo'
+function InvestidorHero({ data }) {
+  const tipos = parseJsonArray(data.tipo_principal)
+  const isAtivo = tipos.includes('Ativo')
+  const tipo = tipos.length > 0 ? tipos.join(' + ') : 'Passivo'
   const tipoBg = isAtivo ? 'from-green-500 to-emerald-600' : 'from-yellow-400 to-amber-500'
-  const tipoText = isAtivo ? 'text-green-700 bg-green-100 border-green-200' : 'text-yellow-700 bg-yellow-100 border-yellow-200'
   const statusColor = INV_STATUS_COLOR[data.status] || 'bg-gray-100 text-gray-600'
   const iniciais = (data.nome || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase()).join('') || '?'
-  const [menuOpen, setMenuOpen] = useState(false)
   const tel = (data.telemovel || '').replace(/\s+/g, '')
   const phoneIntl = tel.startsWith('+') ? tel : (tel.startsWith('00') ? '+' + tel.slice(2) : (tel.length === 9 ? '+351' + tel : tel))
   const proxIso = (data.data_proxima_acao || '').slice(0, 10)
@@ -2409,7 +2412,7 @@ function InvestidorHero({ data, onCriarPerfilDuplo }) {
     : data.capital_min > 0 ? `desde ${eurCompact(data.capital_min)}`
     : null
 
-  const pos = pipelinePosition(data.status, tipo)
+  const pos = pipelinePosition(data.status, tipos)
   const score = Number(data.pontuacao || 0)
 
   // Área geográfica de atuação — para Ativos, é informação central.
@@ -2433,7 +2436,13 @@ function InvestidorHero({ data, onCriarPerfilDuplo }) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-xl font-bold text-gray-900 truncate">{data.nome}</h3>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${tipoText}`}>{tipo}</span>
+              {tipos.length > 0 ? tipos.map(t => (
+                <span key={t} className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${
+                  t === 'Ativo' ? 'text-green-700 bg-green-100 border-green-200' : 'text-yellow-700 bg-yellow-100 border-yellow-200'
+                }`}>{t}</span>
+              )) : (
+                <span className="text-[10px] px-2 py-0.5 rounded-full border font-semibold text-yellow-700 bg-yellow-100 border-yellow-200">Passivo</span>
+              )}
               <InvClassBadge cls={data.classificacao} />
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusColor}`}>{data.status || '—'}</span>
               {!!data.nda_assinado && (
@@ -2446,27 +2455,12 @@ function InvestidorHero({ data, onCriarPerfilDuplo }) {
                   <AlertTriangle className="w-3 h-3" /> Atrasado
                 </span>
               )}
-              {data.duplicado_de && <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">Perfil duplo</span>}
             </div>
             <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 flex-wrap">
               {data.telemovel && <span className="inline-flex items-center gap-1"><Phone className="w-3 h-3" /> {data.telemovel}</span>}
               {data.email && <span className="inline-flex items-center gap-1 truncate"><Mail className="w-3 h-3" /> {data.email}</span>}
               {data.origem && <span className="text-gray-400">· {data.origem}</span>}
             </div>
-          </div>
-
-          {/* Kebab */}
-          <div className="relative shrink-0">
-            <button type="button" onClick={() => setMenuOpen(o => !o)}
-              className="w-9 h-9 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 inline-flex items-center justify-center" title="Mais acções">
-              <MoreVertical className="w-4 h-4" />
-            </button>
-            {menuOpen && (
-              <div className="absolute right-0 mt-1 w-52 rounded-lg border border-gray-200 bg-white shadow-lg z-10">
-                <button type="button" onClick={() => { setMenuOpen(false); onCriarPerfilDuplo(outroTipo) }}
-                  className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">+ Criar perfil {outroTipo}</button>
-              </div>
-            )}
           </div>
         </div>
 
@@ -2734,7 +2728,7 @@ function InvestidorTimeline({ data }) {
 
 // Bloco editável — 6 secções colapsáveis.
 function InvestidorEditSections({ data, form, setField }) {
-  const isAtivo = (form.tipo_principal || 'Passivo') === 'Ativo'
+  const isAtivo = parseJsonArray(form.tipo_principal).includes('Ativo')
   const sec = {
     identificacao: ['nome','tipo_principal','status','classificacao','origem','data_primeiro_contacto'],
     capital:       ['capital_min','capital_max','estrategia','perfil_risco','roi_pretendido','roi_anualizado_pretendido','origem_capital','montante_investido'],
@@ -2749,7 +2743,7 @@ function InvestidorEditSections({ data, form, setField }) {
     {/* 1. Identificação & Status */}
     <Section icon="📋" title="Identificação & Status" fields={sec.identificacao} form={form} defaultOpen>
       <EF label="Nome" field="nome" form={form} set={setField} />
-      <EF label="Tipo" field="tipo_principal" form={form} set={setField} type="select" options={['Passivo','Ativo']} />
+      <MultiChips label="Tipo" field="tipo_principal" form={form} set={setField} options={['Ativo','Passivo']} />
       <EF label="Status" field="status" form={form} set={setField} type="select" options={invStatusFor(form.tipo_principal)} />
       <EF label="Classificação" field="classificacao" form={form} set={setField} type="select" options={['A','B','C','D']} />
       <EF label="Origem" field="origem" form={form} set={setField} type="select" options={ORIGENS_INVESTIDORES} />
@@ -2843,7 +2837,7 @@ function InvestidorReadSections({ data }) {
   const tipoImovel = parseJsonArray(data.tipo_imovel_preferido)
   const localizacao = parseJsonArray(data.localizacao_preferida)
   const regioes = parseJsonArray(data.regioes_preferidas)
-  const isAtivo = (data.tipo_principal || 'Passivo') === 'Ativo'
+  const isAtivo = parseJsonArray(data.tipo_principal).includes('Ativo')
   const labelLocalizacao = isAtivo ? 'Área de Atuação (Distritos)' : 'Localização'
   const sec = {
     identificacao: ['nome','tipo_principal','status','classificacao','origem','data_primeiro_contacto'],

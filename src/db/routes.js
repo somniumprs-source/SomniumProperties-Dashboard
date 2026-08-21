@@ -3171,13 +3171,19 @@ router.post('/automation/score-investidores', async (req, res) => {
         continue
       }
 
-      // Sem scorecard — scoring por completude do perfil (SOP 2 simplificado)
-      let tipo = 'Passivo'
-      try { if (JSON.parse(inv.tipo_investidor || '[]').includes('Ativo')) tipo = 'Ativo' } catch {}
+      // Sem scorecard — scoring por completude do perfil (SOP 2 simplificado).
+      // tipo_principal é o campo que a ficha edita (multi-valor, ex:
+      // '["Ativo","Passivo"]') — lê-se este, não o legado tipo_investidor.
+      let tiposPrincipal = []
+      try { tiposPrincipal = JSON.parse(inv.tipo_principal || '[]') } catch {}
+      if (!Array.isArray(tiposPrincipal)) tiposPrincipal = [tiposPrincipal].filter(Boolean)
+      const tipo = tiposPrincipal.includes('Ativo') ? 'Ativo' : 'Passivo'
 
-      // C1: Capacidade Financeira
+      // C1: Capacidade Financeira. Investidor com os dois perfis usa o
+      // limiar mais permissivo (50k de Passivo) — considerar ambos os
+      // limiares em vez de aplicar sempre o mais exigente (200k de Ativo).
       const capital = Math.max(inv.capital_min || 0, inv.capital_max || 0)
-      const limiteMin = tipo === 'Ativo' ? 200000 : 50000
+      const limiteMin = (tiposPrincipal.includes('Ativo') && !tiposPrincipal.includes('Passivo')) ? 200000 : 50000
       const c1 = capital >= limiteMin * 4 ? 5 : capital >= limiteMin * 2 ? 4 : capital >= limiteMin ? 3 : capital > 0 ? 2 : 1
 
       // C2: Experiência (estimada pelo perfil)
@@ -3674,68 +3680,9 @@ router.get('/classificacao-historico/:investidorId', async (req, res) => {
 })
 
 // ── Duplicar investidor (Ativo ↔ Passivo) ───────────────────
-router.post('/investidores/:id/duplicar', async (req, res) => {
-  try {
-    const { tipo_principal } = req.body
-    if (!tipo_principal || !['Ativo', 'Passivo'].includes(tipo_principal)) {
-      return res.status(400).json({ error: 'tipo_principal deve ser "Ativo" ou "Passivo"' })
-    }
-
-    const { rows: [original] } = await pool.query('SELECT * FROM investidores WHERE id = $1', [req.params.id])
-    if (!original) return res.status(404).json({ error: 'Investidor não encontrado' })
-
-    if (original.tipo_principal === tipo_principal) {
-      return res.status(400).json({ error: `Investidor já é ${tipo_principal}` })
-    }
-
-    // Verificar se já existe duplicado deste tipo
-    const { rows: existente } = await pool.query(
-      'SELECT id FROM investidores WHERE duplicado_de = $1 AND tipo_principal = $2',
-      [original.duplicado_de || original.id, tipo_principal]
-    )
-    if (existente.length > 0) {
-      return res.status(400).json({ error: `Já existe duplicado ${tipo_principal} (ID: ${existente[0].id})`, duplicado_id: existente[0].id })
-    }
-
-    const novoId = randomUUID()
-    const now = new Date().toISOString()
-    const origemId = original.duplicado_de || original.id
-
-    await pool.query(
-      `INSERT INTO investidores (id, nome, status, origem, telemovel, email,
-        capital_min, capital_max, perfil_risco, nda_assinado,
-        data_primeiro_contacto, data_ultimo_contacto, data_reuniao,
-        tipo_principal, duplicado_de, tipo_investidor, notas,
-        created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $18)`,
-      [novoId,
-        `${original.nome} (${tipo_principal})`,
-        'Potencial Investidor',
-        original.origem,
-        original.telemovel,
-        original.email,
-        original.capital_min || 0,
-        original.capital_max || 0,
-        original.perfil_risco,
-        original.nda_assinado || 0,
-        original.data_primeiro_contacto,
-        original.data_ultimo_contacto,
-        original.data_reuniao,
-        tipo_principal,
-        origemId,
-        JSON.stringify([tipo_principal]),
-        `Duplicado de "${original.nome}" (${original.tipo_principal || 'Passivo'}) — perfil ${tipo_principal}`,
-        now]
-    )
-
-    // Marcar original com duplicado_de se ainda não tem
-    if (!original.duplicado_de) {
-      await pool.query('UPDATE investidores SET duplicado_de = $1 WHERE id = $1', [original.id])
-    }
-
-    res.json({ ok: true, id: novoId, nome: `${original.nome} (${tipo_principal})`, tipo_principal })
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
+// /investidores/:id/duplicar removido (ver B3 da auditoria) — tipo_principal
+// passou a ser multi-valor: um investidor pode ser Activo e Passivo em
+// simultâneo no mesmo registo, já não é preciso criar uma segunda ficha.
 
 // ── Reclassificação periódica (30/60/90 dias follow-up) ─────
 

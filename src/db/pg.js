@@ -667,8 +667,10 @@ export async function initSchema() {
       CREATE INDEX IF NOT EXISTS idx_docsinv_investidor ON documentos_investidor(investidor_id);
 
       -- Migration: tipo_principal (Ativo/Passivo) para separação clara de investidores
+      -- Multi-valor desde 0034 (ver B3+B4 da auditoria): guardado como JSON
+      -- array de texto (ex: '["Ativo","Passivo"]'), mesmo padrão de regioes_preferidas.
       DO $$ BEGIN
-        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS tipo_principal TEXT DEFAULT 'Passivo';
+        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS tipo_principal TEXT DEFAULT '["Passivo"]';
         ALTER TABLE investidores ADD COLUMN IF NOT EXISTS duplicado_de TEXT;
         -- user_id: liga investidor a row em users (auth via Supabase) - para portal investidor
         ALTER TABLE investidores ADD COLUMN IF NOT EXISTS user_id TEXT;
@@ -676,6 +678,13 @@ export async function initSchema() {
       END $$;
       CREATE INDEX IF NOT EXISTS idx_investidores_user ON investidores(user_id);
       CREATE INDEX IF NOT EXISTS idx_investidores_tipo ON investidores(tipo_principal);
+      -- Converter valores legacy (bare-string, ex: 'Ativo') para JSON array. Idempotente.
+      UPDATE investidores
+        SET tipo_principal = CASE
+            WHEN tipo_principal IS NULL OR tipo_principal = '' THEN '["Passivo"]'
+            ELSE json_build_array(tipo_principal)::text
+          END
+        WHERE tipo_principal IS NULL OR tipo_principal !~ '^\s*\[';
 
       -- Migration: consolidar estados legacy ("Investidor classificado", "Investidor em espera",
       -- "Acesso a Off-Market", "Investidor Activo") nos estados actuais.

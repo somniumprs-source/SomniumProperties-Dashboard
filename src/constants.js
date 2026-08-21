@@ -103,9 +103,19 @@ export const INV_STATUS_ATIVO = [
 // União usada para filtros gerais. Mantida como `INV_STATUS` por compatibilidade.
 export const INV_STATUS = [...new Set([...INV_STATUS_PASSIVO, ...INV_STATUS_ATIVO])]
 
-// Devolve a lista de estados aplicável conforme o tipo_principal.
+// Devolve a lista de estados aplicável conforme o tipo_principal — que é
+// multi-valor (ex: '["Ativo","Passivo"]'), um investidor pode ser os dois em
+// simultâneo. Aceita string simples (legado) ou array/JSON array.
 export function invStatusFor(tipo) {
-  return tipo === 'Ativo' ? INV_STATUS_ATIVO : INV_STATUS_PASSIVO
+  let tipos = tipo
+  if (typeof tipo === 'string') {
+    try { tipos = JSON.parse(tipo) } catch { tipos = [tipo] }
+  }
+  if (!Array.isArray(tipos)) tipos = [tipos].filter(Boolean)
+  const temAtivo = tipos.includes('Ativo')
+  const temPassivo = tipos.includes('Passivo') || tipos.length === 0
+  if (temAtivo && temPassivo) return INV_STATUS
+  return temAtivo ? INV_STATUS_ATIVO : INV_STATUS_PASSIVO
 }
 
 export const INV_STATUS_COLOR = {

@@ -32,6 +32,19 @@ function readRegiaoCRM(regionalKey) {
   } catch { return null }
 }
 
+// tipo_principal é multi-valor (JSON array, ex: '["Ativo","Passivo"]') — um
+// investidor pode ser Activo e Passivo em simultâneo, por isso "contém" e não
+// igualdade exacta. Aceita também o formato legado (string simples).
+function parseTipoPrincipalArr(raw) {
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw
+  try { const v = JSON.parse(raw); return Array.isArray(v) ? v : [raw] } catch { return [raw] }
+}
+function tipoPrincipalIncludes(raw, val) {
+  const arr = parseTipoPrincipalArr(raw)
+  return arr.length > 0 ? arr.includes(val) : val === 'Passivo'
+}
+
 const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Construtores']
 // Sub-tabs que requerem distinção regional (modal ao entrar). Investidores
 // é pool unificado (sem filtro).
@@ -698,7 +711,7 @@ export function CRM() {
         const d = await r.json()
         let items = d.data ?? []
         // Filtrar client-side se backend não suportar tipo_principal na pesquisa
-        if (tab === 'Investidores') items = items.filter(i => (i.tipo_principal || 'Passivo') === invSubTab)
+        if (tab === 'Investidores') items = items.filter(i => tipoPrincipalIncludes(i.tipo_principal, invSubTab))
         setData(items); setTotal(items.length)
       } else if (tab === 'Consultores') {
         // Usar endpoint enriquecido para consultores (com métricas e alertas)
@@ -717,7 +730,7 @@ export function CRM() {
         const d = await r.json()
         let items = d.data ?? []
         // Segurança extra: filtrar client-side para investidores
-        if (tab === 'Investidores') items = items.filter(i => (i.tipo_principal || 'Passivo') === invSubTab)
+        if (tab === 'Investidores') items = items.filter(i => tipoPrincipalIncludes(i.tipo_principal, invSubTab))
         setData(items); setTotal(items.length)
       }
       // Carregar progresso checklist para imóveis
@@ -810,8 +823,8 @@ export function CRM() {
       columns: (invSubTab === 'Ativo' ? INV_STATUS_ATIVO : INV_STATUS_PASSIVO).filter(s => s !== 'Não qualificado' && s !== 'Inactivo'),
       groupField: 'status',
       renderCard: (item) => {
-        const tipo = item.tipo_principal || 'Passivo'
-        const tipoBg = tipo === 'Ativo' ? 'from-green-500 to-emerald-600' : 'from-yellow-400 to-amber-500'
+        const parseArr = (v) => { try { return Array.isArray(v) ? v : JSON.parse(v || '[]') } catch { return [] } }
+        const tipoBg = parseArr(item.tipo_principal).includes('Ativo') ? 'from-green-500 to-emerald-600' : 'from-yellow-400 to-amber-500'
         const iniciais = (item.nome || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase()).join('') || '?'
         // Capital compacto
         const capCompact = (() => {
@@ -833,7 +846,6 @@ export function CRM() {
         const phoneIntl = tel.startsWith('+') ? tel : (tel.startsWith('00') ? '+' + tel.slice(2) : (tel.length === 9 ? '+351' + tel : tel))
         // Área de atuação: união das regiões macro (Coimbra/AMP) com os distritos,
         // de-duplicada. Espelha a definição em DetailPanel.jsx:2453.
-        const parseArr = (v) => { try { return Array.isArray(v) ? v : JSON.parse(v || '[]') } catch { return [] } }
         const areaAtuacao = Array.from(new Set([
           ...parseArr(item.regioes_preferidas),
           ...parseArr(item.localizacao_preferida),
@@ -1567,14 +1579,15 @@ function InvestidoresTable({ data, onEdit, onDelete, onView }) {
   return (
     <>
     <MobileCardList items={sorted} renderCard={r => {
-      const tipo = r.tipo_principal || 'Passivo'
-      const tipoStyle = tipo === 'Ativo' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+      const tipos = parseTipoPrincipalArr(r.tipo_principal)
+      const tipoLabel = tipos.length > 0 ? tipos.join(' + ') : 'Passivo'
+      const tipoStyle = tipos.includes('Ativo') ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
       return (
         <EntityCard key={r.id} name={r.nome} onClick={() => onView?.(r.id)}
           item={r} onEdit={onEdit} onDelete={onDelete} onView={onView}
           badge={<Badge text={r.status} colorMap={INV_STATUS_COLOR} />}
           fields={[
-            { label: 'Tipo', value: <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${tipoStyle}`}>{tipo}</span> },
+            { label: 'Tipo', value: <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${tipoStyle}`}>{tipoLabel}</span> },
             { label: 'Classe', value: <ClassBadge cls={r.classificacao} /> },
             { label: 'Capital Max', value: r.capital_max > 0 ? EUR(r.capital_max) : null },
             { label: 'NDA', value: r.nda_assinado ? '✓' : null },
@@ -1597,12 +1610,13 @@ function InvestidoresTable({ data, onEdit, onDelete, onView }) {
       </tr></thead>
       <tbody>
         {sorted.map(r => {
-          const tipo = r.tipo_principal || 'Passivo'
-          const tipoStyle = tipo === 'Ativo' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+          const tipos = parseTipoPrincipalArr(r.tipo_principal)
+          const tipoLabel = tipos.length > 0 ? tipos.join(' + ') : 'Passivo'
+          const tipoStyle = tipos.includes('Ativo') ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
           return (
             <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => onView?.(r.id)}>
               <td className="py-3 px-3"><ClickableName name={r.nome} onClick={() => onView?.(r.id)} /></td>
-              <td className="py-2 px-3"><span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${tipoStyle}`}>{tipo}</span></td>
+              <td className="py-2 px-3"><span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${tipoStyle}`}>{tipoLabel}</span></td>
               <td className="py-2 px-3 text-center"><ClassBadge cls={r.classificacao} /></td>
               <td className="py-3 px-3"><Badge text={r.status} colorMap={INV_STATUS_COLOR} /></td>
               <td className="py-2 px-3 text-right font-mono">{r.capital_max > 0 ? EUR(r.capital_max) : '—'}</td>
@@ -1867,7 +1881,7 @@ const FIELD_DEFS = {
   ],
   'Investidores': [
     { key: 'nome', label: 'Nome', type: 'text', required: true },
-    { key: 'tipo_principal', label: 'Tipo de Investidor', type: 'select', options: ['Passivo','Ativo'], required: true },
+    { key: 'tipo_principal', label: 'Tipo de Investidor', type: 'multiselect', options: ['Ativo','Passivo'], required: true },
     { key: 'status', label: 'Status', type: 'select', options: (form) => invStatusFor(form.tipo_principal) },
     { key: 'classificacao', label: 'Classificação', type: 'select', options: ['A','B','C','D'] },
     { key: 'origem', label: 'Origem', type: 'select', options: ['Landing Page','Skool','Grupos Whatsapp','Referenciação','LinkedIn','Eventos Networking','Outro'] },

@@ -119,6 +119,14 @@ function createCRUD(table: string, { searchFields = ["nome"], defaultSort = "cre
           if (v === undefined || v === null || v === "") continue;
           if (!cols.has(k)) continue;
           if (table === "investidores" && k === "regiao") continue;
+          // tipo_principal é multi-valor (JSON array, ex: '["Ativo","Passivo"]')
+          // — um investidor pode ser Activo e Passivo em simultâneo, por isso o
+          // filtro é "contém", não igualdade exacta.
+          if (table === "investidores" && k === "tipo_principal") {
+            params.push(`%"${v}"%`);
+            whereParts.push(`tipo_principal LIKE $${params.length}`);
+            continue;
+          }
           params.push(v);
           whereParts.push(`${k} = $${params.length}`);
         }
