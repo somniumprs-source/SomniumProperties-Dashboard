@@ -1558,6 +1558,15 @@ export async function initSchema() {
         ALTER TABLE investidores ADD COLUMN IF NOT EXISTS classificacao_definida_em TIMESTAMPTZ;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
+
+      -- Documentos do investidor no Google Drive (ver migration
+      -- 0033_investidores_drive_documentos.sql).
+      DO $$ BEGIN
+        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS drive_folder_id TEXT;
+        ALTER TABLE documentos_investidor ADD COLUMN IF NOT EXISTS storage_path TEXT;
+        ALTER TABLE documentos_investidor ADD COLUMN IF NOT EXISTS drive_file_id TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
     `)
 
     // Bootstrap: garantir que somniumprs@gmail.com (owner) existe como admin

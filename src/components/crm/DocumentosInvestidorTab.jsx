@@ -22,7 +22,7 @@ const TIPO_OPTIONS = Object.entries(TIPO_LABELS)
 export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs, onUpdate }) {
   const [documentos, setDocumentos] = useState(initialDocs || [])
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ tipo: 'dossier_investidor', nome: '', imovel_id: '', notas: '' })
+  const [form, setForm] = useState({ tipo: 'dossier_investidor', nome: '', imovel_id: '', notas: '', file: null })
   const [saving, setSaving] = useState(false)
 
   async function load() {
@@ -38,17 +38,28 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
     if (!form.nome?.trim()) return
     setSaving(true)
     try {
-      await apiFetch(`/api/crm/investidores/${investidorId}/documentos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tipo: form.tipo,
-          nome: form.nome.trim(),
-          imovel_id: form.imovel_id || null,
-          notas: form.notas?.trim() || null,
-        }),
-      })
-      setForm({ tipo: 'dossier_investidor', nome: '', imovel_id: '', notas: '' })
+      if (form.file) {
+        const fd = new FormData()
+        fd.append('file', form.file)
+        fd.append('tipo', form.tipo)
+        fd.append('nome', form.nome.trim())
+        if (form.imovel_id) fd.append('imovel_id', form.imovel_id)
+        if (form.notas?.trim()) fd.append('notas', form.notas.trim())
+        const r = await apiFetch(`/api/crm/investidores/${investidorId}/documentos`, { method: 'POST', body: fd })
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao enviar ficheiro')
+      } else {
+        await apiFetch(`/api/crm/investidores/${investidorId}/documentos`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tipo: form.tipo,
+            nome: form.nome.trim(),
+            imovel_id: form.imovel_id || null,
+            notas: form.notas?.trim() || null,
+          }),
+        })
+      }
+      setForm({ tipo: 'dossier_investidor', nome: '', imovel_id: '', notas: '', file: null })
       setShowForm(false)
       await load()
       if (onUpdate) onUpdate()
@@ -101,6 +112,11 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
             <label className="block text-xs font-medium text-gray-500 mb-1">Notas (opcional)</label>
             <input value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} placeholder="Observacoes..." className={inputClass} />
           </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Ficheiro (opcional — PDF, DOCX, XLSX...)</label>
+            <input type="file" onChange={e => setForm(f => ({ ...f, file: e.target.files?.[0] || null }))}
+              className="w-full text-sm text-gray-600 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:text-xs file:font-medium hover:file:bg-indigo-100" />
+          </div>
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => setShowForm(false)} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100">Cancelar</button>
             <button type="submit" disabled={saving} className="px-4 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
@@ -130,13 +146,32 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
                 {doc.notas && <p className="text-xs text-gray-400 mt-0.5 truncate">{doc.notas}</p>}
               </div>
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                {doc.imovel_id && (
+                {doc.storage_path ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => openDocument(`/api/crm/investidores/${investidorId}/documentos/${doc.id}/ficheiro`).catch(() => {})}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600"
+                      title="Abrir o ficheiro enviado"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openDocument(`/api/crm/investidores/${investidorId}/documentos/${doc.id}/ficheiro`, { download: true, filename: doc.nome }).catch(() => {})}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600"
+                      title="Descarregar o ficheiro enviado"
+                    >
+                      <FileDown className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                ) : doc.imovel_id && (
                   <>
                     <button
                       type="button"
                       onClick={() => openDocument(`/api/crm/imoveis/${doc.imovel_id}/relatorio-investidor`).catch(() => {})}
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600"
-                      title="Abrir PDF numa nova aba"
+                      title="Registo sem ficheiro anexado — abrir o dossier actual do imóvel"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
                     </button>
@@ -144,7 +179,7 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
                       type="button"
                       onClick={() => openDocument(`/api/crm/imoveis/${doc.imovel_id}/relatorio-investidor`, { download: true }).catch(() => {})}
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600"
-                      title="Descarregar PDF para enviar a investidores"
+                      title="Registo sem ficheiro anexado — descarregar o dossier actual do imóvel"
                     >
                       <FileDown className="w-3.5 h-3.5" />
                     </button>

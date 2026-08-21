@@ -44,6 +44,7 @@ import { syncAllFromNotion, syncFromNotion, syncToNotion } from "../_shared/sync
 import {
   createImovelFolder, isConfigured as driveConfigured, listImovelFiles,
   moveImovelFolder, uploadDocToFolder, uploadUserFileToFolder, uploadComprovativoToFolder, downloadDriveFile,
+  createInvestidorFolder, uploadDocumentoInvestidor,
 } from "../_shared/driveSync.ts";
 import {
   autoOrganize, ensureLabels, isConfigured as gmailConfigured, organizeBatch, organizeMessage,
@@ -1024,6 +1025,11 @@ async function syncInvestidorAcessos(investidorId: string): Promise<number> {
 }
 
 crudRoutes("/investidores", Investidores, {
+  onCreate: async (item: any) => {
+    if (driveConfigured()) {
+      await createInvestidorFolder(item.id, item.nome || "Sem nome");
+    }
+  },
   onUpdate: async (item: any, body: any) => {
     // Ao ligar um investidor a um utilizador, dar-lhe logo acesso aos projectos.
     if (body?.user_id) await syncInvestidorAcessos(item.id);
@@ -1045,28 +1051,80 @@ app.get("/investidores/:id/documentos", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
+const INVESTIDORES_DOCS_BUCKET = "Investidores";
+
+// Documento real do investidor: Supabase Storage privado (fonte primária) +
+// espelho no Drive na pasta do investidor (best-effort, não bloqueia a
+// resposta). Antes disto, este endpoint só registava tipo/nome/nota sem
+// nenhum ficheiro real por trás.
 app.post("/investidores/:id/documentos", async (c: any) => {
   try {
-    const { tipo, nome, imovel_id, notas } = await c.req.json().catch(() => ({}));
+    const investidorId = c.req.param("id");
+    const form = await c.req.formData();
+    const tipo = form.get("tipo");
+    const nome = form.get("nome");
+    const imovel_id = form.get("imovel_id") || null;
+    const notas = form.get("notas") || null;
     if (!tipo || !nome) return c.json({ error: "tipo e nome são obrigatórios" }, 400);
+
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
+
+    let storagePath: string | null = null;
+    const fRaw = form.get("file");
+    const file = fRaw instanceof File ? fRaw : null;
+    if (file) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const safe = file.name.replace(/[^\w.\- ]+/g, "_");
+      storagePath = `${investidorId}/${id}_${safe}`;
+      await uploadPrivate(INVESTIDORES_DOCS_BUCKET, storagePath, bytes, file.type || "application/octet-stream");
+
+      if (driveConfigured()) {
+        uploadDocumentoInvestidor(investidorId, bytes, file.name, file.type || "application/octet-stream")
+          .then((fileId: string | null) => {
+            if (fileId) pool.query("UPDATE documentos_investidor SET drive_file_id = $1 WHERE id = $2", [fileId, id]).catch(() => {});
+          })
+          .catch((e: any) => console.error("[drive] espelho documento investidor:", e.message));
+      }
+    }
+
     await pool.query(
-      `INSERT INTO documentos_investidor (id, investidor_id, imovel_id, tipo, nome, notas, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [id, c.req.param("id"), imovel_id || null, tipo, nome, notas || null, now],
+      `INSERT INTO documentos_investidor (id, investidor_id, imovel_id, tipo, nome, notas, storage_path, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [id, investidorId, imovel_id, tipo, nome, notas, storagePath, now],
     );
-    return c.json({ id, investidor_id: c.req.param("id"), imovel_id, tipo, nome, notas, created_at: now }, 201);
+    return c.json({ id, investidor_id: investidorId, imovel_id, tipo, nome, notas, storage_path: storagePath, created_at: now }, 201);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// Serve o ficheiro real do documento (Storage, com URL assinada de curta duração).
+app.get("/investidores/:id/documentos/:docId/ficheiro", async (c: any) => {
+  try {
+    const { rows: [doc] } = await pool.query(
+      "SELECT storage_path FROM documentos_investidor WHERE id = $1 AND investidor_id = $2",
+      [c.req.param("docId"), c.req.param("id")],
+    );
+    if (!doc) return c.json({ error: "Não encontrado" }, 404);
+    if (!doc.storage_path) return c.json({ error: "Este registo não tem ficheiro anexado" }, 404);
+    if (!supabase) return c.json({ error: "Storage indisponível" }, 503);
+    const { data, error } = await supabase.storage.from(INVESTIDORES_DOCS_BUCKET).createSignedUrl(doc.storage_path, 300);
+    if (error || !data?.signedUrl) return c.json({ error: error?.message || "Falha ao gerar link" }, 500);
+    return c.redirect(data.signedUrl);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
 app.delete("/investidores/:id/documentos/:docId", async (c: any) => {
   try {
+    const { rows: [doc] } = await pool.query(
+      "SELECT storage_path FROM documentos_investidor WHERE id = $1 AND investidor_id = $2",
+      [c.req.param("docId"), c.req.param("id")],
+    );
     const { rowCount } = await pool.query(
       "DELETE FROM documentos_investidor WHERE id = $1 AND investidor_id = $2",
       [c.req.param("docId"), c.req.param("id")],
     );
     if (rowCount === 0) return c.json({ error: "Não encontrado" }, 404);
+    if (doc?.storage_path) await removeFromStorage(INVESTIDORES_DOCS_BUCKET, doc.storage_path);
     return c.json({ ok: true });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });

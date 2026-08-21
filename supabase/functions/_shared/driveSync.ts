@@ -158,6 +158,68 @@ async function ensureFinanceiroGeralFolder(drive) {
   return financeiroGeralFolderId
 }
 
+// Pasta de topo para os investidores. DRIVE_INVESTIDORES_FOLDER_ID é opcional —
+// sem ela, cria/usa uma subpasta "Investidores" dentro do pipeline (mesmo
+// padrão de ensureFinanceiroGeralFolder).
+let investidoresRootFolderId = Deno.env.get("DRIVE_INVESTIDORES_FOLDER_ID") || null
+async function ensureInvestidoresRootFolder(drive) {
+  if (investidoresRootFolderId) return investidoresRootFolderId
+  investidoresRootFolderId = await ensureSubfolder(drive, PIPELINE_FOLDER_ID, 'Investidores')
+  return investidoresRootFolderId
+}
+
+/**
+ * Criar pasta do investidor no Drive (sem subpastas — os documentos vivem
+ * directamente na pasta, como uma pasta pessoal do investidor).
+ * Retorna o ID da pasta criada.
+ */
+export async function createInvestidorFolder(investidorId, nome) {
+  const drive = getDrive()
+  if (!drive) return null
+
+  try {
+    const parentId = await ensureInvestidoresRootFolder(drive)
+    if (!parentId) return null
+
+    const folder = await drive.files.create({
+      requestBody: { name: nome || 'Sem nome', mimeType: 'application/vnd.google-apps.folder', parents: [parentId] },
+      fields: 'id',
+      supportsAllDrives: true,
+    })
+    const folderId = folder.data.id
+
+    await pool.query('UPDATE investidores SET drive_folder_id = $1 WHERE id = $2', [folderId, investidorId])
+
+    console.log(`[drive] Pasta de investidor criada: "${nome}" (${folderId})`)
+    return folderId
+  } catch (e) {
+    console.error('[drive] Erro ao criar pasta de investidor:', e.message)
+    return null
+  }
+}
+
+/**
+ * Upload de um documento para a pasta do investidor. Cria a pasta se ainda
+ * não existir (investidores criados antes desta funcionalidade).
+ */
+export async function uploadDocumentoInvestidor(investidorId, bytes, fileName, mimeType) {
+  const drive = getDrive()
+  if (!drive) return null
+
+  try {
+    const { rows: [inv] } = await pool.query('SELECT nome, drive_folder_id FROM investidores WHERE id = $1', [investidorId])
+    if (!inv) return null
+    let folderId = inv.drive_folder_id
+    if (!folderId) folderId = await createInvestidorFolder(investidorId, inv.nome)
+    if (!folderId) return null
+
+    return await uploadBytesToFolder(drive, folderId, bytes, fileName, mimeType)
+  } catch (e) {
+    console.error('[drive] Erro ao enviar documento de investidor:', e.message)
+    return null
+  }
+}
+
 /**
  * Upload de documento PDF gerado para a subpasta certa do imóvel no Drive.
  * `pdfData` aceita Uint8Array | ArrayBuffer | Buffer (ou stream Node legacy).

@@ -28,7 +28,7 @@ import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
 import { syncForms, isConfigured as formsConfigured } from './formsSync.js'
-import { createImovelFolder, moveImovelFolder, uploadDocToFolder, uploadUserFileToFolder, uploadComprovativoToFolder, isConfigured as driveConfigured, downloadDriveFile } from './driveSync.js'
+import { createImovelFolder, moveImovelFolder, uploadDocToFolder, uploadUserFileToFolder, uploadComprovativoToFolder, isConfigured as driveConfigured, downloadDriveFile, createInvestidorFolder, uploadDocumentoInvestidor } from './driveSync.js'
 import { generateDoc, getDocsForEstado, docEmbedeLocalizacao } from './pdfImovelDocs.js'
 import { onImovelCreated, listDocumentos, persistDocumento, streamPdfToResAndPersist } from './documentLifecycle.js'
 import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
@@ -741,6 +741,11 @@ async function syncInvestidorAcessos(investidorId) {
 }
 
 crudRoutes('/investidores', Investidores, {
+  onCreate: async (item) => {
+    if (driveConfigured()) {
+      await createInvestidorFolder(item.id, item.nome || 'Sem nome')
+    }
+  },
   onUpdate: async (item, body) => {
     // Ao ligar um investidor a um utilizador, dar-lhe logo acesso aos projectos.
     if (body?.user_id) await syncInvestidorAcessos(item.id)
@@ -762,28 +767,87 @@ router.get('/investidores/:id/documentos', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-router.post('/investidores/:id/documentos', async (req, res) => {
+const INVESTIDORES_DOCS_BUCKET = 'Investidores'
+
+// Documento real do investidor: Supabase Storage (fonte primária) + espelho
+// no Drive na pasta do investidor (best-effort, não bloqueia a resposta) —
+// mesmo padrão de POST /imoveis/:id/fotos. Antes disto, este endpoint só
+// registava tipo/nome/nota sem nenhum ficheiro real por trás.
+router.post('/investidores/:id/documentos', uploadRateLimit, uploadDocs.single('file'), async (req, res) => {
   try {
     const { tipo, nome, imovel_id, notas } = req.body
     if (!tipo || !nome) return res.status(400).json({ error: 'tipo e nome são obrigatórios' })
     const id = randomUUID()
     const now = new Date().toISOString()
+
+    let storagePath = null
+    let driveFileId = null
+    if (req.file) {
+      if (!supabaseStorage) return res.status(503).json({ error: 'Storage indisponível (sem SUPABASE_SERVICE_KEY)' })
+      try {
+        const { data: buckets } = await supabaseStorage.storage.listBuckets()
+        if (!(buckets || []).some(b => b.name === INVESTIDORES_DOCS_BUCKET)) {
+          await supabaseStorage.storage.createBucket(INVESTIDORES_DOCS_BUCKET, { public: false })
+        }
+      } catch { /* segue; o upload devolve erro claro se faltar */ }
+
+      const safe = req.file.originalname.replace(/[^\w.\- ]+/g, '_')
+      storagePath = `${req.params.id}/${id}_${safe}`
+      const { error: upErr } = await supabaseStorage.storage
+        .from(INVESTIDORES_DOCS_BUCKET)
+        .upload(storagePath, req.file.buffer, { contentType: req.file.mimetype, upsert: true })
+      if (upErr) return res.status(500).json({ error: `Upload falhou: ${upErr.message}` })
+
+      if (driveConfigured()) {
+        uploadDocumentoInvestidor(req.params.id, req.file.buffer, req.file.originalname, req.file.mimetype)
+          .then(fileId => {
+            if (fileId) pool.query('UPDATE documentos_investidor SET drive_file_id = $1 WHERE id = $2', [fileId, id]).catch(() => {})
+          })
+          .catch(e => console.error('[drive] espelho documento investidor:', e.message))
+      }
+    }
+
     await pool.query(
-      `INSERT INTO documentos_investidor (id, investidor_id, imovel_id, tipo, nome, notas, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [id, req.params.id, imovel_id || null, tipo, nome, notas || null, now]
+      `INSERT INTO documentos_investidor (id, investidor_id, imovel_id, tipo, nome, notas, storage_path, drive_file_id, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [id, req.params.id, imovel_id || null, tipo, nome, notas || null, storagePath, driveFileId, now]
     )
-    res.status(201).json({ id, investidor_id: req.params.id, imovel_id, tipo, nome, notas, created_at: now })
+    res.status(201).json({ id, investidor_id: req.params.id, imovel_id, tipo, nome, notas, storage_path: storagePath, created_at: now })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Serve o ficheiro real do documento (Storage, com URL assinada de curta duração).
+router.get('/investidores/:id/documentos/:docId/ficheiro', async (req, res) => {
+  try {
+    const { rows: [doc] } = await pool.query(
+      'SELECT storage_path, nome FROM documentos_investidor WHERE id = $1 AND investidor_id = $2',
+      [req.params.docId, req.params.id]
+    )
+    if (!doc) return res.status(404).json({ error: 'Não encontrado' })
+    if (!doc.storage_path) return res.status(404).json({ error: 'Este registo não tem ficheiro anexado' })
+    if (!supabaseStorage) return res.status(503).json({ error: 'Storage indisponível' })
+    const { data, error } = await supabaseStorage.storage
+      .from(INVESTIDORES_DOCS_BUCKET)
+      .createSignedUrl(doc.storage_path, 300)
+    if (error || !data?.signedUrl) return res.status(500).json({ error: error?.message || 'Falha ao gerar link' })
+    res.redirect(data.signedUrl)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 router.delete('/investidores/:id/documentos/:docId', async (req, res) => {
   try {
+    const { rows: [doc] } = await pool.query(
+      'SELECT storage_path FROM documentos_investidor WHERE id = $1 AND investidor_id = $2',
+      [req.params.docId, req.params.id]
+    )
     const { rowCount } = await pool.query(
       'DELETE FROM documentos_investidor WHERE id = $1 AND investidor_id = $2',
       [req.params.docId, req.params.id]
     )
     if (rowCount === 0) return res.status(404).json({ error: 'Não encontrado' })
+    if (doc?.storage_path && supabaseStorage) {
+      await supabaseStorage.storage.from(INVESTIDORES_DOCS_BUCKET).remove([doc.storage_path]).catch(() => {})
+    }
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
