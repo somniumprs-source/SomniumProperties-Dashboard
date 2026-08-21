@@ -4857,7 +4857,9 @@ app.get('/api/okrs', async (req, res) => {
     // Agrupar KRs por OKR e calcular progresso
     const krsByOkr = {}
     for (const kr of allKrs) {
-      kr.valor = fonteValues[kr.fonte] ?? 0
+      // Sem fonte automática = KR manual: o valor vem de valor_manual (quem
+      // gere o OKR actualiza-o à mão), não de uma query à BD.
+      kr.valor = kr.fonte ? (fonteValues[kr.fonte] ?? 0) : (kr.valor_manual ?? 0)
       if (kr.invertido) {
         kr.progresso = kr.valor === 0 ? 100 : Math.max(0, Math.round((1 - kr.valor / kr.meta) * 100))
       } else {
@@ -5011,12 +5013,12 @@ app.delete('/api/okrs/:id', async (req, res) => {
 app.post('/api/okrs/:okrId/krs', async (req, res) => {
   try {
     const pgPool = (await import('./src/db/pg.js')).default
-    const { kr, meta, unidade, tipo, fonte, invertido, ordem } = req.body
+    const { kr, meta, unidade, tipo, fonte, invertido, ordem, valor_manual } = req.body
     const id = (await import('crypto')).randomUUID()
     const now = new Date().toISOString()
     await pgPool.query(
-      'INSERT INTO okr_krs (id, okr_id, kr, meta, unidade, tipo, fonte, invertido, ordem, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
-      [id, req.params.okrId, kr, meta || 1, unidade || '', tipo || 'acumulado', fonte || null, invertido || false, ordem || 0, now, now]
+      'INSERT INTO okr_krs (id, okr_id, kr, meta, unidade, tipo, fonte, invertido, ordem, valor_manual, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)',
+      [id, req.params.okrId, kr, meta || 1, unidade || '', tipo || 'acumulado', fonte || null, invertido || false, ordem || 0, fonte ? null : (valor_manual ?? 0), now]
     )
     res.status(201).json({ id })
   } catch (e) { res.status(500).json({ error: e.message }) }
@@ -5025,15 +5027,16 @@ app.post('/api/okrs/:okrId/krs', async (req, res) => {
 app.put('/api/okr-krs/:id', async (req, res) => {
   try {
     const pgPool = (await import('./src/db/pg.js')).default
-    const { kr, meta, unidade, tipo, fonte, invertido, ordem } = req.body
+    const { kr, meta, unidade, tipo, fonte, invertido, ordem, valor_manual } = req.body
     const sets = []; const params = []
     if (kr !== undefined) { sets.push(`kr = $${params.length+1}`); params.push(kr) }
     if (meta !== undefined) { sets.push(`meta = $${params.length+1}`); params.push(meta) }
     if (unidade !== undefined) { sets.push(`unidade = $${params.length+1}`); params.push(unidade) }
     if (tipo !== undefined) { sets.push(`tipo = $${params.length+1}`); params.push(tipo) }
-    if (fonte !== undefined) { sets.push(`fonte = $${params.length+1}`); params.push(fonte) }
+    if (fonte !== undefined) { sets.push(`fonte = $${params.length+1}`); params.push(fonte || null) }
     if (invertido !== undefined) { sets.push(`invertido = $${params.length+1}`); params.push(invertido) }
     if (ordem !== undefined) { sets.push(`ordem = $${params.length+1}`); params.push(ordem) }
+    if (valor_manual !== undefined) { sets.push(`valor_manual = $${params.length+1}`); params.push(valor_manual) }
     sets.push(`updated_at = $${params.length+1}`); params.push(new Date().toISOString())
     params.push(req.params.id)
     await pgPool.query(`UPDATE okr_krs SET ${sets.join(',')} WHERE id = $${params.length}`, params)

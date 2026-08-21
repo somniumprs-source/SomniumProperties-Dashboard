@@ -1143,14 +1143,18 @@ export function Metricas() {
           async function deleteKr(id) {
             await apiFetch(`/api/okr-krs/${id}`, { method: 'DELETE' }); load()
           }
-          async function addKr(okrId) {
-            const kr = prompt('Descrição do Key Result:')
-            if (!kr) return
-            const meta = parseFloat(prompt('Meta (número):', '1') || '1')
-            await apiFetch(`/api/okrs/${okrId}/krs`, {
-              method: 'POST', headers: {'Content-Type':'application/json'},
-              body: JSON.stringify({ kr, meta, fonte: null })
-            }); load()
+          async function saveKr(okrId, krId, form) {
+            const body = {
+              kr: form.kr, meta: parseFloat(form.meta) || 1,
+              fonte: form.fonte || null,
+              valor_manual: form.fonte ? undefined : (parseFloat(form.valor_manual) || 0),
+            }
+            if (krId) {
+              await apiFetch(`/api/okr-krs/${krId}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
+            } else {
+              await apiFetch(`/api/okrs/${okrId}/krs`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
+            }
+            setEditingOkr(null); load()
           }
           return (
             <>
@@ -1246,16 +1250,29 @@ export function Metricas() {
                                 kr.progresso >= 100 ? 'bg-green-500' : kr.progresso >= 50 ? 'bg-yellow-400' : 'bg-red-400'
                               }`} style={{ width: `${Math.min(100, kr.progresso)}%` }} />
                             </div>
-                            {kr.fonte && <span className="text-[9px] text-gray-300">Auto: {kr.fonte}</span>}
+                            {kr.fonte
+                              ? <span className="text-[9px] text-gray-300">Auto: {kr.fonte}</span>
+                              : <span className="text-[9px] text-amber-500">Manual</span>}
                           </div>
+                          <button onClick={() => setEditingOkr({ okrId: okr.id, kr })} className="text-xs text-gray-300 hover:text-indigo-500 shrink-0" title="Editar KR">✎</button>
                           <button onClick={() => deleteKr(kr.id)} className="text-xs text-gray-300 hover:text-red-500 shrink-0" title="Apagar KR">x</button>
                         </div>
                       ))}
                     </div>
-                    <button onClick={() => addKr(okr.id)} className="mt-3 text-xs text-indigo-500 hover:underline">+ Adicionar Key Result</button>
+                    <button onClick={() => setEditingOkr({ okrId: okr.id, kr: null })} className="mt-3 text-xs text-indigo-500 hover:underline">+ Adicionar Key Result</button>
                   </div>
                 ))}
                 {okrs.length === 0 && <p className="text-xs text-gray-400 text-center py-8">Sem OKRs definidos — clica em "+ Novo Objectivo"</p>}
+
+                {editingOkr && (
+                  <KrFormModal
+                    okrId={editingOkr.okrId}
+                    kr={editingOkr.kr}
+                    fontes={fontes}
+                    onSave={form => saveKr(editingOkr.okrId, editingOkr.kr?.id, form)}
+                    onClose={() => setEditingOkr(null)}
+                  />
+                )}
               </div>
             </>
           )
@@ -1263,6 +1280,54 @@ export function Metricas() {
 
       </div>
     </>
+  )
+}
+
+// ── Modal de criar/editar Key Result — substitui os prompt() nativos.
+// Fonte "Manual" (id vazio na lista de fontes) mostra um campo de valor
+// actual, que fica guardado em valor_manual e é a única forma de um KR
+// manual sair de 0% (antes não existia onde guardar esse valor).
+function KrFormModal({ okrId, kr, fontes, onSave, onClose }) {
+  const [form, setForm] = useState({
+    kr: kr?.kr || '', meta: kr?.meta ?? 1, fonte: kr?.fonte || '', valor_manual: kr?.valor_manual ?? 0,
+  })
+  const isManual = !form.fonte
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-lg w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">{kr ? 'Editar Key Result' : 'Novo Key Result'}</h3>
+        <form onSubmit={e => { e.preventDefault(); onSave(form) }} className="flex flex-col gap-3">
+          <div>
+            <label className="text-xs text-gray-500">Descrição</label>
+            <input value={form.kr} onChange={e => setForm(f => ({ ...f, kr: e.target.value }))}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1" required autoFocus />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">Meta (número)</label>
+            <input type="number" step="any" value={form.meta} onChange={e => setForm(f => ({ ...f, meta: e.target.value }))}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1" required />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">Fonte</label>
+            <select value={form.fonte} onChange={e => setForm(f => ({ ...f, fonte: e.target.value }))}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 bg-white">
+              {fontes.map(f => <option key={f.id ?? 'manual'} value={f.id ?? ''}>{f.label}</option>)}
+            </select>
+          </div>
+          {isManual && (
+            <div>
+              <label className="text-xs text-gray-500">Valor actual (actualiza-se à mão)</label>
+              <input type="number" step="any" value={form.valor_manual} onChange={e => setForm(f => ({ ...f, valor_manual: e.target.value }))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1" />
+            </div>
+          )}
+          <div className="flex gap-2 mt-2">
+            <button type="submit" className="px-4 py-2 text-sm font-medium rounded-lg text-white flex-1" style={{ backgroundColor: GOLD }}>Guardar</button>
+            <button type="button" onClick={onClose} className="px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-500">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
   )
 }
 

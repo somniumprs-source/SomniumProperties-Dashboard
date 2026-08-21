@@ -1584,6 +1584,12 @@ export async function initSchema() {
         ALTER TABLE investidores ADD COLUMN IF NOT EXISTS ref_investidor TEXT;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
+
+      -- KR de OKR com fonte "Manual" (ver migration 0036_okr_krs_valor_manual.sql).
+      DO $$ BEGIN
+        ALTER TABLE okr_krs ADD COLUMN IF NOT EXISTS valor_manual REAL;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
     `)
 
     // Bootstrap: garantir que somniumprs@gmail.com (owner) existe como admin

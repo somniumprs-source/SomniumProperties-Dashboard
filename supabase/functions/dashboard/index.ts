@@ -3170,7 +3170,9 @@ app.get("/okrs", async (c: any) => {
 
     const krsByOkr: Record<string, any[]> = {};
     for (const kr of allKrs) {
-      kr.valor = fonteValues[kr.fonte] ?? 0;
+      // Sem fonte automática = KR manual: o valor vem de valor_manual (quem
+      // gere o OKR actualiza-o à mão), não de uma query à BD.
+      kr.valor = kr.fonte ? (fonteValues[kr.fonte] ?? 0) : (kr.valor_manual ?? 0);
       if (kr.invertido) {
         kr.progresso = kr.valor === 0 ? 100 : Math.max(0, Math.round((1 - kr.valor / kr.meta) * 100));
       } else {
@@ -3335,12 +3337,12 @@ app.delete("/okrs/:id", async (c: any) => {
 app.post("/okrs/:okrId/krs", async (c: any) => {
   try {
     const body = await c.req.json().catch(() => ({}));
-    const { kr, meta, unidade, tipo, fonte, invertido, ordem } = body;
+    const { kr, meta, unidade, tipo, fonte, invertido, ordem, valor_manual } = body;
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     await pool.query(
-      "INSERT INTO okr_krs (id, okr_id, kr, meta, unidade, tipo, fonte, invertido, ordem, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
-      [id, c.req.param("okrId"), kr, meta || 1, unidade || "", tipo || "acumulado", fonte || null, invertido || false, ordem || 0, now, now],
+      "INSERT INTO okr_krs (id, okr_id, kr, meta, unidade, tipo, fonte, invertido, ordem, valor_manual, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)",
+      [id, c.req.param("okrId"), kr, meta || 1, unidade || "", tipo || "acumulado", fonte || null, invertido || false, ordem || 0, fonte ? null : (valor_manual ?? 0), now],
     );
     return c.json({ id }, 201);
   } catch (e: any) {
@@ -3352,16 +3354,17 @@ app.post("/okrs/:okrId/krs", async (c: any) => {
 app.put("/okr-krs/:id", async (c: any) => {
   try {
     const body = await c.req.json().catch(() => ({}));
-    const { kr, meta, unidade, tipo, fonte, invertido, ordem } = body;
+    const { kr, meta, unidade, tipo, fonte, invertido, ordem, valor_manual } = body;
     const sets: string[] = [];
     const params: any[] = [];
     if (kr !== undefined) { sets.push(`kr = $${params.length + 1}`); params.push(kr); }
     if (meta !== undefined) { sets.push(`meta = $${params.length + 1}`); params.push(meta); }
     if (unidade !== undefined) { sets.push(`unidade = $${params.length + 1}`); params.push(unidade); }
     if (tipo !== undefined) { sets.push(`tipo = $${params.length + 1}`); params.push(tipo); }
-    if (fonte !== undefined) { sets.push(`fonte = $${params.length + 1}`); params.push(fonte); }
+    if (fonte !== undefined) { sets.push(`fonte = $${params.length + 1}`); params.push(fonte || null); }
     if (invertido !== undefined) { sets.push(`invertido = $${params.length + 1}`); params.push(invertido); }
     if (ordem !== undefined) { sets.push(`ordem = $${params.length + 1}`); params.push(ordem); }
+    if (valor_manual !== undefined) { sets.push(`valor_manual = $${params.length + 1}`); params.push(valor_manual); }
     if (sets.length === 0) return c.json({ error: "nada para actualizar" }, 400);
     sets.push(`updated_at = $${params.length + 1}`); params.push(new Date().toISOString());
     params.push(c.req.param("id"));
