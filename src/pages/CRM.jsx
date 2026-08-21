@@ -1837,6 +1837,7 @@ const FIELD_DEFS = {
     // — Identificação —
     { key: 'nome', label: 'Nome do Imóvel', type: 'text', required: true },
     { key: 'estado', label: 'Estado', type: 'select', options: ['Adicionado','Chamada Não Atendida','Pendentes','Pré-aprovação','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'] },
+    { key: 'modelo_negocio', label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix & Flip','CAEP','Mediação'], required: true },
     { key: 'ref_interna', label: 'REF Interna', type: 'text' },
     { key: 'tipo_oportunidade', label: 'Tipo Oportunidade', type: 'select', options: ['Portal', 'Off-Market'] },
     { key: 'origem', label: 'Origem', type: 'select', options: ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro'] },
@@ -1848,7 +1849,7 @@ const FIELD_DEFS = {
     { key: 'freguesia', label: 'Freguesia', type: 'combobox_freguesias' },
     // — Caracterização Física —
     { key: 'tipologia', label: 'Tipologia (T1, T2, T3…)', type: 'text' },
-    { key: 'predio_tipo', label: 'Tipo de Prédio', type: 'select', options: ['Edifício multifamiliar','Moradia','Terreno','Prédio para reabilitação','Outro'] },
+    { key: 'predio_tipo', label: 'Tipo de Prédio', type: 'select', options: ['Apartamento','Edifício multifamiliar','Moradia','Terreno','Prédio para reabilitação','Outro'] },
     { key: 'area_util', label: 'Área Útil (m²)', type: 'number' },
     { key: 'area_bruta', label: 'ABP — Área Bruta Privativa (m²)', type: 'number' },
     { key: 'area_bruta_dependente', label: 'ABD — Área Bruta Dependente (m²)', type: 'number' },
@@ -1866,7 +1867,6 @@ const FIELD_DEFS = {
     { key: 'imi_anual', label: 'IMI Anual (€)', type: 'number' },
     { key: 'condominio_mensal_anunciado', label: 'Condomínio Mensal (€)', type: 'number' },
     // — Pipeline & Negócio —
-    { key: 'modelo_negocio', label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix & Flip','CAEP','Mediação'] },
     { key: 'check_qualidade', label: 'Check Qualidade', type: 'checkbox' },
     { key: 'data_adicionado', label: 'Data Adicionado', type: 'date' },
     { key: 'data_chamada', label: 'Data Chamada', type: 'date' },
@@ -2172,16 +2172,28 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
   }, [tab])
 
   function handleChange(key, value) {
-    setForm(prev => ({ ...prev, [key]: value }))
+    setForm(prev => {
+      const next = { ...prev, [key]: value }
+      // Moradia não tem "Nº Pisos do Prédio" nem "Elevador" — limpar para não
+      // ficar valor escondido guardado.
+      if (key === 'predio_tipo' && value === 'Moradia') {
+        next.numero_pisos_predio = null
+        next.tem_elevador = null
+      }
+      return next
+    })
   }
 
   const inputClass = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+  const visibleFields = form.predio_tipo === 'Moradia'
+    ? fields.filter(f => f.key !== 'numero_pisos_predio' && f.key !== 'tem_elevador')
+    : fields
 
   return (
     <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-6 shadow-xs">
       <h2 className="text-sm font-semibold text-gray-700 mb-4">{isNew ? 'Novo Registo' : 'Editar Registo'}</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {fields.map(f => {
+        {visibleFields.map(f => {
           const fieldOptions = typeof f.options === 'function' ? f.options(form) : f.options
           const currentVal = form[f.key]
           const staleSelect = f.type === 'select' && currentVal && fieldOptions && !fieldOptions.includes(currentVal)
