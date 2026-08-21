@@ -238,9 +238,176 @@ export async function instanciarTemplatesDevidos(semanaInicio: string) {
   return { criadas };
 }
 
+// ── Fila priorizada + atribuição manual (21/08/2026) ────────────────
+// Substitui o encaixe 100% automático (gerarProposta, mantido abaixo por
+// referência) — porta de src/db/agendaEngine.js, ver esse ficheiro para
+// o racional completo.
 function minutosDe(hhmm: string): number { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; }
 function hhmmDe(min: number): string { return `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`; }
 
+export async function gerarFila() {
+  const { rows: users } = await pool.query(
+    `SELECT id, nome, cor, iniciais FROM users WHERE ativo = true AND role = ANY($1) ORDER BY id`,
+    [ROLES_EQUIPA],
+  );
+
+  const { rows: pares } = await pool.query(
+    `SELECT p.id AS pesquisa_id, p.tarefa AS pesquisa_tarefa, p.tempo_horas AS pesquisa_horas, p.prioridade, p.created_at,
+            c.id AS cold_call_id, c.tempo_horas AS cold_call_horas
+     FROM tarefas p
+     JOIN tarefas c ON c.origem_id = p.origem_id AND c.origem_campo = 'cadeia_cold_call' AND c.inicio IS NULL AND c.status != 'Concluída'
+     WHERE p.origem_campo = 'cadeia_pesquisa' AND p.inicio IS NULL AND p.status != 'Concluída'`,
+  );
+  const idsCadeia = new Set<string>();
+  for (const p of pares) { idsCadeia.add(p.pesquisa_id); idsCadeia.add(p.cold_call_id); }
+
+  const { rows: soltas } = await pool.query(
+    `SELECT * FROM tarefas WHERE inicio IS NULL AND status != 'Concluída'
+     ORDER BY CASE prioridade WHEN 'alta' THEN 0 WHEN 'media' THEN 1 ELSE 2 END, data_limite NULLS LAST, created_at`,
+  );
+
+  const filaCadeia = pares.map((p: any) => ({
+    tipo: "cadeia",
+    id: `cadeia:${p.pesquisa_id}`,
+    pesquisa_id: p.pesquisa_id,
+    cold_call_id: p.cold_call_id,
+    titulo: String(p.pesquisa_tarefa || "").replace(/^Pesquisa de Imóveis — /, ""),
+    categoria: "Pesquisa + Cold Call",
+    duracao_horas: (Number(p.pesquisa_horas) || 1) + (Number(p.cold_call_horas) || 1),
+    prioridade: p.prioridade,
+    data_limite: null,
+    simultaneo: false,
+    created_at: p.created_at,
+  }));
+  const filaSoltas = soltas.filter((t: any) => !idsCadeia.has(t.id)).map((t: any) => ({
+    tipo: "simples",
+    id: t.id,
+    tarefa_id: t.id,
+    titulo: t.tarefa,
+    categoria: t.categoria,
+    duracao_horas: Number(t.tempo_horas) || 1,
+    prioridade: t.prioridade,
+    data_limite: t.data_limite,
+    simultaneo: !!t.simultaneo,
+    origem_tipo: t.origem_tipo,
+    created_at: t.created_at,
+  }));
+
+  const RANK: Record<string, number> = { alta: 0, media: 1, baixa: 2 };
+  const fila = [...filaCadeia, ...filaSoltas].sort((a: any, b: any) => {
+    if (RANK[a.prioridade] !== RANK[b.prioridade]) return RANK[a.prioridade] - RANK[b.prioridade];
+    if (a.data_limite !== b.data_limite) {
+      if (!a.data_limite) return 1;
+      if (!b.data_limite) return -1;
+      return a.data_limite < b.data_limite ? -1 : 1;
+    }
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  });
+
+  return { users, fila };
+}
+
+async function cursorLivre(bloco: any): Promise<number> {
+  const { rows } = await pool.query(
+    `SELECT hora_fim FROM agendamentos WHERE disponibilidade_bloco_id = $1 AND estado = 'confirmado' ORDER BY hora_fim DESC LIMIT 1`,
+    [bloco.id],
+  );
+  return rows.length ? minutosDe(rows[0].hora_fim) : minutosDe(bloco.hora_inicio);
+}
+
+export async function atribuirTarefa({ blocoId, userId, item }: { blocoId: string; userId: string; item: any }) {
+  const { rows: blocoRows } = await pool.query("SELECT * FROM disponibilidade_blocos WHERE id = $1", [blocoId]);
+  const bloco = blocoRows[0];
+  if (!bloco) throw new Error("Bloco de disponibilidade não encontrado");
+  if (bloco.user_id !== userId) throw new Error("O bloco não pertence a esta pessoa");
+
+  const inicioLivre = await cursorLivre(bloco);
+  const capacidadeMin = minutosDe(bloco.hora_fim) - inicioLivre;
+  if (capacidadeMin <= 0) throw new Error("Este bloco já está completamente preenchido");
+
+  async function inserir(tarefaId: string, uid: string, blocoRow: any, horaInicio: string, horaFim: string) {
+    const id = crypto.randomUUID();
+    await pool.query(
+      `INSERT INTO agendamentos (id, tarefa_id, user_id, disponibilidade_bloco_id, data, hora_inicio, hora_fim, estado, confirmado_em)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'confirmado', NOW())`,
+      [id, tarefaId, uid, blocoRow.id, blocoRow.data, horaInicio, horaFim],
+    );
+    await pool.query(
+      `UPDATE tarefas SET inicio = $1, fim = $2, user_id = $3, updated_at = NOW() WHERE id = $4`,
+      [`${blocoRow.data}T${horaInicio}:00`, `${blocoRow.data}T${horaFim}:00`, uid, tarefaId],
+    );
+    return id;
+  }
+
+  if (item.tipo === "cadeia") {
+    const { rows: tPesquisa } = await pool.query("SELECT tempo_horas FROM tarefas WHERE id = $1", [item.pesquisaId]);
+    const { rows: tColdCall } = await pool.query("SELECT tempo_horas FROM tarefas WHERE id = $1", [item.coldCallId]);
+    const durP = Math.max(15, Math.round((Number(tPesquisa[0]?.tempo_horas) || 1) * 60));
+    const durC = Math.max(15, Math.round((Number(tColdCall[0]?.tempo_horas) || 1) * 60));
+    if (capacidadeMin < durP + durC) throw new Error("Este bloco não tem capacidade para a Pesquisa + Cold Call completas");
+    const inicioP = inicioLivre, fimP = inicioP + durP, inicioC = fimP, fimC = inicioC + durC;
+    await inserir(item.pesquisaId, userId, bloco, hhmmDe(inicioP), hhmmDe(fimP));
+    await inserir(item.coldCallId, userId, bloco, hhmmDe(inicioC), hhmmDe(fimC));
+    await pool.query(`UPDATE imoveis SET data_chamada = $1 WHERE id = (SELECT origem_id FROM tarefas WHERE id = $2)`, [bloco.data, item.pesquisaId]);
+    return { ok: true };
+  }
+
+  const { rows: tarefaRows } = await pool.query("SELECT * FROM tarefas WHERE id = $1", [item.tarefaId]);
+  const tarefa = tarefaRows[0];
+  if (!tarefa) throw new Error("Tarefa não encontrada");
+  const dur = Math.max(15, Math.round((Number(tarefa.tempo_horas) || 1) * 60));
+
+  if (tarefa.simultaneo) {
+    const { rows: outros } = await pool.query(
+      `SELECT id, nome FROM users WHERE ativo = true AND role = ANY($1) AND id != $2 ORDER BY id`,
+      [ROLES_EQUIPA, userId],
+    );
+    const outro = outros[0];
+    if (!outro) throw new Error("Não há outra pessoa da equipa para esta tarefa simultânea");
+    const { rows: blocosOutro } = await pool.query(
+      `SELECT * FROM disponibilidade_blocos WHERE user_id = $1 AND data = $2 ORDER BY hora_inicio`,
+      [outro.id, bloco.data],
+    );
+    let alvo: any = null;
+    let inicioComum = 0;
+    for (const bOutro of blocosOutro) {
+      const cursorOutro = await cursorLivre(bOutro);
+      const inicio = Math.max(inicioLivre, cursorOutro);
+      const fimComum = Math.min(minutosDe(bloco.hora_fim), minutosDe(bOutro.hora_fim));
+      if (fimComum - inicio >= dur) { alvo = bOutro; inicioComum = inicio; break; }
+    }
+    if (!alvo) throw new Error(`${outro.nome} não tem disponibilidade a coincidir neste horário — tarefa simultânea precisa dos dois ao mesmo tempo`);
+    const fimComumMin = inicioComum + dur;
+    await inserir(tarefa.id, userId, bloco, hhmmDe(inicioComum), hhmmDe(fimComumMin));
+    await inserir(tarefa.id, outro.id, alvo, hhmmDe(inicioComum), hhmmDe(fimComumMin));
+    return { ok: true };
+  }
+
+  if (capacidadeMin < dur) throw new Error("Este bloco não tem capacidade suficiente para esta tarefa");
+  await inserir(tarefa.id, userId, bloco, hhmmDe(inicioLivre), hhmmDe(inicioLivre + dur));
+  return { ok: true };
+}
+
+export async function desfazerAtribuicao(tarefaId: string) {
+  const { rows: tarefaRows } = await pool.query("SELECT * FROM tarefas WHERE id = $1", [tarefaId]);
+  const tarefa = tarefaRows[0];
+  if (!tarefa) throw new Error("Tarefa não encontrada");
+
+  const idsParaLimpar = [tarefaId];
+  if (tarefa.origem_campo === "cadeia_pesquisa" || tarefa.origem_campo === "cadeia_cold_call") {
+    const { rows: par } = await pool.query(
+      `SELECT id FROM tarefas WHERE origem_id = $1 AND origem_tipo = 'imovel' AND origem_campo IN ('cadeia_pesquisa','cadeia_cold_call') AND id != $2`,
+      [tarefa.origem_id, tarefaId],
+    );
+    if (par[0]) idsParaLimpar.push(par[0].id);
+  }
+  await pool.query(`DELETE FROM agendamentos WHERE tarefa_id = ANY($1)`, [idsParaLimpar]);
+  await pool.query(`UPDATE tarefas SET inicio = NULL, fim = NULL, updated_at = NOW() WHERE id = ANY($1)`, [idsParaLimpar]);
+  return { ok: true, tarefas_libertadas: idsParaLimpar.length };
+}
+
+// ── (legado) Motor de encaixe 100% automático — mantido por referência,
+// já não é chamado por nenhum endpoint activo. ──
 export async function gerarProposta(semanaInicio: string) {
   const semanaFim = addDias(semanaInicio, 6);
 

@@ -7,7 +7,10 @@
 import { Router } from 'express'
 import { randomUUID } from 'crypto'
 import pool from './pg.js'
-import { gerarCadeiasAngariacao, gerarEstudoDeMercado, gerarAnaliseDeNegocio, gerarElaboracaoProposta, gerarTarefasSinteticas, instanciarTemplatesDevidos, gerarProposta } from './agendaEngine.js'
+import {
+  gerarCadeiasAngariacao, gerarEstudoDeMercado, gerarAnaliseDeNegocio, gerarElaboracaoProposta,
+  gerarTarefasSinteticas, instanciarTemplatesDevidos, gerarProposta, gerarFila, atribuirTarefa, desfazerAtribuicao,
+} from './agendaEngine.js'
 
 const router = Router()
 const FREQUENCIAS_VALIDAS = ['diaria', 'semanal', 'quinzenal', 'mensal', 'custom']
@@ -235,10 +238,14 @@ router.delete('/templates/:id', async (req, res) => {
   }
 })
 
-// ── Motor de agendamento (Fase 2) ────────────────────────────────
+// ── Fila priorizada + atribuição manual (Fase 2, revisão 21/08/2026) ─
+// Encaixe automático substituído por escolha manual — ver agendaEngine.js.
 
-// POST /api/agenda/gerar-semana { semana_inicio }
-router.post('/gerar-semana', async (req, res) => {
+// POST /api/agenda/actualizar-fila { semana_inicio } — corre a geração
+// (cadeias, gatilhos de estado, sequência, automáticas por data,
+// templates devidos) e devolve a fila actualizada. semana_inicio só é
+// usado para saber que templates estão devidos esta semana.
+router.post('/actualizar-fila', async (req, res) => {
   try {
     const { semana_inicio } = req.body || {}
     if (!semana_inicio) return res.status(400).json({ error: 'semana_inicio é obrigatório' })
@@ -248,7 +255,7 @@ router.post('/gerar-semana', async (req, res) => {
     const propostas = await gerarElaboracaoProposta(pool)
     const sinteticas = await gerarTarefasSinteticas(pool)
     const instanciadas = await instanciarTemplatesDevidos(pool, semana_inicio)
-    const proposta = await gerarProposta(pool, semana_inicio)
+    const { users, fila } = await gerarFila(pool)
     res.json({
       ok: true,
       cadeias_angariacao: cadeias,
@@ -257,12 +264,50 @@ router.post('/gerar-semana', async (req, res) => {
       elaboracoes_proposta: propostas,
       tarefas_sinteticas: sinteticas,
       templates_instanciados: instanciadas,
-      agendados: proposta.criados.length,
-      nao_agendadas: proposta.naoAgendadas,
+      users,
+      fila,
     })
   } catch (e) {
-    console.error('[agenda] gerar-semana erro:', e)
+    console.error('[agenda] actualizar-fila erro:', e)
     res.status(500).json({ error: e.message })
+  }
+})
+
+// GET /api/agenda/fila — só lê a fila actual, sem correr geração de novo.
+router.get('/fila', async (req, res) => {
+  try {
+    const { users, fila } = await gerarFila(pool)
+    res.json({ users, fila })
+  } catch (e) {
+    console.error('[agenda] fila erro:', e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// POST /api/agenda/atribuir { blocoId, userId, item } — atribui um item
+// da fila a um bloco de disponibilidade concreto, deliberadamente.
+router.post('/atribuir', async (req, res) => {
+  try {
+    const { blocoId, userId, item } = req.body || {}
+    if (!blocoId || !userId || !item) return res.status(400).json({ error: 'blocoId, userId e item são obrigatórios' })
+    const resultado = await atribuirTarefa(pool, { blocoId, userId, item })
+    res.json(resultado)
+  } catch (e) {
+    console.error('[agenda] atribuir erro:', e)
+    res.status(400).json({ error: e.message })
+  }
+})
+
+// POST /api/agenda/desfazer { tarefaId } — desfaz uma atribuição manual.
+router.post('/desfazer', async (req, res) => {
+  try {
+    const { tarefaId } = req.body || {}
+    if (!tarefaId) return res.status(400).json({ error: 'tarefaId é obrigatório' })
+    const resultado = await desfazerAtribuicao(pool, tarefaId)
+    res.json(resultado)
+  } catch (e) {
+    console.error('[agenda] desfazer erro:', e)
+    res.status(400).json({ error: e.message })
   }
 })
 

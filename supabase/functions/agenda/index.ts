@@ -5,7 +5,10 @@
 import { createApp } from "../_shared/hono.ts";
 import { requireAuth } from "../_shared/auth.ts";
 import pool from "../_shared/pg.ts";
-import { gerarCadeiasAngariacao, gerarEstudoDeMercado, gerarAnaliseDeNegocio, gerarElaboracaoProposta, gerarTarefasSinteticas, instanciarTemplatesDevidos, gerarProposta } from "../_shared/agendaEngine.ts";
+import {
+  gerarCadeiasAngariacao, gerarEstudoDeMercado, gerarAnaliseDeNegocio, gerarElaboracaoProposta,
+  gerarTarefasSinteticas, instanciarTemplatesDevidos, gerarProposta, gerarFila, atribuirTarefa, desfazerAtribuicao,
+} from "../_shared/agendaEngine.ts";
 
 const app = createApp("/agenda");
 
@@ -242,10 +245,10 @@ app.delete("/templates/:id", async (c: any) => {
   }
 });
 
-// ── Motor de agendamento (Fase 2) ────────────────────────────────
+// ── Fila priorizada + atribuição manual (Fase 2, revisão 21/08/2026) ─
 
-// POST /agenda/gerar-semana { semana_inicio }
-app.post("/gerar-semana", async (c: any) => {
+// POST /agenda/actualizar-fila { semana_inicio }
+app.post("/actualizar-fila", async (c: any) => {
   try {
     const { semana_inicio } = await c.req.json().catch(() => ({}));
     if (!semana_inicio) return c.json({ error: "semana_inicio é obrigatório" }, 400);
@@ -255,7 +258,7 @@ app.post("/gerar-semana", async (c: any) => {
     const propostas = await gerarElaboracaoProposta();
     const sinteticas = await gerarTarefasSinteticas();
     const instanciadas = await instanciarTemplatesDevidos(semana_inicio);
-    const proposta = await gerarProposta(semana_inicio);
+    const { users, fila } = await gerarFila();
     return c.json({
       ok: true,
       cadeias_angariacao: cadeias,
@@ -264,12 +267,49 @@ app.post("/gerar-semana", async (c: any) => {
       elaboracoes_proposta: propostas,
       tarefas_sinteticas: sinteticas,
       templates_instanciados: instanciadas,
-      agendados: proposta.criados.length,
-      nao_agendadas: proposta.naoAgendadas,
+      users,
+      fila,
     });
   } catch (e) {
-    console.error("[agenda] gerar-semana erro:", e);
+    console.error("[agenda] actualizar-fila erro:", e);
     return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+// GET /agenda/fila
+app.get("/fila", async (c: any) => {
+  try {
+    const { users, fila } = await gerarFila();
+    return c.json({ users, fila });
+  } catch (e) {
+    console.error("[agenda] fila erro:", e);
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+// POST /agenda/atribuir { blocoId, userId, item }
+app.post("/atribuir", async (c: any) => {
+  try {
+    const { blocoId, userId, item } = await c.req.json().catch(() => ({}));
+    if (!blocoId || !userId || !item) return c.json({ error: "blocoId, userId e item são obrigatórios" }, 400);
+    const resultado = await atribuirTarefa({ blocoId, userId, item });
+    return c.json(resultado);
+  } catch (e) {
+    console.error("[agenda] atribuir erro:", e);
+    return c.json({ error: (e as Error).message }, 400);
+  }
+});
+
+// POST /agenda/desfazer { tarefaId }
+app.post("/desfazer", async (c: any) => {
+  try {
+    const { tarefaId } = await c.req.json().catch(() => ({}));
+    if (!tarefaId) return c.json({ error: "tarefaId é obrigatório" }, 400);
+    const resultado = await desfazerAtribuicao(tarefaId);
+    return c.json(resultado);
+  } catch (e) {
+    console.error("[agenda] desfazer erro:", e);
+    return c.json({ error: (e as Error).message }, 400);
   }
 });
 

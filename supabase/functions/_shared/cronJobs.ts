@@ -557,7 +557,7 @@ async function runArquivoRelatoriosObra() {
 // Corre ao domingo à noite (depois de a equipa marcar disponibilidade),
 // para a proposta já estar pronta na segunda-feira de manhã.
 async function runGerarAgendaSemanal() {
-  const { gerarCadeiasAngariacao, gerarEstudoDeMercado, gerarAnaliseDeNegocio, gerarElaboracaoProposta, gerarTarefasSinteticas, instanciarTemplatesDevidos, gerarProposta } =
+  const { gerarCadeiasAngariacao, gerarEstudoDeMercado, gerarAnaliseDeNegocio, gerarElaboracaoProposta, gerarTarefasSinteticas, instanciarTemplatesDevidos, gerarFila } =
     await import("./agendaEngine.ts");
 
   // Segunda-feira da semana seguinte (Europe/Lisbon).
@@ -577,14 +577,14 @@ async function runGerarAgendaSemanal() {
   const propostas = await gerarElaboracaoProposta();
   const sinteticas = await gerarTarefasSinteticas();
   const instanciadas = await instanciarTemplatesDevidos(semanaInicio);
-  const proposta = await gerarProposta(semanaInicio);
+  const { fila } = await gerarFila();
 
   console.log(
-    `[cron] Agenda pré-gerada para a semana de ${semanaInicio}: ${proposta.criados.length} agendados, ` +
-      `${proposta.naoAgendadas.length} não agendados (cadeias: ${cadeias.criadas}, estudos VVR: ${estudosMercado.criadas}, ` +
+    `[cron] Fila da Agenda actualizada para a semana de ${semanaInicio}: ${fila.length} itens prontos ` +
+      `(cadeias: ${cadeias.criadas}, estudos VVR: ${estudosMercado.criadas}, ` +
       `análises: ${analises.criadas}, propostas: ${propostas.criadas}, sintéticas: ${sinteticas.criadas}, templates: ${instanciadas.criadas})`,
   );
-  return { semanaInicio, agendados: proposta.criados.length, naoAgendadas: proposta.naoAgendadas.length };
+  return { semanaInicio, itensNaFila: fila.length };
 }
 
 // Exports para execução manual via API / cron functions

@@ -104,7 +104,7 @@ export function Agenda() {
           items={[
             { key: 'disponibilidade', label: 'Disponibilidade', icon: Calendar },
             { key: 'catalogo', label: 'Catálogo de Tarefas Recorrentes', icon: BookOpen },
-            { key: 'proposta', label: 'Proposta da Semana', icon: CalendarClock },
+            { key: 'fila', label: 'Fila da Semana', icon: CalendarClock },
           ]}
           value={tab}
           onChange={setTab}
@@ -113,7 +113,7 @@ export function Agenda() {
           ? <DisponibilidadeTab users={users} />
           : tab === 'catalogo'
           ? <CatalogoTab users={users} />
-          : <PropostaTab users={users} />}
+          : <FilaTab users={users} />}
       </div>
     </>
   )
@@ -417,94 +417,125 @@ function CatalogoTab({ users }) {
 }
 
 // ════════════════════════════════════════════════════════════════
-// Proposta da Semana — motor de agendamento (Fase 2)
+// Fila da Semana — fila priorizada + atribuição manual (revisão
+// 21/08/2026: o encaixe 100% automático saiu — decidia a ordem sem
+// juízo de negócio. A geração/sequência/elegibilidade continua toda
+// automática (o que está pronto); QUANDO/QUEM faz cada coisa passa a
+// ser sempre uma escolha tua, bloco a bloco.)
 // ════════════════════════════════════════════════════════════════
-function PropostaTab({ users }) {
+function duracaoBlocoMin(b) {
+  const [h1, m1] = b.hora_inicio.split(':').map(Number)
+  const [h2, m2] = b.hora_fim.split(':').map(Number)
+  return (h2 * 60 + m2) - (h1 * 60 + m1)
+}
+function duracaoAgendamentoMin(a) {
+  const [h1, m1] = a.hora_inicio.split(':').map(Number)
+  const [h2, m2] = a.hora_fim.split(':').map(Number)
+  return (h2 * 60 + m2) - (h1 * 60 + m1)
+}
+function fmtHoras(h) {
+  const n = Number(h)
+  return `${n.toFixed(2).replace(/\.?0+$/, '')}h`
+}
+
+function FilaTab({ users }) {
   const toast = useToast()
   const [refDate, setRefDate] = useState(() => new Date())
+  const [blocos, setBlocos] = useState([])
   const [agendamentos, setAgendamentos] = useState([])
-  const [naoAgendadas, setNaoAgendadas] = useState([])
+  const [fila, setFila] = useState([])
   const [loading, setLoading] = useState(true)
-  const [gerando, setGerando] = useState(false)
-  const [confirmandoTudo, setConfirmandoTudo] = useState(false)
+  const [actualizando, setActualizando] = useState(false)
+  const [picker, setPicker] = useState(null) // { blocoId, userId, capacidadeMin }
 
   const monday = useMemo(() => getMonday(refDate), [refDate])
   const semanaInicio = fmtISO(monday)
   const dias = useMemo(() => Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday); d.setDate(d.getDate() + i); return fmtISO(d)
   }), [monday])
-
-  const usersById = useMemo(() => Object.fromEntries(users.map(u => [u.id, u])), [users])
+  const semanaFim = dias[6]
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const r = await apiFetch(`/api/agenda/proposta?semana_inicio=${semanaInicio}`)
-      const j = await r.json()
-      setAgendamentos(Array.isArray(j.agendamentos) ? j.agendamentos : [])
-      setNaoAgendadas(Array.isArray(j.nao_agendadas) ? j.nao_agendadas : [])
+      const [rBlocos, rProposta, rFila] = await Promise.all([
+        apiFetch(`/api/agenda/disponibilidade?de=${semanaInicio}&ate=${semanaFim}`),
+        apiFetch(`/api/agenda/proposta?semana_inicio=${semanaInicio}`),
+        apiFetch('/api/agenda/fila'),
+      ])
+      setBlocos((await rBlocos.json()).blocos || [])
+      setAgendamentos((await rProposta.json()).agendamentos || [])
+      setFila((await rFila.json()).fila || [])
     } catch (e) { toast?.(e.message, 'error') }
     setLoading(false)
-  }, [semanaInicio])
+  }, [semanaInicio, semanaFim])
 
   useEffect(() => { load() }, [load])
 
-  async function gerar() {
-    setGerando(true)
+  async function actualizarFila() {
+    setActualizando(true)
     try {
-      const r = await apiFetch('/api/agenda/gerar-semana', {
+      const r = await apiFetch('/api/agenda/actualizar-fila', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ semana_inicio: semanaInicio }),
       })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Falha ao gerar proposta')
-      toast?.(`Proposta gerada: ${j.agendados} tarefa(s) encaixada(s), ${j.nao_agendadas?.length || 0} sem espaço.`, 'success')
+      if (!r.ok) throw new Error(j.error || 'Falha ao actualizar')
+      toast?.(`Fila actualizada — ${j.fila?.length || 0} itens prontos.`, 'success')
       await load()
     } catch (e) { toast?.(e.message, 'error') }
-    setGerando(false)
+    setActualizando(false)
   }
 
-  async function confirmarTudo() {
-    setConfirmandoTudo(true)
+  async function escolher(itemFila) {
+    if (!picker) return
     try {
-      const r = await apiFetch(`/api/agenda/semana/${semanaInicio}/confirmar-tudo`, { method: 'POST' })
+      const item = itemFila.tipo === 'cadeia'
+        ? { tipo: 'cadeia', pesquisaId: itemFila.pesquisa_id, coldCallId: itemFila.cold_call_id }
+        : { tipo: 'simples', tarefaId: itemFila.tarefa_id }
+      const r = await apiFetch('/api/agenda/atribuir', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blocoId: picker.blocoId, userId: picker.userId, item }),
+      })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Falha ao confirmar')
-      toast?.(`${j.confirmados} agendamento(s) confirmado(s).`, 'success')
+      if (!r.ok) throw new Error(j.error || 'Falha ao atribuir')
+      setPicker(null)
       await load()
     } catch (e) { toast?.(e.message, 'error') }
-    setConfirmandoTudo(false)
   }
 
-  async function confirmar(id) {
+  async function desfazer(tarefaId) {
     try {
-      const r = await apiFetch(`/api/agenda/agendamentos/${id}/confirmar`, { method: 'POST' })
-      if (!r.ok) throw new Error((await r.json()).error || 'Falha ao confirmar')
+      const r = await apiFetch('/api/agenda/desfazer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tarefaId }),
+      })
+      if (!r.ok) throw new Error((await r.json()).error || 'Falha ao desfazer')
       await load()
     } catch (e) { toast?.(e.message, 'error') }
   }
 
-  async function recusar(id) {
-    try {
-      const r = await apiFetch(`/api/agenda/agendamentos/${id}/recusar`, { method: 'POST' })
-      if (!r.ok) throw new Error((await r.json()).error || 'Falha ao recusar')
-      await load()
-    } catch (e) { toast?.(e.message, 'error') }
-  }
-
-  const porUserEDia = useMemo(() => {
+  const blocosPorUserDia = useMemo(() => {
     const map = {}
-    for (const a of agendamentos) {
-      map[a.user_id] ||= {}
-      ;(map[a.user_id][a.data] ||= []).push(a)
-    }
+    for (const b of blocos) { map[b.user_id] ||= {}; (map[b.user_id][b.data] ||= []).push(b) }
     for (const uid in map) for (const d in map[uid]) map[uid][d].sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio))
+    return map
+  }, [blocos])
+  const agendamentosPorBloco = useMemo(() => {
+    const map = {}
+    for (const a of agendamentos) { (map[a.disponibilidade_bloco_id] ||= []).push(a) }
+    for (const k in map) map[k].sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio))
     return map
   }, [agendamentos])
 
-  const propostosCount = agendamentos.filter(a => a.estado === 'proposto').length
-  const confirmadosCount = agendamentos.filter(a => a.estado === 'confirmado').length
+  const pickerCapacidadeH = picker ? (picker.capacidadeMin / 60) : 0
+  const filaParaPicker = useMemo(() => {
+    if (!picker) return []
+    return fila.filter(it => it.duracao_horas * 60 <= picker.capacidadeMin + 0.001)
+  }, [fila, picker])
 
   return (
     <div className="space-y-4">
@@ -515,7 +546,7 @@ function PropostaTab({ users }) {
             <ChevronLeft className="w-4 h-4" />
           </button>
           <span className="text-sm font-semibold text-gray-800 dark:text-neutral-200 min-w-[140px] text-center">
-            {fmtDiaLabel(monday)} – {fmtDiaLabel(new Date(dias[6]))}
+            {fmtDiaLabel(monday)} – {fmtDiaLabel(new Date(semanaFim))}
           </span>
           <button onClick={() => setRefDate(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n })}
             className="p-2 rounded-lg bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">
@@ -523,17 +554,9 @@ function PropostaTab({ users }) {
           </button>
           <Button variant="secondary" size="sm" onClick={() => setRefDate(new Date())}>Semana actual</Button>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">{confirmadosCount} confirmada(s) · {propostosCount} proposta(s)</span>
-          <Button variant="secondary" size="sm" icon={gerando ? Loader2 : Wand2} onClick={gerar} disabled={gerando}>
-            Gerar proposta desta semana
-          </Button>
-          {propostosCount > 0 && (
-            <Button variant="primary" size="sm" icon={confirmandoTudo ? Loader2 : Check} onClick={confirmarTudo} disabled={confirmandoTudo}>
-              Confirmar tudo
-            </Button>
-          )}
-        </div>
+        <Button variant="secondary" size="sm" icon={actualizando ? Loader2 : Wand2} onClick={actualizarFila} disabled={actualizando}>
+          Actualizar fila
+        </Button>
       </div>
 
       {loading ? <PageSkeleton /> : (
@@ -547,40 +570,43 @@ function PropostaTab({ users }) {
                 </div>
                 <div className="space-y-3">
                   {dias.map(dia => {
-                    const items = (porUserEDia[u.id] || {})[dia] || []
-                    if (!items.length) return null
+                    const blocosDoDia = (blocosPorUserDia[u.id] || {})[dia] || []
+                    if (!blocosDoDia.length) return null
                     return (
                       <div key={dia}>
                         <p className="text-[10px] uppercase tracking-widest font-semibold text-gray-400 mb-1">{fmtDiaLabel(new Date(dia))}</p>
                         <div className="space-y-1.5">
-                          {items.map(a => (
-                            <div key={a.id} className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border text-xs ${
-                              a.estado === 'confirmado' ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800/50' : 'bg-brand-gold/10 border-brand-gold/20'
-                            }`}>
-                              <div className="min-w-0 flex-1">
-                                <span className="font-semibold text-gray-700 dark:text-neutral-200">{a.hora_inicio}–{a.hora_fim}</span>
-                                <span className="text-gray-500 dark:text-neutral-400"> · {a.tarefa}</span>
+                          {blocosDoDia.map(b => {
+                            const itens = agendamentosPorBloco[b.id] || []
+                            const usadoMin = itens.reduce((s, a) => s + duracaoAgendamentoMin(a), 0)
+                            const capacidadeMin = duracaoBlocoMin(b) - usadoMin
+                            return (
+                              <div key={b.id} className="rounded-lg border border-gray-100 dark:border-neutral-800 p-2">
+                                <p className="text-[10px] text-gray-400 mb-1">{b.hora_inicio}–{b.hora_fim} · {fmtHoras(capacidadeMin / 60)} livre</p>
+                                {itens.map(a => (
+                                  <div key={a.id} className="flex items-center justify-between gap-2 px-2 py-1 mb-1 rounded-md bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800/50 text-xs">
+                                    <span className="min-w-0 truncate"><span className="font-semibold text-gray-700 dark:text-neutral-200">{a.hora_inicio}–{a.hora_fim}</span> <span className="text-gray-500 dark:text-neutral-400">· {a.tarefa}</span></span>
+                                    <button onClick={() => desfazer(a.tarefa_id)} title="Desfazer" className="p-0.5 rounded text-gray-400 hover:text-red-500 shrink-0">
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                                {capacidadeMin >= 15 && (
+                                  <button
+                                    onClick={() => setPicker({ blocoId: b.id, userId: u.id, capacidadeMin })}
+                                    className="w-full flex items-center justify-center gap-1 py-1 rounded-md text-[11px] font-semibold text-brand-gold bg-brand-gold/10 hover:bg-brand-gold/20 transition-colors">
+                                    <Plus className="w-3 h-3" /> Atribuir tarefa
+                                  </button>
+                                )}
                               </div>
-                              {a.estado === 'proposto' ? (
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <button onClick={() => confirmar(a.id)} title="Confirmar" className="p-1 rounded-md text-green-600 hover:bg-green-100">
-                                    <Check className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button onClick={() => recusar(a.id)} title="Recusar" className="p-1 rounded-md text-red-500 hover:bg-red-100">
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <Badge tone="green" size="xs">Confirmada</Badge>
-                              )}
-                            </div>
-                          ))}
+                            )
+                          })}
                         </div>
                       </div>
                     )
                   })}
-                  {!Object.keys(porUserEDia[u.id] || {}).length && (
-                    <p className="text-xs text-gray-300 dark:text-neutral-600">Sem tarefas propostas esta semana.</p>
+                  {!Object.keys(blocosPorUserDia[u.id] || {}).length && (
+                    <p className="text-xs text-gray-300 dark:text-neutral-600">Sem disponibilidade dada esta semana.</p>
                   )}
                 </div>
               </Card>
@@ -588,18 +614,18 @@ function PropostaTab({ users }) {
           </div>
 
           <div>
-            <p className="text-sm font-semibold text-gray-700 dark:text-neutral-200 mb-2">Não agendadas esta semana</p>
-            {naoAgendadas.length === 0 ? (
-              <EmptyState icon={Inbox} title="Tudo agendado" description="Não há tarefas por encaixar nesta semana." />
+            <p className="text-sm font-semibold text-gray-700 dark:text-neutral-200 mb-2">Fila de Tarefas Prontas ({fila.length})</p>
+            {fila.length === 0 ? (
+              <EmptyState icon={Inbox} title="Fila vazia" description='Nada pronto a fazer neste momento — clica em "Actualizar fila" para verificar de novo.' />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-                {naoAgendadas.map(t => (
-                  <div key={t.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/40 text-xs">
+                {fila.map(it => (
+                  <div key={it.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 text-xs">
                     <div className="min-w-0">
-                      <p className="font-medium text-gray-800 dark:text-neutral-200 truncate">{t.tarefa}</p>
-                      <p className="text-[10px] text-gray-400">{usersById[t.user_id]?.nome || 'Sem responsável'}{t.categoria ? ` · ${t.categoria}` : ''}</p>
+                      <p className="font-medium text-gray-800 dark:text-neutral-200 truncate">{it.titulo}</p>
+                      <p className="text-[10px] text-gray-400">{it.categoria} · {fmtHoras(it.duracao_horas)}{it.data_limite ? ` · prazo ${it.data_limite}` : ''}</p>
                     </div>
-                    <Badge tone={PRIORIDADE_TONE[t.prioridade] || 'gray'} size="xs">{PRIORIDADE_LABEL[t.prioridade] || t.prioridade}</Badge>
+                    <Badge tone={PRIORIDADE_TONE[it.prioridade] || 'gray'} size="xs">{PRIORIDADE_LABEL[it.prioridade] || it.prioridade}</Badge>
                   </div>
                 ))}
               </div>
@@ -607,6 +633,26 @@ function PropostaTab({ users }) {
           </div>
         </>
       )}
+
+      <Modal open={!!picker} onClose={() => setPicker(null)} title="Escolher tarefa para este bloco"
+        subtitle={picker ? `Capacidade disponível: ${fmtHoras(pickerCapacidadeH)}` : ''} size="lg">
+        {filaParaPicker.length === 0 ? (
+          <EmptyState icon={Inbox} title="Nada cabe aqui" description="Nenhuma tarefa da fila cabe na capacidade livre deste bloco." />
+        ) : (
+          <div className="space-y-1.5 max-h-96 overflow-y-auto">
+            {filaParaPicker.map(it => (
+              <button key={it.id} onClick={() => escolher(it)}
+                className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-neutral-800 hover:border-brand-gold hover:bg-brand-gold/5 transition-colors text-left text-xs">
+                <div className="min-w-0">
+                  <p className="font-medium text-gray-800 dark:text-neutral-200 truncate">{it.titulo}</p>
+                  <p className="text-[10px] text-gray-400">{it.categoria} · {fmtHoras(it.duracao_horas)}{it.data_limite ? ` · prazo ${it.data_limite}` : ''}{it.simultaneo ? ' · precisa dos dois' : ''}</p>
+                </div>
+                <Badge tone={PRIORIDADE_TONE[it.prioridade] || 'gray'} size="xs">{PRIORIDADE_LABEL[it.prioridade] || it.prioridade}</Badge>
+              </button>
+            ))}
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
