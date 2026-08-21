@@ -294,7 +294,7 @@ export function Metricas() {
                   <Row label="Investidores activos" value={NUM(p3?.investidoresAtivos)} />
                   <Row label="Ticket médio" value={EUR(p3?.ticketMedio)} />
                   <Row label="Taxa de conversão" value={PCT(p3?.taxaConversao)} />
-                  <Row label="ROI entregue" value={p3?.roiEntregue != null ? PCT(p3.roiEntregue) : '—'} />
+                  <Row label="ROI entregue (capital passivo)" value={p3?.roiEntregue != null ? PCT(p3.roiEntregue) : '—'} />
                 </div>
               </Card>
             </div>
@@ -306,7 +306,6 @@ export function Metricas() {
                 <M label="Deal Flow / Capital" value={tr?.ratioDealFlowCapital != null ? `${tr.ratioDealFlowCapital}×` : '—'}
                   sub="Pipeline value / capital disponível" warn={tr?.ratioDealFlowCapital != null && tr.ratioDealFlowCapital < 1} />
                 <M label="Ciclo completo médio" value={DAYS(tr?.velocidadeCicloCompleto)} sub="Lead adicionado → escritura" />
-                <M label="ROE (capital passivo)" value={tr?.roe != null ? PCT(tr.roe) : '—'} sub="Lucro entregue / capital captado" />
                 <M label="% projecções cumpridas" value={tr?.cumpreProjeccao != null ? PCT(tr.cumpreProjeccao) : '—'} sub="Lucro real ≥ 80% do estimado" />
               </div>
             </Card>

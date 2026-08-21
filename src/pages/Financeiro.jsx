@@ -956,6 +956,7 @@ function RentabilidadeTab({ rent }) {
                 <th className="text-right py-2 px-3">Faturação Expectável</th>
                 <th className="text-right py-2 px-3">Faturação Real</th>
                 <th className="text-right py-2 px-3">Capital Investido</th>
+                <th className="text-right py-2 px-3">ROI</th>
               </tr>
             </thead>
             <tbody>
@@ -966,6 +967,9 @@ function RentabilidadeTab({ rent }) {
                   <td className="py-2 px-3 text-right font-mono text-indigo-600 font-semibold">{EUR(inv.lucroEst)}</td>
                   <td className="py-2 px-3 text-right font-mono text-green-600">{inv.lucroReal > 0 ? EUR(inv.lucroReal) : '—'}</td>
                   <td className="py-2 px-3 text-right font-mono text-gray-600">{inv.capitalInvestido > 0 ? EUR(inv.capitalInvestido) : '—'}</td>
+                  <td className="py-2 px-3 text-right font-mono text-gray-600">
+                    {(inv.roiReal ?? inv.roiEst) != null ? `${(inv.roiReal ?? inv.roiEst).toFixed(1)}%` : '—'}
+                  </td>
                 </tr>
               ))}
             </tbody>

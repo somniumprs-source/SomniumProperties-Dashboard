@@ -162,7 +162,6 @@ export function Alertas() {
               { key: 'score-investidores',   label: 'Scoring Investidores',     desc: 'Classifica A/B/C/D automaticamente' },
               { key: 'score-consultores',    label: 'Scoring Consultores',      desc: 'Classifica A/B/C/D automaticamente' },
               { key: 'score-prioridade-consultores', label: 'Score Prioridade',  desc: 'Calcula score 0-100 (qualidade + volume + velocidade)' },
-              { key: 'calc-roi',             label: 'Calcular ROI',             desc: 'Atualiza ROI nos im\u00f3veis' },
               { key: 'auto-dates',           label: 'Auto-Datas',              desc: 'Preenche datas em falta' },
               { key: 'pipeline-to-faturacao', label: 'Pipeline \u2192 Fatura\u00e7\u00e3o', desc: 'Cria neg\u00f3cios de im\u00f3veis avan\u00e7ados' },
             ].map(auto => (

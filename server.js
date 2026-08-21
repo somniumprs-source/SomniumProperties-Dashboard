@@ -1660,6 +1660,8 @@ app.get('/api/financeiro/rentabilidade', endpointCache(300000), async (req, res)
       nome, count: v.count,
       lucroEst: round2(v.lucroEst), lucroReal: round2(v.lucroReal),
       capitalInvestido: round2(v.capitalInvestido),
+      roiEst: v.capitalInvestido > 0 ? round2(v.lucroEst / v.capitalInvestido * 100) : null,
+      roiReal: v.capitalInvestido > 0 ? round2(v.lucroReal / v.capitalInvestido * 100) : null,
     })).sort((a, b) => b.lucroEst - a.lucroEst)
 
     // Ciclo médio (dias de data_adicionado → data_proposta_aceite)
@@ -3247,8 +3249,8 @@ app.get('/api/metricas', async (req, res) => {
     }
     const velocidadeCicloCompleto = avg(ciclosCompletos)
 
-    // ROE (lucro real / capital investido pelos parceiros)
-    const roe = capitalCaptado > 0 ? round2(lucroEntregue / capitalCaptado * 100) : null
+    // "ROE" removido — era a mesma fórmula de roiEntregue (lucro real / capital
+    // captado), duplicada com nome diferente. Ver pipeline3.roiEntregue.
 
     // Deals simultâneos em execução
     const dealsSilmultaneos = negocios.filter(n => n.fase !== 'Vendido').length
@@ -4245,7 +4247,6 @@ app.get('/api/metricas', async (req, res) => {
         ratioDealFlowCapital,
         pctDealsCapitalPassivo,
         velocidadeCicloCompleto,
-        roe,
         dealsSilmultaneos,
         cumpreProjeccao,
         margemWholesaling,
@@ -5903,59 +5904,10 @@ app.post('/api/automation/score-consultores', async (req, res) => {
   }
 })
 
-// ── Cálculo automático de ROI em imóveis ──
-app.post('/api/automation/calc-roi', async (req, res) => {
-  try {
-    const imoveis = await getImóveis()
-    const updated = []
-
-    for (const im of imoveis) {
-      if (im.askPrice <= 0) continue
-      const custoTotal = im.askPrice + (im.custoObra || 0)
-      if (custoTotal <= 0) continue
-
-      let roi = null, roiAnualizado = null
-      if (im.valorVendaRemodelado > 0) {
-        // ROI = (VVR - custo total) / custo total * 100
-        roi = round2((im.valorVendaRemodelado - custoTotal) / custoTotal * 100)
-      } else if (im.valorProposta > 0 && im.valorProposta < im.askPrice) {
-        // Wholesaling: spread / ask price * 100
-        roi = round2((im.askPrice - im.valorProposta) / im.askPrice * 100)
-      }
-
-      if (roi === null) continue
-
-      // ROI anualizado: assume 6 meses por deal se não há datas
-      const meses = daysBetween(im.dataAdicionado, im.dataPropostaAceite)
-        ? daysBetween(im.dataAdicionado, im.dataPropostaAceite) / 30
-        : 6
-      roiAnualizado = meses > 0 ? round2(roi * (12 / meses)) : roi
-
-      const needsUpdate = Math.abs((im.roi || 0) - roi) > 0.1 || Math.abs((im.roiAnualizado || 0) - roiAnualizado) > 0.1
-      if (needsUpdate) {
-        try {
-          await notion.pages.update({
-            page_id: im.id,
-            properties: {
-              'ROI': { number: roi },
-              'ROI Anualizado': { number: roiAnualizado },
-            },
-          })
-          updated.push({ nome: im.nome, roi, roiAnualizado })
-        } catch (e) {
-          console.error(`[calc-roi] Erro ao atualizar ${im.nome}:`, e.message)
-        }
-      }
-    }
-
-    cache.delete('imo')
-    cache.invalidate('dash:')
-    res.json({ ok: true, atualizados: updated.length, detalhes: updated })
-  } catch (err) {
-    console.error('[calc-roi]', err.message)
-    res.status(500).json({ error: err.message })
-  }
-})
+// automation/calc-roi removido — usava uma fórmula naive diferente da
+// calculadora e tentava gravar no Notion com IDs do Postgres (falhava sempre,
+// silenciosamente). O ROI apresentado é sempre o da análise activa
+// (ver /api/sync-derivados e propagarParaImovel em analiseRoutes.js).
 
 // ── Auto-preenchimento de datas ──
 app.post('/api/automation/auto-dates', async (req, res) => {
@@ -6105,7 +6057,7 @@ app.post('/api/automation/run-all', async (req, res) => {
     const base = 'http://localhost:3001'
     const results = {}
 
-    const endpoints = ['auto-dates', 'score-investidores', 'score-consultores', 'calc-roi', 'pipeline-to-faturacao']
+    const endpoints = ['auto-dates', 'score-investidores', 'score-consultores', 'pipeline-to-faturacao']
     for (const ep of endpoints) {
       try {
         const r = await fetch(`${base}/api/automation/${ep}`, { method: 'POST' })

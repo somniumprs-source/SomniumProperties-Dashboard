@@ -121,9 +121,9 @@ async function exportComercial() {
   styleHeader(sc.getRow(1))
   for (const r of consultores) {
     sc.addRow({
-      nome: fmt(r.nome), estatuto: fmt(r.estatuto), zona_actuacao: fmt(r.zona_actuacao),
+      nome: fmt(r.nome), estatuto: fmt(r.estatuto), zona_actuacao: fmt(r.zonas),
       contacto: fmt(r.contacto), email: fmt(r.email),
-      pontuacao: r.pontuacao ? Number(r.pontuacao) : '',
+      pontuacao: r.score_prioridade ? Number(r.score_prioridade) : '',
       data_follow_up: fmtDate(r.data_follow_up),
     })
   }

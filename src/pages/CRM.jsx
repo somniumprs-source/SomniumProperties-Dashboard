@@ -1845,7 +1845,6 @@ const FIELD_DEFS = {
     // — Pipeline & Negócio —
     { key: 'modelo_negocio', label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix & Flip','CAEP','Mediação'] },
     { key: 'check_qualidade', label: 'Check Qualidade', type: 'checkbox' },
-    { key: 'check_ouro', label: 'Check Ouro (3 critérios)', type: 'checkbox' },
     { key: 'motivo_descarte', label: 'Motivo Descarte', type: 'select', options: ['Preço elevado','Produto final não vendável','Sem interesse do investidor','Zona fraca','ROI insuficiente','Já vendido','Outro'] },
     { key: 'data_adicionado', label: 'Data Adicionado', type: 'date' },
     { key: 'data_chamada', label: 'Data Chamada', type: 'date' },

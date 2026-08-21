@@ -33,6 +33,10 @@ import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
 import { removeFromStorage, supabase, uploadPublic, uploadPrivate } from "../_shared/storage.ts";
 import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { isWholesaling } from "../_shared/modelos.ts";
+
+// 'Resposta' foi renomeado para 'Recebido' numa migração antiga (ver pg.ts);
+// dados anteriores à migração ainda usam 'Resposta' — aceitar os dois.
+const isDirecaoResposta = (direcao: string) => direcao === "Recebido" || direcao === "Resposta";
 import { syncAllFromNotion, syncFromNotion, syncToNotion } from "../_shared/sync.ts";
 import {
   createImovelFolder, isConfigured as driveConfigured, listImovelFiles,
@@ -1589,6 +1593,8 @@ async function ensureGravacoesTable() {
     ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS registo_confirmado_por TEXT;
     ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cc_resultado TEXT;
     ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cc_aceita_negociar TEXT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cc_disponibilidade TEXT;
+    ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS cc_documentacao TEXT;
     ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_score_objetivo SMALLINT;
     ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_score_motivo_real SMALLINT;
     ALTER TABLE consultor_gravacoes ADD COLUMN IF NOT EXISTS dc_score_dor_desafio SMALLINT;
@@ -1623,11 +1629,13 @@ async function ensureGravacoesTable() {
 // via 'Aceitar sugestao', o confirma).
 const CC_RESULTADOS = ["atendeu", "nao_atendeu", "recusou", "numero_errado"];
 const SIM_NAO_NP = ["sim", "nao", "nao_perguntado"];
+const CC_DISPONIBILIDADE = ["sim", "nao_vendido_reservado"];
+const CC_DOCUMENTACAO = ["enviada_na_hora", "prometida_com_prazo", "nao_pedida"];
 const CL_RESULTADOS = ["aceite", "recusa_definitiva", "vou_pensar_com_data", "vou_pensar_sem_data"];
 const DC_SCORE_FIELDS = ["dc_score_objetivo", "dc_score_motivo_real", "dc_score_dor_desafio", "dc_score_impacto", "dc_score_urgencia", "dc_score_tentativas_anteriores"];
 const DC_NOTAS_FIELDS = ["dc_notas_objetivo", "dc_notas_motivo_real", "dc_notas_dor_desafio", "dc_notas_impacto", "dc_notas_urgencia", "dc_notas_tentativas_anteriores"];
 const REGISTO_MANUAL_KEYS = [
-  "cc_resultado", "cc_aceita_negociar", ...DC_SCORE_FIELDS, ...DC_NOTAS_FIELDS,
+  "cc_disponibilidade", "cc_documentacao", "cc_resultado", "cc_aceita_negociar", ...DC_SCORE_FIELDS, ...DC_NOTAS_FIELDS,
   "dc_onus_verificado", "dc_direito_preferencia_esclarecido",
   "cl_resultado", "cl_valor_ancora", "cl_valor_contraproposta", "cl_deadline", "cl_formalizado_escrito_mesmo_dia",
   "pp_compromisso_confirmado", "pp_criterios_pesquisa_enviados", "pp_negocios_fechados",
@@ -1671,6 +1679,8 @@ function sanitizeRegistoManual(input: Record<string, any>, current: Record<strin
 
   out.cc_resultado = CC_RESULTADOS.includes(pick("cc_resultado")) ? pick("cc_resultado") : null;
   out.cc_aceita_negociar = SIM_NAO_NP.includes(pick("cc_aceita_negociar")) ? pick("cc_aceita_negociar") : null;
+  out.cc_disponibilidade = CC_DISPONIBILIDADE.includes(pick("cc_disponibilidade")) ? pick("cc_disponibilidade") : null;
+  out.cc_documentacao = CC_DOCUMENTACAO.includes(pick("cc_documentacao")) ? pick("cc_documentacao") : null;
 
   for (const f of DC_SCORE_FIELDS) out[f] = clampScore(pick(f));
   for (const f of DC_NOTAS_FIELDS) out[f] = String(pick(f) ?? "").trim() || null;
@@ -1818,7 +1828,7 @@ app.post("/consultores/:id/gravacoes", async (c: any) => {
       `INSERT INTO consultor_gravacoes
         (id, consultor_id, followup_id, imovel_id, titulo, data_chamada, ficheiro_path, ficheiro_nome, estado,
          tipo_chamada, registo_fonte, registo_confirmado_em, registo_confirmado_por,
-         cc_resultado, cc_aceita_negociar,
+         cc_disponibilidade, cc_documentacao, cc_resultado, cc_aceita_negociar,
          dc_score_objetivo, dc_score_motivo_real, dc_score_dor_desafio, dc_score_impacto, dc_score_urgencia, dc_score_tentativas_anteriores,
          dc_notas_objetivo, dc_notas_motivo_real, dc_notas_dor_desafio, dc_notas_impacto, dc_notas_urgencia, dc_notas_tentativas_anteriores,
          dc_pontuacao_total, dc_onus_verificado, dc_direito_preferencia_esclarecido,
@@ -1827,17 +1837,17 @@ app.post("/consultores/:id/gravacoes", async (c: any) => {
          created_at, updated_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,
          $10,$11,$12,$13,
-         $14,$15,
-         $16,$17,$18,$19,$20,$21,
-         $22,$23,$24,$25,$26,$27,
-         $28,$29,$30,
-         $31,$32,$33,$34,$35,
-         $36,$37,$38,
-         $39,$39)
+         $14,$15,$16,$17,
+         $18,$19,$20,$21,$22,$23,
+         $24,$25,$26,$27,$28,$29,
+         $30,$31,$32,
+         $33,$34,$35,$36,$37,
+         $38,$39,$40,
+         $41,$41)
        RETURNING *`,
       [id, consultorId, followupId, imovelId, titulo, dataChamada, storagePath, file?.name || null, estado,
        registo.tipo_chamada, "manual", registo.tipo_chamada ? now : null, registo.tipo_chamada ? registoConfirmadoPor : null,
-       registo.cc_resultado, registo.cc_aceita_negociar,
+       registo.cc_disponibilidade, registo.cc_documentacao, registo.cc_resultado, registo.cc_aceita_negociar,
        registo.dc_score_objetivo, registo.dc_score_motivo_real, registo.dc_score_dor_desafio, registo.dc_score_impacto, registo.dc_score_urgencia, registo.dc_score_tentativas_anteriores,
        registo.dc_notas_objetivo, registo.dc_notas_motivo_real, registo.dc_notas_dor_desafio, registo.dc_notas_impacto, registo.dc_notas_urgencia, registo.dc_notas_tentativas_anteriores,
        registo.dc_pontuacao_total, registo.dc_onus_verificado, registo.dc_direito_preferencia_esclarecido,
@@ -1870,16 +1880,16 @@ app.patch("/gravacoes/:id/registo", async (c: any) => {
     const { rows: [row] } = await pool.query(
       `UPDATE consultor_gravacoes SET
         tipo_chamada = $2, registo_fonte = $3, registo_confirmado_em = $4, registo_confirmado_por = $5,
-        cc_resultado = $6, cc_aceita_negociar = $7,
-        dc_score_objetivo = $8, dc_score_motivo_real = $9, dc_score_dor_desafio = $10, dc_score_impacto = $11, dc_score_urgencia = $12, dc_score_tentativas_anteriores = $13,
-        dc_notas_objetivo = $14, dc_notas_motivo_real = $15, dc_notas_dor_desafio = $16, dc_notas_impacto = $17, dc_notas_urgencia = $18, dc_notas_tentativas_anteriores = $19,
-        dc_pontuacao_total = $20, dc_onus_verificado = $21, dc_direito_preferencia_esclarecido = $22,
-        cl_resultado = $23, cl_valor_ancora = $24, cl_valor_contraproposta = $25, cl_deadline = $26, cl_formalizado_escrito_mesmo_dia = $27,
-        pp_compromisso_confirmado = $28, pp_criterios_pesquisa_enviados = $29, pp_negocios_fechados = $30,
-        updated_at = $31
+        cc_disponibilidade = $6, cc_documentacao = $7, cc_resultado = $8, cc_aceita_negociar = $9,
+        dc_score_objetivo = $10, dc_score_motivo_real = $11, dc_score_dor_desafio = $12, dc_score_impacto = $13, dc_score_urgencia = $14, dc_score_tentativas_anteriores = $15,
+        dc_notas_objetivo = $16, dc_notas_motivo_real = $17, dc_notas_dor_desafio = $18, dc_notas_impacto = $19, dc_notas_urgencia = $20, dc_notas_tentativas_anteriores = $21,
+        dc_pontuacao_total = $22, dc_onus_verificado = $23, dc_direito_preferencia_esclarecido = $24,
+        cl_resultado = $25, cl_valor_ancora = $26, cl_valor_contraproposta = $27, cl_deadline = $28, cl_formalizado_escrito_mesmo_dia = $29,
+        pp_compromisso_confirmado = $30, pp_criterios_pesquisa_enviados = $31, pp_negocios_fechados = $32,
+        updated_at = $33
        WHERE id = $1 RETURNING *`,
       [id, registo.tipo_chamada, registoFonte, now, body?.registo_confirmado_por || null,
-       registo.cc_resultado, registo.cc_aceita_negociar,
+       registo.cc_disponibilidade, registo.cc_documentacao, registo.cc_resultado, registo.cc_aceita_negociar,
        registo.dc_score_objetivo, registo.dc_score_motivo_real, registo.dc_score_dor_desafio, registo.dc_score_impacto, registo.dc_score_urgencia, registo.dc_score_tentativas_anteriores,
        registo.dc_notas_objetivo, registo.dc_notas_motivo_real, registo.dc_notas_dor_desafio, registo.dc_notas_impacto, registo.dc_notas_urgencia, registo.dc_notas_tentativas_anteriores,
        registo.dc_pontuacao_total, registo.dc_onus_verificado, registo.dc_direito_preferencia_esclarecido,
@@ -3003,7 +3013,7 @@ app.get("/consultores/:id/full", async (c: any) => {
   try {
     const { rows: [cons] } = await pool.query("SELECT * FROM consultores WHERE id = $1", [c.req.param("id")]);
     if (!cons) return c.json({ error: "Não encontrado" }, 404);
-    const { rows: imoveis } = await pool.query("SELECT id, nome, estado, tipologia, ask_price, zona, tipo_oportunidade, check_qualidade, check_ouro, data_adicionado FROM imoveis WHERE nome_consultor ILIKE $1", [`%${cons.nome}%`]);
+    const { rows: imoveis } = await pool.query("SELECT id, nome, estado, tipologia, ask_price, zona, tipo_oportunidade, check_qualidade, data_adicionado FROM imoveis WHERE nome_consultor ILIKE $1", [`%${cons.nome}%`]);
     const { rows: negocios } = await pool.query("SELECT * FROM negocios WHERE consultor_ids LIKE $1", [`%${cons.notion_id ?? cons.id}%`]);
     const { rows: tarefas } = await pool.query("SELECT * FROM tarefas WHERE tarefa ILIKE $1 ORDER BY created_at DESC", [`%${cons.nome}%`]);
     const { rows: timeline } = await pool.query("SELECT * FROM audit_log WHERE registo_id = $1 ORDER BY created_at DESC LIMIT 20", [cons.id]);
@@ -3022,7 +3032,7 @@ app.get("/consultores/:id/full", async (c: any) => {
     const tempos: number[] = [];
     for (let i = 0; i < sortedInteracoes.length; i++) {
       if (sortedInteracoes[i].direcao === "Enviado") {
-        const resposta = sortedInteracoes.slice(i + 1).find((x: any) => x.direcao === "Resposta");
+        const resposta = sortedInteracoes.slice(i + 1).find((x: any) => isDirecaoResposta(x.direcao));
         if (resposta) {
           const horas = (new Date(resposta.data_hora).getTime() - new Date(sortedInteracoes[i].data_hora).getTime()) / 3600000;
           if (horas >= 0) tempos.push(horas);
@@ -3478,37 +3488,15 @@ app.post("/automation/score-consultores", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// port de routes.js 2319-2342
-app.post("/automation/calc-roi", async (c: any) => {
-  try {
-    const { rows } = await pool.query("SELECT * FROM imoveis WHERE ask_price > 0");
-    const updated: any[] = [];
-    for (const im of rows) {
-      const custoTotal = im.ask_price + (im.custo_estimado_obra || 0);
-      if (custoTotal <= 0) continue;
-      let roi: number | null = null;
-      if (im.valor_venda_remodelado > 0) {
-        roi = Math.round((im.valor_venda_remodelado - custoTotal) / custoTotal * 10000) / 100;
-      } else if (im.valor_proposta > 0 && im.valor_proposta < im.ask_price) {
-        roi = Math.round((im.ask_price - im.valor_proposta) / im.ask_price * 10000) / 100;
-      }
-      if (roi === null) continue;
-      const roiAnualizado = Math.round(roi * 2 * 100) / 100;
-      if (Math.abs((im.roi || 0) - roi) > 0.1) {
-        await pool.query("UPDATE imoveis SET roi = $1, roi_anualizado = $2, updated_at = $3 WHERE id = $4",
-          [roi, roiAnualizado, new Date().toISOString(), im.id]);
-        updated.push({ nome: im.nome, roi, roiAnualizado });
-      }
-    }
-    return c.json({ ok: true, atualizados: updated.length, detalhes: updated });
-  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
-});
+// automation/calc-roi removido — usava uma fórmula naive diferente da
+// calculadora. O ROI apresentado é sempre o da análise activa
+// (ver /sync-derivados e propagarParaImovel em analiseRoutes.ts).
 
 // port de routes.js 2344-2461
 app.post("/automation/score-prioridade-consultores", async (c: any) => {
   try {
     const { rows: consultores } = await pool.query("SELECT * FROM consultores");
-    const { rows: imoveis } = await pool.query("SELECT nome_consultor, estado, check_qualidade, check_ouro FROM imoveis WHERE nome_consultor IS NOT NULL");
+    const { rows: imoveis } = await pool.query("SELECT nome_consultor, estado, check_qualidade FROM imoveis WHERE nome_consultor IS NOT NULL");
     const { rows: interacoes } = await pool.query("SELECT consultor_id, data_hora, direcao FROM consultor_interacoes ORDER BY data_hora ASC");
     const now = Date.now();
 
@@ -3565,7 +3553,7 @@ app.post("/automation/score-prioridade-consultores", async (c: any) => {
       const tempos: number[] = [];
       for (let i = 0; i < minhasInteracoes.length; i++) {
         if (minhasInteracoes[i].direcao === "Enviado") {
-          const resp = minhasInteracoes.slice(i + 1).find((x: any) => x.direcao === "Resposta");
+          const resp = minhasInteracoes.slice(i + 1).find((x: any) => isDirecaoResposta(x.direcao));
           if (resp) {
             const horas = (new Date(resp.data_hora).getTime() - new Date(minhasInteracoes[i].data_hora).getTime()) / 3600000;
             if (horas >= 0) tempos.push(horas);
@@ -3980,7 +3968,7 @@ app.get("/relatorio/consultores", async (c: any) => {
       const tempos: number[] = [];
       for (let i = 0; i < minhasInt.length; i++) {
         if (minhasInt[i].direcao === "Enviado") {
-          const resp = minhasInt.slice(i + 1).find((x: any) => x.direcao === "Resposta");
+          const resp = minhasInt.slice(i + 1).find((x: any) => isDirecaoResposta(x.direcao));
           if (resp) { const h = (new Date(resp.data_hora).getTime() - new Date(minhasInt[i].data_hora).getTime()) / 3600000; if (h >= 0) tempos.push(h); }
         }
       }
@@ -4034,7 +4022,7 @@ app.get("/relatorio/consultores", async (c: any) => {
 app.post("/automation/run-all", async (c: any) => {
   try {
     const results: Record<string, any> = {};
-    for (const ep of ["score-investidores", "score-consultores", "score-prioridade-consultores", "calc-roi"]) {
+    for (const ep of ["score-investidores", "score-consultores", "score-prioridade-consultores"]) {
       try {
         const r = await app.request(`/crm/automation/${ep}`, { method: "POST" });
         results[ep] = await r.json();

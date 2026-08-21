@@ -588,6 +588,8 @@ app.get("/financeiro/rentabilidade", async (c: any) => {
       lucroEst: round2(v.lucroEst),
       lucroReal: round2(v.lucroReal),
       capitalInvestido: round2(v.capitalInvestido),
+      roiEst: v.capitalInvestido > 0 ? round2(v.lucroEst / v.capitalInvestido * 100) : null,
+      roiReal: v.capitalInvestido > 0 ? round2(v.lucroReal / v.capitalInvestido * 100) : null,
     })).sort((a, b) => b.lucroEst - a.lucroEst);
 
     // Ciclo médio (dias de data_adicionado → data_proposta_aceite)
@@ -1976,7 +1978,7 @@ app.get("/metricas", async (c: any) => {
     }
     const velocidadeCicloCompleto = avg(ciclosCompletos);
 
-    const roe = capitalCaptado > 0 ? round2(lucroEntregue / capitalCaptado * 100) : null;
+    // "ROE" removido — era a mesma fórmula de roiEntregue, duplicada com nome diferente.
 
     const dealsSilmultaneos = negocios.filter((n) => n.fase !== "Vendido").length;
 
@@ -2894,7 +2896,6 @@ app.get("/metricas", async (c: any) => {
         ratioDealFlowCapital,
         pctDealsCapitalPassivo,
         velocidadeCicloCompleto,
-        roe,
         dealsSilmultaneos,
         cumpreProjeccao,
         margemWholesaling,

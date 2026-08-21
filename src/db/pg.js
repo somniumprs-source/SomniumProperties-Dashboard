@@ -449,7 +449,8 @@ export async function initSchema() {
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS tipo_oportunidade TEXT;
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS tipo_operacao TEXT;
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS check_qualidade BOOLEAN DEFAULT false;
-        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS check_ouro BOOLEAN DEFAULT false;
+        -- check_ouro removida (migração 0030_drop_check_ouro.sql) — sem
+        -- critérios definidos em código, sem uso a jusante.
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS fotos TEXT DEFAULT '[]';
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS fee_cedencia REAL;
         ALTER TABLE analises ADD COLUMN IF NOT EXISTS fee_cedencia REAL;
