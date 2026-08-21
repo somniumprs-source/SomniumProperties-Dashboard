@@ -1854,7 +1854,7 @@ const FIELD_DEFS = {
     { key: 'freguesia', label: 'Freguesia', type: 'combobox_freguesias' },
     // — Caracterização Física —
     { key: 'tipologia', label: 'Tipologia (T1, T2, T3…)', type: 'text', quick: true },
-    { key: 'predio_tipo', label: 'Tipo de Prédio', type: 'select', options: ['Apartamento','Edifício multifamiliar','Moradia','Terreno','Prédio para reabilitação','Outro'] },
+    { key: 'predio_tipo', label: 'Tipo de Prédio', type: 'select', options: ['Apartamento','Edifício multifamiliar','Moradia','Terreno','Prédio para reabilitação','Outro'], quick: true },
     { key: 'area_util', label: 'Área Útil (m²)', type: 'number' },
     { key: 'area_bruta', label: 'ABP — Área Bruta Privativa (m²)', type: 'number' },
     { key: 'area_bruta_dependente', label: 'ABD — Área Bruta Dependente (m²)', type: 'number' },
