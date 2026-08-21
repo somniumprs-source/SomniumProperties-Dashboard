@@ -33,12 +33,13 @@ const ROLES_EQUIPA = ['admin', 'comercial', 'financeiro', 'operacoes']
 const GAP_MAX_CADEIA_MIN = 60 // Pesquisa -> Cold Call: no máximo 1h de intervalo
 const PRAZO_ESTUDO_MERCADO_DIAS = 2 // 48h após a Cold Call
 
-// Datas de "próxima acção" já preenchidas ANTES desta data de corte
-// (ex: 128 follow-ups de consultores acumulados ao longo de meses no
-// sistema antigo) não geram tarefa — só contam a partir daqui, quando o
-// campo é preenchido/reescrito de novo (updated_at avança). Decisão do
-// utilizador em 21/08/2026: evitar inundar a agenda com histórico morto.
-const DATA_CORTE_ORIGEM = '2026-08-21T21:41:15.000Z'
+// Nada de histórico anterior a esta data participa na geração automática
+// — nem datas de "próxima acção" já preenchidas (follow-ups), nem
+// imóveis já existentes (cadeia de angariação/Estudo de Mercado). Decisão
+// do utilizador em 21/08/2026: o histórico acumulado ao longo de meses no
+// sistema antigo inundava a Agenda de tarefas sem responsável. Só o que
+// for criado/reescrito a partir daqui entra.
+const DATA_CORTE_ORIGEM = '2026-08-21T22:00:00.000Z'
 
 // Campos de "próxima acção" com tarefa ligada automaticamente. `historico`
 // indica se é rastreável em historico_alteracoes (data_visita está na lista
@@ -82,11 +83,15 @@ async function resolverResponsavelPorHistorico(pool, tabela, entidadeId, campo) 
 
 // ── 1. Cadeia de angariação: Pesquisa de Imóveis -> Cold Call ──────
 export async function gerarCadeiasAngariacao(pool) {
+  // Só imóveis adicionados a partir do corte entram na cadeia automática
+  // — imóveis já existentes na base não geram Pesquisa/Cold Call
+  // retroactivamente (presume-se que já foram accionados na prática).
   const { rows: imoveis } = await pool.query(
     `SELECT id, nome FROM imoveis i
-     WHERE NOT EXISTS (
+     WHERE i.created_at >= $1 AND NOT EXISTS (
        SELECT 1 FROM tarefas t WHERE t.origem_tipo = 'imovel' AND t.origem_id = i.id AND t.origem_campo = 'cadeia_pesquisa'
-     )`
+     )`,
+    [DATA_CORTE_ORIGEM]
   )
   let criadas = 0
   for (const im of imoveis) {
@@ -111,10 +116,11 @@ export async function gerarCadeiasAngariacao(pool) {
 export async function gerarEstudoDeMercado(pool) {
   const { rows: imoveis } = await pool.query(
     `SELECT id, nome, data_chamada, created_at FROM imoveis i
-     WHERE estado = 'Estudo de VVR'
+     WHERE estado = 'Estudo de VVR' AND i.created_at >= $1
        AND NOT EXISTS (
          SELECT 1 FROM tarefas t WHERE t.origem_tipo = 'imovel' AND t.origem_id = i.id AND t.origem_campo = 'estudo_mercado_vvr'
-       )`
+       )`,
+    [DATA_CORTE_ORIGEM]
   )
   let criadas = 0
   for (const im of imoveis) {

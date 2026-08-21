@@ -7,9 +7,9 @@ import pool from "./pg.ts";
 const ROLES_EQUIPA = ["admin", "comercial", "financeiro", "operacoes"];
 const GAP_MAX_CADEIA_MIN = 60;
 const PRAZO_ESTUDO_MERCADO_DIAS = 2;
-// Datas de "próxima acção" já preenchidas ANTES desta data de corte não
-// geram tarefa — só contam a partir daqui (ver agendaEngine.js).
-const DATA_CORTE_ORIGEM = "2026-08-21T21:41:15.000Z";
+// Nada de histórico anterior a esta data participa na geração automática
+// (ver agendaEngine.js para o racional completo).
+const DATA_CORTE_ORIGEM = "2026-08-21T22:00:00.000Z";
 
 const ORIGEM_CAMPOS = [
   { tabela: "consultores", campo: "data_proximo_follow_up", origemTipo: "consultor", categoria: "Follow Up Consultores", duracaoHoras: 0.5, tituloPrefix: "Follow-up", historico: false },
@@ -46,9 +46,10 @@ async function resolverResponsavelPorHistorico(tabela: string, entidadeId: strin
 export async function gerarCadeiasAngariacao() {
   const { rows: imoveis } = await pool.query(
     `SELECT id, nome FROM imoveis i
-     WHERE NOT EXISTS (
+     WHERE i.created_at >= $1 AND NOT EXISTS (
        SELECT 1 FROM tarefas t WHERE t.origem_tipo = 'imovel' AND t.origem_id = i.id AND t.origem_campo = 'cadeia_pesquisa'
      )`,
+    [DATA_CORTE_ORIGEM],
   );
   let criadas = 0;
   for (const im of imoveis) {
@@ -72,10 +73,11 @@ export async function gerarCadeiasAngariacao() {
 export async function gerarEstudoDeMercado() {
   const { rows: imoveis } = await pool.query(
     `SELECT id, nome, data_chamada, created_at FROM imoveis i
-     WHERE estado = 'Estudo de VVR'
+     WHERE estado = 'Estudo de VVR' AND i.created_at >= $1
        AND NOT EXISTS (
          SELECT 1 FROM tarefas t WHERE t.origem_tipo = 'imovel' AND t.origem_id = i.id AND t.origem_campo = 'estudo_mercado_vvr'
        )`,
+    [DATA_CORTE_ORIGEM],
   );
   let criadas = 0;
   for (const im of imoveis) {
