@@ -229,7 +229,7 @@ function DisponibilidadeTab({ users }) {
       {!userId ? (
         <EmptyState icon={Calendar} title="Sem utilizadores" description="Não há utilizadores activos para atribuir disponibilidade." />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+        <div className="grid grid-cols-2 gap-3 max-w-xl">
           {dias.map((d, i) => (
             <DiaColuna
               key={i}
