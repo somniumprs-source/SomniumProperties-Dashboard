@@ -43,7 +43,7 @@ const CATEGORIAS_COM_REGIAO = new Set([
 const TABS = [
   { id: 'resumo',     label: 'Visão Geral' },
   { id: 'tarefas',    label: 'Tarefas' },
-  { id: 'calendario', label: 'Calendário' },
+  { id: 'calendario', label: 'Calendário da Equipa' },
   { id: 'horas',      label: 'Horas & Custo' },
   { id: 'categorias', label: 'Atividades' },
   { id: 'equipa',     label: 'Equipa' },
