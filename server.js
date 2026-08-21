@@ -163,6 +163,8 @@ try {
   app.use('/api/crm', regiaoRoutes)
   const { default: sopRoutes } = await import('./src/db/sopRoutes.js')
   app.use('/api/sops', sopRoutes)
+  const { default: agendaRoutes } = await import('./src/db/agendaRoutes.js')
+  app.use('/api/agenda', agendaRoutes)
   const { default: auditoriaRoutes } = await import('./src/db/auditoriaRoutes.js')
   // Montado em /api/crm/auditoria para o resolveApiUrl mapear directamente para
   // a edge function "crm" em producao (ver src/lib/apiUrl.js).

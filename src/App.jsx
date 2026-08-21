@@ -28,6 +28,7 @@ const AdministracaoSOP = lazy(() => import('./pages/AdministracaoSOP.jsx').then(
 const AdministracaoMultiRegiao = lazy(() => import('./pages/AdministracaoMultiRegiao.jsx').then(m => ({ default: m.AdministracaoMultiRegiao })))
 const AdministracaoChamadas = lazy(() => import('./pages/AdministracaoChamadas.jsx').then(m => ({ default: m.AdministracaoChamadas })))
 const Marketing = lazy(() => import('./pages/Marketing.jsx').then(m => ({ default: m.Marketing })))
+const Agenda = lazy(() => import('./pages/Agenda.jsx').then(m => ({ default: m.Agenda })))
 
 function PageFallback() {
   return (
@@ -78,6 +79,7 @@ function AppRoutes() {
             <Route path="/projectos/:id" element={<ErrorBoundary><ProjectoDetalhe /></ErrorBoundary>} />
             <Route path="/financeiro" element={<ErrorBoundary><Financeiro /></ErrorBoundary>} />
             <Route path="/operacoes" element={<ErrorBoundary><Operacoes /></ErrorBoundary>} />
+            <Route path="/agenda" element={<ErrorBoundary><Agenda /></ErrorBoundary>} />
             <Route path="/marketing" element={<ErrorBoundary><Marketing /></ErrorBoundary>} />
             <Route path="/metricas" element={<ErrorBoundary><Metricas /></ErrorBoundary>} />
             <Route path="/alertas" element={<ErrorBoundary><Alertas /></ErrorBoundary>} />

@@ -1,6 +1,6 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
-import { LayoutDashboard, TrendingUp, Database, Bell, Clock, BarChart3, Menu, X, LogOut, Briefcase, Shield, ScrollText, History, UserCheck, ChevronDown, FileText, BookOpen, Map, Megaphone, Phone } from 'lucide-react'
+import { LayoutDashboard, TrendingUp, Database, Bell, Clock, BarChart3, Menu, X, LogOut, Briefcase, Shield, ScrollText, History, UserCheck, ChevronDown, FileText, BookOpen, Map, Megaphone, Phone, CalendarClock } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { apiFetch } from '../../lib/api.js'
 import { prefetchRoute } from '../../lib/prefetch.js'
@@ -26,6 +26,7 @@ const nav = [
     label: 'Operações', Icon: Clock, area: 'operacoes',
     children: [
       { to: '/operacoes', label: 'Operações', Icon: Clock, badgeKey: 'tarefas', area: 'operacoes', end: true },
+      { to: '/agenda',    label: 'Agenda',    Icon: CalendarClock, area: 'operacoes' },
       { to: '/projectos', label: 'Projectos', Icon: Briefcase, area: 'projectos' },
     ],
   },

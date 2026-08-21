@@ -10,7 +10,7 @@
 export const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 // Segmentos cujo nome JA E o nome da funcao (path passa tal e qual).
-const SELF = new Set(["crm", "users", "sops", "calendar", "voice", "scrape-portal"]);
+const SELF = new Set(["crm", "users", "sops", "calendar", "voice", "scrape-portal", "agenda"]);
 // Segmentos absorvidos pela funcao "dashboard".
 const DASH = new Set([
   "kpis", "financeiro", "comercial", "marketing", "operacoes",

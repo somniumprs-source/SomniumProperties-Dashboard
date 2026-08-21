@@ -801,6 +801,58 @@ export async function initSchema() {
       CREATE INDEX IF NOT EXISTS idx_acessos_user ON acessos(user_id);
       CREATE INDEX IF NOT EXISTS idx_acessos_entidade ON acessos(entidade, entidade_id);
 
+      -- Sistema de Agenda: disponibilidade manual semana-a-semana + catálogo
+      -- de tarefas recorrentes + agendamentos propostos/confirmados (ver
+      -- migration 0037_agenda_disponibilidade_catalogo.sql).
+      CREATE TABLE IF NOT EXISTS disponibilidade_blocos (
+        id           TEXT PRIMARY KEY,
+        user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        data         TEXT NOT NULL,
+        hora_inicio  TEXT NOT NULL,
+        hora_fim     TEXT NOT NULL,
+        created_at   TEXT DEFAULT (NOW()::TEXT),
+        updated_at   TEXT DEFAULT (NOW()::TEXT)
+      );
+      CREATE INDEX IF NOT EXISTS idx_disponibilidade_user_data ON disponibilidade_blocos(user_id, data);
+
+      CREATE TABLE IF NOT EXISTS tarefas_templates (
+        id                          TEXT PRIMARY KEY,
+        titulo                      TEXT NOT NULL,
+        categoria                   TEXT,
+        duracao_estimada_horas      REAL NOT NULL DEFAULT 1,
+        frequencia                  TEXT NOT NULL DEFAULT 'semanal',
+        frequencia_intervalo_dias   INT,
+        dias_semana                 TEXT,
+        prioridade                  TEXT NOT NULL DEFAULT 'media',
+        sop_ref                     TEXT,
+        user_id_default             TEXT REFERENCES users(id) ON DELETE SET NULL,
+        regiao                      TEXT,
+        activo                      BOOLEAN NOT NULL DEFAULT true,
+        ultima_instancia_gerada_em  TEXT,
+        created_at                  TEXT DEFAULT (NOW()::TEXT),
+        updated_at                  TEXT DEFAULT (NOW()::TEXT),
+        updated_by                  TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_tarefas_templates_activo ON tarefas_templates(activo);
+
+      CREATE TABLE IF NOT EXISTS agendamentos (
+        id                        TEXT PRIMARY KEY,
+        tarefa_id                 TEXT NOT NULL REFERENCES tarefas(id) ON DELETE CASCADE,
+        user_id                   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        disponibilidade_bloco_id  TEXT REFERENCES disponibilidade_blocos(id) ON DELETE SET NULL,
+        data                       TEXT NOT NULL,
+        hora_inicio                TEXT NOT NULL,
+        hora_fim                   TEXT NOT NULL,
+        estado                     TEXT NOT NULL DEFAULT 'proposto',
+        gerado_em                  TEXT DEFAULT (NOW()::TEXT),
+        confirmado_em              TEXT,
+        confirmado_por             TEXT,
+        created_at                 TEXT DEFAULT (NOW()::TEXT),
+        updated_at                 TEXT DEFAULT (NOW()::TEXT)
+      );
+      CREATE INDEX IF NOT EXISTS idx_agendamentos_tarefa ON agendamentos(tarefa_id);
+      CREATE INDEX IF NOT EXISTS idx_agendamentos_user_data ON agendamentos(user_id, data);
+
       -- Orçamento de obra (1-para-1 com imoveis)
       CREATE TABLE IF NOT EXISTS orcamentos_obra (
         id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1588,6 +1640,18 @@ export async function initSchema() {
       -- KR de OKR com fonte "Manual" (ver migration 0036_okr_krs_valor_manual.sql).
       DO $$ BEGIN
         ALTER TABLE okr_krs ADD COLUMN IF NOT EXISTS valor_manual REAL;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
+      -- Sistema de Agenda: prioridade/prazo/responsável estruturado/origem
+      -- (ver migration 0037_agenda_disponibilidade_catalogo.sql — essa
+      -- migração faz também o backfill de user_id a partir de funcionario,
+      -- aqui só garantimos as colunas).
+      DO $$ BEGIN
+        ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS prioridade  TEXT DEFAULT 'media';
+        ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS data_limite TEXT;
+        ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS user_id     TEXT REFERENCES users(id) ON DELETE SET NULL;
+        ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS template_id TEXT REFERENCES tarefas_templates(id) ON DELETE SET NULL;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
     `)
