@@ -5,8 +5,15 @@
 import { createApp } from "../_shared/hono.ts";
 import { requireAuth } from "../_shared/auth.ts";
 import pool from "../_shared/pg.ts";
+import { gerarCadeiasAngariacao, gerarEstudoDeMercado, gerarTarefasSinteticas, instanciarTemplatesDevidos, gerarProposta } from "../_shared/agendaEngine.ts";
 
 const app = createApp("/agenda");
+
+function addDias(dataISO: string, n: number): string {
+  const d = new Date(dataISO + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
 
 app.use("*", async (c: any, next: any) => {
   if (c.req.path.endsWith("/_health")) return await next();
@@ -155,7 +162,7 @@ app.post("/templates", async (c: any) => {
     const {
       titulo, categoria, duracao_estimada_horas, frequencia,
       frequencia_intervalo_dias, dias_semana, prioridade, sop_ref,
-      user_id_default, regiao, activo,
+      user_id_default, regiao, activo, simultaneo,
     } = body;
     if (!titulo) return c.json({ error: "titulo é obrigatório" }, 400);
     const freq = frequencia || "semanal";
@@ -171,12 +178,12 @@ app.post("/templates", async (c: any) => {
       `INSERT INTO tarefas_templates
          (id, titulo, categoria, duracao_estimada_horas, frequencia,
           frequencia_intervalo_dias, dias_semana, prioridade, sop_ref,
-          user_id_default, regiao, activo, updated_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+          user_id_default, regiao, activo, updated_by, simultaneo)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        RETURNING *`,
       [id, titulo, categoria || null, duracao_estimada_horas || 1, freq,
        frequencia_intervalo_dias || null, dias_semana || null, prio, sop_ref || null,
-       user_id_default || null, regiao || null, activo !== false, userEmail(c)],
+       user_id_default || null, regiao || null, activo !== false, userEmail(c), !!simultaneo],
     );
     return c.json({ template: rows[0] }, 201);
   } catch (e) {
@@ -198,7 +205,7 @@ app.put("/templates/:id", async (c: any) => {
     const campos = [
       "titulo", "categoria", "duracao_estimada_horas", "frequencia",
       "frequencia_intervalo_dias", "dias_semana", "prioridade", "sop_ref",
-      "user_id_default", "regiao", "activo",
+      "user_id_default", "regiao", "activo", "simultaneo",
     ];
     const fields: string[] = [];
     const values: any[] = [];
@@ -231,6 +238,158 @@ app.delete("/templates/:id", async (c: any) => {
     return c.json({ ok: true });
   } catch (e) {
     console.error("[agenda] delete template erro:", e);
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+// ── Motor de agendamento (Fase 2) ────────────────────────────────
+
+// POST /agenda/gerar-semana { semana_inicio }
+app.post("/gerar-semana", async (c: any) => {
+  try {
+    const { semana_inicio } = await c.req.json().catch(() => ({}));
+    if (!semana_inicio) return c.json({ error: "semana_inicio é obrigatório" }, 400);
+    const cadeias = await gerarCadeiasAngariacao();
+    const estudosMercado = await gerarEstudoDeMercado();
+    const sinteticas = await gerarTarefasSinteticas();
+    const instanciadas = await instanciarTemplatesDevidos(semana_inicio);
+    const proposta = await gerarProposta(semana_inicio);
+    return c.json({
+      ok: true,
+      cadeias_angariacao: cadeias,
+      estudos_mercado: estudosMercado,
+      tarefas_sinteticas: sinteticas,
+      templates_instanciados: instanciadas,
+      agendados: proposta.criados.length,
+      nao_agendadas: proposta.naoAgendadas,
+    });
+  } catch (e) {
+    console.error("[agenda] gerar-semana erro:", e);
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+// GET /agenda/proposta?semana_inicio=&user_id=
+app.get("/proposta", async (c: any) => {
+  try {
+    const semana_inicio = c.req.query("semana_inicio");
+    const user_id = c.req.query("user_id");
+    if (!semana_inicio) return c.json({ error: "semana_inicio é obrigatório" }, 400);
+    const semanaFim = addDias(semana_inicio, 6);
+    const params: any[] = [semana_inicio, semanaFim];
+    let where = "a.data >= $1 AND a.data <= $2";
+    if (user_id) { params.push(user_id); where += ` AND a.user_id = $${params.length}`; }
+    const { rows: agendamentos } = await pool.query(
+      `SELECT a.*, t.tarefa, t.categoria, t.prioridade, t.origem_tipo, t.tempo_horas
+       FROM agendamentos a JOIN tarefas t ON t.id = a.tarefa_id
+       WHERE ${where} ORDER BY a.data, a.hora_inicio`,
+      params,
+    );
+    const paramsNao: any[] = [semana_inicio, semanaFim];
+    let whereNao = "t.inicio IS NULL AND t.status != 'Concluída' AND NOT EXISTS (SELECT 1 FROM agendamentos a2 WHERE a2.tarefa_id = t.id AND a2.estado IN ('proposto','confirmado') AND a2.data >= $1 AND a2.data <= $2)";
+    if (user_id) { paramsNao.push(user_id); whereNao += ` AND (t.user_id = $${paramsNao.length} OR t.user_id IS NULL)`; }
+    const { rows: naoAgendadas } = await pool.query(
+      `SELECT t.* FROM tarefas t WHERE ${whereNao}
+       ORDER BY CASE t.prioridade WHEN 'alta' THEN 0 WHEN 'media' THEN 1 ELSE 2 END, t.data_limite NULLS LAST, t.created_at`,
+      paramsNao,
+    );
+    return c.json({ agendamentos, nao_agendadas: naoAgendadas });
+  } catch (e) {
+    console.error("[agenda] proposta erro:", e);
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+// POST /agenda/agendamentos/:id/confirmar
+app.post("/agendamentos/:id/confirmar", async (c: any) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE agendamentos SET estado = 'confirmado', confirmado_em = NOW(), confirmado_por = $1, updated_at = NOW()
+       WHERE id = $2 AND estado = 'proposto' RETURNING *`,
+      [userEmail(c), c.req.param("id")],
+    );
+    if (!rows.length) return c.json({ error: "Agendamento não encontrado ou já processado" }, 404);
+    const ag = rows[0];
+    const { rows: tarefaRows } = await pool.query(
+      `UPDATE tarefas SET inicio = $1, fim = $2, updated_at = NOW() WHERE id = $3 RETURNING origem_tipo, origem_campo, origem_id`,
+      [`${ag.data}T${ag.hora_inicio}:00`, `${ag.data}T${ag.hora_fim}:00`, ag.tarefa_id],
+    );
+    const tarefa = tarefaRows[0];
+    if (tarefa?.origem_tipo === "imovel" && tarefa?.origem_campo === "cadeia_cold_call") {
+      await pool.query(`UPDATE imoveis SET data_chamada = $1 WHERE id = $2`, [ag.data, tarefa.origem_id]);
+    }
+    return c.json({ agendamento: ag });
+  } catch (e) {
+    console.error("[agenda] confirmar erro:", e);
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+// POST /agenda/agendamentos/:id/recusar
+app.post("/agendamentos/:id/recusar", async (c: any) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE agendamentos SET estado = 'recusado', updated_at = NOW() WHERE id = $1 AND estado = 'proposto' RETURNING *`,
+      [c.req.param("id")],
+    );
+    if (!rows.length) return c.json({ error: "Agendamento não encontrado ou já processado" }, 404);
+    return c.json({ agendamento: rows[0] });
+  } catch (e) {
+    console.error("[agenda] recusar erro:", e);
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+// PUT /agenda/agendamentos/:id — reagendar antes de confirmar
+app.put("/agendamentos/:id", async (c: any) => {
+  try {
+    const { data, hora_inicio, hora_fim } = await c.req.json().catch(() => ({}));
+    if (!data || !hora_inicio || !hora_fim) {
+      return c.json({ error: "data, hora_inicio e hora_fim são obrigatórios" }, 400);
+    }
+    if (hora_fim <= hora_inicio) return c.json({ error: "hora_fim tem de ser depois de hora_inicio" }, 400);
+    const { rows } = await pool.query(
+      `UPDATE agendamentos SET data = $1, hora_inicio = $2, hora_fim = $3, updated_at = NOW()
+       WHERE id = $4 AND estado = 'proposto' RETURNING *`,
+      [data, hora_inicio, hora_fim, c.req.param("id")],
+    );
+    if (!rows.length) return c.json({ error: "Agendamento não encontrado ou já confirmado" }, 404);
+    return c.json({ agendamento: rows[0] });
+  } catch (e) {
+    console.error("[agenda] reagendar erro:", e);
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+// POST /agenda/semana/:semanaInicio/confirmar-tudo
+app.post("/semana/:semanaInicio/confirmar-tudo", async (c: any) => {
+  try {
+    const semanaInicio = c.req.param("semanaInicio");
+    const semanaFim = addDias(semanaInicio, 6);
+    const { rows: propostos } = await pool.query(
+      `SELECT * FROM agendamentos WHERE data >= $1 AND data <= $2 AND estado = 'proposto'`,
+      [semanaInicio, semanaFim],
+    );
+    const email = userEmail(c);
+    let confirmados = 0;
+    for (const ag of propostos) {
+      await pool.query(
+        `UPDATE agendamentos SET estado = 'confirmado', confirmado_em = NOW(), confirmado_por = $1, updated_at = NOW() WHERE id = $2`,
+        [email, ag.id],
+      );
+      const { rows: tarefaRows } = await pool.query(
+        `UPDATE tarefas SET inicio = $1, fim = $2, updated_at = NOW() WHERE id = $3 RETURNING origem_tipo, origem_campo, origem_id`,
+        [`${ag.data}T${ag.hora_inicio}:00`, `${ag.data}T${ag.hora_fim}:00`, ag.tarefa_id],
+      );
+      const tarefa = tarefaRows[0];
+      if (tarefa?.origem_tipo === "imovel" && tarefa?.origem_campo === "cadeia_cold_call") {
+        await pool.query(`UPDATE imoveis SET data_chamada = $1 WHERE id = $2`, [ag.data, tarefa.origem_id]);
+      }
+      confirmados++;
+    }
+    return c.json({ ok: true, confirmados });
+  } catch (e) {
+    console.error("[agenda] confirmar-tudo erro:", e);
     return c.json({ error: (e as Error).message }, 500);
   }
 });

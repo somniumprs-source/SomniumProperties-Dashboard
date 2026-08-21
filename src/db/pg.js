@@ -1666,6 +1666,26 @@ export async function initSchema() {
         ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS template_id TEXT REFERENCES tarefas_templates(id) ON DELETE SET NULL;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
+
+      -- Motor de agendamento: origem de tarefas sintéticas geradas a partir
+      -- de consultores/investidores/imóveis (ver migration
+      -- 0039_agenda_motor_origem.sql).
+      DO $$ BEGIN
+        ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS origem_tipo  TEXT;
+        ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS origem_id    TEXT;
+        ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS origem_campo TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+      CREATE INDEX IF NOT EXISTS idx_tarefas_origem ON tarefas(origem_tipo, origem_id, origem_campo);
+
+      -- Tarefas simultâneas (os dois membros da equipa ao mesmo tempo) e
+      -- cadeias com dependência entre tarefas (ver migration
+      -- 0040_agenda_cadeias_simultaneo.sql).
+      DO $$ BEGIN
+        ALTER TABLE tarefas_templates ADD COLUMN IF NOT EXISTS simultaneo BOOLEAN NOT NULL DEFAULT false;
+        ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS simultaneo BOOLEAN NOT NULL DEFAULT false;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
     `)
 
     // Bootstrap: garantir que somniumprs@gmail.com (owner) existe como admin

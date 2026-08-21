@@ -7,7 +7,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   Calendar, Plus, Trash2, ChevronLeft, ChevronRight, Copy, BookOpen,
-  Pencil, Loader2, Sparkles, ListChecks,
+  Pencil, Loader2, Sparkles, ListChecks, Wand2, Check, X, CalendarClock,
+  Inbox,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { PageSkeleton } from '../components/ui/Skeleton.jsx'
@@ -41,17 +42,16 @@ const PRIORIDADE_TONE = { alta: 'red', media: 'yellow', baixa: 'gray' }
 const PRIORIDADE_LABEL = { alta: 'Alta', media: 'Média', baixa: 'Baixa' }
 const DIAS_SEMANA = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 
-// Catálogo inicial recomendado ("tarefas vencedoras") — cruza os OKRs
-// activos de Q2 2026, as categorias já mais usadas na prática e os
-// alertas de negócio existentes (ver plano). Ponto de partida a afinar:
-// frequência e duração devem ser revistas ao pormenor pela equipa.
+// Catálogo de tarefas recorrentes — revisto em 21/08/2026 após a
+// auditoria comercial: Pesquisa de Imóveis, Cold Call, Estudo de Mercado
+// e os follow-ups de consultor/investidor SAÍRAM daqui — passaram a ser
+// gerados automaticamente pelo motor (cadeia de angariação com gap máximo
+// de 1h entre Pesquisa e Cold Call, Estudo de Mercado accionado pelo
+// estado "Estudo de VVR" do imóvel com prazo de 48h, e follow-ups pelas
+// datas que preenches directamente nas fichas — ver Secção 2 do
+// documento de auditoria). O que resta aqui é só o que continua a ser
+// recorrência de calendário pura, sem gatilho de negócio associado.
 const SUGESTOES_CATALOGO = [
-  { titulo: 'Pesquisa de Imóveis', categoria: 'Pesquisa de Imóveis', duracao_estimada_horas: 1, frequencia: 'diaria', dias_semana: '1,2,3,4,5', prioridade: 'alta', sop_ref: 'SOP 1' },
-  { titulo: 'Cold Call', categoria: 'Cold Call', duracao_estimada_horas: 1, frequencia: 'diaria', dias_semana: '1,2,3,4,5', prioridade: 'alta', sop_ref: 'SOP 2' },
-  { titulo: 'Estudo de Mercado', categoria: 'Estudo de Mercado', duracao_estimada_horas: 1.5, frequencia: 'semanal', prioridade: 'media', sop_ref: 'SOP 6' },
-  { titulo: 'Follow Up Consultores (classes A/B)', categoria: 'Follow Up Consultores', duracao_estimada_horas: 0.5, frequencia: 'diaria', dias_semana: '1,2,3,4,5', prioridade: 'alta', sop_ref: 'SOP 2' },
-  { titulo: 'Contacto Consultores (1ª call)', categoria: 'Contacto Consultores', duracao_estimada_horas: 0.33, frequencia: 'diaria', dias_semana: '1,2,3,4,5', prioridade: 'alta', sop_ref: 'SOP 2' },
-  { titulo: 'Follow Up Investidores', categoria: 'Follow Up Investidores', duracao_estimada_horas: 1, frequencia: 'semanal', prioridade: 'alta', sop_ref: 'SOP 9' },
   { titulo: 'Reunião Investidores', categoria: 'Reunião Investidores', duracao_estimada_horas: 1, frequencia: 'custom', prioridade: 'alta', sop_ref: 'SOP 9/11', activo: false },
   { titulo: 'Análise de Negócio', categoria: 'Análise de Negócio', duracao_estimada_horas: 1.5, frequencia: 'semanal', prioridade: 'alta' },
   { titulo: 'Elaboração de Proposta', categoria: 'Proposta', duracao_estimada_horas: 2, frequencia: 'semanal', prioridade: 'alta' },
@@ -59,6 +59,10 @@ const SUGESTOES_CATALOGO = [
   { titulo: 'Reunião de Equipa Somnium', categoria: 'Reunião de Equipa Somnium', duracao_estimada_horas: 1, frequencia: 'semanal', prioridade: 'alta' },
   { titulo: 'Planeamento da Semana', categoria: 'Planeamento', duracao_estimada_horas: 0.75, frequencia: 'semanal', prioridade: 'media' },
   { titulo: 'SOP / Formação', categoria: 'SOP / Formação', duracao_estimada_horas: 1, frequencia: 'quinzenal', prioridade: 'baixa' },
+  { titulo: 'Revisão de Obras em Curso', categoria: 'Gestão Financeira', duracao_estimada_horas: 1, frequencia: 'semanal', prioridade: 'alta', simultaneo: true },
+  { titulo: 'Reconciliação Mensal de Despesas', categoria: 'Gestão Financeira', duracao_estimada_horas: 1, frequencia: 'mensal', prioridade: 'media' },
+  { titulo: 'Prospecção Activa de Investidores', categoria: 'Follow Up Investidores', duracao_estimada_horas: 1, frequencia: 'semanal', prioridade: 'alta' },
+  { titulo: 'Revisão Mensal de OKRs / Scorecard', categoria: 'Planeamento', duracao_estimada_horas: 0.5, frequencia: 'mensal', prioridade: 'alta' },
 ]
 
 function getMonday(d) {
@@ -97,13 +101,16 @@ export function Agenda() {
           items={[
             { key: 'disponibilidade', label: 'Disponibilidade', icon: Calendar },
             { key: 'catalogo', label: 'Catálogo de Tarefas Recorrentes', icon: BookOpen },
+            { key: 'proposta', label: 'Proposta da Semana', icon: CalendarClock },
           ]}
           value={tab}
           onChange={setTab}
         />
         {loadingUsers ? <PageSkeleton /> : tab === 'disponibilidade'
           ? <DisponibilidadeTab users={users} />
-          : <CatalogoTab users={users} />}
+          : tab === 'catalogo'
+          ? <CatalogoTab users={users} />
+          : <PropostaTab users={users} />}
       </div>
     </>
   )
@@ -380,6 +387,7 @@ function CatalogoTab({ users }) {
                 <Badge tone="blue" size="xs">{FREQUENCIA_LABEL[t.frequencia] || t.frequencia}</Badge>
                 <Badge tone="gray" size="xs">{Number(t.duracao_estimada_horas).toFixed(2).replace(/\.?0+$/, '')}h</Badge>
                 {t.sop_ref && <Badge tone="purple" size="xs">{t.sop_ref}</Badge>}
+                {t.simultaneo && <Badge tone="indigo" size="xs">Simultânea</Badge>}
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-neutral-800">
                 <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
@@ -405,6 +413,201 @@ function CatalogoTab({ users }) {
   )
 }
 
+// ════════════════════════════════════════════════════════════════
+// Proposta da Semana — motor de agendamento (Fase 2)
+// ════════════════════════════════════════════════════════════════
+function PropostaTab({ users }) {
+  const toast = useToast()
+  const [refDate, setRefDate] = useState(() => new Date())
+  const [agendamentos, setAgendamentos] = useState([])
+  const [naoAgendadas, setNaoAgendadas] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [gerando, setGerando] = useState(false)
+  const [confirmandoTudo, setConfirmandoTudo] = useState(false)
+
+  const monday = useMemo(() => getMonday(refDate), [refDate])
+  const semanaInicio = fmtISO(monday)
+  const dias = useMemo(() => Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday); d.setDate(d.getDate() + i); return fmtISO(d)
+  }), [monday])
+
+  const usersById = useMemo(() => Object.fromEntries(users.map(u => [u.id, u])), [users])
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const r = await apiFetch(`/api/agenda/proposta?semana_inicio=${semanaInicio}`)
+      const j = await r.json()
+      setAgendamentos(Array.isArray(j.agendamentos) ? j.agendamentos : [])
+      setNaoAgendadas(Array.isArray(j.nao_agendadas) ? j.nao_agendadas : [])
+    } catch (e) { toast?.(e.message, 'error') }
+    setLoading(false)
+  }, [semanaInicio])
+
+  useEffect(() => { load() }, [load])
+
+  async function gerar() {
+    setGerando(true)
+    try {
+      const r = await apiFetch('/api/agenda/gerar-semana', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ semana_inicio: semanaInicio }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Falha ao gerar proposta')
+      toast?.(`Proposta gerada: ${j.agendados} tarefa(s) encaixada(s), ${j.nao_agendadas?.length || 0} sem espaço.`, 'success')
+      await load()
+    } catch (e) { toast?.(e.message, 'error') }
+    setGerando(false)
+  }
+
+  async function confirmarTudo() {
+    setConfirmandoTudo(true)
+    try {
+      const r = await apiFetch(`/api/agenda/semana/${semanaInicio}/confirmar-tudo`, { method: 'POST' })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Falha ao confirmar')
+      toast?.(`${j.confirmados} agendamento(s) confirmado(s).`, 'success')
+      await load()
+    } catch (e) { toast?.(e.message, 'error') }
+    setConfirmandoTudo(false)
+  }
+
+  async function confirmar(id) {
+    try {
+      const r = await apiFetch(`/api/agenda/agendamentos/${id}/confirmar`, { method: 'POST' })
+      if (!r.ok) throw new Error((await r.json()).error || 'Falha ao confirmar')
+      await load()
+    } catch (e) { toast?.(e.message, 'error') }
+  }
+
+  async function recusar(id) {
+    try {
+      const r = await apiFetch(`/api/agenda/agendamentos/${id}/recusar`, { method: 'POST' })
+      if (!r.ok) throw new Error((await r.json()).error || 'Falha ao recusar')
+      await load()
+    } catch (e) { toast?.(e.message, 'error') }
+  }
+
+  const porUserEDia = useMemo(() => {
+    const map = {}
+    for (const a of agendamentos) {
+      map[a.user_id] ||= {}
+      ;(map[a.user_id][a.data] ||= []).push(a)
+    }
+    for (const uid in map) for (const d in map[uid]) map[uid][d].sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio))
+    return map
+  }, [agendamentos])
+
+  const propostosCount = agendamentos.filter(a => a.estado === 'proposto').length
+  const confirmadosCount = agendamentos.filter(a => a.estado === 'confirmado').length
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={() => setRefDate(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n })}
+            className="p-2 rounded-lg bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span className="text-sm font-semibold text-gray-800 dark:text-neutral-200 min-w-[140px] text-center">
+            {fmtDiaLabel(monday)} – {fmtDiaLabel(new Date(dias[6]))}
+          </span>
+          <button onClick={() => setRefDate(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n })}
+            className="p-2 rounded-lg bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">
+            <ChevronRight className="w-4 h-4" />
+          </button>
+          <Button variant="secondary" size="sm" onClick={() => setRefDate(new Date())}>Semana actual</Button>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400">{confirmadosCount} confirmada(s) · {propostosCount} proposta(s)</span>
+          <Button variant="secondary" size="sm" icon={gerando ? Loader2 : Wand2} onClick={gerar} disabled={gerando}>
+            Gerar proposta desta semana
+          </Button>
+          {propostosCount > 0 && (
+            <Button variant="primary" size="sm" icon={confirmandoTudo ? Loader2 : Check} onClick={confirmarTudo} disabled={confirmandoTudo}>
+              Confirmar tudo
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {loading ? <PageSkeleton /> : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {users.map(u => (
+              <Card key={u.id} variant="default" padding="sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0" style={{ backgroundColor: u.cor || '#C9A84C' }}>{u.iniciais}</span>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-neutral-100">{u.nome}</p>
+                </div>
+                <div className="space-y-3">
+                  {dias.map(dia => {
+                    const items = (porUserEDia[u.id] || {})[dia] || []
+                    if (!items.length) return null
+                    return (
+                      <div key={dia}>
+                        <p className="text-[10px] uppercase tracking-widest font-semibold text-gray-400 mb-1">{fmtDiaLabel(new Date(dia))}</p>
+                        <div className="space-y-1.5">
+                          {items.map(a => (
+                            <div key={a.id} className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border text-xs ${
+                              a.estado === 'confirmado' ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800/50' : 'bg-brand-gold/10 border-brand-gold/20'
+                            }`}>
+                              <div className="min-w-0 flex-1">
+                                <span className="font-semibold text-gray-700 dark:text-neutral-200">{a.hora_inicio}–{a.hora_fim}</span>
+                                <span className="text-gray-500 dark:text-neutral-400"> · {a.tarefa}</span>
+                              </div>
+                              {a.estado === 'proposto' ? (
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button onClick={() => confirmar(a.id)} title="Confirmar" className="p-1 rounded-md text-green-600 hover:bg-green-100">
+                                    <Check className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button onClick={() => recusar(a.id)} title="Recusar" className="p-1 rounded-md text-red-500 hover:bg-red-100">
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <Badge tone="green" size="xs">Confirmada</Badge>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {!Object.keys(porUserEDia[u.id] || {}).length && (
+                    <p className="text-xs text-gray-300 dark:text-neutral-600">Sem tarefas propostas esta semana.</p>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          <div>
+            <p className="text-sm font-semibold text-gray-700 dark:text-neutral-200 mb-2">Não agendadas esta semana</p>
+            {naoAgendadas.length === 0 ? (
+              <EmptyState icon={Inbox} title="Tudo agendado" description="Não há tarefas por encaixar nesta semana." />
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                {naoAgendadas.map(t => (
+                  <div key={t.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/40 text-xs">
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-800 dark:text-neutral-200 truncate">{t.tarefa}</p>
+                      <p className="text-[10px] text-gray-400">{usersById[t.user_id]?.nome || 'Sem responsável'}{t.categoria ? ` · ${t.categoria}` : ''}</p>
+                    </div>
+                    <Badge tone={PRIORIDADE_TONE[t.prioridade] || 'gray'} size="xs">{PRIORIDADE_LABEL[t.prioridade] || t.prioridade}</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function TemplateModal({ open, onClose, template, users, onSaved }) {
   const toast = useToast()
   const isEdit = !!template
@@ -415,7 +618,7 @@ function TemplateModal({ open, onClose, template, users, onSaved }) {
     return {
       titulo: '', categoria: CATEGORIAS[0], duracao_estimada_horas: 1, frequencia: 'semanal',
       frequencia_intervalo_dias: '', dias_semana: [], prioridade: 'media', sop_ref: '',
-      user_id_default: '', regiao: '', activo: true,
+      user_id_default: '', regiao: '', activo: true, simultaneo: false,
     }
   }
 
@@ -434,6 +637,7 @@ function TemplateModal({ open, onClose, template, users, onSaved }) {
         user_id_default: template.user_id_default || '',
         regiao: template.regiao || '',
         activo: template.activo !== false,
+        simultaneo: !!template.simultaneo,
       })
     } else {
       setForm(blankForm())
@@ -464,6 +668,7 @@ function TemplateModal({ open, onClose, template, users, onSaved }) {
         user_id_default: form.user_id_default || null,
         regiao: form.regiao || null,
         activo: form.activo,
+        simultaneo: form.simultaneo,
       }
       const r = await apiFetch(isEdit ? `/api/agenda/templates/${template.id}` : '/api/agenda/templates', {
         method: isEdit ? 'PUT' : 'POST',
@@ -534,7 +739,11 @@ function TemplateModal({ open, onClose, template, users, onSaved }) {
         </Select>
         <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-300 sm:col-span-2">
           <input type="checkbox" checked={form.activo} onChange={e => setForm(f => ({ ...f, activo: e.target.checked }))} className="rounded" />
-          Activo (entra na geração automática quando o motor de agendamento estiver disponível)
+          Activo (entra na geração automática semanal)
+        </label>
+        <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-300 sm:col-span-2">
+          <input type="checkbox" checked={form.simultaneo} onChange={e => setForm(f => ({ ...f, simultaneo: e.target.checked }))} className="rounded" />
+          Tarefa simultânea (exige os dois membros da equipa no mesmo bloco, ao mesmo tempo)
         </label>
       </div>
     </Modal>
