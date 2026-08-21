@@ -28,7 +28,7 @@ import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
 import { syncForms, isConfigured as formsConfigured } from './formsSync.js'
-import { createImovelFolder, moveImovelFolder, uploadDocToFolder, uploadUserFileToFolder, uploadComprovativoToFolder, isConfigured as driveConfigured, downloadDriveFile, createInvestidorFolder, uploadDocumentoInvestidor } from './driveSync.js'
+import { createImovelFolder, moveImovelFolder, uploadDocToFolder, uploadUserFileToFolder, uploadComprovativoToFolder, isConfigured as driveConfigured, downloadDriveFile, createInvestidorFolder, uploadDocumentoInvestidor, moverParaElementosApagados } from './driveSync.js'
 import { generateDoc, getDocsForEstado, docEmbedeLocalizacao } from './pdfImovelDocs.js'
 import { onImovelCreated, listDocumentos, persistDocumento, streamPdfToResAndPersist } from './documentLifecycle.js'
 import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
@@ -847,9 +847,13 @@ router.post('/investidores/:id/documentos', uploadRateLimit, uploadDocs.single('
       if (driveConfigured()) {
         uploadDocumentoInvestidor(req.params.id, req.file.buffer, req.file.originalname, req.file.mimetype)
           .then(fileId => {
-            if (fileId) pool.query('UPDATE documentos_investidor SET drive_file_id = $1 WHERE id = $2', [fileId, id]).catch(() => {})
+            if (fileId) { pool.query('UPDATE documentos_investidor SET drive_file_id = $1 WHERE id = $2', [fileId, id]).catch(() => {}); return }
+            alertarFalhaUploadDrive(`investidor ${req.params.id}`, req.file.originalname)
           })
-          .catch(e => console.error('[drive] espelho documento investidor:', e.message))
+          .catch(e => {
+            console.error('[drive] espelho documento investidor:', e.message)
+            alertarFalhaUploadDrive(`investidor ${req.params.id}`, req.file.originalname)
+          })
       }
     }
 
@@ -883,7 +887,7 @@ router.get('/investidores/:id/documentos/:docId/ficheiro', async (req, res) => {
 router.delete('/investidores/:id/documentos/:docId', async (req, res) => {
   try {
     const { rows: [doc] } = await pool.query(
-      'SELECT storage_path FROM documentos_investidor WHERE id = $1 AND investidor_id = $2',
+      'SELECT storage_path, drive_file_id FROM documentos_investidor WHERE id = $1 AND investidor_id = $2',
       [req.params.docId, req.params.id]
     )
     const { rowCount } = await pool.query(
@@ -893,6 +897,11 @@ router.delete('/investidores/:id/documentos/:docId', async (req, res) => {
     if (rowCount === 0) return res.status(404).json({ error: 'Não encontrado' })
     if (doc?.storage_path && supabaseStorage) {
       await supabaseStorage.storage.from(INVESTIDORES_DOCS_BUCKET).remove([doc.storage_path]).catch(() => {})
+    }
+    // Mesmo tratamento dos documentos de imóvel: mover para "Elementos
+    // apagados do CRM" em vez de deixar o espelho no Drive órfão.
+    if (doc?.drive_file_id) {
+      moverParaElementosApagados(doc.drive_file_id).catch(() => {})
     }
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
@@ -2086,6 +2095,17 @@ router.post('/imoveis/:id/scrape-fotos', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// Alerta por email quando o espelho de um upload no Drive falha (rede, quota,
+// configuração) — antes era só um console.error, ninguém sabia (achado da
+// auditoria). O ficheiro em si já está guardado no Storage; só o espelho falhou.
+async function alertarFalhaUploadDrive(contexto, nomeFicheiro) {
+  try {
+    const { sendEmail } = await import('./emailService.js')
+    const text = `O espelho no Google Drive do ficheiro "${nomeFicheiro}" (${contexto}) falhou. O ficheiro está guardado no Storage do CRM, mas não foi copiado para o Drive — pode ser preciso repetir o upload ou verificar a configuração da integração.`
+    await sendEmail(`Falha no espelho Drive — ${nomeFicheiro}`, `<p>${text}</p>`, { to: 'somniumprs@gmail.com', text })
+  } catch (e) { console.error('[drive] Erro ao enviar alerta de falha de upload:', e.message) }
+}
+
 // ── Upload de fotos para imóveis ─────────────────────────────
 router.post('/imoveis/:id/fotos', uploadRateLimit, uploadImovel.array('fotos', 20), async (req, res) => {
   try {
@@ -2121,17 +2141,7 @@ router.post('/imoveis/:id/fotos', uploadRateLimit, uploadImovel.array('fotos', 2
         }
       }
 
-      // Espelho no Google Drive (fonte primária continua a ser o Storage)
-      if (driveConfigured()) {
-        driveJobs.push(
-          uploadUserFileToFolder(req.params.id, fileBuffer, file.originalname, {
-            isPhoto: folder !== 'documentos',
-            mimeType: file.mimetype,
-          }).catch(e => console.error('[drive] espelho upload:', e.message)),
-        )
-      }
-
-      fotos.push({
+      const fotoEntry = {
         id: randomUUID(),
         name: file.originalname,
         path: filePath,
@@ -2140,7 +2150,27 @@ router.post('/imoveis/:id/fotos', uploadRateLimit, uploadImovel.array('fotos', 2
         uploaded_at: new Date().toISOString(),
         ...(folder ? { folder } : {}),
         ...(slot ? { slot } : {}),
-      })
+      }
+
+      // Espelho no Google Drive (fonte primária continua a ser o Storage)
+      if (driveConfigured()) {
+        driveJobs.push(
+          uploadUserFileToFolder(req.params.id, fileBuffer, file.originalname, {
+            isPhoto: folder !== 'documentos',
+            mimeType: file.mimetype,
+          }).then(driveFileId => {
+            if (driveFileId) { fotoEntry.drive_file_id = driveFileId; return }
+            // Upload devolveu null = falhou (rede/quota/config) — antes era
+            // silencioso, agora avisa (achado da auditoria).
+            alertarFalhaUploadDrive(imovel.nome || req.params.id, file.originalname)
+          }).catch(e => {
+            console.error('[drive] espelho upload:', e.message)
+            alertarFalhaUploadDrive(imovel.nome || req.params.id, file.originalname)
+          }),
+        )
+      }
+
+      fotos.push(fotoEntry)
     }
     await Imoveis.update(req.params.id, { fotos: JSON.stringify(fotos) })
     // Best-effort: espelho no Drive não bloqueia o sucesso da resposta
@@ -2416,9 +2446,21 @@ router.delete('/imoveis/:id/fotos/:fotoId', async (req, res) => {
         await supabaseStorage.storage.from('Imoveis').remove([match[1]]).catch(() => {})
       }
     }
+    // Em vez de deixar o espelho no Drive órfão (ou apagá-lo), move para
+    // "Elementos apagados do CRM" — fica histórico do que já existiu.
+    if (foto?.drive_file_id) {
+      moverParaElementosApagados(foto.drive_file_id).catch(() => {})
+    }
 
     const filtered = fotos.filter(f => f.id !== req.params.fotoId)
-    await Imoveis.update(req.params.id, { fotos: JSON.stringify(filtered) })
+    // Apagar em cascata a análise de IA associada a este ficheiro — senão
+    // fica órfã na ficha, sem documento nenhum por trás (achado da auditoria).
+    const analiseAtual = Array.isArray(imovel.documentacao_analise) ? imovel.documentacao_analise : []
+    const analiseFiltrada = analiseAtual.filter(a => a.fotoId !== req.params.fotoId)
+    await Imoveis.update(req.params.id, {
+      fotos: JSON.stringify(filtered),
+      ...(analiseFiltrada.length !== analiseAtual.length ? { documentacao_analise: JSON.stringify(analiseFiltrada) } : {}),
+    })
     res.json({ ok: true, fotos: filtered })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })

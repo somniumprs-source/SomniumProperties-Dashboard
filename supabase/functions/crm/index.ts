@@ -44,7 +44,7 @@ import { syncAllFromNotion, syncFromNotion, syncToNotion } from "../_shared/sync
 import {
   createImovelFolder, isConfigured as driveConfigured, listImovelFiles,
   moveImovelFolder, uploadDocToFolder, uploadUserFileToFolder, uploadComprovativoToFolder, downloadDriveFile,
-  createInvestidorFolder, uploadDocumentoInvestidor,
+  createInvestidorFolder, uploadDocumentoInvestidor, moverParaElementosApagados,
 } from "../_shared/driveSync.ts";
 import {
   autoOrganize, ensureLabels, isConfigured as gmailConfigured, organizeBatch, organizeMessage,
@@ -1126,9 +1126,13 @@ app.post("/investidores/:id/documentos", async (c: any) => {
       if (driveConfigured()) {
         uploadDocumentoInvestidor(investidorId, bytes, file.name, file.type || "application/octet-stream")
           .then((fileId: string | null) => {
-            if (fileId) pool.query("UPDATE documentos_investidor SET drive_file_id = $1 WHERE id = $2", [fileId, id]).catch(() => {});
+            if (fileId) { pool.query("UPDATE documentos_investidor SET drive_file_id = $1 WHERE id = $2", [fileId, id]).catch(() => {}); return; }
+            alertarFalhaUploadDrive(`investidor ${investidorId}`, file.name);
           })
-          .catch((e: any) => console.error("[drive] espelho documento investidor:", e.message));
+          .catch((e: any) => {
+            console.error("[drive] espelho documento investidor:", e.message);
+            alertarFalhaUploadDrive(`investidor ${investidorId}`, file.name);
+          });
       }
     }
 
@@ -1160,7 +1164,7 @@ app.get("/investidores/:id/documentos/:docId/ficheiro", async (c: any) => {
 app.delete("/investidores/:id/documentos/:docId", async (c: any) => {
   try {
     const { rows: [doc] } = await pool.query(
-      "SELECT storage_path FROM documentos_investidor WHERE id = $1 AND investidor_id = $2",
+      "SELECT storage_path, drive_file_id FROM documentos_investidor WHERE id = $1 AND investidor_id = $2",
       [c.req.param("docId"), c.req.param("id")],
     );
     const { rowCount } = await pool.query(
@@ -1169,6 +1173,9 @@ app.delete("/investidores/:id/documentos/:docId", async (c: any) => {
     );
     if (rowCount === 0) return c.json({ error: "Não encontrado" }, 404);
     if (doc?.storage_path) await removeFromStorage(INVESTIDORES_DOCS_BUCKET, doc.storage_path);
+    // Mesmo tratamento dos documentos de imóvel: mover para "Elementos
+    // apagados do CRM" em vez de deixar o espelho no Drive órfão.
+    if (doc?.drive_file_id) moverParaElementosApagados(doc.drive_file_id).catch(() => {});
     return c.json({ ok: true });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
@@ -2345,6 +2352,15 @@ app.post("/imoveis/:id/scrape-fotos", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
+// Alerta por email quando o espelho de um upload no Drive falha (rede, quota,
+// configuração) — antes era só um console.error, ninguém sabia.
+async function alertarFalhaUploadDrive(contexto: string, nomeFicheiro: string): Promise<void> {
+  try {
+    const text = `O espelho no Google Drive do ficheiro "${nomeFicheiro}" (${contexto}) falhou. O ficheiro está guardado no Storage do CRM, mas não foi copiado para o Drive — pode ser preciso repetir o upload ou verificar a configuração da integração.`;
+    await sendEmail(`Falha no espelho Drive — ${nomeFicheiro}`, `<p>${text}</p>`, { to: "somniumprs@gmail.com", text });
+  } catch (e) { console.error("[drive] Erro ao enviar alerta de falha de upload:", (e as Error).message); }
+}
+
 // ── Upload de fotos (multer/Supabase Storage) — port de routes.js 1188-1228 ──
 // Multipart (multer array 'fotos', 20) → Hono formData + uploadPublic.
 app.post("/imoveis/:id/fotos", async (c: any) => {
@@ -2371,17 +2387,7 @@ app.post("/imoveis/:id/fotos", async (c: any) => {
       const storagePath = `imoveis/${id}/${crypto.randomUUID()}${ext}`;
       const filePath = await uploadPublic("Imoveis", storagePath, bytes, file.type || "application/octet-stream");
 
-      // Espelho no Google Drive (fonte primária continua a ser o Storage)
-      if (driveConfigured()) {
-        driveJobs.push(
-          uploadUserFileToFolder(id, bytes, file.name || `ficheiro${ext}`, {
-            isPhoto: folder !== "documentos",
-            mimeType: file.type || "application/octet-stream",
-          }).catch((e: Error) => console.error("[drive] espelho upload:", e.message)),
-        );
-      }
-
-      fotos.push({
+      const fotoEntry: any = {
         id: crypto.randomUUID(),
         name: file.name,
         path: filePath,
@@ -2390,7 +2396,25 @@ app.post("/imoveis/:id/fotos", async (c: any) => {
         uploaded_at: new Date().toISOString(),
         ...(folder ? { folder } : {}),
         ...(slot ? { slot } : {}),
-      });
+      };
+
+      // Espelho no Google Drive (fonte primária continua a ser o Storage)
+      if (driveConfigured()) {
+        driveJobs.push(
+          uploadUserFileToFolder(id, bytes, file.name || `ficheiro${ext}`, {
+            isPhoto: folder !== "documentos",
+            mimeType: file.type || "application/octet-stream",
+          }).then((driveFileId: string | null) => {
+            if (driveFileId) { fotoEntry.drive_file_id = driveFileId; return; }
+            alertarFalhaUploadDrive(imovel.nome || id, file.name);
+          }).catch((e: Error) => {
+            console.error("[drive] espelho upload:", e.message);
+            alertarFalhaUploadDrive(imovel.nome || id, file.name);
+          }),
+        );
+      }
+
+      fotos.push(fotoEntry);
     }
     await Imoveis.update(id, { fotos: JSON.stringify(fotos) });
     // Best-effort: espelho no Drive não bloqueia o sucesso da resposta
@@ -2702,9 +2726,21 @@ app.delete("/imoveis/:id/fotos/:fotoId", async (c: any) => {
       const match = foto.path.match(/\/storage\/v1\/object\/public\/Imoveis\/(.+)$/);
       if (match) await removeFromStorage("Imoveis", match[1]);
     }
+    // Em vez de deixar o espelho no Drive órfão (ou apagá-lo), move para
+    // "Elementos apagados do CRM" — fica histórico do que já existiu.
+    if (foto?.drive_file_id) {
+      moverParaElementosApagados(foto.drive_file_id).catch(() => {});
+    }
 
     const filtered = fotos.filter((f: any) => f.id !== fotoId);
-    await Imoveis.update(id, { fotos: JSON.stringify(filtered) });
+    // Apagar em cascata a análise de IA associada a este ficheiro — senão
+    // fica órfã na ficha, sem documento nenhum por trás.
+    const analiseAtual = Array.isArray(imovel.documentacao_analise) ? imovel.documentacao_analise : [];
+    const analiseFiltrada = analiseAtual.filter((a: any) => a.fotoId !== fotoId);
+    await Imoveis.update(id, {
+      fotos: JSON.stringify(filtered),
+      ...(analiseFiltrada.length !== analiseAtual.length ? { documentacao_analise: JSON.stringify(analiseFiltrada) } : {}),
+    });
     return c.json({ ok: true, fotos: filtered });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });

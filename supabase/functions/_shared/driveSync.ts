@@ -158,6 +158,43 @@ async function ensureFinanceiroGeralFolder(drive) {
   return financeiroGeralFolderId
 }
 
+// Pasta de arquivo para tudo o que é apagado do CRM (fotos, documentos) mas
+// tem espelho no Drive — em vez de apagar a cópia no Drive (ou deixá-la
+// órfã, como acontecia antes), o ficheiro é movido para aqui, mantendo
+// histórico do que já existiu.
+let elementosApagadosFolderId: string | null = null
+async function ensureElementosApagadosFolder(drive) {
+  if (elementosApagadosFolderId) return elementosApagadosFolderId
+  elementosApagadosFolderId = await ensureSubfolder(drive, PIPELINE_FOLDER_ID, 'Elementos apagados do CRM')
+  return elementosApagadosFolderId
+}
+
+/**
+ * Move um ficheiro do Drive para a pasta "Elementos apagados do CRM", em vez
+ * de o apagar — chamar sempre que um registo com espelho no Drive (foto,
+ * documento) é apagado no CRM.
+ */
+export async function moverParaElementosApagados(fileId: string | null): Promise<boolean> {
+  if (!fileId) return false
+  const drive = getDrive()
+  if (!drive) return false
+  try {
+    const destino = await ensureElementosApagadosFolder(drive)
+    if (!destino) return false
+    const file = await drive.files.get({ fileId, fields: 'parents', supportsAllDrives: true })
+    const currentParents = (file.data.parents || []).join(',')
+    await drive.files.update({
+      fileId, addParents: destino, removeParents: currentParents, supportsAllDrives: true,
+    })
+    console.log(`[drive] Ficheiro ${fileId} movido para "Elementos apagados do CRM"`)
+    return true
+  } catch (e) {
+    if ((e as any).code === 404) return true
+    console.error('[drive] Erro ao mover para Elementos apagados:', (e as Error).message)
+    return false
+  }
+}
+
 // Pasta de topo para os investidores. DRIVE_INVESTIDORES_FOLDER_ID é opcional —
 // sem ela, cria/usa uma subpasta "Investidores" dentro do pipeline (mesmo
 // padrão de ensureFinanceiroGeralFolder).
