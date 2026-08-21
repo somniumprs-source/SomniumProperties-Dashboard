@@ -1835,20 +1835,25 @@ const FIELD_DEFS = {
   // tinha de reabrir a ficha para preencher estes campos do zero.
   'Imóveis': [
     // — Identificação —
-    { key: 'nome', label: 'Nome do Imóvel', type: 'text', required: true },
+    // `quick: true` = campo visível na "Ficha Rápida" ao criar um imóvel novo
+    // (dados normalmente já disponíveis no anúncio, antes do 1º contacto). O
+    // resto só é pedido pela checklist obrigatória ao avançar de estado
+    // (ver checklistTemplates.js — estado "Adicionado" já exige data_chamada,
+    // ask_price, notas, modelo_negocio e fotos antes de sair desse estado).
+    { key: 'nome', label: 'Nome do Imóvel', type: 'text', required: true, quick: true },
     { key: 'estado', label: 'Estado', type: 'select', options: ['Adicionado','Chamada Não Atendida','Pendentes','Pré-aprovação','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'] },
     { key: 'modelo_negocio', label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix & Flip','CAEP','Mediação'], required: true },
     { key: 'ref_interna', label: 'REF Interna', type: 'text' },
     { key: 'tipo_oportunidade', label: 'Tipo Oportunidade', type: 'select', options: ['Portal', 'Off-Market'] },
-    { key: 'origem', label: 'Origem', type: 'select', options: ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro'] },
+    { key: 'origem', label: 'Origem', type: 'select', options: ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro'], quick: true },
     { key: 'nome_consultor', label: 'Consultor', type: 'relation_name_or_new', endpoint: '/api/crm/lookup/consultores', display: r => `${r.nome} (${r.estatuto ?? '—'})`, createEndpoint: '/api/crm/consultores/find-or-create' },
-    { key: 'link', label: 'Link do Imóvel', type: 'url' },
+    { key: 'link', label: 'Link do Imóvel', type: 'url', quick: true },
     // — Localização —
-    { key: 'distrito', label: 'Distrito', type: 'text' },
-    { key: 'concelho', label: 'Concelho', type: 'text' },
+    { key: 'distrito', label: 'Distrito', type: 'text', quick: true },
+    { key: 'concelho', label: 'Concelho', type: 'text', quick: true },
     { key: 'freguesia', label: 'Freguesia', type: 'combobox_freguesias' },
     // — Caracterização Física —
-    { key: 'tipologia', label: 'Tipologia (T1, T2, T3…)', type: 'text' },
+    { key: 'tipologia', label: 'Tipologia (T1, T2, T3…)', type: 'text', quick: true },
     { key: 'predio_tipo', label: 'Tipo de Prédio', type: 'select', options: ['Apartamento','Edifício multifamiliar','Moradia','Terreno','Prédio para reabilitação','Outro'] },
     { key: 'area_util', label: 'Área Útil (m²)', type: 'number' },
     { key: 'area_bruta', label: 'ABP — Área Bruta Privativa (m²)', type: 'number' },
@@ -1859,7 +1864,7 @@ const FIELD_DEFS = {
     { key: 'ano_construcao', label: 'Ano de Construção', type: 'number' },
     { key: 'cru', label: 'Uso (CRU)', type: 'select', options: ['Habitação','Comércio','Serviços','Indústria','Misto'] },
     // — Valores —
-    { key: 'ask_price', label: 'Ask Price (€)', type: 'number' },
+    { key: 'ask_price', label: 'Ask Price (€)', type: 'number', quick: true },
     { key: 'valor_proposta', label: 'Valor Proposta (€)', type: 'number' },
     { key: 'custo_estimado_obra', label: 'Custo Estimado Obra (€)', type: 'number' },
     { key: 'valor_venda_remodelado', label: 'Valor Venda Remodelado (€)', type: 'number' },
@@ -2153,6 +2158,14 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
   const [lookups, setLookups] = useState({})
   const [tagSuggestions, setTagSuggestions] = useState({ imobiliarias: [], zonas: [] })
   const isNew = !item.id
+  // Ficha Rápida: ao criar um imóvel novo, mostrar só os campos disponíveis
+  // no anúncio (nome, link, origem, localização, tipologia, ask price). O
+  // resto preenche-se ao avançar de estado (checklist obrigatória já existe
+  // no backend). Escape hatch: "Mostrar todos os campos" para quem já tem
+  // tudo à mão.
+  const canQuick = isNew && tab === 'Imóveis'
+  const [showAll, setShowAll] = useState(!canQuick)
+  const quickMode = canQuick && !showAll
 
   // Load relation lookups
   useEffect(() => {
@@ -2186,13 +2199,26 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
   }
 
   const inputClass = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+  const baseFields = quickMode ? fields.filter(f => f.quick) : fields
   const visibleFields = form.predio_tipo === 'Moradia'
-    ? fields.filter(f => f.key !== 'numero_pisos_predio' && f.key !== 'tem_elevador')
-    : fields
+    ? baseFields.filter(f => f.key !== 'numero_pisos_predio' && f.key !== 'tem_elevador')
+    : baseFields
 
   return (
     <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-6 shadow-xs">
-      <h2 className="text-sm font-semibold text-gray-700 mb-4">{isNew ? 'Novo Registo' : 'Editar Registo'}</h2>
+      <div className="flex items-center justify-between mb-4 gap-3">
+        <h2 className="text-sm font-semibold text-gray-700">{isNew ? (canQuick ? 'Nova Ficha Rápida' : 'Novo Registo') : 'Editar Registo'}</h2>
+        {canQuick && (
+          <button type="button" onClick={() => setShowAll(s => !s)} className="text-xs text-indigo-600 hover:underline whitespace-nowrap">
+            {quickMode ? 'Mostrar todos os campos' : 'Mostrar só ficha rápida'}
+          </button>
+        )}
+      </div>
+      {quickMode && (
+        <p className="text-xs text-gray-500 -mt-2 mb-4">
+          Só o essencial do anúncio. O resto (tipo de prédio, áreas, valores, pipeline) completa-se ao avançar de estado.
+        </p>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {visibleFields.map(f => {
           const fieldOptions = typeof f.options === 'function' ? f.options(form) : f.options
