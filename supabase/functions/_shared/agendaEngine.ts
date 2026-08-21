@@ -356,13 +356,19 @@ export async function gerarProposta(semanaInicio: string) {
      ORDER BY CASE prioridade WHEN 'alta' THEN 0 WHEN 'media' THEN 1 ELSE 2 END, data_limite NULLS LAST, created_at`,
   );
 
+  // data_limite de uma tarefa instanciada de template é só a segunda-feira
+  // da semana em que foi gerada (bookkeeping, para não duplicar) — não é
+  // um prazo real. Só tarefas com prazo genuíno (cadeia/entidade, ou
+  // definido à mão) restringem o encaixe a um dia específico.
+  const prazoReal = (tarefa: any) => (tarefa.template_id ? null : tarefa.data_limite);
+
   for (const u of users) {
     const minhas = poolComDono.filter((t: any) => t.user_id === u.id && !jaTratadas.has(t.id));
     for (const tarefa of minhas) {
-      let ok = await tentarEncaixar(tarefa, u.id, tarefa.data_limite);
+      let ok = await tentarEncaixar(tarefa, u.id, prazoReal(tarefa));
       if (!ok && tarefa.origem_tipo) {
         for (const outro of users.filter((x: any) => x.id !== u.id)) {
-          ok = await tentarEncaixar(tarefa, outro.id, tarefa.data_limite);
+          ok = await tentarEncaixar(tarefa, outro.id, prazoReal(tarefa));
           if (ok) break;
         }
       }
@@ -374,7 +380,7 @@ export async function gerarProposta(semanaInicio: string) {
     if (jaTratadas.has(tarefa.id)) continue;
     let ok = false;
     for (const u of users) {
-      ok = await tentarEncaixar(tarefa, u.id, tarefa.data_limite);
+      ok = await tentarEncaixar(tarefa, u.id, prazoReal(tarefa));
       if (ok) break;
     }
     if (!ok) naoAgendadas.push(tarefa);
