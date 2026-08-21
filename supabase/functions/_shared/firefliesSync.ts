@@ -117,6 +117,24 @@ export async function syncFireflies() {
       ],
     );
     created++;
+
+    // Se a reunião é de um consultor, a transcrição fica logo disponível no
+    // mesmo local onde a equipa preenche o registo SOP2 da chamada
+    // (consultor_gravacoes) — em vez de ficar presa só em `reunioes`, sem
+    // ligação nenhuma ao scorecard de avaliação.
+    if (entidade_tipo === "consultores" && entidade_id) {
+      try {
+        const gravacaoId = crypto.randomUUID();
+        await pool.query(
+          `INSERT INTO consultor_gravacoes
+            (id, consultor_id, titulo, data_chamada, duracao_seg, estado, transcricao, registo_fonte, created_at, updated_at)
+           VALUES ($1,$2,$3,$4,$5,'transcrito',$6,'fireflies',$7,$7)`,
+          [gravacaoId, entidade_id, t.title, data, t.duration || null, transcricao, now],
+        );
+      } catch (e) {
+        console.error("[fireflies] Erro ao criar gravação a partir da transcrição:", (e as Error).message);
+      }
+    }
   }
 
   return { created, skipped, total: transcripts.length };
