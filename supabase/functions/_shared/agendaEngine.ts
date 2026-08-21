@@ -46,7 +46,7 @@ async function resolverResponsavelPorHistorico(tabela: string, entidadeId: strin
 export async function gerarCadeiasAngariacao() {
   const { rows: imoveis } = await pool.query(
     `SELECT id, nome FROM imoveis i
-     WHERE i.created_at >= $1 AND NOT EXISTS (
+     WHERE i.created_at::timestamptz >= $1::timestamptz AND NOT EXISTS (
        SELECT 1 FROM tarefas t WHERE t.origem_tipo = 'imovel' AND t.origem_id = i.id AND t.origem_campo = 'cadeia_pesquisa'
      )`,
     [DATA_CORTE_ORIGEM],
@@ -73,7 +73,7 @@ export async function gerarCadeiasAngariacao() {
 export async function gerarEstudoDeMercado() {
   const { rows: imoveis } = await pool.query(
     `SELECT id, nome, data_chamada, created_at FROM imoveis i
-     WHERE estado = 'Estudo de VVR' AND i.created_at >= $1
+     WHERE estado = 'Estudo de VVR' AND i.created_at::timestamptz >= $1::timestamptz
        AND NOT EXISTS (
          SELECT 1 FROM tarefas t WHERE t.origem_tipo = 'imovel' AND t.origem_id = i.id AND t.origem_campo = 'estudo_mercado_vvr'
        )`,
@@ -94,6 +94,57 @@ export async function gerarEstudoDeMercado() {
   return { criadas };
 }
 
+// Análise de Negócio: só depois do Estudo de Mercado CONCLUÍDO (não só o
+// estado do imóvel) — sequência obrigatória, ver src/db/agendaEngine.js.
+export async function gerarAnaliseDeNegocio() {
+  const { rows: imoveis } = await pool.query(
+    `SELECT i.id, i.nome FROM imoveis i
+     JOIN tarefas em ON em.origem_tipo = 'imovel' AND em.origem_id = i.id
+       AND em.origem_campo = 'estudo_mercado_vvr' AND em.status = 'Concluída'
+     WHERE i.created_at::timestamptz >= $1::timestamptz
+       AND NOT EXISTS (
+         SELECT 1 FROM tarefas t WHERE t.origem_tipo = 'imovel' AND t.origem_id = i.id AND t.origem_campo = 'analise_negocio'
+       )`,
+    [DATA_CORTE_ORIGEM],
+  );
+  let criadas = 0;
+  for (const im of imoveis) {
+    const id = crypto.randomUUID();
+    await pool.query(
+      `INSERT INTO tarefas (id, tarefa, categoria, status, prioridade, user_id, tempo_horas, origem_tipo, origem_id, origem_campo)
+       VALUES ($1,$2,'Análise de Negócio','A fazer','alta',NULL,1.5,'imovel',$3,'analise_negocio')`,
+      [id, `Análise de Negócio — ${im.nome}`, im.id],
+    );
+    criadas++;
+  }
+  return { criadas };
+}
+
+// Elaboração de Proposta: só depois da Análise de Negócio CONCLUÍDA.
+export async function gerarElaboracaoProposta() {
+  const { rows: imoveis } = await pool.query(
+    `SELECT i.id, i.nome FROM imoveis i
+     JOIN tarefas an ON an.origem_tipo = 'imovel' AND an.origem_id = i.id
+       AND an.origem_campo = 'analise_negocio' AND an.status = 'Concluída'
+     WHERE estado = 'Criar Proposta ao Proprietário' AND i.created_at::timestamptz >= $1::timestamptz
+       AND NOT EXISTS (
+         SELECT 1 FROM tarefas t WHERE t.origem_tipo = 'imovel' AND t.origem_id = i.id AND t.origem_campo = 'elaboracao_proposta'
+       )`,
+    [DATA_CORTE_ORIGEM],
+  );
+  let criadas = 0;
+  for (const im of imoveis) {
+    const id = crypto.randomUUID();
+    await pool.query(
+      `INSERT INTO tarefas (id, tarefa, categoria, status, prioridade, user_id, tempo_horas, origem_tipo, origem_id, origem_campo)
+       VALUES ($1,$2,'Proposta','A fazer','alta',NULL,2,'imovel',$3,'elaboracao_proposta')`,
+      [id, `Elaboração de Proposta — ${im.nome}`, im.id],
+    );
+    criadas++;
+  }
+  return { criadas };
+}
+
 export async function gerarTarefasSinteticas() {
   const hoje = hojeISO();
   let criadas = 0;
@@ -102,7 +153,7 @@ export async function gerarTarefasSinteticas() {
   for (const cfg of ORIGEM_CAMPOS) {
     const { rows: entidades } = await pool.query(
       `SELECT id, nome, ${cfg.campo} AS data_valor FROM ${cfg.tabela}
-       WHERE ${cfg.campo} IS NOT NULL AND ${cfg.campo} >= $1 AND updated_at >= $2`,
+       WHERE ${cfg.campo} IS NOT NULL AND ${cfg.campo} >= $1 AND updated_at::timestamptz >= $2::timestamptz`,
       [hoje, DATA_CORTE_ORIGEM],
     );
     for (const ent of entidades) {

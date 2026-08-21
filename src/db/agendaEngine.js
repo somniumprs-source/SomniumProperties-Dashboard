@@ -88,7 +88,7 @@ export async function gerarCadeiasAngariacao(pool) {
   // retroactivamente (presume-se que já foram accionados na prática).
   const { rows: imoveis } = await pool.query(
     `SELECT id, nome FROM imoveis i
-     WHERE i.created_at >= $1 AND NOT EXISTS (
+     WHERE i.created_at::timestamptz >= $1::timestamptz AND NOT EXISTS (
        SELECT 1 FROM tarefas t WHERE t.origem_tipo = 'imovel' AND t.origem_id = i.id AND t.origem_campo = 'cadeia_pesquisa'
      )`,
     [DATA_CORTE_ORIGEM]
@@ -116,7 +116,7 @@ export async function gerarCadeiasAngariacao(pool) {
 export async function gerarEstudoDeMercado(pool) {
   const { rows: imoveis } = await pool.query(
     `SELECT id, nome, data_chamada, created_at FROM imoveis i
-     WHERE estado = 'Estudo de VVR' AND i.created_at >= $1
+     WHERE estado = 'Estudo de VVR' AND i.created_at::timestamptz >= $1::timestamptz
        AND NOT EXISTS (
          SELECT 1 FROM tarefas t WHERE t.origem_tipo = 'imovel' AND t.origem_id = i.id AND t.origem_campo = 'estudo_mercado_vvr'
        )`,
@@ -137,6 +137,64 @@ export async function gerarEstudoDeMercado(pool) {
   return { criadas }
 }
 
+// ── 2b. Análise de Negócio: só depois do Estudo de Mercado CONCLUÍDO ─
+// Não faz sentido analisar um negócio (ou pior, escrever proposta) antes
+// de o estudo de mercado estar mesmo feito — por isso esta exige a
+// tarefa de Estudo de Mercado já 'Concluída', não só o estado do imóvel.
+export async function gerarAnaliseDeNegocio(pool) {
+  const { rows: imoveis } = await pool.query(
+    `SELECT i.id, i.nome FROM imoveis i
+     JOIN tarefas em ON em.origem_tipo = 'imovel' AND em.origem_id = i.id
+       AND em.origem_campo = 'estudo_mercado_vvr' AND em.status = 'Concluída'
+     WHERE i.created_at::timestamptz >= $1::timestamptz
+       AND NOT EXISTS (
+         SELECT 1 FROM tarefas t WHERE t.origem_tipo = 'imovel' AND t.origem_id = i.id AND t.origem_campo = 'analise_negocio'
+       )`,
+    [DATA_CORTE_ORIGEM]
+  )
+  let criadas = 0
+  for (const im of imoveis) {
+    const id = randomUUID()
+    await pool.query(
+      `INSERT INTO tarefas (id, tarefa, categoria, status, prioridade, user_id, tempo_horas, origem_tipo, origem_id, origem_campo)
+       VALUES ($1,$2,'Análise de Negócio','A fazer','alta',NULL,1.5,'imovel',$3,'analise_negocio')`,
+      [id, `Análise de Negócio — ${im.nome}`, im.id]
+    )
+    criadas++
+  }
+  return { criadas }
+}
+
+// ── 2c. Elaboração de Proposta: só depois da Análise de Negócio CONCLUÍDA
+// Mesma lógica da Análise de Negócio — exige a tarefa anterior da
+// sequência (Análise de Negócio) já 'Concluída', não só o estado do
+// imóvel ter avançado no pipeline. Sequência completa e obrigatória:
+// Pesquisa -> Cold Call -> Estudo de Mercado -> Análise de Negócio ->
+// Elaboração de Proposta, cada uma só nasce quando a anterior está feita.
+export async function gerarElaboracaoProposta(pool) {
+  const { rows: imoveis } = await pool.query(
+    `SELECT i.id, i.nome FROM imoveis i
+     JOIN tarefas an ON an.origem_tipo = 'imovel' AND an.origem_id = i.id
+       AND an.origem_campo = 'analise_negocio' AND an.status = 'Concluída'
+     WHERE estado = 'Criar Proposta ao Proprietário' AND i.created_at::timestamptz >= $1::timestamptz
+       AND NOT EXISTS (
+         SELECT 1 FROM tarefas t WHERE t.origem_tipo = 'imovel' AND t.origem_id = i.id AND t.origem_campo = 'elaboracao_proposta'
+       )`,
+    [DATA_CORTE_ORIGEM]
+  )
+  let criadas = 0
+  for (const im of imoveis) {
+    const id = randomUUID()
+    await pool.query(
+      `INSERT INTO tarefas (id, tarefa, categoria, status, prioridade, user_id, tempo_horas, origem_tipo, origem_id, origem_campo)
+       VALUES ($1,$2,'Proposta','A fazer','alta',NULL,2,'imovel',$3,'elaboracao_proposta')`,
+      [id, `Elaboração de Proposta — ${im.nome}`, im.id]
+    )
+    criadas++
+  }
+  return { criadas }
+}
+
 // ── 3. Tarefas automáticas por data em consultor/investidor/imóvel ─
 export async function gerarTarefasSinteticas(pool) {
   const hoje = hojeISO()
@@ -146,7 +204,7 @@ export async function gerarTarefasSinteticas(pool) {
   for (const cfg of ORIGEM_CAMPOS) {
     const { rows: entidades } = await pool.query(
       `SELECT id, nome, ${cfg.campo} AS data_valor FROM ${cfg.tabela}
-       WHERE ${cfg.campo} IS NOT NULL AND ${cfg.campo} >= $1 AND updated_at >= $2`,
+       WHERE ${cfg.campo} IS NOT NULL AND ${cfg.campo} >= $1 AND updated_at::timestamptz >= $2::timestamptz`,
       [hoje, DATA_CORTE_ORIGEM]
     )
     for (const ent of entidades) {

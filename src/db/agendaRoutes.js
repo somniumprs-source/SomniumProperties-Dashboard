@@ -7,7 +7,7 @@
 import { Router } from 'express'
 import { randomUUID } from 'crypto'
 import pool from './pg.js'
-import { gerarCadeiasAngariacao, gerarEstudoDeMercado, gerarTarefasSinteticas, instanciarTemplatesDevidos, gerarProposta } from './agendaEngine.js'
+import { gerarCadeiasAngariacao, gerarEstudoDeMercado, gerarAnaliseDeNegocio, gerarElaboracaoProposta, gerarTarefasSinteticas, instanciarTemplatesDevidos, gerarProposta } from './agendaEngine.js'
 
 const router = Router()
 const FREQUENCIAS_VALIDAS = ['diaria', 'semanal', 'quinzenal', 'mensal', 'custom']
@@ -244,6 +244,8 @@ router.post('/gerar-semana', async (req, res) => {
     if (!semana_inicio) return res.status(400).json({ error: 'semana_inicio é obrigatório' })
     const cadeias = await gerarCadeiasAngariacao(pool)
     const estudosMercado = await gerarEstudoDeMercado(pool)
+    const analises = await gerarAnaliseDeNegocio(pool)
+    const propostas = await gerarElaboracaoProposta(pool)
     const sinteticas = await gerarTarefasSinteticas(pool)
     const instanciadas = await instanciarTemplatesDevidos(pool, semana_inicio)
     const proposta = await gerarProposta(pool, semana_inicio)
@@ -251,6 +253,8 @@ router.post('/gerar-semana', async (req, res) => {
       ok: true,
       cadeias_angariacao: cadeias,
       estudos_mercado: estudosMercado,
+      analises_negocio: analises,
+      elaboracoes_proposta: propostas,
       tarefas_sinteticas: sinteticas,
       templates_instanciados: instanciadas,
       agendados: proposta.criados.length,

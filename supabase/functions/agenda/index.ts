@@ -5,7 +5,7 @@
 import { createApp } from "../_shared/hono.ts";
 import { requireAuth } from "../_shared/auth.ts";
 import pool from "../_shared/pg.ts";
-import { gerarCadeiasAngariacao, gerarEstudoDeMercado, gerarTarefasSinteticas, instanciarTemplatesDevidos, gerarProposta } from "../_shared/agendaEngine.ts";
+import { gerarCadeiasAngariacao, gerarEstudoDeMercado, gerarAnaliseDeNegocio, gerarElaboracaoProposta, gerarTarefasSinteticas, instanciarTemplatesDevidos, gerarProposta } from "../_shared/agendaEngine.ts";
 
 const app = createApp("/agenda");
 
@@ -251,6 +251,8 @@ app.post("/gerar-semana", async (c: any) => {
     if (!semana_inicio) return c.json({ error: "semana_inicio é obrigatório" }, 400);
     const cadeias = await gerarCadeiasAngariacao();
     const estudosMercado = await gerarEstudoDeMercado();
+    const analises = await gerarAnaliseDeNegocio();
+    const propostas = await gerarElaboracaoProposta();
     const sinteticas = await gerarTarefasSinteticas();
     const instanciadas = await instanciarTemplatesDevidos(semana_inicio);
     const proposta = await gerarProposta(semana_inicio);
@@ -258,6 +260,8 @@ app.post("/gerar-semana", async (c: any) => {
       ok: true,
       cadeias_angariacao: cadeias,
       estudos_mercado: estudosMercado,
+      analises_negocio: analises,
+      elaboracoes_proposta: propostas,
       tarefas_sinteticas: sinteticas,
       templates_instanciados: instanciadas,
       agendados: proposta.criados.length,

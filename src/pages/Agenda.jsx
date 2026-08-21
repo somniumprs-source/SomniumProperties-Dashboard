@@ -43,18 +43,17 @@ const PRIORIDADE_LABEL = { alta: 'Alta', media: 'Média', baixa: 'Baixa' }
 const DIAS_SEMANA = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 
 // Catálogo de tarefas recorrentes — revisto em 21/08/2026 após a
-// auditoria comercial: Pesquisa de Imóveis, Cold Call, Estudo de Mercado
-// e os follow-ups de consultor/investidor SAÍRAM daqui — passaram a ser
-// gerados automaticamente pelo motor (cadeia de angariação com gap máximo
-// de 1h entre Pesquisa e Cold Call, Estudo de Mercado accionado pelo
-// estado "Estudo de VVR" do imóvel com prazo de 48h, e follow-ups pelas
-// datas que preenches directamente nas fichas — ver Secção 2 do
-// documento de auditoria). O que resta aqui é só o que continua a ser
-// recorrência de calendário pura, sem gatilho de negócio associado.
+// auditoria comercial. Saíram daqui para virar sequência automática por
+// imóvel (cada uma só nasce quando a anterior está mesmo concluída):
+// Pesquisa de Imóveis -> Cold Call (mesmo dia, gap <=1h) -> Estudo de
+// Mercado (estado "Estudo de VVR", prazo 48h) -> Análise de Negócio (só
+// com Estudo de Mercado concluído) -> Elaboração de Proposta (só com
+// Análise de Negócio concluída, estado "Criar Proposta ao Proprietário").
+// Follow-ups de consultor/investidor saíram também — só pelas datas que
+// preenches directamente nas fichas. O que resta aqui é só recorrência de
+// calendário pura, sem gatilho de negócio nem sequência associada.
 const SUGESTOES_CATALOGO = [
   { titulo: 'Reunião Investidores', categoria: 'Reunião Investidores', duracao_estimada_horas: 1, frequencia: 'custom', prioridade: 'alta', sop_ref: 'SOP 9/11', activo: false },
-  { titulo: 'Análise de Negócio', categoria: 'Análise de Negócio', duracao_estimada_horas: 1.5, frequencia: 'semanal', prioridade: 'alta' },
-  { titulo: 'Elaboração de Proposta', categoria: 'Proposta', duracao_estimada_horas: 2, frequencia: 'semanal', prioridade: 'alta' },
   { titulo: 'Revisão de Disciplina de Dados', categoria: 'Gestão Financeira', duracao_estimada_horas: 1, frequencia: 'semanal', prioridade: 'media' },
   { titulo: 'Reunião de Equipa Somnium', categoria: 'Reunião de Equipa Somnium', duracao_estimada_horas: 1, frequencia: 'semanal', prioridade: 'alta' },
   { titulo: 'Planeamento da Semana', categoria: 'Planeamento', duracao_estimada_horas: 0.75, frequencia: 'semanal', prioridade: 'media' },
