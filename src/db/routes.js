@@ -1052,6 +1052,14 @@ async function recalcAnaliseActivaCompra(imovelId) {
     `UPDATE imoveis SET roi = $1, roi_anualizado = $2, updated_at = $3 WHERE id = $4`,
     [calculados.retorno_total ?? null, calculados.retorno_anualizado ?? null, now, imovelId],
   )
+
+  // Propagar para negocios.lucro_estimado (todas as categorias, não só
+  // Wholesalling) usando a mesma lógica já usada quando a análise é gravada
+  // pela calculadora — importação dinâmica para evitar ciclo de import
+  // estático com analiseRoutes.js (que importa uploadImovel/supabaseStorage
+  // deste ficheiro ao nível do módulo).
+  const { propagarParaImovel } = await import('./analiseRoutes.js')
+  await propagarParaImovel(imovelId, calculados, inputs).catch(e => console.error('[analise/recalc propagar]', e.message))
 }
 
 // UX12 — Soft delete (lixeira): marcar deleted_at em vez de apagar.
@@ -5179,15 +5187,18 @@ router.get('/projetos/:negocioId/despesas', async (req, res) => {
 
 router.post('/projetos/:negocioId/despesas', async (req, res) => {
   try {
-    const { fase_id, fracao_id, movimento, valor, data, categoria, fornecedor, notas, comprovativo_url, comprovativo_nome } = req.body || {}
+    const { fase_id, fracao_id, movimento, valor, data, categoria, fornecedor, notas } = req.body || {}
     if (!movimento?.trim()) return res.status(400).json({ error: 'movimento obrigatório' })
     const id = randomUUID()
+    // Anexo de comprovativo passa sempre por despesas.documentos — ver
+    // POST /projetos/despesas/:despesaId/comprovativo, chamado depois de criar
+    // a despesa. Nunca escrever comprovativo_url/comprovativo_nome aqui.
     const { rows } = await pool.query(
-      `INSERT INTO despesas (id, movimento, categoria, custo_mensal, custo_anual, timing, data, notas, negocio_id, fase_id, fracao_id, fornecedor, comprovativo_url, comprovativo_nome)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+      `INSERT INTO despesas (id, movimento, categoria, custo_mensal, custo_anual, timing, data, notas, negocio_id, fase_id, fracao_id, fornecedor)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
       [id, movimento.trim(), categoria || 'Obra', Number(valor) || 0, 0, 'Único', data || null, notas || null,
        req.params.negocioId, fase_id || null, fracao_id || null,
-       fornecedor || null, comprovativo_url || null, comprovativo_nome || null]
+       fornecedor || null]
     )
     // Recalcular custo_real da fase
     if (fase_id) {
@@ -5221,20 +5232,35 @@ const uploadComprovativo = multer({
   fileFilter: (req, file, cb) => cb(null, /\.(pdf|jpg|jpeg|png|webp|heic)$/i.test(path.extname(file.originalname))),
 })
 
+// Comprovativo de despesa de obra — usa o mesmo mecanismo (despesas.documentos)
+// do resto das despesas, em vez de comprovativo_url/comprovativo_nome (campo
+// paralelo sem nenhuma UI a mostrá-lo — confirmado por grep no frontend).
 router.post('/projetos/despesas/:despesaId/comprovativo', uploadRateLimit, uploadComprovativo.single('comprovativo'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Sem ficheiro' })
-    const url = `/uploads/comprovativos/${req.file.filename}`
+    const { despesaId } = req.params
+    const despesa = await Despesas.getById(despesaId)
+    if (!despesa) return res.status(404).json({ error: 'Despesa não encontrada' })
+
+    const docs = despesa.documentos ? JSON.parse(despesa.documentos) : []
+    docs.push({
+      id: randomUUID(),
+      name: req.file.originalname,
+      path: `/uploads/comprovativos/${req.file.filename}`,
+      type: req.file.mimetype,
+      size: req.file.size,
+      uploaded_at: new Date().toISOString(),
+    })
     const { rows } = await pool.query(
-      `UPDATE despesas SET comprovativo_url = $1, comprovativo_nome = $2 WHERE id = $3 RETURNING *`,
-      [url, req.file.originalname, req.params.despesaId]
+      `UPDATE despesas SET documentos = $1 WHERE id = $2 RETURNING *`,
+      [JSON.stringify(docs), despesaId]
     )
     if (!rows.length) return res.status(404).json({ error: 'Despesa não encontrada' })
     // Espelho no Google Drive (best-effort — não bloqueia a resposta)
     if (driveConfigured()) {
       try {
         const fileBuffer = await readFile(req.file.path)
-        await uploadComprovativoToFolder(req.params.despesaId, fileBuffer, req.file.originalname, req.file.mimetype)
+        await uploadComprovativoToFolder(despesaId, fileBuffer, req.file.originalname, req.file.mimetype)
       } catch (e) { console.error('[drive] espelho comprovativo:', e.message) }
     }
     res.json(rows[0])
@@ -5269,6 +5295,18 @@ router.get('/projetos/:negocioId/investidores', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// investidores.montante_investido deixa de ser editável à mão — passa a ser
+// sempre a soma real do capital desse investidor em projeto_investidores
+// (fonte de verdade). Recalculado a cada escrita nesta tabela.
+async function syncMontanteInvestido(investidorId) {
+  if (!investidorId) return
+  const { rows: [r] } = await pool.query(
+    'SELECT COALESCE(SUM(capital), 0) AS total FROM projeto_investidores WHERE investidor_id = $1',
+    [investidorId]
+  )
+  await pool.query('UPDATE investidores SET montante_investido = $1 WHERE id = $2', [Number(r.total) || 0, investidorId])
+}
+
 router.post('/projetos/:negocioId/investidores', async (req, res) => {
   try {
     const { investidor_id, capital, percentagem, notas } = req.body || {}
@@ -5284,6 +5322,7 @@ router.post('/projetos/:negocioId/investidores', async (req, res) => {
     )
     // Se este investidor tem um utilizador ligado, dar-lhe acesso a este projecto.
     syncInvestidorAcessos(investidor_id).catch(e => console.error('[projeto-investidor] syncAcessos:', e.message))
+    syncMontanteInvestido(investidor_id).catch(e => console.error('[projeto-investidor] syncMontante:', e.message))
     res.status(201).json(rows[0])
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -5303,13 +5342,15 @@ router.put('/projetos/investidores/:linkId', async (req, res) => {
     params.push(req.params.linkId)
     const { rows } = await pool.query(`UPDATE projeto_investidores SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`, params)
     if (!rows.length) return res.status(404).json({ error: 'Ligação não encontrada' })
+    syncMontanteInvestido(rows[0].investidor_id).catch(e => console.error('[projeto-investidor] syncMontante:', e.message))
     res.json(rows[0])
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 router.delete('/projetos/investidores/:linkId', async (req, res) => {
   try {
-    await pool.query('DELETE FROM projeto_investidores WHERE id = $1', [req.params.linkId])
+    const { rows } = await pool.query('DELETE FROM projeto_investidores WHERE id = $1 RETURNING investidor_id', [req.params.linkId])
+    if (rows[0]) syncMontanteInvestido(rows[0].investidor_id).catch(e => console.error('[projeto-investidor] syncMontante:', e.message))
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })

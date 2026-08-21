@@ -1157,6 +1157,7 @@ import {
   round2 as round2PG,
   isInvestidorPrincipal,
 } from './src/db/queries.js'
+import { calcBurnRateMensal, calcDespesasAnuaisTotal, despesasDaEmpresa } from './src/db/financeCalc.js'
 
 // Legacy getters (retornam vazio — DBs inacessíveis)
 const getEmpreiteiros = async () => []
@@ -1256,12 +1257,9 @@ app.get('/api/kpis/financeiro', endpointCache(300000), async (req, res) => {
     const pendentes          = negócios.filter(n => n.pagamentoEmFalta)
     const negóciosAtivos     = negócios.filter(n => n.fase !== 'Vendido')
 
-    // Burn rate — mensais + anuais ÷ 12
-    const burnRate = round2(
-      despesas.filter(d => d.timing === 'Mensalmente').reduce((s,d) => s + d.custoMensal, 0) + despesas.filter(d => d.timing === 'Anual').reduce((s,d) => s + (d.custoAnual || 0) / 12, 0) +
-      despesas.filter(d => d.timing === 'Anual').reduce((s,d) => s + (d.custoAnual || 0) / 12, 0)
-    )
-    const despesasAnuaisTotal = round2(despesas.reduce((s,d) => s + d.custoAnual, 0))
+    // Burn rate — mensais + anuais ÷ 12, só despesas da empresa (sem obra)
+    const burnRate = calcBurnRateMensal(despesas)
+    const despesasAnuaisTotal = round2(despesasDaEmpresa(despesas).reduce((s,d) => s + (d.custoAnual || 0), 0))
     const runway = burnRate > 0 && lucroPendente > 0 ? round2(lucroPendente / burnRate) : null
 
     // Por categoria
@@ -1355,18 +1353,19 @@ app.get('/api/kpis/financeiro', endpointCache(300000), async (req, res) => {
 app.get('/api/financeiro/despesas', endpointCache(300000), async (req, res) => {
   try {
     const despesas = await getDespesas({ regiao: req.regiaoActiva })
+    // Despesas de obra (negocio_id preenchido) já estão no custo do projecto —
+    // ficam de fora dos totais/categorias "da empresa", mas continuam visíveis
+    // na listagem completa (`todas`).
+    const despesasEmpresa = despesasDaEmpresa(despesas)
 
-    const recorrentes = despesas.filter(d => d.timing === 'Mensalmente')
-    const anuais      = despesas.filter(d => d.timing === 'Anual')
-    const unicaVez    = despesas.filter(d => d.timing === 'Único')
+    const recorrentes = despesasEmpresa.filter(d => d.timing === 'Mensalmente')
+    const anuais      = despesasEmpresa.filter(d => d.timing === 'Anual')
+    const unicaVez    = despesasEmpresa.filter(d => d.timing === 'Único')
     // Burn rate = mensais + anuais ÷ 12
-    const burnRate    = round2(
-      recorrentes.reduce((s,d) => s + d.custoMensal, 0) +
-      anuais.reduce((s,d) => s + (d.custoAnual || 0) / 12, 0)
-    )
+    const burnRate = calcBurnRateMensal(despesas)
 
     const porCategoria = {}
-    for (const d of despesas) {
+    for (const d of despesasEmpresa) {
       const k = d.categoria ?? 'Outros'
       if (!porCategoria[k]) porCategoria[k] = { custoMensal: 0, custoAnual: 0, count: 0 }
       porCategoria[k].custoMensal += d.custoMensal
@@ -1382,7 +1381,7 @@ app.get('/api/financeiro/despesas', endpointCache(300000), async (req, res) => {
     const totalAnual = round2(
       recorrentes.reduce((s,d) => s + (d.custoMensal || 0) * 12, 0) +
       anuais.reduce((s,d) => s + (d.custoAnual || 0), 0) +
-      [...unicaVez, ...despesas.filter(d => d.timing === 'Registado')]
+      [...unicaVez, ...despesasEmpresa.filter(d => d.timing === 'Registado')]
         .filter(d => d.data && new Date(d.data).getFullYear() === anoActual)
         .reduce((s,d) => s + (d.custoMensal || d.custoAnual || 0), 0)
     )
@@ -1406,7 +1405,7 @@ app.get('/api/financeiro/cashflow', endpointCache(300000), async (req, res) => {
 
     const pendentes  = negócios.filter(n => n.pagamentoEmFalta)
     const recebidos  = negócios.filter(n => !n.pagamentoEmFalta && n.lucroReal > 0)
-    const burnRate   = round2(despesas.filter(d => d.timing === 'Mensalmente').reduce((s,d) => s + d.custoMensal, 0) + despesas.filter(d => d.timing === 'Anual').reduce((s,d) => s + (d.custoAnual || 0) / 12, 0))
+    const burnRate   = calcBurnRateMensal(despesas)
 
     const fatExpectavel  = round2(negócios.reduce((s,n) => s + n.lucroEstimado, 0))
     const fatReal        = round2(negócios.reduce((s,n) => s + n.lucroReal, 0))
@@ -2361,7 +2360,7 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
     const lucroLiquido = round2(negPeriodo.reduce((s,n) => s + lucroDe(n), 0))
     const lucroMedio = avg(negPeriodo.map(n => lucroDe(n) || null))
     const margemPct = avg(negPeriodo.filter(n => n.capitalTotal > 0).map(n => lucroDe(n) / n.capitalTotal * 100))
-    const burnMensal = round2(despesas.reduce((s,d) => s + (d.custoMensal || 0), 0))
+    const burnMensal = round2(despesasDaEmpresa(despesas).reduce((s,d) => s + (d.custoMensal || 0), 0))
     const cac = dealsPeriodo > 0 ? round2(burnMensal * mesesPeriodo / dealsPeriodo) : null
     const roiMedio = avg(imoveisAll.filter(i => i.roi > 0).map(i => i.roi))
     const roiAnualizadoMedio = avg(imoveisAll.filter(i => i.roiAnualizado > 0).map(i => i.roiAnualizado))
@@ -2744,7 +2743,7 @@ app.get('/api/weekly-pulse', async (req, res) => {
     ).length
 
     // Cash
-    const burnRate = round2(despesas.filter(d => d.timing === 'Mensalmente').reduce((s,d) => s + d.custoMensal, 0) + despesas.filter(d => d.timing === 'Anual').reduce((s,d) => s + (d.custoAnual || 0) / 12, 0))
+    const burnRate = calcBurnRateMensal(despesas)
     const lucroPendente = round2(negocios.filter(n => n.pagamentoEmFalta).reduce((s,n) => s + n.lucroEstimado, 0))
     const runway = burnRate > 0 ? round2(lucroPendente / burnRate) : null
 
@@ -2784,8 +2783,8 @@ app.get('/api/financeiro/projecao', endpointCache(300000), async (req, res) => {
     const [negocios, despesas] = await Promise.all([getNegócios(), getDespesas()])
     const now = new Date()
 
-    const burnRate = round2(despesas.filter(d => d.timing === 'Mensalmente').reduce((s,d) => s + d.custoMensal, 0) + despesas.filter(d => d.timing === 'Anual').reduce((s,d) => s + (d.custoAnual || 0) / 12, 0))
-    const despesasAnuais = despesas.filter(d => d.timing === 'Anual')
+    const burnRate = calcBurnRateMensal(despesas)
+    const despesasAnuais = despesasDaEmpresa(despesas).filter(d => d.timing === 'Anual')
 
     // Projeção: próximos 12 meses
     const meses = []
@@ -3549,7 +3548,7 @@ app.get('/api/metricas', async (req, res) => {
 
     const CUSTO_HORA = 15
     const CUSTOS_FIXOS_MENSAIS = 360.40
-    const burnRateMensal = round2(despesas.filter(d => d.timing === 'Mensalmente').reduce((s,d) => s + d.custoMensal, 0) + despesas.filter(d => d.timing === 'Anual').reduce((s,d) => s + (d.custoAnual || 0) / 12, 0)) || CUSTOS_FIXOS_MENSAIS
+    const burnRateMensal = calcBurnRateMensal(despesas) || CUSTOS_FIXOS_MENSAIS
     // Meses desde início (usar data mais antiga de qualquer registo)
     const datasIniciais = [
       ...imoveis.map(i => i.dataAdicionado).filter(Boolean),
@@ -5293,7 +5292,7 @@ app.get('/api/time-tracking', async (req, res) => {
     const rphRealizado = totalHoras > 0 && receitaRealizada > 0 ? round2(receitaRealizada / totalHoras) : null
 
     // Custo por hora (horas × 15€ + custos fixos rateados)
-    const burnRateMensal = round2(despesas.filter(d => d.timing === 'Mensalmente').reduce((s, d) => s + d.custoMensal, 0) + despesas.filter(d => d.timing === 'Anual').reduce((s,d) => s + (d.custoAnual || 0) / 12, 0)) || 360.40
+    const burnRateMensal = calcBurnRateMensal(despesas) || 360.40
     const custoHorasTotal = round2(totalHoras * CUSTO_HORA)
     const mesesOp = meses.length || 1
     const custoFixoTotal = round2(burnRateMensal * mesesOp)

@@ -1540,6 +1540,16 @@ export async function initSchema() {
           ALTER TABLE classificacao_historico ADD CONSTRAINT classificacao_historico_scorecard_id_fkey FOREIGN KEY (scorecard_id) REFERENCES scorecards(id) ON DELETE SET NULL NOT VALID;
         END IF;
       END $$;
+
+      -- Formaliza 3 colunas usadas todos os dias (formulários, PDFs, auto-geração
+      -- de ref_interna) mas que existiam só em produção, criadas manualmente fora
+      -- do processo de migração (ver migration 0031_imoveis_campos_manuais.sql).
+      DO $$ BEGIN
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS ref_interna TEXT;
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS imi_anual REAL;
+        ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS condominio_mensal_anunciado REAL;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
     `)
 
     // Bootstrap: garantir que somniumprs@gmail.com (owner) existe como admin

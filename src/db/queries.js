@@ -51,6 +51,10 @@ function mapDespesa(r) {
     notas: r.notas,
     regiao: r.regiao || null,
     rateio: parseRateio(r.rateio),
+    // Despesa de obra (negocio_id/fase_id preenchidos) — já contabilizada no
+    // lucro/custo do negócio, nunca deve entrar nos totais gerais da empresa.
+    negocioId: r.negocio_id || null,
+    faseId: r.fase_id || null,
   }
 }
 

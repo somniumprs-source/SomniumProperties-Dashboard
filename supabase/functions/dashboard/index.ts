@@ -14,6 +14,7 @@ import {
   isInvestidorPrincipal,
   round2,
 } from "../_shared/queries.ts";
+import { calcBurnRateMensal, despesasDaEmpresa } from "../_shared/financeCalc.ts";
 
 // pool.query e os mappers das queries resolvem para `any` (pg sem tipos), pelo que
 // as funcoes importadas chegam como Promise<any>. Reanotamos aqui para Promise<any[]>
@@ -106,13 +107,9 @@ async function kpisFinanceiro(regiao: string | null) {
   const pendentes = negócios.filter((n) => n.pagamentoEmFalta);
   const negóciosAtivos = negócios.filter((n) => n.fase !== "Vendido");
 
-  // Burn rate — mensais + anuais ÷ 12
-  const burnRate = round2(
-    despesas.filter((d) => d.timing === "Mensalmente").reduce((s, d) => s + d.custoMensal, 0) +
-      despesas.filter((d) => d.timing === "Anual").reduce((s, d) => s + (d.custoAnual || 0) / 12, 0) +
-      despesas.filter((d) => d.timing === "Anual").reduce((s, d) => s + (d.custoAnual || 0) / 12, 0),
-  );
-  const despesasAnuaisTotal = round2(despesas.reduce((s, d) => s + d.custoAnual, 0));
+  // Burn rate — mensais + anuais ÷ 12, só despesas da empresa (sem obra)
+  const burnRate = calcBurnRateMensal(despesas);
+  const despesasAnuaisTotal = round2(despesasDaEmpresa(despesas).reduce((s, d) => s + (d.custoAnual || 0), 0));
   const runway = burnRate > 0 && lucroPendente > 0 ? round2(lucroPendente / burnRate) : null;
 
   // Por categoria
@@ -248,18 +245,19 @@ app.get("/kpis/financeiro", async (c: any) => {
 app.get("/financeiro/despesas", async (c: any) => {
   try {
     const despesas = await getDespesas({ regiao: regiaoFrom(c) });
+    // Despesas de obra (negocio_id preenchido) já estão no custo do projecto —
+    // ficam de fora dos totais/categorias "da empresa", mas continuam visíveis
+    // na listagem completa (`todas`).
+    const despesasEmpresa = despesasDaEmpresa(despesas);
 
-    const recorrentes = despesas.filter((d) => d.timing === "Mensalmente");
-    const anuais = despesas.filter((d) => d.timing === "Anual");
-    const unicaVez = despesas.filter((d) => d.timing === "Único");
+    const recorrentes = despesasEmpresa.filter((d) => d.timing === "Mensalmente");
+    const anuais = despesasEmpresa.filter((d) => d.timing === "Anual");
+    const unicaVez = despesasEmpresa.filter((d) => d.timing === "Único");
     // Burn rate = mensais + anuais ÷ 12
-    const burnRate = round2(
-      recorrentes.reduce((s, d) => s + d.custoMensal, 0) +
-        anuais.reduce((s, d) => s + (d.custoAnual || 0) / 12, 0),
-    );
+    const burnRate = calcBurnRateMensal(despesas);
 
     const porCategoria: Record<string, any> = {};
-    for (const d of despesas) {
+    for (const d of despesasEmpresa) {
       const k = d.categoria ?? "Outros";
       if (!porCategoria[k]) porCategoria[k] = { custoMensal: 0, custoAnual: 0, count: 0 };
       porCategoria[k].custoMensal += d.custoMensal;
@@ -280,7 +278,7 @@ app.get("/financeiro/despesas", async (c: any) => {
     const totalAnual = round2(
       recorrentes.reduce((s, d) => s + (d.custoMensal || 0) * 12, 0) +
         anuais.reduce((s, d) => s + (d.custoAnual || 0), 0) +
-        [...unicaVez, ...despesas.filter((d) => d.timing === "Registado")]
+        [...unicaVez, ...despesasEmpresa.filter((d) => d.timing === "Registado")]
           .filter((d) => d.data && new Date(d.data).getFullYear() === anoActual)
           .reduce((s, d) => s + (d.custoMensal || d.custoAnual || 0), 0),
     );
@@ -307,10 +305,7 @@ async function financeiroCashflow(regiao: string | null) {
 
   const pendentes = negócios.filter((n) => n.pagamentoEmFalta);
   const recebidos = negócios.filter((n) => !n.pagamentoEmFalta && n.lucroReal > 0);
-  const burnRate = round2(
-    despesas.filter((d) => d.timing === "Mensalmente").reduce((s, d) => s + d.custoMensal, 0) +
-      despesas.filter((d) => d.timing === "Anual").reduce((s, d) => s + (d.custoAnual || 0) / 12, 0),
-  );
+  const burnRate = calcBurnRateMensal(despesas);
 
   const fatExpectavel = round2(negócios.reduce((s, n) => s + n.lucroEstimado, 0));
   const fatReal = round2(negócios.reduce((s, n) => s + n.lucroReal, 0));
@@ -1343,7 +1338,7 @@ app.get("/comercial/dashboard", async (c: any) => {
     const lucroLiquido = round2(negPeriodo.reduce((s: number, n: any) => s + lucroDe(n), 0));
     const lucroMedio = avg(negPeriodo.map((n: any) => lucroDe(n) || null));
     const margemPct = avg(negPeriodo.filter((n: any) => n.capitalTotal > 0).map((n: any) => lucroDe(n) / n.capitalTotal * 100));
-    const burnMensal = round2(despesas.reduce((s: number, d: any) => s + (d.custoMensal || 0), 0));
+    const burnMensal = round2(despesasDaEmpresa(despesas).reduce((s: number, d: any) => s + (d.custoMensal || 0), 0));
     const cac = dealsPeriodo > 0 ? round2(burnMensal * mesesPeriodo / dealsPeriodo) : null;
     const roiMedio = avg(imoveisAll.filter((i) => i.roi > 0).map((i) => i.roi));
     const roiAnualizadoMedio = avg(imoveisAll.filter((i) => i.roiAnualizado > 0).map((i) => i.roiAnualizado));
@@ -1678,11 +1673,8 @@ app.get("/financeiro/projecao", async (c: any) => {
     const [negocios, despesas] = await Promise.all([getNegócios(), getDespesas()]);
     const now = new Date();
 
-    const burnRate = round2(
-      despesas.filter((d) => d.timing === "Mensalmente").reduce((s, d) => s + d.custoMensal, 0) +
-        despesas.filter((d) => d.timing === "Anual").reduce((s, d) => s + (d.custoAnual || 0) / 12, 0),
-    );
-    const despesasAnuais = despesas.filter((d) => d.timing === "Anual");
+    const burnRate = calcBurnRateMensal(despesas);
+    const despesasAnuais = despesasDaEmpresa(despesas).filter((d) => d.timing === "Anual");
 
     // Projeção: próximos 12 meses
     const meses: any[] = [];
@@ -2258,10 +2250,7 @@ app.get("/metricas", async (c: any) => {
     // ── 2.1 CAC ─────────────────────────────────────────────────
     const CUSTO_HORA = 15;
     const CUSTOS_FIXOS_MENSAIS = 360.40;
-    const burnRateMensal = round2(
-      despesas.filter((d) => d.timing === "Mensalmente").reduce((s, d) => s + d.custoMensal, 0) +
-        despesas.filter((d) => d.timing === "Anual").reduce((s, d) => s + (d.custoAnual || 0) / 12, 0),
-    ) || CUSTOS_FIXOS_MENSAIS;
+    const burnRateMensal = calcBurnRateMensal(despesas) || CUSTOS_FIXOS_MENSAIS;
     const datasIniciais = [
       ...imoveis.map((i) => i.dataAdicionado).filter(Boolean),
       ...investidores.map((i) => i.dataPrimeiroContacto).filter(Boolean),
@@ -3759,10 +3748,7 @@ app.get("/weekly-pulse", async (c: any) => {
     ).length;
 
     // Cash
-    const burnRate = round2(
-      despesas.filter((d) => d.timing === "Mensalmente").reduce((s, d) => s + d.custoMensal, 0) +
-        despesas.filter((d) => d.timing === "Anual").reduce((s, d) => s + (d.custoAnual || 0) / 12, 0),
-    );
+    const burnRate = calcBurnRateMensal(despesas);
     const lucroPendente = round2(negocios.filter((n) => n.pagamentoEmFalta).reduce((s, n) => s + n.lucroEstimado, 0));
     const runway = burnRate > 0 ? round2(lucroPendente / burnRate) : null;
 
@@ -4068,10 +4054,7 @@ app.get("/time-tracking", async (c: any) => {
     const rphRealizado = totalHoras > 0 && receitaRealizada > 0 ? round2(receitaRealizada / totalHoras) : null;
 
     // Custo por hora (horas × 15€ + custos fixos rateados)
-    const burnRateMensal = round2(
-      despesas.filter((d) => d.timing === "Mensalmente").reduce((s, d) => s + d.custoMensal, 0) +
-        despesas.filter((d) => d.timing === "Anual").reduce((s, d) => s + (d.custoAnual || 0) / 12, 0),
-    ) || 360.40;
+    const burnRateMensal = calcBurnRateMensal(despesas) || 360.40;
     const custoHorasTotal = round2(totalHoras * CUSTO_HORA);
     const mesesOp = meses.length || 1;
     const custoFixoTotal = round2(burnRateMensal * mesesOp);

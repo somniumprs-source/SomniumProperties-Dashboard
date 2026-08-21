@@ -61,17 +61,14 @@ const CALC_FIELDS = new Set([
 // O preco de aquisicao da analise (compra) e SUGERIDO pela proposta da ficha do
 // imovel (valor_proposta), editavel; so se usa como default quando a analise ainda
 // nao tem compra propria. No Wholesaling, o fee de cedencia e somado a compra
-// dentro do calcEngine (compra apresentada = compra + fee), e e tambem o default
-// herdado da ficha (imoveis.fee_cedencia) quando a analise nao o define.
+// dentro do calcEngine (compra apresentada = compra + fee) e e SEMPRE herdado
+// da ficha (imoveis.fee_cedencia) — fonte unica, a analise nunca tem valor
+// proprio independente (a UI da calculadora ja mostra o campo como read-only).
 function applyCompraOverride(inputs, imovel) {
   if (!imovel) return inputs
   const out = { ...inputs }
   if (isWholesaling(imovel)) {
-    const feeAtual = Number(out.fee_cedencia)
-    if (!(Number.isFinite(feeAtual) && feeAtual > 0)) {
-      const feeFicha = Number(imovel.fee_cedencia)
-      if (Number.isFinite(feeFicha) && feeFicha > 0) out.fee_cedencia = feeFicha
-    }
+    out.fee_cedencia = Number(imovel.fee_cedencia) || 0
   }
   const atual = Number(out.compra)
   if (Number.isFinite(atual) && atual > 0) return out
@@ -458,7 +455,12 @@ router.get('/analises-kpis', async (req, res) => {
 })
 
 // ── Propagação: análise activa → imóvel + negócio ────────────
-async function propagarParaImovel(imovelId, calculados, inputs) {
+// Exportada para ser reutilizada por recalcAnaliseActivaCompra (routes.js),
+// disparada quando a ficha do imóvel é editada directamente (valor_proposta/
+// fee_cedencia/modelo_negocio) sem passar pela calculadora — assim os dois
+// caminhos de recálculo usam sempre a mesma lógica de propagação para todas
+// as categorias de negócio, não só Wholesalling.
+export async function propagarParaImovel(imovelId, calculados, inputs) {
   try {
     const vvr = parseFloat(inputs.vvr) || 0
     const obraComIva = calculados.obra_com_iva || 0
@@ -486,12 +488,11 @@ async function propagarParaImovel(imovelId, calculados, inputs) {
 
       if (neg.categoria === 'Wholesalling') {
         // Wholesaling = cedência de posição: lucro expectável = fee de cedência.
-        // Fonte única = imoveis.fee_cedencia: quando a análise define o fee,
-        // propaga-se para a ficha do imóvel (a ficha e a Calculadora não divergem).
+        // Fonte única = imoveis.fee_cedencia (applyCompraOverride já garante que
+        // inputs.fee_cedencia reflecte sempre a ficha antes de chegar aqui).
         const fee = Math.round((parseFloat(inputs.fee_cedencia) || 0) * 100) / 100
         if (fee > 0) {
           lucroEstimado = fee
-          await pool.query('UPDATE imoveis SET fee_cedencia = $1 WHERE id = $2', [fee, imovelId])
         } else {
           // Sem fee na análise: NÃO zerar. Se houver tranches, lucro = Σtranches
           // (o fee está faseado); senão mantém o valor actual do negócio.
@@ -521,9 +522,13 @@ async function propagarParaImovel(imovelId, calculados, inputs) {
         lucroEstimado = calculados.lucro_liquido || 0
       }
 
+      // capital_total nunca fica a 0: reflecte sempre o capital necessário
+      // calculado pela análise activa (antes ficava permanentemente zerado
+      // depois da primeira gravação da calculadora).
+      const capitalTotal = Math.round((calculados.capital_necessario || 0) * 100) / 100
       await pool.query(
-        `UPDATE negocios SET lucro_estimado = $1, capital_total = 0, updated_at = $2 WHERE id = $3`,
-        [lucroEstimado, now, neg.id]
+        `UPDATE negocios SET lucro_estimado = $1, capital_total = $2, updated_at = $3 WHERE id = $4`,
+        [lucroEstimado, capitalTotal, now, neg.id]
       )
     }
   } catch (e) {

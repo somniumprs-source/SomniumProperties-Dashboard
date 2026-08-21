@@ -47,7 +47,7 @@ import {
 } from "../_shared/gmailSync.ts";
 import Anthropic from "@anthropic-ai/sdk";
 import { registerRegiaoRoutes } from "./regiaoRoutes.ts";
-import { registerAnaliseRoutes } from "./analiseRoutes.ts";
+import { registerAnaliseRoutes, propagarParaImovel } from "./analiseRoutes.ts";
 import { registerOrcamentoRoutes } from "./orcamentoRoutes.ts";
 import { calcAnalise, calcStressTests } from "../_shared/calcEngine.ts";
 // ── Subsistema PROJETOS (Fix and Flip) ─────────────────────────
@@ -1248,6 +1248,11 @@ async function recalcAnaliseActivaCompra(imovelId: string) {
     `UPDATE imoveis SET roi = $1, roi_anualizado = $2, updated_at = $3 WHERE id = $4`,
     [calculados.retorno_total ?? null, calculados.retorno_anualizado ?? null, now, imovelId],
   );
+
+  // Propagar para negocios.lucro_estimado (todas as categorias, não só
+  // Wholesalling) usando a mesma lógica já usada quando a análise é gravada
+  // pela calculadora.
+  await propagarParaImovel(imovelId, calculados, inputs).catch((e: any) => console.error("[analise/recalc propagar]", (e as Error).message));
 }
 
 // Middleware: garante a coluna valor_cedencia_posicao antes de qualquer POST/PUT
@@ -5225,15 +5230,18 @@ app.get("/projetos/:negocioId/despesas", async (c: any) => {
 app.post("/projetos/:negocioId/despesas", async (c: any) => {
   try {
     const negocioId = c.req.param("negocioId");
-    const { fase_id, fracao_id, movimento, valor, data, categoria, fornecedor, notas, comprovativo_url, comprovativo_nome } = await c.req.json().catch(() => ({}));
+    const { fase_id, fracao_id, movimento, valor, data, categoria, fornecedor, notas } = await c.req.json().catch(() => ({}));
     if (!movimento?.trim()) return c.json({ error: "movimento obrigatório" }, 400);
     const id = crypto.randomUUID();
+    // Anexo de comprovativo passa sempre por despesas.documentos — ver
+    // POST /projetos/despesas/:despesaId/comprovativo, chamado depois de criar
+    // a despesa. Nunca escrever comprovativo_url/comprovativo_nome aqui.
     const { rows } = await pool.query(
-      `INSERT INTO despesas (id, movimento, categoria, custo_mensal, custo_anual, timing, data, notas, negocio_id, fase_id, fracao_id, fornecedor, comprovativo_url, comprovativo_nome)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+      `INSERT INTO despesas (id, movimento, categoria, custo_mensal, custo_anual, timing, data, notas, negocio_id, fase_id, fracao_id, fornecedor)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
       [id, movimento.trim(), categoria || "Obra", Number(valor) || 0, 0, "Único", data || null, notas || null,
         negocioId, fase_id || null, fracao_id || null,
-        fornecedor || null, comprovativo_url || null, comprovativo_nome || null],
+        fornecedor || null],
     );
     if (fase_id) {
       await pool.query(
@@ -5254,9 +5262,13 @@ app.post("/projetos/:negocioId/despesas", async (c: any) => {
 
 // ── POST comprovativo de despesa — port de routes.js 4229-4240 ──
 // Multipart (multer single 'comprovativo') → Hono formData + uploadPublic (bucket "projetos").
+// Usa o mesmo mecanismo (despesas.documentos) do resto das despesas, em vez de
+// comprovativo_url/comprovativo_nome (campo paralelo sem nenhuma UI a mostrá-lo).
 app.post("/projetos/despesas/:despesaId/comprovativo", async (c: any) => {
   try {
     const despesaId = c.req.param("despesaId");
+    const despesa = await Despesas.getById(despesaId);
+    if (!despesa) return c.json({ error: "Despesa não encontrada" }, 404);
     const form = await c.req.formData();
     const fRaw = form.get("comprovativo");
     const file = fRaw instanceof File ? fRaw : null;
@@ -5264,9 +5276,19 @@ app.post("/projetos/despesas/:despesaId/comprovativo", async (c: any) => {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const storagePath = `comprovativos/${despesaId}/${crypto.randomUUID()}_${file.name}`;
     const url = await uploadPublic("projetos", storagePath, bytes, file.type || "application/octet-stream");
+
+    const docs = despesa.documentos ? JSON.parse(despesa.documentos) : [];
+    docs.push({
+      id: crypto.randomUUID(),
+      name: file.name,
+      path: url,
+      type: file.type,
+      size: file.size,
+      uploaded_at: new Date().toISOString(),
+    });
     const { rows } = await pool.query(
-      `UPDATE despesas SET comprovativo_url = $1, comprovativo_nome = $2 WHERE id = $3 RETURNING *`,
-      [url, file.name, despesaId],
+      `UPDATE despesas SET documentos = $1 WHERE id = $2 RETURNING *`,
+      [JSON.stringify(docs), despesaId],
     );
     if (!rows.length) return c.json({ error: "Despesa não encontrada" }, 404);
     // Espelho no Google Drive (best-effort — não bloqueia a resposta)
@@ -5309,6 +5331,18 @@ app.get("/projetos/:negocioId/investidores", async (c: any) => {
 });
 
 // ── POST investidor ao projecto — port de routes.js 4270-4285 ──
+// investidores.montante_investido deixa de ser editável à mão — passa a ser
+// sempre a soma real do capital desse investidor em projeto_investidores
+// (fonte de verdade). Recalculado a cada escrita nesta tabela.
+async function syncMontanteInvestido(investidorId: string) {
+  if (!investidorId) return;
+  const { rows: [r] } = await pool.query(
+    "SELECT COALESCE(SUM(capital), 0) AS total FROM projeto_investidores WHERE investidor_id = $1",
+    [investidorId],
+  );
+  await pool.query("UPDATE investidores SET montante_investido = $1 WHERE id = $2", [Number(r.total) || 0, investidorId]);
+}
+
 app.post("/projetos/:negocioId/investidores", async (c: any) => {
   try {
     const { investidor_id, capital, percentagem, notas } = await c.req.json().catch(() => ({}));
@@ -5324,6 +5358,7 @@ app.post("/projetos/:negocioId/investidores", async (c: any) => {
     );
     // Se este investidor tem um utilizador ligado, dar-lhe acesso a este projecto.
     syncInvestidorAcessos(investidor_id).catch((e: any) => console.error("[projeto-investidor] syncAcessos:", e.message));
+    syncMontanteInvestido(investidor_id).catch((e: any) => console.error("[projeto-investidor] syncMontante:", e.message));
     return c.json(rows[0], 201);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
@@ -5345,6 +5380,7 @@ app.put("/projetos/investidores/:linkId", async (c: any) => {
     params.push(c.req.param("linkId"));
     const { rows } = await pool.query(`UPDATE projeto_investidores SET ${sets.join(", ")} WHERE id = $${params.length} RETURNING *`, params);
     if (!rows.length) return c.json({ error: "Ligação não encontrada" }, 404);
+    syncMontanteInvestido(rows[0].investidor_id).catch((e: any) => console.error("[projeto-investidor] syncMontante:", e.message));
     return c.json(rows[0]);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
@@ -5352,7 +5388,8 @@ app.put("/projetos/investidores/:linkId", async (c: any) => {
 // ── DELETE investidor do projecto — port de routes.js 4306-4311 ──
 app.delete("/projetos/investidores/:linkId", async (c: any) => {
   try {
-    await pool.query("DELETE FROM projeto_investidores WHERE id = $1", [c.req.param("linkId")]);
+    const { rows } = await pool.query("DELETE FROM projeto_investidores WHERE id = $1 RETURNING investidor_id", [c.req.param("linkId")]);
+    if (rows[0]) syncMontanteInvestido(rows[0].investidor_id).catch((e: any) => console.error("[projeto-investidor] syncMontante:", e.message));
     return c.json({ ok: true });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });

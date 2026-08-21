@@ -58,7 +58,10 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
   const fonteCompra = Number(imovel?.valor_proposta)
   const compraLabel = 'Valor da Proposta'
   const temSugestao = Number.isFinite(fonteCompra) && fonteCompra > 0
-  const compraApresentada = (Number(form.compra) || 0) + (Number(form.fee_cedencia) || 0)
+  // fee_cedencia: fonte única é a ficha do imóvel (imoveis.fee_cedencia) — a
+  // calculadora só lê, nunca tem valor próprio independente.
+  const feeCedenciaFicha = Number(imovel?.fee_cedencia) || 0
+  const compraApresentada = (Number(form.compra) || 0) + feeCedenciaFicha
 
   return (
     <div className="space-y-3">
@@ -80,10 +83,9 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
             <Input
               label="Valor de Cedência de Posição"
               field="fee_cedencia"
-              value={form.fee_cedencia ?? ''}
-              onChange={handleChange}
-              placeholder="Ex: 25000"
-              hint="Margem da Somnium na cedência — soma-se ao Preço de Compra na compra apresentada ao investidor"
+              value={feeCedenciaFicha || ''}
+              readOnly
+              hint="Definido na ficha do imóvel — soma-se ao Preço de Compra na compra apresentada ao investidor"
             />
           )}
           <Input label="Valor Patrimonial (VPT)" field="vpt" value={form.vpt} onChange={handleChange} placeholder="Caderneta predial" />

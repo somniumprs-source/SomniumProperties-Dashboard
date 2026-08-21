@@ -764,8 +764,11 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
     }
     setSaving(true)
     try {
-      // Limpar campos do form que são relações (não enviar ao PUT)
-      const { negocios, consultores, imoveis, tarefas, timeline, analises, documentos, checklist, interacoes, ...rest } = form
+      // Limpar campos do form que são relações (não enviar ao PUT).
+      // montante_investido (investidores) é calculado a partir de
+      // projeto_investidores — nunca enviar o valor do form, para não
+      // sobrescrever com um valor potencialmente desactualizado.
+      const { negocios, consultores, imoveis, tarefas, timeline, analises, documentos, checklist, interacoes, montante_investido, ...rest } = form
       // Remover campos virtuais (prefixo _) que vêm da lista enriquecida e não existem na BD
       const cleanForm = Object.fromEntries(Object.entries(rest).filter(([k]) => !k.startsWith('_')))
       const r = await apiFetch(`/api/crm/${endpoint}/${id}`, {
@@ -2761,7 +2764,13 @@ function InvestidorEditSections({ data, form, setField }) {
       <EF label="ROI Total Pretendido" field="roi_pretendido" form={form} set={setField} type="select" options={roiOpts} />
       <EF label="ROI Anualizado Pretendido" field="roi_anualizado_pretendido" form={form} set={setField} type="select" options={roiOpts} />
       <EF label="Origem Capital" field="origem_capital" form={form} set={setField} type="select" options={INV_ORIGEM_CAPITAL_OPTS} />
-      <EF label="Montante Investido (€)" field="montante_investido" form={form} set={setField} type="number" />
+      <div>
+        <p className="text-xs text-gray-400 mb-1">Montante Investido (€)</p>
+        <p className="w-full px-2 py-1.5 rounded-lg border border-gray-100 bg-gray-50 text-sm text-gray-600">
+          {form.montante_investido > 0 ? `€${Number(form.montante_investido).toLocaleString('pt-PT')}` : '—'}
+        </p>
+        <p className="text-[10px] text-gray-400 mt-1 italic">Calculado a partir dos projectos associados a este investidor</p>
+      </div>
       <MultiChips label="Estratégia" field="estrategia" form={form} set={setField} options={INV_ESTRATEGIA_OPTS} />
     </Section>
 

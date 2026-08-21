@@ -144,11 +144,13 @@ export async function exportProjetoExcel(negocioId) {
     const fase = fases.find(f => f.id === d.fase_id)
     const valor = EUR(d.custo_mensal)
     totalDesp += valor
+    let docs = []
+    try { docs = d.documentos ? JSON.parse(d.documentos) : [] } catch {}
     wsDesp.addRow([
       d.data || '', d.movimento, valor,
       d.categoria || '', d.fornecedor || '',
       fase?.nome || (d.fase_id ? '—' : 'Geral'),
-      d.comprovativo_nome || (d.comprovativo_url ? 'Anexado' : ''),
+      docs.length > 0 ? docs.map(x => x.name).join(', ') : '',
     ])
   }
   wsDesp.getColumn(3).numFmt = '#,##0.00 "€"'
