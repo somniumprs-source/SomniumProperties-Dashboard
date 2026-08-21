@@ -80,6 +80,10 @@ function fmtDiaLabel(d) {
 }
 
 const ACTIVE_USER_KEY = 'somnium:active_user_id'
+// Só equipa interna participa na Agenda — mesmo filtro do motor
+// (ver ROLES_EQUIPA em src/db/agendaEngine.js). 'parceiro'/'investidor'
+// ficam de fora (são consultores/investidores externos, não a equipa).
+const ROLES_EQUIPA = ['admin', 'comercial', 'financeiro', 'operacoes']
 
 export function Agenda() {
   const [tab, setTab] = useState('disponibilidade')
@@ -88,7 +92,7 @@ export function Agenda() {
 
   useEffect(() => {
     apiFetch('/api/users').then(r => r.ok ? r.json() : { data: [] }).then(j => {
-      setUsers((j.data || []).filter(u => u.ativo))
+      setUsers((j.data || []).filter(u => u.ativo && ROLES_EQUIPA.includes(u.role)))
     }).catch(() => {}).finally(() => setLoadingUsers(false))
   }, [])
 
