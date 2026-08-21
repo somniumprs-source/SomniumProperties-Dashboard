@@ -2135,6 +2135,7 @@ app.get("/metricas", async (c: any) => {
       }).filter((v) => v != null));
     })();
     const caepRoiInvestidor = avg(investidores.filter((i) => i.roiInvestidor > 0).map((i) => i.roiInvestidor));
+    const caepRoiAnualizadoInvestidor = avg(investidores.filter((i) => i.roiAnualizadoInvestidor > 0).map((i) => i.roiAnualizadoInvestidor));
 
     const consAskPriceMedio = avg(imoveis.filter((i) => i.nomeConsultor && i.askPrice > 0).map((i) => i.askPrice));
     const consLucroMedioGerado = avg(consultoresRaw.filter((c2) => c2.lucroGerado > 0).map((c2) => c2.lucroGerado));
@@ -2159,6 +2160,7 @@ app.get("/metricas", async (c: any) => {
         lucroSomniumSobreCapital: caepLucroSobreCapital, metaLucroSobreCapital: 8,
         lucroSomniumPorMes: caepLucroPorMes, metaLucroPorMes: 2500,
         roiInvestidor: caepRoiInvestidor, metaRoiInvestidor: 20,
+        roiAnualizadoInvestidor: caepRoiAnualizadoInvestidor,
       },
       consultores: {
         askPriceMedio: consAskPriceMedio,

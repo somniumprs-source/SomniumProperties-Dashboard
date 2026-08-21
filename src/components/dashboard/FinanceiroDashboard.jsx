@@ -13,7 +13,7 @@ export function FinanceiroDashboard({ data: d }) {
       {/* ───── ECONOMIA POR NEGÓCIO ───── */}
       <Pillar icon={Coins} title="Economia por negócio" hint="quanto vale e custa cada deal">
         <Group>
-          <KpiCard label="Lucro médio / negócio" value={EUR(ec?.lucroMedio)} sub="Ticket médio" tone="green" size="md" />
+          <KpiCard label="Lucro Médio Previsto / negócio" value={EUR(ec?.lucroMedio)} sub="Real quando fechado, senão estimado" tone="green" size="md" />
           <KpiCard label="Margem média" value={fmtPct(ec?.margemPct)} sub="Margin %" tone="green" size="md" />
           <KpiCard label="Custo por negócio" value={EUR(ec?.cac)} sub="CAC" tone="amber" size="md" />
           <KpiCard label="ROI médio" value={fmtPct(ec?.roiMedio)} sub="ROI" tone="indigo" size="md" />

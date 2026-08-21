@@ -7,7 +7,7 @@ const CAMPO_LABEL = {
   capital_max: 'capital máximo',
   regioes_preferidas: 'regiões preferidas',
   tipo_imovel_preferido: 'tipo de imóvel preferido',
-  roi_pretendido: 'ROI pretendido',
+  roi_pretendido: 'ROI previsto',
   estrategia: 'estratégia',
 }
 
@@ -86,7 +86,7 @@ export function MatchingInvestidoresTab({ imovelId, imovelNome }) {
                 </div>
                 <div className="flex flex-wrap gap-4 mt-2 text-xs text-neutral-500">
                   <span>Capital: {EUR(inv.capital_min)} – {EUR(inv.capital_max)}</span>
-                  {inv.roi_pretendido && <span>ROI total: {inv.roi_pretendido}</span>}
+                  {inv.roi_pretendido && <span>ROI previsto: {inv.roi_pretendido}</span>}
                   {inv.roi_anualizado_pretendido && <span>ROI anualizado: {inv.roi_anualizado_pretendido}</span>}
                   {inv.tipo_imovel_preferido && <span>Tipologia: {inv.tipo_imovel_preferido}</span>}
                 </div>

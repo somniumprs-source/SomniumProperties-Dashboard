@@ -781,28 +781,10 @@ TODAS as tarefas devem ser sincronizadas com Google Calendar.`,
       } catch (e) { res.status(500).json({ error: e.message }) }
     })
 
-    // Endpoint para listar relatórios guardados
-    app.get('/api/relatorios', async (req, res) => {
-      try {
-        const { query: pgQuery } = await import('./src/db/pg.js')
-        const { tipo, limit = 20 } = req.query
-        let query = 'SELECT id, tipo, data, created_at FROM relatorios'
-        const params = []
-        if (tipo) { query += ' WHERE tipo = $1'; params.push(tipo) }
-        query += ` ORDER BY created_at DESC LIMIT $${params.length + 1}`
-        params.push(+limit)
-        const { rows } = await pgQuery(query, params)
-        res.json(rows)
-      } catch (e) { res.status(500).json({ error: e.message }) }
-    })
-    app.get('/api/relatorios/:id', async (req, res) => {
-      try {
-        const { query: pgQuery } = await import('./src/db/pg.js')
-        const { rows: [r] } = await pgQuery('SELECT * FROM relatorios WHERE id = $1', [req.params.id])
-        if (!r) return res.status(404).json({ error: 'Relatório não encontrado' })
-        res.json(r)
-      } catch (e) { res.status(500).json({ error: e.message }) }
-    })
+    // /api/relatorios e /api/relatorios/:id removidos — consultavam uma
+    // tabela `relatorios` que nunca existiu no schema; ninguém no frontend os
+    // chamava (RelatoriosAdmin.jsx usa /api/crm/relatorios-semanais e
+    // /api/crm/reunioes-documentos, endpoints diferentes).
 
     // Iniciar cron jobs
     startCronJobs()
@@ -3419,6 +3401,7 @@ app.get('/api/metricas', async (req, res) => {
       }).filter(v => v != null))
     })()
     const caepRoiInvestidor = avg(investidores.filter(i => i.roiInvestidor > 0).map(i => i.roiInvestidor))
+    const caepRoiAnualizadoInvestidor = avg(investidores.filter(i => i.roiAnualizadoInvestidor > 0).map(i => i.roiAnualizadoInvestidor))
 
     // Consultores
     const consAskPriceMedio = avg(imoveis.filter(i => i.nomeConsultor && i.askPrice > 0).map(i => i.askPrice))
@@ -3443,6 +3426,7 @@ app.get('/api/metricas', async (req, res) => {
         lucroSomniumSobreCapital: caepLucroSobreCapital, metaLucroSobreCapital: 8,
         lucroSomniumPorMes: caepLucroPorMes, metaLucroPorMes: 2500,
         roiInvestidor: caepRoiInvestidor, metaRoiInvestidor: 20,
+        roiAnualizadoInvestidor: caepRoiAnualizadoInvestidor,
       },
       consultores: {
         askPriceMedio: consAskPriceMedio,

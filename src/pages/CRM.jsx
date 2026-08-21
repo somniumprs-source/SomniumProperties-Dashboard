@@ -1881,6 +1881,7 @@ const FIELD_DEFS = {
   ],
   'Investidores': [
     { key: 'nome', label: 'Nome', type: 'text', required: true },
+    { key: 'ref_investidor', label: 'REF Investidor', type: 'text' },
     { key: 'tipo_principal', label: 'Tipo de Investidor', type: 'multiselect', options: ['Ativo','Passivo'], required: true },
     { key: 'status', label: 'Status', type: 'select', options: (form) => invStatusFor(form.tipo_principal) },
     { key: 'classificacao', label: 'Classificação', type: 'select', options: ['A','B','C','D'] },
@@ -1893,8 +1894,8 @@ const FIELD_DEFS = {
     { key: 'nda_assinado', label: 'NDA Assinado', type: 'checkbox' },
     { key: 'estrategia', label: 'Estratégia de Investimento', type: 'multiselect', options: ['Wholesaling','CAEP','Fix & Flip','Mediação','Capital Passivo','Construção'] },
     { key: 'perfil_risco', label: 'Perfil de Risco', type: 'select', options: ['Conservador','Moderado','Agressivo'] },
-    { key: 'roi_pretendido', label: 'ROI Total Pretendido', type: 'text' },
-    { key: 'roi_anualizado_pretendido', label: 'ROI Anualizado Pretendido', type: 'text' },
+    { key: 'roi_pretendido', label: 'ROI Previsto', type: 'text' },
+    { key: 'roi_anualizado_pretendido', label: 'ROI Anualizado Previsto', type: 'text' },
     { key: 'experiencia_imobiliario', label: 'Experiência Imobiliária', type: 'text' },
     { key: 'localizacao_preferida', label: 'Localização Preferida', type: 'text' },
     { key: 'tipo_imovel_preferido', label: 'Tipo Imóvel Preferido', type: 'text' },

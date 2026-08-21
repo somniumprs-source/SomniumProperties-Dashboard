@@ -171,6 +171,16 @@ function createCRUD(table: string, { searchFields = ["nome"], defaultSort = "cre
         data.ref_interna = String(Number(maxRows[0].max) + 1).padStart(4, "0");
       }
 
+      // Auto-gerar REF Investidor sequencial (0001, 0002, ...) — investidores
+      // não são exclusivos de uma região (regioes_preferidas é multi-valor),
+      // por isso a sequência é única e global, ao contrário do ref_interna.
+      if (table === "investidores" && !data.ref_investidor) {
+        const { rows: maxRows } = await pool.query(
+          `SELECT COALESCE(MAX(ref_investidor::int), 0) AS max FROM investidores WHERE ref_investidor ~ '^[0-9]+$'`
+        );
+        data.ref_investidor = String(Number(maxRows[0].max) + 1).padStart(4, "0");
+      }
+
       const tableCols = await getColumns(table);
       const jsonbCols = await getJsonbColumns(table);
       const entries = Object.entries(data).filter(([k, v]) => v !== undefined && !SYSTEM_FIELDS.has(k) && tableCols.has(k));

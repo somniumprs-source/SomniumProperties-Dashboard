@@ -483,7 +483,8 @@ export function Metricas() {
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 <MvsMeta label="Lucro Somnium / capital total" value={caep.lucroSomniumSobreCapital} meta={caep.metaLucroSobreCapital} format="pct" sub="Meta ≥ 8%" />
                 <MvsMeta label="Lucro Somnium / mês retenção" value={caep.lucroSomniumPorMes} meta={caep.metaLucroPorMes} format="eur" sub="Meta ≥ 2.500€/mês" />
-                <MvsMeta label="ROI do investidor" value={caep.roiInvestidor} meta={caep.metaRoiInvestidor} format="pct" sub="Meta ≥ 20%" />
+                <MvsMeta label="ROI Real" value={caep.roiInvestidor} meta={caep.metaRoiInvestidor} format="pct" sub="Meta ≥ 20%" />
+                <M label="ROI Anualizado Real" value={caep.roiAnualizadoInvestidor != null ? PCT(caep.roiAnualizadoInvestidor) : '—'} />
               </div>
 
               <SectionTitle>Consultores — Valor Gerado</SectionTitle>

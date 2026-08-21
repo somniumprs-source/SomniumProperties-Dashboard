@@ -1576,6 +1576,14 @@ export async function initSchema() {
         ALTER TABLE documentos_investidor ADD COLUMN IF NOT EXISTS drive_file_id TEXT;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
+
+      -- REF Investidor: numeração sequencial global (ver migration
+      -- 0035_investidores_ref_investidor.sql — essa migração faz o backfill
+      -- dos registos existentes, aqui só garantimos a coluna).
+      DO $$ BEGIN
+        ALTER TABLE investidores ADD COLUMN IF NOT EXISTS ref_investidor TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
     `)
 
     // Bootstrap: garantir que somniumprs@gmail.com (owner) existe como admin

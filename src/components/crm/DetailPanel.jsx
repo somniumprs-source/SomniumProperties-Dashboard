@@ -2731,7 +2731,7 @@ function InvestidorTimeline({ data }) {
 function InvestidorEditSections({ data, form, setField }) {
   const isAtivo = parseJsonArray(form.tipo_principal).includes('Ativo')
   const sec = {
-    identificacao: ['nome','tipo_principal','status','classificacao','origem','data_primeiro_contacto'],
+    identificacao: ['nome','ref_investidor','tipo_principal','status','classificacao','origem','data_primeiro_contacto'],
     capital:       ['capital_min','capital_max','estrategia','perfil_risco','roi_pretendido','roi_anualizado_pretendido','origem_capital','montante_investido'],
     preferencias:  ['tipo_imovel_preferido','localizacao_preferida','regioes_preferidas','experiencia_imobiliario','equipa_obras'],
     contacto:      ['telemovel','email','preferencia_contacto','nda_assinado'],
@@ -2744,9 +2744,16 @@ function InvestidorEditSections({ data, form, setField }) {
     {/* 1. Identificação & Status */}
     <Section icon="📋" title="Identificação & Status" fields={sec.identificacao} form={form} defaultOpen>
       <EF label="Nome" field="nome" form={form} set={setField} />
+      <EF label="REF Investidor" field="ref_investidor" form={form} set={setField} />
       <MultiChips label="Tipo" field="tipo_principal" form={form} set={setField} options={['Ativo','Passivo']} />
       <EF label="Status" field="status" form={form} set={setField} type="select" options={invStatusFor(form.tipo_principal)} />
-      <EF label="Classificação" field="classificacao" form={form} set={setField} type="select" options={['A','B','C','D']} />
+      <div>
+        <p className="text-xs text-gray-400">Classificação</p>
+        <div className="text-sm font-medium text-gray-800 flex items-center gap-2">
+          <InvClassBadge cls={data.classificacao} />
+          <span className="text-xs text-gray-400">— definida no separador Scorecard</span>
+        </div>
+      </div>
       <EF label="Origem" field="origem" form={form} set={setField} type="select" options={ORIGENS_INVESTIDORES} />
       <EF label="1º Contacto" field="data_primeiro_contacto" form={form} set={setField} type="date" />
     </Section>
@@ -2756,8 +2763,8 @@ function InvestidorEditSections({ data, form, setField }) {
       <EF label="Capital Min (€)" field="capital_min" form={form} set={setField} type="number" />
       <EF label="Capital Max (€)" field="capital_max" form={form} set={setField} type="number" />
       <EF label="Perfil Risco" field="perfil_risco" form={form} set={setField} type="select" options={INV_PERFIL_RISCO_OPTS} />
-      <EF label="ROI Total Pretendido" field="roi_pretendido" form={form} set={setField} type="select" options={roiOpts} />
-      <EF label="ROI Anualizado Pretendido" field="roi_anualizado_pretendido" form={form} set={setField} type="select" options={roiOpts} />
+      <EF label="ROI Previsto" field="roi_pretendido" form={form} set={setField} type="select" options={roiOpts} />
+      <EF label="ROI Anualizado Previsto" field="roi_anualizado_pretendido" form={form} set={setField} type="select" options={roiOpts} />
       <EF label="Origem Capital" field="origem_capital" form={form} set={setField} type="select" options={INV_ORIGEM_CAPITAL_OPTS} />
       <div>
         <p className="text-xs text-gray-400 mb-1">Montante Investido (€)</p>
@@ -2841,7 +2848,7 @@ function InvestidorReadSections({ data }) {
   const isAtivo = parseJsonArray(data.tipo_principal).includes('Ativo')
   const labelLocalizacao = isAtivo ? 'Área de Atuação (Distritos)' : 'Localização'
   const sec = {
-    identificacao: ['nome','tipo_principal','status','classificacao','origem','data_primeiro_contacto'],
+    identificacao: ['nome','ref_investidor','tipo_principal','status','classificacao','origem','data_primeiro_contacto'],
     capital:       ['capital_min','capital_max','estrategia','perfil_risco','roi_pretendido','roi_anualizado_pretendido','origem_capital','montante_investido'],
     preferencias:  ['tipo_imovel_preferido','localizacao_preferida','regioes_preferidas','experiencia_imobiliario','equipa_obras'],
     contacto:      ['telemovel','email','preferencia_contacto','nda_assinado'],
@@ -2851,6 +2858,7 @@ function InvestidorReadSections({ data }) {
   return <>
     {/* 1. Identificação */}
     <Section icon="📋" title="Identificação & Status" fields={sec.identificacao} form={data} defaultOpen>
+      <Field label="REF Investidor" value={data.ref_investidor || '—'} />
       <Field label="Status" value={data.status} />
       <div>
         <p className="text-xs text-gray-400">Classificação</p>
@@ -2868,8 +2876,8 @@ function InvestidorReadSections({ data }) {
       <Field label="Capital Min" value={data.capital_min > 0 ? `€${Number(data.capital_min).toLocaleString('pt-PT')}` : '—'} />
       <Field label="Capital Max" value={data.capital_max > 0 ? `€${Number(data.capital_max).toLocaleString('pt-PT')}` : '—'} />
       <Field label="Perfil Risco" value={data.perfil_risco} />
-      <Field label="ROI Total Pretendido" value={data.roi_pretendido} />
-      <Field label="ROI Anualizado Pretendido" value={data.roi_anualizado_pretendido} />
+      <Field label="ROI Previsto" value={data.roi_pretendido} />
+      <Field label="ROI Anualizado Previsto" value={data.roi_anualizado_pretendido} />
       <Field label="Origem Capital" value={data.origem_capital} />
       <Field label="Montante Investido" value={data.montante_investido > 0 ? `€${Number(data.montante_investido).toLocaleString('pt-PT')}` : '—'} />
       <div className="col-span-2 md:col-span-3">

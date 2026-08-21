@@ -797,9 +797,20 @@ crudRoutes("/imoveis", Imoveis, {
   // CHECKLIST_ENFORCEMENT_START_DATE (imóveis já existentes movem livremente).
   beforeUpdate: async (id: string, body: any) => {
     if (!body.estado) return null;
-    const { rows: [imovel] } = await pool.query("SELECT estado, created_at FROM imoveis WHERE id = $1", [id]);
+    const { rows: [imovel] } = await pool.query("SELECT estado, ask_price, created_at FROM imoveis WHERE id = $1", [id]);
     if (!imovel) return null;
     if (body.estado === imovel.estado) return null;
+
+    // Preço (ask_price) só passa a ser obrigatório a partir do Estudo de
+    // Mercado (Estudo de VVR) em diante — reutiliza o mesmo mapa de
+    // qualidade por estado (>=0.50 = visita/VVR concluído ou mais avançado).
+    if (qualidadeImovel(body.estado) >= 0.50) {
+      const askPriceFinal = body.ask_price ?? imovel.ask_price;
+      if (!askPriceFinal || Number(askPriceFinal) <= 0) {
+        return { error: "Preço (Ask Price) obrigatório a partir do Estudo de Mercado" };
+      }
+    }
+
     if (!imovel.created_at || imovel.created_at < CHECKLIST_ENFORCEMENT_START_DATE) return null;
     const { rows: pendentes } = await pool.query(
       `SELECT titulo FROM checklist_imovel WHERE imovel_id = $1 AND estado = $2 AND obrigatoria = true AND concluida = false`,
@@ -1024,6 +1035,15 @@ async function syncInvestidorAcessos(investidorId: string): Promise<number> {
   return granted;
 }
 
+// Campos obrigatórios por estado avançado — impede gravar "Investidor
+// Qualificado em Carteira" sem classificação, ou "em parceria"/"Ativo" sem
+// montante investido (achado da auditoria: eram possíveis sem validação).
+const INV_ESTADO_CAMPOS_OBRIGATORIOS: Record<string, { campo: string; label: string }[]> = {
+  "Investidor Qualificado em Carteira": [{ campo: "classificacao", label: "Classificação" }],
+  "Investidor em parceria": [{ campo: "montante_investido", label: "Montante Investido" }],
+  "Investidor Ativo": [{ campo: "montante_investido", label: "Montante Investido" }],
+};
+
 crudRoutes("/investidores", Investidores, {
   onCreate: async (item: any) => {
     if (driveConfigured()) {
@@ -1033,6 +1053,30 @@ crudRoutes("/investidores", Investidores, {
   onUpdate: async (item: any, body: any) => {
     // Ao ligar um investidor a um utilizador, dar-lhe logo acesso aos projectos.
     if (body?.user_id) await syncInvestidorAcessos(item.id);
+  },
+  beforeUpdate: async (id: string, body: any) => {
+    if (body.status === undefined && body.classificacao === undefined) return null;
+    const { rows: [inv] } = await pool.query("SELECT * FROM investidores WHERE id = $1", [id]);
+    if (!inv) return null;
+
+    // Classificação só pode mudar pelo Scorecard (POST /scorecards, escreve
+    // directo na BD) — o formulário geral do investidor já não a deixa editar,
+    // isto bloqueia quem tentar na mesma via API directa.
+    if (body.classificacao !== undefined && body.classificacao !== inv.classificacao) {
+      return { error: "Classificação só pode ser alterada pelo Scorecard, não editada directamente" };
+    }
+
+    if (!body.status || body.status === inv.status) return null; // não é uma transição — não bloquear edições de outros campos
+    const obrigatorios = INV_ESTADO_CAMPOS_OBRIGATORIOS[body.status];
+    if (!obrigatorios) return null;
+    const emFalta = obrigatorios.filter(({ campo }: any) => {
+      const valor = body[campo] !== undefined ? body[campo] : inv[campo];
+      return valor === null || valor === undefined || valor === "" || valor === 0;
+    });
+    if (emFalta.length > 0) {
+      return { error: "Campos obrigatórios em falta para este estado", itens_em_falta: emFalta.map((e: any) => e.label) };
+    }
+    return null;
   },
 });
 
