@@ -1383,6 +1383,18 @@ export async function initSchema() {
       CREATE INDEX IF NOT EXISTS idx_mercado_regiao ON mercado_referencia(regiao, concelho);
       CREATE INDEX IF NOT EXISTS idx_mercado_tipologia ON mercado_referencia(tipologia);
 
+      -- Impede entradas duplicadas (ver migration 0038_mercado_referencia_unique.sql).
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'mercado_referencia_regiao_concelho_tipologia_key'
+        ) THEN
+          ALTER TABLE mercado_referencia
+            ADD CONSTRAINT mercado_referencia_regiao_concelho_tipologia_key
+            UNIQUE (regiao, concelho, tipologia);
+        END IF;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
       -- ════════════════════════════════════════════════════════════════
       -- COMPLIANCE REGIONAL — regras municipais (IMT, IMI, AIMI, ARU)
       -- por concelho. Usado pelas análises de rentabilidade.

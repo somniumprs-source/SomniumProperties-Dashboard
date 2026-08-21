@@ -118,10 +118,17 @@ router.post('/regiao/mercado', async (req, res) => {
     const id = randomUUID()
     const { regiao, concelho, freguesia, tipologia, eur_m2_compra, eur_m2_venda, tempo_medio_venda_dias, taxa_absorcao_pct, fonte, data_referencia, notas } = req.body
     if (!regiao || !concelho) return res.status(400).json({ error: 'regiao e concelho obrigatórios' })
-    await pool.query(
-      `INSERT INTO mercado_referencia (id, regiao, concelho, freguesia, tipologia, eur_m2_compra, eur_m2_venda, tempo_medio_venda_dias, taxa_absorcao_pct, fonte, data_referencia, notas)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-      [id, regiao, concelho, freguesia || null, tipologia || null, eur_m2_compra || null, eur_m2_venda || null, tempo_medio_venda_dias || null, taxa_absorcao_pct || null, fonte || null, data_referencia || null, notas || null])
+    try {
+      await pool.query(
+        `INSERT INTO mercado_referencia (id, regiao, concelho, freguesia, tipologia, eur_m2_compra, eur_m2_venda, tempo_medio_venda_dias, taxa_absorcao_pct, fonte, data_referencia, notas)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [id, regiao, concelho, freguesia || null, tipologia || null, eur_m2_compra || null, eur_m2_venda || null, tempo_medio_venda_dias || null, taxa_absorcao_pct || null, fonte || null, data_referencia || null, notas || null])
+    } catch (e) {
+      if (e.code === '23505') {
+        return res.status(409).json({ error: `Já existe uma referência de mercado para ${regiao}/${concelho}${tipologia ? '/' + tipologia : ''} — edite a existente em vez de criar outra.` })
+      }
+      throw e
+    }
     res.status(201).json({ id })
   } catch (e) { res.status(400).json({ error: e.message }) }
 })

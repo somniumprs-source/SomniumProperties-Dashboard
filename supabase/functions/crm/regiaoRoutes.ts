@@ -118,10 +118,17 @@ export function registerRegiaoRoutes(app: any) {
       const id = crypto.randomUUID();
       const { regiao, concelho, freguesia, tipologia, eur_m2_compra, eur_m2_venda, tempo_medio_venda_dias, taxa_absorcao_pct, fonte, data_referencia, notas } = await c.req.json().catch(() => ({}));
       if (!regiao || !concelho) return c.json({ error: "regiao e concelho obrigatórios" }, 400);
-      await pool.query(
-        `INSERT INTO mercado_referencia (id, regiao, concelho, freguesia, tipologia, eur_m2_compra, eur_m2_venda, tempo_medio_venda_dias, taxa_absorcao_pct, fonte, data_referencia, notas)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-        [id, regiao, concelho, freguesia || null, tipologia || null, eur_m2_compra || null, eur_m2_venda || null, tempo_medio_venda_dias || null, taxa_absorcao_pct || null, fonte || null, data_referencia || null, notas || null]);
+      try {
+        await pool.query(
+          `INSERT INTO mercado_referencia (id, regiao, concelho, freguesia, tipologia, eur_m2_compra, eur_m2_venda, tempo_medio_venda_dias, taxa_absorcao_pct, fonte, data_referencia, notas)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+          [id, regiao, concelho, freguesia || null, tipologia || null, eur_m2_compra || null, eur_m2_venda || null, tempo_medio_venda_dias || null, taxa_absorcao_pct || null, fonte || null, data_referencia || null, notas || null]);
+      } catch (e) {
+        if ((e as any).code === "23505") {
+          return c.json({ error: `Já existe uma referência de mercado para ${regiao}/${concelho}${tipologia ? "/" + tipologia : ""} — edite a existente em vez de criar outra.` }, 409);
+        }
+        throw e;
+      }
       return c.json({ id }, 201);
     } catch (e) { return c.json({ error: (e as Error).message }, 400); }
   });

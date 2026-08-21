@@ -47,6 +47,18 @@ export function AdministracaoSOP() {
     }
   }, [])
 
+  // Reclassificar departamento dentro do CRM — o Drive ainda não tem essa
+  // divisão por pastas, por isso o sync sozinho nunca traria isto correcto.
+  async function reclassificar(sopId, departamento) {
+    try {
+      await apiFetch(`/api/sops/${sopId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ departamento }),
+      })
+      setSops(prev => prev.map(s => s.id === sopId ? { ...s, departamento } : s))
+    } catch (e) { setError(e.message) }
+  }
+
   useEffect(() => { loadList() }, [loadList])
 
   const filtered = useMemo(() => {
@@ -217,10 +229,18 @@ export function AdministracaoSOP() {
                     {s.titulo}
                   </p>
                   <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-400">
-                    <span
-                      className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold uppercase tracking-wider"
+                    <select
+                      value={s.departamento || 'geral'}
+                      onClick={e => { e.preventDefault(); e.stopPropagation() }}
+                      onChange={e => { reclassificar(s.id, e.target.value) }}
+                      className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold uppercase tracking-wider border-0 cursor-pointer"
                       style={{ backgroundColor: dep.cor + '20', color: dep.cor }}
-                    >{dep.nome}</span>
+                      title="Reclassificar departamento"
+                    >
+                      {DEPARTAMENTOS.filter(d => d.key).map(d => (
+                        <option key={d.key} value={d.key}>{d.nome}</option>
+                      ))}
+                    </select>
                     <span>·</span>
                     <span>{fmtDate(s.updated_at)}</span>
                   </div>
