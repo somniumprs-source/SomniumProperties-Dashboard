@@ -186,6 +186,40 @@ export function requireModule(module) {
   }
 }
 
+/**
+ * Como requireModule, mas com uma excepção: o role `investidor` pode LER
+ * (GET) o seu próprio registo em /investidores (e sub-recursos, ex.
+ * /investidores/:id/documentos) mesmo sem o módulo `crm.investidores` —
+ * é o que dá acesso ao dossiê próprio (CAEP assinado, KYC, NDA, declaração
+ * de risco) sem abrir a lista de todos os investidores da empresa.
+ */
+export function requireModuleOrOwnInvestidor(module) {
+  return async (req, res, next) => {
+    if (!supabaseAdmin) return next()
+    try {
+      const u = await resolveAppUser(req)
+      if (!u) return res.status(401).json({ error: 'Não autenticado' })
+      if (!u.ativo) return res.status(403).json({ error: 'Conta inactiva' })
+      req.appUser = u
+      if (u.role === 'admin') return next()
+      const mods = ROLE_MODULES[u.role] || []
+      if (mods.includes(module)) return next()
+      if (u.role === 'investidor' && req.method === 'GET') {
+        const m = req.path.match(/^\/([^/]+)/)
+        const firstSeg = m ? m[1] : null
+        if (firstSeg) {
+          const r = await pool.query('SELECT 1 FROM investidores WHERE id = $1 AND user_id = $2', [firstSeg, u.id])
+          if (r.rowCount > 0) return next()
+        }
+      }
+      return res.status(403).json({ error: `Sem acesso a ${module}` })
+    } catch (e) {
+      console.error('[requireModuleOrOwnInvestidor]', req.path, e.message)
+      return next()
+    }
+  }
+}
+
 // ── Routes ───────────────────────────────────────────────────
 const router = Router()
 
@@ -215,6 +249,11 @@ router.get('/me', async (req, res) => {
   try {
     const u = await resolveAppUser(req)
     if (!u) return res.status(401).json({ error: 'Não autenticado' })
+    let investidorId = null
+    if (u.role === 'investidor') {
+      const r = await pool.query('SELECT id FROM investidores WHERE user_id = $1 LIMIT 1', [u.id])
+      investidorId = r.rows[0]?.id || null
+    }
     res.json({
       id: u.id,
       email: u.email,
@@ -225,6 +264,7 @@ router.get('/me', async (req, res) => {
       ativo: u.ativo,
       areas: ROLE_AREAS[u.role] || [],
       modules: ROLE_MODULES[u.role] || [],
+      investidorId,
     })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })

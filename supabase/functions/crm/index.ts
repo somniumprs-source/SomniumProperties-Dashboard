@@ -162,6 +162,31 @@ function requireModule(moduleName: string) {
   };
 }
 
+// Como requireModule, mas o role `investidor` pode LER (GET) o seu próprio
+// registo em /investidores (e sub-recursos, ex. /investidores/:id/documentos)
+// mesmo sem o módulo `crm.investidores` — dossiê próprio (CAEP, KYC, NDA,
+// declaração de risco), sem abrir a lista de todos os investidores.
+function requireModuleOrOwnInvestidor(moduleName: string) {
+  return async (c: any, next: any) => {
+    const u = await resolveCrmUser(c);
+    if (!u) return next();
+    if (!u.ativo) return c.json({ error: "Conta inactiva" }, 403);
+    if (u.role === "admin") return next();
+    const mods = ROLE_MODULES[u.role] || [];
+    if (mods.includes(moduleName)) return next();
+    if (u.role === "investidor" && c.req.method === "GET") {
+      const path = new URL(c.req.url).pathname;
+      const rest = path.replace(/^.*\/investidores\//, "");
+      const firstSeg = rest.split("/")[0] || null;
+      if (firstSeg) {
+        const r = await pool.query("SELECT 1 FROM investidores WHERE id = $1 AND user_id = $2", [firstSeg, u.id]);
+        if (r.rowCount > 0) return next();
+      }
+    }
+    return c.json({ error: `Sem acesso a ${moduleName}` }, 403);
+  };
+}
+
 // Segmentos que não são IDs de registo (rotas custom tipo /imoveis/stats,
 // /imoveis/pois/sugeridos) — mesma lista do Express, para paridade de comportamento.
 const NON_ID_SEGS = new Set(["stats", "enriched", "find-or-create", "lookup", "checklist", "relatorio", "pois"]);
@@ -1129,8 +1154,8 @@ const INV_ESTADO_CAMPOS_OBRIGATORIOS: Record<string, { campo: string; label: str
   "Investidor Ativo": [{ campo: "montante_investido", label: "Montante Investido" }],
 };
 
-app.use("/investidores", requireModule("crm.investidores"));
-app.use("/investidores/*", requireModule("crm.investidores"));
+app.use("/investidores", requireModuleOrOwnInvestidor("crm.investidores"));
+app.use("/investidores/*", requireModuleOrOwnInvestidor("crm.investidores"));
 crudRoutes("/investidores", Investidores, {
   onCreate: async (item: any) => {
     if (driveConfigured()) {

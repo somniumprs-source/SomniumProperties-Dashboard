@@ -220,6 +220,11 @@ app.get("/me", async (c: any) => {
   try {
     const u = await resolveAppUser(c);
     if (!u) return c.json({ error: "Não autenticado" }, 401);
+    let investidorId: string | null = null;
+    if (u.role === "investidor") {
+      const r = await pool.query("SELECT id FROM investidores WHERE user_id = $1 LIMIT 1", [u.id]);
+      investidorId = r.rows[0]?.id || null;
+    }
     return c.json({
       id: u.id,
       email: u.email,
@@ -230,6 +235,7 @@ app.get("/me", async (c: any) => {
       ativo: u.ativo,
       areas: ROLE_AREAS[u.role] || [],
       modules: ROLE_MODULES[u.role] || [],
+      investidorId,
     });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });

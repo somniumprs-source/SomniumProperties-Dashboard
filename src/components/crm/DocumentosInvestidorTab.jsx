@@ -19,7 +19,7 @@ const TIPO_LABELS = {
 
 const TIPO_OPTIONS = Object.entries(TIPO_LABELS)
 
-export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs, onUpdate }) {
+export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs, onUpdate, readOnly = false }) {
   const [documentos, setDocumentos] = useState(initialDocs || [])
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ tipo: 'dossier_investidor', nome: '', imovel_id: '', notas: '', file: null })
@@ -85,16 +85,18 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-700">Documentos enviados ({documentos.length})</h3>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" /> Registar Documento
-        </button>
+        {!readOnly && (
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" /> Registar Documento
+          </button>
+        )}
       </div>
 
       {/* Form inline */}
-      {showForm && (
+      {!readOnly && showForm && (
         <form onSubmit={handleSubmit} className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-200">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -185,13 +187,15 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
                     </button>
                   </>
                 )}
-                <button
-                  onClick={() => handleDelete(doc.id)}
-                  className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
-                  title="Remover"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                {!readOnly && (
+                  <button
+                    onClick={() => handleDelete(doc.id)}
+                    className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
+                    title="Remover"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           ))}

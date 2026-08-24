@@ -37,6 +37,7 @@ export function AuthProvider({ children }) {
         iniciais: (j.nome || j.email || '?').slice(0, 2).toUpperCase(),
         cor: j.cor || '#C9A84C',
         role: j.role, areas: j.areas || [], modules: j.modules || [],
+        investidorId: j.investidorId || null,
       })
     } catch { setProfile(null) }
   }, [])
@@ -100,6 +101,7 @@ export function AuthProvider({ children }) {
       isAuthenticated: !!session,
       hasProfile: !!profile,
       role, areas, modules,
+      investidorId: profile?.investidorId || null,
       isInvestidor: role === 'investidor',
       isReadOnly: role === 'investidor' || role === 'parceiro',
       canAccess: (area) => role === 'admin' || areas.includes(area),

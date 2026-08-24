@@ -140,14 +140,15 @@ try {
   })
 
   // ── Gestão de utilizadores e camadas de acesso ──
-  const { default: userRoutes, accessRouter, requireRole, requireModule, restrictByAccess, restrictProjetosAccess } = await import('./src/db/userRoutes.js')
+  const { default: userRoutes, accessRouter, requireRole, requireModule, requireModuleOrOwnInvestidor, restrictByAccess, restrictProjetosAccess } = await import('./src/db/userRoutes.js')
   app.use('/api/users', userRoutes)
   app.use('/api/acessos', accessRouter)
   // Camadas de acesso do CRM — montadas ANTES do router CRM para correrem primeiro.
   // admin passa sempre; em dev sem Supabase (supabaseAdmin nulo) também passa sempre.
   // parceiro/investidor ficam filtrados por registo via `acessos` (restrictByAccess).
   app.use('/api/crm/imoveis', requireModule('crm.imoveis'), restrictByAccess('imovel'))
-  app.use('/api/crm/investidores', requireModule('crm.investidores'))
+  // investidor sem módulo crm.investidores ainda lê (GET) o seu próprio registo/dossiê.
+  app.use('/api/crm/investidores', requireModuleOrOwnInvestidor('crm.investidores'))
   app.use('/api/crm/consultores', requireModule('crm.consultores'))
   app.use('/api/crm/empreiteiros', requireModule('crm.empreiteiros'))
   app.use('/api/crm/negocios', requireModule('crm.negocios'), restrictByAccess('negocio'))

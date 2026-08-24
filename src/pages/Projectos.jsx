@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Plus, Filter, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle, TrendingUp, Briefcase, Calendar as CalendarIcon, Search, Sparkles, Hammer, Handshake, Home, Zap } from 'lucide-react'
+import { Plus, Filter, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle, TrendingUp, Briefcase, Calendar as CalendarIcon, Search, Sparkles, Hammer, Handshake, Home, Zap, FileText } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { apiFetch } from '../lib/api.js'
 import { Button } from '../components/ui/Button.jsx'
@@ -8,6 +8,7 @@ import { Card } from '../components/ui/Card.jsx'
 import { Badge } from '../components/ui/Badge.jsx'
 import { Input, Select } from '../components/ui/Input.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
+import { DocumentosInvestidorTab } from '../components/crm/DocumentosInvestidorTab.jsx'
 import { RegiaoToggle } from '../components/RegiaoBadge.jsx'
 import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 
@@ -103,9 +104,51 @@ function faseLegacyParaKanban(faseLegacy, colunasDisponiveis) {
   return colunasDisponiveis[0]?.key
 }
 
+// Painel "Os meus documentos" — só para role investidor, dossiê próprio
+// (CAEP assinado, KYC, NDA, declaração de risco) em modo leitura.
+function MeusDocumentosPanel({ investidorId }) {
+  const [aberto, setAberto] = useState(false)
+  const [documentos, setDocumentos] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  async function toggle() {
+    const next = !aberto
+    setAberto(next)
+    if (next && documentos === null) {
+      setLoading(true)
+      try {
+        const r = await apiFetch(`/api/crm/investidores/${investidorId}/documentos`)
+        const j = await r.json().catch(() => [])
+        setDocumentos(Array.isArray(j) ? j : [])
+      } catch { setDocumentos([]) }
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl overflow-hidden">
+      <button onClick={toggle} className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-neutral-800">
+        <span className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-neutral-200">
+          <FileText className="w-4 h-4 text-brand-gold" /> Os meus documentos
+        </span>
+        <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${aberto ? 'rotate-90' : ''}`} />
+      </button>
+      {aberto && (
+        <div className="px-4 pb-4 border-t border-gray-100 dark:border-neutral-800 pt-3">
+          {loading ? (
+            <p className="text-sm text-gray-400">A carregar...</p>
+          ) : (
+            <DocumentosInvestidorTab investidorId={investidorId} documentos={documentos || []} readOnly />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Projectos() {
   const navigate = useNavigate()
-  const { role, isInvestidor, isReadOnly } = useAuth()
+  const { role, isInvestidor, isReadOnly, investidorId } = useAuth()
   // Filtro regional inline (Coimbra | AMP | Geral). Geral = null = ver todas.
   // Partilha a chave de sessionStorage com o apiFetch para manter consistência
   // em mutações disparadas por sub-componentes (DetailPanel etc.).
@@ -285,6 +328,8 @@ export function Projectos() {
           <RegiaoToggle value={regiao} onChange={setRegiao} />
         </div>
         {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>}
+
+        {isInvestidor && investidorId && <MeusDocumentosPanel investidorId={investidorId} />}
 
         {/* Caixas individuais por modelo de negócio — em série no topo, clicáveis */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
