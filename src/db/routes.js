@@ -5486,6 +5486,79 @@ router.delete('/projetos/investidores/:linkId', async (req, res) => {
 })
 
 // ════════════════════════════════════════════════════════════════
+// REUNIÕES de acompanhamento com investidores (SOP 13 — agendamento já
+// era feito por email; isto é o registo consultável no CRM).
+// ════════════════════════════════════════════════════════════════
+let _reunioesInvestidorTableEnsured = false
+async function ensureReunioesInvestidorTable() {
+  if (_reunioesInvestidorTableEnsured) return
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS reunioes_investidor (
+      id TEXT PRIMARY KEY,
+      negocio_id TEXT NOT NULL REFERENCES negocios(id) ON DELETE CASCADE,
+      data_hora TIMESTAMPTZ NOT NULL,
+      formato TEXT DEFAULT 'Online',
+      estado TEXT DEFAULT 'Agendada',
+      notas TEXT,
+      criado_por TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `)
+  _reunioesInvestidorTableEnsured = true
+}
+
+router.get('/projetos/:negocioId/reunioes', async (req, res) => {
+  try {
+    await ensureReunioesInvestidorTable()
+    const { rows } = await pool.query(
+      `SELECT * FROM reunioes_investidor WHERE negocio_id = $1 ORDER BY data_hora DESC`,
+      [req.params.negocioId]
+    )
+    res.json({ reunioes: rows })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/projetos/:negocioId/reunioes', async (req, res) => {
+  try {
+    await ensureReunioesInvestidorTable()
+    const { data_hora, formato, notas } = req.body || {}
+    if (!data_hora) return res.status(400).json({ error: 'data_hora obrigatória' })
+    const id = randomUUID()
+    const { rows } = await pool.query(
+      `INSERT INTO reunioes_investidor (id, negocio_id, data_hora, formato, notas, criado_por)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [id, req.params.negocioId, data_hora, formato || 'Online', notas || null, req.user?.email || null]
+    )
+    res.status(201).json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.put('/projetos/reunioes/:reuniaoId', async (req, res) => {
+  try {
+    await ensureReunioesInvestidorTable()
+    const { data_hora, formato, estado, notas } = req.body || {}
+    const sets = []; const params = []
+    if (data_hora !== undefined) { params.push(data_hora); sets.push(`data_hora = $${params.length}`) }
+    if (formato !== undefined) { params.push(formato); sets.push(`formato = $${params.length}`) }
+    if (estado !== undefined) { params.push(estado); sets.push(`estado = $${params.length}`) }
+    if (notas !== undefined) { params.push(notas); sets.push(`notas = $${params.length}`) }
+    if (!sets.length) return res.status(400).json({ error: 'Nada para actualizar' })
+    params.push(req.params.reuniaoId)
+    const { rows } = await pool.query(`UPDATE reunioes_investidor SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`, params)
+    if (!rows[0]) return res.status(404).json({ error: 'Não encontrada' })
+    res.json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/projetos/reunioes/:reuniaoId', async (req, res) => {
+  try {
+    await ensureReunioesInvestidorTable()
+    await pool.query('DELETE FROM reunioes_investidor WHERE id = $1', [req.params.reuniaoId])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ════════════════════════════════════════════════════════════════
 // FRAÇÕES dentro de um projecto (prédios com várias frações)
 // ════════════════════════════════════════════════════════════════
 router.get('/projetos/:negocioId/fracoes', async (req, res) => {

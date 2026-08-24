@@ -625,7 +625,7 @@ export function restrictByAccess(entidade) {
 // para o negocio dono, por isso ficam completamente bloqueados para roles
 // restritos (edição de obra é da equipa, não do investidor/parceiro).
 const PROJETOS_SUBRESOURCE_BLOQUEADO = new Set([
-  'fases', 'tarefas', 'fotos', 'documentos', 'despesas', 'investidores', 'fracoes', 'comentarios',
+  'fases', 'tarefas', 'fotos', 'documentos', 'despesas', 'investidores', 'fracoes', 'comentarios', 'reunioes',
 ])
 // Rotas agregadas/globais de /projetos já auto-filtradas dentro do próprio
 // handler (meus, portfolio/kpis, portfolio/ia-predicoes, calendario) ou sem

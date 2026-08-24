@@ -4958,7 +4958,7 @@ app.put("/relatorios-semanais/:id", async (c: any) => {
 //   - path por sub-recurso → bloqueado (sem resolução barata para o negócio dono)
 //   - rotas agregadas já auto-filtradas dentro do handler → passam
 const PROJETOS_SUBRESOURCE_BLOQUEADO = new Set([
-  "fases", "tarefas", "fotos", "documentos", "despesas", "investidores", "fracoes", "comentarios",
+  "fases", "tarefas", "fotos", "documentos", "despesas", "investidores", "fracoes", "comentarios", "reunioes",
 ]);
 const PROJETOS_PASSTHROUGH = new Set(["meus", "templates", "calendario", "portfolio"]);
 app.use("/projetos/*", async (c: any, next: any) => {
@@ -5639,6 +5639,79 @@ app.delete("/projetos/investidores/:linkId", async (c: any) => {
   try {
     const { rows } = await pool.query("DELETE FROM projeto_investidores WHERE id = $1 RETURNING investidor_id", [c.req.param("linkId")]);
     if (rows[0]) syncMontanteInvestido(rows[0].investidor_id).catch((e: any) => console.error("[projeto-investidor] syncMontante:", e.message));
+    return c.json({ ok: true });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ════════════════════════════════════════════════════════════════
+// REUNIÕES de acompanhamento com investidores (SOP 13 — agendamento já
+// era feito por email; isto é o registo consultável no CRM).
+// ════════════════════════════════════════════════════════════════
+let _reunioesInvestidorTableEnsured = false;
+async function ensureReunioesInvestidorTable() {
+  if (_reunioesInvestidorTableEnsured) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS reunioes_investidor (
+      id TEXT PRIMARY KEY,
+      negocio_id TEXT NOT NULL REFERENCES negocios(id) ON DELETE CASCADE,
+      data_hora TIMESTAMPTZ NOT NULL,
+      formato TEXT DEFAULT 'Online',
+      estado TEXT DEFAULT 'Agendada',
+      notas TEXT,
+      criado_por TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+  _reunioesInvestidorTableEnsured = true;
+}
+
+app.get("/projetos/:negocioId/reunioes", async (c: any) => {
+  try {
+    await ensureReunioesInvestidorTable();
+    const { rows } = await pool.query(
+      `SELECT * FROM reunioes_investidor WHERE negocio_id = $1 ORDER BY data_hora DESC`,
+      [c.req.param("negocioId")],
+    );
+    return c.json({ reunioes: rows });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/projetos/:negocioId/reunioes", async (c: any) => {
+  try {
+    await ensureReunioesInvestidorTable();
+    const body = await c.req.json().catch(() => ({}));
+    if (!body.data_hora) return c.json({ error: "data_hora obrigatória" }, 400);
+    const u = await resolveCrmUser(c);
+    const { rows } = await pool.query(
+      `INSERT INTO reunioes_investidor (id, negocio_id, data_hora, formato, notas, criado_por)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [crypto.randomUUID(), c.req.param("negocioId"), body.data_hora, body.formato || "Online", body.notas || null, u?.email || null],
+    );
+    return c.json(rows[0], 201);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.put("/projetos/reunioes/:reuniaoId", async (c: any) => {
+  try {
+    await ensureReunioesInvestidorTable();
+    const body = await c.req.json().catch(() => ({}));
+    const sets: string[] = []; const params: any[] = [];
+    if (body.data_hora !== undefined) { params.push(body.data_hora); sets.push(`data_hora = $${params.length}`); }
+    if (body.formato !== undefined) { params.push(body.formato); sets.push(`formato = $${params.length}`); }
+    if (body.estado !== undefined) { params.push(body.estado); sets.push(`estado = $${params.length}`); }
+    if (body.notas !== undefined) { params.push(body.notas); sets.push(`notas = $${params.length}`); }
+    if (!sets.length) return c.json({ error: "Nada para actualizar" }, 400);
+    params.push(c.req.param("reuniaoId"));
+    const { rows } = await pool.query(`UPDATE reunioes_investidor SET ${sets.join(", ")} WHERE id = $${params.length} RETURNING *`, params);
+    if (!rows[0]) return c.json({ error: "Não encontrada" }, 404);
+    return c.json(rows[0]);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.delete("/projetos/reunioes/:reuniaoId", async (c: any) => {
+  try {
+    await ensureReunioesInvestidorTable();
+    await pool.query("DELETE FROM reunioes_investidor WHERE id = $1", [c.req.param("reuniaoId")]);
     return c.json({ ok: true });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });

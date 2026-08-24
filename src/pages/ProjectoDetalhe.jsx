@@ -5,6 +5,7 @@ import {
   Building2, Wallet, ImageIcon, FileText, Users, BarChart3, ChevronRight,
   FileDown, AlertTriangle, Sparkles, RefreshCw, Home, Layers,
   History, MessageSquare, TrendingUp, FileSpreadsheet, Pencil, Eye,
+  CalendarClock,
 } from 'lucide-react'
 import { ProjectoForm } from './Projectos.jsx'
 import { apiFetch, getToken, openDocument } from '../lib/api.js'
@@ -64,6 +65,7 @@ const TABS_BASE = [
   { key: 'fotos',        label: 'Fotos',            icon: ImageIcon },
   { key: 'documentos',   label: 'Documentos',       icon: FileText },
   { key: 'investidores', label: 'Investidores',     icon: Users },
+  { key: 'reunioes',     label: 'Reuniões',         icon: CalendarClock },
   { key: 'historico',    label: 'Histórico',        icon: History },
 ]
 
@@ -315,6 +317,7 @@ export function ProjectoDetalhe() {
             {tab === 'fotos' && <TabFotos negocioId={id} fases={fasesFiltradas} fotos={fotosFiltradas} onChange={load} readOnly={isReadOnly} fracaoSel={fracaoSel} />}
             {tab === 'documentos' && <TabDocumentos negocio={negocio} imovel={imovel} fases={fases} readOnly={isReadOnly} />}
             {tab === 'investidores' && <TabInvestidores negocio={negocio} readOnly={isReadOnly} />}
+            {tab === 'reunioes' && <TabReunioes negocioId={id} readOnly={isReadOnly} />}
             {tab === 'historico' && <TabHistorico negocioId={id} />}
           </div>
         </Card>
@@ -1193,6 +1196,162 @@ function TabDocumentos({ negocio, imovel, fases, readOnly }) {
 // ════════════════════════════════════════════════════════════════
 // TAB: INVESTIDORES
 // ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+// TAB: REUNIÕES de acompanhamento com investidores
+// ════════════════════════════════════════════════════════════════
+const FORMATO_REUNIAO = ['Online', 'Presencial']
+const ESTADO_REUNIAO = ['Agendada', 'Realizada', 'Cancelada']
+const ESTADO_REUNIAO_COR = {
+  Agendada: 'bg-blue-100 text-blue-700',
+  Realizada: 'bg-green-100 text-green-700',
+  Cancelada: 'bg-gray-100 text-gray-500',
+}
+
+function TabReunioes({ negocioId, readOnly }) {
+  const toast = useToast()
+  const [lista, setLista] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({ data: '', hora: '', formato: 'Online', notas: '' })
+  const [saving, setSaving] = useState(false)
+
+  async function load() {
+    setLoading(true)
+    try {
+      const r = await apiFetch(`/api/crm/projetos/${negocioId}/reunioes`)
+      if (r.ok) setLista((await r.json()).reunioes || [])
+    } finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, [negocioId])
+
+  async function adicionar(e) {
+    e.preventDefault()
+    if (!form.data) return
+    setSaving(true)
+    try {
+      const data_hora = `${form.data}T${form.hora || '18:00'}:00`
+      const r = await apiFetch(`/api/crm/projetos/${negocioId}/reunioes`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data_hora, formato: form.formato, notas: form.notas || null }),
+      })
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        toast?.(`Erro ao agendar reunião: ${err.error || r.status}`, 'error', 3500)
+        return
+      }
+      setForm({ data: '', hora: '', formato: 'Online', notas: '' })
+      setShowForm(false)
+      load()
+    } finally { setSaving(false) }
+  }
+
+  async function mudarEstado(id, estado) {
+    const r = await apiFetch(`/api/crm/projetos/reunioes/${id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estado }),
+    })
+    if (r.ok) load()
+  }
+
+  async function apagar(id) {
+    if (!confirm('Apagar esta reunião?')) return
+    const r = await apiFetch(`/api/crm/projetos/reunioes/${id}`, { method: 'DELETE' })
+    if (r.ok) load()
+  }
+
+  const inputClass = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300'
+  const proximas = lista.filter(r => r.estado === 'Agendada')
+  const passadas = lista.filter(r => r.estado !== 'Agendada')
+
+  if (loading) return <p className="text-sm text-gray-400">A carregar...</p>
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-gray-700">Reuniões de acompanhamento ({lista.length})</h3>
+        {!readOnly && (
+          <button onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+            <Plus className="w-3.5 h-3.5" /> Agendar Reunião
+          </button>
+        )}
+      </div>
+
+      {!readOnly && showForm && (
+        <form onSubmit={adicionar} className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-200">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Data</label>
+              <input type="date" value={form.data} onChange={e => setForm(f => ({ ...f, data: e.target.value }))} className={inputClass} required />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Hora</label>
+              <input type="time" value={form.hora} onChange={e => setForm(f => ({ ...f, hora: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Formato</label>
+              <select value={form.formato} onChange={e => setForm(f => ({ ...f, formato: e.target.value }))} className={inputClass}>
+                {FORMATO_REUNIAO.map(f => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Notas (agenda, tópicos)</label>
+            <input value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} placeholder="Ex: tour à obra, cronograma, dúvidas..." className={inputClass} />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setShowForm(false)} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100">Cancelar</button>
+            <button type="submit" disabled={saving} className="px-4 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
+              {saving ? 'A guardar...' : 'Guardar'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {lista.length === 0 ? (
+        <div className="text-center py-8 text-gray-400 text-sm">Nenhuma reunião registada.</div>
+      ) : (
+        <div className="space-y-4">
+          {[['Próximas', proximas], ['Anteriores', passadas]].map(([label, grupo]) => grupo.length > 0 && (
+            <div key={label}>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">{label} ({grupo.length})</p>
+              <div className="divide-y divide-gray-100">
+                {grupo.map(r => (
+                  <div key={r.id} className="flex items-center gap-3 py-3">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                      <CalendarClock className="w-4 h-4 text-indigo-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800">
+                        {new Date(r.data_hora).toLocaleString('pt-PT', { dateStyle: 'medium', timeStyle: 'short' })}
+                        <span className="ml-2 text-xs text-gray-400">{r.formato}</span>
+                      </p>
+                      {r.notas && <p className="text-xs text-gray-400 mt-0.5">{r.notas}</p>}
+                    </div>
+                    {!readOnly ? (
+                      <div className="flex items-center gap-2">
+                        <select value={r.estado} onChange={e => mudarEstado(r.id, e.target.value)}
+                          className={`text-xs rounded-lg px-2 py-1 border-0 ${ESTADO_REUNIAO_COR[r.estado] || 'bg-gray-100'}`}>
+                          {ESTADO_REUNIAO.map(e => <option key={e} value={e}>{e}</option>)}
+                        </select>
+                        <button onClick={() => apagar(r.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500" title="Remover">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <span className={`text-xs px-2 py-1 rounded-lg ${ESTADO_REUNIAO_COR[r.estado] || 'bg-gray-100'}`}>{r.estado}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TabInvestidores({ negocio, readOnly }) {
   const toast = useToast()
   const [lista, setLista] = useState([])
