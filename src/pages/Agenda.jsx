@@ -67,6 +67,12 @@ const SUGESTOES_CATALOGO = [
   { titulo: 'Acompanhamento de Assinaturas CAEP Pendentes', categoria: 'Gestão Financeira', duracao_estimada_horas: 0.33, frequencia: 'semanal', prioridade: 'alta' },
   { titulo: 'Triagem de Alertas Críticos', categoria: 'Planeamento', duracao_estimada_horas: 0.25, frequencia: 'diaria', dias_semana: '1,2,3,4,5', prioridade: 'alta' },
   { titulo: 'Relacionamento com Investidores Activos', categoria: 'Follow Up Investidores', duracao_estimada_horas: 0.75, frequencia: 'quinzenal', prioridade: 'media' },
+  // Adicionadas em 24/08/2026 — foco em métricas de sucesso do negócio,
+  // não só higiene de processo (funil, propostas paradas, cashflow):
+  { titulo: 'Follow-up de Propostas Enviadas', categoria: 'Proposta', duracao_estimada_horas: 0.5, frequencia: 'semanal', prioridade: 'alta' },
+  { titulo: 'Revisão Semanal do Funil (Taxa de Conversão)', categoria: 'Planeamento', duracao_estimada_horas: 1, frequencia: 'semanal', prioridade: 'alta' },
+  { titulo: 'Revisão de Negócios Descartados', categoria: 'Análise de Negócio', duracao_estimada_horas: 1, frequencia: 'mensal', prioridade: 'media' },
+  { titulo: 'Revisão Semanal de Cashflow da Empresa', categoria: 'Gestão Financeira', duracao_estimada_horas: 0.75, frequencia: 'semanal', prioridade: 'alta' },
 ]
 
 function getMonday(d) {
