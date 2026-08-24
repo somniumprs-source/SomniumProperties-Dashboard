@@ -255,7 +255,7 @@ router.post('/actualizar-fila', async (req, res) => {
     const propostas = await gerarElaboracaoProposta(pool)
     const sinteticas = await gerarTarefasSinteticas(pool)
     const instanciadas = await instanciarTemplatesDevidos(pool, semana_inicio)
-    const { users, fila } = await gerarFila(pool)
+    const { users, filaCatalogo, filaAutomatica } = await gerarFila(pool)
     res.json({
       ok: true,
       cadeias_angariacao: cadeias,
@@ -265,7 +265,8 @@ router.post('/actualizar-fila', async (req, res) => {
       tarefas_sinteticas: sinteticas,
       templates_instanciados: instanciadas,
       users,
-      fila,
+      filaCatalogo,
+      filaAutomatica,
     })
   } catch (e) {
     console.error('[agenda] actualizar-fila erro:', e)
@@ -276,8 +277,8 @@ router.post('/actualizar-fila', async (req, res) => {
 // GET /api/agenda/fila — só lê a fila actual, sem correr geração de novo.
 router.get('/fila', async (req, res) => {
   try {
-    const { users, fila } = await gerarFila(pool)
-    res.json({ users, fila })
+    const { users, filaCatalogo, filaAutomatica } = await gerarFila(pool)
+    res.json({ users, filaCatalogo, filaAutomatica })
   } catch (e) {
     console.error('[agenda] fila erro:', e)
     res.status(500).json({ error: e.message })

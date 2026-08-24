@@ -258,7 +258,7 @@ app.post("/actualizar-fila", async (c: any) => {
     const propostas = await gerarElaboracaoProposta();
     const sinteticas = await gerarTarefasSinteticas();
     const instanciadas = await instanciarTemplatesDevidos(semana_inicio);
-    const { users, fila } = await gerarFila();
+    const { users, filaCatalogo, filaAutomatica } = await gerarFila();
     return c.json({
       ok: true,
       cadeias_angariacao: cadeias,
@@ -268,7 +268,8 @@ app.post("/actualizar-fila", async (c: any) => {
       tarefas_sinteticas: sinteticas,
       templates_instanciados: instanciadas,
       users,
-      fila,
+      filaCatalogo,
+      filaAutomatica,
     });
   } catch (e) {
     console.error("[agenda] actualizar-fila erro:", e);
@@ -279,8 +280,8 @@ app.post("/actualizar-fila", async (c: any) => {
 // GET /agenda/fila
 app.get("/fila", async (c: any) => {
   try {
-    const { users, fila } = await gerarFila();
-    return c.json({ users, fila });
+    const { users, filaCatalogo, filaAutomatica } = await gerarFila();
+    return c.json({ users, filaCatalogo, filaAutomatica });
   } catch (e) {
     console.error("[agenda] fila erro:", e);
     return c.json({ error: (e as Error).message }, 500);

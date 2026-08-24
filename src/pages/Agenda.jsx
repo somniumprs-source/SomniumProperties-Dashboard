@@ -159,7 +159,8 @@ function CalendarioTab({ users }) {
   const [refDate, setRefDate] = useState(() => new Date())
   const [blocos, setBlocos] = useState([])
   const [agendamentos, setAgendamentos] = useState([])
-  const [fila, setFila] = useState([])
+  const [filaCatalogo, setFilaCatalogo] = useState([])
+  const [filaAutomatica, setFilaAutomatica] = useState([])
   const [loading, setLoading] = useState(false)
   const [copiando, setCopiando] = useState(false)
   const [actualizando, setActualizando] = useState(false)
@@ -189,7 +190,9 @@ function CalendarioTab({ users }) {
       ])
       setBlocos((await rB.json()).blocos || [])
       setAgendamentos((await rA.json()).agendamentos || [])
-      setFila((await rF.json()).fila || [])
+      const jF = await rF.json()
+      setFilaCatalogo(jF.filaCatalogo || [])
+      setFilaAutomatica(jF.filaAutomatica || [])
     } catch (e) { toast?.(e.message, 'error') }
     setLoading(false)
   }, [userId, semanaInicio, semanaFim])
@@ -254,7 +257,8 @@ function CalendarioTab({ users }) {
       })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || 'Falha ao actualizar')
-      toast?.(`Fila actualizada — ${j.fila?.length || 0} itens prontos.`, 'success')
+      const total = (j.filaCatalogo?.length || 0) + (j.filaAutomatica?.length || 0)
+      toast?.(`Fila actualizada — ${total} itens prontos.`, 'success')
       await load()
     } catch (e) { toast?.(e.message, 'error') }
     setActualizando(false)
@@ -359,7 +363,7 @@ function CalendarioTab({ users }) {
           <Button variant="secondary" size="sm" onClick={() => setRefDate(new Date())}>Semana actual</Button>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-gray-400">{totalHoras.toFixed(1)}h livres · {fila.length} na fila</span>
+          <span className="text-xs text-gray-400">{totalHoras.toFixed(1)}h livres · {filaCatalogo.length + filaAutomatica.length} na fila</span>
           <Button variant="secondary" size="sm" icon={copiando ? Loader2 : Copy} onClick={copiarSemanaAnterior} disabled={copiando || !userId}>
             Copiar semana
           </Button>
@@ -456,28 +460,43 @@ function CalendarioTab({ users }) {
         </div>
       )}
 
-      {picker && (
-        <div ref={pickerRef} className="fixed z-50 w-72 max-h-80 overflow-y-auto rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900"
-          style={{ top: picker.top, left: Math.min(picker.left, window.innerWidth - 300) }}>
-          <div className="px-3 py-2 border-b border-gray-100 dark:border-neutral-800 sticky top-0 bg-white dark:bg-neutral-900">
-            <p className="text-[11px] font-semibold text-gray-600 dark:text-neutral-300">Capacidade livre: {fmtHoras(picker.capacidadeMin / 60)}</p>
+      {picker && (() => {
+        const cabe = it => it.duracao_horas * 60 <= picker.capacidadeMin + 0.001
+        const catalogo = filaCatalogo.filter(cabe)
+        const automatica = filaAutomatica.filter(cabe)
+        const ItemBtn = (it) => (
+          <button key={it.id} onClick={() => escolher(it)}
+            className="w-full text-left px-3 py-2 hover:bg-brand-gold/5 border-b border-gray-50 dark:border-neutral-800/60 last:border-0">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium text-gray-800 dark:text-neutral-200 truncate">{it.titulo}</p>
+              <Badge tone={PRIORIDADE_TONE[it.prioridade] || 'gray'} size="xs">{PRIORIDADE_LABEL[it.prioridade] || it.prioridade}</Badge>
+            </div>
+            <p className="text-[10px] text-gray-400">{it.categoria} · {fmtHoras(it.duracao_horas)}{it.data_limite ? ` · prazo ${it.data_limite}` : ''}{it.simultaneo ? ' · precisa dos dois' : ''}</p>
+          </button>
+        )
+        return (
+          <div ref={pickerRef} className="fixed z-50 w-72 max-h-96 overflow-y-auto rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900"
+            style={{ top: picker.top, left: Math.min(picker.left, window.innerWidth - 300) }}>
+            <div className="px-3 py-2 border-b border-gray-100 dark:border-neutral-800 sticky top-0 bg-white dark:bg-neutral-900">
+              <p className="text-[11px] font-semibold text-gray-600 dark:text-neutral-300">Capacidade livre: {fmtHoras(picker.capacidadeMin / 60)}</p>
+            </div>
+            {catalogo.length === 0 && automatica.length === 0 ? (
+              <p className="text-xs text-gray-400 px-3 py-4 text-center">Nada da fila cabe neste espaço.</p>
+            ) : (
+              <>
+                <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 sticky top-[33px] bg-white dark:bg-neutral-900">Catálogo</p>
+                {catalogo.length === 0 ? (
+                  <p className="text-[11px] text-gray-400 px-3 pb-2">Nada do catálogo cabe aqui.</p>
+                ) : catalogo.map(ItemBtn)}
+                <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 sticky top-[33px] bg-white dark:bg-neutral-900">Automáticas</p>
+                {automatica.length === 0 ? (
+                  <p className="text-[11px] text-gray-400 px-3 pb-2">Sem tarefas automáticas por agendar.</p>
+                ) : automatica.map(ItemBtn)}
+              </>
+            )}
           </div>
-          {fila.filter(it => it.duracao_horas * 60 <= picker.capacidadeMin + 0.001).length === 0 ? (
-            <p className="text-xs text-gray-400 px-3 py-4 text-center">Nada da fila cabe neste espaço.</p>
-          ) : (
-            fila.filter(it => it.duracao_horas * 60 <= picker.capacidadeMin + 0.001).map(it => (
-              <button key={it.id} onClick={() => escolher(it)}
-                className="w-full text-left px-3 py-2 hover:bg-brand-gold/5 border-b border-gray-50 dark:border-neutral-800/60 last:border-0">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-medium text-gray-800 dark:text-neutral-200 truncate">{it.titulo}</p>
-                  <Badge tone={PRIORIDADE_TONE[it.prioridade] || 'gray'} size="xs">{PRIORIDADE_LABEL[it.prioridade] || it.prioridade}</Badge>
-                </div>
-                <p className="text-[10px] text-gray-400">{it.categoria} · {fmtHoras(it.duracao_horas)}{it.data_limite ? ` · prazo ${it.data_limite}` : ''}{it.simultaneo ? ' · precisa dos dois' : ''}</p>
-              </button>
-            ))
-          )}
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

@@ -577,14 +577,15 @@ async function runGerarAgendaSemanal() {
   const propostas = await gerarElaboracaoProposta();
   const sinteticas = await gerarTarefasSinteticas();
   const instanciadas = await instanciarTemplatesDevidos(semanaInicio);
-  const { fila } = await gerarFila();
+  const { filaCatalogo, filaAutomatica } = await gerarFila();
+  const itensNaFila = filaCatalogo.length + filaAutomatica.length;
 
   console.log(
-    `[cron] Fila da Agenda actualizada para a semana de ${semanaInicio}: ${fila.length} itens prontos ` +
-      `(cadeias: ${cadeias.criadas}, estudos VVR: ${estudosMercado.criadas}, ` +
+    `[cron] Fila da Agenda actualizada para a semana de ${semanaInicio}: ${itensNaFila} itens prontos ` +
+      `(catálogo: ${filaCatalogo.length}, automáticas: ${filaAutomatica.length}, cadeias: ${cadeias.criadas}, estudos VVR: ${estudosMercado.criadas}, ` +
       `análises: ${analises.criadas}, propostas: ${propostas.criadas}, sintéticas: ${sinteticas.criadas}, templates: ${instanciadas.criadas})`,
   );
-  return { semanaInicio, itensNaFila: fila.length };
+  return { semanaInicio, itensNaFila };
 }
 
 // Exports para execução manual via API / cron functions

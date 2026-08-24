@@ -311,23 +311,8 @@ export async function instanciarTemplatesDevidos(pool, semanaInicio) {
 function minutos(hhmm) { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m }
 function hhmmDe(min) { return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}` }
 
-// Fila priorizada — só tarefas do Catálogo de Tarefas Recorrentes
-// (template_id preenchido). Decisão do utilizador em 24/08/2026: as
-// automáticas (cadeia de angariação, Estudo de Mercado, follow-ups por
-// entidade) continuam a ser geridas pelo motor mas deixam de aparecer
-// neste menu de escolha — só o que está no catálogo é escolhível aqui.
-export async function gerarFila(pool) {
-  const { rows: users } = await pool.query(
-    `SELECT id, nome, cor, iniciais FROM users WHERE ativo = true AND role = ANY($1) ORDER BY id`,
-    [ROLES_EQUIPA]
-  )
-
-  const { rows: soltas } = await pool.query(
-    `SELECT * FROM tarefas WHERE inicio IS NULL AND status != 'Concluída' AND template_id IS NOT NULL
-     ORDER BY CASE prioridade WHEN 'alta' THEN 0 WHEN 'media' THEN 1 ELSE 2 END, data_limite NULLS LAST, created_at`
-  )
-
-  const fila = soltas.map(t => ({
+function mapSimples(t) {
+  return {
     tipo: 'simples',
     id: t.id,
     tarefa_id: t.id,
@@ -339,9 +324,71 @@ export async function gerarFila(pool) {
     simultaneo: !!t.simultaneo,
     origem_tipo: t.origem_tipo,
     created_at: t.created_at,
-  }))
+  }
+}
+const RANK_PRIORIDADE = { alta: 0, media: 1, baixa: 2 }
+function ordenarFila(itens) {
+  return itens.sort((a, b) => {
+    if (RANK_PRIORIDADE[a.prioridade] !== RANK_PRIORIDADE[b.prioridade]) return RANK_PRIORIDADE[a.prioridade] - RANK_PRIORIDADE[b.prioridade]
+    if (a.data_limite !== b.data_limite) {
+      if (!a.data_limite) return 1
+      if (!b.data_limite) return -1
+      return a.data_limite < b.data_limite ? -1 : 1
+    }
+    return new Date(a.created_at) - new Date(b.created_at)
+  })
+}
 
-  return { users, fila }
+// Fila priorizada, em duas listas separadas (25/08/2026, a pedido do
+// utilizador): "Catálogo" (template_id preenchido, editável na página) e
+// "Automáticas" (cadeia de angariação + tarefas por entidade — geradas
+// sozinhas pelo motor, mas continuam a precisar de escolha manual de
+// bloco). Cadeias aparecem como um único item atómico (as duas ou
+// nenhuma, nunca partidas).
+export async function gerarFila(pool) {
+  const { rows: users } = await pool.query(
+    `SELECT id, nome, cor, iniciais FROM users WHERE ativo = true AND role = ANY($1) ORDER BY id`,
+    [ROLES_EQUIPA]
+  )
+
+  const { rows: catalogo } = await pool.query(
+    `SELECT * FROM tarefas WHERE inicio IS NULL AND status != 'Concluída' AND template_id IS NOT NULL
+     ORDER BY CASE prioridade WHEN 'alta' THEN 0 WHEN 'media' THEN 1 ELSE 2 END, data_limite NULLS LAST, created_at`
+  )
+  const filaCatalogo = catalogo.map(mapSimples)
+
+  const { rows: pares } = await pool.query(
+    `SELECT p.id AS pesquisa_id, p.tarefa AS pesquisa_tarefa, p.tempo_horas AS pesquisa_horas, p.prioridade, p.created_at,
+            c.id AS cold_call_id, c.tempo_horas AS cold_call_horas
+     FROM tarefas p
+     JOIN tarefas c ON c.origem_id = p.origem_id AND c.origem_campo = 'cadeia_cold_call' AND c.inicio IS NULL AND c.status != 'Concluída'
+     WHERE p.origem_campo = 'cadeia_pesquisa' AND p.inicio IS NULL AND p.status != 'Concluída'`
+  )
+  const idsCadeia = new Set()
+  for (const p of pares) { idsCadeia.add(p.pesquisa_id); idsCadeia.add(p.cold_call_id) }
+
+  const { rows: entidade } = await pool.query(
+    `SELECT * FROM tarefas WHERE inicio IS NULL AND status != 'Concluída' AND origem_tipo IS NOT NULL
+     ORDER BY CASE prioridade WHEN 'alta' THEN 0 WHEN 'media' THEN 1 ELSE 2 END, data_limite NULLS LAST, created_at`
+  )
+
+  const filaCadeia = pares.map(p => ({
+    tipo: 'cadeia',
+    id: `cadeia:${p.pesquisa_id}`,
+    pesquisa_id: p.pesquisa_id,
+    cold_call_id: p.cold_call_id,
+    titulo: (p.pesquisa_tarefa || '').replace(/^Pesquisa de Imóveis — /, ''),
+    categoria: 'Pesquisa + Cold Call',
+    duracao_horas: (Number(p.pesquisa_horas) || 1) + (Number(p.cold_call_horas) || 1),
+    prioridade: p.prioridade,
+    data_limite: null,
+    simultaneo: false,
+    created_at: p.created_at,
+  }))
+  const filaEntidade = entidade.filter(t => !idsCadeia.has(t.id)).map(mapSimples)
+  const filaAutomatica = ordenarFila([...filaCadeia, ...filaEntidade])
+
+  return { users, filaCatalogo, filaAutomatica }
 }
 
 // Cursor livre de um bloco: hora_inicio + soma do que já está confirmado
