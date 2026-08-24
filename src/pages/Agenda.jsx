@@ -4,7 +4,7 @@
  * de agendamento (proposta semanal automática) é Fase 2 — esta página só
  * regista os inputs de que esse motor vai precisar.
  */
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   Calendar, Plus, Trash2, ChevronLeft, ChevronRight, Copy, BookOpen,
   Pencil, Loader2, Sparkles, ListChecks, Wand2, Check, X, CalendarClock,
@@ -85,7 +85,7 @@ const ACTIVE_USER_KEY = 'somnium:active_user_id'
 const ROLES_EQUIPA = ['admin', 'comercial', 'financeiro', 'operacoes']
 
 export function Agenda() {
-  const [tab, setTab] = useState('disponibilidade')
+  const [tab, setTab] = useState('calendario')
   const [users, setUsers] = useState([])
   const [loadingUsers, setLoadingUsers] = useState(true)
 
@@ -102,39 +102,63 @@ export function Agenda() {
         <Tabs
           variant="segmented"
           items={[
-            { key: 'disponibilidade', label: 'Disponibilidade', icon: Calendar },
+            { key: 'calendario', label: 'Calendário', icon: CalendarClock },
             { key: 'catalogo', label: 'Catálogo de Tarefas Recorrentes', icon: BookOpen },
-            { key: 'fila', label: 'Fila da Semana', icon: CalendarClock },
           ]}
           value={tab}
           onChange={setTab}
         />
-        {loadingUsers ? <PageSkeleton /> : tab === 'disponibilidade'
-          ? <DisponibilidadeTab users={users} />
-          : tab === 'catalogo'
-          ? <CatalogoTab users={users} />
-          : <FilaTab users={users} />}
+        {loadingUsers ? <PageSkeleton /> : tab === 'calendario'
+          ? <CalendarioTab users={users} />
+          : <CatalogoTab users={users} />}
       </div>
     </>
   )
 }
 
 // ════════════════════════════════════════════════════════════════
-// Disponibilidade — grid semanal manual por pessoa
+// Calendário — grelha de horas (arrasta para marcar disponibilidade;
+// clica num bloco para escolher da fila o que fazer ali). Substitui os
+// separadores Disponibilidade + Fila da Semana (revisão 24/08/2026: o
+// utilizador pediu uma grelha visual real, não cartões de lista).
 // ════════════════════════════════════════════════════════════════
-function DisponibilidadeTab({ users }) {
+const HORA_INICIO_GRELHA = 7
+const HORA_FIM_GRELHA = 21
+const SLOT_MIN = 30
+const SLOTS_POR_DIA = ((HORA_FIM_GRELHA - HORA_INICIO_GRELHA) * 60) / SLOT_MIN
+const SLOT_PX = 22
+const PX_POR_MIN = SLOT_PX / SLOT_MIN
+
+function minutosDoDia(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number)
+  return h * 60 + m
+}
+function hhmmDeMinutos(min) {
+  const h = Math.floor(min / 60), m = min % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+function topPx(hhmm) { return (minutosDoDia(hhmm) - HORA_INICIO_GRELHA * 60) * PX_POR_MIN }
+function alturaPx(hi, hf) { return Math.max(2, (minutosDoDia(hf) - minutosDoDia(hi)) * PX_POR_MIN) }
+
+function CalendarioTab({ users }) {
   const toast = useToast()
   const [userId, setUserId] = useState(() => {
     try { return window.localStorage.getItem(ACTIVE_USER_KEY) || '' } catch { return '' }
   })
   const [refDate, setRefDate] = useState(() => new Date())
   const [blocos, setBlocos] = useState([])
+  const [agendamentos, setAgendamentos] = useState([])
+  const [fila, setFila] = useState([])
   const [loading, setLoading] = useState(false)
   const [copiando, setCopiando] = useState(false)
+  const [actualizando, setActualizando] = useState(false)
+  const [picker, setPicker] = useState(null) // { blocoId, capacidadeMin, top, left }
+  const [, forceTick] = useState(0)
+  const dragRef = useRef(null) // { dayIdx, startSlot, curSlot }
+  const dayColRefs = useRef([])
+  const pickerRef = useRef(null)
 
-  useEffect(() => {
-    if (!userId && users.length) setUserId(users[0].id)
-  }, [users, userId])
+  useEffect(() => { if (!userId && users.length) setUserId(users[0].id) }, [users, userId])
 
   const monday = useMemo(() => getMonday(refDate), [refDate])
   const dias = useMemo(() => Array.from({ length: 7 }, (_, i) => {
@@ -147,22 +171,36 @@ function DisponibilidadeTab({ users }) {
     if (!userId) return
     setLoading(true)
     try {
-      const r = await apiFetch(`/api/agenda/disponibilidade?user_id=${userId}&de=${semanaInicio}&ate=${semanaFim}`)
-      const j = await r.json()
-      setBlocos(Array.isArray(j.blocos) ? j.blocos : [])
+      const [rB, rA, rF] = await Promise.all([
+        apiFetch(`/api/agenda/disponibilidade?user_id=${userId}&de=${semanaInicio}&ate=${semanaFim}`),
+        apiFetch(`/api/agenda/proposta?semana_inicio=${semanaInicio}&user_id=${userId}`),
+        apiFetch('/api/agenda/fila'),
+      ])
+      setBlocos((await rB.json()).blocos || [])
+      setAgendamentos((await rA.json()).agendamentos || [])
+      setFila((await rF.json()).fila || [])
     } catch (e) { toast?.(e.message, 'error') }
     setLoading(false)
   }, [userId, semanaInicio, semanaFim])
 
   useEffect(() => { load() }, [load])
 
-  async function addBloco(data, horaInicio, horaFim) {
-    if (!horaInicio || !horaFim) return
+  // Fecha o picker ao clicar fora dele.
+  useEffect(() => {
+    if (!picker) return
+    function onDocMouseDown(e) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target)) setPicker(null)
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    return () => document.removeEventListener('mousedown', onDocMouseDown)
+  }, [picker])
+
+  async function criarBloco(dia, minInicio, minFim) {
     try {
       const r = await apiFetch('/api/agenda/disponibilidade', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, data, hora_inicio: horaInicio, hora_fim: horaFim }),
+        body: JSON.stringify({ user_id: userId, data: dia, hora_inicio: hhmmDeMinutos(minInicio), hora_fim: hhmmDeMinutos(minFim) }),
       })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || 'Falha ao criar bloco')
@@ -170,11 +208,11 @@ function DisponibilidadeTab({ users }) {
     } catch (e) { toast?.(e.message, 'error') }
   }
 
-  async function delBloco(id) {
+  async function apagarBloco(id) {
     try {
       const r = await apiFetch(`/api/agenda/disponibilidade/${id}`, { method: 'DELETE' })
       if (!r.ok) throw new Error((await r.json()).error || 'Falha ao remover')
-      setBlocos(prev => prev.filter(b => b.id !== id))
+      await load()
     } catch (e) { toast?.(e.message, 'error') }
   }
 
@@ -195,24 +233,105 @@ function DisponibilidadeTab({ users }) {
     setCopiando(false)
   }
 
-  const blocosPorDia = useMemo(() => {
-    const map = {}
-    for (const b of blocos) { (map[b.data] ||= []).push(b) }
-    for (const k in map) map[k].sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio))
-    return map
-  }, [blocos])
+  async function actualizarFila() {
+    setActualizando(true)
+    try {
+      const r = await apiFetch('/api/agenda/actualizar-fila', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ semana_inicio: semanaInicio }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Falha ao actualizar')
+      toast?.(`Fila actualizada — ${j.fila?.length || 0} itens prontos.`, 'success')
+      await load()
+    } catch (e) { toast?.(e.message, 'error') }
+    setActualizando(false)
+  }
 
-  const totalHoras = useMemo(() => blocos.reduce((acc, b) => {
-    const [h1, m1] = b.hora_inicio.split(':').map(Number)
-    const [h2, m2] = b.hora_fim.split(':').map(Number)
-    return acc + ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60
-  }, 0), [blocos])
+  async function desfazer(tarefaId) {
+    try {
+      const r = await apiFetch('/api/agenda/desfazer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tarefaId }),
+      })
+      if (!r.ok) throw new Error((await r.json()).error || 'Falha ao desfazer')
+      await load()
+    } catch (e) { toast?.(e.message, 'error') }
+  }
+
+  async function escolher(itemFila) {
+    if (!picker) return
+    try {
+      const item = itemFila.tipo === 'cadeia'
+        ? { tipo: 'cadeia', pesquisaId: itemFila.pesquisa_id, coldCallId: itemFila.cold_call_id }
+        : { tipo: 'simples', tarefaId: itemFila.tarefa_id }
+      const r = await apiFetch('/api/agenda/atribuir', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blocoId: picker.blocoId, userId, item }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Falha ao atribuir')
+      setPicker(null)
+      await load()
+    } catch (e) { toast?.(e.message, 'error') }
+  }
+
+  const blocosPorDia = useMemo(() => {
+    const m = {}
+    for (const b of blocos) (m[b.data] ||= []).push(b)
+    return m
+  }, [blocos])
+  const agsPorBloco = useMemo(() => {
+    const m = {}
+    for (const a of agendamentos) (m[a.disponibilidade_bloco_id] ||= []).push(a)
+    for (const k in m) m[k].sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio))
+    return m
+  }, [agendamentos])
+
+  const totalHoras = useMemo(() => blocos.reduce((acc, b) => acc + (minutosDoDia(b.hora_fim) - minutosDoDia(b.hora_inicio)) / 60, 0), [blocos])
+
+  // ── Arrastar para criar disponibilidade ──
+  function slotDoEvento(clientY, colEl) {
+    const rect = colEl.getBoundingClientRect()
+    const y = clientY - rect.top
+    return Math.max(0, Math.min(SLOTS_POR_DIA - 1, Math.floor(y / SLOT_PX)))
+  }
+  function onColMouseDown(e, dayIdx) {
+    if (e.target !== e.currentTarget) return // clicou num bloco existente, não no fundo
+    const slot = slotDoEvento(e.clientY, e.currentTarget)
+    dragRef.current = { dayIdx, startSlot: slot, curSlot: slot }
+    forceTick(t => t + 1)
+    const onMove = (ev) => {
+      const col = dayColRefs.current[dayIdx]
+      if (!col || !dragRef.current) return
+      dragRef.current.curSlot = slotDoEvento(ev.clientY, col)
+      forceTick(t => t + 1)
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      const d = dragRef.current
+      dragRef.current = null
+      forceTick(t => t + 1)
+      if (!d) return
+      const lo = Math.min(d.startSlot, d.curSlot)
+      const hi = Math.max(d.startSlot, d.curSlot)
+      criarBloco(fmtISO(dias[d.dayIdx]), HORA_INICIO_GRELHA * 60 + lo * SLOT_MIN, HORA_INICIO_GRELHA * 60 + (hi + 1) * SLOT_MIN)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
+  const horas = useMemo(() => Array.from({ length: HORA_FIM_GRELHA - HORA_INICIO_GRELHA }, (_, i) => HORA_INICIO_GRELHA + i), [])
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <Select size="sm" value={userId} onChange={e => setUserId(e.target.value)} className="w-48" wrapperClassName="!m-0">
+          <Select size="sm" value={userId} onChange={e => setUserId(e.target.value)} className="w-44" wrapperClassName="!m-0">
             {users.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
           </Select>
           <button onClick={() => setRefDate(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n })}
@@ -228,69 +347,127 @@ function DisponibilidadeTab({ users }) {
           </button>
           <Button variant="secondary" size="sm" onClick={() => setRefDate(new Date())}>Semana actual</Button>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-400">Total disponível: <span className="font-semibold text-gray-700 dark:text-neutral-200">{totalHoras.toFixed(1)}h</span></span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-gray-400">{totalHoras.toFixed(1)}h livres · {fila.length} na fila</span>
           <Button variant="secondary" size="sm" icon={copiando ? Loader2 : Copy} onClick={copiarSemanaAnterior} disabled={copiando || !userId}>
-            Copiar semana anterior
+            Copiar semana
+          </Button>
+          <Button variant="secondary" size="sm" icon={actualizando ? Loader2 : Wand2} onClick={actualizarFila} disabled={actualizando}>
+            Actualizar fila
           </Button>
         </div>
       </div>
 
+      <p className="text-[11px] text-gray-400">Arrasta na grelha para marcares um bloco livre. Clica num bloco para escolheres uma tarefa da fila.</p>
+
       {!userId ? (
         <EmptyState icon={Calendar} title="Sem utilizadores" description="Não há utilizadores activos para atribuir disponibilidade." />
       ) : (
-        <div className="grid grid-cols-2 gap-3 max-w-xl">
-          {dias.map((d, i) => (
-            <DiaColuna
-              key={i}
-              data={fmtISO(d)}
-              label={DIAS_SEMANA[i]}
-              diaLabel={fmtDiaLabel(d)}
-              blocos={blocosPorDia[fmtISO(d)] || []}
-              loading={loading}
-              onAdd={(hi, hf) => addBloco(fmtISO(d), hi, hf)}
-              onDelete={delBloco}
-            />
-          ))}
+        <div className="overflow-x-auto">
+          <div className="flex min-w-[720px] select-none" style={{ userSelect: dragRef.current ? 'none' : undefined }}>
+            <div className="shrink-0 pr-1" style={{ width: 40 }}>
+              <div style={{ height: 20 }} />
+              {horas.map(h => (
+                <div key={h} style={{ height: SLOT_PX * 2 }} className="text-right pr-1 text-[10px] text-gray-400 -translate-y-1.5">{h}:00</div>
+              ))}
+            </div>
+            {dias.map((d, dayIdx) => {
+              const diaISO = fmtISO(d)
+              const blocosDia = blocosPorDia[diaISO] || []
+              const isToday = diaISO === fmtISO(new Date())
+              const drag = dragRef.current && dragRef.current.dayIdx === dayIdx ? dragRef.current : null
+              return (
+                <div key={dayIdx} className="flex-1 min-w-[90px] px-0.5">
+                  <p className={`text-center text-[10px] uppercase tracking-widest font-semibold mb-1 ${isToday ? 'text-brand-gold' : 'text-gray-400'}`}>
+                    {DIAS_SEMANA[dayIdx]} <span className="font-normal">{fmtDiaLabel(d)}</span>
+                  </p>
+                  <div
+                    ref={el => { dayColRefs.current[dayIdx] = el }}
+                    onMouseDown={e => onColMouseDown(e, dayIdx)}
+                    className={`relative rounded-lg border ${isToday ? 'border-brand-gold/30' : 'border-gray-100 dark:border-neutral-800'} bg-gray-50/50 dark:bg-neutral-900/30 cursor-crosshair`}
+                    style={{ height: SLOTS_POR_DIA * SLOT_PX }}
+                  >
+                    {horas.map((h, i) => (
+                      <div key={h} className="absolute left-0 right-0 border-t border-gray-100 dark:border-neutral-800/60 pointer-events-none" style={{ top: i * SLOT_PX * 2 }} />
+                    ))}
+                    {drag && (
+                      <div className="absolute left-0.5 right-0.5 rounded bg-brand-gold/30 border border-brand-gold/50 pointer-events-none z-10"
+                        style={{
+                          top: Math.min(drag.startSlot, drag.curSlot) * SLOT_PX,
+                          height: (Math.abs(drag.curSlot - drag.startSlot) + 1) * SLOT_PX,
+                        }} />
+                    )}
+                    {blocosDia.map(b => {
+                      const itens = agsPorBloco[b.id] || []
+                      const usadoMin = itens.reduce((s, a) => s + (minutosDoDia(a.hora_fim) - minutosDoDia(a.hora_inicio)), 0)
+                      const totalMin = minutosDoDia(b.hora_fim) - minutosDoDia(b.hora_inicio)
+                      const livreMin = totalMin - usadoMin
+                      return (
+                        <div key={b.id}
+                          className="absolute left-0.5 right-0.5 rounded-md bg-brand-gold/10 border border-brand-gold/30 overflow-hidden flex flex-col group z-20"
+                          style={{ top: topPx(b.hora_inicio), height: alturaPx(b.hora_inicio, b.hora_fim) }}>
+                          <div className="flex items-center justify-between px-1 py-0.5 shrink-0">
+                            <span className="text-[9px] font-semibold text-brand-dark dark:text-brand-gold">{b.hora_inicio}–{b.hora_fim}</span>
+                            <button onClick={() => apagarBloco(b.id)} title="Apagar bloco"
+                              className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity">
+                              <Trash2 className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
+                          <div className="flex-1 flex flex-col gap-0.5 px-1 pb-1 min-h-0">
+                            {itens.map(a => (
+                              <div key={a.id} className="flex items-center justify-between gap-0.5 px-1 py-0.5 rounded bg-green-100 border border-green-300 dark:bg-green-900/40 dark:border-green-700 text-[9px] leading-tight shrink-0"
+                                title={a.tarefa}>
+                                <span className="truncate text-green-800 dark:text-green-200">{a.tarefa}</span>
+                                <button onClick={() => desfazer(a.tarefa_id)} className="shrink-0 text-green-700 hover:text-red-600 dark:text-green-300">
+                                  <X className="w-2.5 h-2.5" />
+                                </button>
+                              </div>
+                            ))}
+                            {livreMin >= 15 && (
+                              <button
+                                onClick={(e) => {
+                                  const rect = e.currentTarget.getBoundingClientRect()
+                                  setPicker({ blocoId: b.id, capacidadeMin: livreMin, top: rect.bottom + 4, left: rect.left })
+                                }}
+                                className="flex-1 min-h-[16px] flex items-center justify-center gap-0.5 rounded border border-dashed border-brand-gold/40 text-brand-gold hover:bg-brand-gold/10 transition-colors text-[9px] font-semibold">
+                                <Plus className="w-2.5 h-2.5" /> Escolher
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {picker && (
+        <div ref={pickerRef} className="fixed z-50 w-72 max-h-80 overflow-y-auto rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900"
+          style={{ top: picker.top, left: Math.min(picker.left, window.innerWidth - 300) }}>
+          <div className="px-3 py-2 border-b border-gray-100 dark:border-neutral-800 sticky top-0 bg-white dark:bg-neutral-900">
+            <p className="text-[11px] font-semibold text-gray-600 dark:text-neutral-300">Capacidade livre: {fmtHoras(picker.capacidadeMin / 60)}</p>
+          </div>
+          {fila.filter(it => it.duracao_horas * 60 <= picker.capacidadeMin + 0.001).length === 0 ? (
+            <p className="text-xs text-gray-400 px-3 py-4 text-center">Nada da fila cabe neste espaço.</p>
+          ) : (
+            fila.filter(it => it.duracao_horas * 60 <= picker.capacidadeMin + 0.001).map(it => (
+              <button key={it.id} onClick={() => escolher(it)}
+                className="w-full text-left px-3 py-2 hover:bg-brand-gold/5 border-b border-gray-50 dark:border-neutral-800/60 last:border-0">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-gray-800 dark:text-neutral-200 truncate">{it.titulo}</p>
+                  <Badge tone={PRIORIDADE_TONE[it.prioridade] || 'gray'} size="xs">{PRIORIDADE_LABEL[it.prioridade] || it.prioridade}</Badge>
+                </div>
+                <p className="text-[10px] text-gray-400">{it.categoria} · {fmtHoras(it.duracao_horas)}{it.data_limite ? ` · prazo ${it.data_limite}` : ''}{it.simultaneo ? ' · precisa dos dois' : ''}</p>
+              </button>
+            ))
+          )}
         </div>
       )}
     </div>
-  )
-}
-
-function DiaColuna({ data, label, diaLabel, blocos, loading, onAdd, onDelete }) {
-  const [hi, setHi] = useState('09:00')
-  const [hf, setHf] = useState('13:00')
-  const isToday = data === fmtISO(new Date())
-
-  return (
-    <Card variant="default" padding="sm" className={isToday ? 'ring-2 ring-brand-gold/40' : ''}>
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-xs font-bold text-gray-700 dark:text-neutral-200">{label} <span className="font-normal text-gray-400">{diaLabel}</span></p>
-        {loading && <Loader2 className="w-3 h-3 animate-spin text-gray-300" />}
-      </div>
-      <div className="space-y-1.5 mb-2 min-h-[24px]">
-        {blocos.length === 0 && <p className="text-[11px] text-gray-300 dark:text-neutral-600">Sem blocos</p>}
-        {blocos.map(b => (
-          <div key={b.id} className="flex items-center justify-between gap-1 px-2 py-1 rounded-lg bg-brand-gold/10 border border-brand-gold/20 text-[11px]">
-            <span className="font-medium text-brand-dark dark:text-brand-gold">{b.hora_inicio}–{b.hora_fim}</span>
-            <button onClick={() => onDelete(b.id)} className="text-gray-400 hover:text-red-500 transition-colors">
-              <Trash2 className="w-3 h-3" />
-            </button>
-          </div>
-        ))}
-      </div>
-      <div className="flex items-center gap-1">
-        <input type="time" value={hi} onChange={e => setHi(e.target.value)}
-          className="w-full text-[11px] px-1.5 py-1 rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900" />
-        <input type="time" value={hf} onChange={e => setHf(e.target.value)}
-          className="w-full text-[11px] px-1.5 py-1 rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900" />
-        <button onClick={() => onAdd(hi, hf)} title="Adicionar bloco"
-          className="shrink-0 p-1.5 rounded-md bg-brand-dark text-brand-gold hover:bg-brand-dark-light transition-colors">
-          <Plus className="w-3 h-3" />
-        </button>
-      </div>
-    </Card>
   )
 }
 
@@ -416,245 +593,9 @@ function CatalogoTab({ users }) {
   )
 }
 
-// ════════════════════════════════════════════════════════════════
-// Fila da Semana — fila priorizada + atribuição manual (revisão
-// 21/08/2026: o encaixe 100% automático saiu — decidia a ordem sem
-// juízo de negócio. A geração/sequência/elegibilidade continua toda
-// automática (o que está pronto); QUANDO/QUEM faz cada coisa passa a
-// ser sempre uma escolha tua, bloco a bloco.)
-// ════════════════════════════════════════════════════════════════
-function duracaoBlocoMin(b) {
-  const [h1, m1] = b.hora_inicio.split(':').map(Number)
-  const [h2, m2] = b.hora_fim.split(':').map(Number)
-  return (h2 * 60 + m2) - (h1 * 60 + m1)
-}
-function duracaoAgendamentoMin(a) {
-  const [h1, m1] = a.hora_inicio.split(':').map(Number)
-  const [h2, m2] = a.hora_fim.split(':').map(Number)
-  return (h2 * 60 + m2) - (h1 * 60 + m1)
-}
 function fmtHoras(h) {
   const n = Number(h)
   return `${n.toFixed(2).replace(/\.?0+$/, '')}h`
-}
-
-function FilaTab({ users }) {
-  const toast = useToast()
-  const [refDate, setRefDate] = useState(() => new Date())
-  const [blocos, setBlocos] = useState([])
-  const [agendamentos, setAgendamentos] = useState([])
-  const [fila, setFila] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [actualizando, setActualizando] = useState(false)
-  const [picker, setPicker] = useState(null) // { blocoId, userId, capacidadeMin }
-
-  const monday = useMemo(() => getMonday(refDate), [refDate])
-  const semanaInicio = fmtISO(monday)
-  const dias = useMemo(() => Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday); d.setDate(d.getDate() + i); return fmtISO(d)
-  }), [monday])
-  const semanaFim = dias[6]
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [rBlocos, rProposta, rFila] = await Promise.all([
-        apiFetch(`/api/agenda/disponibilidade?de=${semanaInicio}&ate=${semanaFim}`),
-        apiFetch(`/api/agenda/proposta?semana_inicio=${semanaInicio}`),
-        apiFetch('/api/agenda/fila'),
-      ])
-      setBlocos((await rBlocos.json()).blocos || [])
-      setAgendamentos((await rProposta.json()).agendamentos || [])
-      setFila((await rFila.json()).fila || [])
-    } catch (e) { toast?.(e.message, 'error') }
-    setLoading(false)
-  }, [semanaInicio, semanaFim])
-
-  useEffect(() => { load() }, [load])
-
-  async function actualizarFila() {
-    setActualizando(true)
-    try {
-      const r = await apiFetch('/api/agenda/actualizar-fila', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ semana_inicio: semanaInicio }),
-      })
-      const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Falha ao actualizar')
-      toast?.(`Fila actualizada — ${j.fila?.length || 0} itens prontos.`, 'success')
-      await load()
-    } catch (e) { toast?.(e.message, 'error') }
-    setActualizando(false)
-  }
-
-  async function escolher(itemFila) {
-    if (!picker) return
-    try {
-      const item = itemFila.tipo === 'cadeia'
-        ? { tipo: 'cadeia', pesquisaId: itemFila.pesquisa_id, coldCallId: itemFila.cold_call_id }
-        : { tipo: 'simples', tarefaId: itemFila.tarefa_id }
-      const r = await apiFetch('/api/agenda/atribuir', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ blocoId: picker.blocoId, userId: picker.userId, item }),
-      })
-      const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Falha ao atribuir')
-      setPicker(null)
-      await load()
-    } catch (e) { toast?.(e.message, 'error') }
-  }
-
-  async function desfazer(tarefaId) {
-    try {
-      const r = await apiFetch('/api/agenda/desfazer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tarefaId }),
-      })
-      if (!r.ok) throw new Error((await r.json()).error || 'Falha ao desfazer')
-      await load()
-    } catch (e) { toast?.(e.message, 'error') }
-  }
-
-  const blocosPorUserDia = useMemo(() => {
-    const map = {}
-    for (const b of blocos) { map[b.user_id] ||= {}; (map[b.user_id][b.data] ||= []).push(b) }
-    for (const uid in map) for (const d in map[uid]) map[uid][d].sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio))
-    return map
-  }, [blocos])
-  const agendamentosPorBloco = useMemo(() => {
-    const map = {}
-    for (const a of agendamentos) { (map[a.disponibilidade_bloco_id] ||= []).push(a) }
-    for (const k in map) map[k].sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio))
-    return map
-  }, [agendamentos])
-
-  const pickerCapacidadeH = picker ? (picker.capacidadeMin / 60) : 0
-  const filaParaPicker = useMemo(() => {
-    if (!picker) return []
-    return fila.filter(it => it.duracao_horas * 60 <= picker.capacidadeMin + 0.001)
-  }, [fila, picker])
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={() => setRefDate(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n })}
-            className="p-2 rounded-lg bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <span className="text-sm font-semibold text-gray-800 dark:text-neutral-200 min-w-[140px] text-center">
-            {fmtDiaLabel(monday)} – {fmtDiaLabel(new Date(semanaFim))}
-          </span>
-          <button onClick={() => setRefDate(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n })}
-            className="p-2 rounded-lg bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          <Button variant="secondary" size="sm" onClick={() => setRefDate(new Date())}>Semana actual</Button>
-        </div>
-        <Button variant="secondary" size="sm" icon={actualizando ? Loader2 : Wand2} onClick={actualizarFila} disabled={actualizando}>
-          Actualizar fila
-        </Button>
-      </div>
-
-      {loading ? <PageSkeleton /> : (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {users.map(u => (
-              <Card key={u.id} variant="default" padding="sm">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0" style={{ backgroundColor: u.cor || '#C9A84C' }}>{u.iniciais}</span>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-neutral-100">{u.nome}</p>
-                </div>
-                <div className="space-y-3">
-                  {dias.map(dia => {
-                    const blocosDoDia = (blocosPorUserDia[u.id] || {})[dia] || []
-                    if (!blocosDoDia.length) return null
-                    return (
-                      <div key={dia}>
-                        <p className="text-[10px] uppercase tracking-widest font-semibold text-gray-400 mb-1">{fmtDiaLabel(new Date(dia))}</p>
-                        <div className="space-y-1.5">
-                          {blocosDoDia.map(b => {
-                            const itens = agendamentosPorBloco[b.id] || []
-                            const usadoMin = itens.reduce((s, a) => s + duracaoAgendamentoMin(a), 0)
-                            const capacidadeMin = duracaoBlocoMin(b) - usadoMin
-                            return (
-                              <div key={b.id} className="rounded-lg border border-gray-100 dark:border-neutral-800 p-2">
-                                <p className="text-[10px] text-gray-400 mb-1">{b.hora_inicio}–{b.hora_fim} · {fmtHoras(capacidadeMin / 60)} livre</p>
-                                {itens.map(a => (
-                                  <div key={a.id} className="flex items-center justify-between gap-2 px-2 py-1 mb-1 rounded-md bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800/50 text-xs">
-                                    <span className="min-w-0 truncate"><span className="font-semibold text-gray-700 dark:text-neutral-200">{a.hora_inicio}–{a.hora_fim}</span> <span className="text-gray-500 dark:text-neutral-400">· {a.tarefa}</span></span>
-                                    <button onClick={() => desfazer(a.tarefa_id)} title="Desfazer" className="p-0.5 rounded text-gray-400 hover:text-red-500 shrink-0">
-                                      <X className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                ))}
-                                {capacidadeMin >= 15 && (
-                                  <button
-                                    onClick={() => setPicker({ blocoId: b.id, userId: u.id, capacidadeMin })}
-                                    className="w-full flex items-center justify-center gap-1 py-1 rounded-md text-[11px] font-semibold text-brand-gold bg-brand-gold/10 hover:bg-brand-gold/20 transition-colors">
-                                    <Plus className="w-3 h-3" /> Atribuir tarefa
-                                  </button>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  })}
-                  {!Object.keys(blocosPorUserDia[u.id] || {}).length && (
-                    <p className="text-xs text-gray-300 dark:text-neutral-600">Sem disponibilidade dada esta semana.</p>
-                  )}
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          <div>
-            <p className="text-sm font-semibold text-gray-700 dark:text-neutral-200 mb-2">Fila de Tarefas Prontas ({fila.length})</p>
-            {fila.length === 0 ? (
-              <EmptyState icon={Inbox} title="Fila vazia" description='Nada pronto a fazer neste momento — clica em "Actualizar fila" para verificar de novo.' />
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-                {fila.map(it => (
-                  <div key={it.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 text-xs">
-                    <div className="min-w-0">
-                      <p className="font-medium text-gray-800 dark:text-neutral-200 truncate">{it.titulo}</p>
-                      <p className="text-[10px] text-gray-400">{it.categoria} · {fmtHoras(it.duracao_horas)}{it.data_limite ? ` · prazo ${it.data_limite}` : ''}</p>
-                    </div>
-                    <Badge tone={PRIORIDADE_TONE[it.prioridade] || 'gray'} size="xs">{PRIORIDADE_LABEL[it.prioridade] || it.prioridade}</Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      <Modal open={!!picker} onClose={() => setPicker(null)} title="Escolher tarefa para este bloco"
-        subtitle={picker ? `Capacidade disponível: ${fmtHoras(pickerCapacidadeH)}` : ''} size="lg">
-        {filaParaPicker.length === 0 ? (
-          <EmptyState icon={Inbox} title="Nada cabe aqui" description="Nenhuma tarefa da fila cabe na capacidade livre deste bloco." />
-        ) : (
-          <div className="space-y-1.5 max-h-96 overflow-y-auto">
-            {filaParaPicker.map(it => (
-              <button key={it.id} onClick={() => escolher(it)}
-                className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-neutral-800 hover:border-brand-gold hover:bg-brand-gold/5 transition-colors text-left text-xs">
-                <div className="min-w-0">
-                  <p className="font-medium text-gray-800 dark:text-neutral-200 truncate">{it.titulo}</p>
-                  <p className="text-[10px] text-gray-400">{it.categoria} · {fmtHoras(it.duracao_horas)}{it.data_limite ? ` · prazo ${it.data_limite}` : ''}{it.simultaneo ? ' · precisa dos dois' : ''}</p>
-                </div>
-                <Badge tone={PRIORIDADE_TONE[it.prioridade] || 'gray'} size="xs">{PRIORIDADE_LABEL[it.prioridade] || it.prioridade}</Badge>
-              </button>
-            ))}
-          </div>
-        )}
-      </Modal>
-    </div>
-  )
 }
 
 function TemplateModal({ open, onClose, template, users, onSaved }) {
