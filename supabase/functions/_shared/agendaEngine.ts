@@ -304,8 +304,12 @@ export async function atribuirTarefa({ blocoId, userId, item }: { blocoId: strin
        VALUES ($1,$2,$3,$4,$5,$6,$7,'confirmado', NOW())`,
       [id, tarefaId, uid, blocoRow.id, blocoRow.data, horaInicio, horaFim],
     );
+    // Operações (Kanban) mostra e filtra por `funcionario` (texto), não por
+    // user_id — sem isto, a tarefa aparecia no Kanban sem responsável visível.
     await pool.query(
-      `UPDATE tarefas SET inicio = $1, fim = $2, user_id = $3, updated_at = NOW() WHERE id = $4`,
+      `UPDATE tarefas SET inicio = $1, fim = $2, user_id = $3,
+              funcionario = (SELECT nome FROM users WHERE id = $3), updated_at = NOW()
+       WHERE id = $4`,
       [`${blocoRow.data}T${horaInicio}:00`, `${blocoRow.data}T${horaFim}:00`, uid, tarefaId],
     );
     return id;

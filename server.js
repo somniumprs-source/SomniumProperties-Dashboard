@@ -140,7 +140,7 @@ try {
   })
 
   // ── Gestão de utilizadores e camadas de acesso ──
-  const { default: userRoutes, accessRouter, requireRole, requireModule, restrictByAccess } = await import('./src/db/userRoutes.js')
+  const { default: userRoutes, accessRouter, requireRole, requireModule, restrictByAccess, restrictProjetosAccess } = await import('./src/db/userRoutes.js')
   app.use('/api/users', userRoutes)
   app.use('/api/acessos', accessRouter)
   // Camadas de acesso do CRM — montadas ANTES do router CRM para correrem primeiro.
@@ -151,6 +151,8 @@ try {
   app.use('/api/crm/consultores', requireModule('crm.consultores'))
   app.use('/api/crm/empreiteiros', requireModule('crm.empreiteiros'))
   app.use('/api/crm/negocios', requireModule('crm.negocios'), restrictByAccess('negocio'))
+  // /projetos não segue o padrão limpo /:id/subpath dos outros — guard dedicado.
+  app.use('/api/crm/projetos', requireModule('crm.negocios'), restrictProjetosAccess())
 
   // Router CRM — montado DEPOIS dos guards para que estes corram primeiro
   const { default: crmRoutes } = await import('./src/db/routes.js')

@@ -5797,11 +5797,22 @@ router.get('/projetos/portfolio/ia-predicoes', aiRateLimit, async (req, res) => 
     const Anthropic = (await import('@anthropic-ai/sdk')).default
     const client = new Anthropic({ apiKey: ANTHROPIC_KEY })
 
-    // Carregar projectos activos com dados resumidos
+    // Carregar projectos activos com dados resumidos — roles restritos (parceiro/
+    // investidor) só veem os negócios a que têm acesso via `acessos` (mesma
+    // lógica de /projetos/portfolio/kpis).
+    const u = await resolveCrmUser(req)
+    const isRestricted = u && RECORD_RESTRICTED_ROLES.has(u.role)
+    const conds = [`n.categoria = 'Fix and Flip'`, `(n.fase IS NULL OR n.fase <> 'Vendido')`]
+    const params = []
+    if (isRestricted) {
+      params.push(u.id)
+      conds.push(`n.id IN (SELECT entidade_id FROM acessos WHERE entidade = 'negocio' AND user_id = $${params.length})`)
+    }
     const { rows: projectos } = await pool.query(
       `SELECT n.id, n.movimento, n.categoria, n.data_compra, n.data_estimada_venda
        FROM negocios n
-       WHERE n.categoria = 'Fix and Flip' AND (n.fase IS NULL OR n.fase <> 'Vendido')`
+       WHERE ${conds.join(' AND ')}`,
+      params
     )
 
     const contextos = []

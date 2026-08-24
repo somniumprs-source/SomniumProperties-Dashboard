@@ -579,3 +579,58 @@ export function restrictByAccess(entidade) {
     }
   }
 }
+
+// Sub-recursos de /projetos cujo path não começa por negocioId (ex.:
+// /projetos/fases/:faseId, /projetos/fotos/:fotoId) — sem resolução barata
+// para o negocio dono, por isso ficam completamente bloqueados para roles
+// restritos (edição de obra é da equipa, não do investidor/parceiro).
+const PROJETOS_SUBRESOURCE_BLOQUEADO = new Set([
+  'fases', 'tarefas', 'fotos', 'documentos', 'despesas', 'investidores', 'fracoes', 'comentarios',
+])
+// Rotas agregadas/globais de /projetos já auto-filtradas dentro do próprio
+// handler (meus, portfolio/kpis, portfolio/ia-predicoes, calendario) ou sem
+// dados sensíveis por negócio (templates) — passam sem verificação extra.
+const PROJETOS_PASSTHROUGH = new Set(['meus', 'templates', 'calendario', 'portfolio'])
+
+/**
+ * Middleware específico para /api/crm/projetos: ao contrário de /negocios,
+ * as rotas aqui não seguem um padrão limpo /:id/subpath — misturam rotas
+ * negocioId-first (ex. /:negocioId/resumo) com rotas por sub-recurso
+ * (ex. /fases/:faseId). Para roles restritos (parceiro/investidor):
+ *   - path negocioId-first → valida acesso ao negócio via `acessos`
+ *   - path por sub-recurso → bloqueado (ver PROJETOS_SUBRESOURCE_BLOQUEADO)
+ *   - rotas agregadas já auto-filtradas → passam
+ */
+export function restrictProjetosAccess() {
+  return async (req, res, next) => {
+    if (!supabaseAdmin) return next()
+    try {
+      let u = req.appUser
+      if (!u) {
+        try { u = await resolveAppUser(req); req.appUser = u } catch {}
+      }
+      if (!u) return next()
+      if (u.role === 'admin' || !RECORD_RESTRICTED_ROLES.has(u.role)) return next()
+
+      const m = req.path.match(/^\/([^/]+)/)
+      const firstSeg = m ? m[1] : null
+
+      if (!firstSeg || PROJETOS_PASSTHROUGH.has(firstSeg)) return next()
+
+      if (PROJETOS_SUBRESOURCE_BLOQUEADO.has(firstSeg)) {
+        return res.status(403).json({ error: 'Sem permissão para esta operação' })
+      }
+
+      // Caso contrário, firstSeg é o negocioId
+      const r = await pool.query(
+        'SELECT 1 FROM acessos WHERE user_id = $1 AND entidade = $2 AND entidade_id = $3',
+        [u.id, 'negocio', firstSeg]
+      )
+      if (r.rowCount === 0) return res.status(403).json({ error: 'Sem acesso a este registo' })
+      return next()
+    } catch (e) {
+      console.error('[restrictProjetosAccess]', req.path, e.message)
+      return next()
+    }
+  }
+}

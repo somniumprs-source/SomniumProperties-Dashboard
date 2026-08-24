@@ -62,6 +62,11 @@ const SUGESTOES_CATALOGO = [
   { titulo: 'Reconciliação Mensal de Despesas', categoria: 'Gestão Financeira', duracao_estimada_horas: 1, frequencia: 'mensal', prioridade: 'media' },
   { titulo: 'Prospecção Activa de Investidores', categoria: 'Follow Up Investidores', duracao_estimada_horas: 1, frequencia: 'semanal', prioridade: 'alta' },
   { titulo: 'Revisão Mensal de OKRs / Scorecard', categoria: 'Planeamento', duracao_estimada_horas: 0.5, frequencia: 'mensal', prioridade: 'alta' },
+  // Adicionadas em 24/08/2026 — lacunas reais identificadas no CRM:
+  { titulo: 'Prospecção de Imóveis (novos leads)', categoria: 'Pesquisa de Imóveis', duracao_estimada_horas: 1, frequencia: 'diaria', dias_semana: '1,2,3,4,5', prioridade: 'alta' },
+  { titulo: 'Acompanhamento de Assinaturas CAEP Pendentes', categoria: 'Gestão Financeira', duracao_estimada_horas: 0.33, frequencia: 'semanal', prioridade: 'alta' },
+  { titulo: 'Triagem de Alertas Críticos', categoria: 'Planeamento', duracao_estimada_horas: 0.25, frequencia: 'diaria', dias_semana: '1,2,3,4,5', prioridade: 'alta' },
+  { titulo: 'Relacionamento com Investidores Activos', categoria: 'Follow Up Investidores', duracao_estimada_horas: 0.75, frequencia: 'quinzenal', prioridade: 'media' },
 ]
 
 function getMonday(d) {

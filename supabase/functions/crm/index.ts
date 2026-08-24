@@ -136,6 +136,85 @@ async function resolveCrmUser(c: any): Promise<any | null> {
   } catch { return null; }
 }
 
+// ── Camadas de acesso do CRM — port de userRoutes.js (ROLE_MODULES, requireModule,
+// restrictByAccess). Em dev (Express) estas rodam montadas no server.js antes do
+// router CRM; aqui equivalem-se com app.use(path, mw) do Hono, montado antes de
+// cada crudRoutes(). SEM ISTO qualquer utilizador autenticado, independentemente
+// do role, lê tudo em /imoveis, /negocios, /investidores, /consultores, /empreiteiros. ──
+const ROLE_MODULES: Record<string, string[]> = {
+  admin: ["crm.imoveis", "crm.investidores", "crm.consultores", "crm.empreiteiros", "crm.negocios"],
+  comercial: ["crm.imoveis", "crm.investidores", "crm.consultores", "crm.empreiteiros", "crm.negocios"],
+  financeiro: ["crm.negocios"],
+  operacoes: [],
+  parceiro: ["crm.imoveis", "crm.negocios"],
+  investidor: ["crm.negocios"],
+};
+
+function requireModule(moduleName: string) {
+  return async (c: any, next: any) => {
+    const u = await resolveCrmUser(c);
+    if (!u) return next(); // sem Supabase/token (dev) — passa, igual ao Express
+    if (!u.ativo) return c.json({ error: "Conta inactiva" }, 403);
+    if (u.role === "admin") return next();
+    const mods = ROLE_MODULES[u.role] || [];
+    if (mods.includes(moduleName)) return next();
+    return c.json({ error: `Sem acesso a ${moduleName}` }, 403);
+  };
+}
+
+// Segmentos que não são IDs de registo (rotas custom tipo /imoveis/stats,
+// /imoveis/pois/sugeridos) — mesma lista do Express, para paridade de comportamento.
+const NON_ID_SEGS = new Set(["stats", "enriched", "find-or-create", "lookup", "checklist", "relatorio", "pois"]);
+
+function restrictByAccessGeneric(entidade: string) {
+  return async (c: any, next: any) => {
+    const u = await resolveCrmUser(c);
+    if (!u || u.role === "admin" || !RECORD_RESTRICTED_ROLES.has(u.role)) return next();
+
+    const mountPrefix = `/${entidade === "imovel" ? "imoveis" : "negocios"}`;
+    const path = new URL(c.req.url).pathname;
+    const idx = path.indexOf(mountPrefix);
+    const rest = idx >= 0 ? path.slice(idx + mountPrefix.length) : path; // ex: "/abc-123/fotos" ou ""
+    const m = rest.match(/^\/([^/]+)/);
+    const firstSeg = m ? m[1] : null;
+    const restPath = m ? rest.slice(m[0].length) : "";
+    const isRecordPath = !!firstSeg && !NON_ID_SEGS.has(firstSeg);
+
+    if (c.req.method === "POST" && !isRecordPath) {
+      return c.json({ error: "Sem permissão para criar novos registos" }, 403);
+    }
+    if (c.req.method === "DELETE" && isRecordPath && !restPath) {
+      return c.json({ error: "Sem permissão para apagar registos" }, 403);
+    }
+    if (isRecordPath) {
+      const r = await pool.query(
+        "SELECT 1 FROM acessos WHERE user_id = $1 AND entidade = $2 AND entidade_id = $3",
+        [u.id, entidade, firstSeg],
+      );
+      if (r.rowCount === 0) return c.json({ error: "Sem acesso a este registo" }, 403);
+      return next();
+    }
+    // Listagem (GET /) — filtrar a resposta pelos IDs a que o user tem acesso.
+    if (c.req.method === "GET") {
+      const idsRows = await pool.query("SELECT entidade_id FROM acessos WHERE user_id = $1 AND entidade = $2", [u.id, entidade]);
+      const ids = new Set(idsRows.rows.map((x: any) => x.entidade_id));
+      const origJson = c.json.bind(c);
+      c.json = (body: any, ...rest2: any[]) => {
+        try {
+          if (body && Array.isArray(body.data)) {
+            body.data = body.data.filter((item: any) => ids.has(item.id));
+            if (typeof body.total === "number") body.total = body.data.length;
+          } else if (Array.isArray(body)) {
+            body = body.filter((item: any) => ids.has(item.id));
+          }
+        } catch (e) { console.error("[restrictByAccessGeneric.json]", (e as Error).message); }
+        return origJson(body, ...rest2);
+      };
+    }
+    return next();
+  };
+}
+
 // ── Auto-criar fases+tarefas conforme o template da categoria (port de routes.js criarFasesProjecto) ──
 async function criarFasesProjecto(negocioId: string, categoria: string): Promise<void> {
   const template = getTemplateFases(categoria);
@@ -664,6 +743,12 @@ async function autoCriarNegocioDeImovel(imovel: any, novoEstado: string): Promis
   return negocioId;
 }
 
+// Camada de acesso — port de server.js app.use('/api/crm/imoveis', requireModule('crm.imoveis'), restrictByAccess('imovel')).
+app.use("/imoveis", requireModule("crm.imoveis"));
+app.use("/imoveis/*", requireModule("crm.imoveis"));
+app.use("/imoveis", restrictByAccessGeneric("imovel"));
+app.use("/imoveis/*", restrictByAccessGeneric("imovel"));
+
 // Middleware: garante a coluna fee_cedencia (fee de cedência do Wholesaling)
 // antes de qualquer POST/PUT em /imoveis — evita drop silencioso no primeiro
 // save quando a coluna ainda nao existe em producao (migracoes nao auto-aplicadas).
@@ -1044,6 +1129,8 @@ const INV_ESTADO_CAMPOS_OBRIGATORIOS: Record<string, { campo: string; label: str
   "Investidor Ativo": [{ campo: "montante_investido", label: "Montante Investido" }],
 };
 
+app.use("/investidores", requireModule("crm.investidores"));
+app.use("/investidores/*", requireModule("crm.investidores"));
 crudRoutes("/investidores", Investidores, {
   onCreate: async (item: any) => {
     if (driveConfigured()) {
@@ -1320,6 +1407,8 @@ app.get("/consultores/enriched", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
+app.use("/consultores", requireModule("crm.consultores"));
+app.use("/consultores/*", requireModule("crm.consultores"));
 crudRoutes("/consultores", Consultores);
 
 // Wholesaling: lucro esperado = fee de cedência da ficha do imóvel (imoveis.fee_cedencia).
@@ -1400,6 +1489,19 @@ async function recalcAnaliseActivaCompra(imovelId: string) {
   // pela calculadora.
   await propagarParaImovel(imovelId, calculados, inputs).catch((e: any) => console.error("[analise/recalc propagar]", (e as Error).message));
 }
+
+// Camada de acesso — port de server.js app.use('/api/crm/negocios', requireModule('crm.negocios'), restrictByAccess('negocio')).
+app.use("/negocios", requireModule("crm.negocios"));
+app.use("/negocios/*", requireModule("crm.negocios"));
+app.use("/negocios", restrictByAccessGeneric("negocio"));
+app.use("/negocios/*", restrictByAccessGeneric("negocio"));
+// negocios-lixeira é um path irmão (não bate no mount /negocios/*) — sem uso
+// legítimo para roles restritos, bloqueado à parte.
+app.use("/negocios-lixeira", async (c: any, next: any) => {
+  const u = await resolveCrmUser(c);
+  if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return c.json({ error: "Sem acesso" }, 403);
+  return next();
+});
 
 // Middleware: garante a coluna valor_cedencia_posicao antes de qualquer POST/PUT
 // em /negocios — evita drop silencioso do campo no primeiro save quando a
@@ -1568,6 +1670,8 @@ app.get("/tarefas/count-atrasadas", async (c: any) => {
 crudRoutes("/tarefas", Tarefas);
 crudRoutes("/consultor-interacoes", ConsultorInteracoes);
 crudRoutes("/investidor-interacoes", InvestidorInteracoes);
+app.use("/empreiteiros", requireModule("crm.empreiteiros"));
+app.use("/empreiteiros/*", requireModule("crm.empreiteiros"));
 crudRoutes("/empreiteiros", Empreiteiros);
 
 // ── Visitas — CRUD com sync de imoveis.data_visita — port de routes.js 1021-1060 ──
@@ -4820,6 +4924,44 @@ app.put("/relatorios-semanais/:id", async (c: any) => {
 // ════════════════════════════════════════════════════════════════
 // PROJETOS FIX AND FLIP — Fases, Tarefas, Fotos
 // ════════════════════════════════════════════════════════════════
+
+// Guard de acesso para /projetos — port de userRoutes.js restrictProjetosAccess.
+// Ao contrário de /negocios, as rotas aqui não seguem /:id/subpath limpo —
+// misturam negocioId-first (/:negocioId/resumo) com sub-recurso-first
+// (/fases/:faseId). Para roles restritos (parceiro/investidor):
+//   - path negocioId-first → valida acesso ao negócio via `acessos`
+//   - path por sub-recurso → bloqueado (sem resolução barata para o negócio dono)
+//   - rotas agregadas já auto-filtradas dentro do handler → passam
+const PROJETOS_SUBRESOURCE_BLOQUEADO = new Set([
+  "fases", "tarefas", "fotos", "documentos", "despesas", "investidores", "fracoes", "comentarios",
+]);
+const PROJETOS_PASSTHROUGH = new Set(["meus", "templates", "calendario", "portfolio"]);
+app.use("/projetos/*", async (c: any, next: any) => {
+  try {
+    const u = await resolveCrmUser(c);
+    if (!u || u.role === "admin" || !RECORD_RESTRICTED_ROLES.has(u.role)) return next();
+
+    const path = new URL(c.req.url).pathname;
+    const rest = path.replace(/^.*\/projetos\//, "");
+    const firstSeg = rest.split("/")[0] || null;
+
+    if (!firstSeg || PROJETOS_PASSTHROUGH.has(firstSeg)) return next();
+    if (PROJETOS_SUBRESOURCE_BLOQUEADO.has(firstSeg)) {
+      return c.json({ error: "Sem permissão para esta operação" }, 403);
+    }
+
+    // Caso contrário, firstSeg é o negocioId
+    const r = await pool.query(
+      "SELECT 1 FROM acessos WHERE user_id = $1 AND entidade = $2 AND entidade_id = $3",
+      [u.id, "negocio", firstSeg],
+    );
+    if (r.rowCount === 0) return c.json({ error: "Sem acesso a este registo" }, 403);
+    return next();
+  } catch (e) {
+    console.error("[restrictProjetosAccess]", (e as Error).message);
+    return next();
+  }
+});
 
 // ── GET lista de projectos — port de routes.js 3519-3543 ──
 app.get("/projetos/meus", async (c: any) => {
