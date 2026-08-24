@@ -992,6 +992,7 @@ function TabDocumentos({ negocio, imovel, fases, readOnly }) {
     { key: 'licenca',      label: 'Licença',       cor: '#0ea5e9' },
     { key: 'relatorio',    label: 'Relatório',     cor: '#C9A84C' },
     { key: 'contrato',     label: 'Contrato',      cor: '#8b5cf6' },
+    { key: 'comprovativo_liquidacao', label: 'Comprovativo de Pagamento (Liquidação)', cor: '#22c55e' },
     { key: 'outro',        label: 'Outro',         cor: '#6b7280' },
   ]
 

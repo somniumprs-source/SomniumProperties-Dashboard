@@ -5308,15 +5308,26 @@ app.get("/projetos/:negocioId/pdf/saida", async (c: any) => {
     // é um campo legado nunca escrito pela app — descontinuado (confirmado
     // que nenhum negócio depende só dele).
     const { rows: projInv } = await pool.query(
-      `SELECT pi.capital, pi.percentagem, i.nome
+      `SELECT pi.investidor_id, pi.capital, pi.percentagem, i.nome
        FROM projeto_investidores pi
        JOIN investidores i ON pi.investidor_id = i.id
        WHERE pi.negocio_id = $1
        ORDER BY pi.capital DESC`,
       [c.req.param("negocioId")],
     );
-    const investidores = projInv.map((p: any) => ({ nome: p.nome, capital: Number(p.capital) || 0 }));
-    const buf = await streamToBuffer(generateRelatorioSaida({ ...data, investidores }));
+    let investidores = projInv.map((p: any) => ({ investidor_id: p.investidor_id, nome: p.nome, capital: Number(p.capital) || 0 }));
+
+    // Investidor só vê a própria distribuição — os capitais dos restantes
+    // co-investidores do mesmo negócio não são dele para ver.
+    let apenasProprio = false;
+    const u = await resolveCrmUser(c);
+    if (u?.role === "investidor") {
+      const { rows: [meu] } = await pool.query("SELECT id FROM investidores WHERE user_id = $1", [u.id]);
+      investidores = meu ? investidores.filter((i: any) => i.investidor_id === meu.id) : [];
+      apenasProprio = true;
+    }
+
+    const buf = await streamToBuffer(generateRelatorioSaida({ ...data, investidores, apenasProprio }));
     return c.body(buf, 200, {
       "Content-Type": "application/pdf",
       "Content-Disposition": pdfDisposition(c, `saida-caep-${data.negocio.movimento.replace(/[^\w]/g, "_")}.pdf`),

@@ -473,7 +473,7 @@ export function generateMemoriaDescritiva({ negocio, imovel, fases, orcamento })
 // ════════════════════════════════════════════════════════════════
 // 4. RELATÓRIO DE SAÍDA / DISTRIBUIÇÃO CAEP (pós-venda)
 // ════════════════════════════════════════════════════════════════
-export function generateRelatorioSaida({ negocio, imovel, fases, custoReal, investidores }) {
+export function generateRelatorioSaida({ negocio, imovel, fases, custoReal, investidores, apenasProprio = false }) {
   const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true })
 
   header(doc, 'Relatório de Saída · CAEP', `${negocio.movimento}${imovel?.nome ? ' · ' + imovel.nome : ''}`)
@@ -508,9 +508,12 @@ export function generateRelatorioSaida({ negocio, imovel, fases, custoReal, inve
       .text(`TIR anualizada estimada: ${tirAnual.toFixed(1)}%`)
   }
 
-  // Distribuição
-  secaoTitulo(doc, 'Distribuição de Capital e Lucro')
-  if (investidores && investidores.length > 0) {
+  // Distribuição — a versão do próprio investidor só mostra a linha dele,
+  // nunca o capital dos restantes co-investidores do mesmo negócio.
+  secaoTitulo(doc, apenasProprio ? 'A Tua Distribuição' : 'Distribuição de Capital e Lucro')
+  if (apenasProprio && (!investidores || investidores.length === 0)) {
+    doc.fontSize(8).fillColor(MUTED).text('Sem registo de capital associado a este investidor neste negócio.')
+  } else if (investidores && investidores.length > 0) {
     const headers = ['Investidor', 'Capital aportado', '%', 'Distribuição (capital + lucro)']
     const colW = [200, 100, 50, 150]
     let x = 50

@@ -5025,17 +5025,28 @@ router.get('/projetos/:negocioId/pdf/saida', async (req, res) => {
     // é um campo legado nunca escrito pela app — descontinuado (confirmado
     // que nenhum negócio depende só dele).
     const { rows: projInv } = await pool.query(
-      `SELECT pi.capital, pi.percentagem, i.nome
+      `SELECT pi.investidor_id, pi.capital, pi.percentagem, i.nome
        FROM projeto_investidores pi
        JOIN investidores i ON pi.investidor_id = i.id
        WHERE pi.negocio_id = $1
        ORDER BY pi.capital DESC`,
       [req.params.negocioId]
     )
-    const investidores = projInv.map(p => ({ nome: p.nome, capital: Number(p.capital) || 0 }))
+    let investidores = projInv.map(p => ({ investidor_id: p.investidor_id, nome: p.nome, capital: Number(p.capital) || 0 }))
+
+    // Investidor só vê a própria distribuição — os capitais dos restantes
+    // co-investidores do mesmo negócio não são dele para ver.
+    let apenasProprio = false
+    const u = await resolveCrmUser(req)
+    if (u?.role === 'investidor') {
+      const { rows: [meu] } = await pool.query('SELECT id FROM investidores WHERE user_id = $1', [u.id])
+      investidores = meu ? investidores.filter(i => i.investidor_id === meu.id) : []
+      apenasProprio = true
+    }
+
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', pdfDisposition(req, `saida-caep-${data.negocio.movimento.replace(/[^\w]/g, '_')}.pdf`))
-    const doc = generateRelatorioSaida({ ...data, investidores })
+    const doc = generateRelatorioSaida({ ...data, investidores, apenasProprio })
     doc.pipe(res)
   } catch (e) { console.error('[pdf/saida]', e.message); res.status(500).json({ error: e.message }) }
 })
