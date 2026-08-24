@@ -101,20 +101,24 @@ export async function exportProjetoExcel(negocioId) {
   wsFases.columns = [
     { width: 6 }, { width: 30 }, { width: 14 }, { width: 12 },
     { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 },
-    { width: 14 }, { width: 14 }, { width: 50 },
+    { width: 14 }, { width: 14 }, { width: 12 }, { width: 50 },
   ]
-  tabelaHeader(wsFases, 1, ['#', 'Nome', 'Estado', '% Execução', 'Início Prev.', 'Fim Prev.', 'Início Real', 'Fim Real', 'Orçamento (€)', 'Custo Real (€)', 'Notas'])
+  tabelaHeader(wsFases, 1, ['#', 'Nome', 'Estado', '% Execução', 'Início Prev.', 'Fim Prev.', 'Início Real', 'Fim Real', 'Orçamento (€)', 'Custo Real (€)', 'Desvio (%)', 'Notas'])
   fases.forEach((f, i) => {
+    const orcado = EUR(f.orcamento_alocado)
+    const real = EUR(f.custo_real)
+    const desvio = orcado > 0 ? (real - orcado) / orcado : null
     wsFases.addRow([
       f.ordem + 1, f.nome, f.estado, f.perc_execucao || 0,
       f.data_inicio_prevista || '', f.data_fim_prevista || '',
       f.data_inicio_real || '', f.data_fim_real || '',
-      EUR(f.orcamento_alocado), EUR(f.custo_real),
+      orcado, real, desvio,
       f.notas || ''
     ])
   })
   wsFases.getColumn(9).numFmt = '#,##0 "€"'
   wsFases.getColumn(10).numFmt = '#,##0 "€"'
+  wsFases.getColumn(11).numFmt = '+0.0%;-0.0%;—'
 
   // ── Sheet 3: Tarefas ──
   const wsTarefas = wb.addWorksheet('Tarefas')
