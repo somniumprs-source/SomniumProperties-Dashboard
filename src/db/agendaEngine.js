@@ -270,6 +270,15 @@ export async function instanciarTemplatesDevidos(pool, semanaInicio) {
   let criadas = 0
 
   for (const tpl of templates) {
+    // Não gera nova instância enquanto a anterior não estiver 'Concluída'
+    // (no Kanban) — sem isto, uma recorrente semanal nunca feita acumulava
+    // uma cópia nova a cada "Actualizar fila", duplicada na fila.
+    const { rows: pendente } = await pool.query(
+      `SELECT id FROM tarefas WHERE template_id = $1 AND status != 'Concluída' LIMIT 1`,
+      [tpl.id]
+    )
+    if (pendente.length) continue
+
     const dias = diasAlvoTemplate(tpl, semanaInicio)
     for (const dia of dias) {
       const { rows: existentes } = await pool.query(
@@ -302,44 +311,23 @@ export async function instanciarTemplatesDevidos(pool, semanaInicio) {
 function minutos(hhmm) { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m }
 function hhmmDe(min) { return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}` }
 
-// Fila priorizada de tudo o que está pronto a ser feito. Cadeias
-// (Pesquisa+Cold Call) aparecem como um único item atómico (mesmo
-// racional do gerarProposta antigo: as duas ou nenhuma, nunca partidas).
+// Fila priorizada — só tarefas do Catálogo de Tarefas Recorrentes
+// (template_id preenchido). Decisão do utilizador em 24/08/2026: as
+// automáticas (cadeia de angariação, Estudo de Mercado, follow-ups por
+// entidade) continuam a ser geridas pelo motor mas deixam de aparecer
+// neste menu de escolha — só o que está no catálogo é escolhível aqui.
 export async function gerarFila(pool) {
   const { rows: users } = await pool.query(
     `SELECT id, nome, cor, iniciais FROM users WHERE ativo = true AND role = ANY($1) ORDER BY id`,
     [ROLES_EQUIPA]
   )
 
-  const { rows: pares } = await pool.query(
-    `SELECT p.id AS pesquisa_id, p.tarefa AS pesquisa_tarefa, p.tempo_horas AS pesquisa_horas, p.prioridade, p.created_at,
-            c.id AS cold_call_id, c.tempo_horas AS cold_call_horas
-     FROM tarefas p
-     JOIN tarefas c ON c.origem_id = p.origem_id AND c.origem_campo = 'cadeia_cold_call' AND c.inicio IS NULL AND c.status != 'Concluída'
-     WHERE p.origem_campo = 'cadeia_pesquisa' AND p.inicio IS NULL AND p.status != 'Concluída'`
-  )
-  const idsCadeia = new Set()
-  for (const p of pares) { idsCadeia.add(p.pesquisa_id); idsCadeia.add(p.cold_call_id) }
-
   const { rows: soltas } = await pool.query(
-    `SELECT * FROM tarefas WHERE inicio IS NULL AND status != 'Concluída'
+    `SELECT * FROM tarefas WHERE inicio IS NULL AND status != 'Concluída' AND template_id IS NOT NULL
      ORDER BY CASE prioridade WHEN 'alta' THEN 0 WHEN 'media' THEN 1 ELSE 2 END, data_limite NULLS LAST, created_at`
   )
 
-  const filaCadeia = pares.map(p => ({
-    tipo: 'cadeia',
-    id: `cadeia:${p.pesquisa_id}`,
-    pesquisa_id: p.pesquisa_id,
-    cold_call_id: p.cold_call_id,
-    titulo: (p.pesquisa_tarefa || '').replace(/^Pesquisa de Imóveis — /, ''),
-    categoria: 'Pesquisa + Cold Call',
-    duracao_horas: (Number(p.pesquisa_horas) || 1) + (Number(p.cold_call_horas) || 1),
-    prioridade: p.prioridade,
-    data_limite: null,
-    simultaneo: false,
-    created_at: p.created_at,
-  }))
-  const filaSoltas = soltas.filter(t => !idsCadeia.has(t.id)).map(t => ({
+  const fila = soltas.map(t => ({
     tipo: 'simples',
     id: t.id,
     tarefa_id: t.id,
@@ -352,17 +340,6 @@ export async function gerarFila(pool) {
     origem_tipo: t.origem_tipo,
     created_at: t.created_at,
   }))
-
-  const RANK = { alta: 0, media: 1, baixa: 2 }
-  const fila = [...filaCadeia, ...filaSoltas].sort((a, b) => {
-    if (RANK[a.prioridade] !== RANK[b.prioridade]) return RANK[a.prioridade] - RANK[b.prioridade]
-    if (a.data_limite !== b.data_limite) {
-      if (!a.data_limite) return 1
-      if (!b.data_limite) return -1
-      return a.data_limite < b.data_limite ? -1 : 1
-    }
-    return new Date(a.created_at) - new Date(b.created_at)
-  })
 
   return { users, fila }
 }
