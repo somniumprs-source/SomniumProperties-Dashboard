@@ -111,9 +111,22 @@ export async function importFolderToSops({ folderId, departamento, overwrite = f
  *     extraído do título (ex: "SOP 4" ou "SOP_4") — não pelo ID do ficheiro,
  *     que muda sempre que o documento é recriado/re-uploaded no Drive. Isto
  *     evita duplicados quando um SOP é substituído por um ficheiro novo.
- *  2. No fim, remove da BD qualquer linha dos departamentos sincronizados que
+ *     O casamento é feito contra TODA a tabela `sops`, não só contra os
+ *     departamentos sincronizados: um SOP reclassificado manualmente para
+ *     outro departamento (ex. "comercial" -> "administrativo") continua a
+ *     ser encontrado, evitando duplicado por violação de drive_file_id
+ *     único (bug corrigido em 24/08/2026 — SOP 8 e SOP 12 falhavam sempre
+ *     porque a query de casamento só via linhas do departamento sincronizado).
+ *  2. Nunca escreve por cima do departamento de uma linha já existente — o
+ *     campo é gerides pela reclassificação manual no CRM (endpoint PUT
+ *     /api/sops/:id), o Drive não tem essa informação. Só uma linha nova
+ *     (inserida agora pela primeira vez) recebe o departamento da pasta
+ *     sincronizada.
+ *  3. No fim, remove da BD qualquer linha dos departamentos sincronizados que
  *     não correspondeu a nenhum ficheiro desta sincronização (documentos
- *     obsoletos ou removidos do Drive).
+ *     obsoletos ou removidos do Drive) — linhas reclassificadas para outro
+ *     departamento ficam fora deste passo, tal como já não são o alvo da
+ *     sincronização actual.
  */
 export async function syncSopsFromDrive({ folders, user = null }) {
   if (!isConfigured()) {
@@ -129,8 +142,7 @@ export async function syncSopsFromDrive({ folders, user = null }) {
 
   const departamentos = [...new Set(folders.map(f => f.departamento))]
   const { rows: existingRows } = await pool.query(
-    `SELECT id, titulo, drive_file_id FROM sops WHERE departamento = ANY($1) ORDER BY created_at ASC, id ASC`,
-    [departamentos]
+    `SELECT id, titulo, drive_file_id FROM sops ORDER BY created_at ASC, id ASC`
   )
   const numToId = new Map()
   const fileIdToId = new Map()
@@ -167,11 +179,14 @@ export async function syncSopsFromDrive({ folders, user = null }) {
           const matchId = (num != null ? numToId.get(num) : null) ?? fileIdToId.get(f.id) ?? null
 
           if (matchId) {
+            // Departamento não entra no UPDATE de propósito — é reclassificado
+            // manualmente no CRM e o Drive não tem essa informação; sobrescrever
+            // aqui desfaria a reclassificação a cada sincronização.
             await pool.query(
-              `UPDATE sops SET titulo = $1, departamento = $2, drive_url = $3, drive_file_id = $4,
-               updated_at = NOW(), updated_by = $5
-               WHERE id = $6`,
-              [titulo, departamento, f.webViewLink || null, f.id, user, matchId]
+              `UPDATE sops SET titulo = $1, drive_url = $2, drive_file_id = $3,
+               updated_at = NOW(), updated_by = $4
+               WHERE id = $5`,
+              [titulo, f.webViewLink || null, f.id, user, matchId]
             )
             touchedIds.add(matchId)
             fileIdToId.set(f.id, matchId)
