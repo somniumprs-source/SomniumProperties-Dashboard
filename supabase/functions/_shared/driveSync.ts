@@ -14,6 +14,7 @@
  *    reescrita para usar getGoogleAuth().
  */
 import { drive } from "@googleapis/drive";
+import { Buffer } from "node:buffer";
 import pool from "./pg.ts";
 import { getGoogleAuth, isGoogleConfigured } from "./googleAuth.ts";
 
