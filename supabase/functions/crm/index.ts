@@ -44,7 +44,7 @@ import { syncAllFromNotion, syncFromNotion, syncToNotion } from "../_shared/sync
 import {
   createImovelFolder, isConfigured as driveConfigured, listImovelFiles,
   moveImovelFolder, uploadDocToFolder, uploadUserFileToFolder, uploadComprovativoToFolder, downloadDriveFile,
-  createInvestidorFolder, uploadDocumentoInvestidor, moverParaElementosApagados,
+  createInvestidorFolder, uploadDocumentoInvestidor, moverParaElementosApagados, ensureInvestidorFolderShared,
 } from "../_shared/driveSync.ts";
 import {
   autoOrganize, ensureLabels, isConfigured as gmailConfigured, organizeBatch, organizeMessage,
@@ -1163,8 +1163,13 @@ crudRoutes("/investidores", Investidores, {
     }
   },
   onUpdate: async (item: any, body: any) => {
-    // Ao ligar um investidor a um utilizador, dar-lhe logo acesso aos projectos.
-    if (body?.user_id) await syncInvestidorAcessos(item.id);
+    // Ao ligar um investidor a um utilizador, dar-lhe logo acesso aos projectos
+    // e garantir que a pasta Drive (com as 6 subpastas do SOP 13) está partilhada
+    // com o email dele — cobre também investidores criados antes desta partilha existir.
+    if (body?.user_id) {
+      await syncInvestidorAcessos(item.id);
+      if (driveConfigured()) await ensureInvestidorFolderShared(item.id).catch((e: any) => console.error("[drive] ensureInvestidorFolderShared:", e.message));
+    }
   },
   beforeUpdate: async (id: string, body: any) => {
     if (body.status === undefined && body.classificacao === undefined) return null;

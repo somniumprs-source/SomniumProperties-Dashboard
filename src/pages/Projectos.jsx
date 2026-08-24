@@ -109,6 +109,7 @@ function faseLegacyParaKanban(faseLegacy, colunasDisponiveis) {
 function MeusDocumentosPanel({ investidorId }) {
   const [aberto, setAberto] = useState(false)
   const [documentos, setDocumentos] = useState(null)
+  const [driveFolderId, setDriveFolderId] = useState(null)
   const [loading, setLoading] = useState(false)
 
   async function toggle() {
@@ -117,9 +118,13 @@ function MeusDocumentosPanel({ investidorId }) {
     if (next && documentos === null) {
       setLoading(true)
       try {
-        const r = await apiFetch(`/api/crm/investidores/${investidorId}/documentos`)
-        const j = await r.json().catch(() => [])
+        const [rDocs, rInv] = await Promise.all([
+          apiFetch(`/api/crm/investidores/${investidorId}/documentos`),
+          apiFetch(`/api/crm/investidores/${investidorId}`),
+        ])
+        const j = await rDocs.json().catch(() => [])
         setDocumentos(Array.isArray(j) ? j : [])
+        if (rInv.ok) setDriveFolderId((await rInv.json())?.drive_folder_id || null)
       } catch { setDocumentos([]) }
       setLoading(false)
     }
@@ -134,11 +139,19 @@ function MeusDocumentosPanel({ investidorId }) {
         <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${aberto ? 'rotate-90' : ''}`} />
       </button>
       {aberto && (
-        <div className="px-4 pb-4 border-t border-gray-100 dark:border-neutral-800 pt-3">
+        <div className="px-4 pb-4 border-t border-gray-100 dark:border-neutral-800 pt-3 space-y-3">
           {loading ? (
             <p className="text-sm text-gray-400">A carregar...</p>
           ) : (
-            <DocumentosInvestidorTab investidorId={investidorId} documentos={documentos || []} readOnly />
+            <>
+              {driveFolderId && (
+                <a href={`https://drive.google.com/drive/folders/${driveFolderId}`} target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-dark text-brand-gold hover:bg-brand-dark-light">
+                  Abrir pasta partilhada na Drive
+                </a>
+              )}
+              <DocumentosInvestidorTab investidorId={investidorId} documentos={documentos || []} readOnly />
+            </>
           )}
         </div>
       )}

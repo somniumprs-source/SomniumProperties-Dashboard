@@ -50,6 +50,16 @@ const SUB_FINANCEIRO  = '06 Financeiro'
 
 const SUBFOLDERS = [SUB_DOCS_LEGAL, SUB_ANALISES, SUB_PROPOSTAS, SUB_FICHAS, SUB_FOTOS, SUB_FINANCEIRO]
 
+// ── Subpastas da pasta partilhada com o investidor (SOP 13, Passo 7) ──
+const SUBFOLDERS_INVESTIDOR = [
+  '01 Documentação',
+  '02 Excel de Controlo de Custos',
+  '03 Faturas',
+  '04 Fotos do Antes',
+  '05 Fotos do Depois',
+  '06 Fotos do Progresso Semanal',
+]
+
 // Tipo de documento gerado → subpasta de destino
 const DOC_SUBFOLDER_MAP = {
   analise_rentabilidade:          SUB_ANALISES,
@@ -304,8 +314,29 @@ export async function uploadComprovativoToFolder(despesaId, bytes, fileName, mim
 }
 
 /**
- * Criar pasta do investidor no Drive (sem subpastas — os documentos vivem
- * directamente na pasta, como uma pasta pessoal do investidor).
+ * Partilha uma pasta do Drive com o email do investidor (leitor). Idempotente
+ * na prática — o Drive não duplica uma permissão já existente para o mesmo
+ * email/role, apenas devolve o mesmo resultado.
+ */
+async function partilharComInvestidor(drive, folderId, email) {
+  if (!email) return
+  try {
+    await drive.permissions.create({
+      fileId: folderId,
+      requestBody: { type: 'user', role: 'reader', emailAddress: email },
+      sendNotificationEmail: true,
+      supportsAllDrives: true,
+    })
+    console.log(`[drive] Pasta ${folderId} partilhada com ${email}`)
+  } catch (e) {
+    console.error(`[drive] Erro ao partilhar pasta ${folderId} com ${email}:`, e.message)
+  }
+}
+
+/**
+ * Criar pasta do investidor no Drive, com as 6 subpastas do SOP 13 (Passo 7:
+ * Documentação, Excel de Controlo de Custos, Faturas, Fotos do Antes/Depois/
+ * Progresso Semanal), e partilhá-la com o email do investidor.
  * Retorna o ID da pasta criada.
  */
 export async function createInvestidorFolder(investidorId, nome) {
@@ -323,12 +354,44 @@ export async function createInvestidorFolder(investidorId, nome) {
     })
     const folderId = folder.data.id
 
+    for (const sub of SUBFOLDERS_INVESTIDOR) {
+      await drive.files.create({
+        requestBody: { name: sub, mimeType: 'application/vnd.google-apps.folder', parents: [folderId] },
+        supportsAllDrives: true,
+      })
+    }
+
     await pool.query('UPDATE investidores SET drive_folder_id = $1 WHERE id = $2', [folderId, investidorId])
+
+    const { rows: [inv] } = await pool.query('SELECT email FROM investidores WHERE id = $1', [investidorId])
+    if (inv?.email) await partilharComInvestidor(drive, folderId, inv.email)
 
     console.log(`[drive] Pasta de investidor criada: "${nome}" (${folderId})`)
     return folderId
   } catch (e) {
     console.error('[drive] Erro ao criar pasta de investidor:', e.message)
+    return null
+  }
+}
+
+/**
+ * Garante que a pasta do investidor existe e está partilhada com o email
+ * actual dele — chamado no onboarding (após CAEP assinado) e idempotente
+ * para investidores criados antes desta funcionalidade existir.
+ */
+export async function ensureInvestidorFolderShared(investidorId) {
+  const drive = getDrive()
+  if (!drive) return null
+
+  try {
+    const { rows: [inv] } = await pool.query('SELECT nome, email, drive_folder_id FROM investidores WHERE id = $1', [investidorId])
+    if (!inv) return null
+    let folderId = inv.drive_folder_id
+    if (!folderId) return await createInvestidorFolder(investidorId, inv.nome)
+    if (inv.email) await partilharComInvestidor(drive, folderId, inv.email)
+    return folderId
+  } catch (e) {
+    console.error('[drive] Erro ao garantir partilha da pasta de investidor:', e.message)
     return null
   }
 }

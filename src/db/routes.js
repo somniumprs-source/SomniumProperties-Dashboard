@@ -28,7 +28,7 @@ import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
 import { syncForms, isConfigured as formsConfigured } from './formsSync.js'
-import { createImovelFolder, moveImovelFolder, uploadDocToFolder, uploadUserFileToFolder, uploadComprovativoToFolder, isConfigured as driveConfigured, downloadDriveFile, createInvestidorFolder, uploadDocumentoInvestidor, moverParaElementosApagados } from './driveSync.js'
+import { createImovelFolder, moveImovelFolder, uploadDocToFolder, uploadUserFileToFolder, uploadComprovativoToFolder, isConfigured as driveConfigured, downloadDriveFile, createInvestidorFolder, uploadDocumentoInvestidor, moverParaElementosApagados, ensureInvestidorFolderShared } from './driveSync.js'
 import { generateDoc, getDocsForEstado, docEmbedeLocalizacao } from './pdfImovelDocs.js'
 import { onImovelCreated, listDocumentos, persistDocumento, streamPdfToResAndPersist } from './documentLifecycle.js'
 import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
@@ -769,8 +769,13 @@ crudRoutes('/investidores', Investidores, {
     }
   },
   onUpdate: async (item, body) => {
-    // Ao ligar um investidor a um utilizador, dar-lhe logo acesso aos projectos.
-    if (body?.user_id) await syncInvestidorAcessos(item.id)
+    // Ao ligar um investidor a um utilizador, dar-lhe logo acesso aos projectos
+    // e garantir que a pasta Drive (com as 6 subpastas do SOP 13) está partilhada
+    // com o email dele — cobre também investidores criados antes desta partilha existir.
+    if (body?.user_id) {
+      await syncInvestidorAcessos(item.id)
+      if (driveConfigured()) await ensureInvestidorFolderShared(item.id).catch(e => console.error('[drive] ensureInvestidorFolderShared:', e.message))
+    }
   },
   beforeUpdate: async (id, body) => {
     if (body.status === undefined && body.classificacao === undefined) return null
