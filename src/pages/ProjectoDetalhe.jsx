@@ -5,7 +5,7 @@ import {
   Building2, Wallet, ImageIcon, FileText, Users, BarChart3, ChevronRight,
   FileDown, AlertTriangle, Sparkles, RefreshCw, Home, Layers,
   History, MessageSquare, TrendingUp, FileSpreadsheet, Pencil, Eye,
-  CalendarClock,
+  CalendarClock, ClipboardCheck,
 } from 'lucide-react'
 import { ProjectoForm } from './Projectos.jsx'
 import { apiFetch, getToken, openDocument } from '../lib/api.js'
@@ -66,6 +66,7 @@ const TABS_BASE = [
   { key: 'documentos',   label: 'Documentos',       icon: FileText },
   { key: 'investidores', label: 'Investidores',     icon: Users },
   { key: 'reunioes',     label: 'Reuniões',         icon: CalendarClock },
+  { key: 'vistorias',    label: 'Vistoria Semanal', icon: ClipboardCheck, teamOnly: true },
   { key: 'historico',    label: 'Histórico',        icon: History },
 ]
 
@@ -153,7 +154,8 @@ export function ProjectoDetalhe() {
   const TABS_OBRA_OCULTAS = new Set(['orcamento', 'forecast', 'fotos'])
   const TABS = TABS_BASE.filter(t =>
     (!t.predioOnly || isPredio) &&
-    !(isWholesalling && TABS_OBRA_OCULTAS.has(t.key))
+    !(isWholesalling && TABS_OBRA_OCULTAS.has(t.key)) &&
+    !(t.teamOnly && isReadOnly)
   )
 
   return (
@@ -318,6 +320,7 @@ export function ProjectoDetalhe() {
             {tab === 'documentos' && <TabDocumentos negocio={negocio} imovel={imovel} fases={fases} readOnly={isReadOnly} />}
             {tab === 'investidores' && <TabInvestidores negocio={negocio} readOnly={isReadOnly} />}
             {tab === 'reunioes' && <TabReunioes negocioId={id} readOnly={isReadOnly} />}
+            {tab === 'vistorias' && <TabVistorias negocioId={id} negocio={negocio} />}
             {tab === 'historico' && <TabHistorico negocioId={id} />}
           </div>
         </Card>
@@ -974,6 +977,8 @@ function TabDocumentos({ negocio, imovel, fases, readOnly }) {
   const isWS = negocio.categoria === 'Wholesalling'
   const [faseFichaSel, setFaseFichaSel] = useState(fases[0]?.id || '')
   const [docs, setDocs] = useState([])
+  const [vistorias, setVistorias] = useState([])
+  const [vistoriaSel, setVistoriaSel] = useState('')
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [faseDoc, setFaseDoc] = useState('')
@@ -993,8 +998,16 @@ function TabDocumentos({ negocio, imovel, fases, readOnly }) {
   async function load() {
     setLoading(true)
     try {
-      const r = await apiFetch(`/api/crm/projetos/${negocio.id}/documentos`)
-      if (r.ok) setDocs((await r.json()).documentos || [])
+      const [rDocs, rVist] = await Promise.all([
+        apiFetch(`/api/crm/projetos/${negocio.id}/documentos`),
+        apiFetch(`/api/crm/projetos/${negocio.id}/vistorias`),
+      ])
+      if (rDocs.ok) setDocs((await rDocs.json()).documentos || [])
+      if (rVist.ok) {
+        const vs = (await rVist.json()).vistorias || []
+        setVistorias(vs)
+        setVistoriaSel(vs[0]?.id || '')
+      }
     } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [negocio.id])
@@ -1110,6 +1123,35 @@ function TabDocumentos({ negocio, imovel, fases, readOnly }) {
                   </button>
                 </div>
               </div>
+              {/* Relatório Semanal de Obra (por vistoria) */}
+              {vistorias.length > 0 && (
+                <div className="p-3 rounded-lg border border-gray-200 bg-gray-50">
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-800">Relatório Semanal de Obra</p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">Progresso por rubrica, orçamento, fotos da semana e ocorrências.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <select value={vistoriaSel} onChange={e => setVistoriaSel(e.target.value)}
+                      className="flex-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs bg-white">
+                      {vistorias.map(v => (
+                        <option key={v.id} value={v.id}>{new Date(v.semana_data).toLocaleDateString('pt-PT', { dateStyle: 'medium' })}</option>
+                      ))}
+                    </select>
+                    <button onClick={() => vistoriaSel && abrirPDF(`/api/crm/projetos/${negocio.id}/pdf/relatorio-semanal/${vistoriaSel}`)}
+                      disabled={!vistoriaSel} title="Abrir numa nova aba"
+                      className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5">
+                      <Eye className="w-3.5 h-3.5" /> Ver
+                    </button>
+                    <button onClick={() => vistoriaSel && abrirPDF(`/api/crm/projetos/${negocio.id}/pdf/relatorio-semanal/${vistoriaSel}`, { download: true })}
+                      disabled={!vistoriaSel} title="Descarregar PDF para enviar"
+                      className="px-3 py-1.5 text-xs rounded-lg bg-brand-dark text-brand-gold hover:bg-brand-dark-light disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center gap-1.5">
+                      <FileDown className="w-3.5 h-3.5" /> Download
+                    </button>
+                  </div>
+                </div>
+              )}
               {autoGerados.map(t => (
                 <div key={t.key} className="flex items-start justify-between gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
                   <div className="flex-1">
@@ -1343,6 +1385,181 @@ function TabReunioes({ negocioId, readOnly }) {
                     )}
                   </div>
                 ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
+// TAB: VISTORIA SEMANAL (equipa) — Template A/B do SOP 13. Input de
+// campo (transposto do PDF preenchido em obra); gera o Relatório Semanal.
+// ════════════════════════════════════════════════════════════════
+const ESTADO_RUBRICA = ['Não iniciado', 'Em curso', 'Concluído']
+
+function novaListaRubricas(padrao) {
+  return (padrao || []).map(rubrica => ({ rubrica, estado: 'Não iniciado', perc: 0, observacoes: '' }))
+}
+
+function TabVistorias({ negocioId, negocio }) {
+  const toast = useToast()
+  const [lista, setLista] = useState([])
+  const [rubricasPadrao, setRubricasPadrao] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({ semana_data: '', rubricas: [], desvio_dias: '', desvio_causa: '', desvio_accao: '', incidentes: '', proximos_passos: '' })
+
+  async function load() {
+    setLoading(true)
+    try {
+      const r = await apiFetch(`/api/crm/projetos/${negocioId}/vistorias`)
+      if (r.ok) {
+        const j = await r.json()
+        setLista(j.vistorias || [])
+        setRubricasPadrao(j.rubricasPadrao || [])
+      }
+    } finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, [negocioId])
+
+  function abrirForm() {
+    setForm({
+      semana_data: new Date().toISOString().slice(0, 10),
+      rubricas: novaListaRubricas(rubricasPadrao),
+      desvio_dias: '', desvio_causa: '', desvio_accao: '', incidentes: '', proximos_passos: '',
+    })
+    setShowForm(true)
+  }
+
+  function actualizarRubrica(i, campo, valor) {
+    setForm(f => {
+      const rubricas = [...f.rubricas]
+      rubricas[i] = { ...rubricas[i], [campo]: valor }
+      return { ...f, rubricas }
+    })
+  }
+
+  async function guardar(e) {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      const r = await apiFetch(`/api/crm/projetos/${negocioId}/vistorias`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...form,
+          desvio_dias: form.desvio_dias === '' ? null : parseInt(form.desvio_dias, 10),
+        }),
+      })
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        toast?.(`Erro ao registar vistoria: ${err.error || r.status}`, 'error', 3500)
+        return
+      }
+      setShowForm(false)
+      load()
+    } finally { setSaving(false) }
+  }
+
+  async function gerarRelatorio(vistoriaId, { download = false } = {}) {
+    try { await openDocument(`/api/crm/projetos/${negocioId}/pdf/relatorio-semanal/${vistoriaId}`, { download }) } catch { /* já notificado */ }
+  }
+
+  const inputClass = 'w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300'
+
+  if (loading) return <p className="text-sm text-gray-400">A carregar...</p>
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-gray-700">Vistorias semanais ({lista.length})</h3>
+        <button onClick={abrirForm} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+          <Plus className="w-3.5 h-3.5" /> Registar Vistoria
+        </button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={guardar} className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-200">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Data da vistoria</label>
+            <input type="date" value={form.semana_data} onChange={e => setForm(f => ({ ...f, semana_data: e.target.value }))} className={`${inputClass} max-w-xs`} required />
+          </div>
+
+          <div>
+            <p className="text-xs font-medium text-gray-500 mb-1.5">Estado por rubrica (MQT)</p>
+            <div className="space-y-1.5">
+              {form.rubricas.map((r, i) => (
+                <div key={r.rubrica} className="grid grid-cols-12 gap-1.5 items-center">
+                  <span className="col-span-3 text-xs text-gray-600 truncate" title={r.rubrica}>{r.rubrica}</span>
+                  <select value={r.estado} onChange={e => actualizarRubrica(i, 'estado', e.target.value)} className={`${inputClass} col-span-3`}>
+                    {ESTADO_RUBRICA.map(e => <option key={e} value={e}>{e}</option>)}
+                  </select>
+                  <input type="number" min="0" max="100" value={r.perc} onChange={e => actualizarRubrica(i, 'perc', parseInt(e.target.value, 10) || 0)}
+                    className={`${inputClass} col-span-2`} placeholder="%" />
+                  <input value={r.observacoes} onChange={e => actualizarRubrica(i, 'observacoes', e.target.value)}
+                    className={`${inputClass} col-span-4`} placeholder="Observações" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Desvio de cronograma (dias)</label>
+              <input type="number" value={form.desvio_dias} onChange={e => setForm(f => ({ ...f, desvio_dias: e.target.value }))} className={inputClass} placeholder="Ex: -2 ou 3" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Causa do desvio</label>
+              <input value={form.desvio_causa} onChange={e => setForm(f => ({ ...f, desvio_causa: e.target.value }))} className={inputClass} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Acção correctiva</label>
+            <input value={form.desvio_accao} onChange={e => setForm(f => ({ ...f, desvio_accao: e.target.value }))} className={inputClass} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Ocorrências (segurança, qualidade, reclamações)</label>
+            <textarea value={form.incidentes} onChange={e => setForm(f => ({ ...f, incidentes: e.target.value }))} rows={2} className={inputClass} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Próximos 7 dias</label>
+            <textarea value={form.proximos_passos} onChange={e => setForm(f => ({ ...f, proximos_passos: e.target.value }))} rows={2} className={inputClass} />
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setShowForm(false)} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100">Cancelar</button>
+            <button type="submit" disabled={saving} className="px-4 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
+              {saving ? 'A guardar...' : 'Guardar e gerar relatório'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {lista.length === 0 ? (
+        <div className="text-center py-8 text-gray-400 text-sm">Nenhuma vistoria registada.</div>
+      ) : (
+        <div className="divide-y divide-gray-100">
+          {lista.map(v => (
+            <div key={v.id} className="flex items-center gap-3 py-3">
+              <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                <ClipboardCheck className="w-4 h-4 text-indigo-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-800">{new Date(v.semana_data).toLocaleDateString('pt-PT', { dateStyle: 'medium' })}</p>
+                {v.desvio_dias ? <p className="text-xs text-gray-400">Desvio: {v.desvio_dias > 0 ? '+' : ''}{v.desvio_dias} dias</p> : null}
+              </div>
+              <div className="flex items-center gap-1">
+                <button onClick={() => gerarRelatorio(v.id)} title="Ver relatório semanal"
+                  className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 inline-flex items-center gap-1.5">
+                  <Eye className="w-3.5 h-3.5" /> Ver relatório
+                </button>
+                <button onClick={() => gerarRelatorio(v.id, { download: true })} title="Descarregar relatório semanal"
+                  className="px-3 py-1.5 text-xs rounded-lg bg-brand-dark text-brand-gold hover:bg-brand-dark-light inline-flex items-center gap-1.5">
+                  <FileDown className="w-3.5 h-3.5" /> Download
+                </button>
               </div>
             </div>
           ))}

@@ -59,7 +59,7 @@ import {
   FASES_POR_CATEGORIA, getTemplateFases, getFaseConfigGlobal,
 } from "../_shared/fasesFixFlip.ts";
 import {
-  generateFichaAcompanhamento, generateRelatorioAcompanhamento,
+  generateFichaAcompanhamento, generateRelatorioAcompanhamento, generateRelatorioSemanalObra,
   generateMemoriaDescritiva, generateRelatorioSaida,
 } from "../_shared/pdfProjectoFixFlip.ts";
 import { exportProjetoExcel } from "../_shared/projetoExcelExport.ts";
@@ -5719,6 +5719,95 @@ app.delete("/projetos/reunioes/:reuniaoId", async (c: any) => {
     await pool.query("DELETE FROM reunioes_investidor WHERE id = $1", [c.req.param("reuniaoId")]);
     return c.json({ ok: true });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ════════════════════════════════════════════════════════════════
+// VISTORIAS SEMANAIS DE OBRA — Template A/B do SOP 13. Input único de
+// campo (transposto do PDF preenchido em obra); gera o Relatório Semanal.
+// ════════════════════════════════════════════════════════════════
+const RUBRICAS_MQT = [
+  "Preliminares", "Paredes / Estrutura", "Tetos", "Impermeabilizações",
+  "Revestimentos", "Carpintarias", "Pinturas", "Loiças e acessórios",
+  "Redes hidráulicas", "Redes eléctricas / ITED", "Ar condicionado", "Limpeza final",
+];
+
+let _vistoriasObraTableEnsured = false;
+async function ensureVistoriasObraTable() {
+  if (_vistoriasObraTableEnsured) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS vistorias_obra (
+      id TEXT PRIMARY KEY,
+      negocio_id TEXT NOT NULL REFERENCES negocios(id) ON DELETE CASCADE,
+      semana_data DATE NOT NULL,
+      rubricas JSONB NOT NULL DEFAULT '[]',
+      desvio_dias INTEGER,
+      desvio_causa TEXT,
+      desvio_accao TEXT,
+      incidentes TEXT,
+      proximos_passos TEXT,
+      criado_por TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+  _vistoriasObraTableEnsured = true;
+}
+
+app.get("/projetos/:negocioId/vistorias", async (c: any) => {
+  try {
+    await ensureVistoriasObraTable();
+    const { rows } = await pool.query(
+      `SELECT * FROM vistorias_obra WHERE negocio_id = $1 ORDER BY semana_data DESC`,
+      [c.req.param("negocioId")],
+    );
+    return c.json({ vistorias: rows, rubricasPadrao: RUBRICAS_MQT });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/projetos/:negocioId/vistorias", async (c: any) => {
+  try {
+    await ensureVistoriasObraTable();
+    const body = await c.req.json().catch(() => ({}));
+    if (!body.semana_data) return c.json({ error: "semana_data obrigatória" }, 400);
+    const u = await resolveCrmUser(c);
+    const { rows } = await pool.query(
+      `INSERT INTO vistorias_obra (id, negocio_id, semana_data, rubricas, desvio_dias, desvio_causa, desvio_accao, incidentes, proximos_passos, criado_por)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [crypto.randomUUID(), c.req.param("negocioId"), body.semana_data, JSON.stringify(body.rubricas || []), body.desvio_dias ?? null, body.desvio_causa || null, body.desvio_accao || null, body.incidentes || null, body.proximos_passos || null, u?.email || null],
+    );
+    return c.json(rows[0], 201);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── PDF: Relatório Semanal de Obra, gerado a partir de uma vistoria ──
+app.get("/projetos/:negocioId/pdf/relatorio-semanal/:vistoriaId", async (c: any) => {
+  try {
+    await ensureVistoriasObraTable();
+    const data = await loadProjetoCompleto(c.req.param("negocioId"));
+    if (!data) return c.json({ error: "Projecto não encontrado" }, 404);
+    const { rows: vRows } = await pool.query("SELECT * FROM vistorias_obra WHERE id = $1 AND negocio_id = $2", [c.req.param("vistoriaId"), c.req.param("negocioId")]);
+    const vistoria = vRows[0];
+    if (!vistoria) return c.json({ error: "Vistoria não encontrada" }, 404);
+
+    const inicioSemana = new Date(vistoria.semana_data);
+    const fimSemana = new Date(inicioSemana.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const fotosSemana = data.fotos.filter((f: any) => {
+      const d = new Date(f.created_at);
+      return d >= inicioSemana && d < fimSemana;
+    });
+
+    const { rows: todasVistorias } = await pool.query("SELECT semana_data FROM vistorias_obra WHERE negocio_id = $1 ORDER BY semana_data ASC", [c.req.param("negocioId")]);
+    const semanaAtual = todasVistorias.findIndex((v: any) => String(v.semana_data) === String(vistoria.semana_data)) + 1;
+
+    const buf = await streamToBuffer(generateRelatorioSemanalObra({
+      negocio: data.negocio, imovel: data.imovel, vistoria, fases: data.fases,
+      fotos: fotosSemana, orcAlocado: data.orcAlocado, custoReal: data.custoReal,
+      semanaAtual: semanaAtual || null, semanaTotal: todasVistorias.length || null,
+    }));
+    return c.body(buf, 200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": pdfDisposition(c, `relatorio-semanal-${vistoria.semana_data}-${data.negocio.movimento.replace(/[^\w]/g, "_")}.pdf`),
+    });
+  } catch (e) { console.error("[pdf/relatorio-semanal]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
 });
 
 // ── GET fracoes do projecto — port de routes.js 4316-4330 ──

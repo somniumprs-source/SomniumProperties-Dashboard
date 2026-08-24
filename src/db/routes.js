@@ -43,6 +43,7 @@ import { resolveAppUser, RECORD_RESTRICTED_ROLES } from './userRoutes.js'
 import {
   generateFichaAcompanhamento,
   generateRelatorioAcompanhamento,
+  generateRelatorioSemanalObra,
   generateMemoriaDescritiva,
   generateRelatorioSaida,
 } from './pdfProjectoFixFlip.js'
@@ -5561,6 +5562,95 @@ router.delete('/projetos/reunioes/:reuniaoId', async (req, res) => {
     await pool.query('DELETE FROM reunioes_investidor WHERE id = $1', [req.params.reuniaoId])
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ════════════════════════════════════════════════════════════════
+// VISTORIAS SEMANAIS DE OBRA — Template A/B do SOP 13. Input único de
+// campo (transposto do PDF preenchido em obra); gera o Relatório Semanal.
+// ════════════════════════════════════════════════════════════════
+const RUBRICAS_MQT = [
+  'Preliminares', 'Paredes / Estrutura', 'Tetos', 'Impermeabilizações',
+  'Revestimentos', 'Carpintarias', 'Pinturas', 'Loiças e acessórios',
+  'Redes hidráulicas', 'Redes eléctricas / ITED', 'Ar condicionado', 'Limpeza final',
+]
+
+let _vistoriasObraTableEnsured = false
+async function ensureVistoriasObraTable() {
+  if (_vistoriasObraTableEnsured) return
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS vistorias_obra (
+      id TEXT PRIMARY KEY,
+      negocio_id TEXT NOT NULL REFERENCES negocios(id) ON DELETE CASCADE,
+      semana_data DATE NOT NULL,
+      rubricas JSONB NOT NULL DEFAULT '[]',
+      desvio_dias INTEGER,
+      desvio_causa TEXT,
+      desvio_accao TEXT,
+      incidentes TEXT,
+      proximos_passos TEXT,
+      criado_por TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `)
+  _vistoriasObraTableEnsured = true
+}
+
+router.get('/projetos/:negocioId/vistorias', async (req, res) => {
+  try {
+    await ensureVistoriasObraTable()
+    const { rows } = await pool.query(
+      `SELECT * FROM vistorias_obra WHERE negocio_id = $1 ORDER BY semana_data DESC`,
+      [req.params.negocioId]
+    )
+    res.json({ vistorias: rows, rubricasPadrao: RUBRICAS_MQT })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/projetos/:negocioId/vistorias', async (req, res) => {
+  try {
+    await ensureVistoriasObraTable()
+    const { semana_data, rubricas, desvio_dias, desvio_causa, desvio_accao, incidentes, proximos_passos } = req.body || {}
+    if (!semana_data) return res.status(400).json({ error: 'semana_data obrigatória' })
+    const id = randomUUID()
+    const { rows } = await pool.query(
+      `INSERT INTO vistorias_obra (id, negocio_id, semana_data, rubricas, desvio_dias, desvio_causa, desvio_accao, incidentes, proximos_passos, criado_por)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [id, req.params.negocioId, semana_data, JSON.stringify(rubricas || []), desvio_dias ?? null, desvio_causa || null, desvio_accao || null, incidentes || null, proximos_passos || null, req.user?.email || null]
+    )
+    res.status(201).json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── PDF: Relatório Semanal de Obra, gerado a partir de uma vistoria ──
+router.get('/projetos/:negocioId/pdf/relatorio-semanal/:vistoriaId', async (req, res) => {
+  try {
+    await ensureVistoriasObraTable()
+    const data = await loadProjetoCompleto(req.params.negocioId)
+    if (!data) return res.status(404).json({ error: 'Projecto não encontrado' })
+    const { rows: vRows } = await pool.query('SELECT * FROM vistorias_obra WHERE id = $1 AND negocio_id = $2', [req.params.vistoriaId, req.params.negocioId])
+    const vistoria = vRows[0]
+    if (!vistoria) return res.status(404).json({ error: 'Vistoria não encontrada' })
+
+    // Fotos da semana: janela de 7 dias a partir da data da vistoria.
+    const inicioSemana = new Date(vistoria.semana_data)
+    const fimSemana = new Date(inicioSemana.getTime() + 7 * 24 * 60 * 60 * 1000)
+    const fotosSemana = data.fotos.filter(f => {
+      const d = new Date(f.created_at)
+      return d >= inicioSemana && d < fimSemana
+    })
+
+    const { rows: todasVistorias } = await pool.query('SELECT semana_data FROM vistorias_obra WHERE negocio_id = $1 ORDER BY semana_data ASC', [req.params.negocioId])
+    const semanaAtual = todasVistorias.findIndex(v => v.semana_data.toISOString?.() === vistoria.semana_data?.toISOString?.() || String(v.semana_data) === String(vistoria.semana_data)) + 1
+
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', pdfDisposition(req, `relatorio-semanal-${vistoria.semana_data}-${data.negocio.movimento.replace(/[^\w]/g, '_')}.pdf`))
+    const doc = generateRelatorioSemanalObra({
+      negocio: data.negocio, imovel: data.imovel, vistoria, fases: data.fases,
+      fotos: fotosSemana, orcAlocado: data.orcAlocado, custoReal: data.custoReal,
+      semanaAtual: semanaAtual || null, semanaTotal: todasVistorias.length || null,
+    })
+    doc.pipe(res)
+  } catch (e) { console.error('[pdf/relatorio-semanal]', e.message); res.status(500).json({ error: e.message }) }
 })
 
 // ════════════════════════════════════════════════════════════════
