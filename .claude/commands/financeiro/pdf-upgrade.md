@@ -22,8 +22,8 @@ Antes de executar, ler `.claude/dept/financeiro.md` para contexto do departament
 4. Melhora seguindo o padrao profissional:
    - Usar o `DocBuilder` para layout consistente (header, section, row, bigNumbers, simpleTable, photos)
    - Fotos: max 6 por documento, grid 2 colunas, rounded corners
-   - Cores: gold #C9A84C, black #0d0d0d, body #2a2a2a, muted #888
-   - Logo: `public/logo-transparent.png`
+   - Cores: usar sempre os tokens de `src/db/docTheme.js` (`DOC_COLORS`) — nunca hex hardcoded. Fonte unica de verdade, gemeo em `supabase/functions/_shared/docTheme.ts`.
+   - Logo: `LOGO_BLACK_PNG`/`LOGO_WHITE_PNG` de `src/db/logoBlack.js`/`logoWhite.js` (preto sobre fundo claro, branco sobre fundo escuro) — nunca ler `public/logo-transparent.png` directamente (nao existe nos isolates Deno de producao)
    - Capa sempre presente em documentos para investidor
 
 5. Testa gerando o PDF via curl: `curl -o test.pdf http://localhost:3001/api/crm/imoveis/{id}/documento/{tipo}`

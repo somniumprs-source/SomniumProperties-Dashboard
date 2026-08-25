@@ -5,10 +5,12 @@
  */
 import ExcelJS from 'exceljs'
 import pool from './pg.ts'
+import { LOGO_BLACK_PNG } from './logoBlack.ts'
+import { DOC_COLORS, toArgb } from './docTheme.ts'
 
-const GOLD = 'FFC9A84C'
-const BLACK = 'FF0D0D0D'
-const LIGHT = 'FFF9FAFB'
+const GOLD = toArgb(DOC_COLORS.gold)
+const BLACK = toArgb(DOC_COLORS.black)
+const LIGHT = toArgb(DOC_COLORS.tableRowAlt1)
 
 const EUR = v => Number(v) || 0
 
@@ -16,6 +18,11 @@ function headerStyle(ws, range) {
   ws.getCell(range).font = { bold: true, color: { argb: GOLD }, size: 11 }
   ws.getCell(range).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BLACK } }
   ws.getCell(range).alignment = { vertical: 'middle', horizontal: 'left' }
+}
+
+function addLogo(wb, sheet) {
+  const imageId = wb.addImage({ buffer: LOGO_BLACK_PNG, extension: 'png' })
+  sheet.addImage(imageId, { tl: { col: sheet.columnCount, row: 0.15 }, ext: { width: 68, height: 68 / (1516 / 614) } })
 }
 
 function tabelaHeader(ws, row, labels) {
@@ -64,6 +71,7 @@ export async function exportProjetoExcel(negocioId) {
   wsResumo.getCell('A1').value = `SOMNIUM PROPERTIES — ${negocio.movimento}`
   headerStyle(wsResumo, 'A1')
   wsResumo.getCell('A1').alignment = { vertical: 'middle', horizontal: 'center' }
+  addLogo(wb, wsResumo)
   wsResumo.getRow(1).height = 28
 
   const linhas = [

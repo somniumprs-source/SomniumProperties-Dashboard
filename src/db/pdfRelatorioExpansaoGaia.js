@@ -15,14 +15,15 @@ import { fileURLToPath } from 'url'
 import path from 'path'
 import { LOGO_BLACK_PNG } from './logoBlack.js'
 import { DADOS_EXPANSAO_GAIA } from './expansaoGaiaData.js'
+import { DOC_COLORS } from './docTheme.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const C = {
-  gold: '#C9A84C', black: '#0d0d0d', white: '#ffffff',
-  body: '#2a2a2a', muted: '#888888',
-  border: '#e0ddd5', light: '#f0efe9', headerBg: '#f0efe9', totalBg: '#f5f3ee',
-  green: '#2d6a2d', red: '#8b2020', amber: '#b07a1d',
+  gold: DOC_COLORS.gold, black: DOC_COLORS.black, white: DOC_COLORS.white,
+  body: DOC_COLORS.body, muted: DOC_COLORS.muted,
+  border: DOC_COLORS.border, light: DOC_COLORS.light, headerBg: DOC_COLORS.tableHeaderBg, totalBg: DOC_COLORS.tableRowAlt1,
+  green: DOC_COLORS.green, red: DOC_COLORS.red, amber: DOC_COLORS.amber,
 }
 const ML = 50, MR = 50
 const PW = 595.28, PH = 841.89

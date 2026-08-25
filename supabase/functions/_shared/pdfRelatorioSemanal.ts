@@ -5,18 +5,20 @@
  * tabelas com header underline gold, callouts e footer institucional.
  */
 import PDFDocument from './pdfkitGuard.ts'
+import { LOGO_BLACK_PNG } from "./logoBlack.ts"
+import { DOC_COLORS } from "./docTheme.ts"
 
-const GOLD = '#C9A84C'
-const GOLD_DARK = '#a88a3a'
-const TEXT = '#1f2937'
-const BODY = '#374151'
-const MUTED = '#6b7280'
-const LIGHT = '#9ca3af'
-const BORDER = '#e0ddd5'
-const BG = '#fbfaf7'
-const RED = '#b91c1c'
-const ORANGE = '#c2410c'
-const GREEN = '#15803d'
+const GOLD = DOC_COLORS.gold
+const GOLD_DARK = DOC_COLORS.goldDark
+const TEXT = DOC_COLORS.black
+const BODY = DOC_COLORS.body
+const MUTED = DOC_COLORS.muted
+const LIGHT = DOC_COLORS.mutedLight
+const BORDER = DOC_COLORS.border
+const BG = DOC_COLORS.bg
+const RED = DOC_COLORS.red
+const ORANGE = DOC_COLORS.amber
+const GREEN = DOC_COLORS.green
 
 const PT = 60
 const PB = 70
@@ -181,8 +183,12 @@ export function generateRelatorioSemanalPDF(relatorio) {
     const headerH = 92
     doc.lineWidth(0.5).strokeColor(BORDER).rect(ML, y, CW, headerH).stroke()
 
-    doc.font('Helvetica').fontSize(8).fillColor(MUTED)
-      .text('SOMNIUM PROPERTIES', ML + 18, y + 16, { characterSpacing: 2.5, lineBreak: false })
+    try {
+      doc.image(LOGO_BLACK_PNG, ML + 18, y + 14, { height: 16 })
+    } catch {
+      doc.font('Helvetica').fontSize(8).fillColor(MUTED)
+        .text('SOMNIUM PROPERTIES', ML + 18, y + 16, { characterSpacing: 2.5, lineBreak: false })
+    }
 
     doc.font('Helvetica').fontSize(7.5).fillColor(MUTED)
       .text('DATA', ML + CW - 100, y + 16, { width: 80, align: 'right', characterSpacing: 2, lineBreak: false })

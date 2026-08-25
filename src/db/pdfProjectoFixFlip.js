@@ -13,15 +13,16 @@ import PDFDocument from 'pdfkit'
 import { readFileSync, existsSync } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { DOC_COLORS } from './docTheme.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const LOGO_PATH = path.resolve(__dirname, '../../public/logo-transparent.png')
 
-const GOLD = '#C9A84C'
-const BLACK = '#0d0d0d'
-const TEXT = '#1f2937'
-const MUTED = '#6b7280'
-const LINE = '#e5e7eb'
+const GOLD = DOC_COLORS.gold
+const BLACK = DOC_COLORS.black
+const TEXT = DOC_COLORS.body
+const MUTED = DOC_COLORS.muted
+const LINE = DOC_COLORS.border
 
 const EUR = (v) => {
   if (v == null || !Number.isFinite(Number(v))) return '—'
@@ -40,7 +41,7 @@ function header(doc, titulo, subtitulo) {
     try { doc.image(LOGO_PATH, 50, 30, { height: 40 }) } catch {}
   }
   doc.fillColor('white').font('Helvetica-Bold').fontSize(11).text(titulo.toUpperCase(), 170, 38, { width: doc.page.width - 220 })
-  if (subtitulo) doc.fillColor('#aaaaaa').font('Helvetica').fontSize(8).text(subtitulo, 170, 56, { width: doc.page.width - 220 })
+  if (subtitulo) doc.fillColor(DOC_COLORS.mutedLight).font('Helvetica').fontSize(8).text(subtitulo, 170, 56, { width: doc.page.width - 220 })
   // Linha dourada
   doc.moveTo(0, 100).lineTo(doc.page.width, 100).lineWidth(3).strokeColor(GOLD).stroke()
   doc.y = 120
@@ -66,13 +67,13 @@ function secaoTitulo(doc, texto) {
 }
 
 function kpiCard(doc, x, y, w, h, label, valor, cor = GOLD) {
-  doc.roundedRect(x, y, w, h, 6).fillAndStroke('#f9fafb', LINE)
+  doc.roundedRect(x, y, w, h, 6).fillAndStroke(DOC_COLORS.light, LINE)
   doc.fillColor(MUTED).font('Helvetica').fontSize(7).text(label.toUpperCase(), x + 8, y + 8, { width: w - 16 })
   doc.fillColor(cor).font('Helvetica-Bold').fontSize(14).text(valor, x + 8, y + 22, { width: w - 16 })
 }
 
 function progBar(doc, x, y, w, perc, cor = GOLD) {
-  doc.roundedRect(x, y, w, 6, 3).fill('#e5e7eb')
+  doc.roundedRect(x, y, w, 6, 3).fill(DOC_COLORS.border)
   const fill = Math.max(0, Math.min(100, perc)) / 100 * w
   if (fill > 0) doc.roundedRect(x, y, fill, 6, 3).fill(cor)
 }
@@ -105,12 +106,12 @@ function inserirFotos(doc, fotos, maxFotos = 6) {
         doc.restore()
         doc.roundedRect(x, doc.y, cellW, cellH, 4).lineWidth(0.5).strokeColor(LINE).stroke()
         if (f.tipo) {
-          const corTipo = f.tipo === 'antes' ? '#ef4444' : f.tipo === 'depois' ? '#22c55e' : BLACK
+          const corTipo = f.tipo === 'antes' ? DOC_COLORS.red : f.tipo === 'depois' ? DOC_COLORS.green : BLACK
           doc.roundedRect(x + 4, doc.y + 4, 36, 12, 2).fill(corTipo)
           doc.fillColor('white').font('Helvetica-Bold').fontSize(6).text(f.tipo.toUpperCase(), x + 4, doc.y - cellH + 7, { width: 36, align: 'center' })
         }
       } catch (e) {
-        doc.rect(x, doc.y, cellW, cellH).fill('#f3f4f6')
+        doc.rect(x, doc.y, cellW, cellH).fill(DOC_COLORS.light)
         doc.fillColor(MUTED).fontSize(7).text('(imagem)', x, doc.y - cellH + cellH/2, { width: cellW, align: 'center' })
       }
     }
@@ -132,7 +133,7 @@ export function generateFichaAcompanhamento({ negocio, imovel, fase, tarefas, fo
   kpiCard(doc, 50,                       kpiY, kpiW, 50, 'Execução',    PCT(fase.perc_execucao), GOLD)
   kpiCard(doc, 50 + (kpiW + 8) * 1,      kpiY, kpiW, 50, 'Estado',      (fase.estado || '—').replace('_', ' '), BLACK)
   kpiCard(doc, 50 + (kpiW + 8) * 2,      kpiY, kpiW, 50, 'Orçamento',   EUR(fase.orcamento_alocado), GOLD)
-  kpiCard(doc, 50 + (kpiW + 8) * 3,      kpiY, kpiW, 50, 'Custo real',  EUR(fase.custo_real), '#ef4444')
+  kpiCard(doc, 50 + (kpiW + 8) * 3,      kpiY, kpiW, 50, 'Custo real',  EUR(fase.custo_real), DOC_COLORS.red)
   doc.y = kpiY + 65
 
   // Cronograma
@@ -149,7 +150,7 @@ export function generateFichaAcompanhamento({ negocio, imovel, fase, tarefas, fo
   for (const t of tarefas) {
     if (doc.y > doc.page.height - 80) { doc.addPage(); doc.y = 50 }
     const mark = t.concluida ? '☑' : '☐'
-    const cor = t.concluida ? '#22c55e' : MUTED
+    const cor = t.concluida ? DOC_COLORS.green : MUTED
     doc.fillColor(cor).font('Helvetica').fontSize(8).text(`${mark}  ${t.descricao}`, 50, doc.y, { width: doc.page.width - 100 })
     doc.moveDown(0.15)
   }
@@ -192,7 +193,7 @@ export function generateRelatorioAcompanhamento({ negocio, imovel, fases, tarefa
   kpiCard(doc, 50,                  kpiY, kpiW, 56, 'Execução global', PCT(percGlobal), GOLD)
   kpiCard(doc, 50 + (kpiW + 8) * 1, kpiY, kpiW, 56, 'Faturação esperada', EUR(negocio.lucro_estimado), BLACK)
   kpiCard(doc, 50 + (kpiW + 8) * 2, kpiY, kpiW, 56, 'Orçamento total', EUR(orcAlocado || negocio.custo_real_obra), GOLD)
-  kpiCard(doc, 50 + (kpiW + 8) * 3, kpiY, kpiW, 56, 'Custo real',     EUR(custoReal), '#ef4444')
+  kpiCard(doc, 50 + (kpiW + 8) * 3, kpiY, kpiW, 56, 'Custo real',     EUR(custoReal), DOC_COLORS.red)
   doc.y = kpiY + 72
 
   // Sumário executivo
@@ -212,7 +213,7 @@ export function generateRelatorioAcompanhamento({ negocio, imovel, fases, tarefa
     if (doc.y > doc.page.height - 80) { doc.addPage(); doc.y = 50 }
     const yIni = doc.y
     // Bullet de estado
-    const corEstado = f.estado === 'concluida' ? '#22c55e' : f.estado === 'em_curso' ? '#3b82f6' : f.estado === 'bloqueada' ? '#ef4444' : '#9ca3af'
+    const corEstado = f.estado === 'concluida' ? DOC_COLORS.green : f.estado === 'em_curso' ? '#3b82f6' : f.estado === 'bloqueada' ? DOC_COLORS.red : DOC_COLORS.mutedLight
     doc.circle(56, yIni + 5, 3).fill(corEstado)
     doc.fillColor(TEXT).font('Helvetica-Bold').fontSize(9).text(f.nome, 65, yIni, { width: 220 })
     doc.fillColor(MUTED).font('Helvetica').fontSize(7)
@@ -243,7 +244,7 @@ export function generateRelatorioAcompanhamento({ negocio, imovel, fases, tarefa
         .text(f.nome, 50, yIni, { width: colW[0] })
         .text(EUR(f.orcamento_alocado), 50 + colW[0], yIni, { width: colW[1] })
         .text(EUR(f.custo_real), 50 + colW[0] + colW[1], yIni, { width: colW[2] })
-      doc.fillColor(desvio > 0 ? '#ef4444' : '#22c55e')
+      doc.fillColor(desvio > 0 ? DOC_COLORS.red : DOC_COLORS.green)
         .text(EUR(desvio), 50 + colW[0] + colW[1] + colW[2], yIni, { width: colW[3] })
       doc.y = yIni + 14
     }
@@ -287,10 +288,10 @@ export function generateRelatorioAcompanhamento({ negocio, imovel, fases, tarefa
 function semaforoDesvio(pct) {
   if (pct == null) return { cor: MUTED, label: '—' }
   const abs = Math.abs(pct)
-  if (abs <= 5) return { cor: '#22c55e', label: 'Dentro do orçamento' }
-  if (abs <= 10) return { cor: '#eab308', label: 'Atenção — investigar causa' }
-  if (abs <= 15) return { cor: '#f97316', label: 'Reunião técnica recomendada' }
-  return { cor: '#ef4444', label: 'Aviso formal — plano de acção necessário' }
+  if (abs <= 5) return { cor: DOC_COLORS.green, label: 'Dentro do orçamento' }
+  if (abs <= 10) return { cor: DOC_COLORS.amber, label: 'Atenção — investigar causa' }
+  if (abs <= 15) return { cor: DOC_COLORS.amber, label: 'Reunião técnica recomendada' }
+  return { cor: DOC_COLORS.red, label: 'Aviso formal — plano de acção necessário' }
 }
 
 export function generateRelatorioSemanalObra({ negocio, imovel, vistoria, fases, fotos, orcAlocado, custoReal, semanaAtual, semanaTotal }) {
@@ -312,7 +313,7 @@ export function generateRelatorioSemanalObra({ negocio, imovel, vistoria, fases,
   const kpiY = doc.y
   kpiCard(doc, 50,                  kpiY, kpiW, 56, 'Execução global', PCT(percGlobal), GOLD)
   kpiCard(doc, 50 + (kpiW + 8) * 1, kpiY, kpiW, 56, 'Orçamento', EUR(orcAlocado), BLACK)
-  kpiCard(doc, 50 + (kpiW + 8) * 2, kpiY, kpiW, 56, 'Custo real', EUR(custoReal), '#ef4444')
+  kpiCard(doc, 50 + (kpiW + 8) * 2, kpiY, kpiW, 56, 'Custo real', EUR(custoReal), DOC_COLORS.red)
   kpiCard(doc, 50 + (kpiW + 8) * 3, kpiY, kpiW, 56, 'Desvio', desvioPct == null ? '—' : `${desvioPct > 0 ? '+' : ''}${desvioPct.toFixed(1)}%`, semaforo.cor)
   doc.y = kpiY + 72
 
@@ -372,7 +373,7 @@ export function generateRelatorioSemanalObra({ negocio, imovel, vistoria, fases,
         .text(f.nome, 50, yIni, { width: colW[0] })
         .text(EUR(f.orcamento_alocado), 50 + colW[0], yIni, { width: colW[1] })
         .text(EUR(f.custo_real), 50 + colW[0] + colW[1], yIni, { width: colW[2] })
-      doc.fillColor(desvio > 0 ? '#ef4444' : '#22c55e')
+      doc.fillColor(desvio > 0 ? DOC_COLORS.red : DOC_COLORS.green)
         .text(EUR(desvio), 50 + colW[0] + colW[1] + colW[2], yIni, { width: colW[3] })
       doc.y = yIni + 14
     }
@@ -493,9 +494,9 @@ export function generateRelatorioSaida({ negocio, imovel, fases, custoReal, inve
   // KPIs financeiros
   const kpiW = (doc.page.width - 100 - 3 * 8) / 4
   const kpiY = doc.y
-  kpiCard(doc, 50,                  kpiY, kpiW, 56, 'Valor de venda',  EUR(valorVenda), '#22c55e')
+  kpiCard(doc, 50,                  kpiY, kpiW, 56, 'Valor de venda',  EUR(valorVenda), DOC_COLORS.green)
   kpiCard(doc, 50 + (kpiW + 8) * 1, kpiY, kpiW, 56, 'Capital investido', EUR(capitalTotal), BLACK)
-  kpiCard(doc, 50 + (kpiW + 8) * 2, kpiY, kpiW, 56, 'Custo real obra', EUR(custoReal), '#ef4444')
+  kpiCard(doc, 50 + (kpiW + 8) * 2, kpiY, kpiW, 56, 'Custo real obra', EUR(custoReal), DOC_COLORS.red)
   kpiCard(doc, 50 + (kpiW + 8) * 3, kpiY, kpiW, 56, 'Lucro bruto',     EUR(lucroBruto), GOLD)
   doc.y = kpiY + 72
 
@@ -537,7 +538,7 @@ export function generateRelatorioSaida({ negocio, imovel, fases, custoReal, inve
         .text(inv.nome || '—', 50, yIni, { width: colW[0] })
         .text(EUR(inv.capital), 50 + colW[0], yIni, { width: colW[1] })
         .text(`${(pct * 100).toFixed(1)}%`, 50 + colW[0] + colW[1], yIni, { width: colW[2] })
-        .fillColor('#22c55e').font('Helvetica-Bold')
+        .fillColor(DOC_COLORS.green).font('Helvetica-Bold')
         .text(EUR(distribuicao), 50 + colW[0] + colW[1] + colW[2], yIni, { width: colW[3] })
       doc.y = yIni + 14
     }

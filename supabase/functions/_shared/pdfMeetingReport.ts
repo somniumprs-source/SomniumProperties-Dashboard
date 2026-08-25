@@ -4,27 +4,23 @@
  * Layout institucional Somnium Properties — estilo corporativo formal.
  *
  * Port verbatim de src/db/pdfMeetingReport.js para Edge Functions (Deno).
- * Diferenças mecânicas: PDFDocument vem do pdfkitGuard.ts (guard NaN aplicado),
- * o logo lido via readFileSync(public/...) -> import { LOGO_BLACK_PNG } como Buffer.
- * Fontes built-in Helvetica (sem registo de ficheiros). O gerador original não
- * desenha o logo no corpo (drawHeader é textual); o LOGO_BLACK_PNG fica disponível
- * para uso futuro, espelhando pdfReport.ts.
+ * Diferenças mecânicas: PDFDocument vem do pdfkitGuard.ts (guard NaN aplicado).
+ * Fontes built-in Helvetica (sem registo de ficheiros).
  */
 import PDFDocument from "./pdfkitGuard.ts"
 import { Buffer } from "node:buffer"
 import { LOGO_BLACK_PNG } from "./logoBlack.ts"
+import { DOC_COLORS } from "./docTheme.ts"
 
-const LOGO = LOGO_BLACK_PNG
-
-const GOLD = '#C9A84C'
-const GOLD_DARK = '#a88a3a'
-const BLACK = '#0d0d0d'
-const TEXT = '#1f2937'
-const BODY = '#374151'
-const MUTED = '#6b7280'
-const LIGHT = '#9ca3af'
-const BORDER = '#e0ddd5'
-const BG = '#fbfaf7'
+const GOLD = DOC_COLORS.gold
+const GOLD_DARK = DOC_COLORS.goldDark
+const BLACK = DOC_COLORS.black
+const TEXT = DOC_COLORS.black
+const BODY = DOC_COLORS.body
+const MUTED = DOC_COLORS.muted
+const LIGHT = DOC_COLORS.mutedLight
+const BORDER = DOC_COLORS.border
+const BG = DOC_COLORS.bg
 
 const PT = 60   // top margin
 const PB = 70   // bottom margin
@@ -117,7 +113,7 @@ export function generateMeetingPDF(reuniao, analise, investidor) {
     const obs = Array.isArray(perfil.objecoes) ? perfil.objecoes : [perfil.objecoes]
     if (obs.filter(Boolean).length > 0) {
       subhead('Objeções e Preocupações')
-      bulletList(obs.filter(Boolean), { color: '#b91c1c' })
+      bulletList(obs.filter(Boolean), { color: DOC_COLORS.red })
     }
   }
 
@@ -186,9 +182,13 @@ export function generateMeetingPDF(reuniao, analise, investidor) {
     const headerH = 92
     doc.lineWidth(0.5).strokeColor(BORDER).rect(ML, y, CW, headerH).stroke()
 
-    // Brand label (top-left)
-    doc.font('Helvetica').fontSize(8).fillColor(MUTED)
-      .text('SOMNIUM PROPERTIES', ML + 18, y + 16, { characterSpacing: 2.5, lineBreak: false })
+    // Logo (top-left)
+    try {
+      doc.image(LOGO_BLACK_PNG, ML + 18, y + 14, { height: 16 })
+    } catch {
+      doc.font('Helvetica').fontSize(8).fillColor(MUTED)
+        .text('SOMNIUM PROPERTIES', ML + 18, y + 16, { characterSpacing: 2.5, lineBreak: false })
+    }
 
     // Date label (top-right)
     doc.font('Helvetica').fontSize(7.5).fillColor(MUTED)

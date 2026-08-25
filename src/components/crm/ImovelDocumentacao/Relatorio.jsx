@@ -31,7 +31,7 @@ export function Relatorio({ imovelId, analises, flags, inconsistencias, resumoEs
   }
 
   const stats = [
-    { label: 'Documentos', valor: r.totalDocs, cor: '#0a0a0a' },
+    { label: 'Documentos', valor: r.totalDocs, cor: '#0d0d0d' },
     { label: 'Analisados', valor: r.analisados, cor: '#C9A84C' },
     { label: 'Alertas', valor: r.alertas, cor: r.alertas ? '#e67e22' : '#27ae60' },
     { label: 'Inconsistências', valor: r.nInconsistencias, cor: r.nInconsistencias ? '#c0392b' : '#27ae60' },
@@ -58,7 +58,7 @@ export function Relatorio({ imovelId, analises, flags, inconsistencias, resumoEs
           </button>
           <button onClick={() => exportarPdf({ download: true })} disabled={exporting}
             className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg text-white disabled:opacity-50"
-            style={{ backgroundColor: '#0a0a0a' }}
+            style={{ backgroundColor: '#0d0d0d' }}
             title="Descarregar o PDF para enviar a investidores">
             <FileDown className="w-4 h-4" style={{ color: '#C9A84C' }} />
             {exporting ? 'A gerar…' : 'Download PDF'}

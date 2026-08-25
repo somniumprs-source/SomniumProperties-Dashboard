@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url"
 import { Buffer } from "node:buffer"
 import { rasterizarSvgParaPng } from "./resvgWasm.ts"
 import { LOGO_BLACK_PNG } from "./logoBlack.ts"
+import { DOC_COLORS } from "./docTheme.ts"
 import { calcMetricsExtra, MULT, EUR_M2, RACIO, PCT_DEC, EUR_S, colorMargem, colorPositivo } from "./calcMetricsExtra.ts"
 import pool from "./pg.ts"
 import { calcOrcamentoObra, SECCOES_ORDEM, SECCOES_OBRA, SECCOES_LABELS } from "./orcamentoObraEngine.ts"
@@ -47,11 +48,12 @@ function localizacaoTexto(im, opts = {}) {
 
 // Design tokens (reference: Proposta de Investimento Somnium)
 const C = {
-  gold: '#C9A84C', black: '#0d0d0d', white: '#ffffff',
-  bg: '#f7f6f2', body: '#2a2a2a', muted: '#888888',
-  border: '#e0ddd5', light: '#f0efe9', accent: '#1a1a1a',
-  headerBg: '#f0efe9', totalBg: '#f5f3ee',
-  green: '#2d6a2d', red: '#8b2020', blue: '#6366f1',
+  gold: DOC_COLORS.gold, black: DOC_COLORS.black, white: DOC_COLORS.white,
+  bg: DOC_COLORS.bg, body: DOC_COLORS.body, muted: DOC_COLORS.muted,
+  border: DOC_COLORS.border, light: DOC_COLORS.light, accent: '#1a1a1a',
+  headerBg: DOC_COLORS.tableHeaderBg, totalBg: DOC_COLORS.tableRowAlt1,
+  green: DOC_COLORS.green, red: DOC_COLORS.red, blue: '#6366f1',
+  goldDark: DOC_COLORS.goldDark, amber: DOC_COLORS.amber,
 }
 const ML = 50, MR = 50 // margins
 const PW = 595.28, PH = 841.89
@@ -1245,7 +1247,7 @@ class DocBuilder {
     if (total) { this.doc.rect(ML, this.y - 1, CW, 0.5).fill(C.body); this.y += 3 }
     this.doc.fontSize(total ? 9 : 8.5).fillColor(C.body).text(label, ML + 4, this.y + 1, { width: 320, lineBreak: false })
     this.doc.fontSize(total ? 9 : 8.5).fillColor(C.body).text(String(value || '—'), ML + 330, this.y + 1, { width: CW - 334, align: 'right', lineBreak: false })
-    if (!total) this.doc.rect(ML, this.y + 13, CW, 0.2).fill('#e0ddd5')
+    if (!total) this.doc.rect(ML, this.y + 13, CW, 0.2).fill(C.border)
     this.y += total ? 18 : 14
     return this
   }
@@ -1516,7 +1518,7 @@ function renderStressTests(b, a, opts = {}) {
     b.subheader('Sensibilidade ao Prazo de Detenção')
     const rows = m.sensibilidade_prazo.map(s => {
       const ra = s.ra_simples_pp
-      const cor = s.is_base ? '#8C6A30' : (ra > 20 ? '#1B5E20' : (ra < 5 ? '#8B1A1A' : C.body))
+      const cor = s.is_base ? C.goldDark : (ra > 20 ? C.green : (ra < 5 ? C.red : C.body))
       const label = `${s.prazo} meses${s.is_base ? ' (base)' : ''}`
       const sinal = s.premio_pp >= 0 ? '+' : ''
       return {
@@ -1943,7 +1945,7 @@ function renderResumoExecutivo(b, im, a, m) {
   b.doc.rect(ML, b.y, CW, boxH).fill(C.black)
   b.doc.rect(ML, b.y, 4, boxH).fill(C.gold)
   b.doc.fontSize(7).fillColor(C.gold).text('TESE DE INVESTIMENTO', ML + 14, b.y + 8, { width: CW - 24, characterSpacing: 1, lineBreak: false })
-  b.doc.fontSize(9).fillColor('#f0efe9').text(teseTexto, ML + 14, b.y + 22, { width: CW - 24, lineGap: 3 })
+  b.doc.fontSize(9).fillColor(C.light).text(teseTexto, ML + 14, b.y + 22, { width: CW - 24, lineGap: 3 })
   b.y += boxH + 8
 
   // Hero KPIs — grid 3x3 (9 metricas com nome completo)
@@ -2182,7 +2184,7 @@ function renderExitAlternativo(b, im, a, m) {
   const ctxTexto = 'Caso o imóvel não seja vendido no prazo previsto, o arrendamento constitui uma estratégia de exit alternativa. A análise abaixo quantifica a viabilidade desta opção.'
   const ctxH = b.doc.heightOfString(ctxTexto, { width: CW - 24, lineGap: 3 })
   b.ensure(ctxH + 22)
-  b.doc.rect(ML, b.y, CW, ctxH + 16).fill('#f5f3ee')
+  b.doc.rect(ML, b.y, CW, ctxH + 16).fill(C.totalBg)
   b.doc.rect(ML, b.y, 3, ctxH + 16).fill(C.gold)
   b.doc.fontSize(8.5).fillColor(C.body).text(ctxTexto, ML + 12, b.y + 8, { width: CW - 24, lineGap: 3 })
   b.y += ctxH + 22
@@ -2218,7 +2220,7 @@ function renderExitAlternativo(b, im, a, m) {
     : `✗ Não — défice de ${EUR_S(Math.abs(e.folga))}/mês`
   b.simpleTable([
     { label: 'Custo Mensal de Detenção', value: EUR_S(e.custo_mensal_det) + '/mês' },
-    { label: 'Renda Cobre Custos de Detenção?', value: coberturaLabel, color: e.cobertura_ok ? '#1B5E20' : '#8B1A1A' },
+    { label: 'Renda Cobre Custos de Detenção?', value: coberturaLabel, color: e.cobertura_ok ? C.green : C.red },
     { label: 'Break-Even de Arrendamento', value: e.be_arrendamento != null ? `${e.be_arrendamento} meses` : '—' },
   ])
   b.note('Após o número de meses indicado, o retorno acumulado por arrendamento iguala o lucro perdido por adiar a venda.')
@@ -2266,7 +2268,7 @@ function drawPosVisualBar(b, { min, max, mediana, media, vvr, posCor }) {
   const trackW = CW
   const trackX = ML
   // Track
-  b.doc.rect(trackX, trackY, trackW, trackH).fill('#EDEAE0')
+  b.doc.rect(trackX, trackY, trackW, trackH).fill(C.light)
   // Helper para mapear valor -> x
   const range = max - min
   const xFor = (v) => {
@@ -2277,10 +2279,10 @@ function drawPosVisualBar(b, { min, max, mediana, media, vvr, posCor }) {
   if (media > 0 && media >= min && media <= max) {
     const xMedia = xFor(media)
     b.doc.save()
-    b.doc.lineWidth(0.7).strokeColor('#999999').dash(2, { space: 2 })
+    b.doc.lineWidth(0.7).strokeColor(C.muted).dash(2, { space: 2 })
     b.doc.moveTo(xMedia, trackY - 4).lineTo(xMedia, trackY + trackH + 4).stroke()
     b.doc.undash()
-    b.doc.fontSize(7).fillColor('#999999').text('Méd.', xMedia - 12, trackY + trackH + 6, { width: 24, align: 'center', lineBreak: false })
+    b.doc.fontSize(7).fillColor(C.muted).text('Méd.', xMedia - 12, trackY + trackH + 6, { width: 24, align: 'center', lineBreak: false })
     b.doc.restore()
   }
   // Linha solida dourada na mediana
@@ -2369,10 +2371,10 @@ function computeTipologiaStats(tip, areaAlvo, descontoNeg, vvrAdoptado) {
   const deltaMedia = mediaVvr > 0 && vvrAdoptado > 0 ? ((vvrAdoptado / mediaVvr) - 1) * 100 : null
   let posTexto = '—', posCor = C.body
   if (deltaMediana != null) {
-    if (deltaMediana < -5) { posTexto = 'Conservador (abaixo da mediana)'; posCor = '#1B5E20' }
+    if (deltaMediana < -5) { posTexto = 'Conservador (abaixo da mediana)'; posCor = C.green }
     else if (deltaMediana <= 5) { posTexto = 'Alinhado com a mediana'; posCor = C.gold }
     else if (deltaMediana <= 15) { posTexto = 'Moderadamente acima da mediana'; posCor = C.gold }
-    else { posTexto = 'Acima do intervalo de mercado'; posCor = '#8B1A1A' }
+    else { posTexto = 'Acima do intervalo de mercado'; posCor = C.red }
   }
 
   return {
@@ -2498,7 +2500,7 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
         b.doc.rect(ML, b.y, CW, boxH).fill(C.black)
         b.doc.rect(ML, b.y, 4, boxH).fill(C.gold)
         b.doc.fontSize(7).fillColor(C.gold).text('CONCLUSÃO DO ESTUDO', ML + 14, b.y + 8, { width: CW - 28, characterSpacing: 1, lineBreak: false })
-        b.doc.fontSize(9).fillColor('#f0efe9').text(conclusao, ML + 14, b.y + 22, { width: CW - 28, lineGap: 3 })
+        b.doc.fontSize(9).fillColor(C.light).text(conclusao, ML + 14, b.y + 22, { width: CW - 28, lineGap: 3 })
         b.y += boxH + 8
       }
 
@@ -2636,7 +2638,7 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
           `${c.area} m²`,
           EUR(c.preco),
           `${Math.round(c.precoM2Bruto).toLocaleString('pt-PT')} €/m²`,
-          { value: `${c.ajTotal >= 0 ? '+' : ''}${c.ajTotal.toFixed(1)}%`, color: c.ajTotal >= 0 ? '#1B5E20' : '#8B1A1A' },
+          { value: `${c.ajTotal >= 0 ? '+' : ''}${c.ajTotal.toFixed(1)}%`, color: c.ajTotal >= 0 ? C.green : C.red },
           `${Math.round(c.precoM2Aj).toLocaleString('pt-PT')} €/m²`,
           EUR(c.vvrEst),
           EUR(c.precoTransac),
@@ -2703,7 +2705,7 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
       b.space(4)
 
       const pctStr = (v) => `${v >= 0 ? '+' : ''}${(v || 0).toFixed(1)}%`
-      const signColor = (v) => v === 0 ? C.body : (v > 0 ? '#1B5E20' : '#8B1A1A')
+      const signColor = (v) => v === 0 ? C.body : (v > 0 ? C.green : C.red)
 
       g.compsCalc.forEach((c, i) => {
         const letra = String.fromCharCode(65 + i)
@@ -2716,7 +2718,7 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
         if (subtitulo) {
           const subX = ML + 200
           const subW = CW - 200 - 12
-          b.doc.fontSize(8.5).fillColor('#9b8a4d').text(subtitulo, subX, b.y + 8, { width: subW, align: 'right', lineBreak: false })
+          b.doc.fontSize(8.5).fillColor(C.goldDark).text(subtitulo, subX, b.y + 8, { width: subW, align: 'right', lineBreak: false })
         }
         b.y += 28
         if (linkValido) {
@@ -2786,7 +2788,7 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
         { label: 'VVR Adoptado (Preço de saída definido para o negócio)', value: EUR(g.vvrAdoptado), color: C.gold, total: true },
         { label: 'Preço/m² Implícito no VVR', value: g.precoM2Vvr ? `${Math.round(g.precoM2Vvr).toLocaleString('pt-PT')} €/m²` : '—' },
         { label: 'Posicionamento (Face à distribuição dos comparáveis ajustados)', value: g.posTexto, color: g.posCor, total: true },
-        { label: 'VVR vs. Média dos Comparáveis (Diferença percentual face à média)', value: g.deltaMedia != null ? `${g.deltaMedia >= 0 ? '+' : ''}${g.deltaMedia.toFixed(1)}%` : '—', color: g.deltaMedia != null && g.deltaMedia < 0 ? '#1B5E20' : '#8B1A1A' },
+        { label: 'VVR vs. Média dos Comparáveis (Diferença percentual face à média)', value: g.deltaMedia != null ? `${g.deltaMedia >= 0 ? '+' : ''}${g.deltaMedia.toFixed(1)}%` : '—', color: g.deltaMedia != null && g.deltaMedia < 0 ? C.green : C.red },
         { label: 'VVR vs. Mediana dos Comparáveis (indicador principal)', value: g.deltaMediana != null ? `${g.deltaMediana >= 0 ? '+' : ''}${g.deltaMediana.toFixed(1)}%` : '—', color: g.posCor, total: true },
         { label: 'Margem de Segurança VVR (% de desconto antes de prejuízo)', value: margemSegPct },
         { label: 'Desconto Negocial Estimado (% redução esperada entre oferta e transacção)', value: `${descontoNeg}%` },
@@ -3692,7 +3694,7 @@ function detectarInconsistenciasDoc(analises) {
 
 // Relatório consolidado da documentação importada e analisada por IA.
 function renderRelatorioDocumental(b, im) {
-  const COR = { validado: C.green, warning: '#b5651d', erro: C.red }
+  const COR = { validado: C.green, warning: C.amber, erro: C.red }
   let analises = im?.documentacao_analise
   if (typeof analises === 'string') { try { analises = JSON.parse(analises) } catch { analises = [] } }
   if (!Array.isArray(analises)) analises = []

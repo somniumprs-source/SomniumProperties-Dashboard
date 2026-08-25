@@ -14,12 +14,13 @@ import PDFDocument from "./pdfkitGuard.ts"
 import { Buffer } from "node:buffer"
 import { LOGO_WHITE_PNG } from "./logoWhite.ts"
 import { calcOrcamentoObra, validarOrcamento, REGIMES_FISCAIS, SECCOES_ORDEM, SECCOES_LABELS } from "./orcamentoObraEngine.ts"
+import { DOC_COLORS } from "./docTheme.ts"
 
-const GOLD  = '#C9A84C'
-const BLACK = '#0d0d0d'
-const GRAY  = '#666666'
-const LIGHT = '#F0EDE5'
-const RED   = '#b91c1c'
+const GOLD  = DOC_COLORS.gold
+const BLACK = DOC_COLORS.black
+const GRAY  = DOC_COLORS.muted
+const LIGHT = DOC_COLORS.tableRowAlt1
+const RED   = DOC_COLORS.red
 
 const EUR = v => {
   if (v == null || !Number.isFinite(Number(v))) return '—'
@@ -63,7 +64,7 @@ export function generateOrcamentoObraPDF(imovel, orcamentoRow) {
   }
   doc.rect(0, 108, doc.page.width, 2).fill(GOLD)
   doc.fontSize(10).fillColor(GOLD).text('ORÇAMENTO DE OBRA', 50, 80, { align: 'right' })
-  doc.fontSize(8).fillColor('#999')
+  doc.fontSize(8).fillColor(DOC_COLORS.mutedLight)
      .text(new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' }), 50, 92, { align: 'right' })
 
   let y = 130

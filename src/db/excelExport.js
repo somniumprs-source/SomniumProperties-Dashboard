@@ -6,13 +6,20 @@ import pool from './pg.js'
 import { google } from 'googleapis'
 import { Readable } from 'stream'
 import { getGoogleAuth } from './googleAuth.js'
+import { LOGO_BLACK_PNG } from './logoBlack.js'
+import { DOC_COLORS, toArgb } from './docTheme.js'
 
-const BRAND = { gold: 'C9A84C', dark: '0D0D0D', white: 'FFFFFF', light: 'F5F5F0', muted: '888888' }
+const BRAND = { gold: toArgb(DOC_COLORS.gold), dark: toArgb(DOC_COLORS.black), white: toArgb(DOC_COLORS.white), light: toArgb(DOC_COLORS.tableRowAlt1), muted: toArgb(DOC_COLORS.muted) }
 
 function getDrive() {
   const auth = getGoogleAuth()
   if (!auth) return null
   return google.drive({ version: 'v3', auth })
+}
+
+function addLogo(wb, sheet) {
+  const imageId = wb.addImage({ buffer: LOGO_BLACK_PNG, extension: 'png' })
+  sheet.addImage(imageId, { tl: { col: sheet.columnCount, row: 0.15 }, ext: { width: 68, height: 68 / (1516 / 614) } })
 }
 
 function styleHeader(row) {
@@ -32,7 +39,7 @@ function styleRows(sheet) {
       cell.font = { size: 10 }
       cell.alignment = { vertical: 'middle', wrapText: true }
       if (idx % 2 === 0) {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND.light.replace('#', '') } }
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND.light } }
       }
     })
   })
@@ -77,6 +84,7 @@ async function exportComercial() {
   si.getColumn('vvr').numFmt = '#,##0 €'
   si.getColumn('roi').numFmt = '0.0%'
   styleRows(si)
+  addLogo(wb, si)
 
   // Investidores
   const { rows: investidores } = await pool.query('SELECT * FROM investidores ORDER BY created_at DESC')
@@ -159,6 +167,7 @@ async function exportFinanceiro() {
   sd.getColumn('custo_mensal').numFmt = '#,##0.00 €'
   sd.getColumn('custo_anual').numFmt = '#,##0.00 €'
   styleRows(sd)
+  addLogo(wb, sd)
 
   // Negocios
   const { rows: negocios } = await pool.query('SELECT * FROM negocios ORDER BY created_at DESC')
@@ -213,6 +222,7 @@ async function exportAdministrativo() {
     })
   }
   styleRows(st)
+  addLogo(wb, st)
 
   return wb
 }

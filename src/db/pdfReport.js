@@ -6,15 +6,16 @@ import PDFDocument from 'pdfkit'
 import { readFileSync } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { DOC_COLORS, hexToRgbArr } from './docTheme.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const LOGO_PATH = path.resolve(__dirname, '../../public/logo-transparent.png')
 
-const GOLD = [201, 168, 76]
-const BLACK = [13, 13, 13]
-const WHITE = [255, 255, 255]
-const GRAY = [100, 100, 100]
-const LIGHT_GRAY = [240, 240, 236]
+const GOLD = hexToRgbArr(DOC_COLORS.gold)
+const BLACK = hexToRgbArr(DOC_COLORS.black)
+const WHITE = hexToRgbArr(DOC_COLORS.white)
+const GRAY = hexToRgbArr(DOC_COLORS.muted)
+const LIGHT_GRAY = hexToRgbArr(DOC_COLORS.tableRowAlt1)
 
 const EUR = v => {
   if (v == null || v === 0) return '—'
@@ -41,7 +42,7 @@ export function generateImovelPDF(imovel, analise = null) {
 
   // Title
   doc.fontSize(10).fillColor(rgbStr(GOLD)).text('RELATÓRIO DE IMÓVEL', 50, 80, { align: 'right' })
-  doc.fontSize(8).fillColor('#666666').text(new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' }), 50, 94, { align: 'right' })
+  doc.fontSize(8).fillColor(DOC_COLORS.muted).text(new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' }), 50, 94, { align: 'right' })
 
   let y = 140
 
@@ -70,7 +71,7 @@ export function generateImovelPDF(imovel, analise = null) {
         doc.roundedRect(x, y, imgW, imgH, 4).clip()
         doc.image(imgData, x, y, { fit: [imgW, imgH], align: 'center', valign: 'center' })
         doc.restore()
-        doc.roundedRect(x, y, imgW, imgH, 4).lineWidth(0.5).strokeColor('#e0ddd5').stroke()
+        doc.roundedRect(x, y, imgW, imgH, 4).lineWidth(0.5).strokeColor(DOC_COLORS.border).stroke()
         col++
         if (col >= 2) { col = 0; y += imgH + 6 }
       } catch {}
@@ -156,7 +157,7 @@ export function generateImovelPDF(imovel, analise = null) {
   if (imovel.notas) {
     y = checkPage(doc, y, 100)
     y = drawSectionHeader(doc, 'NOTAS', y + 10, pageWidth)
-    doc.fontSize(9).fillColor('#333333')
+    doc.fontSize(9).fillColor(DOC_COLORS.body)
     doc.text(imovel.notas, 50, y + 5, { width: pageWidth })
     y = doc.y + 10
   }
@@ -165,7 +166,7 @@ export function generateImovelPDF(imovel, analise = null) {
   if (imovel.motivo_descarte) {
     y = checkPage(doc, y, 60)
     y = drawSectionHeader(doc, 'MOTIVO DE DESCARTE', y + 10, pageWidth)
-    doc.fontSize(9).fillColor('#ef4444')
+    doc.fontSize(9).fillColor(DOC_COLORS.red)
     doc.text(imovel.motivo_descarte, 50, y + 5, { width: pageWidth })
     y = doc.y + 10
   }
@@ -176,9 +177,9 @@ export function generateImovelPDF(imovel, analise = null) {
   doc.rect(0, footerY - 5, doc.page.width, 2).fill(rgbStr(GOLD))
   doc.fontSize(7).fillColor(rgbStr(GOLD))
     .text('SOMNIUM PROPERTIES', 50, footerY + 5)
-  doc.fontSize(7).fillColor('#666666')
+  doc.fontSize(7).fillColor(DOC_COLORS.muted)
     .text('Documento gerado automaticamente · Confidencial', 50, footerY + 5, { align: 'right' })
-  doc.fontSize(7).fillColor('#444444')
+  doc.fontSize(7).fillColor(DOC_COLORS.mutedDark)
     .text(`Ref: ${imovel.id?.slice(0, 8) || '—'} · ${new Date().toISOString().slice(0, 10)}`, 50, footerY + 16)
 
   doc.end()
@@ -220,8 +221,8 @@ function drawFieldGrid(doc, fields, y, pageWidth) {
 }
 
 function drawField(doc, label, value, x, y, maxWidth) {
-  doc.fontSize(7).fillColor('#999999').text(label.toUpperCase(), x, y, { width: maxWidth })
-  doc.fontSize(10).fillColor('#1a1a1a').text(String(value || '—'), x, y + 12, { width: maxWidth, lineBreak: true })
+  doc.fontSize(7).fillColor(DOC_COLORS.mutedLight).text(label.toUpperCase(), x, y, { width: maxWidth })
+  doc.fontSize(10).fillColor(DOC_COLORS.body).text(String(value || '—'), x, y + 12, { width: maxWidth, lineBreak: true })
 }
 
 function checkPage(doc, y, needed) {
