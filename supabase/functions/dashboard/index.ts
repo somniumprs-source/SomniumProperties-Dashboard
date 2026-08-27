@@ -1268,7 +1268,7 @@ app.get("/comercial/dashboard", async (c: any) => {
       getConsultores({ regiao }).catch(() => [] as any[]),
       getNegócios({ regiao }).catch(() => [] as any[]),
       getDespesas({ regiao }).catch(() => [] as any[]),
-      pool.query(`SELECT canal, direcao, data_hora FROM consultor_interacoes`).catch(() => ({ rows: [] as any[] })),
+      pool.query(`SELECT consultor_id, canal, direcao, data_hora FROM consultor_interacoes ORDER BY consultor_id, data_hora`).catch(() => ({ rows: [] as any[] })),
       pool.query(`SELECT finalidade, data_hora FROM investidor_interacoes`).catch(() => ({ rows: [] as any[] })),
       pool.query(`SELECT negocio_id, capital FROM projeto_investidores WHERE capital > 0`).catch(() => ({ rows: [] as any[] })),
     ]);
@@ -1396,6 +1396,23 @@ app.get("/comercial/dashboard", async (c: any) => {
     const consChamadas = ciRows.filter((r: any) => isChamada(r.canal) && inP(r.data_hora, start, end)).length;
     const consChamadasSomnium = ciRows.filter((r: any) => isChamada(r.canal) && r.direcao === "Enviado" && inP(r.data_hora, start, end)).length;
     const consNovos = consultores.filter((cc: any) => inP(cc.dataInicio, start, end)).length;
+    const isDirecaoResposta = (direcao: any) => direcao === "Recebido" || direcao === "Resposta";
+    const temposRespostaHoras: number[] = [];
+    const ciPorConsultor: any = {};
+    for (const r of ciRows) { (ciPorConsultor[r.consultor_id] ||= []).push(r); }
+    for (const lista of Object.values(ciPorConsultor) as any[][]) {
+      for (let i = 0; i < lista.length; i++) {
+        if (lista[i].direcao === "Enviado") {
+          const resp = lista.slice(i + 1).find((x: any) => isDirecaoResposta(x.direcao));
+          if (resp) {
+            const horas = (new Date(resp.data_hora).getTime() - new Date(lista[i].data_hora).getTime()) / 3600000;
+            if (horas >= 0) temposRespostaHoras.push(horas);
+          }
+        }
+      }
+    }
+    const taxaResposta24h = temposRespostaHoras.length > 0
+      ? round2(temposRespostaHoras.filter((h) => h <= 24).length / temposRespostaHoras.length * 100) : null;
     const ultimoImovel: any = {};
     for (const i of imoveisAll) {
       if (!i.nomeConsultor || !i.dataAdicionado) continue;
@@ -1455,6 +1472,7 @@ app.get("/comercial/dashboard", async (c: any) => {
       },
       consultores: {
         taxaConversao: taxaConvConsultor, parceirosInativos, ativacao: ativacaoConsultor, tempoResposta: tempoRespostaConsultor,
+        taxaResposta24h,
         premium, lucroPorFonte,
       },
       updatedAt: new Date().toISOString(),
@@ -2062,6 +2080,13 @@ app.get("/metricas", async (c: any) => {
     const mixWH = negocios.length > 0 ? round2(negWH.length / negocios.length * 100) : null;
     const mixCAEP = negocios.length > 0 ? round2(negCAEP.length / negocios.length * 100) : null;
 
+    // Métricas SOP 1 — Procura de Negócios (reutilizam estados/campos existentes, sem novo estado)
+    const tempoRespostaMedioDias = avg(imoveis.map((i: any) => daysBetween(i.dataAdicionado, i.dataChamada)));
+    const imoveisAnalisadosBase = imoveis.filter((i: any) => i.estado !== "Adicionado" && i.estado !== "Pendentes").length;
+    const taxaQualificacao = imoveisAnalisadosBase > 0 ? round2(analisados / imoveisAnalisadosBase * 100) : null;
+    const imComVisitaOuEstudo = imoveis.filter((i: any) => !!i.dataVisita || i.estado === "Estudo de VVR" || !!i.dataEstudoMercado).length;
+    const convImChamadaToVisitaOuEstudo = imComChamada > 0 ? round2(imComVisitaOuEstudo / imComChamada * 100) : null;
+
     const invComReuniao = investidores.filter((i) => !!i.dataReuniao).length;
     const invClassificados = investidores.filter((i) => i.classificacao.length > 0).length;
     const invComInvestimento = investidores.filter((i) => i.montanteInvestido > 0).length;
@@ -2090,6 +2115,9 @@ app.get("/metricas", async (c: any) => {
         propostaToFecho: convImPropostaToFecho, metaPropostaToFecho: 35,
         global: convImGlobal, metaGlobal: 6,
         mixWH, mixCAEP,
+        tempoRespostaMedioDias, metaTempoRespostaMedioDias: 1,
+        taxaQualificacao, metaTaxaQualificacao: 25,
+        chamadaToVisitaOuEstudo: convImChamadaToVisitaOuEstudo, metaChamadaToVisitaOuEstudo: 15,
         totais: { leads: leadsGerados, chamadas: imComChamada, visitas: imComVisita, propostas: imComProposta, fechos: imComFecho },
       },
       investidores: {

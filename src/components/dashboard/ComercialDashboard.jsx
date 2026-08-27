@@ -107,6 +107,7 @@ export function ComercialDashboard({ data: d }) {
         <KpiCard label="Taxa de conversão" value={fmtPct(co?.taxaConversao)} sub="Conversion" tone="indigo" size="md" />
         <KpiCard label="Ativação" value={fmtPct(co?.ativacao)} sub="Activation rate" tone="green" size="md" />
         <KpiCard label="Parceiros inativos" value={fmtPct(co?.parceirosInativos)} sub="Churn · 60d s/ imóvel" tone={co?.parceirosInativos > 0 ? 'red' : 'green'} size="md" />
+        <KpiCard label="Resposta ≤24h" value={fmtPct(co?.taxaResposta24h)} sub="Meta SOP 1: ≥ 80%" tone="indigo" size="md" />
       </Group>
       {co?.premium?.length > 0 && (
         <div>

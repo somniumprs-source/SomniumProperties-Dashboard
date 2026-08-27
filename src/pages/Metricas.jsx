@@ -423,6 +423,13 @@ export function Metricas() {
                 </div>
               )}
 
+              <SectionTitle>Procura de Negócios — Métricas SOP 1</SectionTitle>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                <MvsMeta label="Tempo de Resposta Médio" value={im.tempoRespostaMedioDias} meta={im.metaTempoRespostaMedioDias} format="days" invert sub="entrada no CRM → 1.º contacto" />
+                <MvsMeta label="Taxa de Qualificação" value={im.taxaQualificacao} meta={im.metaTaxaQualificacao} format="pct" sub="Visita Marcada ou Estudo de VVR / analisados" />
+                <MvsMeta label="Contacto → Visita ou Estudo VVR" value={im.chamadaToVisitaOuEstudo} meta={im.metaChamadaToVisitaOuEstudo} format="pct" />
+              </div>
+
               <SectionTitle>Funil Investidores — Taxa de Conversão</SectionTitle>
               <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                 <Funil steps={[
