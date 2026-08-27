@@ -8,7 +8,7 @@ import { Button } from '../components/ui/Button.jsx'
 import { Card } from '../components/ui/Card.jsx'
 import { Input } from '../components/ui/Input.jsx'
 
-const DRIVE_FOLDER_URL = 'https://drive.google.com/drive/folders/1cZ-Adu-8GTz-PptrzYLaX6K6O54AhfvG'
+const DRIVE_FOLDER_URL = 'https://drive.google.com/drive/folders/1RjMnjBB3igprt_Bx0qDGXOFZvbkbiYxH'
 
 const DEPARTAMENTOS = [
   { key: '',               nome: 'Todos',          Icon: LayoutGrid, cor: '#6b7280', desc: 'Todos os SOPs' },
@@ -75,8 +75,7 @@ export function AdministracaoSOP() {
     setSyncing(true)
     try {
       const folders = [
-        { folderId: '1I35yShyNBWgE6Co8WePG5SlrHAas5pyE', departamento: 'comercial' },
-        { folderId: '1kQ33VoPcKHX8CYWBCJT2e0XQfSVbs5iR', departamento: 'comercial' },
+        { folderId: '1RjMnjBB3igprt_Bx0qDGXOFZvbkbiYxH', departamento: 'comercial' },
       ]
       const r = await apiFetch('/api/sops/sync', {
         method: 'POST',
