@@ -58,7 +58,7 @@ export async function registarDespesasMensais(): Promise<void> {
     const cols = 6;
     const placeholders = rows.map((_, i) => {
       const o = i * cols;
-      return `($${o + 1}, $${o + 2}, $${o + 3}, $${o + 4}, $${o + 5}, $${o + 5}, 'Registado', $${o + 6}, NOW(), NOW())`;
+      return `($${o + 1}, $${o + 2}, $${o + 3}, $${o + 4}, $${o + 5}, 0, 'Registado', $${o + 6}, NOW(), NOW())`;
     }).join(", ");
     const params = rows.flatMap((r) => [r.id, r.movimento, r.categoria, r.data, r.valor, r.notas]);
     const { rowCount: criados } = await pool.query(
