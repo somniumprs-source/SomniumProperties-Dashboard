@@ -22,6 +22,7 @@ const FicheirosTab = lazy(() => import('./FicheirosTab.jsx').then(m => ({ defaul
 const ChecklistTab = lazy(() => import('./ChecklistTab.jsx').then(m => ({ default: m.ChecklistTab })))
 const VisitasTab = lazy(() => import('./VisitasTab.jsx').then(m => ({ default: m.VisitasTab })))
 const DocumentosInvestidorTab = lazy(() => import('./DocumentosInvestidorTab.jsx').then(m => ({ default: m.DocumentosInvestidorTab })))
+const DadosEmpresaInvestidorTab = lazy(() => import('./DadosEmpresaInvestidorTab.jsx').then(m => ({ default: m.DadosEmpresaInvestidorTab })))
 
 function TabFallback() {
   return (
@@ -843,6 +844,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
     { key: 'interacoes', label: `Interacções (${data?.interacoes?.length ?? 0})`, icon: '💬', show: type === 'Consultores' },
     { key: 'interacoes_inv', label: 'Chamadas', icon: '📞', show: type === 'Investidores' },
     { key: 'documentos', label: `Documentos (${data?.documentos?.length ?? 0})`, icon: '📎', show: type === 'Investidores' },
+    { key: 'dados_empresa', label: 'Dados Empresa', icon: '🏢', show: type === 'Investidores' },
     { key: 'relatorios', label: `Reuniões (${reunioes.length})`, icon: '📄', show: (type === 'Investidores' || type === 'Consultores') },
     { key: 'avaliacao', label: 'Avaliação', icon: '🎯', show: type === 'Investidores' },
   ].filter(t => t.show)
@@ -1005,6 +1007,12 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       ) : type === 'Investidores' && activeTab === 'documentos' ? (
         <div className="p-4 sm:p-6">
           <DocumentosInvestidorTab investidorId={data.id} documentos={data.documentos || []} onUpdate={loadData} />
+        </div>
+
+      /* Dados legais de empresa (investidor pessoa colectiva) */
+      ) : type === 'Investidores' && activeTab === 'dados_empresa' ? (
+        <div className="p-4 sm:p-6">
+          <DadosEmpresaInvestidorTab investidorId={data.id} dadosEmpresa={data.dados_empresa} onUpdate={loadData} />
         </div>
 
       /* Relatórios reuniões (investidores/consultores) */
