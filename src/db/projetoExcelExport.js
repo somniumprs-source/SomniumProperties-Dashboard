@@ -89,7 +89,7 @@ export async function exportProjetoExcel(negocioId) {
     ['Capital total', EUR(negocio.capital_total)],
     ['Custo real obra', EUR(negocio.custo_real_obra)],
     ['Nº investidores', negocio.n_investidores || invs.length],
-    ['Quota Somnium', `${negocio.quota_somnium || 0}%`],
+    ['Quota Somnium', EUR(negocio.quota_somnium)],
     ['Notas', negocio.notas || '—'],
     ['', ''],
     ['Exportado em', new Date().toLocaleString('pt-PT')],

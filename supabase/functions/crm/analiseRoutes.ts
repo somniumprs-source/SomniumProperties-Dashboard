@@ -45,7 +45,7 @@ const CALC_FIELDS = new Set([
 // disparada quando a ficha do imóvel é editada directamente — assim os dois
 // caminhos de recálculo usam sempre a mesma lógica de propagação para todas
 // as categorias de negócio, não só Wholesalling.
-export async function propagarParaImovel(imovelId: string, calculados: any, inputs: any) {
+export async function propagarParaImovel(imovelId: string, calculados: any, inputs: any, caepResult: any = null) {
   try {
     const vvr = parseFloat(inputs.vvr) || 0;
     const obraComIva = calculados.obra_com_iva || 0;
@@ -91,16 +91,18 @@ export async function propagarParaImovel(imovelId: string, calculados: any, inpu
         const pct = neg.comissao_pct || 2.5;
         lucroEstimado = Math.round(vvr * (pct / 100) * 100) / 100;
       } else if (neg.categoria === "CAEP") {
-        // CAEP: 2/3 da quota activa.
-        // Prioridade: perc_somnium definido na ficha CAEP da análise (fonte da verdade)
-        //          > comissao_pct já guardado no negocio
-        //          > default 40
-        const caepData = typeof inputs?.caep === "string" ? JSON.parse(inputs.caep || "null") : inputs?.caep;
-        const split = Number(caepData?.perc_somnium) || parseFloat(neg.comissao_pct) || 40;
-        const quotaActiva = lucroBruto * (split / 100);
-        lucroEstimado = Math.round(quotaActiva * (2 / 3) * 100) / 100;
+        // CAEP: quota Somnium = valor já calculado pelo calcCAEP (fonte única da
+        // verdade — respeita a base líquido/bruto e a % configurada na ficha CAEP).
+        // Fallback simples (lucroBruto × split%) só quando ainda não há CAEP configurado.
+        // Prioridade do split: perc_somnium da ficha CAEP > comissao_pct já guardado > default 40
+        const split = Number(caepResult?.perc_somnium) || parseFloat(neg.comissao_pct) || 40;
+        const quotaSomnium = caepResult
+          ? caepResult.quota_somnium
+          : Math.round(lucroBruto * (split / 100) * 100) / 100;
+        lucroEstimado = quotaSomnium;
+        await pool.query("UPDATE negocios SET quota_somnium = $1 WHERE id = $2", [quotaSomnium, neg.id]);
         // Sincroniza comissao_pct no negocio quando vem do perc_somnium da análise
-        if (Number(caepData?.perc_somnium) && parseFloat(neg.comissao_pct) !== split) {
+        if (Number(caepResult?.perc_somnium) && parseFloat(neg.comissao_pct) !== split) {
           await pool.query("UPDATE negocios SET comissao_pct = $1 WHERE id = $2", [split, neg.id]);
         }
       } else {
@@ -205,7 +207,7 @@ export function registerAnaliseRoutes(app: any) {
       await pool.query(`INSERT INTO analises (${cols.join(", ")}) VALUES (${vals.join(", ")})`, params);
 
       // Se activa, propagar para imóvel
-      if (activa) await propagarParaImovel(imovelId, calculados, inputs);
+      if (activa) await propagarParaImovel(imovelId, calculados, inputs, caepResult);
 
       // Audit log
       await pool.query(
@@ -327,7 +329,7 @@ export function registerAnaliseRoutes(app: any) {
       await pool.query(`UPDATE analises SET ${sets.join(", ")} WHERE id = $${params.length}`, params);
 
       // Se activa, propagar
-      if (existing.activa) await propagarParaImovel(existing.imovel_id, calculados, merged);
+      if (existing.activa) await propagarParaImovel(existing.imovel_id, calculados, merged, caepResult);
 
       // Sync ARU -> orçamento de obra: a "Zona ARU" é partilhada entre a análise
       // (campo aru) e o orçamento (zona_aru). Espelhar o flag e recalcular os
@@ -397,7 +399,7 @@ export function registerAnaliseRoutes(app: any) {
       await pool.query("UPDATE analises SET activa = true, updated_at = $1 WHERE id = $2", [new Date().toISOString(), c.req.param("id")]);
 
       // Propagar para imóvel
-      await propagarParaImovel(analise.imovel_id, analise, analise);
+      await propagarParaImovel(analise.imovel_id, analise, analise, analise.caep);
 
       return c.json({ ok: true, analise_id: c.req.param("id") });
     } catch (e) { return c.json({ error: (e as Error).message }, 500); }
