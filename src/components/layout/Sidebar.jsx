@@ -12,6 +12,8 @@ const nav = [
     label: 'Administração', Icon: ScrollText, area: 'administracao',
     children: [
       { to: '/',                         label: 'Dashboard',    Icon: LayoutDashboard, end: true, area: 'dashboard' },
+      { to: '/operacoes',                label: 'Operações',    Icon: Clock, badgeKey: 'tarefas', area: 'operacoes' },
+      { to: '/agenda',                   label: 'Agenda',       Icon: CalendarClock, area: 'operacoes' },
       { to: '/administracao/relatorios', label: 'Relatórios',   Icon: FileText, area: 'administracao' },
       { to: '/administracao/sop',        label: 'SOPs',         Icon: BookOpen, area: 'administracao' },
       { to: '/administracao/regiao',     label: 'Multi-Região', Icon: Map, area: 'administracao' },
@@ -20,13 +22,8 @@ const nav = [
   },
   { to: '/crm', label: 'Departamento Comercial', Icon: Database, badgeKey: 'crm', area: 'crm' },
   {
-    // Antes: "Tarefas" (que é a página Operacoes.jsx real) vivia dentro de
-    // Administração, e este grupo "Operações" só continha Projectos — o
-    // nome do menu não correspondia à página. Unificados no mesmo grupo.
-    label: 'Operações', Icon: Clock, area: 'operacoes',
+    label: 'Operações', Icon: Briefcase, area: 'projectos',
     children: [
-      { to: '/operacoes', label: 'Operações', Icon: Clock, badgeKey: 'tarefas', area: 'operacoes', end: true },
-      { to: '/agenda',    label: 'Agenda',    Icon: CalendarClock, area: 'operacoes' },
       { to: '/projectos', label: 'Projectos', Icon: Briefcase, area: 'projectos' },
     ],
   },
