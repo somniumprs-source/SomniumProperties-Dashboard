@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, CheckCircle2, Circle, Plus, Trash2, Upload, X,
-  Building2, Wallet, ImageIcon, FileText, Users, BarChart3, ChevronRight,
+  Wallet, ImageIcon, FileText, Users, BarChart3, ChevronRight,
   FileDown, AlertTriangle, Sparkles, RefreshCw, Home, Layers,
   History, MessageSquare, TrendingUp, FileSpreadsheet, Pencil, Eye,
   CalendarClock, ClipboardCheck,
@@ -20,6 +20,7 @@ import { PartilharAcesso } from '../components/PartilharAcesso.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { AiResumoCard, GanttFases, TabHistorico } from '../components/projeto/cards.jsx'
 import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
+import { calcOrcamentoObra } from '../db/orcamentoObraEngine.js'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const GOLD = '#C9A84C'
@@ -313,7 +314,7 @@ export function ProjectoDetalhe() {
             {tab === 'resumo' && <TabResumo resumo={resumo} fases={fasesFiltradas} fracaoSel={fracaoSel} fracoes={fracoes} />}
             {tab === 'fracoes' && <TabFracoes negocioId={id} fracoes={fracoes} onChange={load} readOnly={isReadOnly} fasesComuns={fases.filter(f => !f.fracao_id)} />}
             {tab === 'fases' && <TabFases fases={fasesFiltradas} onChange={load} readOnly={isReadOnly} negocioId={id} />}
-            {tab === 'orcamento' && <TabOrcamento imovel={imovel} />}
+            {tab === 'orcamento' && <TabOrcamento imovel={imovel} negocio={negocio} onChange={load} />}
             {tab === 'faturacao' && <TabFaturacao negocio={negocio} onChange={load} readOnly={isReadOnly} />}
             {tab === 'forecast' && <TabForecast negocioId={id} />}
             {tab === 'fotos' && <TabFotos negocioId={id} fases={fasesFiltradas} fotos={fotosFiltradas} onChange={load} readOnly={isReadOnly} fracaoSel={fracaoSel} />}
@@ -715,16 +716,168 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
 // ════════════════════════════════════════════════════════════════
 // TAB: ORÇAMENTO
 // ════════════════════════════════════════════════════════════════
-function TabOrcamento({ imovel }) {
+function TabOrcamento({ imovel, negocio, onChange }) {
   if (!imovel) return <p className="text-sm text-gray-500">Este projecto não tem imóvel associado. Liga um imóvel ao negócio para usar o orçamento detalhado de obra.</p>
+
+  const a = negocio?.analise_snapshot
   return (
-    <div className="space-y-3">
-      <p className="text-sm text-gray-600">O orçamento detalhado de obra (25 secções, IVA reduzido ARU, MO por dia, retenções IRS) está ligado ao imóvel <strong>{imovel.nome}</strong>.</p>
-      <div className="flex gap-2">
-        <Link to={`/crm?imovelId=${imovel.id}&tab=obra`}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-brand-dark text-brand-gold text-sm font-medium hover:bg-brand-dark-light">
-          <Building2 className="w-4 h-4" /> Abrir orçamento no CRM
-        </Link>
+    <div className="space-y-6">
+      {/* Análise financeira congelada no momento em que o projecto foi criado
+          (ou recuperada de raiz para projectos antigos) — cópia estática dos
+          inputs + calculados do Comercial, nunca recalculada automaticamente. */}
+      <div className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-900/50 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Análise Financeira</h3>
+          {a?._capturado_em && (
+            <span className="text-[10px] text-gray-400">Capturada em {new Date(a._capturado_em).toLocaleDateString('pt-PT')}</span>
+          )}
+        </div>
+        {!a ? (
+          <p className="text-sm text-gray-400">Sem análise financeira associada a este projecto.</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6">
+            <Field label="Capital necessário" value={EUR(a.capital_necessario)} accent />
+            <Field label="Lucro líquido" value={EUR(a.lucro_liquido)} accent />
+            <Field label="Retorno anualizado" value={a.retorno_anualizado != null ? `${a.retorno_anualizado}%` : '—'} />
+            <Field label="Valor de venda (VVR)" value={EUR(a.vvr)} />
+            <Field label="Custo de obra" value={EUR(a.obra)} />
+            <Field label="Break-even" value={EUR(a.break_even)} />
+          </div>
+        )}
+      </div>
+
+      <ImportarOrcamento negocio={negocio} onChange={onChange} />
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
+// Orçamento do projecto — duas formas de importar, sem links de saída:
+// 1) Importar orçamento: carregar um documento (PDF/Word/Excel/foto) de um
+//    orçamento de fornecedor.
+// 2) Importar orçamento interno: copiar o orçamento de obra (25 secções) já
+//    preenchido no Comercial para este projecto (cópia estática, "Reimportar"
+//    para sincronizar de novo).
+// ════════════════════════════════════════════════════════════════
+function ImportarOrcamento({ negocio, onChange }) {
+  const toast = useToast()
+  const [docs, setDocs] = useState([])
+  const [loadingDocs, setLoadingDocs] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [importando, setImportando] = useState(false)
+  const fileRef = useRef(null)
+
+  async function loadDocs() {
+    setLoadingDocs(true)
+    try {
+      const r = await apiFetch(`/api/crm/projetos/${negocio.id}/documentos`)
+      if (r.ok) setDocs((await r.json()).documentos.filter(d => d.tipo === 'orcamento_fornecedor'))
+    } finally { setLoadingDocs(false) }
+  }
+  useEffect(() => { if (negocio) loadDocs() }, [negocio?.id])
+
+  async function uploadDoc(e) {
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      files.forEach(f => fd.append('files', f))
+      fd.append('tipo', 'orcamento_fornecedor')
+      const token = await getToken().catch(() => null)
+      const r = await fetch(`/api/crm/projetos/${negocio.id}/documentos`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      })
+      if (!r.ok) throw new Error('Erro ao importar orçamento')
+      loadDocs()
+    } catch (err) { toast?.(err.message, 'error', 3500) }
+    finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  async function apagarDoc(id) {
+    if (!confirm('Apagar este documento?')) return
+    const r = await apiFetch(`/api/crm/projetos/documentos/${id}`, { method: 'DELETE' })
+    if (!r.ok) { toast?.('Erro ao apagar documento', 'error', 3500); return }
+    loadDocs()
+  }
+
+  async function importarInterno() {
+    setImportando(true)
+    try {
+      const r = await apiFetch(`/api/crm/projetos/${negocio.id}/orcamento-interno/importar`, { method: 'POST' })
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        throw new Error(err.error || 'Erro ao importar orçamento interno')
+      }
+      toast?.('Orçamento interno importado.', 'success', 3000)
+      onChange?.()
+    } catch (err) { toast?.(err.message, 'error', 4000) }
+    finally { setImportando(false) }
+  }
+
+  const snap = negocio?.orcamento_obra_snapshot
+  const calc = snap ? calcOrcamentoObra(snap) : null
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Orçamento</h3>
+        <div className="flex items-center gap-2">
+          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-xs font-medium cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800">
+            <Upload className="w-3.5 h-3.5" /> {uploading ? 'A carregar…' : 'Importar orçamento'}
+            <input ref={fileRef} type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp,.heic"
+              className="hidden" onChange={uploadDoc} disabled={uploading} />
+          </label>
+          <button onClick={importarInterno} disabled={importando}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-dark text-brand-gold text-xs font-medium hover:bg-brand-dark-light disabled:opacity-50">
+            <RefreshCw className={`w-3.5 h-3.5 ${importando ? 'animate-spin' : ''}`} />
+            {snap ? 'Reimportar orçamento interno' : 'Importar orçamento interno'}
+          </button>
+        </div>
+      </div>
+
+      {/* Orçamento interno importado — cópia estática do orçamento de obra do Comercial */}
+      {calc && (
+        <div className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-gray-600 dark:text-neutral-300">Orçamento interno de obra</p>
+            {snap._importado_em && (
+              <span className="text-[10px] text-gray-400">Importado em {new Date(snap._importado_em).toLocaleDateString('pt-PT')}</span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6">
+            <Field label="Total obra" value={EUR(calc.total_obra)} accent />
+            <Field label="IVA" value={EUR(calc.totais.iva_geral)} />
+            <Field label="Retenções IRS" value={EUR(calc.totais.retencoes_irs)} />
+            <Field label="Total a pagar" value={EUR(calc.totais.a_pagar)} accent />
+          </div>
+        </div>
+      )}
+
+      {/* Documentos de orçamento (propostas/orçamentos de fornecedores) */}
+      <div>
+        {loadingDocs ? (
+          <p className="text-sm text-gray-400 py-4 text-center">A carregar…</p>
+        ) : docs.length === 0 ? (
+          <p className="text-sm text-gray-400 py-4 text-center">Sem orçamentos de fornecedores importados. Aceita PDF, Word, Excel ou fotos.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {docs.map(d => (
+              <div key={d.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+                <button onClick={() => openDocument(d.url).catch(() => {})}
+                  className="flex items-center gap-2 text-xs text-gray-700 dark:text-neutral-300 hover:text-brand-gold truncate min-w-0">
+                  <FileText className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{d.nome}</span>
+                </button>
+                <button onClick={() => apagarDoc(d.id)} className="text-gray-400 hover:text-red-500 shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

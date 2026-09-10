@@ -346,9 +346,22 @@ async function autoCriarNegocioDeImovel(imovel, novoEstado) {
   const movimento = imovel.nome || `Projecto ${categoria}`
   const notas = `Auto-criado a partir do imóvel "${imovel.nome || imovel.id}" (estado: ${novoEstado})`
 
+  // Congela a análise financeira activa do imóvel (inputs + calculados) no
+  // momento da criação do projecto — fonte única para a "Análise Financeira"
+  // em Projetos, nunca recalculada automaticamente depois.
+  let analiseSnapshot = null
+  try {
+    const { rows: [analiseAtiva] } = await pool.query(
+      'SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1', [imovel.id]
+    )
+    if (analiseAtiva) {
+      analiseSnapshot = { ...analiseAtiva, ...calcAnalise(analiseAtiva), _capturado_em: new Date().toISOString() }
+    }
+  } catch (e) { console.error('[auto-negocio] snapshot análise:', e.message) }
+
   await pool.query(
-    `INSERT INTO negocios (id, movimento, categoria, fase, capital_total, lucro_estimado, imovel_id, data, notas, regiao)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    `INSERT INTO negocios (id, movimento, categoria, fase, capital_total, lucro_estimado, imovel_id, data, notas, regiao, analise_snapshot)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     [
       negocioId,
       movimento,
@@ -360,6 +373,7 @@ async function autoCriarNegocioDeImovel(imovel, novoEstado) {
       new Date().toISOString().slice(0, 10),
       notas,
       imovel.regiao ?? null,
+      analiseSnapshot ? JSON.stringify(analiseSnapshot) : null,
     ]
   )
 
@@ -5384,6 +5398,27 @@ router.post('/projetos/:negocioId/documentos', uploadRateLimit, uploadDoc.array(
     }
     res.status(201).json({ documentos: inserted })
   } catch (e) { console.error('[projetos/documentos] upload', e.message); res.status(500).json({ error: e.message }) }
+})
+
+// Importar orçamento interno: copia o orçamento de obra (25 secções) do
+// imóvel ligado para o projecto, como cópia estática — não liga ao original,
+// só sincroniza de novo se o utilizador pedir outra vez.
+router.post('/projetos/:negocioId/orcamento-interno/importar', async (req, res) => {
+  try {
+    const { rows: [negocio] } = await pool.query('SELECT imovel_id FROM negocios WHERE id = $1', [req.params.negocioId])
+    if (!negocio) return res.status(404).json({ error: 'Projecto não encontrado' })
+    if (!negocio.imovel_id) return res.status(400).json({ error: 'Projecto sem imóvel associado' })
+
+    const { rows: [orcamento] } = await pool.query('SELECT * FROM orcamentos_obra WHERE imovel_id = $1', [negocio.imovel_id])
+    if (!orcamento) return res.status(404).json({ error: 'Este imóvel ainda não tem orçamento interno preenchido no Comercial' })
+
+    const snapshot = { ...orcamento, _importado_em: new Date().toISOString() }
+    const { rows: [updated] } = await pool.query(
+      `UPDATE negocios SET orcamento_obra_snapshot = $1, updated_at = NOW()::TEXT WHERE id = $2 RETURNING orcamento_obra_snapshot`,
+      [JSON.stringify(snapshot), req.params.negocioId]
+    )
+    res.json({ orcamento_obra_snapshot: updated.orcamento_obra_snapshot })
+  } catch (e) { console.error('[orcamento-interno/importar]', e.message); res.status(500).json({ error: e.message }) }
 })
 
 router.put('/projetos/documentos/:docId', async (req, res) => {
