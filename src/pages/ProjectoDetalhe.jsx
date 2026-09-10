@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, CheckCircle2, Circle, Plus, Trash2, Upload, X,
-  Wallet, ImageIcon, FileText, Users, BarChart3, ChevronRight,
+  Wallet, FileText, Users, BarChart3, ChevronRight,
   FileDown, AlertTriangle, Sparkles, RefreshCw, Home, Layers,
   History, MessageSquare, TrendingUp, FileSpreadsheet, Pencil, Eye,
   CalendarClock, ClipboardCheck, Calculator,
@@ -60,16 +60,13 @@ const ESTADO_COR = {
 const TABS_BASE = [
   { key: 'resumo',       label: 'Resumo',           icon: BarChart3 },
   { key: 'fracoes',      label: 'Frações e Áreas',  icon: Layers, predioOnly: true },
-  { key: 'fases',        label: 'Fases & Tarefas',  icon: CheckCircle2 },
   { key: 'analise',      label: 'Análise Financeira', icon: Calculator },
-  { key: 'orcamento',    label: 'Orçamento',        icon: Wallet },
+  { key: 'obras',        label: 'Obras',            icon: Home },
   { key: 'faturacao',    label: 'Faturação',        icon: Wallet },
   { key: 'forecast',     label: 'Forecast',         icon: TrendingUp },
-  { key: 'fotos',        label: 'Fotos',            icon: ImageIcon },
   { key: 'documentos',   label: 'Documentos',       icon: FileText },
   { key: 'investidores', label: 'Investidores',     icon: Users },
   { key: 'reunioes',     label: 'Reuniões',         icon: CalendarClock },
-  { key: 'vistorias',    label: 'Vistoria Semanal', icon: ClipboardCheck, teamOnly: true },
   { key: 'historico',    label: 'Histórico',        icon: History },
 ]
 
@@ -154,7 +151,7 @@ export function ProjectoDetalhe() {
   const isPredio = negocio.tipo_projeto === 'predio'
   // Wholesalling é cedência de posição (sem obra): esconder as abas de obra.
   const isWholesalling = negocio.categoria === 'Wholesalling'
-  const TABS_OBRA_OCULTAS = new Set(['orcamento', 'forecast', 'fotos'])
+  const TABS_OBRA_OCULTAS = new Set(['forecast'])
   const TABS = TABS_BASE.filter(t =>
     (!t.predioOnly || isPredio) &&
     !(isWholesalling && TABS_OBRA_OCULTAS.has(t.key)) &&
@@ -315,16 +312,19 @@ export function ProjectoDetalhe() {
           <div className="p-4 sm:p-6">
             {tab === 'resumo' && <TabResumo resumo={resumo} fases={fasesFiltradas} fracaoSel={fracaoSel} fracoes={fracoes} />}
             {tab === 'fracoes' && <TabFracoes negocioId={id} fracoes={fracoes} onChange={load} readOnly={isReadOnly} fasesComuns={fases.filter(f => !f.fracao_id)} />}
-            {tab === 'fases' && <TabFases fases={fasesFiltradas} onChange={load} readOnly={isReadOnly} negocioId={id} />}
             {tab === 'analise' && <TabAnaliseFinanceira negocio={negocio} onChange={load} />}
-            {tab === 'orcamento' && <TabOrcamento imovel={imovel} negocio={negocio} onChange={load} />}
+            {tab === 'obras' && (
+              <TabObras
+                imovel={imovel} negocio={negocio} negocioId={id}
+                fases={fasesFiltradas} fotos={fotosFiltradas} fracaoSel={fracaoSel}
+                isWholesalling={isWholesalling} isReadOnly={isReadOnly} onChange={load}
+              />
+            )}
             {tab === 'faturacao' && <TabFaturacao negocio={negocio} onChange={load} readOnly={isReadOnly} />}
             {tab === 'forecast' && <TabForecast negocioId={id} />}
-            {tab === 'fotos' && <TabFotos negocioId={id} fases={fasesFiltradas} fotos={fotosFiltradas} onChange={load} readOnly={isReadOnly} fracaoSel={fracaoSel} />}
             {tab === 'documentos' && <TabDocumentos negocio={negocio} imovel={imovel} fases={fases} readOnly={isReadOnly} />}
             {tab === 'investidores' && <TabInvestidores negocio={negocio} readOnly={isReadOnly} />}
             {tab === 'reunioes' && <TabReunioes negocioId={id} readOnly={isReadOnly} />}
-            {tab === 'vistorias' && <TabVistorias negocioId={id} negocio={negocio} />}
             {tab === 'historico' && <TabHistorico negocioId={id} />}
           </div>
         </Card>
@@ -400,6 +400,47 @@ function Field({ label, value, accent }) {
     <div className="flex justify-between items-baseline py-1 border-b border-gray-100 dark:border-neutral-800 last:border-0">
       <span className="text-caption text-gray-500 dark:text-neutral-400">{label}</span>
       <span className={`text-sm font-medium ${accent ? 'text-gray-900 dark:text-neutral-100 font-mono' : 'text-gray-700 dark:text-neutral-300'}`}>{value || '—'}</span>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
+// TAB: OBRAS — agrupa tudo o que é acompanhamento de obra num único
+// separador com sub-abas: Orçamento, Fases da Obra, Fotos, Vistoria Semanal.
+// ════════════════════════════════════════════════════════════════
+function TabObras({ imovel, negocio, negocioId, fases, fotos, fracaoSel, isWholesalling, isReadOnly, onChange }) {
+  const SUBTABS_OBRAS = [
+    { key: 'orcamento', label: 'Orçamento',        hidden: isWholesalling },
+    { key: 'fases',     label: 'Fases da Obra' },
+    { key: 'fotos',     label: 'Fotos',            hidden: isWholesalling },
+    { key: 'vistorias', label: 'Vistoria Semanal', hidden: isReadOnly },
+  ].filter(t => !t.hidden)
+
+  const [sub, setSub] = useState(SUBTABS_OBRAS[0]?.key)
+  useEffect(() => {
+    if (!SUBTABS_OBRAS.some(t => t.key === sub)) setSub(SUBTABS_OBRAS[0]?.key)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isWholesalling, isReadOnly])
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-1 border-b border-gray-200 dark:border-neutral-800 -mt-1 overflow-x-auto">
+        {SUBTABS_OBRAS.map(t => (
+          <button key={t.key} onClick={() => setSub(t.key)}
+            className={`px-3 py-2 text-xs font-medium border-b-2 -mb-px whitespace-nowrap transition-colors ${
+              sub === t.key
+                ? 'border-brand-gold text-brand-dark dark:text-brand-gold'
+                : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-neutral-300'
+            }`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {sub === 'orcamento' && <TabOrcamento imovel={imovel} negocio={negocio} onChange={onChange} />}
+      {sub === 'fases' && <TabFases fases={fases} onChange={onChange} readOnly={isReadOnly} negocioId={negocioId} />}
+      {sub === 'fotos' && <TabFotos negocioId={negocioId} fases={fases} fotos={fotos} onChange={onChange} readOnly={isReadOnly} fracaoSel={fracaoSel} />}
+      {sub === 'vistorias' && <TabVistorias negocioId={negocioId} negocio={negocio} />}
     </div>
   )
 }
