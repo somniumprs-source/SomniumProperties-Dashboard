@@ -913,6 +913,105 @@ router.delete('/investidores/:id/documentos/:docId', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// ── Orçamentos recebidos de fornecedores/empreiteiros (sub-aba "Documentos
+// Orçamentos" da aba Obra) — distinto de orcamentos_obra (estimativa planeada) ──
+router.get('/imoveis/:id/orcamentos-obra', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM orcamentos_obra_recebidos WHERE imovel_id = $1 ORDER BY created_at DESC',
+      [req.params.id]
+    )
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+const OBRA_ORCAMENTOS_BUCKET = 'ObraOrcamentos'
+
+router.post('/imoveis/:id/orcamentos-obra', uploadRateLimit, uploadDocs.single('file'), async (req, res) => {
+  try {
+    const { fornecedor, valor, notas } = req.body
+    if (!fornecedor) return res.status(400).json({ error: 'fornecedor é obrigatório' })
+    const id = randomUUID()
+    const now = new Date().toISOString()
+
+    let storagePath = null
+    let driveFileId = null
+    if (req.file) {
+      if (!supabaseStorage) return res.status(503).json({ error: 'Storage indisponível (sem SUPABASE_SERVICE_KEY)' })
+      try {
+        const { data: buckets } = await supabaseStorage.storage.listBuckets()
+        if (!(buckets || []).some(b => b.name === OBRA_ORCAMENTOS_BUCKET)) {
+          await supabaseStorage.storage.createBucket(OBRA_ORCAMENTOS_BUCKET, { public: false })
+        }
+      } catch { /* segue; o upload devolve erro claro se faltar */ }
+
+      const safe = req.file.originalname.replace(/[^\w.\- ]+/g, '_')
+      storagePath = `${req.params.id}/${id}_${safe}`
+      const { error: upErr } = await supabaseStorage.storage
+        .from(OBRA_ORCAMENTOS_BUCKET)
+        .upload(storagePath, req.file.buffer, { contentType: req.file.mimetype, upsert: true })
+      if (upErr) return res.status(500).json({ error: `Upload falhou: ${upErr.message}` })
+
+      if (driveConfigured()) {
+        uploadDocToFolder(req.params.id, req.file.buffer, req.file.originalname, { tipo: 'orcamento_obra', mimeType: req.file.mimetype })
+          .then(fileId => {
+            if (fileId) { pool.query('UPDATE orcamentos_obra_recebidos SET drive_file_id = $1 WHERE id = $2', [fileId, id]).catch(() => {}); return }
+            alertarFalhaUploadDrive(`imóvel ${req.params.id}`, req.file.originalname)
+          })
+          .catch(e => {
+            console.error('[drive] espelho orçamento obra:', e.message)
+            alertarFalhaUploadDrive(`imóvel ${req.params.id}`, req.file.originalname)
+          })
+      }
+    }
+
+    await pool.query(
+      `INSERT INTO orcamentos_obra_recebidos (id, imovel_id, fornecedor, valor, notas, storage_path, drive_file_id, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [id, req.params.id, fornecedor, valor || null, notas || null, storagePath, driveFileId, now]
+    )
+    res.status(201).json({ id, imovel_id: req.params.id, fornecedor, valor: valor || null, notas, storage_path: storagePath, created_at: now })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/imoveis/:id/orcamentos-obra/:docId/ficheiro', async (req, res) => {
+  try {
+    const { rows: [doc] } = await pool.query(
+      'SELECT storage_path FROM orcamentos_obra_recebidos WHERE id = $1 AND imovel_id = $2',
+      [req.params.docId, req.params.id]
+    )
+    if (!doc) return res.status(404).json({ error: 'Não encontrado' })
+    if (!doc.storage_path) return res.status(404).json({ error: 'Este registo não tem ficheiro anexado' })
+    if (!supabaseStorage) return res.status(503).json({ error: 'Storage indisponível' })
+    const { data, error } = await supabaseStorage.storage
+      .from(OBRA_ORCAMENTOS_BUCKET)
+      .createSignedUrl(doc.storage_path, 300)
+    if (error || !data?.signedUrl) return res.status(500).json({ error: error?.message || 'Falha ao gerar link' })
+    res.redirect(data.signedUrl)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/imoveis/:id/orcamentos-obra/:docId', async (req, res) => {
+  try {
+    const { rows: [doc] } = await pool.query(
+      'SELECT storage_path, drive_file_id FROM orcamentos_obra_recebidos WHERE id = $1 AND imovel_id = $2',
+      [req.params.docId, req.params.id]
+    )
+    const { rowCount } = await pool.query(
+      'DELETE FROM orcamentos_obra_recebidos WHERE id = $1 AND imovel_id = $2',
+      [req.params.docId, req.params.id]
+    )
+    if (rowCount === 0) return res.status(404).json({ error: 'Não encontrado' })
+    if (doc?.storage_path && supabaseStorage) {
+      await supabaseStorage.storage.from(OBRA_ORCAMENTOS_BUCKET).remove([doc.storage_path]).catch(() => {})
+    }
+    if (doc?.drive_file_id) {
+      moverParaElementosApagados(doc.drive_file_id).catch(() => {})
+    }
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 // ── Endpoints específicos de consultores (ANTES do crudRoutes para evitar conflito com :id) ─
 
 // Find-or-create consultor (dedup por nome/contacto)

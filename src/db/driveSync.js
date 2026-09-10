@@ -78,6 +78,7 @@ const DOC_SUBFOLDER_MAP = {
   resumo_negociacao:              SUB_FICHAS,
   ficha_follow_up:                SUB_FICHAS,
   ficha_descarte:                 SUB_FICHAS,
+  orcamento_obra:                 SUB_FINANCEIRO,
 }
 
 // Pasta de topo para comprovativos de despesas sem imóvel associado.

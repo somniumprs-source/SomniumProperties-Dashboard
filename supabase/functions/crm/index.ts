@@ -1297,6 +1297,98 @@ app.delete("/investidores/:id/documentos/:docId", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
+
+
+// ── Orçamentos recebidos de fornecedores/empreiteiros (sub-aba "Documentos
+// Orçamentos" da aba Obra) — distinto de orcamentos_obra (estimativa planeada) ──
+app.get("/imoveis/:id/orcamentos-obra", async (c: any) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT * FROM orcamentos_obra_recebidos WHERE imovel_id = $1 ORDER BY created_at DESC",
+      [c.req.param("id")],
+    );
+    return c.json(rows);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+const OBRA_ORCAMENTOS_BUCKET = "ObraOrcamentos";
+
+app.post("/imoveis/:id/orcamentos-obra", async (c: any) => {
+  try {
+    const imovelId = c.req.param("id");
+    const form = await c.req.formData();
+    const fornecedor = form.get("fornecedor");
+    const valor = form.get("valor") || null;
+    const notas = form.get("notas") || null;
+    if (!fornecedor) return c.json({ error: "fornecedor é obrigatório" }, 400);
+
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    let storagePath: string | null = null;
+    let driveFileId: string | null = null;
+    const fRaw = form.get("file");
+    const file = fRaw instanceof File ? fRaw : null;
+    if (file) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const safe = file.name.replace(/[^\w.\- ]+/g, "_");
+      storagePath = `${imovelId}/${id}_${safe}`;
+      await uploadPrivate(OBRA_ORCAMENTOS_BUCKET, storagePath, bytes, file.type || "application/octet-stream");
+
+      if (driveConfigured()) {
+        uploadDocToFolder(imovelId, bytes, file.name, { tipo: "orcamento_obra", mimeType: file.type || "application/octet-stream" })
+          .then((fileId: string | null) => {
+            if (fileId) { pool.query("UPDATE orcamentos_obra_recebidos SET drive_file_id = $1 WHERE id = $2", [fileId, id]).catch(() => {}); return; }
+            alertarFalhaUploadDrive(`imóvel ${imovelId}`, file.name);
+          })
+          .catch((e: any) => {
+            console.error("[drive] espelho orçamento obra:", e.message);
+            alertarFalhaUploadDrive(`imóvel ${imovelId}`, file.name);
+          });
+      }
+    }
+
+    await pool.query(
+      `INSERT INTO orcamentos_obra_recebidos (id, imovel_id, fornecedor, valor, notas, storage_path, drive_file_id, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [id, imovelId, fornecedor, valor, notas, storagePath, driveFileId, now],
+    );
+    return c.json({ id, imovel_id: imovelId, fornecedor, valor, notas, storage_path: storagePath, created_at: now }, 201);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.get("/imoveis/:id/orcamentos-obra/:docId/ficheiro", async (c: any) => {
+  try {
+    const { rows: [doc] } = await pool.query(
+      "SELECT storage_path FROM orcamentos_obra_recebidos WHERE id = $1 AND imovel_id = $2",
+      [c.req.param("docId"), c.req.param("id")],
+    );
+    if (!doc) return c.json({ error: "Não encontrado" }, 404);
+    if (!doc.storage_path) return c.json({ error: "Este registo não tem ficheiro anexado" }, 404);
+    if (!supabase) return c.json({ error: "Storage indisponível" }, 503);
+    const { data, error } = await supabase.storage.from(OBRA_ORCAMENTOS_BUCKET).createSignedUrl(doc.storage_path, 300);
+    if (error || !data?.signedUrl) return c.json({ error: error?.message || "Falha ao gerar link" }, 500);
+    return c.redirect(data.signedUrl);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.delete("/imoveis/:id/orcamentos-obra/:docId", async (c: any) => {
+  try {
+    const { rows: [doc] } = await pool.query(
+      "SELECT storage_path, drive_file_id FROM orcamentos_obra_recebidos WHERE id = $1 AND imovel_id = $2",
+      [c.req.param("docId"), c.req.param("id")],
+    );
+    const { rowCount } = await pool.query(
+      "DELETE FROM orcamentos_obra_recebidos WHERE id = $1 AND imovel_id = $2",
+      [c.req.param("docId"), c.req.param("id")],
+    );
+    if (rowCount === 0) return c.json({ error: "Não encontrado" }, 404);
+    if (doc?.storage_path) await removeFromStorage(OBRA_ORCAMENTOS_BUCKET, doc.storage_path);
+    if (doc?.drive_file_id) moverParaElementosApagados(doc.drive_file_id).catch(() => {});
+    return c.json({ ok: true });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
 // ── Endpoints especificos de consultores (ANTES do crudRoutes) ──
 
 // Find-or-create consultor (dedup por nome/contacto) — port de routes.js 698-727

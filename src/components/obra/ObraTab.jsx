@@ -11,6 +11,7 @@ import { SeccaoCard } from './SeccaoCard.jsx'
 import { SECCOES, TIPOS_OBRA } from './seccoesConfig.js'
 import { calcOrcamentoObra, validarOrcamento } from '../../db/orcamentoObraEngine.js'
 import { openDocument } from '../../lib/api.js'
+import { DocumentosOrcamentosTab } from './DocumentosOrcamentosTab.jsx'
 
 const GOLD = '#C9A84C'
 const BLACK = '#0d0d0d'
@@ -27,12 +28,49 @@ export function ObraTab({ imovelId, imovelNome }) {
   const avisos = useMemo(() => validarOrcamento(orcamento), [orcamento])
 
   const [showSettings, setShowSettings] = useState(false)
+  const [activeSubTab, setActiveSubTab] = useState('orcamento')
+
+  const SUBTABS_OBRA = [
+    { key: 'orcamento', label: 'Orçamento' },
+    { key: 'documentos', label: 'Documentos Orçamentos' },
+  ]
+  const subTabSwitcher = (
+    <div className="flex items-center gap-1 border-b border-gray-200 bg-white px-4 sm:px-6 pt-2">
+      {SUBTABS_OBRA.map(t => (
+        <button
+          key={t.key}
+          onClick={() => setActiveSubTab(t.key)}
+          className={`px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${
+            activeSubTab === t.key
+              ? 'border-indigo-600 text-indigo-700'
+              : 'border-transparent text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  )
+
+  if (activeSubTab === 'documentos') {
+    return (
+      <div className="bg-gray-50 min-h-full">
+        {subTabSwitcher}
+        <div className="p-4 sm:p-6">
+          <DocumentosOrcamentosTab imovelId={imovelId} />
+        </div>
+      </div>
+    )
+  }
 
   if (loading) {
     return (
-      <div className="py-12 text-center">
-        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-3 text-gray-400" />
-        <p className="text-sm text-gray-400">A carregar orçamento...</p>
+      <div className="bg-gray-50 min-h-full">
+        {subTabSwitcher}
+        <div className="py-12 text-center">
+          <Loader2 className="w-6 h-6 animate-spin mx-auto mb-3 text-gray-400" />
+          <p className="text-sm text-gray-400">A carregar orçamento...</p>
+        </div>
       </div>
     )
   }
@@ -76,6 +114,7 @@ export function ObraTab({ imovelId, imovelNome }) {
 
   return (
     <div className="bg-gray-50 min-h-full">
+      {subTabSwitcher}
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 sticky top-0 z-10">
         <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
