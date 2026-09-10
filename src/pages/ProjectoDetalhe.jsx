@@ -5,7 +5,7 @@ import {
   Wallet, ImageIcon, FileText, Users, BarChart3, ChevronRight,
   FileDown, AlertTriangle, Sparkles, RefreshCw, Home, Layers,
   History, MessageSquare, TrendingUp, FileSpreadsheet, Pencil, Eye,
-  CalendarClock, ClipboardCheck,
+  CalendarClock, ClipboardCheck, Calculator,
 } from 'lucide-react'
 import { ProjectoForm } from './Projectos.jsx'
 import { apiFetch, getToken, openDocument } from '../lib/api.js'
@@ -61,6 +61,7 @@ const TABS_BASE = [
   { key: 'resumo',       label: 'Resumo',           icon: BarChart3 },
   { key: 'fracoes',      label: 'Frações e Áreas',  icon: Layers, predioOnly: true },
   { key: 'fases',        label: 'Fases & Tarefas',  icon: CheckCircle2 },
+  { key: 'analise',      label: 'Análise Financeira', icon: Calculator },
   { key: 'orcamento',    label: 'Orçamento',        icon: Wallet },
   { key: 'faturacao',    label: 'Faturação',        icon: Wallet },
   { key: 'forecast',     label: 'Forecast',         icon: TrendingUp },
@@ -315,6 +316,7 @@ export function ProjectoDetalhe() {
             {tab === 'resumo' && <TabResumo resumo={resumo} fases={fasesFiltradas} fracaoSel={fracaoSel} fracoes={fracoes} />}
             {tab === 'fracoes' && <TabFracoes negocioId={id} fracoes={fracoes} onChange={load} readOnly={isReadOnly} fasesComuns={fases.filter(f => !f.fracao_id)} />}
             {tab === 'fases' && <TabFases fases={fasesFiltradas} onChange={load} readOnly={isReadOnly} negocioId={id} />}
+            {tab === 'analise' && <TabAnaliseFinanceira negocio={negocio} onChange={load} />}
             {tab === 'orcamento' && <TabOrcamento imovel={imovel} negocio={negocio} onChange={load} />}
             {tab === 'faturacao' && <TabFaturacao negocio={negocio} onChange={load} readOnly={isReadOnly} />}
             {tab === 'forecast' && <TabForecast negocioId={id} />}
@@ -719,35 +721,140 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
 // ════════════════════════════════════════════════════════════════
 function TabOrcamento({ imovel, negocio, onChange }) {
   if (!imovel) return <p className="text-sm text-gray-500">Este projecto não tem imóvel associado. Liga um imóvel ao negócio para usar o orçamento detalhado de obra.</p>
+  return <ImportarOrcamento imovel={imovel} negocio={negocio} onChange={onChange} />
+}
 
+// ════════════════════════════════════════════════════════════════
+// TAB: ANÁLISE FINANCEIRA — cópia congelada (inputs + calculados) da análise
+// activa do imóvel no momento em que o projecto foi criado. Não é editável
+// aqui (isso faz-se no Comercial); "Reimportar" busca a versão actual.
+// ════════════════════════════════════════════════════════════════
+function TabAnaliseFinanceira({ negocio, onChange }) {
+  const toast = useToast()
+  const [importando, setImportando] = useState(false)
   const a = negocio?.analise_snapshot
+
+  async function reimportar() {
+    setImportando(true)
+    try {
+      const r = await apiFetch(`/api/crm/projetos/${negocio.id}/analise/importar`, { method: 'POST' })
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        throw new Error(err.error || 'Erro ao importar análise financeira')
+      }
+      toast?.('Análise financeira importada.', 'success', 3000)
+      onChange?.()
+    } catch (err) { toast?.(err.message, 'error', 4000) }
+    finally { setImportando(false) }
+  }
+
   return (
-    <div className="space-y-6">
-      {/* Análise financeira congelada no momento em que o projecto foi criado
-          (ou recuperada de raiz para projectos antigos) — cópia estática dos
-          inputs + calculados do Comercial, nunca recalculada automaticamente. */}
-      <div className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-900/50 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Análise Financeira</h3>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-xs text-gray-400">Cópia congelada da análise do Comercial — não editável aqui.</p>
           {a?._capturado_em && (
-            <span className="text-[10px] text-gray-400">Capturada em {new Date(a._capturado_em).toLocaleDateString('pt-PT')}</span>
+            <p className="text-[10px] text-gray-400 mt-0.5">Capturada em {new Date(a._capturado_em).toLocaleString('pt-PT')}</p>
           )}
         </div>
-        {!a ? (
-          <p className="text-sm text-gray-400">Sem análise financeira associada a este projecto.</p>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6">
-            <Field label="Capital necessário" value={EUR(a.capital_necessario)} accent />
-            <Field label="Lucro líquido" value={EUR(a.lucro_liquido)} accent />
-            <Field label="Retorno anualizado" value={a.retorno_anualizado != null ? `${a.retorno_anualizado}%` : '—'} />
-            <Field label="Valor de venda (VVR)" value={EUR(a.vvr)} />
-            <Field label="Custo de obra" value={EUR(a.obra)} />
-            <Field label="Break-even" value={EUR(a.break_even)} />
-          </div>
-        )}
+        <button onClick={reimportar} disabled={importando || !negocio}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-dark text-brand-gold text-xs font-medium hover:bg-brand-dark-light disabled:opacity-50 shrink-0">
+          <RefreshCw className={`w-3.5 h-3.5 ${importando ? 'animate-spin' : ''}`} />
+          {a ? 'Reimportar análise' : 'Importar análise'}
+        </button>
       </div>
 
-      <ImportarOrcamento imovel={imovel} negocio={negocio} onChange={onChange} />
+      {!a ? (
+        <p className="text-sm text-gray-400 py-8 text-center">Sem análise financeira associada a este projecto.</p>
+      ) : (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-900/50 p-4">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Resultados</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6">
+              <Field label="Capital necessário" value={EUR(a.capital_necessario)} accent />
+              <Field label="Lucro bruto" value={EUR(a.lucro_bruto)} />
+              <Field label="Lucro líquido" value={EUR(a.lucro_liquido)} accent />
+              <Field label="Break-even (VVR)" value={EUR(a.break_even)} />
+              <Field label="Retorno total" value={a.retorno_total != null ? `${a.retorno_total}%` : '—'} />
+              <Field label="Retorno anualizado" value={a.retorno_anualizado != null ? `${a.retorno_anualizado}%` : '—'} accent />
+              <Field label="Cash-on-cash" value={a.cash_on_cash != null ? `${a.cash_on_cash}%` : '—'} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <AnaliseSeccao titulo="A. Aquisição">
+              <Field label="Compra" value={EUR(a.compra)} />
+              <Field label="VPT" value={EUR(a.vpt)} />
+              <Field label="Finalidade" value={a.finalidade} />
+              <Field label="Escritura" value={EUR(a.escritura)} />
+              <Field label="CPCV" value={EUR(a.cpcv_compra)} />
+              <Field label="Due diligence" value={EUR(a.due_diligence)} />
+              <Field label="IMT" value={EUR(a.imt)} />
+              <Field label="Imposto de selo" value={EUR(a.imposto_selo)} />
+              <Field label="Total aquisição" value={EUR(a.total_aquisicao)} accent />
+            </AnaliseSeccao>
+
+            <AnaliseSeccao titulo="B. Financiamento">
+              <Field label="% financiamento" value={a.perc_financiamento != null ? `${a.perc_financiamento}%` : '—'} />
+              <Field label="Prazo" value={a.prazo_anos != null ? `${a.prazo_anos} anos` : '—'} />
+              <Field label="TAN" value={a.tan != null ? `${a.tan}%` : '—'} />
+              <Field label="Tipo de taxa" value={a.tipo_taxa} />
+              <Field label="Comissões banco" value={EUR(a.comissoes_banco)} />
+              <Field label="Valor financiado" value={EUR(a.valor_financiado)} />
+              <Field label="Prestação mensal" value={EUR(a.prestacao_mensal)} accent />
+            </AnaliseSeccao>
+
+            <AnaliseSeccao titulo="C. Obra">
+              <Field label="Modo" value={a.modo_obra} />
+              <Field label="Custo de obra" value={EUR(a.obra)} accent />
+              <Field label="PMO" value={a.pmo_perc != null ? `${a.pmo_perc}%` : '—'} />
+              <Field label="Zona ARU" value={a.aru ? 'Sim' : 'Não'} />
+              <Field label="Ampliação" value={a.ampliacao ? 'Sim' : 'Não'} />
+              <Field label="Licenciamento" value={EUR(a.licenciamento)} />
+              <Field label="IVA obra" value={EUR(a.iva_obra)} />
+              <Field label="Obra c/ IVA" value={EUR(a.obra_com_iva)} />
+            </AnaliseSeccao>
+
+            <AnaliseSeccao titulo="D. Detenção">
+              <Field label="Meses" value={a.meses} />
+              <Field label="Seguro/mês" value={EUR(a.seguro_mensal)} />
+              <Field label="Condomínio/mês" value={EUR(a.condominio_mensal)} />
+              <Field label="Utilidades/mês" value={EUR(a.utilidades_mensal)} />
+              <Field label="Nº tranches" value={a.n_tranches} />
+              <Field label="Taxa IMI" value={a.taxa_imi != null ? `${a.taxa_imi}%` : '—'} />
+              <Field label="Total detenção" value={EUR(a.total_detencao)} accent />
+            </AnaliseSeccao>
+
+            <AnaliseSeccao titulo="E. Venda">
+              <Field label="VVR" value={EUR(a.vvr)} accent />
+              <Field label="Comissão" value={a.comissao_perc != null ? `${a.comissao_perc}%` : '—'} />
+              <Field label="CPCV venda" value={EUR(a.cpcv_venda)} />
+              <Field label="Certificado energético" value={EUR(a.cert_energetico)} />
+              <Field label="Home staging" value={EUR(a.home_staging)} />
+              <Field label="Outros" value={EUR(a.outros_venda)} />
+              <Field label="Comissão c/ IVA" value={EUR(a.comissao_com_iva)} />
+              <Field label="Total venda" value={EUR(a.total_venda)} accent />
+            </AnaliseSeccao>
+
+            <AnaliseSeccao titulo="F. Fiscalidade">
+              <Field label="Regime fiscal" value={a.regime_fiscal} />
+              <Field label="Derrama" value={a.derrama_perc != null ? `${a.derrama_perc}%` : '—'} />
+              <Field label="% dividendos" value={a.perc_dividendos != null ? `${a.perc_dividendos}%` : '—'} />
+              <Field label="Impostos" value={EUR(a.impostos)} accent />
+              <Field label="Retenção dividendos" value={EUR(a.retencao_dividendos)} />
+            </AnaliseSeccao>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AnaliseSeccao({ titulo, children }) {
+  return (
+    <div className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4">
+      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{titulo}</h3>
+      {children}
     </div>
   )
 }

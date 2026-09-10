@@ -5421,6 +5421,30 @@ router.post('/projetos/:negocioId/orcamento-interno/importar', async (req, res) 
   } catch (e) { console.error('[orcamento-interno/importar]', e.message); res.status(500).json({ error: e.message }) }
 })
 
+// Importar/reimportar análise financeira: congela a análise activa do imóvel
+// ligado (inputs + calculados) no projecto — mesma lógica de
+// autoCriarNegocioDeImovel, disponível a pedido para reimportar depois de
+// editar a análise no Comercial.
+router.post('/projetos/:negocioId/analise/importar', async (req, res) => {
+  try {
+    const { rows: [negocio] } = await pool.query('SELECT imovel_id FROM negocios WHERE id = $1', [req.params.negocioId])
+    if (!negocio) return res.status(404).json({ error: 'Projecto não encontrado' })
+    if (!negocio.imovel_id) return res.status(400).json({ error: 'Projecto sem imóvel associado' })
+
+    const { rows: [analiseAtiva] } = await pool.query(
+      'SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1', [negocio.imovel_id]
+    )
+    if (!analiseAtiva) return res.status(404).json({ error: 'Este imóvel não tem nenhuma análise financeira activa no Comercial' })
+
+    const snapshot = { ...analiseAtiva, ...calcAnalise(analiseAtiva), _capturado_em: new Date().toISOString() }
+    const { rows: [updated] } = await pool.query(
+      `UPDATE negocios SET analise_snapshot = $1, updated_at = NOW()::TEXT WHERE id = $2 RETURNING analise_snapshot`,
+      [JSON.stringify(snapshot), req.params.negocioId]
+    )
+    res.json({ analise_snapshot: updated.analise_snapshot })
+  } catch (e) { console.error('[analise/importar]', e.message); res.status(500).json({ error: e.message }) }
+})
+
 router.put('/projetos/documentos/:docId', async (req, res) => {
   try {
     const allowed = ['fase_id', 'tipo', 'nome', 'notas']
