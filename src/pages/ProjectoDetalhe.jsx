@@ -146,7 +146,7 @@ export function ProjectoDetalhe() {
   if (loading) return <><Header title="Projecto" subtitle="A carregar..." /><div className="p-8 text-center text-gray-400">A carregar…</div></>
   if (error || !resumo) return <><Header title="Projecto" subtitle="Erro" /><div className="p-8 text-center text-red-500">{error || 'Sem dados'}</div></>
 
-  const { negocio, imovel, percGlobal, custoReal, orcAlocado, faseAtual } = resumo
+  const { negocio, imovel, analise, percGlobal, custoReal, orcAlocado, faseAtual } = resumo
   const semFases = fases.length === 0
   const isPredio = negocio.tipo_projeto === 'predio'
   // Wholesalling é cedência de posição (sem obra): esconder as abas de obra.
@@ -312,7 +312,7 @@ export function ProjectoDetalhe() {
           <div className="p-4 sm:p-6">
             {tab === 'resumo' && <TabResumo resumo={resumo} fases={fasesFiltradas} fracaoSel={fracaoSel} fracoes={fracoes} />}
             {tab === 'fracoes' && <TabFracoes negocioId={id} fracoes={fracoes} onChange={load} readOnly={isReadOnly} fasesComuns={fases.filter(f => !f.fracao_id)} />}
-            {tab === 'analise' && <TabAnaliseFinanceira negocio={negocio} onChange={load} />}
+            {tab === 'analise' && <TabAnaliseFinanceira analise={analise} />}
             {tab === 'obras' && (
               <TabObras
                 imovel={imovel} negocio={negocio} negocioId={id}
@@ -410,8 +410,8 @@ function Field({ label, value, accent }) {
 // ════════════════════════════════════════════════════════════════
 function TabObras({ imovel, negocio, negocioId, fases, fotos, fracaoSel, isWholesalling, isReadOnly, onChange }) {
   const SUBTABS_OBRAS = [
-    { key: 'orcamento', label: 'Orçamento',        hidden: isWholesalling },
     { key: 'fases',     label: 'Fases da Obra' },
+    { key: 'orcamento', label: 'Orçamento',        hidden: isWholesalling },
     { key: 'fotos',     label: 'Fotos',            hidden: isWholesalling },
     { key: 'vistorias', label: 'Vistoria Semanal', hidden: isReadOnly },
   ].filter(t => !t.hidden)
@@ -766,44 +766,15 @@ function TabOrcamento({ imovel, negocio, onChange }) {
 }
 
 // ════════════════════════════════════════════════════════════════
-// TAB: ANÁLISE FINANCEIRA — cópia congelada (inputs + calculados) da análise
-// activa do imóvel no momento em que o projecto foi criado. Não é editável
-// aqui (isso faz-se no Comercial); "Reimportar" busca a versão actual.
+// TAB: ANÁLISE FINANCEIRA — a mesma análise activa do imóvel no Comercial,
+// lida ao vivo (não é cópia nem fica desatualizada): acompanha o imóvel de
+// forma contínua ao longo da evolução de lead a projecto real. Edita-se no
+// Comercial; aqui é só leitura.
 // ════════════════════════════════════════════════════════════════
-function TabAnaliseFinanceira({ negocio, onChange }) {
-  const toast = useToast()
-  const [importando, setImportando] = useState(false)
-  const a = negocio?.analise_snapshot
-
-  async function reimportar() {
-    setImportando(true)
-    try {
-      const r = await apiFetch(`/api/crm/projetos/${negocio.id}/analise/importar`, { method: 'POST' })
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({}))
-        throw new Error(err.error || 'Erro ao importar análise financeira')
-      }
-      toast?.('Análise financeira importada.', 'success', 3000)
-      onChange?.()
-    } catch (err) { toast?.(err.message, 'error', 4000) }
-    finally { setImportando(false) }
-  }
-
+function TabAnaliseFinanceira({ analise: a }) {
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-xs text-gray-400">Cópia congelada da análise do Comercial — não editável aqui.</p>
-          {a?._capturado_em && (
-            <p className="text-[10px] text-gray-400 mt-0.5">Capturada em {new Date(a._capturado_em).toLocaleString('pt-PT')}</p>
-          )}
-        </div>
-        <button onClick={reimportar} disabled={importando || !negocio}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-dark text-brand-gold text-xs font-medium hover:bg-brand-dark-light disabled:opacity-50 shrink-0">
-          <RefreshCw className={`w-3.5 h-3.5 ${importando ? 'animate-spin' : ''}`} />
-          {a ? 'Reimportar análise' : 'Importar análise'}
-        </button>
-      </div>
+      <p className="text-xs text-gray-400">Análise activa do imóvel no Comercial, em tempo real — para editar, faz no Comercial.</p>
 
       {!a ? (
         <p className="text-sm text-gray-400 py-8 text-center">Sem análise financeira associada a este projecto.</p>
@@ -906,14 +877,17 @@ function AnaliseSeccao({ titulo, children }) {
 //    empreiteiros (fornecedor, valor, ficheiro) — DocumentosOrcamentosTab,
 //    ligado ao imóvel (mesma tabela/armazenamento usados no Comercial).
 // 2) Importar orçamento interno: copiar o orçamento de obra (25 secções) já
-//    preenchido no Comercial para este projecto (cópia estática, "Reimportar"
-//    para sincronizar de novo).
+//    preenchido no Comercial (meramente ilustrativo, feito pelo sócio) para
+//    este projecto — a partir daqui É este que conta como o orçamento real
+//    do negócio. "Reimportar" pede confirmação por substituir esse valor.
 // ════════════════════════════════════════════════════════════════
 function ImportarOrcamento({ imovel, negocio, onChange }) {
   const toast = useToast()
   const [importando, setImportando] = useState(false)
+  const jaTemOrcamento = !!negocio?.orcamento_obra_snapshot
 
   async function importarInterno() {
+    if (jaTemOrcamento && !confirm('Já existe um orçamento importado, usado como o orçamento real do projecto. Substituir pelos valores actuais do Comercial?')) return
     setImportando(true)
     try {
       const r = await apiFetch(`/api/crm/projetos/${negocio.id}/orcamento-interno/importar`, { method: 'POST' })

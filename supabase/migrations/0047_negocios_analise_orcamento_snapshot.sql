@@ -1,6 +1,7 @@
--- Cópia congelada (inputs + calculados) da análise financeira activa do imóvel
--- no momento em que o negócio/projecto é criado — nunca recalculada depois.
--- E cópia do orçamento de obra, só actualizada quando o utilizador pede
--- "Importar orçamento interno" em Projetos.
-ALTER TABLE negocios ADD COLUMN IF NOT EXISTS analise_snapshot JSONB;
+-- Cópia estática do orçamento de obra (orcamentos_obra) — o do Comercial é
+-- meramente ilustrativo; esta cópia, importada a pedido em Projetos
+-- ("Importar orçamento interno"), é que conta como o orçamento real do
+-- projecto. A análise financeira não tem cópia: é lida ao vivo da análise
+-- activa do imóvel (GET /projetos/:id/resumo), contínua ao longo da
+-- evolução do imóvel de lead a projecto.
 ALTER TABLE negocios ADD COLUMN IF NOT EXISTS orcamento_obra_snapshot JSONB;
