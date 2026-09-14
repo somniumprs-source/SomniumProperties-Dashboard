@@ -5712,18 +5712,18 @@ app.get("/projetos/:negocioId/despesas", async (c: any) => {
 app.post("/projetos/:negocioId/despesas", async (c: any) => {
   try {
     const negocioId = c.req.param("negocioId");
-    const { fase_id, fracao_id, movimento, valor, data, categoria, fornecedor, notas } = await c.req.json().catch(() => ({}));
+    const { fase_id, fracao_id, movimento, valor, data, categoria, fornecedor, notas, pago } = await c.req.json().catch(() => ({}));
     if (!movimento?.trim()) return c.json({ error: "movimento obrigatório" }, 400);
     const id = crypto.randomUUID();
     // Anexo de comprovativo passa sempre por despesas.documentos — ver
     // POST /projetos/despesas/:despesaId/comprovativo, chamado depois de criar
     // a despesa. Nunca escrever comprovativo_url/comprovativo_nome aqui.
     const { rows } = await pool.query(
-      `INSERT INTO despesas (id, movimento, categoria, custo_mensal, custo_anual, timing, data, notas, negocio_id, fase_id, fracao_id, fornecedor)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+      `INSERT INTO despesas (id, movimento, categoria, custo_mensal, custo_anual, timing, data, notas, negocio_id, fase_id, fracao_id, fornecedor, pago, data_pagamento)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
       [id, movimento.trim(), categoria || "Obra", Number(valor) || 0, 0, "Único", data || null, notas || null,
         negocioId, fase_id || null, fracao_id || null,
-        fornecedor || null],
+        fornecedor || null, !!pago, pago ? new Date().toISOString().slice(0, 10) : null],
     );
     if (fase_id) {
       await pool.query(
@@ -5739,6 +5739,39 @@ app.post("/projetos/:negocioId/despesas", async (c: any) => {
       user,
     });
     return c.json(rows[0], 201);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── PUT despesa/factura — aba "Faturas" do Projecto (editar valor/estado de pagamento) ──
+app.put("/projetos/despesas/:despesaId", async (c: any) => {
+  try {
+    const despesaId = c.req.param("despesaId");
+    const despesa = await Despesas.getById(despesaId);
+    if (!despesa) return c.json({ error: "Despesa não encontrada" }, 404);
+    const { movimento, fornecedor, valor, data, categoria, pago, data_pagamento } = await c.req.json().catch(() => ({}));
+    const novoPago = pago !== undefined ? !!pago : despesa.pago;
+    const campos = {
+      movimento: movimento !== undefined ? movimento.trim() : despesa.movimento,
+      fornecedor: fornecedor !== undefined ? (fornecedor || null) : despesa.fornecedor,
+      custo_mensal: valor !== undefined ? (Number(valor) || 0) : despesa.custo_mensal,
+      data: data !== undefined ? (data || null) : despesa.data,
+      categoria: categoria !== undefined ? categoria : despesa.categoria,
+      pago: novoPago,
+      data_pagamento: data_pagamento !== undefined
+        ? (data_pagamento || null)
+        : (novoPago && !despesa.data_pagamento ? new Date().toISOString().slice(0, 10) : (novoPago ? despesa.data_pagamento : null)),
+    };
+    const { rows } = await pool.query(
+      `UPDATE despesas SET movimento = $1, fornecedor = $2, custo_mensal = $3, data = $4, categoria = $5, pago = $6, data_pagamento = $7, updated_at = NOW() WHERE id = $8 RETURNING *`,
+      [campos.movimento, campos.fornecedor, campos.custo_mensal, campos.data, campos.categoria, campos.pago, campos.data_pagamento, despesaId],
+    );
+    if (despesa.fase_id) {
+      await pool.query(
+        `UPDATE projeto_fases SET custo_real = (SELECT COALESCE(SUM(custo_mensal), 0) FROM despesas WHERE fase_id = $1), updated_at = NOW() WHERE id = $1`,
+        [despesa.fase_id],
+      );
+    }
+    return c.json(rows[0]);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 

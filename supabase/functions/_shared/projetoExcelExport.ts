@@ -146,27 +146,33 @@ export async function exportProjetoExcel(negocioId) {
     ])
   }
 
-  // ── Sheet 4: Despesas ──
+  // ── Sheet 4: Despesas / Faturas ──
   const wsDesp = wb.addWorksheet('Despesas')
   wsDesp.columns = [
-    { width: 14 }, { width: 30 }, { width: 14 }, { width: 14 }, { width: 25 }, { width: 30 }, { width: 30 },
+    { width: 14 }, { width: 30 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 25 }, { width: 30 }, { width: 30 },
   ]
-  tabelaHeader(wsDesp, 1, ['Data', 'Descrição', 'Valor (€)', 'Categoria', 'Fornecedor', 'Fase', 'Comprovativo'])
-  let totalDesp = 0
+  tabelaHeader(wsDesp, 1, ['Data', 'Descrição', 'Valor (€)', 'Estado', 'Categoria', 'Fornecedor', 'Fase', 'Comprovativo'])
+  let totalDesp = 0, totalPago = 0, totalPendente = 0
   for (const d of despesas) {
     const fase = fases.find(f => f.id === d.fase_id)
     const valor = EUR(d.custo_mensal)
     totalDesp += valor
+    if (d.pago) totalPago += valor; else totalPendente += valor
     let docs: any[] = []
     try { docs = d.documentos ? JSON.parse(d.documentos) : [] } catch { /* noop */ }
-    wsDesp.addRow([
-      d.data || '', d.movimento, valor,
+    const linha = wsDesp.addRow([
+      d.data || '', d.movimento, valor, d.pago ? 'Pago' : 'Pendente',
       d.categoria || '', d.fornecedor || '',
       fase?.nome || (d.fase_id ? '—' : 'Geral'),
       docs.length > 0 ? docs.map((x: any) => x.name).join(', ') : '',
     ])
+    linha.getCell(4).font = { color: { argb: d.pago ? 'FF16A34A' : 'FFD97706' }, bold: true }
   }
   wsDesp.getColumn(3).numFmt = '#,##0.00 "€"'
+  const linhaPago = wsDesp.addRow(['', 'Total pago', totalPago])
+  linhaPago.font = { italic: true }
+  const linhaPendente = wsDesp.addRow(['', 'Total pendente', totalPendente])
+  linhaPendente.font = { italic: true }
   const linhaTotal = wsDesp.addRow(['', 'TOTAL', totalDesp])
   linhaTotal.font = { bold: true }
   linhaTotal.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT } }

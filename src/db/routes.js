@@ -5555,18 +5555,18 @@ router.get('/projetos/:negocioId/despesas', async (req, res) => {
 
 router.post('/projetos/:negocioId/despesas', async (req, res) => {
   try {
-    const { fase_id, fracao_id, movimento, valor, data, categoria, fornecedor, notas } = req.body || {}
+    const { fase_id, fracao_id, movimento, valor, data, categoria, fornecedor, notas, pago } = req.body || {}
     if (!movimento?.trim()) return res.status(400).json({ error: 'movimento obrigatório' })
     const id = randomUUID()
     // Anexo de comprovativo passa sempre por despesas.documentos — ver
     // POST /projetos/despesas/:despesaId/comprovativo, chamado depois de criar
     // a despesa. Nunca escrever comprovativo_url/comprovativo_nome aqui.
     const { rows } = await pool.query(
-      `INSERT INTO despesas (id, movimento, categoria, custo_mensal, custo_anual, timing, data, notas, negocio_id, fase_id, fracao_id, fornecedor)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+      `INSERT INTO despesas (id, movimento, categoria, custo_mensal, custo_anual, timing, data, notas, negocio_id, fase_id, fracao_id, fornecedor, pago, data_pagamento)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
       [id, movimento.trim(), categoria || 'Obra', Number(valor) || 0, 0, 'Único', data || null, notas || null,
        req.params.negocioId, fase_id || null, fracao_id || null,
-       fornecedor || null]
+       fornecedor || null, !!pago, pago ? new Date().toISOString().slice(0, 10) : null]
     )
     // Recalcular custo_real da fase
     if (fase_id) {
@@ -5584,6 +5584,40 @@ router.post('/projetos/:negocioId/despesas', async (req, res) => {
       user,
     })
     res.status(201).json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Aba "Faturas" do Projecto — editar campos (valor, fornecedor, categoria,
+// data) e alternar estado de pagamento de uma despesa/factura já criada.
+router.put('/projetos/despesas/:despesaId', async (req, res) => {
+  try {
+    const { despesaId } = req.params
+    const despesa = await Despesas.getById(despesaId)
+    if (!despesa) return res.status(404).json({ error: 'Despesa não encontrada' })
+    const { movimento, fornecedor, valor, data, categoria, pago, data_pagamento } = req.body || {}
+    const novoPago = pago !== undefined ? !!pago : despesa.pago
+    const campos = {
+      movimento: movimento !== undefined ? movimento.trim() : despesa.movimento,
+      fornecedor: fornecedor !== undefined ? (fornecedor || null) : despesa.fornecedor,
+      custo_mensal: valor !== undefined ? (Number(valor) || 0) : despesa.custo_mensal,
+      data: data !== undefined ? (data || null) : despesa.data,
+      categoria: categoria !== undefined ? categoria : despesa.categoria,
+      pago: novoPago,
+      data_pagamento: data_pagamento !== undefined
+        ? (data_pagamento || null)
+        : (novoPago && !despesa.data_pagamento ? new Date().toISOString().slice(0, 10) : (novoPago ? despesa.data_pagamento : null)),
+    }
+    const { rows } = await pool.query(
+      `UPDATE despesas SET movimento = $1, fornecedor = $2, custo_mensal = $3, data = $4, categoria = $5, pago = $6, data_pagamento = $7, updated_at = NOW() WHERE id = $8 RETURNING *`,
+      [campos.movimento, campos.fornecedor, campos.custo_mensal, campos.data, campos.categoria, campos.pago, campos.data_pagamento, despesaId]
+    )
+    if (despesa.fase_id) {
+      await pool.query(
+        `UPDATE projeto_fases SET custo_real = (SELECT COALESCE(SUM(custo_mensal), 0) FROM despesas WHERE fase_id = $1), updated_at = NOW() WHERE id = $1`,
+        [despesa.fase_id]
+      )
+    }
+    res.json(rows[0])
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 

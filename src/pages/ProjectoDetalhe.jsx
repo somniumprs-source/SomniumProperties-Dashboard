@@ -5,9 +5,10 @@ import {
   Wallet, FileText, Users, BarChart3, ChevronRight,
   FileDown, AlertTriangle, Sparkles, RefreshCw, Home, Layers,
   History, MessageSquare, TrendingUp, FileSpreadsheet, Pencil, Eye,
-  CalendarClock, ClipboardCheck, Calculator,
+  CalendarClock, ClipboardCheck, Calculator, Receipt,
 } from 'lucide-react'
 import { ProjectoForm } from './Projectos.jsx'
+import { DESP_CATEGORIAS } from '../constants.js'
 import { apiFetch, getToken, openDocument } from '../lib/api.js'
 import { Header } from '../components/layout/Header.jsx'
 import { Button } from '../components/ui/Button.jsx'
@@ -68,6 +69,7 @@ const TABS_BASE = [
   { key: 'analise',      label: 'Análise Financeira', icon: Calculator },
   { key: 'obras',        label: 'Obras',            icon: Home },
   { key: 'faturacao',    label: 'Faturação',        icon: Wallet },
+  { key: 'faturas',      label: 'Faturas',          icon: Receipt },
   { key: 'forecast',     label: 'Forecast',         icon: TrendingUp },
   { key: 'documentos',   label: 'Documentos',       icon: FileText },
   { key: 'investidores', label: 'Investidores',     icon: Users },
@@ -330,6 +332,7 @@ export function ProjectoDetalhe() {
               />
             )}
             {tab === 'faturacao' && <TabFaturacao negocio={negocio} imovel={imovel} analise={analise} onChange={load} readOnly={isReadOnly} />}
+            {tab === 'faturas' && <TabFaturas negocioId={id} readOnly={isReadOnly} />}
             {tab === 'forecast' && <TabForecast negocioId={id} />}
             {tab === 'documentos' && <TabDocumentos negocio={negocio} imovel={imovel} fases={fases} readOnly={isReadOnly} />}
             {tab === 'investidores' && <TabInvestidores negocio={negocio} readOnly={isReadOnly} />}
@@ -1107,6 +1110,215 @@ function TabFaturacao({ negocio, imovel, analise, onChange, readOnly }) {
           </button>
         </div>
       </form>}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
+// TAB: FATURAS — facturas de fornecedores, valor manual + estado de
+// pagamento. Reaproveita a tabela despesas (negocio_id) e o mecanismo
+// de comprovativo já usado nas "Despesas reais" por fase (aba Obras).
+// ════════════════════════════════════════════════════════════════
+const FATURA_EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0)
+
+function TabFaturas({ negocioId, readOnly }) {
+  const toast = useToast()
+  const [faturas, setFaturas] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({ fornecedor: '', movimento: '', valor: '', data: '', categoria: '', pago: false, file: null })
+  const [saving, setSaving] = useState(false)
+
+  async function load() {
+    const r = await apiFetch(`/api/crm/projetos/${negocioId}/despesas`)
+    if (r.ok) {
+      const { despesas } = await r.json()
+      setFaturas(despesas)
+    }
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [negocioId])
+
+  async function adicionar(e) {
+    e.preventDefault()
+    if (!form.fornecedor.trim() || !form.valor) return
+    setSaving(true)
+    try {
+      const r = await apiFetch(`/api/crm/projetos/${negocioId}/despesas`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fornecedor: form.fornecedor.trim(),
+          movimento: form.movimento.trim() || form.fornecedor.trim(),
+          valor: parseFloat(form.valor) || 0,
+          data: form.data || new Date().toISOString().slice(0, 10),
+          categoria: form.categoria || undefined,
+          pago: form.pago,
+        }),
+      })
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        toast?.(`Erro ao adicionar factura: ${err.error || r.status}`, 'error', 3500)
+        return
+      }
+      const despesa = await r.json()
+      if (form.file) {
+        const fd = new FormData()
+        fd.append('comprovativo', form.file)
+        await apiFetch(`/api/crm/projetos/despesas/${despesa.id}/comprovativo`, { method: 'POST', body: fd })
+      }
+      setForm({ fornecedor: '', movimento: '', valor: '', data: '', categoria: '', pago: false, file: null })
+      setShowForm(false)
+      load()
+    } finally { setSaving(false) }
+  }
+
+  async function togglePago(f) {
+    const r = await apiFetch(`/api/crm/projetos/despesas/${f.id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pago: !f.pago }),
+    })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao actualizar estado: ${err.error || r.status}`, 'error', 3500)
+      return
+    }
+    load()
+  }
+
+  async function apagar(id) {
+    if (!confirm('Apagar esta factura?')) return
+    const r = await apiFetch(`/api/crm/projetos/despesas/${id}`, { method: 'DELETE' })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao apagar factura: ${err.error || r.status}`, 'error', 3500)
+      return
+    }
+    load()
+  }
+
+  const totalPago = faturas.filter(f => f.pago).reduce((s, f) => s + (Number(f.custo_mensal) || 0), 0)
+  const totalPendente = faturas.filter(f => !f.pago).reduce((s, f) => s + (Number(f.custo_mensal) || 0), 0)
+
+  if (loading) return <div className="py-8 text-center text-sm text-gray-400">A carregar...</div>
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+          <p className="text-[10px] text-gray-500 uppercase tracking-wide">Total facturado</p>
+          <p className="text-lg font-mono font-bold text-gray-800">{FATURA_EUR(totalPago + totalPendente)}</p>
+        </div>
+        <div className="rounded-xl border border-green-100 bg-green-50 p-3">
+          <p className="text-[10px] text-green-700 uppercase tracking-wide">Pago</p>
+          <p className="text-lg font-mono font-bold text-green-700">{FATURA_EUR(totalPago)}</p>
+        </div>
+        <div className="rounded-xl border border-amber-100 bg-amber-50 p-3">
+          <p className="text-[10px] text-amber-700 uppercase tracking-wide">Pendente</p>
+          <p className="text-lg font-mono font-bold text-amber-700">{FATURA_EUR(totalPendente)}</p>
+        </div>
+      </div>
+
+      {!readOnly && (
+        <div className="flex justify-end">
+          <Button size="sm" icon={Plus} onClick={() => setShowForm(!showForm)}>Nova factura</Button>
+        </div>
+      )}
+
+      {showForm && (
+        <form onSubmit={adicionar} className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-200">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Fornecedor *</label>
+              <input value={form.fornecedor} onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))}
+                placeholder="Ex: Construções Silva & Filhos" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" required />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Descrição</label>
+              <input value={form.movimento} onChange={e => setForm(f => ({ ...f, movimento: e.target.value }))}
+                placeholder="Ex: Factura nº 123" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Valor (€) *</label>
+              <input type="number" step="0.01" value={form.valor} onChange={e => setForm(f => ({ ...f, valor: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm font-mono" required />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Data</label>
+              <input type="date" value={form.data} onChange={e => setForm(f => ({ ...f, data: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Categoria</label>
+              <select value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm">
+                <option value="">—</option>
+                {DESP_CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="flex items-center gap-2 pt-6">
+              <input type="checkbox" id="fatura-pago" checked={form.pago} onChange={e => setForm(f => ({ ...f, pago: e.target.checked }))}
+                className="w-4 h-4 rounded border-gray-300" />
+              <label htmlFor="fatura-pago" className="text-xs font-medium text-gray-600">Já paga</label>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Ficheiro (PDF, JPG, PNG) — opcional</label>
+            <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic" onChange={e => setForm(f => ({ ...f, file: e.target.files?.[0] || null }))}
+              className="w-full text-sm text-gray-600 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-gray-100 file:text-gray-700 file:text-xs file:font-medium hover:file:bg-gray-200" />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setShowForm(false)} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100">Cancelar</button>
+            <button type="submit" disabled={saving} className="px-4 py-1.5 text-xs font-medium rounded-lg bg-brand-dark text-brand-gold hover:bg-brand-dark-light disabled:opacity-50">
+              {saving ? 'A guardar...' : 'Guardar'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {faturas.length === 0 ? (
+        <div className="text-center py-8 text-gray-400 text-sm">Sem facturas registadas.</div>
+      ) : (
+        <div className="divide-y divide-gray-100">
+          {faturas.map(f => {
+            let docs = []
+            try { docs = f.documentos ? JSON.parse(f.documentos) : [] } catch {}
+            return (
+              <div key={f.id} className="flex items-center gap-3 py-3 group">
+                <button type="button" onClick={() => !readOnly && togglePago(f)} disabled={readOnly} title={f.pago ? 'Marcar como pendente' : 'Marcar como pago'}>
+                  {f.pago
+                    ? <CheckCircle2 className="w-5 h-5 text-green-600" />
+                    : <Circle className="w-5 h-5 text-amber-400" />}
+                </button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800 truncate">{f.fornecedor || f.movimento}</p>
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <span>{f.movimento}</span>
+                    {f.data && <span>· {f.data}</span>}
+                    {f.categoria && <span>· {f.categoria}</span>}
+                  </div>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${f.pago ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                  {f.pago ? 'Pago' : 'Pendente'}
+                </span>
+                <span className="text-sm font-mono font-semibold text-gray-800 w-24 text-right">{FATURA_EUR(f.custo_mensal)}</span>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {docs.map(doc => (
+                    <a key={doc.id} href={doc.path} target="_blank" rel="noreferrer" title={doc.name}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-brand-gold">
+                      <FileText className="w-3.5 h-3.5" />
+                    </a>
+                  ))}
+                  {!readOnly && (
+                    <button onClick={() => apagar(f.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500" title="Apagar">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

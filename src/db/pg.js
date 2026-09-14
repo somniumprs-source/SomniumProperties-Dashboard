@@ -1719,6 +1719,14 @@ export async function initSchema() {
         ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS simultaneo BOOLEAN NOT NULL DEFAULT false;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
+
+      -- Aba "Faturas" do Projecto: estado de pagamento por despesa/factura
+      -- (ver migration 0053_despesas_pago.sql).
+      DO $$ BEGIN
+        ALTER TABLE despesas ADD COLUMN IF NOT EXISTS pago BOOLEAN DEFAULT false;
+        ALTER TABLE despesas ADD COLUMN IF NOT EXISTS data_pagamento TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
     `)
 
     // Bootstrap: garantir que somniumprs@gmail.com (owner) existe como admin
