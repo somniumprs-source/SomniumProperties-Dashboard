@@ -8,7 +8,8 @@ import { TabKPIs } from '../components/crm/TabKPIs.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { KanbanSkeleton, TableSkeleton } from '../components/ui/Skeleton.jsx'
 import { EmptyState } from '../components/ui/EmptyState.jsx'
-import { Building2, Users, UserCheck, HardHat, ChevronLeft, ChevronRight, Phone, MessageCircle, Wallet, AlertTriangle, Clock as Clock3, Plus } from 'lucide-react'
+import { Building2, Users, UserCheck, HardHat, Sparkles, ChevronLeft, ChevronRight, Phone, MessageCircle, Wallet, AlertTriangle, Clock as Clock3, Plus } from 'lucide-react'
+import { OportunidadesPanel } from '../components/crm/OportunidadesPanel.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { KpiCard } from '../components/ui/KpiCard.jsx'
@@ -45,7 +46,7 @@ function tipoPrincipalIncludes(raw, val) {
   return arr.length > 0 ? arr.includes(val) : val === 'Passivo'
 }
 
-const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Construtores']
+const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Construtores', 'Oportunidades']
 // Sub-tabs que requerem distinção regional (modal ao entrar). Investidores
 // é pool unificado (sem filtro).
 const TABS_REGIONAIS = new Set(['Imóveis', 'Consultores', 'Construtores'])
@@ -699,6 +700,9 @@ export function CRM() {
   )
 
   const load = useCallback(async () => {
+    // Oportunidades tem fetch e UI próprios (OportunidadesPanel) — não passa
+    // pelo endpoint genérico /api/crm/{endpoint} (undefined para esta tab).
+    if (tab === 'Oportunidades') { setLoading(false); return }
     setLoading(true)
     // Geral (regiaoActiva = null) é válido — backend devolve sem filtro.
     try {
@@ -1138,14 +1142,15 @@ export function CRM() {
           </div>
         )}
 
-        {/* Pipelines — 4 cards centrados que actuam como tabs */}
+        {/* Pipelines — 5 cards centrados que actuam como tabs */}
         <div className="flex justify-center">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 w-full max-w-5xl">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 w-full max-w-6xl">
             {[
-              { key: 'Imóveis',      icon: Building2, tone: 'indigo', statsKey: 'imoveis' },
-              { key: 'Investidores', icon: Users,     tone: 'gold',   statsKey: 'investidores' },
-              { key: 'Consultores',  icon: UserCheck, tone: 'green',  statsKey: 'consultores' },
-              { key: 'Construtores', icon: HardHat,   tone: 'amber',  statsKey: null },
+              { key: 'Imóveis',       icon: Building2, tone: 'indigo', statsKey: 'imoveis' },
+              { key: 'Investidores',  icon: Users,     tone: 'gold',   statsKey: 'investidores' },
+              { key: 'Consultores',   icon: UserCheck, tone: 'green',  statsKey: 'consultores' },
+              { key: 'Construtores',  icon: HardHat,   tone: 'amber',  statsKey: null },
+              { key: 'Oportunidades', icon: Sparkles,  tone: 'blue',   statsKey: null },
             ].map(t => (
               <KpiCard
                 key={t.key}
@@ -1171,7 +1176,7 @@ export function CRM() {
         </div>
 
         {/* KPIs integrados */}
-        <TabKPIs tab={tab} regiao={regiaoActiva} />
+        {tab !== 'Oportunidades' && <TabKPIs tab={tab} regiao={regiaoActiva} />}
 
         {/* Sub-tabs Investidores: Passivo / Ativo — destaque visual + barra de fases */}
         {tab === 'Investidores' && (
@@ -1202,56 +1207,63 @@ export function CRM() {
         )}
 
         {/* Filtros dinâmicos */}
-        <Filters tab={tab} filters={filters} onChange={f => { setFilters(f); setSearch('') }} regiao={regiaoActiva} />
+        {tab !== 'Oportunidades' && (
+          <Filters tab={tab} filters={filters} onChange={f => { setFilters(f); setSearch('') }} regiao={regiaoActiva} />
+        )}
 
         {/* Search + Actions */}
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center">
-          <input
-            type="text" placeholder={`Pesquisar ${tab.toLowerCase()}... (/ para focar)`}
-            value={searchInput} onChange={e => handleSearch(e.target.value)}
-            className="w-full sm:flex-1 px-4 py-3 sm:py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-          />
-          <div className="flex gap-2 items-center">
-            {hasKanban && (
-              <div className="flex bg-gray-100 rounded-lg p-0.5">
-                <button onClick={() => setView('table')}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'table' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
-                  Tabela
-                </button>
-                <button onClick={() => setView('kanban')}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'kanban' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
-                  Kanban
-                </button>
-                {tab === 'Consultores' && (
-                  <button onClick={() => setView('followups')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'followups' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
-                    Follow-ups
+        {tab !== 'Oportunidades' && (
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center">
+            <input
+              type="text" placeholder={`Pesquisar ${tab.toLowerCase()}... (/ para focar)`}
+              value={searchInput} onChange={e => handleSearch(e.target.value)}
+              className="w-full sm:flex-1 px-4 py-3 sm:py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            />
+            <div className="flex gap-2 items-center">
+              {hasKanban && (
+                <div className="flex bg-gray-100 rounded-lg p-0.5">
+                  <button onClick={() => setView('table')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'table' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
+                    Tabela
                   </button>
-                )}
-                {(tab === 'Consultores' || tab === 'Investidores') && (
-                  <button onClick={() => setView('relatorio')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'relatorio' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
-                    Relatório
+                  <button onClick={() => setView('kanban')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'kanban' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
+                    Kanban
                   </button>
-                )}
-              </div>
-            )}
-            <Button onClick={() => setEditing({})} icon={Plus}>Novo</Button>
-            <button type="button" onClick={() => openDocument('/api/crm/backup', { download: true, filename: 'backup.json' }).catch(() => {})} className="hidden sm:block px-3 py-2 bg-gray-100 text-gray-600 text-xs font-medium rounded-xl hover:bg-gray-200 transition-colors">
-              Backup
-            </button>
+                  {tab === 'Consultores' && (
+                    <button onClick={() => setView('followups')}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'followups' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
+                      Follow-ups
+                    </button>
+                  )}
+                  {(tab === 'Consultores' || tab === 'Investidores') && (
+                    <button onClick={() => setView('relatorio')}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'relatorio' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
+                      Relatório
+                    </button>
+                  )}
+                </div>
+              )}
+              <Button onClick={() => setEditing({})} icon={Plus}>Novo</Button>
+              <button type="button" onClick={() => openDocument('/api/crm/backup', { download: true, filename: 'backup.json' }).catch(() => {})} className="hidden sm:block px-3 py-2 bg-gray-100 text-gray-600 text-xs font-medium rounded-xl hover:bg-gray-200 transition-colors">
+                Backup
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Edit/Create form */}
-        {editing !== null && (
+        {editing !== null && tab !== 'Oportunidades' && (
           <FormPanel tab={tab} item={editing} regiao={regiaoActiva} onSave={handleSave} onCancel={() => setEditing(null)} />
         )}
 
         {/* Loading */}
-        {loading && editing === null && (
+        {loading && editing === null && tab !== 'Oportunidades' && (
           view === 'kanban' ? <KanbanSkeleton columns={5} /> : <TableSkeleton rows={8} cols={6} />
         )}
+
+        {/* Oportunidades — fila de aprovar/rejeitar da pesquisa diária Idealista */}
+        {tab === 'Oportunidades' && <OportunidadesPanel regiao={regiaoActiva} />}
 
         {/* Investidores: Split View (lista compacta + detalhe lado a lado) */}
         {tab === 'Investidores' && detail ? (
@@ -1350,7 +1362,7 @@ export function CRM() {
           {/* Kanban View */}
           {!loading && editing === null && view === 'kanban' && kanbanConfig && data.length === 0 && (
             <EmptyState
-              icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Construtores': HardHat }[tab] || Building2}
+              icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Construtores': HardHat, 'Oportunidades': Sparkles }[tab] || Building2}
               title={`Sem ${tab.toLowerCase()}`}
               description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
             />
@@ -1379,9 +1391,9 @@ export function CRM() {
           )}
 
           {/* Table View */}
-          {!loading && editing === null && (view === 'table' || !hasKanban) && data.length === 0 && (
+          {!loading && editing === null && tab !== 'Oportunidades' && (view === 'table' || !hasKanban) && data.length === 0 && (
             <EmptyState
-              icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Construtores': HardHat }[tab] || Building2}
+              icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Construtores': HardHat, 'Oportunidades': Sparkles }[tab] || Building2}
               title={`Sem ${tab.toLowerCase()}`}
               description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
             />

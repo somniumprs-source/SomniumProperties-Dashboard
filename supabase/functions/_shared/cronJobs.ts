@@ -10,6 +10,8 @@ import { generateRelatorioAcompanhamento } from "./pdfProjectoFixFlip.ts";
 import { streamToBuffer } from "./pdfkitGuard.ts";
 import { uploadPublic } from "./storage.ts";
 import Anthropic from "@anthropic-ai/sdk";
+import { ensureOportunidadesScraperTable, ensurePrecoM2ReferenciaTable } from "./oportunidadesScraper.ts";
+import { buscarOportunidadesIdealista } from "./apifyIdealista.ts";
 
 // ── Follow-up config por classe ─────────────────────────────
 const FOLLOWUP_RULES: Record<string, { dias: number[]; canal: string }> = {
@@ -588,6 +590,32 @@ async function runGerarAgendaSemanal() {
   return { semanaInicio, itensNaFila };
 }
 
+// ── Pesquisa diária de imóveis (Idealista via Apify) — SOP 1 §5.2.1 ────
+async function runProcuraImoveis() {
+  await ensureOportunidadesScraperTable();
+  await ensurePrecoM2ReferenciaTable();
+  const { candidatos, erros } = await buscarOportunidadesIdealista();
+
+  let novos = 0;
+  for (const c of candidatos) {
+    const id = crypto.randomUUID();
+    const cols = Object.keys(c);
+    const { rowCount } = await pool.query(
+      `INSERT INTO oportunidades_scraper (id, ${cols.join(", ")})
+       VALUES ($1, ${cols.map((_, i) => `$${i + 2}`).join(", ")})
+       ON CONFLICT (property_code) DO NOTHING`,
+      [id, ...cols.map((k) => (c as any)[k])],
+    );
+    if (rowCount) novos++;
+  }
+
+  console.log(
+    `[cron-procura-imoveis] ${candidatos.length} candidatos encontrados, ${novos} novos inseridos` +
+      (erros.length ? ` (erros: ${erros.join(" | ")})` : ""),
+  );
+  return { encontrados: candidatos.length, novos, erros };
+}
+
 // Exports para execução manual via API / cron functions
 export {
   REACTIVATION_TEMPLATE,
@@ -598,4 +626,5 @@ export {
   runReclassificacaoInvestidores,
   runRelatorioDiario,
   runRelatorioSemanal,
+  runProcuraImoveis,
 };

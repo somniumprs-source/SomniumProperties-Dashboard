@@ -13,6 +13,7 @@ import { Header } from '../components/layout/Header.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { Card } from '../components/ui/Card.jsx'
 import { Badge } from '../components/ui/Badge.jsx'
+import { StatusBadge } from '../components/dashboard/StatusBadge.jsx'
 import { Input, Select, Textarea } from '../components/ui/Input.jsx'
 import { Avatar } from '../components/ui/Avatar.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
@@ -24,6 +25,9 @@ import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const GOLD = '#C9A84C'
 const BLACK = '#0d0d0d'
+
+// SOP 13 §9 — semáforo de desvio orçamental (verde/amarelo/laranja/vermelho)
+const SEMAFORO_STATUS = { verde: 'green', amarelo: 'yellow', laranja: 'orange', vermelho: 'red' }
 
 const FASE_COR = {
   aquisicao: '#475569',                  // slate (cálculo)
@@ -347,6 +351,16 @@ function TabResumo({ resumo, fases }) {
   const totalTarefas = fases.reduce((s, f) => s + (f.tarefas_total || 0), 0)
   const tarefasConcluidas = fases.reduce((s, f) => s + (f.tarefas_concluidas || 0), 0)
 
+  // SOP 13 §9 — semáforo de desvio orçamental da última vistoria registada.
+  const [ultimoSemaforo, setUltimoSemaforo] = useState(null)
+  useEffect(() => {
+    if (isWS) return
+    apiFetch(`/api/crm/projetos/${negocio.id}/vistorias`)
+      .then(r => r.ok ? r.json() : null)
+      .then(j => setUltimoSemaforo((j?.vistorias || []).find(v => v.semaforo_cor) || null))
+      .catch(() => {})
+  }, [negocio.id, isWS])
+
   return (
     <div className="space-y-6">
       <AiResumoCard negocioId={negocio.id} />
@@ -374,6 +388,12 @@ function TabResumo({ resumo, fases }) {
             <Field label="Fases criadas" value={`${fases.length}`} />
             <Field label="Fases concluídas" value={`${fases.filter(f => f.estado === 'concluida').length} / ${fases.length}`} />
             <Field label="Tarefas concluídas" value={`${tarefasConcluidas} / ${totalTarefas}`} />
+            {ultimoSemaforo && (
+              <div className="flex justify-between items-baseline py-1 border-b border-gray-100 dark:border-neutral-800 last:border-0">
+                <span className="text-caption text-gray-500 dark:text-neutral-400">Desvio orçamental (última vistoria)</span>
+                <StatusBadge status={SEMAFORO_STATUS[ultimoSemaforo.semaforo_cor]} />
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1552,6 +1572,11 @@ function TabVistorias({ negocioId, negocio }) {
                 <p className="text-sm font-medium text-gray-800">{new Date(v.semana_data).toLocaleDateString('pt-PT', { dateStyle: 'medium' })}</p>
                 {v.desvio_dias ? <p className="text-xs text-gray-400">Desvio: {v.desvio_dias > 0 ? '+' : ''}{v.desvio_dias} dias</p> : null}
               </div>
+              {v.semaforo_cor && (
+                <div className="shrink-0" title={v.semaforo_pct != null ? `Desvio orçamental: ${v.semaforo_pct > 0 ? '+' : ''}${Number(v.semaforo_pct).toFixed(1)}%` : undefined}>
+                  <StatusBadge status={SEMAFORO_STATUS[v.semaforo_cor]} />
+                </div>
+              )}
               <div className="flex items-center gap-1">
                 <button onClick={() => gerarRelatorio(v.id)} title="Ver relatório semanal"
                   className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 inline-flex items-center gap-1.5">
@@ -1676,6 +1701,17 @@ function TabInvestidores({ negocio, readOnly }) {
     load()
   }
 
+  // SOP 13, Passo 3 — confirmação de contacto (chamada/WhatsApp, Anexo 3).
+  async function confirmarContacto(linkId) {
+    const r = await apiFetch(`/api/crm/projetos/investidores/${linkId}/confirmar-contacto`, { method: 'PUT' })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao confirmar contacto: ${err.error || r.status}`, 'error', 3500)
+      return
+    }
+    load()
+  }
+
   const disponiveis = todosInvestidores.filter(i => !lista.find(l => l.investidor_id === i.id))
 
   return (
@@ -1722,6 +1758,19 @@ function TabInvestidores({ negocio, readOnly }) {
                   <p className="text-sm font-mono font-semibold text-green-600">{EUR(distribuicao(l))}</p>
                 </div>
               </div>
+              {l.onboarding_iniciado_em && (
+                l.confirmacao_contacto_em ? (
+                  <span className="hidden sm:inline text-[10px] text-green-600 font-medium whitespace-nowrap"
+                    title={`Contacto confirmado em ${new Date(l.confirmacao_contacto_em).toLocaleDateString('pt-PT')}`}>
+                    Contacto confirmado
+                  </span>
+                ) : !readOnly ? (
+                  <button onClick={() => confirmarContacto(l.id)}
+                    className="text-[10px] font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 whitespace-nowrap">
+                    Confirmar Contacto
+                  </button>
+                ) : null
+              )}
               {!readOnly && (
                 <button onClick={() => apagar(l.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500">
                   <Trash2 className="w-4 h-4" />

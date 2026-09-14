@@ -20,6 +20,7 @@ function mapNegocio(r) {
     consultorIds: r.consultor_ids ? JSON.parse(r.consultor_ids) : [],
     notas: r.notas, quotaSomnium: r.quota_somnium || 0,
     capitalTotal: r.capital_total || 0, nInvestidores: r.n_investidores || 0,
+    dataInicioObra: r.data_inicio_obra, dataFimObra: r.data_fim_obra,
     pagamentosFaseados: (() => {
       try {
         const v = typeof r.pagamentos_faseados === 'string' ? JSON.parse(r.pagamentos_faseados) : r.pagamentos_faseados
@@ -228,6 +229,44 @@ export async function getInvestidores({ regiao } = {}) {
   }
   const { rows } = await pool.query('SELECT * FROM investidores')
   return rows.map(mapInvestidor)
+}
+
+// SOP 13 §9 — dados de onboarding por (negócio, investidor). JOIN a negocios
+// só para permitir filtro por região (mesmo padrão de getDespesas/getTarefas).
+export async function getProjetoInvestidores({ regiao } = {}) {
+  const clause = regiao ? 'WHERE n.deleted_at IS NULL AND n.regiao = $1' : 'WHERE n.deleted_at IS NULL'
+  const params = regiao ? [regiao] : []
+  const { rows } = await pool.query(
+    `SELECT pi.* FROM projeto_investidores pi JOIN negocios n ON n.id = pi.negocio_id ${clause}`, params)
+  return rows.map(r => ({
+    id: r.id, negocioId: r.negocio_id, investidorId: r.investidor_id,
+    capital: r.capital || 0, percentagem: r.percentagem || 0,
+    onboardingIniciadoEm: r.onboarding_iniciado_em,
+    emailBoasVindasEnviadoEm: r.email_boas_vindas_enviado_em,
+    confirmacaoContactoEm: r.confirmacao_contacto_em,
+  }))
+}
+
+// SOP 13, Passo 5 — reuniões de acompanhamento com investidores, por projecto.
+export async function getReunioesInvestidor({ regiao } = {}) {
+  const clause = regiao ? 'WHERE n.deleted_at IS NULL AND n.regiao = $1' : 'WHERE n.deleted_at IS NULL'
+  const params = regiao ? [regiao] : []
+  const { rows } = await pool.query(
+    `SELECT r.* FROM reunioes_investidor r JOIN negocios n ON n.id = r.negocio_id ${clause}`, params)
+  return rows.map(r => ({ id: r.id, negocioId: r.negocio_id, dataHora: r.data_hora, estado: r.estado }))
+}
+
+// SOP 13, Passo 8 — vistorias semanais de obra, por projecto.
+export async function getVistoriasObra({ regiao } = {}) {
+  const clause = regiao ? 'WHERE n.deleted_at IS NULL AND n.regiao = $1' : 'WHERE n.deleted_at IS NULL'
+  const params = regiao ? [regiao] : []
+  const { rows } = await pool.query(
+    `SELECT v.* FROM vistorias_obra v JOIN negocios n ON n.id = v.negocio_id ${clause}`, params)
+  return rows.map(r => ({
+    id: r.id, negocioId: r.negocio_id, semanaData: r.semana_data,
+    semaforoPct: r.semaforo_pct != null ? Number(r.semaforo_pct) : null,
+    semaforoCor: r.semaforo_cor, relatorioGeradoEm: r.relatorio_gerado_em,
+  }))
 }
 
 export async function getConsultores({ regiao } = {}) {

@@ -31,6 +31,7 @@ import { syncForms, isConfigured as formsConfigured } from './formsSync.js'
 import { createImovelFolder, moveImovelFolder, uploadDocToFolder, uploadUserFileToFolder, uploadComprovativoToFolder, isConfigured as driveConfigured, downloadDriveFile, createInvestidorFolder, uploadDocumentoInvestidor, moverParaElementosApagados, ensureInvestidorFolderShared } from './driveSync.js'
 import { generateDoc, getDocsForEstado, docEmbedeLocalizacao } from './pdfImovelDocs.js'
 import { onImovelCreated, listDocumentos, persistDocumento, streamPdfToResAndPersist } from './documentLifecycle.js'
+import { ensureOportunidadesScraperTable } from './oportunidadesScraper.js'
 import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
 import { generateMeetingPDF } from './pdfMeetingReport.js'
 import { ensureLabels, organizeMessage, organizeBatch, autoOrganize, isConfigured as gmailConfigured } from './gmailSync.js'
@@ -46,6 +47,7 @@ import {
   generateRelatorioSemanalObra,
   generateMemoriaDescritiva,
   generateRelatorioSaida,
+  semaforoDesvio,
 } from './pdfProjectoFixFlip.js'
 import { generateRelatorioExpansaoGaia } from './pdfRelatorioExpansaoGaia.js'
 import { gerarResumoProjeto, invalidarCacheAi, isConfigured as aiConfigured } from './projetoAiAssistant.js'
@@ -509,6 +511,96 @@ crudRoutes('/imoveis', Imoveis, {
   },
 })
 
+// ════════════════════════════════════════════════════════════════
+// OPORTUNIDADES — fila de candidatos a imóvel da pesquisa diária Idealista
+// via Apify (SOP 1 §5.2.1, cron-procura-imoveis / runProcuraImoveis). Aprovar
+// cria o imóvel de facto (mesmos side-effects do onCreate de /imoveis acima);
+// rejeitar só marca estado, fica em BD para não voltar a sugerir o mesmo
+// property_code.
+// ════════════════════════════════════════════════════════════════
+const ZONA_PARA_REGIAO = { coimbra: 'Coimbra', porto: 'AMP' }
+
+router.get('/oportunidades', async (req, res) => {
+  try {
+    await ensureOportunidadesScraperTable()
+    const estado = req.query.estado || 'pendente'
+    const { rows } = await pool.query(
+      `SELECT * FROM oportunidades_scraper WHERE estado = $1 ORDER BY created_at DESC LIMIT 200`,
+      [estado]
+    )
+    res.json({ data: rows, total: rows.length })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/oportunidades/:id', async (req, res) => {
+  try {
+    await ensureOportunidadesScraperTable()
+    const { rows } = await pool.query(`SELECT * FROM oportunidades_scraper WHERE id = $1`, [req.params.id])
+    if (!rows[0]) return res.status(404).json({ error: 'Oportunidade não encontrada' })
+    res.json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/oportunidades/:id/aprovar', async (req, res) => {
+  try {
+    await ensureOportunidadesScraperTable()
+    const id = req.params.id
+    const { rows } = await pool.query(`SELECT * FROM oportunidades_scraper WHERE id = $1`, [id])
+    const cand = rows[0]
+    if (!cand) return res.status(404).json({ error: 'Oportunidade não encontrada' })
+    if (cand.estado !== 'pendente') return res.status(409).json({ error: `Já foi ${cand.estado}` })
+
+    const item = await Imoveis.create({
+      nome: cand.morada || `${cand.tipologia || 'Imóvel'} — ${cand.concelho}`,
+      origem: 'Idealista',
+      link: cand.link,
+      distrito: cand.distrito,
+      concelho: cand.concelho,
+      regiao: ZONA_PARA_REGIAO[cand.zona] || 'Coimbra',
+      tipologia: cand.tipologia,
+      predio_tipo: cand.predio_tipo,
+      ask_price: cand.preco,
+      area_util: cand.area,
+      ano_construcao: cand.ano_construcao,
+      estado: 'Adicionado',
+    })
+
+    // Mesmos side-effects do onCreate de crudRoutes('/imoveis', ...) acima —
+    // duplicado de propósito (esse hook só corre para o POST HTTP /imoveis).
+    if (driveConfigured()) {
+      await createImovelFolder(item.id, item.nome || 'Sem nome', item.estado || 'Adicionado')
+    }
+    onImovelCreated(item).catch(e => console.error('[docs] oportunidade aprovar:', e.message))
+    if (cand.link && cand.link.startsWith('http')) {
+      scrapePhotosFromLink(cand.link, item.id).then(async (photos) => {
+        if (photos.length > 0) {
+          await Imoveis.update(item.id, { fotos: JSON.stringify(photos) })
+        }
+      }).catch(e => console.error('[scraper] oportunidade aprovar:', e.message))
+    }
+
+    await pool.query(
+      `UPDATE oportunidades_scraper SET estado = 'aprovado', imovel_id = $2, decidido_por = $3, decidido_em = NOW() WHERE id = $1`,
+      [id, item.id, req.user?.email || null]
+    )
+    res.json({ ok: true, imovel_id: item.id })
+  } catch (e) { res.status(400).json({ error: e.message }) }
+})
+
+router.post('/oportunidades/:id/rejeitar', async (req, res) => {
+  try {
+    await ensureOportunidadesScraperTable()
+    const { motivo } = req.body || {}
+    const { rowCount } = await pool.query(
+      `UPDATE oportunidades_scraper SET estado = 'rejeitado', motivo_rejeicao = $2, decidido_por = $3, decidido_em = NOW()
+       WHERE id = $1 AND estado = 'pendente'`,
+      [req.params.id, motivo || null, req.user?.email || null]
+    )
+    if (!rowCount) return res.status(409).json({ error: 'Oportunidade não encontrada ou já decidida' })
+    res.json({ ok: true })
+  } catch (e) { res.status(400).json({ error: e.message }) }
+})
+
 // ── Listagem dos documentos persistidos do imóvel ───────────
 router.get('/imoveis/:id/documentos-persistidos', async (req, res) => {
   try { res.json(await listDocumentos(req.params.id)) }
@@ -828,6 +920,7 @@ const INVESTIDORES_DOCS_BUCKET = 'Investidores'
 router.post('/investidores/:id/documentos', uploadRateLimit, uploadDocs.single('file'), async (req, res) => {
   try {
     const { tipo, nome, imovel_id, notas } = req.body
+    const direcao = req.body.direcao === 'recebido' ? 'recebido' : 'enviado'
     if (!tipo || !nome) return res.status(400).json({ error: 'tipo e nome são obrigatórios' })
     const id = randomUUID()
     const now = new Date().toISOString()
@@ -864,11 +957,11 @@ router.post('/investidores/:id/documentos', uploadRateLimit, uploadDocs.single('
     }
 
     await pool.query(
-      `INSERT INTO documentos_investidor (id, investidor_id, imovel_id, tipo, nome, notas, storage_path, drive_file_id, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [id, req.params.id, imovel_id || null, tipo, nome, notas || null, storagePath, driveFileId, now]
+      `INSERT INTO documentos_investidor (id, investidor_id, imovel_id, tipo, nome, notas, storage_path, drive_file_id, direcao, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [id, req.params.id, imovel_id || null, tipo, nome, notas || null, storagePath, driveFileId, direcao, now]
     )
-    res.status(201).json({ id, investidor_id: req.params.id, imovel_id, tipo, nome, notas, storage_path: storagePath, created_at: now })
+    res.status(201).json({ id, investidor_id: req.params.id, imovel_id, tipo, nome, notas, storage_path: storagePath, direcao, created_at: now })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -5553,10 +5646,62 @@ async function syncMontanteInvestido(investidorId) {
   await pool.query('UPDATE investidores SET montante_investido = $1 WHERE id = $2', [Number(r.total) || 0, investidorId])
 }
 
+// SOP 13, Passo 1-2 — onboarding começa quando um investidor entra num
+// projecto. Dispara o email de boas-vindas (Anexo 1 do SOP) e grava as datas
+// de origem das métricas de onboarding (SOP 13 §9). Best-effort, não bloqueia
+// a resposta do endpoint.
+async function iniciarOnboardingInvestidor(linkId, negocioId, investidorId) {
+  try {
+    await pool.query('UPDATE projeto_investidores SET onboarding_iniciado_em = NOW() WHERE id = $1', [linkId])
+
+    const { sendEmail, isConfigured: emailOK } = await import('./emailService.js')
+    if (!emailOK()) return
+    const { rows: negs } = await pool.query('SELECT movimento FROM negocios WHERE id = $1', [negocioId])
+    const { rows: invs } = await pool.query('SELECT nome, email FROM investidores WHERE id = $1', [investidorId])
+    const negocio = negs[0]
+    const investidor = invs[0]
+    if (!negocio || !investidor?.email) return
+
+    const subject = `Bem-vindo à Somnium Properties | Projeto ${negocio.movimento}`
+    const html = `
+      <div style="font-family: -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; background: #ffffff;">
+        <div style="background: #0d0d0d; padding: 24px; border-radius: 12px; color: white; text-align: center;">
+          <p style="color: #C9A84C; font-size: 11px; letter-spacing: 1px; margin: 0; text-transform: uppercase;">SOMNIUM PROPERTIES</p>
+          <h1 style="color: #C9A84C; margin: 8px 0 0; font-size: 22px;">Bem-vindo, ${investidor.nome}!</h1>
+        </div>
+        <div style="padding: 24px 0;">
+          <p style="font-size: 15px; color: #1f2937; line-height: 1.6;">
+            É com enorme satisfação que confirmamos a formalização da nossa parceria no projeto <strong>${negocio.movimento}</strong>.
+            Agradecemos a confiança e asseguramos total compromisso com transparência, comunicação e excelência.
+          </p>
+          <div style="background: #f9fafb; border-left: 3px solid #C9A84C; padding: 16px; border-radius: 8px; margin: 16px 0;">
+            <p style="margin: 0; color: #6b7280; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">O que pode esperar</p>
+            <p style="margin: 6px 0 0; font-size: 14px; color: #0d0d0d;">Transparência total · comunicação regular · resposta em até 24h · gestão profissional</p>
+          </div>
+          <p style="font-size: 14px; color: #6b7280;">
+            Nas próximas 48h vamos confirmar consigo os canais de comunicação e agendar a primeira reunião de acompanhamento.
+          </p>
+        </div>
+        <div style="border-top: 1px solid #e5e7eb; padding-top: 12px; text-align: center;">
+          <p style="font-size: 10px; color: #9ca3af; margin: 0;">Somnium Properties · ${new Date().toLocaleDateString('pt-PT')}</p>
+        </div>
+      </div>
+    `
+    sendEmail(subject, html, { to: investidor.email })
+      .then(() => pool.query('UPDATE projeto_investidores SET email_boas_vindas_enviado_em = NOW() WHERE id = $1', [linkId]))
+      .catch(e => console.error('[onboarding-investidor] email boas-vindas:', e.message))
+  } catch (e) { console.error('[onboarding-investidor]', e.message) }
+}
+
 router.post('/projetos/:negocioId/investidores', async (req, res) => {
   try {
     const { investidor_id, capital, percentagem, notas } = req.body || {}
     if (!investidor_id) return res.status(400).json({ error: 'investidor_id obrigatório' })
+    const { rows: existentes } = await pool.query(
+      'SELECT id FROM projeto_investidores WHERE negocio_id = $1 AND investidor_id = $2',
+      [req.params.negocioId, investidor_id]
+    )
+    const jaExistia = existentes.length > 0
     const id = randomUUID()
     const { rows } = await pool.query(
       `INSERT INTO projeto_investidores (id, negocio_id, investidor_id, capital, percentagem, notas)
@@ -5569,6 +5714,9 @@ router.post('/projetos/:negocioId/investidores', async (req, res) => {
     // Se este investidor tem um utilizador ligado, dar-lhe acesso a este projecto.
     syncInvestidorAcessos(investidor_id).catch(e => console.error('[projeto-investidor] syncAcessos:', e.message))
     syncMontanteInvestido(investidor_id).catch(e => console.error('[projeto-investidor] syncMontante:', e.message))
+    if (!jaExistia) {
+      iniciarOnboardingInvestidor(rows[0].id, req.params.negocioId, investidor_id).catch(e => console.error('[projeto-investidor] onboarding:', e.message))
+    }
     res.status(201).json(rows[0])
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -5589,6 +5737,24 @@ router.put('/projetos/investidores/:linkId', async (req, res) => {
     const { rows } = await pool.query(`UPDATE projeto_investidores SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`, params)
     if (!rows.length) return res.status(404).json({ error: 'Ligação não encontrada' })
     syncMontanteInvestido(rows[0].investidor_id).catch(e => console.error('[projeto-investidor] syncMontante:', e.message))
+    res.json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// SOP 13, Passo 3 — confirmação de contacto (chamada/WhatsApp, Anexo 3),
+// registada manualmente pelo Coordenador de Investidores. Idempotente.
+router.put('/projetos/investidores/:linkId/confirmar-contacto', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE projeto_investidores SET confirmacao_contacto_em = NOW()
+       WHERE id = $1 AND confirmacao_contacto_em IS NULL RETURNING *`,
+      [req.params.linkId]
+    )
+    if (!rows.length) {
+      const { rows: existente } = await pool.query('SELECT * FROM projeto_investidores WHERE id = $1', [req.params.linkId])
+      if (!existente.length) return res.status(404).json({ error: 'Ligação não encontrada' })
+      return res.json(existente[0])
+    }
     res.json(rows[0])
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -5701,6 +5867,9 @@ async function ensureVistoriasObraTable() {
       criado_por TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+    ALTER TABLE vistorias_obra ADD COLUMN IF NOT EXISTS semaforo_pct NUMERIC;
+    ALTER TABLE vistorias_obra ADD COLUMN IF NOT EXISTS semaforo_cor TEXT;
+    ALTER TABLE vistorias_obra ADD COLUMN IF NOT EXISTS relatorio_gerado_em TIMESTAMPTZ;
   `)
   _vistoriasObraTableEnsured = true
 }
@@ -5722,10 +5891,15 @@ router.post('/projetos/:negocioId/vistorias', async (req, res) => {
     const { semana_data, rubricas, desvio_dias, desvio_causa, desvio_accao, incidentes, proximos_passos } = req.body || {}
     if (!semana_data) return res.status(400).json({ error: 'semana_data obrigatória' })
     const id = randomUUID()
+    // Congela o semáforo de desvio orçamental (SOP 13 §9) com os custos DESTA
+    // semana — evita que o histórico mude se os custos do projecto mudarem depois.
+    const projeto = await loadProjetoCompleto(req.params.negocioId)
+    const semaforoPct = projeto && projeto.orcAlocado > 0 ? ((projeto.custoReal - projeto.orcAlocado) / projeto.orcAlocado) * 100 : null
+    const semaforo = semaforoDesvio(semaforoPct)
     const { rows } = await pool.query(
-      `INSERT INTO vistorias_obra (id, negocio_id, semana_data, rubricas, desvio_dias, desvio_causa, desvio_accao, incidentes, proximos_passos, criado_por)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [id, req.params.negocioId, semana_data, JSON.stringify(rubricas || []), desvio_dias ?? null, desvio_causa || null, desvio_accao || null, incidentes || null, proximos_passos || null, req.user?.email || null]
+      `INSERT INTO vistorias_obra (id, negocio_id, semana_data, rubricas, desvio_dias, desvio_causa, desvio_accao, incidentes, proximos_passos, criado_por, semaforo_pct, semaforo_cor)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+      [id, req.params.negocioId, semana_data, JSON.stringify(rubricas || []), desvio_dias ?? null, desvio_causa || null, desvio_accao || null, incidentes || null, proximos_passos || null, req.user?.email || null, semaforoPct, semaforo.tag]
     )
     res.status(201).json(rows[0])
   } catch (e) { res.status(500).json({ error: e.message }) }
@@ -5740,6 +5914,11 @@ router.get('/projetos/:negocioId/pdf/relatorio-semanal/:vistoriaId', async (req,
     const { rows: vRows } = await pool.query('SELECT * FROM vistorias_obra WHERE id = $1 AND negocio_id = $2', [req.params.vistoriaId, req.params.negocioId])
     const vistoria = vRows[0]
     if (!vistoria) return res.status(404).json({ error: 'Vistoria não encontrada' })
+
+    // Telemetria da taxa de entrega do relatório semanal (SOP 13 §9) — só
+    // a primeira geração conta como "entregue", não bloqueia a resposta.
+    pool.query('UPDATE vistorias_obra SET relatorio_gerado_em = NOW() WHERE id = $1 AND relatorio_gerado_em IS NULL', [vistoria.id])
+      .catch(e => console.error('[pdf/relatorio-semanal] relatorio_gerado_em:', e.message))
 
     // Fotos da semana: janela de 7 dias a partir da data da vistoria.
     const inicioSemana = new Date(vistoria.semana_data)

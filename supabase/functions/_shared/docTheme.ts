@@ -23,6 +23,7 @@ export const DOC_COLORS = {
   green: '#2D6A2D',
   red: '#8B2020',
   amber: '#B07A1D',
+  orange: '#C2701D',
 }
 
 export const DOC_FONT = {

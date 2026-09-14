@@ -1223,6 +1223,21 @@ export async function initSchema() {
       CREATE INDEX IF NOT EXISTS idx_projinv_negocio ON projeto_investidores(negocio_id);
       CREATE INDEX IF NOT EXISTS idx_projinv_investidor ON projeto_investidores(investidor_id);
 
+      -- SOP 13 §9 — métricas de onboarding por investidor (datas de origem
+      -- das taxas de boas-vindas/confirmação/primeira reunião) e janela de
+      -- obra activa por projecto (denominador da taxa de entrega semanal).
+      DO $$ BEGIN
+        ALTER TABLE projeto_investidores ADD COLUMN IF NOT EXISTS onboarding_iniciado_em TIMESTAMPTZ;
+        ALTER TABLE projeto_investidores ADD COLUMN IF NOT EXISTS email_boas_vindas_enviado_em TIMESTAMPTZ;
+        ALTER TABLE projeto_investidores ADD COLUMN IF NOT EXISTS confirmacao_contacto_em TIMESTAMPTZ;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+      DO $$ BEGIN
+        ALTER TABLE negocios ADD COLUMN IF NOT EXISTS data_inicio_obra DATE;
+        ALTER TABLE negocios ADD COLUMN IF NOT EXISTS data_fim_obra DATE;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
       -- ════════════════════════════════════════════════════════════════
       -- MULTI-REGIÃO (Coimbra | AMP) — expansão Porto/Gaia
       -- Cada entidade pertence a UMA região. Investidores podem ter
@@ -1638,6 +1653,17 @@ export async function initSchema() {
         ALTER TABLE investidores ADD COLUMN IF NOT EXISTS drive_folder_id TEXT;
         ALTER TABLE documentos_investidor ADD COLUMN IF NOT EXISTS storage_path TEXT;
         ALTER TABLE documentos_investidor ADD COLUMN IF NOT EXISTS drive_file_id TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
+      -- Enviados vs recebidos (ver migration 0045_documentos_investidor_direcao.sql).
+      DO $$ BEGIN
+        ALTER TABLE documentos_investidor ADD COLUMN IF NOT EXISTS direcao TEXT NOT NULL DEFAULT 'enviado';
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+      DO $$ BEGIN
+        ALTER TABLE documentos_investidor ADD CONSTRAINT documentos_investidor_direcao_check
+          CHECK (direcao IN ('enviado', 'recebido'));
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 

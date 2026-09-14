@@ -287,13 +287,16 @@ export function generateRelatorioAcompanhamento({ negocio, imovel, fases, tarefa
 // 2b. RELATÓRIO SEMANAL DE OBRA — gerado a partir da vistoria semanal do
 // empreiteiro (Template A/B do documento de optimização do SOP 13).
 // ════════════════════════════════════════════════════════════════
-function semaforoDesvio(pct) {
-  if (pct == null) return { cor: MUTED, label: '—' }
+// 4 bandas do SOP 13 §9 (verde/amarelo/laranja/vermelho) — usada tanto no
+// PDF do Relatório Semanal como para persistir o semáforo por vistoria
+// (ver POST /projetos/:negocioId/vistorias).
+export function semaforoDesvio(pct) {
+  if (pct == null) return { cor: MUTED, label: '—', tag: null }
   const abs = Math.abs(pct)
-  if (abs <= 5) return { cor: DOC_COLORS.green, label: 'Dentro do orçamento' }
-  if (abs <= 10) return { cor: DOC_COLORS.amber, label: 'Atenção — investigar causa' }
-  if (abs <= 15) return { cor: DOC_COLORS.amber, label: 'Reunião técnica recomendada' }
-  return { cor: DOC_COLORS.red, label: 'Aviso formal — plano de acção necessário' }
+  if (abs <= 5) return { cor: DOC_COLORS.green, label: 'Dentro do orçamento', tag: 'verde' }
+  if (abs <= 10) return { cor: DOC_COLORS.amber, label: 'Atenção — investigar causa', tag: 'amarelo' }
+  if (abs <= 15) return { cor: DOC_COLORS.orange, label: 'Reunião técnica recomendada', tag: 'laranja' }
+  return { cor: DOC_COLORS.red, label: 'Aviso formal — plano de acção necessário', tag: 'vermelho' }
 }
 
 export function generateRelatorioSemanalObra({ negocio, imovel, vistoria, fases, fotos, orcAlocado, custoReal, semanaAtual, semanaTotal }) {
@@ -307,7 +310,11 @@ export function generateRelatorioSemanalObra({ negocio, imovel, vistoria, fases,
   const percGlobal = fases.length > 0
     ? Math.round(fases.reduce((s, f) => s + (Number(f.perc_execucao) || 0), 0) / fases.length)
     : 0
-  const desvioPct = orcAlocado > 0 ? ((custoReal - orcAlocado) / orcAlocado) * 100 : null
+  // Preferir o desvio congelado no momento da vistoria (histórico correcto,
+  // não sujeito a alterações posteriores de custos do projecto). Vistorias
+  // antigas sem o campo persistido caem no cálculo ao vivo de sempre.
+  const desvioPctLive = orcAlocado > 0 ? ((custoReal - orcAlocado) / orcAlocado) * 100 : null
+  const desvioPct = vistoria.semaforo_pct != null ? Number(vistoria.semaforo_pct) : desvioPctLive
   const semaforo = semaforoDesvio(desvioPct)
 
   const kpiW = (doc.page.width - 100 - 3 * 8) / 4

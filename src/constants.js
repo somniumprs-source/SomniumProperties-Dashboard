@@ -240,6 +240,12 @@ export const CC_RESULTADO_LABEL = {
 }
 export const SIM_NAO_NP = ['sim', 'nao', 'nao_perguntado']
 export const SIM_NAO_NP_LABEL = { sim: 'Sim', nao: 'Não', nao_perguntado: 'Não chegou a perguntar-se' }
+export const CC_DISPONIBILIDADE = ['sim', 'nao_vendido_reservado']
+export const CC_DISPONIBILIDADE_LABEL = { sim: 'Sim', nao_vendido_reservado: 'Não, já vendido ou reservado' }
+export const CC_DOCUMENTACAO = ['enviada_na_hora', 'prometida_com_prazo', 'nao_pedida']
+export const CC_DOCUMENTACAO_LABEL = {
+  enviada_na_hora: 'Enviada na hora', prometida_com_prazo: 'Prometida com prazo', nao_pedida: 'Não pedida',
+}
 
 // Discovery Call — scorecard de qualificação 0-12 (6 critérios x 0-2)
 export const DC_CRITERIOS = [
@@ -275,6 +281,7 @@ export const CL_RESULTADO_COLOR = {
 // qualquer listagem genérica dos campos SOP2).
 export const REGISTO_FIELD_LABEL = {
   cc_resultado: 'Resultado', cc_aceita_negociar: 'Aceita negociar',
+  cc_disponibilidade: 'Disponibilidade confirmada', cc_documentacao: 'Documentação (caderneta e planta)',
   dc_score_objetivo: 'Objectivo', dc_score_motivo_real: 'Motivo Real', dc_score_dor_desafio: 'Dor / Desafio',
   dc_score_impacto: 'Impacto', dc_score_urgencia: 'Urgência', dc_score_tentativas_anteriores: 'Tentativas Anteriores',
   dc_notas_objetivo: 'Justificação — Objectivo', dc_notas_motivo_real: 'Justificação — Motivo Real',
@@ -293,6 +300,8 @@ export function fmtRegistoValor(key, v) {
   if (typeof v === 'boolean') return v ? 'Sim' : 'Não'
   if (key === 'cc_resultado') return CC_RESULTADO_LABEL[v] || v
   if (key === 'cc_aceita_negociar') return SIM_NAO_NP_LABEL[v] || v
+  if (key === 'cc_disponibilidade') return CC_DISPONIBILIDADE_LABEL[v] || v
+  if (key === 'cc_documentacao') return CC_DOCUMENTACAO_LABEL[v] || v
   if (key === 'cl_resultado') return CL_RESULTADO_LABEL[v] || v
   if (key === 'cl_valor_ancora' || key === 'cl_valor_contraproposta') return EUR(Number(v))
   if (key === 'cl_deadline') return fmtDate(v)
@@ -302,7 +311,7 @@ export function fmtRegistoValor(key, v) {
 
 // Campos manuais (colunas do registo) por tipo de chamada, na ordem a mostrar.
 export const CAMPOS_POR_TIPO = {
-  cold_call: ['cc_resultado', 'cc_aceita_negociar'],
+  cold_call: ['cc_disponibilidade', 'cc_documentacao', 'cc_resultado', 'cc_aceita_negociar'],
   discovery_call: ['dc_onus_verificado', 'dc_direito_preferencia_esclarecido'],
   close_call: ['cl_resultado', 'cl_valor_ancora', 'cl_valor_contraproposta', 'cl_deadline', 'cl_formalizado_escrito_mesmo_dia'],
   pivot_parceria: ['pp_compromisso_confirmado', 'pp_criterios_pesquisa_enviados', 'pp_negocios_fechados'],

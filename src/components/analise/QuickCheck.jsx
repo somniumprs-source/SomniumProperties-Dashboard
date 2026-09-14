@@ -93,10 +93,12 @@ export function QuickCheck({ analise, onTransfer }) {
           </div>
 
           {/* Transferir */}
-          <button onClick={transferir}
-            className="w-full py-2 text-xs rounded-lg border border-yellow-500 text-yellow-700 hover:bg-yellow-50 transition-colors">
-            Abrir na Calculadora Completa
-          </button>
+          {onTransfer && (
+            <button onClick={transferir}
+              className="w-full py-2 text-xs rounded-lg border border-yellow-500 text-yellow-700 hover:bg-yellow-50 transition-colors">
+              Abrir na Calculadora Completa
+            </button>
+          )}
         </div>
       )}
     </div>

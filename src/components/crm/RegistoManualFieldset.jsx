@@ -11,6 +11,7 @@
  */
 import {
   CC_RESULTADOS, CC_RESULTADO_LABEL, SIM_NAO_NP, SIM_NAO_NP_LABEL,
+  CC_DISPONIBILIDADE, CC_DISPONIBILIDADE_LABEL, CC_DOCUMENTACAO, CC_DOCUMENTACAO_LABEL,
   DC_CRITERIOS, bandaScorecard, CL_RESULTADOS, CL_RESULTADO_LABEL,
 } from '../../constants.js'
 
@@ -68,6 +69,10 @@ export function RegistoManualFieldset({ registo, onChange }) {
     <div className="space-y-3">
       <Bloco titulo="Cold Call">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <SelectField label="Disponibilidade confirmada" value={registo.cc_disponibilidade} options={CC_DISPONIBILIDADE} labels={CC_DISPONIBILIDADE_LABEL}
+            onChange={v => onChange('cc_disponibilidade', v)} />
+          <SelectField label="Documentação (caderneta e planta)" value={registo.cc_documentacao} options={CC_DOCUMENTACAO} labels={CC_DOCUMENTACAO_LABEL}
+            onChange={v => onChange('cc_documentacao', v)} />
           <SelectField label="Resultado" value={registo.cc_resultado} options={CC_RESULTADOS} labels={CC_RESULTADO_LABEL}
             onChange={v => onChange('cc_resultado', v)} />
           <SelectField label="Aceita negociar" value={registo.cc_aceita_negociar} options={SIM_NAO_NP} labels={SIM_NAO_NP_LABEL}

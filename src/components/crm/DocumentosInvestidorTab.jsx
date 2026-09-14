@@ -7,7 +7,7 @@ import { FileText, Plus, Trash2, ExternalLink, FileDown } from 'lucide-react'
 import { apiFetch, openDocument } from '../../lib/api.js'
 import { fmtDate } from '../../constants.js'
 
-const TIPO_LABELS = {
+const TIPO_LABELS_ENVIADO = {
   dossier_investidor: 'Dossier de Investimento',
   proposta_investimento: 'Proposta de Investimento',
   proposta_investimento_anonima: 'Proposta de Investimento (Anonima)',
@@ -17,13 +17,40 @@ const TIPO_LABELS = {
   outro: 'Outro',
 }
 
-const TIPO_OPTIONS = Object.entries(TIPO_LABELS)
+const TIPO_LABELS_RECEBIDO = {
+  identificacao: 'Identificacao (CC/Passaporte)',
+  comprovativo_morada: 'Comprovativo de Morada',
+  comprovativo_fundos: 'Comprovativo de Fundos',
+  procuracao: 'Procuracao',
+  nda_assinado: 'NDA Assinado',
+  contrato_assinado: 'Contrato Assinado',
+  certidao_permanente: 'Certidao Permanente / Registo Comercial',
+  outro: 'Outro',
+}
+
+const TIPO_LABELS_POR_DIRECAO = { enviado: TIPO_LABELS_ENVIADO, recebido: TIPO_LABELS_RECEBIDO }
+
+const SUBTABS = [
+  { key: 'enviado', label: 'Enviados' },
+  { key: 'recebido', label: 'Recebidos' },
+]
 
 export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs, onUpdate, readOnly = false }) {
   const [documentos, setDocumentos] = useState(initialDocs || [])
+  const [direcao, setDirecao] = useState('enviado')
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ tipo: 'dossier_investidor', nome: '', imovel_id: '', notas: '', file: null })
   const [saving, setSaving] = useState(false)
+
+  const TIPO_LABELS = TIPO_LABELS_POR_DIRECAO[direcao]
+  const TIPO_OPTIONS = Object.entries(TIPO_LABELS)
+  const documentosFiltrados = documentos.filter(d => (d.direcao || 'enviado') === direcao)
+
+  function trocarDirecao(novaDirecao) {
+    setDirecao(novaDirecao)
+    setShowForm(false)
+    setForm(f => ({ ...f, tipo: Object.keys(TIPO_LABELS_POR_DIRECAO[novaDirecao])[0] }))
+  }
 
   async function load() {
     try {
@@ -43,6 +70,7 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
         fd.append('file', form.file)
         fd.append('tipo', form.tipo)
         fd.append('nome', form.nome.trim())
+        fd.append('direcao', direcao)
         if (form.imovel_id) fd.append('imovel_id', form.imovel_id)
         if (form.notas?.trim()) fd.append('notas', form.notas.trim())
         const r = await apiFetch(`/api/crm/investidores/${investidorId}/documentos`, { method: 'POST', body: fd })
@@ -54,12 +82,13 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
           body: JSON.stringify({
             tipo: form.tipo,
             nome: form.nome.trim(),
+            direcao,
             imovel_id: form.imovel_id || null,
             notas: form.notas?.trim() || null,
           }),
         })
       }
-      setForm({ tipo: 'dossier_investidor', nome: '', imovel_id: '', notas: '', file: null })
+      setForm({ tipo: Object.keys(TIPO_LABELS)[0], nome: '', imovel_id: '', notas: '', file: null })
       setShowForm(false)
       await load()
       if (onUpdate) onUpdate()
@@ -82,9 +111,31 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
 
   return (
     <div className="space-y-4">
+      {/* Sub-abas: Enviados / Recebidos */}
+      <div className="flex items-center gap-1 border-b border-gray-100">
+        {SUBTABS.map(t => {
+          const count = documentos.filter(d => (d.direcao || 'enviado') === t.key).length
+          return (
+            <button
+              key={t.key}
+              onClick={() => trocarDirecao(t.key)}
+              className={`px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${
+                direcao === t.key
+                  ? 'border-indigo-600 text-indigo-700'
+                  : 'border-transparent text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              {t.label} ({count})
+            </button>
+          )
+        })}
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-700">Documentos enviados ({documentos.length})</h3>
+        <h3 className="text-sm font-semibold text-gray-700">
+          Documentos {direcao === 'enviado' ? 'enviados' : 'recebidos'} ({documentosFiltrados.length})
+        </h3>
         {!readOnly && (
           <button
             onClick={() => setShowForm(!showForm)}
@@ -129,11 +180,13 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
       )}
 
       {/* Lista */}
-      {documentos.length === 0 ? (
-        <div className="text-center py-8 text-gray-400 text-sm">Nenhum documento registado.</div>
+      {documentosFiltrados.length === 0 ? (
+        <div className="text-center py-8 text-gray-400 text-sm">
+          Nenhum documento {direcao === 'enviado' ? 'enviado' : 'recebido'} registado.
+        </div>
       ) : (
         <div className="divide-y divide-gray-100">
-          {documentos.map(doc => (
+          {documentosFiltrados.map(doc => (
             <div key={doc.id} className="flex items-center gap-3 py-3 group">
               <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
                 <FileText className="w-4 h-4 text-indigo-500" />

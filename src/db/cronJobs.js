@@ -7,6 +7,8 @@ import pool from './pg.js'
 import { randomUUID } from 'crypto'
 import { sendWhatsApp, isConfigured as whatsappConfigured } from './whatsappAgent.js'
 import { sendEmail, isConfigured as emailConfigured } from './emailService.js'
+import { ensureOportunidadesScraperTable, ensurePrecoM2ReferenciaTable } from './oportunidadesScraper.js'
+import { buscarOportunidadesIdealista } from './apifyIdealista.js'
 
 const TIMEZONE = 'Europe/Lisbon'
 
@@ -494,5 +496,35 @@ export function startCronJobs() {
   console.log('[cron] Arquivamento trimestral de tarefas registado → 1 Jan/Abr/Jul/Out 03:00 Europe/Lisbon')
 }
 
+// ── Pesquisa diária de imóveis (Idealista via Apify) — SOP 1 §5.2.1 ────
+// Não registada em startCronJobs() de propósito: evita gastar créditos Apify
+// sempre que `npm run dev` estiver a correr às 7h. Só via trigger manual
+// (POST /api/cron/procura-imoveis) — em produção, o pg_cron + cron-procura-imoveis
+// (Edge Function) é que corre a horas reais.
+async function runProcuraImoveis() {
+  await ensureOportunidadesScraperTable()
+  await ensurePrecoM2ReferenciaTable()
+  const { candidatos, erros } = await buscarOportunidadesIdealista()
+
+  let novos = 0
+  for (const c of candidatos) {
+    const id = randomUUID()
+    const cols = Object.keys(c)
+    const { rowCount } = await pool.query(
+      `INSERT INTO oportunidades_scraper (id, ${cols.join(', ')})
+       VALUES ($1, ${cols.map((_, i) => `$${i + 2}`).join(', ')})
+       ON CONFLICT (property_code) DO NOTHING`,
+      [id, ...cols.map(k => c[k])]
+    )
+    if (rowCount) novos++
+  }
+
+  console.log(
+    `[cron-procura-imoveis] ${candidatos.length} candidatos encontrados, ${novos} novos inseridos` +
+      (erros.length ? ` (erros: ${erros.join(' | ')})` : '')
+  )
+  return { encontrados: candidatos.length, novos, erros }
+}
+
 // Exports para execução manual via API
-export { runFollowUp, runRelatorioDiario, runRelatorioSemanal, runReclassificacaoInvestidores, runAutoInactivoInvestidores, runArquivoRelatoriosObra, REACTIVATION_TEMPLATE }
+export { runFollowUp, runRelatorioDiario, runRelatorioSemanal, runReclassificacaoInvestidores, runAutoInactivoInvestidores, runArquivoRelatoriosObra, REACTIVATION_TEMPLATE, runProcuraImoveis }

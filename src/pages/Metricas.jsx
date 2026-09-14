@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { Header } from '../components/layout/Header.jsx'
 import { PageSkeleton } from '../components/ui/Skeleton.jsx'
 import { apiFetch } from '../lib/api.js'
@@ -15,9 +16,13 @@ const TABS = [
   { id: 'receita',      label: 'Receita & Margens' },
   { id: 'eficiencia',   label: 'Eficiência' },
   { id: 'retencao',     label: 'Retenção' },
+  { id: 'onboarding',   label: 'Onboarding & Obra' },
   { id: 'avancado',     label: 'Avançado' },
   { id: 'okrs',         label: 'OKRs' },
 ]
+
+const SEMAFORO_COLORS = { verde: '#22c55e', amarelo: '#C9A84C', laranja: '#f97316', vermelho: '#ef4444' }
+const SEMAFORO_LABELS = { verde: 'Verde', amarelo: 'Amarelo', laranja: 'Laranja', vermelho: 'Vermelho' }
 
 const FUNNEL_COLORS = ['#94a3b8', '#60a5fa', '#818cf8', '#f59e0b', '#22c55e']
 
@@ -209,6 +214,7 @@ export function Metricas() {
   const p3  = data?.pipeline3
   const tr  = data?.transversal
   const tk  = data?.tracker
+  const oo  = data?.onboardingObra
 
   return (
     <>
@@ -929,6 +935,102 @@ export function Metricas() {
                   warn={cons.inativosMais30d > 0} />
                 <MvsMeta label="Tempo médio até descontinuação" value={cons.tempoMedioAteDescontinuacao} meta={cons.metaTempo} format="days" invert />
                 <M label="Motivo mais frequente" value={cons.motivoMaisFrequente || '—'} />
+              </div>
+            </>
+          )
+        })()}
+
+        {/* ══════════ ONBOARDING & OBRA (SOP 13 §9) ══════════ */}
+        {tab === 'onboarding' && oo && (() => {
+          const semaforoPie = Object.entries(oo.semaforoDistribuicao?.porCor || {})
+            .filter(([, v]) => v > 0)
+            .map(([cor, v]) => ({ name: SEMAFORO_LABELS[cor] || cor, cor, value: v }))
+          const porProjectoSemaforo = oo.semaforoDistribuicao?.porProjecto || []
+          const porProjectoEntrega = oo.entregaRelatorioSemanal?.porProjecto || []
+          return (
+            <>
+              <SectionTitle>Onboarding de Investidores</SectionTitle>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+                <MvsMeta label="Boas-vindas em 24h" value={oo.taxaBoasVindas24h} meta={100} format="pct" sub="Email enviado ≤ 24h após onboarding iniciado" />
+                <MvsMeta label="Confirmação em 48h" value={oo.taxaConfirmacao48h} meta={100} format="pct" sub="Contacto confirmado ≤ 48h após email" />
+                <MvsMeta label="Primeira reunião em 7 dias" value={oo.taxaPrimeiraReuniao7d} meta={100} format="pct" />
+                <MvsMeta label="Tempo médio de onboarding" value={oo.tempoMedioOnboarding} meta={7} format="days" invert sub="Confirmação de fundos → 1.ª reunião" />
+              </div>
+
+              <SectionTitle>Obra — Entrega do Relatório Semanal</SectionTitle>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <MvsMeta label="Taxa média de entrega" value={oo.entregaRelatorioSemanal?.media} meta={100} format="pct" sub="Vistorias registadas / semanas de obra activa" />
+              </div>
+              {porProjectoEntrega.length > 0 ? (
+                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
+                  <table className="min-w-[500px] w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
+                        <th className="text-left py-2 px-3">Projecto</th>
+                        <th className="text-right py-2 px-3">Vistorias</th>
+                        <th className="text-right py-2 px-3">Semanas de obra</th>
+                        <th className="text-right py-2 px-3">Taxa de entrega</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {porProjectoEntrega.map((p, idx) => (
+                        <tr key={idx} className="border-b border-gray-50">
+                          <td className="py-2 px-3 font-medium text-gray-800">{p.movimento}</td>
+                          <td className="py-2 px-3 text-right font-mono text-xs">{p.vistorias}</td>
+                          <td className="py-2 px-3 text-right font-mono text-xs">{p.semanas}</td>
+                          <td className="py-2 px-3 text-right font-mono font-bold text-indigo-600">{PCT(p.taxa)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <EmptyState />}
+
+              <SectionTitle>Distribuição do Semáforo de Desvio Orçamental (trimestre corrente)</SectionTitle>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
+                  <h2 className="text-sm font-semibold text-gray-700 mb-4">Vistorias por cor (trimestre corrente)</h2>
+                  {semaforoPie.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <PieChart>
+                        <Pie data={semaforoPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80}
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false}>
+                          {semaforoPie.map((s, i) => <Cell key={i} fill={SEMAFORO_COLORS[s.cor]} />)}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : <EmptyState />}
+                </div>
+
+                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
+                  <h2 className="text-sm font-semibold text-gray-700 mb-4">Cor mais recente por projecto</h2>
+                  {porProjectoSemaforo.length > 0 ? (
+                    <table className="min-w-[380px] w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
+                          <th className="text-left py-2 px-3">Projecto</th>
+                          <th className="text-right py-2 px-3">Desvio</th>
+                          <th className="text-right py-2 px-3">Semáforo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {porProjectoSemaforo.map((p, idx) => (
+                          <tr key={idx} className="border-b border-gray-50">
+                            <td className="py-2 px-3 font-medium text-gray-800">{p.movimento || '—'}</td>
+                            <td className="py-2 px-3 text-right font-mono text-xs">{p.pct != null ? `${p.pct > 0 ? '+' : ''}${p.pct.toFixed(1)}%` : '—'}</td>
+                            <td className="py-2 px-3 text-right">
+                              <span className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: SEMAFORO_COLORS[p.cor] }}>
+                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: SEMAFORO_COLORS[p.cor] }} />
+                                {SEMAFORO_LABELS[p.cor] || p.cor}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : <EmptyState />}
+                </div>
               </div>
             </>
           )

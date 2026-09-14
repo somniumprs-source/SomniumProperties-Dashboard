@@ -2,6 +2,7 @@ export function StatusBadge({ status }) {
   const map = {
     green:  { color: '#22c55e', label: 'OK' },
     yellow: { color: '#C9A84C', label: 'Atenção' },
+    orange: { color: '#f97316', label: 'Alerta' },
     red:    { color: '#ef4444', label: 'Crítico' },
   }
   const s = map[status] ?? map.yellow

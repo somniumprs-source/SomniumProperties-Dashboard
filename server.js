@@ -147,6 +147,7 @@ try {
   // admin passa sempre; em dev sem Supabase (supabaseAdmin nulo) também passa sempre.
   // parceiro/investidor ficam filtrados por registo via `acessos` (restrictByAccess).
   app.use('/api/crm/imoveis', requireModule('crm.imoveis'), restrictByAccess('imovel'))
+  app.use('/api/crm/oportunidades', requireModule('crm.imoveis'))
   // investidor sem módulo crm.investidores ainda lê (GET) o seu próprio registo/dossiê.
   app.use('/api/crm/investidores', requireModuleOrOwnInvestidor('crm.investidores'))
   app.use('/api/crm/consultores', requireModule('crm.consultores'))
@@ -308,7 +309,7 @@ try {
   // ── WhatsApp Webhook (Twilio) ───────────────────────────────
   try {
     const { receiveWhatsAppMessage, isConfigured: waConfigured } = await import('./src/db/whatsappAgent.js')
-    const { runFollowUp, runRelatorioDiario, runRelatorioSemanal, REACTIVATION_TEMPLATE } = await import('./src/db/cronJobs.js')
+    const { runFollowUp, runRelatorioDiario, runRelatorioSemanal, runProcuraImoveis, REACTIVATION_TEMPLATE } = await import('./src/db/cronJobs.js')
     const { startCronJobs } = await import('./src/db/cronJobs.js')
 
     // Tracking do ultimo pedido recebido no webhook
@@ -692,6 +693,11 @@ TODAS as tarefas devem ser sincronizadas com Google Calendar.`,
     })
     app.post('/api/cron/relatorio-semanal', async (_req, res) => {
       try { await runRelatorioSemanal(); res.json({ ok: true }) } catch (e) { res.status(500).json({ error: e.message }) }
+    })
+    // Pesquisa diária de imóveis (Idealista via Apify) — trigger manual para
+    // testar em dev; não registada em node-cron (ver nota em cronJobs.js).
+    app.post('/api/cron/procura-imoveis', async (_req, res) => {
+      try { res.json({ ok: true, ...(await runProcuraImoveis()) }) } catch (e) { res.status(500).json({ error: e.message }) }
     })
 
     // Endpoint para obter template de reactivação — regional (?regiao=AMP|Coimbra)
@@ -1130,6 +1136,7 @@ function mapConsultor(p) {
 import {
   getNegócios, getDespesas, getImóveis, getInvestidores, getConsultores, getTarefas,
   getVisitas,
+  getProjetoInvestidores, getReunioesInvestidor, getVistoriasObra,
   round2 as round2PG,
   isInvestidorPrincipal,
 } from './src/db/queries.js'
@@ -3014,13 +3021,16 @@ app.get('/api/metricas', async (req, res) => {
     const cacheKey = `dash:metricas|r=${regiao || ''}`
     const cached = cache.get(cacheKey)
     if (cached) return res.json(cached)
-    const [imoveis, negocios, investidoresRaw, consultoresRaw, despesas, visitas] = await Promise.all([
+    const [imoveis, negocios, investidoresRaw, consultoresRaw, despesas, visitas, projetoInvestidores, reunioesInvestidor, vistoriasObra] = await Promise.all([
       getImóveis({ regiao }).catch(() => []),
       getNegócios({ regiao }),
       getInvestidores({ regiao }),
       getConsultores({ regiao }).catch(() => []),
       getDespesas({ regiao }).catch(() => []),
       getVisitas({ regiao }).catch(() => []),
+      getProjetoInvestidores({ regiao }).catch(() => []),
+      getReunioesInvestidor({ regiao }).catch(() => []),
+      getVistoriasObra({ regiao }).catch(() => []),
     ])
     // Excluir cópias duplicadas (Ativo/Passivo) para não contar a mesma pessoa duas vezes
     const investidores = investidoresRaw.filter(isInvestidorPrincipal)
@@ -4169,6 +4179,103 @@ app.get('/api/metricas', async (req, res) => {
       okrs,
     }
 
+    // ════════════════════════════════════════════════════════════
+    // SOP 13 §9 — ONBOARDING & OBRA
+    // ════════════════════════════════════════════════════════════
+
+    // Primeira reunião REALIZADA por projecto (reuniões são por negocio_id,
+    // não por investidor — servem todos os investidores desse projecto).
+    const primeiraReuniaoPorNegocio = {}
+    for (const r of reunioesInvestidor) {
+      if (r.estado !== 'Realizada' || !r.dataHora) continue
+      const d = new Date(r.dataHora)
+      if (!primeiraReuniaoPorNegocio[r.negocioId] || d < primeiraReuniaoPorNegocio[r.negocioId]) {
+        primeiraReuniaoPorNegocio[r.negocioId] = d
+      }
+    }
+
+    const piComOnboarding = projetoInvestidores.filter(pi => pi.onboardingIniciadoEm)
+
+    // Taxa de Boas-Vindas em 24h
+    const piComEmail24h = piComOnboarding.filter(pi => {
+      if (!pi.emailBoasVindasEnviadoEm) return false
+      return (new Date(pi.emailBoasVindasEnviadoEm) - new Date(pi.onboardingIniciadoEm)) / 3600000 <= 24
+    })
+    const taxaBoasVindas24h = piComOnboarding.length > 0
+      ? round2(piComEmail24h.length / piComOnboarding.length * 100) : null
+
+    // Taxa de Confirmação em 48h (base = linhas com email de boas-vindas enviado)
+    const piComEmail = piComOnboarding.filter(pi => pi.emailBoasVindasEnviadoEm)
+    const piConfirmados48h = piComEmail.filter(pi => {
+      if (!pi.confirmacaoContactoEm) return false
+      return (new Date(pi.confirmacaoContactoEm) - new Date(pi.emailBoasVindasEnviadoEm)) / 3600000 <= 48
+    })
+    const taxaConfirmacao48h = piComEmail.length > 0
+      ? round2(piConfirmados48h.length / piComEmail.length * 100) : null
+
+    // Taxa de Primeira Reunião em 7 Dias
+    const piPrimeiraReuniao7d = piComOnboarding.filter(pi => {
+      const reuniao = primeiraReuniaoPorNegocio[pi.negocioId]
+      if (!reuniao) return false
+      const dias = daysBetween(pi.onboardingIniciadoEm, reuniao)
+      return dias != null && dias <= 7
+    })
+    const taxaPrimeiraReuniao7d = piComOnboarding.length > 0
+      ? round2(piPrimeiraReuniao7d.length / piComOnboarding.length * 100) : null
+
+    // Tempo Médio de Onboarding (confirmação de fundos → primeira reunião realizada)
+    const investidorPorId = Object.fromEntries(investidoresRaw.map(i => [i.id, i]))
+    const temposOnboarding = projetoInvestidores
+      .map(pi => {
+        const inv = investidorPorId[pi.investidorId]
+        const reuniao = primeiraReuniaoPorNegocio[pi.negocioId]
+        if (!inv?.dataCapitalTransferido || !reuniao) return null
+        return daysBetween(inv.dataCapitalTransferido, reuniao)
+      })
+      .filter(v => v != null && v < 365)
+    const tempoMedioOnboarding = avg(temposOnboarding)
+
+    // Taxa de Entrega do Relatório Semanal (por projecto com obra activa)
+    const vistoriasPorNegocio = {}
+    for (const v of vistoriasObra) {
+      (vistoriasPorNegocio[v.negocioId] ??= []).push(v)
+    }
+    const entregaRelatorioPorProjeto = negocios
+      .filter(n => n.dataInicioObra)
+      .map(n => {
+        const dias = daysBetween(n.dataInicioObra, n.dataFimObra || now) || 0
+        const semanas = Math.max(1, Math.ceil(dias / 7))
+        const vistoriasCount = (vistoriasPorNegocio[n.id] || []).length
+        return { negocioId: n.id, movimento: n.movimento, taxa: round2(Math.min(vistoriasCount / semanas, 1) * 100), vistorias: vistoriasCount, semanas }
+      })
+    const taxaEntregaRelatorioSemanal = avg(entregaRelatorioPorProjeto.map(p => p.taxa))
+
+    // Distribuição do Semáforo de Desvio Orçamental (trimestre corrente)
+    const semaforoPorCor = { verde: 0, amarelo: 0, laranja: 0, vermelho: 0 }
+    for (const v of vistoriasObra) {
+      if (v.semaforoCor && isQuarter(v.semanaData, ano, currentQuarter) && semaforoPorCor[v.semaforoCor] != null) {
+        semaforoPorCor[v.semaforoCor]++
+      }
+    }
+    const ultimaVistoriaPorNegocio = {}
+    for (const v of vistoriasObra) {
+      if (!v.semanaData) continue
+      const atual = ultimaVistoriaPorNegocio[v.negocioId]
+      if (!atual || new Date(v.semanaData) > new Date(atual.semanaData)) ultimaVistoriaPorNegocio[v.negocioId] = v
+    }
+    const semaforoPorProjeto = Object.values(ultimaVistoriaPorNegocio)
+      .filter(v => v.semaforoCor)
+      .map(v => ({ negocioId: v.negocioId, movimento: negocios.find(n => n.id === v.negocioId)?.movimento || null, cor: v.semaforoCor, pct: v.semaforoPct }))
+
+    const onboardingObraPayload = {
+      taxaBoasVindas24h,
+      taxaConfirmacao48h,
+      taxaPrimeiraReuniao7d,
+      tempoMedioOnboarding,
+      entregaRelatorioSemanal: { media: taxaEntregaRelatorioSemanal, porProjecto: entregaRelatorioPorProjeto },
+      semaforoDistribuicao: { porCor: semaforoPorCor, porProjecto: semaforoPorProjeto },
+    }
+
     const metricasPayload = {
       updatedAt: new Date().toISOString(),
 
@@ -4277,6 +4384,9 @@ app.get('/api/metricas', async (req, res) => {
 
       // ── KPIs Avançados + OKRs ──
       avancado: trackerAvancado,
+
+      // ── Onboarding & Obra (SOP 13 §9) ──
+      onboardingObra: onboardingObraPayload,
     }
     cache.set(cacheKey, metricasPayload, 300000)
     res.json(metricasPayload)

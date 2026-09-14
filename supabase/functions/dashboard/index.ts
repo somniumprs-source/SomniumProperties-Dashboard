@@ -11,6 +11,9 @@ import {
   getConsultores as _getConsultores,
   getVisitas as _getVisitas,
   getTarefas as _getTarefas,
+  getProjetoInvestidores as _getProjetoInvestidores,
+  getReunioesInvestidor as _getReunioesInvestidor,
+  getVistoriasObra as _getVistoriasObra,
   isInvestidorPrincipal,
   round2,
 } from "../_shared/queries.ts";
@@ -27,6 +30,9 @@ const getInvestidores = _getInvestidores as (a?: RegiaoArg) => Promise<any[]>;
 const getConsultores = _getConsultores as (a?: RegiaoArg) => Promise<any[]>;
 const getVisitas = _getVisitas as (a?: RegiaoArg) => Promise<any[]>;
 const getTarefas = _getTarefas as (a?: RegiaoArg) => Promise<any[]>;
+const getProjetoInvestidores = _getProjetoInvestidores as (a?: RegiaoArg) => Promise<any[]>;
+const getReunioesInvestidor = _getReunioesInvestidor as (a?: RegiaoArg) => Promise<any[]>;
+const getVistoriasObra = _getVistoriasObra as (a?: RegiaoArg) => Promise<any[]>;
 
 const app = createApp("/dashboard");
 
@@ -1790,13 +1796,16 @@ app.get("/financeiro/projecao", async (c: any) => {
 app.get("/metricas", async (c: any) => {
   try {
     const regiao = regiaoFrom(c);
-    const [imoveis, negocios, investidoresRaw, consultoresRaw, despesas, visitas] = await Promise.all([
+    const [imoveis, negocios, investidoresRaw, consultoresRaw, despesas, visitas, projetoInvestidores, reunioesInvestidor, vistoriasObra] = await Promise.all([
       getImóveis({ regiao }).catch(() => [] as any[]),
       getNegócios({ regiao }),
       getInvestidores({ regiao }),
       getConsultores({ regiao }).catch(() => [] as any[]),
       getDespesas({ regiao }).catch(() => [] as any[]),
       getVisitas({ regiao }).catch(() => [] as any[]),
+      getProjetoInvestidores({ regiao }).catch(() => [] as any[]),
+      getReunioesInvestidor({ regiao }).catch(() => [] as any[]),
+      getVistoriasObra({ regiao }).catch(() => [] as any[]),
     ]);
     // Excluir cópias duplicadas (Ativo/Passivo) para não contar a mesma pessoa duas vezes
     const investidores = investidoresRaw.filter(isInvestidorPrincipal);
@@ -2845,6 +2854,95 @@ app.get("/metricas", async (c: any) => {
       okrs,
     };
 
+    // ════════════════════════════════════════════════════════════
+    // SOP 13 §9 — ONBOARDING & OBRA
+    // ════════════════════════════════════════════════════════════
+
+    const primeiraReuniaoPorNegocio: Record<string, Date> = {};
+    for (const r of reunioesInvestidor) {
+      if (r.estado !== "Realizada" || !r.dataHora) continue;
+      const d = new Date(r.dataHora);
+      if (!primeiraReuniaoPorNegocio[r.negocioId] || d < primeiraReuniaoPorNegocio[r.negocioId]) {
+        primeiraReuniaoPorNegocio[r.negocioId] = d;
+      }
+    }
+
+    const piComOnboarding = projetoInvestidores.filter((pi: any) => pi.onboardingIniciadoEm);
+
+    const piComEmail24h = piComOnboarding.filter((pi: any) => {
+      if (!pi.emailBoasVindasEnviadoEm) return false;
+      return (new Date(pi.emailBoasVindasEnviadoEm).getTime() - new Date(pi.onboardingIniciadoEm).getTime()) / 3600000 <= 24;
+    });
+    const taxaBoasVindas24h = piComOnboarding.length > 0
+      ? round2(piComEmail24h.length / piComOnboarding.length * 100) : null;
+
+    const piComEmail = piComOnboarding.filter((pi: any) => pi.emailBoasVindasEnviadoEm);
+    const piConfirmados48h = piComEmail.filter((pi: any) => {
+      if (!pi.confirmacaoContactoEm) return false;
+      return (new Date(pi.confirmacaoContactoEm).getTime() - new Date(pi.emailBoasVindasEnviadoEm).getTime()) / 3600000 <= 48;
+    });
+    const taxaConfirmacao48h = piComEmail.length > 0
+      ? round2(piConfirmados48h.length / piComEmail.length * 100) : null;
+
+    const piPrimeiraReuniao7d = piComOnboarding.filter((pi: any) => {
+      const reuniao = primeiraReuniaoPorNegocio[pi.negocioId];
+      if (!reuniao) return false;
+      const dias = daysBetween(pi.onboardingIniciadoEm, reuniao);
+      return dias != null && dias <= 7;
+    });
+    const taxaPrimeiraReuniao7d = piComOnboarding.length > 0
+      ? round2(piPrimeiraReuniao7d.length / piComOnboarding.length * 100) : null;
+
+    const investidorPorId = Object.fromEntries(investidoresRaw.map((i: any) => [i.id, i]));
+    const temposOnboarding = projetoInvestidores
+      .map((pi: any) => {
+        const inv = investidorPorId[pi.investidorId];
+        const reuniao = primeiraReuniaoPorNegocio[pi.negocioId];
+        if (!inv?.dataCapitalTransferido || !reuniao) return null;
+        return daysBetween(inv.dataCapitalTransferido, reuniao);
+      })
+      .filter((v: any) => v != null && v < 365);
+    const tempoMedioOnboarding = avg(temposOnboarding);
+
+    const vistoriasPorNegocio: Record<string, any[]> = {};
+    for (const v of vistoriasObra) {
+      (vistoriasPorNegocio[v.negocioId] ??= []).push(v);
+    }
+    const entregaRelatorioPorProjeto = negocios
+      .filter((n: any) => n.dataInicioObra)
+      .map((n: any) => {
+        const dias = daysBetween(n.dataInicioObra, n.dataFimObra || now) || 0;
+        const semanas = Math.max(1, Math.ceil(dias / 7));
+        const vistoriasCount = (vistoriasPorNegocio[n.id] || []).length;
+        return { negocioId: n.id, movimento: n.movimento, taxa: round2(Math.min(vistoriasCount / semanas, 1) * 100), vistorias: vistoriasCount, semanas };
+      });
+    const taxaEntregaRelatorioSemanal = avg(entregaRelatorioPorProjeto.map((p: any) => p.taxa));
+
+    const semaforoPorCor: Record<string, number> = { verde: 0, amarelo: 0, laranja: 0, vermelho: 0 };
+    for (const v of vistoriasObra) {
+      if (v.semaforoCor && isQuarter(v.semanaData, ano, currentQuarter) && semaforoPorCor[v.semaforoCor] != null) {
+        semaforoPorCor[v.semaforoCor]++;
+      }
+    }
+    const ultimaVistoriaPorNegocio: Record<string, any> = {};
+    for (const v of vistoriasObra) {
+      if (!v.semanaData) continue;
+      const atual = ultimaVistoriaPorNegocio[v.negocioId];
+      if (!atual || new Date(v.semanaData) > new Date(atual.semanaData)) ultimaVistoriaPorNegocio[v.negocioId] = v;
+    }
+    const semaforoPorProjeto = Object.values(ultimaVistoriaPorNegocio)
+      .filter((v: any) => v.semaforoCor)
+      .map((v: any) => ({ negocioId: v.negocioId, movimento: negocios.find((n: any) => n.id === v.negocioId)?.movimento || null, cor: v.semaforoCor, pct: v.semaforoPct }));
+
+    const onboardingObraPayload = {
+      taxaBoasVindas24h,
+      taxaConfirmacao48h,
+      taxaPrimeiraReuniao7d,
+      tempoMedioOnboarding,
+      entregaRelatorioSemanal: { media: taxaEntregaRelatorioSemanal, porProjecto: entregaRelatorioPorProjeto },
+      semaforoDistribuicao: { porCor: semaforoPorCor, porProjecto: semaforoPorProjeto },
+    };
+
     const metricasPayload = {
       updatedAt: new Date().toISOString(),
       top: {
@@ -2936,6 +3034,7 @@ app.get("/metricas", async (c: any) => {
         churn: trackerChurn,
       },
       avancado: trackerAvancado,
+      onboardingObra: onboardingObraPayload,
     };
     return c.json(metricasPayload);
   } catch (err: any) {

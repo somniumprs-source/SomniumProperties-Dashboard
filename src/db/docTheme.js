@@ -29,6 +29,7 @@ export const DOC_COLORS = {
   green: '#2D6A2D', // positivo / validado
   red: '#8B2020', // negativo / erro
   amber: '#B07A1D', // aviso
+  orange: '#C2701D', // aviso mais grave que amber, abaixo de red (ex: semaforo de desvio orcamental 10-15%)
 }
 
 export const DOC_FONT = {

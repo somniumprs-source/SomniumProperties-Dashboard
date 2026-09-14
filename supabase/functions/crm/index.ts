@@ -36,6 +36,7 @@ import { isWholesaling } from "../_shared/modelos.ts";
 import { CHECKLIST_ENFORCEMENT_START_DATE } from "../_shared/featureFlags.ts";
 import { diasFollowUpParaRegisto } from "../_shared/followupRules.ts";
 import { criarFollowUpConsultor } from "../_shared/consultorFollowups.ts";
+import { ensureOportunidadesScraperTable } from "../_shared/oportunidadesScraper.ts";
 
 // 'Resposta' foi renomeado para 'Recebido' numa migração antiga (ver pg.ts);
 // dados anteriores à migração ainda usam 'Resposta' — aceitar os dois.
@@ -60,7 +61,7 @@ import {
 } from "../_shared/fasesFixFlip.ts";
 import {
   generateFichaAcompanhamento, generateRelatorioAcompanhamento, generateRelatorioSemanalObra,
-  generateMemoriaDescritiva, generateRelatorioSaida,
+  generateMemoriaDescritiva, generateRelatorioSaida, semaforoDesvio,
 } from "../_shared/pdfProjectoFixFlip.ts";
 import { exportProjetoExcel } from "../_shared/projetoExcelExport.ts";
 import { audit } from "../_shared/projetoAuditLog.ts";
@@ -773,6 +774,8 @@ app.use("/imoveis", requireModule("crm.imoveis"));
 app.use("/imoveis/*", requireModule("crm.imoveis"));
 app.use("/imoveis", restrictByAccessGeneric("imovel"));
 app.use("/imoveis/*", restrictByAccessGeneric("imovel"));
+app.use("/oportunidades", requireModule("crm.imoveis"));
+app.use("/oportunidades/*", requireModule("crm.imoveis"));
 
 // Middleware: garante a coluna fee_cedencia (fee de cedência do Wholesaling)
 // antes de qualquer POST/PUT em /imoveis — evita drop silencioso no primeiro
@@ -931,6 +934,97 @@ crudRoutes("/imoveis", Imoveis, {
     }
     return null;
   },
+});
+
+// ════════════════════════════════════════════════════════════════
+// OPORTUNIDADES — fila de candidatos a imóvel da pesquisa diária Idealista
+// via Apify (SOP 1 §5.2.1, cron-procura-imoveis). Aprovar cria o imóvel de
+// facto (mesmos side-effects do onCreate de /imoveis acima); rejeitar só
+// marca estado, fica em BD para não voltar a sugerir o mesmo property_code.
+// ════════════════════════════════════════════════════════════════
+const ZONA_PARA_REGIAO: Record<string, string> = { coimbra: "Coimbra", porto: "AMP" };
+
+app.get("/oportunidades", async (c: any) => {
+  try {
+    await ensureOportunidadesScraperTable();
+    const estado = c.req.query("estado") || "pendente";
+    const { rows } = await pool.query(
+      `SELECT * FROM oportunidades_scraper WHERE estado = $1 ORDER BY created_at DESC LIMIT 200`,
+      [estado],
+    );
+    return c.json({ data: rows, total: rows.length });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.get("/oportunidades/:id", async (c: any) => {
+  try {
+    await ensureOportunidadesScraperTable();
+    const { rows } = await pool.query(`SELECT * FROM oportunidades_scraper WHERE id = $1`, [c.req.param("id")]);
+    if (!rows[0]) return c.json({ error: "Oportunidade não encontrada" }, 404);
+    return c.json(rows[0]);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/oportunidades/:id/aprovar", async (c: any) => {
+  try {
+    await ensureOportunidadesScraperTable();
+    const id = c.req.param("id");
+    const { rows } = await pool.query(`SELECT * FROM oportunidades_scraper WHERE id = $1`, [id]);
+    const cand = rows[0];
+    if (!cand) return c.json({ error: "Oportunidade não encontrada" }, 404);
+    if (cand.estado !== "pendente") return c.json({ error: `Já foi ${cand.estado}` }, 409);
+
+    const item = await Imoveis.create({
+      nome: cand.morada || `${cand.tipologia || "Imóvel"} — ${cand.concelho}`,
+      origem: "Idealista",
+      link: cand.link,
+      distrito: cand.distrito,
+      concelho: cand.concelho,
+      regiao: ZONA_PARA_REGIAO[cand.zona] || "Coimbra",
+      tipologia: cand.tipologia,
+      predio_tipo: cand.predio_tipo,
+      ask_price: cand.preco,
+      area_util: cand.area,
+      ano_construcao: cand.ano_construcao,
+      estado: "Adicionado",
+    });
+
+    // Mesmos side-effects do onCreate de crudRoutes("/imoveis", ...) acima —
+    // duplicado de propósito (esse hook só corre para o POST HTTP /imoveis).
+    if (driveConfigured()) {
+      await createImovelFolder(item.id, item.nome || "Sem nome", item.estado || "Adicionado");
+    }
+    onImovelCreated(item).catch((e: any) => console.error("[docs] oportunidade aprovar:", e.message));
+    if (cand.link && cand.link.startsWith("http")) {
+      scrapePhotosFromLink(cand.link, item.id).then(async (photos: any[]) => {
+        if (photos.length > 0) {
+          await Imoveis.update(item.id, { fotos: JSON.stringify(photos) });
+        }
+      }).catch((e: any) => console.error("[scraper] oportunidade aprovar:", e.message));
+    }
+
+    const utilizador = c.get("user")?.email || null;
+    await pool.query(
+      `UPDATE oportunidades_scraper SET estado = 'aprovado', imovel_id = $2, decidido_por = $3, decidido_em = NOW() WHERE id = $1`,
+      [id, item.id, utilizador],
+    );
+    return c.json({ ok: true, imovel_id: item.id });
+  } catch (e) { return c.json({ error: (e as Error).message }, 400); }
+});
+
+app.post("/oportunidades/:id/rejeitar", async (c: any) => {
+  try {
+    await ensureOportunidadesScraperTable();
+    const { motivo } = await c.req.json().catch(() => ({}));
+    const utilizador = c.get("user")?.email || null;
+    const { rowCount } = await pool.query(
+      `UPDATE oportunidades_scraper SET estado = 'rejeitado', motivo_rejeicao = $2, decidido_por = $3, decidido_em = NOW()
+       WHERE id = $1 AND estado = 'pendente'`,
+      [c.req.param("id"), motivo || null, utilizador],
+    );
+    if (!rowCount) return c.json({ error: "Oportunidade não encontrada ou já decidida" }, 409);
+    return c.json({ ok: true });
+  } catch (e) { return c.json({ error: (e as Error).message }, 400); }
 });
 
 // ── Listagem dos documentos persistidos do imovel (listDocumentos) ──
@@ -1226,6 +1320,7 @@ app.post("/investidores/:id/documentos", async (c: any) => {
     const nome = form.get("nome");
     const imovel_id = form.get("imovel_id") || null;
     const notas = form.get("notas") || null;
+    const direcao = form.get("direcao") === "recebido" ? "recebido" : "enviado";
     if (!tipo || !nome) return c.json({ error: "tipo e nome são obrigatórios" }, 400);
 
     const id = crypto.randomUUID();
@@ -1254,11 +1349,11 @@ app.post("/investidores/:id/documentos", async (c: any) => {
     }
 
     await pool.query(
-      `INSERT INTO documentos_investidor (id, investidor_id, imovel_id, tipo, nome, notas, storage_path, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [id, investidorId, imovel_id, tipo, nome, notas, storagePath, now],
+      `INSERT INTO documentos_investidor (id, investidor_id, imovel_id, tipo, nome, notas, storage_path, direcao, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [id, investidorId, imovel_id, tipo, nome, notas, storagePath, direcao, now],
     );
-    return c.json({ id, investidor_id: investidorId, imovel_id, tipo, nome, notas, storage_path: storagePath, created_at: now }, 201);
+    return c.json({ id, investidor_id: investidorId, imovel_id, tipo, nome, notas, storage_path: storagePath, direcao, created_at: now }, 201);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
@@ -1296,8 +1391,6 @@ app.delete("/investidores/:id/documentos/:docId", async (c: any) => {
     return c.json({ ok: true });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
-
-
 
 // ── Orçamentos recebidos de fornecedores/empreiteiros (sub-aba "Documentos
 // Orçamentos" da aba Obra) — distinto de orcamentos_obra (estimativa planeada) ──
@@ -5700,10 +5793,61 @@ async function syncMontanteInvestido(investidorId: string) {
   await pool.query("UPDATE investidores SET montante_investido = $1 WHERE id = $2", [Number(r.total) || 0, investidorId]);
 }
 
+// SOP 13, Passo 1-2 — onboarding começa quando um investidor entra num
+// projecto. Dispara o email de boas-vindas (Anexo 1 do SOP) e grava as datas
+// de origem das métricas de onboarding (SOP 13 §9). Best-effort, não bloqueia
+// a resposta do endpoint.
+async function iniciarOnboardingInvestidor(linkId: string, negocioId: string, investidorId: string) {
+  try {
+    await pool.query("UPDATE projeto_investidores SET onboarding_iniciado_em = NOW() WHERE id = $1", [linkId]);
+
+    if (!emailConfigured()) return;
+    const { rows: negs } = await pool.query("SELECT movimento FROM negocios WHERE id = $1", [negocioId]);
+    const { rows: invs } = await pool.query("SELECT nome, email FROM investidores WHERE id = $1", [investidorId]);
+    const negocio = negs[0];
+    const investidor = invs[0];
+    if (!negocio || !investidor?.email) return;
+
+    const subject = `Bem-vindo à Somnium Properties | Projeto ${negocio.movimento}`;
+    const html = `
+      <div style="font-family: -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; background: #ffffff;">
+        <div style="background: #0d0d0d; padding: 24px; border-radius: 12px; color: white; text-align: center;">
+          <p style="color: #C9A84C; font-size: 11px; letter-spacing: 1px; margin: 0; text-transform: uppercase;">SOMNIUM PROPERTIES</p>
+          <h1 style="color: #C9A84C; margin: 8px 0 0; font-size: 22px;">Bem-vindo, ${investidor.nome}!</h1>
+        </div>
+        <div style="padding: 24px 0;">
+          <p style="font-size: 15px; color: #1f2937; line-height: 1.6;">
+            É com enorme satisfação que confirmamos a formalização da nossa parceria no projeto <strong>${negocio.movimento}</strong>.
+            Agradecemos a confiança e asseguramos total compromisso com transparência, comunicação e excelência.
+          </p>
+          <div style="background: #f9fafb; border-left: 3px solid #C9A84C; padding: 16px; border-radius: 8px; margin: 16px 0;">
+            <p style="margin: 0; color: #6b7280; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">O que pode esperar</p>
+            <p style="margin: 6px 0 0; font-size: 14px; color: #0d0d0d;">Transparência total · comunicação regular · resposta em até 24h · gestão profissional</p>
+          </div>
+          <p style="font-size: 14px; color: #6b7280;">
+            Nas próximas 48h vamos confirmar consigo os canais de comunicação e agendar a primeira reunião de acompanhamento.
+          </p>
+        </div>
+        <div style="border-top: 1px solid #e5e7eb; padding-top: 12px; text-align: center;">
+          <p style="font-size: 10px; color: #9ca3af; margin: 0;">Somnium Properties · ${new Date().toLocaleDateString("pt-PT")}</p>
+        </div>
+      </div>
+    `;
+    sendEmail(subject, html, { to: investidor.email })
+      .then(() => pool.query("UPDATE projeto_investidores SET email_boas_vindas_enviado_em = NOW() WHERE id = $1", [linkId]))
+      .catch((e: any) => console.error("[onboarding-investidor] email boas-vindas:", e.message));
+  } catch (e) { console.error("[onboarding-investidor]", (e as Error).message); }
+}
+
 app.post("/projetos/:negocioId/investidores", async (c: any) => {
   try {
     const { investidor_id, capital, percentagem, notas } = await c.req.json().catch(() => ({}));
     if (!investidor_id) return c.json({ error: "investidor_id obrigatório" }, 400);
+    const { rows: existentes } = await pool.query(
+      "SELECT id FROM projeto_investidores WHERE negocio_id = $1 AND investidor_id = $2",
+      [c.req.param("negocioId"), investidor_id],
+    );
+    const jaExistia = existentes.length > 0;
     const id = crypto.randomUUID();
     const { rows } = await pool.query(
       `INSERT INTO projeto_investidores (id, negocio_id, investidor_id, capital, percentagem, notas)
@@ -5716,6 +5860,9 @@ app.post("/projetos/:negocioId/investidores", async (c: any) => {
     // Se este investidor tem um utilizador ligado, dar-lhe acesso a este projecto.
     syncInvestidorAcessos(investidor_id).catch((e: any) => console.error("[projeto-investidor] syncAcessos:", e.message));
     syncMontanteInvestido(investidor_id).catch((e: any) => console.error("[projeto-investidor] syncMontante:", e.message));
+    if (!jaExistia) {
+      iniciarOnboardingInvestidor(rows[0].id, c.req.param("negocioId"), investidor_id).catch((e: any) => console.error("[projeto-investidor] onboarding:", e.message));
+    }
     return c.json(rows[0], 201);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
@@ -5738,6 +5885,24 @@ app.put("/projetos/investidores/:linkId", async (c: any) => {
     const { rows } = await pool.query(`UPDATE projeto_investidores SET ${sets.join(", ")} WHERE id = $${params.length} RETURNING *`, params);
     if (!rows.length) return c.json({ error: "Ligação não encontrada" }, 404);
     syncMontanteInvestido(rows[0].investidor_id).catch((e: any) => console.error("[projeto-investidor] syncMontante:", e.message));
+    return c.json(rows[0]);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// SOP 13, Passo 3 — confirmação de contacto (chamada/WhatsApp, Anexo 3),
+// registada manualmente pelo Coordenador de Investidores. Idempotente.
+app.put("/projetos/investidores/:linkId/confirmar-contacto", async (c: any) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE projeto_investidores SET confirmacao_contacto_em = NOW()
+       WHERE id = $1 AND confirmacao_contacto_em IS NULL RETURNING *`,
+      [c.req.param("linkId")],
+    );
+    if (!rows.length) {
+      const { rows: existente } = await pool.query("SELECT * FROM projeto_investidores WHERE id = $1", [c.req.param("linkId")]);
+      if (!existente.length) return c.json({ error: "Ligação não encontrada" }, 404);
+      return c.json(existente[0]);
+    }
     return c.json(rows[0]);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
@@ -5851,6 +6016,9 @@ async function ensureVistoriasObraTable() {
       criado_por TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+    ALTER TABLE vistorias_obra ADD COLUMN IF NOT EXISTS semaforo_pct NUMERIC;
+    ALTER TABLE vistorias_obra ADD COLUMN IF NOT EXISTS semaforo_cor TEXT;
+    ALTER TABLE vistorias_obra ADD COLUMN IF NOT EXISTS relatorio_gerado_em TIMESTAMPTZ;
   `);
   _vistoriasObraTableEnsured = true;
 }
@@ -5872,10 +6040,15 @@ app.post("/projetos/:negocioId/vistorias", async (c: any) => {
     const body = await c.req.json().catch(() => ({}));
     if (!body.semana_data) return c.json({ error: "semana_data obrigatória" }, 400);
     const u = await resolveCrmUser(c);
+    // Congela o semáforo de desvio orçamental (SOP 13 §9) com os custos DESTA
+    // semana — evita que o histórico mude se os custos do projecto mudarem depois.
+    const projeto = await loadProjetoCompleto(c.req.param("negocioId"));
+    const semaforoPct = projeto && projeto.orcAlocado > 0 ? ((projeto.custoReal - projeto.orcAlocado) / projeto.orcAlocado) * 100 : null;
+    const semaforo = semaforoDesvio(semaforoPct);
     const { rows } = await pool.query(
-      `INSERT INTO vistorias_obra (id, negocio_id, semana_data, rubricas, desvio_dias, desvio_causa, desvio_accao, incidentes, proximos_passos, criado_por)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [crypto.randomUUID(), c.req.param("negocioId"), body.semana_data, JSON.stringify(body.rubricas || []), body.desvio_dias ?? null, body.desvio_causa || null, body.desvio_accao || null, body.incidentes || null, body.proximos_passos || null, u?.email || null],
+      `INSERT INTO vistorias_obra (id, negocio_id, semana_data, rubricas, desvio_dias, desvio_causa, desvio_accao, incidentes, proximos_passos, criado_por, semaforo_pct, semaforo_cor)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+      [crypto.randomUUID(), c.req.param("negocioId"), body.semana_data, JSON.stringify(body.rubricas || []), body.desvio_dias ?? null, body.desvio_causa || null, body.desvio_accao || null, body.incidentes || null, body.proximos_passos || null, u?.email || null, semaforoPct, semaforo.tag],
     );
     return c.json(rows[0], 201);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
@@ -5890,6 +6063,11 @@ app.get("/projetos/:negocioId/pdf/relatorio-semanal/:vistoriaId", async (c: any)
     const { rows: vRows } = await pool.query("SELECT * FROM vistorias_obra WHERE id = $1 AND negocio_id = $2", [c.req.param("vistoriaId"), c.req.param("negocioId")]);
     const vistoria = vRows[0];
     if (!vistoria) return c.json({ error: "Vistoria não encontrada" }, 404);
+
+    // Telemetria da taxa de entrega do relatório semanal (SOP 13 §9) — só
+    // a primeira geração conta como "entregue", não bloqueia a resposta.
+    pool.query("UPDATE vistorias_obra SET relatorio_gerado_em = NOW() WHERE id = $1 AND relatorio_gerado_em IS NULL", [vistoria.id])
+      .catch((e: any) => console.error("[pdf/relatorio-semanal] relatorio_gerado_em:", e.message));
 
     const inicioSemana = new Date(vistoria.semana_data);
     const fimSemana = new Date(inicioSemana.getTime() + 7 * 24 * 60 * 60 * 1000);

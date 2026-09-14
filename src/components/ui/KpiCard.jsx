@@ -6,7 +6,7 @@
  *  - label: string (descritor pequeno em cima)
  *  - value: string | number (número grande)
  *  - sub:   string opcional (caption)
- *  - tone:  'gold' | 'indigo' | 'green' | 'red' | 'amber' | 'gray' (default gray)
+ *  - tone:  'gold' | 'indigo' | 'green' | 'red' | 'amber' | 'orange' | 'gray' (default gray)
  *  - size:  'sm' | 'md' | 'lg' (default md)
  *  - onClick: torna o card clicável com hover
  */
@@ -17,6 +17,7 @@ const TONE = {
   green:  { iconBg: 'bg-emerald-50',   iconText: 'text-emerald-600', accent: 'text-emerald-700' },
   red:    { iconBg: 'bg-red-50',       iconText: 'text-red-600', accent: 'text-red-700' },
   amber:  { iconBg: 'bg-amber-50',     iconText: 'text-amber-600', accent: 'text-amber-700' },
+  orange: { iconBg: 'bg-orange-50',    iconText: 'text-orange-600', accent: 'text-orange-700' },
   blue:   { iconBg: 'bg-blue-50',      iconText: 'text-blue-600', accent: 'text-blue-700' },
   gray:   { iconBg: 'bg-gray-100',     iconText: 'text-gray-600', accent: 'text-gray-900' },
 }

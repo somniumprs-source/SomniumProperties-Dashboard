@@ -73,3 +73,6 @@ verify_jwt = false
 
 [functions.cron-gerar-agenda-semanal]
 verify_jwt = false
+
+[functions.cron-procura-imoveis]
+verify_jwt = false
