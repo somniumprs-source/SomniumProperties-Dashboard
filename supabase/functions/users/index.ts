@@ -402,9 +402,9 @@ app.post("/:id/reset-password", async (c: any) => {
     const u = await getUserById(c.req.param("id"));
     if (!u) return c.json({ error: "Não encontrado" }, 404);
     if (!supabaseAdmin) return c.json({ error: "Supabase não configurado" }, 503);
-    const redirectTo = Deno.env.get("PUBLIC_APP_URL") || undefined;
+    const redirectTo = `${resolveRedirectTo(c)}/resetpassword`;
     const { data, error } = await supabaseAdmin.auth.admin.generateLink({
-      type: "recovery", email: u.email, options: redirectTo ? { redirectTo } : undefined,
+      type: "recovery", email: u.email, options: { redirectTo },
     });
     if (error) return c.json({ error: error.message }, 400);
     return c.json({ ok: true, actionLink: data?.properties?.action_link || null });

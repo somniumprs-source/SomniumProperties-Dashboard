@@ -420,9 +420,9 @@ router.post('/:id/reset-password', async (req, res) => {
     const u = await getUserById(req.params.id)
     if (!u) return res.status(404).json({ error: 'Não encontrado' })
     if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase não configurado' })
-    const redirectTo = process.env.PUBLIC_APP_URL || undefined
+    const redirectTo = `${resolveRedirectTo(req)}/resetpassword`
     const { data, error } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'recovery', email: u.email, options: redirectTo ? { redirectTo } : undefined,
+      type: 'recovery', email: u.email, options: { redirectTo },
     })
     if (error) return res.status(400).json({ error: error.message })
     res.json({ ok: true, actionLink: data?.properties?.action_link || null })

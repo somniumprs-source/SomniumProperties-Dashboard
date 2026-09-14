@@ -20,6 +20,7 @@ const Projectos   = lazy(() => import('./pages/Projectos.jsx').then(m => ({ defa
 const ProjectoDetalhe = lazy(() => import('./pages/ProjectoDetalhe.jsx').then(m => ({ default: m.ProjectoDetalhe })))
 const ProjectosCalendario = lazy(() => import('./pages/ProjectosCalendario.jsx').then(m => ({ default: m.ProjectosCalendario })))
 const AceitarAssinatura = lazy(() => import('./pages/AceitarAssinatura.jsx').then(m => ({ default: m.AceitarAssinatura })))
+const ResetPassword = lazy(() => import('./pages/ResetPassword.jsx').then(m => ({ default: m.ResetPassword })))
 const Utilizadores = lazy(() => import('./pages/Utilizadores.jsx').then(m => ({ default: m.Utilizadores })))
 const Auditoria   = lazy(() => import('./pages/Auditoria.jsx'))
 const RelatoriosAdmin = lazy(() => import('./pages/RelatoriosAdmin.jsx').then(m => ({ default: m.RelatoriosAdmin })))
@@ -49,6 +50,19 @@ function AppRoutes() {
           <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#C9A84C', borderTopColor: 'transparent' }} />
         </div>
       </div>
+    )
+  }
+
+  // Rota pública de reset de password (link de recovery do Supabase; não requer login)
+  if (window.location.pathname === '/resetpassword') {
+    return (
+      <ChunkErrorBoundary>
+        <Suspense fallback={<PageFallback />}>
+          <Routes>
+            <Route path="/resetpassword" element={<ResetPassword />} />
+          </Routes>
+        </Suspense>
+      </ChunkErrorBoundary>
     )
   }
 
