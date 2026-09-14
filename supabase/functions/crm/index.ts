@@ -1487,6 +1487,13 @@ app.delete("/imoveis/:id/orcamentos-obra/:docId", async (c: any) => {
 });
 
 // ── Endpoints especificos de consultores (ANTES do crudRoutes) ──
+// Guard aplicado ANTES destas rotas (find-or-create/sugestoes-tags/enriched):
+// como o Hono compõe os handlers pela ordem de registo, um app.use() de guard
+// registado só depois destas nunca chegava a correr para elas — qualquer
+// utilizador autenticado (parceiro/investidor/operacoes incluídos) conseguia
+// chamar /consultores/enriched e obter todos os consultores sem módulo crm.consultores.
+app.use("/consultores", requireModule("crm.consultores"));
+app.use("/consultores/*", requireModule("crm.consultores"));
 
 // Find-or-create consultor (dedup por nome/contacto) — port de routes.js 698-727
 app.post("/consultores/find-or-create", async (c: any) => {
@@ -1626,8 +1633,6 @@ app.get("/consultores/enriched", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-app.use("/consultores", requireModule("crm.consultores"));
-app.use("/consultores/*", requireModule("crm.consultores"));
 crudRoutes("/consultores", Consultores);
 
 // Wholesaling: lucro esperado = fee de cedência da ficha do imóvel (imoveis.fee_cedencia).
@@ -1715,7 +1720,9 @@ app.use("/negocios/*", requireModule("crm.negocios"));
 app.use("/negocios", restrictByAccessGeneric("negocio"));
 app.use("/negocios/*", restrictByAccessGeneric("negocio"));
 // negocios-lixeira é um path irmão (não bate no mount /negocios/*) — sem uso
-// legítimo para roles restritos, bloqueado à parte.
+// legítimo para roles restritos, bloqueado à parte. requireModule cobre roles
+// sem crm.negocios (ex. operacoes, que antes passava sem guard nenhum aqui).
+app.use("/negocios-lixeira", requireModule("crm.negocios"));
 app.use("/negocios-lixeira", async (c: any, next: any) => {
   const u = await resolveCrmUser(c);
   if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return c.json({ error: "Sem acesso" }, 403);
@@ -1821,7 +1828,9 @@ app.post("/negocios/:id/restaurar", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// Lista lixeira — port de routes.js 949-956
+// Lista lixeira — port de routes.js 949-956 (guard em "negocios-lixeira é um
+// path irmão..." acima; reforçado ali com requireModule("crm.negocios") para
+// também bloquear roles sem esse módulo, ex. operacoes).
 app.get("/negocios-lixeira", async (c: any) => {
   try {
     await ensureColumn("negocios", "deleted_at TIMESTAMPTZ");
@@ -1887,7 +1896,16 @@ app.get("/tarefas/count-atrasadas", async (c: any) => {
 });
 
 crudRoutes("/tarefas", Tarefas);
+
+// "consultor-interacoes" e "investidor-interacoes" não vivem sob /consultores
+// ou /investidores, por isso os guards montados nesses prefixos nunca os
+// cobriam — qualquer utilizador autenticado, independentemente do role,
+// conseguia ler/escrever o histórico de interações com consultores/investidores.
+app.use("/consultor-interacoes", requireModule("crm.consultores"));
+app.use("/consultor-interacoes/*", requireModule("crm.consultores"));
 crudRoutes("/consultor-interacoes", ConsultorInteracoes);
+app.use("/investidor-interacoes", requireModule("crm.investidores"));
+app.use("/investidor-interacoes/*", requireModule("crm.investidores"));
 crudRoutes("/investidor-interacoes", InvestidorInteracoes);
 app.use("/empreiteiros", requireModule("crm.empreiteiros"));
 app.use("/empreiteiros/*", requireModule("crm.empreiteiros"));
