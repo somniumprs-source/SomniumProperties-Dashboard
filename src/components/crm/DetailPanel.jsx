@@ -982,7 +982,18 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
 
       ) : type === 'Imóveis' && activeTab === 'analise' ? (
         <div className="p-4 sm:p-6">
-          <AnaliseTab imovelId={data.id} imovelNome={data.nome} imovel={data} />
+          {data.negocios?.some(n => !n.deleted_at) ? (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+                Negócio fechado — já existe Projecto para este imóvel. A Análise Financeira edita-se agora em <strong>Projetos</strong>; aqui fica só como consulta.
+              </div>
+              <div className="pointer-events-none opacity-60">
+                <AnaliseTab imovelId={data.id} imovelNome={data.nome} imovel={data} />
+              </div>
+            </div>
+          ) : (
+            <AnaliseTab imovelId={data.id} imovelNome={data.nome} imovel={data} />
+          )}
         </div>
 
       /* Ficheiros do imóvel (fotos + documentos + Drive) */

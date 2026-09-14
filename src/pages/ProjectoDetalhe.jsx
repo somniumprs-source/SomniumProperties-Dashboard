@@ -22,6 +22,7 @@ import { AiResumoCard, GanttFases, TabHistorico } from '../components/projeto/ca
 import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 import { calcOrcamentoObra } from '../db/orcamentoObraEngine.js'
 import { DocumentosOrcamentosTab } from '../components/obra/DocumentosOrcamentosTab.jsx'
+import { AnaliseTab } from '../components/analise/AnaliseTab.jsx'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const GOLD = '#C9A84C'
@@ -312,7 +313,11 @@ export function ProjectoDetalhe() {
           <div className="p-4 sm:p-6">
             {tab === 'resumo' && <TabResumo resumo={resumo} fases={fasesFiltradas} fracaoSel={fracaoSel} fracoes={fracoes} />}
             {tab === 'fracoes' && <TabFracoes negocioId={id} fracoes={fracoes} onChange={load} readOnly={isReadOnly} fasesComuns={fases.filter(f => !f.fracao_id)} />}
-            {tab === 'analise' && <TabAnaliseFinanceira analise={analise} />}
+            {tab === 'analise' && (
+              imovel
+                ? <AnaliseTab imovelId={imovel.id} imovelNome={imovel.nome} imovel={imovel} />
+                : <p className="text-sm text-gray-400 py-8 text-center">Sem imóvel associado a este projecto.</p>
+            )}
             {tab === 'obras' && (
               <TabObras
                 imovel={imovel} negocio={negocio} negocioId={id}
@@ -763,112 +768,6 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
 function TabOrcamento({ imovel, negocio, onChange }) {
   if (!imovel) return <p className="text-sm text-gray-500">Este projecto não tem imóvel associado. Liga um imóvel ao negócio para usar o orçamento detalhado de obra.</p>
   return <ImportarOrcamento imovel={imovel} negocio={negocio} onChange={onChange} />
-}
-
-// ════════════════════════════════════════════════════════════════
-// TAB: ANÁLISE FINANCEIRA — a mesma análise activa do imóvel no Comercial,
-// lida ao vivo (não é cópia nem fica desatualizada): acompanha o imóvel de
-// forma contínua ao longo da evolução de lead a projecto real. Edita-se no
-// Comercial; aqui é só leitura.
-// ════════════════════════════════════════════════════════════════
-function TabAnaliseFinanceira({ analise: a }) {
-  return (
-    <div className="space-y-4">
-      <p className="text-xs text-gray-400">Análise activa do imóvel no Comercial, em tempo real — para editar, faz no Comercial.</p>
-
-      {!a ? (
-        <p className="text-sm text-gray-400 py-8 text-center">Sem análise financeira associada a este projecto.</p>
-      ) : (
-        <div className="space-y-4">
-          <div className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-900/50 p-4">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Resultados</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6">
-              <Field label="Capital necessário" value={EUR(a.capital_necessario)} accent />
-              <Field label="Lucro bruto" value={EUR(a.lucro_bruto)} />
-              <Field label="Lucro líquido" value={EUR(a.lucro_liquido)} accent />
-              <Field label="Break-even (VVR)" value={EUR(a.break_even)} />
-              <Field label="Retorno total" value={a.retorno_total != null ? `${a.retorno_total}%` : '—'} />
-              <Field label="Retorno anualizado" value={a.retorno_anualizado != null ? `${a.retorno_anualizado}%` : '—'} accent />
-              <Field label="Cash-on-cash" value={a.cash_on_cash != null ? `${a.cash_on_cash}%` : '—'} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <AnaliseSeccao titulo="A. Aquisição">
-              <Field label="Compra" value={EUR(a.compra)} />
-              <Field label="VPT" value={EUR(a.vpt)} />
-              <Field label="Finalidade" value={a.finalidade} />
-              <Field label="Escritura" value={EUR(a.escritura)} />
-              <Field label="CPCV" value={EUR(a.cpcv_compra)} />
-              <Field label="Due diligence" value={EUR(a.due_diligence)} />
-              <Field label="IMT" value={EUR(a.imt)} />
-              <Field label="Imposto de selo" value={EUR(a.imposto_selo)} />
-              <Field label="Total aquisição" value={EUR(a.total_aquisicao)} accent />
-            </AnaliseSeccao>
-
-            <AnaliseSeccao titulo="B. Financiamento">
-              <Field label="% financiamento" value={a.perc_financiamento != null ? `${a.perc_financiamento}%` : '—'} />
-              <Field label="Prazo" value={a.prazo_anos != null ? `${a.prazo_anos} anos` : '—'} />
-              <Field label="TAN" value={a.tan != null ? `${a.tan}%` : '—'} />
-              <Field label="Tipo de taxa" value={a.tipo_taxa} />
-              <Field label="Comissões banco" value={EUR(a.comissoes_banco)} />
-              <Field label="Valor financiado" value={EUR(a.valor_financiado)} />
-              <Field label="Prestação mensal" value={EUR(a.prestacao_mensal)} accent />
-            </AnaliseSeccao>
-
-            <AnaliseSeccao titulo="C. Obra">
-              <Field label="Modo" value={a.modo_obra} />
-              <Field label="Custo de obra" value={EUR(a.obra)} accent />
-              <Field label="PMO" value={a.pmo_perc != null ? `${a.pmo_perc}%` : '—'} />
-              <Field label="Zona ARU" value={a.aru ? 'Sim' : 'Não'} />
-              <Field label="Ampliação" value={a.ampliacao ? 'Sim' : 'Não'} />
-              <Field label="Licenciamento" value={EUR(a.licenciamento)} />
-              <Field label="IVA obra" value={EUR(a.iva_obra)} />
-              <Field label="Obra c/ IVA" value={EUR(a.obra_com_iva)} />
-            </AnaliseSeccao>
-
-            <AnaliseSeccao titulo="D. Detenção">
-              <Field label="Meses" value={a.meses} />
-              <Field label="Seguro/mês" value={EUR(a.seguro_mensal)} />
-              <Field label="Condomínio/mês" value={EUR(a.condominio_mensal)} />
-              <Field label="Utilidades/mês" value={EUR(a.utilidades_mensal)} />
-              <Field label="Nº tranches" value={a.n_tranches} />
-              <Field label="Taxa IMI" value={a.taxa_imi != null ? `${a.taxa_imi}%` : '—'} />
-              <Field label="Total detenção" value={EUR(a.total_detencao)} accent />
-            </AnaliseSeccao>
-
-            <AnaliseSeccao titulo="E. Venda">
-              <Field label="VVR" value={EUR(a.vvr)} accent />
-              <Field label="Comissão" value={a.comissao_perc != null ? `${a.comissao_perc}%` : '—'} />
-              <Field label="CPCV venda" value={EUR(a.cpcv_venda)} />
-              <Field label="Certificado energético" value={EUR(a.cert_energetico)} />
-              <Field label="Home staging" value={EUR(a.home_staging)} />
-              <Field label="Outros" value={EUR(a.outros_venda)} />
-              <Field label="Comissão c/ IVA" value={EUR(a.comissao_com_iva)} />
-              <Field label="Total venda" value={EUR(a.total_venda)} accent />
-            </AnaliseSeccao>
-
-            <AnaliseSeccao titulo="F. Fiscalidade">
-              <Field label="Regime fiscal" value={a.regime_fiscal} />
-              <Field label="Derrama" value={a.derrama_perc != null ? `${a.derrama_perc}%` : '—'} />
-              <Field label="% dividendos" value={a.perc_dividendos != null ? `${a.perc_dividendos}%` : '—'} />
-              <Field label="Impostos" value={EUR(a.impostos)} accent />
-              <Field label="Retenção dividendos" value={EUR(a.retencao_dividendos)} />
-            </AnaliseSeccao>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function AnaliseSeccao({ titulo, children }) {
-  return (
-    <div className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4">
-      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{titulo}</h3>
-      {children}
-    </div>
-  )
 }
 
 // ════════════════════════════════════════════════════════════════
