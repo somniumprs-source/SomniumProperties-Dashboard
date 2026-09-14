@@ -1609,7 +1609,7 @@ function EF({ label, field, form, set, type = 'text', options }) {
       ) : type === 'date' ? (
         <input type="date" value={(form[field] || '').slice(0, 10)} onChange={e => set(field, e.target.value)} className={inputClass} />
       ) : type === 'number' ? (
-        <input type="number" value={form[field] || ''} onChange={e => set(field, +e.target.value || null)} className={inputClass} />
+        <input type="number" step="any" value={form[field] || ''} onChange={e => set(field, +e.target.value || null)} className={inputClass} onWheel={e => e.target.blur()} />
       ) : (
         <input type="text" value={form[field] || ''} onChange={e => set(field, e.target.value)} className={inputClass} />
       )}

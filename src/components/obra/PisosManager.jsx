@@ -39,10 +39,12 @@ export function PisosManager({ pisos, onChange }) {
               <span className="text-sm font-medium text-gray-700 w-28 truncate" title={p.nome}>{p.nome}</span>
               <input
                 type="number"
+                step="any"
                 value={p.area_m2 || ''}
                 onChange={(e) => editar(p.nome, { area_m2: Number(e.target.value) || 0 })}
                 className="w-24 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:border-gray-500"
                 placeholder="m²"
+                onWheel={e => e.target.blur()}
               />
               <span className="text-xs text-gray-400">m² (ABP)</span>
               <input
@@ -78,10 +80,12 @@ export function PisosManager({ pisos, onChange }) {
         </datalist>
         <input
           type="number"
+          step="any"
           value={novaArea}
           onChange={(e) => setNovaArea(e.target.value)}
           className="w-24 px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:border-gray-500"
           placeholder="Área m²"
+          onWheel={e => e.target.blur()}
         />
         <button
           onClick={() => { adicionar(novoNome, novaArea); setNovoNome(''); setNovaArea('') }}

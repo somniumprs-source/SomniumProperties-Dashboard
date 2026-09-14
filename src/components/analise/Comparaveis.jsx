@@ -617,10 +617,10 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
               <button onClick={() => removeTipologia(tIdx)}
                 className="text-xs text-red-400 hover:text-red-600 transition-colors">✕</button>
               <div className="flex gap-3 text-xs text-gray-400 items-center flex-wrap">
-                <label>Área imóvel: <input type="number" value={tip.area || ''} onChange={e => updateTip(tIdx, 'area', parseFloat(e.target.value) || 0)}
-                  className="w-16 bg-white border rounded px-1 py-0.5 font-mono" /> m²</label>
-                <label title="VVR adoptado para esta tipologia (deixar vazio usa o VVR da análise)">VVR adoptado: <input type="number" value={tip.vvr || ''} placeholder={mediaAjust > 0 && tip.area > 0 ? Math.round(mediaAjust * tip.area) : ''} onChange={e => updateTip(tIdx, 'vvr', parseFloat(e.target.value) || 0)}
-                  className="w-24 bg-white border rounded px-1 py-0.5 font-mono" /> €</label>
+                <label>Área imóvel: <input type="number" step="any" value={tip.area || ''} onChange={e => updateTip(tIdx, 'area', parseFloat(e.target.value) || 0)}
+                  className="w-16 bg-white border rounded px-1 py-0.5 font-mono" onWheel={e => e.target.blur()} /> m²</label>
+                <label title="VVR adoptado para esta tipologia (deixar vazio usa o VVR da análise)">VVR adoptado: <input type="number" step="any" value={tip.vvr || ''} placeholder={mediaAjust > 0 && tip.area > 0 ? Math.round(mediaAjust * tip.area) : ''} onChange={e => updateTip(tIdx, 'vvr', parseFloat(e.target.value) || 0)}
+                  className="w-24 bg-white border rounded px-1 py-0.5 font-mono" onWheel={e => e.target.blur()} /> €</label>
                 <span className="hidden sm:inline">|</span>
                 <span>Média: <strong className="text-gray-600">{media} €/m²</strong></span>
                 <span>Ajustada: <strong className="text-gray-600">{mediaAjust} €/m²</strong></span>
@@ -663,12 +663,12 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
                         ) : (cIdx + 1)}
                       </span>
                       <div className="col-span-2">
-                        <input type="number" value={comp.preco || ''} onChange={e => updateComp(tIdx, cIdx, 'preco', parseFloat(e.target.value) || 0)}
-                          placeholder="€" className="w-full border rounded px-2 py-1 font-mono" />
+                        <input type="number" step="any" value={comp.preco || ''} onChange={e => updateComp(tIdx, cIdx, 'preco', parseFloat(e.target.value) || 0)}
+                          placeholder="€" className="w-full border rounded px-2 py-1 font-mono" onWheel={e => e.target.blur()} />
                       </div>
                       <div className="col-span-1">
-                        <input type="number" value={comp.area || ''} onChange={e => updateComp(tIdx, cIdx, 'area', parseFloat(e.target.value) || 0)}
-                          placeholder="m²" className="w-full border rounded px-2 py-1 font-mono" />
+                        <input type="number" step="any" value={comp.area || ''} onChange={e => updateComp(tIdx, cIdx, 'area', parseFloat(e.target.value) || 0)}
+                          placeholder="m²" className="w-full border rounded px-2 py-1 font-mono" onWheel={e => e.target.blur()} />
                       </div>
                       <div className="col-span-6 grid grid-cols-6 gap-1">
                         {Object.keys(AJUSTE_LABELS).map(aj => {

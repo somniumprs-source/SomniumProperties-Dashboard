@@ -112,9 +112,9 @@ export function CAEPParcerias({ analise, onUpdate }) {
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-gray-500">% Somnium</label>
-            <input type="number" value={config.perc_somnium}
+            <input type="number" step="any" value={config.perc_somnium}
               onChange={e => save({ ...config, perc_somnium: parseFloat(e.target.value) || 0 })}
-              className="w-full border rounded-lg px-3 py-1.5 text-sm font-mono" />
+              className="w-full border rounded-lg px-3 py-1.5 text-sm font-mono" onWheel={e => e.target.blur()} />
           </div>
           <div>
             <label className="text-xs text-gray-500">Base de distribuição</label>
@@ -158,8 +158,8 @@ export function CAEPParcerias({ analise, onUpdate }) {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                 <div>
                   <label className="text-gray-400">Capital</label>
-                  <input type="number" value={inv.capital || ''} onChange={e => updateInvestidor(idx, 'capital', parseFloat(e.target.value) || 0)}
-                    className="w-full border rounded px-2 py-1 font-mono" />
+                  <input type="number" step="any" value={inv.capital || ''} onChange={e => updateInvestidor(idx, 'capital', parseFloat(e.target.value) || 0)}
+                    className="w-full border rounded px-2 py-1 font-mono" onWheel={e => e.target.blur()} />
                 </div>
                 <div>
                   <label className="text-gray-400">% do pool</label>
@@ -236,9 +236,9 @@ export function CAEPParcerias({ analise, onUpdate }) {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <div>
                 <label className="text-xs text-gray-500">% Somnium</label>
-                <input type="number" value={med.perc_somnium}
+                <input type="number" step="any" value={med.perc_somnium}
                   onChange={e => updateMedPercSomnium(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-1.5 text-sm font-mono" />
+                  className="w-full border rounded-lg px-3 py-1.5 text-sm font-mono" onWheel={e => e.target.blur()} />
               </div>
             </div>
 
@@ -252,9 +252,9 @@ export function CAEPParcerias({ analise, onUpdate }) {
                       <p className="text-gray-400">% da comissão</p>
                     </div>
                     <div>
-                      <input type="number" value={r.perc}
+                      <input type="number" step="any" value={r.perc}
                         onChange={e => updateMedInvestidor(r.nome, e.target.value)}
-                        className="w-full border rounded px-2 py-1 font-mono" />
+                        className="w-full border rounded px-2 py-1 font-mono" onWheel={e => e.target.blur()} />
                     </div>
                     <div className="text-right font-mono font-semibold text-gray-700">
                       {EUR(resultado ? resultado.valor : mediacaoTotal * r.perc / 100)}
