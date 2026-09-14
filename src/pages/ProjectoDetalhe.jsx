@@ -2,10 +2,10 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, CheckCircle2, Circle, Plus, Trash2, Upload, X,
-  Building2, Wallet, ImageIcon, FileText, Users, BarChart3, ChevronRight,
+  Wallet, FileText, Users, BarChart3, ChevronRight,
   FileDown, AlertTriangle, Sparkles, RefreshCw, Home, Layers,
   History, MessageSquare, TrendingUp, FileSpreadsheet, Pencil, Eye,
-  CalendarClock, ClipboardCheck,
+  CalendarClock, ClipboardCheck, Calculator,
 } from 'lucide-react'
 import { ProjectoForm } from './Projectos.jsx'
 import { apiFetch, getToken, openDocument } from '../lib/api.js'
@@ -21,6 +21,9 @@ import { PartilharAcesso } from '../components/PartilharAcesso.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { AiResumoCard, GanttFases, TabHistorico } from '../components/projeto/cards.jsx'
 import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
+import { calcOrcamentoObra } from '../db/orcamentoObraEngine.js'
+import { DocumentosOrcamentosTab } from '../components/obra/DocumentosOrcamentosTab.jsx'
+import { AnaliseTab } from '../components/analise/AnaliseTab.jsx'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const GOLD = '#C9A84C'
@@ -62,15 +65,13 @@ const ESTADO_COR = {
 const TABS_BASE = [
   { key: 'resumo',       label: 'Resumo',           icon: BarChart3 },
   { key: 'fracoes',      label: 'Frações e Áreas',  icon: Layers, predioOnly: true },
-  { key: 'fases',        label: 'Fases & Tarefas',  icon: CheckCircle2 },
-  { key: 'orcamento',    label: 'Orçamento',        icon: Wallet },
+  { key: 'analise',      label: 'Análise Financeira', icon: Calculator },
+  { key: 'obras',        label: 'Obras',            icon: Home },
   { key: 'faturacao',    label: 'Faturação',        icon: Wallet },
   { key: 'forecast',     label: 'Forecast',         icon: TrendingUp },
-  { key: 'fotos',        label: 'Fotos',            icon: ImageIcon },
   { key: 'documentos',   label: 'Documentos',       icon: FileText },
   { key: 'investidores', label: 'Investidores',     icon: Users },
   { key: 'reunioes',     label: 'Reuniões',         icon: CalendarClock },
-  { key: 'vistorias',    label: 'Vistoria Semanal', icon: ClipboardCheck, teamOnly: true },
   { key: 'historico',    label: 'Histórico',        icon: History },
 ]
 
@@ -150,12 +151,12 @@ export function ProjectoDetalhe() {
   if (loading) return <><Header title="Projecto" subtitle="A carregar..." /><div className="p-8 text-center text-gray-400">A carregar…</div></>
   if (error || !resumo) return <><Header title="Projecto" subtitle="Erro" /><div className="p-8 text-center text-red-500">{error || 'Sem dados'}</div></>
 
-  const { negocio, imovel, percGlobal, custoReal, orcAlocado, faseAtual } = resumo
+  const { negocio, imovel, analise, percGlobal, custoReal, orcAlocado, faseAtual } = resumo
   const semFases = fases.length === 0
   const isPredio = negocio.tipo_projeto === 'predio'
   // Wholesalling é cedência de posição (sem obra): esconder as abas de obra.
   const isWholesalling = negocio.categoria === 'Wholesalling'
-  const TABS_OBRA_OCULTAS = new Set(['orcamento', 'forecast', 'fotos'])
+  const TABS_OBRA_OCULTAS = new Set(['forecast'])
   const TABS = TABS_BASE.filter(t =>
     (!t.predioOnly || isPredio) &&
     !(isWholesalling && TABS_OBRA_OCULTAS.has(t.key)) &&
@@ -316,15 +317,23 @@ export function ProjectoDetalhe() {
           <div className="p-4 sm:p-6">
             {tab === 'resumo' && <TabResumo resumo={resumo} fases={fasesFiltradas} fracaoSel={fracaoSel} fracoes={fracoes} />}
             {tab === 'fracoes' && <TabFracoes negocioId={id} fracoes={fracoes} onChange={load} readOnly={isReadOnly} fasesComuns={fases.filter(f => !f.fracao_id)} />}
-            {tab === 'fases' && <TabFases fases={fasesFiltradas} onChange={load} readOnly={isReadOnly} negocioId={id} />}
-            {tab === 'orcamento' && <TabOrcamento imovel={imovel} />}
-            {tab === 'faturacao' && <TabFaturacao negocio={negocio} onChange={load} readOnly={isReadOnly} />}
+            {tab === 'analise' && (
+              imovel
+                ? <AnaliseTab imovelId={imovel.id} imovelNome={imovel.nome} imovel={imovel} />
+                : <p className="text-sm text-gray-400 py-8 text-center">Sem imóvel associado a este projecto.</p>
+            )}
+            {tab === 'obras' && (
+              <TabObras
+                imovel={imovel} negocio={negocio} negocioId={id}
+                fases={fasesFiltradas} fotos={fotosFiltradas} fracaoSel={fracaoSel}
+                isWholesalling={isWholesalling} isReadOnly={isReadOnly} onChange={load}
+              />
+            )}
+            {tab === 'faturacao' && <TabFaturacao negocio={negocio} imovel={imovel} analise={analise} onChange={load} readOnly={isReadOnly} />}
             {tab === 'forecast' && <TabForecast negocioId={id} />}
-            {tab === 'fotos' && <TabFotos negocioId={id} fases={fasesFiltradas} fotos={fotosFiltradas} onChange={load} readOnly={isReadOnly} fracaoSel={fracaoSel} />}
             {tab === 'documentos' && <TabDocumentos negocio={negocio} imovel={imovel} fases={fases} readOnly={isReadOnly} />}
             {tab === 'investidores' && <TabInvestidores negocio={negocio} readOnly={isReadOnly} />}
             {tab === 'reunioes' && <TabReunioes negocioId={id} readOnly={isReadOnly} />}
-            {tab === 'vistorias' && <TabVistorias negocioId={id} negocio={negocio} />}
             {tab === 'historico' && <TabHistorico negocioId={id} />}
           </div>
         </Card>
@@ -416,6 +425,47 @@ function Field({ label, value, accent }) {
     <div className="flex justify-between items-baseline py-1 border-b border-gray-100 dark:border-neutral-800 last:border-0">
       <span className="text-caption text-gray-500 dark:text-neutral-400">{label}</span>
       <span className={`text-sm font-medium ${accent ? 'text-gray-900 dark:text-neutral-100 font-mono' : 'text-gray-700 dark:text-neutral-300'}`}>{value || '—'}</span>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
+// TAB: OBRAS — agrupa tudo o que é acompanhamento de obra num único
+// separador com sub-abas: Orçamento, Fases da Obra, Fotos, Vistoria Semanal.
+// ════════════════════════════════════════════════════════════════
+function TabObras({ imovel, negocio, negocioId, fases, fotos, fracaoSel, isWholesalling, isReadOnly, onChange }) {
+  const SUBTABS_OBRAS = [
+    { key: 'fases',     label: 'Fases da Obra' },
+    { key: 'orcamento', label: 'Orçamento',        hidden: isWholesalling },
+    { key: 'fotos',     label: 'Fotos',            hidden: isWholesalling },
+    { key: 'vistorias', label: 'Vistoria Semanal', hidden: isReadOnly },
+  ].filter(t => !t.hidden)
+
+  const [sub, setSub] = useState(SUBTABS_OBRAS[0]?.key)
+  useEffect(() => {
+    if (!SUBTABS_OBRAS.some(t => t.key === sub)) setSub(SUBTABS_OBRAS[0]?.key)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isWholesalling, isReadOnly])
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-1 border-b border-gray-200 dark:border-neutral-800 -mt-1 overflow-x-auto">
+        {SUBTABS_OBRAS.map(t => (
+          <button key={t.key} onClick={() => setSub(t.key)}
+            className={`px-3 py-2 text-xs font-medium border-b-2 -mb-px whitespace-nowrap transition-colors ${
+              sub === t.key
+                ? 'border-brand-gold text-brand-dark dark:text-brand-gold'
+                : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-neutral-300'
+            }`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {sub === 'orcamento' && <TabOrcamento imovel={imovel} negocio={negocio} onChange={onChange} />}
+      {sub === 'fases' && <TabFases fases={fases} onChange={onChange} readOnly={isReadOnly} negocioId={negocioId} />}
+      {sub === 'fotos' && <TabFotos negocioId={negocioId} fases={fases} fotos={fotos} onChange={onChange} readOnly={isReadOnly} fracaoSel={fracaoSel} />}
+      {sub === 'vistorias' && <TabVistorias negocioId={negocioId} negocio={negocio} />}
     </div>
   )
 }
@@ -735,17 +785,76 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
 // ════════════════════════════════════════════════════════════════
 // TAB: ORÇAMENTO
 // ════════════════════════════════════════════════════════════════
-function TabOrcamento({ imovel }) {
+function TabOrcamento({ imovel, negocio, onChange }) {
   if (!imovel) return <p className="text-sm text-gray-500">Este projecto não tem imóvel associado. Liga um imóvel ao negócio para usar o orçamento detalhado de obra.</p>
+  return <ImportarOrcamento imovel={imovel} negocio={negocio} onChange={onChange} />
+}
+
+// ════════════════════════════════════════════════════════════════
+// Orçamento do projecto — duas formas de importar, sem links de saída:
+// 1) Importar orçamento: orçamentos reais recebidos de fornecedores/
+//    empreiteiros (fornecedor, valor, ficheiro) — DocumentosOrcamentosTab,
+//    ligado ao imóvel (mesma tabela/armazenamento usados no Comercial).
+// 2) Importar orçamento interno: copiar o orçamento de obra (25 secções) já
+//    preenchido no Comercial (meramente ilustrativo, feito pelo sócio) para
+//    este projecto — a partir daqui É este que conta como o orçamento real
+//    do negócio. "Reimportar" pede confirmação por substituir esse valor.
+// ════════════════════════════════════════════════════════════════
+function ImportarOrcamento({ imovel, negocio, onChange }) {
+  const toast = useToast()
+  const [importando, setImportando] = useState(false)
+  const jaTemOrcamento = !!negocio?.orcamento_obra_snapshot
+
+  async function importarInterno() {
+    if (jaTemOrcamento && !confirm('Já existe um orçamento importado, usado como o orçamento real do projecto. Substituir pelos valores actuais do Comercial?')) return
+    setImportando(true)
+    try {
+      const r = await apiFetch(`/api/crm/projetos/${negocio.id}/orcamento-interno/importar`, { method: 'POST' })
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        throw new Error(err.error || 'Erro ao importar orçamento interno')
+      }
+      toast?.('Orçamento interno importado.', 'success', 3000)
+      onChange?.()
+    } catch (err) { toast?.(err.message, 'error', 4000) }
+    finally { setImportando(false) }
+  }
+
+  const snap = negocio?.orcamento_obra_snapshot
+  const calc = snap ? calcOrcamentoObra(snap) : null
+
   return (
-    <div className="space-y-3">
-      <p className="text-sm text-gray-600">O orçamento detalhado de obra (25 secções, IVA reduzido ARU, MO por dia, retenções IRS) está ligado ao imóvel <strong>{imovel.nome}</strong>.</p>
-      <div className="flex gap-2">
-        <Link to={`/crm?imovelId=${imovel.id}&tab=obra`}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-brand-dark text-brand-gold text-sm font-medium hover:bg-brand-dark-light">
-          <Building2 className="w-4 h-4" /> Abrir orçamento no CRM
-        </Link>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Orçamento interno de obra</h3>
+        <button onClick={importarInterno} disabled={importando}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-dark text-brand-gold text-xs font-medium hover:bg-brand-dark-light disabled:opacity-50">
+          <RefreshCw className={`w-3.5 h-3.5 ${importando ? 'animate-spin' : ''}`} />
+          {snap ? 'Reimportar orçamento interno' : 'Importar orçamento interno'}
+        </button>
       </div>
+
+      {/* Orçamento interno importado — cópia estática do orçamento de obra do Comercial */}
+      {calc && (
+        <div className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-gray-600 dark:text-neutral-300">Última importação</p>
+            {snap._importado_em && (
+              <span className="text-[10px] text-gray-400">Importado em {new Date(snap._importado_em).toLocaleDateString('pt-PT')}</span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6">
+            <Field label="Total obra" value={EUR(calc.total_obra)} accent />
+            <Field label="IVA" value={EUR(calc.totais.iva_geral)} />
+            <Field label="Retenções IRS" value={EUR(calc.totais.retencoes_irs)} />
+            <Field label="Total a pagar" value={EUR(calc.totais.a_pagar)} accent />
+          </div>
+        </div>
+      )}
+
+      {/* Orçamentos recebidos de fornecedores/empreiteiros — mesma tabela e
+          armazenamento (Storage + espelho Drive) usados no Comercial. */}
+      <DocumentosOrcamentosTab imovelId={imovel.id} />
     </div>
   )
 }
@@ -753,7 +862,131 @@ function TabOrcamento({ imovel }) {
 // ════════════════════════════════════════════════════════════════
 // TAB: FATURAÇÃO (tranches do negócio)
 // ════════════════════════════════════════════════════════════════
-function TabFaturacao({ negocio, onChange, readOnly }) {
+
+function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100 }
+
+// Resumo de faturação do negócio: Total do Negócio (bruto) e a respectiva
+// divisão Somnium / Investidores, sempre em valores brutos — independente do
+// regime fiscal ou da base (líquido/bruto) escolhida na Análise Financeira —
+// comparando o expectável (modelo + % configurada) com o já realizado
+// (negocio.lucro_real, alimentado pelas tranches confirmadas em baixo).
+function ResumoFaturacaoNegocio({ negocio, imovel, analise }) {
+  const [investidores, setInvestidores] = useState([])
+
+  async function loadInvestidores() {
+    const r = await apiFetch(`/api/crm/projetos/${negocio.id}/investidores`).catch(() => null)
+    if (r?.ok) setInvestidores((await r.json()).investidores || [])
+  }
+  useEffect(() => { loadInvestidores() }, [negocio.id])
+  // Dinâmico: qualquer gravação (tranches, investidores, análise financeira) dispara
+  // 'somnium:refresh' via apiFetch — recarrega esta lista sem precisar de mudar de aba.
+  useRefreshOnMutation(loadInvestidores)
+
+  const percInvestidoresLigados = investidores.reduce((s, i) => s + (Number(i.percentagem) || 0), 0)
+
+  let caepCfg = null
+  try {
+    const raw = analise?.caep
+    caepCfg = typeof raw === 'string' ? JSON.parse(raw || 'null') : raw
+  } catch {}
+
+  const categoria = negocio.categoria
+  let percSomnium, totalExpectavel, modeloLabel
+
+  if (categoria === 'Wholesalling') {
+    modeloLabel = 'Wholesalling — cedência de posição'
+    percSomnium = Math.max(0, 100 - percInvestidoresLigados)
+    totalExpectavel = Number(imovel?.fee_cedencia) || Number(negocio.lucro_estimado) || 0
+  } else if (categoria === 'Mediação Imobiliária') {
+    modeloLabel = 'Mediação Imobiliária'
+    percSomnium = Math.max(0, 100 - percInvestidoresLigados)
+    const vvr = Number(analise?.vvr) || 0
+    const comissaoPerc = analise?.comissao_perc != null && analise.comissao_perc !== '' ? Number(analise.comissao_perc) : 2.5
+    totalExpectavel = vvr > 0 ? round2(vvr * comissaoPerc / 100) : (Number(negocio.lucro_estimado) || 0)
+  } else if (categoria === 'CAEP') {
+    modeloLabel = 'CAEP — parceria de investimento'
+    percSomnium = Number(caepCfg?.perc_somnium) || Number(negocio.comissao_pct) || 40
+    totalExpectavel = Number(analise?.lucro_bruto) || 0
+  } else {
+    modeloLabel = categoria || 'Fix and Flip'
+    percSomnium = Math.max(0, 100 - percInvestidoresLigados)
+    totalExpectavel = Number(analise?.lucro_bruto) || 0
+  }
+
+  const somniumExpectavel = round2(totalExpectavel * percSomnium / 100)
+  const investidoresExpectavel = round2(totalExpectavel - somniumExpectavel)
+
+  // Real: lucro_real reflecte sempre o que a Somnium já recebeu (tranches
+  // confirmadas). O total e a parte dos investidores derivam-se aplicando a
+  // mesma % do modelo — não há forma de rastrear recebimentos dos investidores
+  // fora do CRM, por isso é uma extrapolação assumida sobre o valor já confirmado.
+  const somniumReal = Number(negocio.lucro_real) || 0
+  const totalReal = percSomnium > 0 ? round2(somniumReal / (percSomnium / 100)) : somniumReal
+  const investidoresReal = round2(totalReal - somniumReal)
+
+  // Divisão por investidor: CAEP usa a config da Análise (proporcional ao capital
+  // de cada um, igual ao calcCAEP); os restantes modelos usam a % atribuída a
+  // cada investidor na aba Investidores do projecto.
+  let investidoresDetalhe = []
+  if (categoria === 'CAEP' && caepCfg?.investidores?.length) {
+    const capTotal = caepCfg.investidores.reduce((s, i) => s + (Number(i.capital) || 0), 0)
+    investidoresDetalhe = caepCfg.investidores.map((inv, idx) => {
+      const fracao = capTotal > 0 ? (Number(inv.capital) || 0) / capTotal : 0
+      return {
+        id: idx,
+        nome: inv.nome || `Investidor ${idx + 1}`,
+        percPie: round2((100 - percSomnium) * fracao),
+        exp: round2(investidoresExpectavel * fracao),
+        real: round2(investidoresReal * fracao),
+      }
+    })
+  } else if (investidores.length) {
+    investidoresDetalhe = investidores.map(inv => ({
+      id: inv.id,
+      nome: inv.investidor_nome || 'Investidor',
+      percPie: Number(inv.percentagem) || 0,
+      exp: round2(totalExpectavel * (Number(inv.percentagem) || 0) / 100),
+      real: round2(totalReal * (Number(inv.percentagem) || 0) / 100),
+    }))
+  }
+
+  const Linha = ({ label, exp, real, sub }) => (
+    <div className="grid grid-cols-3 items-center gap-2 py-2.5 border-b border-gray-100 last:border-0">
+      <div>
+        <p className="text-sm font-medium text-gray-700">{label}</p>
+        {sub && <p className="text-[10px] text-gray-400">{sub}</p>}
+      </div>
+      <p className="text-sm font-mono text-right text-gray-500">{EUR(exp)}</p>
+      <p className="text-sm font-mono text-right font-semibold text-gray-800">{EUR(real)}</p>
+    </div>
+  )
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4 mb-4">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Faturação do Negócio (bruto)</p>
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold/15 text-brand-dark font-medium">{modeloLabel}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2 mb-1 mt-3">
+        <div />
+        <p className="text-[10px] uppercase tracking-wide text-gray-400 text-right">Expectável</p>
+        <p className="text-[10px] uppercase tracking-wide text-gray-400 text-right">Real</p>
+      </div>
+      <Linha label="Faturação Total do Negócio" exp={totalExpectavel} real={totalReal} />
+      <Linha label="Somnium Properties" sub={`${percSomnium.toFixed(1)}%`} exp={somniumExpectavel} real={somniumReal} />
+      <Linha label="Investidores" sub={`${Math.max(0, 100 - percSomnium).toFixed(1)}%`} exp={investidoresExpectavel} real={investidoresReal} />
+      {investidoresDetalhe.length > 0 && (
+        <div className="pl-4 border-l-2 border-gray-100 ml-1">
+          {investidoresDetalhe.map(inv => (
+            <Linha key={inv.id} label={inv.nome} sub={`${inv.percPie.toFixed(1)}%`} exp={inv.exp} real={inv.real} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TabFaturacao({ negocio, imovel, analise, onChange, readOnly }) {
   const toast = useToast()
   let pags = []
   try { pags = typeof negocio.pagamentos_faseados === 'string' ? JSON.parse(negocio.pagamentos_faseados || '[]') : (negocio.pagamentos_faseados || []) } catch {}
@@ -824,6 +1057,10 @@ function TabFaturacao({ negocio, onChange, readOnly }) {
 
   return (
     <div className="space-y-3">
+      <ResumoFaturacaoNegocio negocio={negocio} imovel={imovel} analise={analise} />
+
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tranches / Cronograma de Pagamentos</p>
+
       {pags.length > 0 ? (
         <>
           <div className="flex items-center gap-3">

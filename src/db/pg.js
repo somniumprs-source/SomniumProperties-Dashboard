@@ -1128,6 +1128,13 @@ export async function initSchema() {
       ALTER TABLE negocios ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
       CREATE INDEX IF NOT EXISTS idx_negocios_deleted ON negocios(deleted_at);
 
+      -- Cópia estática do orçamento de obra (orcamentos_obra) — o do Comercial
+      -- é meramente ilustrativo; esta cópia, importada a pedido em Projetos
+      -- ("Importar orçamento interno"), é que conta como o orçamento real do
+      -- projecto. (A análise financeira não tem cópia: é sempre lida ao vivo
+      -- da análise activa do imóvel — ver GET /projetos/:id/resumo.)
+      ALTER TABLE negocios ADD COLUMN IF NOT EXISTS orcamento_obra_snapshot JSONB;
+
       -- Frações dentro de um projecto (prédios com várias frações)
       CREATE TABLE IF NOT EXISTS projeto_fracoes (
         id TEXT PRIMARY KEY,

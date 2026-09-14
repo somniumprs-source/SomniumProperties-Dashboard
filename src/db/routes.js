@@ -193,7 +193,7 @@ router.use((req, _res, next) => {
         if (req.body.regioes_preferidas === undefined) {
           req.body.regioes_preferidas = JSON.stringify([r])
         }
-      } else if (req.body.regiao === undefined) {
+      } else if (req.body.regiao === undefined || req.body.regiao === null) {
         req.body.regiao = r
       }
     }
@@ -1011,7 +1011,10 @@ router.delete('/investidores/:id/documentos/:docId', async (req, res) => {
 router.get('/imoveis/:id/orcamentos-obra', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT * FROM orcamentos_obra_recebidos WHERE imovel_id = $1 ORDER BY created_at DESC',
+      `SELECT o.*, e.nome AS empreiteiro_nome, e.empresa AS empreiteiro_empresa
+       FROM orcamentos_obra_recebidos o
+       LEFT JOIN empreiteiros e ON e.id = o.empreiteiro_id
+       WHERE o.imovel_id = $1 ORDER BY o.created_at DESC`,
       [req.params.id]
     )
     res.json(rows)
@@ -1022,7 +1025,7 @@ const OBRA_ORCAMENTOS_BUCKET = 'ObraOrcamentos'
 
 router.post('/imoveis/:id/orcamentos-obra', uploadRateLimit, uploadDocs.single('file'), async (req, res) => {
   try {
-    const { fornecedor, valor, notas } = req.body
+    const { fornecedor, valor, notas, empreiteiro_id } = req.body
     if (!fornecedor) return res.status(400).json({ error: 'fornecedor é obrigatório' })
     const id = randomUUID()
     const now = new Date().toISOString()
@@ -1059,11 +1062,11 @@ router.post('/imoveis/:id/orcamentos-obra', uploadRateLimit, uploadDocs.single('
     }
 
     await pool.query(
-      `INSERT INTO orcamentos_obra_recebidos (id, imovel_id, fornecedor, valor, notas, storage_path, drive_file_id, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [id, req.params.id, fornecedor, valor || null, notas || null, storagePath, driveFileId, now]
+      `INSERT INTO orcamentos_obra_recebidos (id, imovel_id, fornecedor, valor, notas, storage_path, drive_file_id, created_at, empreiteiro_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [id, req.params.id, fornecedor, valor || null, notas || null, storagePath, driveFileId, now, empreiteiro_id || null]
     )
-    res.status(201).json({ id, imovel_id: req.params.id, fornecedor, valor: valor || null, notas, storage_path: storagePath, created_at: now })
+    res.status(201).json({ id, imovel_id: req.params.id, fornecedor, valor: valor || null, notas, storage_path: storagePath, created_at: now, empreiteiro_id: empreiteiro_id || null })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -5479,6 +5482,32 @@ router.post('/projetos/:negocioId/documentos', uploadRateLimit, uploadDoc.array(
   } catch (e) { console.error('[projetos/documentos] upload', e.message); res.status(500).json({ error: e.message }) }
 })
 
+// Importar orçamento interno: copia o orçamento de obra (25 secções) do
+// imóvel ligado para o projecto, como cópia estática — a partir daqui é este
+// orçamento (e não o do Comercial, meramente ilustrativo) que conta como o
+// real do projecto. Só sincroniza de novo se o utilizador pedir outra vez.
+// Acção só para a equipa (não parceiro/investidor).
+router.post('/projetos/:negocioId/orcamento-interno/importar', async (req, res) => {
+  try {
+    if (req.appUser && RECORD_RESTRICTED_ROLES.has(req.appUser.role)) {
+      return res.status(403).json({ error: 'Sem permissão para esta operação' })
+    }
+    const { rows: [negocio] } = await pool.query('SELECT imovel_id FROM negocios WHERE id = $1', [req.params.negocioId])
+    if (!negocio) return res.status(404).json({ error: 'Projecto não encontrado' })
+    if (!negocio.imovel_id) return res.status(400).json({ error: 'Projecto sem imóvel associado' })
+
+    const { rows: [orcamento] } = await pool.query('SELECT * FROM orcamentos_obra WHERE imovel_id = $1', [negocio.imovel_id])
+    if (!orcamento) return res.status(404).json({ error: 'Este imóvel ainda não tem orçamento interno preenchido no Comercial' })
+
+    const snapshot = { ...orcamento, _importado_em: new Date().toISOString() }
+    const { rows: [updated] } = await pool.query(
+      `UPDATE negocios SET orcamento_obra_snapshot = $1, updated_at = NOW()::TEXT WHERE id = $2 RETURNING orcamento_obra_snapshot`,
+      [JSON.stringify(snapshot), req.params.negocioId]
+    )
+    res.json({ orcamento_obra_snapshot: updated.orcamento_obra_snapshot })
+  } catch (e) { console.error('[orcamento-interno/importar]', e.message); res.status(500).json({ error: e.message }) }
+})
+
 router.put('/projetos/documentos/:docId', async (req, res) => {
   try {
     const allowed = ['fase_id', 'tipo', 'nome', 'notas']
@@ -6716,9 +6745,23 @@ router.get('/projetos/:negocioId/resumo', async (req, res) => {
     )
 
     let imovel = null
+    let analise = null
     if (negocio.imovel_id) {
-      const { rows: imRows } = await pool.query('SELECT id, nome, zona, tipologia, fotos FROM imoveis WHERE id = $1', [negocio.imovel_id])
+      const { rows: imRows } = await pool.query(
+        'SELECT id, nome, zona, tipologia, fotos, estado, modelo_negocio, valor_proposta, fee_cedencia, area_bruta FROM imoveis WHERE id = $1',
+        [negocio.imovel_id]
+      )
       imovel = imRows[0] || null
+
+      // Análise financeira contínua — a mesma análise activa do imóvel no
+      // Comercial, calculada em tempo real (não é cópia; acompanha o imóvel
+      // ao longo da evolução de lead a projecto).
+      try {
+        const { rows: [analiseAtiva] } = await pool.query(
+          'SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1', [negocio.imovel_id]
+        )
+        if (analiseAtiva) analise = { ...analiseAtiva, ...calcAnalise(analiseAtiva) }
+      } catch (e) { console.error('[projetos/resumo] análise:', e.message) }
     }
 
     const orcAlocado = fases.reduce((s, f) => s + (Number(f.orcamento_alocado) || 0), 0)
@@ -6728,7 +6771,7 @@ router.get('/projetos/:negocioId/resumo', async (req, res) => {
       : 0
     const faseAtual = fases.find(f => f.estado === 'em_curso') || fases.find(f => f.estado === 'pendente') || fases[fases.length - 1]
 
-    res.json({ negocio, imovel, fases, orcAlocado, custoReal, percGlobal, faseAtual })
+    res.json({ negocio, imovel, analise, fases, orcAlocado, custoReal, percGlobal, faseAtual })
   } catch (e) { console.error('[projetos/resumo]', e.message); res.status(500).json({ error: e.message }) }
 })
 

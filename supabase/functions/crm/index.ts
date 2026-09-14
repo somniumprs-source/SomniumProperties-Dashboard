@@ -675,7 +675,7 @@ function crudRoutes(
       const regiaoActiva = c.get("regiaoActiva");
       if (regiaoActiva) {
         if (table === "investidores") { if (body.regioes_preferidas === undefined) body.regioes_preferidas = JSON.stringify([regiaoActiva]); }
-        else if (body.regiao === undefined) body.regiao = regiaoActiva;
+        else if (body.regiao === undefined || body.regiao === null) body.regiao = regiaoActiva;
       }
       const item = await crud.create(body, { regiaoActiva });
       syncToNotion(table, item.id);
@@ -689,7 +689,7 @@ function crudRoutes(
       const regiaoActiva = c.get("regiaoActiva");
       if (regiaoActiva) {
         if (table === "investidores") { if (body.regioes_preferidas === undefined) body.regioes_preferidas = JSON.stringify([regiaoActiva]); }
-        else if (body.regiao === undefined) body.regiao = regiaoActiva;
+        else if (body.regiao === undefined || body.regiao === null) body.regiao = regiaoActiva;
       }
       if (hooks.beforeUpdate) {
         const check = await hooks.beforeUpdate(c.req.param("id"), body);
@@ -1397,7 +1397,10 @@ app.delete("/investidores/:id/documentos/:docId", async (c: any) => {
 app.get("/imoveis/:id/orcamentos-obra", async (c: any) => {
   try {
     const { rows } = await pool.query(
-      "SELECT * FROM orcamentos_obra_recebidos WHERE imovel_id = $1 ORDER BY created_at DESC",
+      `SELECT o.*, e.nome AS empreiteiro_nome, e.empresa AS empreiteiro_empresa
+       FROM orcamentos_obra_recebidos o
+       LEFT JOIN empreiteiros e ON e.id = o.empreiteiro_id
+       WHERE o.imovel_id = $1 ORDER BY o.created_at DESC`,
       [c.req.param("id")],
     );
     return c.json(rows);
@@ -1413,6 +1416,7 @@ app.post("/imoveis/:id/orcamentos-obra", async (c: any) => {
     const fornecedor = form.get("fornecedor");
     const valor = form.get("valor") || null;
     const notas = form.get("notas") || null;
+    const empreiteiroId = form.get("empreiteiro_id") || null;
     if (!fornecedor) return c.json({ error: "fornecedor é obrigatório" }, 400);
 
     const id = crypto.randomUUID();
@@ -1442,11 +1446,11 @@ app.post("/imoveis/:id/orcamentos-obra", async (c: any) => {
     }
 
     await pool.query(
-      `INSERT INTO orcamentos_obra_recebidos (id, imovel_id, fornecedor, valor, notas, storage_path, drive_file_id, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [id, imovelId, fornecedor, valor, notas, storagePath, driveFileId, now],
+      `INSERT INTO orcamentos_obra_recebidos (id, imovel_id, fornecedor, valor, notas, storage_path, drive_file_id, created_at, empreiteiro_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [id, imovelId, fornecedor, valor, notas, storagePath, driveFileId, now, empreiteiroId],
     );
-    return c.json({ id, imovel_id: imovelId, fornecedor, valor, notas, storage_path: storagePath, created_at: now }, 201);
+    return c.json({ id, imovel_id: imovelId, fornecedor, valor, notas, storage_path: storagePath, created_at: now, empreiteiro_id: empreiteiroId }, 201);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
@@ -5627,6 +5631,34 @@ app.post("/projetos/:negocioId/documentos", async (c: any) => {
   } catch (e) { console.error("[projetos/documentos] upload", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
 });
 
+// Importar orçamento interno: copia o orçamento de obra (25 secções) do
+// imóvel ligado para o projecto, como cópia estática — a partir daqui é este
+// orçamento (e não o do Comercial, meramente ilustrativo) que conta como o
+// real do projecto. Só sincroniza de novo se o utilizador pedir outra vez.
+// Acção só para a equipa (não parceiro/investidor). Port de routes.js.
+app.post("/projetos/:negocioId/orcamento-interno/importar", async (c: any) => {
+  try {
+    const u = await resolveCrmUser(c);
+    if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return c.json({ error: "Sem permissão para esta operação" }, 403);
+
+    const negocioId = c.req.param("negocioId");
+    await ensureColumn("negocios", "orcamento_obra_snapshot JSONB");
+    const { rows: [negocio] } = await pool.query("SELECT imovel_id FROM negocios WHERE id = $1", [negocioId]);
+    if (!negocio) return c.json({ error: "Projecto não encontrado" }, 404);
+    if (!negocio.imovel_id) return c.json({ error: "Projecto sem imóvel associado" }, 400);
+
+    const { rows: [orcamento] } = await pool.query("SELECT * FROM orcamentos_obra WHERE imovel_id = $1", [negocio.imovel_id]);
+    if (!orcamento) return c.json({ error: "Este imóvel ainda não tem orçamento interno preenchido no Comercial" }, 404);
+
+    const snapshot = { ...orcamento, _importado_em: new Date().toISOString() };
+    const { rows: [updated] } = await pool.query(
+      `UPDATE negocios SET orcamento_obra_snapshot = $1, updated_at = NOW()::TEXT WHERE id = $2 RETURNING orcamento_obra_snapshot`,
+      [JSON.stringify(snapshot), negocioId],
+    );
+    return c.json({ orcamento_obra_snapshot: updated.orcamento_obra_snapshot });
+  } catch (e) { console.error("[orcamento-interno/importar]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
+
 // ── PUT documento do projecto — port de routes.js 4140-4157 ──
 app.put("/projetos/documentos/:docId", async (c: any) => {
   try {
@@ -6736,9 +6768,23 @@ app.get("/projetos/:negocioId/resumo", async (c: any) => {
     );
 
     let imovel = null;
+    let analise = null;
     if (negocio.imovel_id) {
-      const { rows: imRows } = await pool.query("SELECT id, nome, zona, tipologia, fotos FROM imoveis WHERE id = $1", [negocio.imovel_id]);
+      const { rows: imRows } = await pool.query(
+        "SELECT id, nome, zona, tipologia, fotos, estado, modelo_negocio, valor_proposta, fee_cedencia, area_bruta FROM imoveis WHERE id = $1",
+        [negocio.imovel_id],
+      );
       imovel = imRows[0] || null;
+
+      // Análise financeira contínua — a mesma análise activa do imóvel no
+      // Comercial, calculada em tempo real (não é cópia; acompanha o imóvel
+      // ao longo da evolução de lead a projecto).
+      try {
+        const { rows: [analiseAtiva] } = await pool.query(
+          "SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1", [negocio.imovel_id],
+        );
+        if (analiseAtiva) analise = { ...analiseAtiva, ...calcAnalise(analiseAtiva) };
+      } catch (e) { console.error("[projetos/resumo] análise:", (e as Error).message); }
     }
 
     const orcAlocado = fases.reduce((s: number, f: any) => s + (Number(f.orcamento_alocado) || 0), 0);
@@ -6748,7 +6794,7 @@ app.get("/projetos/:negocioId/resumo", async (c: any) => {
       : 0;
     const faseAtual = fases.find((f: any) => f.estado === "em_curso") || fases.find((f: any) => f.estado === "pendente") || fases[fases.length - 1];
 
-    return c.json({ negocio, imovel, fases, orcAlocado, custoReal, percGlobal, faseAtual });
+    return c.json({ negocio, imovel, analise, fases, orcAlocado, custoReal, percGlobal, faseAtual });
   } catch (e) { console.error("[projetos/resumo]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
 });
 
