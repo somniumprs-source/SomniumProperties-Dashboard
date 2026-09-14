@@ -43,8 +43,14 @@ function Wrapper({ label, error, hint, children, className = '' }) {
 export const Input = forwardRef(function Input(
   { label, error, hint, size = 'md', prefix, suffix, className = '', wrapperClassName, ...rest }, ref
 ) {
+  // Números sem `step` explícito ficariam limitados a valores inteiros pelo
+  // browser (arredonda ao usar as setas do campo ou o scroll do rato) — "any"
+  // permite decimais (ex: valores em €) sem afectar campos que já pedem um step próprio.
+  const numberProps = rest.type === 'number'
+    ? { step: rest.step ?? 'any', onWheel: rest.onWheel ?? (e => e.target.blur()) }
+    : null
   const input = (
-    <input ref={ref} className={`${baseClass(size, error, rest.disabled)} ${prefix ? 'pl-9' : ''} ${suffix ? 'pr-9' : ''} ${className}`} {...rest} />
+    <input ref={ref} className={`${baseClass(size, error, rest.disabled)} ${prefix ? 'pl-9' : ''} ${suffix ? 'pr-9' : ''} ${className}`} {...rest} {...numberProps} />
   )
   const inner = (prefix || suffix) ? (
     <div className="relative">

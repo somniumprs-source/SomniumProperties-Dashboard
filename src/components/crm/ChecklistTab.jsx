@@ -78,7 +78,7 @@ function InlineImovelField({ field, value, onChange }) {
     return <input type="date" value={(value || '').slice(0, 10)} onChange={e => onChange(field, e.target.value)} className={inputClass} />
   }
   if (cfg.type === 'number') {
-    return <input type="number" value={value ?? ''} onChange={e => onChange(field, +e.target.value || null)} className={inputClass} placeholder={cfg.label} />
+    return <input type="number" step="any" value={value ?? ''} onChange={e => onChange(field, +e.target.value || null)} className={inputClass} placeholder={cfg.label} onWheel={e => e.target.blur()} />
   }
   return <input type="text" value={value ?? ''} onChange={e => onChange(field, e.target.value)} className={inputClass} placeholder={cfg.label} />
 }

@@ -342,9 +342,10 @@ function Input({ label, field, value, onChange, step, placeholder, required, rea
       </label>
       <input
         type="number"
-        step={step || '100'}
+        step={step || 'any'}
         value={value ?? ''}
         onChange={handleChange}
+        onWheel={e => e.target.blur()}
         placeholder={placeholder}
         readOnly={readOnly}
         className={`w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm font-mono placeholder:text-gray-300 focus:outline-none focus:ring-2 transition-shadow ${readOnly ? 'bg-gray-50 cursor-not-allowed text-gray-600' : ''}`}

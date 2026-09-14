@@ -33,7 +33,7 @@ export function NumberField({ label, value, onChange }) {
   return (
     <div>
       <label className="block text-xs text-gray-500 mb-1">{label}</label>
-      <input type="number" value={value ?? ''} onChange={e => onChange(e.target.value)} className={inputClass} />
+      <input type="number" step="any" value={value ?? ''} onChange={e => onChange(e.target.value)} className={inputClass} onWheel={e => e.target.blur()} />
     </div>
   )
 }

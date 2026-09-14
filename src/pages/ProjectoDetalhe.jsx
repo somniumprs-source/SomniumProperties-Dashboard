@@ -701,8 +701,8 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
             </div>
             <div>
               <label className="text-[10px] text-gray-500 uppercase tracking-wide block mb-1">Orçamento alocado (€)</label>
-              <input type="number" defaultValue={fase.orcamento_alocado || 0} onBlur={e => setCampo('orcamento_alocado', parseFloat(e.target.value) || 0)}
-                className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white" />
+              <input type="number" step="any" defaultValue={fase.orcamento_alocado || 0} onBlur={e => setCampo('orcamento_alocado', parseFloat(e.target.value) || 0)}
+                className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white" onWheel={e => e.target.blur()} />
             </div>
           </div>
 
@@ -2189,8 +2189,8 @@ function TabInvestidores({ negocio, readOnly }) {
                   {readOnly ? (
                     <p className="text-sm font-mono font-semibold text-gray-700">{EUR(l.capital)}</p>
                   ) : (
-                    <input type="number" defaultValue={l.capital || 0} onBlur={e => editar(l.id, 'capital', parseFloat(e.target.value) || 0)}
-                      className="w-24 text-right text-sm font-mono px-2 py-0.5 rounded border border-gray-200" />
+                    <input type="number" step="any" defaultValue={l.capital || 0} onBlur={e => editar(l.id, 'capital', parseFloat(e.target.value) || 0)}
+                      className="w-24 text-right text-sm font-mono px-2 py-0.5 rounded border border-gray-200" onWheel={e => e.target.blur()} />
                   )}
                 </div>
                 <div>
@@ -2583,7 +2583,7 @@ function FracaoForm({ fracao, onSave, onCancel, fasesComunsCount }) {
           <>
             <div>
               <label className="text-[10px] text-gray-500 uppercase block mb-1">Valor venda esperado (€)</label>
-              <input type="number" step="100" value={f.valor_venda_estimado || ''} onChange={e => set('valor_venda_estimado', e.target.value)} className={inputClass} />
+              <input type="number" step="any" value={f.valor_venda_estimado || ''} onChange={e => set('valor_venda_estimado', e.target.value)} className={inputClass} onWheel={e => e.target.blur()} />
             </div>
             <div>
               <label className="text-[10px] text-gray-500 uppercase block mb-1">Data venda estimada</label>
@@ -2595,7 +2595,7 @@ function FracaoForm({ fracao, onSave, onCancel, fasesComunsCount }) {
           <>
             <div>
               <label className="text-[10px] text-gray-500 uppercase block mb-1">Valor venda real (€)</label>
-              <input type="number" step="100" value={f.valor_venda_real || ''} onChange={e => set('valor_venda_real', e.target.value)} className={inputClass} />
+              <input type="number" step="any" value={f.valor_venda_real || ''} onChange={e => set('valor_venda_real', e.target.value)} className={inputClass} onWheel={e => e.target.blur()} />
             </div>
             <div>
               <label className="text-[10px] text-gray-500 uppercase block mb-1">Data venda real</label>
