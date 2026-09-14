@@ -853,14 +853,14 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100 }
 function ResumoFaturacaoNegocio({ negocio, imovel, analise }) {
   const [investidores, setInvestidores] = useState([])
 
-  useEffect(() => {
-    let cancel = false
-    apiFetch(`/api/crm/projetos/${negocio.id}/investidores`)
-      .then(r => r.ok ? r.json() : { investidores: [] })
-      .then(d => { if (!cancel) setInvestidores(d.investidores || []) })
-      .catch(() => {})
-    return () => { cancel = true }
-  }, [negocio.id])
+  async function loadInvestidores() {
+    const r = await apiFetch(`/api/crm/projetos/${negocio.id}/investidores`).catch(() => null)
+    if (r?.ok) setInvestidores((await r.json()).investidores || [])
+  }
+  useEffect(() => { loadInvestidores() }, [negocio.id])
+  // Dinâmico: qualquer gravação (tranches, investidores, análise financeira) dispara
+  // 'somnium:refresh' via apiFetch — recarrega esta lista sem precisar de mudar de aba.
+  useRefreshOnMutation(loadInvestidores)
 
   const percInvestidoresLigados = investidores.reduce((s, i) => s + (Number(i.percentagem) || 0), 0)
 
@@ -904,6 +904,32 @@ function ResumoFaturacaoNegocio({ negocio, imovel, analise }) {
   const totalReal = percSomnium > 0 ? round2(somniumReal / (percSomnium / 100)) : somniumReal
   const investidoresReal = round2(totalReal - somniumReal)
 
+  // Divisão por investidor: CAEP usa a config da Análise (proporcional ao capital
+  // de cada um, igual ao calcCAEP); os restantes modelos usam a % atribuída a
+  // cada investidor na aba Investidores do projecto.
+  let investidoresDetalhe = []
+  if (categoria === 'CAEP' && caepCfg?.investidores?.length) {
+    const capTotal = caepCfg.investidores.reduce((s, i) => s + (Number(i.capital) || 0), 0)
+    investidoresDetalhe = caepCfg.investidores.map((inv, idx) => {
+      const fracao = capTotal > 0 ? (Number(inv.capital) || 0) / capTotal : 0
+      return {
+        id: idx,
+        nome: inv.nome || `Investidor ${idx + 1}`,
+        percPie: round2((100 - percSomnium) * fracao),
+        exp: round2(investidoresExpectavel * fracao),
+        real: round2(investidoresReal * fracao),
+      }
+    })
+  } else if (investidores.length) {
+    investidoresDetalhe = investidores.map(inv => ({
+      id: inv.id,
+      nome: inv.investidor_nome || 'Investidor',
+      percPie: Number(inv.percentagem) || 0,
+      exp: round2(totalExpectavel * (Number(inv.percentagem) || 0) / 100),
+      real: round2(totalReal * (Number(inv.percentagem) || 0) / 100),
+    }))
+  }
+
   const Linha = ({ label, exp, real, sub }) => (
     <div className="grid grid-cols-3 items-center gap-2 py-2.5 border-b border-gray-100 last:border-0">
       <div>
@@ -929,6 +955,13 @@ function ResumoFaturacaoNegocio({ negocio, imovel, analise }) {
       <Linha label="Faturação Total do Negócio" exp={totalExpectavel} real={totalReal} />
       <Linha label="Somnium Properties" sub={`${percSomnium.toFixed(1)}%`} exp={somniumExpectavel} real={somniumReal} />
       <Linha label="Investidores" sub={`${Math.max(0, 100 - percSomnium).toFixed(1)}%`} exp={investidoresExpectavel} real={investidoresReal} />
+      {investidoresDetalhe.length > 0 && (
+        <div className="pl-4 border-l-2 border-gray-100 ml-1">
+          {investidoresDetalhe.map(inv => (
+            <Linha key={inv.id} label={inv.nome} sub={`${inv.percPie.toFixed(1)}%`} exp={inv.exp} real={inv.real} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
