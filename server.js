@@ -140,7 +140,7 @@ try {
   })
 
   // ── Gestão de utilizadores e camadas de acesso ──
-  const { default: userRoutes, accessRouter, requireRole, requireModule, requireModuleOrOwnInvestidor, restrictByAccess, restrictProjetosAccess } = await import('./src/db/userRoutes.js')
+  const { default: userRoutes, accessRouter, requireRole, requireModule, requireModuleOrOwnInvestidor, restrictByAccess, restrictProjetosAccess, resolveAppUser, RECORD_RESTRICTED_ROLES } = await import('./src/db/userRoutes.js')
   app.use('/api/users', userRoutes)
   app.use('/api/acessos', accessRouter)
   // Camadas de acesso do CRM — montadas ANTES do router CRM para correrem primeiro.
@@ -155,6 +155,19 @@ try {
   app.use('/api/crm/negocios', requireModule('crm.negocios'), restrictByAccess('negocio'))
   // /projetos não segue o padrão limpo /:id/subpath dos outros — guard dedicado.
   app.use('/api/crm/projetos', requireModule('crm.negocios'), restrictProjetosAccess())
+  // "consultor-interacoes"/"investidor-interacoes" não vivem sob /consultores
+  // ou /investidores, por isso os guards acima nunca os cobriam — qualquer
+  // utilizador autenticado conseguia ler/escrever interações com consultores/investidores.
+  app.use('/api/crm/consultor-interacoes', requireModule('crm.consultores'))
+  app.use('/api/crm/investidor-interacoes', requireModule('crm.investidores'))
+  // "negocios-lixeira" também escapa ao prefixo /negocios: devolve TODOS os
+  // negócios apagados sem filtro por `acessos`, por isso bloqueia-se também
+  // parceiro/investidor (só deviam ver registos partilhados com eles).
+  app.use('/api/crm/negocios-lixeira', requireModule('crm.negocios'), async (req, res, next) => {
+    const u = await resolveAppUser(req)
+    if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return res.status(403).json({ error: 'Sem acesso a negocios-lixeira' })
+    next()
+  })
 
   // Router CRM — montado DEPOIS dos guards para que estes corram primeiro
   const { default: crmRoutes } = await import('./src/db/routes.js')
