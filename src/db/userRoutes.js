@@ -331,13 +331,18 @@ router.post('/', async (req, res) => {
         } else {
           authUserId = createResult.data?.user?.id
         }
-        // Agora gerar magiclink (já existe seguramente)
+        // Agora gerar link de acesso — mesmo formato do reset-password
+        // (token como segmento de caminho em /resetpassword/<token>, em vez do
+        // action_link bruto do Supabase) para a pessoa definir a sua password.
         const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
-          type: 'magiclink', email, options: redirectTo ? { redirectTo } : undefined,
+          type: 'recovery', email, options: redirectTo ? { redirectTo } : undefined,
         })
-        if (linkErr) return res.status(400).json({ error: `Magic link: ${linkErr.message}` })
+        if (linkErr) return res.status(400).json({ error: `Link de acesso: ${linkErr.message}` })
         if (!authUserId) authUserId = linkData?.user?.id
-        actionLink = linkData?.properties?.action_link || null
+        const hashedToken = linkData?.properties?.hashed_token
+        actionLink = hashedToken
+          ? `${redirectTo}/resetpassword/${hashedToken}`
+          : linkData?.properties?.action_link || null
         if (!actionLink) return res.status(500).json({
           error: 'Supabase não devolveu action_link. Verifica que SUPABASE_SERVICE_KEY é a service_role key (não a anon).',
         })
@@ -515,10 +520,30 @@ export const accessRouter = (() => {
 
   // Quem tem acesso a um registo (lista de users, para o modal de partilha)
   // GET /api/acessos/:entidade/:id
+  // Sem isto qualquer utilizador autenticado (parceiro/investidor incluído)
+  // conseguia listar nomes/emails/roles de quem tem acesso a QUALQUER registo,
+  // só por adivinhar/conhecer o id — sem verificar se tem acesso a esse registo.
   r.get('/:entidade/:id', async (req, res) => {
     try {
       const { entidade, id } = req.params
       if (!['imovel', 'negocio'].includes(entidade)) return res.status(400).json({ error: 'entidade inválida' })
+      if (supabaseAdmin) {
+        const u = await resolveAppUser(req)
+        if (!u) return res.status(401).json({ error: 'Não autenticado' })
+        if (!u.ativo) return res.status(403).json({ error: 'Conta inactiva' })
+        if (u.role !== 'admin') {
+          const moduleName = entidade === 'imovel' ? 'crm.imoveis' : 'crm.negocios'
+          const mods = ROLE_MODULES[u.role] || []
+          if (!mods.includes(moduleName)) return res.status(403).json({ error: `Sem acesso a ${moduleName}` })
+          if (RECORD_RESTRICTED_ROLES.has(u.role)) {
+            const own = await pool.query(
+              'SELECT 1 FROM acessos WHERE user_id = $1 AND entidade = $2 AND entidade_id = $3',
+              [u.id, entidade, id]
+            )
+            if (own.rowCount === 0) return res.status(403).json({ error: 'Sem acesso a este registo' })
+          }
+        }
+      }
       const result = await pool.query(`
         SELECT a.id AS acesso_id, u.id AS user_id, u.nome, u.email, u.iniciais, u.cor, u.role
         FROM acessos a JOIN users u ON u.id = a.user_id
