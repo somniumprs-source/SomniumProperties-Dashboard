@@ -74,16 +74,19 @@ async function getUserById(id: string) {
 }
 
 // Determina o redirectTo para os links Supabase.
-// Em Edge Functions nao temos req.protocol/host fiavel — usamos PUBLIC_APP_URL
-// ou o host do pedido (via header) com fallback para o dominio Vercel.
+// Em Edge Functions o header "host" e o hostname interno do runtime
+// (ex: edge-runtime.supabase.com), NUNCA o dominio do site — nao serve para
+// isto. O header "Origin" e enviado pelo browser em todo o fetch cross-origin
+// (o caso de uso aqui: frontend em vercel.app a chamar *.functions.supabase.co)
+// e reflecte o dominio real da pagina. Prioridade: PUBLIC_APP_URL > Origin > fallback fixo.
 function resolveRedirectTo(c: any): string {
   const publicUrl = Deno.env.get("PUBLIC_APP_URL");
   if (publicUrl) return publicUrl;
-  const host = c.req.header("host");
-  if (host && !host.startsWith("localhost")) {
-    const proto = c.req.header("x-forwarded-proto") || "https";
-    return `${proto}://${host}`;
-  }
+  const origin = c.req.header("origin");
+  try {
+    const host = origin ? new URL(origin).hostname : "";
+    if (host && host !== "localhost" && !/supabase\.(co|com)$/.test(host)) return origin!;
+  } catch { /* origin ausente ou invalido — cai no fallback */ }
   return "https://somnium-properties-dashboard.vercel.app";
 }
 
@@ -295,8 +298,10 @@ app.post("/", async (c: any) => {
         } else {
           authUserId = createResult.data?.user?.id ?? null;
         }
-        // Mesmo formato do reset-password (token como segmento de caminho em
-        // /resetpassword/<token>, em vez do action_link bruto do Supabase).
+        // Gera um token de recovery do Supabase (mesmo mecanismo do reset de
+        // password) mas o link aponta para /get-started/<token> — página com
+        // texto próprio de primeiro acesso, em vez do action_link bruto do
+        // Supabase (que aponta para <projecto>.supabase.co).
         const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
           type: "recovery", email, options: redirectTo ? { redirectTo } : undefined,
         });
@@ -304,7 +309,7 @@ app.post("/", async (c: any) => {
         if (!authUserId) authUserId = linkData?.user?.id ?? null;
         const hashedToken = linkData?.properties?.hashed_token;
         actionLink = hashedToken
-          ? `${redirectTo}/resetpassword/${hashedToken}`
+          ? `${redirectTo}/get-started/${hashedToken}`
           : linkData?.properties?.action_link || null;
         if (!actionLink) {
           return c.json({
@@ -418,8 +423,9 @@ app.post("/:id/reset-password", async (c: any) => {
 });
 
 // ── POST /users/:id/magic-link (port 384-409) ──
-// Mesmo formato do reset-password (token como segmento de caminho em
-// /resetpassword/<token>, em vez do action_link bruto do Supabase).
+// Mesmo mecanismo do reset-password (token de recovery, no path em vez do
+// action_link bruto do Supabase) mas aponta para /get-started — página com
+// texto de primeiro acesso, não de "repor password".
 app.post("/:id/magic-link", async (c: any) => {
   const adm = await requireAdmin(c);
   if (!adm.ok) return c.json({ error: "Apenas administradores" }, 403);
@@ -444,7 +450,7 @@ app.post("/:id/magic-link", async (c: any) => {
     }
     const hashedToken = data?.properties?.hashed_token;
     const actionLink = hashedToken
-      ? `${redirectTo}/resetpassword/${hashedToken}`
+      ? `${redirectTo}/get-started/${hashedToken}`
       : data?.properties?.action_link || null;
     if (!actionLink) {
       return c.json({ error: "Supabase não devolveu action_link. Verifica SUPABASE_SERVICE_KEY (deve ser a service_role key, não a anon)." }, 500);

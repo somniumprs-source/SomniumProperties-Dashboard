@@ -33,10 +33,13 @@ export const ROLE_AREAS = {
 // Se uma role não estiver listada num módulo, NÃO tem acesso a esse módulo.
 // Parceiros têm acesso a 'crm.imoveis' e 'crm.negocios' MAS sujeito a filtro
 // por registo (tabela `acessos`) — só vêem os imóveis/negócios partilhados com eles.
+// "crm.despesas" nunca existiu apesar de /api/crm/despesas ser CRUD completo
+// de dados financeiros — ficava sem guard nenhum. financeiro/admin são os
+// únicos roles com a área "financeiro" em ROLE_AREAS acima.
 export const ROLE_MODULES = {
-  admin:      ['crm.imoveis', 'crm.investidores', 'crm.consultores', 'crm.empreiteiros', 'crm.negocios'],
+  admin:      ['crm.imoveis', 'crm.investidores', 'crm.consultores', 'crm.empreiteiros', 'crm.negocios', 'crm.despesas'],
   comercial:  ['crm.imoveis', 'crm.investidores', 'crm.consultores', 'crm.empreiteiros', 'crm.negocios'],
-  financeiro: ['crm.negocios'],
+  financeiro: ['crm.negocios', 'crm.despesas'],
   operacoes:  [],
   parceiro:   ['crm.imoveis', 'crm.negocios'],
   investidor: ['crm.negocios'],
@@ -331,9 +334,10 @@ router.post('/', async (req, res) => {
         } else {
           authUserId = createResult.data?.user?.id
         }
-        // Agora gerar link de acesso — mesmo formato do reset-password
-        // (token como segmento de caminho em /resetpassword/<token>, em vez do
-        // action_link bruto do Supabase) para a pessoa definir a sua password.
+        // Gera um token de recovery do Supabase (mesmo mecanismo do reset de
+        // password) mas o link aponta para /get-started/<token> — página com
+        // texto próprio de primeiro acesso, em vez do action_link bruto do
+        // Supabase (que aponta para <projecto>.supabase.co).
         const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
           type: 'recovery', email, options: redirectTo ? { redirectTo } : undefined,
         })
@@ -341,7 +345,7 @@ router.post('/', async (req, res) => {
         if (!authUserId) authUserId = linkData?.user?.id
         const hashedToken = linkData?.properties?.hashed_token
         actionLink = hashedToken
-          ? `${redirectTo}/resetpassword/${hashedToken}`
+          ? `${redirectTo}/get-started/${hashedToken}`
           : linkData?.properties?.action_link || null
         if (!actionLink) return res.status(500).json({
           error: 'Supabase não devolveu action_link. Verifica que SUPABASE_SERVICE_KEY é a service_role key (não a anon).',
@@ -436,8 +440,9 @@ router.post('/:id/reset-password', async (req, res) => {
 })
 
 // POST /api/users/:id/magic-link — gera link de acesso (não requer SMTP)
-// Mesmo formato do reset-password (token como segmento de caminho em
-// /resetpassword/<token>, em vez do action_link bruto do Supabase).
+// Mesmo mecanismo do reset-password (token de recovery, no path em vez do
+// action_link bruto do Supabase) mas aponta para /get-started — página com
+// texto de primeiro acesso, não de "repor password".
 router.post('/:id/magic-link', async (req, res) => {
   try {
     const u = await getUserById(req.params.id)
@@ -461,7 +466,7 @@ router.post('/:id/magic-link', async (req, res) => {
     }
     const hashedToken = data?.properties?.hashed_token
     const actionLink = hashedToken
-      ? `${redirectTo}/resetpassword/${hashedToken}`
+      ? `${redirectTo}/get-started/${hashedToken}`
       : data?.properties?.action_link || null
     if (!actionLink) return res.status(500).json({ error: 'Supabase não devolveu action_link. Verifica SUPABASE_SERVICE_KEY (deve ser a service_role key, não a anon).' })
     res.json({ ok: true, actionLink })

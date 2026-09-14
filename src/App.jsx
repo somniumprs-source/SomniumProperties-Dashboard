@@ -67,6 +67,22 @@ function AppRoutes() {
     )
   }
 
+  // Rota pública de primeiro acesso (convite/magic link; mesmo mecanismo do
+  // reset de password — token de recovery do Supabase — mas com texto próprio
+  // para quem está a criar o acesso pela primeira vez, não a repor password).
+  if (window.location.pathname.startsWith('/get-started')) {
+    return (
+      <ChunkErrorBoundary>
+        <Suspense fallback={<PageFallback />}>
+          <Routes>
+            <Route path="/get-started/:token" element={<ResetPassword firstAccess />} />
+            <Route path="/get-started" element={<ResetPassword firstAccess />} />
+          </Routes>
+        </Suspense>
+      </ChunkErrorBoundary>
+    )
+  }
+
   // Rota pública para aceitar assinatura (não requer login)
   if (window.location.pathname.startsWith('/aceitar/')) {
     return (
