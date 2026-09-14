@@ -435,18 +435,20 @@ router.post('/:id/reset-password', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// POST /api/users/:id/magic-link — gera magic link de acesso (não requer SMTP)
+// POST /api/users/:id/magic-link — gera link de acesso (não requer SMTP)
+// Mesmo formato do reset-password (token como segmento de caminho em
+// /resetpassword/<token>, em vez do action_link bruto do Supabase).
 router.post('/:id/magic-link', async (req, res) => {
   try {
     const u = await getUserById(req.params.id)
     if (!u) return res.status(404).json({ error: 'Não encontrado' })
     if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase não configurado' })
-    const redirectTo = process.env.PUBLIC_APP_URL || undefined
+    const redirectTo = resolveRedirectTo(req)
 
-    // Tenta magiclink (user existente). Se falhar por não existir, tenta invite (cria + gera link).
+    // Tenta recovery (user existente). Se falhar por não existir, tenta invite (cria + gera link).
     let data, error
     ;({ data, error } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'magiclink', email: u.email, options: redirectTo ? { redirectTo } : undefined,
+      type: 'recovery', email: u.email, options: redirectTo ? { redirectTo } : undefined,
     }))
     if (error) {
       const msg = (error.message || '').toLowerCase()
@@ -457,7 +459,10 @@ router.post('/:id/magic-link', async (req, res) => {
       }
       if (error) return res.status(400).json({ error: error.message })
     }
-    const actionLink = data?.properties?.action_link || null
+    const hashedToken = data?.properties?.hashed_token
+    const actionLink = hashedToken
+      ? `${redirectTo}/resetpassword/${hashedToken}`
+      : data?.properties?.action_link || null
     if (!actionLink) return res.status(500).json({ error: 'Supabase não devolveu action_link. Verifica SUPABASE_SERVICE_KEY (deve ser a service_role key, não a anon).' })
     res.json({ ok: true, actionLink })
   } catch (e) { res.status(500).json({ error: e.message }) }

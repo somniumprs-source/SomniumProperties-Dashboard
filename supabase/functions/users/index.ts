@@ -418,6 +418,8 @@ app.post("/:id/reset-password", async (c: any) => {
 });
 
 // ── POST /users/:id/magic-link (port 384-409) ──
+// Mesmo formato do reset-password (token como segmento de caminho em
+// /resetpassword/<token>, em vez do action_link bruto do Supabase).
 app.post("/:id/magic-link", async (c: any) => {
   const adm = await requireAdmin(c);
   if (!adm.ok) return c.json({ error: "Apenas administradores" }, 403);
@@ -425,11 +427,11 @@ app.post("/:id/magic-link", async (c: any) => {
     const u = await getUserById(c.req.param("id"));
     if (!u) return c.json({ error: "Não encontrado" }, 404);
     if (!supabaseAdmin) return c.json({ error: "Supabase não configurado" }, 503);
-    const redirectTo = Deno.env.get("PUBLIC_APP_URL") || undefined;
+    const redirectTo = resolveRedirectTo(c);
 
     let data: any, error: any;
     ({ data, error } = await supabaseAdmin.auth.admin.generateLink({
-      type: "magiclink", email: u.email, options: redirectTo ? { redirectTo } : undefined,
+      type: "recovery", email: u.email, options: redirectTo ? { redirectTo } : undefined,
     }));
     if (error) {
       const msg = (error.message || "").toLowerCase();
@@ -440,7 +442,10 @@ app.post("/:id/magic-link", async (c: any) => {
       }
       if (error) return c.json({ error: error.message }, 400);
     }
-    const actionLink = data?.properties?.action_link || null;
+    const hashedToken = data?.properties?.hashed_token;
+    const actionLink = hashedToken
+      ? `${redirectTo}/resetpassword/${hashedToken}`
+      : data?.properties?.action_link || null;
     if (!actionLink) {
       return c.json({ error: "Supabase não devolveu action_link. Verifica SUPABASE_SERVICE_KEY (deve ser a service_role key, não a anon)." }, 500);
     }
