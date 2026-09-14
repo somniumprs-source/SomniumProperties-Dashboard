@@ -1,13 +1,19 @@
 import { useEffect, useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase.js'
 
 const GOLD = '#C9A84C'
 
-// Página pública de reset de password. O link do Supabase (type=recovery)
-// redireciona para aqui com access_token/refresh_token no hash da URL.
+// Página pública de reset de password. Link gerado com o token como
+// segmento do caminho (/resetpassword/<token>) em vez do action_link bruto
+// do Supabase (que aponta para <projecto>.supabase.co) — assim o link
+// enviado à pessoa é sempre limpo, no domínio da Somnium, verificado aqui
+// via verifyOtp. Mantém também o formato antigo (#access_token=...) para
+// links já enviados antes desta mudança.
 // authEnabled com detectSessionInUrl:false (ver lib/supabase.js — evita
-// session fixation), por isso o hash é lido e a sessão criada aqui à mão.
+// session fixation), por isso a sessão é sempre criada aqui à mão.
 export function ResetPassword() {
+  const { token } = useParams()
   const [status, setStatus] = useState('validating') // validating | ready | invalid | saving | done
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -16,6 +22,15 @@ export function ResetPassword() {
   useEffect(() => {
     async function establishSession() {
       if (!supabase) { setStatus('invalid'); return }
+
+      if (token) {
+        const { error: otpErr } = await supabase.auth.verifyOtp({ token_hash: token, type: 'recovery' })
+        history.replaceState(null, '', '/resetpassword')
+        if (otpErr) { setStatus('invalid'); return }
+        setStatus('ready')
+        return
+      }
+
       const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
       const access_token = hash.get('access_token')
       const refresh_token = hash.get('refresh_token')

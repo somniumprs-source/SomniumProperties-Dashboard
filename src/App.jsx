@@ -54,11 +54,12 @@ function AppRoutes() {
   }
 
   // Rota pública de reset de password (link de recovery do Supabase; não requer login)
-  if (window.location.pathname === '/resetpassword') {
+  if (window.location.pathname.startsWith('/resetpassword')) {
     return (
       <ChunkErrorBoundary>
         <Suspense fallback={<PageFallback />}>
           <Routes>
+            <Route path="/resetpassword/:token" element={<ResetPassword />} />
             <Route path="/resetpassword" element={<ResetPassword />} />
           </Routes>
         </Suspense>

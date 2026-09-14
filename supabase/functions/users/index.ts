@@ -402,12 +402,13 @@ app.post("/:id/reset-password", async (c: any) => {
     const u = await getUserById(c.req.param("id"));
     if (!u) return c.json({ error: "Não encontrado" }, 404);
     if (!supabaseAdmin) return c.json({ error: "Supabase não configurado" }, 503);
-    const redirectTo = `${resolveRedirectTo(c)}/resetpassword`;
-    const { data, error } = await supabaseAdmin.auth.admin.generateLink({
-      type: "recovery", email: u.email, options: { redirectTo },
-    });
+    const { data, error } = await supabaseAdmin.auth.admin.generateLink({ type: "recovery", email: u.email });
     if (error) return c.json({ error: error.message }, 400);
-    return c.json({ ok: true, actionLink: data?.properties?.action_link || null });
+    const hashedToken = data?.properties?.hashed_token;
+    const actionLink = hashedToken
+      ? `${resolveRedirectTo(c)}/resetpassword/${hashedToken}`
+      : data?.properties?.action_link || null;
+    return c.json({ ok: true, actionLink });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
