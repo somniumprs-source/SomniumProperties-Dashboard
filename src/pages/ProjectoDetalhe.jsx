@@ -68,7 +68,7 @@ const TABS_BASE = [
   { key: 'fracoes',      label: 'Frações e Áreas',  icon: Layers, predioOnly: true },
   { key: 'analise',      label: 'Análise Financeira', icon: Calculator },
   { key: 'obras',        label: 'Obras',            icon: Home },
-  { key: 'faturacao',    label: 'Faturação',        icon: Wallet },
+  { key: 'faturacao',    label: 'Lucro',            icon: Wallet },
   { key: 'faturas',      label: 'Faturas',          icon: Receipt },
   { key: 'forecast',     label: 'Forecast',         icon: TrendingUp },
   { key: 'documentos',   label: 'Documentos',       icon: FileText },
