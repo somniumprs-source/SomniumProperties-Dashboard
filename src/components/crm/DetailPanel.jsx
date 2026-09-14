@@ -987,9 +987,11 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
               <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
                 Negócio fechado — já existe Projecto para este imóvel. A Análise Financeira edita-se agora em <strong>Projetos</strong>; aqui fica só como consulta.
               </div>
-              <div className="pointer-events-none opacity-60">
+              {/* <fieldset disabled> em vez de pointer-events-none: bloqueia também
+                  o foco por teclado (Tab) em inputs/botões, não só o clique de rato. */}
+              <fieldset disabled className="min-w-0 p-0 m-0 border-0 opacity-60">
                 <AnaliseTab imovelId={data.id} imovelNome={data.nome} imovel={data} />
-              </div>
+              </fieldset>
             </div>
           ) : (
             <AnaliseTab imovelId={data.id} imovelNome={data.nome} imovel={data} />

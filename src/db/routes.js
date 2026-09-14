@@ -6565,7 +6565,10 @@ router.get('/projetos/:negocioId/resumo', async (req, res) => {
     let imovel = null
     let analise = null
     if (negocio.imovel_id) {
-      const { rows: imRows } = await pool.query('SELECT id, nome, zona, tipologia, fotos FROM imoveis WHERE id = $1', [negocio.imovel_id])
+      const { rows: imRows } = await pool.query(
+        'SELECT id, nome, zona, tipologia, fotos, estado, modelo_negocio, valor_proposta, fee_cedencia, area_bruta FROM imoveis WHERE id = $1',
+        [negocio.imovel_id]
+      )
       imovel = imRows[0] || null
 
       // Análise financeira contínua — a mesma análise activa do imóvel no
