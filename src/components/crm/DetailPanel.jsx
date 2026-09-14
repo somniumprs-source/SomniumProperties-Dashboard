@@ -984,8 +984,16 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
         <div className="p-4 sm:p-6">
           {data.negocios?.some(n => !n.deleted_at) ? (
             <div className="space-y-3">
-              <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
-                Negócio fechado — já existe Projecto para este imóvel. A Análise Financeira edita-se agora em <strong>Projetos</strong>; aqui fica só como consulta.
+              <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300 flex items-center justify-between gap-3 flex-wrap">
+                <span>Negócio fechado — já existe Projecto para este imóvel. A Análise Financeira edita-se agora em <strong>Projetos</strong>; aqui fica só como consulta.</span>
+                {(() => {
+                  const negocioActivo = data.negocios.find(n => !n.deleted_at)
+                  return negocioActivo ? (
+                    <a href={`/projectos/${negocioActivo.id}`} className="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg border border-amber-400 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors whitespace-nowrap">
+                      Abrir em Projetos →
+                    </a>
+                  ) : null
+                })()}
               </div>
               {/* <fieldset disabled> em vez de pointer-events-none: bloqueia também
                   o foco por teclado (Tab) em inputs/botões, não só o clique de rato. */}
