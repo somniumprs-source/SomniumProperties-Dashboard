@@ -53,7 +53,7 @@ const SUB_TABS = [
 const GOLD = '#C9A84C'
 const BLACK = '#1A1A1A'
 
-export function AnaliseTab({ imovelId, imovelNome, imovel }) {
+export function AnaliseTab({ imovelId, imovelNome, imovel, readOnly = false }) {
   const {
     analises, selected, loading, saving, lastSaveStatus,
     select, criar, guardar, guardarAgora, flush, activar, duplicar, apagar,
@@ -95,17 +95,20 @@ export function AnaliseTab({ imovelId, imovelNome, imovel }) {
         <div className="text-center max-w-sm">
           <h3 className="text-base font-semibold text-gray-800 mb-1">Análise de Rentabilidade</h3>
           <p className="text-sm text-gray-500 leading-relaxed">
-            Cria a primeira análise financeira para <strong>{imovelNome}</strong>.
-            Calcula custos, lucro, impostos e retorno com as fórmulas OE 2026.
+            {readOnly
+              ? <>Ainda não há análise financeira para <strong>{imovelNome}</strong>.</>
+              : <>Cria a primeira análise financeira para <strong>{imovelNome}</strong>. Calcula custos, lucro, impostos e retorno com as fórmulas OE 2026.</>}
           </p>
         </div>
-        <button
-          onClick={() => criar({ nome: 'Cenário Base' })}
-          className="px-5 py-2.5 text-sm font-semibold rounded-xl text-white transition-all hover:scale-105"
-          style={{ backgroundColor: BLACK }}
-        >
-          + Criar Primeira Análise
-        </button>
+        {!readOnly && (
+          <button
+            onClick={() => criar({ nome: 'Cenário Base' })}
+            className="px-5 py-2.5 text-sm font-semibold rounded-xl text-white transition-all hover:scale-105"
+            style={{ backgroundColor: BLACK }}
+          >
+            + Criar Primeira Análise
+          </button>
+        )}
         <div className="flex gap-6 text-xs text-gray-400 mt-2">
           <span>IMT · IS · IVA · IRC · IRS</span>
           <span>Stress Tests</span>
@@ -133,19 +136,21 @@ export function AnaliseTab({ imovelId, imovelNome, imovel }) {
           ))}
         </select>
 
-        {selected && (
+        {!readOnly && selected && (
           <RenameInput nome={selected.nome} onRename={(nome) => guardarAgora({ nome })} />
         )}
 
-        <button
-          onClick={() => criar({ nome: `Cenário ${analises.length + 1}` })}
-          className="px-3 py-2 text-xs font-semibold rounded-lg text-white transition-colors"
-          style={{ backgroundColor: BLACK }}
-        >
-          + Novo Cenário
-        </button>
+        {!readOnly && (
+          <button
+            onClick={() => criar({ nome: `Cenário ${analises.length + 1}` })}
+            className="px-3 py-2 text-xs font-semibold rounded-lg text-white transition-colors"
+            style={{ backgroundColor: BLACK }}
+          >
+            + Novo Cenário
+          </button>
+        )}
 
-        {selected && !selected.activa && (
+        {!readOnly && selected && !selected.activa && (
           <button
             onClick={() => activar(selected.id)}
             className="px-3 py-2 text-xs font-semibold rounded-lg border-2 transition-colors hover:opacity-80"
@@ -155,7 +160,7 @@ export function AnaliseTab({ imovelId, imovelNome, imovel }) {
           </button>
         )}
 
-        {selected && (
+        {!readOnly && selected && (
           <button
             onClick={() => duplicar(selected.id)}
             className="px-3 py-2 text-xs rounded-lg border border-gray-300 text-gray-600 hover:bg-white transition-colors"
@@ -164,7 +169,7 @@ export function AnaliseTab({ imovelId, imovelNome, imovel }) {
           </button>
         )}
 
-        {selected && analises.length > 1 && (
+        {!readOnly && selected && analises.length > 1 && (
           <button
             onClick={() => { if (confirm('Apagar esta análise?')) apagar(selected.id) }}
             className="px-3 py-2 text-xs rounded-lg text-red-500 hover:bg-red-50 transition-colors"
@@ -181,7 +186,11 @@ export function AnaliseTab({ imovelId, imovelNome, imovel }) {
           </span>
         )}
 
-        {saving && (
+        {readOnly ? (
+          <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700">
+            👁 SÓ CONSULTA
+          </span>
+        ) : saving && (
           <span className="flex items-center gap-1.5 text-xs text-gray-400">
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
             Guardado automaticamente
@@ -220,40 +229,45 @@ export function AnaliseTab({ imovelId, imovelNome, imovel }) {
         </div>
       )}
 
-      {/* Conteúdo */}
+      {/* Conteúdo — em modo só-consulta, fica dentro de um <fieldset disabled>: dá para
+          navegar livremente entre cenários e sub-abas (fora deste bloco), mas os campos e
+          acções de edição de cada sub-aba ficam desligados. Não expande secções fechadas
+          por defeito nem detalhes internos — para isso, edita/consulta em Projetos. */}
       {selected && (
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          {/* Coluna principal */}
-          <div className="xl:col-span-2">
-            {effectiveSubTab === 'Calculadora' && (
-              <CalculadoraForm analise={selected} imovel={imovel} onUpdate={guardar} />
-            )}
-            {effectiveSubTab === 'Quick Check' && (
-              <QuickCheck analise={selected} onTransfer={(dados) => { guardarAgora(dados); setSubTab('Calculadora') }} />
-            )}
-            {effectiveSubTab === 'Stress Tests' && (
-              <StressTests analise={selected} />
-            )}
-            {effectiveSubTab === 'Comparáveis' && (
-              <Comparaveis
-                analise={selected}
-                imovel={imovel}
-                onUpdate={guardar}
-                flush={flush}
-                guardarAgora={guardarAgora}
-                lastSaveStatus={lastSaveStatus}
-              />
-            )}
-            {effectiveSubTab === 'CAEP' && (
-              <CAEPParcerias analise={selected} onUpdate={guardarAgora} />
-            )}
-          </div>
+        <fieldset disabled={readOnly} className="min-w-0 p-0 m-0 border-0">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            {/* Coluna principal */}
+            <div className="xl:col-span-2">
+              {effectiveSubTab === 'Calculadora' && (
+                <CalculadoraForm analise={selected} imovel={imovel} onUpdate={guardar} />
+              )}
+              {effectiveSubTab === 'Quick Check' && (
+                <QuickCheck analise={selected} onTransfer={(dados) => { guardarAgora(dados); setSubTab('Calculadora') }} />
+              )}
+              {effectiveSubTab === 'Stress Tests' && (
+                <StressTests analise={selected} />
+              )}
+              {effectiveSubTab === 'Comparáveis' && (
+                <Comparaveis
+                  analise={selected}
+                  imovel={imovel}
+                  onUpdate={guardar}
+                  flush={flush}
+                  guardarAgora={guardarAgora}
+                  lastSaveStatus={lastSaveStatus}
+                />
+              )}
+              {effectiveSubTab === 'CAEP' && (
+                <CAEPParcerias analise={selected} onUpdate={guardarAgora} />
+              )}
+            </div>
 
-          {/* Sidebar resume — desktop only */}
-          <div className="hidden xl:block xl:sticky xl:top-4 xl:self-start">
-            <AnaliseResume analise={selected} />
+            {/* Sidebar resume — desktop only */}
+            <div className="hidden xl:block xl:sticky xl:top-4 xl:self-start">
+              <AnaliseResume analise={selected} />
+            </div>
           </div>
-        </div>
+        </fieldset>
       )}
     </div>
   )

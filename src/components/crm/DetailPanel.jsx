@@ -995,11 +995,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
                   ) : null
                 })()}
               </div>
-              {/* <fieldset disabled> em vez de pointer-events-none: bloqueia também
-                  o foco por teclado (Tab) em inputs/botões, não só o clique de rato. */}
-              <fieldset disabled className="min-w-0 p-0 m-0 border-0 opacity-60">
-                <AnaliseTab imovelId={data.id} imovelNome={data.nome} imovel={data} />
-              </fieldset>
+              <AnaliseTab imovelId={data.id} imovelNome={data.nome} imovel={data} readOnly />
             </div>
           ) : (
             <AnaliseTab imovelId={data.id} imovelNome={data.nome} imovel={data} />

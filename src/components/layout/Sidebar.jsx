@@ -21,12 +21,7 @@ const nav = [
     ],
   },
   { to: '/crm', label: 'Departamento Comercial', Icon: Database, badgeKey: 'crm', area: 'crm' },
-  {
-    label: 'Operações', Icon: Briefcase, area: 'projectos',
-    children: [
-      { to: '/projectos', label: 'Projectos', Icon: Briefcase, area: 'projectos' },
-    ],
-  },
+  { to: '/projectos', label: 'Projectos', Icon: Briefcase, area: 'projectos' },
   { to: '/financeiro',         label: 'Departamento Financeiro', Icon: TrendingUp, area: 'financeiro' },
   { to: '/marketing',          label: 'Marketing e Marca Pessoal', Icon: Megaphone, area: 'marketing' },
   { to: '/alertas',            label: 'Alertas',    Icon: Bell, badgeKey: 'alertas', area: 'alertas' },
