@@ -191,7 +191,7 @@ router.use((req, _res, next) => {
         if (req.body.regioes_preferidas === undefined) {
           req.body.regioes_preferidas = JSON.stringify([r])
         }
-      } else if (req.body.regiao === undefined) {
+      } else if (req.body.regiao === undefined || req.body.regiao === null) {
         req.body.regiao = r
       }
     }
@@ -918,7 +918,10 @@ router.delete('/investidores/:id/documentos/:docId', async (req, res) => {
 router.get('/imoveis/:id/orcamentos-obra', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT * FROM orcamentos_obra_recebidos WHERE imovel_id = $1 ORDER BY created_at DESC',
+      `SELECT o.*, e.nome AS empreiteiro_nome, e.empresa AS empreiteiro_empresa
+       FROM orcamentos_obra_recebidos o
+       LEFT JOIN empreiteiros e ON e.id = o.empreiteiro_id
+       WHERE o.imovel_id = $1 ORDER BY o.created_at DESC`,
       [req.params.id]
     )
     res.json(rows)
@@ -929,7 +932,7 @@ const OBRA_ORCAMENTOS_BUCKET = 'ObraOrcamentos'
 
 router.post('/imoveis/:id/orcamentos-obra', uploadRateLimit, uploadDocs.single('file'), async (req, res) => {
   try {
-    const { fornecedor, valor, notas } = req.body
+    const { fornecedor, valor, notas, empreiteiro_id } = req.body
     if (!fornecedor) return res.status(400).json({ error: 'fornecedor é obrigatório' })
     const id = randomUUID()
     const now = new Date().toISOString()
@@ -966,11 +969,11 @@ router.post('/imoveis/:id/orcamentos-obra', uploadRateLimit, uploadDocs.single('
     }
 
     await pool.query(
-      `INSERT INTO orcamentos_obra_recebidos (id, imovel_id, fornecedor, valor, notas, storage_path, drive_file_id, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [id, req.params.id, fornecedor, valor || null, notas || null, storagePath, driveFileId, now]
+      `INSERT INTO orcamentos_obra_recebidos (id, imovel_id, fornecedor, valor, notas, storage_path, drive_file_id, created_at, empreiteiro_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [id, req.params.id, fornecedor, valor || null, notas || null, storagePath, driveFileId, now, empreiteiro_id || null]
     )
-    res.status(201).json({ id, imovel_id: req.params.id, fornecedor, valor: valor || null, notas, storage_path: storagePath, created_at: now })
+    res.status(201).json({ id, imovel_id: req.params.id, fornecedor, valor: valor || null, notas, storage_path: storagePath, created_at: now, empreiteiro_id: empreiteiro_id || null })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 

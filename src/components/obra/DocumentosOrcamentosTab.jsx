@@ -17,8 +17,9 @@ export function DocumentosOrcamentosTab({ imovelId }) {
   const [documentos, setDocumentos] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ fornecedor: '', valor: '', notas: '', file: null })
+  const [form, setForm] = useState({ empreiteiro_id: '', fornecedor: '', valor: '', notas: '', file: null })
   const [saving, setSaving] = useState(false)
+  const [construtores, setConstrutores] = useState([])
 
   const inputClass = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300'
 
@@ -31,7 +32,23 @@ export function DocumentosOrcamentosTab({ imovelId }) {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [imovelId])
+  async function loadConstrutores() {
+    try {
+      const r = await apiFetch('/api/crm/empreiteiros?limit=200')
+      const { data } = await r.json()
+      setConstrutores(Array.isArray(data) ? data : [])
+    } catch { setConstrutores([]) }
+  }
+
+  useEffect(() => { load(); loadConstrutores() }, [imovelId])
+
+  // Selecionar um Construtor do pipeline pré-preenche o fornecedor com o nome
+  // dele — mantém-se editável para o caso de o orçamento vir de outra pessoa
+  // da mesma empresa, mas garante a ligação (empreiteiro_id) para análises futuras.
+  function handleConstrutorChange(id) {
+    const c = construtores.find(x => x.id === id)
+    setForm(f => ({ ...f, empreiteiro_id: id, fornecedor: c ? (c.empresa || c.nome) : f.fornecedor }))
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -40,12 +57,13 @@ export function DocumentosOrcamentosTab({ imovelId }) {
     try {
       const fd = new FormData()
       fd.append('fornecedor', form.fornecedor.trim())
+      if (form.empreiteiro_id) fd.append('empreiteiro_id', form.empreiteiro_id)
       if (form.valor) fd.append('valor', form.valor)
       if (form.notas?.trim()) fd.append('notas', form.notas.trim())
       if (form.file) fd.append('file', form.file)
       const r = await apiFetch(`/api/crm/imoveis/${imovelId}/orcamentos-obra`, { method: 'POST', body: fd })
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao importar orçamento')
-      setForm({ fornecedor: '', valor: '', notas: '', file: null })
+      setForm({ empreiteiro_id: '', fornecedor: '', valor: '', notas: '', file: null })
       setShowForm(false)
       await load()
     } catch (err) {
@@ -80,6 +98,15 @@ export function DocumentosOrcamentosTab({ imovelId }) {
 
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-200">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Construtor (pipeline) — opcional</label>
+            <select value={form.empreiteiro_id} onChange={e => handleConstrutorChange(e.target.value)} className={inputClass}>
+              <option value="">— Não listado / outro fornecedor —</option>
+              {construtores.map(c => (
+                <option key={c.id} value={c.id}>{c.empresa || c.nome}{c.empresa && c.nome ? ` (${c.nome})` : ''}</option>
+              ))}
+            </select>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Fornecedor</label>
@@ -120,6 +147,11 @@ export function DocumentosOrcamentosTab({ imovelId }) {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-800 truncate">{doc.fornecedor}</p>
                 <div className="flex items-center gap-2 text-xs text-gray-400">
+                  {doc.empreiteiro_id && (
+                    <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600" title="Ligado ao Construtor no pipeline">
+                      {doc.empreiteiro_empresa || doc.empreiteiro_nome}
+                    </span>
+                  )}
                   {EUR(doc.valor) && <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{EUR(doc.valor)}</span>}
                   <span>{fmtDate(doc.created_at)}</span>
                 </div>

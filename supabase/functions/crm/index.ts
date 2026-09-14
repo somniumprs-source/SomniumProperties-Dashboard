@@ -674,7 +674,7 @@ function crudRoutes(
       const regiaoActiva = c.get("regiaoActiva");
       if (regiaoActiva) {
         if (table === "investidores") { if (body.regioes_preferidas === undefined) body.regioes_preferidas = JSON.stringify([regiaoActiva]); }
-        else if (body.regiao === undefined) body.regiao = regiaoActiva;
+        else if (body.regiao === undefined || body.regiao === null) body.regiao = regiaoActiva;
       }
       const item = await crud.create(body, { regiaoActiva });
       syncToNotion(table, item.id);
@@ -688,7 +688,7 @@ function crudRoutes(
       const regiaoActiva = c.get("regiaoActiva");
       if (regiaoActiva) {
         if (table === "investidores") { if (body.regioes_preferidas === undefined) body.regioes_preferidas = JSON.stringify([regiaoActiva]); }
-        else if (body.regiao === undefined) body.regiao = regiaoActiva;
+        else if (body.regiao === undefined || body.regiao === null) body.regiao = regiaoActiva;
       }
       if (hooks.beforeUpdate) {
         const check = await hooks.beforeUpdate(c.req.param("id"), body);
@@ -1304,7 +1304,10 @@ app.delete("/investidores/:id/documentos/:docId", async (c: any) => {
 app.get("/imoveis/:id/orcamentos-obra", async (c: any) => {
   try {
     const { rows } = await pool.query(
-      "SELECT * FROM orcamentos_obra_recebidos WHERE imovel_id = $1 ORDER BY created_at DESC",
+      `SELECT o.*, e.nome AS empreiteiro_nome, e.empresa AS empreiteiro_empresa
+       FROM orcamentos_obra_recebidos o
+       LEFT JOIN empreiteiros e ON e.id = o.empreiteiro_id
+       WHERE o.imovel_id = $1 ORDER BY o.created_at DESC`,
       [c.req.param("id")],
     );
     return c.json(rows);
@@ -1320,6 +1323,7 @@ app.post("/imoveis/:id/orcamentos-obra", async (c: any) => {
     const fornecedor = form.get("fornecedor");
     const valor = form.get("valor") || null;
     const notas = form.get("notas") || null;
+    const empreiteiroId = form.get("empreiteiro_id") || null;
     if (!fornecedor) return c.json({ error: "fornecedor é obrigatório" }, 400);
 
     const id = crypto.randomUUID();
@@ -1349,11 +1353,11 @@ app.post("/imoveis/:id/orcamentos-obra", async (c: any) => {
     }
 
     await pool.query(
-      `INSERT INTO orcamentos_obra_recebidos (id, imovel_id, fornecedor, valor, notas, storage_path, drive_file_id, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [id, imovelId, fornecedor, valor, notas, storagePath, driveFileId, now],
+      `INSERT INTO orcamentos_obra_recebidos (id, imovel_id, fornecedor, valor, notas, storage_path, drive_file_id, created_at, empreiteiro_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [id, imovelId, fornecedor, valor, notas, storagePath, driveFileId, now, empreiteiroId],
     );
-    return c.json({ id, imovel_id: imovelId, fornecedor, valor, notas, storage_path: storagePath, created_at: now }, 201);
+    return c.json({ id, imovel_id: imovelId, fornecedor, valor, notas, storage_path: storagePath, created_at: now, empreiteiro_id: empreiteiroId }, 201);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
