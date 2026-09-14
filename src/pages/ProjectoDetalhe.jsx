@@ -325,7 +325,7 @@ export function ProjectoDetalhe() {
                 isWholesalling={isWholesalling} isReadOnly={isReadOnly} onChange={load}
               />
             )}
-            {tab === 'faturacao' && <TabFaturacao negocio={negocio} onChange={load} readOnly={isReadOnly} />}
+            {tab === 'faturacao' && <TabFaturacao negocio={negocio} imovel={imovel} analise={analise} onChange={load} readOnly={isReadOnly} />}
             {tab === 'forecast' && <TabForecast negocioId={id} />}
             {tab === 'documentos' && <TabDocumentos negocio={negocio} imovel={imovel} fases={fases} readOnly={isReadOnly} />}
             {tab === 'investidores' && <TabInvestidores negocio={negocio} readOnly={isReadOnly} />}
@@ -842,7 +842,98 @@ function ImportarOrcamento({ imovel, negocio, onChange }) {
 // ════════════════════════════════════════════════════════════════
 // TAB: FATURAÇÃO (tranches do negócio)
 // ════════════════════════════════════════════════════════════════
-function TabFaturacao({ negocio, onChange, readOnly }) {
+
+function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100 }
+
+// Resumo de faturação do negócio: Total do Negócio (bruto) e a respectiva
+// divisão Somnium / Investidores, sempre em valores brutos — independente do
+// regime fiscal ou da base (líquido/bruto) escolhida na Análise Financeira —
+// comparando o expectável (modelo + % configurada) com o já realizado
+// (negocio.lucro_real, alimentado pelas tranches confirmadas em baixo).
+function ResumoFaturacaoNegocio({ negocio, imovel, analise }) {
+  const [investidores, setInvestidores] = useState([])
+
+  useEffect(() => {
+    let cancel = false
+    apiFetch(`/api/crm/projetos/${negocio.id}/investidores`)
+      .then(r => r.ok ? r.json() : { investidores: [] })
+      .then(d => { if (!cancel) setInvestidores(d.investidores || []) })
+      .catch(() => {})
+    return () => { cancel = true }
+  }, [negocio.id])
+
+  const percInvestidoresLigados = investidores.reduce((s, i) => s + (Number(i.percentagem) || 0), 0)
+
+  let caepCfg = null
+  try {
+    const raw = analise?.caep
+    caepCfg = typeof raw === 'string' ? JSON.parse(raw || 'null') : raw
+  } catch {}
+
+  const categoria = negocio.categoria
+  let percSomnium, totalExpectavel, modeloLabel
+
+  if (categoria === 'Wholesalling') {
+    modeloLabel = 'Wholesalling — cedência de posição'
+    percSomnium = Math.max(0, 100 - percInvestidoresLigados)
+    totalExpectavel = Number(imovel?.fee_cedencia) || Number(negocio.lucro_estimado) || 0
+  } else if (categoria === 'Mediação Imobiliária') {
+    modeloLabel = 'Mediação Imobiliária'
+    percSomnium = Math.max(0, 100 - percInvestidoresLigados)
+    const vvr = Number(analise?.vvr) || 0
+    const comissaoPerc = analise?.comissao_perc != null && analise.comissao_perc !== '' ? Number(analise.comissao_perc) : 2.5
+    totalExpectavel = vvr > 0 ? round2(vvr * comissaoPerc / 100) : (Number(negocio.lucro_estimado) || 0)
+  } else if (categoria === 'CAEP') {
+    modeloLabel = 'CAEP — parceria de investimento'
+    percSomnium = Number(caepCfg?.perc_somnium) || Number(negocio.comissao_pct) || 40
+    totalExpectavel = Number(analise?.lucro_bruto) || 0
+  } else {
+    modeloLabel = categoria || 'Fix and Flip'
+    percSomnium = Math.max(0, 100 - percInvestidoresLigados)
+    totalExpectavel = Number(analise?.lucro_bruto) || 0
+  }
+
+  const somniumExpectavel = round2(totalExpectavel * percSomnium / 100)
+  const investidoresExpectavel = round2(totalExpectavel - somniumExpectavel)
+
+  // Real: lucro_real reflecte sempre o que a Somnium já recebeu (tranches
+  // confirmadas). O total e a parte dos investidores derivam-se aplicando a
+  // mesma % do modelo — não há forma de rastrear recebimentos dos investidores
+  // fora do CRM, por isso é uma extrapolação assumida sobre o valor já confirmado.
+  const somniumReal = Number(negocio.lucro_real) || 0
+  const totalReal = percSomnium > 0 ? round2(somniumReal / (percSomnium / 100)) : somniumReal
+  const investidoresReal = round2(totalReal - somniumReal)
+
+  const Linha = ({ label, exp, real, sub }) => (
+    <div className="grid grid-cols-3 items-center gap-2 py-2.5 border-b border-gray-100 last:border-0">
+      <div>
+        <p className="text-sm font-medium text-gray-700">{label}</p>
+        {sub && <p className="text-[10px] text-gray-400">{sub}</p>}
+      </div>
+      <p className="text-sm font-mono text-right text-gray-500">{EUR(exp)}</p>
+      <p className="text-sm font-mono text-right font-semibold text-gray-800">{EUR(real)}</p>
+    </div>
+  )
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4 mb-4">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Faturação do Negócio (bruto)</p>
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold/15 text-brand-dark font-medium">{modeloLabel}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2 mb-1 mt-3">
+        <div />
+        <p className="text-[10px] uppercase tracking-wide text-gray-400 text-right">Expectável</p>
+        <p className="text-[10px] uppercase tracking-wide text-gray-400 text-right">Real</p>
+      </div>
+      <Linha label="Faturação Total do Negócio" exp={totalExpectavel} real={totalReal} />
+      <Linha label="Somnium Properties" sub={`${percSomnium.toFixed(1)}%`} exp={somniumExpectavel} real={somniumReal} />
+      <Linha label="Investidores" sub={`${Math.max(0, 100 - percSomnium).toFixed(1)}%`} exp={investidoresExpectavel} real={investidoresReal} />
+    </div>
+  )
+}
+
+function TabFaturacao({ negocio, imovel, analise, onChange, readOnly }) {
   const toast = useToast()
   let pags = []
   try { pags = typeof negocio.pagamentos_faseados === 'string' ? JSON.parse(negocio.pagamentos_faseados || '[]') : (negocio.pagamentos_faseados || []) } catch {}
@@ -913,6 +1004,10 @@ function TabFaturacao({ negocio, onChange, readOnly }) {
 
   return (
     <div className="space-y-3">
+      <ResumoFaturacaoNegocio negocio={negocio} imovel={imovel} analise={analise} />
+
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tranches / Cronograma de Pagamentos</p>
+
       {pags.length > 0 ? (
         <>
           <div className="flex items-center gap-3">
