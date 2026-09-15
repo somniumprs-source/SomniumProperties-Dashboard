@@ -8,17 +8,22 @@
   },
   "scripts": {
     "postinstall": "patch-package",
+    "predev": "node scripts/generate-shared-roles.mjs",
     "dev": "concurrently \"node server.js\" \"vite\"",
+    "preserver": "node scripts/generate-shared-roles.mjs",
     "server": "node server.js",
     "sync-landing": "node scripts/sync-landing.mjs",
-    "prebuild": "node scripts/sync-landing.mjs",
+    "prebuild": "node scripts/generate-shared-roles.mjs && node scripts/sync-landing.mjs",
     "build": "vite build",
     "start": "npm run build && NODE_ENV=production node server.js",
     "preview": "vite preview",
     "setup": "node scripts/setup.js",
     "monthly": "node scripts/monthly.js",
     "lint": "eslint src --ext .js,.jsx",
-    "test:smoke": "node scripts/smoke-projetos.mjs"
+    "test:smoke": "node scripts/smoke-projetos.mjs",
+    "generate:roles": "node scripts/generate-shared-roles.mjs",
+    "check:roles": "node scripts/check-role-parity.mjs",
+    "check:endpoints": "node scripts/check-endpoint-parity.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",
@@ -45,7 +50,7 @@
     "lucide-react": "^0.344.0",
     "multer": "^2.1.1",
     "node-cron": "^4.2.1",
-    "nodemailer": "^8.0.5",
+    "nodemailer": "^10.0.10",
     "patch-package": "^8.0.1",
     "pdf-lib": "^1.17.1",
     "pdfkit": "^0.18.0",
@@ -70,5 +75,10 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
     "prettier": "^3.2.5"
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "^11.1.1"
+    }
   }
 }

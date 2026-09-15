@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Lembrete (NÃO bloqueia o commit): se um lado do par dev/produção mudou sem
+# o outro, avisa. CLAUDE.md já diz "alteracoes a endpoints precisam de ser
+# portadas para AMBOS" — isto é o mesmo lembrete, automático, no momento em
+# que é mais fácil de agir (antes do commit, não depois do deploy).
+#
+# Corre check-role-parity.mjs/check-endpoint-parity.mjs (o CI corre os
+# mesmos scripts, bloqueante) quando os ficheiros relevantes estão staged.
+
+set -e
+
+staged() { git diff --cached --name-only; }
+files="$(staged)"
+
+warn_pair() {
+  local dev_pattern="$1" prod_pattern="$2" label="$3"
+  local dev_hit prod_hit
+  dev_hit="$(echo "$files" | grep -E "$dev_pattern" || true)"
+  prod_hit="$(echo "$files" | grep -E "$prod_pattern" || true)"
+  if [ -n "$dev_hit" ] && [ -z "$prod_hit" ]; then
+    echo "⚠️  [$label] mudou dev sem mudar produção — lembra-te de portar (ver CLAUDE.md)."
+    echo "    dev: $dev_hit"
+  elif [ -z "$dev_hit" ] && [ -n "$prod_hit" ]; then
+    echo "⚠️  [$label] mudou produção sem mudar dev — lembra-te de portar (ver CLAUDE.md)."
+    echo "    produção: $prod_hit"
+  fi
+}
+
+warn_pair '^src/db/userRoutes\.js$' '^supabase/functions/users/index\.ts$' "users"
+warn_pair '^src/db/routes\.js$' '^supabase/functions/crm/index\.ts$' "crm"
+warn_pair '^server\.js$' '^supabase/functions/(crm|dashboard|users)/index\.ts$' "server.js (guards montados antes do router)"
+
+# Se o par mexeu nos DOIS lados (ou não mexeu em nenhum), corre os checks de
+# paridade completos — apanham divergências de conteúdo, não só "só um lado mudou".
+if echo "$files" | grep -qE '^(src/db/(userRoutes|routes)\.js|supabase/functions/(users|crm)/index\.ts|supabase/functions/_shared/roles\.ts)$'; then
+  node scripts/check-role-parity.mjs || echo "⚠️  roles/módulos divergem entre dev e produção (ver acima) — não bloqueia o commit, mas o CI vai falhar."
+  node scripts/check-endpoint-parity.mjs || echo "⚠️  rotas divergem entre dev e produção (ver acima) — não bloqueia o commit, mas o CI vai falhar."
+fi
+
+exit 0

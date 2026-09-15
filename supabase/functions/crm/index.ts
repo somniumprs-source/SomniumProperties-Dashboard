@@ -11,6 +11,10 @@
 // continuam registados ANTES dos crudRoutes/:id correspondentes.
 import { createApp } from "../_shared/hono.ts";
 import { requireAuth, requireInternalKey } from "../_shared/auth.ts";
+import { assertPublicHttpUrl } from "../_shared/ssrfGuard.ts";
+import { assertSafeUpload, AUDIO_ALLOWED_EXT, OFFICE_ALLOWED_EXT, checkUploadRateLimit, uploadRateLimitKey } from "../_shared/uploadGuard.ts";
+import { ROLE_MODULES, RECORD_RESTRICTED_ROLES, NON_ID_SEGS } from "../_shared/roles.ts";
+import { resolveOrProvisionUser } from "../_shared/userResolve.ts";
 import pool from "../_shared/pg.ts";
 import { withAuditUser } from "../_shared/audit.ts";
 import {
@@ -107,10 +111,21 @@ const PATH_TO_TABLE: Record<string, string> = {
 
 // ── Resolucao de utilizador para o CRM (port de routes.js resolveCrmUser) ──
 // O CRM bypassa o auth global mas precisa do user para filtros (acessos,
-// roles restritos, audit, notificacoes in-app). Sem service key (dev) ou sem
-// token -> null (o handler devolve tudo / age como admin, igual ao Express).
-const RECORD_RESTRICTED_ROLES = new Set(["parceiro", "investidor"]);
-const _crmAuthClient = (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_KEY"))
+// roles restritos, audit, notificacoes in-app). Sem service key (dev) -> null
+// (o handler devolve tudo / age como admin, igual ao Express).
+// RECORD_RESTRICTED_ROLES vem de ../_shared/roles.ts (fonte única).
+//
+// CRM_AUTH_CONFIGURED distingue "sem service key" (dev — os guards abaixo
+// deixam passar, como o Express sem supabaseAdmin) de "service key existe mas
+// não resolvi utilizador" (token ausente/inválido, ou JWT válido só que ainda
+// sem linha em `users`) — este segundo caso tem de REJEITAR, não passar. Antes
+// os guards tratavam os dois iguais (`if (!u) return next()`), o que deixava
+// qualquer JWT válido de um utilizador ainda não provisionado (ex: primeiro
+// pedido cai no CRM antes de bater em /api/users/me) aceder sem NENHUMA
+// verificação de role — resolveOrProvisionUser (partilhado com "users") evita
+// mesmo esse caso ao criar a linha aí, mas o guard fica correcto de qualquer forma.
+const CRM_AUTH_CONFIGURED = !!(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_KEY"));
+const _crmAuthClient = CRM_AUTH_CONFIGURED
   ? createClient(
     Deno.env.get("SUPABASE_URL") || "https://mjgusjuougzoeiyavsor.supabase.co",
     (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_KEY"))!,
@@ -125,16 +140,19 @@ async function resolveCrmUser(c: any): Promise<any | null> {
   try {
     const { data: { user }, error } = await _crmAuthClient.auth.getUser(token);
     if (error || !user?.email) return null;
-    // Resolver o app-user a partir do email (port de resolveAppUser, simplificado).
-    // Email pode estar partilhado por varios registos (admin + outros). Ordem
-    // deterministica: admin activo > activo > restantes (port de getUserByEmail).
-    const { rows } = await pool.query(
-      `SELECT * FROM users WHERE LOWER(email) = LOWER($1)
-       ORDER BY (role='admin' AND ativo)::int DESC, ativo::int DESC, created_at ASC LIMIT 1`,
-      [user.email],
-    );
-    return rows[0] || null;
+    return await resolveOrProvisionUser({ id: user.id, email: user.email });
   } catch { return null; }
+}
+
+// Aplica o rate limit de upload (por utilizador, ou por IP sem sessão) —
+// devolve a resposta 429 já pronta a devolver quando excedido, ou null se ok.
+async function checkUploadLimit(c: any, max = 30, windowMs = 60 * 60 * 1000): Promise<Response | null> {
+  const u = await resolveCrmUser(c);
+  const key = uploadRateLimitKey(c, u?.id);
+  if (!checkUploadRateLimit(key, max, windowMs)) {
+    return c.json({ error: "Demasiados uploads. Tente mais tarde." }, 429);
+  }
+  return null;
 }
 
 // ── Camadas de acesso do CRM — port de userRoutes.js (ROLE_MODULES, requireModule,
@@ -142,19 +160,17 @@ async function resolveCrmUser(c: any): Promise<any | null> {
 // router CRM; aqui equivalem-se com app.use(path, mw) do Hono, montado antes de
 // cada crudRoutes(). SEM ISTO qualquer utilizador autenticado, independentemente
 // do role, lê tudo em /imoveis, /negocios, /investidores, /consultores, /empreiteiros. ──
-const ROLE_MODULES: Record<string, string[]> = {
-  admin: ["crm.imoveis", "crm.investidores", "crm.consultores", "crm.empreiteiros", "crm.negocios"],
-  comercial: ["crm.imoveis", "crm.investidores", "crm.consultores", "crm.empreiteiros", "crm.negocios"],
-  financeiro: ["crm.negocios"],
-  operacoes: [],
-  parceiro: ["crm.imoveis", "crm.negocios"],
-  investidor: ["crm.negocios"],
-};
+// ROLE_MODULES vem de ../_shared/roles.ts (fonte única, partilhada com "users" e
+// "dashboard" — antes cada Edge Function tinha a sua própria cópia e divergiam
+// sem ninguém reparar, ex: "crm.despesas" só existia aqui).
 
 function requireModule(moduleName: string) {
   return async (c: any, next: any) => {
     const u = await resolveCrmUser(c);
-    if (!u) return next(); // sem Supabase/token (dev) — passa, igual ao Express
+    // Sem service key (dev) — passa, igual ao Express sem supabaseAdmin. COM
+    // service key, "sem utilizador" é uma falha de autenticação real (token
+    // ausente/inválido) — nunca deve passar (ver nota em CRM_AUTH_CONFIGURED acima).
+    if (!u) return CRM_AUTH_CONFIGURED ? c.json({ error: "Não autenticado" }, 401) : next();
     if (!u.ativo) return c.json({ error: "Conta inactiva" }, 403);
     if (u.role === "admin") return next();
     const mods = ROLE_MODULES[u.role] || [];
@@ -170,7 +186,7 @@ function requireModule(moduleName: string) {
 function requireModuleOrOwnInvestidor(moduleName: string) {
   return async (c: any, next: any) => {
     const u = await resolveCrmUser(c);
-    if (!u) return next();
+    if (!u) return CRM_AUTH_CONFIGURED ? c.json({ error: "Não autenticado" }, 401) : next();
     if (!u.ativo) return c.json({ error: "Conta inactiva" }, 403);
     if (u.role === "admin") return next();
     const mods = ROLE_MODULES[u.role] || [];
@@ -188,9 +204,7 @@ function requireModuleOrOwnInvestidor(moduleName: string) {
   };
 }
 
-// Segmentos que não são IDs de registo (rotas custom tipo /imoveis/stats,
-// /imoveis/pois/sugeridos) — mesma lista do Express, para paridade de comportamento.
-const NON_ID_SEGS = new Set(["stats", "enriched", "find-or-create", "lookup", "checklist", "relatorio", "pois"]);
+// NON_ID_SEGS vem de ../_shared/roles.ts (fonte única, para paridade com o Express).
 
 function restrictByAccessGeneric(entidade: string) {
   return async (c: any, next: any) => {
@@ -677,7 +691,8 @@ function crudRoutes(
         if (table === "investidores") { if (body.regioes_preferidas === undefined) body.regioes_preferidas = JSON.stringify([regiaoActiva]); }
         else if (body.regiao === undefined || body.regiao === null) body.regiao = regiaoActiva;
       }
-      const item = await crud.create(body, { regiaoActiva });
+      const u = await resolveCrmUser(c);
+      const item = await crud.create(body, { regiaoActiva, role: u?.role });
       syncToNotion(table, item.id);
       hooks.onCreate?.(item).catch((e: any) => console.error(`[hook] create ${table}:`, e.message));
       return c.json(item, 201);
@@ -695,7 +710,8 @@ function crudRoutes(
         const check = await hooks.beforeUpdate(c.req.param("id"), body);
         if (check && check.error) return c.json(check, 400);
       }
-      const item = await crud.update(c.req.param("id"), body, { regiaoActiva });
+      const u = await resolveCrmUser(c);
+      const item = await crud.update(c.req.param("id"), body, { regiaoActiva, role: u?.role });
       if (!item) return c.json({ error: "Não encontrado" }, 404);
       syncToNotion(table, c.req.param("id"));
       hooks.onUpdate?.(item, body).catch((e: any) => console.error(`[hook] update ${table}:`, e.message));
@@ -1314,6 +1330,7 @@ const INVESTIDORES_DOCS_BUCKET = "Investidores";
 // nenhum ficheiro real por trás.
 app.post("/investidores/:id/documentos", async (c: any) => {
   try {
+    const _rl = await checkUploadLimit(c); if (_rl) return _rl;
     const investidorId = c.req.param("id");
     const form = await c.req.formData();
     const tipo = form.get("tipo");
@@ -1330,6 +1347,7 @@ app.post("/investidores/:id/documentos", async (c: any) => {
     const fRaw = form.get("file");
     const file = fRaw instanceof File ? fRaw : null;
     if (file) {
+      assertSafeUpload(file);
       const bytes = new Uint8Array(await file.arrayBuffer());
       const safe = file.name.replace(/[^\w.\- ]+/g, "_");
       storagePath = `${investidorId}/${id}_${safe}`;
@@ -1411,6 +1429,7 @@ const OBRA_ORCAMENTOS_BUCKET = "ObraOrcamentos";
 
 app.post("/imoveis/:id/orcamentos-obra", async (c: any) => {
   try {
+    const _rl = await checkUploadLimit(c); if (_rl) return _rl;
     const imovelId = c.req.param("id");
     const form = await c.req.formData();
     const fornecedor = form.get("fornecedor");
@@ -1427,6 +1446,7 @@ app.post("/imoveis/:id/orcamentos-obra", async (c: any) => {
     const fRaw = form.get("file");
     const file = fRaw instanceof File ? fRaw : null;
     if (file) {
+      assertSafeUpload(file);
       const bytes = new Uint8Array(await file.arrayBuffer());
       const safe = file.name.replace(/[^\w.\- ]+/g, "_");
       storagePath = `${imovelId}/${id}_${safe}`;
@@ -1879,6 +1899,12 @@ app.put("/negocios/:id/confirmar-pagamento", async (c: any) => {
   }
 });
 
+// "/despesas" nunca teve guard nenhum (nem "crm.despesas" existia em
+// ROLE_MODULES) — qualquer utilizador autenticado, incluindo parceiro,
+// investidor e operacoes, conseguia ler/criar/editar/apagar TODAS as despesas
+// da empresa. Cobre também upload/remoção de documentos de despesa abaixo.
+app.use("/despesas", requireModule("crm.despesas"));
+app.use("/despesas/*", requireModule("crm.despesas"));
 crudRoutes("/despesas", Despesas);
 
 // Contagem rapida de tarefas atrasadas — port de routes.js 1003-1012
@@ -2245,6 +2271,7 @@ async function nomeConsultor(id: string): Promise<string> {
 // caso o registo fica em estado 'sem_audio', so com os campos manuais do SOP2.
 app.post("/consultores/:id/gravacoes", async (c: any) => {
   try {
+    const _rl = await checkUploadLimit(c, 10, 60 * 60 * 1000); if (_rl) return _rl; // ficheiros até 200MB — limite mais apertado
     await ensureGravacoesTable();
     const consultorId = c.req.param("id");
     const { rows: [cons] } = await pool.query("SELECT id, nome FROM consultores WHERE id = $1", [consultorId]);
@@ -2253,7 +2280,7 @@ app.post("/consultores/:id/gravacoes", async (c: any) => {
     const form = await c.req.formData();
     const fileRaw = form.get("audio");
     const file = fileRaw instanceof File ? fileRaw : null;
-    if (file && file.size > 200 * 1024 * 1024) return c.json({ error: "Ficheiro demasiado grande (max. 200MB)." }, 400);
+    if (file) assertSafeUpload(file, 200 * 1024 * 1024, AUDIO_ALLOWED_EXT);
 
     let storagePath: string | null = null;
     if (file) {
@@ -2707,6 +2734,7 @@ async function alertarFalhaUploadDrive(contexto: string, nomeFicheiro: string): 
 app.post("/imoveis/:id/fotos", async (c: any) => {
   const id = c.req.param("id");
   try {
+    const _rl = await checkUploadLimit(c); if (_rl) return _rl;
     const form = await c.req.formData();
     const files = form.getAll("fotos").filter((f: any): f is File => f instanceof File);
     if (!files.length) return c.json({ error: "Nenhum ficheiro recebido (limite 15MB por ficheiro)" }, 400);
@@ -2717,6 +2745,8 @@ app.post("/imoveis/:id/fotos", async (c: any) => {
     const slot = typeof slotRaw === "string" && slotRaw.trim() ? slotRaw.trim() : undefined;
     const imovel = await Imoveis.getById(id);
     if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
+
+    for (const file of files) assertSafeUpload(file);
 
     let fotos = imovel.fotos ? JSON.parse(imovel.fotos) : [];
     const driveJobs: Promise<unknown>[] = [];
@@ -2861,6 +2891,7 @@ async function resolveDocBuffer(
   bodyName: string | null,
 ): Promise<{ bytes: Uint8Array; ext: string; name: string; contentType: string | null } | null> {
   if (file) {
+    assertSafeUpload(file, 20 * 1024 * 1024);
     const bytes = new Uint8Array(await file.arrayBuffer());
     const ext = (file.name?.match(/\.[a-z0-9]+$/i)?.[0] || "").toLowerCase();
     return { bytes, ext, name: file.name, contentType: file.type || null };
@@ -2869,6 +2900,7 @@ async function resolveDocBuffer(
   if (!p) return null;
   const ext = ((bodyName || p).split("?")[0].match(/\.[a-z0-9]+$/i)?.[0] || "").toLowerCase();
   if (/^https?:\/\//i.test(p)) {
+    assertPublicHttpUrl(p); // SSRF: nunca deixar apontar para localhost/rede privada/metadata
     const r = await fetch(p);
     if (!r.ok) throw new Error(`Não foi possível obter o ficheiro (${r.status})`);
     return { bytes: new Uint8Array(await r.arrayBuffer()), ext, name: bodyName || p.split("/").pop() || "documento", contentType: r.headers.get("content-type") };
@@ -2880,6 +2912,7 @@ async function resolveDocBuffer(
 app.post("/imoveis/:id/documentos/analise", async (c: any) => {
   const id = c.req.param("id");
   try {
+    const _rl = await checkUploadLimit(c, 15, 60 * 60 * 1000); if (_rl) return _rl; // cada chamada custa API de IA
     if (!Deno.env.get("ANTHROPIC_API_KEY")) {
       return c.json({ error: "Análise por IA indisponível (ANTHROPIC_API_KEY não configurada)." }, 503);
     }
@@ -3105,10 +3138,12 @@ app.get("/imoveis/:id/drive-files", async (c: any) => {
 app.post("/despesas/:id/upload", async (c: any) => {
   const id = c.req.param("id");
   try {
+    const _rl = await checkUploadLimit(c); if (_rl) return _rl;
     const form = await c.req.formData();
     const fRaw = form.get("file");
     const file = fRaw instanceof File ? fRaw : null;
     if (!file) return c.json({ error: "Ficheiro inválido (PDF, JPG, PNG até 10MB)" }, 400);
+    assertSafeUpload(file, 10 * 1024 * 1024);
     const despesa = await Despesas.getById(id);
     if (!despesa) return c.json({ error: "Despesa não encontrada" }, 404);
 
@@ -3371,8 +3406,16 @@ app.get("/imoveis/:id/docx/:tipo", async (c: any) => {
 app.get("/docx/tipos", (c: any) => c.json({ tipos: getAvailableTypes() }));
 
 // ── CSV Export — port de routes.js 1761-1783 ──
+// Sem guard nenhum: "/export-csv" e "/import-csv" não vivem sob nenhum dos
+// prefixos com requireModule (imoveis/investidores/consultores/negocios/...),
+// por isso qualquer utilizador autenticado — incluindo parceiro/investidor —
+// conseguia exportar TODAS as tabelas (despesas incluído, sem módulo
+// crm.negocios sequer) e, pior, importar linhas arbitrárias (ver import-csv
+// abaixo). Não há uso deste endpoint no frontend — restringido a admin.
 app.get("/export-csv/:entity", async (c: any) => {
   try {
+    const u = await resolveCrmUser(c);
+    if (u && u.role !== "admin") return c.json({ error: "Apenas administradores" }, 403);
     const entity = c.req.param("entity");
     const allowed = ["imoveis", "investidores", "consultores", "negocios", "despesas", "tarefas"];
     if (!allowed.includes(entity)) return c.json({ error: `Entidade invalida. Usar: ${allowed.join(", ")}` }, 400);
@@ -3396,16 +3439,28 @@ app.get("/export-csv/:entity", async (c: any) => {
 });
 
 // ── CSV Import — port de routes.js 1786-1803 ──
+// As `keys` do INSERT vinham directas de Object.keys(row) do JSON do pedido,
+// sem validar contra as colunas reais da tabela — injecção de SQL via nome de
+// coluna (ex.: um "key" tipo `nome, (SELECT ...)` interpolado sem qualquer
+// escaping). Agora filtra-se por information_schema, tal como o crud.js faz
+// para o CRUD genérico.
 app.post("/import-csv/:entity", async (c: any) => {
   try {
+    const u = await resolveCrmUser(c);
+    if (u && u.role !== "admin") return c.json({ error: "Apenas administradores" }, 403);
     const entity = c.req.param("entity");
     const allowed = ["investidores", "consultores", "despesas"];
     if (!allowed.includes(entity)) return c.json({ error: `Import permitido para: ${allowed.join(", ")}` }, 400);
     const { rows: data } = await c.req.json().catch(() => ({ rows: undefined }));
     if (!Array.isArray(data) || data.length === 0) return c.json({ error: "Body deve conter { rows: [...] }" }, 400);
+    const { rows: colRows } = await pool.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1`,
+      [entity],
+    );
+    const validCols = new Set(colRows.map((r: any) => r.column_name));
     let imported = 0;
     for (const row of data) {
-      const keys = Object.keys(row).filter((k) => k !== "id" && k !== "created_at" && k !== "updated_at");
+      const keys = Object.keys(row).filter((k) => k !== "id" && k !== "created_at" && k !== "updated_at" && validCols.has(k));
       if (keys.length === 0) continue;
       const vals = keys.map((_, i) => `$${i + 1}`);
       await pool.query(`INSERT INTO ${entity} (${keys.join(",")}) VALUES (${vals.join(",")})`, keys.map((k) => row[k] || null));
@@ -4852,6 +4907,39 @@ app.get("/imoveis/:id/distancias", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
+// "relatorios-semanais", "relatorios-documentos" e "reunioes-documentos" são
+// conteúdo interno de administração (resumos de reuniões, relatórios da
+// equipa) sem módulo nenhum a cobri-los — qualquer utilizador autenticado
+// conseguia lê-los/geri-los. Não há caso de uso legítimo para parceiro/
+// investidor (roles externos, sem a área "administracao" em ROLE_AREAS);
+// bloqueiam-se aqui sem restringir os roles internos (admin/comercial/
+// financeiro/operacoes), que já usam isto nas páginas de Administração.
+app.use("/relatorios-semanais", async (c: any, next: any) => {
+  const u = await resolveCrmUser(c);
+  if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return c.json({ error: "Sem acesso" }, 403);
+  return next();
+});
+app.use("/relatorios-semanais/*", async (c: any, next: any) => {
+  const u = await resolveCrmUser(c);
+  if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return c.json({ error: "Sem acesso" }, 403);
+  return next();
+});
+app.use("/relatorios-documentos", async (c: any, next: any) => {
+  const u = await resolveCrmUser(c);
+  if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return c.json({ error: "Sem acesso" }, 403);
+  return next();
+});
+app.use("/reunioes-documentos", async (c: any, next: any) => {
+  const u = await resolveCrmUser(c);
+  if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return c.json({ error: "Sem acesso" }, 403);
+  return next();
+});
+app.use("/reunioes-documentos/*", async (c: any, next: any) => {
+  const u = await resolveCrmUser(c);
+  if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return c.json({ error: "Sem acesso" }, 403);
+  return next();
+});
+
 // ── Relatorios Semanais Administracao — port de routes.js 3410-3510 ──
 app.get("/relatorios-semanais", async (c: any) => {
   try {
@@ -5058,6 +5146,7 @@ app.delete("/reunioes-documentos/:id", async (c: any) => {
 
 app.post("/reunioes-documentos/:id/ficheiros", async (c: any) => {
   try {
+    const _rl = await checkUploadLimit(c); if (_rl) return _rl;
     await ensureReunioesTable();
     if (!supabase) return c.json({ error: "Storage indisponível" }, 503);
     const { rows: [r] } = await pool.query("SELECT pasta FROM reunioes_documentos WHERE id = $1", [c.req.param("id")]);
@@ -5065,6 +5154,7 @@ app.post("/reunioes-documentos/:id/ficheiros", async (c: any) => {
     const form = await c.req.formData();
     const files = form.getAll("ficheiros").filter((f: any): f is File => f instanceof File);
     if (!files.length) return c.json({ error: "Nenhum ficheiro recebido" }, 400);
+    for (const file of files) assertSafeUpload(file, 25 * 1024 * 1024, OFFICE_ALLOWED_EXT);
     for (const file of files) {
       const safe = file.name.replace(/[^\w.\- ]+/g, "_");
       const bytes = new Uint8Array(await file.arrayBuffer());
@@ -5401,6 +5491,7 @@ app.get("/projetos/:negocioId/fotos", async (c: any) => {
 // Multipart (multer array 'fotos', 20) → Hono formData + uploadPublic (bucket "projetos").
 app.post("/projetos/fases/:faseId/fotos", async (c: any) => {
   try {
+    const _rl = await checkUploadLimit(c); if (_rl) return _rl;
     const { rows: faseRows } = await pool.query("SELECT negocio_id FROM projeto_fases WHERE id = $1", [c.req.param("faseId")]);
     if (!faseRows.length) return c.json({ error: "Fase não encontrada" }, 404);
     const negocioId = faseRows[0].negocio_id;
@@ -5408,11 +5499,13 @@ app.post("/projetos/fases/:faseId/fotos", async (c: any) => {
     const files = form.getAll("fotos").filter((f: any): f is File => f instanceof File);
     const tipo = (typeof form.get("tipo") === "string" ? form.get("tipo") as string : "") || "durante";
     const legenda = (typeof form.get("legenda") === "string" ? form.get("legenda") as string : "") || "";
+    for (const file of files) assertSafeUpload(file);
     const inserted: any[] = [];
     for (const file of files) {
       const id = crypto.randomUUID();
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const storagePath = `fotos/${negocioId}/${crypto.randomUUID()}_${file.name}`;
+      const safeName = file.name.replace(/[^\w.\- ]+/g, "_");
+      const storagePath = `fotos/${negocioId}/${crypto.randomUUID()}_${safeName}`;
       const url = await uploadPublic("projetos", storagePath, bytes, file.type || "application/octet-stream");
       const { rows } = await pool.query(
         `INSERT INTO projeto_fotos (id, fase_id, negocio_id, url, legenda, tipo)
@@ -5626,17 +5719,20 @@ app.get("/projetos/:negocioId/documentos", async (c: any) => {
 // Multipart (multer array 'files', 10) → Hono formData + uploadPublic (bucket "projetos").
 app.post("/projetos/:negocioId/documentos", async (c: any) => {
   try {
+    const _rl = await checkUploadLimit(c); if (_rl) return _rl;
     const negocioId = c.req.param("negocioId");
     const form = await c.req.formData();
     const files = form.getAll("files").filter((f: any): f is File => f instanceof File);
     const faseId = typeof form.get("faseId") === "string" ? form.get("faseId") as string : null;
     const tipo = typeof form.get("tipo") === "string" ? form.get("tipo") as string : null;
     const notas = typeof form.get("notas") === "string" ? form.get("notas") as string : null;
+    for (const file of files) assertSafeUpload(file, 25 * 1024 * 1024, OFFICE_ALLOWED_EXT);
     const inserted: any[] = [];
     for (const file of files) {
       const id = crypto.randomUUID();
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const storagePath = `docs/${negocioId}/${crypto.randomUUID()}_${file.name}`;
+      const safeName = file.name.replace(/[^\w.\- ]+/g, "_");
+      const storagePath = `docs/${negocioId}/${crypto.randomUUID()}_${safeName}`;
       const url = await uploadPublic("projetos", storagePath, bytes, file.type || "application/octet-stream");
       const { rows } = await pool.query(
         `INSERT INTO projeto_documentos (id, fase_id, negocio_id, url, nome, tipo, tamanho, mime, notas)
@@ -5799,6 +5895,7 @@ app.put("/projetos/despesas/:despesaId", async (c: any) => {
 // comprovativo_url/comprovativo_nome (campo paralelo sem nenhuma UI a mostrá-lo).
 app.post("/projetos/despesas/:despesaId/comprovativo", async (c: any) => {
   try {
+    const _rl = await checkUploadLimit(c); if (_rl) return _rl;
     const despesaId = c.req.param("despesaId");
     const despesa = await Despesas.getById(despesaId);
     if (!despesa) return c.json({ error: "Despesa não encontrada" }, 404);
@@ -5806,8 +5903,10 @@ app.post("/projetos/despesas/:despesaId/comprovativo", async (c: any) => {
     const fRaw = form.get("comprovativo");
     const file = fRaw instanceof File ? fRaw : null;
     if (!file) return c.json({ error: "Sem ficheiro" }, 400);
+    assertSafeUpload(file);
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const storagePath = `comprovativos/${despesaId}/${crypto.randomUUID()}_${file.name}`;
+    const safeName = file.name.replace(/[^\w.\- ]+/g, "_");
+    const storagePath = `comprovativos/${despesaId}/${crypto.randomUUID()}_${safeName}`;
     const url = await uploadPublic("projetos", storagePath, bytes, file.type || "application/octet-stream");
 
     const docs = despesa.documentos ? JSON.parse(despesa.documentos) : [];

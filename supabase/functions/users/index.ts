@@ -8,8 +8,10 @@
 // Os guardas de role/modulo do Express (router.use admin-only, requireRole,
 // requireModule) sao replicados como middleware/verificacao no inicio dos handlers,
 // preservando a semantica original (dev mode sem service key -> passa).
-import { createApp } from "../_shared/hono.ts";
+import { createApp, isAllowedRedirectOrigin } from "../_shared/hono.ts";
 import pool from "../_shared/pg.ts";
+import { ROLES, ROLE_AREAS, ROLE_MODULES, RECORD_RESTRICTED_ROLES } from "../_shared/roles.ts";
+import { getUserByEmail, resolveOrProvisionUser } from "../_shared/userResolve.ts";
 import { createClient } from "@supabase/supabase-js";
 
 // Variaveis de contexto guardadas pelos middlewares (authUser resolvido do JWT).
@@ -21,29 +23,9 @@ declare module "@hono/hono" {
 
 const app = createApp("/users");
 
-// ── Constantes de roles/areas/modulos (port de userRoutes.js 16-47) ──
-const ROLES = ["admin", "comercial", "financeiro", "operacoes", "parceiro", "investidor"];
-
-const ROLE_AREAS: Record<string, string[]> = {
-  admin: ["dashboard", "crm", "projectos", "financeiro", "operacoes", "metricas", "alertas", "administracao", "marketing", "admin"],
-  comercial: ["dashboard", "crm", "projectos", "metricas"],
-  financeiro: ["dashboard", "financeiro", "metricas"],
-  operacoes: ["dashboard", "operacoes", "alertas", "metricas"],
-  parceiro: ["crm", "projectos"],
-  investidor: ["projectos"],
-};
-
-const ROLE_MODULES: Record<string, string[]> = {
-  admin: ["crm.imoveis", "crm.investidores", "crm.consultores", "crm.empreiteiros", "crm.negocios"],
-  comercial: ["crm.imoveis", "crm.investidores", "crm.consultores", "crm.empreiteiros", "crm.negocios"],
-  financeiro: ["crm.negocios"],
-  operacoes: [],
-  parceiro: ["crm.imoveis", "crm.negocios"],
-  investidor: ["crm.negocios"],
-};
-
-// Roles cujo acesso a registos e restrito pela tabela `acessos`.
-const RECORD_RESTRICTED_ROLES = new Set(["parceiro", "investidor"]);
+// ── Constantes de roles/areas/modulos: vem de ../_shared/roles.ts (fonte
+// única, partilhada com "crm" e "dashboard" — antes cada Edge Function tinha
+// a sua própria cópia e divergiam sem ninguém reparar). ──
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "https://mjgusjuougzoeiyavsor.supabase.co";
 const SUPABASE_SERVICE_KEY = (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_KEY")) || "";
@@ -63,10 +45,9 @@ function invalidateUserCache(email?: string | null) {
 }
 
 // ── Helpers ──────────────────────────────────────────────────
-async function getUserByEmail(email: string) {
-  const r = await pool.query("SELECT * FROM users WHERE LOWER(email) = LOWER($1)", [email]);
-  return r.rows[0] || null;
-}
+// getUserByEmail vem de ../_shared/userResolve.ts (fonte única, partilhada
+// com "crm" — antes cada uma tinha a sua própria versão e só esta tinha o
+// ORDER BY determinístico para email partilhado por vários registos).
 
 async function getUserById(id: string) {
   const r = await pool.query("SELECT * FROM users WHERE id = $1", [id]);
@@ -74,16 +55,21 @@ async function getUserById(id: string) {
 }
 
 // Determina o redirectTo para os links Supabase.
-// Em Edge Functions nao temos req.protocol/host fiavel — usamos PUBLIC_APP_URL
-// ou o host do pedido (via header) com fallback para o dominio Vercel.
+// Em Edge Functions o header "host" e o hostname interno do runtime
+// (ex: edge-runtime.supabase.com), NUNCA o dominio do site — nao serve para
+// isto. O header "Origin" e enviado pelo browser em todo o fetch cross-origin
+// (o caso de uso aqui: frontend em vercel.app a chamar *.functions.supabase.co)
+// e reflecte o dominio real da pagina. Prioridade: PUBLIC_APP_URL > Origin > fallback fixo.
 function resolveRedirectTo(c: any): string {
   const publicUrl = Deno.env.get("PUBLIC_APP_URL");
   if (publicUrl) return publicUrl;
-  const host = c.req.header("host");
-  if (host && !host.startsWith("localhost")) {
-    const proto = c.req.header("x-forwarded-proto") || "https";
-    return `${proto}://${host}`;
-  }
+  // O header Origin é enviado pelo browser, mas nada impede um pedido feito
+  // directamente à Edge Function (curl/script) de o forjar — antes qualquer
+  // valor "plausível" (não localhost, não *.supabase.co) era aceite como
+  // destino do link de recovery/convite. Só se aceita se bater na mesma
+  // allowlist do CORS (domínio de produção + previews Vercel do projecto).
+  const origin = c.req.header("origin");
+  if (origin && isAllowedRedirectOrigin(origin)) return origin;
   return "https://somnium-properties-dashboard.vercel.app";
 }
 
@@ -118,27 +104,16 @@ async function resolveAppUser(c: any): Promise<any | null> {
   }
   const authUser = c.get("authUser") ?? (await getAuthUser(c));
   if (!authUser?.email) return null;
-  const email = authUser.email;
-  const key = email.toLowerCase();
+  const key = authUser.email.toLowerCase();
 
   const cached = _userCache.get(key);
   if (cached && cached.expires > Date.now()) return cached.user;
 
-  const isOwner = OWNER_EMAILS.includes(key);
-  let u = await getUserByEmail(email);
-  if (!u) {
-    await pool.query(
-      `INSERT INTO users (id, email, nome, iniciais, role, ativo)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (id) DO NOTHING`,
-      [authUser.id, email, email.split("@")[0], iniciaisFromNome(email), isOwner ? "admin" : "comercial", isOwner],
-    );
-    u = await getUserByEmail(email);
-  }
-  if (u && isOwner && (u.role !== "admin" || !u.ativo)) {
-    await pool.query(`UPDATE users SET role = 'admin', ativo = true, updated_at = NOW()::TEXT WHERE id = $1`, [u.id]);
-    u = await getUserByEmail(email);
-  }
+  // Resolução + auto-provisionamento: ../_shared/userResolve.ts (fonte única,
+  // partilhada com "crm" — antes esta lógica só existia aqui, e "crm" fazia
+  // apenas um SELECT sem provisionar, deixando um utilizador com JWT válido
+  // mas ainda sem linha em `users` passar sem NENHUM guard de role no CRM).
+  const u = await resolveOrProvisionUser(authUser);
   _userCache.set(key, { user: u, expires: Date.now() + USER_CACHE_TTL_MS });
   return u;
 }
@@ -295,8 +270,10 @@ app.post("/", async (c: any) => {
         } else {
           authUserId = createResult.data?.user?.id ?? null;
         }
-        // Mesmo formato do reset-password (token como segmento de caminho em
-        // /resetpassword/<token>, em vez do action_link bruto do Supabase).
+        // Gera um token de recovery do Supabase (mesmo mecanismo do reset de
+        // password) mas o link aponta para /get-started/<token> — página com
+        // texto próprio de primeiro acesso, em vez do action_link bruto do
+        // Supabase (que aponta para <projecto>.supabase.co).
         const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
           type: "recovery", email, options: redirectTo ? { redirectTo } : undefined,
         });
@@ -304,7 +281,7 @@ app.post("/", async (c: any) => {
         if (!authUserId) authUserId = linkData?.user?.id ?? null;
         const hashedToken = linkData?.properties?.hashed_token;
         actionLink = hashedToken
-          ? `${redirectTo}/resetpassword/${hashedToken}`
+          ? `${redirectTo}/get-started/${hashedToken}`
           : linkData?.properties?.action_link || null;
         if (!actionLink) {
           return c.json({
@@ -418,6 +395,9 @@ app.post("/:id/reset-password", async (c: any) => {
 });
 
 // ── POST /users/:id/magic-link (port 384-409) ──
+// Mesmo mecanismo do reset-password (token de recovery, no path em vez do
+// action_link bruto do Supabase) mas aponta para /get-started — página com
+// texto de primeiro acesso, não de "repor password".
 app.post("/:id/magic-link", async (c: any) => {
   const adm = await requireAdmin(c);
   if (!adm.ok) return c.json({ error: "Apenas administradores" }, 403);
@@ -425,11 +405,11 @@ app.post("/:id/magic-link", async (c: any) => {
     const u = await getUserById(c.req.param("id"));
     if (!u) return c.json({ error: "Não encontrado" }, 404);
     if (!supabaseAdmin) return c.json({ error: "Supabase não configurado" }, 503);
-    const redirectTo = Deno.env.get("PUBLIC_APP_URL") || undefined;
+    const redirectTo = resolveRedirectTo(c);
 
     let data: any, error: any;
     ({ data, error } = await supabaseAdmin.auth.admin.generateLink({
-      type: "magiclink", email: u.email, options: redirectTo ? { redirectTo } : undefined,
+      type: "recovery", email: u.email, options: redirectTo ? { redirectTo } : undefined,
     }));
     if (error) {
       const msg = (error.message || "").toLowerCase();
@@ -440,7 +420,10 @@ app.post("/:id/magic-link", async (c: any) => {
       }
       if (error) return c.json({ error: error.message }, 400);
     }
-    const actionLink = data?.properties?.action_link || null;
+    const hashedToken = data?.properties?.hashed_token;
+    const actionLink = hashedToken
+      ? `${redirectTo}/get-started/${hashedToken}`
+      : data?.properties?.action_link || null;
     if (!actionLink) {
       return c.json({ error: "Supabase não devolveu action_link. Verifica SUPABASE_SERVICE_KEY (deve ser a service_role key, não a anon)." }, 500);
     }

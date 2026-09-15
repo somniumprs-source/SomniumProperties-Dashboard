@@ -12,7 +12,12 @@ const GOLD = '#C9A84C'
 // links já enviados antes desta mudança.
 // authEnabled com detectSessionInUrl:false (ver lib/supabase.js — evita
 // session fixation), por isso a sessão é sempre criada aqui à mão.
-export function ResetPassword() {
+//
+// `firstAccess` (rota /get-started) reutiliza exactamente o mesmo mecanismo
+// — o backend gera sempre um token de recovery — só troca o texto, para não
+// confundir quem está a criar acesso pela primeira vez com linguagem de
+// "repor password".
+export function ResetPassword({ firstAccess = false }) {
   const { token } = useParams()
   const [status, setStatus] = useState('validating') // validating | ready | invalid | saving | done
   const [password, setPassword] = useState('')
@@ -70,7 +75,9 @@ export function ResetPassword() {
         </div>
 
         <div className="rounded-2xl p-8 border" style={{ backgroundColor: '#111', borderColor: '#1a1a1a' }}>
-          <h2 className="text-white text-lg font-semibold text-center mb-6">Definir nova password</h2>
+          <h2 className="text-white text-lg font-semibold text-center mb-6">
+            {firstAccess ? 'Criar a tua password' : 'Definir nova password'}
+          </h2>
 
           {status === 'validating' && (
             <p className="text-gray-400 text-sm text-center">A validar o link...</p>
@@ -78,7 +85,9 @@ export function ResetPassword() {
 
           {status === 'invalid' && (
             <div className="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm text-center">
-              Este link é inválido ou já expirou. Pede um novo link de reset.
+              {firstAccess
+                ? 'Este link é inválido ou já expirou. Pede um novo link de acesso.'
+                : 'Este link é inválido ou já expirou. Pede um novo link de reset.'}
             </div>
           )}
 
@@ -90,7 +99,7 @@ export function ResetPassword() {
                 </div>
               )}
               <div>
-                <label className="text-xs text-gray-400 block mb-1.5">Nova password</label>
+                <label className="text-xs text-gray-400 block mb-1.5">{firstAccess ? 'Password' : 'Nova password'}</label>
                 <input type="password" value={password} onChange={e => setPassword(e.target.value)}
                   className="w-full rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:ring-2"
                   style={{ backgroundColor: '#1a1a1a', borderColor: '#333' }}

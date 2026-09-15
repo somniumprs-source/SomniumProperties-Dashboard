@@ -1,4 +1,5 @@
 import pool from "../_shared/pg.ts";
+import { throttled } from "../_shared/cronThrottle.ts";
 import { OAuth2Client } from "google-auth-library";
 import { calendar } from "@googleapis/calendar";
 import { pullGCalToTarefas, pushAllTarefas } from "../calendar/calendarSync.ts";
@@ -43,7 +44,12 @@ Deno.serve(async (req) => {
     return new Response("forbidden", { status: 403 });
   }
 
-  // SEM janela horaria — corre sempre (pg_cron */15). No-op se gcal nao configurado.
+  // SEM janela horaria — corre sempre (pg_cron */15). Sem INTERNAL_API_KEY
+  // definida, este endpoint ficava invocável sem limite; o throttle impõe o
+  // mesmo intervalo mínimo do cron legítimo mesmo que alguém o chame à parte.
+  if (!(await throttled("cron-sync-calendar", 12 * 60 * 1000))) {
+    return Response.json({ ok: true, ran: false, reason: "throttled", fn: "cron-sync-calendar" });
+  }
   const gcal = getGcal();
   if (!gcal) {
     return Response.json({ ok: true, ran: false, reason: "gcal nao configurado", fn: "cron-sync-calendar" });

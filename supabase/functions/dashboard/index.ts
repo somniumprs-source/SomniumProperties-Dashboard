@@ -2,6 +2,8 @@
 // Traducao mecanica: logica de negocio identica; so muda a camada wrapper (Express req/res -> Hono).
 import { createApp } from "../_shared/hono.ts";
 import { requireAuth } from "../_shared/auth.ts";
+import { RECORD_RESTRICTED_ROLES } from "../_shared/roles.ts";
+import { resolveOrProvisionUser } from "../_shared/userResolve.ts";
 import pool from "../_shared/pg.ts";
 import {
   getNegócios as _getNegócios,
@@ -41,6 +43,49 @@ const app = createApp("/dashboard");
 app.use("*", async (c: any, next: any) => {
   if (c.req.path.endsWith("/_health")) return await next();
   return await requireAuth(c, next);
+});
+
+// ── Bloqueio de roles externos (parceiro/investidor) ──
+// Esta função expõe TODO o dashboard interno (financeiro, comercial, KPIs,
+// alertas, OKRs, tarefas, métricas) e só tinha requireAuth (qualquer utilizador
+// com sessão válida passava) — sem verificação de role nenhuma. parceiro e
+// investidor (ROLE_AREAS em userRoutes.js/users edge fn) só têm acesso a
+// crm/projectos, nunca a esta área; sem este guard, um investidor conseguia
+// pedir directamente /dashboard/financeiro/despesas ou /dashboard/comercial/consultores
+// e ver dados financeiros e de consultores da empresa inteira.
+// RECORD_RESTRICTED_ROLES vem de ../_shared/roles.ts (fonte única).
+const _dashSupabaseUrl = Deno.env.get("SUPABASE_URL") || "https://mjgusjuougzoeiyavsor.supabase.co";
+const _dashServiceKey = (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_KEY")) || "";
+let _dashAuthClient: ReturnType<typeof import("@supabase/supabase-js").createClient> | null = null;
+async function resolveDashboardRole(c: any): Promise<string | null> {
+  if (!_dashServiceKey) return null; // dev sem service key: sem restricao de role (como o resto do CRM)
+  if (!_dashAuthClient) {
+    const { createClient } = await import("@supabase/supabase-js");
+    _dashAuthClient = createClient(_dashSupabaseUrl, _dashServiceKey);
+  }
+  const h = c.req.header("authorization");
+  const token = (h?.startsWith("Bearer ") ? h.slice(7) : null) || c.req.query("token");
+  if (!token) return null;
+  try {
+    const { data: { user }, error } = await _dashAuthClient.auth.getUser(token);
+    if (error || !user?.email) return null;
+    // resolveOrProvisionUser (../_shared/userResolve.ts) em vez de um SELECT
+    // simples: um JWT válido cujo utilizador ainda não tem linha em `users`
+    // (ex: primeiro pedido cai no dashboard antes de bater em /api/users/me)
+    // devolvia role=null aqui, e o guard abaixo só bloqueia quando `role` é
+    // truthy — passava sem restrição nenhuma em vez de ficar sujeito ao
+    // mesmo default seguro (comercial) que o resto da app usa.
+    const u = await resolveOrProvisionUser({ id: user.id, email: user.email });
+    return u?.role || null;
+  } catch { return null; }
+}
+app.use("*", async (c: any, next: any) => {
+  if (c.req.path.endsWith("/_health")) return await next();
+  const role = await resolveDashboardRole(c);
+  if (role && RECORD_RESTRICTED_ROLES.has(role)) {
+    return c.json({ error: "Sem acesso a esta área" }, 403);
+  }
+  await next();
 });
 
 // ── Helper de regiao (semantica do middleware global do server.js) ──

@@ -12,39 +12,13 @@
 import { Router } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import pool from './pg.js'
-
-export const ROLES = ['admin', 'comercial', 'financeiro', 'operacoes', 'parceiro', 'investidor']
-
-export const ROLE_AREAS = {
-  admin:      ['dashboard', 'crm', 'projectos', 'financeiro', 'operacoes', 'metricas', 'alertas', 'administracao', 'marketing', 'admin'],
-  comercial:  ['dashboard', 'crm', 'projectos', 'metricas'],
-  financeiro: ['dashboard', 'financeiro', 'metricas'],
-  operacoes:  ['dashboard', 'operacoes', 'alertas', 'metricas'],
-  // Parceiro externo: vê CRM (só tab Imóveis) e Projectos.
-  // Dentro destes, só vê os registos partilhados com ele (filtro pela tabela `acessos`).
-  parceiro:   ['crm', 'projectos'],
-  // Investidor: só vê Projectos (os projetos onde foi adicionado via tabela `acessos`).
-  // Dentro do projeto vê tudo (cronograma, fotos, documentos), mas read-only.
-  investidor: ['projectos'],
-}
-
-// Sub-módulos dentro de cada área. Usado para filtrar tabs/secções no frontend
-// e para proteger endpoints específicos no backend.
-// Se uma role não estiver listada num módulo, NÃO tem acesso a esse módulo.
-// Parceiros têm acesso a 'crm.imoveis' e 'crm.negocios' MAS sujeito a filtro
-// por registo (tabela `acessos`) — só vêem os imóveis/negócios partilhados com eles.
-export const ROLE_MODULES = {
-  admin:      ['crm.imoveis', 'crm.investidores', 'crm.consultores', 'crm.empreiteiros', 'crm.negocios'],
-  comercial:  ['crm.imoveis', 'crm.investidores', 'crm.consultores', 'crm.empreiteiros', 'crm.negocios'],
-  financeiro: ['crm.negocios'],
-  operacoes:  [],
-  parceiro:   ['crm.imoveis', 'crm.negocios'],
-  investidor: ['crm.negocios'],
-}
-
-// Roles cujo acesso a registos é restrito pela tabela `acessos`.
-// Outros roles (admin, comercial, etc.) vêem tudo.
-export const RECORD_RESTRICTED_ROLES = new Set(['parceiro', 'investidor'])
+// ROLES/ROLE_AREAS/ROLE_MODULES/RECORD_RESTRICTED_ROLES/NON_ID_SEGS: gerados
+// a partir de supabase/functions/_shared/roles.ts (fonte única — Node não
+// importa um módulo Deno directamente). Nunca editar rolesShared.generated.js
+// à mão; editar roles.ts e correr `npm run generate:roles` (ou dev/build, que
+// já o fazem sozinhos). Ver scripts/generate-shared-roles.mjs.
+import { ROLES, ROLE_AREAS, ROLE_MODULES, RECORD_RESTRICTED_ROLES, NON_ID_SEGS } from './rolesShared.generated.js'
+export { ROLES, ROLE_AREAS, ROLE_MODULES, RECORD_RESTRICTED_ROLES, NON_ID_SEGS }
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.supabase.co'
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
@@ -84,16 +58,26 @@ async function getUserById(id) {
 
 /**
  * Determina o redirectTo para os links Supabase.
- * Ordem: PUBLIC_APP_URL > derivado do pedido actual > fallback para o domínio Render.
+ * Ordem: PUBLIC_APP_URL > derivado do pedido actual > fallback para o domínio Vercel.
+ * (Render está decomissionado — ver CLAUDE.md — por isso o fallback aponta
+ * para o domínio de produção actual, igual ao resolveRedirectTo da Edge Function.)
  */
+// Mesma allowlist do CORS de produção (supabase/functions/_shared/hono.ts) —
+// mantida à mão aqui porque este lado é Node/Express e não importa o módulo
+// Deno. O header Host de um pedido pode ser forjado por quem o faz
+// directamente (curl/script); antes qualquer Host que não começasse por
+// "localhost" era aceite como destino do link de recovery/convite.
+const REDIRECT_ALLOWED_ORIGIN = 'https://somnium-properties-dashboard.vercel.app'
+const REDIRECT_VERCEL_PREVIEW_RE = /^https:\/\/somnium-properties-dashboard-[a-z0-9-]+\.vercel\.app$/
 function resolveRedirectTo(req) {
   if (process.env.PUBLIC_APP_URL) return process.env.PUBLIC_APP_URL
   const host = req.get('host')
   if (host && !host.startsWith('localhost')) {
-    const proto = req.headers['x-forwarded-proto'] || (host.includes('onrender.com') ? 'https' : req.protocol)
-    return `${proto}://${host}`
+    const proto = req.headers['x-forwarded-proto'] || req.protocol
+    const candidate = `${proto}://${host}`
+    if (candidate === REDIRECT_ALLOWED_ORIGIN || REDIRECT_VERCEL_PREVIEW_RE.test(candidate)) return candidate
   }
-  return 'https://somniumproperties-dashboard.onrender.com'
+  return REDIRECT_ALLOWED_ORIGIN
 }
 
 function iniciaisFromNome(nome) {
@@ -331,9 +315,10 @@ router.post('/', async (req, res) => {
         } else {
           authUserId = createResult.data?.user?.id
         }
-        // Agora gerar link de acesso — mesmo formato do reset-password
-        // (token como segmento de caminho em /resetpassword/<token>, em vez do
-        // action_link bruto do Supabase) para a pessoa definir a sua password.
+        // Gera um token de recovery do Supabase (mesmo mecanismo do reset de
+        // password) mas o link aponta para /get-started/<token> — página com
+        // texto próprio de primeiro acesso, em vez do action_link bruto do
+        // Supabase (que aponta para <projecto>.supabase.co).
         const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
           type: 'recovery', email, options: redirectTo ? { redirectTo } : undefined,
         })
@@ -341,7 +326,7 @@ router.post('/', async (req, res) => {
         if (!authUserId) authUserId = linkData?.user?.id
         const hashedToken = linkData?.properties?.hashed_token
         actionLink = hashedToken
-          ? `${redirectTo}/resetpassword/${hashedToken}`
+          ? `${redirectTo}/get-started/${hashedToken}`
           : linkData?.properties?.action_link || null
         if (!actionLink) return res.status(500).json({
           error: 'Supabase não devolveu action_link. Verifica que SUPABASE_SERVICE_KEY é a service_role key (não a anon).',
@@ -435,18 +420,21 @@ router.post('/:id/reset-password', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// POST /api/users/:id/magic-link — gera magic link de acesso (não requer SMTP)
+// POST /api/users/:id/magic-link — gera link de acesso (não requer SMTP)
+// Mesmo mecanismo do reset-password (token de recovery, no path em vez do
+// action_link bruto do Supabase) mas aponta para /get-started — página com
+// texto de primeiro acesso, não de "repor password".
 router.post('/:id/magic-link', async (req, res) => {
   try {
     const u = await getUserById(req.params.id)
     if (!u) return res.status(404).json({ error: 'Não encontrado' })
     if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase não configurado' })
-    const redirectTo = process.env.PUBLIC_APP_URL || undefined
+    const redirectTo = resolveRedirectTo(req)
 
-    // Tenta magiclink (user existente). Se falhar por não existir, tenta invite (cria + gera link).
+    // Tenta recovery (user existente). Se falhar por não existir, tenta invite (cria + gera link).
     let data, error
     ;({ data, error } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'magiclink', email: u.email, options: redirectTo ? { redirectTo } : undefined,
+      type: 'recovery', email: u.email, options: redirectTo ? { redirectTo } : undefined,
     }))
     if (error) {
       const msg = (error.message || '').toLowerCase()
@@ -457,7 +445,10 @@ router.post('/:id/magic-link', async (req, res) => {
       }
       if (error) return res.status(400).json({ error: error.message })
     }
-    const actionLink = data?.properties?.action_link || null
+    const hashedToken = data?.properties?.hashed_token
+    const actionLink = hashedToken
+      ? `${redirectTo}/get-started/${hashedToken}`
+      : data?.properties?.action_link || null
     if (!actionLink) return res.status(500).json({ error: 'Supabase não devolveu action_link. Verifica SUPABASE_SERVICE_KEY (deve ser a service_role key, não a anon).' })
     res.json({ ok: true, actionLink })
   } catch (e) { res.status(500).json({ error: e.message }) }
@@ -599,8 +590,8 @@ export function restrictByAccess(entidade) {
     const m = req.path.match(/^\/([^/]+)/)
     const firstSeg = m ? m[1] : null
     const restPath = m ? req.path.slice(m[0].length) : ''
-    // Segmentos especiais que NÃO são IDs de registos
-    const NON_ID_SEGS = new Set(['stats', 'enriched', 'find-or-create', 'lookup', 'checklist', 'relatorio'])
+    // Segmentos especiais que NÃO são IDs de registos (NON_ID_SEGS importado
+    // do topo do ficheiro, gerado a partir de supabase/functions/_shared/roles.ts)
     const isRecordPath = firstSeg && !NON_ID_SEGS.has(firstSeg)
 
     // Criação: POST sem ID na URL
