@@ -61,11 +61,6 @@ const PAIRS = [
 // ou ser permanente (documentada) ou ter um dono/prazo para desaparecer.
 const KNOWN_ONE_SIDED = new Set([
   "GET /_health", // convenção só das Edge Functions (probe de deploy), permanente
-  // Gap identificado em 2026-09-14 (auditoria de duplicação dev/produção):
-  // a página Auditoria.jsx não funciona em dev local porque estas rotas só
-  // existem em produção. Remover desta lista quando forem portadas.
-  "GET /auditoria",
-  "GET /auditoria/utilizadores",
 ]);
 
 let hasDiff = false;

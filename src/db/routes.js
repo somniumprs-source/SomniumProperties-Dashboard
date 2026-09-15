@@ -285,7 +285,7 @@ function crudRoutes(path, crud, { onCreate, onUpdate, beforeUpdate } = {}) {
 
   router.post(path, async (req, res) => {
     try {
-      const item = await crud.create(req.body, { regiaoActiva: req.regiaoActiva })
+      const item = await crud.create(req.body, { regiaoActiva: req.regiaoActiva, role: req.appUser?.role })
       const table = path.slice(1)
       syncToNotion(table, item.id).catch(e => console.error(`[sync] create ${table}:`, e.message))
       if (onCreate) onCreate(item).catch(e => console.error(`[hook] create ${table}:`, e.message))
@@ -299,7 +299,7 @@ function crudRoutes(path, crud, { onCreate, onUpdate, beforeUpdate } = {}) {
         const check = await beforeUpdate(req.params.id, req.body)
         if (check && check.error) return res.status(400).json(check)
       }
-      const item = await crud.update(req.params.id, req.body, { regiaoActiva: req.regiaoActiva })
+      const item = await crud.update(req.params.id, req.body, { regiaoActiva: req.regiaoActiva, role: req.appUser?.role })
       if (!item) return res.status(404).json({ error: 'Não encontrado' })
       const table = path.slice(1)
       syncToNotion(table, req.params.id).catch(e => console.error(`[sync] update ${table}:`, e.message))
@@ -6821,6 +6821,72 @@ router.get('/projetos/:negocioId/resumo', async (req, res) => {
 
     res.json({ negocio, imovel, analise, fases, orcAlocado, custoReal, percGlobal, faseAtual })
   } catch (e) { console.error('[projetos/resumo]', e.message); res.status(500).json({ error: e.message }) }
+})
+
+// ── Auditoria · historico de alteracoes (admin only) ──────────────
+// Port de supabase/functions/crm/index.ts (só existia em produção — a página
+// Auditoria.jsx nunca funcionou em dev local; gap encontrado por
+// scripts/check-endpoint-parity.mjs).
+async function requireAdminAudit(req, res) {
+  if (!_supabaseCrm) return null // dev sem service-role, deixa passar
+  const u = await resolveCrmUser(req)
+  if (!u) { res.status(401).json({ error: 'Nao autenticado' }); return res }
+  if (u.role !== 'admin') { res.status(403).json({ error: 'So administradores' }); return res }
+  return null
+}
+
+router.get('/auditoria', async (req, res) => {
+  if (await requireAdminAudit(req, res)) return
+  try {
+    const { entidade, entidade_id: entidadeId, user_email: userEmail, from, to } = req.query
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500)
+    const offset = parseInt(req.query.offset) || 0
+
+    const where = []
+    const params = []
+    if (entidade) { params.push(entidade); where.push(`a.entidade = $${params.length}`) }
+    if (entidadeId) { params.push(entidadeId); where.push(`a.entidade_id = $${params.length}`) }
+    if (userEmail) { params.push(`%${userEmail}%`); where.push(`(a.user_email ILIKE $${params.length} OR a.user_nome ILIKE $${params.length})`) }
+    if (from) { params.push(from); where.push(`a.created_at >= $${params.length}`) }
+    if (to) { params.push(to); where.push(`a.created_at <= $${params.length}`) }
+    const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : ''
+
+    const [{ rows }, { rows: countRows }] = await Promise.all([
+      pool.query(
+        `SELECT a.id, a.entidade, a.entidade_id, a.operacao, a.user_email, a.user_nome, a.alteracoes, a.created_at,
+                CASE
+                  WHEN a.entidade = 'imoveis' THEN (SELECT nome FROM imoveis WHERE id = a.entidade_id)
+                  WHEN a.entidade = 'investidores' THEN (SELECT nome FROM investidores WHERE id = a.entidade_id)
+                  WHEN a.entidade = 'negocios' THEN (SELECT COALESCE(NULLIF(notas,''), id::text) FROM negocios WHERE id = a.entidade_id)
+                END AS entidade_nome
+         FROM historico_alteracoes a
+         ${whereClause}
+         ORDER BY a.created_at DESC
+         LIMIT ${limit} OFFSET ${offset}`,
+        params
+      ),
+      pool.query(`SELECT COUNT(*)::int AS total FROM historico_alteracoes a ${whereClause}`, params),
+    ])
+
+    res.json({ rows, total: countRows[0]?.total || 0, limit, offset })
+  } catch (e) {
+    console.error('[auditoria]', e.message)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+router.get('/auditoria/utilizadores', async (req, res) => {
+  if (await requireAdminAudit(req, res)) return
+  try {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT COALESCE(NULLIF(user_nome,''), user_email) AS nome FROM historico_alteracoes
+       WHERE COALESCE(NULLIF(user_nome,''), user_email) IS NOT NULL ORDER BY nome`
+    )
+    res.json(rows.map(r => r.nome))
+  } catch (e) {
+    console.error('[auditoria/utilizadores]', e.message)
+    res.status(500).json({ error: 'Erro' })
+  }
 })
 
 export default router

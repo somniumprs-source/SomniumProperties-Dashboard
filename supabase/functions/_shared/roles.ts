@@ -4,10 +4,12 @@
 // "crm.despesas" existia em "crm" mas não em "users", pelo que /api/users/me
 // devolvia `modules` incompleto para o frontend decidir o que mostrar).
 //
-// O lado Express de dev (src/db/userRoutes.js, Node/CommonJS) NÃO importa
-// daqui — Node não consegue importar um módulo Deno directamente. Mantém a
-// sua própria cópia manual; o script `scripts/check-role-parity.mjs` (correr
-// via `npm run check:roles`, e no CI) compara os dois lados a cada alteração.
+// O lado Express de dev (src/db/userRoutes.js) NÃO importa daqui — Node não
+// consegue importar um módulo Deno directamente. Em vez de manter uma cópia
+// manual, src/db/rolesShared.generated.js é GERADO a partir deste ficheiro
+// (scripts/generate-shared-roles.mjs, `npm run generate:roles`, já corre
+// sozinho antes de dev/build/server). `npm run check:roles` (e o CI)
+// confirmam que o gerado está actualizado.
 
 export const ROLES = ["admin", "comercial", "financeiro", "operacoes", "parceiro", "investidor"] as const;
 

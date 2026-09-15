@@ -12,8 +12,9 @@
 import { createApp } from "../_shared/hono.ts";
 import { requireAuth, requireInternalKey } from "../_shared/auth.ts";
 import { assertPublicHttpUrl } from "../_shared/ssrfGuard.ts";
-import { assertSafeUpload } from "../_shared/uploadGuard.ts";
+import { assertSafeUpload, AUDIO_ALLOWED_EXT, OFFICE_ALLOWED_EXT, checkUploadRateLimit, uploadRateLimitKey } from "../_shared/uploadGuard.ts";
 import { ROLE_MODULES, RECORD_RESTRICTED_ROLES, NON_ID_SEGS } from "../_shared/roles.ts";
+import { resolveOrProvisionUser } from "../_shared/userResolve.ts";
 import pool from "../_shared/pg.ts";
 import { withAuditUser } from "../_shared/audit.ts";
 import {
@@ -110,10 +111,21 @@ const PATH_TO_TABLE: Record<string, string> = {
 
 // ── Resolucao de utilizador para o CRM (port de routes.js resolveCrmUser) ──
 // O CRM bypassa o auth global mas precisa do user para filtros (acessos,
-// roles restritos, audit, notificacoes in-app). Sem service key (dev) ou sem
-// token -> null (o handler devolve tudo / age como admin, igual ao Express).
+// roles restritos, audit, notificacoes in-app). Sem service key (dev) -> null
+// (o handler devolve tudo / age como admin, igual ao Express).
 // RECORD_RESTRICTED_ROLES vem de ../_shared/roles.ts (fonte única).
-const _crmAuthClient = (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_KEY"))
+//
+// CRM_AUTH_CONFIGURED distingue "sem service key" (dev — os guards abaixo
+// deixam passar, como o Express sem supabaseAdmin) de "service key existe mas
+// não resolvi utilizador" (token ausente/inválido, ou JWT válido só que ainda
+// sem linha em `users`) — este segundo caso tem de REJEITAR, não passar. Antes
+// os guards tratavam os dois iguais (`if (!u) return next()`), o que deixava
+// qualquer JWT válido de um utilizador ainda não provisionado (ex: primeiro
+// pedido cai no CRM antes de bater em /api/users/me) aceder sem NENHUMA
+// verificação de role — resolveOrProvisionUser (partilhado com "users") evita
+// mesmo esse caso ao criar a linha aí, mas o guard fica correcto de qualquer forma.
+const CRM_AUTH_CONFIGURED = !!(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_KEY"));
+const _crmAuthClient = CRM_AUTH_CONFIGURED
   ? createClient(
     Deno.env.get("SUPABASE_URL") || "https://mjgusjuougzoeiyavsor.supabase.co",
     (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_KEY"))!,
@@ -128,16 +140,19 @@ async function resolveCrmUser(c: any): Promise<any | null> {
   try {
     const { data: { user }, error } = await _crmAuthClient.auth.getUser(token);
     if (error || !user?.email) return null;
-    // Resolver o app-user a partir do email (port de resolveAppUser, simplificado).
-    // Email pode estar partilhado por varios registos (admin + outros). Ordem
-    // deterministica: admin activo > activo > restantes (port de getUserByEmail).
-    const { rows } = await pool.query(
-      `SELECT * FROM users WHERE LOWER(email) = LOWER($1)
-       ORDER BY (role='admin' AND ativo)::int DESC, ativo::int DESC, created_at ASC LIMIT 1`,
-      [user.email],
-    );
-    return rows[0] || null;
+    return await resolveOrProvisionUser({ id: user.id, email: user.email });
   } catch { return null; }
+}
+
+// Aplica o rate limit de upload (por utilizador, ou por IP sem sessão) —
+// devolve a resposta 429 já pronta a devolver quando excedido, ou null se ok.
+async function checkUploadLimit(c: any, max = 30, windowMs = 60 * 60 * 1000): Promise<Response | null> {
+  const u = await resolveCrmUser(c);
+  const key = uploadRateLimitKey(c, u?.id);
+  if (!checkUploadRateLimit(key, max, windowMs)) {
+    return c.json({ error: "Demasiados uploads. Tente mais tarde." }, 429);
+  }
+  return null;
 }
 
 // ── Camadas de acesso do CRM — port de userRoutes.js (ROLE_MODULES, requireModule,
@@ -152,7 +167,10 @@ async function resolveCrmUser(c: any): Promise<any | null> {
 function requireModule(moduleName: string) {
   return async (c: any, next: any) => {
     const u = await resolveCrmUser(c);
-    if (!u) return next(); // sem Supabase/token (dev) — passa, igual ao Express
+    // Sem service key (dev) — passa, igual ao Express sem supabaseAdmin. COM
+    // service key, "sem utilizador" é uma falha de autenticação real (token
+    // ausente/inválido) — nunca deve passar (ver nota em CRM_AUTH_CONFIGURED acima).
+    if (!u) return CRM_AUTH_CONFIGURED ? c.json({ error: "Não autenticado" }, 401) : next();
     if (!u.ativo) return c.json({ error: "Conta inactiva" }, 403);
     if (u.role === "admin") return next();
     const mods = ROLE_MODULES[u.role] || [];
@@ -168,7 +186,7 @@ function requireModule(moduleName: string) {
 function requireModuleOrOwnInvestidor(moduleName: string) {
   return async (c: any, next: any) => {
     const u = await resolveCrmUser(c);
-    if (!u) return next();
+    if (!u) return CRM_AUTH_CONFIGURED ? c.json({ error: "Não autenticado" }, 401) : next();
     if (!u.ativo) return c.json({ error: "Conta inactiva" }, 403);
     if (u.role === "admin") return next();
     const mods = ROLE_MODULES[u.role] || [];
@@ -673,7 +691,8 @@ function crudRoutes(
         if (table === "investidores") { if (body.regioes_preferidas === undefined) body.regioes_preferidas = JSON.stringify([regiaoActiva]); }
         else if (body.regiao === undefined || body.regiao === null) body.regiao = regiaoActiva;
       }
-      const item = await crud.create(body, { regiaoActiva });
+      const u = await resolveCrmUser(c);
+      const item = await crud.create(body, { regiaoActiva, role: u?.role });
       syncToNotion(table, item.id);
       hooks.onCreate?.(item).catch((e: any) => console.error(`[hook] create ${table}:`, e.message));
       return c.json(item, 201);
@@ -691,7 +710,8 @@ function crudRoutes(
         const check = await hooks.beforeUpdate(c.req.param("id"), body);
         if (check && check.error) return c.json(check, 400);
       }
-      const item = await crud.update(c.req.param("id"), body, { regiaoActiva });
+      const u = await resolveCrmUser(c);
+      const item = await crud.update(c.req.param("id"), body, { regiaoActiva, role: u?.role });
       if (!item) return c.json({ error: "Não encontrado" }, 404);
       syncToNotion(table, c.req.param("id"));
       hooks.onUpdate?.(item, body).catch((e: any) => console.error(`[hook] update ${table}:`, e.message));
@@ -1310,6 +1330,7 @@ const INVESTIDORES_DOCS_BUCKET = "Investidores";
 // nenhum ficheiro real por trás.
 app.post("/investidores/:id/documentos", async (c: any) => {
   try {
+    const _rl = await checkUploadLimit(c); if (_rl) return _rl;
     const investidorId = c.req.param("id");
     const form = await c.req.formData();
     const tipo = form.get("tipo");
@@ -1326,6 +1347,7 @@ app.post("/investidores/:id/documentos", async (c: any) => {
     const fRaw = form.get("file");
     const file = fRaw instanceof File ? fRaw : null;
     if (file) {
+      assertSafeUpload(file);
       const bytes = new Uint8Array(await file.arrayBuffer());
       const safe = file.name.replace(/[^\w.\- ]+/g, "_");
       storagePath = `${investidorId}/${id}_${safe}`;
@@ -1407,6 +1429,7 @@ const OBRA_ORCAMENTOS_BUCKET = "ObraOrcamentos";
 
 app.post("/imoveis/:id/orcamentos-obra", async (c: any) => {
   try {
+    const _rl = await checkUploadLimit(c); if (_rl) return _rl;
     const imovelId = c.req.param("id");
     const form = await c.req.formData();
     const fornecedor = form.get("fornecedor");
@@ -1423,6 +1446,7 @@ app.post("/imoveis/:id/orcamentos-obra", async (c: any) => {
     const fRaw = form.get("file");
     const file = fRaw instanceof File ? fRaw : null;
     if (file) {
+      assertSafeUpload(file);
       const bytes = new Uint8Array(await file.arrayBuffer());
       const safe = file.name.replace(/[^\w.\- ]+/g, "_");
       storagePath = `${imovelId}/${id}_${safe}`;
@@ -2247,6 +2271,7 @@ async function nomeConsultor(id: string): Promise<string> {
 // caso o registo fica em estado 'sem_audio', so com os campos manuais do SOP2.
 app.post("/consultores/:id/gravacoes", async (c: any) => {
   try {
+    const _rl = await checkUploadLimit(c, 10, 60 * 60 * 1000); if (_rl) return _rl; // ficheiros até 200MB — limite mais apertado
     await ensureGravacoesTable();
     const consultorId = c.req.param("id");
     const { rows: [cons] } = await pool.query("SELECT id, nome FROM consultores WHERE id = $1", [consultorId]);
@@ -2255,7 +2280,7 @@ app.post("/consultores/:id/gravacoes", async (c: any) => {
     const form = await c.req.formData();
     const fileRaw = form.get("audio");
     const file = fileRaw instanceof File ? fileRaw : null;
-    if (file && file.size > 200 * 1024 * 1024) return c.json({ error: "Ficheiro demasiado grande (max. 200MB)." }, 400);
+    if (file) assertSafeUpload(file, 200 * 1024 * 1024, AUDIO_ALLOWED_EXT);
 
     let storagePath: string | null = null;
     if (file) {
@@ -2709,6 +2734,7 @@ async function alertarFalhaUploadDrive(contexto: string, nomeFicheiro: string): 
 app.post("/imoveis/:id/fotos", async (c: any) => {
   const id = c.req.param("id");
   try {
+    const _rl = await checkUploadLimit(c); if (_rl) return _rl;
     const form = await c.req.formData();
     const files = form.getAll("fotos").filter((f: any): f is File => f instanceof File);
     if (!files.length) return c.json({ error: "Nenhum ficheiro recebido (limite 15MB por ficheiro)" }, 400);
@@ -2865,6 +2891,7 @@ async function resolveDocBuffer(
   bodyName: string | null,
 ): Promise<{ bytes: Uint8Array; ext: string; name: string; contentType: string | null } | null> {
   if (file) {
+    assertSafeUpload(file, 20 * 1024 * 1024);
     const bytes = new Uint8Array(await file.arrayBuffer());
     const ext = (file.name?.match(/\.[a-z0-9]+$/i)?.[0] || "").toLowerCase();
     return { bytes, ext, name: file.name, contentType: file.type || null };
@@ -2885,6 +2912,7 @@ async function resolveDocBuffer(
 app.post("/imoveis/:id/documentos/analise", async (c: any) => {
   const id = c.req.param("id");
   try {
+    const _rl = await checkUploadLimit(c, 15, 60 * 60 * 1000); if (_rl) return _rl; // cada chamada custa API de IA
     if (!Deno.env.get("ANTHROPIC_API_KEY")) {
       return c.json({ error: "Análise por IA indisponível (ANTHROPIC_API_KEY não configurada)." }, 503);
     }
@@ -3110,6 +3138,7 @@ app.get("/imoveis/:id/drive-files", async (c: any) => {
 app.post("/despesas/:id/upload", async (c: any) => {
   const id = c.req.param("id");
   try {
+    const _rl = await checkUploadLimit(c); if (_rl) return _rl;
     const form = await c.req.formData();
     const fRaw = form.get("file");
     const file = fRaw instanceof File ? fRaw : null;
@@ -5117,6 +5146,7 @@ app.delete("/reunioes-documentos/:id", async (c: any) => {
 
 app.post("/reunioes-documentos/:id/ficheiros", async (c: any) => {
   try {
+    const _rl = await checkUploadLimit(c); if (_rl) return _rl;
     await ensureReunioesTable();
     if (!supabase) return c.json({ error: "Storage indisponível" }, 503);
     const { rows: [r] } = await pool.query("SELECT pasta FROM reunioes_documentos WHERE id = $1", [c.req.param("id")]);
@@ -5124,6 +5154,7 @@ app.post("/reunioes-documentos/:id/ficheiros", async (c: any) => {
     const form = await c.req.formData();
     const files = form.getAll("ficheiros").filter((f: any): f is File => f instanceof File);
     if (!files.length) return c.json({ error: "Nenhum ficheiro recebido" }, 400);
+    for (const file of files) assertSafeUpload(file, 25 * 1024 * 1024, OFFICE_ALLOWED_EXT);
     for (const file of files) {
       const safe = file.name.replace(/[^\w.\- ]+/g, "_");
       const bytes = new Uint8Array(await file.arrayBuffer());
@@ -5460,6 +5491,7 @@ app.get("/projetos/:negocioId/fotos", async (c: any) => {
 // Multipart (multer array 'fotos', 20) → Hono formData + uploadPublic (bucket "projetos").
 app.post("/projetos/fases/:faseId/fotos", async (c: any) => {
   try {
+    const _rl = await checkUploadLimit(c); if (_rl) return _rl;
     const { rows: faseRows } = await pool.query("SELECT negocio_id FROM projeto_fases WHERE id = $1", [c.req.param("faseId")]);
     if (!faseRows.length) return c.json({ error: "Fase não encontrada" }, 404);
     const negocioId = faseRows[0].negocio_id;
@@ -5467,11 +5499,13 @@ app.post("/projetos/fases/:faseId/fotos", async (c: any) => {
     const files = form.getAll("fotos").filter((f: any): f is File => f instanceof File);
     const tipo = (typeof form.get("tipo") === "string" ? form.get("tipo") as string : "") || "durante";
     const legenda = (typeof form.get("legenda") === "string" ? form.get("legenda") as string : "") || "";
+    for (const file of files) assertSafeUpload(file);
     const inserted: any[] = [];
     for (const file of files) {
       const id = crypto.randomUUID();
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const storagePath = `fotos/${negocioId}/${crypto.randomUUID()}_${file.name}`;
+      const safeName = file.name.replace(/[^\w.\- ]+/g, "_");
+      const storagePath = `fotos/${negocioId}/${crypto.randomUUID()}_${safeName}`;
       const url = await uploadPublic("projetos", storagePath, bytes, file.type || "application/octet-stream");
       const { rows } = await pool.query(
         `INSERT INTO projeto_fotos (id, fase_id, negocio_id, url, legenda, tipo)
@@ -5685,17 +5719,20 @@ app.get("/projetos/:negocioId/documentos", async (c: any) => {
 // Multipart (multer array 'files', 10) → Hono formData + uploadPublic (bucket "projetos").
 app.post("/projetos/:negocioId/documentos", async (c: any) => {
   try {
+    const _rl = await checkUploadLimit(c); if (_rl) return _rl;
     const negocioId = c.req.param("negocioId");
     const form = await c.req.formData();
     const files = form.getAll("files").filter((f: any): f is File => f instanceof File);
     const faseId = typeof form.get("faseId") === "string" ? form.get("faseId") as string : null;
     const tipo = typeof form.get("tipo") === "string" ? form.get("tipo") as string : null;
     const notas = typeof form.get("notas") === "string" ? form.get("notas") as string : null;
+    for (const file of files) assertSafeUpload(file, 25 * 1024 * 1024, OFFICE_ALLOWED_EXT);
     const inserted: any[] = [];
     for (const file of files) {
       const id = crypto.randomUUID();
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const storagePath = `docs/${negocioId}/${crypto.randomUUID()}_${file.name}`;
+      const safeName = file.name.replace(/[^\w.\- ]+/g, "_");
+      const storagePath = `docs/${negocioId}/${crypto.randomUUID()}_${safeName}`;
       const url = await uploadPublic("projetos", storagePath, bytes, file.type || "application/octet-stream");
       const { rows } = await pool.query(
         `INSERT INTO projeto_documentos (id, fase_id, negocio_id, url, nome, tipo, tamanho, mime, notas)
@@ -5858,6 +5895,7 @@ app.put("/projetos/despesas/:despesaId", async (c: any) => {
 // comprovativo_url/comprovativo_nome (campo paralelo sem nenhuma UI a mostrá-lo).
 app.post("/projetos/despesas/:despesaId/comprovativo", async (c: any) => {
   try {
+    const _rl = await checkUploadLimit(c); if (_rl) return _rl;
     const despesaId = c.req.param("despesaId");
     const despesa = await Despesas.getById(despesaId);
     if (!despesa) return c.json({ error: "Despesa não encontrada" }, 404);
@@ -5865,8 +5903,10 @@ app.post("/projetos/despesas/:despesaId/comprovativo", async (c: any) => {
     const fRaw = form.get("comprovativo");
     const file = fRaw instanceof File ? fRaw : null;
     if (!file) return c.json({ error: "Sem ficheiro" }, 400);
+    assertSafeUpload(file);
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const storagePath = `comprovativos/${despesaId}/${crypto.randomUUID()}_${file.name}`;
+    const safeName = file.name.replace(/[^\w.\- ]+/g, "_");
+    const storagePath = `comprovativos/${despesaId}/${crypto.randomUUID()}_${safeName}`;
     const url = await uploadPublic("projetos", storagePath, bytes, file.type || "application/octet-stream");
 
     const docs = despesa.documentos ? JSON.parse(despesa.documentos) : [];

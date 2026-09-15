@@ -8,9 +8,10 @@
 // Os guardas de role/modulo do Express (router.use admin-only, requireRole,
 // requireModule) sao replicados como middleware/verificacao no inicio dos handlers,
 // preservando a semantica original (dev mode sem service key -> passa).
-import { createApp } from "../_shared/hono.ts";
+import { createApp, isAllowedRedirectOrigin } from "../_shared/hono.ts";
 import pool from "../_shared/pg.ts";
 import { ROLES, ROLE_AREAS, ROLE_MODULES, RECORD_RESTRICTED_ROLES } from "../_shared/roles.ts";
+import { getUserByEmail, resolveOrProvisionUser } from "../_shared/userResolve.ts";
 import { createClient } from "@supabase/supabase-js";
 
 // Variaveis de contexto guardadas pelos middlewares (authUser resolvido do JWT).
@@ -44,10 +45,9 @@ function invalidateUserCache(email?: string | null) {
 }
 
 // ── Helpers ──────────────────────────────────────────────────
-async function getUserByEmail(email: string) {
-  const r = await pool.query("SELECT * FROM users WHERE LOWER(email) = LOWER($1)", [email]);
-  return r.rows[0] || null;
-}
+// getUserByEmail vem de ../_shared/userResolve.ts (fonte única, partilhada
+// com "crm" — antes cada uma tinha a sua própria versão e só esta tinha o
+// ORDER BY determinístico para email partilhado por vários registos).
 
 async function getUserById(id: string) {
   const r = await pool.query("SELECT * FROM users WHERE id = $1", [id]);
@@ -63,11 +63,13 @@ async function getUserById(id: string) {
 function resolveRedirectTo(c: any): string {
   const publicUrl = Deno.env.get("PUBLIC_APP_URL");
   if (publicUrl) return publicUrl;
+  // O header Origin é enviado pelo browser, mas nada impede um pedido feito
+  // directamente à Edge Function (curl/script) de o forjar — antes qualquer
+  // valor "plausível" (não localhost, não *.supabase.co) era aceite como
+  // destino do link de recovery/convite. Só se aceita se bater na mesma
+  // allowlist do CORS (domínio de produção + previews Vercel do projecto).
   const origin = c.req.header("origin");
-  try {
-    const host = origin ? new URL(origin).hostname : "";
-    if (host && host !== "localhost" && !/supabase\.(co|com)$/.test(host)) return origin!;
-  } catch { /* origin ausente ou invalido — cai no fallback */ }
+  if (origin && isAllowedRedirectOrigin(origin)) return origin;
   return "https://somnium-properties-dashboard.vercel.app";
 }
 
@@ -102,27 +104,16 @@ async function resolveAppUser(c: any): Promise<any | null> {
   }
   const authUser = c.get("authUser") ?? (await getAuthUser(c));
   if (!authUser?.email) return null;
-  const email = authUser.email;
-  const key = email.toLowerCase();
+  const key = authUser.email.toLowerCase();
 
   const cached = _userCache.get(key);
   if (cached && cached.expires > Date.now()) return cached.user;
 
-  const isOwner = OWNER_EMAILS.includes(key);
-  let u = await getUserByEmail(email);
-  if (!u) {
-    await pool.query(
-      `INSERT INTO users (id, email, nome, iniciais, role, ativo)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (id) DO NOTHING`,
-      [authUser.id, email, email.split("@")[0], iniciaisFromNome(email), isOwner ? "admin" : "comercial", isOwner],
-    );
-    u = await getUserByEmail(email);
-  }
-  if (u && isOwner && (u.role !== "admin" || !u.ativo)) {
-    await pool.query(`UPDATE users SET role = 'admin', ativo = true, updated_at = NOW()::TEXT WHERE id = $1`, [u.id]);
-    u = await getUserByEmail(email);
-  }
+  // Resolução + auto-provisionamento: ../_shared/userResolve.ts (fonte única,
+  // partilhada com "crm" — antes esta lógica só existia aqui, e "crm" fazia
+  // apenas um SELECT sem provisionar, deixando um utilizador com JWT válido
+  // mas ainda sem linha em `users` passar sem NENHUM guard de role no CRM).
+  const u = await resolveOrProvisionUser(authUser);
   _userCache.set(key, { user: u, expires: Date.now() + USER_CACHE_TTL_MS });
   return u;
 }

@@ -3,6 +3,7 @@
 import { createApp } from "../_shared/hono.ts";
 import { requireAuth } from "../_shared/auth.ts";
 import { RECORD_RESTRICTED_ROLES } from "../_shared/roles.ts";
+import { resolveOrProvisionUser } from "../_shared/userResolve.ts";
 import pool from "../_shared/pg.ts";
 import {
   getNegócios as _getNegócios,
@@ -68,12 +69,14 @@ async function resolveDashboardRole(c: any): Promise<string | null> {
   try {
     const { data: { user }, error } = await _dashAuthClient.auth.getUser(token);
     if (error || !user?.email) return null;
-    const { rows } = await pool.query(
-      `SELECT role FROM users WHERE LOWER(email) = LOWER($1)
-       ORDER BY (role='admin' AND ativo)::int DESC, ativo::int DESC, created_at ASC LIMIT 1`,
-      [user.email],
-    );
-    return rows[0]?.role || null;
+    // resolveOrProvisionUser (../_shared/userResolve.ts) em vez de um SELECT
+    // simples: um JWT válido cujo utilizador ainda não tem linha em `users`
+    // (ex: primeiro pedido cai no dashboard antes de bater em /api/users/me)
+    // devolvia role=null aqui, e o guard abaixo só bloqueia quando `role` é
+    // truthy — passava sem restrição nenhuma em vez de ficar sujeito ao
+    // mesmo default seguro (comercial) que o resto da app usa.
+    const u = await resolveOrProvisionUser({ id: user.id, email: user.email });
+    return u?.role || null;
   } catch { return null; }
 }
 app.use("*", async (c: any, next: any) => {

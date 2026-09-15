@@ -12,42 +12,13 @@
 import { Router } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import pool from './pg.js'
-
-export const ROLES = ['admin', 'comercial', 'financeiro', 'operacoes', 'parceiro', 'investidor']
-
-export const ROLE_AREAS = {
-  admin:      ['dashboard', 'crm', 'projectos', 'financeiro', 'operacoes', 'metricas', 'alertas', 'administracao', 'marketing', 'admin'],
-  comercial:  ['dashboard', 'crm', 'projectos', 'metricas'],
-  financeiro: ['dashboard', 'financeiro', 'metricas'],
-  operacoes:  ['dashboard', 'operacoes', 'alertas', 'metricas'],
-  // Parceiro externo: vê CRM (só tab Imóveis) e Projectos.
-  // Dentro destes, só vê os registos partilhados com ele (filtro pela tabela `acessos`).
-  parceiro:   ['crm', 'projectos'],
-  // Investidor: só vê Projectos (os projetos onde foi adicionado via tabela `acessos`).
-  // Dentro do projeto vê tudo (cronograma, fotos, documentos), mas read-only.
-  investidor: ['projectos'],
-}
-
-// Sub-módulos dentro de cada área. Usado para filtrar tabs/secções no frontend
-// e para proteger endpoints específicos no backend.
-// Se uma role não estiver listada num módulo, NÃO tem acesso a esse módulo.
-// Parceiros têm acesso a 'crm.imoveis' e 'crm.negocios' MAS sujeito a filtro
-// por registo (tabela `acessos`) — só vêem os imóveis/negócios partilhados com eles.
-// "crm.despesas" nunca existiu apesar de /api/crm/despesas ser CRUD completo
-// de dados financeiros — ficava sem guard nenhum. financeiro/admin são os
-// únicos roles com a área "financeiro" em ROLE_AREAS acima.
-export const ROLE_MODULES = {
-  admin:      ['crm.imoveis', 'crm.investidores', 'crm.consultores', 'crm.empreiteiros', 'crm.negocios', 'crm.despesas'],
-  comercial:  ['crm.imoveis', 'crm.investidores', 'crm.consultores', 'crm.empreiteiros', 'crm.negocios'],
-  financeiro: ['crm.negocios', 'crm.despesas'],
-  operacoes:  [],
-  parceiro:   ['crm.imoveis', 'crm.negocios'],
-  investidor: ['crm.negocios'],
-}
-
-// Roles cujo acesso a registos é restrito pela tabela `acessos`.
-// Outros roles (admin, comercial, etc.) vêem tudo.
-export const RECORD_RESTRICTED_ROLES = new Set(['parceiro', 'investidor'])
+// ROLES/ROLE_AREAS/ROLE_MODULES/RECORD_RESTRICTED_ROLES/NON_ID_SEGS: gerados
+// a partir de supabase/functions/_shared/roles.ts (fonte única — Node não
+// importa um módulo Deno directamente). Nunca editar rolesShared.generated.js
+// à mão; editar roles.ts e correr `npm run generate:roles` (ou dev/build, que
+// já o fazem sozinhos). Ver scripts/generate-shared-roles.mjs.
+import { ROLES, ROLE_AREAS, ROLE_MODULES, RECORD_RESTRICTED_ROLES, NON_ID_SEGS } from './rolesShared.generated.js'
+export { ROLES, ROLE_AREAS, ROLE_MODULES, RECORD_RESTRICTED_ROLES, NON_ID_SEGS }
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.supabase.co'
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
@@ -91,14 +62,22 @@ async function getUserById(id) {
  * (Render está decomissionado — ver CLAUDE.md — por isso o fallback aponta
  * para o domínio de produção actual, igual ao resolveRedirectTo da Edge Function.)
  */
+// Mesma allowlist do CORS de produção (supabase/functions/_shared/hono.ts) —
+// mantida à mão aqui porque este lado é Node/Express e não importa o módulo
+// Deno. O header Host de um pedido pode ser forjado por quem o faz
+// directamente (curl/script); antes qualquer Host que não começasse por
+// "localhost" era aceite como destino do link de recovery/convite.
+const REDIRECT_ALLOWED_ORIGIN = 'https://somnium-properties-dashboard.vercel.app'
+const REDIRECT_VERCEL_PREVIEW_RE = /^https:\/\/somnium-properties-dashboard-[a-z0-9-]+\.vercel\.app$/
 function resolveRedirectTo(req) {
   if (process.env.PUBLIC_APP_URL) return process.env.PUBLIC_APP_URL
   const host = req.get('host')
   if (host && !host.startsWith('localhost')) {
     const proto = req.headers['x-forwarded-proto'] || req.protocol
-    return `${proto}://${host}`
+    const candidate = `${proto}://${host}`
+    if (candidate === REDIRECT_ALLOWED_ORIGIN || REDIRECT_VERCEL_PREVIEW_RE.test(candidate)) return candidate
   }
-  return 'https://somnium-properties-dashboard.vercel.app'
+  return REDIRECT_ALLOWED_ORIGIN
 }
 
 function iniciaisFromNome(nome) {
@@ -611,10 +590,8 @@ export function restrictByAccess(entidade) {
     const m = req.path.match(/^\/([^/]+)/)
     const firstSeg = m ? m[1] : null
     const restPath = m ? req.path.slice(m[0].length) : ''
-    // Segmentos especiais que NÃO são IDs de registos
-    // Mantido em sync à mão com NON_ID_SEGS em supabase/functions/_shared/roles.ts
-    // (Node não importa módulos Deno) — scripts/check-role-parity.mjs avisa se divergir.
-    const NON_ID_SEGS = new Set(['stats', 'enriched', 'find-or-create', 'lookup', 'checklist', 'relatorio', 'pois'])
+    // Segmentos especiais que NÃO são IDs de registos (NON_ID_SEGS importado
+    // do topo do ficheiro, gerado a partir de supabase/functions/_shared/roles.ts)
     const isRecordPath = firstSeg && !NON_ID_SEGS.has(firstSeg)
 
     // Criação: POST sem ID na URL
