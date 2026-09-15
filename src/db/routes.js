@@ -2972,6 +2972,8 @@ router.get('/docx/tipos', (req, res) => {
 // ── CSV Export ──────────────────────────────────────────────────
 router.get('/export-csv/:entity', async (req, res) => {
   try {
+    const u = await resolveAppUser(req)
+    if (u && u.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' })
     const { entity } = req.params
     const allowed = ['imoveis', 'investidores', 'consultores', 'negocios', 'despesas', 'tarefas']
     if (!allowed.includes(entity)) return res.status(400).json({ error: `Entidade invalida. Usar: ${allowed.join(', ')}` })
@@ -2995,16 +2997,28 @@ router.get('/export-csv/:entity', async (req, res) => {
 })
 
 // ── CSV Import ──────────────────────────────────────────────────
+// As `keys` do INSERT vinham directas de Object.keys(row) do JSON do pedido,
+// sem validar contra as colunas reais da tabela — injecção de SQL via nome de
+// coluna. Agora filtra-se por information_schema, tal como o crud.js faz para
+// o CRUD genérico. Também sem guard nenhum antes desta correcção — qualquer
+// utilizador autenticado conseguia importar/exportar tabelas inteiras.
 router.post('/import-csv/:entity', async (req, res) => {
   try {
+    const u = await resolveAppUser(req)
+    if (u && u.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' })
     const { entity } = req.params
     const allowed = ['investidores', 'consultores', 'despesas']
     if (!allowed.includes(entity)) return res.status(400).json({ error: `Import permitido para: ${allowed.join(', ')}` })
     const { rows: data } = req.body
     if (!Array.isArray(data) || data.length === 0) return res.status(400).json({ error: 'Body deve conter { rows: [...] }' })
+    const { rows: colRows } = await pool.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1`,
+      [entity]
+    )
+    const validCols = new Set(colRows.map(r => r.column_name))
     let imported = 0
     for (const row of data) {
-      const keys = Object.keys(row).filter(k => k !== 'id' && k !== 'created_at' && k !== 'updated_at')
+      const keys = Object.keys(row).filter(k => k !== 'id' && k !== 'created_at' && k !== 'updated_at' && validCols.has(k))
       if (keys.length === 0) continue
       const vals = keys.map((_, i) => `$${i + 1}`)
       await pool.query(`INSERT INTO ${entity} (${keys.join(',')}) VALUES (${vals.join(',')})`, keys.map(k => row[k] || null))

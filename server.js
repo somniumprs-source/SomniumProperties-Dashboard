@@ -168,6 +168,35 @@ try {
     if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return res.status(403).json({ error: 'Sem acesso a negocios-lixeira' })
     next()
   })
+  // "/despesas" nunca teve guard nenhum (nem 'crm.despesas' existia em
+  // ROLE_MODULES) — qualquer utilizador autenticado conseguia ler/criar/editar/
+  // apagar TODAS as despesas da empresa.
+  app.use('/api/crm/despesas', requireModule('crm.despesas'))
+  // "relatorios-semanais"/"relatorios-documentos"/"reunioes-documentos" são
+  // conteúdo interno de administração sem módulo nenhum a cobri-los — sem
+  // caso de uso legítimo para parceiro/investidor (roles externos).
+  const ADMIN_ONLY_INTERNAL_PATHS = ['/api/crm/relatorios-semanais', '/api/crm/relatorios-documentos', '/api/crm/reunioes-documentos']
+  app.use('/api/crm', async (req, res, next) => {
+    const hit = ADMIN_ONLY_INTERNAL_PATHS.some(p => req.path === p || req.path.startsWith(p + '/'))
+    if (!hit) return next()
+    const u = await resolveAppUser(req)
+    if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return res.status(403).json({ error: 'Sem acesso' })
+    next()
+  })
+  // Bloqueia parceiro/investidor de todas as áreas fora de CRM/Projectos.
+  // Estas roles (externos) só têm 'crm'/'projectos' em ROLE_AREAS, mas nada
+  // impedia (antes desta correção) que chamassem directamente os endpoints
+  // de financeiro, comercial (dashboard), KPIs, métricas, alertas, OKRs ou
+  // tarefas — expondo dados financeiros e de consultores da empresa inteira
+  // a um investidor externo, por exemplo.
+  const DASHBOARD_AREA_PREFIXES = ['/api/kpis', '/api/financeiro', '/api/comercial', '/api/metricas', '/api/alertas', '/api/operacoes', '/api/okrs', '/api/tarefas', '/api/weekly-pulse', '/api/ops-scorecard', '/api/time-tracking', '/api/data-health']
+  app.use('/api', async (req, res, next) => {
+    const hit = DASHBOARD_AREA_PREFIXES.some(p => req.path === p || req.path.startsWith(p + '/'))
+    if (!hit) return next()
+    const u = await resolveAppUser(req)
+    if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return res.status(403).json({ error: 'Sem acesso a esta área' })
+    next()
+  })
 
   // Router CRM — montado DEPOIS dos guards para que estes corram primeiro
   const { default: crmRoutes } = await import('./src/db/routes.js')
@@ -305,7 +334,7 @@ try {
               <tr><td style="padding:8px 14px 8px 0;color:#888;">ROI anualizado pretendido</td><td>${body.roi_anualizado || '-'}</td></tr>
             </table>
             <hr style="margin:24px 0;border:0;border-top:1px solid #eee;">
-            <p style="font-size:12px;color:#999;margin:0;">Submissão automática via formulário da landing page Somnium Properties.<br>Acesso ao CRM: <a href="https://somniumproperties-dashboard.onrender.com" style="color:#C9A84C;">Dashboard</a></p>
+            <p style="font-size:12px;color:#999;margin:0;">Submissão automática via formulário da landing page Somnium Properties.<br>Acesso ao CRM: <a href="https://somnium-properties-dashboard.vercel.app" style="color:#C9A84C;">Dashboard</a></p>
           </div>
         `
         sendEmail(`Somnium · Nova candidatura: ${nome}`, emailHtml).catch(e => console.error('[landing-lead] erro email:', e.message))
@@ -332,12 +361,14 @@ try {
     const { validateTwilioSignature } = await import('./src/db/whatsappAgent.js')
     app.post('/api/webhook/whatsapp', express.urlencoded({ extended: false }), (req, res) => {
       lastWebhookReceived = { timestamp: new Date().toISOString(), from: req.body?.From || '?' }
-      // Validar assinatura Twilio (se configurada)
+      // Validar assinatura Twilio (se configurada). Um pedido SEM o header
+      // x-twilio-signature saltava esta verificação por completo (bastava não
+      // enviar a assinatura para forjar mensagens com "From" arbitrário).
       const twilioSig = req.headers['x-twilio-signature']
       const webhookUrl = process.env.TWILIO_WEBHOOK_URL
-      if (webhookUrl && twilioSig) {
-        if (!validateTwilioSignature(webhookUrl, req.body || {}, twilioSig)) {
-          console.warn('[whatsapp] Assinatura Twilio invalida — pedido rejeitado')
+      if (webhookUrl) {
+        if (!twilioSig || !validateTwilioSignature(webhookUrl, req.body || {}, twilioSig)) {
+          console.warn('[whatsapp] Assinatura Twilio invalida ou ausente — pedido rejeitado')
           return res.status(403).send('<Response></Response>')
         }
       }
@@ -386,7 +417,7 @@ try {
         google_oauth: isGoogleConfigured(),
         ultimo_webhook: lastWebhookReceived || 'Nenhum pedido recebido desde o ultimo restart',
         instrucoes: !process.env.TWILIO_WEBHOOK_URL
-          ? 'Configurar no Twilio Console: Sandbox Settings → When a message comes in → https://somniumproperties-dashboard.onrender.com/api/webhook/whatsapp (HTTP POST)'
+          ? 'Configurar no Twilio Console: Sandbox Settings → When a message comes in → https://mjgusjuougzoeiyavsor.functions.supabase.co/webhook-whatsapp (HTTP POST) — em produção o webhook corre na Edge Function, não neste servidor Express (dev-only)'
           : null,
       })
     })

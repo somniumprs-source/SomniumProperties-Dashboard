@@ -7,6 +7,7 @@
 //    apanha a maioria das fotos.
 //  - downloadPortalPhotos guarda em Supabase Storage (sem fallback de disco).
 import { uploadPublic } from "./storage.ts";
+import { assertPublicHttpUrl } from "./ssrfGuard.ts";
 
 const MAX_PHOTOS = 15;
 const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
@@ -47,6 +48,7 @@ interface PortalData {
 }
 
 export async function fetchPortalData(url: string): Promise<PortalData | null> {
+  assertPublicHttpUrl(url); // SSRF: nunca deixar apontar para localhost/rede privada/metadata
   // 1. Fetch simples (rapido, sem browser)
   try {
     const controller = new AbortController();
@@ -225,6 +227,9 @@ export async function downloadPortalPhotos(imovelId: string, fotosUrls: string[]
   for (let i = 0; i < fotosUrls.length; i++) {
     const imageUrl = fotosUrls[i];
     try {
+      // fotosUrls vem do parsing do HTML da página do portal — pode conter
+      // URLs apontadas por uma página maliciosa (segundo vector de SSRF).
+      assertPublicHttpUrl(imageUrl);
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), PHOTO_TIMEOUT);
       const res = await fetch(imageUrl, {

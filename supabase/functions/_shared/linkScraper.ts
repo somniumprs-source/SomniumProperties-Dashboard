@@ -8,11 +8,13 @@
  * passa a gravar em Storage (bucket publico "Imoveis") em vez do disco.
  */
 import { uploadPublic } from "./storage.ts";
+import { assertPublicHttpUrl } from "./ssrfGuard.ts";
 
 /**
  * Busca HTML de um URL com headers de browser real.
  */
 async function fetchPage(url: string): Promise<string> {
+  assertPublicHttpUrl(url); // SSRF: nunca deixar apontar para localhost/rede privada/metadata
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
   try {
@@ -111,6 +113,10 @@ function extractImageUrls(html: string, pageUrl: string): string[] {
  * Descarrega uma imagem e guarda em Supabase Storage (bucket publico "Imoveis").
  */
 async function downloadImage(url: string, imovelId: string): Promise<any> {
+  // As URLs de imagem vêm extraídas do HTML da página do anúncio — uma página
+  // maliciosa podia embutir um <img src="http://169.254.169.254/...jpg"> e
+  // usar isto como segundo vector de SSRF. Mesma validação que o fetchPage.
+  try { assertPublicHttpUrl(url); } catch { return null; }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30000);
   try {

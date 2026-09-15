@@ -11,6 +11,9 @@
 // continuam registados ANTES dos crudRoutes/:id correspondentes.
 import { createApp } from "../_shared/hono.ts";
 import { requireAuth, requireInternalKey } from "../_shared/auth.ts";
+import { assertPublicHttpUrl } from "../_shared/ssrfGuard.ts";
+import { assertSafeUpload } from "../_shared/uploadGuard.ts";
+import { ROLE_MODULES, RECORD_RESTRICTED_ROLES, NON_ID_SEGS } from "../_shared/roles.ts";
 import pool from "../_shared/pg.ts";
 import { withAuditUser } from "../_shared/audit.ts";
 import {
@@ -109,7 +112,7 @@ const PATH_TO_TABLE: Record<string, string> = {
 // O CRM bypassa o auth global mas precisa do user para filtros (acessos,
 // roles restritos, audit, notificacoes in-app). Sem service key (dev) ou sem
 // token -> null (o handler devolve tudo / age como admin, igual ao Express).
-const RECORD_RESTRICTED_ROLES = new Set(["parceiro", "investidor"]);
+// RECORD_RESTRICTED_ROLES vem de ../_shared/roles.ts (fonte única).
 const _crmAuthClient = (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_KEY"))
   ? createClient(
     Deno.env.get("SUPABASE_URL") || "https://mjgusjuougzoeiyavsor.supabase.co",
@@ -142,14 +145,9 @@ async function resolveCrmUser(c: any): Promise<any | null> {
 // router CRM; aqui equivalem-se com app.use(path, mw) do Hono, montado antes de
 // cada crudRoutes(). SEM ISTO qualquer utilizador autenticado, independentemente
 // do role, lê tudo em /imoveis, /negocios, /investidores, /consultores, /empreiteiros. ──
-const ROLE_MODULES: Record<string, string[]> = {
-  admin: ["crm.imoveis", "crm.investidores", "crm.consultores", "crm.empreiteiros", "crm.negocios"],
-  comercial: ["crm.imoveis", "crm.investidores", "crm.consultores", "crm.empreiteiros", "crm.negocios"],
-  financeiro: ["crm.negocios"],
-  operacoes: [],
-  parceiro: ["crm.imoveis", "crm.negocios"],
-  investidor: ["crm.negocios"],
-};
+// ROLE_MODULES vem de ../_shared/roles.ts (fonte única, partilhada com "users" e
+// "dashboard" — antes cada Edge Function tinha a sua própria cópia e divergiam
+// sem ninguém reparar, ex: "crm.despesas" só existia aqui).
 
 function requireModule(moduleName: string) {
   return async (c: any, next: any) => {
@@ -188,9 +186,7 @@ function requireModuleOrOwnInvestidor(moduleName: string) {
   };
 }
 
-// Segmentos que não são IDs de registo (rotas custom tipo /imoveis/stats,
-// /imoveis/pois/sugeridos) — mesma lista do Express, para paridade de comportamento.
-const NON_ID_SEGS = new Set(["stats", "enriched", "find-or-create", "lookup", "checklist", "relatorio", "pois"]);
+// NON_ID_SEGS vem de ../_shared/roles.ts (fonte única, para paridade com o Express).
 
 function restrictByAccessGeneric(entidade: string) {
   return async (c: any, next: any) => {
@@ -1879,6 +1875,12 @@ app.put("/negocios/:id/confirmar-pagamento", async (c: any) => {
   }
 });
 
+// "/despesas" nunca teve guard nenhum (nem "crm.despesas" existia em
+// ROLE_MODULES) — qualquer utilizador autenticado, incluindo parceiro,
+// investidor e operacoes, conseguia ler/criar/editar/apagar TODAS as despesas
+// da empresa. Cobre também upload/remoção de documentos de despesa abaixo.
+app.use("/despesas", requireModule("crm.despesas"));
+app.use("/despesas/*", requireModule("crm.despesas"));
 crudRoutes("/despesas", Despesas);
 
 // Contagem rapida de tarefas atrasadas — port de routes.js 1003-1012
@@ -2718,6 +2720,8 @@ app.post("/imoveis/:id/fotos", async (c: any) => {
     const imovel = await Imoveis.getById(id);
     if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
 
+    for (const file of files) assertSafeUpload(file);
+
     let fotos = imovel.fotos ? JSON.parse(imovel.fotos) : [];
     const driveJobs: Promise<unknown>[] = [];
     for (const file of files) {
@@ -2869,6 +2873,7 @@ async function resolveDocBuffer(
   if (!p) return null;
   const ext = ((bodyName || p).split("?")[0].match(/\.[a-z0-9]+$/i)?.[0] || "").toLowerCase();
   if (/^https?:\/\//i.test(p)) {
+    assertPublicHttpUrl(p); // SSRF: nunca deixar apontar para localhost/rede privada/metadata
     const r = await fetch(p);
     if (!r.ok) throw new Error(`Não foi possível obter o ficheiro (${r.status})`);
     return { bytes: new Uint8Array(await r.arrayBuffer()), ext, name: bodyName || p.split("/").pop() || "documento", contentType: r.headers.get("content-type") };
@@ -3109,6 +3114,7 @@ app.post("/despesas/:id/upload", async (c: any) => {
     const fRaw = form.get("file");
     const file = fRaw instanceof File ? fRaw : null;
     if (!file) return c.json({ error: "Ficheiro inválido (PDF, JPG, PNG até 10MB)" }, 400);
+    assertSafeUpload(file, 10 * 1024 * 1024);
     const despesa = await Despesas.getById(id);
     if (!despesa) return c.json({ error: "Despesa não encontrada" }, 404);
 
@@ -3371,8 +3377,16 @@ app.get("/imoveis/:id/docx/:tipo", async (c: any) => {
 app.get("/docx/tipos", (c: any) => c.json({ tipos: getAvailableTypes() }));
 
 // ── CSV Export — port de routes.js 1761-1783 ──
+// Sem guard nenhum: "/export-csv" e "/import-csv" não vivem sob nenhum dos
+// prefixos com requireModule (imoveis/investidores/consultores/negocios/...),
+// por isso qualquer utilizador autenticado — incluindo parceiro/investidor —
+// conseguia exportar TODAS as tabelas (despesas incluído, sem módulo
+// crm.negocios sequer) e, pior, importar linhas arbitrárias (ver import-csv
+// abaixo). Não há uso deste endpoint no frontend — restringido a admin.
 app.get("/export-csv/:entity", async (c: any) => {
   try {
+    const u = await resolveCrmUser(c);
+    if (u && u.role !== "admin") return c.json({ error: "Apenas administradores" }, 403);
     const entity = c.req.param("entity");
     const allowed = ["imoveis", "investidores", "consultores", "negocios", "despesas", "tarefas"];
     if (!allowed.includes(entity)) return c.json({ error: `Entidade invalida. Usar: ${allowed.join(", ")}` }, 400);
@@ -3396,16 +3410,28 @@ app.get("/export-csv/:entity", async (c: any) => {
 });
 
 // ── CSV Import — port de routes.js 1786-1803 ──
+// As `keys` do INSERT vinham directas de Object.keys(row) do JSON do pedido,
+// sem validar contra as colunas reais da tabela — injecção de SQL via nome de
+// coluna (ex.: um "key" tipo `nome, (SELECT ...)` interpolado sem qualquer
+// escaping). Agora filtra-se por information_schema, tal como o crud.js faz
+// para o CRUD genérico.
 app.post("/import-csv/:entity", async (c: any) => {
   try {
+    const u = await resolveCrmUser(c);
+    if (u && u.role !== "admin") return c.json({ error: "Apenas administradores" }, 403);
     const entity = c.req.param("entity");
     const allowed = ["investidores", "consultores", "despesas"];
     if (!allowed.includes(entity)) return c.json({ error: `Import permitido para: ${allowed.join(", ")}` }, 400);
     const { rows: data } = await c.req.json().catch(() => ({ rows: undefined }));
     if (!Array.isArray(data) || data.length === 0) return c.json({ error: "Body deve conter { rows: [...] }" }, 400);
+    const { rows: colRows } = await pool.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1`,
+      [entity],
+    );
+    const validCols = new Set(colRows.map((r: any) => r.column_name));
     let imported = 0;
     for (const row of data) {
-      const keys = Object.keys(row).filter((k) => k !== "id" && k !== "created_at" && k !== "updated_at");
+      const keys = Object.keys(row).filter((k) => k !== "id" && k !== "created_at" && k !== "updated_at" && validCols.has(k));
       if (keys.length === 0) continue;
       const vals = keys.map((_, i) => `$${i + 1}`);
       await pool.query(`INSERT INTO ${entity} (${keys.join(",")}) VALUES (${vals.join(",")})`, keys.map((k) => row[k] || null));
@@ -4850,6 +4876,39 @@ app.get("/imoveis/:id/distancias", async (c: any) => {
       payload: imovel.pois_distancias || null,
     });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// "relatorios-semanais", "relatorios-documentos" e "reunioes-documentos" são
+// conteúdo interno de administração (resumos de reuniões, relatórios da
+// equipa) sem módulo nenhum a cobri-los — qualquer utilizador autenticado
+// conseguia lê-los/geri-los. Não há caso de uso legítimo para parceiro/
+// investidor (roles externos, sem a área "administracao" em ROLE_AREAS);
+// bloqueiam-se aqui sem restringir os roles internos (admin/comercial/
+// financeiro/operacoes), que já usam isto nas páginas de Administração.
+app.use("/relatorios-semanais", async (c: any, next: any) => {
+  const u = await resolveCrmUser(c);
+  if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return c.json({ error: "Sem acesso" }, 403);
+  return next();
+});
+app.use("/relatorios-semanais/*", async (c: any, next: any) => {
+  const u = await resolveCrmUser(c);
+  if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return c.json({ error: "Sem acesso" }, 403);
+  return next();
+});
+app.use("/relatorios-documentos", async (c: any, next: any) => {
+  const u = await resolveCrmUser(c);
+  if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return c.json({ error: "Sem acesso" }, 403);
+  return next();
+});
+app.use("/reunioes-documentos", async (c: any, next: any) => {
+  const u = await resolveCrmUser(c);
+  if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return c.json({ error: "Sem acesso" }, 403);
+  return next();
+});
+app.use("/reunioes-documentos/*", async (c: any, next: any) => {
+  const u = await resolveCrmUser(c);
+  if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return c.json({ error: "Sem acesso" }, 403);
+  return next();
 });
 
 // ── Relatorios Semanais Administracao — port de routes.js 3410-3510 ──

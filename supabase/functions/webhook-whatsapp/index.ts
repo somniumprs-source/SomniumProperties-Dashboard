@@ -13,12 +13,15 @@ app.post("/", async (c) => {
   const p = await c.req.parseBody();
   lastWebhookReceived = { timestamp: new Date().toISOString(), from: String(p.From || "?") };
 
-  // Validar assinatura Twilio (se configurada).
+  // Validar assinatura Twilio (se configurada). Antes, um pedido SEM o header
+  // x-twilio-signature saltava esta verificação por completo (`webhookUrl &&
+  // sig` era falso) — bastava não enviar a assinatura para o atacante poder
+  // forjar mensagens (From arbitrário) processadas como legítimas.
   const sig = c.req.header("x-twilio-signature");
   const webhookUrl = Deno.env.get("TWILIO_WEBHOOK_URL");
-  if (webhookUrl && sig) {
-    if (!(await validateTwilioSignature(webhookUrl, p as Record<string, any>, sig))) {
-      console.warn("[whatsapp] Assinatura Twilio invalida — pedido rejeitado");
+  if (webhookUrl) {
+    if (!sig || !(await validateTwilioSignature(webhookUrl, p as Record<string, any>, sig))) {
+      console.warn("[whatsapp] Assinatura Twilio invalida ou ausente — pedido rejeitado");
       return c.body("<Response></Response>", 403, { "Content-Type": "text/xml" });
     }
   }
