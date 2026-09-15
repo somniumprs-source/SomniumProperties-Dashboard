@@ -10,6 +10,7 @@
 // preservando a semantica original (dev mode sem service key -> passa).
 import { createApp } from "../_shared/hono.ts";
 import pool from "../_shared/pg.ts";
+import { ROLES, ROLE_AREAS, ROLE_MODULES, RECORD_RESTRICTED_ROLES } from "../_shared/roles.ts";
 import { createClient } from "@supabase/supabase-js";
 
 // Variaveis de contexto guardadas pelos middlewares (authUser resolvido do JWT).
@@ -21,29 +22,9 @@ declare module "@hono/hono" {
 
 const app = createApp("/users");
 
-// ── Constantes de roles/areas/modulos (port de userRoutes.js 16-47) ──
-const ROLES = ["admin", "comercial", "financeiro", "operacoes", "parceiro", "investidor"];
-
-const ROLE_AREAS: Record<string, string[]> = {
-  admin: ["dashboard", "crm", "projectos", "financeiro", "operacoes", "metricas", "alertas", "administracao", "marketing", "admin"],
-  comercial: ["dashboard", "crm", "projectos", "metricas"],
-  financeiro: ["dashboard", "financeiro", "metricas"],
-  operacoes: ["dashboard", "operacoes", "alertas", "metricas"],
-  parceiro: ["crm", "projectos"],
-  investidor: ["projectos"],
-};
-
-const ROLE_MODULES: Record<string, string[]> = {
-  admin: ["crm.imoveis", "crm.investidores", "crm.consultores", "crm.empreiteiros", "crm.negocios"],
-  comercial: ["crm.imoveis", "crm.investidores", "crm.consultores", "crm.empreiteiros", "crm.negocios"],
-  financeiro: ["crm.negocios"],
-  operacoes: [],
-  parceiro: ["crm.imoveis", "crm.negocios"],
-  investidor: ["crm.negocios"],
-};
-
-// Roles cujo acesso a registos e restrito pela tabela `acessos`.
-const RECORD_RESTRICTED_ROLES = new Set(["parceiro", "investidor"]);
+// ── Constantes de roles/areas/modulos: vem de ../_shared/roles.ts (fonte
+// única, partilhada com "crm" e "dashboard" — antes cada Edge Function tinha
+// a sua própria cópia e divergiam sem ninguém reparar). ──
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "https://mjgusjuougzoeiyavsor.supabase.co";
 const SUPABASE_SERVICE_KEY = (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_KEY")) || "";

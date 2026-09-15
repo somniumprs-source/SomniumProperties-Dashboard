@@ -87,16 +87,18 @@ async function getUserById(id) {
 
 /**
  * Determina o redirectTo para os links Supabase.
- * Ordem: PUBLIC_APP_URL > derivado do pedido actual > fallback para o domínio Render.
+ * Ordem: PUBLIC_APP_URL > derivado do pedido actual > fallback para o domínio Vercel.
+ * (Render está decomissionado — ver CLAUDE.md — por isso o fallback aponta
+ * para o domínio de produção actual, igual ao resolveRedirectTo da Edge Function.)
  */
 function resolveRedirectTo(req) {
   if (process.env.PUBLIC_APP_URL) return process.env.PUBLIC_APP_URL
   const host = req.get('host')
   if (host && !host.startsWith('localhost')) {
-    const proto = req.headers['x-forwarded-proto'] || (host.includes('onrender.com') ? 'https' : req.protocol)
+    const proto = req.headers['x-forwarded-proto'] || req.protocol
     return `${proto}://${host}`
   }
-  return 'https://somniumproperties-dashboard.onrender.com'
+  return 'https://somnium-properties-dashboard.vercel.app'
 }
 
 function iniciaisFromNome(nome) {
@@ -610,7 +612,9 @@ export function restrictByAccess(entidade) {
     const firstSeg = m ? m[1] : null
     const restPath = m ? req.path.slice(m[0].length) : ''
     // Segmentos especiais que NÃO são IDs de registos
-    const NON_ID_SEGS = new Set(['stats', 'enriched', 'find-or-create', 'lookup', 'checklist', 'relatorio'])
+    // Mantido em sync à mão com NON_ID_SEGS em supabase/functions/_shared/roles.ts
+    // (Node não importa módulos Deno) — scripts/check-role-parity.mjs avisa se divergir.
+    const NON_ID_SEGS = new Set(['stats', 'enriched', 'find-or-create', 'lookup', 'checklist', 'relatorio', 'pois'])
     const isRecordPath = firstSeg && !NON_ID_SEGS.has(firstSeg)
 
     // Criação: POST sem ID na URL

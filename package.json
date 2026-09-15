@@ -18,7 +18,8 @@
     "setup": "node scripts/setup.js",
     "monthly": "node scripts/monthly.js",
     "lint": "eslint src --ext .js,.jsx",
-    "test:smoke": "node scripts/smoke-projetos.mjs"
+    "test:smoke": "node scripts/smoke-projetos.mjs",
+    "check:endpoints": "node scripts/check-endpoint-parity.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",

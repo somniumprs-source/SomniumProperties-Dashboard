@@ -26,6 +26,10 @@ jobs:
         run: npm run lint
       - name: Build de producao (frontend)
         run: npm run build
+      - name: Paridade de rotas dev vs Edge Functions (users, crm)
+        run: node scripts/check-endpoint-parity.mjs
+      - name: Paridade de roles/modulos dev vs Edge Functions
+        run: node scripts/check-role-parity.mjs
       - name: Parse de todos os ficheiros backend (node --check)
         run: |
           set -e
