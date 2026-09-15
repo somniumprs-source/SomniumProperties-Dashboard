@@ -7,8 +7,41 @@ import pool from "../_shared/pg.ts";
 
 const app = createApp("/webhook-landing-lead");
 
+// Anti-spam: 5 submissões por IP/hora — mesma janela do dev (express-rate-limit
+// não existe em Deno Edge Functions). Em memória por isolate: não é garantia
+// global (vários isolates, reinício a cada deploy), mas sobe o custo de um
+// flood trivial de zero para algo que já exige mais do que um script de uma
+// linha, e este endpoint é público (verify_jwt=false) por natureza.
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+const RATE_LIMIT_MAX = 5;
+const _rateBuckets = new Map<string, { count: number; resetAt: number }>();
+function checkRateLimit(key: string): boolean {
+  const now = Date.now();
+  const bucket = _rateBuckets.get(key);
+  if (!bucket || now > bucket.resetAt) {
+    _rateBuckets.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  if (bucket.count >= RATE_LIMIT_MAX) return false;
+  bucket.count++;
+  return true;
+}
+
+// Campos do formulário vão para o HTML do email de notificação interna sem
+// escaping — um lead malicioso podia injectar markup/scripts no cliente de
+// email de quem recebe a notificação (somniumprs@gmail.com).
+function escapeHtml(s: any): string {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string
+  ));
+}
+
 app.post("/", async (c) => {
   try {
+    const ip = (c.req.header("x-forwarded-for") || "").split(",")[0].trim() || "unknown";
+    if (!checkRateLimit(ip)) {
+      return c.json({ ok: false, error: "Demasiadas submissões. Tente mais tarde." }, 429);
+    }
     const body = (await c.req.json().catch(() => ({}))) as Record<string, any>;
     // Honeypot: se o campo "_hp" vier preenchido, descarta silenciosamente
     if (body._hp) return c.json({ ok: true, action: "ignored" });
@@ -100,15 +133,15 @@ app.post("/", async (c) => {
         : "<strong>Lead existente actualizado</strong> (match por telemóvel)."
     }</p>
         <table style="border-collapse:collapse;font-size:14px;width:100%;">
-          <tr><td style="padding:8px 14px 8px 0;color:#888;width:160px;">Nome</td><td style="font-weight:600;">${nome}</td></tr>
-          <tr><td style="padding:8px 14px 8px 0;color:#888;">Email</td><td>${email}</td></tr>
-          <tr><td style="padding:8px 14px 8px 0;color:#888;">Telemóvel</td><td>${telemovel || "-"}</td></tr>
-          <tr><td style="padding:8px 14px 8px 0;color:#888;">Objetivo</td><td>${body.objetivo || "-"}</td></tr>
-          <tr><td style="padding:8px 14px 8px 0;color:#888;">Experiência</td><td>${body.experiencia || "-"}</td></tr>
-          <tr><td style="padding:8px 14px 8px 0;color:#888;">Capital disponível</td><td>${body.capital || "-"}</td></tr>
-          <tr><td style="padding:8px 14px 8px 0;color:#888;">Empreiteiro disponível</td><td>${body.empreiteiro || "-"}</td></tr>
-          <tr><td style="padding:8px 14px 8px 0;color:#888;">Retorno total pretendido</td><td>${body.retorno_total || "-"}</td></tr>
-          <tr><td style="padding:8px 14px 8px 0;color:#888;">ROI anualizado pretendido</td><td>${body.roi_anualizado || "-"}</td></tr>
+          <tr><td style="padding:8px 14px 8px 0;color:#888;width:160px;">Nome</td><td style="font-weight:600;">${escapeHtml(nome)}</td></tr>
+          <tr><td style="padding:8px 14px 8px 0;color:#888;">Email</td><td>${escapeHtml(email)}</td></tr>
+          <tr><td style="padding:8px 14px 8px 0;color:#888;">Telemóvel</td><td>${escapeHtml(telemovel || "-")}</td></tr>
+          <tr><td style="padding:8px 14px 8px 0;color:#888;">Objetivo</td><td>${escapeHtml(body.objetivo || "-")}</td></tr>
+          <tr><td style="padding:8px 14px 8px 0;color:#888;">Experiência</td><td>${escapeHtml(body.experiencia || "-")}</td></tr>
+          <tr><td style="padding:8px 14px 8px 0;color:#888;">Capital disponível</td><td>${escapeHtml(body.capital || "-")}</td></tr>
+          <tr><td style="padding:8px 14px 8px 0;color:#888;">Empreiteiro disponível</td><td>${escapeHtml(body.empreiteiro || "-")}</td></tr>
+          <tr><td style="padding:8px 14px 8px 0;color:#888;">Retorno total pretendido</td><td>${escapeHtml(body.retorno_total || "-")}</td></tr>
+          <tr><td style="padding:8px 14px 8px 0;color:#888;">ROI anualizado pretendido</td><td>${escapeHtml(body.roi_anualizado || "-")}</td></tr>
         </table>
         <hr style="margin:24px 0;border:0;border-top:1px solid #eee;">
         <p style="font-size:12px;color:#999;margin:0;">Submissão automática via formulário da landing page Somnium Properties.<br>Acesso ao CRM: <a href="https://somnium-properties-dashboard.vercel.app" style="color:#C9A84C;">Dashboard</a></p>

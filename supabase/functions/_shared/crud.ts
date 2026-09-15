@@ -101,7 +101,28 @@ export async function ensureColumn(table: string, columnDdl: string): Promise<vo
 }
 
 interface ListOpts { limit?: number; offset?: number; sort?: string; filter?: Record<string, any> }
-interface RegiaoOpt { regiaoActiva?: string | null }
+interface RegiaoOpt { regiaoActiva?: string | null; role?: string | null }
+
+// ── Mass assignment: o guard de acesso (restrictByAccessGeneric) só valida a
+// que REGISTO um role restrito (parceiro/investidor) pode mexer — não a que
+// CAMPOS. Uma vez com acesso de escrita a um negócio/imóvel partilhado, sem
+// isto conseguiam alterar qualquer coluna existente na tabela, incluindo
+// valores financeiros que a UI nunca lhes mostra. Reaproveita o mesmo regex
+// que cleanFormData já usa para reconhecer campos financeiros/numéricos.
+const RECORD_RESTRICTED_ROLES = new Set(["parceiro", "investidor"]);
+const FINANCIAL_FIELD_RE = /^(custo|lucro|capital|ask_price|valor|roi|montante|score|comissao|fee_)/;
+// deleted_at nunca deve ser escrito pelo CRUD genérico, por ninguém — o
+// soft-delete/restore têm rotas dedicadas com a lógica própria (fases,
+// tarefas, notificações); passar por aqui desalinhava esse estado.
+const ALWAYS_BLOCKED_FIELDS = new Set(["deleted_at"]);
+
+function filterFieldsForRole(entries: [string, any][], role: string | null | undefined): [string, any][] {
+  let out = entries.filter(([k]) => !ALWAYS_BLOCKED_FIELDS.has(k));
+  if (role && RECORD_RESTRICTED_ROLES.has(role)) {
+    out = out.filter(([k]) => !FINANCIAL_FIELD_RE.test(k));
+  }
+  return out;
+}
 
 // ── Generic CRUD factory ─────────────────────────────────────
 function createCRUD(table: string, { searchFields = ["nome"], defaultSort = "created_at DESC" }: { searchFields?: string[]; defaultSort?: string } = {}) {
@@ -146,7 +167,7 @@ function createCRUD(table: string, { searchFields = ["nome"], defaultSort = "cre
       return rows[0] ?? null;
     },
 
-    async create(rawData: Record<string, any>, { regiaoActiva = null }: RegiaoOpt = {}) {
+    async create(rawData: Record<string, any>, { regiaoActiva = null, role = null }: RegiaoOpt = {}) {
       const data = cleanFormData(rawData);
       const validationError = validateRequired(table, data);
       if (validationError) throw new Error(validationError);
@@ -183,7 +204,8 @@ function createCRUD(table: string, { searchFields = ["nome"], defaultSort = "cre
 
       const tableCols = await getColumns(table);
       const jsonbCols = await getJsonbColumns(table);
-      const entries = Object.entries(data).filter(([k, v]) => v !== undefined && !SYSTEM_FIELDS.has(k) && tableCols.has(k));
+      let entries = Object.entries(data).filter(([k, v]) => v !== undefined && !SYSTEM_FIELDS.has(k) && tableCols.has(k));
+      entries = filterFieldsForRole(entries, role);
       const cleanData = Object.fromEntries(entries);
       const cols = ["id", ...entries.map(([k]) => k), "created_at", "updated_at"];
       const vals = cols.map((_, i) => `$${i + 1}`);
@@ -193,7 +215,7 @@ function createCRUD(table: string, { searchFields = ["nome"], defaultSort = "cre
       return { id, ...cleanData, created_at: now, updated_at: now };
     },
 
-    async update(id: string, rawData: Record<string, any>, { regiaoActiva = null }: RegiaoOpt = {}) {
+    async update(id: string, rawData: Record<string, any>, { regiaoActiva = null, role = null }: RegiaoOpt = {}) {
       const data = cleanFormData(rawData);
       const { rows: existing } = await pool.query(`SELECT * FROM ${table} WHERE id = $1`, [id]);
       if (!existing[0]) return null;
@@ -202,7 +224,8 @@ function createCRUD(table: string, { searchFields = ["nome"], defaultSort = "cre
 
       const tableCols = await getColumns(table);
       const jsonbCols = await getJsonbColumns(table);
-      const entries = Object.entries(data).filter(([k, v]) => v !== undefined && !SYSTEM_FIELDS.has(k) && tableCols.has(k));
+      let entries = Object.entries(data).filter(([k, v]) => v !== undefined && !SYSTEM_FIELDS.has(k) && tableCols.has(k));
+      entries = filterFieldsForRole(entries, role);
       const cleanData = Object.fromEntries(entries);
       const sets = entries.map(([k], i) => `${k} = $${i + 1}`);
       sets.push(`updated_at = $${entries.length + 1}`);

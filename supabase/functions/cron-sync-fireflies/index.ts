@@ -1,4 +1,5 @@
 import pool from "../_shared/pg.ts";
+import { throttled } from "../_shared/cronThrottle.ts";
 import { isConfigured, syncFireflies } from "../_shared/firefliesSync.ts";
 
 const INTERNAL_API_KEY = Deno.env.get("INTERNAL_API_KEY") || "";
@@ -12,7 +13,12 @@ Deno.serve(async (req) => {
     return new Response("forbidden", { status: 403 });
   }
 
-  // SEM janela horaria — corre sempre (pg_cron */16). No-op se nao configurado.
+  // SEM janela horaria — corre sempre (pg_cron */16). Sem INTERNAL_API_KEY
+  // definida, este endpoint ficava invocável sem limite; o throttle impõe o
+  // mesmo intervalo mínimo do cron legítimo mesmo que alguém o chame à parte.
+  if (!(await throttled("cron-sync-fireflies", 13 * 60 * 1000))) {
+    return Response.json({ ok: true, ran: false, reason: "throttled", fn: "cron-sync-fireflies" });
+  }
   if (!isConfigured()) {
     return Response.json({ ok: true, ran: false, reason: "fireflies nao configurado", fn: "cron-sync-fireflies" });
   }

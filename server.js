@@ -234,6 +234,13 @@ try {
       message: { ok: false, error: 'Demasiadas submissões. Tente mais tarde.' },
     })
 
+    // Campos do formulário vão para o HTML do email de notificação interna
+    // sem escaping — um lead malicioso podia injectar markup/scripts no
+    // cliente de email de quem recebe a notificação (somniumprs@gmail.com).
+    const escapeHtmlLead = (s) => String(s ?? '').replace(/[&<>"']/g, c => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ))
+
     app.post('/api/webhook/landing-lead', landingRateLimit, async (req, res) => {
       try {
         const body = req.body || {}
@@ -323,15 +330,15 @@ try {
             </div>
             <p style="font-size:14px;color:#444;margin-bottom:18px;">${action === 'created' ? '<strong>Novo lead criado</strong> no CRM com status <em>Pendente de Aprovação</em>.' : '<strong>Lead existente actualizado</strong> (match por telemóvel).'}</p>
             <table style="border-collapse:collapse;font-size:14px;width:100%;">
-              <tr><td style="padding:8px 14px 8px 0;color:#888;width:160px;">Nome</td><td style="font-weight:600;">${nome}</td></tr>
-              <tr><td style="padding:8px 14px 8px 0;color:#888;">Email</td><td>${email}</td></tr>
-              <tr><td style="padding:8px 14px 8px 0;color:#888;">Telemóvel</td><td>${telemovel || '-'}</td></tr>
-              <tr><td style="padding:8px 14px 8px 0;color:#888;">Objetivo</td><td>${body.objetivo || '-'}</td></tr>
-              <tr><td style="padding:8px 14px 8px 0;color:#888;">Experiência</td><td>${body.experiencia || '-'}</td></tr>
-              <tr><td style="padding:8px 14px 8px 0;color:#888;">Capital disponível</td><td>${body.capital || '-'}</td></tr>
-              <tr><td style="padding:8px 14px 8px 0;color:#888;">Empreiteiro disponível</td><td>${body.empreiteiro || '-'}</td></tr>
-              <tr><td style="padding:8px 14px 8px 0;color:#888;">Retorno total pretendido</td><td>${body.retorno_total || '-'}</td></tr>
-              <tr><td style="padding:8px 14px 8px 0;color:#888;">ROI anualizado pretendido</td><td>${body.roi_anualizado || '-'}</td></tr>
+              <tr><td style="padding:8px 14px 8px 0;color:#888;width:160px;">Nome</td><td style="font-weight:600;">${escapeHtmlLead(nome)}</td></tr>
+              <tr><td style="padding:8px 14px 8px 0;color:#888;">Email</td><td>${escapeHtmlLead(email)}</td></tr>
+              <tr><td style="padding:8px 14px 8px 0;color:#888;">Telemóvel</td><td>${escapeHtmlLead(telemovel || '-')}</td></tr>
+              <tr><td style="padding:8px 14px 8px 0;color:#888;">Objetivo</td><td>${escapeHtmlLead(body.objetivo || '-')}</td></tr>
+              <tr><td style="padding:8px 14px 8px 0;color:#888;">Experiência</td><td>${escapeHtmlLead(body.experiencia || '-')}</td></tr>
+              <tr><td style="padding:8px 14px 8px 0;color:#888;">Capital disponível</td><td>${escapeHtmlLead(body.capital || '-')}</td></tr>
+              <tr><td style="padding:8px 14px 8px 0;color:#888;">Empreiteiro disponível</td><td>${escapeHtmlLead(body.empreiteiro || '-')}</td></tr>
+              <tr><td style="padding:8px 14px 8px 0;color:#888;">Retorno total pretendido</td><td>${escapeHtmlLead(body.retorno_total || '-')}</td></tr>
+              <tr><td style="padding:8px 14px 8px 0;color:#888;">ROI anualizado pretendido</td><td>${escapeHtmlLead(body.roi_anualizado || '-')}</td></tr>
             </table>
             <hr style="margin:24px 0;border:0;border-top:1px solid #eee;">
             <p style="font-size:12px;color:#999;margin:0;">Submissão automática via formulário da landing page Somnium Properties.<br>Acesso ao CRM: <a href="https://somnium-properties-dashboard.vercel.app" style="color:#C9A84C;">Dashboard</a></p>
