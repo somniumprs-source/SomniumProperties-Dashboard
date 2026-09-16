@@ -40,9 +40,11 @@ export function PillField({ label, value, onChange, options, labels }) {
 
 export function NumberField({ label, value, onChange }) {
   return (
-    <div>
-      <label className="block text-xs text-gray-500 mb-1">{label}</label>
-      <input type="number" step="any" value={value ?? ''} onChange={e => onChange(e.target.value)} className={inputClass} onWheel={e => e.target.blur()} />
+    <div className="flex items-center justify-between gap-2">
+      <label className="text-xs text-gray-500 shrink-0">{label}</label>
+      <input type="number" step="any" value={value ?? ''} onChange={e => onChange(e.target.value)}
+        className="w-28 px-2 py-1 rounded-md border border-gray-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-yellow-300"
+        onWheel={e => e.target.blur()} />
     </div>
   )
 }
@@ -134,14 +136,15 @@ export function RegistoManualFieldset({ registo, onChange }) {
         <div className="space-y-1.5">
           <PillField label="Resultado" value={registo.cl_resultado} options={CL_RESULTADOS} labels={CL_RESULTADO_LABEL}
             onChange={v => onChange('cl_resultado', v)} />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+          <div className="space-y-1.5">
             <NumberField label="Valor de âncora (€)" value={registo.cl_valor_ancora} onChange={v => onChange('cl_valor_ancora', v)} />
             <NumberField label="Contra-proposta (€)" value={registo.cl_valor_contraproposta} onChange={v => onChange('cl_valor_contraproposta', v)} />
           </div>
           {registo.cl_resultado === 'vou_pensar_com_data' && (
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Deadline da resposta</label>
-              <input type="date" value={registo.cl_deadline || ''} onChange={e => onChange('cl_deadline', e.target.value)} className={inputClass} />
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs text-gray-500 shrink-0">Deadline da resposta</label>
+              <input type="date" value={registo.cl_deadline || ''} onChange={e => onChange('cl_deadline', e.target.value)}
+                className="w-36 px-2 py-1 rounded-md border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
             </div>
           )}
           <CheckboxField label="Formalizado por escrito no mesmo dia" checked={registo.cl_formalizado_escrito_mesmo_dia === true}
