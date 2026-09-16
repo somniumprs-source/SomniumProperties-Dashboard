@@ -1,9 +1,16 @@
 # Nao enviar para o Vercel o que nao e preciso para o build do frontend.
 # As fotos (448MB) migram para Supabase Storage; o backend corre em Edge Functions.
 # NB: scripts/ FICA (o prebuild corre scripts/sync-landing.mjs) e patches/ FICA
-# (postinstall corre patch-package).
+# (postinstall corre patch-package). roles.ts tambem FICA (excepcoes em cascata
+# abaixo — nao se pode reincluir um ficheiro dentro de uma pasta ja excluida) —
+# o prebuild corre scripts/generate-shared-roles.mjs, que le esse ficheiro.
 public/uploads
-supabase
+supabase/*
+!supabase/functions
+supabase/functions/*
+!supabase/functions/_shared
+supabase/functions/_shared/*
+!supabase/functions/_shared/roles.ts
 server.js
 docs
 tmp
