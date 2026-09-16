@@ -1850,7 +1850,7 @@ const FIELD_DEFS = {
     { key: 'ref_interna', label: 'REF Interna', type: 'text' },
     { key: 'tipo_oportunidade', label: 'Tipo Oportunidade', type: 'select', options: ['Portal', 'Off-Market'] },
     { key: 'origem', label: 'Origem', type: 'select', options: ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro'], quick: true },
-    { key: 'nome_consultor', label: 'Consultor', type: 'relation_name_or_new', endpoint: '/api/crm/lookup/consultores', display: r => `${r.nome} (${r.estatuto ?? '—'})`, createEndpoint: '/api/crm/consultores/find-or-create' },
+    { key: 'nome_consultor', label: 'Consultor', type: 'relation_name_or_new', endpoint: '/api/crm/lookup/consultores', display: r => `${r.nome} (${r.estatuto ?? '—'})`, createEndpoint: '/api/crm/consultores/find-or-create', quick: true },
     { key: 'link', label: 'Link do Imóvel', type: 'url', quick: true },
     // — Localização —
     { key: 'distrito', label: 'Distrito', type: 'text', quick: true },
@@ -1972,7 +1972,7 @@ function RelationOrNew({ value, options, display, createEndpoint, regiao, onChan
   const [mode, setMode] = useState('select') // 'select' | 'new'
   const [newName, setNewName] = useState('')
   const [newContacto, setNewContacto] = useState('')
-  const [newEmail, setNewEmail] = useState('')
+  const [newImobiliaria, setNewImobiliaria] = useState('')
   const [creating, setCreating] = useState(false)
   const inputClass = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
 
@@ -1987,7 +1987,7 @@ function RelationOrNew({ value, options, display, createEndpoint, regiao, onChan
         body: JSON.stringify({
           nome: newName.trim(),
           contacto: newContacto.trim() || null,
-          email: newEmail.trim() || null,
+          imobiliaria: newImobiliaria.trim() ? JSON.stringify([newImobiliaria.trim()]) : null,
           regiao,
         }),
       })
@@ -1997,7 +1997,7 @@ function RelationOrNew({ value, options, display, createEndpoint, regiao, onChan
       setMode('select')
       setNewName('')
       setNewContacto('')
-      setNewEmail('')
+      setNewImobiliaria('')
     } catch {}
     setCreating(false)
   }
@@ -2008,7 +2008,7 @@ function RelationOrNew({ value, options, display, createEndpoint, regiao, onChan
         <input type="text" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome do novo consultor *" className={inputClass} autoFocus />
         <div className="grid grid-cols-2 gap-2">
           <input type="tel" value={newContacto} onChange={e => setNewContacto(e.target.value)} placeholder="Contacto (9XX XXX XXX)" className={inputClass} />
-          <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="Email" className={inputClass} />
+          <input type="text" value={newImobiliaria} onChange={e => setNewImobiliaria(e.target.value)} placeholder="Imobiliária" className={inputClass} />
         </div>
         <div className="flex gap-2">
           <button onClick={handleCreate} disabled={creating || !newName.trim()} className="px-3 py-2 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 shrink-0">
