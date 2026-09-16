@@ -17,14 +17,23 @@ import {
 
 export const inputClass = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300'
 
-export function SelectField({ label, value, onChange, options, labels }) {
+export function PillField({ label, value, onChange, options, labels }) {
   return (
-    <div>
-      <label className="block text-xs text-gray-500 mb-1">{label}</label>
-      <select value={value || ''} onChange={e => onChange(e.target.value)} className={inputClass}>
-        <option value="">—</option>
-        {options.map(o => <option key={o} value={o}>{labels[o] || o}</option>)}
-      </select>
+    <div className="flex items-center justify-between gap-2 flex-wrap">
+      <span className="text-xs text-gray-600">{label}</span>
+      <div className="flex gap-1 flex-wrap justify-end">
+        {options.map(o => {
+          const active = value === o
+          return (
+            <button key={o} type="button"
+              onClick={() => onChange(active ? '' : o)}
+              className={`px-2 py-1 rounded-md text-xs font-medium border transition-colors whitespace-nowrap ${active ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-yellow-300'}`}
+              style={active ? { backgroundColor: '#C9A84C' } : undefined}>
+              {labels[o] || o}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -48,10 +57,11 @@ export function CheckboxField({ label, checked, onChange }) {
   )
 }
 
-function Bloco({ titulo, children }) {
+function Bloco({ titulo, legenda, children }) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-3">
-      <p className="text-xs font-semibold text-gray-700 mb-2">{titulo}</p>
+    <div className="bg-white rounded-lg border border-gray-200 p-2">
+      <p className={`text-xs font-semibold text-gray-700 ${legenda ? 'mb-0.5' : 'mb-1.5'}`}>{titulo}</p>
+      {legenda && <p className="text-[10px] text-gray-400 mb-1.5">{legenda}</p>}
       {children}
     </div>
   )
@@ -66,53 +76,52 @@ export function RegistoManualFieldset({ registo, onChange }) {
   const banda = bandaScorecard(total)
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <Bloco titulo="Cold Call">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <SelectField label="Disponibilidade confirmada" value={registo.cc_disponibilidade} options={CC_DISPONIBILIDADE} labels={CC_DISPONIBILIDADE_LABEL}
+        <div className="space-y-1.5">
+          <PillField label="Disponibilidade confirmada" value={registo.cc_disponibilidade} options={CC_DISPONIBILIDADE} labels={CC_DISPONIBILIDADE_LABEL}
             onChange={v => onChange('cc_disponibilidade', v)} />
-          <SelectField label="Documentação (caderneta e planta)" value={registo.cc_documentacao} options={CC_DOCUMENTACAO} labels={CC_DOCUMENTACAO_LABEL}
+          <PillField label="Documentação (caderneta e planta)" value={registo.cc_documentacao} options={CC_DOCUMENTACAO} labels={CC_DOCUMENTACAO_LABEL}
             onChange={v => onChange('cc_documentacao', v)} />
-          <SelectField label="Resultado" value={registo.cc_resultado} options={CC_RESULTADOS} labels={CC_RESULTADO_LABEL}
+          <PillField label="Resultado" value={registo.cc_resultado} options={CC_RESULTADOS} labels={CC_RESULTADO_LABEL}
             onChange={v => onChange('cc_resultado', v)} />
-          <SelectField label="Aceita negociar" value={registo.cc_aceita_negociar} options={SIM_NAO_NP} labels={SIM_NAO_NP_LABEL}
+          <PillField label="Aceita negociar" value={registo.cc_aceita_negociar} options={SIM_NAO_NP} labels={SIM_NAO_NP_LABEL}
             onChange={v => onChange('cc_aceita_negociar', v)} />
         </div>
       </Bloco>
 
-      <Bloco titulo="Discovery Call — Scorecard de Qualificação">
-        <div className="space-y-3">
+      <Bloco titulo="Discovery Call — Scorecard de Qualificação"
+        legenda="0 = não abordado · 1 = superficial · 2 = aprofundado (detalhe concreto e quantificado)">
+        <div className="space-y-1">
           {DC_CRITERIOS.map(c => (
-            <div key={c.key} className="space-y-1">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-gray-600">{c.label}</span>
-                <div className="flex gap-1">
-                  {[0, 1, 2].map(n => {
-                    const active = registo[c.key] === n
-                    return (
-                      <button key={n} type="button"
-                        onClick={() => onChange(c.key, active ? null : n)}
-                        className={`w-7 h-7 rounded-md text-xs font-semibold border transition-colors ${active ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-yellow-300'}`}
-                        style={active ? { backgroundColor: '#C9A84C' } : undefined}>
-                        {n}
-                      </button>
-                    )
-                  })}
-                </div>
+            <div key={c.key} className="flex items-center gap-2">
+              <span className="text-xs text-gray-600 w-28 shrink-0">{c.label}</span>
+              <div className="flex gap-1 shrink-0">
+                {[0, 1, 2].map(n => {
+                  const active = registo[c.key] === n
+                  return (
+                    <button key={n} type="button"
+                      onClick={() => onChange(c.key, active ? null : n)}
+                      className={`w-6 h-6 rounded-md text-xs font-semibold border transition-colors ${active ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-yellow-300'}`}
+                      style={active ? { backgroundColor: '#C9A84C' } : undefined}>
+                      {n}
+                    </button>
+                  )
+                })}
               </div>
               <input type="text" value={registo[c.notaKey] || ''} onChange={e => onChange(c.notaKey, e.target.value)}
-                placeholder="Justificação da pontuação (opcional)"
-                className="w-full px-2 py-1 text-xs rounded-md border border-gray-200 focus:outline-none focus:ring-1 focus:ring-yellow-300" />
+                placeholder="Justificação (opcional)"
+                className="flex-1 min-w-0 px-2 py-1 text-xs rounded-md border border-gray-200 focus:outline-none focus:ring-1 focus:ring-yellow-300" />
             </div>
           ))}
-          <div className="flex items-center justify-between pt-2 mt-1 border-t border-gray-100">
+          <div className="flex items-center justify-between pt-1.5 mt-0.5 border-t border-gray-100">
             <span className="text-xs font-semibold text-gray-700">Total</span>
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-gray-800">{total != null ? `${total}/12` : '— /12'}</span>
               {banda && <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${banda.cls}`}>{banda.label}</span>}
             </div>
           </div>
-          <div className="pt-2 space-y-0.5">
+          <div className="pt-1.5 space-y-0.5">
             <CheckboxField label="Ónus/hipotecas verificado (Certidão Permanente)" checked={registo.dc_onus_verificado === true}
               onChange={v => onChange('dc_onus_verificado', v)} />
             <CheckboxField label="Direito de preferência esclarecido" checked={registo.dc_direito_preferencia_esclarecido === true}
@@ -122,10 +131,10 @@ export function RegistoManualFieldset({ registo, onChange }) {
       </Bloco>
 
       <Bloco titulo="Close Call">
-        <div className="space-y-3">
-          <SelectField label="Resultado" value={registo.cl_resultado} options={CL_RESULTADOS} labels={CL_RESULTADO_LABEL}
+        <div className="space-y-1.5">
+          <PillField label="Resultado" value={registo.cl_resultado} options={CL_RESULTADOS} labels={CL_RESULTADO_LABEL}
             onChange={v => onChange('cl_resultado', v)} />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
             <NumberField label="Valor de âncora (€)" value={registo.cl_valor_ancora} onChange={v => onChange('cl_valor_ancora', v)} />
             <NumberField label="Contra-proposta (€)" value={registo.cl_valor_contraproposta} onChange={v => onChange('cl_valor_contraproposta', v)} />
           </div>
