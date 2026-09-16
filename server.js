@@ -14,7 +14,10 @@ app.use(cors())
 // gzip dos payloads JSON e dos chunks estáticos (~70-80% redução em
 // respostas grandes como /api/crm/investidores que devolve 70KB → ~15KB).
 app.use(compression({ threshold: 1024 }))
-app.use(express.json())
+// Captura o corpo em bruto (req.rawBody) para poder validar a assinatura
+// HMAC do webhook Slack — a verificação tem de correr sobre os bytes
+// exactos recebidos, não sobre um JSON re-serializado.
+app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf } }))
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500, standardHeaders: true, legacyHeaders: false }))
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads'), {
   maxAge: '7d',
@@ -355,6 +358,74 @@ try {
     console.log('[crm] Webhook landing-lead montado em POST /api/webhook/landing-lead')
   }
 
+  // ── Slack Webhook · TAREFA-... cria tarefa na agenda + log p/ relatório diário ─
+  {
+    const { default: pgPool } = await import('./src/db/pg.js')
+    const { randomUUID } = await import('crypto')
+    const { verifySlackSignature, resolveSlackUserName } = await import('./src/db/slackVerify.js')
+
+    const TRIGGER_RE = /^TAREFA[\s:\-]+(.+)$/is
+
+    app.post('/api/webhook/slack', async (req, res) => {
+      try {
+        const body = req.body || {}
+
+        // Passo de configuração do Slack: responder o challenge de imediato.
+        if (body.type === 'url_verification') {
+          return res.json({ challenge: body.challenge })
+        }
+
+        const signature = req.headers['x-slack-signature']
+        const timestamp = req.headers['x-slack-request-timestamp']
+        const ok = verifySlackSignature({
+          signingSecret: process.env.SLACK_SIGNING_SECRET,
+          signature, timestamp,
+          rawBody: req.rawBody ? req.rawBody.toString('utf8') : '',
+        })
+        if (!ok) return res.status(401).json({ ok: false, error: 'Assinatura inválida' })
+
+        const event = body.event || {}
+        // Ignora tudo o que não seja mensagem nova de uma pessoa (edições,
+        // apagados, e mensagens do próprio bot — evita eco/loop).
+        if (event.type !== 'message' || event.subtype || event.bot_id) {
+          return res.json({ ok: true, action: 'ignored' })
+        }
+        if (process.env.SLACK_CHANNEL_ID && event.channel !== process.env.SLACK_CHANNEL_ID) {
+          return res.json({ ok: true, action: 'ignored_channel' })
+        }
+
+        const texto = (event.text || '').trim()
+        const userName = await resolveSlackUserName(event.user)
+
+        // Idempotência: Slack reenvia o evento se não responder a tempo.
+        const { rows: [inserted] } = await pgPool.query(
+          `INSERT INTO slack_mensagens (id, slack_event_id, channel_id, user_id, user_name, texto, ts, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           ON CONFLICT (slack_event_id) DO NOTHING
+           RETURNING id`,
+          [randomUUID(), body.event_id || null, event.channel, event.user, userName, texto, event.ts, new Date().toISOString()]
+        )
+        if (!inserted) return res.json({ ok: true, action: 'duplicate' })
+
+        const match = texto.match(TRIGGER_RE)
+        if (match) {
+          const { processVoiceCommand } = await import('./src/db/voiceProcess.js')
+          const result = await processVoiceCommand(match[1].trim(), { funcionario: userName })
+          await pgPool.query(
+            'UPDATE slack_mensagens SET is_trigger_tarefa = true, tarefa_id = $1 WHERE id = $2',
+            [result?.tarefa_id || null, inserted.id]
+          )
+        }
+
+        res.json({ ok: true })
+      } catch (e) {
+        console.error('[webhook-slack] erro:', e.message)
+        res.status(500).json({ ok: false, error: 'Erro ao processar evento' })
+      }
+    })
+    console.log('[crm] Webhook Slack montado em POST /api/webhook/slack')
+  }
+
   try {
     const { runFollowUp, runRelatorioDiario, runRelatorioSemanal, runProcuraImoveis } = await import('./src/db/cronJobs.js')
     const { startCronJobs } = await import('./src/db/cronJobs.js')
@@ -362,253 +433,11 @@ try {
     // Endpoint para processar comando de voz (Speech → Claude API → Accao no CRM)
     app.post('/api/voice/process', async (req, res) => {
       try {
-        const { text } = req.body
+        const { text, funcionario } = req.body
         if (!text?.trim()) return res.status(400).json({ error: 'Texto vazio' })
-
-        const { query: pgQuery } = await import('./src/db/pg.js')
-        const { randomUUID } = await import('crypto')
-        const Anthropic = (await import('@anthropic-ai/sdk')).default
-        const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-        const now = new Date().toISOString()
-        const hoje = new Date().toISOString().slice(0, 10)
-
-        // Buscar consultores e imoveis para contexto
-        const { rows: consultores } = await pgQuery("SELECT id, nome FROM consultores LIMIT 200")
-        const { rows: imoveis } = await pgQuery("SELECT id, nome, estado FROM imoveis LIMIT 200")
-        const consNomes = consultores.map(c => c.nome).join(', ')
-        const imNomes = imoveis.map(i => `${i.nome} (${i.estado})`).join(', ')
-
-        const response = await client.messages.create({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 500,
-          system: `Interpretas comandos de voz em português para um CRM imobiliário. Data de hoje: ${hoje}.
-
-CONSULTORES NA BASE: ${consNomes}
-IMÓVEIS NA BASE: ${imNomes}
-
-Devolve SEMPRE JSON com exactamente este schema:
-{
-  "accao": "TAREFA|NOTA_IMOVEL|NOTA_CONSULTOR|INTERACAO|MOVER_ESTADO|CLASSIFICAR|FOLLOW_UP|CRIAR_IMOVEL|ATUALIZAR_IMOVEL|CRIAR_CONSULTOR",
-  "descricao": "texto limpo e claro da tarefa/nota (reformula se necessario)",
-  "entidade": "nome do consultor ou imovel (exacto da base)",
-  "entidade_tipo": "consultor|imovel|null",
-  "data": "YYYY-MM-DD",
-  "hora_inicio": "HH:MM ou null",
-  "hora_fim": "HH:MM ou null",
-  "duracao_horas": numero (default 1 se nao especificado),
-  "categoria": "Follow-up Consultor|Visita|Análise|Proposta|Documentação|Reunião|Obra|Outro",
-  "novo_estado": "estado pipeline ou null",
-  "canal": "chamada|whatsapp|null",
-  "preencher_data_visita": true|false (true se for visita a imovel),
-  "preencher_data_chamada": true|false (true se for chamada a consultor/imovel),
-  "mensagem_ui": "texto curto para mostrar ao utilizador"
-}
-
-REGRAS DE INTERPRETAÇÃO:
-- Se diz "às 18 horas" sem hora fim → hora_inicio=18:00, duracao=1h, hora_fim=19:00
-- Se diz "das 10 às 12" → hora_inicio=10:00, hora_fim=12:00, duracao=2
-- Se diz "durante 2 horas" → duracao=2
-- Se diz "sexta-feira" → calcular a data exacta YYYY-MM-DD
-- Se diz "amanhã" → data de amanha
-- Se diz "visita ao imovel X" → preencher_data_visita=true + TAREFA categoria Visita
-- Se diz "ligar ao consultor X" → preencher_data_chamada=true + INTERACAO/TAREFA
-- Se diz "follow up feito" → registar como ja realizado (INTERACAO passada)
-- Se diz "nota ao imovel/consultor" → NOTA_IMOVEL ou NOTA_CONSULTOR
-- SEMPRE reformula a descricao para ser clara e concisa
-
-Exemplos:
-"na sexta-feira vamos fazer visita ao imovel pelas 18 horas" → TAREFA, Visita, imovel match, data=sexta, hora_inicio=18:00, hora_fim=19:00, preencher_data_visita=true
-"ligar ao consultor Teresa amanha as 10" → TAREFA, Follow-up, Teresa Sousa, data=amanha, hora_inicio=10:00, hora_fim=10:30, duracao=0.5
-"nota ao prédio rua do clube: proprietário aceita 150k" → NOTA_IMOVEL, Prédio Rua do Clube
-"follow up ao Amaro feito hoje por chamada" → INTERACAO, Amaro Bailão, canal=chamada, data=hoje
-"mover prédio Bencanta para estudo de VVR" → MOVER_ESTADO, Prédio Bencanta, novo_estado=Estudo de VVR
-
-"adicionar imovel T3 em Celas consultor João preço 180 mil" → CRIAR_IMOVEL
-"actualizar preço do prédio Bencanta para 340 mil" → ATUALIZAR_IMOVEL
-"adicionar consultor Maria Santos telefone 912345678" → CRIAR_CONSULTOR
-
-Faz match aproximado dos nomes (Teresa → Teresa Sousa, prédio clube → Prédio Rua do Clube).
-TODAS as tarefas devem ser sincronizadas com Google Calendar.`,
-          messages: [{ role: 'user', content: text }]
-        })
-
-        const respText = response.content[0]?.text || '{}'
-        let parsed
-        try {
-          const jsonMatch = respText.match(/\{[\s\S]*\}/)
-          parsed = JSON.parse(jsonMatch?.[0] || respText)
-        } catch { parsed = { accao: 'TAREFA', descricao: text, mensagem_ui: text } }
-
-        const accao = parsed.accao || 'TAREFA'
-        const entNome = parsed.entidade
-        let msg = parsed.mensagem_ui || 'Processado'
-
-        // Executar accao
-        if (accao === 'NOTA_IMOVEL' && entNome) {
-          const im = imoveis.find(i => i.nome.toLowerCase().includes(entNome.toLowerCase()))
-          if (im) {
-            const { rows: [existing] } = await pgQuery('SELECT notas FROM imoveis WHERE id = $1', [im.id])
-            const notas = (existing?.notas || '') + '\n' + `[${hoje}] ${parsed.descricao}`
-            await pgQuery('UPDATE imoveis SET notas = $1, updated_at = $2 WHERE id = $3', [notas.trim(), now, im.id])
-            msg = `Nota adicionada ao imóvel "${im.nome}"`
-          } else { msg = `Imóvel "${entNome}" não encontrado` }
-
-        } else if (accao === 'NOTA_CONSULTOR' && entNome) {
-          const cons = consultores.find(c => c.nome.toLowerCase().includes(entNome.toLowerCase()))
-          if (cons) {
-            const { rows: [existing] } = await pgQuery('SELECT notas FROM consultores WHERE id = $1', [cons.id])
-            const notas = (existing?.notas || '') + '\n' + `[${hoje}] ${parsed.descricao}`
-            await pgQuery('UPDATE consultores SET notas = $1, updated_at = $2 WHERE id = $3', [notas.trim(), now, cons.id])
-            msg = `Nota adicionada ao consultor "${cons.nome}"`
-          } else { msg = `Consultor "${entNome}" não encontrado` }
-
-        } else if (accao === 'INTERACAO' && entNome) {
-          const cons = consultores.find(c => c.nome.toLowerCase().includes(entNome.toLowerCase()))
-          if (cons) {
-            await pgQuery(
-              'INSERT INTO consultor_interacoes (id, consultor_id, data_hora, canal, direcao, notas) VALUES ($1, $2, $3, $4, $5, $6)',
-              [randomUUID(), cons.id, parsed.data ? `${parsed.data}T${parsed.hora || '09:00'}:00Z` : now, parsed.canal || 'chamada', 'Enviado', parsed.descricao]
-            )
-            msg = `Interacção registada com "${cons.nome}" (${parsed.canal || 'chamada'})`
-          } else { msg = `Consultor "${entNome}" não encontrado` }
-
-        } else if (accao === 'MOVER_ESTADO' && entNome && parsed.novo_estado) {
-          const im = imoveis.find(i => i.nome.toLowerCase().includes(entNome.toLowerCase()))
-          if (im) {
-            await pgQuery('UPDATE imoveis SET estado = $1, updated_at = $2 WHERE id = $3', [parsed.novo_estado, now, im.id])
-            msg = `"${im.nome}" movido para "${parsed.novo_estado}"`
-          } else { msg = `Imóvel "${entNome}" não encontrado` }
-
-        } else if (accao === 'CLASSIFICAR' && entNome) {
-          const cons = consultores.find(c => c.nome.toLowerCase().includes(entNome.toLowerCase()))
-          if (cons) {
-            const estado = parsed.descricao.toLowerCase().includes('inativo') ? 'Inativo' : parsed.descricao.toLowerCase().includes('ativo') ? 'Ativo' : 'Em avaliação'
-            await pgQuery('UPDATE consultores SET estado_avaliacao = $1, updated_at = $2 WHERE id = $3', [estado, now, cons.id])
-            msg = `"${cons.nome}" classificado como "${estado}"`
-          }
-
-        } else if (accao === 'FOLLOW_UP' && entNome) {
-          const cons = consultores.find(c => c.nome.toLowerCase().includes(entNome.toLowerCase()))
-          if (cons) {
-            const data = parsed.data || hoje
-            await pgQuery('UPDATE consultores SET data_follow_up = $1, data_proximo_follow_up = $2, updated_at = $3 WHERE id = $4', [data, data, now, cons.id])
-            await pgQuery(
-              'INSERT INTO consultor_interacoes (id, consultor_id, data_hora, canal, direcao, notas) VALUES ($1, $2, $3, $4, $5, $6)',
-              [randomUUID(), cons.id, `${data}T${parsed.hora || '09:00'}:00Z`, parsed.canal || 'chamada', 'Enviado', `Follow-up: ${parsed.descricao}`]
-            )
-            msg = `Follow-up registado com "${cons.nome}" — ${data}`
-          }
-
-        } else if (accao === 'CRIAR_IMOVEL') {
-          const nome = parsed.descricao || text
-          const PORT = process.env.PORT ?? 3001
-          try {
-            await fetch(`http://localhost:${PORT}/api/crm/imoveis`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                nome,
-                zona: parsed.zona || null,
-                tipologia: parsed.tipologia || null,
-                ask_price: parsed.ask_price || 0,
-                nome_consultor: parsed.entidade || null,
-                origem: 'Consultor',
-              })
-            })
-            msg = `Imóvel criado: "${nome}"`
-          } catch { msg = `Erro ao criar imóvel` }
-
-        } else if (accao === 'ATUALIZAR_IMOVEL' && entNome) {
-          const im = imoveis.find(i => i.nome.toLowerCase().includes(entNome.toLowerCase()))
-          if (im) {
-            const updates = {}
-            if (parsed.ask_price) updates.ask_price = parsed.ask_price
-            if (parsed.valor_proposta) updates.valor_proposta = parsed.valor_proposta
-            if (parsed.tipologia) updates.tipologia = parsed.tipologia
-            if (parsed.zona) updates.zona = parsed.zona
-            if (parsed.descricao) {
-              const { rows: [ex] } = await pgQuery('SELECT notas FROM imoveis WHERE id = $1', [im.id])
-              updates.notas = ((ex?.notas || '') + '\n' + `[${hoje}] ${parsed.descricao}`).trim()
-            }
-            if (Object.keys(updates).length > 0) {
-              const sets = Object.entries(updates).map(([k], i) => `${k} = $${i + 1}`)
-              sets.push(`updated_at = $${Object.keys(updates).length + 1}`)
-              const params = [...Object.values(updates), now, im.id]
-              await pgQuery(`UPDATE imoveis SET ${sets.join(', ')} WHERE id = $${params.length}`, params)
-            }
-            msg = `"${im.nome}" actualizado`
-          }
-
-        } else if (accao === 'CRIAR_CONSULTOR') {
-          const PORT = process.env.PORT ?? 3001
-          try {
-            await fetch(`http://localhost:${PORT}/api/crm/consultores/find-or-create`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                nome: parsed.entidade || parsed.descricao,
-                contacto: parsed.contacto || null,
-              })
-            })
-            msg = `Consultor criado/encontrado: "${parsed.entidade || parsed.descricao}"`
-          } catch { msg = `Erro ao criar consultor` }
-
-        } else {
-          // Default: criar tarefa com hora inicio/fim
-          const hInicio = parsed.hora_inicio || '09:00'
-          const duracao = parsed.duracao_horas || 1
-          const hFim = parsed.hora_fim || (() => {
-            const [h, m] = hInicio.split(':').map(Number)
-            const totalMin = h * 60 + m + duracao * 60
-            return `${String(Math.floor(totalMin / 60)).padStart(2, '0')}:${String(totalMin % 60).padStart(2, '0')}`
-          })()
-          const dataStr = parsed.data || hoje
-          const inicio = `${dataStr}T${hInicio}:00`
-          const fim = `${dataStr}T${hFim}:00`
-
-          // Criar tarefa via endpoint interno (sincroniza automaticamente com Google Calendar)
-          try {
-            const PORT = process.env.PORT ?? 3001
-            await fetch(`http://localhost:${PORT}/api/tarefas`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                tarefa: parsed.descricao || text,
-                categoria: parsed.categoria || 'Outro',
-                funcionario: 'Alexandre Mendes',
-                inicio, fim,
-              })
-            })
-          } catch (tarefaErr) {
-            // Fallback: criar directamente na DB
-            await pgQuery(
-              `INSERT INTO tarefas (id, tarefa, status, categoria, funcionario, inicio, fim, created_at, updated_at)
-               VALUES ($1, $2, 'A fazer', $3, $4, $5, $6, $7, $7)`,
-              [randomUUID(), parsed.descricao || text, parsed.categoria || 'Outro', 'Alexandre Mendes', inicio, fim, now]
-            )
-          }
-
-          // Preencher datas nas fichas dos imoveis
-          if (parsed.preencher_data_visita && entNome) {
-            const im = imoveis.find(i => i.nome.toLowerCase().includes(entNome.toLowerCase()))
-            if (im) {
-              await pgQuery('UPDATE imoveis SET data_visita = $1, updated_at = $2 WHERE id = $3', [dataStr, now, im.id])
-              msg = `Visita agendada: "${parsed.descricao}" (${hInicio}-${hFim}) — data_visita preenchida + Google Calendar sincronizado`
-            } else {
-              msg = `Tarefa criada: "${parsed.descricao}" (${hInicio}-${hFim}) + Google Calendar`
-            }
-          } else if (parsed.preencher_data_chamada && entNome) {
-            const im = imoveis.find(i => i.nome.toLowerCase().includes(entNome.toLowerCase()))
-            if (im) {
-              await pgQuery('UPDATE imoveis SET data_chamada = $1, updated_at = $2 WHERE id = $3', [dataStr, now, im.id])
-            }
-            msg = `Tarefa criada: "${parsed.descricao}" (${hInicio}-${hFim}) + Google Calendar`
-          } else {
-            msg = `Tarefa criada: "${parsed.descricao}" (${hInicio}-${hFim}) + Google Calendar`
-          }
-        }
-
-        res.json({ ok: true, message: msg, accao, parsed })
+        const { processVoiceCommand } = await import('./src/db/voiceProcess.js')
+        const result = await processVoiceCommand(text, { funcionario })
+        res.json(result)
       } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
     })
 
@@ -621,6 +450,12 @@ TODAS as tarefas devem ser sincronizadas com Google Calendar.`,
     })
     app.post('/api/cron/relatorio-semanal', async (_req, res) => {
       try { await runRelatorioSemanal(); res.json({ ok: true }) } catch (e) { res.status(500).json({ error: e.message }) }
+    })
+    app.post('/api/cron/relatorio-diario-slack', async (_req, res) => {
+      try {
+        const { runRelatorioDiarioSlack } = await import('./src/db/slackRelatorioDiario.js')
+        res.json({ ok: true, ...(await runRelatorioDiarioSlack()) })
+      } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
     })
     // Pesquisa diária de imóveis (Idealista via Apify) — trigger manual para
     // testar em dev; não registada em node-cron (ver nota em cronJobs.js).

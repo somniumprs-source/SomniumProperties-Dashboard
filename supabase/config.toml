@@ -32,6 +32,9 @@ verify_jwt = true
 [functions.webhook-landing-lead]
 verify_jwt = false
 
+[functions.webhook-slack]
+verify_jwt = false
+
 [functions.cron-followup]
 verify_jwt = false
 
@@ -72,4 +75,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.cron-procura-imoveis]
+verify_jwt = false
+
+[functions.cron-relatorio-diario-slack]
 verify_jwt = false
