@@ -4,94 +4,29 @@
  * Todos os horários em Europe/Lisbon (a agenda passa para pg_cron; aqui só a lógica).
  */
 import pool from "../_shared/pg.ts";
-import { isConfigured as whatsappConfigured, sendWhatsApp } from "./whatsappAgent.ts";
 import { isConfigured as emailConfigured, sendEmail } from "./emailService.ts";
 import { generateRelatorioAcompanhamento } from "./pdfProjectoFixFlip.ts";
 import { streamToBuffer } from "./pdfkitGuard.ts";
 import { uploadPublic } from "./storage.ts";
-import Anthropic from "@anthropic-ai/sdk";
 import { ensureOportunidadesScraperTable, ensurePrecoM2ReferenciaTable } from "./oportunidadesScraper.ts";
 import { buscarOportunidadesIdealista } from "./apifyIdealista.ts";
 
 // ── Follow-up config por classe ─────────────────────────────
-const FOLLOWUP_RULES: Record<string, { dias: number[]; canal: string }> = {
-  A: { dias: [7, 10, 15], canal: "chamada" },
-  B: { dias: [10, 15], canal: "chamada" },
-  C: { dias: [15], canal: "whatsapp_auto" },
-  D: { dias: [15], canal: "whatsapp_auto" },
+const FOLLOWUP_RULES: Record<string, { dias: number[] }> = {
+  A: { dias: [7, 10, 15] },
+  B: { dias: [10, 15] },
+  C: { dias: [15] },
+  D: { dias: [15] },
 };
-
-// ── Templates de reactivação por região ──────────────────────
-const ZONAS_INTERESSE: Record<string, string> = {
-  Coimbra: "concelho de Coimbra, zona central de Condeixa-a-Nova e Ventosa do Bairro (Mealhada)",
-  AMP:
-    "Porto (Bonfim, Campanhã, Cedofeita, Paranhos), Vila Nova de Gaia (Santa Marinha, Mafamude, Canidelo) e Santa Maria da Feira",
-};
-function zonasDeInteresse(regiao: string) {
-  return ZONAS_INTERESSE[regiao] || ZONAS_INTERESSE.Coimbra;
-}
-
-const REACTIVATION_TEMPLATE = (nome: string, regiao = "Coimbra") => {
-  const primeiroNome = nome.split(" ")[0];
-  const zonaRegiao = regiao === "AMP" ? "na Área Metropolitana do Porto" : "na zona de Coimbra";
-  return `Boa tarde ${primeiroNome}, sou o Alexandre Mendes da Somnium Properties.
-
-Mudei recentemente de contacto e estou a retomar a comunicação com consultores com quem já trabalhei ou que operam ${zonaRegiao}.
-
-Investimos em imóveis com potencial de valorização. Compramos directamente, renovamos e recolocamos no mercado. Trabalhamos com consultores como parceiros de negócio e valorizamos quem nos apresenta boas oportunidades.
-
-*O que procuramos:*
-• Imóveis com margem de negociação, construção anterior a 2000 ou que precisem de obras
-• Proprietário com motivação concreta para vender (herança, emigração, divórcio, dificuldades financeiras)
-• Questões de licenciamento ou documentação não são impedimento
-• Zonas: ${zonasDeInteresse(regiao)}
-• Valor máximo de aquisição: 250.000€
-
-Quando encontramos o imóvel certo, avançamos com rapidez e sem burocracia.
-
-Se cruzar com algo neste perfil, basta responder aqui. Cumprimentos.`;
-};
-
-// ── Helper Twilio (template aprovado) ────────────────────────
-// O original usava o SDK twilio directo para enviar contentSid (template).
-// sendWhatsApp do whatsappAgent só envia texto livre, por isso esta chamada
-// REST replica o envio de template (contentSid + contentVariables) via API Twilio.
-const TWILIO_SID = Deno.env.get("TWILIO_ACCOUNT_SID") || "";
-const TWILIO_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN") || "";
-const TWILIO_NUMBER = Deno.env.get("TWILIO_WHATSAPP_NUMBER") || "";
-
-async function sendWhatsAppTemplate(to: string, contentSid: string, variables: Record<string, string>) {
-  if (!TWILIO_SID || !TWILIO_TOKEN || !TWILIO_NUMBER) {
-    throw new Error("Twilio não configurado");
-  }
-  const auth = btoa(`${TWILIO_SID}:${TWILIO_TOKEN}`);
-  const form = new URLSearchParams();
-  form.set("From", TWILIO_NUMBER.startsWith("whatsapp:") ? TWILIO_NUMBER : `whatsapp:${TWILIO_NUMBER}`);
-  form.set("To", to.startsWith("whatsapp:") ? to : `whatsapp:${to.replace(/\s/g, "")}`);
-  form.set("ContentSid", contentSid);
-  form.set("ContentVariables", JSON.stringify(variables));
-  const resp = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`,
-    {
-      method: "POST",
-      headers: {
-        "Authorization": `Basic ${auth}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: form.toString(),
-    },
-  );
-  const json = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error((json as any)?.message || `Twilio HTTP ${resp.status}`);
-  return (json as any).sid as string;
-}
 
 // ── JOB 1: Follow-up diário (08:00 Europe/Lisbon) ──────────
+// Actualiza apenas a data de próximo follow-up por classe; o envio
+// automático de mensagens (agente WhatsApp) foi removido.
 async function runFollowUp() {
   console.log("[cron] Follow-up diário — a correr");
   try {
     const { rows: consultores } = await pool.query(
-      "SELECT * FROM consultores WHERE estado_avaliacao != 'Inativo' AND controlo_manual = false",
+      "SELECT * FROM consultores WHERE estado_avaliacao != 'Inativo'",
     );
     const { rows: interacoes } = await pool.query(
       "SELECT consultor_id, MAX(data_hora) as ultima FROM consultor_interacoes GROUP BY consultor_id",
@@ -100,7 +35,6 @@ async function runFollowUp() {
     for (const i of interacoes) ultimaInteracao[i.consultor_id] = new Date(i.ultima);
 
     const now = new Date();
-    let enviadosAuto = 0, tarefasCriadas = 0;
 
     for (const c of consultores) {
       const classe = c.classificacao || "D";
@@ -122,68 +56,6 @@ async function runFollowUp() {
       );
       if (recentFU) continue;
 
-      const canal = c.canal_followup || rules.canal;
-
-      if (canal === "whatsapp_auto" && c.contacto && whatsappConfigured()) {
-        // Gerar mensagem via Claude API
-        const { rows: hist } = await pool.query(
-          "SELECT direcao, notas, data_hora FROM consultor_interacoes WHERE consultor_id = $1 ORDER BY data_hora DESC LIMIT 5",
-          [c.id],
-        );
-        const histText = hist.reverse().map((h: any) => `${h.direcao}: ${h.notas}`).join("\n");
-
-        let msg: string | undefined;
-        try {
-          const client = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") });
-          const resp = await client.messages.create({
-            model: "claude-sonnet-4-6",
-            max_tokens: 300,
-            system:
-              `És o Alexandre da Somnium Properties. Escreve uma mensagem curta (max 3 linhas) de follow-up para um consultor imobiliário. Tom: profissional mas acessível. Objectivo: perguntar se tem imóveis novos para partilhar. Nunca "conforme" ou "relativamente". Sê directo.`,
-            messages: [{
-              role: "user",
-              content:
-                `Consultor: ${c.nome}\nÚltimo contacto: há ${diasSem} dias\nHistórico:\n${histText || "(sem histórico)"}\n\nEscreve APENAS a mensagem (sem JSON, sem explicação).`,
-            }],
-          });
-          msg = (resp.content[0] as any)?.text?.trim();
-        } catch {
-          {
-            const regiaoConsultor = c.regiao === "AMP" ? "no Porto, Gaia e arredores" : "em Coimbra e arredores";
-            msg =
-              `Olá ${c.nome}, tudo bem? Alguma novidade de imóveis que possam encaixar no nosso perfil? Estamos à procura de oportunidades com margem negocial ${regiaoConsultor}.`;
-          }
-        }
-
-        // Enviar via template aprovado (necessario para primeira mensagem)
-        const templateSids = {
-          geral: "HXa7c0a58c493495883965a44988542916",
-          reminder: "HXacd7d45a76226a7f10619a3878669c13",
-          inativo: "HXac84ceb95bbd70a8d2c492c3a7f08c53",
-        };
-        const templateSid = diasSem > 30
-          ? templateSids.inativo
-          : diasSem > 15
-          ? templateSids.reminder
-          : templateSids.geral;
-        const firstName = (c.nome || "").split(" ")[0];
-        try {
-          const to = c.contacto.startsWith("whatsapp:") ? c.contacto : `whatsapp:${c.contacto.replace(/\s/g, "")}`;
-          await sendWhatsAppTemplate(to, templateSid, { "1": firstName });
-        } catch (templateErr) {
-          console.warn("[cron] Template falhou, tentando texto livre:", (templateErr as Error).message);
-          await sendWhatsApp(c.contacto, msg || "");
-        }
-        await pool.query(
-          "INSERT INTO consultor_interacoes (id, consultor_id, data_hora, canal, direcao, notas) VALUES ($1, $2, $3, $4, $5, $6)",
-          [crypto.randomUUID(), c.id, now.toISOString(), "whatsapp", "Enviado", `[FOLLOW-UP AUTO] ${msg}`],
-        );
-        enviadosAuto++;
-      } else {
-        // Criação de tarefa manual desactivada (gerava ruído no CRM com classe D
-        // quando whatsappConfigured() era false). Reactivar apenas para A/B.
-      }
-
       // Actualizar próximo follow-up
       const proximoDias = rules.dias[0];
       const proximo = new Date(now.getTime() + proximoDias * 86400000);
@@ -193,7 +65,7 @@ async function runFollowUp() {
       );
     }
 
-    console.log(`[cron] Follow-up: ${enviadosAuto} auto WhatsApp, ${tarefasCriadas} tarefas manuais`);
+    console.log("[cron] Follow-up diário concluído");
   } catch (e) {
     console.error("[cron] Erro follow-up:", (e as Error).message);
   }
@@ -618,7 +490,6 @@ async function runProcuraImoveis() {
 
 // Exports para execução manual via API / cron functions
 export {
-  REACTIVATION_TEMPLATE,
   runArquivoRelatoriosObra,
   runGerarAgendaSemanal,
   runAutoInactivoInvestidores,

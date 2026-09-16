@@ -23,12 +23,10 @@ function formatHoras(h) {
   return `${Math.round(h / 24)}d ${Math.round(h % 24)}h`
 }
 
-export function InteracoesTab({ consultorId, onUpdate, controloManual, autoOpenForm = false, onAutoOpenConsumed }) {
+export function InteracoesTab({ consultorId, onUpdate, autoOpenForm = false, onAutoOpenConsumed }) {
   const [interacoes, setInteracoes] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [handoff, setHandoff] = useState(!!controloManual)
-  const [togglingAgent, setTogglingAgent] = useState(false)
   const [form, setForm] = useState({ canal: 'Chamada', direcao: 'Enviado', notas: '', data_hora: '' })
   const [saving, setSaving] = useState(false)
   const [filtroImovel, setFiltroImovel] = useState('todas')
@@ -58,30 +56,18 @@ export function InteracoesTab({ consultorId, onUpdate, controloManual, autoOpenF
     if (!form.notas?.trim()) return
     setSaving(true)
     try {
-      // Se WhatsApp + Enviado → enviar mensagem real pelo Twilio
-      if (form.canal === 'WhatsApp' && form.direcao === 'Enviado') {
-        const r = await apiFetch(`/api/consultores/${consultorId}/enviar-whatsapp`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mensagem: form.notas.trim() }),
-        })
-        const data = await r.json()
-        if (!r.ok) throw new Error(data.error || 'Erro ao enviar')
-      } else {
-        // Registo manual (chamada ou resposta recebida)
-        await apiFetch('/api/crm/consultor-interacoes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            consultor_id: consultorId,
-            canal: form.canal,
-            direcao: form.direcao,
-            notas: form.notas || null,
-            data_hora: form.data_hora || new Date().toISOString(),
-          }),
-        })
-      }
-      setForm({ canal: 'WhatsApp', direcao: 'Enviado', notas: '', data_hora: '' })
+      await apiFetch('/api/crm/consultor-interacoes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          consultor_id: consultorId,
+          canal: form.canal,
+          direcao: form.direcao,
+          notas: form.notas || null,
+          data_hora: form.data_hora || new Date().toISOString(),
+        }),
+      })
+      setForm({ canal: 'Chamada', direcao: 'Enviado', notas: '', data_hora: '' })
       setShowForm(false)
       await load()
       if (onUpdate) onUpdate()
@@ -112,45 +98,8 @@ export function InteracoesTab({ consultorId, onUpdate, controloManual, autoOpenF
 
   const inputClass = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300'
 
-  async function toggleAgent() {
-    setTogglingAgent(true)
-    try {
-      const endpoint = handoff ? 'retomar-agente' : 'handoff'
-      await apiFetch(`/api/consultores/${consultorId}/${endpoint}`, { method: 'POST' })
-      setHandoff(!handoff)
-      if (onUpdate) onUpdate()
-    } catch {}
-    setTogglingAgent(false)
-  }
-
   return (
     <div className="space-y-4">
-      {/* Banner handoff */}
-      {handoff && (
-        <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-xl">
-          <div>
-            <p className="text-sm font-medium text-amber-800">Agente pausado — controlo manual activo</p>
-            <p className="text-xs text-amber-600">O agente não responde automaticamente enquanto estiveres em controlo manual.</p>
-          </div>
-          <button onClick={toggleAgent} disabled={togglingAgent}
-            className="px-4 py-2 text-xs font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors shrink-0">
-            {togglingAgent ? '...' : 'Retomar Agente'}
-          </button>
-        </div>
-      )}
-      {!handoff && (
-        <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-xl">
-          <div>
-            <p className="text-sm font-medium text-green-800">Agente activo — respostas automáticas ligadas</p>
-            <p className="text-xs text-green-600">O agente responde automaticamente às mensagens do consultor.</p>
-          </div>
-          <button onClick={toggleAgent} disabled={togglingAgent}
-            className="px-4 py-2 text-xs font-medium rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors shrink-0">
-            {togglingAgent ? '...' : 'Pausar Agente'}
-          </button>
-        </div>
-      )}
-
       {/* Header + stats */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -225,9 +174,7 @@ export function InteracoesTab({ consultorId, onUpdate, controloManual, autoOpenF
             </div>
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">
-              {form.canal === 'WhatsApp' && form.direcao === 'Enviado' ? 'Mensagem (será enviada pelo WhatsApp)' : 'Notas'}
-            </label>
+            <label className="block text-xs text-gray-500 mb-1">Notas</label>
             <textarea
               value={form.notas}
               onChange={e => setForm(p => ({ ...p, notas: e.target.value }))}
@@ -238,12 +185,8 @@ export function InteracoesTab({ consultorId, onUpdate, controloManual, autoOpenF
           </div>
           <div className="flex gap-2">
             <button type="submit" disabled={saving || !form.notas?.trim()}
-              className={`px-4 py-2 text-white text-xs font-medium rounded-lg transition-colors ${
-                form.canal === 'WhatsApp' && form.direcao === 'Enviado'
-                  ? 'bg-green-600 hover:bg-green-700'
-                  : 'bg-indigo-600 hover:bg-indigo-700'
-              }`}>
-              {saving ? 'A enviar...' : form.canal === 'WhatsApp' && form.direcao === 'Enviado' ? 'Enviar WhatsApp' : 'Registar'}
+              className="px-4 py-2 text-white text-xs font-medium rounded-lg transition-colors bg-indigo-600 hover:bg-indigo-700">
+              {saving ? 'A guardar...' : 'Registar'}
             </button>
             <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-100 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-200">
               Cancelar

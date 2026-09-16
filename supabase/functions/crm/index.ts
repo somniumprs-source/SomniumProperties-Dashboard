@@ -71,7 +71,6 @@ import { exportProjetoExcel } from "../_shared/projetoExcelExport.ts";
 import { audit } from "../_shared/projetoAuditLog.ts";
 import { gerarResumoProjeto, isConfigured as aiConfigured } from "../_shared/projetoAiAssistant.ts";
 import { sendEmail, isConfigured as emailConfigured } from "../_shared/emailService.ts";
-import { sendWhatsApp } from "../_shared/whatsappAgent.ts";
 // ── Subsistema RELATORIOS / EXPORTS / AUTOMATION (ultimo lote de stubs) ──
 import {
   autoGerarRelatoriosSemanaisPendentes, gerarRelatorioSemanal,
@@ -433,7 +432,6 @@ async function notificarInvestidoresMudancaFase(negocioId: string, novaFaseKey: 
           </p>
         </div>
       </div>`;
-    const textoWhatsApp = `🏗️ *Somnium Properties*\n\n${negocio.movimento}: nova fase iniciada\n\n${faseIcon} *${faseNome}*\n\nConsulta o cronograma e fotos no portal: ${link}`;
 
     const { rows: invsComUser } = await pool.query(
       `SELECT id, user_id FROM investidores WHERE id = ANY($1) AND user_id IS NOT NULL`, [invIds],
@@ -442,11 +440,8 @@ async function notificarInvestidoresMudancaFase(negocioId: string, novaFaseKey: 
 
     for (const inv of invsFiltered) {
       const canal = inv.canal_notificacao || "email";
-      if ((canal === "email" || canal === "ambos") && inv.email) {
+      if ((canal === "email" || canal === "ambos" || canal === "whatsapp") && inv.email) {
         sendEmail(subject, html, { to: inv.email }).catch((e) => console.error(`[notif-fase] email ${inv.email}:`, e.message));
-      }
-      if ((canal === "whatsapp" || canal === "ambos") && inv.telemovel) {
-        try { await sendWhatsApp(inv.telemovel, textoWhatsApp); } catch (e) { console.error(`[notif-fase] whatsapp ${inv.telemovel}:`, (e as Error).message); }
       }
       const userId = userIdsPorInv[inv.id];
       if (userId) {
@@ -4740,37 +4735,6 @@ app.get("/backup/:id/download", async (c: any) => {
     c.header("Content-Type", "application/json");
     c.header("Content-Disposition", `attachment; filename=somnium-backup-${rows[0].created_at.slice(0, 10)}.json`);
     return c.json(data);
-  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
-});
-
-// ── WhatsApp unread counts + mark-seen — port de routes.js 3246-3274 ──
-app.get("/whatsapp/unread-counts", async (c: any) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT ci.consultor_id, COUNT(*)::int as unread
-      FROM consultor_interacoes ci
-      LEFT JOIN whatsapp_last_seen ls ON ls.consultor_id = ci.consultor_id
-      WHERE ci.canal = 'whatsapp'
-        AND ci.direcao = 'Recebido'
-        AND ci.data_hora > COALESCE(ls.last_seen_at, '1970-01-01')
-      GROUP BY ci.consultor_id
-      HAVING COUNT(*) > 0
-    `);
-    const result: Record<string, number> = {};
-    for (const r of rows) result[r.consultor_id] = r.unread;
-    return c.json(result);
-  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
-});
-
-app.post("/whatsapp/mark-seen/:id", async (c: any) => {
-  try {
-    await pool.query(
-      `INSERT INTO whatsapp_last_seen (consultor_id, last_seen_at)
-       VALUES ($1, $2)
-       ON CONFLICT (consultor_id) DO UPDATE SET last_seen_at = $2`,
-      [c.req.param("id"), new Date().toISOString()],
-    );
-    return c.json({ ok: true });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 

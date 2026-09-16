@@ -17,7 +17,6 @@ import { MultiSelect } from '../components/ui/MultiSelect.jsx'
 import { Combobox } from '../components/ui/Combobox.jsx'
 import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
 import { apiFetch, openDocument } from '../lib/api.js'
-import { useUnreadCounts } from '../hooks/useUnreadCounts.js'
 import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
 import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 import { RegiaoToggle } from '../components/RegiaoBadge.jsx'
@@ -685,7 +684,6 @@ export function CRM() {
   const [invSubTab, setInvSubTab] = useUrlState('invSubTab', 'Passivo') // sub-tab investidores
   const [detailName, setDetailName] = useState(null) // nome para breadcrumb
   const [moveModal, setMoveModal] = useState(null) // { id, newColumn, type } | null
-  const { counts: unreadCounts } = useUnreadCounts(tab === 'Consultores')
 
   const toast = useToast()
   const searchTimer = useRef(null)
@@ -926,12 +924,6 @@ export function CRM() {
               {alertDot && <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${alertDot}`} />}
               <ClassBadge cls={item.classificacao} />
               <p className="text-[13px] font-semibold text-gray-800 truncate flex-1">{item.nome}</p>
-              {unreadCounts[item.id] > 0 && (
-                <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-                  style={{ backgroundColor: '#25D366' }}>
-                  {unreadCounts[item.id] > 99 ? '99+' : unreadCounts[item.id]}
-                </span>
-              )}
             </div>
             {imobs && <p className="text-[11px] text-gray-500 mt-0.5">{imobs}</p>}
             {item.contacto && <p className="text-[11px] text-gray-400 mt-0.5">{item.contacto}</p>}

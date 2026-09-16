@@ -22,9 +22,6 @@ export function resolveApiUrl(url) {
   if (!API_BASE || typeof url !== "string" || !url.startsWith("/api/")) return url;
   const rest = url.slice(5); // depois de "/api/"
   // Webhooks (segmento composto com hifen na funcao).
-  if (rest.startsWith("webhook/whatsapp")) {
-    return API_BASE + "/webhook-whatsapp" + rest.slice("webhook/whatsapp".length);
-  }
   if (rest.startsWith("webhook/landing-lead")) {
     return API_BASE + "/webhook-landing-lead" + rest.slice("webhook/landing-lead".length);
   }

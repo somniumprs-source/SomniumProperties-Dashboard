@@ -27,7 +27,6 @@
 ## Integracoes
 
 - **Google Drive**: pasta automatica por imovel (subpastas Documentos/Fotos/Estudo de Mercado). Ficheiro: src/db/driveSync.js
-- **WhatsApp (Twilio)**: agente de follow-up para consultores. Webhook em server.js
 - **Fireflies.ai**: transcricoes de reunioes + auto-fill investidores. Ficheiro: src/db/firefliesSync.js
 
 ## Endpoints API

@@ -355,99 +355,9 @@ try {
     console.log('[crm] Webhook landing-lead montado em POST /api/webhook/landing-lead')
   }
 
-  // ── WhatsApp Webhook (Twilio) ───────────────────────────────
   try {
-    const { receiveWhatsAppMessage, isConfigured: waConfigured } = await import('./src/db/whatsappAgent.js')
-    const { runFollowUp, runRelatorioDiario, runRelatorioSemanal, runProcuraImoveis, REACTIVATION_TEMPLATE } = await import('./src/db/cronJobs.js')
+    const { runFollowUp, runRelatorioDiario, runRelatorioSemanal, runProcuraImoveis } = await import('./src/db/cronJobs.js')
     const { startCronJobs } = await import('./src/db/cronJobs.js')
-
-    // Tracking do ultimo pedido recebido no webhook
-    let lastWebhookReceived = null
-
-    // Webhook POST /api/webhook/whatsapp (recepção Twilio — com validacao de assinatura)
-    const { validateTwilioSignature } = await import('./src/db/whatsappAgent.js')
-    app.post('/api/webhook/whatsapp', express.urlencoded({ extended: false }), (req, res) => {
-      lastWebhookReceived = { timestamp: new Date().toISOString(), from: req.body?.From || '?' }
-      // Validar assinatura Twilio (se configurada). Um pedido SEM o header
-      // x-twilio-signature saltava esta verificação por completo (bastava não
-      // enviar a assinatura para forjar mensagens com "From" arbitrário).
-      const twilioSig = req.headers['x-twilio-signature']
-      const webhookUrl = process.env.TWILIO_WEBHOOK_URL
-      if (webhookUrl) {
-        if (!twilioSig || !validateTwilioSignature(webhookUrl, req.body || {}, twilioSig)) {
-          console.warn('[whatsapp] Assinatura Twilio invalida ou ausente — pedido rejeitado')
-          return res.status(403).send('<Response></Response>')
-        }
-      }
-
-      // Responder 200 ao Twilio sem mensagem automatica (o agente responde via API)
-      res.set('Content-Type', 'text/xml')
-      res.status(200).send('<Response></Response>')
-
-      const from = req.body.From || ''
-      let body = req.body.Body || ''
-      const numMedia = parseInt(req.body.NumMedia || '0')
-
-      // Detectar media (áudios, fotos, ficheiros) e pedir texto ao consultor
-      if (numMedia > 0) {
-        const mediaType = req.body.MediaContentType0 || ''
-        if (mediaType.startsWith('audio/')) {
-          body = body
-            ? `${body}\n[ÁUDIO RECEBIDO — pedir ao consultor para enviar por escrito]`
-            : '[ÁUDIO RECEBIDO — pedir ao consultor para enviar por escrito]'
-        } else if (mediaType.startsWith('image/')) {
-          body = body
-            ? `${body}\n[IMAGEM RECEBIDA — pedir dados por escrito ao consultor]`
-            : '[IMAGEM RECEBIDA — pedir dados por escrito ao consultor]'
-        } else if (!body) {
-          body = '[FICHEIRO RECEBIDO — pedir dados por escrito ao consultor]'
-        }
-      }
-
-      if (from && body) {
-        receiveWhatsAppMessage(from, body, true)
-      }
-    })
-
-    // Endpoint de status do agente WhatsApp
-    const { isGoogleConfigured } = await import('./src/db/googleAuth.js')
-    app.get('/api/webhook/whatsapp/status', (_req, res) => {
-      res.json({
-        agente_activo: waConfigured(),
-        twilio: {
-          sid: !!process.env.TWILIO_ACCOUNT_SID,
-          token: !!process.env.TWILIO_AUTH_TOKEN,
-          number: process.env.TWILIO_WHATSAPP_NUMBER || null,
-          webhook_url: process.env.TWILIO_WEBHOOK_URL || 'NAO CONFIGURADO — definir TWILIO_WEBHOOK_URL',
-        },
-        anthropic: !!process.env.ANTHROPIC_API_KEY,
-        google_oauth: isGoogleConfigured(),
-        ultimo_webhook: lastWebhookReceived || 'Nenhum pedido recebido desde o ultimo restart',
-        instrucoes: !process.env.TWILIO_WEBHOOK_URL
-          ? 'Configurar no Twilio Console: Sandbox Settings → When a message comes in → https://mjgusjuougzoeiyavsor.functions.supabase.co/webhook-whatsapp (HTTP POST) — em produção o webhook corre na Edge Function, não neste servidor Express (dev-only)'
-          : null,
-      })
-    })
-
-    // Endpoint para retomar controlo do agente
-    app.post('/api/consultores/:id/retomar-agente', async (req, res) => {
-      try {
-        const { query: pgQuery } = await import('./src/db/pg.js')
-        await pgQuery('UPDATE consultores SET controlo_manual = false, updated_at = $1 WHERE id = $2',
-          [new Date().toISOString(), req.params.id])
-        res.json({ ok: true })
-      } catch (e) { res.status(500).json({ error: e.message }) }
-    })
-
-    // Endpoint para marcar handoff manual
-    app.post('/api/consultores/:id/handoff', async (req, res) => {
-      try {
-        const { query: pgQuery } = await import('./src/db/pg.js')
-        await pgQuery('UPDATE consultores SET controlo_manual = true, updated_at = $1 WHERE id = $2',
-          [new Date().toISOString(), req.params.id])
-        res.json({ ok: true })
-      } catch (e) { res.status(500).json({ error: e.message }) }
-    })
 
     // Endpoint para processar comando de voz (Speech → Claude API → Accao no CRM)
     app.post('/api/voice/process', async (req, res) => {
@@ -702,39 +612,6 @@ TODAS as tarefas devem ser sincronizadas com Google Calendar.`,
       } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
     })
 
-    // Endpoint para enviar WhatsApp manualmente (handoff — tu a falar directamente)
-    app.post('/api/consultores/:id/enviar-whatsapp', async (req, res) => {
-      try {
-        const { query: pgQuery } = await import('./src/db/pg.js')
-        const { sendWhatsApp } = await import('./src/db/whatsappAgent.js')
-        const { randomUUID } = await import('crypto')
-        const { mensagem } = req.body
-        if (!mensagem?.trim()) return res.status(400).json({ error: 'Mensagem vazia' })
-
-        // Buscar consultor
-        const { rows: [consultor] } = await pgQuery('SELECT id, nome, contacto, controlo_manual FROM consultores WHERE id = $1', [req.params.id])
-        if (!consultor) return res.status(404).json({ error: 'Consultor não encontrado' })
-        if (!consultor.contacto) return res.status(400).json({ error: 'Consultor sem contacto' })
-
-        // Marcar handoff (agente para de responder)
-        await pgQuery('UPDATE consultores SET controlo_manual = true, updated_at = $1 WHERE id = $2',
-          [new Date().toISOString(), consultor.id])
-
-        // Enviar pelo Twilio
-        const result = await sendWhatsApp(consultor.contacto, mensagem.trim())
-        if (!result) return res.status(500).json({ error: 'Falha no envio' })
-
-        // Registar no log
-        const now = new Date().toISOString()
-        await pgQuery(
-          'INSERT INTO consultor_interacoes (id, consultor_id, data_hora, canal, direcao, notas) VALUES ($1, $2, $3, $4, $5, $6)',
-          [randomUUID(), consultor.id, now, 'whatsapp', 'Enviado', mensagem.trim()]
-        )
-
-        res.json({ ok: true, sid: result.sid })
-      } catch (e) { res.status(500).json({ error: e.message }) }
-    })
-
     // Endpoints para execução manual de cron jobs
     app.post('/api/cron/followup', async (_req, res) => {
       try { await runFollowUp(); res.json({ ok: true }) } catch (e) { res.status(500).json({ error: e.message }) }
@@ -751,98 +628,6 @@ TODAS as tarefas devem ser sincronizadas com Google Calendar.`,
       try { res.json({ ok: true, ...(await runProcuraImoveis()) }) } catch (e) { res.status(500).json({ error: e.message }) }
     })
 
-    // Endpoint para obter template de reactivação — regional (?regiao=AMP|Coimbra)
-    app.get('/api/template/reactivacao/:nome', (req, res) => {
-      const regiao = req.query.regiao === 'AMP' ? 'AMP' : 'Coimbra'
-      res.json({ template: REACTIVATION_TEMPLATE(req.params.nome, regiao) })
-    })
-
-    // ── Reactivação em massa (20/dia) ─────────────────────────
-    app.post('/api/reactivacao/enviar', async (req, res) => {
-      try {
-        const { query: pgQuery } = await import('./src/db/pg.js')
-        const limite = req.body?.limite || 20
-        const { sendWhatsApp } = await import('./src/db/whatsappAgent.js')
-
-        // Buscar consultores com contacto que ainda nao foram reactivados.
-        // Incluir `regiao` para que REACTIVATION_TEMPLATE seja regional.
-        const { rows: consultores } = await pgQuery(
-          "SELECT id, nome, contacto, regiao FROM consultores WHERE reactivado = false AND contacto IS NOT NULL AND contacto != '' ORDER BY classificacao ASC, score_prioridade DESC LIMIT $1",
-          [limite]
-        )
-
-        if (consultores.length === 0) {
-          return res.json({ ok: true, enviados: 0, faltam: 0, mensagem: 'Todos os consultores já foram reactivados' })
-        }
-
-        const { randomUUID } = await import('crypto')
-        const enviados = []
-        const erros = []
-        const now = new Date().toISOString()
-
-        for (const c of consultores) {
-          try {
-            const firstName = (c.nome || '').split(' ')[0]
-            const msg = REACTIVATION_TEMPLATE(firstName, c.regiao || 'Coimbra')
-            // Usar template aprovado pela Meta (necessario para primeira mensagem)
-            const twilio = (await import('twilio')).default
-            const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
-            const to = c.contacto.startsWith('whatsapp:') ? c.contacto : `whatsapp:${c.contacto.replace(/\s/g, '')}`
-            let result
-            try {
-              // Tentar com template content SID
-              result = await twilioClient.messages.create({
-                from: process.env.TWILIO_WHATSAPP_NUMBER,
-                to,
-                contentSid: 'HXa6f25c714d7850e23796ea471a3c4fa9',
-                contentVariables: JSON.stringify({ '1': firstName }),
-              })
-            } catch (templateErr) {
-              // Se template nao aprovado, tentar texto livre (funciona se ja houve conversa)
-              console.warn('[reactivacao] Template falhou, tentando texto livre:', templateErr.message)
-              const { sendWhatsApp: sendWA } = await import('./src/db/whatsappAgent.js')
-              result = await sendWA(c.contacto, msg)
-            }
-            if (result) {
-              // Marcar como reactivado
-              await pgQuery('UPDATE consultores SET reactivado = true, updated_at = $1 WHERE id = $2', [now, c.id])
-              // Registar no log de interacoes
-              await pgQuery(
-                'INSERT INTO consultor_interacoes (id, consultor_id, data_hora, canal, direcao, notas) VALUES ($1, $2, $3, $4, $5, $6)',
-                [randomUUID(), c.id, now, 'whatsapp', 'Enviado', `[REACTIVAÇÃO] ${msg}`]
-              )
-              enviados.push({ nome: c.nome, contacto: c.contacto })
-            } else {
-              erros.push({ nome: c.nome, contacto: c.contacto, erro: 'Envio falhou' })
-            }
-          } catch (e) {
-            erros.push({ nome: c.nome, contacto: c.contacto, erro: e.message })
-          }
-        }
-
-        // Contar quantos faltam
-        const { rows: [{ c: faltam }] } = await pgQuery("SELECT COUNT(*) as c FROM consultores WHERE reactivado = false AND contacto IS NOT NULL AND contacto != ''")
-
-        res.json({ ok: true, enviados: enviados.length, erros: erros.length, faltam: parseInt(faltam), detalhes: { enviados, erros } })
-      } catch (e) { res.status(500).json({ error: e.message }) }
-    })
-
-    app.get('/api/reactivacao/estado', async (req, res) => {
-      try {
-        const { query: pgQuery } = await import('./src/db/pg.js')
-        const { rows: [total] } = await pgQuery("SELECT COUNT(*) as c FROM consultores WHERE contacto IS NOT NULL AND contacto != ''")
-        const { rows: [reactivados] } = await pgQuery("SELECT COUNT(*) as c FROM consultores WHERE reactivado = true")
-        const { rows: [faltam] } = await pgQuery("SELECT COUNT(*) as c FROM consultores WHERE reactivado = false AND contacto IS NOT NULL AND contacto != ''")
-        const { rows: [ultimo] } = await pgQuery("SELECT data_hora FROM consultor_interacoes WHERE notas LIKE '%REACTIVAÇÃO%' ORDER BY data_hora DESC LIMIT 1")
-        res.json({
-          total: parseInt(total.c),
-          reactivados: parseInt(reactivados.c),
-          faltam: parseInt(faltam.c),
-          ultimo_envio: ultimo?.data_hora || null,
-        })
-      } catch (e) { res.status(500).json({ error: e.message }) }
-    })
-
     // /api/relatorios e /api/relatorios/:id removidos — consultavam uma
     // tabela `relatorios` que nunca existiu no schema; ninguém no frontend os
     // chamava (RelatoriosAdmin.jsx usa /api/crm/relatorios-semanais e
@@ -850,14 +635,8 @@ TODAS as tarefas devem ser sincronizadas com Google Calendar.`,
 
     // Iniciar cron jobs
     startCronJobs()
-
-    if (waConfigured()) {
-      console.log('[whatsapp] Agente WhatsApp activo — webhook em /api/webhook/whatsapp')
-    } else {
-      console.log('[whatsapp] Twilio/Anthropic não configurado — webhook registado mas agente inactivo')
-    }
   } catch (e) {
-    console.warn('[whatsapp] Módulo WhatsApp não disponível:', e.message)
+    console.warn('[crm] Módulo de cron jobs não disponível:', e.message)
   }
 } catch (e) {
   console.warn('[crm] PostgreSQL não disponível — CRM API desativada:', e.message)

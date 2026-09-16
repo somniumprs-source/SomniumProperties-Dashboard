@@ -29,9 +29,6 @@ verify_jwt = true
 [functions.scrape-portal]
 verify_jwt = true
 
-[functions.webhook-whatsapp]
-verify_jwt = false
-
 [functions.webhook-landing-lead]
 verify_jwt = false
 

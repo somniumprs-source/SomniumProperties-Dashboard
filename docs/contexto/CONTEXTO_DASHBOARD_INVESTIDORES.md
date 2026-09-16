@@ -30,9 +30,8 @@ A dashboard suporta o ciclo completo: identificação de imóvel → análise de
 - **Cálculo automático** de ROI, TIR, cash-on-cash, impostos (IMT, IS, IRC, IRS, IVA, Derrama) com base nas tabelas fiscais OE 2026.
 - **Stress tests** automáticos a cada análise (variações de VVR, custo de obra e prazos).
 - **Portal público para investidores** com acesso via token, sem necessidade de login.
-- **Automação de follow-up** com consultores via WhatsApp e email.
 - **Geração automática de PDFs** com análises, fotos e fichas de projecto.
-- **Integrações** com Notion, Google Drive, Gmail, Supabase, Fireflies, Twilio.
+- **Integrações** com Notion, Google Drive, Gmail, Supabase, Fireflies.
 
 ---
 
@@ -182,7 +181,6 @@ Devolve um **veredicto** (resiliente, neutro, em risco) e identifica quais vari�
 | **Gmail** | Organização e labeling automático de emails relacionados com cada deal. |
 | **Google Calendar** | Sincronização de reuniões, visitas e follow-ups. |
 | **Supabase Storage** | Armazenamento de PDFs gerados e ficheiros do utilizador. |
-| **Twilio / WhatsApp** | Envio de mensagens automáticas de follow-up a consultores. |
 | **Fireflies** | Transcrição automática de reuniões. |
 | **Anthropic Claude API** | Análise assistida de imóveis e geração de conteúdo. |
 

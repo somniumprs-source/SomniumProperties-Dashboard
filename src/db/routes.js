@@ -4389,37 +4389,6 @@ router.get('/backup/:id/download', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// ── WhatsApp unread counts + mark-seen ────────────────────
-router.get('/whatsapp/unread-counts', async (_req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT ci.consultor_id, COUNT(*)::int as unread
-      FROM consultor_interacoes ci
-      LEFT JOIN whatsapp_last_seen ls ON ls.consultor_id = ci.consultor_id
-      WHERE ci.canal = 'whatsapp'
-        AND ci.direcao = 'Recebido'
-        AND ci.data_hora > COALESCE(ls.last_seen_at, '1970-01-01')
-      GROUP BY ci.consultor_id
-      HAVING COUNT(*) > 0
-    `)
-    const result = {}
-    for (const r of rows) result[r.consultor_id] = r.unread
-    res.json(result)
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
-
-router.post('/whatsapp/mark-seen/:id', async (req, res) => {
-  try {
-    await pool.query(
-      `INSERT INTO whatsapp_last_seen (consultor_id, last_seen_at)
-       VALUES ($1, $2)
-       ON CONFLICT (consultor_id) DO UPDATE SET last_seen_at = $2`,
-      [req.params.id, new Date().toISOString()]
-    )
-    res.json({ ok: true })
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
-
 // ── Estudo de localização: Distance Matrix API ────────────────
 // POIs sugeridos por defeito (categoria + label visível). O frontend pode
 // adicionar/remover livremente — esta lista é só o ponto de partida.
@@ -5411,8 +5380,6 @@ async function notificarInvestidoresMudancaFase(negocioId, novaFaseKey) {
       </div>
     `
 
-    const textoWhatsApp = `🏗️ *Somnium Properties*\n\n${negocio.movimento}: nova fase iniciada\n\n${faseIcon} *${faseNome}*\n\nConsulta o cronograma e fotos no portal: ${link}`
-
     // Procurar user_id ligado a cada investidor (F19: notificação in-app)
     const { rows: invsComUser } = await pool.query(
       `SELECT id, user_id FROM investidores WHERE id = ANY($1) AND user_id IS NOT NULL`,
@@ -5420,20 +5387,13 @@ async function notificarInvestidoresMudancaFase(negocioId, novaFaseKey) {
     )
     const userIdsPorInv = Object.fromEntries(invsComUser.map(i => [i.id, i.user_id]))
 
-    let envios = { email: 0, whatsapp: 0, in_app: 0 }
+    let envios = { email: 0, in_app: 0 }
     for (const inv of invs) {
       const canal = inv.canal_notificacao || 'email'
-      if ((canal === 'email' || canal === 'ambos') && inv.email) {
+      if ((canal === 'email' || canal === 'ambos' || canal === 'whatsapp') && inv.email) {
         sendEmail(subject, html, { to: inv.email })
           .then(() => envios.email++)
           .catch(e => console.error(`[notif-fase] email ${inv.email}:`, e.message))
-      }
-      if ((canal === 'whatsapp' || canal === 'ambos') && inv.telemovel) {
-        try {
-          const { sendWhatsApp } = await import('./whatsappAgent.js')
-          await sendWhatsApp(inv.telemovel, textoWhatsApp)
-          envios.whatsapp++
-        } catch (e) { console.error(`[notif-fase] whatsapp ${inv.telemovel}:`, e.message) }
       }
       // F19: notificação in-app
       const userId = userIdsPorInv[inv.id]
@@ -5447,7 +5407,7 @@ async function notificarInvestidoresMudancaFase(negocioId, novaFaseKey) {
         envios.in_app++
       }
     }
-    console.log(`[notif-fase] ${negocio.movimento} → ${faseNome}: email=${envios.email}, whatsapp=${envios.whatsapp}, in-app=${envios.in_app}`)
+    console.log(`[notif-fase] ${negocio.movimento} → ${faseNome}: email=${envios.email}, in-app=${envios.in_app}`)
   } catch (e) { console.error('[notif-fase]', e.message) }
 }
 

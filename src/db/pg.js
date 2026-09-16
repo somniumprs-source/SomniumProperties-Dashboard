@@ -437,10 +437,10 @@ export async function initSchema() {
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 
-      -- Migration: campos para agente WhatsApp + follow-up automático
+      -- Migration: módulo gestão de consultores — campo de reactivação
+      -- (canal_followup e controlo_manual removidos — migração
+      -- 0054_remove_whatsapp_agent.sql — eram do agente WhatsApp descontinuado)
       DO $$ BEGIN
-        ALTER TABLE consultores ADD COLUMN IF NOT EXISTS canal_followup TEXT DEFAULT 'whatsapp_auto';
-        ALTER TABLE consultores ADD COLUMN IF NOT EXISTS controlo_manual BOOLEAN DEFAULT false;
         ALTER TABLE consultores ADD COLUMN IF NOT EXISTS reactivado BOOLEAN DEFAULT false;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
@@ -624,12 +624,6 @@ export async function initSchema() {
       -- Migrar direcao 'Resposta' para 'Recebido' (correcao semantica)
       UPDATE consultor_interacoes SET direcao = 'Recebido'
         WHERE direcao = 'Resposta' AND notas NOT LIKE '[AGENTE]%' AND notas NOT LIKE '[FOLLOW-UP%' AND notas NOT LIKE '[REACTIVAÇÃO%';
-
-      -- Tracking de "ultima vez que o utilizador viu" as mensagens WhatsApp de cada consultor
-      CREATE TABLE IF NOT EXISTS whatsapp_last_seen (
-        consultor_id TEXT PRIMARY KEY,
-        last_seen_at TEXT NOT NULL DEFAULT (NOW()::TEXT)
-      );
 
       -- Checklist obrigatória por estado do imóvel
       CREATE TABLE IF NOT EXISTS checklist_imovel (
@@ -1563,9 +1557,6 @@ export async function initSchema() {
         END IF;
         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'consultor_followups'::regclass AND conname = 'consultor_followups_consultor_id_fkey') THEN
           ALTER TABLE consultor_followups ADD CONSTRAINT consultor_followups_consultor_id_fkey FOREIGN KEY (consultor_id) REFERENCES consultores(id) ON DELETE NO ACTION NOT VALID;
-        END IF;
-        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'whatsapp_last_seen'::regclass AND conname = 'whatsapp_last_seen_consultor_id_fkey') THEN
-          ALTER TABLE whatsapp_last_seen ADD CONSTRAINT whatsapp_last_seen_consultor_id_fkey FOREIGN KEY (consultor_id) REFERENCES consultores(id) ON DELETE NO ACTION NOT VALID;
         END IF;
       END $$;
 

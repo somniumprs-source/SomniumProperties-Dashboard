@@ -14,7 +14,7 @@ app.use("*", async (c: any, next: any) => {
   return await requireAuth(c, next);
 });
 
-// Deteccao de link de portal num texto (util para o agente WhatsApp/inbound).
+// Deteccao de link de portal num texto.
 app.post("/detect", async (c) => {
   try {
     const { text } = await c.req.json().catch(() => ({}));
