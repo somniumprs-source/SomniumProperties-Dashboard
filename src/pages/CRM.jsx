@@ -1845,6 +1845,10 @@ const FIELD_DEFS = {
     // (ver checklistTemplates.js — estado "Adicionado" já exige data_chamada,
     // ask_price, notas, modelo_negocio e fotos antes de sair desse estado).
     { key: 'nome', label: 'Nome do Imóvel', type: 'text', required: true, quick: true },
+    // Obrigatório ao criar em "Geral" (sem regiao activa no toggle) — sem isto
+    // o handleSave bloqueia com toast a mandar voltar ao toggle no topo, sem
+    // dar hipotese de escolher a regiao aqui mesmo na ficha rapida.
+    { key: 'regiao', label: 'Região', type: 'select', options: ['Coimbra', 'AMP'], required: true, quick: true },
     { key: 'estado', label: 'Estado', type: 'select', options: ['Adicionado','Chamada Não Atendida','Pendentes','Pré-aprovação','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'] },
     { key: 'modelo_negocio', label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix & Flip','CAEP','Mediação'], required: true },
     { key: 'ref_interna', label: 'REF Interna', type: 'text' },
