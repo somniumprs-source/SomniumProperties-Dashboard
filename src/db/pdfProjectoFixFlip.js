@@ -550,7 +550,7 @@ export function generateRelatorioSaida({ negocio, imovel, fases, custoReal, inve
       doc.y = yIni + 14
     }
   } else {
-    doc.fontSize(8).fillColor(MUTED).text('Sem lista detalhada de investidores. Adicione investidor_ids ao negócio para o detalhe individual.')
+    doc.fontSize(8).fillColor(MUTED).text('Sem lista detalhada de investidores. Associe investidores a este negócio (capital e percentagem) para o detalhe individual.')
   }
 
   // Resumo final

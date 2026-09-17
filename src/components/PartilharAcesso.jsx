@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Share2, X, UserPlus, Trash2 } from 'lucide-react'
-import { apiFetch } from '../lib/api.js'
+import { apiFetch, apiFetchJson } from '../lib/api.js'
 import { useToast } from './ui/Toast.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
 
@@ -48,8 +48,8 @@ function PartilharModal({ entidade, entidadeId, nome, onClose }) {
     setLoading(true)
     try {
       const [usersRes, accRes] = await Promise.all([
-        apiFetch('/api/users').then(r => r.json()),
-        apiFetch(`/api/acessos/${entidade}/${entidadeId}`).then(r => r.json()),
+        apiFetchJson('/api/users'),
+        apiFetchJson(`/api/acessos/${entidade}/${entidadeId}`),
       ])
       setParceiros((usersRes.data || []).filter(u => u.role === 'parceiro' && u.ativo))
       setComAcesso(accRes.data || [])
@@ -170,9 +170,10 @@ export function AcessosDoUser({ userId }) {
   async function load() {
     setLoading(true)
     try {
-      const r = await apiFetch(`/api/users/${userId}/acessos`).then(r => r.json())
+      const r = await apiFetchJson(`/api/users/${userId}/acessos`)
       setItems(r.data || [])
-    } finally { setLoading(false) }
+    } catch (e) { toast(`Erro: ${e.message}`, 'error') }
+    finally { setLoading(false) }
   }
   useEffect(() => { load() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [userId])
 

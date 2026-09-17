@@ -256,6 +256,20 @@ router.delete('/analises/:id', async (req, res) => {
 
     await pool.query('DELETE FROM analises WHERE id = $1', [req.params.id])
 
+    // Se a análise apagada era a activa, os campos derivados do imóvel (ROI
+    // incluído) ficavam com o último valor sincronizado até ao próximo
+    // arranque do servidor (ver migração em pg.js). Resincronizar já: se
+    // sobrar outra análise activa (não deveria, mas por segurança), propagar
+    // os valores dela; senão repor a 0, tal como o /sync-derivados faria.
+    if (existing.activa) {
+      const { rows: [aindaActiva] } = await pool.query('SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1', [existing.imovel_id])
+      if (aindaActiva) {
+        await propagarParaImovel(existing.imovel_id, aindaActiva, aindaActiva, aindaActiva.caep)
+      } else {
+        await pool.query('UPDATE imoveis SET roi = 0, roi_anualizado = 0, updated_at = $1 WHERE id = $2', [new Date().toISOString(), existing.imovel_id])
+      }
+    }
+
     await pool.query(
       'INSERT INTO audit_log (tabela, registo_id, acao, dados_anteriores) VALUES ($1, $2, $3, $4)',
       ['analises', req.params.id, 'DELETE', JSON.stringify({ nome: existing.nome, imovel_id: existing.imovel_id })]

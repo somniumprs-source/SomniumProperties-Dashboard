@@ -2,7 +2,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import { LayoutDashboard, TrendingUp, Database, Bell, Clock, BarChart3, Menu, X, LogOut, Briefcase, Shield, ScrollText, History, UserCheck, ChevronDown, FileText, BookOpen, Map, Megaphone, Phone, CalendarClock } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext.jsx'
-import { apiFetch } from '../../lib/api.js'
+import { apiFetch, apiFetchJson } from '../../lib/api.js'
 import { prefetchRoute } from '../../lib/prefetch.js'
 
 // Estrutura da plataforma por departamento. Itens com `children` viram
@@ -56,9 +56,9 @@ export function Sidebar() {
       if (typeof document !== 'undefined' && document.hidden) return
       try {
         const [alertas, tarefasCount] = await Promise.all([
-          apiFetch('/api/alertas').then(r => r.json()).catch(() => null),
+          apiFetchJson('/api/alertas').catch(() => null),
           // Endpoint dedicado de contagem — evita puxar ?limit=200 só para o badge.
-          apiFetch('/api/crm/tarefas/count-atrasadas').then(r => r.json()).catch(() => null),
+          apiFetchJson('/api/crm/tarefas/count-atrasadas').catch(() => null),
         ])
         const criticos = alertas?.resumo?.criticos ?? 0
         const atrasadas = Number(tarefasCount?.atrasadas) || 0

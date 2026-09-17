@@ -38,7 +38,9 @@ const IMOVEL_FIELD_CONFIG = {
   // separados por "; ", não é um único valor de select.
   'motivo_nao_interessa': { label: 'Motivo Não Interessa', type: 'text' },
   'data_chamada': { label: 'Data Chamada', type: 'date' },
-  'data_visita': { label: 'Data Visita', type: 'date' },
+  // 'data_visita' removido de propósito: é derivado automaticamente da
+  // última visita realizada (tabela `visitas`, aba Visitas do imóvel) — não
+  // deve voltar a ser editável directamente aqui (ver src/db/pg.js).
   'data_estudo_mercado': { label: 'Data Estudo Mercado', type: 'date' },
   'data_proposta': { label: 'Data Proposta', type: 'date' },
   'data_proposta_aceite': { label: 'Data Proposta Aceite', type: 'date' },

@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, CheckCircle2, Circle, Plus, Trash2, Upload, X,
@@ -99,20 +100,15 @@ export function ProjectoDetalhe() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { isReadOnly, isInvestidor } = useAuth()
-  const [resumo, setResumo] = useState(null)
-  const [fases, setFases] = useState([])
-  const [fotos, setFotos] = useState([])
-  const [fracoes, setFracoes] = useState([])
   const [fracaoSel, setFracaoSel] = useState(null)  // null = "Prédio inteiro"
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
   const [tab, setTab] = useState('resumo')
   const [editing, setEditing] = useState(false)
   const [savingEdit, setSavingEdit] = useState(false)
 
-  async function load() {
-    setLoading(true); setError(null)
-    try {
+  // Migrado para React Query (Problema 23 da auditoria) — ver Financeiro.jsx/CRM.jsx.
+  const query = useQuery({
+    queryKey: ['projeto-detalhe', id],
+    queryFn: async () => {
       const [rResumo, rFases, rFotos, rFracoes] = await Promise.all([
         apiFetch(`/api/crm/projetos/${id}/resumo`),
         apiFetch(`/api/crm/projetos/${id}/fases`),
@@ -120,13 +116,20 @@ export function ProjectoDetalhe() {
         apiFetch(`/api/crm/projetos/${id}/fracoes`),
       ])
       if (!rResumo.ok) throw new Error('Projecto não encontrado')
-      setResumo(await rResumo.json())
-      if (rFases.ok) setFases((await rFases.json()).fases || [])
-      if (rFotos.ok) setFotos((await rFotos.json()).fotos || [])
-      if (rFracoes.ok) setFracoes((await rFracoes.json()).fracoes || [])
-    } catch (e) { setError(e.message) }
-    finally { setLoading(false) }
-  }
+      const resumo = await rResumo.json()
+      const fases = rFases.ok ? (await rFases.json()).fases || [] : []
+      const fotos = rFotos.ok ? (await rFotos.json()).fotos || [] : []
+      const fracoes = rFracoes.ok ? (await rFracoes.json()).fracoes || [] : []
+      return { resumo, fases, fotos, fracoes }
+    },
+  })
+  const resumo = query.data?.resumo ?? null
+  const fases = useMemo(() => query.data?.fases ?? [], [query.data])
+  const fotos = useMemo(() => query.data?.fotos ?? [], [query.data])
+  const fracoes = useMemo(() => query.data?.fracoes ?? [], [query.data])
+  const loading = query.isPending
+  const error = query.error?.message || null
+  const load = query.refetch
 
   // Filtros aplicados pela fração selecionada
   const fasesFiltradas = fracaoSel === null
@@ -147,7 +150,6 @@ export function ProjectoDetalhe() {
     load()
   }
 
-  useEffect(() => { load() }, [id])
   useRefreshOnMutation(load)
 
   if (loading) return <><Header title="Projecto" subtitle="A carregar..." /><div className="p-8 text-center text-gray-400">A carregar…</div></>
@@ -491,21 +493,25 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
   const toast = useToast()
   const [open, setOpen] = useState(fase.estado === 'em_curso')
   const [novaTarefa, setNovaTarefa] = useState('')
-  const [despesas, setDespesas] = useState([])
   const [novaDespesa, setNovaDespesa] = useState({ movimento: '', valor: '', data: '', categoria: 'Material' })
   const cor = FASE_COR[fase.fase_key] || '#6366f1'
   const icon = FASE_ICON[fase.fase_key] || '🛠️'
   const diasAtraso = calcularAtraso(fase)
 
-  async function loadDespesas() {
-    if (!negocioId) return
-    const r = await apiFetch(`/api/crm/projetos/${negocioId}/despesas`)
-    if (r.ok) {
+  // Migrado para React Query (Problema 23/24 da auditoria) — só busca quando
+  // o acordeão está aberto, e fica em cache entre aberturas/fechos.
+  const despesasQuery = useQuery({
+    queryKey: ['fase-despesas', negocioId, fase.id],
+    enabled: open && !!negocioId,
+    queryFn: async () => {
+      const r = await apiFetch(`/api/crm/projetos/${negocioId}/despesas`)
+      if (!r.ok) throw new Error('Erro ao carregar despesas')
       const { despesas } = await r.json()
-      setDespesas(despesas.filter(d => d.fase_id === fase.id))
-    }
-  }
-  useEffect(() => { if (open) loadDespesas() }, [open, fase.id])
+      return despesas.filter(d => d.fase_id === fase.id)
+    },
+  })
+  const despesas = useMemo(() => despesasQuery.data ?? [], [despesasQuery.data])
+  const loadDespesas = despesasQuery.refetch
 
   async function adicionarDespesa(e) {
     e?.preventDefault()
@@ -874,13 +880,16 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100 }
 // comparando o expectável (modelo + % configurada) com o já realizado
 // (negocio.lucro_real, alimentado pelas tranches confirmadas em baixo).
 function ResumoFaturacaoNegocio({ negocio, imovel, analise }) {
-  const [investidores, setInvestidores] = useState([])
-
-  async function loadInvestidores() {
-    const r = await apiFetch(`/api/crm/projetos/${negocio.id}/investidores`).catch(() => null)
-    if (r?.ok) setInvestidores((await r.json()).investidores || [])
-  }
-  useEffect(() => { loadInvestidores() }, [negocio.id])
+  // Migrado para React Query (Problema 23/24 da auditoria).
+  const investidoresQuery = useQuery({
+    queryKey: ['projeto-investidores', negocio.id],
+    queryFn: async () => {
+      const r = await apiFetch(`/api/crm/projetos/${negocio.id}/investidores`).catch(() => null)
+      return r?.ok ? (await r.json()).investidores || [] : []
+    },
+  })
+  const investidores = useMemo(() => investidoresQuery.data ?? [], [investidoresQuery.data])
+  const loadInvestidores = investidoresQuery.refetch
   // Dinâmico: qualquer gravação (tranches, investidores, análise financeira) dispara
   // 'somnium:refresh' via apiFetch — recarrega esta lista sem precisar de mudar de aba.
   useRefreshOnMutation(loadInvestidores)
@@ -1123,21 +1132,23 @@ const FATURA_EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', curr
 
 function TabFaturas({ negocioId, readOnly }) {
   const toast = useToast()
-  const [faturas, setFaturas] = useState([])
-  const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ fornecedor: '', movimento: '', valor: '', data: '', categoria: '', pago: false, file: null })
   const [saving, setSaving] = useState(false)
 
-  async function load() {
-    const r = await apiFetch(`/api/crm/projetos/${negocioId}/despesas`)
-    if (r.ok) {
+  // Migrado para React Query (Problema 23/24 da auditoria).
+  const faturasQuery = useQuery({
+    queryKey: ['projeto-faturas', negocioId],
+    queryFn: async () => {
+      const r = await apiFetch(`/api/crm/projetos/${negocioId}/despesas`)
+      if (!r.ok) throw new Error('Erro ao carregar faturas')
       const { despesas } = await r.json()
-      setFaturas(despesas)
-    }
-    setLoading(false)
-  }
-  useEffect(() => { load() }, [negocioId])
+      return despesas
+    },
+  })
+  const faturas = useMemo(() => faturasQuery.data ?? [], [faturasQuery.data])
+  const loading = faturasQuery.isPending
+  const load = faturasQuery.refetch
 
   async function adicionar(e) {
     e.preventDefault()
@@ -1445,10 +1456,7 @@ function FotosGaleriaPorFase({ fotos, onDelete }) {
 function TabDocumentos({ negocio, imovel, fases, readOnly }) {
   const isWS = negocio.categoria === 'Wholesalling'
   const [faseFichaSel, setFaseFichaSel] = useState(fases[0]?.id || '')
-  const [docs, setDocs] = useState([])
-  const [vistorias, setVistorias] = useState([])
   const [vistoriaSel, setVistoriaSel] = useState('')
-  const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [faseDoc, setFaseDoc] = useState('')
   const [tipoDoc, setTipoDoc] = useState('outro')
@@ -1465,22 +1473,26 @@ function TabDocumentos({ negocio, imovel, fases, readOnly }) {
     { key: 'outro',        label: 'Outro',         cor: '#6b7280' },
   ]
 
-  async function load() {
-    setLoading(true)
-    try {
+  // Migrado para React Query (Problema 23/24 da auditoria).
+  const query = useQuery({
+    queryKey: ['projeto-documentos', negocio.id],
+    queryFn: async () => {
       const [rDocs, rVist] = await Promise.all([
         apiFetch(`/api/crm/projetos/${negocio.id}/documentos`),
         apiFetch(`/api/crm/projetos/${negocio.id}/vistorias`),
       ])
-      if (rDocs.ok) setDocs((await rDocs.json()).documentos || [])
-      if (rVist.ok) {
-        const vs = (await rVist.json()).vistorias || []
-        setVistorias(vs)
-        setVistoriaSel(vs[0]?.id || '')
-      }
-    } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [negocio.id])
+      const docs = rDocs.ok ? (await rDocs.json()).documentos || [] : []
+      const vistorias = rVist.ok ? (await rVist.json()).vistorias || [] : []
+      return { docs, vistorias }
+    },
+  })
+  const docs = useMemo(() => query.data?.docs ?? [], [query.data])
+  const vistorias = useMemo(() => query.data?.vistorias ?? [], [query.data])
+  const loading = query.isPending
+  const load = query.refetch
+  // Mantém o comportamento anterior: seleccionar a 1ª vistoria sempre que a
+  // lista for (re)carregada.
+  useEffect(() => { setVistoriaSel(vistorias[0]?.id || '') }, [vistorias])
 
   async function abrirPDF(url, { download = false } = {}) {
     // openDocument trata o seu próprio feedback de erro (toast global).
@@ -1721,20 +1733,22 @@ const ESTADO_REUNIAO_COR = {
 
 function TabReunioes({ negocioId, readOnly }) {
   const toast = useToast()
-  const [lista, setLista] = useState([])
-  const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ data: '', hora: '', formato: 'Online', notas: '' })
   const [saving, setSaving] = useState(false)
 
-  async function load() {
-    setLoading(true)
-    try {
+  // Migrado para React Query (Problema 23/24 da auditoria).
+  const query = useQuery({
+    queryKey: ['projeto-reunioes', negocioId],
+    queryFn: async () => {
       const r = await apiFetch(`/api/crm/projetos/${negocioId}/reunioes`)
-      if (r.ok) setLista((await r.json()).reunioes || [])
-    } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [negocioId])
+      if (!r.ok) throw new Error('Erro ao carregar reuniões')
+      return (await r.json()).reunioes || []
+    },
+  })
+  const lista = useMemo(() => query.data ?? [], [query.data])
+  const loading = query.isPending
+  const load = query.refetch
 
   async function adicionar(e) {
     e.preventDefault()
@@ -1876,25 +1890,24 @@ function novaListaRubricas(padrao) {
 
 function TabVistorias({ negocioId, negocio }) {
   const toast = useToast()
-  const [lista, setLista] = useState([])
-  const [rubricasPadrao, setRubricasPadrao] = useState([])
-  const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ semana_data: '', rubricas: [], desvio_dias: '', desvio_causa: '', desvio_accao: '', incidentes: '', proximos_passos: '' })
 
-  async function load() {
-    setLoading(true)
-    try {
+  // Migrado para React Query (Problema 23/24 da auditoria).
+  const query = useQuery({
+    queryKey: ['projeto-vistorias', negocioId],
+    queryFn: async () => {
       const r = await apiFetch(`/api/crm/projetos/${negocioId}/vistorias`)
-      if (r.ok) {
-        const j = await r.json()
-        setLista(j.vistorias || [])
-        setRubricasPadrao(j.rubricasPadrao || [])
-      }
-    } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [negocioId])
+      if (!r.ok) throw new Error('Erro ao carregar vistorias')
+      const j = await r.json()
+      return { lista: j.vistorias || [], rubricasPadrao: j.rubricasPadrao || [] }
+    },
+  })
+  const lista = useMemo(() => query.data?.lista ?? [], [query.data])
+  const rubricasPadrao = useMemo(() => query.data?.rubricasPadrao ?? [], [query.data])
+  const loading = query.isPending
+  const load = query.refetch
 
   function abrirForm() {
     setForm({
@@ -2046,23 +2059,28 @@ function TabVistorias({ negocioId, negocio }) {
 
 function TabInvestidores({ negocio, readOnly }) {
   const toast = useToast()
-  const [lista, setLista] = useState([])
-  const [todosInvestidores, setTodosInvestidores] = useState([])
   const [investidorSel, setInvestidorSel] = useState('')
   const [novoCapital, setNovoCapital] = useState('')
   const [novaPerc, setNovaPerc] = useState('')
   const [novoInvNome, setNovoInvNome] = useState('')
   const [novoInvContacto, setNovoInvContacto] = useState('')
 
-  async function load() {
-    const [r1, r2] = await Promise.all([
-      apiFetch(`/api/crm/projetos/${negocio.id}/investidores`),
-      apiFetch('/api/crm/investidores?limit=500'),
-    ])
-    if (r1.ok) setLista((await r1.json()).investidores || [])
-    if (r2.ok) setTodosInvestidores(((await r2.json()).data || []).filter(i => i.status !== 'Inactivo'))
-  }
-  useEffect(() => { load() }, [negocio.id])
+  // Migrado para React Query (Problema 23/24 da auditoria).
+  const query = useQuery({
+    queryKey: ['projeto-investidores-tab', negocio.id],
+    queryFn: async () => {
+      const [r1, r2] = await Promise.all([
+        apiFetch(`/api/crm/projetos/${negocio.id}/investidores`),
+        apiFetch('/api/crm/investidores?limit=1000'),
+      ])
+      const lista = r1.ok ? (await r1.json()).investidores || [] : []
+      const todosInvestidores = r2.ok ? ((await r2.json()).data || []).filter(i => i.status !== 'Inactivo') : []
+      return { lista, todosInvestidores }
+    },
+  })
+  const lista = useMemo(() => query.data?.lista ?? [], [query.data])
+  const todosInvestidores = useMemo(() => query.data?.todosInvestidores ?? [], [query.data])
+  const load = query.refetch
 
   const capitalTotal = lista.reduce((s, l) => s + (Number(l.capital) || 0), 0)
   const percTotal = lista.reduce((s, l) => s + (Number(l.percentagem) || 0), 0)
@@ -2696,13 +2714,18 @@ function KpiBox({ label, value, cor, accent }) {
 // ════════════════════════════════════════════════════════════════
 function ComentariosFase({ faseId, readOnly }) {
   const toast = useToast()
-  const [comentarios, setComentarios] = useState([])
   const [texto, setTexto] = useState("")
-  async function load() {
-    const r = await apiFetch(`/api/crm/projetos/fases/${faseId}/comentarios`)
-    if (r.ok) setComentarios((await r.json()).comentarios || [])
-  }
-  useEffect(() => { load() }, [faseId])
+  // Migrado para React Query (Problema 23/24 da auditoria).
+  const query = useQuery({
+    queryKey: ['fase-comentarios', faseId],
+    queryFn: async () => {
+      const r = await apiFetch(`/api/crm/projetos/fases/${faseId}/comentarios`)
+      if (!r.ok) throw new Error('Erro ao carregar comentários')
+      return (await r.json()).comentarios || []
+    },
+  })
+  const comentarios = useMemo(() => query.data ?? [], [query.data])
+  const load = query.refetch
   async function enviar(e) {
     e?.preventDefault()
     if (!texto.trim()) return

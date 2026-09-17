@@ -1745,22 +1745,6 @@ app.use("/negocios-lixeira", async (c: any, next: any) => {
   return next();
 });
 
-// Middleware: garante a coluna valor_cedencia_posicao antes de qualquer POST/PUT
-// em /negocios — evita drop silencioso do campo no primeiro save quando a
-// coluna ainda nao existe em producao (migracoes nao sao auto-aplicadas).
-app.use("/negocios", async (c: any, next: any) => {
-  if (c.req.method === "POST" || c.req.method === "PUT" || c.req.method === "PATCH") {
-    await ensureColumn("negocios", "valor_cedencia_posicao REAL");
-  }
-  await next();
-});
-app.use("/negocios/*", async (c: any, next: any) => {
-  if (c.req.method === "POST" || c.req.method === "PUT" || c.req.method === "PATCH") {
-    await ensureColumn("negocios", "valor_cedencia_posicao REAL");
-  }
-  await next();
-});
-
 // UX12 — Soft delete (lixeira) — port de routes.js 919-934.
 // IMPORTANTE: registar ANTES de crudRoutes('/negocios'), senão o DELETE genérico
 // do crud (hard delete) apanha o pedido primeiro e rebenta com violação de FK

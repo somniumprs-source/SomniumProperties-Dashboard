@@ -23,12 +23,13 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 // "r" cobre o accessRouter de userRoutes.js (`const r = Router()`).
 const METHOD_RE = /\b(?:router|app|r)\.(get|post|put|delete|patch)\(\s*(['"`])((?:(?!\2).)*)\2/g;
 
-function extractRoutes(relPath, { normalize } = {}) {
+function extractRoutes(relPath, { normalize, filter } = {}) {
   const text = readFileSync(join(ROOT, relPath), "utf8");
   const routes = new Set();
   for (const m of text.matchAll(METHOD_RE)) {
     const method = m[1].toUpperCase();
     let path = m[3];
+    if (filter && !filter(path)) continue;
     if (normalize) path = normalize(path);
     routes.add(`${method} ${path}`);
   }
@@ -41,6 +42,15 @@ function extractRoutes(relPath, { normalize } = {}) {
 // produção sob o prefixo /acessos/*).
 const stripLeadingAcessos = (path) => path.replace(/^\/acessos(?=\/|$)/, "") || "/";
 
+// Mesma lista usada em server.js:192 para o guard de acesso (parceiro/investidor
+// não podem chamar nada destas áreas) — reaproveitada aqui para filtrar, de
+// server.js (que mistura TODOS os domínios num só ficheiro), só as rotas que
+// supabase/functions/dashboard/index.ts também deveria implementar. Mantida
+// por sincronizar à mão com server.js:192 (script é best-effort, não formal).
+const DASHBOARD_AREA_PREFIXES = ["/api/kpis", "/api/financeiro", "/api/comercial", "/api/metricas", "/api/alertas", "/api/operacoes", "/api/okrs", "/api/okr-krs", "/api/tarefas", "/api/weekly-pulse", "/api/ops-scorecard", "/api/time-tracking", "/api/data-health", "/api/marketing"];
+const isDashboardRoute = (path) => DASHBOARD_AREA_PREFIXES.some((p) => path === p || path.startsWith(p + "/"));
+const stripLeadingApi = (path) => path.replace(/^\/api(?=\/|$)/, "") || "/";
+
 const PAIRS = [
   {
     label: "users (src/db/userRoutes.js ↔ supabase/functions/users/index.ts)",
@@ -52,6 +62,13 @@ const PAIRS = [
     label: "crm (src/db/routes.js ↔ supabase/functions/crm/index.ts)",
     dev: "src/db/routes.js",
     prod: "supabase/functions/crm/index.ts",
+  },
+  {
+    label: "dashboard (server.js [financeiro/comercial/kpis/metricas/operacoes/okrs/tarefas/alertas] ↔ supabase/functions/dashboard/index.ts)",
+    dev: "server.js",
+    prod: "supabase/functions/dashboard/index.ts",
+    devFilter: isDashboardRoute,
+    devNormalize: stripLeadingApi,
   },
 ];
 
@@ -66,8 +83,8 @@ const KNOWN_ONE_SIDED = new Set([
 let hasDiff = false;
 
 for (const pair of PAIRS) {
-  const devRoutes = extractRoutes(pair.dev);
-  const prodRoutes = extractRoutes(pair.prod, { normalize: pair.prodNormalize });
+  const devRoutes = extractRoutes(pair.dev, { normalize: pair.devNormalize, filter: pair.devFilter });
+  const prodRoutes = extractRoutes(pair.prod, { normalize: pair.prodNormalize, filter: pair.prodFilter });
 
   const onlyDev = [...devRoutes].filter((r) => !prodRoutes.has(r) && !KNOWN_ONE_SIDED.has(r)).sort();
   const onlyProd = [...prodRoutes].filter((r) => !devRoutes.has(r) && !KNOWN_ONE_SIDED.has(r)).sort();

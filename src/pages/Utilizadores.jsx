@@ -353,7 +353,7 @@ function InviteForm({ onClose, onCreated }) {
   // Quando role=investidor, carrega lista de investidores sem user_id ligado
   useEffect(() => {
     if (form.role !== 'investidor') { setInvestidores([]); return }
-    apiFetch('/api/crm/investidores?limit=500')
+    apiFetch('/api/crm/investidores?limit=1000')
       .then(r => r.ok ? r.json() : null)
       .then(j => setInvestidores(j?.data?.filter(i => !i.user_id) || []))
       .catch(() => {})

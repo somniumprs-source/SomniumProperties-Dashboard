@@ -93,7 +93,6 @@ const KanbanCard = memo(function KanbanCard({ item, dragging, onDragStart, onDra
 }, (prev, next) => (
   prev.item.id === next.item.id &&
   prev.item.updated_at === next.item.updated_at &&
-  prev.item[prev.item.__groupField] === next.item[next.item.__groupField] &&
   prev.dragging === next.dragging &&
   prev.renderCard === next.renderCard &&
   prev.onDelete === next.onDelete

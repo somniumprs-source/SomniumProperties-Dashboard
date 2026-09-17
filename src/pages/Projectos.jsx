@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useNavigate, Link } from 'react-router-dom'
 import { Plus, Filter, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle, TrendingUp, Briefcase, Calendar as CalendarIcon, Search, Sparkles, Hammer, Handshake, Home, Zap, FileText } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
@@ -173,11 +174,8 @@ export function Projectos() {
       else sessionStorage.removeItem(REGIAO_STORAGE_KEY)
     } catch {}
   }
-  const [kpis, setKpis] = useState(null)
-  const [projectos, setProjectos] = useState([])
   const [fasesPorNegocio, setFasesPorNegocio] = useState({})  // negocioId → { faseAtualKey, percGlobal }
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [mutationError, setMutationError] = useState(null)
   const [editing, setEditing] = useState(null)
   const [view, setView] = useState('kanban')  // 'kanban' | 'lista'
   const [filterCat, setFilterCat] = useState(isInvestidor ? '' : 'Fix and Flip')
@@ -187,18 +185,22 @@ export function Projectos() {
   const [predicoes, setPredicoes] = useState(null)
   const [predicoesLoading, setPredicoesLoading] = useState(false)
 
-  async function load() {
-    setLoading(true); setError(null)
-    try {
+  // Migrado para React Query (Problema 23 da auditoria) — ver Financeiro.jsx/CRM.jsx.
+  // syntheticKpisRef substitui o antigo guard `isReadOnly && !kpis` (que lia o
+  // state da render anterior): construir os KPIs sintéticos do investidor só
+  // uma vez, não recalcular a cada refetch — mesmo comportamento de antes.
+  const syntheticKpisRef = useRef(false)
+  const query = useQuery({
+    queryKey: ['projectos-list', regiao, isReadOnly, isInvestidor],
+    queryFn: async () => {
       const safe = (p) => p.then(r => r.ok ? r.json() : null).catch(() => null)
       // Investidores/parceiros usam endpoint filtrado por acessos
-      const negociosUrl = isReadOnly ? '/api/crm/projetos/meus' : '/api/crm/negocios?limit=200'
+      const negociosUrl = isReadOnly ? '/api/crm/projetos/meus' : '/api/crm/negocios?limit=1000'
       const [k, n] = await Promise.all([
         isInvestidor ? Promise.resolve(null) : safe(apiFetch('/api/kpis/financeiro', { regiao })),
         safe(apiFetch(negociosUrl, { regiao })),
       ])
       if (!isInvestidor && !k) throw new Error('Erro ao carregar projectos')
-      setKpis(k)
       // Normalizar para forma esperada pelo Kanban (com imovelNome, lucroEstimado, etc.)
       const rawData = n?.data ?? []
       const negocios = rawData.map(r => ({
@@ -207,8 +209,8 @@ export function Projectos() {
         lucroEstimado: r.lucro_estimado ?? r.lucroEstimado,
         lucroReal: r.lucro_real ?? r.lucroReal,
       }))
-      setProjectos(negocios)
-      if (isReadOnly && !kpis) {
+      let kpis = k
+      if (isReadOnly && !k && !syntheticKpisRef.current) {
         // Construir KPIs minimais a partir da lista (para investidor)
         const catCount = {}
         for (const x of negocios) {
@@ -218,11 +220,16 @@ export function Projectos() {
           catCount[c].lucroEst += Number(x.lucroEstimado) || 0
           catCount[c].lucroReal += Number(x.lucroReal) || 0
         }
-        setKpis({ categorias: Object.values(catCount), negociosLista: negocios })
+        kpis = { categorias: Object.values(catCount), negociosLista: negocios }
+        syntheticKpisRef.current = true
       }
-    } catch (err) { setError(err.message) }
-    finally { setLoading(false) }
-  }
+      return { kpis, projectos: negocios }
+    },
+  })
+  const kpis = query.data?.kpis ?? null
+  const projectos = useMemo(() => query.data?.projectos ?? [], [query.data])
+  const loading = query.isPending
+  const error = mutationError || query.error?.message || null
 
   async function loadFases(negocios, categoriaActiva) {
     // Optimização: só carregar fases para projectos da categoria filtrada (evita N requests inúteis)
@@ -260,7 +267,7 @@ export function Projectos() {
     setFasesPorNegocio(result)
   }
 
-  useEffect(() => { load() }, [regiao])
+  const load = query.refetch
   useRefreshOnMutation(load)
   useEffect(() => { if (projectos.length > 0) loadFases(projectos, filterCat) }, [projectos, filterCat])
   useEffect(() => {
@@ -295,8 +302,8 @@ export function Projectos() {
       const url = isNew ? '/api/crm/negocios' : `/api/crm/negocios/${form.id}`
       const r = await apiFetch(url, { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
       if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || `Erro ${r.status}`) }
-      setEditing(null); setError(null); load()
-    } catch (e) { console.error('[saveProjecto]', e); setError(e.message) }
+      setEditing(null); setMutationError(null); load()
+    } catch (e) { console.error('[saveProjecto]', e); setMutationError(e.message) }
   }
 
   // Para admin: usar negociosLista (com KPIs financeiros). Para investidor: usar projectos directo.

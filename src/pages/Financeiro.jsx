@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, ComposedChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine,
@@ -10,7 +11,6 @@ import { Tabs } from '../components/ui/Tabs.jsx'
 import { ScrollableTable } from '../components/ui/ScrollableTable.jsx'
 import { apiFetch } from '../lib/api.js'
 import { useUrlState } from '../hooks/useUrlState.js'
-import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 import { REGIOES } from '../constants.js'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
@@ -39,42 +39,73 @@ const TIMING_COLOR = {
 const TABS = ['Visão Geral', 'Conta Corrente', 'Despesas', 'Tesouraria', 'P&L', 'Rentabilidade']
 
 export function Financeiro() {
-  const [kpis,     setKpis]     = useState(null)
-  const [despesas, setDespesas] = useState(null)
-  const [cashflow, setCashflow] = useState(null)
-  const [projecao, setProjecao] = useState(null)
-  const [analises, setAnalises] = useState(null)
-  const [aging,    setAging]    = useState(null)
-  const [rent,     setRent]     = useState(null)
-  const [conta,    setConta]    = useState(null)
-  const [loading,  setLoading]  = useState(true)
-  const [error,    setError]    = useState(null)
   const [tab,      setTab]      = useUrlState('tab', 'Visão Geral')
   const [editingDesp, setEditingDesp] = useState(null)
-  const [crmDespesas, setCrmDespesas] = useState([])
 
-  async function load() {
-    setLoading(true); setError(null)
-    try {
-      const safe = (promise) => promise.then(r => r.ok ? r.json() : null).catch(() => null)
-      const [k, d, c, p, a, ds, ag, re, cc] = await Promise.all([
-        safe(apiFetch('/api/kpis/financeiro')),
-        safe(apiFetch('/api/financeiro/despesas')),
-        safe(apiFetch('/api/financeiro/cashflow')),
-        safe(apiFetch('/api/financeiro/projecao')),
-        safe(apiFetch('/api/crm/analises-kpis')),
-        safe(apiFetch('/api/crm/despesas?limit=200')),
-        safe(apiFetch('/api/financeiro/aging')),
-        safe(apiFetch('/api/financeiro/rentabilidade')),
-        safe(apiFetch('/api/financeiro/conta-corrente')),
-      ])
+  const safe = (promise) => promise.then(r => r.ok ? r.json() : null).catch(() => null)
+
+  // Migrado para React Query (Problema 23 da auditoria) e depois dividido em
+  // 1 pedido "core" (sempre visível no banner do topo) + 1 pedido por
+  // separador, só disparado quando esse separador é aberto (Problema 25 —
+  // antes disparava sempre os 9 pedidos, mesmo vendo só 1 separador).
+  const coreQuery = useQuery({
+    queryKey: ['financeiro-core'],
+    queryFn: async () => {
+      const [k, c] = await Promise.all([safe(apiFetch('/api/kpis/financeiro')), safe(apiFetch('/api/financeiro/cashflow'))])
       if (!k) throw new Error('Erro ao carregar dados financeiros')
-      setKpis(k); setDespesas(d); setCashflow(c); setProjecao(p); setAnalises(a)
-      setCrmDespesas(ds?.data ?? [])
-      setAging(ag); setRent(re); setConta(cc)
-    } catch (err) { setError(err.message) }
-    finally { setLoading(false) }
-  }
+      return { kpis: k, cashflow: c }
+    },
+  })
+  const analisesQuery = useQuery({
+    queryKey: ['financeiro-analises'],
+    enabled: tab === 'Visão Geral',
+    queryFn: () => safe(apiFetch('/api/crm/analises-kpis')),
+  })
+  const despesasQuery = useQuery({
+    queryKey: ['financeiro-despesas'],
+    enabled: tab === 'Despesas',
+    queryFn: async () => {
+      const [d, ds] = await Promise.all([safe(apiFetch('/api/financeiro/despesas')), safe(apiFetch('/api/crm/despesas?limit=1000'))])
+      return { despesas: d, crmDespesas: ds?.data ?? [] }
+    },
+  })
+  const agingQuery = useQuery({
+    queryKey: ['financeiro-aging'],
+    enabled: tab === 'Tesouraria',
+    queryFn: () => safe(apiFetch('/api/financeiro/aging')),
+  })
+  const projecaoQuery = useQuery({
+    queryKey: ['financeiro-projecao'],
+    enabled: tab === 'P&L',
+    queryFn: () => safe(apiFetch('/api/financeiro/projecao')),
+  })
+  const rentQuery = useQuery({
+    queryKey: ['financeiro-rentabilidade'],
+    enabled: tab === 'Rentabilidade',
+    queryFn: () => safe(apiFetch('/api/financeiro/rentabilidade')),
+  })
+  const contaQuery = useQuery({
+    queryKey: ['financeiro-conta'],
+    enabled: tab === 'Conta Corrente',
+    queryFn: () => safe(apiFetch('/api/financeiro/conta-corrente')),
+  })
+
+  const kpis = coreQuery.data?.kpis ?? null
+  const cashflow = coreQuery.data?.cashflow ?? null
+  const analises = analisesQuery.data ?? null
+  const despesas = despesasQuery.data?.despesas ?? null
+  const crmDespesas = useMemo(() => despesasQuery.data?.crmDespesas ?? [], [despesasQuery.data])
+  const aging = agingQuery.data ?? null
+  const projecao = projecaoQuery.data ?? null
+  const rent = rentQuery.data ?? null
+  const conta = contaQuery.data ?? null
+  const loading = coreQuery.isPending
+  const [error, setError] = useState(null)
+  // Botão "Actualizar" do Header: o essencial (banner) é sempre core; o
+  // separador aberto no momento já está "activo" e é invalidado
+  // automaticamente por qualquer mutação (ver src/lib/queryClient.js), por
+  // isso não precisa de ser incluído aqui à parte.
+  const load = coreQuery.refetch
 
   async function saveDespesa(form) {
     try {
@@ -105,7 +136,8 @@ export function Financeiro() {
       }
       setEditingDesp(null)
       setError(null)
-      load()
+      // Despesas afeta o burn rate do banner (core) e a lista desta aba.
+      coreQuery.refetch(); despesasQuery.refetch()
     } catch (e) {
       console.error('[saveDespesa]', e)
       setError(e.message)
@@ -115,7 +147,7 @@ export function Financeiro() {
   async function deleteDespesa(id) {
     if (!confirm('Apagar esta despesa?')) return
     await apiFetch(`/api/crm/despesas/${id}`, { method: 'DELETE' })
-    load()
+    coreQuery.refetch(); despesasQuery.refetch()
   }
 
   async function confirmarPagamento(negocioId, trancheIndex, descricao) {
@@ -130,15 +162,13 @@ export function Financeiro() {
         const err = await r.json().catch(() => ({}))
         throw new Error(err.error || `Erro ${r.status}`)
       }
-      load()
+      // Confirmar pagamento afeta pendentes/recebidos do cashflow (core).
+      coreQuery.refetch()
     } catch (e) {
       console.error('[confirmarPagamento]', e)
       setError(e.message)
     }
   }
-
-  useEffect(() => { load() }, [])
-  useRefreshOnMutation(load)
 
   const negociosLista  = kpis?.negociosLista ?? []
   const categoriasPie  = (kpis?.categorias ?? [])
@@ -173,8 +203,8 @@ export function Financeiro() {
       </div>
 
       <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>
+        {(error || coreQuery.error) && (
+          <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error || coreQuery.error.message}</div>
         )}
 
         {/* Hero banner — identidade Somnium */}
@@ -377,7 +407,7 @@ export function Financeiro() {
             </div>
 
             {editingDesp !== null && (
-              <DespesaForm item={editingDesp} onSave={saveDespesa} onCancel={() => setEditingDesp(null)} onReload={load} />
+              <DespesaForm item={editingDesp} onSave={saveDespesa} onCancel={() => setEditingDesp(null)} onReload={despesasQuery.refetch} />
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
               <KPICard label="Burn Rate / Mês"     value={EUR(despesas?.burnRate)}      meta="—" status="green"  trend="neutral" unit="" />
@@ -650,7 +680,7 @@ export function Financeiro() {
             </div>
           </>
         )}
-        {tab === 'P&L' && !projecao && !loading && (
+        {tab === 'P&L' && !projecao && !projecaoQuery.isPending && (
           <div className="text-center text-gray-400 py-12 text-sm">Sem dados de projeção disponíveis</div>
         )}
 

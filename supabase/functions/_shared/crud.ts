@@ -211,7 +211,7 @@ function createCRUD(table: string, { searchFields = ["nome"], defaultSort = "cre
       const vals = cols.map((_, i) => `$${i + 1}`);
       const params = [id, ...entries.map(([k, v]) => serializeForCol(v, jsonbCols.has(k))), now, now];
       await pool.query(`INSERT INTO ${table} (${cols.join(", ")}) VALUES (${vals.join(", ")})`, params);
-      auditLog(table, id, "INSERT", null, { id, ...cleanData }, regiaoActiva);
+      await auditLog(table, id, "INSERT", null, { id, ...cleanData }, regiaoActiva).catch((e: Error) => console.error("[auditLog]", table, id, e.message));
       return { id, ...cleanData, created_at: now, updated_at: now };
     },
 
@@ -231,7 +231,7 @@ function createCRUD(table: string, { searchFields = ["nome"], defaultSort = "cre
       sets.push(`updated_at = $${entries.length + 1}`);
       const params = [...entries.map(([k, v]) => serializeForCol(v, jsonbCols.has(k))), now, id];
       await pool.query(`UPDATE ${table} SET ${sets.join(", ")} WHERE id = $${entries.length + 2}`, params);
-      auditLog(table, id, "UPDATE", existing[0], cleanData, regiaoActiva);
+      await auditLog(table, id, "UPDATE", existing[0], cleanData, regiaoActiva).catch((e: Error) => console.error("[auditLog]", table, id, e.message));
       return { ...existing[0], ...cleanData, updated_at: now };
     },
 
@@ -239,7 +239,7 @@ function createCRUD(table: string, { searchFields = ["nome"], defaultSort = "cre
       const { rows: existing } = await pool.query(`SELECT * FROM ${table} WHERE id = $1`, [id]);
       if (!existing[0]) return false;
       await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
-      auditLog(table, id, "DELETE", existing[0], null, regiaoActiva);
+      await auditLog(table, id, "DELETE", existing[0], null, regiaoActiva).catch((e: Error) => console.error("[auditLog]", table, id, e.message));
       return true;
     },
 

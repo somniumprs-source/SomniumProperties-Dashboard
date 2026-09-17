@@ -5,7 +5,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { MessageSquare, Plus, ChevronDown, ChevronUp, Trash2, Mic } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
-import { fmtDate } from '../../constants.js'
+import { fmtDateHora } from '../../constants.js'
 import { GravacaoCard } from './GravacaoCard.jsx'
 
 const fmtDia = d => { if (!d) return '—'; try { return new Date(d).toLocaleDateString('pt-PT') } catch { return d } }
@@ -226,10 +226,7 @@ export function ImovelInteracoesSection({ imovelId, consultores, onUpdate }) {
           ) : (
             <div className="space-y-2">
               {interacoes.map(i => {
-                const dataHora = i.data_hora ? new Date(i.data_hora) : null
-                const dataStr = dataHora
-                  ? `${dataHora.toLocaleDateString('pt-PT')} ${dataHora.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}`
-                  : '—'
+                const dataStr = fmtDateHora(i.data_hora)
                 return (
                   <div key={i.id} className="bg-amber-50 border border-amber-100 rounded-lg px-4 py-3 group">
                     <div className="flex items-start justify-between gap-2">

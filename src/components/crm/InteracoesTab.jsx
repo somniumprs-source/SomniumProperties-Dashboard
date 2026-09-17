@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react'
 import { Phone, MessageCircle, ArrowUpRight, ArrowDownLeft, Plus, Clock } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
-import { fmtDate } from '../../constants.js'
+import { fmtDateHora } from '../../constants.js'
 
 const CANAL_ICON = { Chamada: Phone, WhatsApp: MessageCircle }
 const DIRECAO_ICON = { Enviado: ArrowUpRight, Resposta: ArrowDownLeft, Recebido: ArrowDownLeft }
@@ -212,10 +212,7 @@ export function InteracoesTab({ consultorId, onUpdate, autoOpenForm = false, onA
             const isRecebido = i.direcao === 'Recebido' || i.direcao === 'Resposta'
             const isAgente = (i.notas || '').includes('[AGENTE]') || (i.notas || '').includes('[FOLLOW-UP') || (i.notas || '').includes('[REACTIVAÇÃO')
             const tempoResp = tempoRespostaMap[i.id]
-            const dataHora = i.data_hora ? new Date(i.data_hora) : null
-            const dataStr = dataHora
-              ? `${dataHora.toLocaleDateString('pt-PT')} ${dataHora.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}`
-              : '—'
+            const dataStr = fmtDateHora(i.data_hora)
             // Limpar prefixos do agente para mostrar so o texto
             const textoLimpo = (i.notas || '').replace(/^\[AGENTE\]\s*/, '').replace(/^\[FOLLOW-UP AUTO\]\s*/, '').replace(/^\[REACTIVAÇÃO\]\s*/, '')
 

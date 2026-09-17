@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { supabase, authEnabled } from '../lib/supabase.js'
+import { apiFetch } from '../lib/api.js'
 
 const AuthContext = createContext(null)
 
@@ -29,7 +30,7 @@ export function AuthProvider({ children }) {
         session = r.data.session
       }
       if (!session?.access_token) { setProfile(null); return }
-      const r = await fetch('/api/users/me', { headers: { Authorization: `Bearer ${session.access_token}` } })
+      const r = await apiFetch('/api/users/me')
       if (!r.ok) { setProfile(null); return }
       const j = await r.json()
       setProfile({

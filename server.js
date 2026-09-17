@@ -79,8 +79,8 @@ async function validateTokenCoalesced(token) {
 app.use('/api', async (req, res, next) => {
   // Webhook Twilio — validacao feita no handler (X-Twilio-Signature)
   if (req.path.startsWith('/webhook/')) return next()
-  // Cron jobs, templates, relatórios, reactivação — protegidos por API key interna
-  if (req.path.startsWith('/cron/') || req.path.startsWith('/template/') || req.path.startsWith('/relatorios') || req.path.startsWith('/reactivacao')) {
+  // Cron jobs, templates, relatórios — protegidos por API key interna
+  if (req.path.startsWith('/cron/') || req.path.startsWith('/template/') || req.path.startsWith('/relatorios')) {
     const internalKey = process.env.INTERNAL_API_KEY
     if (internalKey && req.headers['x-api-key'] !== internalKey) {
       // Em dev (sem key configurada), deixar passar
@@ -192,7 +192,11 @@ try {
   // de financeiro, comercial (dashboard), KPIs, métricas, alertas, OKRs ou
   // tarefas — expondo dados financeiros e de consultores da empresa inteira
   // a um investidor externo, por exemplo.
-  const DASHBOARD_AREA_PREFIXES = ['/api/kpis', '/api/financeiro', '/api/comercial', '/api/metricas', '/api/alertas', '/api/operacoes', '/api/okrs', '/api/tarefas', '/api/weekly-pulse', '/api/ops-scorecard', '/api/time-tracking', '/api/data-health']
+  // /api/marketing e /api/okr-krs faltavam aqui (achado do script de paridade
+  // de endpoints — server.js/dashboard/index.ts) apesar de serem dados da
+  // mesma área restrita; sem impacto em produção (server.js só corre em dev),
+  // mas mantém o guard coerente com o resto do ficheiro.
+  const DASHBOARD_AREA_PREFIXES = ['/api/kpis', '/api/financeiro', '/api/comercial', '/api/metricas', '/api/alertas', '/api/operacoes', '/api/okrs', '/api/okr-krs', '/api/tarefas', '/api/weekly-pulse', '/api/ops-scorecard', '/api/time-tracking', '/api/data-health', '/api/marketing']
   app.use('/api', async (req, res, next) => {
     const hit = DASHBOARD_AREA_PREFIXES.some(p => req.path === p || req.path.startsWith(p + '/'))
     if (!hit) return next()
@@ -2010,8 +2014,18 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
     const margemPct = avg(negPeriodo.filter(n => n.capitalTotal > 0).map(n => lucroDe(n) / n.capitalTotal * 100))
     const burnMensal = round2(despesasDaEmpresa(despesas).reduce((s,d) => s + (d.custoMensal || 0), 0))
     const cac = dealsPeriodo > 0 ? round2(burnMensal * mesesPeriodo / dealsPeriodo) : null
-    const roiMedio = avg(imoveisAll.filter(i => i.roi > 0).map(i => i.roi))
-    const roiAnualizadoMedio = avg(imoveisAll.filter(i => i.roiAnualizado > 0).map(i => i.roiAnualizado))
+    // "ROI médio" só faz sentido para modelos de compra-e-valoriza (CAEP,
+    // Fix and Flip) — Wholesalling é cedência de posição com lucro = fee fixa,
+    // não um retorno comparável, e diluía/distorcia esta média (achado da
+    // auditoria: mesmo rótulo "ROI médio" a medir populações diferentes
+    // consoante o ecrã). Mesma definição usada em /kpis/imoveis e em Métricas.
+    const idsRoiElegivel = new Set(
+      negocios.filter(n => n.categoria === 'CAEP' || n.categoria === 'Fix and Flip')
+        .flatMap(n => n.imovel)
+    )
+    const imoveisRoiElegiveis = imoveisAll.filter(i => idsRoiElegivel.has(i.id))
+    const roiMedio = avg(imoveisRoiElegiveis.filter(i => i.roi > 0).map(i => i.roi))
+    const roiAnualizadoMedio = avg(imoveisRoiElegiveis.filter(i => i.roiAnualizado > 0).map(i => i.roiAnualizado))
     const descontoMedio = avg(imoveisAll
       .filter(i => inP(i.dataProposta, start, end) && i.askPrice > 0 && i.valorProposta > 0)
       .map(i => (i.askPrice - i.valorProposta) / i.askPrice * 100))

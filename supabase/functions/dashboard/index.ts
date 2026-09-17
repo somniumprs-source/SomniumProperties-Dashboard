@@ -20,6 +20,29 @@ import {
   round2,
 } from "../_shared/queries.ts";
 import { calcBurnRateMensal, despesasDaEmpresa } from "../_shared/financeCalc.ts";
+import { TTLCache } from "../_shared/ttlCache.ts";
+
+// Cache de endpoints pesados — port de endpointCache() em server.js (achado
+// da auditoria: dev tinha cache de 2-5min nestes 13 endpoints, produção
+// recalculava tudo em cada pedido). Só GET, só respostas 2xx. Em memória por
+// instância da Edge Function — beneficia pedidos repetidos na mesma instância
+// "quente", tal como a cache de dev; reinicia-se com um cold start novo.
+const dashboardCache = new TTLCache(60000);
+function endpointCache(ttl: number) {
+  return async (c: any, next: any) => {
+    const url = new URL(c.req.url);
+    const key = `dash:${url.pathname}?${url.searchParams.toString()}|r=${c.req.header("x-regiao") || ""}`;
+    const cached = dashboardCache.get(key);
+    if (cached !== undefined) return c.json(cached);
+    await next();
+    if (c.res && c.res.status >= 200 && c.res.status < 300) {
+      try {
+        const payload = await c.res.clone().json();
+        dashboardCache.set(key, payload, ttl);
+      } catch { /* resposta não-JSON (ex: erro sem body) — não cachear */ }
+    }
+  };
+}
 
 // pool.query e os mappers das queries resolvem para `any` (pg sem tipos), pelo que
 // as funcoes importadas chegam como Promise<any>. Reanotamos aqui para Promise<any[]>
@@ -282,7 +305,7 @@ async function kpisFinanceiro(regiao: string | null) {
   };
 }
 
-app.get("/kpis/financeiro", async (c: any) => {
+app.get("/kpis/financeiro", endpointCache(300000), async (c: any) => {
   try {
     const regiao = regiaoFrom(c);
     return c.json(await kpisFinanceiro(regiao));
@@ -293,7 +316,7 @@ app.get("/kpis/financeiro", async (c: any) => {
 });
 
 // ── Despesas operacionais ────────────────────────────────────────
-app.get("/financeiro/despesas", async (c: any) => {
+app.get("/financeiro/despesas", endpointCache(300000), async (c: any) => {
   try {
     const despesas = await getDespesas({ regiao: regiaoFrom(c) });
     // Despesas de obra (negocio_id preenchido) já estão no custo do projecto —
@@ -373,7 +396,7 @@ async function financeiroCashflow(regiao: string | null) {
   return { lucroPendente, lucroRecebido, burnRate, runway, pendentes: pendentesOrdenados, recebidos };
 }
 
-app.get("/financeiro/cashflow", async (c: any) => {
+app.get("/financeiro/cashflow", endpointCache(300000), async (c: any) => {
   try {
     const regiao = regiaoFrom(c);
     return c.json(await financeiroCashflow(regiao));
@@ -388,7 +411,7 @@ app.get("/financeiro/pl", (c: any) => c.json({}));
 app.get("/financeiro/budget", (c: any) => c.json({ linhas: [] }));
 
 // ── Conta Corrente (extrato cronológico) ─────────────────────────
-app.get("/financeiro/conta-corrente", async (c: any) => {
+app.get("/financeiro/conta-corrente", endpointCache(300000), async (c: any) => {
   try {
     const regiao = regiaoFrom(c);
     const [negócios, despesasAll] = await Promise.all([getNegócios({ regiao }), getDespesas({ regiao })]);
@@ -526,7 +549,7 @@ app.get("/financeiro/conta-corrente", async (c: any) => {
 });
 
 // ── Aging de pagamentos faseados ─────────────────────────────────
-app.get("/financeiro/aging", async (c: any) => {
+app.get("/financeiro/aging", endpointCache(300000), async (c: any) => {
   try {
     const negocios = await getNegócios();
     const hoje = new Date();
@@ -565,7 +588,7 @@ app.get("/financeiro/aging", async (c: any) => {
 });
 
 // ── Rentabilidade ────────────────────────────────────────────────
-app.get("/financeiro/rentabilidade", async (c: any) => {
+app.get("/financeiro/rentabilidade", endpointCache(300000), async (c: any) => {
   try {
     const [negocios, imoveis, consultores, investidores] = await Promise.all([
       getNegócios(),
@@ -801,7 +824,7 @@ async function kpisComercial(regiao: string | null) {
   };
 }
 
-app.get("/kpis/comercial", async (c: any) => {
+app.get("/kpis/comercial", endpointCache(300000), async (c: any) => {
   try {
     const regiao = regiaoFrom(c);
     return c.json(await kpisComercial(regiao));
@@ -1307,7 +1330,7 @@ app.get("/comercial/metricas-temporais", async (c: any) => {
 // DASHBOARD COMERCIAL — métricas/KPI por período (semana/mês/trimestre/ano)
 // com comparação vs período anterior. Port do handler dev (server.js).
 // ════════════════════════════════════════════════════════════════
-app.get("/comercial/dashboard", async (c: any) => {
+app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
   try {
     const pq = c.req.query("periodo");
     const periodo = ["semana", "mes", "trimestre", "ano"].includes(pq) ? pq : "mes";
@@ -1391,8 +1414,18 @@ app.get("/comercial/dashboard", async (c: any) => {
     const margemPct = avg(negPeriodo.filter((n: any) => n.capitalTotal > 0).map((n: any) => lucroDe(n) / n.capitalTotal * 100));
     const burnMensal = round2(despesasDaEmpresa(despesas).reduce((s: number, d: any) => s + (d.custoMensal || 0), 0));
     const cac = dealsPeriodo > 0 ? round2(burnMensal * mesesPeriodo / dealsPeriodo) : null;
-    const roiMedio = avg(imoveisAll.filter((i) => i.roi > 0).map((i) => i.roi));
-    const roiAnualizadoMedio = avg(imoveisAll.filter((i) => i.roiAnualizado > 0).map((i) => i.roiAnualizado));
+    // "ROI médio" só faz sentido para modelos de compra-e-valoriza (CAEP,
+    // Fix and Flip) — Wholesalling é cedência de posição com lucro = fee fixa,
+    // não um retorno comparável, e diluía/distorcia esta média (achado da
+    // auditoria: mesmo rótulo "ROI médio" a medir populações diferentes
+    // consoante o ecrã). Mesma definição usada em /kpis/imoveis e em Métricas.
+    const idsRoiElegivel = new Set(
+      negocios.filter((n: any) => n.categoria === "CAEP" || n.categoria === "Fix and Flip")
+        .flatMap((n: any) => n.imovel),
+    );
+    const imoveisRoiElegiveis = imoveisAll.filter((i: any) => idsRoiElegivel.has(i.id));
+    const roiMedio = avg(imoveisRoiElegiveis.filter((i) => i.roi > 0).map((i) => i.roi));
+    const roiAnualizadoMedio = avg(imoveisRoiElegiveis.filter((i) => i.roiAnualizado > 0).map((i) => i.roiAnualizado));
     const descontoMedio = avg(imoveisAll
       .filter((i) => inP(i.dataProposta, start, end) && i.askPrice > 0 && i.valorProposta > 0)
       .map((i) => (i.askPrice - i.valorProposta) / i.askPrice * 100));
@@ -1555,7 +1588,7 @@ async function kpisMarketing() {
   return { leadsGerados, cpl, sql, taxaQualificacao, receitaAtribuida: round2(receitaAtribuida), roi, campanhasAtivas: ativas.slice(0, 10) };
 }
 
-app.get("/kpis/marketing", async (c: any) => {
+app.get("/kpis/marketing", endpointCache(300000), async (c: any) => {
   try {
     return c.json(await kpisMarketing());
   } catch (err: any) {
@@ -1651,7 +1684,7 @@ async function kpisOperacoes() {
   };
 }
 
-app.get("/kpis/operacoes", async (c: any) => {
+app.get("/kpis/operacoes", endpointCache(300000), async (c: any) => {
   try {
     return c.json(await kpisOperacoes());
   } catch (err: any) {
@@ -1737,7 +1770,7 @@ app.get("/kpis", async (c: any) => {
 // ════════════════════════════════════════════════════════════════
 // CASH FLOW PROJETADO — Projeção mensal
 // ════════════════════════════════════════════════════════════════
-app.get("/financeiro/projecao", async (c: any) => {
+app.get("/financeiro/projecao", endpointCache(300000), async (c: any) => {
   try {
     const [negocios, despesas] = await Promise.all([getNegócios(), getDespesas()]);
     const now = new Date();
@@ -3560,7 +3593,7 @@ app.delete("/okr-krs/:id", async (c: any) => {
 // ════════════════════════════════════════════════════════════════
 // ALERTAS
 // ════════════════════════════════════════════════════════════════
-app.get("/alertas", async (c: any) => {
+app.get("/alertas", endpointCache(300000), async (c: any) => {
   try {
     const regiao = regiaoFrom(c);
     const [imoveis, investidoresRaw, consultoresRaw, negocios] = await Promise.all([
@@ -4308,7 +4341,7 @@ app.get("/time-tracking", async (c: any) => {
 // ════════════════════════════════════════════════════════════════
 // DATA HEALTH
 // ════════════════════════════════════════════════════════════════
-app.get("/data-health", async (c: any) => {
+app.get("/data-health", endpointCache(300000), async (c: any) => {
   try {
     const [imoveis, investidores, consultoresRaw, negocios, despesas] = await Promise.all([
       getImóveis().catch(() => [] as any[]),

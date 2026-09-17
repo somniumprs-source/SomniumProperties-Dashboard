@@ -55,7 +55,7 @@ export function VisitasTab({ imovelId, onUpdate }) {
 
   async function loadInvestidores() {
     try {
-      const r = await apiFetch('/api/crm/investidores?limit=500&sort=nome')
+      const r = await apiFetch('/api/crm/investidores?limit=1000&sort=nome')
       const j = await r.json()
       setInvestidores(j.data || [])
     } catch { setInvestidores([]) }

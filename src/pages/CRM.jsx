@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Header } from '../components/layout/Header.jsx'
 import { KanbanBoard } from '../components/crm/KanbanBoard.jsx'
 import { MOTIVOS_NAO_INTERESSA_PADRAO } from '../components/crm/detailPanelConstants.js'
@@ -8,7 +9,7 @@ import { TabKPIs } from '../components/crm/TabKPIs.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { KanbanSkeleton, TableSkeleton } from '../components/ui/Skeleton.jsx'
 import { EmptyState } from '../components/ui/EmptyState.jsx'
-import { Building2, Users, UserCheck, HardHat, Sparkles, ChevronLeft, ChevronRight, Phone, MessageCircle, Wallet, AlertTriangle, Clock as Clock3, Plus } from 'lucide-react'
+import { Building2, Users, UserCheck, HardHat, Sparkles, ChevronLeft, ChevronRight, Phone, MessageCircle, Wallet, AlertTriangle, Clock as Clock3, Plus, RefreshCw } from 'lucide-react'
 import { OportunidadesPanel } from '../components/crm/OportunidadesPanel.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { Button } from '../components/ui/Button.jsx'
@@ -16,7 +17,7 @@ import { KpiCard } from '../components/ui/KpiCard.jsx'
 import { MultiSelect } from '../components/ui/MultiSelect.jsx'
 import { Combobox } from '../components/ui/Combobox.jsx'
 import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
-import { apiFetch, openDocument } from '../lib/api.js'
+import { apiFetch, apiFetchJson, openDocument } from '../lib/api.js'
 import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
 import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 import { RegiaoToggle } from '../components/RegiaoBadge.jsx'
@@ -666,9 +667,6 @@ export function CRM() {
       else sessionStorage.removeItem(`somnium.regiao.${regionalKey}`)
     } catch {}
   }
-  const [data, setData] = useState([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useUrlState('q', '')
   const [searchInput, setSearchInput] = useState(search)
   const [editing, setEditing] = useState(null) // null = list view, object = edit/create
@@ -697,55 +695,64 @@ export function CRM() {
     [tab, filters, invSubTab]
   )
 
-  const load = useCallback(async () => {
-    // Oportunidades tem fetch e UI próprios (OportunidadesPanel) — não passa
-    // pelo endpoint genérico /api/crm/{endpoint} (undefined para esta tab).
-    if (tab === 'Oportunidades') { setLoading(false); return }
-    setLoading(true)
-    // Geral (regiaoActiva = null) é válido — backend devolve sem filtro.
-    try {
+  // Migrado para React Query (Problema 23 da auditoria): antes cada mudança de
+  // aba refazia o pedido do zero e mostrava sempre um spinner, mesmo ao voltar
+  // a uma aba já vista há segundos — a cache (staleTime/gcTime já configurados
+  // em src/lib/queryClient.js, nunca ligados a nenhuma página) torna a
+  // navegação entre abas instantânea a partir da 2ª visita. A forma de chamar
+  // (`load()`) mantém-se igual para não obrigar a mexer nos ~15 sítios que já
+  // a invocam directamente após mutações.
+  const listQuery = useQuery({
+    queryKey: ['crm-list', tab, endpoint, search, invSubTab, effectiveFilters, regiaoActiva],
+    enabled: tab !== 'Oportunidades',
+    queryFn: async () => {
+      // Geral (regiaoActiva = null) é válido — backend devolve sem filtro.
+      let items
       if (search) {
         const params = new URLSearchParams({ search })
         // Investidores: sempre filtrar por tipo mesmo na pesquisa
         if (tab === 'Investidores') params.set('tipo_principal', invSubTab)
         for (const [k, v] of Object.entries(effectiveFilters)) { if (v && k !== 'tipo_principal') params.set(k, v) }
-        const r = await apiFetch(`/api/crm/${endpoint}?${params}`, { regiao: regiaoActiva })
-        const d = await r.json()
-        let items = d.data ?? []
+        const d = await apiFetchJson(`/api/crm/${endpoint}?${params}`, { regiao: regiaoActiva })
+        items = d.data ?? []
         // Filtrar client-side se backend não suportar tipo_principal na pesquisa
         if (tab === 'Investidores') items = items.filter(i => tipoPrincipalIncludes(i.tipo_principal, invSubTab))
-        setData(items); setTotal(items.length)
       } else if (tab === 'Consultores') {
         // Usar endpoint enriquecido para consultores (com métricas e alertas)
         const params = new URLSearchParams()
         for (const [k, v] of Object.entries(effectiveFilters)) { if (v) params.set(k, v) }
-        const r = await apiFetch(`/api/crm/consultores/enriched${params.toString() ? '?' + params : ''}`, { regiao: regiaoActiva })
-        const d = await r.json()
-        let items = d.data ?? []
+        const d = await apiFetchJson(`/api/crm/consultores/enriched${params.toString() ? '?' + params : ''}`, { regiao: regiaoActiva })
+        items = d.data ?? []
         // Filtrar client-side por estado_avaliacao se necessário
         if (effectiveFilters.estado_avaliacao) items = items.filter(c => c.estado_avaliacao === effectiveFilters.estado_avaliacao)
-        setData(items); setTotal(items.length)
       } else {
-        const params = new URLSearchParams({ limit: '200' })
+        // limit generoso (achado da auditoria: volumes reais são pequenos —
+        // ver Problema 24 — mas 200 já não tinha margem nenhuma de segurança)
+        const params = new URLSearchParams({ limit: '1000' })
         for (const [k, v] of Object.entries(effectiveFilters)) { if (v) params.set(k, v) }
-        const r = await apiFetch(`/api/crm/${endpoint}?${params}`, { regiao: regiaoActiva })
-        const d = await r.json()
-        let items = d.data ?? []
+        const d = await apiFetchJson(`/api/crm/${endpoint}?${params}`, { regiao: regiaoActiva })
+        items = d.data ?? []
         // Segurança extra: filtrar client-side para investidores
         if (tab === 'Investidores') items = items.filter(i => tipoPrincipalIncludes(i.tipo_principal, invSubTab))
-        setData(items); setTotal(items.length)
       }
-      // Carregar progresso checklist para imóveis
+      // Carregar progresso checklist para imóveis (fire-and-forget, como antes)
       if (tab === 'Imóveis') {
-        apiFetch('/api/crm/checklist/progress-batch', { regiao: regiaoActiva }).then(r => r.json()).then(d => {
+        apiFetchJson('/api/crm/checklist/progress-batch', { regiao: regiaoActiva }).then(d => {
           checklistProgressCache = d
         }).catch(() => {})
       }
-    } catch {}
-    setLoading(false)
-  }, [endpoint, tab, search, filters, invSubTab, effectiveFilters, regiaoActiva, regionalKey])
-
-  useEffect(() => { load() }, [load])
+      return { items, total: items.length }
+    },
+  })
+  // useMemo (não só `?? []`) para manter a mesma referência entre renders
+  // enquanto os dados não mudam — um array novo a cada render invalidava
+  // desnecessariamente os useCallback/useEffect noutros pontos do ficheiro
+  // que dependem de `data`.
+  const data = useMemo(() => listQuery.data?.items ?? [], [listQuery.data])
+  const total = listQuery.data?.total ?? 0
+  const loading = tab === 'Oportunidades' ? false : listQuery.isPending
+  const loadError = listQuery.isError
+  const load = listQuery.refetch
   // Forçar filtro tipo_principal quando sub-tab investidores muda
   useEffect(() => {
     if (tab === 'Investidores') {
@@ -1353,11 +1360,24 @@ export function CRM() {
 
           {/* Kanban View */}
           {!loading && editing === null && view === 'kanban' && kanbanConfig && data.length === 0 && (
-            <EmptyState
-              icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Construtores': HardHat, 'Oportunidades': Sparkles }[tab] || Building2}
-              title={`Sem ${tab.toLowerCase()}`}
-              description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
-            />
+            loadError ? (
+              <EmptyState
+                icon={AlertTriangle}
+                title="Erro ao carregar"
+                description="Não foi possível ligar ao servidor. Verifica a tua ligação e tenta novamente."
+                action={
+                  <button onClick={load} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-neutral-800 text-white hover:bg-neutral-700 transition-colors">
+                    <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
+                  </button>
+                }
+              />
+            ) : (
+              <EmptyState
+                icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Construtores': HardHat, 'Oportunidades': Sparkles }[tab] || Building2}
+                title={`Sem ${tab.toLowerCase()}`}
+                description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
+              />
+            )
           )}
           {moveModal && (
             <MoveReasonModal
@@ -1384,11 +1404,24 @@ export function CRM() {
 
           {/* Table View */}
           {!loading && editing === null && tab !== 'Oportunidades' && (view === 'table' || !hasKanban) && data.length === 0 && (
-            <EmptyState
-              icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Construtores': HardHat, 'Oportunidades': Sparkles }[tab] || Building2}
-              title={`Sem ${tab.toLowerCase()}`}
-              description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
-            />
+            loadError ? (
+              <EmptyState
+                icon={AlertTriangle}
+                title="Erro ao carregar"
+                description="Não foi possível ligar ao servidor. Verifica a tua ligação e tenta novamente."
+                action={
+                  <button onClick={load} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-neutral-800 text-white hover:bg-neutral-700 transition-colors">
+                    <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
+                  </button>
+                }
+              />
+            ) : (
+              <EmptyState
+                icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Construtores': HardHat, 'Oportunidades': Sparkles }[tab] || Building2}
+                title={`Sem ${tab.toLowerCase()}`}
+                description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
+              />
+            )
           )}
           {!loading && editing === null && (view === 'table' || !hasKanban) && data.length > 0 && (
             <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs overflow-hidden">
@@ -2178,7 +2211,7 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
   // Load relation lookups
   useEffect(() => {
     fields.filter(f => ['relation', 'relation_name', 'relation_name_or_new'].includes(f.type)).forEach(f => {
-      fetch(f.endpoint).then(r => r.json()).then(data => {
+      apiFetch(f.endpoint, { regiao }).then(r => r.json()).then(data => {
         setLookups(prev => ({ ...prev, [f.key]: data }))
       }).catch(() => {})
     })
@@ -2318,7 +2351,7 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
                 regiao={form.regiao || regiao}
                 onChange={v => handleChange(f.key, v)}
                 onCreated={() => {
-                  fetch(f.endpoint).then(r => r.json()).then(data => setLookups(prev => ({ ...prev, [f.key]: data }))).catch(() => {})
+                  apiFetch(f.endpoint, { regiao }).then(r => r.json()).then(data => setLookups(prev => ({ ...prev, [f.key]: data }))).catch(() => {})
                 }}
               />
             ) : f.type === 'textarea' ? (

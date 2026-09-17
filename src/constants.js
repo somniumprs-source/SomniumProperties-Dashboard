@@ -206,6 +206,14 @@ export function fmtDate(iso) {
   return `${d}/${m}/${y}`
 }
 
+// ── Formatar data+hora ISO → DD/MM/YYYY HH:MM ─────────────────
+export function fmtDateHora(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return `${d.toLocaleDateString('pt-PT')} ${d.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}`
+}
+
 // ── Formatar data relativa ("há 3 dias") ─────────────────────
 export function fmtDateRelative(iso) {
   if (!iso) return '—'

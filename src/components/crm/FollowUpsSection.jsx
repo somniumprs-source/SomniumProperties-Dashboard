@@ -9,7 +9,7 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Plus, Trash2, CalendarClock, Mic, Upload, Loader2, X } from 'lucide-react'
-import { apiFetch } from '../../lib/api.js'
+import { apiFetch, apiFetchJson } from '../../lib/api.js'
 import { GravacaoCard } from './GravacaoCard.jsx'
 import { inputClass } from './RegistoManualFieldset.jsx'
 
@@ -42,8 +42,7 @@ export function FollowUpsSection({ consultorId, onUpdate }) {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const r = await apiFetch(`/api/crm/consultores/${consultorId}/followups`)
-      const data = await r.json()
+      const data = await apiFetchJson(`/api/crm/consultores/${consultorId}/followups`)
       setItems(Array.isArray(data) ? data : [])
     } catch { setItems([]) }
     await loadGravacoes()
@@ -55,8 +54,7 @@ export function FollowUpsSection({ consultorId, onUpdate }) {
   // Lista de imoveis para o seletor "Imovel relacionado".
   useEffect(() => {
     let activo = true
-    apiFetch('/api/crm/imoveis')
-      .then(r => r.json())
+    apiFetchJson('/api/crm/imoveis?limit=1000')
       .then(d => { if (activo) setImoveis(Array.isArray(d) ? d : []) })
       .catch(() => { if (activo) setImoveis([]) })
     return () => { activo = false }

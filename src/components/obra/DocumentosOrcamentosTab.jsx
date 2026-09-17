@@ -34,7 +34,7 @@ export function DocumentosOrcamentosTab({ imovelId }) {
 
   async function loadConstrutores() {
     try {
-      const r = await apiFetch('/api/crm/empreiteiros?limit=200')
+      const r = await apiFetch('/api/crm/empreiteiros?limit=1000')
       const { data } = await r.json()
       setConstrutores(Array.isArray(data) ? data : [])
     } catch { setConstrutores([]) }

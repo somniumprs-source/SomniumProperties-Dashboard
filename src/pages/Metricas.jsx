@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { Header } from '../components/layout/Header.jsx'
 import { PageSkeleton } from '../components/ui/Skeleton.jsx'
@@ -173,17 +174,13 @@ function ProgressMeta({ label, value, meta, format = 'eur' }) {
 // ── Main ────────────────────────────────────────────────────────
 export function Metricas() {
   const [tab, setTab]       = useUrlState('tab', 'resumo')
-  const [data, setData]     = useState(null)
-  const [okrs, setOkrs]     = useState([])
-  const [fontes, setFontes] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError]   = useState(null)
   const [showOkrForm, setShowOkrForm] = useState(false)
   const [editingOkr, setEditingOkr] = useState(null)
 
-  async function load() {
-    setLoading(true); setError(null)
-    try {
+  // Migrado para React Query (Problema 23 da auditoria) — ver Financeiro.jsx/CRM.jsx.
+  const query = useQuery({
+    queryKey: ['metricas-dashboard'],
+    queryFn: async () => {
       const [r, okrRes, fontesRes] = await Promise.all([
         apiFetch('/api/metricas'),
         apiFetch('/api/okrs').then(r => r.json()).catch(() => []),
@@ -192,20 +189,22 @@ export function Metricas() {
       if (!r.ok) throw new Error('Erro no servidor')
       const d = await r.json()
       if (d.error) throw new Error(d.error)
-      setData(d)
-      setOkrs(okrRes)
-      setFontes(fontesRes)
+      let okrs = okrRes
       // Seed Q2 se vazio
       if (!okrRes.length) {
         await apiFetch('/api/okrs/seed-q2', { method: 'POST' })
-        const seeded = await apiFetch('/api/okrs').then(r => r.json()).catch(() => [])
-        setOkrs(seeded)
+        okrs = await apiFetch('/api/okrs').then(r => r.json()).catch(() => [])
       }
-    } catch (e) { setError(e.message) }
-    finally { setLoading(false) }
-  }
+      return { data: d, okrs, fontes: fontesRes }
+    },
+  })
+  const data = query.data?.data ?? null
+  const okrs = useMemo(() => query.data?.okrs ?? [], [query.data])
+  const fontes = useMemo(() => query.data?.fontes ?? [], [query.data])
+  const loading = query.isPending
+  const error = query.error?.message || null
+  const load = query.refetch
 
-  useEffect(() => { load() }, [])
   useRefreshOnMutation(load)
 
   const top = data?.top

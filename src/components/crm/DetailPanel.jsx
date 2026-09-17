@@ -2,9 +2,9 @@
  * Painel de detalhe para Imóveis, Investidores, Consultores.
  * Mostra: campos editáveis + relações + timeline + tarefas + reuniões.
  */
-import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, memo, lazy, Suspense } from 'react'
 import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, RefreshCw, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin, Eye, Trash2 } from 'lucide-react'
-import { apiFetch, openDocument } from '../../lib/api.js'
+import { apiFetch, apiFetchJson, openDocument } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { PartilharAcesso } from '../PartilharAcesso.jsx'
 import { FollowUpsSection } from './FollowUpsSection.jsx'
@@ -36,17 +36,30 @@ import coimbraFreguesiasData from '../../constants/coimbra-freguesias.json'
 import ampFreguesiasData from '../../constants/amp-freguesias.json'
 import { CLASS_COLOR, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, ORIGENS_INVESTIDORES, fmtDate, fmtDateRelative } from '../../constants.js'
 
-// Hook simples — carrega lookups uma vez e mantém em memória
+// Hook simples — carrega lookups uma vez e mantém em memória. Invalidada
+// automaticamente pelo evento global `somnium:refresh` (mesmo padrão do
+// useConsultoresLookup abaixo), para não servir zonas/tags desactualizadas
+// depois de uma mutation que as tenha alterado noutro sítio da app.
 const __lookupsCache = { data: null, promise: null }
 function useLookups() {
   const [data, setData] = useState(__lookupsCache.data)
+  const [refreshTick, setRefreshTick] = useState(0)
   useEffect(() => {
-    if (__lookupsCache.data) return
+    const onRefresh = () => {
+      __lookupsCache.data = null
+      __lookupsCache.promise = null
+      setRefreshTick(t => t + 1)
+    }
+    window.addEventListener('somnium:refresh', onRefresh)
+    return () => window.removeEventListener('somnium:refresh', onRefresh)
+  }, [])
+  useEffect(() => {
+    if (__lookupsCache.data) { setData(__lookupsCache.data); return }
     if (!__lookupsCache.promise) {
-      __lookupsCache.promise = apiFetch('/api/crm/lookups').then(r => r.json()).then(d => { __lookupsCache.data = d; return d })
+      __lookupsCache.promise = apiFetchJson('/api/crm/lookups').then(d => { __lookupsCache.data = d; return d }).catch(() => ({}))
     }
     __lookupsCache.promise.then(setData)
-  }, [])
+  }, [refreshTick])
   return data || {}
 }
 
@@ -732,7 +745,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
   }
 
   function loadData() {
-    return apiFetch(`/api/crm/${endpoint}/${id}/full`).then(r => r.json()).then(setData).catch(() => {})
+    return apiFetchJson(`/api/crm/${endpoint}/${id}/full`).then(setData).catch(() => {})
   }
 
   // Recarregar dados quando sai da tab analise (para reflectir alterações da calculadora)
@@ -797,6 +810,20 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
   function cancelEdit() { setEditing(false); setForm({}) }
   function setField(k, v) { setForm(prev => ({ ...prev, [k]: v })) }
 
+  // Trocar de aba com edição por guardar em curso sobrescrevia silenciosamente
+  // alterações feitas noutras abas (ex: Checklist) ao voltar e guardar com o
+  // form antigo. Avisar e obrigar a guardar (ou ficar) antes de mudar de aba.
+  async function handleTabChange(key) {
+    if (key === activeTab) return
+    if (editing && JSON.stringify(form) !== JSON.stringify(data)) {
+      const guardar = confirm('Tens alterações por guardar nesta aba.\n\nOK = Guardar e mudar de aba\nCancelar = Ficar nesta aba')
+      if (!guardar) return
+      const ok = await saveEdit()
+      if (!ok) return
+    }
+    setActiveTab(key)
+  }
+
   useEffect(() => {
     if (!id || !endpoint) return
     setLoading(true)
@@ -818,8 +845,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
 
     // Carregar reuniões para investidores e consultores
     if (type === 'Investidores' || type === 'Consultores') {
-      apiFetch(`/api/crm/reunioes?entidade_tipo=${endpoint}&entidade_id=${id}`)
-        .then(r => r.json())
+      apiFetchJson(`/api/crm/reunioes?entidade_tipo=${endpoint}&entidade_id=${id}`)
         .then(setReunioes)
         .catch(() => {})
     }
@@ -925,7 +951,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       {tabs.length > 1 && (
         <div className="flex border-b border-gray-200 overflow-x-auto" style={{ backgroundColor: '#F5F4F0' }}>
           {tabs.map(t => (
-            <button key={t.key} onClick={() => setActiveTab(t.key)}
+            <button key={t.key} onClick={() => handleTabChange(t.key)}
               className="relative px-4 sm:px-5 py-3 text-sm font-medium transition-colors whitespace-nowrap"
               style={{
                 color: activeTab === t.key ? '#1A1A1A' : '#9ca3af',
@@ -1360,7 +1386,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
                     <span className="text-purple-400 shrink-0">{r.data?.slice(5, 10)}</span>
                   </div>
                 ))}
-                <button onClick={() => setActiveTab('relatorios')} className="text-xs font-medium px-2 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 w-full text-center">
+                <button onClick={() => handleTabChange('relatorios')} className="text-xs font-medium px-2 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 w-full text-center">
                   Ver todos os relatórios →
                 </button>
               </div>
@@ -1597,7 +1623,13 @@ function Field({ label, value }) {
   )
 }
 
-function EF({ label, field, form, set, type = 'text', options }) {
+// memo com comparador próprio (achado da auditoria — Problema 27): o `form`
+// inteiro muda de referência a cada tecla premida em QUALQUER campo (setField
+// faz setForm(prev => ({...prev, [k]: v}))), por isso um memo raso continuaria
+// a re-renderizar todos os ~48 campos do formulário a cada tecla. Comparar só
+// o valor do campo que este EF representa resolve isso: só o campo realmente
+// alterado volta a renderizar.
+const EF = memo(function EF({ label, field, form, set, type = 'text', options }) {
   const inputClass = "w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
   return (
     <div>
@@ -1616,7 +1648,13 @@ function EF({ label, field, form, set, type = 'text', options }) {
       )}
     </div>
   )
-}
+}, (prev, next) => (
+  prev.field === next.field &&
+  prev.label === next.label &&
+  prev.type === next.type &&
+  prev.options === next.options &&
+  prev.form[prev.field] === next.form[next.field]
+))
 
 // Conta quantos campos da lista estão preenchidos no objecto (truthy + !== "")
 function countFilled(obj, fields) {
@@ -2166,7 +2204,10 @@ function ImovelEditSections({ data, form, setField }) {
       <EF label="Modelo de Negócio" field="modelo_negocio" form={form} set={setField} type="select" options={MODELO_NEGOCIO_OPTS} />
       <EF label="Data Adicionado" field="data_adicionado" form={form} set={setField} type="date" />
       <EF label="Data Chamada" field="data_chamada" form={form} set={setField} type="date" />
-      <EF label="Data Visita" field="data_visita" form={form} set={setField} type="date" />
+      {/* Read-only: derivado automaticamente da última visita realizada (aba
+          Visitas / tabela `visitas`), nunca deve ser editado directamente
+          (ver comentário em src/db/pg.js sobre `imoveis.data_visita`). */}
+      <Field label="Data Visita (auto — ver aba Visitas)" value={data.data_visita} />
       <EF label="Data Estudo Mercado" field="data_estudo_mercado" form={form} set={setField} type="date" />
       <EF label="Data Proposta" field="data_proposta" form={form} set={setField} type="date" />
       <EF label="Data Proposta Aceite" field="data_proposta_aceite" form={form} set={setField} type="date" />
@@ -3149,6 +3190,7 @@ function AvaliacaoTab({ data, onUpdate }) {
 }
 
 function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }) {
+  const toast = useToast()
   const [scorecards, setScorecards] = useState([])
   const [rubrica, setRubrica] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -3161,12 +3203,12 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
 
   useEffect(() => {
     Promise.all([
-      apiFetch(`/api/crm/scorecards/${investidorId}`).then(r => r.json()),
-      apiFetch('/api/crm/scorecards/rubrica').then(r => r.json()),
+      apiFetchJson(`/api/crm/scorecards/${investidorId}`),
+      apiFetchJson('/api/crm/scorecards/rubrica'),
     ]).then(([sc, rb]) => {
       setScorecards(sc)
       setRubrica(rb)
-    }).finally(() => setLoading(false))
+    }).catch(() => {}).finally(() => setLoading(false))
   }, [investidorId])
 
   const pesos = rubrica?.pesos?.[tipo] || { c1: 0.20, c2: 0.10, c3: 0.30, c4: 0.20, c5: 0.20 }
@@ -3179,7 +3221,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
   async function saveScorecard() {
     setSaving(true)
     try {
-      const r = await apiFetch('/api/crm/scorecards', {
+      await apiFetchJson('/api/crm/scorecards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3190,15 +3232,12 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
           fonte: 'manual',
         }),
       })
-      const result = await r.json()
-      if (result.ok) {
-        setCreating(false)
-        setForm({ c1_score: 3, c2_score: 3, c3_score: 3, c4_score: 3, c5_score: 3, c1_notas: '', c2_notas: '', c3_notas: '', c4_notas: '', c5_notas: '' })
-        const sc = await apiFetch(`/api/crm/scorecards/${investidorId}`).then(r => r.json())
-        setScorecards(sc)
-        if (onUpdate) onUpdate()
-      }
-    } catch (e) { console.error(e) }
+      setCreating(false)
+      setForm({ c1_score: 3, c2_score: 3, c3_score: 3, c4_score: 3, c5_score: 3, c1_notas: '', c2_notas: '', c3_notas: '', c4_notas: '', c5_notas: '' })
+      const sc = await apiFetchJson(`/api/crm/scorecards/${investidorId}`)
+      setScorecards(sc)
+      if (onUpdate) onUpdate()
+    } catch (e) { toast(e.message || 'Erro ao guardar scorecard', 'error') }
     setSaving(false)
   }
 
@@ -3541,10 +3580,12 @@ function ClassificacaoTab({ investidorId, investidorNome, classificacaoActual, p
   const [loading, setLoading] = useState(true)
   const [reclassificando, setReclassificando] = useState(false)
 
+  const toast = useToast()
+
   useEffect(() => {
-    apiFetch(`/api/crm/classificacao-historico/${investidorId}`)
-      .then(r => r.json())
+    apiFetchJson(`/api/crm/classificacao-historico/${investidorId}`)
       .then(setHistorico)
+      .catch(() => {})
       .finally(() => setLoading(false))
   }, [investidorId])
 
@@ -3552,9 +3593,9 @@ function ClassificacaoTab({ investidorId, investidorNome, classificacaoActual, p
     setReclassificando(true)
     try {
       await apiFetch('/api/crm/automation/reclassificar-investidores', { method: 'POST' })
-      const h = await apiFetch(`/api/crm/classificacao-historico/${investidorId}`).then(r => r.json())
+      const h = await apiFetchJson(`/api/crm/classificacao-historico/${investidorId}`)
       setHistorico(h)
-    } catch (e) { console.error(e) }
+    } catch (e) { toast(e.message || 'Erro ao reclassificar', 'error') }
     setReclassificando(false)
   }
 

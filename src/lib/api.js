@@ -151,6 +151,23 @@ export async function apiFetch(url, options = {}) {
   }
 }
 
+/**
+ * apiFetch + parse JSON, mas a rejeitar em respostas não-OK em vez de
+ * devolver silenciosamente o corpo de erro como se fossem dados válidos
+ * (achado da auditoria: 3 padrões de tratamento de erro diferentes espalhados
+ * pelo código — este helper unifica para o padrão correcto). Usar sempre que
+ * o chamador só precisa do JSON de sucesso; para casos que precisam de
+ * inspeccionar `response.status`/headers, continuar a usar `apiFetch` directo.
+ */
+export async function apiFetchJson(url, options = {}) {
+  const r = await apiFetch(url, options)
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}))
+    throw new Error(err.error || `Erro ${r.status}`)
+  }
+  return r.json()
+}
+
 // Deriva um nome de ficheiro a partir do path do endpoint (último segmento
 // significativo), para o atributo `download` quando o backend não envia
 // Content-Disposition (ex.: respostas servidas via redirect do Storage).

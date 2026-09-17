@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Header } from '../components/layout/Header.jsx'
 import { PageSkeleton } from '../components/ui/Skeleton.jsx'
 import { apiFetch } from '../lib/api.js'
@@ -256,11 +257,8 @@ function CalendarWeek({ events, tarefas }) {
 // ── Main ────────────────────────────────────────────────────────
 export function Operacoes() {
   const [tab, setTab] = useUrlState('tab', 'resumo')
-  const [data, setData] = useState(null)
-  const [tarefas, setTarefas] = useState([])
-  const [loading, setLoading] = useState(true)
   const [syncingGcal, setSyncingGcal] = useState(false)
-  const [error, setError] = useState(null)
+  const [mutationError, setMutationError] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [editingTask, setEditingTask] = useState(null)
   const [taskFilter, setTaskFilter] = useState('semana')
@@ -272,9 +270,10 @@ export function Operacoes() {
   const [dragOverStatus, setDragOverStatus] = useState(null)
   const [syncing, setSyncing] = useState(false)
 
-  const loadAll = useCallback(async () => {
-    setLoading(true); setError(null)
-    try {
+  // Migrado para React Query (Problema 23 da auditoria) — ver Financeiro.jsx/CRM.jsx.
+  const query = useQuery({
+    queryKey: ['operacoes-dashboard'],
+    queryFn: async () => {
       // Antes esta vista chamava também /api/calendar/events (GCal directo).
       // Mas isso causava duplicação: cada evento aparecia uma vez como tarefa
       // sincronizada (com gcal_event_id) e outra vez como evento GCal "puro".
@@ -283,16 +282,20 @@ export function Operacoes() {
       // que ainda não passaram pelo pull, usa-se o botão "Sincronizar agora".
       const [tr, tf] = await Promise.all([
         apiFetch('/api/time-tracking').then(r => r.json()),
-        apiFetch('/api/tarefas?limit=200').then(r => r.json()),
+        // limit generoso — achado da auditoria: 200 cortava tarefas reais (já
+        // havia 229 em produção, silenciosamente truncadas sem aviso nenhum).
+        apiFetch('/api/tarefas?limit=1000').then(r => r.json()),
       ])
       if (tr.error) throw new Error(tr.error)
-      setData(tr)
-      setTarefas(tf.data || [])
-    } catch (e) { setError(e.message) }
-    finally { setLoading(false) }
-  }, [])
+      return { data: tr, tarefas: tf.data || [] }
+    },
+  })
+  const data = query.data?.data ?? null
+  const tarefas = useMemo(() => query.data?.tarefas ?? [], [query.data])
+  const loading = query.isPending
+  const error = mutationError || query.error?.message || null
+  const loadAll = query.refetch
 
-  useEffect(() => { loadAll() }, [loadAll])
   useRefreshOnMutation(loadAll)
 
   // Força um pull GCal → tarefas e recarrega a lista. Antes era preciso esperar
@@ -302,7 +305,7 @@ export function Operacoes() {
     try {
       await apiFetch('/api/calendar/pull', { method: 'POST' })
       await loadAll()
-    } catch (e) { setError(e.message) }
+    } catch (e) { setMutationError(e.message) }
     finally { setSyncingGcal(false) }
   }
 
@@ -315,7 +318,7 @@ export function Operacoes() {
       if (d.error) throw new Error(d.error)
       setShowForm(false); setEditingTask(null)
       await loadAll()
-    } catch (e) { setError(e.message) }
+    } catch (e) { setMutationError(e.message) }
   }
 
   async function deleteTarefa(id) {
@@ -323,14 +326,14 @@ export function Operacoes() {
       await apiFetch(`/api/tarefas/${id}`, { method: 'DELETE' })
       setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n })
       await loadAll()
-    } catch (e) { setError(e.message) }
+    } catch (e) { setMutationError(e.message) }
   }
 
   async function updateStatus(id, status) {
     try {
       await apiFetch(`/api/tarefas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
       await loadAll()
-    } catch (e) { setError(e.message) }
+    } catch (e) { setMutationError(e.message) }
   }
 
   async function handleDropStatus(status) {
@@ -354,7 +357,7 @@ export function Operacoes() {
         throw new Error(msg)
       }
       await loadAll()
-    } catch (e) { setError(e.message) }
+    } catch (e) { setMutationError(e.message) }
     finally { setSyncing(false) }
   }
 
@@ -400,7 +403,7 @@ export function Operacoes() {
       await Promise.all([...selectedIds].map(id => apiFetch(`/api/tarefas/${id}`, { method: 'DELETE' })))
       setSelectedIds(new Set())
       await loadAll()
-    } catch (e) { setError(e.message) }
+    } catch (e) { setMutationError(e.message) }
   }
 
   function toggleSelect(id) {

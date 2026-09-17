@@ -24,7 +24,7 @@ export function ImovelDocumentacao({ imovelId, tipoImovel }) {
   }
 
   const subs = [
-    { key: 'checklist', label: 'Checklist', icon: ListChecks },
+    { key: 'checklist', label: 'Documentos Obrigatórios', icon: ListChecks },
     { key: 'outros', label: 'Outros Documentos', icon: Files },
     { key: 'relatorio', label: 'Relatório', icon: FileBarChart2 },
   ]
