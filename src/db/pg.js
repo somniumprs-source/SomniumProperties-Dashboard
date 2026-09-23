@@ -1742,8 +1742,8 @@ export async function initSchema() {
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 
-      -- Tipo de documento por custo: fatura ou comprovativo de pagamento/
-      -- transferência (compra, IMT, IS não têm fatura) — ver migration
+      -- Tipo de documento por custo: fatura ou comprovativo de pagamento
+      -- (transferência incluída; compra, IMT, IS não têm fatura) — ver migration
       -- 0062_despesas_tipo_documento.sql.
       DO $$ BEGIN
         ALTER TABLE despesas ADD COLUMN IF NOT EXISTS tipo_documento TEXT DEFAULT 'fatura';

@@ -5815,7 +5815,7 @@ app.get("/projetos/:negocioId/despesas", async (c: any) => {
 
 // Documento que suporta cada custo da aba "Faturas e Comprovativos": a compra
 // do imóvel, o IMT e o IS não têm fatura, só comprovativo — e contam na mesma.
-const TIPOS_DOCUMENTO_DESPESA = ["fatura", "comprovativo_pagamento", "comprovativo_transferencia"];
+const TIPOS_DOCUMENTO_DESPESA = ["fatura", "comprovativo_pagamento"];
 
 // ── POST despesa por fase — port de routes.js 4185-4214 ──
 app.post("/projetos/:negocioId/despesas", async (c: any) => {

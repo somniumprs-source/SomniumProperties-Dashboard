@@ -1138,7 +1138,7 @@ function TabFaturacao({ negocio, imovel, analise, onChange, readOnly }) {
 
 // ════════════════════════════════════════════════════════════════
 // TAB: FATURAS E COMPROVATIVOS — faturas de fornecedores e comprovativos
-// de pagamento/transferência (compra do imóvel, IMT e IS não têm fatura,
+// de pagamento — transferência incluída (compra do imóvel, IMT e IS não têm fatura,
 // só comprovativo, e contam na mesma), valor manual + estado de pagamento. Reaproveita a tabela despesas (negocio_id) e o mecanismo
 // de comprovativo já usado nas "Despesas reais" por fase (aba Obras).
 // Cada fatura liga a uma rubrica da Análise Financeira (ou 'Custo extra',
@@ -1150,7 +1150,6 @@ const FATURA_EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', curr
 const TIPOS_DOCUMENTO = [
   { key: 'fatura', label: 'Fatura', cls: 'bg-gray-100 text-gray-600' },
   { key: 'comprovativo_pagamento', label: 'Comprovativo de pagamento', cls: 'bg-indigo-50 text-indigo-700' },
-  { key: 'comprovativo_transferencia', label: 'Comprovativo de transferência', cls: 'bg-indigo-50 text-indigo-700' },
 ]
 const tipoDocumentoDe = f => TIPOS_DOCUMENTO.find(t => t.key === f.tipo_documento) || TIPOS_DOCUMENTO[0]
 

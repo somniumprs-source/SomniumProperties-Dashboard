@@ -5557,7 +5557,7 @@ function validarRubricaDespesa(rubrica, justificacao) {
 
 // Documento que suporta cada custo da aba "Faturas e Comprovativos": a compra
 // do imóvel, o IMT e o IS não têm fatura, só comprovativo — e contam na mesma.
-const TIPOS_DOCUMENTO_DESPESA = ['fatura', 'comprovativo_pagamento', 'comprovativo_transferencia']
+const TIPOS_DOCUMENTO_DESPESA = ['fatura', 'comprovativo_pagamento']
 
 router.get('/projetos/:negocioId/despesas', async (req, res) => {
   try {
