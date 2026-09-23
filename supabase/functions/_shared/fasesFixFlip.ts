@@ -227,7 +227,7 @@ export const FASES_WHOLESALLING = [
     cor: '#0d0d0d',
     descricao: 'Finder fee liquidada',
     tarefas: [
-      'Emitir factura',
+      'Emitir fatura',
       'Confirmar recebimento do fee',
       'Reconciliar com financeiro',
       'Arquivo do dossier',
@@ -323,7 +323,7 @@ export const FASES_MEDIACAO = [
     tarefas: [
       'Marcação de escritura',
       'Assinatura escritura',
-      'Emissão factura de comissão',
+      'Emissão fatura de comissão',
       'Recebimento e arquivo',
     ],
   },

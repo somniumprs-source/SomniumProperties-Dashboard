@@ -5789,7 +5789,7 @@ app.delete("/projetos/documentos/:docId", async (c: any) => {
 });
 
 // ── GET despesas por fase — port de routes.js 4171-4183 ──
-// rubrica_analise liga a factura a uma rubrica da Análise Financeira (lista em
+// rubrica_analise liga a fatura a uma rubrica da Análise Financeira (lista em
 // src/components/projeto/EstimadoVsReal.jsx). "extra" = custo fora da Análise,
 // obriga a justificação para a análise final do negócio.
 function validarRubricaDespesa(rubrica: unknown, justificacao: unknown): string | null {
@@ -5814,7 +5814,7 @@ app.get("/projetos/:negocioId/despesas", async (c: any) => {
 });
 
 // Documento que suporta cada custo da aba "Faturas e Comprovativos": a compra
-// do imóvel, o IMT e o IS não têm factura, só comprovativo — e contam na mesma.
+// do imóvel, o IMT e o IS não têm fatura, só comprovativo — e contam na mesma.
 const TIPOS_DOCUMENTO_DESPESA = ["fatura", "comprovativo_pagamento", "comprovativo_transferencia"];
 
 // ── POST despesa por fase — port de routes.js 4185-4214 ──
@@ -5861,7 +5861,7 @@ app.post("/projetos/:negocioId/despesas", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── PUT despesa/factura — aba "Faturas" do Projecto (editar valor/estado de pagamento) ──
+// ── PUT despesa/fatura — aba "Faturas" do Projecto (editar valor/estado de pagamento) ──
 app.put("/projetos/despesas/:despesaId", async (c: any) => {
   try {
     const despesaId = c.req.param("despesaId");

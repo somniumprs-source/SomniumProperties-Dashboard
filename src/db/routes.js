@@ -5545,7 +5545,7 @@ router.delete('/projetos/documentos/:docId', async (req, res) => {
 })
 
 // ── DESPESAS por fase (F2.6) ────────────────────────────────
-// rubrica_analise liga a factura a uma rubrica da Análise Financeira (lista em
+// rubrica_analise liga a fatura a uma rubrica da Análise Financeira (lista em
 // src/components/projeto/EstimadoVsReal.jsx). 'extra' = custo fora da Análise,
 // obriga a justificação para a análise final do negócio.
 function validarRubricaDespesa(rubrica, justificacao) {
@@ -5556,7 +5556,7 @@ function validarRubricaDespesa(rubrica, justificacao) {
 }
 
 // Documento que suporta cada custo da aba "Faturas e Comprovativos": a compra
-// do imóvel, o IMT e o IS não têm factura, só comprovativo — e contam na mesma.
+// do imóvel, o IMT e o IS não têm fatura, só comprovativo — e contam na mesma.
 const TIPOS_DOCUMENTO_DESPESA = ['fatura', 'comprovativo_pagamento', 'comprovativo_transferencia']
 
 router.get('/projetos/:negocioId/despesas', async (req, res) => {
@@ -5618,7 +5618,7 @@ router.post('/projetos/:negocioId/despesas', async (req, res) => {
 })
 
 // Aba "Faturas" do Projecto — editar campos (valor, fornecedor, categoria,
-// data) e alternar estado de pagamento de uma despesa/factura já criada.
+// data) e alternar estado de pagamento de uma despesa/fatura já criada.
 router.put('/projetos/despesas/:despesaId', async (req, res) => {
   try {
     const { despesaId } = req.params
@@ -5662,7 +5662,7 @@ router.put('/projetos/despesas/:despesaId', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// Upload de comprovativo (factura/recibo) — separado para suportar multipart
+// Upload de comprovativo (fatura/recibo) — separado para suportar multipart
 const projetoCompDir = path.resolve(__dirname, '../../public/uploads/comprovativos')
 try { mkdirSync(projetoCompDir, { recursive: true }) } catch {}
 const projetoCompStorage = multer.diskStorage({

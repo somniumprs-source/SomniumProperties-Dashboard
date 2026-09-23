@@ -1,7 +1,7 @@
 /**
  * Quadro "Estimado vs Real" (aba Resumo do projecto) — espelho entre a Análise Financeira
  * (valores estimados, análise activa do imóvel) e as Faturas e Comprovativos (valores reais,
- * tabela despesas do negócio). Cada factura é ligada a uma rubrica da Análise
+ * tabela despesas do negócio). Cada fatura é ligada a uma rubrica da Análise
  * via despesas.rubrica_analise; custos fora da Análise usam a rubrica 'extra'
  * e exigem motivo + justificação, para a análise final do negócio.
  * Só consulta: toda a introdução de valores é feita na aba Faturas e Comprovativos.
@@ -29,7 +29,7 @@ const round2 = x => Math.round((x + Number.EPSILON) * 100) / 100
 // dos estimados é igual ao custo_total da análise. `acumula`: rubricas que vão
 // sendo faturadas ao longo do projecto (obra, custos mensais) — enquanto o
 // projecto corre, o custo final previsto é max(real, estimado); nas restantes
-// (pagamento único) uma factura registada é tratada como valor final.
+// (pagamento único) uma fatura registada é tratada como valor final.
 // `semCapital`: não conta para o capital a adiantar (comissão paga pelo sinal).
 const GRUPO_VENDA_DEDUCAO = 'Descontado na venda'
 
@@ -47,7 +47,7 @@ export const RUBRICAS = [
   { key: 'prestacoes',       grupo: 'Financiamento',  label: 'Prestações do crédito',      est: a => n(a.prestacao_mensal) * meses(a), acumula: true },
   { key: 'obra',             grupo: 'Obra',           label: 'Obra (c/ IVA)',              est: a => n(a.obra_com_iva), acumula: true },
   // Licenças e certificações: detalhe do subtotal licenciamento da Análise. A key
-  // 'licenciamento' fica como "Outras" (residual) — compatível com facturas antigas
+  // 'licenciamento' fica como "Outras" (residual) — compatível com faturas antigas
   // e com análises sem detalhe, e a soma das 3 é sempre igual a licenciamento.
   { key: 'lic_camara',       grupo: 'Licenças e certificações', label: 'Licenças e taxas camarárias', est: a => n(a.lic_camara) },
   { key: 'lic_aru',          grupo: 'Licenças e certificações', label: 'Certificação ARU',            est: a => n(a.lic_aru) },
@@ -108,7 +108,7 @@ export function labelRubrica(key) {
 
 // Select de rubrica usado na aba Faturas e Comprovativos (criar e reclassificar faturas e comprovativos).
 // A rubrica é obrigatória: a opção vazia só aparece como placeholder (desactivada),
-// para facturas novas ("Escolher rubrica…") ou antigas ainda sem rubrica.
+// para faturas novas ("Escolher rubrica…") ou antigas ainda sem rubrica.
 export function RubricaSelect({ value, onChange, analise, className = '', incluirExtra = true, placeholder = '— Por classificar —', ...rest }) {
   return (
     <select value={value || ''} onChange={e => onChange(e.target.value)} className={className} {...rest}>

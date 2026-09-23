@@ -1137,11 +1137,11 @@ function TabFaturacao({ negocio, imovel, analise, onChange, readOnly }) {
 }
 
 // ════════════════════════════════════════════════════════════════
-// TAB: FATURAS E COMPROVATIVOS — facturas de fornecedores e comprovativos
-// de pagamento/transferência (compra do imóvel, IMT e IS não têm factura,
+// TAB: FATURAS E COMPROVATIVOS — faturas de fornecedores e comprovativos
+// de pagamento/transferência (compra do imóvel, IMT e IS não têm fatura,
 // só comprovativo, e contam na mesma), valor manual + estado de pagamento. Reaproveita a tabela despesas (negocio_id) e o mecanismo
 // de comprovativo já usado nas "Despesas reais" por fase (aba Obras).
-// Cada factura liga a uma rubrica da Análise Financeira (ou 'Custo extra',
+// Cada fatura liga a uma rubrica da Análise Financeira (ou 'Custo extra',
 // com motivo + justificação obrigatórios) — alimenta o quadro Estimado vs
 // Real da aba Resumo.
 // ════════════════════════════════════════════════════════════════
@@ -1182,7 +1182,7 @@ function TabFaturas({ negocioId, analise, readOnly }) {
     e.preventDefault()
     if (!form.fornecedor.trim() || !form.valor) return
     if (!form.rubrica_analise) {
-      toast?.('Escolhe a rubrica da Análise Financeira desta factura.', 'error', 3500)
+      toast?.('Escolhe a rubrica da Análise Financeira desta fatura.', 'error', 3500)
       return
     }
     if (form.rubrica_analise === RUBRICA_EXTRA && (!form.motivo_extra || !form.justificacao.trim())) {
@@ -1337,7 +1337,7 @@ function TabFaturas({ negocioId, analise, readOnly }) {
                 ))}
               </div>
               {form.tipo_documento !== 'fatura' && (
-                <p className="mt-1 text-[11px] text-gray-400">Para custos sem factura (compra do imóvel, IMT, IS…). Um comprovativo prova o pagamento — fica registado como pago. Se o custo já tem factura aqui, anexa o comprovativo a essa factura em vez de o lançar de novo.</p>
+                <p className="mt-1 text-[11px] text-gray-400">Para custos sem fatura (compra do imóvel, IMT, IS…). Um comprovativo prova o pagamento — fica registado como pago. Se o custo já tem fatura aqui, anexa o comprovativo a essa fatura em vez de o lançar de novo.</p>
               )}
             </div>
             <div>
@@ -1348,7 +1348,7 @@ function TabFaturas({ negocioId, analise, readOnly }) {
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Descrição</label>
               <input value={form.movimento} onChange={e => setForm(f => ({ ...f, movimento: e.target.value }))}
-                placeholder={form.tipo_documento === 'fatura' ? 'Ex: Factura nº 123' : 'Ex: Pagamento do IMT'} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+                placeholder={form.tipo_documento === 'fatura' ? 'Ex: Fatura nº 123' : 'Ex: Pagamento do IMT'} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Valor (€) *</label>

@@ -1033,7 +1033,7 @@ export async function initSchema() {
       -- Tipo do projecto: 'fracao_unica' (default) ou 'predio' (com várias frações + áreas comuns)
       ALTER TABLE negocios ADD COLUMN IF NOT EXISTS tipo_projeto TEXT DEFAULT 'fracao_unica';
 
-      -- P4: comprovativos em despesas (factura/recibo) + categoria mais rica
+      -- P4: comprovativos em despesas (fatura/recibo) + categoria mais rica
       ALTER TABLE despesas ADD COLUMN IF NOT EXISTS comprovativo_url TEXT;
       ALTER TABLE despesas ADD COLUMN IF NOT EXISTS comprovativo_nome TEXT;
       ALTER TABLE despesas ADD COLUMN IF NOT EXISTS fornecedor TEXT;
@@ -1724,7 +1724,7 @@ export async function initSchema() {
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 
-      -- Aba "Faturas" do Projecto: estado de pagamento por despesa/factura
+      -- Aba "Faturas" do Projecto: estado de pagamento por despesa/fatura
       -- (ver migration 0053_despesas_pago.sql).
       DO $$ BEGIN
         ALTER TABLE despesas ADD COLUMN IF NOT EXISTS pago BOOLEAN DEFAULT false;
@@ -1733,7 +1733,7 @@ export async function initSchema() {
       END $$;
 
       -- Quadro Estimado vs Real (Resumo do Projecto): rubrica da Análise
-      -- Financeira por factura + motivo/justificação dos custos extra
+      -- Financeira por fatura + motivo/justificação dos custos extra
       -- (ver migration 0056_despesas_rubrica_analise.sql).
       DO $$ BEGIN
         ALTER TABLE despesas ADD COLUMN IF NOT EXISTS rubrica_analise TEXT;
@@ -1742,8 +1742,8 @@ export async function initSchema() {
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 
-      -- Tipo de documento por custo: factura ou comprovativo de pagamento/
-      -- transferência (compra, IMT, IS não têm factura) — ver migration
+      -- Tipo de documento por custo: fatura ou comprovativo de pagamento/
+      -- transferência (compra, IMT, IS não têm fatura) — ver migration
       -- 0062_despesas_tipo_documento.sql.
       DO $$ BEGIN
         ALTER TABLE despesas ADD COLUMN IF NOT EXISTS tipo_documento TEXT DEFAULT 'fatura';
