@@ -29,3 +29,6 @@ AUTO_PUSH_FALHOU.txt
 
 # Manifesto por-sessão do Stop hook (ficheiros tocados pelo Claude)
 .claude/.touched/
+
+# Estado local do Supabase CLI (inclui URL do pooler) — nunca commitar
+supabase/.temp/

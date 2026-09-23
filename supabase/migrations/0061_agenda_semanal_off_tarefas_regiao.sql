@@ -34,7 +34,7 @@ update tarefas set regiao = null
 where origem_tipo is null and regiao = 'Coimbra'
   and not (
     template_id is null and (
-      categoria in ('Visita', 'Visita a Obra')
+      coalesce(categoria, '') in ('Visita', 'Visita a Obra') -- sem coalesce, categoria NULL anulava o NOT
       or tarefa ilike 'visita%'
       or tarefa ilike '%obra%'
     )
