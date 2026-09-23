@@ -31,6 +31,8 @@ const round2 = x => Math.round((x + Number.EPSILON) * 100) / 100
 // projecto corre, o custo final previsto é max(real, estimado); nas restantes
 // (pagamento único) uma factura registada é tratada como valor final.
 // `semCapital`: não conta para o capital a adiantar (comissão paga pelo sinal).
+const GRUPO_VENDA_DEDUCAO = 'Descontado na venda'
+
 export const RUBRICAS = [
   // Compra = total de aquisição guardado menos os restantes custos de aquisição:
   // inclui o fee de cedência (Wholesaling), tal como calcAnalise o soma à compra.
@@ -58,7 +60,9 @@ export const RUBRICAS = [
   { key: 'tranches',         grupo: 'Detenção',       label: 'Custos de tranches',         est: a => n(a.n_tranches || 1) * n(a.custo_tranche) },
   { key: 'ligacao_servicos', grupo: 'Detenção',       label: 'Ligação de serviços',        est: a => n(a.ligacao_servicos) },
   { key: 'excedente_capital',grupo: 'Detenção',       label: 'Excedente de capital (reserva)', est: a => n(a.excedente_capital) },
-  { key: 'comissao_venda',   grupo: 'Venda',          label: 'Comissão de mediação (c/ IVA)', est: a => n(a.comissao_com_iva), semCapital: true },
+  // A comissão sai do preço de venda (paga no sinal do comprador): não é despesa
+  // coberta pelo capital — fica num grupo próprio, mas conta para o lucro.
+  { key: 'comissao_venda',   grupo: GRUPO_VENDA_DEDUCAO, label: 'Comissão de mediação (c/ IVA)', est: a => n(a.comissao_com_iva), semCapital: true },
   { key: 'cpcv_venda',       grupo: 'Venda',          label: 'CPCV de venda',              est: a => n(a.cpcv_venda) },
   { key: 'cert_energetico',  grupo: 'Venda',          label: 'Certificado energético',     est: a => n(a.cert_energetico) },
   { key: 'home_staging',     grupo: 'Venda',          label: 'Home staging',               est: a => n(a.home_staging) },
@@ -86,7 +90,9 @@ export const MOTIVOS_EXTRA = [
   'Outro',
 ]
 
+// Despesas pagas pelo capital primeiro; o que é descontado na venda fica no fim.
 export const GRUPOS = [...new Set(RUBRICAS.map(r => r.grupo))]
+  .sort((a, b) => (a === GRUPO_VENDA_DEDUCAO) - (b === GRUPO_VENDA_DEDUCAO))
 
 // Despesas antigas sem rubrica: as registadas numa fase de obra contam como Obra.
 export function rubricaDe(d) {
@@ -195,17 +201,20 @@ export function QuadroEstimadoVsReal({ negocioId, analise, faturacao }) {
     const poupancas = round2(todas.filter(l => l.desvioEfetivo < 0).reduce((s, l) => s + l.desvioEfetivo, 0))
     const derrapagens = round2(todas.filter(l => l.desvioEfetivo > 0).reduce((s, l) => s + l.desvioEfetivo, 0))
 
-    const despesasEstimadas = round2(linhas.reduce((s, l) => s + l.estimado, 0))
-    // Parte das despesas que não precisa de capital (comissão paga pelo sinal do
-    // comprador) e parte coberta por financiamento bancário.
-    const despesasSemCapital = round2(linhas.filter(l => l.semCapital).reduce((s, l) => s + l.estimado, 0))
-    const despesasReais = round2(despesas.reduce((s, d) => s + n(d.custo_mensal), 0))
-    const despesasPagas = round2(despesas.filter(d => d.pago).reduce((s, d) => s + n(d.custo_mensal), 0))
+    // Despesas = só o que o capital (e o crédito) paga. A comissão de venda é
+    // descontada ao preço de venda e fica à parte (deducaoVenda*).
+    const semCapitalKeys = new Set(RUBRICAS.filter(r => r.semCapital).map(r => r.key))
+    const ehDeducao = d => semCapitalKeys.has(rubricaDe(d))
+    const deducaoVendaEst = round2(linhas.filter(l => l.semCapital).reduce((s, l) => s + l.estimado, 0))
+    const deducaoVendaReal = round2(despesas.filter(ehDeducao).reduce((s, d) => s + n(d.custo_mensal), 0))
+    const despesasEstimadas = round2(linhas.filter(l => !l.semCapital).reduce((s, l) => s + l.estimado, 0))
+    const despesasReais = round2(despesas.filter(d => !ehDeducao(d)).reduce((s, d) => s + n(d.custo_mensal), 0))
+    const despesasPagas = round2(despesas.filter(d => d.pago && !ehDeducao(d)).reduce((s, d) => s + n(d.custo_mensal), 0))
 
     return {
       linhas, linhasExtra, linhasSem, extras,
       totalExtras: somar(extras),
-      despesasEstimadas, despesasSemCapital, valorFinanciado: n(a.valor_financiado), despesasReais, despesasPagas,
+      despesasEstimadas, despesasReais, despesasPagas, deducaoVendaEst, deducaoVendaReal, valorFinanciado: n(a.valor_financiado),
       desvioTotal, poupancas, derrapagens,
       lucroEstimado: L, lucroAjustado,
       capitalEstimado: C, capitalAjustado,
@@ -234,10 +243,12 @@ export function QuadroEstimadoVsReal({ negocioId, analise, faturacao }) {
   // Reconciliação despesas ↔ capital (tooltip): o KpiCard trunca a linha de baixo.
   const despEstDetalhe = [
     `${EUR(calc.despesasEstimadas)} despesas estimadas`,
-    calc.despesasSemCapital > 0 && `− ${EUR(calc.despesasSemCapital)} comissão de mediação (paga no sinal do comprador)`,
     calc.valorFinanciado > 0 && `− ${EUR(calc.valorFinanciado)} financiamento bancário`,
-    `= ${EUR(calc.capitalEstimado)} a financiar com capital`,
+    calc.valorFinanciado > 0 && `= ${EUR(calc.capitalEstimado)} a financiar com capital`,
+    calc.deducaoVendaEst > 0 && `Comissão de mediação (${EUR(calc.deducaoVendaEst)}) descontada na venda — não usa capital`,
   ].filter(Boolean).join('\n')
+  const despEstSub = calc.valorFinanciado > 0 ? `Capital: ${EUR(calc.capitalEstimado)} · resto crédito`
+    : calc.deducaoVendaEst > 0 ? `Sem comissão (sai da venda)` : 'Análise Financeira'
   const actualizado = despesasQuery.dataUpdatedAt ? new Date(despesasQuery.dataUpdatedAt).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) : null
 
   return (
@@ -266,7 +277,7 @@ export function QuadroEstimadoVsReal({ negocioId, analise, faturacao }) {
             value={EUR(fatReal)} sub={`${fatPct}% · tranches confirmadas`} />
           <div title={despEstDetalhe}>
             <KpiCard size="sm" icon={Calculator} tone="gray" label="Despesas estimadas"
-              value={EUR(calc.despesasEstimadas)} sub={`A financiar: ${EUR(calc.capitalEstimado)}`} className="h-full" />
+              value={EUR(calc.despesasEstimadas)} sub={despEstSub} className="h-full" />
           </div>
           <KpiCard size="sm" icon={Receipt} tone={execPct > 100 ? 'red' : 'amber'} label="Despesas reais"
             value={EUR(calc.despesasReais)} sub={`${execPct}% executado · ${EUR(despPendentes)} pendente`} />
@@ -303,7 +314,7 @@ export function QuadroEstimadoVsReal({ negocioId, analise, faturacao }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {GRUPOS.map(g => {
+                    {GRUPOS.filter(g => g !== GRUPO_VENDA_DEDUCAO).map(g => {
                       const ls = calc.linhas.filter(l => l.grupo === g && (l.estimado > 0 || l.temReal))
                       if (ls.length === 0) return null
                       return [
@@ -319,14 +330,28 @@ export function QuadroEstimadoVsReal({ negocioId, analise, faturacao }) {
                       <GrupoLinha key="__sem" label="Por classificar — atribuir rubrica na aba Faturas" ls={calc.linhasSem} tom="amber" />,
                       ...calc.linhasSem.map(l => <EspelhoLinha key={l.key} l={l} />),
                     ]}
+                    <tr className="border-y-2 border-gray-200 dark:border-neutral-700 font-semibold bg-white dark:bg-neutral-900">
+                      <td className="py-2.5 px-4 text-gray-900 dark:text-neutral-100">Total despesas <span className="text-[11px] font-normal text-gray-400">(pagas pelo capital)</span></td>
+                      <td className="py-2.5 px-3 text-right font-mono text-gray-600 dark:text-neutral-300">{EUR(calc.despesasEstimadas)}</td>
+                      <td className="py-2.5 px-3 text-right font-mono text-gray-900 dark:text-neutral-100">{EUR(calc.despesasReais)}</td>
+                      <td colSpan={3} />
+                    </tr>
+                    {(() => {
+                      const ls = calc.linhas.filter(l => l.grupo === GRUPO_VENDA_DEDUCAO && (l.estimado > 0 || l.temReal))
+                      if (ls.length === 0) return null
+                      return [
+                        <GrupoLinha key="__deducao" label={`${GRUPO_VENDA_DEDUCAO} — não usa capital, reduz o valor recebido`} ls={ls} />,
+                        ...ls.map(l => <EspelhoLinha key={l.key} l={l} />),
+                      ]
+                    })()}
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-gray-200 dark:border-neutral-700 font-semibold">
-                      <td className="py-2.5 px-4 text-gray-900 dark:text-neutral-100">Soma do desvio</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-gray-600 dark:text-neutral-300">{EUR(calc.despesasEstimadas)}</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-gray-900 dark:text-neutral-100">{EUR(calc.despesasReais)}</td>
+                      <td className="py-2.5 px-4 text-gray-900 dark:text-neutral-100">Soma do desvio <span className="text-[11px] font-normal text-gray-400">(despesas + descontado na venda)</span></td>
+                      <td />
+                      <td />
                       <DesvioCell valor={calc.desvioTotal} custo />
-                      <td className="py-2.5 px-3 text-right font-mono text-xs text-gray-500">{fmtPctDesvio(calc.desvioTotal, calc.despesasEstimadas)}</td>
+                      <td className="py-2.5 px-3 text-right font-mono text-xs text-gray-500">{fmtPctDesvio(calc.desvioTotal, calc.despesasEstimadas + calc.deducaoVendaEst)}</td>
                       <td className="py-2.5 px-4">
                         <Badge tone={calc.desvioTotal > 0 ? 'red' : calc.desvioTotal < 0 ? 'green' : 'gray'} size="sm">{veredicto(calc.desvioTotal)}</Badge>
                       </td>
