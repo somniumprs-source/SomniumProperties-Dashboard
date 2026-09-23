@@ -138,7 +138,6 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <Input label="Valor final (c/ IVA, do empreiteiro)" field="obra" value={form.obra} onChange={handleChange} placeholder="Ex: 36900" />
-              <Input label="Licenciamento" field="licenciamento" value={form.licenciamento} onChange={handleChange} placeholder="0" />
             </div>
             <div className="mt-2 text-xs text-gray-400">
               Valor usado tal e qual — sem IVA computado, sem PMO % nem regimes ARU/Ampliação.
@@ -154,7 +153,6 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
               <Input label="% Mão-de-obra" field="pmo_perc" value={form.pmo_perc} onChange={handleChange} step="5" placeholder="65" />
               <Toggle label="Zona ARU (IVA 6%)" field="aru" value={form.aru} onChange={handleChange} />
               <Toggle label="Ampliação (IVA 23%)" field="ampliacao" value={form.ampliacao} onChange={handleChange} />
-              <Input label="Licenciamento" field="licenciamento" value={form.licenciamento} onChange={handleChange} placeholder="0" />
             </div>
             {(form.pmo_perc > 0) && (
               <div className="mt-3 pl-3 border-l-2" style={{ borderColor: GOLD + '60' }}>
@@ -174,6 +172,7 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
             ]} />
           </>
         )}
+        <LicencasCertificacoes form={form} analise={analise} onChange={handleChange} />
       </Section>
 
       {/* D. Custos de Detenção */}
@@ -326,6 +325,23 @@ function CalcRow({ items }) {
           <span className={`font-mono ${item.bold ? 'font-semibold text-gray-800' : 'text-gray-600'}`}>{EUR(item.value)}</span>
         </div>
       ))}
+    </div>
+  )
+}
+
+// Licenças e certificações — o subtotal (licenciamento) é calculado no motor
+// a partir destas 3 linhas; não incluir estes valores no custo da obra.
+function LicencasCertificacoes({ form, analise, onChange }) {
+  return (
+    <div className="mt-4 pt-3 border-t border-gray-100">
+      <div className="text-xs font-semibold text-gray-500 mb-2">Licenças e certificações</div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Input label="Licenças e taxas camarárias" field="lic_camara" value={form.lic_camara} onChange={onChange} placeholder="0" />
+        <Input label="Certificação ARU" field="lic_aru" value={form.lic_aru} onChange={onChange} placeholder="0" />
+        <Input label="Outras licenças e certidões" field="lic_outros" value={form.lic_outros} onChange={onChange} placeholder="0" />
+      </div>
+      <div className="mt-2 text-xs text-gray-400">Não incluir estes valores no custo da obra acima, para não duplicar.</div>
+      <CalcRow items={[{ label: 'Total licenças e certificações', value: analise.licenciamento, bold: true }]} />
     </div>
   )
 }

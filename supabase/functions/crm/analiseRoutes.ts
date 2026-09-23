@@ -17,7 +17,7 @@ import { isWholesaling } from "../_shared/modelos.ts";
 const INPUT_FIELDS = new Set([
   "nome", "compra", "fee_cedencia", "vpt", "finalidade", "escritura", "cpcv_compra", "due_diligence",
   "perc_financiamento", "prazo_anos", "tan", "tipo_taxa", "comissoes_banco", "hipoteca",
-  "modo_obra", "obra", "pmo_perc", "aru", "ampliacao", "licenciamento",
+  "modo_obra", "obra", "pmo_perc", "aru", "ampliacao", "licenciamento", "lic_camara", "lic_aru", "lic_outros",
   "pmo_arq_perc", "pmo_fisc_perc", "pmo_seg_obra_perc", "pmo_outros_perc",
   "meses", "seguro_mensal", "condominio_mensal", "utilidades_mensal",
   "n_tranches", "custo_tranche", "taxa_imi", "ligacao_servicos", "excedente_capital",

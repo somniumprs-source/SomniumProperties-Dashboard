@@ -5789,6 +5789,16 @@ app.delete("/projetos/documentos/:docId", async (c: any) => {
 });
 
 // ── GET despesas por fase — port de routes.js 4171-4183 ──
+// rubrica_analise liga a factura a uma rubrica da Análise Financeira (lista em
+// src/components/projeto/EstimadoVsReal.jsx). "extra" = custo fora da Análise,
+// obriga a justificação para a análise final do negócio.
+function validarRubricaDespesa(rubrica: unknown, justificacao: unknown): string | null {
+  if (rubrica == null || rubrica === "") return null;
+  if (typeof rubrica !== "string" || !/^[a-z_]{1,40}$/.test(rubrica)) return "rubrica_analise inválida";
+  if (rubrica === "extra" && !String(justificacao || "").trim()) return "Custo extra exige justificação";
+  return null;
+}
+
 app.get("/projetos/:negocioId/despesas", async (c: any) => {
   try {
     const { rows } = await pool.query(
@@ -5807,18 +5817,21 @@ app.get("/projetos/:negocioId/despesas", async (c: any) => {
 app.post("/projetos/:negocioId/despesas", async (c: any) => {
   try {
     const negocioId = c.req.param("negocioId");
-    const { fase_id, fracao_id, movimento, valor, data, categoria, fornecedor, notas, pago } = await c.req.json().catch(() => ({}));
+    const { fase_id, fracao_id, movimento, valor, data, categoria, fornecedor, notas, pago, rubrica_analise, motivo_extra, justificacao } = await c.req.json().catch(() => ({}));
     if (!movimento?.trim()) return c.json({ error: "movimento obrigatório" }, 400);
+    const erroRubrica = validarRubricaDespesa(rubrica_analise, justificacao);
+    if (erroRubrica) return c.json({ error: erroRubrica }, 400);
     const id = crypto.randomUUID();
     // Anexo de comprovativo passa sempre por despesas.documentos — ver
     // POST /projetos/despesas/:despesaId/comprovativo, chamado depois de criar
     // a despesa. Nunca escrever comprovativo_url/comprovativo_nome aqui.
     const { rows } = await pool.query(
-      `INSERT INTO despesas (id, movimento, categoria, custo_mensal, custo_anual, timing, data, notas, negocio_id, fase_id, fracao_id, fornecedor, pago, data_pagamento)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+      `INSERT INTO despesas (id, movimento, categoria, custo_mensal, custo_anual, timing, data, notas, negocio_id, fase_id, fracao_id, fornecedor, pago, data_pagamento, rubrica_analise, motivo_extra, justificacao)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING *`,
       [id, movimento.trim(), categoria || "Obra", Number(valor) || 0, 0, "Único", data || null, notas || null,
         negocioId, fase_id || null, fracao_id || null,
-        fornecedor || null, !!pago, pago ? new Date().toISOString().slice(0, 10) : null],
+        fornecedor || null, !!pago, pago ? new Date().toISOString().slice(0, 10) : null,
+        rubrica_analise || null, rubrica_analise === "extra" ? (motivo_extra || null) : null, justificacao?.trim() || null],
     );
     if (fase_id) {
       await pool.query(
@@ -5843,7 +5856,7 @@ app.put("/projetos/despesas/:despesaId", async (c: any) => {
     const despesaId = c.req.param("despesaId");
     const despesa = await Despesas.getById(despesaId);
     if (!despesa) return c.json({ error: "Despesa não encontrada" }, 404);
-    const { movimento, fornecedor, valor, data, categoria, pago, data_pagamento } = await c.req.json().catch(() => ({}));
+    const { movimento, fornecedor, valor, data, categoria, pago, data_pagamento, rubrica_analise, motivo_extra, justificacao } = await c.req.json().catch(() => ({}));
     const novoPago = pago !== undefined ? !!pago : despesa.pago;
     const campos = {
       movimento: movimento !== undefined ? movimento.trim() : despesa.movimento,
@@ -5852,13 +5865,21 @@ app.put("/projetos/despesas/:despesaId", async (c: any) => {
       data: data !== undefined ? (data || null) : despesa.data,
       categoria: categoria !== undefined ? categoria : despesa.categoria,
       pago: novoPago,
+      rubrica_analise: rubrica_analise !== undefined ? (rubrica_analise || null) : despesa.rubrica_analise,
+      motivo_extra: motivo_extra !== undefined ? (motivo_extra || null) : despesa.motivo_extra,
+      justificacao: justificacao !== undefined ? (justificacao?.trim() || null) : despesa.justificacao,
       data_pagamento: data_pagamento !== undefined
         ? (data_pagamento || null)
         : (novoPago && !despesa.data_pagamento ? new Date().toISOString().slice(0, 10) : (novoPago ? despesa.data_pagamento : null)),
     };
+    if (campos.rubrica_analise !== "extra") campos.motivo_extra = null;
+    const erroRubrica = validarRubricaDespesa(campos.rubrica_analise, campos.justificacao);
+    if (erroRubrica) return c.json({ error: erroRubrica }, 400);
     const { rows } = await pool.query(
-      `UPDATE despesas SET movimento = $1, fornecedor = $2, custo_mensal = $3, data = $4, categoria = $5, pago = $6, data_pagamento = $7, updated_at = NOW() WHERE id = $8 RETURNING *`,
-      [campos.movimento, campos.fornecedor, campos.custo_mensal, campos.data, campos.categoria, campos.pago, campos.data_pagamento, despesaId],
+      `UPDATE despesas SET movimento = $1, fornecedor = $2, custo_mensal = $3, data = $4, categoria = $5, pago = $6, data_pagamento = $7,
+         rubrica_analise = $8, motivo_extra = $9, justificacao = $10, updated_at = NOW() WHERE id = $11 RETURNING *`,
+      [campos.movimento, campos.fornecedor, campos.custo_mensal, campos.data, campos.categoria, campos.pago, campos.data_pagamento,
+        campos.rubrica_analise, campos.motivo_extra, campos.justificacao, despesaId],
     );
     if (despesa.fase_id) {
       await pool.query(

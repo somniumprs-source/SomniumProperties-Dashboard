@@ -198,7 +198,15 @@ export function calcAnalise(inputs: any): any {
   const pmoPerc = parseFloat(i.pmo_perc) || 65
   const aru = !!i.aru
   const ampliacao = !!i.ampliacao
-  const licenciamento = parseFloat(i.licenciamento) || 0
+  // Licenças e certificações: licenciamento é o subtotal das 3 linhas de detalhe
+  // (camarárias, certificação ARU, outras). Análises antigas sem detalhe
+  // mantêm o valor único de licenciamento.
+  const licCamara = parseFloat(i.lic_camara) || 0
+  const licAru = parseFloat(i.lic_aru) || 0
+  const licOutros = parseFloat(i.lic_outros) || 0
+  const licenciamento = (licCamara + licAru + licOutros) > 0
+    ? round2(licCamara + licAru + licOutros)
+    : (parseFloat(i.licenciamento) || 0)
   const modoObra = i.modo_obra || 'calculado'
 
   const meses = Math.max(parseInt(i.meses) || 6, 1)
@@ -328,6 +336,7 @@ export function calcAnalise(inputs: any): any {
     // Calculados C — Obra
     iva_obra: ivaObra,
     obra_com_iva: obraComIva,
+    licenciamento,
     // Calculados D — Detenção
     imi_proporcional: imiProporcional,
     total_detencao: totalDetencao,

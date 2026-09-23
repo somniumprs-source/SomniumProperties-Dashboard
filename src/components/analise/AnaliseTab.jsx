@@ -53,7 +53,7 @@ const SUB_TABS = [
 const GOLD = '#C9A84C'
 const BLACK = '#1A1A1A'
 
-export function AnaliseTab({ imovelId, imovelNome, imovel, readOnly = false }) {
+export function AnaliseTab({ imovelId, imovelNome, imovel, readOnly = false, emProjeto = false }) {
   const {
     analises, selected, loading, saving, lastSaveStatus,
     select, criar, guardar, guardarAgora, flush, activar, duplicar, apagar,
@@ -62,10 +62,14 @@ export function AnaliseTab({ imovelId, imovelNome, imovel, readOnly = false }) {
   const [subTab, setSubTab] = useState('Calculadora')
 
   // Wholesaling é cedência de posição: Stress Tests e CAEP não fazem sentido — escondem-se.
+  // Dentro de um Projecto o negócio já está validado e os investidores/montantes
+  // vivem na aba Investidores: Quick Check e CAEP seriam informação duplicada.
   const wholesaling = isWholesaling(imovel)
-  const subTabs = wholesaling
-    ? SUB_TABS.filter(t => t.key !== 'Stress Tests' && t.key !== 'CAEP')
-    : SUB_TABS
+  const ocultas = new Set([
+    ...(wholesaling ? ['Stress Tests', 'CAEP'] : []),
+    ...(emProjeto ? ['Quick Check', 'CAEP'] : []),
+  ])
+  const subTabs = SUB_TABS.filter(t => !ocultas.has(t.key))
   const effectiveSubTab = subTabs.some(t => t.key === subTab) ? subTab : 'Calculadora'
 
   // Mudar de subTab obriga a flush — garante que edições debounced (Comparáveis, Calculadora)

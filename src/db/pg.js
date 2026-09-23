@@ -369,6 +369,18 @@ export async function initSchema() {
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 
+      -- Migration: licenças e certificações (detalhe do licenciamento — ver
+      -- 0057_analises_licencas_detalhe.sql). licenciamento passa a subtotal.
+      DO $$ BEGIN
+        ALTER TABLE analises ADD COLUMN IF NOT EXISTS lic_camara REAL DEFAULT 0;
+        ALTER TABLE analises ADD COLUMN IF NOT EXISTS lic_aru REAL DEFAULT 0;
+        ALTER TABLE analises ADD COLUMN IF NOT EXISTS lic_outros REAL DEFAULT 0;
+        UPDATE analises SET lic_outros = licenciamento
+          WHERE COALESCE(licenciamento, 0) > 0
+            AND COALESCE(lic_camara, 0) + COALESCE(lic_aru, 0) + COALESCE(lic_outros, 0) = 0;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
       -- Migration: categoria_irs (Cat. G | B-simplificado | B-organizada).
       -- Aplica-se quando regime_fiscal='Particular'. Default 'G' (mais-valia).
       DO $$ BEGIN
@@ -1715,6 +1727,16 @@ export async function initSchema() {
       DO $$ BEGIN
         ALTER TABLE despesas ADD COLUMN IF NOT EXISTS pago BOOLEAN DEFAULT false;
         ALTER TABLE despesas ADD COLUMN IF NOT EXISTS data_pagamento TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
+      -- Quadro Estimado vs Real (Resumo do Projecto): rubrica da Análise
+      -- Financeira por factura + motivo/justificação dos custos extra
+      -- (ver migration 0056_despesas_rubrica_analise.sql).
+      DO $$ BEGIN
+        ALTER TABLE despesas ADD COLUMN IF NOT EXISTS rubrica_analise TEXT;
+        ALTER TABLE despesas ADD COLUMN IF NOT EXISTS motivo_extra TEXT;
+        ALTER TABLE despesas ADD COLUMN IF NOT EXISTS justificacao TEXT;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
     `)

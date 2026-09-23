@@ -26,6 +26,7 @@ import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 import { calcOrcamentoObra } from '../db/orcamentoObraEngine.js'
 import { DocumentosOrcamentosTab } from '../components/obra/DocumentosOrcamentosTab.jsx'
 import { AnaliseTab } from '../components/analise/AnaliseTab.jsx'
+import { QuadroEstimadoVsReal, RubricaSelect, RUBRICA_EXTRA, MOTIVOS_EXTRA, rubricaDe, labelRubrica } from '../components/projeto/EstimadoVsReal.jsx'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const GOLD = '#C9A84C'
@@ -323,7 +324,7 @@ export function ProjectoDetalhe() {
             {tab === 'fracoes' && <TabFracoes negocioId={id} fracoes={fracoes} onChange={load} readOnly={isReadOnly} fasesComuns={fases.filter(f => !f.fracao_id)} />}
             {tab === 'analise' && (
               imovel
-                ? <AnaliseTab imovelId={imovel.id} imovelNome={imovel.nome} imovel={imovel} />
+                ? <AnaliseTab imovelId={imovel.id} imovelNome={imovel.nome} imovel={imovel} emProjeto />
                 : <p className="text-sm text-gray-400 py-8 text-center">Sem imóvel associado a este projecto.</p>
             )}
             {tab === 'obras' && (
@@ -334,7 +335,7 @@ export function ProjectoDetalhe() {
               />
             )}
             {tab === 'faturacao' && <TabFaturacao negocio={negocio} imovel={imovel} analise={analise} onChange={load} readOnly={isReadOnly} />}
-            {tab === 'faturas' && <TabFaturas negocioId={id} readOnly={isReadOnly} />}
+            {tab === 'faturas' && <TabFaturas negocioId={id} analise={analise} readOnly={isReadOnly} />}
             {tab === 'forecast' && <TabForecast negocioId={id} />}
             {tab === 'documentos' && <TabDocumentos negocio={negocio} imovel={imovel} fases={fases} readOnly={isReadOnly} />}
             {tab === 'investidores' && <TabInvestidores negocio={negocio} readOnly={isReadOnly} />}
@@ -360,7 +361,8 @@ function BannerKpi({ label, value }) {
 // TAB: RESUMO
 // ════════════════════════════════════════════════════════════════
 function TabResumo({ resumo, fases }) {
-  const { negocio } = resumo
+  const { negocio, imovel, analise } = resumo
+  const faturacao = useFaturacaoNegocio({ negocio, imovel, analise })
   const isWS = negocio.categoria === 'Wholesalling'
   const totalTarefas = fases.reduce((s, f) => s + (f.tarefas_total || 0), 0)
   const tarefasConcluidas = fases.reduce((s, f) => s + (f.tarefas_concluidas || 0), 0)
@@ -378,6 +380,8 @@ function TabResumo({ resumo, fases }) {
   return (
     <div className="space-y-6">
       <AiResumoCard negocioId={negocio.id} />
+
+      <QuadroEstimadoVsReal negocioId={negocio.id} analise={analise} faturacao={faturacao} />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="space-y-3">
@@ -879,7 +883,7 @@ function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100 }
 // regime fiscal ou da base (líquido/bruto) escolhida na Análise Financeira —
 // comparando o expectável (modelo + % configurada) com o já realizado
 // (negocio.lucro_real, alimentado pelas tranches confirmadas em baixo).
-function ResumoFaturacaoNegocio({ negocio, imovel, analise }) {
+function useFaturacaoNegocio({ negocio, imovel, analise }) {
   // Migrado para React Query (Problema 23/24 da auditoria).
   const investidoresQuery = useQuery({
     queryKey: ['projeto-investidores', negocio.id],
@@ -896,12 +900,6 @@ function ResumoFaturacaoNegocio({ negocio, imovel, analise }) {
 
   const percInvestidoresLigados = investidores.reduce((s, i) => s + (Number(i.percentagem) || 0), 0)
 
-  let caepCfg = null
-  try {
-    const raw = analise?.caep
-    caepCfg = typeof raw === 'string' ? JSON.parse(raw || 'null') : raw
-  } catch {}
-
   const categoria = negocio.categoria
   let percSomnium, totalExpectavel, modeloLabel
 
@@ -917,7 +915,8 @@ function ResumoFaturacaoNegocio({ negocio, imovel, analise }) {
     totalExpectavel = vvr > 0 ? round2(vvr * comissaoPerc / 100) : (Number(negocio.lucro_estimado) || 0)
   } else if (categoria === 'CAEP') {
     modeloLabel = 'CAEP — parceria de investimento'
-    percSomnium = Number(caepCfg?.perc_somnium) || Number(negocio.comissao_pct) || 40
+    // % da Somnium definida no projecto (aba Investidores); os parceiros dividem o resto.
+    percSomnium = negocio.comissao_pct != null && negocio.comissao_pct !== '' ? Number(negocio.comissao_pct) : 40
     totalExpectavel = Number(analise?.lucro_bruto) || 0
   } else {
     modeloLabel = categoria || 'Fix and Flip'
@@ -936,17 +935,20 @@ function ResumoFaturacaoNegocio({ negocio, imovel, analise }) {
   const totalReal = percSomnium > 0 ? round2(somniumReal / (percSomnium / 100)) : somniumReal
   const investidoresReal = round2(totalReal - somniumReal)
 
-  // Divisão por investidor: CAEP usa a config da Análise (proporcional ao capital
-  // de cada um, igual ao calcCAEP); os restantes modelos usam a % atribuída a
-  // cada investidor na aba Investidores do projecto.
+  // Divisão por investidor — fonte única: aba Investidores do projecto.
+  // CAEP: a % de cada parceiro é a sua fatia da parte dos investidores (o resto
+  // após a Somnium); sem % atribuídas, divide-se pelo capital (como o calcCAEP).
+  // Restantes modelos: a % de cada investidor é sobre o total do negócio.
   let investidoresDetalhe = []
-  if (categoria === 'CAEP' && caepCfg?.investidores?.length) {
-    const capTotal = caepCfg.investidores.reduce((s, i) => s + (Number(i.capital) || 0), 0)
-    investidoresDetalhe = caepCfg.investidores.map((inv, idx) => {
-      const fracao = capTotal > 0 ? (Number(inv.capital) || 0) / capTotal : 0
+  if (categoria === 'CAEP' && investidores.length) {
+    const usaPerc = percInvestidoresLigados > 0
+    const pesoTotal = usaPerc ? percInvestidoresLigados : investidores.reduce((s, i) => s + (Number(i.capital) || 0), 0)
+    investidoresDetalhe = investidores.map(inv => {
+      const peso = usaPerc ? (Number(inv.percentagem) || 0) : (Number(inv.capital) || 0)
+      const fracao = pesoTotal > 0 ? peso / pesoTotal : 0
       return {
-        id: idx,
-        nome: inv.nome || `Investidor ${idx + 1}`,
+        id: inv.id,
+        nome: inv.investidor_nome || 'Investidor',
         percPie: round2((100 - percSomnium) * fracao),
         exp: round2(investidoresExpectavel * fracao),
         real: round2(investidoresReal * fracao),
@@ -961,6 +963,19 @@ function ResumoFaturacaoNegocio({ negocio, imovel, analise }) {
       real: round2(totalReal * (Number(inv.percentagem) || 0) / 100),
     }))
   }
+
+  // Capital: fonte única = investidores ligados na aba Investidores do projecto.
+  // Em CAEP chama-se "angariado" (parceiros); nos restantes modelos, "alocado".
+  const capitalLigados = round2(investidores.reduce((s, i) => s + (Number(i.capital) || 0), 0))
+  const capitalLabel = categoria === 'CAEP' ? 'Capital angariado' : 'Capital alocado'
+  const capitalValor = capitalLigados || Number(negocio.capital_total) || 0
+
+  return { modeloLabel, percSomnium, totalExpectavel, totalReal, somniumExpectavel, somniumReal, investidoresExpectavel, investidoresReal, investidoresDetalhe, capitalLabel, capitalValor }
+}
+
+function ResumoFaturacaoNegocio({ negocio, imovel, analise }) {
+  const { modeloLabel, percSomnium, totalExpectavel, totalReal, somniumExpectavel, somniumReal, investidoresExpectavel, investidoresReal, investidoresDetalhe } =
+    useFaturacaoNegocio({ negocio, imovel, analise })
 
   const Linha = ({ label, exp, real, sub }) => (
     <div className="grid grid-cols-3 items-center gap-2 py-2.5 border-b border-gray-100 last:border-0">
@@ -1127,14 +1142,21 @@ function TabFaturacao({ negocio, imovel, analise, onChange, readOnly }) {
 // TAB: FATURAS — facturas de fornecedores, valor manual + estado de
 // pagamento. Reaproveita a tabela despesas (negocio_id) e o mecanismo
 // de comprovativo já usado nas "Despesas reais" por fase (aba Obras).
+// Cada factura liga a uma rubrica da Análise Financeira (ou 'Custo extra',
+// com motivo + justificação obrigatórios) — alimenta o quadro Estimado vs
+// Real da aba Resumo.
 // ════════════════════════════════════════════════════════════════
 const FATURA_EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0)
 
-function TabFaturas({ negocioId, readOnly }) {
+const FATURA_FORM_VAZIO = { fornecedor: '', movimento: '', valor: '', data: '', categoria: '', pago: false, file: null, rubrica_analise: '', motivo_extra: '', justificacao: '' }
+
+function TabFaturas({ negocioId, analise, readOnly }) {
   const toast = useToast()
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ fornecedor: '', movimento: '', valor: '', data: '', categoria: '', pago: false, file: null })
+  const [form, setForm] = useState(FATURA_FORM_VAZIO)
   const [saving, setSaving] = useState(false)
+  const [filtro, setFiltro] = useState('todas')  // todas | extras | por_classificar
+  const [editExtra, setEditExtra] = useState(null)  // { id, rubrica_analise, motivo_extra, justificacao }
 
   // Migrado para React Query (Problema 23/24 da auditoria).
   const faturasQuery = useQuery({
@@ -1153,6 +1175,10 @@ function TabFaturas({ negocioId, readOnly }) {
   async function adicionar(e) {
     e.preventDefault()
     if (!form.fornecedor.trim() || !form.valor) return
+    if (form.rubrica_analise === RUBRICA_EXTRA && (!form.motivo_extra || !form.justificacao.trim())) {
+      toast?.('Custo extra: indica o motivo e a justificação.', 'error', 3500)
+      return
+    }
     setSaving(true)
     try {
       const r = await apiFetch(`/api/crm/projetos/${negocioId}/despesas`, {
@@ -1164,6 +1190,9 @@ function TabFaturas({ negocioId, readOnly }) {
           data: form.data || new Date().toISOString().slice(0, 10),
           categoria: form.categoria || undefined,
           pago: form.pago,
+          rubrica_analise: form.rubrica_analise || null,
+          motivo_extra: form.rubrica_analise === RUBRICA_EXTRA ? form.motivo_extra : null,
+          justificacao: form.justificacao.trim() || null,
         }),
       })
       if (!r.ok) {
@@ -1177,7 +1206,7 @@ function TabFaturas({ negocioId, readOnly }) {
         fd.append('comprovativo', form.file)
         await apiFetch(`/api/crm/projetos/despesas/${despesa.id}/comprovativo`, { method: 'POST', body: fd })
       }
-      setForm({ fornecedor: '', movimento: '', valor: '', data: '', categoria: '', pago: false, file: null })
+      setForm(FATURA_FORM_VAZIO)
       setShowForm(false)
       load()
     } finally { setSaving(false) }
@@ -1196,6 +1225,39 @@ function TabFaturas({ negocioId, readOnly }) {
     load()
   }
 
+  async function guardarRubrica(f, campos) {
+    const r = await apiFetch(`/api/crm/projetos/despesas/${f.id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(campos),
+    })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao classificar factura: ${err.error || r.status}`, 'error', 3500)
+      return false
+    }
+    load()
+    return true
+  }
+
+  // Mudar para 'Custo extra' exige motivo + justificação: abre o painel inline
+  // em vez de gravar logo. As restantes rubricas gravam de imediato.
+  function mudarRubrica(f, rubrica) {
+    if (rubrica === RUBRICA_EXTRA) {
+      setEditExtra({ id: f.id, rubrica_analise: RUBRICA_EXTRA, motivo_extra: f.motivo_extra || '', justificacao: f.justificacao || '' })
+      return
+    }
+    guardarRubrica(f, { rubrica_analise: rubrica || null, motivo_extra: null })
+  }
+
+  async function guardarExtra(f) {
+    if (!editExtra.motivo_extra || !editExtra.justificacao.trim()) {
+      toast?.('Indica o motivo e a justificação do custo extra.', 'error', 3500)
+      return
+    }
+    const ok = await guardarRubrica(f, { rubrica_analise: RUBRICA_EXTRA, motivo_extra: editExtra.motivo_extra, justificacao: editExtra.justificacao.trim() })
+    if (ok) setEditExtra(null)
+  }
+
   async function apagar(id) {
     if (!confirm('Apagar esta factura?')) return
     const r = await apiFetch(`/api/crm/projetos/despesas/${id}`, { method: 'DELETE' })
@@ -1207,6 +1269,11 @@ function TabFaturas({ negocioId, readOnly }) {
     load()
   }
 
+  const nExtras = faturas.filter(f => rubricaDe(f) === RUBRICA_EXTRA).length
+  const nPorClassificar = faturas.filter(f => !rubricaDe(f)).length
+  const faturasVisiveis = filtro === 'extras' ? faturas.filter(f => rubricaDe(f) === RUBRICA_EXTRA)
+    : filtro === 'por_classificar' ? faturas.filter(f => !rubricaDe(f))
+    : faturas
   const totalPago = faturas.filter(f => f.pago).reduce((s, f) => s + (Number(f.custo_mensal) || 0), 0)
   const totalPendente = faturas.filter(f => !f.pago).reduce((s, f) => s + (Number(f.custo_mensal) || 0), 0)
 
@@ -1229,11 +1296,21 @@ function TabFaturas({ negocioId, readOnly }) {
         </div>
       </div>
 
-      {!readOnly && (
-        <div className="flex justify-end">
-          <Button size="sm" icon={Plus} onClick={() => setShowForm(!showForm)}>Nova factura</Button>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-1 text-xs">
+          {[
+            { k: 'todas', label: `Todas (${faturas.length})` },
+            { k: 'extras', label: `Custos extra (${nExtras})` },
+            { k: 'por_classificar', label: `Por classificar (${nPorClassificar})` },
+          ].map(o => (
+            <button key={o.k} type="button" onClick={() => setFiltro(o.k)}
+              className={`px-2.5 py-1 rounded-full border ${filtro === o.k ? 'bg-brand-dark text-brand-gold border-brand-dark' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+              {o.label}
+            </button>
+          ))}
         </div>
-      )}
+        {!readOnly && <Button size="sm" icon={Plus} onClick={() => setShowForm(!showForm)}>Nova factura</Button>}
+      </div>
 
       {showForm && (
         <form onSubmit={adicionar} className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-200">
@@ -1266,6 +1343,30 @@ function TabFaturas({ negocioId, readOnly }) {
                 {DESP_CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Rubrica da Análise Financeira</label>
+              <RubricaSelect value={form.rubrica_analise} analise={analise}
+                onChange={v => setForm(f => ({ ...f, rubrica_analise: v }))}
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+            </div>
+            {form.rubrica_analise === RUBRICA_EXTRA && (
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Motivo do custo extra *</label>
+                <select value={form.motivo_extra} onChange={e => setForm(f => ({ ...f, motivo_extra: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" required>
+                  <option value="">—</option>
+                  {MOTIVOS_EXTRA.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+            )}
+            {form.rubrica_analise === RUBRICA_EXTRA && (
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium text-gray-500 mb-1">Justificação da necessidade *</label>
+                <textarea rows={3} value={form.justificacao} onChange={e => setForm(f => ({ ...f, justificacao: e.target.value }))}
+                  placeholder="Porque foi necessário, porque não estava na Análise e o que acontecia se não fosse feito."
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" required />
+              </div>
+            )}
             <div className="flex items-center gap-2 pt-6">
               <input type="checkbox" id="fatura-pago" checked={form.pago} onChange={e => setForm(f => ({ ...f, pago: e.target.checked }))}
                 className="w-4 h-4 rounded border-gray-300" />
@@ -1286,15 +1387,19 @@ function TabFaturas({ negocioId, readOnly }) {
         </form>
       )}
 
-      {faturas.length === 0 ? (
-        <div className="text-center py-8 text-gray-400 text-sm">Sem facturas registadas.</div>
+      {faturasVisiveis.length === 0 ? (
+        <div className="text-center py-8 text-gray-400 text-sm">{faturas.length === 0 ? 'Sem facturas registadas.' : 'Nenhuma factura neste filtro.'}</div>
       ) : (
         <div className="divide-y divide-gray-100">
-          {faturas.map(f => {
+          {faturasVisiveis.map(f => {
             let docs = []
             try { docs = f.documentos ? JSON.parse(f.documentos) : [] } catch {}
+            const rubrica = rubricaDe(f)
+            const isExtra = rubrica === RUBRICA_EXTRA
+            const editando = editExtra?.id === f.id
             return (
-              <div key={f.id} className="flex items-center gap-3 py-3 group">
+              <div key={f.id} className="py-3">
+              <div className="flex items-center gap-3 group">
                 <button type="button" onClick={() => !readOnly && togglePago(f)} disabled={readOnly} title={f.pago ? 'Marcar como pendente' : 'Marcar como pago'}>
                   {f.pago
                     ? <CheckCircle2 className="w-5 h-5 text-green-600" />
@@ -1308,6 +1413,15 @@ function TabFaturas({ negocioId, readOnly }) {
                     {f.categoria && <span>· {f.categoria}</span>}
                   </div>
                 </div>
+                {readOnly ? (
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${isExtra ? 'bg-red-50 text-red-700' : rubrica ? 'bg-gray-100 text-gray-600' : 'bg-amber-50 text-amber-700'}`}>
+                    {labelRubrica(rubrica) || 'Por classificar'}
+                  </span>
+                ) : (
+                  <RubricaSelect value={editando ? RUBRICA_EXTRA : rubrica} onChange={v => mudarRubrica(f, v)}
+                    title="Rubrica da Análise Financeira"
+                    className={`max-w-[11rem] px-2 py-1 rounded-lg border text-[11px] ${isExtra || editando ? 'border-red-200 bg-red-50 text-red-700' : rubrica ? 'border-gray-200 bg-white text-gray-600' : 'border-amber-200 bg-amber-50 text-amber-700'}`} />
+                )}
                 <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${f.pago ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                   {f.pago ? 'Pago' : 'Pendente'}
                 </span>
@@ -1325,6 +1439,32 @@ function TabFaturas({ negocioId, readOnly }) {
                     </button>
                   )}
                 </div>
+              </div>
+              {isExtra && !editando && (
+                <div className="mt-1.5 ml-8 text-xs">
+                  {f.justificacao
+                    ? <p className="text-gray-600 bg-red-50/50 rounded-lg px-3 py-2 whitespace-pre-line"><span className="font-medium text-red-700">{f.motivo_extra || 'Custo extra'}:</span> {f.justificacao}</p>
+                    : <p className="text-amber-700">Custo extra sem justificação.{!readOnly && <button type="button" className="ml-1 underline" onClick={() => mudarRubrica(f, RUBRICA_EXTRA)}>Completar</button>}</p>}
+                  {!readOnly && f.justificacao && (
+                    <button type="button" className="mt-1 text-[11px] text-gray-400 hover:text-brand-gold" onClick={() => mudarRubrica(f, RUBRICA_EXTRA)}>Editar justificação</button>
+                  )}
+                </div>
+              )}
+              {editando && (
+                <div className="mt-2 ml-8 p-3 rounded-lg border border-red-100 bg-red-50/40 space-y-2">
+                  <select value={editExtra.motivo_extra} onChange={e => setEditExtra(x => ({ ...x, motivo_extra: e.target.value }))}
+                    className="w-full sm:w-72 px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm bg-white">
+                    <option value="">Motivo do custo extra *</option>
+                    {MOTIVOS_EXTRA.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <textarea rows={2} value={editExtra.justificacao} onChange={e => setEditExtra(x => ({ ...x, justificacao: e.target.value }))}
+                    placeholder="Justificação da necessidade *" className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm bg-white" />
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={() => setEditExtra(null)} className="px-3 py-1 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100">Cancelar</button>
+                    <button type="button" onClick={() => guardarExtra(f)} className="px-3 py-1 text-xs rounded-lg bg-brand-dark text-brand-gold hover:bg-brand-dark-light">Guardar</button>
+                  </div>
+                </div>
+              )}
               </div>
             )
           })}
@@ -2181,6 +2321,22 @@ function TabInvestidores({ negocio, readOnly }) {
 
   const disponiveis = todosInvestidores.filter(i => !lista.find(l => l.investidor_id === i.id))
 
+  // CAEP: a % da Somnium no lucro vive no projecto (negocio.comissao_pct) e os
+  // parceiros dividem o restante segundo a % de cada um (Faturação lê daqui).
+  const isCaep = negocio.categoria === 'CAEP'
+  const percSomniumCaep = negocio.comissao_pct != null && negocio.comissao_pct !== '' ? Number(negocio.comissao_pct) : 40
+  async function guardarPercSomnium(v) {
+    if (v === percSomniumCaep) return
+    const r = await apiFetch(`/api/crm/negocios/${negocio.id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ comissao_pct: v }),
+    })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(`Erro ao guardar % da Somnium: ${err.error || r.status}`, 'error', 3500)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -2189,6 +2345,26 @@ function TabInvestidores({ negocio, readOnly }) {
         <Field label="% atribuída" value={`${percTotal.toFixed(1)}%`} />
         <Field label="Lucro a distribuir" value={EUR(lucroEstimado)} accent />
       </div>
+
+      {isCaep && (
+        <div className="flex items-center gap-3 p-3 rounded-lg border border-brand-gold/40 bg-brand-gold/5">
+          <div className="w-8 h-8 rounded-full bg-brand-dark text-brand-gold flex items-center justify-center font-bold text-xs flex-shrink-0">SP</div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-800">Somnium Properties</p>
+            <p className="text-[10px] text-gray-400">% do lucro do CAEP · os parceiros dividem os restantes {Math.max(0, 100 - percSomniumCaep).toFixed(1)}% segundo a % de cada um</p>
+          </div>
+          {readOnly ? (
+            <p className="text-sm font-mono font-semibold text-gray-700">{percSomniumCaep.toFixed(1)}%</p>
+          ) : (
+            <div className="flex items-center gap-1">
+              <input type="number" step="0.5" min="0" max="100" key={percSomniumCaep} defaultValue={percSomniumCaep}
+                onBlur={e => guardarPercSomnium(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
+                className="w-20 px-2 py-1 text-sm font-mono text-right rounded-lg border border-gray-200 bg-white" />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {lista.length > 0 ? (
         <div className="space-y-2">
