@@ -5,7 +5,7 @@ import {
   ArrowLeft, CheckCircle2, Circle, Plus, Trash2, Upload, X,
   Wallet, FileText, Users, BarChart3, ChevronRight,
   FileDown, AlertTriangle, Sparkles, RefreshCw, Home, Layers,
-  History, MessageSquare, TrendingUp, FileSpreadsheet, Pencil, Eye,
+  History, MessageSquare, FileSpreadsheet, Pencil, Eye,
   CalendarClock, ClipboardCheck, Calculator, Receipt,
 } from 'lucide-react'
 import { ProjectoForm } from './Projectos.jsx'
@@ -72,7 +72,6 @@ const TABS_BASE = [
   { key: 'obras',        label: 'Obras',            icon: Home },
   { key: 'faturacao',    label: 'Lucro',            icon: Wallet },
   { key: 'faturas',      label: 'Faturas e Comprovativos', icon: Receipt },
-  { key: 'forecast',     label: 'Forecast',         icon: TrendingUp },
   { key: 'documentos',   label: 'Documentos',       icon: FileText },
   { key: 'investidores', label: 'Investidores',     icon: Users },
   { key: 'reunioes',     label: 'Reuniões',         icon: CalendarClock },
@@ -159,12 +158,10 @@ export function ProjectoDetalhe() {
   const { negocio, imovel, analise, percGlobal, custoReal, orcAlocado, faseAtual } = resumo
   const semFases = fases.length === 0
   const isPredio = negocio.tipo_projeto === 'predio'
-  // Wholesalling é cedência de posição (sem obra): esconder as abas de obra.
+  // Wholesalling é cedência de posição (sem obra).
   const isWholesalling = negocio.categoria === 'Wholesalling'
-  const TABS_OBRA_OCULTAS = new Set(['forecast'])
   const TABS = TABS_BASE.filter(t =>
     (!t.predioOnly || isPredio) &&
-    !(isWholesalling && TABS_OBRA_OCULTAS.has(t.key)) &&
     !(t.teamOnly && isReadOnly)
   )
 
@@ -335,7 +332,6 @@ export function ProjectoDetalhe() {
             )}
             {tab === 'faturacao' && <TabFaturacao negocio={negocio} imovel={imovel} analise={analise} onChange={load} readOnly={isReadOnly} />}
             {tab === 'faturas' && <TabFaturas negocioId={id} analise={analise} readOnly={isReadOnly} />}
-            {tab === 'forecast' && <TabForecast negocioId={id} />}
             {tab === 'documentos' && <TabDocumentos negocio={negocio} imovel={imovel} fases={fases} readOnly={isReadOnly} />}
             {tab === 'investidores' && <TabInvestidores negocio={negocio} readOnly={isReadOnly} />}
             {tab === 'reunioes' && <TabReunioes negocioId={id} readOnly={isReadOnly} />}
@@ -2846,68 +2842,6 @@ function FracaoForm({ fracao, onSave, onCancel, fasesComunsCount }) {
         </Button>
         <Button variant="ghost" size="lg" onClick={onCancel}>Cancelar</Button>
       </div>
-    </div>
-  )
-}
-
-// ════════════════════════════════════════════════════════════════
-// P4.7 — TAB FORECAST DE TESOURARIA
-// ════════════════════════════════════════════════════════════════
-function TabForecast({ negocioId }) {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  useEffect(() => {
-    apiFetch(`/api/crm/projetos/${negocioId}/forecast`)
-      .then(r => r.ok ? r.json() : null)
-      .then(setData)
-      .finally(() => setLoading(false))
-  }, [negocioId])
-
-  if (loading) return <p className="text-sm text-gray-400 py-8 text-center">A calcular forecast…</p>
-  if (!data) return <p className="text-sm text-gray-500 py-8 text-center">Sem dados.</p>
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
-        <KpiBox label="Outflow previsto" value={EUR(data.totais.outflow)} cor="#ef4444" />
-        <KpiBox label="Inflow previsto" value={EUR(data.totais.inflow)} cor="#22c55e" />
-        <KpiBox label="Saldo previsto" value={EUR(data.totais.saldo_previsto)} cor={data.totais.saldo_previsto >= 0 ? "#22c55e" : "#ef4444"} accent />
-      </div>
-      {data.eventos.length === 0 ? (
-        <p className="text-sm text-gray-400 py-4 text-center">Sem eventos previstos (define datas previstas nas fases e tranches).</p>
-      ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr className="text-[10px] uppercase tracking-wider text-gray-500">
-                <th className="text-left px-3 py-2">Data</th>
-                <th className="text-left px-3 py-2">Descrição</th>
-                <th className="text-right px-3 py-2">Valor</th>
-                <th className="text-right px-3 py-2">Saldo acum.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.eventos.map((e, i) => (
-                <tr key={i} className="border-t border-gray-100">
-                  <td className="px-3 py-2 text-xs text-gray-600">{e.data}</td>
-                  <td className="px-3 py-2 text-xs text-gray-800">{e.descricao}</td>
-                  <td className={`px-3 py-2 text-right text-xs font-mono ${e.valor >= 0 ? "text-green-600" : "text-red-600"}`}>{EUR(e.valor)}</td>
-                  <td className={`px-3 py-2 text-right text-xs font-mono font-semibold ${e.saldo_acumulado >= 0 ? "text-gray-700" : "text-red-700"}`}>{EUR(e.saldo_acumulado)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function KpiBox({ label, value, cor, accent }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-3">
-      <p className="text-[10px] uppercase tracking-wider text-gray-400">{label}</p>
-      <p className={`text-lg font-mono font-bold mt-0.5`} style={{ color: cor }}>{value}</p>
     </div>
   )
 }
