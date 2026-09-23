@@ -187,6 +187,39 @@ export async function gerarTarefasSinteticas() {
   return { criadas, actualizadas };
 }
 
+// Port 1:1 de agendarFollowUpImovel (src/db/agendaEngine.js) — ver comentário lá.
+export async function agendarFollowUpImovel(imovelId: string, user: { id?: string; nome?: string } | null = null) {
+  const { rows: [im] } = await pool.query(
+    "SELECT id, nome, regiao, data_follow_up FROM imoveis WHERE id = $1",
+    [imovelId],
+  );
+  if (!im?.data_follow_up) return null;
+  const data = String(im.data_follow_up).slice(0, 10);
+  const titulo = `Follow-up imóvel — ${im.nome || "Imóvel"}`;
+  const { rows: abertas } = await pool.query(
+    `SELECT id FROM tarefas
+     WHERE origem_tipo = 'imovel' AND origem_id = $1 AND origem_campo = 'data_follow_up' AND status != 'Concluída'
+     ORDER BY created_at DESC LIMIT 1`,
+    [imovelId],
+  );
+  if (abertas.length) {
+    await pool.query(
+      `UPDATE tarefas SET tarefa = $1, data_limite = $2, inicio = $2, fim = $2, regiao = $3, updated_at = NOW()
+       WHERE id = $4`,
+      [titulo, data, im.regiao || null, abertas[0].id],
+    );
+    return abertas[0].id;
+  }
+  const id = crypto.randomUUID();
+  await pool.query(
+    `INSERT INTO tarefas (id, tarefa, categoria, status, prioridade, data_limite, inicio, fim, user_id, funcionario,
+                          tempo_horas, regiao, origem_tipo, origem_id, origem_campo)
+     VALUES ($1,$2,'Follow Up Consultores','A fazer','alta',$3,$3,$3,$4,$5,0.5,$6,'imovel',$7,'data_follow_up')`,
+    [id, titulo, data, user?.id || null, user?.nome || null, im.regiao || null, imovelId],
+  );
+  return id;
+}
+
 function diasAlvoTemplate(tpl: any, semanaInicio: string): string[] {
   if (tpl.dias_semana) {
     const nums = tpl.dias_semana.split(",").map(Number);

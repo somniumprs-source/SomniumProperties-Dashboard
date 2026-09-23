@@ -81,6 +81,7 @@ import { DADOS_EXPANSAO_GAIA } from "../_shared/expansaoGaiaData.ts";
 import { exportDepartment } from "../_shared/excelExport.ts";
 import { generateDocx, getAvailableTypes } from "../_shared/docxGenerator.ts";
 import { CHECKLIST_TEMPLATES } from "../_shared/checklistTemplates.ts";
+import { agendarFollowUpImovel } from "../_shared/agendaEngine.ts";
 import { createClient } from "@supabase/supabase-js";
 import { Buffer } from "node:buffer";
 
@@ -2680,6 +2681,38 @@ app.get("/imoveis/:id/followups", async (c: any) => {
     );
     return c.json(rows);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── Follow Up do imóvel (aba "Follow Up") — port de routes.js ──
+// Grava data/motivo do follow-up e agenda logo a tarefa 'A fazer' para esse
+// dia (agendarFollowUpImovel) — não fica à espera do "gerar-semana".
+app.get("/imoveis/:id/follow-up", async (c: any) => {
+  try {
+    const imovel = await Imoveis.getById(c.req.param("id"));
+    if (!imovel) return c.json({ error: "Não encontrado" }, 404);
+    const { rows: tarefas } = await pool.query(
+      `SELECT id, tarefa, status, data_limite, inicio, funcionario, created_at FROM tarefas
+       WHERE origem_tipo = 'imovel' AND origem_id = $1 AND origem_campo = 'data_follow_up'
+       ORDER BY COALESCE(data_limite, inicio) DESC, created_at DESC`,
+      [c.req.param("id")],
+    );
+    return c.json({ data_follow_up: imovel.data_follow_up, motivo_follow_up: imovel.motivo_follow_up, tarefas });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/imoveis/:id/follow-up", async (c: any) => {
+  try {
+    const { data, motivo } = await c.req.json().catch(() => ({}));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data || "")) return c.json({ error: "Data do follow-up é obrigatória" }, 400);
+    const id = c.req.param("id");
+    const imovel = await Imoveis.getById(id);
+    if (!imovel) return c.json({ error: "Não encontrado" }, 404);
+    const patch: Record<string, any> = { data_follow_up: data };
+    if (motivo !== undefined) patch.motivo_follow_up = (motivo || "").trim() || null;
+    await Imoveis.update(id, patch);
+    const tarefaId = await agendarFollowUpImovel(id, await resolveCrmUser(c));
+    return c.json({ ok: true, tarefa_id: tarefaId });
+  } catch (e) { return c.json({ error: (e as Error).message }, 400); }
 });
 
 app.get("/imoveis/:id/gravacoes", async (c: any) => {

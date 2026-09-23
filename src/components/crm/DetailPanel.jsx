@@ -20,6 +20,7 @@ const MatchingInvestidoresTab = lazy(() => import('./MatchingInvestidoresTab.jsx
 const FicheirosTab = lazy(() => import('./FicheirosTab.jsx').then(m => ({ default: m.FicheirosTab })))
 const ChecklistTab = lazy(() => import('./ChecklistTab.jsx').then(m => ({ default: m.ChecklistTab })))
 const VisitasTab = lazy(() => import('./VisitasTab.jsx').then(m => ({ default: m.VisitasTab })))
+const FollowUpImovelTab = lazy(() => import('./FollowUpImovelTab.jsx').then(m => ({ default: m.FollowUpImovelTab })))
 const DocumentosInvestidorTab = lazy(() => import('./DocumentosInvestidorTab.jsx').then(m => ({ default: m.DocumentosInvestidorTab })))
 const DadosEmpresaInvestidorTab = lazy(() => import('./DadosEmpresaInvestidorTab.jsx').then(m => ({ default: m.DadosEmpresaInvestidorTab })))
 
@@ -771,6 +772,14 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
         const err = await r.json().catch(() => ({}))
         throw new Error(err.error || 'Erro ao guardar')
       }
+      // Data de follow-up mudada na ficha → agendar logo a tarefa 'A fazer'
+      // (mesmo endpoint da aba "Follow Up"; motivo já foi gravado no PUT).
+      if (type === 'Imóveis' && cleanForm.data_follow_up && cleanForm.data_follow_up !== data?.data_follow_up) {
+        await apiFetch(`/api/crm/imoveis/${id}/follow-up`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: String(cleanForm.data_follow_up).slice(0, 10) }),
+        }).catch(() => {})
+      }
       await loadData()
       setEditing(false)
       if (onSave) onSave()
@@ -829,6 +838,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
     { key: 'localizacao', label: 'Localização', icon: '📍', show: type === 'Imóveis' },
     { key: 'pontos_riscos', label: 'Pontos & Riscos', icon: '⚖️', show: type === 'Imóveis' },
     { key: 'visitas', label: 'Visitas', icon: '🚪', show: type === 'Imóveis' },
+    { key: 'follow_up', label: 'Follow Up', icon: '🔁', show: type === 'Imóveis' },
     { key: 'matching', label: 'Matching investidores', icon: '🎯', show: type === 'Imóveis' },
     { key: 'relatorios_imovel', label: 'Relatórios', icon: '📄', show: type === 'Imóveis' },
     { key: 'checklist', label: 'Checklist', icon: '📋', show: type === 'Imóveis' },
@@ -949,6 +959,9 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
 
       ) : type === 'Imóveis' && activeTab === 'visitas' ? (
         <VisitasTab imovelId={data.id} onUpdate={loadData} />
+
+      ) : type === 'Imóveis' && activeTab === 'follow_up' ? (
+        <FollowUpImovelTab imovelId={data.id} onUpdate={loadData} toast={toast} />
 
       ) : type === 'Imóveis' && activeTab === 'matching' ? (
         <div className="p-4 sm:p-6">

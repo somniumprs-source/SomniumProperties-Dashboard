@@ -23,6 +23,7 @@ const supabaseStorage = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABA
 export { supabaseStorage }
 import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, InvestidorInteracoes, ConsultorFollowups, DocumentosInvestidor, Visitas, Empreiteiros, getDashboardStats } from './crud.js'
 import pool from './pg.js'
+import { agendarFollowUpImovel } from './agendaEngine.js'
 import { getVisitasEnriquecidas, syncDataVisitaDerivada, getFichaVisitaParaImovel } from './queries.js'
 import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
 import { generateImovelPDF } from './pdfReport.js'
@@ -2264,6 +2265,37 @@ router.get('/imoveis/:id/followups', async (req, res) => {
     )
     res.json(rows)
   } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Follow Up do imóvel (aba "Follow Up") ─────────────────────
+// Grava data/motivo do follow-up e agenda logo a tarefa 'A fazer' para esse
+// dia (agendarFollowUpImovel) — não fica à espera do "gerar-semana".
+router.get('/imoveis/:id/follow-up', async (req, res) => {
+  try {
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Não encontrado' })
+    const { rows: tarefas } = await pool.query(
+      `SELECT id, tarefa, status, data_limite, inicio, funcionario, created_at FROM tarefas
+       WHERE origem_tipo = 'imovel' AND origem_id = $1 AND origem_campo = 'data_follow_up'
+       ORDER BY COALESCE(data_limite, inicio) DESC, created_at DESC`,
+      [req.params.id]
+    )
+    res.json({ data_follow_up: imovel.data_follow_up, motivo_follow_up: imovel.motivo_follow_up, tarefas })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/imoveis/:id/follow-up', async (req, res) => {
+  try {
+    const { data, motivo } = req.body || {}
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data || '')) return res.status(400).json({ error: 'Data do follow-up é obrigatória' })
+    const imovel = await Imoveis.getById(req.params.id)
+    if (!imovel) return res.status(404).json({ error: 'Não encontrado' })
+    const patch = { data_follow_up: data }
+    if (motivo !== undefined) patch.motivo_follow_up = (motivo || '').trim() || null
+    await Imoveis.update(req.params.id, patch)
+    const tarefaId = await agendarFollowUpImovel(pool, req.params.id, req.user || null)
+    res.json({ ok: true, tarefa_id: tarefaId })
+  } catch (e) { res.status(400).json({ error: e.message }) }
 })
 
 router.get('/imoveis/:id/gravacoes', async (req, res) => {
