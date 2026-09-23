@@ -71,7 +71,7 @@ const TABS_BASE = [
   { key: 'analise',      label: 'Análise Financeira', icon: Calculator },
   { key: 'obras',        label: 'Obras',            icon: Home },
   { key: 'faturacao',    label: 'Lucro',            icon: Wallet },
-  { key: 'faturas',      label: 'Faturas',          icon: Receipt },
+  { key: 'faturas',      label: 'Faturas e Comprovativos', icon: Receipt },
   { key: 'forecast',     label: 'Forecast',         icon: TrendingUp },
   { key: 'documentos',   label: 'Documentos',       icon: FileText },
   { key: 'investidores', label: 'Investidores',     icon: Users },
@@ -1137,8 +1137,9 @@ function TabFaturacao({ negocio, imovel, analise, onChange, readOnly }) {
 }
 
 // ════════════════════════════════════════════════════════════════
-// TAB: FATURAS — facturas de fornecedores, valor manual + estado de
-// pagamento. Reaproveita a tabela despesas (negocio_id) e o mecanismo
+// TAB: FATURAS E COMPROVATIVOS — facturas de fornecedores e comprovativos
+// de pagamento/transferência (compra do imóvel, IMT e IS não têm factura,
+// só comprovativo, e contam na mesma), valor manual + estado de pagamento. Reaproveita a tabela despesas (negocio_id) e o mecanismo
 // de comprovativo já usado nas "Despesas reais" por fase (aba Obras).
 // Cada factura liga a uma rubrica da Análise Financeira (ou 'Custo extra',
 // com motivo + justificação obrigatórios) — alimenta o quadro Estimado vs
@@ -1146,7 +1147,14 @@ function TabFaturacao({ negocio, imovel, analise, onChange, readOnly }) {
 // ════════════════════════════════════════════════════════════════
 const FATURA_EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(Number(v) || 0)
 
-const FATURA_FORM_VAZIO = { fornecedor: '', movimento: '', valor: '', data: '', categoria: '', pago: false, file: null, rubrica_analise: '', motivo_extra: '', justificacao: '' }
+const TIPOS_DOCUMENTO = [
+  { key: 'fatura', label: 'Fatura', cls: 'bg-gray-100 text-gray-600' },
+  { key: 'comprovativo_pagamento', label: 'Comprovativo de pagamento', cls: 'bg-indigo-50 text-indigo-700' },
+  { key: 'comprovativo_transferencia', label: 'Comprovativo de transferência', cls: 'bg-indigo-50 text-indigo-700' },
+]
+const tipoDocumentoDe = f => TIPOS_DOCUMENTO.find(t => t.key === f.tipo_documento) || TIPOS_DOCUMENTO[0]
+
+const FATURA_FORM_VAZIO = { tipo_documento: 'fatura', fornecedor: '', movimento: '', valor: '', data: '', categoria: '', pago: false, file: null, rubrica_analise: '', motivo_extra: '', justificacao: '' }
 
 function TabFaturas({ negocioId, analise, readOnly }) {
   const toast = useToast()
@@ -1191,7 +1199,8 @@ function TabFaturas({ negocioId, analise, readOnly }) {
           valor: parseFloat(form.valor) || 0,
           data: form.data || new Date().toISOString().slice(0, 10),
           categoria: form.categoria || undefined,
-          pago: form.pago,
+          pago: form.pago || form.tipo_documento !== 'fatura',
+          tipo_documento: form.tipo_documento,
           rubrica_analise: form.rubrica_analise || null,
           motivo_extra: form.rubrica_analise === RUBRICA_EXTRA ? form.motivo_extra : null,
           justificacao: form.justificacao.trim() || null,
@@ -1199,7 +1208,7 @@ function TabFaturas({ negocioId, analise, readOnly }) {
       })
       if (!r.ok) {
         const err = await r.json().catch(() => ({}))
-        toast?.(`Erro ao adicionar factura: ${err.error || r.status}`, 'error', 3500)
+        toast?.(`Erro ao adicionar documento: ${err.error || r.status}`, 'error', 3500)
         return
       }
       const despesa = await r.json()
@@ -1234,7 +1243,7 @@ function TabFaturas({ negocioId, analise, readOnly }) {
     })
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
-      toast?.(`Erro ao classificar factura: ${err.error || r.status}`, 'error', 3500)
+      toast?.(`Erro ao classificar documento: ${err.error || r.status}`, 'error', 3500)
       return false
     }
     load()
@@ -1261,11 +1270,11 @@ function TabFaturas({ negocioId, analise, readOnly }) {
   }
 
   async function apagar(id) {
-    if (!confirm('Apagar esta factura?')) return
+    if (!confirm('Apagar este documento?')) return
     const r = await apiFetch(`/api/crm/projetos/despesas/${id}`, { method: 'DELETE' })
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
-      toast?.(`Erro ao apagar factura: ${err.error || r.status}`, 'error', 3500)
+      toast?.(`Erro ao apagar documento: ${err.error || r.status}`, 'error', 3500)
       return
     }
     load()
@@ -1285,7 +1294,7 @@ function TabFaturas({ negocioId, analise, readOnly }) {
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wide">Total facturado</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-wide">Total</p>
           <p className="text-lg font-mono font-bold text-gray-800">{FATURA_EUR(totalPago + totalPendente)}</p>
         </div>
         <div className="rounded-xl border border-green-100 bg-green-50 p-3">
@@ -1311,21 +1320,35 @@ function TabFaturas({ negocioId, analise, readOnly }) {
             </button>
           ))}
         </div>
-        {!readOnly && <Button size="sm" icon={Plus} onClick={() => setShowForm(!showForm)}>Nova factura</Button>}
+        {!readOnly && <Button size="sm" icon={Plus} onClick={() => setShowForm(!showForm)}>Novo documento</Button>}
       </div>
 
       {showForm && (
         <form onSubmit={adicionar} className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-200">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Tipo de documento *</label>
+              <div className="flex flex-wrap gap-1.5">
+                {TIPOS_DOCUMENTO.map(t => (
+                  <button key={t.key} type="button" onClick={() => setForm(f => ({ ...f, tipo_documento: t.key, pago: t.key !== 'fatura' ? true : f.pago }))}
+                    className={`px-3 py-1.5 rounded-lg border text-xs font-medium ${form.tipo_documento === t.key ? 'bg-brand-dark text-brand-gold border-brand-dark' : 'border-gray-200 text-gray-600 bg-white hover:bg-gray-50'}`}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              {form.tipo_documento !== 'fatura' && (
+                <p className="mt-1 text-[11px] text-gray-400">Para custos sem factura (compra do imóvel, IMT, IS…). Um comprovativo prova o pagamento — fica registado como pago. Se o custo já tem factura aqui, anexa o comprovativo a essa factura em vez de o lançar de novo.</p>
+              )}
+            </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Fornecedor *</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1">{form.tipo_documento === 'fatura' ? 'Fornecedor *' : 'Beneficiário *'}</label>
               <input value={form.fornecedor} onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))}
-                placeholder="Ex: Construções Silva & Filhos" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" required />
+                placeholder={form.tipo_documento === 'fatura' ? 'Ex: Construções Silva & Filhos' : 'Ex: Vendedor / Autoridade Tributária'} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" required />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Descrição</label>
               <input value={form.movimento} onChange={e => setForm(f => ({ ...f, movimento: e.target.value }))}
-                placeholder="Ex: Factura nº 123" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+                placeholder={form.tipo_documento === 'fatura' ? 'Ex: Factura nº 123' : 'Ex: Pagamento do IMT'} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Valor (€) *</label>
@@ -1370,9 +1393,10 @@ function TabFaturas({ negocioId, analise, readOnly }) {
               </div>
             )}
             <div className="flex items-center gap-2 pt-6">
-              <input type="checkbox" id="fatura-pago" checked={form.pago} onChange={e => setForm(f => ({ ...f, pago: e.target.checked }))}
+              <input type="checkbox" id="fatura-pago" checked={form.pago || form.tipo_documento !== 'fatura'} disabled={form.tipo_documento !== 'fatura'}
+                onChange={e => setForm(f => ({ ...f, pago: e.target.checked }))}
                 className="w-4 h-4 rounded border-gray-300" />
-              <label htmlFor="fatura-pago" className="text-xs font-medium text-gray-600">Já paga</label>
+              <label htmlFor="fatura-pago" className="text-xs font-medium text-gray-600">Já pago</label>
             </div>
           </div>
           <div>
@@ -1390,7 +1414,7 @@ function TabFaturas({ negocioId, analise, readOnly }) {
       )}
 
       {faturasVisiveis.length === 0 ? (
-        <div className="text-center py-8 text-gray-400 text-sm">{faturas.length === 0 ? 'Sem facturas registadas.' : 'Nenhuma factura neste filtro.'}</div>
+        <div className="text-center py-8 text-gray-400 text-sm">{faturas.length === 0 ? 'Sem faturas nem comprovativos registados.' : 'Nenhum documento neste filtro.'}</div>
       ) : (
         <div className="divide-y divide-gray-100">
           {faturasVisiveis.map(f => {
@@ -1399,6 +1423,7 @@ function TabFaturas({ negocioId, analise, readOnly }) {
             const rubrica = rubricaDe(f)
             const isExtra = rubrica === RUBRICA_EXTRA
             const editando = editExtra?.id === f.id
+            const tipoDoc = tipoDocumentoDe(f)
             return (
               <div key={f.id} className="py-3">
               <div className="flex items-center gap-3 group">
@@ -1410,6 +1435,7 @@ function TabFaturas({ negocioId, analise, readOnly }) {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-800 truncate">{f.fornecedor || f.movimento}</p>
                   <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${tipoDoc.cls}`}>{tipoDoc.label}</span>
                     <span>{f.movimento}</span>
                     {f.data && <span>· {f.data}</span>}
                     {f.categoria && <span>· {f.categoria}</span>}

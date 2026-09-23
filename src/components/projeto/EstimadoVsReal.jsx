@@ -1,12 +1,12 @@
 /**
  * Quadro "Estimado vs Real" (aba Resumo do projecto) — espelho entre a Análise Financeira
- * (valores estimados, análise activa do imóvel) e as Faturas (valores reais,
+ * (valores estimados, análise activa do imóvel) e as Faturas e Comprovativos (valores reais,
  * tabela despesas do negócio). Cada factura é ligada a uma rubrica da Análise
  * via despesas.rubrica_analise; custos fora da Análise usam a rubrica 'extra'
  * e exigem motivo + justificação, para a análise final do negócio.
- * Só consulta: toda a introdução de valores é feita na aba Faturas.
+ * Só consulta: toda a introdução de valores é feita na aba Faturas e Comprovativos.
  *
- * Tempo real: partilha a queryKey ['projeto-faturas', id] com a aba Faturas e
+ * Tempo real: partilha a queryKey ['projeto-faturas', id] com a aba Faturas e Comprovativos e
  * recarrega em qualquer mutação (somnium:refresh). A análise chega via /resumo,
  * que o ProjectoDetalhe já recarrega nas mesmas mutações.
  */
@@ -106,7 +106,7 @@ export function labelRubrica(key) {
   return RUBRICAS.find(r => r.key === key)?.label || null
 }
 
-// Select de rubrica usado na aba Faturas (criar e reclassificar facturas).
+// Select de rubrica usado na aba Faturas e Comprovativos (criar e reclassificar faturas e comprovativos).
 // A rubrica é obrigatória: a opção vazia só aparece como placeholder (desactivada),
 // para facturas novas ("Escolher rubrica…") ou antigas ainda sem rubrica.
 export function RubricaSelect({ value, onChange, analise, className = '', incluirExtra = true, placeholder = '— Por classificar —', ...rest }) {
@@ -327,7 +327,7 @@ export function QuadroEstimadoVsReal({ negocioId, analise, faturacao }) {
                       ...calc.linhasExtra.map(l => <EspelhoLinha key={l.key} l={l} />),
                     ]}
                     {calc.linhasSem.length > 0 && [
-                      <GrupoLinha key="__sem" label="Por classificar — atribuir rubrica na aba Faturas" ls={calc.linhasSem} tom="amber" />,
+                      <GrupoLinha key="__sem" label="Por classificar — atribuir rubrica na aba Faturas e Comprovativos" ls={calc.linhasSem} tom="amber" />,
                       ...calc.linhasSem.map(l => <EspelhoLinha key={l.key} l={l} />),
                     ]}
                     <tr className="border-y-2 border-gray-200 dark:border-neutral-700 font-semibold bg-white dark:bg-neutral-900">
@@ -468,7 +468,7 @@ function EspelhoLinha({ l }) {
     <tr className="border-b border-gray-50 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800/40">
       <td className="py-2 px-4 pl-7 text-gray-700 dark:text-neutral-300">
         {l.label}
-        {l.nFaturas > 0 && <span className="ml-1.5 text-[10px] text-gray-400">{l.nFaturas} fat.</span>}
+        {l.nFaturas > 0 && <span className="ml-1.5 text-[10px] text-gray-400">{l.nFaturas} doc.</span>}
       </td>
       <td className="py-2 px-3 text-right font-mono text-gray-500 dark:text-neutral-400">{EUR(l.estimado)}</td>
       <td className="py-2 px-3 text-right font-mono text-gray-800 dark:text-neutral-100">{l.temReal ? EUR(l.real) : <span className="text-gray-300">—</span>}</td>
@@ -484,7 +484,7 @@ function EspelhoLinha({ l }) {
 }
 
 // ── Custos extra (só leitura) ───────────────────────────────────
-// Registados na aba Faturas com rubrica 'extra' + motivo + justificação.
+// Registados na aba Faturas e Comprovativos com rubrica 'extra' + motivo + justificação.
 function ListaCustosExtra({ extras, total, embutido }) {
   const porMotivo = useMemo(() => {
     const m = {}
@@ -498,7 +498,7 @@ function ListaCustosExtra({ extras, total, embutido }) {
   return (
     <Wrapper>
       <Card.Header icon={FilePlus2} title="Custos extra — fora da Análise Financeira"
-        subtitle='Registados na aba Faturas com a rubrica "Custo extra", motivo e justificação'
+        subtitle='Registados na aba Faturas e Comprovativos com a rubrica "Custo extra", motivo e justificação'
         action={<span className="text-sm font-mono font-bold text-red-600">{EUR(total)}</span>} />
 
       {porMotivo.length > 0 && (
@@ -545,7 +545,7 @@ function ListaCustosExtra({ extras, total, embutido }) {
                         <span className="px-1.5 py-0.5 bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded">{d.motivo_extra || 'Outro'}</span>
                       </td>
                       <td className="py-2.5 px-3 text-xs text-gray-600 dark:text-neutral-300 whitespace-pre-line">
-                        {d.justificacao || <span className="text-amber-700">Sem justificação — completar na aba Faturas</span>}
+                        {d.justificacao || <span className="text-amber-700">Sem justificação — completar na aba Faturas e Comprovativos</span>}
                       </td>
                       <td className="py-2.5 px-3">
                         <Badge tone={d.pago ? 'green' : 'yellow'} size="sm">{d.pago ? 'Pago' : 'Pendente'}</Badge>

@@ -1741,6 +1741,14 @@ export async function initSchema() {
         ALTER TABLE despesas ADD COLUMN IF NOT EXISTS justificacao TEXT;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
+
+      -- Tipo de documento por custo: factura ou comprovativo de pagamento/
+      -- transferência (compra, IMT, IS não têm factura) — ver migration
+      -- 0062_despesas_tipo_documento.sql.
+      DO $$ BEGIN
+        ALTER TABLE despesas ADD COLUMN IF NOT EXISTS tipo_documento TEXT DEFAULT 'fatura';
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
     `)
 
     // Bootstrap: garantir que somniumprs@gmail.com (owner) existe como admin
