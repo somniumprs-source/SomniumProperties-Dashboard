@@ -121,6 +121,10 @@ export async function pullGCalToTarefas(gcal: any, calendarId: string, { days = 
 
     for (const event of events) {
       if (!event.summary) continue;
+      // Eventos recorrentes do GCal não viram tarefas (cada ocorrência gerava
+      // uma tarefa nova, ex: "Exportar conversas WhatsApp" x5). Recorrência de
+      // tarefas faz-se pelo catálogo (tarefas_templates), não pelo calendário.
+      if (event.recurringEventId) { skipped++; continue; }
 
       const eventId = event.id;
       const inicio = event.start?.dateTime || event.start?.date || null;

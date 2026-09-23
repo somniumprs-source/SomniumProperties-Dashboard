@@ -1313,8 +1313,10 @@ export async function initSchema() {
       CREATE INDEX IF NOT EXISTS idx_okrs_regiao ON okrs(regiao);
 
       DO $$ BEGIN
+        -- Sem backfill para 'Coimbra': região só faz sentido em tarefas
+        -- ligadas a um imóvel; as restantes (equipa, investidores, GCal,
+        -- catálogo) ficam com regiao NULL.
         ALTER TABLE tarefas ADD COLUMN IF NOT EXISTS regiao TEXT;
-        UPDATE tarefas SET regiao = 'Coimbra' WHERE regiao IS NULL;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
       CREATE INDEX IF NOT EXISTS idx_tarefas_regiao ON tarefas(regiao);
