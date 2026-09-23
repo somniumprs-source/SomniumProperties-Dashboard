@@ -1,4 +1,4 @@
--- 0055_indices_relacoes_quentes.sql — índices em relações muito consultadas
+-- 0060_indices_relacoes_quentes.sql — índices em relações muito consultadas
 -- sem índice (achado da auditoria transversal, Problema 29). FKs já existiam
 -- (006_foreign_keys.sql / migrações posteriores); faltava só o índice.
 -- CONCURRENTLY: sem lock de escrita na tabela, seguro correr em produção.

@@ -1,4 +1,4 @@
--- 0054_drop_colunas_cedencia_mortas.sql — remover colunas mortas do modelo
+-- 0059_drop_colunas_cedencia_mortas.sql — remover colunas mortas do modelo
 -- antigo de cedência de posição (Wholesaling), substituído pelo fee_cedencia
 -- (ver 0019_fee_cedencia.sql). Confirmado sem uso em nenhum cálculo/tela;
 -- achado da auditoria transversal — decisão do utilizador de apagar (volume
