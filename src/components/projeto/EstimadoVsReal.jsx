@@ -66,8 +66,12 @@ export const RUBRICAS = [
 ]
 function meses(a) { return Math.max(parseInt(a.meses) || 6, 1) }
 function estCompra(a) {
+  const declarado = n(a.compra) + n(a.fee_cedencia)
+  if (!(n(a.total_aquisicao) > 0)) return declarado
   const outros = n(a.imt) + n(a.imposto_selo) + (a.escritura == null ? 0 : n(a.escritura) || 700) + n(a.cpcv_compra) + n(a.due_diligence)
-  return n(a.total_aquisicao) > 0 ? Math.max(n(a.total_aquisicao) - outros, 0) : n(a.compra) + n(a.fee_cedencia)
+  const derivado = Math.max(n(a.total_aquisicao) - outros, 0)
+  // Diferenças abaixo de 1 € são arredondamentos dos impostos guardados: usa o valor declarado.
+  return Math.abs(derivado - declarado) < 1 ? declarado : derivado
 }
 
 export const RUBRICA_EXTRA = 'extra'
@@ -97,10 +101,12 @@ export function labelRubrica(key) {
 }
 
 // Select de rubrica usado na aba Faturas (criar e reclassificar facturas).
-export function RubricaSelect({ value, onChange, analise, className = '', incluirExtra = true, ...rest }) {
+// A rubrica é obrigatória: a opção vazia só aparece como placeholder (desactivada),
+// para facturas novas ("Escolher rubrica…") ou antigas ainda sem rubrica.
+export function RubricaSelect({ value, onChange, analise, className = '', incluirExtra = true, placeholder = '— Por classificar —', ...rest }) {
   return (
     <select value={value || ''} onChange={e => onChange(e.target.value)} className={className} {...rest}>
-      <option value="">— Por classificar —</option>
+      <option value="" disabled>{placeholder}</option>
       {GRUPOS.map(g => (
         <optgroup key={g} label={g}>
           {RUBRICAS.filter(r => r.grupo === g).map(r => (
@@ -190,13 +196,16 @@ export function QuadroEstimadoVsReal({ negocioId, analise, faturacao }) {
     const derrapagens = round2(todas.filter(l => l.desvioEfetivo > 0).reduce((s, l) => s + l.desvioEfetivo, 0))
 
     const despesasEstimadas = round2(linhas.reduce((s, l) => s + l.estimado, 0))
+    // Parte das despesas que não precisa de capital (comissão paga pelo sinal do
+    // comprador) e parte coberta por financiamento bancário.
+    const despesasSemCapital = round2(linhas.filter(l => l.semCapital).reduce((s, l) => s + l.estimado, 0))
     const despesasReais = round2(despesas.reduce((s, d) => s + n(d.custo_mensal), 0))
     const despesasPagas = round2(despesas.filter(d => d.pago).reduce((s, d) => s + n(d.custo_mensal), 0))
 
     return {
       linhas, linhasExtra, linhasSem, extras,
       totalExtras: somar(extras),
-      despesasEstimadas, despesasReais, despesasPagas,
+      despesasEstimadas, despesasSemCapital, valorFinanciado: n(a.valor_financiado), despesasReais, despesasPagas,
       desvioTotal, poupancas, derrapagens,
       lucroEstimado: L, lucroAjustado,
       capitalEstimado: C, capitalAjustado,
@@ -208,12 +217,27 @@ export function QuadroEstimadoVsReal({ negocioId, analise, faturacao }) {
 
   const semAnalise = !analise
   const execPct = calc.despesasEstimadas > 0 ? Math.round((calc.despesasReais / calc.despesasEstimadas) * 100) : 0
-  const fatExp = n(faturacao?.totalExpectavel)
-  const fatReal = n(faturacao?.totalReal)
+  // Faturação = o que a Somnium fatura (fee, comissão ou % do lucro); o real vem
+  // só das tranches confirmadas. O lucro total do negócio fica no painel de desvios.
+  const fatExp = n(faturacao?.somniumExpectavel)
+  const fatReal = n(faturacao?.somniumReal)
+  const percSomnium = n(faturacao?.percSomnium)
   const fatPct = fatExp > 0 ? Math.round((fatReal / fatExp) * 100) : 0
   const despPendentes = round2(calc.despesasReais - calc.despesasPagas)
   const capital = n(faturacao?.capitalValor)
-  const coberturaPct = calc.capitalEstimado > 0 ? Math.round((capital / calc.capitalEstimado) * 100) : 0
+  const coberturaPct = calc.capitalEstimado > 0 ? Math.round((capital / calc.capitalEstimado) * 1000) / 10 : 0
+  const margemCapital = round2(capital - calc.capitalEstimado)
+  const capitalCobre = calc.capitalEstimado > 0 && margemCapital >= 0
+  const capitalSub = calc.capitalEstimado <= 0 ? 'Sem capital necessário na Análise'
+    : capitalCobre ? `Cobre ${coberturaPct.toLocaleString('pt-PT')}% · +${EUR(margemCapital)}`
+    : `Faltam ${EUR(-margemCapital)} · ${coberturaPct.toLocaleString('pt-PT')}%`
+  // Reconciliação despesas ↔ capital (tooltip): o KpiCard trunca a linha de baixo.
+  const despEstDetalhe = [
+    `${EUR(calc.despesasEstimadas)} despesas estimadas`,
+    calc.despesasSemCapital > 0 && `− ${EUR(calc.despesasSemCapital)} comissão de mediação (paga no sinal do comprador)`,
+    calc.valorFinanciado > 0 && `− ${EUR(calc.valorFinanciado)} financiamento bancário`,
+    `= ${EUR(calc.capitalEstimado)} a financiar com capital`,
+  ].filter(Boolean).join('\n')
   const actualizado = despesasQuery.dataUpdatedAt ? new Date(despesasQuery.dataUpdatedAt).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) : null
 
   return (
@@ -232,14 +256,18 @@ export function QuadroEstimadoVsReal({ negocioId, analise, faturacao }) {
 
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-          <KpiCard size="sm" icon={Landmark} tone="gold" label={faturacao?.capitalLabel || 'Capital alocado'}
-            value={EUR(capital)} sub={calc.capitalEstimado > 0 ? `${coberturaPct}% de ${EUR(calc.capitalEstimado)} necessários` : 'Sem capital necessário na Análise'} />
+          <div title={calc.capitalEstimado > 0 ? `${EUR(capital)} de capital para ${EUR(calc.capitalEstimado)} a financiar` : undefined}>
+            <KpiCard size="sm" icon={Landmark} tone={calc.capitalEstimado > 0 && !capitalCobre ? 'red' : 'gold'} label={faturacao?.capitalLabel || 'Capital alocado'}
+              value={EUR(capital)} sub={capitalSub} className="h-full" />
+          </div>
           <KpiCard size="sm" icon={TrendingUp} tone="indigo" label="Faturação expectável"
-            value={EUR(fatExp)} sub="Modelo do negócio" />
+            value={EUR(fatExp)} sub={percSomnium > 0 && percSomnium < 100 ? `Somnium · ${percSomnium.toLocaleString('pt-PT')}% do lucro` : 'Parte da Somnium'} />
           <KpiCard size="sm" icon={Wallet} tone={fatReal > 0 ? 'green' : 'gray'} label="Faturação real"
-            value={EUR(fatReal)} sub={`${fatPct}% do expectável`} />
-          <KpiCard size="sm" icon={Calculator} tone="gray" label="Despesas estimadas"
-            value={EUR(calc.despesasEstimadas)} sub="Análise Financeira" />
+            value={EUR(fatReal)} sub={`${fatPct}% · tranches confirmadas`} />
+          <div title={despEstDetalhe}>
+            <KpiCard size="sm" icon={Calculator} tone="gray" label="Despesas estimadas"
+              value={EUR(calc.despesasEstimadas)} sub={`A financiar: ${EUR(calc.capitalEstimado)}`} className="h-full" />
+          </div>
           <KpiCard size="sm" icon={Receipt} tone={execPct > 100 ? 'red' : 'amber'} label="Despesas reais"
             value={EUR(calc.despesasReais)} sub={`${execPct}% executado · ${EUR(despPendentes)} pendente`} />
         </div>

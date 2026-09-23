@@ -281,9 +281,8 @@ export function ProjectoDetalhe() {
               )}
             </div>
             <div className="grid grid-cols-2 sm:flex sm:items-start gap-4 sm:gap-7 w-full sm:w-auto">
+              {/* Só estado: os valores financeiros vivem no quadro Estimado vs Real do Resumo. */}
               <BannerKpi label="Execução" value={`${percGlobal}%`} />
-              <BannerKpi label="Faturação" value={EUR(negocio.lucro_estimado)} />
-              {!isWholesalling && <BannerKpi label="Custo obra" value={EUR(custoReal || negocio.custo_real_obra)} />}
               {faseAtual && (
                 <div className="sm:text-right col-span-2 sm:col-span-1">
                   <p className="text-overline uppercase tracking-widest text-white/50 font-semibold">Fase actual</p>
@@ -377,55 +376,54 @@ function TabResumo({ resumo, fases }) {
       .catch(() => {})
   }, [negocio.id, isWS])
 
-  return (
-    <div className="space-y-6">
-      <AiResumoCard negocioId={negocio.id} />
+  // Uma só fonte por número: o dinheiro está todo no quadro; aqui fica só o
+  // calendário e o progresso (sem repetir faturação, capital ou custos).
+  const fasesConcluidas = fases.filter(f => f.estado === 'concluida').length
+  const calendario = [
+    { label: 'Compra', value: fmtData(negocio.data_compra) },
+    { label: 'Venda estimada', value: fmtData(negocio.data_estimada_venda) },
+    negocio.data_venda && { label: 'Venda', value: fmtData(negocio.data_venda) },
+    fases.length > 0 && { label: 'Fases', value: `${fasesConcluidas}/${fases.length}` },
+    totalTarefas > 0 && { label: 'Tarefas', value: `${tarefasConcluidas}/${totalTarefas}` },
+  ].filter(Boolean)
 
+  return (
+    <div className="space-y-4">
       <QuadroEstimadoVsReal negocioId={negocio.id} analise={analise} faturacao={faturacao} />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="space-y-3">
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Dados do projecto</h3>
-          <Field label="Categoria" value={negocio.categoria} />
-          <Field label="Fase legacy" value={negocio.fase} />
-          <Field label="Data compra" value={negocio.data_compra} />
-          <Field label="Venda estimada" value={negocio.data_estimada_venda} />
-          <Field label="Data venda" value={negocio.data_venda} />
-        </div>
-        <div className="space-y-3">
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Financeiro</h3>
-          <Field label="Faturação esperada" value={EUR(negocio.lucro_estimado)} accent />
-          <Field label="Faturação real" value={EUR(negocio.lucro_real)} accent />
-          {!isWS && <Field label="Custo real obra" value={EUR(negocio.custo_real_obra)} />}
-          <Field label="Capital total" value={EUR(negocio.capital_total)} />
-          <Field label="Nº investidores" value={negocio.n_investidores} />
-        </div>
-        {!isWS && (
-          <div className="space-y-3">
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Obra</h3>
-            <Field label="Fases criadas" value={`${fases.length}`} />
-            <Field label="Fases concluídas" value={`${fases.filter(f => f.estado === 'concluida').length} / ${fases.length}`} />
-            <Field label="Tarefas concluídas" value={`${tarefasConcluidas} / ${totalTarefas}`} />
-            {ultimoSemaforo && (
-              <div className="flex justify-between items-baseline py-1 border-b border-gray-100 dark:border-neutral-800 last:border-0">
-                <span className="text-caption text-gray-500 dark:text-neutral-400">Desvio orçamental (última vistoria)</span>
-                <StatusBadge status={SEMAFORO_STATUS[ultimoSemaforo.semaforo_cor]} />
-              </div>
-            )}
+      <Card padding="sm" className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        {calendario.map(c => (
+          <div key={c.label} className="flex items-baseline gap-1.5">
+            <span className="text-[10px] uppercase tracking-wide font-semibold text-gray-400">{c.label}</span>
+            <span className="text-sm font-medium text-gray-800 dark:text-neutral-100">{c.value}</span>
+          </div>
+        ))}
+        {ultimoSemaforo && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wide font-semibold text-gray-400">Última vistoria</span>
+            <StatusBadge status={SEMAFORO_STATUS[ultimoSemaforo.semaforo_cor]} />
           </div>
         )}
-      </div>
-
-      {negocio.notas && (
-        <div>
-          <p className="text-[10px] text-gray-400 uppercase">Notas</p>
-          <p className="text-xs text-gray-700 bg-gray-50 rounded-lg p-2.5 mt-1">{negocio.notas}</p>
-        </div>
-      )}
+      </Card>
 
       {fases.length > 0 && <GanttFases fases={fases} negocio={negocio} />}
+
+      {negocio.notas && (
+        <Card padding="sm">
+          <p className="text-[10px] uppercase tracking-wide font-semibold text-gray-400">Notas</p>
+          <p className="text-xs text-gray-700 dark:text-neutral-300 mt-1 whitespace-pre-line">{negocio.notas}</p>
+        </Card>
+      )}
+
+      <AiResumoCard negocioId={negocio.id} />
     </div>
   )
+}
+
+function fmtData(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  return isNaN(d) ? iso : d.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 
@@ -1175,6 +1173,10 @@ function TabFaturas({ negocioId, analise, readOnly }) {
   async function adicionar(e) {
     e.preventDefault()
     if (!form.fornecedor.trim() || !form.valor) return
+    if (!form.rubrica_analise) {
+      toast?.('Escolhe a rubrica da Análise Financeira desta factura.', 'error', 3500)
+      return
+    }
     if (form.rubrica_analise === RUBRICA_EXTRA && (!form.motivo_extra || !form.justificacao.trim())) {
       toast?.('Custo extra: indica o motivo e a justificação.', 'error', 3500)
       return
@@ -1344,8 +1346,8 @@ function TabFaturas({ negocioId, analise, readOnly }) {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Rubrica da Análise Financeira</label>
-              <RubricaSelect value={form.rubrica_analise} analise={analise}
+              <label className="block text-xs font-medium text-gray-500 mb-1">Rubrica da Análise Financeira *</label>
+              <RubricaSelect value={form.rubrica_analise} analise={analise} required placeholder="Escolher rubrica…"
                 onChange={v => setForm(f => ({ ...f, rubrica_analise: v }))}
                 className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
             </div>

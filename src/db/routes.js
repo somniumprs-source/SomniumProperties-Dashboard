@@ -5573,7 +5573,10 @@ router.post('/projetos/:negocioId/despesas', async (req, res) => {
   try {
     const { fase_id, fracao_id, movimento, valor, data, categoria, fornecedor, notas, pago, rubrica_analise, motivo_extra, justificacao } = req.body || {}
     if (!movimento?.trim()) return res.status(400).json({ error: 'movimento obrigatório' })
-    const erroRubrica = validarRubricaDespesa(rubrica_analise, justificacao)
+    // Rubrica obrigatória; despesas de uma fase de obra ficam automaticamente em 'obra'.
+    const rubricaFinal = rubrica_analise || (fase_id ? 'obra' : null)
+    if (!rubricaFinal) return res.status(400).json({ error: 'Rubrica da Análise Financeira obrigatória' })
+    const erroRubrica = validarRubricaDespesa(rubricaFinal, justificacao)
     if (erroRubrica) return res.status(400).json({ error: erroRubrica })
     const id = randomUUID()
     // Anexo de comprovativo passa sempre por despesas.documentos — ver
@@ -5585,7 +5588,7 @@ router.post('/projetos/:negocioId/despesas', async (req, res) => {
       [id, movimento.trim(), categoria || 'Obra', Number(valor) || 0, 0, 'Único', data || null, notas || null,
        req.params.negocioId, fase_id || null, fracao_id || null,
        fornecedor || null, !!pago, pago ? new Date().toISOString().slice(0, 10) : null,
-       rubrica_analise || null, rubrica_analise === 'extra' ? (motivo_extra || null) : null, justificacao?.trim() || null]
+       rubricaFinal, rubricaFinal === 'extra' ? (motivo_extra || null) : null, justificacao?.trim() || null]
     )
     // Recalcular custo_real da fase
     if (fase_id) {
@@ -5630,6 +5633,7 @@ router.put('/projetos/despesas/:despesaId', async (req, res) => {
         : (novoPago && !despesa.data_pagamento ? new Date().toISOString().slice(0, 10) : (novoPago ? despesa.data_pagamento : null)),
     }
     if (campos.rubrica_analise !== 'extra') campos.motivo_extra = null
+    if (rubrica_analise !== undefined && !campos.rubrica_analise && !despesa.fase_id) return res.status(400).json({ error: 'Rubrica da Análise Financeira obrigatória' })
     const erroRubrica = validarRubricaDespesa(campos.rubrica_analise, campos.justificacao)
     if (erroRubrica) return res.status(400).json({ error: erroRubrica })
     const { rows } = await pool.query(
