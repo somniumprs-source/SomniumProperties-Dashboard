@@ -6,7 +6,6 @@
     "@googleapis/sheets": "npm:@googleapis/sheets@13.0.2",
     "@hono/hono": "jsr:@hono/hono@^4.12.23",
     "@hono/hono/cors": "jsr:@hono/hono@^4.12.23/cors",
-    "@notionhq/client": "npm:@notionhq/client@2.2.15",
     "@resvg/resvg-wasm": "npm:@resvg/resvg-wasm@2.6.2",
     "@supabase/supabase-js": "jsr:@supabase/supabase-js@2",
     "docx": "npm:docx@9.6.1",

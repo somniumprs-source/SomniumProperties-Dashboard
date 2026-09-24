@@ -45,7 +45,6 @@ import { ensureOportunidadesScraperTable } from "../_shared/oportunidadesScraper
 // 'Resposta' foi renomeado para 'Recebido' numa migração antiga (ver pg.ts);
 // dados anteriores à migração ainda usam 'Resposta' — aceitar os dois.
 const isDirecaoResposta = (direcao: string) => direcao === "Recebido" || direcao === "Resposta";
-import { syncAllFromNotion, syncFromNotion, syncToNotion } from "../_shared/sync.ts";
 import {
   createImovelFolder, isConfigured as driveConfigured, listImovelFiles,
   moveImovelFolder, uploadDocToFolder, uploadUserFileToFolder, uploadComprovativoToFolder, downloadDriveFile,
@@ -99,8 +98,6 @@ const app = createApp("/crm");
 // investidores ou guardar para analise.
 const pdfDisposition = (c: any, filename: string) =>
   `${c.req.query("download") ? "attachment" : "inline"}; filename="${filename}"`;
-
-// Notion sync agora real (de ../_shared/sync.ts). No-op gracioso sem NOTION_API_KEY.
 
 const REGIOES_VALIDAS = new Set(["Coimbra", "AMP"]);
 const TABELAS_ISOLADAS_REGIAO = new Set(["imoveis", "consultores", "negocios", "empreiteiros"]);
@@ -642,7 +639,7 @@ function qualidadeImovel(estado: string): number {
 }
 
 // ── Generic CRUD route factory (port de routes.js 218-276) ───────
-// hooks onCreate/onUpdate ligados (PDF/drive/scrape/fases); syncToNotion real (no-op gracioso sem NOTION_API_KEY).
+// hooks onCreate/onUpdate ligados (PDF/drive/scrape/fases).
 function crudRoutes(
   path: string,
   crud: any,
@@ -689,7 +686,6 @@ function crudRoutes(
       }
       const u = await resolveCrmUser(c);
       const item = await crud.create(body, { regiaoActiva, role: u?.role });
-      syncToNotion(table, item.id);
       hooks.onCreate?.(item).catch((e: any) => console.error(`[hook] create ${table}:`, e.message));
       return c.json(item, 201);
     } catch (e) { return c.json({ error: (e as Error).message }, 400); }
@@ -709,7 +705,6 @@ function crudRoutes(
       const u = await resolveCrmUser(c);
       const item = await crud.update(c.req.param("id"), body, { regiaoActiva, role: u?.role });
       if (!item) return c.json({ error: "Não encontrado" }, 404);
-      syncToNotion(table, c.req.param("id"));
       hooks.onUpdate?.(item, body).catch((e: any) => console.error(`[hook] update ${table}:`, e.message));
       return c.json(item);
     } catch (e) { return c.json({ error: (e as Error).message }, 400); }
@@ -1894,7 +1889,6 @@ app.put("/negocios/:id/confirmar-pagamento", async (c: any) => {
     const values = Object.values(updates);
     await pool.query(`UPDATE negocios SET ${setClauses}, updated_at = NOW() WHERE id = $1`, [c.req.param("id"), ...values]);
 
-    syncToNotion("negocios", c.req.param("id"));
     return c.json({ ok: true, todasRecebidas, pagamentos: pags });
   } catch (e) {
     console.error("[confirmar-pagamento]", (e as Error).message);
@@ -3525,16 +3519,6 @@ app.get("/search", async (c: any) => {
       total: imoveis.rowCount + investidores.rowCount + consultores.rowCount + negocios.rowCount,
     });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
-});
-
-// ── Sync Notion <-> CRM (port routes.js ~1828-1836) ──
-app.post("/sync", async (c: any) => {
-  try { return c.json({ ok: true, results: await syncAllFromNotion() }); }
-  catch (e) { return c.json({ error: (e as Error).message }, 500); }
-});
-app.post("/sync/:table", async (c: any) => {
-  try { return c.json(await syncFromNotion(c.req.param("table"))); }
-  catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
 // ── Ficha de detalhe do imovel com relacoes — port de routes.js 1839-1895 ──
