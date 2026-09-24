@@ -520,7 +520,7 @@ export async function propagarParaImovel(imovelId, calculados, inputs, caepResul
         // imóvel nunca o sobrepõe; sem tranches mantém o valor actual.
         let pags = []
         try { pags = typeof neg.pagamentos_faseados === 'string' ? JSON.parse(neg.pagamentos_faseados || '[]') : (neg.pagamentos_faseados || []) } catch { /* noop */ }
-        const somaTranches = pags.reduce((s) => s + (parseFloat(p.valor) || 0), 0)
+        const somaTranches = pags.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
         lucroEstimado = somaTranches > 0 ? Math.round(somaTranches * 100) / 100 : (parseFloat(neg.lucro_estimado) || 0)
       } else if (neg.categoria === 'Mediação Imobiliária') {
         // Mediação: comissão % sobre valor de venda
