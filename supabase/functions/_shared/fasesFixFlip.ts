@@ -329,12 +329,88 @@ export const FASES_MEDIACAO = [
   },
 ]
 
+// Consultoria/Assessoria — honorário fixo; pode incluir gestão da obra do
+// cliente (sem capital próprio da Somnium). Keys com prefixo cons_ para não
+// colidirem no lookup global (getFaseConfigGlobal).
+export const FASES_CONSULTORIA = [
+  {
+    key: 'cons_proposta',
+    nome: 'Proposta e Contrato',
+    icon: '📝',
+    cor: '#475569',
+    descricao: 'Âmbito, honorário e contrato de prestação de serviços',
+    tarefas: [
+      'Reunião de levantamento de necessidades',
+      'Enviar proposta de honorários',
+      'Assinatura do contrato de prestação de serviços',
+    ],
+  },
+  {
+    key: 'cons_diagnostico',
+    nome: 'Diagnóstico',
+    icon: '🔍',
+    cor: '#1F4E5F',
+    descricao: 'Análise da situação do cliente e do imóvel',
+    tarefas: [
+      'Recolha de documentação do cliente/imóvel',
+      'Visita técnica',
+      'Relatório de diagnóstico',
+    ],
+  },
+  {
+    key: 'cons_plano',
+    nome: 'Plano de Ação',
+    icon: '🗺️',
+    cor: '#5F4D20',
+    descricao: 'Recomendações, orçamento e calendário',
+    tarefas: [
+      'Plano de ação e calendário',
+      'Validação do plano com o cliente',
+    ],
+  },
+  {
+    key: 'cons_execucao',
+    nome: 'Execução / Acompanhamento de Obra',
+    icon: '🏗️',
+    cor: '#C9A84C',
+    descricao: 'Acompanhamento da execução e, se contratada, gestão da obra do cliente',
+    tarefas: [
+      'Reuniões de acompanhamento com o cliente',
+      'Coordenação de fornecedores/empreiteiros (se aplicável)',
+      'Relatórios de progresso',
+    ],
+  },
+  {
+    key: 'cons_entrega',
+    nome: 'Entrega',
+    icon: '📦',
+    cor: '#2E7D5B',
+    descricao: 'Entrega final ao cliente',
+    tarefas: [
+      'Relatório final / entregáveis',
+      'Reunião de fecho com o cliente',
+    ],
+  },
+  {
+    key: 'cons_fecho',
+    nome: 'Fecho e Faturação',
+    icon: '✅',
+    cor: '#0d0d0d',
+    descricao: 'Faturação do honorário e arquivo',
+    tarefas: [
+      'Emissão da fatura do honorário',
+      'Recebimento e arquivo',
+    ],
+  },
+]
+
 // Mapa de categoria → template de fases
 export const FASES_POR_CATEGORIA = {
   'Fix and Flip': FASES_FIX_FLIP,
   'CAEP': FASES_CAEP,
   'Wholesalling': FASES_WHOLESALLING,
   'Mediação Imobiliária': FASES_MEDIACAO,
+  'Consultoria/Assessoria': FASES_CONSULTORIA,
 }
 
 export function getTemplateFases(categoria) {

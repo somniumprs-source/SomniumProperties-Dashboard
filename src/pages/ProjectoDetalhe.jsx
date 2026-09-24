@@ -26,7 +26,7 @@ import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 import { calcOrcamentoObra } from '../db/orcamentoObraEngine.js'
 import { DocumentosOrcamentosTab } from '../components/obra/DocumentosOrcamentosTab.jsx'
 import { AnaliseTab } from '../components/analise/AnaliseTab.jsx'
-import { QuadroEstimadoVsReal, RubricaSelect, RUBRICA_EXTRA, MOTIVOS_EXTRA, rubricaDe, labelRubrica } from '../components/projeto/EstimadoVsReal.jsx'
+import { QuadroEstimadoVsReal, QuadroConsultoria, RubricaSelect, RUBRICA_EXTRA, MOTIVOS_EXTRA, rubricaDe, labelRubrica } from '../components/projeto/EstimadoVsReal.jsx'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const GOLD = '#C9A84C'
@@ -160,8 +160,12 @@ export function ProjectoDetalhe() {
   const isPredio = negocio.tipo_projeto === 'predio'
   // Wholesalling é cedência de posição (sem obra).
   const isWholesalling = negocio.categoria === 'Wholesalling'
+  // Consultoria/Assessoria: a Somnium não investe — sem Análise Financeira nem Investidores.
+  const isConsultoria = negocio.categoria === 'Consultoria/Assessoria'
+  const TABS_OCULTAS_CONSULTORIA = new Set(['analise', 'investidores'])
   const TABS = TABS_BASE.filter(t =>
     (!t.predioOnly || isPredio) &&
+    !(isConsultoria && TABS_OCULTAS_CONSULTORIA.has(t.key)) &&
     !(t.teamOnly && isReadOnly)
   )
 
@@ -331,7 +335,7 @@ export function ProjectoDetalhe() {
               />
             )}
             {tab === 'faturacao' && <TabFaturacao negocio={negocio} imovel={imovel} analise={analise} onChange={load} readOnly={isReadOnly} />}
-            {tab === 'faturas' && <TabFaturas negocioId={id} analise={analise} readOnly={isReadOnly} />}
+            {tab === 'faturas' && <TabFaturas negocioId={id} analise={analise} readOnly={isReadOnly} consultoria={isConsultoria} />}
             {tab === 'documentos' && <TabDocumentos negocio={negocio} imovel={imovel} fases={fases} readOnly={isReadOnly} />}
             {tab === 'investidores' && <TabInvestidores negocio={negocio} readOnly={isReadOnly} />}
             {tab === 'reunioes' && <TabReunioes negocioId={id} readOnly={isReadOnly} />}
@@ -385,7 +389,9 @@ function TabResumo({ resumo, fases }) {
 
   return (
     <div className="space-y-4">
-      <QuadroEstimadoVsReal negocioId={negocio.id} analise={analise} faturacao={faturacao} />
+      {negocio.categoria === 'Consultoria/Assessoria'
+        ? <QuadroConsultoria negocioId={negocio.id} faturacao={faturacao} />
+        : <QuadroEstimadoVsReal negocioId={negocio.id} analise={analise} faturacao={faturacao} />}
 
       <Card padding="sm" className="flex flex-wrap items-center gap-x-6 gap-y-2">
         {calendario.map(c => (
@@ -897,7 +903,15 @@ function useFaturacaoNegocio({ negocio, imovel, analise }) {
   const categoria = negocio.categoria
   let percSomnium, totalExpectavel, modeloLabel
 
-  if (categoria === 'Wholesalling') {
+  if (categoria === 'Consultoria/Assessoria') {
+    // Honorário fixo = Σ tranches da aba Lucro (fonte única); 100% Somnium.
+    modeloLabel = 'Consultoria/Assessoria — honorário fixo'
+    percSomnium = 100
+    let pagsCons = []
+    try { pagsCons = typeof negocio.pagamentos_faseados === 'string' ? JSON.parse(negocio.pagamentos_faseados || '[]') : (negocio.pagamentos_faseados || []) } catch {}
+    const somaTranches = pagsCons.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
+    totalExpectavel = round2(somaTranches) || Number(negocio.lucro_estimado) || 0
+  } else if (categoria === 'Wholesalling') {
     modeloLabel = 'Wholesalling — cedência de posição'
     percSomnium = Math.max(0, 100 - percInvestidoresLigados)
     totalExpectavel = Number(imovel?.fee_cedencia) || Number(negocio.lucro_estimado) || 0
@@ -1151,7 +1165,7 @@ const tipoDocumentoDe = f => TIPOS_DOCUMENTO.find(t => t.key === f.tipo_document
 
 const FATURA_FORM_VAZIO = { tipo_documento: 'fatura', fornecedor: '', movimento: '', valor: '', data: '', categoria: '', pago: false, file: null, rubrica_analise: '', motivo_extra: '', justificacao: '' }
 
-function TabFaturas({ negocioId, analise, readOnly }) {
+function TabFaturas({ negocioId, analise, readOnly, consultoria = false }) {
   const toast = useToast()
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(FATURA_FORM_VAZIO)
@@ -1364,8 +1378,8 @@ function TabFaturas({ negocioId, analise, readOnly }) {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Rubrica da Análise Financeira *</label>
-              <RubricaSelect value={form.rubrica_analise} analise={analise} required placeholder="Escolher rubrica…"
+              <label className="block text-xs font-medium text-gray-500 mb-1">{consultoria ? 'Tipo de custo *' : 'Rubrica da Análise Financeira *'}</label>
+              <RubricaSelect value={form.rubrica_analise} analise={analise} consultoria={consultoria} required placeholder="Escolher rubrica…"
                 onChange={v => setForm(f => ({ ...f, rubrica_analise: v }))}
                 className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
             </div>
@@ -1441,7 +1455,7 @@ function TabFaturas({ negocioId, analise, readOnly }) {
                     {labelRubrica(rubrica) || 'Por classificar'}
                   </span>
                 ) : (
-                  <RubricaSelect value={editando ? RUBRICA_EXTRA : rubrica} onChange={v => mudarRubrica(f, v)}
+                  <RubricaSelect value={editando ? RUBRICA_EXTRA : rubrica} consultoria={consultoria} onChange={v => mudarRubrica(f, v)}
                     title="Rubrica da Análise Financeira"
                     className={`max-w-[11rem] px-2 py-1 rounded-lg border text-[11px] ${isExtra || editando ? 'border-red-200 bg-red-50 text-red-700' : rubrica ? 'border-gray-200 bg-white text-gray-600' : 'border-amber-200 bg-amber-50 text-amber-700'}`} />
                 )}

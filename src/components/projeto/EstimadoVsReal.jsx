@@ -101,15 +101,32 @@ export function rubricaDe(d) {
   return null
 }
 
+// Consultoria/Assessoria: não há Análise Financeira — só custos próprios da
+// Somnium, por tipo. Faturas de obra do cliente (rubrica 'obra') não contam.
+export const RUBRICAS_CONSULTORIA = [
+  { key: 'cons_deslocacoes',    label: 'Deslocações' },
+  { key: 'cons_subcontratacao', label: 'Subcontratação (técnicos, especialistas)' },
+  { key: 'cons_materiais',      label: 'Materiais e licenças' },
+  { key: 'cons_outros',         label: 'Outros' },
+]
+
 export function labelRubrica(key) {
   if (key === RUBRICA_EXTRA) return 'Custo extra'
-  return RUBRICAS.find(r => r.key === key)?.label || null
+  return RUBRICAS.find(r => r.key === key)?.label || RUBRICAS_CONSULTORIA.find(r => r.key === key)?.label || null
 }
 
 // Select de rubrica usado na aba Faturas e Comprovativos (criar e reclassificar faturas e comprovativos).
 // A rubrica é obrigatória: a opção vazia só aparece como placeholder (desactivada),
 // para faturas novas ("Escolher rubrica…") ou antigas ainda sem rubrica.
-export function RubricaSelect({ value, onChange, analise, className = '', incluirExtra = true, placeholder = '— Por classificar —', ...rest }) {
+export function RubricaSelect({ value, onChange, analise, className = '', incluirExtra = true, consultoria = false, placeholder = '— Por classificar —', ...rest }) {
+  if (consultoria) {
+    return (
+      <select value={value || ''} onChange={e => onChange(e.target.value)} className={className} {...rest}>
+        <option value="" disabled>{placeholder}</option>
+        {RUBRICAS_CONSULTORIA.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+      </select>
+    )
+  }
   return (
     <select value={value || ''} onChange={e => onChange(e.target.value)} className={className} {...rest}>
       <option value="" disabled>{placeholder}</option>
@@ -128,6 +145,122 @@ export function RubricaSelect({ value, onChange, analise, className = '', inclui
         </optgroup>
       )}
     </select>
+  )
+}
+
+// ── Quadro Consultoria/Assessoria ───────────────────────────────
+// Sem capital nem Análise: honorário (Σ tranches), faturado (tranches
+// confirmadas), despesas próprias e margem.
+export function QuadroConsultoria({ negocioId, faturacao }) {
+  const [aberto, setAberto] = useState(false)
+  const despesasQuery = useQuery({
+    queryKey: ['projeto-faturas', negocioId],
+    queryFn: async () => {
+      const r = await apiFetch(`/api/crm/projetos/${negocioId}/despesas`)
+      if (!r.ok) throw new Error('Erro ao carregar faturas')
+      const { despesas } = await r.json()
+      return despesas
+    },
+    refetchInterval: 60_000,
+  })
+  useRefreshOnMutation(despesasQuery.refetch)
+  const despesas = useMemo(() => despesasQuery.data ?? [], [despesasQuery.data])
+
+  const calc = useMemo(() => {
+    const proprias = despesas.filter(d => rubricaDe(d) !== 'obra')
+    const obraCliente = round2(despesas.filter(d => rubricaDe(d) === 'obra').reduce((s, d) => s + n(d.custo_mensal), 0))
+    const porTipo = RUBRICAS_CONSULTORIA.map(r => {
+      const fs = proprias.filter(d => rubricaDe(d) === r.key)
+      return { ...r, n: fs.length, total: round2(fs.reduce((s, d) => s + n(d.custo_mensal), 0)) }
+    })
+    const semTipo = proprias.filter(d => !RUBRICAS_CONSULTORIA.some(r => r.key === rubricaDe(d)))
+    const total = round2(proprias.reduce((s, d) => s + n(d.custo_mensal), 0))
+    const pagas = round2(proprias.filter(d => d.pago).reduce((s, d) => s + n(d.custo_mensal), 0))
+    return { porTipo, semTipo, totalSemTipo: round2(semTipo.reduce((s, d) => s + n(d.custo_mensal), 0)), total, pagas, obraCliente }
+  }, [despesas])
+
+  if (despesasQuery.isPending) return <Card><p className="py-4 text-center text-sm text-gray-400">A carregar quadro…</p></Card>
+
+  const honorario = n(faturacao?.totalExpectavel)
+  const faturado = n(faturacao?.somniumReal)
+  const pctFaturado = honorario > 0 ? Math.round((faturado / honorario) * 100) : 0
+  const margem = round2(honorario - calc.total)
+  const margemPct = honorario > 0 ? Math.round((margem / honorario) * 100) : 0
+
+  return (
+    <Card>
+      <Card.Header icon={Scale} title="Honorário e custos"
+        subtitle="Consultoria/Assessoria — sem capital próprio da Somnium"
+        action={faturacao?.modeloLabel && <Badge tone="gold" size="sm">{faturacao.modeloLabel}</Badge>} />
+
+      {honorario <= 0 && (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800/50 px-3 py-2 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+          <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+          Define o honorário acordado nas tranches da aba Lucro.
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+        <KpiCard size="sm" icon={Landmark} tone="gold" label="Honorário acordado" value={EUR(honorario)} sub="Soma das tranches" />
+        <KpiCard size="sm" icon={Wallet} tone={faturado > 0 ? 'green' : 'gray'} label="Faturado" value={EUR(faturado)} sub={`${pctFaturado}% · tranches confirmadas`} />
+        <KpiCard size="sm" icon={Receipt} tone="amber" label="Despesas próprias" value={EUR(calc.total)} sub={`${EUR(round2(calc.total - calc.pagas))} pendente`} />
+        <KpiCard size="sm" icon={Calculator} tone={margem < 0 ? 'red' : 'green'} label="Margem" value={EUR(margem)} sub={honorario > 0 ? `${margemPct}% do honorário` : '—'} />
+      </div>
+
+      <Card.Footer className="flex items-center justify-between gap-3 flex-wrap">
+        <button type="button" onClick={() => setAberto(v => !v)}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-neutral-300 hover:text-brand-gold">
+          {aberto ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+          {aberto ? 'Esconder despesas por tipo' : 'Ver despesas por tipo'}
+        </button>
+        {calc.semTipo.length > 0 && <Badge tone="yellow" size="sm">{calc.semTipo.length} por classificar</Badge>}
+      </Card.Footer>
+
+      {aberto && (
+        <div className="mt-4 space-y-2">
+          <div className="rounded-xl border border-gray-200 dark:border-neutral-800 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 dark:border-neutral-800 text-xs text-gray-400 uppercase bg-gray-50 dark:bg-neutral-800/50">
+                  <th className="text-left py-2.5 px-4">Tipo de custo</th>
+                  <th className="text-right py-2.5 px-3 w-24">Faturas</th>
+                  <th className="text-right py-2.5 px-4 w-32">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {calc.porTipo.filter(t => t.n > 0).map(t => (
+                  <tr key={t.key} className="border-b border-gray-50 dark:border-neutral-800">
+                    <td className="py-2 px-4 text-gray-700 dark:text-neutral-300">{t.label}</td>
+                    <td className="py-2 px-3 text-right text-xs text-gray-400">{t.n}</td>
+                    <td className="py-2 px-4 text-right font-mono text-gray-800 dark:text-neutral-100">{EUR2(t.total)}</td>
+                  </tr>
+                ))}
+                {calc.semTipo.length > 0 && (
+                  <tr className="border-b border-gray-50 bg-amber-50/50 dark:bg-amber-900/10">
+                    <td className="py-2 px-4 text-amber-800 dark:text-amber-300">Por classificar — escolher o tipo na aba Faturas</td>
+                    <td className="py-2 px-3 text-right text-xs text-amber-700">{calc.semTipo.length}</td>
+                    <td className="py-2 px-4 text-right font-mono text-amber-800 dark:text-amber-300">{EUR2(calc.totalSemTipo)}</td>
+                  </tr>
+                )}
+                {calc.total === 0 && calc.semTipo.length === 0 && (
+                  <tr><td colSpan={3} className="py-4 text-center text-sm text-gray-400">Sem despesas próprias registadas.</td></tr>
+                )}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-gray-200 dark:border-neutral-700 font-semibold">
+                  <td className="py-2.5 px-4 text-gray-900 dark:text-neutral-100">Total despesas próprias</td>
+                  <td />
+                  <td className="py-2.5 px-4 text-right font-mono text-gray-900 dark:text-neutral-100">{EUR2(calc.total)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          {calc.obraCliente > 0 && (
+            <p className="text-[11px] text-gray-400">Custos de obra do cliente lançados nas fases ({EUR(calc.obraCliente)}) não contam como despesa da Somnium.</p>
+          )}
+        </div>
+      )}
+    </Card>
   )
 }
 

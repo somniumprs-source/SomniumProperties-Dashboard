@@ -130,7 +130,7 @@ db.exec(`
     id TEXT PRIMARY KEY,
     notion_id TEXT UNIQUE,
     movimento TEXT NOT NULL,
-    categoria TEXT, -- Wholesalling | CAEP | Mediação Imobiliária | Fix and Flip
+    categoria TEXT, -- Wholesalling | CAEP | Mediação Imobiliária | Fix and Flip | Consultoria/Assessoria
     fase TEXT, -- Fase de obras | Fase de venda | Vendido
     lucro_estimado REAL DEFAULT 0,
     lucro_real REAL DEFAULT 0,

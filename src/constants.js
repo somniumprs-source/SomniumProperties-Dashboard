@@ -156,7 +156,7 @@ export const CONS_ESTADO_AVALIACAO_COLOR = {
 }
 
 // ── Negócios — Categorias e Fases ────────────────────────────
-export const NEG_CATEGORIAS = ['Wholesalling', 'CAEP', 'Mediação Imobiliária', 'Fix and Flip']
+export const NEG_CATEGORIAS = ['Wholesalling', 'CAEP', 'Mediação Imobiliária', 'Fix and Flip', 'Consultoria/Assessoria']
 export const NEG_FASES = ['Fase de obras', 'Fase de venda', 'Vendido']
 
 export const NEG_CAT_COLOR = {
@@ -164,6 +164,7 @@ export const NEG_CAT_COLOR = {
   'CAEP':                 'bg-yellow-100 text-yellow-700',
   'Mediação Imobiliária': 'bg-green-100 text-green-700',
   'Fix and Flip':         'bg-red-100 text-red-700',
+  'Consultoria/Assessoria': 'bg-cyan-100 text-cyan-700',
 }
 
 export const NEG_FASE_COLOR = {
@@ -186,7 +187,7 @@ export const CLASS_COLOR = { A: 'bg-green-500', B: 'bg-blue-500', C: 'bg-yellow-
 // ── Origens ──────────────────────────────────────────────────
 export const ORIGENS_IMOVEIS = ['Idealista', 'Imovirtual', 'Supercasa', 'Consultor', 'Referência', 'Outro']
 export const ORIGENS_INVESTIDORES = ['Landing Page', 'Skool', 'Grupos Whatsapp', 'Referenciação', 'LinkedIn', 'Eventos Networking', 'Outro']
-export const MODELOS_NEGOCIO = ['Wholesaling', 'Fix & Flip', 'CAEP', 'Mediação']
+export const MODELOS_NEGOCIO = ['Wholesaling', 'Fix & Flip', 'CAEP', 'Mediação', 'Consultoria/Assessoria']
 
 // ── Despesas — Categorias ────────────────────────────────────
 export const DESP_CATEGORIAS = [

@@ -28,8 +28,9 @@ const CAT_COLORS = {
   'Mediação Imobiliária': '#10b981',
   'CAEP':                 '#f59e0b',
   'Fix and Flip':         '#ef4444',
+  'Consultoria/Assessoria': '#0891b2',
 }
-const CATEGORIAS = ['Wholesalling', 'CAEP', 'Mediação Imobiliária', 'Fix and Flip']
+const CATEGORIAS = ['Wholesalling', 'CAEP', 'Mediação Imobiliária', 'Fix and Flip', 'Consultoria/Assessoria']
 
 // Modelos de negócio com ícone Lucide profissional + descrição
 // Nota: não há card "Todos" — a vista agregada (Portfolio) já mostra o total
@@ -39,6 +40,7 @@ const MODELOS_NEGOCIO = [
   { key: 'CAEP',                   nome: 'CAEP',          Icon: Handshake,  desc: 'Contrato de Associação em Participação' },
   { key: 'Mediação Imobiliária',   nome: 'Mediação',      Icon: Home,       desc: 'Intermediação imobiliária' },
   { key: 'Wholesalling',           nome: 'Wholesalling',  Icon: Zap,        desc: 'Finder fee' },
+  { key: 'Consultoria/Assessoria', nome: 'Consultoria',   Icon: Briefcase,  desc: 'Honorário fixo, sem capital próprio' },
 ]
 
 // Fases do Kanban por categoria — paleta Somnium (gold + dark + acentos elegantes)
@@ -72,12 +74,22 @@ const FASES_MEDIACAO_KANBAN = [
   { key: 'escritura',          nome: 'Escritura',               icon: '🔑', cor: '#0d0d0d' },
 ]
 
+const FASES_CONSULTORIA_KANBAN = [
+  { key: 'cons_proposta',    nome: 'Proposta e Contrato',   icon: '📝', cor: '#475569' },
+  { key: 'cons_diagnostico', nome: 'Diagnóstico',           icon: '🔍', cor: '#1F4E5F' },
+  { key: 'cons_plano',       nome: 'Plano de Ação',         icon: '🗺️', cor: '#5F4D20' },
+  { key: 'cons_execucao',    nome: 'Execução / Obra',       icon: '🏗️', cor: '#C9A84C' },
+  { key: 'cons_entrega',     nome: 'Entrega',               icon: '📦', cor: '#2E7D5B' },
+  { key: 'cons_fecho',       nome: 'Fecho e Faturação',     icon: '✅', cor: '#0d0d0d' },
+]
+
 // Mapa de categoria → colunas Kanban
 const FASES_KANBAN_POR_CATEGORIA = {
   'Fix and Flip':         FASES_FIX_FLIP_KANBAN,
   'CAEP':                 FASES_FIX_FLIP_KANBAN,  // mesmo workflow
   'Wholesalling':         FASES_WHOLESALLING_KANBAN,
   'Mediação Imobiliária': FASES_MEDIACAO_KANBAN,
+  'Consultoria/Assessoria': FASES_CONSULTORIA_KANBAN,
 }
 
 // Fallback (vista "Todos") — usa o template Fix and Flip como referência genérica
@@ -352,7 +364,7 @@ export function Projectos() {
         {isInvestidor && investidorId && <MeusDocumentosPanel investidorId={investidorId} />}
 
         {/* Caixas individuais por modelo de negócio — em série no topo, clicáveis */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {MODELOS_NEGOCIO.map(m => {
             const projDoModelo = m.key === '' ? lista : lista.filter(n => n.categoria === m.key)
             const contagem = projDoModelo.length

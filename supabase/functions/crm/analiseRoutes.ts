@@ -86,6 +86,13 @@ export async function propagarParaImovel(imovelId: string, calculados: any, inpu
           const somaTranches = pags.reduce((s: number, p: any) => s + (parseFloat(p.valor) || 0), 0);
           lucroEstimado = somaTranches > 0 ? Math.round(somaTranches * 100) / 100 : (parseFloat(neg.lucro_estimado) || 0);
         }
+      } else if (neg.categoria === "Consultoria/Assessoria") {
+        // Consultoria: honorário fixo = Σ tranches da aba Lucro. A Análise do
+        // imóvel nunca o sobrepõe; sem tranches mantém o valor actual.
+        let pags: any[] = [];
+        try { pags = typeof neg.pagamentos_faseados === "string" ? JSON.parse(neg.pagamentos_faseados || "[]") : (neg.pagamentos_faseados || []) } catch { /* noop */ }
+        const somaTranches = pags.reduce((s: number, p: any) => s + (parseFloat(p.valor) || 0), 0);
+        lucroEstimado = somaTranches > 0 ? Math.round(somaTranches * 100) / 100 : (parseFloat(neg.lucro_estimado) || 0);
       } else if (neg.categoria === "Mediação Imobiliária") {
         // Mediação: comissão % sobre valor de venda
         const pct = neg.comissao_pct || 2.5;
@@ -112,7 +119,8 @@ export async function propagarParaImovel(imovelId: string, calculados: any, inpu
       // capital_total nunca fica a 0: reflecte sempre o capital necessário
       // calculado pela análise activa (antes ficava permanentemente zerado
       // depois da primeira gravação da calculadora).
-      const capitalTotal = Math.round((calculados.capital_necessario || 0) * 100) / 100;
+      // Consultoria não usa capital próprio da Somnium.
+      const capitalTotal = neg.categoria === "Consultoria/Assessoria" ? 0 : Math.round((calculados.capital_necessario || 0) * 100) / 100;
       await pool.query(
         `UPDATE negocios SET lucro_estimado = $1, capital_total = $2, updated_at = $3 WHERE id = $4`,
         [lucroEstimado, capitalTotal, now, neg.id],

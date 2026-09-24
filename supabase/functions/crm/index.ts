@@ -1673,6 +1673,23 @@ async function recomputeLucroWholesaling(negocioId: string) {
   );
 }
 
+// Consultoria/Assessoria: honorário fixo = Σ tranches (pagamentos_faseados).
+// Sem tranches não mexe no valor; nunca tem capital próprio da Somnium.
+async function recomputeHonorarioConsultoria(negocioId: string) {
+  const { rows: [neg] } = await pool.query(
+    `SELECT pagamentos_faseados FROM negocios WHERE id = $1 AND categoria = 'Consultoria/Assessoria'`,
+    [negocioId],
+  );
+  if (!neg) return;
+  let pags: any[] = [];
+  try { pags = typeof neg.pagamentos_faseados === "string" ? JSON.parse(neg.pagamentos_faseados || "[]") : (neg.pagamentos_faseados || []); } catch { /* noop */ }
+  const soma = Math.round(pags.reduce((s: number, p: any) => s + (parseFloat(p.valor) || 0), 0) * 100) / 100;
+  await pool.query(
+    `UPDATE negocios SET lucro_estimado = CASE WHEN $1 > 0 THEN $1 ELSE lucro_estimado END, capital_total = 0, updated_at = NOW()::TEXT WHERE id = $2`,
+    [soma, negocioId],
+  );
+}
+
 async function recomputeLucroWholesalingPorImovel(imovelId: string) {
   await ensureColumn("imoveis", "fee_cedencia REAL");
   const { rows } = await pool.query(
@@ -1776,6 +1793,9 @@ crudRoutes("/negocios", Negocios, {
     if (item.categoria === "Wholesalling") {
       await recomputeLucroWholesaling(item.id).catch((e) => console.error("[wholesaling/recompute]", (e as Error).message));
     }
+    if (item.categoria === "Consultoria/Assessoria") {
+      await recomputeHonorarioConsultoria(item.id).catch((e) => console.error("[consultoria/honorario]", (e as Error).message));
+    }
   },
   onUpdate: async (item: any, body: any) => {
     // Se categoria suporta template, criar fases (idempotente)
@@ -1784,6 +1804,9 @@ crudRoutes("/negocios", Negocios, {
     }
     if (item.categoria === "Wholesalling" || body.categoria === "Wholesalling") {
       await recomputeLucroWholesaling(item.id).catch((e) => console.error("[wholesaling/recompute]", (e as Error).message));
+    }
+    if (item.categoria === "Consultoria/Assessoria" || body.categoria === "Consultoria/Assessoria") {
+      await recomputeHonorarioConsultoria(item.id).catch((e) => console.error("[consultoria/honorario]", (e as Error).message));
     }
   },
 });
@@ -6709,6 +6732,7 @@ app.get("/projetos/templates", async (c: any) => {
       { id: "__default_caep__", nome: "CAEP (default)", descricao: "8 fases (igual ao Fix and Flip)", fases_json: JSON.stringify(FASES_POR_CATEGORIA["CAEP"]) },
       { id: "__default_whs__", nome: "Wholesalling (default)", descricao: "7 fases — prospecção a fee recebido", fases_json: JSON.stringify(FASES_POR_CATEGORIA["Wholesalling"]) },
       { id: "__default_med__", nome: "Mediação Imobiliária (default)", descricao: "7 fases — captação a escritura", fases_json: JSON.stringify(FASES_POR_CATEGORIA["Mediação Imobiliária"]) },
+      { id: "__default_cons__", nome: "Consultoria/Assessoria (default)", descricao: "6 fases — proposta a faturação do honorário", fases_json: JSON.stringify(FASES_POR_CATEGORIA["Consultoria/Assessoria"]) },
     ].map((t) => ({ ...t, publico: true, created_at: null }));
     return c.json({ templates: [...defaults, ...rows] });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }

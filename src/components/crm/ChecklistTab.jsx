@@ -31,7 +31,7 @@ const IMOVEL_FIELD_CONFIG = {
   'valor_proposta': { label: 'Valor Proposta (€)', type: 'number' },
   'valor_venda_remodelado': { label: 'VVR (€)', type: 'number' },
   'custo_estimado_obra': { label: 'Custo Obra (€)', type: 'number' },
-  'modelo_negocio': { label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix & Flip','CAEP','Mediação'] },
+  'modelo_negocio': { label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix & Flip','CAEP','Mediação','Consultoria/Assessoria'] },
   'nome_consultor': { label: 'Consultor', type: 'text' },
   // Mesmo campo usado pelo Kanban ao mover para "Não interessa" (MoveReasonModal,
   // CRM.jsx) — texto porque o valor real combina presets + notas livres,

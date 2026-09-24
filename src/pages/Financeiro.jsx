@@ -20,6 +20,7 @@ const MES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','
 const CAT_COLORS = {
   'Wholesalling':         '#6366f1',
   'Mediação Imobiliária': '#10b981',
+  'Consultoria/Assessoria': '#0891b2',
   'CAEP':                 '#f59e0b',
   'Fix and Flip':         '#ef4444',
 }

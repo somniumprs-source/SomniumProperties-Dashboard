@@ -1275,7 +1275,7 @@ router.use((req, res, next) => {
 crudRoutes('/consultores', Consultores)
 
 // ── Negocios: auto-criar fases conforme template da categoria ──
-// Suporta: Fix and Flip, CAEP, Wholesalling, Mediação Imobiliária
+// Suporta: Fix and Flip, CAEP, Wholesalling, Mediação Imobiliária, Consultoria/Assessoria
 async function criarFasesProjecto(negocioId, categoria) {
   const template = getTemplateFases(categoria)
   if (!template) return  // categoria sem workflow
@@ -1350,6 +1350,23 @@ async function recomputeLucroWholesaling(negocioId) {
   await pool.query(
     `UPDATE negocios SET lucro_estimado = $1, updated_at = NOW()::TEXT WHERE id = $2`,
     [fee, negocioId],
+  )
+}
+
+// Consultoria/Assessoria: honorário fixo = Σ tranches (pagamentos_faseados).
+// Sem tranches não mexe no valor; nunca tem capital próprio da Somnium.
+async function recomputeHonorarioConsultoria(negocioId) {
+  const { rows: [neg] } = await pool.query(
+    `SELECT pagamentos_faseados FROM negocios WHERE id = $1 AND categoria = 'Consultoria/Assessoria'`,
+    [negocioId],
+  )
+  if (!neg) return
+  let pags = []
+  try { pags = typeof neg.pagamentos_faseados === 'string' ? JSON.parse(neg.pagamentos_faseados || '[]') : (neg.pagamentos_faseados || []) } catch {}
+  const soma = Math.round(pags.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0) * 100) / 100
+  await pool.query(
+    `UPDATE negocios SET lucro_estimado = CASE WHEN $1 > 0 THEN $1 ELSE lucro_estimado END, capital_total = 0, updated_at = NOW()::TEXT WHERE id = $2`,
+    [soma, negocioId],
   )
 }
 
@@ -1439,6 +1456,9 @@ crudRoutes('/negocios', Negocios, {
     if (item.categoria === 'Wholesalling') {
       await recomputeLucroWholesaling(item.id).catch(e => console.error('[wholesaling/recompute]', e.message))
     }
+    if (item.categoria === 'Consultoria/Assessoria') {
+      await recomputeHonorarioConsultoria(item.id).catch(e => console.error('[consultoria/honorario]', e.message))
+    }
   },
   onUpdate: async (item, body) => {
     // Se categoria suporta template, criar fases (idempotente)
@@ -1447,6 +1467,9 @@ crudRoutes('/negocios', Negocios, {
     }
     if (item.categoria === 'Wholesalling' || body.categoria === 'Wholesalling') {
       await recomputeLucroWholesaling(item.id).catch(e => console.error('[wholesaling/recompute]', e.message))
+    }
+    if (item.categoria === 'Consultoria/Assessoria' || body.categoria === 'Consultoria/Assessoria') {
+      await recomputeHonorarioConsultoria(item.id).catch(e => console.error('[consultoria/honorario]', e.message))
     }
   },
 })
@@ -3232,7 +3255,7 @@ router.get('/kpis/:tab', async (req, res) => {
         FROM imoveis ${wReg} GROUP BY estado ORDER BY count DESC
       `, params)
       // ROI médio: só de imóveis com negocio activo de CAEP ou Fix and Flip.
-      // Wholesalling e Mediação Imobiliária são modelos de fee/comissão, não de ROI
+      // Wholesalling, Mediação e Consultoria são modelos de fee/comissão/honorário, não de ROI
       // sobre capital investido — não pertencem a esta métrica.
       const { rows: [totals] } = await pool.query(`
         SELECT
@@ -6598,6 +6621,7 @@ router.get('/projetos/templates', async (req, res) => {
       { id: '__default_caep__', nome: 'CAEP (default)',          descricao: '8 fases (igual ao Fix and Flip)',                  fases_json: JSON.stringify(FASES_POR_CATEGORIA['CAEP']) },
       { id: '__default_whs__',  nome: 'Wholesalling (default)',  descricao: '7 fases — prospecção a fee recebido',              fases_json: JSON.stringify(FASES_POR_CATEGORIA['Wholesalling']) },
       { id: '__default_med__',  nome: 'Mediação Imobiliária (default)', descricao: '7 fases — captação a escritura',           fases_json: JSON.stringify(FASES_POR_CATEGORIA['Mediação Imobiliária']) },
+      { id: '__default_cons__', nome: 'Consultoria/Assessoria (default)', descricao: '6 fases — proposta a faturação do honorário', fases_json: JSON.stringify(FASES_POR_CATEGORIA['Consultoria/Assessoria']) },
     ].map(t => ({ ...t, publico: true, created_at: null }))
     res.json({ templates: [...defaults, ...rows] })
   } catch (e) { res.status(500).json({ error: e.message }) }

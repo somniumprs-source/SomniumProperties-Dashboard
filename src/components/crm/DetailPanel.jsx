@@ -1813,7 +1813,7 @@ function useFreguesiasLookup(form) {
 
 const ESTADOS_PIPELINE = ['Pré-aprovação','Adicionado','Chamada Não Atendida','Pendentes','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa']
 const ORIGEM_OPTS = ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro']
-const MODELO_NEGOCIO_OPTS = ['Wholesaling','Fix & Flip','CAEP','Mediação']
+const MODELO_NEGOCIO_OPTS = ['Wholesaling','Fix & Flip','CAEP','Mediação','Consultoria/Assessoria']
 const TIPO_OPERACAO_OPTS = ['Fix & Flip','Arrendamento']
 
 // Mini-form embutido para criar consultor sem sair da ficha do imóvel.
