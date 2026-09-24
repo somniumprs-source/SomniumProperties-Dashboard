@@ -144,7 +144,7 @@ export const CHECKLIST_TEMPLATES = {
   ],
 
   'Wholesaling': [
-    { key: 'wh_negocio', titulo: 'Criar registo de negócio no CRM (categoria: Wholesalling)', campo_crm: 'negocio: movimento, categoria, fase, imovel_id', categoria: 'Análise de Negócio', tempo_estimado: 0.25, obrigatoria: true },
+    { key: 'wh_negocio', titulo: 'Criar registo de negócio no CRM (categoria: Wholesaling)', campo_crm: 'negocio: movimento, categoria, fase, imovel_id', categoria: 'Análise de Negócio', tempo_estimado: 0.25, obrigatoria: true },
     { key: 'wh_lucro', titulo: 'Preencher lucro estimado do negócio', campo_crm: 'negocio: lucro_estimado', categoria: 'Análise de Negócio', tempo_estimado: 0.1, obrigatoria: true },
     { key: 'wh_investidor', titulo: 'Associar investidor(es) ao negócio', campo_crm: 'negocio: investidor_ids', categoria: 'Análise de Negócio', tempo_estimado: 0.1, obrigatoria: true },
     { key: 'wh_consultor', titulo: 'Associar consultor(es) ao negócio', campo_crm: 'negocio: consultor_ids', categoria: 'Análise de Negócio', tempo_estimado: 0.1, obrigatoria: false },

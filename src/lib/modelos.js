@@ -1,6 +1,6 @@
-// Deteção robusta do modelo Wholesalling.
+// Deteção robusta do modelo Wholesaling.
 //
-// Todo o comportamento de Wholesalling (esconder abas Stress/CAEP, campo de
+// Todo o comportamento de Wholesaling (esconder abas Stress/CAEP, campo de
 // fee de cedência, calcEngine compra+fee, lucro=fee) estava amarrado a um único
 // campo editável — `modelo_negocio === 'Wholesaling'`. Quando esse campo diverge
 // do estado/pipeline (ex.: imóvel em estado 'Wholesaling' com modelo_negocio a
@@ -9,6 +9,5 @@
 export function isWholesaling(imovel) {
   if (!imovel) return false
   if (imovel.modelo_negocio === 'Wholesaling') return true
-  const estado = imovel.estado
-  return estado === 'Wholesaling' || estado === 'Wholesalling'
+  return imovel.estado === 'Wholesaling'
 }

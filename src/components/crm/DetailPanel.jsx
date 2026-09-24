@@ -1813,8 +1813,8 @@ function useFreguesiasLookup(form) {
 
 const ESTADOS_PIPELINE = ['Pré-aprovação','Adicionado','Chamada Não Atendida','Pendentes','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa']
 const ORIGEM_OPTS = ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro']
-const MODELO_NEGOCIO_OPTS = ['Wholesaling','Fix & Flip','CAEP','Mediação','Consultoria/Assessoria']
-const TIPO_OPERACAO_OPTS = ['Fix & Flip','Arrendamento']
+const MODELO_NEGOCIO_OPTS = ['Wholesaling','Fix and Flip','CAEP','Mediação Imobiliária','Consultoria/Assessoria']
+const TIPO_OPERACAO_OPTS = ['Fix and Flip','Arrendamento']
 
 // Mini-form embutido para criar consultor sem sair da ficha do imóvel.
 // Triggado quando o utilizador escreve um nome novo no Combobox de consultor
@@ -2385,7 +2385,7 @@ const INV_TIPO_IMOVEL_OPTS = ['T0', 'T1', 'T2', 'T3+', 'Apartamento', 'Moradia',
 const INV_DISTRITOS_OPTS = ['Aveiro','Beja','Braga','Bragança','Castelo Branco','Coimbra','Évora','Faro','Guarda','Leiria','Lisboa','Portalegre','Porto','Santarém','Setúbal','Viana do Castelo','Vila Real','Viseu','Açores','Madeira']
 const INV_REGIOES_OPTS = ['Norte','Centro','Lisboa e Vale do Tejo','Alentejo','Algarve','Açores','Madeira','Coimbra','Porto','AMP','AML']
 const INV_EQUIPA_OBRAS_OPTS = ['Própria', 'Da Somnium', 'Indiferente', 'Sem opinião']
-const INV_ESTRATEGIA_OPTS = ['Wholesaling', 'CAEP', 'Fix & Flip', 'Mediação', 'Cedência de posição', 'Arrendamento']
+const INV_ESTRATEGIA_OPTS = ['Wholesaling', 'CAEP', 'Fix and Flip', 'Mediação Imobiliária', 'Cedência de posição', 'Arrendamento']
 const INV_PERFIL_RISCO_OPTS = ['Conservador', 'Moderado', 'Agressivo']
 const INV_ORIGEM_CAPITAL_OPTS = ['Poupança pessoal','Actividade empresarial','Venda de activo','Herança','Outro']
 const INV_PREF_CONTACTO_OPTS = ['WhatsApp','Chamada','Email','Presencial']

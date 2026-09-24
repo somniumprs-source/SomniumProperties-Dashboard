@@ -719,10 +719,8 @@ function crudRoutes(
 }
 
 // Mapa estado do imóvel → categoria de negocio (port de routes.js 280-285)
-// Nota: o estado no CRM aparece como "Wholesaling" (1 L) mas a categoria de negocio é "Wholesalling" (2 Ls)
 const ESTADO_IMOVEL_PARA_CATEGORIA: Record<string, string> = {
-  "Wholesaling": "Wholesalling",
-  "Wholesalling": "Wholesalling",
+  "Wholesaling": "Wholesaling",
   "CAEP": "CAEP",
   "Fix and Flip": "Fix and Flip",
 };
@@ -1654,7 +1652,7 @@ async function recomputeLucroWholesaling(negocioId: string) {
     `SELECT im.fee_cedencia
        FROM negocios n
        LEFT JOIN imoveis im ON im.id = n.imovel_id
-      WHERE n.id = $1 AND n.categoria = 'Wholesalling'`,
+      WHERE n.id = $1 AND n.categoria = 'Wholesaling'`,
     [negocioId],
   );
   if (!rows[0]) return;
@@ -1688,7 +1686,7 @@ async function recomputeHonorarioConsultoria(negocioId: string) {
 async function recomputeLucroWholesalingPorImovel(imovelId: string) {
   await ensureColumn("imoveis", "fee_cedencia REAL");
   const { rows } = await pool.query(
-    `SELECT id FROM negocios WHERE imovel_id = $1 AND categoria = 'Wholesalling'`,
+    `SELECT id FROM negocios WHERE imovel_id = $1 AND categoria = 'Wholesaling'`,
     [imovelId],
   );
   for (const r of rows) {
@@ -1737,7 +1735,7 @@ async function recalcAnaliseActivaCompra(imovelId: string) {
   );
 
   // Propagar para negocios.lucro_estimado (todas as categorias, não só
-  // Wholesalling) usando a mesma lógica já usada quando a análise é gravada
+  // Wholesaling) usando a mesma lógica já usada quando a análise é gravada
   // pela calculadora.
   await propagarParaImovel(imovelId, calculados, inputs).catch((e: any) => console.error("[analise/recalc propagar]", (e as Error).message));
 }
@@ -1785,7 +1783,7 @@ crudRoutes("/negocios", Negocios, {
     if ((FASES_POR_CATEGORIA as any)[item.categoria]) {
       await criarFasesProjecto(item.id, item.categoria).catch((e) => console.error("[fases] auto-criar:", e.message));
     }
-    if (item.categoria === "Wholesalling") {
+    if (item.categoria === "Wholesaling") {
       await recomputeLucroWholesaling(item.id).catch((e) => console.error("[wholesaling/recompute]", (e as Error).message));
     }
     if (item.categoria === "Consultoria/Assessoria") {
@@ -1797,7 +1795,7 @@ crudRoutes("/negocios", Negocios, {
     if ((FASES_POR_CATEGORIA as any)[body.categoria]) {
       await criarFasesProjecto(item.id, body.categoria).catch((e) => console.error("[fases] auto-criar update:", e.message));
     }
-    if (item.categoria === "Wholesalling" || body.categoria === "Wholesalling") {
+    if (item.categoria === "Wholesaling" || body.categoria === "Wholesaling") {
       await recomputeLucroWholesaling(item.id).catch((e) => console.error("[wholesaling/recompute]", (e as Error).message));
     }
     if (item.categoria === "Consultoria/Assessoria" || body.categoria === "Consultoria/Assessoria") {
@@ -6714,7 +6712,7 @@ app.get("/projetos/templates", async (c: any) => {
     const defaults = [
       { id: "__default_ff__", nome: "Fix and Flip (default)", descricao: "8 fases padrão para reabilitação em PT", fases_json: JSON.stringify(FASES_POR_CATEGORIA["Fix and Flip"]) },
       { id: "__default_caep__", nome: "CAEP (default)", descricao: "8 fases (igual ao Fix and Flip)", fases_json: JSON.stringify(FASES_POR_CATEGORIA["CAEP"]) },
-      { id: "__default_whs__", nome: "Wholesalling (default)", descricao: "7 fases — prospecção a fee recebido", fases_json: JSON.stringify(FASES_POR_CATEGORIA["Wholesalling"]) },
+      { id: "__default_whs__", nome: "Wholesaling (default)", descricao: "7 fases — prospecção a fee recebido", fases_json: JSON.stringify(FASES_POR_CATEGORIA["Wholesaling"]) },
       { id: "__default_med__", nome: "Mediação Imobiliária (default)", descricao: "7 fases — captação a escritura", fases_json: JSON.stringify(FASES_POR_CATEGORIA["Mediação Imobiliária"]) },
       { id: "__default_cons__", nome: "Consultoria/Assessoria (default)", descricao: "6 fases — proposta a faturação do honorário", fases_json: JSON.stringify(FASES_POR_CATEGORIA["Consultoria/Assessoria"]) },
     ].map((t) => ({ ...t, publico: true, created_at: null }));

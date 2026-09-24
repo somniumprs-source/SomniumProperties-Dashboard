@@ -52,7 +52,7 @@ Responde APENAS em JSON válido com esta estrutura:
   "investidor_dados": {
     "capital_min": null ou número em EUR,
     "capital_max": null ou número em EUR,
-    "estrategia": [] array de estratégias mencionadas (ex: "Wholesaling", "Fix & Flip", "CAEP", "Capital Passivo"),
+    "estrategia": [] array de estratégias mencionadas (ex: "Wholesaling", "Fix and Flip", "CAEP", "Capital Passivo"),
     "perfil_risco": null ou "Conservador" ou "Moderado" ou "Agressivo",
     "tipo_investidor": [] array (ex: "Passivo", "Ativo", "Particular", "Institucional"),
     "experiencia_imobiliario": null ou texto breve,
@@ -119,10 +119,10 @@ function analyzeWithPatterns(reuniao, transcricao, resumo) {
   // Estratégias
   const estrategia = []
   if (/wholesal/i.test(text)) estrategia.push('Wholesaling')
-  if (/fix\s*[&e]\s*flip/i.test(text)) estrategia.push('Fix & Flip')
+  if (/fix\s*[&e]\s*flip/i.test(text)) estrategia.push('Fix and Flip')
   if (/caep/i.test(text)) estrategia.push('CAEP')
   if (/passivo|rendimento|renda/i.test(text)) estrategia.push('Capital Passivo')
-  if (/media[çc][aã]o/i.test(text)) estrategia.push('Mediação')
+  if (/media[çc][aã]o/i.test(text)) estrategia.push('Mediação Imobiliária')
 
   // Perfil de risco
   let perfil_risco = null

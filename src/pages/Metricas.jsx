@@ -567,7 +567,7 @@ export function Metricas() {
                     <RoiBlock title="ROI Médio — Conjunto (Fix &amp; Flip + CAEP + Cedência)" data={rp.conjunto} />
                     <RoiBlock title="ROI Médio — Fix &amp; Flip" data={rp.fixAndFlip} />
                     <RoiBlock title="ROI Médio — CAEP" data={rp.caep} />
-                    <RoiBlock title="ROI Médio — Wholesalling (cedência)" data={rp.wholesalling} hasReal={false} />
+                    <RoiBlock title="ROI Médio — Wholesaling (cedência)" data={rp.wholesalling} hasReal={false} />
                   </>
                 )
               })()}

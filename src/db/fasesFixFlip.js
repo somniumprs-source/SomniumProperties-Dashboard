@@ -164,7 +164,7 @@ export function getFaseConfig(key) {
 // CAEP partilha o mesmo workflow operacional do Fix and Flip
 export const FASES_CAEP = FASES_FIX_FLIP
 
-// Fluxo Wholesalling: alinhar investidor antes de comprometer a compra.
+// Fluxo Wholesaling: alinhar investidor antes de comprometer a compra.
 // Procurar Investidor → Negociação → CPCV de Compra → CPCV de Cedência → Fee Recebido
 export const FASES_WHOLESALLING = [
   {
@@ -407,7 +407,7 @@ export const FASES_CONSULTORIA = [
 export const FASES_POR_CATEGORIA = {
   'Fix and Flip': FASES_FIX_FLIP,
   'CAEP': FASES_CAEP,
-  'Wholesalling': FASES_WHOLESALLING,
+  'Wholesaling': FASES_WHOLESALLING,
   'Mediação Imobiliária': FASES_MEDIACAO,
   'Consultoria/Assessoria': FASES_CONSULTORIA,
 }

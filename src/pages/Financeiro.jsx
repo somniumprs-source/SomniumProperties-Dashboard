@@ -18,7 +18,7 @@ const EUR2 = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 
 const MES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 
 const CAT_COLORS = {
-  'Wholesalling':         '#6366f1',
+  'Wholesaling':         '#6366f1',
   'Mediação Imobiliária': '#10b981',
   'Consultoria/Assessoria': '#0891b2',
   'CAEP':                 '#f59e0b',

@@ -38,7 +38,7 @@ export function Filters({ tab, filters, onChange, regiao }) {
         </select>
         <select value={filters.modelo_negocio ?? ''} onChange={e => set('modelo_negocio', e.target.value)} className={selectClass}>
           <option value="">Todos os modelos</option>
-          {['Wholesaling','Fix & Flip','CAEP','Mediação','Consultoria/Assessoria'].map(o =>
+          {['Wholesaling','Fix and Flip','CAEP','Mediação Imobiliária','Consultoria/Assessoria'].map(o =>
             <option key={o} value={o}>{o}</option>
           )}
         </select>
@@ -84,7 +84,7 @@ export function Filters({ tab, filters, onChange, regiao }) {
       {tab === 'Negócios' && <>
         <select value={filters.categoria ?? ''} onChange={e => set('categoria', e.target.value)} className={selectClass}>
           <option value="">Todas as categorias</option>
-          {['Wholesalling','CAEP','Mediação Imobiliária','Fix and Flip','Consultoria/Assessoria'].map(o =>
+          {['Wholesaling','CAEP','Mediação Imobiliária','Fix and Flip','Consultoria/Assessoria'].map(o =>
             <option key={o} value={o}>{o}</option>
           )}
         </select>

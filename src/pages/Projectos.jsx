@@ -24,13 +24,13 @@ function readRegiaoFromStorage() {
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 
 const CAT_COLORS = {
-  'Wholesalling':         '#6366f1',
+  'Wholesaling':         '#6366f1',
   'Mediação Imobiliária': '#10b981',
   'CAEP':                 '#f59e0b',
   'Fix and Flip':         '#ef4444',
   'Consultoria/Assessoria': '#0891b2',
 }
-const CATEGORIAS = ['Wholesalling', 'CAEP', 'Mediação Imobiliária', 'Fix and Flip', 'Consultoria/Assessoria']
+const CATEGORIAS = ['Wholesaling', 'CAEP', 'Mediação Imobiliária', 'Fix and Flip', 'Consultoria/Assessoria']
 
 // Modelos de negócio com ícone Lucide profissional + descrição
 // O card "Todos" (key '') mostra todos os projectos em grelha de cards.
@@ -38,8 +38,8 @@ const MODELOS_NEGOCIO = [
   { key: '',                       nome: 'Todos',         Icon: LayoutGrid, desc: 'Todos os modelos de negócio' },
   { key: 'Fix and Flip',           nome: 'Fix and Flip',  Icon: Hammer,     desc: 'Reabilitação completa' },
   { key: 'CAEP',                   nome: 'CAEP',          Icon: Handshake,  desc: 'Contrato de Associação em Participação' },
-  { key: 'Mediação Imobiliária',   nome: 'Mediação',      Icon: Home,       desc: 'Intermediação imobiliária' },
-  { key: 'Wholesalling',           nome: 'Wholesalling',  Icon: Zap,        desc: 'Finder fee' },
+  { key: 'Mediação Imobiliária',   nome: 'Mediação Imobiliária',      Icon: Home,       desc: 'Intermediação imobiliária' },
+  { key: 'Wholesaling',           nome: 'Wholesaling',  Icon: Zap,        desc: 'Finder fee' },
   { key: 'Consultoria/Assessoria', nome: 'Consultoria',   Icon: Briefcase,  desc: 'Honorário fixo, sem capital próprio' },
 ]
 
@@ -87,7 +87,7 @@ const FASES_CONSULTORIA_KANBAN = [
 const FASES_KANBAN_POR_CATEGORIA = {
   'Fix and Flip':         FASES_FIX_FLIP_KANBAN,
   'CAEP':                 FASES_FIX_FLIP_KANBAN,  // mesmo workflow
-  'Wholesalling':         FASES_WHOLESALLING_KANBAN,
+  'Wholesaling':         FASES_WHOLESALLING_KANBAN,
   'Mediação Imobiliária': FASES_MEDIACAO_KANBAN,
   'Consultoria/Assessoria': FASES_CONSULTORIA_KANBAN,
 }

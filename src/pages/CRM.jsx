@@ -1883,7 +1883,7 @@ const FIELD_DEFS = {
     // dar hipotese de escolher a regiao aqui mesmo na ficha rapida.
     { key: 'regiao', label: 'Região', type: 'select', options: ['Coimbra', 'AMP'], required: true, quick: true },
     { key: 'estado', label: 'Estado', type: 'select', options: ['Adicionado','Chamada Não Atendida','Pendentes','Pré-aprovação','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'] },
-    { key: 'modelo_negocio', label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix & Flip','CAEP','Mediação','Consultoria/Assessoria'], required: true },
+    { key: 'modelo_negocio', label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix and Flip','CAEP','Mediação Imobiliária','Consultoria/Assessoria'], required: true },
     { key: 'ref_interna', label: 'REF Interna', type: 'text' },
     { key: 'tipo_oportunidade', label: 'Tipo Oportunidade', type: 'select', options: ['Portal', 'Off-Market'] },
     { key: 'origem', label: 'Origem', type: 'select', options: ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro'], quick: true },
@@ -1938,7 +1938,7 @@ const FIELD_DEFS = {
     { key: 'capital_max', label: 'Capital Máximo (€)', type: 'number' },
     { key: 'montante_investido', label: 'Montante Investido (€)', type: 'number' },
     { key: 'nda_assinado', label: 'NDA Assinado', type: 'checkbox' },
-    { key: 'estrategia', label: 'Estratégia de Investimento', type: 'multiselect', options: ['Wholesaling','CAEP','Fix & Flip','Mediação','Capital Passivo','Construção'] },
+    { key: 'estrategia', label: 'Estratégia de Investimento', type: 'multiselect', options: ['Wholesaling','CAEP','Fix and Flip','Mediação Imobiliária','Capital Passivo','Construção'] },
     { key: 'perfil_risco', label: 'Perfil de Risco', type: 'select', options: ['Conservador','Moderado','Agressivo'] },
     { key: 'roi_pretendido', label: 'ROI Previsto', type: 'text' },
     { key: 'roi_anualizado_pretendido', label: 'ROI Anualizado Previsto', type: 'text' },

@@ -522,7 +522,7 @@ function mapNegocio(p) {
   return {
     id: p.id,
     movimento:        title(pr['Movimento']),
-    categoria:        sel(pr['Categoria']),      // Wholesalling | CAEP | Mediação Imobiliária | Fix and Flip
+    categoria:        sel(pr['Categoria']),      // Wholesaling | CAEP | Mediação Imobiliária | Fix and Flip
     fase:             sel(pr['Fase']),            // Fase de obras | Fase de venda | Vendido
     lucroEstimado:    num(pr['Lucro estimado']),
     lucroReal:        num(pr['Lucro real']),
@@ -1819,7 +1819,7 @@ app.get('/api/comercial/metricas-temporais', async (req, res) => {
     // ── Receita por modelo ─────────────────────────────────────
     function receitaModelo(s, e) {
       const neg = negocios.filter(n => inP(n.dataVenda, s, e) && n.fase === 'Vendido')
-      const wh  = neg.filter(n => n.categoria === 'Wholesalling')
+      const wh  = neg.filter(n => n.categoria === 'Wholesaling')
       const caep= neg.filter(n => n.categoria === 'CAEP')
       return {
         totalNeg:     neg.length,
@@ -1977,7 +1977,7 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
     const burnMensal = round2(despesasDaEmpresa(despesas).reduce((s,d) => s + (d.custoMensal || 0), 0))
     const cac = dealsPeriodo > 0 ? round2(burnMensal * mesesPeriodo / dealsPeriodo) : null
     // "ROI médio" só faz sentido para modelos de compra-e-valoriza (CAEP,
-    // Fix and Flip) — Wholesalling é cedência de posição com lucro = fee fixa,
+    // Fix and Flip) — Wholesaling é cedência de posição com lucro = fee fixa,
     // não um retorno comparável, e diluía/distorcia esta média (achado da
     // auditoria: mesmo rótulo "ROI médio" a medir populações diferentes
     // consoante o ecrã). Mesma definição usada em /kpis/imoveis e em Métricas.
@@ -2774,7 +2774,7 @@ app.get('/api/metricas', async (req, res) => {
     })).sort((a, b) => b.taxaDescarte - a.taxaDescarte)
 
     // Modelo por estado (Wholesaling vs F&F derivado do campo Modelo de Negócio ou fallback por estado)
-    const modeloCount = { 'Wholesaling': 0, 'Fix & Flip': 0, 'Mediação': 0, 'Não definido': 0 }
+    const modeloCount = { 'Wholesaling': 0, 'Fix and Flip': 0, 'Mediação Imobiliária': 0, 'Não definido': 0 }
     for (const i of imoveisAtivos) {
       const m = i.modeloNegocio ?? 'Não definido'
       modeloCount[m] = (modeloCount[m] ?? 0) + 1
@@ -2808,7 +2808,7 @@ app.get('/api/metricas', async (req, res) => {
     const holdingMedio = avg(holdingPeriods)
 
     // Margem bruta por modelo
-    const negWholesaling = negocios.filter(n => n.categoria === 'Wholesalling')
+    const negWholesaling = negocios.filter(n => n.categoria === 'Wholesaling')
     const negFF          = negocios.filter(n => ['Fix and Flip', 'CAEP'].includes(n.categoria))
     const margemWholesaling = avg(negWholesaling.filter(n=>n.lucroReal>0).map(n=>n.lucroReal))
     const margemFF          = avg(negFF.filter(n=>n.lucroReal>0).map(n=>n.lucroReal))
@@ -2926,7 +2926,7 @@ app.get('/api/metricas', async (req, res) => {
     // ── 1.1 RECEITA / FATURAÇÃO ─────────────────────────────────
 
     // Wholesaling deals
-    const negWH = negocios.filter(n => n.categoria === 'Wholesalling')
+    const negWH = negocios.filter(n => n.categoria === 'Wholesaling')
     const negWHFechados = negWH.filter(n => n.fase === 'Vendido')
     const negWHAno = negWH.filter(n => isYear(n.dataVenda || n.data, ano))
     const negWHFechadosAno = negWHFechados.filter(n => isYear(n.dataVenda, ano))
@@ -3137,7 +3137,7 @@ app.get('/api/metricas', async (req, res) => {
     // ── ROI médio do portfólio, por modelo e em conjunto ──
     // Usa o ROI e ROI anualizado calculados na Análise Financeira de cada imóvel
     // (imovel.roi / imovel.roiAnualizado — fonte única calcEngine, correta por modelo).
-    // Estimado: todos os modelos elegíveis. Real: só F&F + CAEP fechados (Wholesalling
+    // Estimado: todos os modelos elegíveis. Real: só F&F + CAEP fechados (Wholesaling
     // só considera estimado), ajustando o ROI projetado pelo rácio lucro real/estimado.
     const ROI_CATS_REAL = new Set(['Fix and Flip', 'CAEP'])
     const imovelComRoi = (n) => {
@@ -3148,7 +3148,7 @@ app.get('/api/metricas', async (req, res) => {
       return null
     }
     const mkBucket = () => ({ estTotal: [], estAnual: [], realTotal: [], realAnual: [] })
-    const roiBuckets = { 'Fix and Flip': mkBucket(), 'CAEP': mkBucket(), 'Wholesalling': mkBucket() }
+    const roiBuckets = { 'Fix and Flip': mkBucket(), 'CAEP': mkBucket(), 'Wholesaling': mkBucket() }
     for (const n of negocios) {
       const b = roiBuckets[n.categoria]
       if (!b) continue
@@ -3169,7 +3169,7 @@ app.get('/api/metricas', async (req, res) => {
     }
     const estStats = (b) => ({ total: avg(b.estTotal), anualizado: avg(b.estAnual), n: b.estTotal.length })
     const realStats = (b) => ({ total: avg(b.realTotal), anualizado: avg(b.realAnual), n: b.realTotal.length })
-    const ff = roiBuckets['Fix and Flip'], cp = roiBuckets['CAEP'], whl = roiBuckets['Wholesalling']
+    const ff = roiBuckets['Fix and Flip'], cp = roiBuckets['CAEP'], whl = roiBuckets['Wholesaling']
     const conjunto = {
       estTotal: [...ff.estTotal, ...cp.estTotal, ...whl.estTotal],
       estAnual: [...ff.estAnual, ...cp.estAnual, ...whl.estAnual],
@@ -3186,9 +3186,9 @@ app.get('/api/metricas', async (req, res) => {
     const trackerMargem = {
       roiPortfolio,
       wholesaling: {
-        margemBrutaMedia: avg(margensPorNegocio.filter(m => m.categoria === 'Wholesalling' && m.margemBruta != null).map(m => m.margemBruta)),
-        margemLiquidaMedia: avg(margensPorNegocio.filter(m => m.categoria === 'Wholesalling' && m.margemLiquida != null).map(m => m.margemLiquida)),
-        desvioObraMedia: avg(margensPorNegocio.filter(m => m.categoria === 'Wholesalling' && m.desvioObra != null).map(m => m.desvioObra)),
+        margemBrutaMedia: avg(margensPorNegocio.filter(m => m.categoria === 'Wholesaling' && m.margemBruta != null).map(m => m.margemBruta)),
+        margemLiquidaMedia: avg(margensPorNegocio.filter(m => m.categoria === 'Wholesaling' && m.margemLiquida != null).map(m => m.margemLiquida)),
+        desvioObraMedia: avg(margensPorNegocio.filter(m => m.categoria === 'Wholesaling' && m.desvioObra != null).map(m => m.desvioObra)),
       },
       caep: {
         roiMedio: avg(negCAEP.filter(n => n.capitalTotal > 0).map(n => {
@@ -5573,7 +5573,7 @@ app.post('/api/automation/pipeline-to-faturacao', async (req, res) => {
     for (const im of candidatos) {
       try {
         // Determinar categoria a partir do estado do pipeline
-        let categoria = 'Wholesalling'
+        let categoria = 'Wholesaling'
         if (im.estado === 'Fix and Flip') categoria = 'Fix and Flip'
         else if (im.estado === 'CAEP') categoria = 'CAEP'
         else if (im.estado === 'Mediação Imobiliária') categoria = 'Mediação Imobiliária'
@@ -5596,7 +5596,7 @@ app.post('/api/automation/pipeline-to-faturacao', async (req, res) => {
           const lucroBruto = calc.lucro_bruto || 0
           const vvr = calc.vvr || 0
           let lucroEstimado = 0
-          if (categoria === 'Wholesalling') {
+          if (categoria === 'Wholesaling') {
             // Wholesaling: lucro = fee de cedência da ficha do imóvel (não 10% de um F&F).
             const { rows: [imf] } = await pool.query('SELECT fee_cedencia FROM imoveis WHERE id = $1', [im.id])
             lucroEstimado = Math.round((Number(imf?.fee_cedencia) || 0) * 100) / 100

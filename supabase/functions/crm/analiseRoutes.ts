@@ -44,7 +44,7 @@ const CALC_FIELDS = new Set([
 // Exportada para ser reutilizada por recalcAnaliseActivaCompra (crm/index.ts),
 // disparada quando a ficha do imóvel é editada directamente — assim os dois
 // caminhos de recálculo usam sempre a mesma lógica de propagação para todas
-// as categorias de negócio, não só Wholesalling.
+// as categorias de negócio, não só Wholesaling.
 export async function propagarParaImovel(imovelId: string, calculados: any, inputs: any, caepResult: any = null) {
   try {
     const vvr = parseFloat(inputs.vvr) || 0;
@@ -71,7 +71,7 @@ export async function propagarParaImovel(imovelId: string, calculados: any, inpu
     for (const neg of negocios) {
       let lucroEstimado = 0;
 
-      if (neg.categoria === "Wholesalling") {
+      if (neg.categoria === "Wholesaling") {
         // Wholesaling = cedência de posição: lucro expectável = fee de cedência.
         // Fonte única = imoveis.fee_cedencia (applyCompraOverride já garante que
         // inputs.fee_cedencia reflecte sempre a ficha antes de chegar aqui).

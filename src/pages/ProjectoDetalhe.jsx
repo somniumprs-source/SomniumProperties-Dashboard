@@ -158,8 +158,8 @@ export function ProjectoDetalhe() {
   const { negocio, imovel, analise, percGlobal, custoReal, orcAlocado, faseAtual } = resumo
   const semFases = fases.length === 0
   const isPredio = negocio.tipo_projeto === 'predio'
-  // Wholesalling é cedência de posição (sem obra).
-  const isWholesalling = negocio.categoria === 'Wholesalling'
+  // Wholesaling é cedência de posição (sem obra).
+  const isWholesalling = negocio.categoria === 'Wholesaling'
   // Consultoria/Assessoria: a Somnium não investe — sem Análise Financeira nem Investidores.
   const isConsultoria = negocio.categoria === 'Consultoria/Assessoria'
   const TABS_OCULTAS_CONSULTORIA = new Set(['analise', 'investidores'])
@@ -362,7 +362,7 @@ function BannerKpi({ label, value }) {
 function TabResumo({ resumo, fases }) {
   const { negocio, imovel, analise } = resumo
   const faturacao = useFaturacaoNegocio({ negocio, imovel, analise })
-  const isWS = negocio.categoria === 'Wholesalling'
+  const isWS = negocio.categoria === 'Wholesaling'
   const totalTarefas = fases.reduce((s, f) => s + (f.tarefas_total || 0), 0)
   const tarefasConcluidas = fases.reduce((s, f) => s + (f.tarefas_concluidas || 0), 0)
 
@@ -911,8 +911,8 @@ function useFaturacaoNegocio({ negocio, imovel, analise }) {
     try { pagsCons = typeof negocio.pagamentos_faseados === 'string' ? JSON.parse(negocio.pagamentos_faseados || '[]') : (negocio.pagamentos_faseados || []) } catch {}
     const somaTranches = pagsCons.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
     totalExpectavel = round2(somaTranches) || Number(negocio.lucro_estimado) || 0
-  } else if (categoria === 'Wholesalling') {
-    modeloLabel = 'Wholesalling — cedência de posição'
+  } else if (categoria === 'Wholesaling') {
+    modeloLabel = 'Wholesaling — cedência de posição'
     percSomnium = Math.max(0, 100 - percInvestidoresLigados)
     totalExpectavel = Number(imovel?.fee_cedencia) || Number(negocio.lucro_estimado) || 0
   } else if (categoria === 'Mediação Imobiliária') {
@@ -1631,7 +1631,7 @@ function FotosGaleriaPorFase({ fotos, onDelete }) {
 // TAB: DOCUMENTOS (placeholder V1 — geração V2)
 // ════════════════════════════════════════════════════════════════
 function TabDocumentos({ negocio, imovel, fases, readOnly }) {
-  const isWS = negocio.categoria === 'Wholesalling'
+  const isWS = negocio.categoria === 'Wholesaling'
   const [faseFichaSel, setFaseFichaSel] = useState(fases[0]?.id || '')
   const [vistoriaSel, setVistoriaSel] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -1717,7 +1717,7 @@ function TabDocumentos({ negocio, imovel, fases, readOnly }) {
     { key: 'saida', nome: 'Relatório de Saída / CAEP', desc: 'Capital, distribuição, ROI/TIR.', url: `/api/crm/projetos/${negocio.id}/pdf/saida` },
   ]
 
-  // Wholesalling (cedência de posição): documentos do imóvel, não de obra.
+  // Wholesaling (cedência de posição): documentos do imóvel, não de obra.
   const docsImovelWS = imovel ? [
     { key: 'ficha_imovel',              nome: 'Ficha do Imóvel',                desc: 'Dados-base do imóvel.',                                 url: `/api/crm/imoveis/${imovel.id}/documento/ficha_imovel` },
     { key: 'analise_rentabilidade',     nome: 'Análise de Rentabilidade',       desc: 'Análise financeira completa (tese do investidor).',      url: `/api/crm/imoveis/${imovel.id}/documento/analise_rentabilidade` },

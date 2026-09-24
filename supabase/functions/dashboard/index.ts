@@ -1258,7 +1258,7 @@ app.get("/comercial/metricas-temporais", async (c: any) => {
     // ── Receita por modelo ─────────────────────────────────────
     function receitaModelo(s: Date, e: Date) {
       const neg = negocios.filter((n) => inP(n.dataVenda, s, e) && n.fase === "Vendido");
-      const wh = neg.filter((n) => n.categoria === "Wholesalling");
+      const wh = neg.filter((n) => n.categoria === "Wholesaling");
       const caep = neg.filter((n) => n.categoria === "CAEP");
       return {
         totalNeg: neg.length,
@@ -1415,7 +1415,7 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
     const burnMensal = round2(despesasDaEmpresa(despesas).reduce((s: number, d: any) => s + (d.custoMensal || 0), 0));
     const cac = dealsPeriodo > 0 ? round2(burnMensal * mesesPeriodo / dealsPeriodo) : null;
     // "ROI médio" só faz sentido para modelos de compra-e-valoriza (CAEP,
-    // Fix and Flip) — Wholesalling é cedência de posição com lucro = fee fixa,
+    // Fix and Flip) — Wholesaling é cedência de posição com lucro = fee fixa,
     // não um retorno comparável, e diluía/distorcia esta média (achado da
     // auditoria: mesmo rótulo "ROI médio" a medir populações diferentes
     // consoante o ecrã). Mesma definição usada em /kpis/imoveis e em Métricas.
@@ -1972,7 +1972,7 @@ app.get("/metricas", async (c: any) => {
       taxaDescarte: round2(v.descartados / v.total * 100),
     })).sort((a, b) => b.taxaDescarte - a.taxaDescarte);
 
-    const modeloCount: Record<string, number> = { "Wholesaling": 0, "Fix & Flip": 0, "Mediação": 0, "Não definido": 0 };
+    const modeloCount: Record<string, number> = { "Wholesaling": 0, "Fix and Flip": 0, "Mediação Imobiliária": 0, "Não definido": 0 };
     for (const i of imoveisAtivos) {
       const m = i.modeloNegocio ?? "Não definido";
       modeloCount[m] = (modeloCount[m] ?? 0) + 1;
@@ -2002,7 +2002,7 @@ app.get("/metricas", async (c: any) => {
       .filter((v) => v != null && v > 0 && v < 730);
     const holdingMedio = avg(holdingPeriods);
 
-    const negWholesaling = negocios.filter((n) => n.categoria === "Wholesalling");
+    const negWholesaling = negocios.filter((n) => n.categoria === "Wholesaling");
     const negFF = negocios.filter((n) => ["Fix and Flip", "CAEP"].includes(n.categoria));
     const margemWholesaling = avg(negWholesaling.filter((n) => n.lucroReal > 0).map((n) => n.lucroReal));
     const margemFF = avg(negFF.filter((n) => n.lucroReal > 0).map((n) => n.lucroReal));
@@ -2102,7 +2102,7 @@ app.get("/metricas", async (c: any) => {
     };
 
     // ── 1.1 RECEITA / FATURAÇÃO ─────────────────────────────────
-    const negWH = negocios.filter((n) => n.categoria === "Wholesalling");
+    const negWH = negocios.filter((n) => n.categoria === "Wholesaling");
     const negWHFechados = negWH.filter((n) => n.fase === "Vendido");
     const negWHFechadosAno = negWHFechados.filter((n) => isYear(n.dataVenda, ano));
     const whReceitaAnual = round2(negWHFechadosAno.reduce((s, n) => s + (n.lucroReal || n.lucroEstimado), 0));
@@ -2300,7 +2300,7 @@ app.get("/metricas", async (c: any) => {
     // ── ROI médio do portfólio, por modelo e em conjunto ──
     // Usa o ROI e ROI anualizado calculados na Análise Financeira de cada imóvel
     // (imovel.roi / imovel.roiAnualizado — fonte única calcEngine, correta por modelo).
-    // Estimado: todos os modelos elegíveis. Real: só F&F + CAEP fechados (Wholesalling
+    // Estimado: todos os modelos elegíveis. Real: só F&F + CAEP fechados (Wholesaling
     // só considera estimado), ajustando o ROI projetado pelo rácio lucro real/estimado.
     const ROI_CATS_REAL = new Set(["Fix and Flip", "CAEP"]);
     const imovelComRoi = (n: any) => {
@@ -2311,7 +2311,7 @@ app.get("/metricas", async (c: any) => {
       return null;
     };
     const mkBucket = () => ({ estTotal: [] as number[], estAnual: [] as number[], realTotal: [] as number[], realAnual: [] as number[] });
-    const roiBuckets: Record<string, ReturnType<typeof mkBucket>> = { "Fix and Flip": mkBucket(), "CAEP": mkBucket(), "Wholesalling": mkBucket() };
+    const roiBuckets: Record<string, ReturnType<typeof mkBucket>> = { "Fix and Flip": mkBucket(), "CAEP": mkBucket(), "Wholesaling": mkBucket() };
     for (const n of negocios) {
       const b = roiBuckets[n.categoria];
       if (!b) continue;
@@ -2332,7 +2332,7 @@ app.get("/metricas", async (c: any) => {
     }
     const estStats = (b: ReturnType<typeof mkBucket>) => ({ total: avg(b.estTotal), anualizado: avg(b.estAnual), n: b.estTotal.length });
     const realStats = (b: ReturnType<typeof mkBucket>) => ({ total: avg(b.realTotal), anualizado: avg(b.realAnual), n: b.realTotal.length });
-    const ff = roiBuckets["Fix and Flip"], cp = roiBuckets["CAEP"], whl = roiBuckets["Wholesalling"];
+    const ff = roiBuckets["Fix and Flip"], cp = roiBuckets["CAEP"], whl = roiBuckets["Wholesaling"];
     const conjunto = {
       estTotal: [...ff.estTotal, ...cp.estTotal, ...whl.estTotal],
       estAnual: [...ff.estAnual, ...cp.estAnual, ...whl.estAnual],
@@ -2349,9 +2349,9 @@ app.get("/metricas", async (c: any) => {
     const trackerMargem = {
       roiPortfolio,
       wholesaling: {
-        margemBrutaMedia: avg(margensPorNegocio.filter((m) => m.categoria === "Wholesalling" && m.margemBruta != null).map((m) => m.margemBruta)),
-        margemLiquidaMedia: avg(margensPorNegocio.filter((m) => m.categoria === "Wholesalling" && m.margemLiquida != null).map((m) => m.margemLiquida)),
-        desvioObraMedia: avg(margensPorNegocio.filter((m) => m.categoria === "Wholesalling" && m.desvioObra != null).map((m) => m.desvioObra)),
+        margemBrutaMedia: avg(margensPorNegocio.filter((m) => m.categoria === "Wholesaling" && m.margemBruta != null).map((m) => m.margemBruta)),
+        margemLiquidaMedia: avg(margensPorNegocio.filter((m) => m.categoria === "Wholesaling" && m.margemLiquida != null).map((m) => m.margemLiquida)),
+        desvioObraMedia: avg(margensPorNegocio.filter((m) => m.categoria === "Wholesaling" && m.desvioObra != null).map((m) => m.desvioObra)),
       },
       caep: {
         roiMedio: avg(negCAEP.filter((n) => n.capitalTotal > 0).map((n) => {
