@@ -237,7 +237,7 @@ export function TabHistorico({ negocioId }) {
   }, [negocioId])
 
   if (loading) return <p className="text-sm text-gray-400 py-8 text-center">A carregar…</p>
-  if (eventos.length === 0) return <p className="text-sm text-gray-400 py-8 text-center">Sem actividade registada.</p>
+  if (eventos.length === 0) return <p className="text-sm text-gray-400 py-8 text-center">Sem atividade registada.</p>
 
   return (
     <div className="space-y-2">

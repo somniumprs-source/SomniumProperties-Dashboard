@@ -146,8 +146,8 @@ export const DADOS_EXPANSAO_GAIA = {
       score: 7.8,
       criterios: { preco_entrada: 10, procura_liquidez: 7, servicos_amenidades: 6, potencial_revalorizacao: 8, concorrencia: 9 },
       classificacao: 'recomendar',
-      perfil: 'Freguesia extensa e mista (urbana junto a A1 e rural a leste). Stock barato em Pedroso urbano (zona Vacariça, Boavista). Industria activa que sustenta procura local. Crescimento de familias de classe media a procurar moradias.',
-      drivers: ['Nó A1 Carvalhos', 'Industria activa', 'Acesso rapido ao Porto e Aveiro', 'Pipeline Cemusa/IKEA proximo', 'Crescimento residencial moradia'],
+      perfil: 'Freguesia extensa e mista (urbana junto a A1 e rural a leste). Stock barato em Pedroso urbano (zona Vacariça, Boavista). Industria ativa que sustenta procura local. Crescimento de familias de classe media a procurar moradias.',
+      drivers: ['Nó A1 Carvalhos', 'Industria ativa', 'Acesso rapido ao Porto e Aveiro', 'Pipeline Cemusa/IKEA proximo', 'Crescimento residencial moradia'],
       target_imovel: 'T2/T3 em predios anos 80-2000 nas zonas urbanas. Moradias geminadas para revenda a familias locais. Predios pequenos no centro de Pedroso.',
     },
     {
@@ -164,7 +164,7 @@ export const DADOS_EXPANSAO_GAIA = {
       criterios: { preco_entrada: 10, procura_liquidez: 6, servicos_amenidades: 6, potencial_revalorizacao: 7, concorrencia: 9 },
       classificacao: 'monitorizar',
       perfil: 'Zona de transicao entre Gaia urbana e o concelho de Espinho. Bom acesso A1 e proximidade industrial. Stock mais barato mas tempo de venda mais longo. Atrai familias que pretendem moradia com terreno acessivel.',
-      drivers: ['Nó A1 Carvalhos/Souto', 'Industria activa', 'Pipeline residencial em curso', 'Proximidade EFTA Portugal'],
+      drivers: ['Nó A1 Carvalhos/Souto', 'Industria ativa', 'Pipeline residencial em curso', 'Proximidade EFTA Portugal'],
       target_imovel: 'T2 anos 90 para arrendamento operario. Moradias pequenas para revenda. Predios isolados.',
     },
     {

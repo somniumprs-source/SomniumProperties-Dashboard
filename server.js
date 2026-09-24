@@ -3,7 +3,6 @@ import express from 'express'
 import cors from 'cors'
 import compression from 'compression'
 import rateLimit from 'express-rate-limit'
-import { Client } from '@notionhq/client'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
@@ -482,22 +481,6 @@ try {
   app.use('/api/crm', (_req, res) => res.status(503).json({ error: 'CRM não disponível' }))
 }
 
-const notion = new Client({ auth: process.env.NOTION_API_KEY })
-
-const DB = {
-  negócios:        process.env.NOTION_DB_FATURACAO,         // Faturação — negócios / deals
-  despesas:        process.env.NOTION_DB_DESPESAS,           // Despesas operacionais
-  investidores:    process.env.NOTION_DB_INVESTIDORES,
-  pipelineImoveis: process.env.NOTION_DB_PIPELINE_IMOVEIS,
-  empreiteiros:    process.env.NOTION_DB_EMPREITEIROS,
-  consultores:     process.env.NOTION_DB_CONSULTORES,
-  projetos:        process.env.NOTION_DB_PROJETOS,           // Projetos (linked to Pipeline Imóveis)
-  pipeline:        process.env.NOTION_DB_PIPELINE,
-  clientes:        process.env.NOTION_DB_CLIENTES,
-  campanhas:       process.env.NOTION_DB_CAMPANHAS,
-  obras:           process.env.NOTION_DB_OBRAS,
-}
-
 // ── Helpers ──────────────────────────────────────────────────────
 const title      = p => p?.title?.map(r => r.plain_text).join('') ?? ''
 const text       = p => p?.rich_text?.map(r => r.plain_text).join('') ?? ''
@@ -532,16 +515,6 @@ function isYear(dateStr, year) {
 
 function mesAbrevToNum(abrev) { return MES_ABREV.indexOf(abrev) + 1 }
 
-async function queryAll(dbId, filter) {
-  const results = []
-  let cursor
-  do {
-    const res = await notion.databases.query({ database_id: dbId, filter, start_cursor: cursor, page_size: 100 })
-    results.push(...res.results)
-    cursor = res.has_more ? res.next_cursor : undefined
-  } while (cursor)
-  return results
-}
 
 // ── Mappers ───────────────────────────────────────────────────────
 function mapNegocio(p) {
@@ -1514,17 +1487,6 @@ app.get('/api/comercial/empreiteiros', async (req, res) => {
   }
 })
 
-// Cache de nomes de consultores por page ID (resolve relações da Faturação)
-const consultorNameCache = new Map()
-async function resolveConsultorName(pageId) {
-  if (consultorNameCache.has(pageId)) return consultorNameCache.get(pageId)
-  try {
-    const p = await notion.pages.retrieve({ page_id: pageId })
-    const nome = Object.values(p.properties).find(v => v.type === 'title')?.title?.map(t => t.plain_text).join('') ?? null
-    consultorNameCache.set(pageId, nome)
-    return nome
-  } catch { return null }
-}
 
 app.get('/api/comercial/consultores', async (_req, res) => {
   try {
@@ -5647,22 +5609,6 @@ app.post('/api/automation/pipeline-to-faturacao', async (req, res) => {
           }
         }
 
-        // Sync Notion (se configurado)
-        try {
-          if (DB.negócios) {
-            await notion.pages.create({
-              parent: { database_id: DB.negócios },
-              properties: {
-                'Movimento': { title: [{ text: { content: im.nome } }] },
-                'Categoria': { select: { name: categoria } },
-                'Fase': { select: { name: 'Fase de obras' } },
-                'Lucro estimado': { number: 0 },
-                'Data': { date: { start: hoje } },
-                'Imóvel': { relation: [{ id: im.id }] },
-              },
-            })
-          }
-        } catch (e) { console.error(`[pipeline-to-fat] Notion sync ${im.nome}:`, e.message) }
 
         created.push({ nome: im.nome, categoria })
       } catch (e) {
@@ -5715,17 +5661,9 @@ if (process.env.NODE_ENV === 'production') {
 async function autoMigrate() {
   try {
     const pool = (await import('./src/db/pg.js')).default
-    const { syncAllFromNotion } = await import('./src/db/sync.js')
     const { rows } = await pool.query('SELECT COUNT(*) as c FROM imoveis')
     const count = parseInt(rows[0].c)
-    if (count === 0) {
-      console.log('[startup] DB vazia — a migrar do Notion...')
-      const results = await syncAllFromNotion()
-      const total = Object.values(results).reduce((s, r) => s + (r.total ?? 0), 0)
-      console.log(`[startup] Migração completa: ${total} registos`)
-    } else {
-      console.log(`[startup] DB OK — ${count} imóveis + mais`)
-    }
+    console.log(`[startup] DB OK — ${count} imóveis + mais`)
   } catch (e) {
     console.warn('[startup] Auto-migrate falhou:', e.message)
   }

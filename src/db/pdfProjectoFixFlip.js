@@ -202,7 +202,7 @@ export function generateRelatorioAcompanhamento({ negocio, imovel, fases, tarefa
   const emCurso = fases.find(f => f.estado === 'em_curso')
   const totalTarefas = tarefas.length
   const tarefasConcluidas = tarefas.filter(t => t.concluida).length
-  texto(doc, `O projecto encontra-se a ${PCT(percGlobal)} de execução global. ${concluidas} de ${fases.length} fases concluídas. ` +
+  texto(doc, `O projeto encontra-se a ${PCT(percGlobal)} de execução global. ${concluidas} de ${fases.length} fases concluídas. ` +
     (emCurso ? `Fase em curso: "${emCurso.nome}" (${PCT(emCurso.perc_execucao)}). ` : '') +
     `Total de ${tarefasConcluidas} tarefas concluídas em ${totalTarefas}.`, { size: 9 })
   doc.moveDown(0.3)
@@ -294,7 +294,7 @@ export function semaforoDesvio(pct) {
   if (abs <= 5) return { cor: DOC_COLORS.green, label: 'Dentro do orçamento', tag: 'verde' }
   if (abs <= 10) return { cor: DOC_COLORS.amber, label: 'Atenção — investigar causa', tag: 'amarelo' }
   if (abs <= 15) return { cor: DOC_COLORS.orange, label: 'Reunião técnica recomendada', tag: 'laranja' }
-  return { cor: DOC_COLORS.red, label: 'Aviso formal — plano de acção necessário', tag: 'vermelho' }
+  return { cor: DOC_COLORS.red, label: 'Aviso formal — plano de ação necessário', tag: 'vermelho' }
 }
 
 export function generateRelatorioSemanalObra({ negocio, imovel, vistoria, fases, fotos, orcAlocado, custoReal, semanaAtual, semanaTotal }) {
@@ -559,7 +559,7 @@ export function generateRelatorioSaida({ negocio, imovel, fases, custoReal, inve
   doc.fontSize(9).fillColor(TEXT)
     .text(`Operação Fix and Flip concluída com sucesso.`)
     .text(`Todas as obrigações fiscais (IMT, IS, IRC/IRS) foram liquidadas previamente à distribuição.`)
-    .text(`A documentação completa (escrituras, licenças, certificações) está arquivada no dossier do projecto.`)
+    .text(`A documentação completa (escrituras, licenças, certificações) está arquivada no dossier do projeto.`)
 
   const range = doc.bufferedPageRange()
   for (let i = 0; i < range.count; i++) { doc.switchToPage(i); footer(doc, i + 1) }

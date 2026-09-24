@@ -226,7 +226,7 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
                       type="button"
                       onClick={() => openDocument(`/api/crm/imoveis/${doc.imovel_id}/relatorio-investidor`).catch(() => {})}
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600"
-                      title="Registo sem ficheiro anexado — abrir o dossier actual do imóvel"
+                      title="Registo sem ficheiro anexado — abrir o dossier atual do imóvel"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
                     </button>
@@ -234,7 +234,7 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
                       type="button"
                       onClick={() => openDocument(`/api/crm/imoveis/${doc.imovel_id}/relatorio-investidor`, { download: true }).catch(() => {})}
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600"
-                      title="Registo sem ficheiro anexado — descarregar o dossier actual do imóvel"
+                      title="Registo sem ficheiro anexado — descarregar o dossier atual do imóvel"
                     >
                       <FileDown className="w-3.5 h-3.5" />
                     </button>

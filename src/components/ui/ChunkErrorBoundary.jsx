@@ -66,7 +66,7 @@ export class ChunkErrorBoundary extends Component {
             <button onClick={this.handleManualReload}
               className="px-5 py-2.5 text-sm font-semibold rounded-xl"
               style={{ backgroundColor: '#C9A84C', color: '#0d0d0d' }}>
-              Actualizar
+              Atualizar
             </button>
           </div>
         </div>

@@ -415,7 +415,7 @@ function linhasRebocos(s, regime) {
   for (const [k, label] of [
     ['chapisco_material', 'Chapisco — material'],
     ['reboco_trad_material', 'Reboco tradicional — material'],
-    ['estuque_proj_material', 'Estuque projectado — material'],
+    ['estuque_proj_material', 'Estuque projetado — material'],
     ['gesso_paredes_material', 'Gesso cartonado em paredes — material'],
   ]) {
     if (num(s[k]) > 0)
@@ -701,7 +701,7 @@ function linhasLicenciamento(s) {
   s = s || {}
   const out = []
   if (num(s.projeto) > 0)
-    out.push(linhaHonorarios('Projecto especialidade/arquitectura',
+    out.push(linhaHonorarios('Projeto especialidade/arquitetura',
       num(s.projeto), `${num(s.projeto)} €`, s.projeto_singular ? 25 : 0))
   if (num(s.fiscalizacao_perc) > 0 && num(s.base_obra_para_fiscalizacao) > 0) {
     const v = round2(num(s.base_obra_para_fiscalizacao) * num(s.fiscalizacao_perc) / 100)
@@ -1064,7 +1064,7 @@ export function validarOrcamento(orcamento) {
   if (o.zona_aru) {
     avisos.push({
       seccao: 'global', tipo: 'fiscal',
-      msg: 'Zona ARU activada — Verba 2.27 CIVA: material a 6%. Confirme documentação obrigatória: declaração do dono da obra ao empreiteiro, certificação ARU/IHRU.',
+      msg: 'Zona ARU ativada — Verba 2.27 CIVA: material a 6%. Confirme documentação obrigatória: declaração do dono da obra ao empreiteiro, certificação ARU/IHRU.',
     })
   }
   if (o.tipo_obra === 'remodelacao') {

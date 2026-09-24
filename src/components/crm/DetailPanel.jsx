@@ -725,7 +725,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
   // Apagar a entidade directamente a partir da ficha aberta (sem voltar à lista).
   async function handleDelete() {
     if (deleting) return
-    if (!confirm(`Apagar "${data?.nome || 'este registo'}"? Esta acção não pode ser desfeita.`)) return
+    if (!confirm(`Apagar "${data?.nome || 'este registo'}"? Esta ação não pode ser desfeita.`)) return
     setDeleting(true)
     try {
       const r = await apiFetch(`/api/crm/${endpoint}/${id}`, { method: 'DELETE' })
@@ -868,7 +868,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
     { key: 'matching', label: 'Matching investidores', icon: '🎯', show: type === 'Imóveis' },
     { key: 'relatorios_imovel', label: 'Relatórios', icon: '📄', show: type === 'Imóveis' },
     { key: 'checklist', label: 'Checklist', icon: '📋', show: type === 'Imóveis' },
-    { key: 'interacoes', label: `Interacções (${data?.interacoes?.length ?? 0})`, icon: '💬', show: type === 'Consultores' },
+    { key: 'interacoes', label: `Interações (${data?.interacoes?.length ?? 0})`, icon: '💬', show: type === 'Consultores' },
     { key: 'interacoes_inv', label: 'Chamadas', icon: '📞', show: type === 'Investidores' },
     { key: 'documentos', label: `Documentos (${data?.documentos?.length ?? 0})`, icon: '📎', show: type === 'Investidores' },
     { key: 'dados_empresa', label: 'Dados Empresa', icon: '🏢', show: type === 'Investidores' },
@@ -932,7 +932,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
             <button onClick={() => { setActiveTab('interacoes'); setOpenContactoForm(true) }}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
               style={{ backgroundColor: '#22c55e', color: '#fff' }}
-              title="Registar contacto efectuado">
+              title="Registar contacto efetuado">
               <PhoneCall className="w-3.5 h-3.5" /> Registar Contacto
             </button>
           )}
@@ -1012,7 +1012,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
           {data.negocios?.some(n => !n.deleted_at) ? (
             <div className="space-y-3">
               <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300 flex items-center justify-between gap-3 flex-wrap">
-                <span>Negócio fechado — já existe Projecto para este imóvel. A Análise Financeira edita-se agora em <strong>Projetos</strong>; aqui fica só como consulta.</span>
+                <span>Negócio fechado — já existe Projeto para este imóvel. A Análise Financeira edita-se agora em <strong>Projetos</strong>; aqui fica só como consulta.</span>
                 {(() => {
                   const negocioActivo = data.negocios.find(n => !n.deleted_at)
                   return negocioActivo ? (
@@ -1128,7 +1128,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
                       value={form.motivo_nao_interessa || ''}
                       onChange={v => setField('motivo_nao_interessa', v)}
                     />
-                    <p className="text-[11px] text-red-500 mt-1">⚠ Selecciona pelo menos um motivo (ou escreve nas notas) antes de guardar.</p>
+                    <p className="text-[11px] text-red-500 mt-1">⚠ Seleciona pelo menos um motivo (ou escreve nas notas) antes de guardar.</p>
                   </div>
                 )}
                 <ImovelEditSections data={data} form={form} setField={setField} />
@@ -1163,7 +1163,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
                       <div className="flex items-center gap-2 mb-3">
                         <span className="text-sm">📊</span>
                         <h4 className="text-sm font-bold text-neutral-800">Análise de Rentabilidade</h4>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Activa</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Ativa</span>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                         {analise.vvr > 0 && <div>
@@ -2606,7 +2606,7 @@ function InvestidorHero({ data }) {
       {isTerminal && (
         <div className="px-4 sm:px-5 py-2 bg-gray-50 border-t border-gray-100 text-[11px] text-gray-500 flex items-center gap-2">
           <AlertTriangle className="w-3.5 h-3.5" />
-          {data.status === 'Inactivo' ? 'Investidor marcado como inactivo.' : 'Investidor não qualificado.'}
+          {data.status === 'Inactivo' ? 'Investidor marcado como inativo.' : 'Investidor não qualificado.'}
           {data.motivo_inatividade && <span className="text-gray-400">· {data.motivo_inatividade}</span>}
           {data.motivo_nao_aprovacao && <span className="text-gray-400">· {data.motivo_nao_aprovacao}</span>}
         </div>
@@ -2841,7 +2841,7 @@ function InvestidorEditSections({ data, form, setField }) {
         <p className="w-full px-2 py-1.5 rounded-lg border border-gray-100 bg-gray-50 text-sm text-gray-600">
           {form.montante_investido > 0 ? `€${Number(form.montante_investido).toLocaleString('pt-PT')}` : '—'}
         </p>
-        <p className="text-[10px] text-gray-400 mt-1 italic">Calculado a partir dos projectos associados a este investidor</p>
+        <p className="text-[10px] text-gray-400 mt-1 italic">Calculado a partir dos projetos associados a este investidor</p>
       </div>
       <MultiChips label="Estratégia" field="estrategia" form={form} set={setField} options={INV_ESTRATEGIA_OPTS} />
     </Section>
@@ -3311,7 +3311,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                   <div className="rounded-lg bg-white border border-gray-200 p-4">
                     <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{script.intro.replace(/\[Nome\]/g, investidorNome.split(' ')[0])}</p>
                   </div>
-                  <p className="text-[10px] text-gray-400">Tom: profissional mas acessível. Objectivo: criar confiança e alinhar expectativas.</p>
+                  <p className="text-[10px] text-gray-400">Tom: profissional mas acessível. Objetivo: criar confiança e alinhar expectativas.</p>
                 </div>
               )}
 
@@ -3378,7 +3378,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                     <div className="space-y-1 text-xs text-green-800">
                       <p>1. Preencher o Scorecard com base nas respostas (botão abaixo)</p>
                       <p>2. Enviar resumo por email ao investidor dentro de 24h</p>
-                      <p>3. Actualizar status no CRM para "Follow Up" ou "Investidor Qualificado em Carteira"</p>
+                      <p>3. Atualizar status no CRM para "Follow Up" ou "Investidor Qualificado em Carteira"</p>
                       <p>4. Se Classe A/B: agendar apresentação de oportunidade</p>
                     </div>
                   </div>
@@ -3540,7 +3540,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                   <div className="flex items-center gap-2">
                     <span className={`text-lg font-black ${cores.text}`}>Classe {sc.classificacao}</span>
                     <span className="text-xs text-gray-500">{sc.pontuacao_ponderada}/100 pts</span>
-                    {idx === 0 && <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-dark text-white font-medium">Actual</span>}
+                    {idx === 0 && <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-dark text-white font-medium">Atual</span>}
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-gray-500">{new Date(sc.created_at).toLocaleDateString('pt-PT')}</p>
@@ -3609,7 +3609,7 @@ function ClassificacaoTab({ investidorId, investidorNome, classificacaoActual, p
       <div className={`rounded-xl border ${coresActual.border} ${coresActual.bg} p-5`}>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[10px] uppercase text-gray-500 tracking-wide">Classificação Actual</p>
+            <p className="text-[10px] uppercase text-gray-500 tracking-wide">Classificação Atual</p>
             <div className="flex items-center gap-3 mt-1">
               <span className={`text-3xl font-black ${coresActual.text}`}>
                 {classificacaoActual || '—'}
@@ -3654,7 +3654,7 @@ function ClassificacaoTab({ investidorId, investidorNome, classificacaoActual, p
           </div>
         </div>
         <p className="text-[10px] text-gray-400 mt-2">
-          Bónus: NDA assinado (+5), montante investido (+10), negócios activos (+10).
+          Bónus: NDA assinado (+5), montante investido (+10), negócios ativos (+10).
           Classe C sem evolução em 180 dias → sugestão de arquivo.
         </p>
       </div>

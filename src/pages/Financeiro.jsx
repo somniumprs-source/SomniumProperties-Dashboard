@@ -190,8 +190,7 @@ export function Financeiro() {
 
   return (
     <>
-      <Header title="Financeiro" subtitle="Atualização em tempo real" onRefresh={load} loading={loading}
-        notionUrl="https://www.notion.so/333c6d45a01f81dc9cb4d12a999e28ed" />
+      <Header title="Financeiro" subtitle="Atualização em tempo real" onRefresh={load} loading={loading} />
 
       {/* Tabs */}
       <div className="px-4 sm:px-6 pt-3 bg-white sticky top-0 z-10">
@@ -224,7 +223,7 @@ export function Financeiro() {
             </div>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <HeroKpi label="Faturação Expectável" value={EUR(kpis?.lucroEstimadoTotal)} sub={`${kpis?.negóciosAtivos ?? 0} negócios activos`} accent />
+            <HeroKpi label="Faturação Estimada" value={EUR(kpis?.lucroEstimadoTotal)} sub={`${kpis?.negóciosAtivos ?? 0} negócios ativos`} accent />
             <HeroKpi label="Faturação Real" value={EUR(kpis?.lucroRealTotal)} sub={kpis?.lucroRealTotal > 0 ? 'recebido' : 'a receber'} green />
             <HeroKpi label="Burn Rate / Mês" value={EUR(kpis?.burnRate)} sub="custos fixos" red={(kpis?.burnRate ?? 0) > 1000} />
             <HeroKpi label="Runway" value={runwayMeses != null ? `${Math.round(runwayMeses)}m` : '—'} sub="meses estimados" />
@@ -249,7 +248,7 @@ export function Financeiro() {
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-              <KPICard label="Faturação Expectável" value={EUR(kpis?.lucroEstimadoTotal)} meta="—" status="green"                                       trend="neutral" unit="" />
+              <KPICard label="Faturação Estimada" value={EUR(kpis?.lucroEstimadoTotal)} meta="—" status="green"                                       trend="neutral" unit="" />
               <KPICard label="Faturação Real"      value={EUR(kpis?.lucroRealTotal)}     meta="—" status={kpis?.lucroRealTotal > 0 ? 'green' : 'yellow'} trend="neutral" unit="" />
               <KPICard label="A Receber (pendente)" value={EUR((kpis?.lucroEstimadoTotal ?? 0) - (kpis?.lucroRealTotal ?? 0))} meta="—" status={(kpis?.lucroEstimadoTotal ?? 0) - (kpis?.lucroRealTotal ?? 0) > 0 ? 'yellow' : 'green'} trend="neutral" unit="" />
               <KPICard label="Burn Rate / Mês"     value={EUR(kpis?.burnRate)}           meta="—" status="green"                                       trend="neutral" unit="" />
@@ -332,10 +331,10 @@ export function Financeiro() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
                       <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
                       <YAxis type="category" dataKey="fase" tick={{ fontSize: 11 }} width={110} />
-                      <Tooltip formatter={(v, n) => n === 'Faturação Expectável €' ? EUR(v) : v} />
+                      <Tooltip formatter={(v, n) => n === 'Faturação Estimada €' ? EUR(v) : v} />
                       <Legend />
                       <Bar dataKey="count"    name="Nº Negócios"     fill="#6366f1" radius={[0,3,3,0]} />
-                      <Bar dataKey="lucroEst" name="Faturação Expectável €"  fill="#10b981" radius={[0,3,3,0]} />
+                      <Bar dataKey="lucroEst" name="Faturação Estimada €"  fill="#10b981" radius={[0,3,3,0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : <EmptyState />}
@@ -566,9 +565,9 @@ export function Financeiro() {
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
               <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-4 shadow-xs">
-                <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Faturação Expectável</span>
+                <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Faturação Estimada</span>
                 <span className="text-2xl font-bold text-indigo-600">{EUR(projecao.pl.receitaEstimada)}</span>
-                <span className="text-xs text-gray-400 block mt-1">Total expectável</span>
+                <span className="text-xs text-gray-400 block mt-1">Total estimado</span>
               </div>
               <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-4 shadow-xs">
                 <span className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Faturação Real</span>
@@ -955,7 +954,7 @@ function RentabilidadeTab({ rent }) {
               <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
                 <th className="text-left py-2 px-3">Consultor</th>
                 <th className="text-right py-2 px-3">Deals</th>
-                <th className="text-right py-2 px-3">Faturação Expectável</th>
+                <th className="text-right py-2 px-3">Faturação Estimada</th>
                 <th className="text-right py-2 px-3">Faturação Real</th>
                 <th className="text-right py-2 px-3">Média / Deal</th>
               </tr>
@@ -984,7 +983,7 @@ function RentabilidadeTab({ rent }) {
               <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
                 <th className="text-left py-2 px-3">Investidor</th>
                 <th className="text-right py-2 px-3">Negócios</th>
-                <th className="text-right py-2 px-3">Faturação Expectável</th>
+                <th className="text-right py-2 px-3">Faturação Estimada</th>
                 <th className="text-right py-2 px-3">Faturação Real</th>
                 <th className="text-right py-2 px-3">Capital Investido</th>
                 <th className="text-right py-2 px-3">ROI</th>
@@ -1032,7 +1031,7 @@ function NegociosTable({ rows, emptyMsg = 'Sem dados' }) {
           <th className="text-left py-2 px-3">Negócio</th>
           <th className="text-left py-2 px-3">Categoria</th>
           <th className="text-left py-2 px-3">Fase</th>
-          <th className="text-right py-2 px-3">Faturação Expectável</th>
+          <th className="text-right py-2 px-3">Faturação Estimada</th>
           <th className="text-left py-2 px-3">Data Estimada</th>
         </tr>
       </thead>

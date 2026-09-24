@@ -77,7 +77,7 @@ export function Alertas() {
   }
 
   async function restoreBackup(id) {
-    if (!confirm('Restaurar este backup? O estado actual será guardado antes da restauração.')) return
+    if (!confirm('Restaurar este backup? O estado atual será guardado antes da restauração.')) return
     setBackupLoading(true)
     try {
       const r = await apiFetch(`/api/crm/backup/restore/${id}`, { method: 'POST' })
@@ -137,7 +137,7 @@ export function Alertas() {
             </div>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <HeroKpi label="Críticos" value={resumo.criticos ?? '—'} sub="acção imediata" red />
+            <HeroKpi label="Críticos" value={resumo.criticos ?? '—'} sub="ação imediata" red />
             <HeroKpi label="Avisos" value={resumo.avisos ?? '—'} sub="a monitorizar" accent />
             <HeroKpi label="Info" value={resumo.info ?? '—'} sub="contextual" green />
             <HeroKpi label="Total alertas" value={resumo.total ?? '—'} sub={`${resumo.camposIncompletos ?? 0} campos incompletos`} />
@@ -234,7 +234,7 @@ export function Alertas() {
                 </h2>
                 <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium">{inactivos.length}</span>
               </div>
-              <p className="text-caption text-gray-500 dark:text-neutral-400 mb-3">A cron diária passa Follow Ups parados &gt; 90 dias para Inactivo automaticamente. Revê e reactiva se for caso.</p>
+              <p className="text-caption text-gray-500 dark:text-neutral-400 mb-3">A cron diária passa Follow Ups parados &gt; 90 dias para Inactivo automaticamente. Revê e reativa se for caso.</p>
               <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
                 {inactivos.map((a, i) => (
                   <div key={i} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg border border-gray-100 hover:bg-gray-50">
@@ -342,7 +342,7 @@ export function Alertas() {
               {backupLoading ? 'A guardar...' : 'Criar Backup Agora'}
             </button>
           </div>
-          <p className="text-xs text-gray-400 mb-3">Backup automático diário às 03:00. Últimos 30 guardados. Cada restauro guarda o estado actual primeiro.</p>
+          <p className="text-xs text-gray-400 mb-3">Backup automático diário às 03:00. Últimos 30 guardados. Cada restauro guarda o estado atual primeiro.</p>
           {backups.length > 0 ? (
             <ScrollableTable>
               <table className="min-w-[600px] w-full text-xs">

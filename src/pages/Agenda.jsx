@@ -256,7 +256,7 @@ function CalendarioTab({ users }) {
         body: JSON.stringify({ semana_inicio: semanaInicio }),
       })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Falha ao actualizar')
+      if (!r.ok) throw new Error(j.error || 'Falha ao atualizar')
       const total = (j.filaCatalogo?.length || 0) + (j.filaAutomatica?.length || 0)
       toast?.(`Fila actualizada — ${total} itens prontos.`, 'success')
       await load()
@@ -360,7 +360,7 @@ function CalendarioTab({ users }) {
             className="p-2 rounded-lg bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800">
             <ChevronRight className="w-4 h-4" />
           </button>
-          <Button variant="secondary" size="sm" onClick={() => setRefDate(new Date())}>Semana actual</Button>
+          <Button variant="secondary" size="sm" onClick={() => setRefDate(new Date())}>Semana atual</Button>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-gray-400">{totalHoras.toFixed(1)}h livres · {filaCatalogo.length + filaAutomatica.length} na fila</span>
@@ -368,7 +368,7 @@ function CalendarioTab({ users }) {
             Copiar semana
           </Button>
           <Button variant="secondary" size="sm" icon={actualizando ? Loader2 : Wand2} onClick={actualizarFila} disabled={actualizando}>
-            Actualizar fila
+            Atualizar fila
           </Button>
         </div>
       </div>
@@ -376,7 +376,7 @@ function CalendarioTab({ users }) {
       <p className="text-[11px] text-gray-400">Arrasta na grelha para marcares um bloco livre. Clica num bloco para escolheres uma tarefa da fila.</p>
 
       {!userId ? (
-        <EmptyState icon={Calendar} title="Sem utilizadores" description="Não há utilizadores activos para atribuir disponibilidade." />
+        <EmptyState icon={Calendar} title="Sem utilizadores" description="Não há utilizadores ativos para atribuir disponibilidade." />
       ) : (
         <div className="overflow-x-auto">
           <div className="flex min-w-[720px] select-none" style={{ userSelect: dragRef.current ? 'none' : undefined }}>
@@ -531,7 +531,7 @@ function CatalogoTab({ users }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ activo: !t.activo }),
       })
-      if (!r.ok) throw new Error((await r.json()).error || 'Falha ao actualizar')
+      if (!r.ok) throw new Error((await r.json()).error || 'Falha ao atualizar')
       await load()
     } catch (e) { toast?.(e.message, 'error') }
   }
@@ -576,14 +576,14 @@ function CatalogoTab({ users }) {
             Carregar sugestões iniciais
           </Button>
         </div>
-        <span className="text-xs text-gray-400">{templates.filter(t => t.activo).length} activo(s) · {templates.length} no total</span>
+        <span className="text-xs text-gray-400">{templates.filter(t => t.activo).length} ativo(s) · {templates.length} no total</span>
       </div>
 
       {loading ? (
         <PageSkeleton />
       ) : templates.length === 0 ? (
         <EmptyState icon={ListChecks} title="Catálogo vazio"
-          description={'Sem tarefas recorrentes definidas. Usa "Carregar sugestões iniciais" para começar com uma lista pensada para os OKRs actuais.'} />
+          description={'Sem tarefas recorrentes definidas. Usa "Carregar sugestões iniciais" para começar com uma lista pensada para os OKRs atuais.'} />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {templates.map(t => (
@@ -602,7 +602,7 @@ function CatalogoTab({ users }) {
               <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-neutral-800">
                 <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
                   <input type="checkbox" checked={!!t.activo} onChange={() => toggleActivo(t)} className="rounded" />
-                  Activo
+                  Ativo
                 </label>
                 <div className="flex items-center gap-1">
                   <button onClick={() => openEdit(t)} className="p-1.5 rounded-md text-gray-400 hover:text-brand-gold hover:bg-brand-gold/10 transition-colors">
@@ -759,7 +759,7 @@ function TemplateModal({ open, onClose, template, users, onSaved }) {
         </Select>
         <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-300 sm:col-span-2">
           <input type="checkbox" checked={form.activo} onChange={e => setForm(f => ({ ...f, activo: e.target.checked }))} className="rounded" />
-          Activo (entra na geração automática semanal)
+          Ativo (entra na geração automática semanal)
         </label>
         <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-300 sm:col-span-2">
           <input type="checkbox" checked={form.simultaneo} onChange={e => setForm(f => ({ ...f, simultaneo: e.target.checked }))} className="rounded" />

@@ -1761,7 +1761,7 @@ function renderFichaVisita(b, im, analise = null) {
     'Janelas: material (alumínio, PVC, madeira), vidro simples ou duplo',
     'Estores / portadas: funcionamento e estado',
     'Isolamento térmico: paredes exteriores, cobertura, pontes térmicas',
-    'Isolamento acústico: ruído exterior, entre fracções',
+    'Isolamento acústico: ruído exterior, entre frações',
   ].map(p => ({ label: `□  ${p}`, value: '' })))
   b.space(4)
 
@@ -1817,7 +1817,7 @@ function renderFichaVisita(b, im, analise = null) {
   b.header('DOCUMENTOS A SOLICITAR')
   b.subheader('Obrigatórios')
   b.simpleTable([
-    'Caderneta predial urbana (actualizada)',
+    'Caderneta predial urbana (atualizada)',
     'Certidão permanente do registo predial (com encargos)',
     'Licença de utilização',
     'Certificado energético',
@@ -1831,7 +1831,7 @@ function renderFichaVisita(b, im, analise = null) {
     'Certidão de teor (se herança)',
     'Habilitação de herdeiros (se herança)',
     'Planta de localização e extracto do PDM',
-    'Projecto de arquitectura (se disponível)',
+    'Projeto de arquitetura (se disponível)',
     'Certificado de conformidade das instalações de gás',
   ].map(p => ({ label: `□  ${p}`, value: '' })))
   b.space(4)
@@ -1846,7 +1846,7 @@ function renderFichaVisita(b, im, analise = null) {
   const nc = fv?.preVisita?.notasCampo || {}
   b.input('Impressão geral do contacto telefónico', nc.impressaoContacto || '', { tall: true })
   b.input('Pontos críticos a confirmar na visita', nc.pontosCriticos || '', { tall: true })
-  b.input('Estratégia de negociação a adoptar', nc.estrategia || '', { tall: true })
+  b.input('Estratégia de negociação a adotar', nc.estrategia || '', { tall: true })
   b.space(4)
 
   b.newPage()
@@ -1964,7 +1964,7 @@ function renderResumoExecutivo(b, im, a, m) {
   })()
   b.bigNumbers([
     { label: 'Capital Necessário', value: EUR(a.capital_necessario || compra + obra), sub: '(Capital próprio a adiantar, líquido de financiamento)' },
-    { label: 'Lucro Bruto', value: EUR(a.lucro_bruto), sub: '(VVR - Custo Total do Projecto, antes de impostos)' },
+    { label: 'Lucro Bruto', value: EUR(a.lucro_bruto), sub: '(VVR - Custo Total do Projeto, antes de impostos)' },
   ])
   b.space(2)
   b.bigNumbers([
@@ -1973,12 +1973,12 @@ function renderResumoExecutivo(b, im, a, m) {
   ])
   b.space(2)
   b.bigNumbers([
-    { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash), sub: '(Lucro líquido / capital empregue no projecto)' },
+    { label: 'Cash-on-Cash', value: PCT(a.cash_on_cash), sub: '(Lucro líquido / capital empregue no projeto)' },
     { label: 'ROI', value: PCT_DEC(m.roe_sem_alav), sub: '(Return on Investment — retorno sobre o capital total empregue)' },
   ])
   b.space(2)
   b.bigNumbers([
-    { label: 'Tempo de Permanência do Capital', value: tempoLabel, sub: '(Período em que o capital está alocado ao projecto)' },
+    { label: 'Tempo de Permanência do Capital', value: tempoLabel, sub: '(Período em que o capital está alocado ao projeto)' },
     { label: 'Custo de Oportunidade', value: cooLabel, sub: '(Quantas vezes o RA supera um depósito a prazo a 3,5%)' },
   ])
   b.space(4)
@@ -2064,7 +2064,7 @@ function renderAnaliseRentabilidade(b, im, a, opts = {}) {
   ]
   if (m.pmo_breakdown) {
     const p = m.pmo_breakdown
-    if (p.arq.perc > 0) obraRows.push({ label: '   └ Projecto de Arquitectura', value: `${PCT(p.arq.perc)} · ${EUR(p.arq.eur)}` })
+    if (p.arq.perc > 0) obraRows.push({ label: '   └ Projeto de Arquitetura', value: `${PCT(p.arq.perc)} · ${EUR(p.arq.eur)}` })
     if (p.fisc.perc > 0) obraRows.push({ label: '   └ Fiscalização / Gestão de Obra', value: `${PCT(p.fisc.perc)} · ${EUR(p.fisc.eur)}` })
     if (p.seg.perc > 0) obraRows.push({ label: '   └ Coordenação de Segurança', value: `${PCT(p.seg.perc)} · ${EUR(p.seg.eur)}` })
     if (p.outros.perc > 0) obraRows.push({ label: '   └ Outros Custos de Gestão', value: `${PCT(p.outros.perc)} · ${EUR(p.outros.eur)}` })
@@ -2078,7 +2078,7 @@ function renderAnaliseRentabilidade(b, im, a, opts = {}) {
   )
   b.simpleTable(obraRows)
   if (!m.pmo_breakdown && a.pmo_perc > 0) {
-    b.note('PMO inclui projecto, fiscalização e coordenação de obra — desagregação disponível mediante pedido.')
+    b.note('PMO inclui projeto, fiscalização e coordenação de obra — desagregação disponível mediante pedido.')
   }
   b.space(4)
 
@@ -2118,16 +2118,16 @@ function renderAnaliseRentabilidade(b, im, a, opts = {}) {
     fiscRows.push({ label: '% Distribuição Dividendos', value: PCT(a.perc_dividendos) })
     fiscRows.push({ label: 'Retenção Dividendos (28%)', value: EUR(m.fiscal.dividendos_eur) })
     fiscRows.push({ label: 'Carga Fiscal Total', value: EUR(a.impostos), total: true })
-    fiscRows.push({ label: 'Taxa Efectiva sobre Lucro Bruto', value: PCT_DEC(m.fiscal.taxa_efectiva) })
+    fiscRows.push({ label: 'Taxa Efetiva sobre Lucro Bruto', value: PCT_DEC(m.fiscal.taxa_efectiva) })
   } else {
     fiscRows.push({ label: 'Impostos', value: EUR(a.impostos), total: true })
     if (m.fiscal && m.fiscal.taxa_efectiva != null) {
-      fiscRows.push({ label: 'Taxa Efectiva sobre Lucro Bruto', value: PCT_DEC(m.fiscal.taxa_efectiva) })
+      fiscRows.push({ label: 'Taxa Efetiva sobre Lucro Bruto', value: PCT_DEC(m.fiscal.taxa_efectiva) })
     }
   }
   b.simpleTable(fiscRows)
   if (a.regime_fiscal === 'Sem') {
-    b.note('Valor apresentado bruto de fiscalidade. O lucro líquido iguala o lucro bruto. A carga fiscal aplicável depende da estrutura jurídica adoptada pelo investidor para o negócio.')
+    b.note('Valor apresentado bruto de fiscalidade. O lucro líquido iguala o lucro bruto. A carga fiscal aplicável depende da estrutura jurídica adotada pelo investidor para o negócio.')
   }
   b.space(4)
 
@@ -2187,7 +2187,7 @@ function renderExitAlternativo(b, im, a, m) {
   b.header('J. EXIT ALTERNATIVO — ANÁLISE DE ARRENDAMENTO')
 
   if (!m.exit_arrendamento) {
-    b.note('Introduza renda mensal estimada na ficha financeira (secção "Exit Alternativo") para activar esta análise.')
+    b.note('Introduza renda mensal estimada na ficha financeira (secção "Exit Alternativo") para ativar esta análise.')
     return
   }
 
@@ -2266,12 +2266,12 @@ function calcDesvioPadrao(arr) {
 
 function gerarConclusaoAuto({ n, mediana, vvrAdoptado, delta, posTexto, minM2, maxM2, precoM2Vvr, descontoNeg, dataRecolha, fonteDados }) {
   const partes = []
-  partes.push(`Com base em ${n} comparáveis recolhidos${dataRecolha ? ` em ${dataRecolha}` : ''}${fonteDados ? ` (fonte: ${fonteDados})` : ''}, o VVR adoptado de ${EUR(vvrAdoptado)} posiciona-se ${posTexto.toLowerCase()} face à mediana ajustada (${EUR(mediana)}).`)
+  partes.push(`Com base em ${n} comparáveis recolhidos${dataRecolha ? ` em ${dataRecolha}` : ''}${fonteDados ? ` (fonte: ${fonteDados})` : ''}, o VVR adotado de ${EUR(vvrAdoptado)} posiciona-se ${posTexto.toLowerCase()} face à mediana ajustada (${EUR(mediana)}).`)
   if (precoM2Vvr && minM2 && maxM2) {
     partes.push(`O preço de ${Math.round(precoM2Vvr).toLocaleString('pt-PT')} €/m² está contido no intervalo observado (${Math.round(minM2).toLocaleString('pt-PT')} €/m² a ${Math.round(maxM2).toLocaleString('pt-PT')} €/m²).`)
   }
   if (descontoNeg) {
-    partes.push(`Preços são de oferta; aplicar desconto negocial estimado de ${descontoNeg}% para preço de transacção efectiva.`)
+    partes.push(`Preços são de oferta; aplicar desconto negocial estimado de ${descontoNeg}% para preço de transação efetiva.`)
   }
   return partes.join(' ')
 }
@@ -2441,7 +2441,7 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
         if (multi) { b.subheader(g.label); b.space(1) }
         b.bigNumbers([
           { label: 'Mediana VVR Est.', value: EUR(g.medianaVvr), sub: `(${g.n} comparáveis analisados)` },
-          { label: 'VVR Adoptado', value: EUR(g.vvrAdoptado), valueColor: g.posCor, sub: g.deltaMediana != null ? `${g.deltaMediana >= 0 ? '+' : ''}${g.deltaMediana.toFixed(1)}% vs. mediana` : '(escolha interna)' },
+          { label: 'VVR Adotado', value: EUR(g.vvrAdoptado), valueColor: g.posCor, sub: g.deltaMediana != null ? `${g.deltaMediana >= 0 ? '+' : ''}${g.deltaMediana.toFixed(1)}% vs. mediana` : '(escolha interna)' },
           { label: 'Preço/m² VVR', value: g.precoM2Vvr ? `${Math.round(g.precoM2Vvr).toLocaleString('pt-PT')} €/m²` : '—', sub: '(preço por m² implícito)' },
         ])
         b.space(3)
@@ -2523,8 +2523,8 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
         b.bigNumbers([
           { label: 'Mediana VVR Est.', value: EUR(g.medianaVvr), sub: '(Mediana dos VVR estimados ajustados dos comparáveis)' },
           { label: 'Intervalo de Mercado', value: [`${Math.round(g.minM2).toLocaleString('pt-PT')} €/m²`, `a ${Math.round(g.maxM2).toLocaleString('pt-PT')} €/m²`], sub: '(Min. e máx. €/m² ajustado)' },
-          { label: 'VVR Adoptado', value: EUR(g.vvrAdoptado), valueColor: g.posCor, sub: g.deltaMediana != null ? `${g.deltaMediana >= 0 ? '+' : ''}${g.deltaMediana.toFixed(1)}% vs. mediana` : '(Valor de Venda de Referência escolhido)' },
-          { label: 'Preço/m² VVR', value: g.precoM2Vvr ? `${Math.round(g.precoM2Vvr).toLocaleString('pt-PT')} €/m²` : '—', sub: '(Preço por m² implícito no VVR adoptado)' },
+          { label: 'VVR Adotado', value: EUR(g.vvrAdoptado), valueColor: g.posCor, sub: g.deltaMediana != null ? `${g.deltaMediana >= 0 ? '+' : ''}${g.deltaMediana.toFixed(1)}% vs. mediana` : '(Valor de Venda de Referência escolhido)' },
+          { label: 'Preço/m² VVR', value: g.precoM2Vvr ? `${Math.round(g.precoM2Vvr).toLocaleString('pt-PT')} €/m²` : '—', sub: '(Preço por m² implícito no VVR adotado)' },
         ])
         b.space(4)
       }
@@ -2542,7 +2542,7 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
         { label: 'Piso', value: alvoAtr.piso || '—' },
         { label: 'Elevador', value: alvoAtr.elevador ? 'Sim' : 'Não' },
         { label: 'Garagem / Estacionamento', value: alvoAtr.garagem ? 'Sim' : 'Não' },
-        { label: 'VVR Adoptado (Valor de Venda de Referência — preço alvo de saída)', value: EUR(g.vvrAdoptado), total: true },
+        { label: 'VVR Adotado (Valor de Venda de Referência — preço alvo de saída)', value: EUR(g.vvrAdoptado), total: true },
         { label: 'Preço de Venda Alvo por m²', value: g.precoM2Vvr ? `${Math.round(g.precoM2Vvr).toLocaleString('pt-PT')} €/m²` : '—' },
       ])
       b.space(4)
@@ -2551,7 +2551,7 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
     // B. Analise de Rendimento — Exit Arrendamento — skip quando do Dossier
     // (J. EXIT ALTERNATIVO da Analise de Rentabilidade ja faz analise completa)
     if (!opts.skipExitArrendamento) {
-      b.header('B. ANÁLISE DE RENDIMENTO — EXIT ARRENDAMENTO (Activar se exit alternativo à venda)' + suffix(g))
+      b.header('B. ANÁLISE DE RENDIMENTO — EXIT ARRENDAMENTO (Ativar se exit alternativo à venda)' + suffix(g))
       const rendaMensal = parseFloat(g.tip?.renda) || 0
       const yieldBruta = parseFloat(g.tip?.yield) || 0
       const vvrPorRendimento = (rendaMensal > 0 && yieldBruta > 0) ? (rendaMensal * 12 / (yieldBruta / 100)) : 0
@@ -2574,8 +2574,8 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
       // C. Metodologia
       b.subheader('C. Metodologia de Avaliação')
       b.simpleTable([
-        { label: 'Tipo de Preço (Oferta de venda vs. transacção efectiva escriturada)', value: meta.tipo_preco || '—' },
-        { label: 'Desconto Negocial Estimado (Redução média entre oferta e transacção)', value: descontoNeg != null ? `${descontoNeg}%` : '—' },
+        { label: 'Tipo de Preço (Oferta de venda vs. transação efetiva escriturada)', value: meta.tipo_preco || '—' },
+        { label: 'Desconto Negocial Estimado (Redução média entre oferta e transação)', value: descontoNeg != null ? `${descontoNeg}%` : '—' },
         { label: 'Data de Recolha dos Dados', value: meta.data_recolha || '—' },
         { label: 'Raio de Pesquisa (Distância máxima ao imóvel alvo)', value: meta.raio_pesquisa_km != null ? `${meta.raio_pesquisa_km} km` : '—' },
         { label: 'Número de Comparáveis Válidos', value: String(totalN) },
@@ -2590,13 +2590,13 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
       // D. Grelha de Ajustes Qualitativos
       b.subheader('D. Grelha de Ajustes Qualitativos (Lógica de ajuste aplicada a cada atributo)')
       b.colTable(
-        [['Atributo', 90], ['Direcção do Ajuste', 200], ['Lógica', 175]],
+        [['Atributo', 90], ['Direção do Ajuste', 200], ['Lógica', 175]],
         [
           { _values: ['Estado de Conservação', 'Comp. pior que alvo: +% | Comp. igual ou melhor: 0% ou -%', 'Alvo será reabilitado — comp. em pior estado subestima o VVR'] },
           { _values: ['Piso', 'Cave/RC: +% vs andar | Andar alto: -%', 'Cave penaliza preço; andares altos premiam'] },
           { _values: ['Elevador', 'Comp. com elevador e alvo sem: -%', 'Remover o atributo premium do comparável'] },
           { _values: ['Garagem', 'Comp. com garagem e alvo sem: -%', 'Remover valor de garagem do comparável'] },
-          { _values: ['Área', `Calculado automaticamente (diferença % × coef. ${AREA_FACTOR_PDF})`, 'Fracções menores tendem a ter preço/m² mais alto'] },
+          { _values: ['Área', `Calculado automaticamente (diferença % × coef. ${AREA_FACTOR_PDF})`, 'Frações menores tendem a ter preço/m² mais alto'] },
         ]
       )
       b.space(4)
@@ -2662,14 +2662,14 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
       rowsE.push({ _total: true, _values: ['MÉDIA', '—', '—', `${Math.round(g.n > 0 ? g.compsCalc.reduce((s,c)=>s+c.precoM2Bruto,0)/g.n : 0).toLocaleString('pt-PT')} €/m²`, '—', `${Math.round(g.mediaM2).toLocaleString('pt-PT')} €/m²`, EUR(g.mediaVvr), '—'] })
       rowsE.push({ _total: true, _values: ['MEDIANA', '—', '—', '—', '—', `${Math.round(g.medianaM2).toLocaleString('pt-PT')} €/m²`, EUR(g.medianaVvr), '—'] })
       if (g.vvrAdoptado > 0) {
-        rowsE.push({ _total: true, _values: ['VVR ADOPTADO', '—', '—', '—', { value: g.deltaMediana != null ? `${g.deltaMediana >= 0 ? '+' : ''}${g.deltaMediana.toFixed(1)}% vs. med.` : '—', color: g.posCor }, g.precoM2Vvr ? `${Math.round(g.precoM2Vvr).toLocaleString('pt-PT')} €/m²` : '—', EUR(g.vvrAdoptado), '—'] })
+        rowsE.push({ _total: true, _values: ['VVR ADOTADO', '—', '—', '—', { value: g.deltaMediana != null ? `${g.deltaMediana >= 0 ? '+' : ''}${g.deltaMediana.toFixed(1)}% vs. med.` : '—', color: g.posCor }, g.precoM2Vvr ? `${Math.round(g.precoM2Vvr).toLocaleString('pt-PT')} €/m²` : '—', EUR(g.vvrAdoptado), '—'] })
       }
       b.colTable(
         [['Comparável', 110], ['Área', 38], ['Preço Oferta', 60], ['€/m² Bruto', 55], ['Aj. Total', 50], ['€/m² Aj.', 55], ['VVR Est.', 60], ['Transac. -' + descontoNeg + '%', 62]],
         rowsE
       )
       b.space(2)
-      b.note(`Ajuste de área calculado automaticamente com coeficiente ${AREA_FACTOR_PDF}. Ajustes de estado, piso, elevador e garagem inseridos manualmente. Preço de transacção estimado com desconto negocial de ${descontoNeg}% sobre preço de oferta.`)
+      b.note(`Ajuste de área calculado automaticamente com coeficiente ${AREA_FACTOR_PDF}. Ajustes de estado, piso, elevador e garagem inseridos manualmente. Preço de transação estimado com desconto negocial de ${descontoNeg}% sobre preço de oferta.`)
     } else {
       b.note('Sem comparáveis preenchidos nesta análise.')
     }
@@ -2795,18 +2795,18 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
       b.space(4)
 
       // H. Posicionamento do VVR Adoptado
-      b.subheader('H. Posicionamento do VVR Adoptado')
+      b.subheader('H. Posicionamento do VVR Adotado')
       const margemSegPct = m.margem_seg_vvr != null ? `${(m.margem_seg_vvr * 100).toFixed(1)}% (ver relatório de rentabilidade)` : '— (analisar no relatório de rentabilidade)'
       const precoTransacEquiv = g.vvrAdoptado * (1 - descontoNeg / 100)
       b.simpleTable([
-        { label: 'VVR Adoptado (Preço de saída definido para o negócio)', value: EUR(g.vvrAdoptado), color: C.gold, total: true },
+        { label: 'VVR Adotado (Preço de saída definido para o negócio)', value: EUR(g.vvrAdoptado), color: C.gold, total: true },
         { label: 'Preço/m² Implícito no VVR', value: g.precoM2Vvr ? `${Math.round(g.precoM2Vvr).toLocaleString('pt-PT')} €/m²` : '—' },
         { label: 'Posicionamento (Face à distribuição dos comparáveis ajustados)', value: g.posTexto, color: g.posCor, total: true },
         { label: 'VVR vs. Média dos Comparáveis (Diferença percentual face à média)', value: g.deltaMedia != null ? `${g.deltaMedia >= 0 ? '+' : ''}${g.deltaMedia.toFixed(1)}%` : '—', color: g.deltaMedia != null && g.deltaMedia < 0 ? C.green : C.red },
         { label: 'VVR vs. Mediana dos Comparáveis (indicador principal)', value: g.deltaMediana != null ? `${g.deltaMediana >= 0 ? '+' : ''}${g.deltaMediana.toFixed(1)}%` : '—', color: g.posCor, total: true },
         { label: 'Margem de Segurança VVR (% de desconto antes de prejuízo)', value: margemSegPct },
-        { label: 'Desconto Negocial Estimado (% redução esperada entre oferta e transacção)', value: `${descontoNeg}%` },
-        { label: `Preço de Transacção Equivalente (VVR ajustado com desconto de ${descontoNeg}%)`, value: EUR(precoTransacEquiv) },
+        { label: 'Desconto Negocial Estimado (% redução esperada entre oferta e transação)', value: `${descontoNeg}%` },
+        { label: `Preço de Transação Equivalente (VVR ajustado com desconto de ${descontoNeg}%)`, value: EUR(precoTransacEquiv) },
       ])
       b.space(3)
 
@@ -2815,7 +2815,7 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
       if (g.minVvr > 0 && g.maxVvr > 0 && g.vvrAdoptado > 0) {
         drawPosVisualBar(b, { min: g.minVvr, max: g.maxVvr, mediana: g.medianaVvr, media: g.mediaVvr, vvr: g.vvrAdoptado, posCor: g.posCor })
         b.space(2)
-        b.note('Diamante colorido = VVR adoptado. Linha sólida dourada = mediana. Linha tracejada cinzenta = média. Verde = posicionamento conservador. Dourado = alinhado com mediana. Vermelho = acima do intervalo.')
+        b.note('Diamante colorido = VVR adotado. Linha sólida dourada = mediana. Linha tracejada cinzenta = média. Verde = posicionamento conservador. Dourado = alinhado com mediana. Vermelho = acima do intervalo.')
       } else {
         b.note('Posicionamento visual indisponível: dados insuficientes.')
       }
@@ -2837,7 +2837,7 @@ function renderEstudoComparaveis(b, im, a, opts = {}) {
   }
 
   b.space(4)
-  b.text('Os valores apresentados são estimativas baseadas em comparáveis de mercado e podem não reflectir o valor exacto de transacção. A Somnium Properties recomenda validação com avaliação profissional certificada. Este documento é preparado para fins informativos e não constitui aconselhamento financeiro ou fiscal. Somnium Properties — Confidencial.', { size: 7, color: C.muted })
+  b.text('Os valores apresentados são estimativas baseadas em comparáveis de mercado e podem não refletir o valor exato de transação. A Somnium Properties recomenda validação com avaliação profissional certificada. Este documento é preparado para fins informativos e não constitui aconselhamento financeiro ou fiscal. Somnium Properties — Confidencial.', { size: 7, color: C.muted })
 }
 
 function renderPropostaFormal(b, im) {
@@ -3068,12 +3068,12 @@ function renderResumoNegociacao(b, im) {
     ])
     b.space(4)
   }
-  b.header('ESTADO ACTUAL')
+  b.header('ESTADO ATUAL')
   b.metric('Ponto de situação da negociação', '________________')
 }
 
 function renderFichaFollowUp(b, im) {
-  b.header('ESTADO ACTUAL')
+  b.header('ESTADO ATUAL')
   b.simpleTable([
     { label: 'Imóvel', value: im.nome }, { label: 'Estado', value: (im.estado || '').replace(/^\d+-/, '') },
     { label: 'Consultor', value: im.nome_consultor }, { label: 'Data Follow Up', value: FDATE(im.data_follow_up) },
@@ -3089,7 +3089,7 @@ function renderFichaFollowUp(b, im) {
 }
 
 function renderRelatorioInvestimento(b, im, an) {
-  if (!an || !Object.keys(an).length) { b.text('Sem análise financeira activa para este imóvel.'); return }
+  if (!an || !Object.keys(an).length) { b.text('Sem análise financeira ativa para este imóvel.'); return }
 
   const ra = an.retorno_anualizado || 0
 
@@ -3133,7 +3133,7 @@ function renderRelatorioInvestimento(b, im, an) {
       { label: 'Total Obra', value: EUR(an.obra_com_iva), total: true },
       { label: `Detenção (${an.meses || 6} meses)`, value: EUR(an.total_detencao) },
       { label: `Comissão venda (${an.comissao_perc || 2.5}%)`, value: EUR(comissaoVenda) },
-      { label: 'Custo Total do Projecto', value: EUR(custoTotalProjecto), total: true },
+      { label: 'Custo Total do Projeto', value: EUR(custoTotalProjecto), total: true },
     ]
     if (valorFinanciado > 0) rows.push({ label: '(−) Valor Financiado (banco)', value: `−${EUR(valorFinanciado)}` })
     if (comissaoVenda > 0) rows.push({ label: '(−) Comissão paga pelo sinal do comprador', value: `−${EUR(comissaoVenda)}` })
@@ -3149,7 +3149,7 @@ function renderRelatorioInvestimento(b, im, an) {
     const custoTotalProjecto = (an.capital_necessario || 0) + valorFinanciado + comissaoVenda
     b.simpleTable([
       { label: 'Receita de venda (VVR)', value: EUR(an.vvr) },
-      { label: 'Total de custos do projecto', value: EUR(custoTotalProjecto) },
+      { label: 'Total de custos do projeto', value: EUR(custoTotalProjecto) },
       { label: 'Lucro Bruto', value: EUR(an.lucro_bruto), total: true },
       { label: 'Impostos (IRC + Derrama)', value: EUR(an.impostos) },
       { label: 'Retenção dividendos', value: EUR(an.retencao_dividendos) },
@@ -3307,12 +3307,12 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
   ])
   b.space(3)
 
-  b.header('SOBRE O PROJECTO')
+  b.header('SOBRE O PROJETO')
   const tipoDesc = im.tipologia ? `um ${im.tipologia}` : 'um imóvel'
   const areaDesc = im.area_bruta ? ` com uma área bruta de ${im.area_bruta} m²` : ''
   const zonaDesc = localizacaoTexto(im)
   b.textBlock(
-    `O projecto consiste na aquisição, remodelação integral e revenda de ${tipoDesc}${areaDesc}, localizado${zonaDesc}. ` +
+    `O projeto consiste na aquisição, remodelação integral e revenda de ${tipoDesc}${areaDesc}, localizado${zonaDesc}. ` +
     `O imóvel encontra-se num estado de conservação que exige remodelação total, o que justifica o preço de aquisição abaixo do valor de mercado e cria a margem de valorização identificada.`
   )
   b.space(4)
@@ -3379,7 +3379,7 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
       { label: 'Obra + IVA', value: EUR(obra) },
       { label: `Manutenção (${meses} meses)`, value: EUR(deal.total_detencao) },
       { label: 'Comissão Imobiliária', value: EUR(comissaoVenda) },
-      { label: 'Custo Total do Projecto', value: EUR(custoTotalProjecto), total: true },
+      { label: 'Custo Total do Projeto', value: EUR(custoTotalProjecto), total: true },
     ]
     if (valorFinanciado > 0) rows.push({ label: '(−) Valor Financiado (banco)', value: `−${EUR(valorFinanciado)}` })
     if (comissaoVenda > 0) rows.push({ label: '(−) Comissão paga pelo sinal do comprador', value: `−${EUR(comissaoVenda)}` })
@@ -3419,15 +3419,15 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
   const rtVal = a.retorno_total || 0
   let stParsed = a.stress_tests
   if (typeof stParsed === 'string') try { stParsed = JSON.parse(stParsed) } catch { stParsed = null }
-  let conclusao = `O projecto apresenta um perfil de risco-retorno atractivo: no cenário base conservador, o investimento gera um retorno total de ${rtVal}% e anualizado de ${raVal}% num prazo de ${meses} meses.`
+  let conclusao = `O projeto apresenta um perfil de risco-retorno atrativo: no cenário base conservador, o investimento gera um retorno total de ${rtVal}% e anualizado de ${raVal}% num prazo de ${meses} meses.`
   if (stParsed) {
     if (stParsed.pior?.lucro_liquido > 0) {
-      conclusao += ` O investimento mantém lucro positivo mesmo no pior cenário (${EUR(stParsed.pior.lucro_liquido)}), o que valida a solidez estrutural do projecto.`
+      conclusao += ` O investimento mantém lucro positivo mesmo no pior cenário (${EUR(stParsed.pior.lucro_liquido)}), o que valida a solidez estrutural do projeto.`
     } else if (stParsed.pior?.lucro_liquido != null) {
       conclusao += ` No pior cenário, o lucro estimado é de ${EUR(stParsed.pior.lucro_liquido)}, o que requer atenção ao risco.`
     }
   }
-  if (im.zona) conclusao += ` A localização${localizacaoTexto(im)}, sustenta os valores de venda projectados.`
+  if (im.zona) conclusao += ` A localização${localizacaoTexto(im)}, sustenta os valores de venda projetados.`
   b.textBlock(conclusao)
 
   b.space(4)
@@ -3459,7 +3459,7 @@ function renderPropostaInvestimentoAnonima(b, im, a) {
   renderAssumptionsAndGlossary(b, deal)
 
   b.space(3)
-  b.note('Os valores apresentados são estimativas conservadoras baseadas em análise de mercado e podem variar. A Somnium Properties utiliza stress tests automáticos em todos os negócios para protecção do investidor. Investimento imobiliário envolve risco de capital.')
+  b.note('Os valores apresentados são estimativas conservadoras baseadas em análise de mercado e podem variar. A Somnium Properties utiliza stress tests automáticos em todos os negócios para proteção do investidor. Investimento imobiliário envolve risco de capital.')
 }
 
 // ── Proposta de Cedência de Posição Contratual ─────────────────
@@ -3579,7 +3579,7 @@ function renderPropostaCedenciaPosicao(b, im, a) {
   ])
   b.space(4)
 
-  b.note(`Pressupostos: Cessão de posição contratual (artigo 424.º CC). Prazo: ${meses} meses. Valores apresentados em bruto, antes de fiscalidade; a carga fiscal aplicável depende da estrutura jurídica adoptada pelo investidor. O Valor de Cedência de Posição está incluído no custo de aquisição apresentado.`)
+  b.note(`Pressupostos: Cessão de posição contratual (artigo 424.º CC). Prazo: ${meses} meses. Valores apresentados em bruto, antes de fiscalidade; a carga fiscal aplicável depende da estrutura jurídica adotada pelo investidor. O Valor de Cedência de Posição está incluído no custo de aquisição apresentado.`)
 
   b.newPage()
   b.header('ENQUADRAMENTO LEGAL — CEDÊNCIA DE POSIÇÃO')
@@ -3609,7 +3609,7 @@ function renderPropostaCedenciaPosicao(b, im, a) {
   }
 
   b.space(3)
-  b.note('Os valores apresentados são estimativas conservadoras baseadas em análise de mercado e podem variar. A Somnium Properties utiliza stress tests automáticos para protecção do investidor. Investimento imobiliário envolve risco de capital.')
+  b.note('Os valores apresentados são estimativas conservadoras baseadas em análise de mercado e podem variar. A Somnium Properties utiliza stress tests automáticos para proteção do investidor. Investimento imobiliário envolve risco de capital.')
 }
 
 function renderFichaDescarte(b, im) {
@@ -3665,7 +3665,7 @@ function renderFichaDescarte(b, im) {
 // Chaves comparáveis entre documentos (espelha documentacao.config.js no frontend).
 const DADOS_CHAVE_LABELS = {
   morada: 'Morada', freguesia: 'Freguesia', concelho: 'Concelho',
-  artigo_matricial: 'Artigo matricial', fracao: 'Fracção', area: 'Área',
+  artigo_matricial: 'Artigo matricial', fracao: 'Fração', area: 'Área',
   vpt: 'VPT', titular: 'Titular', data_documento: 'Data do documento', validade: 'Validade',
 }
 const CHAVES_NUMERICAS_DOC = new Set(['area', 'vpt'])
@@ -3767,7 +3767,7 @@ function renderRelatorioDocumental(b, im) {
   } else if (temAlerta) {
     b.verdict('CONCLUSÃO: Há alertas a verificar na documentação antes de avançar.', false)
   } else {
-    b.verdict('CONCLUSÃO: Documentação analisada sem problemas detectados.', true)
+    b.verdict('CONCLUSÃO: Documentação analisada sem problemas detetados.', true)
   }
   b.space(2)
 

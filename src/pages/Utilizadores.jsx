@@ -8,11 +8,11 @@ import { AcessosDoUser } from '../components/PartilharAcesso.jsx'
 
 const ROLES = [
   { id: 'admin',      label: 'Admin',      desc: 'Acesso total + gestão de utilizadores' },
-  { id: 'comercial',  label: 'Comercial',  desc: 'CRM, projectos, métricas' },
+  { id: 'comercial',  label: 'Comercial',  desc: 'CRM, projetos, métricas' },
   { id: 'financeiro', label: 'Financeiro', desc: 'Financeiro, métricas' },
   { id: 'operacoes',  label: 'Operações',  desc: 'Operações, alertas, métricas' },
-  { id: 'parceiro',   label: 'Parceiro',   desc: 'Externo — só vê imóveis/projectos partilhados' },
-  { id: 'investidor', label: 'Investidor', desc: 'Externo — só vê projectos onde foi adicionado' },
+  { id: 'parceiro',   label: 'Parceiro',   desc: 'Externo — só vê imóveis/projetos partilhados' },
+  { id: 'investidor', label: 'Investidor', desc: 'Externo — só vê projetos onde foi adicionado' },
 ]
 
 const COR_PALETTE = ['#C9A84C', '#6366f1', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899']
@@ -216,7 +216,7 @@ export function Utilizadores() {
                       color: u.ativo ? '#10b981' : '#ef4444',
                       border: `1px solid ${u.ativo ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
                     }}>
-                    {u.ativo ? 'Activo' : 'Inactivo'}
+                    {u.ativo ? 'Ativo' : 'Inativo'}
                   </button>
                 </td>
                 <td className="px-4 py-3 text-right">
@@ -245,7 +245,7 @@ export function Utilizadores() {
                   <td colSpan={5} className="p-0">
                     <div className="px-4 py-3">
                       <p className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">Acessos atribuídos</p>
-                      <p className="text-[10px] text-gray-600 mb-2">Para conceder acesso, vai ao detalhe do imóvel ou projecto e clica "Partilhar".</p>
+                      <p className="text-[10px] text-gray-600 mb-2">Para conceder acesso, vai ao detalhe do imóvel ou projeto e clica "Partilhar".</p>
                     </div>
                     <AcessosDoUser userId={u.id} />
                   </td>

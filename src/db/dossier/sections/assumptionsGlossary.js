@@ -57,9 +57,9 @@ export function renderAssumptionsAndGlossary(b, deal, opts = {}) {
 
   // Indicadores financeiros (texto compacto, fonte 7.5pt)
   const indicadores = [
-    'Custo Total do Projecto — Compra + IMT + IS + Escritura + Obra com IVA + Licenciamento + Detencao + Comissao Venda + Custo de Financiamento.',
-    'Capital Necessario — Custo Total do Projecto − Valor Financiado − Comissao Venda (a comissao e paga pelo sinal do comprador, nao constitui capital a adiantar).',
-    'Lucro Bruto — VVR − Custo Total do Projecto.',
+    'Custo Total do Projeto — Compra + IMT + IS + Escritura + Obra com IVA + Licenciamento + Detencao + Comissao Venda + Custo de Financiamento.',
+    'Capital Necessario — Custo Total do Projeto − Valor Financiado − Comissao Venda (a comissao e paga pelo sinal do comprador, nao constitui capital a adiantar).',
+    'Lucro Bruto — VVR − Custo Total do Projeto.',
     ...(opts.brutoOnly ? [] : ['Lucro Liquido — Lucro Bruto − Impostos do regime fiscal aplicavel.']),
     'Retorno Total — Lucro Bruto / Capital Necessario.',
     'Retorno Anualizado — ((1 + Retorno Total) ^ (12 / meses)) − 1.',

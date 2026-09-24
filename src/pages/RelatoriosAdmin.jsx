@@ -469,7 +469,7 @@ export function RelatoriosAdmin() {
             <button
               onClick={sincronizarFireflies}
               disabled={syncing}
-              title="Cria/actualiza relatórios de todas as semanas com reuniões 'Reunião Semanal'"
+              title="Cria/atualiza relatórios de todas as semanas com reuniões 'Reunião Semanal'"
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition-all disabled:opacity-50"
               style={{ borderColor: GOLD, color: GOLD }}
             >

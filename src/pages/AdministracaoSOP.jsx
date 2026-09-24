@@ -126,8 +126,8 @@ export function AdministracaoSOP() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <HeroKpi label="Total SOPs" value={totalSops} sub="documentados" />
           <HeroKpi label="Departamentos" value={DEPARTAMENTOS.length - 1} sub="áreas cobertas" accent />
-          <HeroKpi label="Actualizados" value={sopsRecentes} sub="últimos 30 dias" green />
-          <HeroKpi label="Vista" value={filterDep ? (DEPT_MAP[filterDep]?.nome ?? 'Filtrada') : 'Todos'} sub="filtro activo" />
+          <HeroKpi label="Atualizados" value={sopsRecentes} sub="últimos 30 dias" green />
+          <HeroKpi label="Vista" value={filterDep ? (DEPT_MAP[filterDep]?.nome ?? 'Filtrada') : 'Todos'} sub="filtro ativo" />
         </div>
       </div>
 
@@ -158,13 +158,10 @@ export function AdministracaoSOP() {
                 <span className={`text-3xl font-bold leading-none font-mono ${ativo ? 'text-brand-gold' : 'text-gray-900 dark:text-neutral-100'}`}>{contagem}</span>
               </div>
               <p className={`text-sm font-semibold leading-tight ${ativo ? 'text-brand-gold' : 'text-gray-900 dark:text-neutral-100'}`}>{d.nome}</p>
-              <p className={`text-[10px] uppercase tracking-widest font-semibold mt-0.5 ${ativo ? 'text-white/60' : 'text-gray-400 dark:text-neutral-500'}`}>
-                {contagem === 1 ? 'documento' : 'documentos'}
-              </p>
               {ultimoUpdate && (
                 <div className={`mt-3 pt-2 border-t ${ativo ? 'border-white/10' : 'border-gray-100 dark:border-neutral-800'}`}>
                   <p className={`text-[10px] ${ativo ? 'text-brand-gold/70' : 'text-gray-400 dark:text-neutral-500'}`}>
-                    Última actualização · {fmtDate(ultimoUpdate)}
+                    Última atualização · {fmtDate(ultimoUpdate)}
                   </p>
                 </div>
               )}

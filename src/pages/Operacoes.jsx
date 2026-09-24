@@ -268,7 +268,6 @@ export function Operacoes() {
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [draggedId, setDraggedId] = useState(null)
   const [dragOverStatus, setDragOverStatus] = useState(null)
-  const [syncing, setSyncing] = useState(false)
 
   // Migrado para React Query (Problema 23 da auditoria) — ver Financeiro.jsx/CRM.jsx.
   const query = useQuery({
@@ -345,22 +344,6 @@ export function Operacoes() {
     await updateStatus(id, status)
   }
 
-  async function syncNotion() {
-    setSyncing(true)
-    try {
-      const r = await apiFetch('/api/crm/sync/tarefas', { method: 'POST' })
-      const d = await r.json()
-      if (d.error) {
-        const msg = /no notion db|notion db for tarefas/i.test(d.error)
-          ? 'Sync Notion nao configurada (falta NOTION_DB_TAREFAS no .env).'
-          : d.error
-        throw new Error(msg)
-      }
-      await loadAll()
-    } catch (e) { setMutationError(e.message) }
-    finally { setSyncing(false) }
-  }
-
   const r = data?.resumo
   const k = data?.kpis
 
@@ -433,9 +416,6 @@ export function Operacoes() {
               items={TABS.map(t => ({ key: t.id, label: t.label }))}
             />
           </div>
-          <Button variant="secondary" size="sm" onClick={syncNotion} disabled={syncing}>
-            {syncing ? 'Sync...' : 'Sync Notion'}
-          </Button>
         </div>
       </div>
 
@@ -588,7 +568,7 @@ export function Operacoes() {
                 {selectedIds.size > 0 && (
                   <button onClick={() => setSelectedIds(new Set())}
                     className="px-3 py-1 text-xs rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100">
-                    Limpar selecção
+                    Limpar seleção
                   </button>
                 )}
               </div>
@@ -847,8 +827,8 @@ export function Operacoes() {
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
               <M label="RPH (pipeline)" value={k.rph != null ? EUR(k.rph) : '—'} sub={`Pipeline: ${EUR(k.receitaTotal)}`} highlight />
               <M label="RPH (realizado)" value={k.rphRealizado != null ? EUR(k.rphRealizado) : '—'} warn={k.rphRealizado === null} />
-              <M label="Receita pipeline" value={EUR(k.receitaTotal)} />
-              <M label="Receita realizada" value={EUR(k.receitaRealizada)} />
+              <M label="Faturação em pipeline" value={EUR(k.receitaTotal)} />
+              <M label="Faturação real" value={EUR(k.receitaRealizada)} />
             </div>
             <SectionTitle>Alocação de Tempo</SectionTitle>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">

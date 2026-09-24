@@ -186,7 +186,7 @@ export const SECCOES = [
     campos: [
       { key: 'chapisco_material',         label: 'Chapisco',                 sufixo: '€', tipo_fiscal: 'material' },
       { key: 'reboco_trad_material',      label: 'Reboco tradicional',       sufixo: '€', tipo_fiscal: 'material' },
-      { key: 'estuque_proj_material',     label: 'Estuque projectado',       sufixo: '€', tipo_fiscal: 'material' },
+      { key: 'estuque_proj_material',     label: 'Estuque projetado',       sufixo: '€', tipo_fiscal: 'material' },
       { key: 'gesso_paredes_material',    label: 'Gesso cartonado paredes',  sufixo: '€', tipo_fiscal: 'material' },
     ],
   },
@@ -363,7 +363,7 @@ export const SECCOES = [
     tipo: 'licenciamento_completo', grupo: 'extra', isLicenciamento: true,
     nota: 'Honorários sempre 23% (com retenção 25% se singular). Taxas/seguros sem IVA.',
     campos: [
-      { key: 'projeto',               label: 'Projecto especialidade/arquitectura', sufixo: '€', acompanha_singular: true },
+      { key: 'projeto',               label: 'Projeto especialidade/arquitetura', sufixo: '€', acompanha_singular: true },
       { key: 'tro',                   label: 'TRO — Técnico Responsável de Obra',   sufixo: '€', acompanha_singular: true },
       { key: 'fiscalizacao',          label: 'Fiscalização (valor fixo)',           sufixo: '€', acompanha_singular: true },
       { key: 'fiscalizacao_perc',     label: '— ou % sobre base obra',              sufixo: '%' },

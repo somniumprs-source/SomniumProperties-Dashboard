@@ -108,7 +108,7 @@ function PartilharModal({ entidade, entidadeId, nome, onClose }) {
         </div>
 
         <p className="text-xs text-gray-500 mb-4">
-          Selecciona os parceiros externos que podem ver e editar este {entidade}.
+          Seleciona os parceiros externos que podem ver e editar este {entidade}.
         </p>
 
         {loading && <p className="text-sm text-gray-400 text-center py-6">A carregar…</p>}

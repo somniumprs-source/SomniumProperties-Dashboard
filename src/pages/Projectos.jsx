@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, Link } from 'react-router-dom'
-import { Plus, Filter, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle, TrendingUp, Briefcase, Calendar as CalendarIcon, Search, Sparkles, Hammer, Handshake, Home, Zap, FileText } from 'lucide-react'
+import { Plus, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle, TrendingUp, Briefcase, Calendar as CalendarIcon, Search, Sparkles, Hammer, Handshake, Home, Zap, FileText } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { apiFetch } from '../lib/api.js'
 import { Button } from '../components/ui/Button.jsx'
@@ -33,9 +33,9 @@ const CAT_COLORS = {
 const CATEGORIAS = ['Wholesalling', 'CAEP', 'Mediação Imobiliária', 'Fix and Flip', 'Consultoria/Assessoria']
 
 // Modelos de negócio com ícone Lucide profissional + descrição
-// Nota: não há card "Todos" — a vista agregada (Portfolio) já mostra o total
-// quando nenhum modelo está seleccionado (filterCat === '').
+// O card "Todos" (key '') mostra todos os projectos em grelha de cards.
 const MODELOS_NEGOCIO = [
+  { key: '',                       nome: 'Todos',         Icon: LayoutGrid, desc: 'Todos os modelos de negócio' },
   { key: 'Fix and Flip',           nome: 'Fix and Flip',  Icon: Hammer,     desc: 'Reabilitação completa' },
   { key: 'CAEP',                   nome: 'CAEP',          Icon: Handshake,  desc: 'Contrato de Associação em Participação' },
   { key: 'Mediação Imobiliária',   nome: 'Mediação',      Icon: Home,       desc: 'Intermediação imobiliária' },
@@ -174,7 +174,7 @@ function MeusDocumentosPanel({ investidorId }) {
 
 export function Projectos() {
   const navigate = useNavigate()
-  const { role, isInvestidor, isReadOnly, investidorId } = useAuth()
+  const { isInvestidor, isReadOnly, investidorId } = useAuth()
   // Filtro regional inline (Coimbra | AMP | Geral). Geral = null = ver todas.
   // Partilha a chave de sessionStorage com o apiFetch para manter consistência
   // em mutações disparadas por sub-componentes (DetailPanel etc.).
@@ -212,7 +212,7 @@ export function Projectos() {
         isInvestidor ? Promise.resolve(null) : safe(apiFetch('/api/kpis/financeiro', { regiao })),
         safe(apiFetch(negociosUrl, { regiao })),
       ])
-      if (!isInvestidor && !k) throw new Error('Erro ao carregar projectos')
+      if (!isInvestidor && !k) throw new Error('Erro ao carregar projetos')
       // Normalizar para forma esperada pelo Kanban (com imovelNome, lucroEstimado, etc.)
       const rawData = n?.data ?? []
       const negocios = rawData.map(r => ({
@@ -353,7 +353,7 @@ export function Projectos() {
 
   return (
     <>
-      <Header title="Projectos" subtitle="Gestão de projectos activos por fase de obra" onRefresh={load} loading={loading} />
+      <Header title="Projetos" onRefresh={load} loading={loading} />
 
       <div className="p-4 sm:p-6 flex flex-col gap-4">
         <div className="flex justify-end">
@@ -373,7 +373,7 @@ export function Projectos() {
             const ativo = filterCat === m.key
             const corCat = CAT_COLORS[m.key] || '#C9A84C'
             return (
-              <button key={m.key} onClick={() => setFilterCat(filterCat === m.key ? '' : m.key)}
+              <button key={m.key || 'todos'} onClick={() => setFilterCat(filterCat === m.key ? '' : m.key)}
                 title={m.desc}
                 className={`group relative text-left p-4 rounded-xl border-2 transition-all overflow-hidden
                   ${ativo
@@ -391,20 +391,17 @@ export function Projectos() {
                   <span className={`text-3xl font-bold leading-none font-mono ${ativo ? 'text-brand-gold' : 'text-gray-900 dark:text-neutral-100'}`}>{contagem}</span>
                 </div>
                 <p className={`text-sm font-semibold leading-tight ${ativo ? 'text-brand-gold' : 'text-gray-900 dark:text-neutral-100'}`}>{m.nome}</p>
-                <p className={`text-[10px] uppercase tracking-widest font-semibold mt-0.5 ${ativo ? 'text-white/60' : 'text-gray-400 dark:text-neutral-500'}`}>
-                  {contagem === 1 ? 'projecto' : 'projectos'}
-                </p>
 
                 {(lucroEsperado > 0 || lucroReal > 0) && (
                   <div className={`mt-3 pt-2 border-t ${ativo ? 'border-white/10' : 'border-gray-100 dark:border-neutral-800'} space-y-0.5`}>
                     {lucroEsperado > 0 && (
                       <p className={`text-[10px] font-mono ${ativo ? 'text-brand-gold/70' : 'text-indigo-600 dark:text-indigo-400'}`}>
-                        {EUR(lucroEsperado)} esperado
+                        {EUR(lucroEsperado)} estimado
                       </p>
                     )}
                     {lucroReal > 0 && (
                       <p className={`text-[10px] font-mono ${ativo ? 'text-green-300' : 'text-green-600 dark:text-green-400'}`}>
-                        {EUR(lucroReal)} recebido
+                        {EUR(lucroReal)} real
                       </p>
                     )}
                   </div>
@@ -417,11 +414,11 @@ export function Projectos() {
         {/* Toolbar */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-2 flex-wrap">
-            {!isReadOnly && <Button variant="primary" icon={Plus} onClick={() => setEditing({})}>Novo Projecto</Button>}
+            {!isReadOnly && <Button variant="primary" icon={Plus} onClick={() => setEditing({})}>Novo Projeto</Button>}
             <Link to="/projectos/calendario">
               <Button variant="secondary" size="md" icon={CalendarIcon}>Calendário</Button>
             </Link>
-            <div className="inline-flex bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg p-0.5 shadow-xs">
+            {filterCat && <div className="inline-flex bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg p-0.5 shadow-xs">
               <button onClick={() => setView('kanban')}
                 className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${view === 'kanban' ? 'bg-brand-dark text-brand-gold shadow-xs' : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'}`}>
                 <LayoutGrid className="w-3.5 h-3.5" /> Kanban
@@ -430,7 +427,7 @@ export function Projectos() {
                 className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${view === 'lista' ? 'bg-brand-dark text-brand-gold shadow-xs' : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'}`}>
                 <ListIcon className="w-3.5 h-3.5" /> Lista
               </button>
-            </div>
+            </div>}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <Input
@@ -466,7 +463,7 @@ export function Projectos() {
                 <div>
                   <h2 className="text-overline uppercase tracking-widest font-semibold text-brand-gold">Portfolio</h2>
                   <p className="text-sm font-semibold text-white">
-                    {(MODELOS_NEGOCIO.find(m => m.key === filterCat)?.nome || 'Todos')} · Vista agregada
+                    {MODELOS_NEGOCIO.find(m => m.key === filterCat)?.nome || 'Todos'}
                   </p>
                 </div>
               </div>
@@ -484,11 +481,11 @@ export function Projectos() {
               )}
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-              <PortfolioKpi label="Projectos activos" value={portfolio.totais.ativos} sub={`de ${portfolio.totais.total} total`} />
+              <PortfolioKpi label="Projetos ativos" value={portfolio.totais.ativos} sub={`de ${portfolio.totais.total} total`} />
               <PortfolioKpi label="Capital agregado" value={EUR(portfolio.totais.capital_total)} />
-              <PortfolioKpi label="Lucro esperado" value={EUR(portfolio.totais.lucro_estimado_total)} accent />
-              <PortfolioKpi label="Lucro realizado" value={EUR(portfolio.totais.lucro_real_total)} green />
-              <PortfolioKpi label="Em curso" value={portfolio.fases?.em_curso || 0} sub="fases activas" />
+              <PortfolioKpi label="Faturação estimada" value={EUR(portfolio.totais.lucro_estimado_total)} accent />
+              <PortfolioKpi label="Faturação real" value={EUR(portfolio.totais.lucro_real_total)} green />
+              <PortfolioKpi label="Em curso" value={portfolio.fases?.em_curso || 0} />
             </div>
             {predicoes?.predicoes?.length > 0 && (
               <div className="mt-4 pt-4 border-t border-white/10">
@@ -532,7 +529,7 @@ export function Projectos() {
                 )}
                 {portfolio.distribuicaoFases?.length > 0 && (
                   <div>
-                    <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-1.5"><TrendingUp className="w-3 h-3" /> Distribuição por fase actual</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-1.5"><TrendingUp className="w-3 h-3" /> Distribuição por fase atual</p>
                     <div className="space-y-1.5">
                       {portfolio.distribuicaoFases.slice(0, 4).map(d => (
                         <div key={d.fase_key} className="flex items-center justify-between bg-white/5 rounded-lg px-2.5 py-1.5">
@@ -548,9 +545,13 @@ export function Projectos() {
           </div>
         )}
 
-        {/* (KPIs por categoria removidos — info agora visível nas caixas de modelo de negócio acima) */}
-
-        {view === 'kanban' ? (
+        {!filterCat ? (
+          <GrelhaProjetos
+            projectos={filtered}
+            fasesInfo={fasesPorNegocio}
+            onCardClick={(id) => navigate(`/projectos/${id}`)}
+          />
+        ) : view === 'kanban' ? (
           <KanbanBoard
             colunas={colunasKanban}
             cardsPorColuna={cardsPorColuna}
@@ -558,7 +559,6 @@ export function Projectos() {
             readOnly={isReadOnly}
             onCardClick={(id) => navigate(`/projectos/${id}`)}
             onMoveCard={async (negocioId, faseKey) => {
-              console.log('[kanban] moveCard', { negocioId, faseKey })
               try {
                 const r = await apiFetch(`/api/crm/projetos/${negocioId}/mover-fase`, {
                   method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -570,7 +570,6 @@ export function Projectos() {
                   alert(err.error || `Não foi possível mover (HTTP ${r.status})`)
                   return
                 }
-                console.log('[kanban] move OK — a recarregar')
                 load()
               } catch (e) {
                 console.error('[kanban] mover-fase exception:', e)
@@ -686,7 +685,36 @@ function KanbanBoard({ colunas, cardsPorColuna, fasesInfo, onCardClick, onMoveCa
   )
 }
 
-function KanbanCard({ negocio: n, info, onClick, onDragStart, onDragEnd, isDragging, readOnly }) {
+// Vista "Todos" — um card por projecto, agrupados por modelo de negócio.
+// Não usa Kanban porque cada modelo tem colunas de fases diferentes.
+function GrelhaProjetos({ projectos, fasesInfo, onCardClick }) {
+  const grupos = MODELOS_NEGOCIO.filter(m => m.key)
+    .map(m => ({ ...m, itens: projectos.filter(n => n.categoria === m.key) }))
+    .filter(g => g.itens.length > 0)
+  if (!grupos.length) {
+    return <p className="py-12 text-center text-sm text-gray-400 dark:text-neutral-500">Sem projetos a mostrar.</p>
+  }
+  return (
+    <div className="flex flex-col gap-5">
+      {grupos.map(g => (
+        <div key={g.key}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-2 h-2 rounded-full" style={{ background: CAT_COLORS[g.key] }} />
+            <h3 className="text-overline uppercase tracking-widest font-semibold text-gray-500 dark:text-neutral-400">{g.nome}</h3>
+            <Badge tone="gray" size="xs" className="font-mono">{g.itens.length}</Badge>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {g.itens.map(n => (
+              <KanbanCard key={n.id} negocio={n} info={fasesInfo[n.id]} onClick={() => onCardClick(n.id)} readOnly mostrarFase />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function KanbanCard({ negocio: n, info, onClick, onDragStart, onDragEnd, isDragging, readOnly, mostrarFase }) {
   const temWorkflow = !!FASES_KANBAN_POR_CATEGORIA[n.categoria]
   const podeArrastar = !readOnly && temWorkflow
   return (
@@ -711,6 +739,17 @@ function KanbanCard({ negocio: n, info, onClick, onDragStart, onDragEnd, isDragg
           <span className="opacity-60">📍</span> {n.imovelNome}
         </p>
       )}
+
+      {mostrarFase && (() => {
+        const faseNome = info?.faseAtualKey
+          ? FASES_KANBAN_POR_CATEGORIA[n.categoria]?.find(f => f.key === info.faseAtualKey)?.nome
+          : n.fase
+        return faseNome ? (
+          <p className="text-xs text-gray-700 dark:text-neutral-300 mb-2">
+            <span className="text-gray-400 dark:text-neutral-500">Fase:</span> <span className="font-semibold">{faseNome}</span>
+          </p>
+        ) : null
+      })()}
 
       {info?.diasAtrasoMax > 0 && (
         <div className="mb-2">
@@ -747,13 +786,13 @@ function ListaProjetos({ projectos, fasesInfo, onCardClick }) {
       <table className="min-w-full text-sm">
         <thead className="bg-gray-50 dark:bg-neutral-900/50">
           <tr className="border-b border-gray-200 dark:border-neutral-800">
-            <th className="text-left py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Projecto</th>
+            <th className="text-left py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Projeto</th>
             <th className="text-left py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Categoria</th>
             <th className="text-left py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Imóvel</th>
-            <th className="text-left py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Fase actual</th>
+            <th className="text-left py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Fase atual</th>
             <th className="text-right py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">% Exec.</th>
-            <th className="text-right py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Fat. esperada</th>
-            <th className="text-right py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Fat. real</th>
+            <th className="text-right py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Faturação estimada</th>
+            <th className="text-right py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Faturação real</th>
           </tr>
         </thead>
         <tbody>
@@ -787,7 +826,7 @@ function ListaProjetos({ projectos, fasesInfo, onCardClick }) {
             )
           })}
           {!projectos.length && (
-            <tr><td colSpan={7} className="py-12 text-center text-sm text-gray-400 dark:text-neutral-500">Sem projectos a mostrar.</td></tr>
+            <tr><td colSpan={7} className="py-12 text-center text-sm text-gray-400 dark:text-neutral-500">Sem projetos a mostrar.</td></tr>
           )}
         </tbody>
       </table>
@@ -812,11 +851,11 @@ export function ProjectoForm({ item, onSave, onCancel }) {
     <Card variant="default" padding="lg" className="border-2 border-brand-gold shadow-gold animate-slide-down">
       <h3 className="text-base font-semibold text-gray-900 dark:text-neutral-100 mb-4 flex items-center gap-2">
         <span className="w-1 h-5 bg-brand-gold rounded-full" />
-        {isNew ? 'Novo Projecto' : 'Editar Projecto'}
+        {isNew ? 'Novo Projeto' : 'Editar Projeto'}
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <Input
-          label="Nome do Projecto *"
+          label="Nome do Projeto *"
           value={f.movimento}
           onChange={e => set('movimento', e.target.value)}
           placeholder="Ex: M3 Eiras"
@@ -826,7 +865,7 @@ export function ProjectoForm({ item, onSave, onCancel }) {
           {CATEGORIAS.map(o => <option key={o} value={o}>{o}</option>)}
         </Select>
         <Input
-          type="number" label="Faturação Esperada (€)"
+          type="number" label="Faturação Estimada (€)"
           value={f.lucro_estimado}
           onChange={e => set('lucro_estimado', +e.target.value)}
         />
@@ -872,12 +911,12 @@ export function ProjectoForm({ item, onSave, onCancel }) {
           <span className="text-base">✨</span>
           <p>{f.tipo_projeto === 'predio'
             ? 'Ao criar este prédio, serão geradas as 8 fases-base. Depois adicionas as frações e áreas comuns — cada uma com o seu próprio cronograma.'
-            : 'Ao criar este projecto, serão geradas automaticamente as 8 fases de obra com tarefas-template profissionais.'}</p>
+            : 'Ao criar este projeto, serão geradas automaticamente as 8 fases de obra com tarefas-template profissionais.'}</p>
         </div>
       )}
       <div className="flex gap-3 mt-5 pt-4 border-t border-gray-100 dark:border-neutral-800">
         <Button size="lg" onClick={() => onSave(f)} disabled={!f.movimento?.trim()}>
-          {isNew ? 'Criar projecto' : 'Guardar alterações'}
+          {isNew ? 'Criar projeto' : 'Guardar alterações'}
         </Button>
         <Button variant="ghost" size="lg" onClick={onCancel}>Cancelar</Button>
       </div>

@@ -25,7 +25,6 @@ import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, Consul
 import pool from './pg.js'
 import { agendarFollowUpImovel } from './agendaEngine.js'
 import { getVisitasEnriquecidas, syncDataVisitaDerivada, getFichaVisitaParaImovel } from './queries.js'
-import { syncFromNotion, syncAllFromNotion, syncToNotion } from './sync.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
 import { syncForms, isConfigured as formsConfigured } from './formsSync.js'
@@ -288,7 +287,6 @@ function crudRoutes(path, crud, { onCreate, onUpdate, beforeUpdate } = {}) {
     try {
       const item = await crud.create(req.body, { regiaoActiva: req.regiaoActiva, role: req.appUser?.role })
       const table = path.slice(1)
-      syncToNotion(table, item.id).catch(e => console.error(`[sync] create ${table}:`, e.message))
       if (onCreate) onCreate(item).catch(e => console.error(`[hook] create ${table}:`, e.message))
       res.status(201).json(item)
     } catch (e) { res.status(400).json({ error: e.message }) }
@@ -303,7 +301,6 @@ function crudRoutes(path, crud, { onCreate, onUpdate, beforeUpdate } = {}) {
       const item = await crud.update(req.params.id, req.body, { regiaoActiva: req.regiaoActiva, role: req.appUser?.role })
       if (!item) return res.status(404).json({ error: 'Não encontrado' })
       const table = path.slice(1)
-      syncToNotion(table, req.params.id).catch(e => console.error(`[sync] update ${table}:`, e.message))
       if (onUpdate) onUpdate(item, req.body).catch(e => console.error(`[hook] update ${table}:`, e.message))
       res.json(item)
     } catch (e) { res.status(400).json({ error: e.message }) }
@@ -1553,7 +1550,6 @@ router.put('/negocios/:id/confirmar-pagamento', async (req, res) => {
     const values = Object.values(updates)
     await pool.query(`UPDATE negocios SET ${setClauses}, updated_at = NOW() WHERE id = $1`, [req.params.id, ...values])
 
-    syncToNotion('negocios', req.params.id).catch(e => console.error('[sync] confirmar-pagamento:', e.message))
     res.json({ ok: true, todasRecebidas, pagamentos: pags })
   } catch (e) {
     console.error('[confirmar-pagamento]', e.message)
@@ -3103,17 +3099,6 @@ router.get('/search', async (req, res) => {
       total: imoveis.rowCount + investidores.rowCount + consultores.rowCount + negocios.rowCount,
     })
   } catch (e) { res.status(500).json({ error: e.message }) }
-})
-
-// ── Sync Notion ↔ CRM ─────────────────────────────────────────
-router.post('/sync', async (req, res) => {
-  try { res.json({ ok: true, results: await syncAllFromNotion() }) }
-  catch (e) { res.status(500).json({ error: e.message }) }
-})
-
-router.post('/sync/:table', async (req, res) => {
-  try { res.json(await syncFromNotion(req.params.table)) }
-  catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 // ── Ficha de detalhe com relações ──────────────────────────────

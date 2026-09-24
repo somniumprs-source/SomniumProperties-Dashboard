@@ -260,7 +260,7 @@ export function ChecklistTab({ imovel, onUpdate }) {
       {estado && grouped[estado] && (
         <div className="rounded-lg border border-gray-200 p-4" style={{ backgroundColor: '#FAFAF8' }}>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-semibold text-gray-800">Estado actual: {estado}</span>
+            <span className="text-sm font-semibold text-gray-800">Estado atual: {estado}</span>
             <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
               currentProgress.done === currentProgress.total
                 ? 'bg-green-100 text-green-700'

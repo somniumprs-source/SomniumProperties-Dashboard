@@ -115,7 +115,7 @@ export function ProjectoDetalhe() {
         apiFetch(`/api/crm/projetos/${id}/fotos`),
         apiFetch(`/api/crm/projetos/${id}/fracoes`),
       ])
-      if (!rResumo.ok) throw new Error('Projecto não encontrado')
+      if (!rResumo.ok) throw new Error('Projeto não encontrado')
       const resumo = await rResumo.json()
       const fases = rFases.ok ? (await rFases.json()).fases || [] : []
       const fotos = rFotos.ok ? (await rFotos.json()).fotos || [] : []
@@ -140,7 +140,7 @@ export function ProjectoDetalhe() {
     : fotos.filter(f => f.fracao_id === fracaoSel || (fracaoSel === '__comum__' && !f.fracao_id))
 
   async function inicializarFases() {
-    if (!confirm('Criar as 8 fases de obra para este projecto?')) return
+    if (!confirm('Criar as 8 fases de obra para este projeto?')) return
     const r = await apiFetch(`/api/crm/projetos/${id}/fases/inicializar`, { method: 'POST' })
     if (!r.ok) {
       const e = await r.json().catch(() => ({}))
@@ -152,8 +152,8 @@ export function ProjectoDetalhe() {
 
   useRefreshOnMutation(load)
 
-  if (loading) return <><Header title="Projecto" subtitle="A carregar..." /><div className="p-8 text-center text-gray-400">A carregar…</div></>
-  if (error || !resumo) return <><Header title="Projecto" subtitle="Erro" /><div className="p-8 text-center text-red-500">{error || 'Sem dados'}</div></>
+  if (loading) return <><Header title="Projeto" subtitle="A carregar..." /><div className="p-8 text-center text-gray-400">A carregar…</div></>
+  if (error || !resumo) return <><Header title="Projeto" subtitle="Erro" /><div className="p-8 text-center text-red-500">{error || 'Sem dados'}</div></>
 
   const { negocio, imovel, analise, percGlobal, custoReal, orcAlocado, faseAtual } = resumo
   const semFases = fases.length === 0
@@ -173,7 +173,7 @@ export function ProjectoDetalhe() {
     <>
       <Header
         title={negocio.movimento}
-        subtitle={`${negocio.categoria || 'Projecto'}${imovel?.nome ? ' · ' + imovel.nome : ''}`}
+        subtitle={`${negocio.categoria || 'Projeto'}${imovel?.nome ? ' · ' + imovel.nome : ''}`}
         onRefresh={load}
         loading={loading}
       />
@@ -203,7 +203,7 @@ export function ProjectoDetalhe() {
         {/* Voltar + ações topo */}
         <div className="flex items-center justify-between gap-2">
           <Link to="/projectos" className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-brand-gold">
-            <ArrowLeft className="w-3.5 h-3.5" /> Voltar a Projectos
+            <ArrowLeft className="w-3.5 h-3.5" /> Voltar a Projetos
           </Link>
           <div className="flex items-center gap-2">
             {!isReadOnly && semFases && (
@@ -220,7 +220,7 @@ export function ProjectoDetalhe() {
             {!isReadOnly && (
               <Button size="sm" variant="destructive" icon={Trash2}
                 onClick={async () => {
-                  if (!confirm(`Apagar o projecto "${negocio.movimento}"? Esta acção apaga também fases, tarefas e fotos. Não pode ser revertida.`)) return
+                  if (!confirm(`Apagar o projeto "${negocio.movimento}"? Esta ação apaga também fases, tarefas e fotos. Não pode ser revertida.`)) return
                   const r = await apiFetch(`/api/crm/negocios/${id}`, { method: 'DELETE' })
                   if (r.ok) navigate('/projectos')
                   else alert('Erro ao apagar')
@@ -286,7 +286,7 @@ export function ProjectoDetalhe() {
               <BannerKpi label="Execução" value={`${percGlobal}%`} />
               {faseAtual && (
                 <div className="sm:text-right col-span-2 sm:col-span-1">
-                  <p className="text-overline uppercase tracking-widest text-white/50 font-semibold">Fase actual</p>
+                  <p className="text-overline uppercase tracking-widest text-white/50 font-semibold">Fase atual</p>
                   <p className="text-sm font-semibold mt-1 text-brand-gold truncate">
                     <span className="mr-1">{FASE_ICON[faseAtual.fase_key]}</span> {faseAtual.nome}
                   </p>
@@ -325,7 +325,7 @@ export function ProjectoDetalhe() {
             {tab === 'analise' && (
               imovel
                 ? <AnaliseTab imovelId={imovel.id} imovelNome={imovel.nome} imovel={imovel} emProjeto />
-                : <p className="text-sm text-gray-400 py-8 text-center">Sem imóvel associado a este projecto.</p>
+                : <p className="text-sm text-gray-400 py-8 text-center">Sem imóvel associado a este projeto.</p>
             )}
             {tab === 'obras' && (
               <TabObras
@@ -799,7 +799,7 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
 // TAB: ORÇAMENTO
 // ════════════════════════════════════════════════════════════════
 function TabOrcamento({ imovel, negocio, onChange }) {
-  if (!imovel) return <p className="text-sm text-gray-500">Este projecto não tem imóvel associado. Liga um imóvel ao negócio para usar o orçamento detalhado de obra.</p>
+  if (!imovel) return <p className="text-sm text-gray-500">Este projeto não tem imóvel associado. Liga um imóvel ao negócio para usar o orçamento detalhado de obra.</p>
   return <ImportarOrcamento imovel={imovel} negocio={negocio} onChange={onChange} />
 }
 
@@ -819,7 +819,7 @@ function ImportarOrcamento({ imovel, negocio, onChange }) {
   const jaTemOrcamento = !!negocio?.orcamento_obra_snapshot
 
   async function importarInterno() {
-    if (jaTemOrcamento && !confirm('Já existe um orçamento importado, usado como o orçamento real do projecto. Substituir pelos valores actuais do Comercial?')) return
+    if (jaTemOrcamento && !confirm('Já existe um orçamento importado, usado como o orçamento real do projeto. Substituir pelos valores atuais do Comercial?')) return
     setImportando(true)
     try {
       const r = await apiFetch(`/api/crm/projetos/${negocio.id}/orcamento-interno/importar`, { method: 'POST' })
@@ -1004,7 +1004,7 @@ function ResumoFaturacaoNegocio({ negocio, imovel, analise }) {
       </div>
       <div className="grid grid-cols-3 gap-2 mb-1 mt-3">
         <div />
-        <p className="text-[10px] uppercase tracking-wide text-gray-400 text-right">Expectável</p>
+        <p className="text-[10px] uppercase tracking-wide text-gray-400 text-right">Estimado</p>
         <p className="text-[10px] uppercase tracking-wide text-gray-400 text-right">Real</p>
       </div>
       <Linha label="Faturação Total do Negócio" exp={totalExpectavel} real={totalReal} />
@@ -1836,7 +1836,7 @@ function TabDocumentos({ negocio, imovel, fases, readOnly }) {
 
       {/* SECÇÃO 2: Documentos uploaded */}
       <div>
-        <h3 className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">Documentos do projecto ({docs.length})</h3>
+        <h3 className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">Documentos do projeto ({docs.length})</h3>
 
         {!readOnly && (
           <div className="bg-gray-50 rounded-xl p-3 flex flex-col sm:flex-row gap-2 mb-3">
@@ -2177,7 +2177,7 @@ function TabVistorias({ negocioId, negocio }) {
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Acção correctiva</label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Ação corretiva</label>
             <input value={form.desvio_accao} onChange={e => setForm(f => ({ ...f, desvio_accao: e.target.value }))} className={inputClass} />
           </div>
           <div>
@@ -2686,7 +2686,7 @@ function FracaoCard({ fracao: fr, readOnly, onEdit, onDelete }) {
       {!isArea && (
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-gray-400">Venda esperada</p>
+            <p className="text-[10px] uppercase tracking-wider text-gray-400">Venda estimada</p>
             <p className="font-mono font-semibold text-indigo-600">{EUR(vendaEsp)}</p>
           </div>
           <div>
@@ -2813,7 +2813,7 @@ function FracaoForm({ fracao, onSave, onCancel, fasesComunsCount }) {
         {!isAreaComum && (
           <>
             <div>
-              <label className="text-[10px] text-gray-500 uppercase block mb-1">Valor venda esperado (€)</label>
+              <label className="text-[10px] text-gray-500 uppercase block mb-1">Valor de venda estimado (€)</label>
               <input type="number" step="any" value={f.valor_venda_estimado || ''} onChange={e => set('valor_venda_estimado', e.target.value)} className={inputClass} onWheel={e => e.target.blur()} />
             </div>
             <div>

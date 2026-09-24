@@ -162,7 +162,7 @@ function RelatorioConsultores() {
         <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-2">
           <p className="text-sm font-semibold text-green-800">Reclassificação concluída</p>
           <p className="text-xs text-green-700">
-            {reclassResult.reclassificados ?? reclassResult.atualizados ?? 0} consultores actualizados
+            {reclassResult.reclassificados ?? reclassResult.atualizados ?? 0} consultores atualizados
           </p>
           {reclassResult.mudancas?.length > 0 && (
             <div className="mt-2">
@@ -199,7 +199,7 @@ function RelatorioConsultores() {
         </div>
         <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
           <p className="text-2xl font-bold text-orange-600">{report.alertas.inativos_60d}</p>
-          <p className="text-xs text-gray-500">Inactivos 60d+</p>
+          <p className="text-xs text-gray-500">Inativos 60d+</p>
         </div>
       </div>
 
@@ -524,7 +524,7 @@ function FollowUpView({ data, onView, onDelete }) {
         </div>
         <div className="bg-orange-50 rounded-xl p-3 text-center border border-orange-200">
           <p className="text-2xl font-bold text-orange-600">{atencao.length}</p>
-          <p className="text-xs text-orange-500">Inactivos (&gt;15 dias)</p>
+          <p className="text-xs text-orange-500">Inativos (&gt;15 dias)</p>
         </div>
         <div className="bg-gray-50 rounded-xl p-3 text-center border border-gray-200">
           <p className="text-2xl font-bold text-gray-600">{pendentes.length}</p>
@@ -537,7 +537,7 @@ function FollowUpView({ data, onView, onDelete }) {
       </div>
 
       <Section title="Urgente — Sem 1o contacto" color="bg-red-500" borderColor="border-red-200" items={urgentes} />
-      <Section title="Atenção — Inactivos há mais de 15 dias" color="bg-orange-500" borderColor="border-orange-200" items={atencao} />
+      <Section title="Atenção — Inativos há mais de 15 dias" color="bg-orange-500" borderColor="border-orange-200" items={atencao} />
       <Section title="Pendentes" color="bg-gray-400" borderColor="border-gray-200" items={pendentes} />
       <Section title="Em dia — Check positivo recente" color="bg-green-500" borderColor="border-green-200" items={ok} />
 
@@ -1761,7 +1761,7 @@ function NegociosTable({ data, onEdit, onDelete, onViewImovel }) {
         fields={[
           { label: 'Categoria', value: <Badge text={r.categoria} colorMap={NEG_CAT_COLOR} /> },
           { label: 'Lucro Est.', value: <span className="text-indigo-600 font-mono">{EUR(r.lucro_estimado)}</span> },
-          { label: 'Lucro Real', value: r.lucro_real > 0 ? <span className="text-green-600 font-mono">{EUR(r.lucro_real)}</span> : null },
+          { label: 'Faturação Real', value: r.lucro_real > 0 ? <span className="text-green-600 font-mono">{EUR(r.lucro_real)}</span> : null },
           { label: 'Data', value: fmtDate(r.data) },
           { label: '', value: r.imovel_id ? <span className="text-brand-gold">→ ver imóvel</span> : null },
         ]} />
@@ -1772,7 +1772,7 @@ function NegociosTable({ data, onEdit, onDelete, onViewImovel }) {
         <Th field="categoria" label="Categoria" {...sp} />
         <Th field="fase" label="Fase" {...sp} />
         <Th field="lucro_estimado" label="Lucro Est." align="right" {...sp} />
-        <Th field="lucro_real" label="Lucro Real" align="right" {...sp} />
+        <Th field="lucro_real" label="Faturação Real" align="right" {...sp} />
         <Th field="data" label="Data" {...sp} />
         <th className="py-3 px-3"></th>
       </tr></thead>
@@ -1989,7 +1989,7 @@ const FIELD_DEFS = {
     { key: 'morada', label: 'Morada / Sede', type: 'text' },
     { key: 'estado', label: 'Estado', type: 'select', options: ['Em avaliação','Activo','Inactivo'] },
     { key: 'classificacao', label: 'Classificação', type: 'select', options: ['A','B','C','D'] },
-    { key: 'concelhos_atuacao', label: 'Concelhos de Actuação', type: 'multiselect_concelhos' },
+    { key: 'concelhos_atuacao', label: 'Concelhos de Atuação', type: 'multiselect_concelhos' },
     { key: 'especialidades', label: 'Especialidades', type: 'multiselect', options: ['Construção geral','Remodelação integral','Carpintaria','Pichelaria / Canalização','Electricidade','AVAC','Pinturas','Pavimentos','Cozinhas','Caixilharia','Coberturas','Pladur','Demolições','Estuque','Estruturas','Jardins / Exteriores'] },
     { key: 'preco_m2_medio', label: 'Preço Médio m² (€)', type: 'number' },
     { key: 'prazo_medio_dias', label: 'Prazo Médio (dias)', type: 'number' },
@@ -2286,7 +2286,7 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
                 </select>
                 {staleSelect && (
                   <p className="mt-1 text-[11px] text-amber-600">
-                    "{currentVal}" não pertence ao pipeline actual — escolhe um novo estado para confirmar.
+                    "{currentVal}" não pertence ao pipeline atual — escolhe um novo estado para confirmar.
                   </p>
                 )}
               </>

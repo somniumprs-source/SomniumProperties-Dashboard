@@ -11,7 +11,7 @@ export function AnaliseResume({ analise }) {
   const ra = a.retorno_anualizado || 0
 
   const raConfig = ra >= 15
-    ? { color: '#16a34a', bg: '#dcfce7', border: '#bbf7d0', label: 'Negócio atractivo' }
+    ? { color: '#16a34a', bg: '#dcfce7', border: '#bbf7d0', label: 'Negócio atrativo' }
     : ra >= 8
     ? { color: '#d97706', bg: '#fef3c7', border: '#fde68a', label: 'Analisar com cuidado' }
     : { color: '#dc2626', bg: '#fee2e2', border: '#fecaca', label: 'Não recomendado' }

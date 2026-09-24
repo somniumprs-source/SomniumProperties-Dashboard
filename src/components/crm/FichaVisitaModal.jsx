@@ -121,7 +121,7 @@ export function FichaVisitaModal({ visita, imovelId, imovelNome, onClose, onSave
                   onChange={e => setNotaCampo('pontosCriticos', e.target.value)} />
               </div>
               <div>
-                <label className={labelClass}>Estratégia de negociação a adoptar</label>
+                <label className={labelClass}>Estratégia de negociação a adotar</label>
                 <textarea rows={2} className={inputClass} value={ficha.preVisita.notasCampo.estrategia}
                   onChange={e => setNotaCampo('estrategia', e.target.value)} />
               </div>

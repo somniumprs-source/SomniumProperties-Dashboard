@@ -103,7 +103,7 @@ export function InteracoesTab({ consultorId, onUpdate, autoOpenForm = false, onA
       {/* Header + stats */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <h3 className="text-sm font-semibold text-gray-700">Interacções ({interacoes.length})</h3>
+          <h3 className="text-sm font-semibold text-gray-700">Interações ({interacoes.length})</h3>
           {tempoMedio != null && (
             <div className="flex items-center gap-1.5 text-xs text-gray-500">
               <Clock className="w-3.5 h-3.5" />
@@ -115,7 +115,7 @@ export function InteracoesTab({ consultorId, onUpdate, autoOpenForm = false, onA
           onClick={() => setShowForm(!showForm)}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
         >
-          <Plus className="w-3.5 h-3.5" /> Nova Interacção
+          <Plus className="w-3.5 h-3.5" /> Nova Interação
         </button>
       </div>
 
@@ -156,7 +156,7 @@ export function InteracoesTab({ consultorId, onUpdate, autoOpenForm = false, onA
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Direcção</label>
+              <label className="block text-xs text-gray-500 mb-1">Direção</label>
               <select value={form.direcao} onChange={e => setForm(p => ({ ...p, direcao: e.target.value }))} className={inputClass}>
                 <option value="Enviado">Enviado por nós</option>
                 <option value="Resposta">Resposta do consultor</option>
@@ -199,7 +199,7 @@ export function InteracoesTab({ consultorId, onUpdate, autoOpenForm = false, onA
       {loading ? (
         <div className="text-center py-8 text-gray-400 text-sm">A carregar...</div>
       ) : interacoes.length === 0 ? (
-        <div className="text-center py-8 text-gray-400 text-sm">Sem interacções registadas</div>
+        <div className="text-center py-8 text-gray-400 text-sm">Sem interações registadas</div>
       ) : (
         <div className="space-y-3 bg-gray-50 rounded-xl p-4" style={{ minHeight: '200px' }}>
           {interacoes.filter(i => {

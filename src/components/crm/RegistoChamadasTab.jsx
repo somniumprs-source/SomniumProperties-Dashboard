@@ -192,7 +192,7 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
                 <th className="px-3 py-2 font-semibold">Data</th>
                 <th className="px-3 py-2 font-semibold">Fases cobertas</th>
                 <th className="px-3 py-2 font-semibold">Resultado</th>
-                <th className="px-3 py-2 font-semibold w-20">Acções</th>
+                <th className="px-3 py-2 font-semibold w-20">Ações</th>
               </tr>
             </thead>
             <tbody>

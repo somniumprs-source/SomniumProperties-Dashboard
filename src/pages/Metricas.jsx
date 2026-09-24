@@ -110,7 +110,7 @@ function SectionTitle({ children }) {
 }
 
 function EmptyState() {
-  return <p className="text-xs text-gray-400 text-center py-8">Sem dados suficientes — preenche os campos no Notion</p>
+  return <p className="text-xs text-gray-400 text-center py-8">Sem dados suficientes — preenche os campos no CRM</p>
 }
 
 function Row({ label, value }) {
@@ -252,7 +252,7 @@ export function Metricas() {
               </div>
             </div>
             <div className="relative grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <HeroKpi label="Receita Prevista / Mês" value={EUR(top?.receitaPrevistaMes)} sub="Pipeline activo" accent />
+              <HeroKpi label="Receita Prevista / Mês" value={EUR(top?.receitaPrevistaMes)} sub="Pipeline ativo" accent />
               <HeroKpi label="Deals Fechados / Mês" value={NUM(top?.dealsFechadosMes)} sub={`${p2?.totalDeals ?? '—'} total`} green />
               <HeroKpi label="Capital Captado" value={EUR(top?.capitalPassivoCaptado)} sub={`${p3?.investidoresAtivos ?? 0} investidores`} />
               <HeroKpi label="Ciclo Médio" value={DAYS(top?.velocidadeMediaCiclo)} sub="Abordagem → fecho" red={(top?.velocidadeMediaCiclo ?? 0) > 90} />
@@ -264,9 +264,9 @@ export function Metricas() {
         {tab === 'resumo' && (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-              <M label="Receita prevista / mês" value={EUR(top?.receitaPrevistaMes)} sub="Lucro estimado negócios activos" highlight />
+              <M label="Faturação estimada / mês" value={EUR(top?.receitaPrevistaMes)} sub="Negócios ativos" highlight />
               <M label="Deals fechados no mês" value={NUM(top?.dealsFechadosMes)} sub={`de ${p2?.totalDeals ?? '—'} negócios totais`} />
-              <M label="Capital passivo captado" value={EUR(top?.capitalPassivoCaptado)} sub={`${p3?.investidoresAtivos ?? '—'} investidores activos`} />
+              <M label="Capital passivo captado" value={EUR(top?.capitalPassivoCaptado)} sub={`${p3?.investidoresAtivos ?? '—'} investidores ativos`} />
               <M label="Velocidade média do ciclo" value={DAYS(top?.velocidadeMediaCiclo)} sub="1.ª abordagem → proposta aceite" />
             </div>
 
@@ -296,7 +296,7 @@ export function Metricas() {
                 <Card.Header title="Pipeline 3 — Investidores" subtitle="Captação & ROI" icon={Users} />
                 <div className="flex flex-col gap-2 text-sm">
                   <Row label="Capital captado" value={EUR(p3?.capitalCaptado)} />
-                  <Row label="Investidores activos" value={NUM(p3?.investidoresAtivos)} />
+                  <Row label="Investidores ativos" value={NUM(p3?.investidoresAtivos)} />
                   <Row label="Ticket médio" value={EUR(p3?.ticketMedio)} />
                   <Row label="Taxa de conversão" value={PCT(p3?.taxaConversao)} />
                   <Row label="ROI entregue (capital passivo)" value={p3?.roiEntregue != null ? PCT(p3.roiEntregue) : '—'} />
@@ -311,7 +311,7 @@ export function Metricas() {
                 <M label="Deal Flow / Capital" value={tr?.ratioDealFlowCapital != null ? `${tr.ratioDealFlowCapital}×` : '—'}
                   sub="Pipeline value / capital disponível" warn={tr?.ratioDealFlowCapital != null && tr.ratioDealFlowCapital < 1} />
                 <M label="Ciclo completo médio" value={DAYS(tr?.velocidadeCicloCompleto)} sub="Lead adicionado → escritura" />
-                <M label="% projecções cumpridas" value={tr?.cumpreProjeccao != null ? PCT(tr.cumpreProjeccao) : '—'} sub="Lucro real ≥ 80% do estimado" />
+                <M label="% projecções cumpridas" value={tr?.cumpreProjeccao != null ? PCT(tr.cumpreProjeccao) : '—'} sub="Faturação real ≥ 80% da estimada" />
               </div>
             </Card>
 
@@ -574,7 +574,7 @@ export function Metricas() {
 
               <SectionTitle>Wholesaling — Margem</SectionTitle>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
-                <M label="Margem bruta média" value={wh.margemBrutaMedia != null ? PCT(wh.margemBrutaMedia) : '—'} sub="Lucro estimado / Ask Price" />
+                <M label="Margem bruta média" value={wh.margemBrutaMedia != null ? PCT(wh.margemBrutaMedia) : '—'} sub="Faturação estimada / Ask Price" />
                 <M label="Margem líquida média (após IRC)" value={wh.margemLiquidaMedia != null ? PCT(wh.margemLiquidaMedia) : '—'} sub="~21% IRC" />
                 <M label="Desvio orçamento obra médio" value={wh.desvioObraMedia != null ? `${wh.desvioObraMedia > 0 ? '+' : ''}${PCT(wh.desvioObraMedia)}` : '—'}
                   sub="Custo real vs estimado" warn={wh.desvioObraMedia > 20} />
@@ -958,14 +958,14 @@ export function Metricas() {
 
               <SectionTitle>Obra — Entrega do Relatório Semanal</SectionTitle>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                <MvsMeta label="Taxa média de entrega" value={oo.entregaRelatorioSemanal?.media} meta={100} format="pct" sub="Vistorias registadas / semanas de obra activa" />
+                <MvsMeta label="Taxa média de entrega" value={oo.entregaRelatorioSemanal?.media} meta={100} format="pct" sub="Vistorias registadas / semanas de obra ativa" />
               </div>
               {porProjectoEntrega.length > 0 ? (
                 <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
                   <table className="min-w-[500px] w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
-                        <th className="text-left py-2 px-3">Projecto</th>
+                        <th className="text-left py-2 px-3">Projeto</th>
                         <th className="text-right py-2 px-3">Vistorias</th>
                         <th className="text-right py-2 px-3">Semanas de obra</th>
                         <th className="text-right py-2 px-3">Taxa de entrega</th>
@@ -1003,12 +1003,12 @@ export function Metricas() {
                 </div>
 
                 <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
-                  <h2 className="text-sm font-semibold text-gray-700 mb-4">Cor mais recente por projecto</h2>
+                  <h2 className="text-sm font-semibold text-gray-700 mb-4">Cor mais recente por projeto</h2>
                   {porProjectoSemaforo.length > 0 ? (
                     <table className="min-w-[380px] w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
-                          <th className="text-left py-2 px-3">Projecto</th>
+                          <th className="text-left py-2 px-3">Projeto</th>
                           <th className="text-right py-2 px-3">Desvio</th>
                           <th className="text-right py-2 px-3">Semáforo</th>
                         </tr>
@@ -1245,7 +1245,7 @@ export function Metricas() {
             setShowOkrForm(false); load()
           }
           async function deleteOkr(id) {
-            if (!confirm('Apagar este objectivo e todos os KRs?')) return
+            if (!confirm('Apagar este objetivo e todos os KRs?')) return
             await apiFetch(`/api/okrs/${id}`, { method: 'DELETE' }); load()
           }
           async function deleteKr(id) {
@@ -1270,7 +1270,7 @@ export function Metricas() {
               {wa && (
                 <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold text-gray-700">Actividade Semanal</h3>
+                    <h3 className="text-sm font-semibold text-gray-700">Atividade Semanal</h3>
                     <span className={`text-2xl font-bold ${wa.score >= 70 ? 'text-green-600' : wa.score >= 40 ? 'text-yellow-600' : 'text-red-500'}`}>
                       {wa.score}%
                     </span>
@@ -1301,18 +1301,18 @@ export function Metricas() {
                 <SectionTitle>OKRs</SectionTitle>
                 <button onClick={() => setShowOkrForm(true)}
                   className="px-4 py-2 text-sm font-medium rounded-lg text-white" style={{ backgroundColor: GOLD }}>
-                  + Novo Objectivo
+                  + Novo Objetivo
                 </button>
               </div>
 
               {/* Create OKR form */}
               {showOkrForm && (
                 <div className="bg-white rounded-xl border-2 border-yellow-200 p-5 shadow-md">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Novo Objectivo</h3>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Novo Objetivo</h3>
                   <form onSubmit={e => { e.preventDefault(); const fd = new FormData(e.target); createOkr({ trimestre: fd.get('trimestre'), objectivo: fd.get('objectivo'), krs: [] }) }}>
                     <div className="grid grid-cols-1 xl:grid-cols-4 gap-3">
                       <input name="trimestre" defaultValue="Q2 2026" placeholder="Trimestre (ex: Q3 2026)" className="border border-gray-200 rounded-lg px-3 py-2 text-sm" required />
-                      <input name="objectivo" placeholder="Objectivo" className="xl:col-span-2 border border-gray-200 rounded-lg px-3 py-2 text-sm" autoFocus required />
+                      <input name="objectivo" placeholder="Objetivo" className="xl:col-span-2 border border-gray-200 rounded-lg px-3 py-2 text-sm" autoFocus required />
                       <div className="flex gap-2">
                         <button type="submit" className="px-4 py-2 text-sm font-medium rounded-lg text-white flex-1" style={{ backgroundColor: GOLD }}>Criar</button>
                         <button type="button" onClick={() => setShowOkrForm(false)} className="px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-500">Cancelar</button>
@@ -1370,7 +1370,7 @@ export function Metricas() {
                     <button onClick={() => setEditingOkr({ okrId: okr.id, kr: null })} className="mt-3 text-xs text-indigo-500 hover:underline">+ Adicionar Key Result</button>
                   </div>
                 ))}
-                {okrs.length === 0 && <p className="text-xs text-gray-400 text-center py-8">Sem OKRs definidos — clica em "+ Novo Objectivo"</p>}
+                {okrs.length === 0 && <p className="text-xs text-gray-400 text-center py-8">Sem OKRs definidos — clica em "+ Novo Objetivo"</p>}
 
                 {editingOkr && (
                   <KrFormModal
@@ -1424,7 +1424,7 @@ function KrFormModal({ okrId, kr, fontes, onSave, onClose }) {
           </div>
           {isManual && (
             <div>
-              <label className="text-xs text-gray-500">Valor actual (actualiza-se à mão)</label>
+              <label className="text-xs text-gray-500">Valor atual (atualiza-se à mão)</label>
               <input type="number" step="any" value={form.valor_manual} onChange={e => setForm(f => ({ ...f, valor_manual: e.target.value }))}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1" />
             </div>

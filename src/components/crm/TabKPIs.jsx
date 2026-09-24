@@ -33,7 +33,7 @@ export function TabKPIs({ tab, regiao }) {
     'Negócios': [
       { label: 'Total', value: kpis.total },
       { label: 'Lucro Est.', value: EUR(kpis.lucro_est) },
-      { label: 'Lucro Real', value: kpis.lucro_real > 0 ? EUR(kpis.lucro_real) : '—' },
+      { label: 'Faturação Real', value: kpis.lucro_real > 0 ? EUR(kpis.lucro_real) : '—' },
       { label: 'Vendidos', value: kpis.vendidos },
     ],
     'Despesas': [

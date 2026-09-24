@@ -455,7 +455,7 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
               <label className="block text-xs">
                 <span className="text-gray-500">Notas de Metodologia</span>
                 <textarea value={meta.metodologia} onChange={e => updateMeta('metodologia', e.target.value)} rows={2}
-                  className="w-full mt-0.5 border rounded px-2 py-1 text-sm" placeholder="Observações sobre a recolha, critérios de selecção..." />
+                  className="w-full mt-0.5 border rounded px-2 py-1 text-sm" placeholder="Observações sobre a recolha, critérios de seleção..." />
               </label>
               <label className="block text-xs">
                 <span className="text-gray-500">Conclusão do Estudo</span>
@@ -545,7 +545,7 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
           <button type="button" disabled={uploadingAlfredo || !analise?.id}
             onClick={() => alfredoInputRef.current?.click()}
             className="w-full text-xs px-4 py-4 rounded border-2 border-dashed border-brand-gold/60 hover:border-brand-gold hover:bg-white text-gray-600 disabled:opacity-50 inline-flex items-center justify-center gap-2 font-semibold">
-            <Upload size={16} /> {uploadingAlfredo ? 'A carregar...' : (analise?.id ? 'Carregar captura do estudo (JPG, PNG, WEBP — máx. 15MB)' : 'Guarde a análise primeiro para activar este upload')}
+            <Upload size={16} /> {uploadingAlfredo ? 'A carregar...' : (analise?.id ? 'Carregar captura do estudo (JPG, PNG, WEBP — máx. 15MB)' : 'Guarde a análise primeiro para ativar este upload')}
           </button>
         )}
         <input ref={alfredoInputRef} type="file" accept="image/jpeg,image/png,image/webp"
@@ -619,7 +619,7 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
               <div className="flex gap-3 text-xs text-gray-400 items-center flex-wrap">
                 <label>Área imóvel: <input type="number" step="any" value={tip.area || ''} onChange={e => updateTip(tIdx, 'area', parseFloat(e.target.value) || 0)}
                   className="w-16 bg-white border rounded px-1 py-0.5 font-mono" onWheel={e => e.target.blur()} /> m²</label>
-                <label title="VVR adoptado para esta tipologia (deixar vazio usa o VVR da análise)">VVR adoptado: <input type="number" step="any" value={tip.vvr || ''} placeholder={mediaAjust > 0 && tip.area > 0 ? Math.round(mediaAjust * tip.area) : ''} onChange={e => updateTip(tIdx, 'vvr', parseFloat(e.target.value) || 0)}
+                <label title="VVR adotado para esta tipologia (deixar vazio usa o VVR da análise)">VVR adotado: <input type="number" step="any" value={tip.vvr || ''} placeholder={mediaAjust > 0 && tip.area > 0 ? Math.round(mediaAjust * tip.area) : ''} onChange={e => updateTip(tIdx, 'vvr', parseFloat(e.target.value) || 0)}
                   className="w-24 bg-white border rounded px-1 py-0.5 font-mono" onWheel={e => e.target.blur()} /> €</label>
                 <span className="hidden sm:inline">|</span>
                 <span>Média: <strong className="text-gray-600">{media} €/m²</strong></span>
@@ -744,7 +744,7 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
                           <span className="text-gray-500">Estado de Conservação</span>
                           <select value={comp.estado || ''} onChange={e => updateComp(tIdx, cIdx, 'estado', e.target.value)}
                             className="w-full mt-0.5 border rounded px-2 py-1 bg-white">
-                            <option value="">— Seleccionar —</option>
+                            <option value="">— Selecionar —</option>
                             {ESTADO_OPCOES.map(o => <option key={o} value={o}>{o}</option>)}
                           </select>
                         </label>
@@ -752,7 +752,7 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
                           <span className="text-gray-500">Piso</span>
                           <select value={comp.piso || ''} onChange={e => updateComp(tIdx, cIdx, 'piso', e.target.value)}
                             className="w-full mt-0.5 border rounded px-2 py-1 bg-white">
-                            <option value="">— Seleccionar —</option>
+                            <option value="">— Selecionar —</option>
                             {PISO_OPCOES.map(o => <option key={o} value={o}>{o}</option>)}
                           </select>
                         </label>
@@ -845,7 +845,7 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
           {stats.delta != null && stats.posicionamento && (
             <div className="px-4 pb-4 flex flex-col sm:flex-row items-center justify-between gap-2">
               <div className="text-xs text-gray-500">
-                VVR Adoptado <strong className="font-mono text-gray-700">{EUR(stats.vvrAdoptado)}</strong> vs. Mediana
+                VVR Adotado <strong className="font-mono text-gray-700">{EUR(stats.vvrAdoptado)}</strong> vs. Mediana
                 <span className={`ml-2 font-mono font-semibold ${stats.delta < 0 ? 'text-green-600' : stats.delta > 5 ? 'text-red-600' : 'text-brand-gold'}`}>
                   {stats.delta >= 0 ? '+' : ''}{stats.delta.toFixed(1)}%
                 </span>

@@ -258,7 +258,7 @@ export const CC_DOCUMENTACAO_LABEL = {
 
 // Discovery Call — scorecard de qualificação 0-12 (6 critérios x 0-2)
 export const DC_CRITERIOS = [
-  { key: 'dc_score_objetivo', notaKey: 'dc_notas_objetivo', label: 'Objectivo' },
+  { key: 'dc_score_objetivo', notaKey: 'dc_notas_objetivo', label: 'Objetivo' },
   { key: 'dc_score_motivo_real', notaKey: 'dc_notas_motivo_real', label: 'Motivo Real' },
   { key: 'dc_score_dor_desafio', notaKey: 'dc_notas_dor_desafio', label: 'Dor / Desafio' },
   { key: 'dc_score_impacto', notaKey: 'dc_notas_impacto', label: 'Impacto' },
@@ -291,9 +291,9 @@ export const CL_RESULTADO_COLOR = {
 export const REGISTO_FIELD_LABEL = {
   cc_resultado: 'Resultado', cc_aceita_negociar: 'Aceita negociar',
   cc_disponibilidade: 'Disponibilidade confirmada', cc_documentacao: 'Documentação (caderneta e planta)',
-  dc_score_objetivo: 'Objectivo', dc_score_motivo_real: 'Motivo Real', dc_score_dor_desafio: 'Dor / Desafio',
+  dc_score_objetivo: 'Objetivo', dc_score_motivo_real: 'Motivo Real', dc_score_dor_desafio: 'Dor / Desafio',
   dc_score_impacto: 'Impacto', dc_score_urgencia: 'Urgência', dc_score_tentativas_anteriores: 'Tentativas Anteriores',
-  dc_notas_objetivo: 'Justificação — Objectivo', dc_notas_motivo_real: 'Justificação — Motivo Real',
+  dc_notas_objetivo: 'Justificação — Objetivo', dc_notas_motivo_real: 'Justificação — Motivo Real',
   dc_notas_dor_desafio: 'Justificação — Dor / Desafio', dc_notas_impacto: 'Justificação — Impacto',
   dc_notas_urgencia: 'Justificação — Urgência', dc_notas_tentativas_anteriores: 'Justificação — Tentativas Anteriores',
   dc_onus_verificado: 'Ónus/hipotecas verificado', dc_direito_preferencia_esclarecido: 'Direito de preferência esclarecido',

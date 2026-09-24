@@ -160,7 +160,7 @@ export function AnaliseTab({ imovelId, imovelNome, imovel, readOnly = false, emP
             className="px-3 py-2 text-xs font-semibold rounded-lg border-2 transition-colors hover:opacity-80"
             style={{ borderColor: GOLD, color: GOLD }}
           >
-            Tornar Activa
+            Tornar Ativa
           </button>
         )}
 
@@ -186,7 +186,7 @@ export function AnaliseTab({ imovelId, imovelNome, imovel, readOnly = false, emP
 
         {selected?.activa && (
           <span className="px-3 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: GOLD + '20', color: GOLD }}>
-            ★ ACTIVA
+            ★ ATIVA
           </span>
         )}
 

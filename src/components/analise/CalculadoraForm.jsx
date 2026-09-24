@@ -158,7 +158,7 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
               <div className="mt-3 pl-3 border-l-2" style={{ borderColor: GOLD + '60' }}>
                 <div className="text-xs text-gray-500 mb-2">Desagregação do PMO (opcional — mostra detalhe no relatório):</div>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  <Input label="Arquitectura %" field="pmo_arq_perc" value={form.pmo_arq_perc} onChange={handleChange} step="0.5" placeholder="0" />
+                  <Input label="Arquitetura %" field="pmo_arq_perc" value={form.pmo_arq_perc} onChange={handleChange} step="0.5" placeholder="0" />
                   <Input label="Fiscalização %" field="pmo_fisc_perc" value={form.pmo_fisc_perc} onChange={handleChange} step="0.5" placeholder="0" />
                   <Input label="Coord. Segurança %" field="pmo_seg_obra_perc" value={form.pmo_seg_obra_perc} onChange={handleChange} step="0.5" placeholder="0" />
                   <Input label="Outros %" field="pmo_outros_perc" value={form.pmo_outros_perc} onChange={handleChange} step="0.5" placeholder="0" />
@@ -238,13 +238,13 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
           <div className="mt-2 text-xs text-gray-400 leading-relaxed">
             <strong>Sem regime fiscal</strong>: apresenta o lucro bruto ao investidor, sem deduzir qualquer imposto.
             O lucro líquido iguala o lucro bruto. A fiscalidade fica a cargo do investidor, conforme a estrutura
-            jurídica que adoptar para o negócio.
+            jurídica que adotar para o negócio.
           </div>
         )}
         {form.regime_fiscal === 'Particular' && (
           <div className="mt-2 text-xs text-gray-400 leading-relaxed">
             <strong>Cat. G</strong>: mais-valia ocasional — 50% × 28% (autónoma) ou × marginal (englobada). Art. 43.º n.º 2 CIRS.<br />
-            <strong>Cat. B simplificado</strong>: actividade habitual de revenda — base = VVR × 0,15 (Art. 31.º), tributada à marginal IRS.<br />
+            <strong>Cat. B simplificado</strong>: atividade habitual de revenda — base = VVR × 0,15 (Art. 31.º), tributada à marginal IRS.<br />
             <strong>Cat. B organizada</strong>: contabilidade organizada — base = lucro bruto × marginal IRS.<br />
             Em dúvida, consultar o contabilista. A AT pode reclassificar Cat. G→B em caso de habitualidade.
           </div>
@@ -265,7 +265,7 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
           <Input label="Custos Gestão %" field="gestao_arr_pct" value={form.gestao_arr_pct} onChange={handleChange} step="0.5" placeholder="8" />
         </div>
         <div className="mt-2 text-xs text-gray-400">
-          Activa a secção "K. Exit Alternativo" no relatório PDF.
+          Ativa a secção "K. Exit Alternativo" no relatório PDF.
         </div>
       </Section>
     </div>

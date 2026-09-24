@@ -7,7 +7,7 @@ const REGIOES_META = {
   Coimbra: {
     titulo: 'Coimbra',
     sub: 'Operação base · estabelecida',
-    desc: 'Mercado consolidado, pipeline activo, equipa principal.',
+    desc: 'Mercado consolidado, pipeline ativo, equipa principal.',
     Icon: MapPin,
   },
   AMP: {
@@ -85,7 +85,7 @@ export function RegiaoModal({ gate, contexto }) {
                     <Icon className="w-6 h-6" />
                   </div>
                   {isActive && (
-                    <span className="text-xs px-2 py-1 rounded-full bg-white/10 text-white">activa</span>
+                    <span className="text-xs px-2 py-1 rounded-full bg-white/10 text-white">ativa</span>
                   )}
                 </div>
                 <h2 className="mt-5 text-xl font-semibold text-white">{meta.titulo}</h2>

@@ -55,9 +55,9 @@ export function AdministracaoMultiRegiao() {
           <RegiaoBadge regiao={regiaoAtiva} onTrocar={gate.abrirModal} />
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <HeroKpi label="Região activa" value={REGIAO_LABEL[regiaoAtiva]} sub="filtro principal" accent />
+          <HeroKpi label="Região ativa" value={REGIAO_LABEL[regiaoAtiva]} sub="filtro principal" accent />
           <HeroKpi label="Concelhos" value={concelhosCount} sub="cobertos" />
-          <HeroKpi label="Vista actual" value={tabActual} sub="painel" />
+          <HeroKpi label="Vista atual" value={tabActual} sub="painel" />
           <HeroKpi label="Identidade" value={regiaoAtiva.toUpperCase()} sub="cor regional" green />
         </div>
       </div>
@@ -114,10 +114,10 @@ function KpisPanel({ regiao }) {
   const cards = [
     { label: 'Imóveis no pipeline', v: data.imoveis.em_pipeline, sub: `${data.imoveis.total} totais` },
     { label: 'Investidores compatíveis', v: data.investidores.total, sub: 'pool unificado' },
-    { label: 'Consultores activos', v: data.consultores.ativos, sub: `${data.consultores.total} totais` },
+    { label: 'Consultores ativos', v: data.consultores.ativos, sub: `${data.consultores.total} totais` },
     { label: 'Negócios vendidos', v: data.negocios.vendidos, sub: `${data.negocios.total} no pipeline` },
-    { label: 'Receita real', v: EUR(data.negocios.receita_real), sub: 'fecho concretizado' },
-    { label: 'Receita estimada', v: EUR(data.negocios.receita_estimada), sub: 'pipeline total' },
+    { label: 'Faturação real', v: EUR(data.negocios.receita_real), sub: 'fecho concretizado' },
+    { label: 'Faturação estimada', v: EUR(data.negocios.receita_estimada), sub: 'pipeline total' },
     { label: 'Despesa anual', v: EUR(data.despesas.anual), sub: `${data.despesas.total} despesas` },
     { label: 'Margem estimada', v: EUR(data.margem_estimada), sub: 'receita - despesa anual' },
     { label: 'ROI médio', v: data.imoveis.roi_medio != null ? PCT(data.imoveis.roi_medio) : '—', sub: 'anualizado' },
@@ -306,7 +306,7 @@ function HotZonesPanel({ regiao }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-neutral-500">
-        Distribuição de imóveis por concelho — onde estão as oportunidades, onde o pipeline está activo, qual o ticket médio.
+        Distribuição de imóveis por concelho — onde estão as oportunidades, onde o pipeline está ativo, qual o ticket médio.
       </p>
       <div className="space-y-2">
         {data.length === 0 && <p className="text-sm text-neutral-400 py-4">Sem dados na região.</p>}
@@ -318,7 +318,7 @@ function HotZonesPanel({ regiao }) {
                 <div>
                   <p className="font-medium text-neutral-900 dark:text-white">{z.concelho}</p>
                   <p className="text-xs text-neutral-500">
-                    {z.total} imóveis · {z.oportunidades} oportunidades activas
+                    {z.total} imóveis · {z.oportunidades} oportunidades ativas
                   </p>
                 </div>
                 <div className="text-right text-xs text-neutral-500">

@@ -291,7 +291,7 @@ function renderSumarioExecutivo(b, dados) {
     { lineGap: 3 }
   )
   b.text(
-    `Este relatorio avalia as 15 freguesias do concelho com cinco eixos de scoring (preco entrada, procura, servicos, revalorizacao, concorrencia) calibrados para o modelo de wholesaling Somnium (cedencia de posicao, ticket aquisicao 100-200 mil euros, tipologias T0-T3 e predios para reabilitacao). O objectivo e identificar as freguesias onde o produto-tipo Somnium tem maior probabilidade de captacao rapida + cedencia rentavel a investidor CAEP.`,
+    `Este relatorio avalia as 15 freguesias do concelho com cinco eixos de scoring (preco entrada, procura, servicos, revalorizacao, concorrencia) calibrados para o modelo de wholesaling Somnium (cedencia de posicao, ticket aquisicao 100-200 mil euros, tipologias T0-T3 e predios para reabilitacao). O objetivo e identificar as freguesias onde o produto-tipo Somnium tem maior probabilidade de captacao rapida + cedencia rentavel a investidor CAEP.`,
     { lineGap: 3 }
   )
 
@@ -332,7 +332,7 @@ function renderContextoMacro(b, dados) {
     { label: 'Fogos licenciados por 1000 hab (vs Grande Porto / nacional)', value: `${m.licenciamentos_por_1000_hab} / ${m.licenciamentos_porto_grande} / ${m.licenciamentos_nacional}` },
   ])
 
-  b.subheader('Projectos estruturantes 2026-2028')
+  b.subheader('Projetos estruturantes 2026-2028')
   b.bullet('Linha Rubi (H) do Metro do Porto — 6 novas estacoes em Gaia (Arrabida, Candal, Rotunda, Devesas, Soares dos Reis, Santo Ovidio). Conclusao adiada para Julho 2028. Impacto valorizativo concentrado em Mafamude e Vilar do Paraiso.')
   b.bullet('Ponte Ferreirinha — nova travessia exclusiva do Metro sobre o Douro, ligando Casa da Musica (Porto) a Arrabida (Gaia).')
   b.bullet('Metrobus Boavista-Praca do Imperio — BRT de 3.8 km com operacao iniciada em 2025. Reduz tempo de deslocacao Mafamude-Boavista.')
@@ -352,7 +352,7 @@ function renderMetodologia(b, dados) {
     { label: '1. Preco de entrada — adequacao ao ticket 100-200 mil euros', value: `${s.pesos.preco_entrada}%` },
     { label: '2. Procura / liquidez — tempo medio de venda, absorcao do stock', value: `${s.pesos.procura_liquidez}%` },
     { label: '3. Servicos e amenidades — escolas, saude, transportes, comercio', value: `${s.pesos.servicos_amenidades}%` },
-    { label: '4. Potencial de revalorizacao — projectos urbanos, demografia, pipeline', value: `${s.pesos.potencial_revalorizacao}%` },
+    { label: '4. Potencial de revalorizacao — projetos urbanos, demografia, pipeline', value: `${s.pesos.potencial_revalorizacao}%` },
     { label: '5. Concorrencia — densidade de outros operadores wholesale na zona', value: `${s.pesos.concorrencia}%` },
     { label: 'Total ponderado', value: '100%', total: true },
   ])
@@ -361,7 +361,7 @@ function renderMetodologia(b, dados) {
   b.bullet(`Monitorizar — ${s.classificacao_regras.monitorizar} · zona com upside contextual, accionar caso-a-caso`)
   b.bullet(`Evitar — ${s.classificacao_regras.evitar} · ticket fora da gama ou liquidez insuficiente para wholesaling 100-200k`)
   b.text(
-    `Notas: ranges de preco/m2 reflectem dispersao real do stock (anos 70 a construcao recente). Tempo de venda baseado em snapshots do Confidencial Imobiliario e listagens activas em Idealista/Casa SAPO. Score global e indicativo e deve ser revisitado a cada release do Observatorio Imobiliario de Gaia.`,
+    `Notas: ranges de preco/m2 refletem dispersao real do stock (anos 70 a construcao recente). Tempo de venda baseado em snapshots do Confidencial Imobiliario e listagens ativas em Idealista/Casa SAPO. Score global e indicativo e deve ser revisitado a cada release do Observatorio Imobiliario de Gaia.`,
     { lineGap: 3, size: 8, color: C.muted }
   )
 }
@@ -433,7 +433,7 @@ function renderFichaFreguesia(b, f, posicao) {
 function renderDriversTransversais(b, dados) {
   b.header('Drivers Transversais e Servicos do Concelho')
   b.text(
-    `Factores comuns a multiplas freguesias que influenciam decisoes de aquisicao e revenda em Vila Nova de Gaia. Util para construir o argumentario com investidor CAEP e para qualificar leads.`,
+    `Fatores comuns a multiplas freguesias que influenciam decisoes de aquisicao e revenda em Vila Nova de Gaia. Util para construir o argumentario com investidor CAEP e para qualificar leads.`,
     { lineGap: 3 }
   )
   dados.drivers_transversais.forEach(group => {
@@ -443,7 +443,7 @@ function renderDriversTransversais(b, dados) {
 }
 
 function renderRiscos(b, dados) {
-  b.header('Riscos e Factores Criticos')
+  b.header('Riscos e Fatores Criticos')
   dados.riscos.forEach(r => {
     b.subheader(r.titulo)
     b.text(r.descricao, { lineGap: 3 })
@@ -462,10 +462,10 @@ function renderProximosPassos(b, dados) {
 function renderAnexoFontes(b, dados) {
   b.header('Anexo — Metodologia e Fontes')
   b.subheader('Notas metodologicas')
-  b.bullet('Precos por freguesia: triangulacao entre Idealista, Casa SAPO, SuperCasa, Observatorio Imobiliario de Gaia e Confidencial Imobiliario. Ranges em vez de pontos unicos para reflectir dispersao real do stock.')
-  b.bullet('Tempo medio de venda: estimativa baseada em snapshots do Confidencial Imobiliario e tempo medio de listagens activas em Idealista. Valores podem variar 15-25% em funcao do segmento.')
+  b.bullet('Precos por freguesia: triangulacao entre Idealista, Casa SAPO, SuperCasa, Observatorio Imobiliario de Gaia e Confidencial Imobiliario. Ranges em vez de pontos unicos para refletir dispersao real do stock.')
+  b.bullet('Tempo medio de venda: estimativa baseada em snapshots do Confidencial Imobiliario e tempo medio de listagens ativas em Idealista. Valores podem variar 15-25% em funcao do segmento.')
   b.bullet('Score global: modelo proprietario Somnium calibrado para wholesaling 100-200k. Nao substitui due diligence imovel a imovel.')
-  b.bullet('Populacao por freguesia: Censos 2021 INE (publicacao definitiva, 2022-2023). Nao reflecte movimentos demograficos pos-pandemia.')
+  b.bullet('Populacao por freguesia: Censos 2021 INE (publicacao definitiva, 2022-2023). Nao reflete movimentos demograficos pos-pandemia.')
   b.bullet('Pipeline de licenciamento: Camara Municipal de Vila Nova de Gaia, comunicados de imprensa 2024-2025.')
 
   b.subheader('Fontes consultadas')
@@ -474,7 +474,7 @@ function renderAnexoFontes(b, dados) {
   })
   b.space(8)
   b.text(
-    `Documento elaborado por Alexandre Mendes, CFO Somnium Properties. Confidencial. Para uso interno e apresentacao a investidores CAEP. Actualizar a cada release do Observatorio Imobiliario de Gaia (semestralmente) ou em caso de alteracao material nos eixos de scoring.`,
+    `Documento elaborado por Alexandre Mendes, CFO Somnium Properties. Confidencial. Para uso interno e apresentacao a investidores CAEP. Atualizar a cada release do Observatorio Imobiliario de Gaia (semestralmente) ou em caso de alteracao material nos eixos de scoring.`,
     { lineGap: 3, size: 8, color: C.muted }
   )
 }

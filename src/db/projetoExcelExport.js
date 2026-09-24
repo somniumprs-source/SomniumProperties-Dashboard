@@ -74,9 +74,9 @@ export async function exportProjetoExcel(negocioId) {
   wsResumo.getRow(1).height = 28
 
   const linhas = [
-    ['Projecto', negocio.movimento],
+    ['Projeto', negocio.movimento],
     ['Categoria', negocio.categoria || '—'],
-    ['Tipo de projecto', negocio.tipo_projeto === 'predio' ? 'Prédio com várias frações' : 'Fração única'],
+    ['Tipo de projeto', negocio.tipo_projeto === 'predio' ? 'Prédio com várias frações' : 'Fração única'],
     ['Fase legacy', negocio.fase || '—'],
     ['Imóvel', imovel?.nome || '—'],
     ['Zona', imovel?.zona || '—'],

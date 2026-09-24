@@ -21,7 +21,7 @@ const nav = [
     ],
   },
   { to: '/crm', label: 'Departamento Comercial', Icon: Database, badgeKey: 'crm', area: 'crm' },
-  { to: '/projectos', label: 'Projectos', Icon: Briefcase, area: 'projectos' },
+  { to: '/projectos', label: 'Projetos', Icon: Briefcase, area: 'projectos' },
   { to: '/financeiro',         label: 'Departamento Financeiro', Icon: TrendingUp, area: 'financeiro' },
   { to: '/marketing',          label: 'Marketing e Marca Pessoal', Icon: Megaphone, area: 'marketing' },
   { to: '/alertas',            label: 'Alertas',    Icon: Bell, badgeKey: 'alertas', area: 'alertas' },
@@ -408,7 +408,7 @@ function PerfilActivoSelector() {
           <button onClick={() => escolher(null)}
             className="w-full text-left px-3 py-2 text-xs hover:bg-white/5 border-b border-neutral-800"
             style={{ color: '#888' }}>
-            <span className="italic">(sem perfil activo)</span>
+            <span className="italic">(sem perfil ativo)</span>
           </button>
           {users.length === 0 ? (
             <p className="text-xs text-neutral-500 py-3 text-center">Sem utilizadores</p>

@@ -388,13 +388,13 @@ export function QuadroEstimadoVsReal({ negocioId, analise, faturacao }) {
     <div className="space-y-4">
       <Card>
         <Card.Header icon={Scale} title="Estimado vs Real"
-          subtitle={`Análise Financeira espelhada com as Faturas, custo a custo${actualizado ? ` · actualizado às ${actualizado}` : ''}`}
+          subtitle={`Análise Financeira espelhada com as Faturas, custo a custo${actualizado ? ` · atualizado às ${actualizado}` : ''}`}
           action={faturacao?.modeloLabel && <Badge tone="gold" size="sm">{faturacao.modeloLabel}</Badge>} />
 
         {semAnalise && (
           <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800/50 px-3 py-2 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
             <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-            Sem Análise Financeira activa para o imóvel — os valores estimados ficam a zero.
+            Sem Análise Financeira ativa para o imóvel — os valores estimados ficam a zero.
           </div>
         )}
 
@@ -404,7 +404,7 @@ export function QuadroEstimadoVsReal({ negocioId, analise, faturacao }) {
             <KpiCard size="sm" icon={Landmark} tone={calc.capitalEstimado > 0 && !capitalCobre ? 'red' : 'gold'} label={faturacao?.capitalLabel || 'Capital alocado'}
               value={EUR(capital)} sub={capitalSub} className="h-full" />
           </div>
-          <KpiCard size="sm" icon={TrendingUp} tone="indigo" label="Faturação expectável"
+          <KpiCard size="sm" icon={TrendingUp} tone="indigo" label="Faturação estimada"
             value={EUR(fatExp)} sub={percSomnium > 0 && percSomnium < 100 ? `Somnium · ${percSomnium.toLocaleString('pt-PT')}% do lucro` : 'Parte da Somnium'} />
           <KpiCard size="sm" icon={Wallet} tone={fatReal > 0 ? 'green' : 'gray'} label="Faturação real"
             value={EUR(fatReal)} sub={`${fatPct}% · tranches confirmadas`} />
