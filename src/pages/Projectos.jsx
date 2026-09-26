@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useNavigate, Link } from 'react-router-dom'
 import { Plus, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle, TrendingUp, Briefcase, Calendar as CalendarIcon, Search, Sparkles, Hammer, Handshake, Home, Zap, FileText } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
@@ -193,7 +193,6 @@ export function Projectos() {
   const [filterCat, setFilterCat] = useState(isInvestidor ? '' : 'Fix and Flip')
   const [search, setSearch] = useState('')
   const [filterAtraso, setFilterAtraso] = useState(false)
-  const [portfolio, setPortfolio] = useState(null)
   const [predicoes, setPredicoes] = useState(null)
   const [predicoesLoading, setPredicoesLoading] = useState(false)
 
@@ -243,12 +242,10 @@ export function Projectos() {
   const loading = query.isPending
   const error = mutationError || query.error?.message || null
 
-  async function loadFases(negocios, categoriaActiva) {
-    // Optimização: só carregar fases para projectos da categoria filtrada (evita N requests inúteis)
-    const negociosComFases = negocios.filter(n =>
-      FASES_KANBAN_POR_CATEGORIA[n.categoria] &&
-      (!categoriaActiva || n.categoria === categoriaActiva)
-    )
+  // Carrega as fases de todos os projectos uma só vez: mudar de modelo de
+  // negócio filtra no cliente, sem voltar a pedir nada ao servidor.
+  async function loadFases(negocios) {
+    const negociosComFases = negocios.filter(n => FASES_KANBAN_POR_CATEGORIA[n.categoria])
     const result = {}
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
     await Promise.all(negociosComFases.map(async (n) => {
@@ -279,16 +276,23 @@ export function Projectos() {
     setFasesPorNegocio(result)
   }
 
-  const load = query.refetch
+  // KPIs do Portfolio em cache por modelo: ao voltar a um modelo já visto a
+  // resposta é imediata, e enquanto chega um novo mantém-se o anterior.
+  const portfolioQuery = useQuery({
+    queryKey: ['projetos-portfolio', filterCat, regiao],
+    queryFn: async () => {
+      const qs = filterCat ? `?categoria=${encodeURIComponent(filterCat)}` : ''
+      const r = await apiFetch(`/api/crm/projetos/portfolio/kpis${qs}`, { regiao })
+      return r.ok ? r.json() : null
+    },
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+  })
+  const portfolio = portfolioQuery.data ?? null
+
+  const load = () => { query.refetch(); portfolioQuery.refetch() }
   useRefreshOnMutation(load)
-  useEffect(() => { if (projectos.length > 0) loadFases(projectos, filterCat) }, [projectos, filterCat])
-  useEffect(() => {
-    const qs = filterCat ? `?categoria=${encodeURIComponent(filterCat)}` : ''
-    apiFetch(`/api/crm/projetos/portfolio/kpis${qs}`, { regiao })
-      .then(r => r.ok ? r.json() : null)
-      .then(setPortfolio)
-      .catch(() => {})
-  }, [filterCat, regiao])
+  useEffect(() => { if (projectos.length > 0) loadFases(projectos) }, [projectos])
 
   // UX13: Keyboard shortcuts
   useEffect(() => {
