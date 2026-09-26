@@ -516,7 +516,7 @@ export async function propagarParaImovel(imovelId, calculados, inputs, caepResul
           lucroEstimado = somaTranches > 0 ? Math.round(somaTranches * 100) / 100 : (parseFloat(neg.lucro_estimado) || 0)
         }
       } else if (neg.categoria === 'Consultoria/Assessoria') {
-        // Consultoria: honorário fixo = Σ tranches da aba Lucro. A Análise do
+        // Consultoria: honorário fixo = Σ tranches (Resumo do projeto). A Análise do
         // imóvel nunca o sobrepõe; sem tranches mantém o valor actual.
         let pags = []
         try { pags = typeof neg.pagamentos_faseados === 'string' ? JSON.parse(neg.pagamentos_faseados || '[]') : (neg.pagamentos_faseados || []) } catch { /* noop */ }

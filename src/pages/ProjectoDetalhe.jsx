@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import {
   ArrowLeft, CheckCircle2, Circle, Plus, Trash2, Upload, X,
-  Wallet, FileText, Users, BarChart3, ChevronRight,
+  FileText, Users, BarChart3, ChevronRight,
   FileDown, AlertTriangle, Sparkles, RefreshCw, Home, Layers,
   History, MessageSquare, FileSpreadsheet, Pencil, Eye,
   CalendarClock, ClipboardCheck, Calculator, Receipt,
@@ -71,7 +71,6 @@ const TABS_BASE = [
   { key: 'fracoes',      label: 'Frações e Áreas',  icon: Layers, predioOnly: true },
   { key: 'analise',      label: 'Análise Financeira', icon: Calculator },
   { key: 'obras',        label: 'Obras',            icon: Home },
-  { key: 'faturacao',    label: 'Lucro',            icon: Wallet },
   { key: 'faturas',      label: 'Faturas e Comprovativos', icon: Receipt },
   { key: 'documentos',   label: 'Documentos',       icon: FileText },
   { key: 'investidores', label: 'Investidores',     icon: Users },
@@ -324,7 +323,7 @@ export function ProjectoDetalhe() {
           </div>
 
           <div className="p-4 sm:p-6">
-            {tab === 'resumo' && <TabResumo resumo={resumo} fases={fasesFiltradas} fracaoSel={fracaoSel} fracoes={fracoes} />}
+            {tab === 'resumo' && <TabResumo resumo={resumo} fases={fasesFiltradas} fracaoSel={fracaoSel} fracoes={fracoes} onChange={load} readOnly={isReadOnly} />}
             {tab === 'fracoes' && <TabFracoes negocioId={id} fracoes={fracoes} onChange={load} readOnly={isReadOnly} fasesComuns={fases.filter(f => !f.fracao_id)} />}
             {tab === 'analise' && (
               imovel
@@ -339,7 +338,6 @@ export function ProjectoDetalhe() {
                 isWholesalling={isWholesalling} isReadOnly={isReadOnly} onChange={load}
               />
             )}
-            {tab === 'faturacao' && <TabFaturacao negocio={negocio} imovel={imovel} analise={analise} onChange={load} readOnly={isReadOnly} />}
             {tab === 'faturas' && <TabFaturas negocioId={id} analise={analise} readOnly={isReadOnly} consultoria={isConsultoria} />}
             {tab === 'documentos' && <TabDocumentos negocio={negocio} imovel={imovel} fases={fases} readOnly={isReadOnly} />}
             {tab === 'investidores' && <TabInvestidores negocio={negocio} readOnly={isReadOnly} />}
@@ -364,7 +362,7 @@ function BannerKpi({ label, value }) {
 // ════════════════════════════════════════════════════════════════
 // TAB: RESUMO
 // ════════════════════════════════════════════════════════════════
-function TabResumo({ resumo, fases }) {
+function TabResumo({ resumo, fases, onChange, readOnly }) {
   const { negocio, imovel, analise } = resumo
   const faturacao = useFaturacaoNegocio({ negocio, imovel, analise })
   const isWS = negocio.categoria === 'Wholesaling'
@@ -397,6 +395,18 @@ function TabResumo({ resumo, fases }) {
       {negocio.categoria === 'Consultoria/Assessoria'
         ? <QuadroConsultoria negocioId={negocio.id} faturacao={faturacao} />
         : <QuadroEstimadoVsReal negocioId={negocio.id} analise={analise} faturacao={faturacao} />}
+
+      {/* Wholesaling (fee em prestações) e Consultoria (honorário) recebem em
+          tranches, que alimentam a Faturação real. CAEP e Fix and Flip não têm
+          tranches: o lucro bruto é distribuído na venda, por isso só se mostra
+          a divisão entre a Somnium e os investidores. */}
+      {['Wholesaling', 'Consultoria/Assessoria'].includes(negocio.categoria)
+        ? (
+          <Card padding="md">
+            <TranchesRecebimento negocio={negocio} imovel={imovel} analise={analise} onChange={onChange} readOnly={readOnly} />
+          </Card>
+        )
+        : <ResumoFaturacaoNegocio negocio={negocio} imovel={imovel} analise={analise} />}
 
       <Card padding="sm" className="flex flex-wrap items-center gap-x-6 gap-y-2">
         {calendario.map(c => (
@@ -908,7 +918,7 @@ function useFaturacaoNegocio({ negocio, imovel, analise }) {
   let percSomnium, totalExpectavel, modeloLabel
 
   if (categoria === 'Consultoria/Assessoria') {
-    // Honorário fixo = Σ tranches da aba Lucro (fonte única); 100% Somnium.
+    // Honorário fixo = Σ tranches do Resumo (fonte única); 100% Somnium.
     modeloLabel = 'Consultoria/Assessoria — honorário fixo'
     percSomnium = 100
     let pagsCons = []
@@ -1025,7 +1035,7 @@ function ResumoFaturacaoNegocio({ negocio, imovel, analise }) {
   )
 }
 
-function TabFaturacao({ negocio, imovel, analise, onChange, readOnly }) {
+function TranchesRecebimento({ negocio, imovel, analise, onChange, readOnly }) {
   const toast = useToast()
   let pags = []
   try { pags = typeof negocio.pagamentos_faseados === 'string' ? JSON.parse(negocio.pagamentos_faseados || '[]') : (negocio.pagamentos_faseados || []) } catch {}
