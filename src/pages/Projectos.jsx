@@ -83,10 +83,16 @@ const FASES_CONSULTORIA_KANBAN = [
   { key: 'cons_fecho',       nome: 'Fecho e Faturação',     icon: '✅', cor: '#0d0d0d' },
 ]
 
+// CAEP: Pré-aquisição antes da Aquisição; depois segue o workflow do Fix and Flip
+const FASES_CAEP_KANBAN = [
+  { key: 'pre_aquisicao', nome: 'Pré-aquisição', icon: '📋', cor: '#1F4E5F' },
+  ...FASES_FIX_FLIP_KANBAN,
+]
+
 // Mapa de categoria → colunas Kanban
 const FASES_KANBAN_POR_CATEGORIA = {
   'Fix and Flip':         FASES_FIX_FLIP_KANBAN,
-  'CAEP':                 FASES_FIX_FLIP_KANBAN,  // mesmo workflow
+  'CAEP':                 FASES_CAEP_KANBAN,
   'Wholesaling':         FASES_WHOLESALLING_KANBAN,
   'Mediação Imobiliária': FASES_MEDIACAO_KANBAN,
   'Consultoria/Assessoria': FASES_CONSULTORIA_KANBAN,

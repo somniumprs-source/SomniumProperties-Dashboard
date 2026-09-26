@@ -6711,7 +6711,7 @@ app.get("/projetos/templates", async (c: any) => {
     const { rows } = await pool.query("SELECT * FROM projeto_templates WHERE publico = true OR created_by = $1 ORDER BY nome", [u?.id || ""]);
     const defaults = [
       { id: "__default_ff__", nome: "Fix and Flip (default)", descricao: "8 fases padrão para reabilitação em PT", fases_json: JSON.stringify(FASES_POR_CATEGORIA["Fix and Flip"]) },
-      { id: "__default_caep__", nome: "CAEP (default)", descricao: "8 fases (igual ao Fix and Flip)", fases_json: JSON.stringify(FASES_POR_CATEGORIA["CAEP"]) },
+      { id: "__default_caep__", nome: "CAEP (default)", descricao: "9 fases — pré-aquisição à venda", fases_json: JSON.stringify(FASES_POR_CATEGORIA["CAEP"]) },
       { id: "__default_whs__", nome: "Wholesaling (default)", descricao: "7 fases — prospecção a fee recebido", fases_json: JSON.stringify(FASES_POR_CATEGORIA["Wholesaling"]) },
       { id: "__default_med__", nome: "Mediação Imobiliária (default)", descricao: "7 fases — captação a escritura", fases_json: JSON.stringify(FASES_POR_CATEGORIA["Mediação Imobiliária"]) },
       { id: "__default_cons__", nome: "Consultoria/Assessoria (default)", descricao: "6 fases — proposta a faturação do honorário", fases_json: JSON.stringify(FASES_POR_CATEGORIA["Consultoria/Assessoria"]) },

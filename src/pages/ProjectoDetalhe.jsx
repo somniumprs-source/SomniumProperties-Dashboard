@@ -36,6 +36,7 @@ const BLACK = '#0d0d0d'
 const SEMAFORO_STATUS = { verde: 'green', amarelo: 'yellow', laranja: 'orange', vermelho: 'red' }
 
 const FASE_COR = {
+  pre_aquisicao: '#1F4E5F',              // teal escuro (preparação CAEP)
   aquisicao: '#475569',                  // slate (cálculo)
   projeto_licenca: '#1F4E5F',            // teal escuro (técnico)
   demolicoes: '#7C2D40',                 // vinho (transformação)
@@ -46,7 +47,7 @@ const FASE_COR = {
   vendido: '#0d0d0d',                    // brand dark (sucesso)
 }
 const FASE_ICON = {
-  aquisicao: '🔑', projeto_licenca: '📐', demolicoes: '🔨', estrutura_especialidades: '⚡',
+  pre_aquisicao: '📋', aquisicao: '🔑', projeto_licenca: '📐', demolicoes: '🔨', estrutura_especialidades: '⚡',
   acabamentos: '🎨', exterior_fecho: '🏠', comercializacao: '📣', vendido: '✅',
 }
 const ESTADO_LABEL = { pendente: 'Pendente', em_curso: 'Em curso', concluida: 'Concluída', bloqueada: 'Bloqueada' }

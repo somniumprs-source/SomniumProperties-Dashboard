@@ -162,8 +162,44 @@ export function getFaseConfig(key) {
   return FASES_FIX_FLIP.find(f => f.key === key)
 }
 
-// CAEP partilha o mesmo workflow operacional do Fix and Flip
-export const FASES_CAEP = FASES_FIX_FLIP
+// CAEP: começa com Pré-aquisição (documentação, contrato CAEP e capital dos
+// investidores) e uma Aquisição própria (da marcação da escritura à mudança
+// de titulares). O CPCV fica no Departamento Comercial: o projeto só nasce com
+// proposta aceite e CPCV alinhado. Da fase Projeto & Licença em diante segue o
+// workflow operacional do Fix and Flip.
+export const FASES_CAEP = [
+  {
+    key: 'pre_aquisicao',
+    nome: 'Pré-aquisição',
+    icon: '📋',
+    cor: '#1F4E5F',
+    descricao: 'Documentação do imóvel, contrato CAEP e capital dos investidores',
+    tarefas: [
+      'Verificação final da documentação do imóvel',
+      'Recolha e envio da documentação dos investidores ao advogado para a minuta do CAEP',
+      'Revisão da minuta do CAEP',
+      'Assinatura do CAEP por todos os intervenientes',
+      'Transferência do capital dos investidores',
+    ],
+  },
+  {
+    key: 'aquisicao',
+    nome: 'Aquisição',
+    icon: '🔑',
+    cor: '#6366f1',
+    descricao: 'Escritura, impostos, registo e mudança de titulares',
+    tarefas: [
+      'Marcação da escritura e confirmação do local e hora',
+      'Confirmação da documentação do imóvel no dia da escritura',
+      'Pagamento do IMT e do Imposto do Selo',
+      'Escritura de compra e venda',
+      'Pagamento dos honorários do solicitador ou advogado',
+      'Confirmação do registo predial e fiscal',
+      'Mudança de titular dos contratos (água, eletricidade e condomínio)',
+    ],
+  },
+  ...FASES_FIX_FLIP.filter((f) => f.key !== 'aquisicao'),
+]
 
 // Fluxo Wholesaling: alinhar investidor antes de comprometer a compra.
 // Procurar Investidor → Negociação → CPCV de Compra → CPCV de Cedência → Fee Recebido
