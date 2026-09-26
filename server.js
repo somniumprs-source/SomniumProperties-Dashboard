@@ -145,6 +145,15 @@ try {
   const { default: userRoutes, accessRouter, requireRole, requireModule, requireModuleOrOwnInvestidor, restrictByAccess, restrictProjetosAccess, resolveAppUser, RECORD_RESTRICTED_ROLES } = await import('./src/db/userRoutes.js')
   app.use('/api/users', userRoutes)
   app.use('/api/acessos', accessRouter)
+  // Só consulta para roles externos: por agora só a equipa interna altera
+  // dados — parceiros e investidores veem o que lhes foi partilhado mas não
+  // criam, editam nem apagam nada (espelho em supabase/functions/crm).
+  app.use('/api/crm', async (req, res, next) => {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next()
+    const u = await resolveAppUser(req).catch(() => null)
+    if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return res.status(403).json({ error: 'Acesso só de consulta' })
+    next()
+  })
   // Camadas de acesso do CRM — montadas ANTES do router CRM para correrem primeiro.
   // admin passa sempre; em dev sem Supabase (supabaseAdmin nulo) também passa sempre.
   // parceiro/investidor ficam filtrados por registo via `acessos` (restrictByAccess).

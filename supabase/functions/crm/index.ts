@@ -595,6 +595,16 @@ app.use("*", async (c, next) => {
   await next();
 });
 
+// ── Só consulta para roles externos (espelho de server.js) ──────────
+// Por agora só a equipa interna altera dados: parceiros e investidores veem
+// o que lhes foi partilhado mas não criam, editam nem apagam nada.
+app.use("*", async (c, next) => {
+  if (["GET", "HEAD", "OPTIONS"].includes(c.req.method)) return await next();
+  const u = await resolveCrmUser(c).catch(() => null);
+  if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return c.json({ error: "Acesso só de consulta" }, 403);
+  await next();
+});
+
 // ── Middleware de isolamento regional (port de routes.js 172-194) — 403 em edicao cruzada ──
 app.use("*", async (c, next) => {
   try {
