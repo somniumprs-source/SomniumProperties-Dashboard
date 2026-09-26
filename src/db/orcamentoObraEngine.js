@@ -743,7 +743,7 @@ function linhasFechoObra(s, regime) {
     out.push(linhaHonorarios('Telas finais (as-built)', num(s.telas_finais),
       `${num(s.telas_finais)} €`, s.telas_singular ? 25 : 0))
   if (num(s.fth) > 0)
-    out.push(linhaHonorarios('Ficha técnica da habitação (FTH)', num(s.fth),
+    out.push(linhaHonorarios('Ficha Técnica de Habitação (FTH)', num(s.fth),
       `${num(s.fth)} €`, s.fth_singular ? 25 : 0))
   if (num(s.sce_final) > 0)
     out.push(linhaHonorarios('SCE final pós-obra', num(s.sce_final),

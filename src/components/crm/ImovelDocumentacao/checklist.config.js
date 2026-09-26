@@ -6,14 +6,14 @@
  */
 
 export const CHECKLIST_DOCUMENTACAO = [
-  { slot: 'caderneta_predial', titulo: 'Caderneta predial', descricao: 'Documento das Finanças com identificação fiscal do imóvel.' },
-  { slot: 'certidao_permanente', titulo: 'Certidão permanente', descricao: 'Comprova titularidade, ónus e encargos.' },
-  { slot: 'licenca_utilizacao', titulo: 'Licença de utilização', descricao: 'Emitida pela Câmara Municipal; obrigatória na escritura.' },
-  { slot: 'ficha_tecnica', titulo: 'Ficha técnica da habitação', descricao: 'Características técnicas do imóvel.' },
-  { slot: 'certificado_energetico', titulo: 'Certificado energético', descricao: 'Classe energética emitida pela ADENE.' },
-  { slot: 'planta_imovel', titulo: 'Planta do imóvel', descricao: 'Planta arquitetónica ou cadastral.' },
-  { slot: 'cpcv', titulo: 'CPCV de compra', descricao: 'CPCV assinado entre vendedor e Somnium.' },
-  { slot: 'id_vendedor', titulo: 'Identificação do vendedor', descricao: 'CC/passaporte e NIF do titular.' },
+  { slot: 'caderneta_predial', titulo: 'Caderneta Predial Urbana', descricao: 'Documento das Finanças com identificação fiscal do imóvel.' },
+  { slot: 'certidao_permanente', titulo: 'Certidão Permanente do Registo Predial', descricao: 'Comprova titularidade, ónus e encargos.' },
+  { slot: 'licenca_utilizacao', titulo: 'Licença de Utilização', descricao: 'Emitida pela Câmara Municipal; obrigatória na escritura.' },
+  { slot: 'ficha_tecnica', titulo: 'Ficha Técnica de Habitação', descricao: 'Características técnicas do imóvel.' },
+  { slot: 'certificado_energetico', titulo: 'Certificado Energético', descricao: 'Classe energética emitida pela ADENE.' },
+  { slot: 'planta_imovel', titulo: 'Planta do imóvel', descricao: 'Planta arquitectónica ou cadastral.' },
+  { slot: 'cpcv', titulo: 'Contrato Promessa Compra e Venda', descricao: 'CPCV assinado entre vendedor e Somnium.' },
+  { slot: 'id_vendedor', titulo: 'Documento de identificação do vendedor', descricao: 'CC/passaporte e NIF do titular.' },
   { slot: 'comprovativo_imi', titulo: 'Comprovativo de IMI', descricao: 'Último comprovativo de pagamento de IMI.' },
 ]
 

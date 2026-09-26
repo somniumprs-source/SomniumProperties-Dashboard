@@ -18,7 +18,7 @@ export const CHECKLIST_TEMPLATES = {
     { key: 'pre_zona', titulo: 'Preencher zona/freguesia', campo_crm: 'zona', categoria: 'Pesquisa de Imóveis', tempo_estimado: 0.1, obrigatoria: true },
     { key: 'pre_areas', titulo: 'Preencher áreas do anúncio (área bruta e ABD)', campo_crm: 'area_bruta, area_bruta_dependente', categoria: 'Pesquisa de Imóveis', tempo_estimado: 0.1, obrigatoria: true },
     { key: 'pre_screening', titulo: 'Fazer pré-screening: calcular preço/m2 e comparar com média da zona', campo_crm: 'notas', categoria: 'Pesquisa de Imóveis', tempo_estimado: 0.25, obrigatoria: false },
-    { key: 'pre_caderneta', titulo: 'Consultar a caderneta predial online (Portal das Finanças)', campo_crm: 'notas', categoria: 'Pesquisa de Imóveis', tempo_estimado: 0.25, obrigatoria: false },
+    { key: 'pre_caderneta', titulo: 'Consultar Caderneta Predial Urbana online (Portal das Finanças)', campo_crm: 'notas', categoria: 'Pesquisa de Imóveis', tempo_estimado: 0.25, obrigatoria: false },
   ],
 
   'Adicionado': [
