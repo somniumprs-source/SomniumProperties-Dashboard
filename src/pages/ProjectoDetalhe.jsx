@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import {
   ArrowLeft, CheckCircle2, Circle, Plus, Trash2, Upload, X,
   Wallet, FileText, Users, BarChart3, ChevronRight,
@@ -67,6 +67,7 @@ const ESTADO_COR = {
 
 const TABS_BASE = [
   { key: 'resumo',       label: 'Resumo',           icon: BarChart3 },
+  { key: 'fases',        label: 'Fases e Tarefas',  icon: ClipboardCheck },
   { key: 'fracoes',      label: 'Frações e Áreas',  icon: Layers, predioOnly: true },
   { key: 'analise',      label: 'Análise Financeira', icon: Calculator },
   { key: 'obras',        label: 'Obras',            icon: Home },
@@ -101,7 +102,8 @@ export function ProjectoDetalhe() {
   const navigate = useNavigate()
   const { isReadOnly, isInvestidor } = useAuth()
   const [fracaoSel, setFracaoSel] = useState(null)  // null = "Prédio inteiro"
-  const [tab, setTab] = useState('resumo')
+  const [searchParams] = useSearchParams()
+  const [tab, setTab] = useState(() => searchParams.get('tab') || 'resumo')
   const [editing, setEditing] = useState(false)
   const [savingEdit, setSavingEdit] = useState(false)
 
@@ -140,7 +142,7 @@ export function ProjectoDetalhe() {
     : fotos.filter(f => f.fracao_id === fracaoSel || (fracaoSel === '__comum__' && !f.fracao_id))
 
   async function inicializarFases() {
-    if (!confirm('Criar as 8 fases de obra para este projeto?')) return
+    if (!confirm('Criar as fases deste projeto?')) return
     const r = await apiFetch(`/api/crm/projetos/${id}/fases/inicializar`, { method: 'POST' })
     if (!r.ok) {
       const e = await r.json().catch(() => ({}))
@@ -166,7 +168,9 @@ export function ProjectoDetalhe() {
   const TABS = TABS_BASE.filter(t =>
     (!t.predioOnly || isPredio) &&
     !(isConsultoria && TABS_OCULTAS_CONSULTORIA.has(t.key)) &&
-    !(t.teamOnly && isReadOnly)
+    !(t.teamOnly && isReadOnly) &&
+    // Wholesaling não tem obra: sem orçamento, fotos nem vistorias.
+    !(t.key === 'obras' && isWholesalling)
   )
 
   return (
@@ -207,7 +211,7 @@ export function ProjectoDetalhe() {
           </Link>
           <div className="flex items-center gap-2">
             {!isReadOnly && semFases && (
-              <Button size="sm" icon={Plus} onClick={inicializarFases}>{isWholesalling ? 'Inicializar fases' : 'Inicializar fases de obra'}</Button>
+              <Button size="sm" icon={Plus} onClick={inicializarFases}>Inicializar fases</Button>
             )}
             <button type="button" onClick={() => openDocument(`/api/crm/projetos/${id}/export-excel`, { download: true }).catch(e => console.error('[export-excel]', e.message))}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50">
@@ -327,6 +331,7 @@ export function ProjectoDetalhe() {
                 ? <AnaliseTab imovelId={imovel.id} imovelNome={imovel.nome} imovel={imovel} emProjeto />
                 : <p className="text-sm text-gray-400 py-8 text-center">Sem imóvel associado a este projeto.</p>
             )}
+            {tab === 'fases' && <TabFases fases={fasesFiltradas} onChange={load} readOnly={isReadOnly} negocioId={id} />}
             {tab === 'obras' && (
               <TabObras
                 imovel={imovel} negocio={negocio} negocioId={id}
@@ -440,11 +445,11 @@ function Field({ label, value, accent }) {
 
 // ════════════════════════════════════════════════════════════════
 // TAB: OBRAS — agrupa tudo o que é acompanhamento de obra num único
-// separador com sub-abas: Orçamento, Fases da Obra, Fotos, Vistoria Semanal.
+// separador com sub-abas: Orçamento, Fotos, Vistoria Semanal. As fases e
+// tarefas vivem no separador próprio "Fases e Tarefas" (não são só de obra).
 // ════════════════════════════════════════════════════════════════
 function TabObras({ imovel, negocio, negocioId, fases, fotos, fracaoSel, isWholesalling, isReadOnly, onChange }) {
   const SUBTABS_OBRAS = [
-    { key: 'fases',     label: 'Fases da Obra' },
     { key: 'orcamento', label: 'Orçamento',        hidden: isWholesalling },
     { key: 'fotos',     label: 'Fotos',            hidden: isWholesalling },
     { key: 'vistorias', label: 'Vistoria Semanal', hidden: isReadOnly },
@@ -472,7 +477,6 @@ function TabObras({ imovel, negocio, negocioId, fases, fotos, fracaoSel, isWhole
       </div>
 
       {sub === 'orcamento' && <TabOrcamento imovel={imovel} negocio={negocio} onChange={onChange} />}
-      {sub === 'fases' && <TabFases fases={fases} onChange={onChange} readOnly={isReadOnly} negocioId={negocioId} />}
       {sub === 'fotos' && <TabFotos negocioId={negocioId} fases={fases} fotos={fotos} onChange={onChange} readOnly={isReadOnly} fracaoSel={fracaoSel} />}
       {sub === 'vistorias' && <TabVistorias negocioId={negocioId} negocio={negocio} />}
     </div>
@@ -484,7 +488,7 @@ function TabObras({ imovel, negocio, negocioId, fases, fotos, fracaoSel, isWhole
 // ════════════════════════════════════════════════════════════════
 function TabFases({ fases, onChange, readOnly, negocioId }) {
   if (fases.length === 0) {
-    return <p className="text-center text-sm text-gray-400 py-8">Sem fases de obra criadas. Inicializa-as no topo da página.</p>
+    return <p className="text-center text-sm text-gray-400 py-8">Sem fases criadas. Inicializa-as no topo da página.</p>
   }
   return (
     <div className="space-y-3">

@@ -553,7 +553,7 @@ export function Projectos() {
           <GrelhaProjetos
             projectos={filtered}
             fasesInfo={fasesPorNegocio}
-            onCardClick={(id) => navigate(`/projectos/${id}`)}
+            onCardClick={(id) => navigate(`/projectos/${id}?tab=fases`)}
           />
         ) : view === 'kanban' ? (
           <KanbanBoard
@@ -561,7 +561,7 @@ export function Projectos() {
             cardsPorColuna={cardsPorColuna}
             fasesInfo={fasesPorNegocio}
             readOnly={isReadOnly}
-            onCardClick={(id) => navigate(`/projectos/${id}`)}
+            onCardClick={(id) => navigate(`/projectos/${id}?tab=fases`)}
             onMoveCard={async (negocioId, faseKey) => {
               try {
                 const r = await apiFetch(`/api/crm/projetos/${negocioId}/mover-fase`, {
@@ -585,7 +585,7 @@ export function Projectos() {
           <ListaProjetos
             projectos={filtered}
             fasesInfo={fasesPorNegocio}
-            onCardClick={(id) => navigate(`/projectos/${id}`)}
+            onCardClick={(id) => navigate(`/projectos/${id}?tab=fases`)}
           />
         )}
       </div>
