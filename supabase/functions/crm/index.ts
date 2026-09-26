@@ -6958,6 +6958,14 @@ app.get("/projetos/:negocioId/resumo", async (c: any) => {
         if (analiseAtiva) analise = { ...analiseAtiva, ...calcAnalise(analiseAtiva) };
       } catch (e) { console.error("[projetos/resumo] análise:", (e as Error).message); }
     }
+    // Com a Análise guardada como final, o estimado do projeto usa a cópia
+    // congelada e deixa de acompanhar edições posteriores da análise do imóvel.
+    const final = negocio.analise_final;
+    if (final?.snapshot) analise = final.snapshot;
+    const analiseFinal = final?.snapshot
+      ? { analise_id: final.analise_id, versao: final.versao, guardada_em: final.guardada_em, guardada_por: final.guardada_por }
+      : null;
+    delete negocio.analise_final;
 
     const orcAlocado = fases.reduce((s: number, f: any) => s + (Number(f.orcamento_alocado) || 0), 0);
     const custoReal = fases.reduce((s: number, f: any) => s + (Number(f.custo_real) || 0), 0);
@@ -6966,8 +6974,30 @@ app.get("/projetos/:negocioId/resumo", async (c: any) => {
       : 0;
     const faseAtual = fases.find((f: any) => f.estado === "em_curso") || fases.find((f: any) => f.estado === "pendente") || fases[fases.length - 1];
 
-    return c.json({ negocio, imovel, analise, fases, orcAlocado, custoReal, percGlobal, faseAtual });
+    return c.json({ negocio, imovel, analise, analiseFinal, fases, orcAlocado, custoReal, percGlobal, faseAtual });
   } catch (e) { console.error("[projetos/resumo]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
+
+// Guarda a Análise Financeira ativa do imóvel como final no projeto (cópia
+// congelada com os cálculos). Por agora só administradores.
+app.post("/projetos/:negocioId/analise-final", async (c: any) => {
+  try {
+    const u = await resolveCrmUser(c).catch(() => null);
+    if (!u || u.role !== "admin") return c.json({ error: "Só administradores podem guardar a análise final" }, 403);
+    const { rows: [neg] } = await pool.query("SELECT id, imovel_id FROM negocios WHERE id = $1 AND deleted_at IS NULL", [c.req.param("negocioId")]);
+    if (!neg) return c.json({ error: "Projeto não encontrado" }, 404);
+    if (!neg.imovel_id) return c.json({ error: "Projeto sem imóvel associado" }, 400);
+    const { rows: [a] } = await pool.query("SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1", [neg.imovel_id]);
+    if (!a) return c.json({ error: "O imóvel não tem Análise Financeira ativa" }, 400);
+    const final = {
+      analise_id: a.id, versao: a.versao ?? null,
+      guardada_em: new Date().toISOString(), guardada_por: u?.nome || u?.email || null,
+      snapshot: { ...a, ...calcAnalise(a) },
+    };
+    await pool.query("UPDATE negocios SET analise_final = $1, updated_at = NOW() WHERE id = $2", [JSON.stringify(final), neg.id]);
+    const { snapshot: _s, ...meta } = final;
+    return c.json({ ok: true, analiseFinal: meta });
+  } catch (e) { console.error("[projetos/analise-final]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
 });
 
 // ── Routers portados (analises, orcamento-obra, regiao) — port dos sub-routers Express ──

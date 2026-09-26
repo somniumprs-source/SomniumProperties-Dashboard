@@ -6845,6 +6845,14 @@ router.get('/projetos/:negocioId/resumo', async (req, res) => {
         if (analiseAtiva) analise = { ...analiseAtiva, ...calcAnalise(analiseAtiva) }
       } catch (e) { console.error('[projetos/resumo] análise:', e.message) }
     }
+    // Com a Análise guardada como final, o estimado do projeto usa a cópia
+    // congelada e deixa de acompanhar edições posteriores da análise do imóvel.
+    const final = negocio.analise_final
+    if (final?.snapshot) analise = final.snapshot
+    const analiseFinal = final?.snapshot
+      ? { analise_id: final.analise_id, versao: final.versao, guardada_em: final.guardada_em, guardada_por: final.guardada_por }
+      : null
+    delete negocio.analise_final
 
     const orcAlocado = fases.reduce((s, f) => s + (Number(f.orcamento_alocado) || 0), 0)
     const custoReal = fases.reduce((s, f) => s + (Number(f.custo_real) || 0), 0)
@@ -6853,8 +6861,31 @@ router.get('/projetos/:negocioId/resumo', async (req, res) => {
       : 0
     const faseAtual = fases.find(f => f.estado === 'em_curso') || fases.find(f => f.estado === 'pendente') || fases[fases.length - 1]
 
-    res.json({ negocio, imovel, analise, fases, orcAlocado, custoReal, percGlobal, faseAtual })
+    res.json({ negocio, imovel, analise, analiseFinal, fases, orcAlocado, custoReal, percGlobal, faseAtual })
   } catch (e) { console.error('[projetos/resumo]', e.message); res.status(500).json({ error: e.message }) }
+})
+
+// Guarda a Análise Financeira ativa do imóvel como final no projeto (cópia
+// congelada com os cálculos). Por agora só administradores (em dev sem
+// Supabase não há utilizador e passa, como nos restantes guards).
+router.post('/projetos/:negocioId/analise-final', async (req, res) => {
+  try {
+    const u = await resolveCrmUser(req).catch(() => null)
+    if (u && u.role !== 'admin') return res.status(403).json({ error: 'Só administradores podem guardar a análise final' })
+    const { rows: [neg] } = await pool.query('SELECT id, imovel_id FROM negocios WHERE id = $1 AND deleted_at IS NULL', [req.params.negocioId])
+    if (!neg) return res.status(404).json({ error: 'Projeto não encontrado' })
+    if (!neg.imovel_id) return res.status(400).json({ error: 'Projeto sem imóvel associado' })
+    const { rows: [a] } = await pool.query('SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1', [neg.imovel_id])
+    if (!a) return res.status(400).json({ error: 'O imóvel não tem Análise Financeira ativa' })
+    const final = {
+      analise_id: a.id, versao: a.versao ?? null,
+      guardada_em: new Date().toISOString(), guardada_por: u?.nome || u?.email || null,
+      snapshot: { ...a, ...calcAnalise(a) },
+    }
+    await pool.query('UPDATE negocios SET analise_final = $1, updated_at = NOW() WHERE id = $2', [JSON.stringify(final), neg.id])
+    const { snapshot: _s, ...meta } = final
+    res.json({ ok: true, analiseFinal: meta })
+  } catch (e) { console.error('[projetos/analise-final]', e.message); res.status(500).json({ error: e.message }) }
 })
 
 // ── Auditoria · historico de alteracoes (admin only) ──────────────

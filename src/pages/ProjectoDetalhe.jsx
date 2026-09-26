@@ -100,7 +100,7 @@ const CATEGORIAS_COMUM = [
 export function ProjectoDetalhe() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { isReadOnly, isInvestidor } = useAuth()
+  const { isReadOnly, isInvestidor, role } = useAuth()
   const [fracaoSel, setFracaoSel] = useState(null)  // null = "Prédio inteiro"
   const [searchParams] = useSearchParams()
   const [tab, setTab] = useState(() => searchParams.get('tab') || 'resumo')
@@ -328,7 +328,10 @@ export function ProjectoDetalhe() {
             {tab === 'fracoes' && <TabFracoes negocioId={id} fracoes={fracoes} onChange={load} readOnly={isReadOnly} fasesComuns={fases.filter(f => !f.fracao_id)} />}
             {tab === 'analise' && (
               imovel
-                ? <AnaliseTab imovelId={imovel.id} imovelNome={imovel.nome} imovel={imovel} emProjeto />
+                ? <>
+                    <AnaliseFinalBar negocioId={id} analiseFinal={resumo.analiseFinal} podeGuardar={role === 'admin'} onChange={load} />
+                    <AnaliseTab imovelId={imovel.id} imovelNome={imovel.nome} imovel={imovel} emProjeto />
+                  </>
                 : <p className="text-sm text-gray-400 py-8 text-center">Sem imóvel associado a este projeto.</p>
             )}
             {tab === 'fases' && <TabFases fases={fasesFiltradas} onChange={load} readOnly={isReadOnly} negocioId={id} />}
@@ -357,6 +360,52 @@ function BannerKpi({ label, value }) {
       <p className="text-overline uppercase tracking-widest text-white/50 font-semibold">{label}</p>
       <p className="text-xl font-mono font-bold mt-1 truncate">{value}</p>
     </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
+// ANÁLISE FINAL — guarda a análise ativa como final no projeto: o Estimado
+// passa a usar essa cópia e deixa de mexer com edições posteriores.
+// ════════════════════════════════════════════════════════════════
+function AnaliseFinalBar({ negocioId, analiseFinal, podeGuardar, onChange }) {
+  const toast = useToast()
+  const [saving, setSaving] = useState(false)
+
+  async function guardar() {
+    const msg = analiseFinal
+      ? 'Substituir a análise final guardada pela análise atual? O Estimado do projeto passa a usar os novos valores.'
+      : 'Guardar a análise atual como final? O Estimado do projeto fica fixo nestes valores.'
+    if (!confirm(msg)) return
+    setSaving(true)
+    const r = await apiFetch(`/api/crm/projetos/${negocioId}/analise-final`, { method: 'POST' })
+    setSaving(false)
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      toast?.(err.error || `Erro ao guardar (${r.status})`, 'error', 3500)
+      return
+    }
+    toast?.('Análise guardada como final', 'success', 2500)
+    onChange()
+  }
+
+  return (
+    <Card padding="sm" className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-start gap-2 min-w-0">
+        {analiseFinal
+          ? <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+          : <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />}
+        <p className="text-sm text-gray-700 dark:text-neutral-200">
+          {analiseFinal
+            ? <>Análise final guardada a <b>{fmtData(analiseFinal.guardada_em)}</b>{analiseFinal.guardada_por ? <> por {analiseFinal.guardada_por}</> : null}. O Estimado do projeto usa estes valores.</>
+            : <>A análise ainda não foi guardada como final. O Estimado do projeto acompanha-a em tempo real.</>}
+        </p>
+      </div>
+      {podeGuardar && (
+        <Button size="sm" variant={analiseFinal ? 'secondary' : 'primary'} onClick={guardar} disabled={saving}>
+          {saving ? 'A guardar…' : analiseFinal ? 'Guardar de novo como final' : 'Guardar como final'}
+        </Button>
+      )}
+    </Card>
   )
 }
 
