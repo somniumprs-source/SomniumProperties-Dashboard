@@ -32,6 +32,7 @@ function getMonthMatrix(year, month) {
 
 const FASE_COR = {
   pre_aquisicao: '#1F4E5F',
+  pre_obra: '#5F4D20',
   aquisicao: '#475569',
   projeto_licenca: '#1F4E5F',
   demolicoes: '#7C2D40',

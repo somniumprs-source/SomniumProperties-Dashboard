@@ -83,10 +83,12 @@ const FASES_CONSULTORIA_KANBAN = [
   { key: 'cons_fecho',       nome: 'Fecho e Faturação',     icon: '✅', cor: '#0d0d0d' },
 ]
 
-// CAEP: Pré-aquisição antes da Aquisição; depois segue o workflow do Fix and Flip
+// CAEP: Pré-aquisição → Aquisição → Pré-obra; das Demolições em diante segue o Fix and Flip
 const FASES_CAEP_KANBAN = [
   { key: 'pre_aquisicao', nome: 'Pré-aquisição', icon: '📋', cor: '#1F4E5F' },
-  ...FASES_FIX_FLIP_KANBAN,
+  ...FASES_FIX_FLIP_KANBAN.filter(f => f.key === 'aquisicao'),
+  { key: 'pre_obra', nome: 'Pré-obra', icon: '🧭', cor: '#5F4D20' },
+  ...FASES_FIX_FLIP_KANBAN.filter(f => f.key !== 'aquisicao' && f.key !== 'projeto_licenca'),
 ]
 
 // Mapa de categoria → colunas Kanban

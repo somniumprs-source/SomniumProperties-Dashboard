@@ -41,6 +41,7 @@ import { generateDocx, getAvailableTypes } from './docxGenerator.js'
 import { runEstudoLocalizacao } from '../lib/estudoLocalizacao.js'
 import { FASES_FIX_FLIP, FASES_POR_CATEGORIA, getTemplateFases, getFaseConfigGlobal } from './fasesFixFlip.js'
 import { avaliarDealBreakers, painelDealBreakers } from './dealBreakers.js'
+import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase } from './projetoTarefas.js'
 import { resolveAppUser, RECORD_RESTRICTED_ROLES } from './userRoutes.js'
 import {
   generateFichaAcompanhamento,
@@ -1323,12 +1324,7 @@ async function criarFasesProjecto(negocioId, categoria) {
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [faseId, negocioId, fracaoId, fase.key, fase.nome, i, i === 0 ? 'em_curso' : 'pendente']
     )
-    for (let j = 0; j < fase.tarefas.length; j++) {
-      await pool.query(
-        `INSERT INTO projeto_tarefas (id, fase_id, descricao, ordem) VALUES ($1, $2, $3, $4)`,
-        [randomUUID(), faseId, fase.tarefas[j], j]
-      )
-    }
+    await inserirTarefasDoModelo(pool, faseId, fase.tarefas, randomUUID)
   }
 }
 
@@ -4940,8 +4936,10 @@ router.get('/projetos/:negocioId/fases', async (req, res) => {
     }
     const enriched = fases.map(f => {
       const fts = tarefas.filter(t => t.fase_id === f.id)
-      const concluidas = fts.filter(t => t.concluida).length
-      const total = fts.length
+      // Tarefas opcionais por ativar não contam (nem para o total nem para a %)
+      const ativas = fts.filter(t => t.ativa !== false)
+      const concluidas = ativas.filter(t => t.concluida).length
+      const total = ativas.length
       const percTarefas = total > 0 ? Math.round((concluidas / total) * 100) : 0
       return {
         ...f,
@@ -5011,6 +5009,8 @@ router.put('/projetos/fases/:faseId', async (req, res) => {
       })
     }
 
+    // Fase reaberta: a percentagem volta a ser a das tarefas
+    if (req.body.estado && req.body.estado !== 'concluida') await recalcularFase(pool, rows[0].id)
     res.json(rows[0])
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -5027,6 +5027,7 @@ router.post('/projetos/fases/:faseId/tarefas', async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [id, req.params.faseId, descricao.trim(), maxOrdem[0].m + 1, responsavel || null, deadline || null, notas || null]
     )
+    await recalcularFase(pool, req.params.faseId)
     res.status(201).json(rows[0])
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -5034,7 +5035,20 @@ router.post('/projetos/fases/:faseId/tarefas', async (req, res) => {
 // PUT tarefa (toggle concluída, editar campos)
 router.put('/projetos/tarefas/:tarefaId', async (req, res) => {
   try {
-    const allowed = ['descricao', 'concluida', 'responsavel', 'deadline', 'notas']
+    const { rows: [atual] } = await pool.query('SELECT fase_id, checklist, opcional FROM projeto_tarefas WHERE id = $1', [req.params.tarefaId])
+    if (!atual) return res.status(404).json({ error: 'Tarefa não encontrada' })
+    // Uma tarefa com checklist só se conclui com os itens obrigatórios feitos
+    if (req.body.concluida) {
+      const ch = lerChecklist(atual.checklist)
+      if (ch) {
+        const inv = ch.por_investidor ? await investidoresDaFase(pool, atual.fase_id) : []
+        if (!checklistCompleta(ch, inv)) {
+          return res.status(400).json({ error: ch.por_investidor && !inv.length ? 'Associa os investidores ao projeto antes de concluir esta tarefa' : 'Completa a checklist antes de concluir a tarefa' })
+        }
+      }
+    }
+    if (req.body.ativa !== undefined && !atual.opcional) return res.status(400).json({ error: 'Só as tarefas opcionais se ativam ou desativam' })
+    const allowed = ['descricao', 'concluida', 'responsavel', 'deadline', 'notas', 'ativa']
     const sets = []
     const params = []
     for (const k of allowed) {
@@ -5069,13 +5083,39 @@ router.put('/projetos/tarefas/:tarefaId', async (req, res) => {
         })
       }
     }
+    await recalcularFase(pool, rows[0].fase_id)
+    res.json(rows[0])
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Marca ou desmarca um item da checklist de uma tarefa (regista quem e quando).
+router.put('/projetos/tarefas/:tarefaId/checklist', async (req, res) => {
+  try {
+    const { chave, feito, nota } = req.body || {}
+    const { rows: [t] } = await pool.query('SELECT fase_id, checklist FROM projeto_tarefas WHERE id = $1', [req.params.tarefaId])
+    if (!t) return res.status(404).json({ error: 'Tarefa não encontrada' })
+    const ch = lerChecklist(t.checklist)
+    const k = String(chave || '')
+    const itemK = k.includes(':') ? k.split(':').pop() : k
+    if (!ch || !ch.itens.some(i => i.k === itemK)) return res.status(400).json({ error: 'Item da checklist inválido' })
+    const u = await resolveCrmUser(req).catch(() => null)
+    const anterior = ch.estado?.[k] || {}
+    ch.estado = { ...(ch.estado || {}), [k]: {
+      feito: feito !== undefined ? !!feito : !!anterior.feito,
+      nota: nota !== undefined ? String(nota) : (anterior.nota || ''),
+      por: feito !== undefined ? (u?.nome || u?.email || null) : anterior.por || null,
+      em: feito !== undefined ? new Date().toISOString() : anterior.em || null,
+    } }
+    const { rows } = await pool.query('UPDATE projeto_tarefas SET checklist = $1 WHERE id = $2 RETURNING *', [JSON.stringify(ch), req.params.tarefaId])
+    await recalcularFase(pool, t.fase_id)
     res.json(rows[0])
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 router.delete('/projetos/tarefas/:tarefaId', async (req, res) => {
   try {
-    await pool.query('DELETE FROM projeto_tarefas WHERE id = $1', [req.params.tarefaId])
+    const { rows: [t] } = await pool.query('DELETE FROM projeto_tarefas WHERE id = $1 RETURNING fase_id', [req.params.tarefaId])
+    if (t) await recalcularFase(pool, t.fase_id)
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -6120,13 +6160,14 @@ router.post('/projetos/:negocioId/fracoes', async (req, res) => {
         )
         // Duplicar tarefas-template
         const { rows: tarefas } = await pool.query(
-          `SELECT descricao, ordem FROM projeto_tarefas WHERE fase_id = $1 ORDER BY ordem`,
+          `SELECT descricao, ordem, checklist, opcional, ativa FROM projeto_tarefas WHERE fase_id = $1 ORDER BY ordem`,
           [f.id]
         )
         for (const t of tarefas) {
+          const ch = lerChecklist(t.checklist)
           await pool.query(
-            `INSERT INTO projeto_tarefas (id, fase_id, descricao, ordem) VALUES ($1, $2, $3, $4)`,
-            [randomUUID(), novaFaseId, t.descricao, t.ordem]
+            `INSERT INTO projeto_tarefas (id, fase_id, descricao, ordem, checklist, opcional, ativa) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [randomUUID(), novaFaseId, t.descricao, t.ordem, ch ? JSON.stringify({ ...ch, estado: {} }) : null, t.opcional, t.ativa]
           )
         }
       }

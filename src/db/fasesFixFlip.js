@@ -164,8 +164,8 @@ export function getFaseConfig(key) {
 // CAEP: começa com Pré-aquisição (documentação, contrato CAEP e capital dos
 // investidores) e uma Aquisição própria (da marcação da escritura à mudança
 // de titulares). O CPCV fica no Departamento Comercial: o projeto só nasce com
-// proposta aceite e CPCV alinhado. Da fase Projeto & Licença em diante segue o
-// workflow operacional do Fix and Flip.
+// proposta aceite e CPCV alinhado. Segue-se a Pré-obra (tarefas opcionais =
+// blocos que o Comercial marca) e, das Demolições em diante, o workflow do Fix and Flip.
 export const FASES_CAEP = [
   {
     key: 'pre_aquisicao',
@@ -174,8 +174,24 @@ export const FASES_CAEP = [
     cor: '#1F4E5F',
     descricao: 'Documentação do imóvel, contrato CAEP e capital dos investidores',
     tarefas: [
-      'Verificação final da documentação do imóvel',
-      'Recolha e envio da documentação dos investidores ao advogado para a minuta do CAEP',
+      { t: 'Verificação final da documentação do imóvel', checklist: [
+        { k: 'caderneta', t: 'Caderneta Predial Urbana', slot: 'caderneta_predial' },
+        { k: 'certidao', t: 'Certidão Permanente do Registo Predial', slot: 'certidao_permanente' },
+        { k: 'condominio', t: 'Declaração de dívidas do condomínio' },
+        { k: 'imi', t: 'Comprovativo de IMI', slot: 'comprovativo_imi' },
+        { k: 'agua_luz', t: 'Água e luz sem dívidas' },
+        { k: 'ce', t: 'Certificado Energético', slot: 'certificado_energetico' },
+        { k: 'licenca', t: 'Licença de Utilização ou isenção', slot: 'licenca_utilizacao' },
+      ] },
+      { t: 'Recolha e envio da documentação dos investidores ao advogado para a minuta do CAEP', porInvestidor: true, checklist: [
+        { k: 'cc', t: 'Cartão de cidadão' },
+        { k: 'nif', t: 'NIF' },
+        { k: 'morada', t: 'Comprovativo de morada' },
+        { k: 'iban', t: 'IBAN' },
+        { k: 'origem_fundos', t: 'Declaração de origem dos fundos' },
+        { k: 'nda', t: 'NDA' },
+        { k: 'risco', t: 'Declaração de risco' },
+      ] },
       'Revisão da minuta do CAEP',
       'Assinatura do CAEP por todos os intervenientes',
       'Transferência do capital dos investidores',
@@ -189,15 +205,107 @@ export const FASES_CAEP = [
     descricao: 'Escritura, impostos, registo e mudança de titulares',
     tarefas: [
       'Marcação da escritura e confirmação do local e hora',
-      'Confirmação da documentação do imóvel no dia da escritura',
+      { t: 'Confirmação da documentação do imóvel no dia da escritura', checklist: [
+        { k: 'caderneta', t: 'Caderneta Predial Urbana', slot: 'caderneta_predial' },
+        { k: 'certidao', t: 'Certidão Permanente do Registo Predial', slot: 'certidao_permanente' },
+        { k: 'ce', t: 'Certificado Energético', slot: 'certificado_energetico' },
+        { k: 'licenca', t: 'Licença de Utilização ou isenção', slot: 'licenca_utilizacao' },
+        { k: 'condominio', t: 'Declaração de dívidas do condomínio' },
+        { k: 'ficha_tecnica', t: 'Ficha Técnica de Habitação', slot: 'ficha_tecnica', obrigatoria: false },
+        { k: 'imt_is', t: 'Comprovativos de pagamento do IMT e do IS' },
+        { k: 'distrate', t: 'Distrate da hipoteca presente (banco do vendedor ou documento)', obrigatoria: false },
+      ] },
       'Pagamento do IMT e do Imposto do Selo',
       'Escritura de compra e venda',
       'Pagamento dos honorários do solicitador ou advogado',
-      'Confirmação do registo predial e fiscal',
-      'Mudança de titular dos contratos (água, eletricidade e condomínio)',
+      { t: 'Confirmação do registo predial e fiscal', checklist: [
+        { k: 'escritura', t: 'Cópia da escritura' },
+        { k: 'certidao', t: 'Certidão permanente: aquisição registada e ónus cancelados (usar o código já comprado)', slot: 'certidao_permanente' },
+        { k: 'caderneta', t: 'Caderneta atualizada', slot: 'caderneta_predial' },
+      ] },
+      { t: 'Mudança de titular dos contratos', checklist: [
+        { k: 'agua', t: 'Água' },
+        { k: 'eletricidade', t: 'Eletricidade' },
+        { k: 'condominio', t: 'Condomínio', obrigatoria: false },
+      ] },
     ],
   },
-  ...FASES_FIX_FLIP.filter(f => f.key !== 'aquisicao'),
+  {
+    key: 'pre_obra',
+    nome: 'Pré-obra',
+    icon: '🧭',
+    cor: '#5F4D20',
+    descricao: 'Tudo o que tem de estar resolvido antes de a obra começar',
+    tarefas: [
+      { t: 'Retificação de áreas', opcional: true, checklist: [
+        { k: 'modelo1', t: 'Modelo 1 do IMI entregue' },
+        { k: 'averbamento', t: 'Averbamento na certidão permanente' },
+      ] },
+      { t: 'ARU: vistoria inicial do estado de conservação', opcional: true, checklist: [
+        { k: 'pedido', t: 'Pedido de vistoria à câmara' },
+        { k: 'auto', t: 'Auto de vistoria com o nível de conservação inicial (antes de qualquer obra)' },
+      ] },
+      { t: 'Autorização do condomínio', opcional: true, checklist: [
+        { k: 'assembleia', t: 'Assembleia de condóminos' },
+        { k: 'ata', t: 'Ata com a aprovação' },
+      ] },
+      { t: 'Legalização: projeto submetido', opcional: true, checklist: [
+        { k: 'levantamento', t: 'Levantamento do existente' },
+        { k: 'projeto', t: 'Projeto de legalização com o estado final depois da obra' },
+        { k: 'submissao', t: 'Submissão na câmara dentro do prazo do PIP' },
+        { k: 'taxas', t: 'Pagamento das taxas' },
+      ] },
+      { t: 'Projeto e licenciamento', opcional: true, checklist: [
+        { k: 'arquitetura', t: 'Projeto de arquitetura' },
+        { k: 'especialidades', t: 'Projetos de especialidades' },
+        { k: 'submissao', t: 'Submissão (comunicação prévia ou licença)' },
+        { k: 'taxas', t: 'Pagamento das taxas' },
+        { k: 'alvara', t: 'Admissão ou alvará' },
+      ] },
+      { t: 'Propriedade horizontal', opcional: true, checklist: [
+        { k: 'certidao_camara', t: 'Certidão camarária de propriedade horizontal' },
+        { k: 'escritura', t: 'Escritura de constituição ou alteração' },
+        { k: 'registo', t: 'Registo predial' },
+        { k: 'matriz', t: 'Inscrição matricial das frações' },
+      ] },
+      { t: 'Revisão final da proposta do empreiteiro', checklist: [
+        { k: 'vistoria', t: 'Vistoria do empreiteiro ao imóvel' },
+        { k: 'medicoes', t: 'Medições e assunções confirmadas' },
+        { k: 'nao_incluidos', t: 'Trabalhos não incluídos e quem os assume' },
+        { k: 'prazo', t: 'Prazo definido (dias úteis ou de calendário)' },
+        { k: 'pagamentos', t: 'Plano de pagamentos' },
+        { k: 'proposta_final', t: 'Proposta final revista carregada' },
+      ] },
+      { t: 'IVA a 6%', checklist: [
+        { k: 'contabilista', t: 'Enquadramento validado pela contabilista (verba, 20% de materiais, autoliquidação)' },
+        { k: 'materiais', t: 'Divisão entre materiais e mão de obra obtida' },
+        { k: 'clausula', t: 'Cláusula de responsabilidade do IVA no contrato' },
+        { k: 'documento', t: 'Documento entregue ao empreiteiro (declaração da câmara, se ARU)' },
+      ] },
+      { t: 'Contrato de empreitada e pagamento do adiantamento', checklist: [
+        { k: 'prazo', t: 'Prazo (dias úteis ou de calendário)' },
+        { k: 'pagamentos', t: 'Preço e plano de pagamentos' },
+        { k: 'trabalhos_mais', t: 'Trabalhos a mais só com aprovação escrita' },
+        { k: 'nao_incluidos', t: 'Trabalhos não incluídos e responsáveis' },
+        { k: 'iva', t: 'Cláusula de IVA' },
+        { k: 'penalizacoes', t: 'Penalizações por atraso' },
+        { k: 'garantias', t: 'Garantias e retenção' },
+        { k: 'seguros', t: 'Seguros do empreiteiro' },
+        { k: 'alvara', t: 'Alvará do empreiteiro' },
+        { k: 'garantia_bancaria', t: 'Garantia bancária do adiantamento (se acordada)', obrigatoria: false },
+        { k: 'assinado', t: 'Contrato assinado' },
+        { k: 'adiantamento', t: 'Adiantamento pago (depois de assinar)' },
+      ] },
+      { t: 'Consignação da obra e fotografias do estado zero', checklist: [
+        { k: 'auto', t: 'Auto de consignação com a data do D1' },
+        { k: 'fotos', t: 'Fotografias do estado zero (todas as divisões)' },
+        { k: 'chaves', t: 'Entrega das chaves ao empreiteiro (quantas)' },
+        { k: 'contadores', t: 'Leitura dos contadores' },
+        { k: 'vizinhos', t: 'Comunicação a vizinhos ou condomínio', obrigatoria: false },
+      ] },
+    ],
+  },
+  ...FASES_FIX_FLIP.filter(f => f.key !== 'aquisicao' && f.key !== 'projeto_licenca'),
 ]
 
 // Fluxo Wholesaling: alinhar investidor antes de comprometer a compra.

@@ -9,6 +9,7 @@ import {
   CalendarClock, ClipboardCheck, Calculator, Receipt,
 } from 'lucide-react'
 import { ProjectoForm } from './Projectos.jsx'
+import { TarefasFase } from '../components/projeto/TarefasFase.jsx'
 import { DESP_CATEGORIAS } from '../constants.js'
 import { apiFetch, getToken, openDocument } from '../lib/api.js'
 import { Header } from '../components/layout/Header.jsx'
@@ -37,6 +38,7 @@ const SEMAFORO_STATUS = { verde: 'green', amarelo: 'yellow', laranja: 'orange', 
 
 const FASE_COR = {
   pre_aquisicao: '#1F4E5F',              // teal escuro (preparação CAEP)
+  pre_obra: '#5F4D20',                   // gold-800 (preparação da obra)
   aquisicao: '#475569',                  // slate (cálculo)
   projeto_licenca: '#1F4E5F',            // teal escuro (técnico)
   demolicoes: '#7C2D40',                 // vinho (transformação)
@@ -47,7 +49,7 @@ const FASE_COR = {
   vendido: '#0d0d0d',                    // brand dark (sucesso)
 }
 const FASE_ICON = {
-  pre_aquisicao: '📋', aquisicao: '🔑', projeto_licenca: '📐', demolicoes: '🔨', estrutura_especialidades: '⚡',
+  pre_aquisicao: '📋', aquisicao: '🔑', pre_obra: '🧭', projeto_licenca: '📐', demolicoes: '🔨', estrutura_especialidades: '⚡',
   acabamentos: '🎨', exterior_fecho: '🏠', comercializacao: '📣', vendido: '✅',
 }
 const ESTADO_LABEL = { pendente: 'Pendente', em_curso: 'Em curso', concluida: 'Concluída', bloqueada: 'Bloqueada' }
@@ -334,7 +336,7 @@ export function ProjectoDetalhe() {
                   </>
                 : <p className="text-sm text-gray-400 py-8 text-center">Sem imóvel associado a este projeto.</p>
             )}
-            {tab === 'fases' && <TabFases fases={fasesFiltradas} onChange={load} readOnly={isReadOnly} negocioId={id} />}
+            {tab === 'fases' && <TabFases fases={fasesFiltradas} onChange={load} readOnly={isReadOnly} negocioId={id} fotosImovel={imovel?.fotos} />}
             {tab === 'obras' && (
               <TabObras
                 imovel={imovel} negocio={negocio} negocioId={id}
@@ -546,21 +548,20 @@ function TabObras({ imovel, negocio, negocioId, fases, fotos, fracaoSel, isWhole
 // ════════════════════════════════════════════════════════════════
 // TAB: FASES & TAREFAS
 // ════════════════════════════════════════════════════════════════
-function TabFases({ fases, onChange, readOnly, negocioId }) {
+function TabFases({ fases, onChange, readOnly, negocioId, fotosImovel }) {
   if (fases.length === 0) {
     return <p className="text-center text-sm text-gray-400 py-8">Sem fases criadas. Inicializa-as no topo da página.</p>
   }
   return (
     <div className="space-y-3">
-      {fases.map(f => <FaseAccordion key={f.id} fase={f} onChange={onChange} readOnly={readOnly} negocioId={negocioId} />)}
+      {fases.map(f => <FaseAccordion key={f.id} fase={f} onChange={onChange} readOnly={readOnly} negocioId={negocioId} fotosImovel={fotosImovel} />)}
     </div>
   )
 }
 
-function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
+function FaseAccordion({ fase, onChange, readOnly, negocioId, fotosImovel }) {
   const toast = useToast()
   const [open, setOpen] = useState(fase.estado === 'em_curso')
-  const [novaTarefa, setNovaTarefa] = useState('')
   const [novaDespesa, setNovaDespesa] = useState({ movimento: '', valor: '', data: '', categoria: 'Material' })
   const cor = FASE_COR[fase.fase_key] || '#6366f1'
   const icon = FASE_ICON[fase.fase_key] || '🛠️'
@@ -639,43 +640,6 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
     else toast?.('Erro ao guardar', 'error')
     onChange()
   }
-  async function toggleTarefa(t) {
-    const r = await apiFetch(`/api/crm/projetos/tarefas/${t.id}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ concluida: t.concluida ? 0 : 1 }),
-    })
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}))
-      toast?.(`Erro ao actualizar tarefa: ${err.error || r.status}`, 'error', 3500)
-      return
-    }
-    onChange()
-  }
-  async function adicionarTarefa() {
-    if (!novaTarefa.trim()) return
-    const r = await apiFetch(`/api/crm/projetos/fases/${fase.id}/tarefas`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ descricao: novaTarefa.trim() }),
-    })
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}))
-      toast?.(`Erro ao adicionar tarefa: ${err.error || r.status}`, 'error', 3500)
-      return
-    }
-    setNovaTarefa('')
-    onChange()
-  }
-  async function apagarTarefa(t) {
-    if (!confirm(`Apagar tarefa "${t.descricao}"?`)) return
-    const r = await apiFetch(`/api/crm/projetos/tarefas/${t.id}`, { method: 'DELETE' })
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}))
-      toast?.(`Erro ao apagar tarefa: ${err.error || r.status}`, 'error', 3500)
-      return
-    }
-    onChange()
-  }
-
   return (
     <div className={`bg-white dark:bg-neutral-900 border rounded-xl overflow-hidden transition-all ${open ? 'shadow-md border-gray-300 dark:border-neutral-700' : 'border-gray-200 dark:border-neutral-800 shadow-xs'}`}>
       <button onClick={() => setOpen(!open)}
@@ -714,19 +678,7 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
             <div><span className="text-[10px] text-gray-500 uppercase block">Início real</span><span className="text-gray-700">{fase.data_inicio_real || '—'}</span></div>
             <div><span className="text-[10px] text-gray-500 uppercase block">Fim real</span><span className="text-gray-700">{fase.data_fim_real || '—'}</span></div>
           </div>
-          {fase.tarefas?.length > 0 && (
-            <div>
-              <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">Tarefas ({fase.tarefas_concluidas}/{fase.tarefas_total})</p>
-              <div className="space-y-1.5">
-                {fase.tarefas.map(t => (
-                  <div key={t.id} className="flex items-center gap-2 bg-white rounded-lg px-2.5 py-2 border border-gray-100">
-                    {t.concluida ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Circle className="w-4 h-4 text-gray-300" />}
-                    <span className={`flex-1 text-xs ${t.concluida ? 'line-through text-gray-400' : 'text-gray-700'}`}>{t.descricao}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <TarefasFase fase={fase} negocioId={negocioId} fotosImovel={fotosImovel} readOnly onChange={onChange} />
           {fase.notas && (
             <div>
               <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Notas</p>
@@ -747,15 +699,8 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
               </select>
             </div>
             <div>
-              <label className="text-[10px] text-gray-500 uppercase tracking-wide block mb-1">% Execução</label>
-              <input type="number" min={0} max={100}
-                key={`perc-${fase.id}-${fase.perc_execucao ?? 0}`}
-                defaultValue={fase.perc_execucao || 0}
-                onBlur={e => {
-                  const v = Math.max(0, Math.min(100, parseInt(e.target.value) || 0))
-                  if (v !== (fase.perc_execucao || 0)) setCampo('perc_execucao', v)
-                }}
-                className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white" />
+              <label className="text-[10px] text-gray-500 uppercase tracking-wide block mb-1">% Execução (automática)</label>
+              <p className="px-2.5 py-1.5 text-sm rounded-lg border border-gray-100 bg-gray-50 font-mono text-gray-700" title="Calculada pelas tarefas: todas valem o mesmo e as checklists contam em parte">{fase.perc_execucao || 0}%</p>
             </div>
             <div>
               <label className="text-[10px] text-gray-500 uppercase tracking-wide block mb-1">Responsável</label>
@@ -780,35 +725,8 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId }) {
             </div>
           </div>
 
-          {/* Tarefas */}
-          <div>
-            <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">Tarefas</p>
-            <div className="space-y-1.5 mb-2">
-              {(fase.tarefas || []).map(t => (
-                <div key={t.id} className="flex items-center gap-2 group bg-white rounded-lg px-2.5 py-2 border border-gray-100">
-                  <button onClick={() => toggleTarefa(t)} className="flex-shrink-0">
-                    {t.concluida
-                      ? <CheckCircle2 className="w-4 h-4 text-green-600" />
-                      : <Circle className="w-4 h-4 text-gray-300 hover:text-gray-500" />
-                    }
-                  </button>
-                  <span className={`flex-1 text-xs ${t.concluida ? 'line-through text-gray-400' : 'text-gray-700'}`}>{t.descricao}</span>
-                  {t.deadline && <span className="text-[10px] text-gray-400">{t.deadline}</span>}
-                  <button onClick={() => apagarTarefa(t)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-opacity">
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
-              {(fase.tarefas || []).length === 0 && <p className="text-[11px] text-gray-400 italic">Sem tarefas.</p>}
-            </div>
-            <div className="flex gap-2">
-              <input value={novaTarefa} onChange={e => setNovaTarefa(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && adicionarTarefa()}
-                placeholder="Nova tarefa..."
-                className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 bg-white" />
-              <Button size="sm" icon={Plus} onClick={adicionarTarefa} disabled={!novaTarefa.trim()}>Adicionar</Button>
-            </div>
-          </div>
+          {/* Tarefas (com checklist e tarefas opcionais) */}
+          <TarefasFase fase={fase} negocioId={negocioId} fotosImovel={fotosImovel} onChange={onChange} />
 
           {/* Despesas detalhadas (F2.6) */}
           <div>

@@ -38,6 +38,7 @@ import { removeFromStorage, supabase, uploadPublic, uploadPrivate } from "../_sh
 import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { isWholesaling } from "../_shared/modelos.ts";
 import { avaliarDealBreakers, painelDealBreakers } from "../_shared/dealBreakers.ts";
+import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase } from "../_shared/projetoTarefas.ts";
 import { CHECKLIST_ENFORCEMENT_START_DATE } from "../_shared/featureFlags.ts";
 import { diasFollowUpParaRegisto } from "../_shared/followupRules.ts";
 import { criarFollowUpConsultor } from "../_shared/consultorFollowups.ts";
@@ -293,12 +294,7 @@ async function criarFasesProjecto(negocioId: string, categoria: string): Promise
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [faseId, negocioId, fracaoId, fase.key, fase.nome, i, i === 0 ? "em_curso" : "pendente"],
     );
-    for (let j = 0; j < fase.tarefas.length; j++) {
-      await pool.query(
-        `INSERT INTO projeto_tarefas (id, fase_id, descricao, ordem) VALUES ($1, $2, $3, $4)`,
-        [crypto.randomUUID(), faseId, fase.tarefas[j], j],
-      );
-    }
+    await inserirTarefasDoModelo(pool, faseId, fase.tarefas, () => crypto.randomUUID());
   }
 }
 const criarFasesFixFlip = (negocioId: string) => criarFasesProjecto(negocioId, "Fix and Flip");
@@ -5353,8 +5349,10 @@ app.get("/projetos/:negocioId/fases", async (c: any) => {
     }
     const enriched = fases.map((f: any) => {
       const fts = tarefas.filter((t) => t.fase_id === f.id);
-      const concluidas = fts.filter((t) => t.concluida).length;
-      const total = fts.length;
+      // Tarefas opcionais por ativar não contam (nem para o total nem para a %)
+      const ativas = fts.filter((t) => t.ativa !== false);
+      const concluidas = ativas.filter((t) => t.concluida).length;
+      const total = ativas.length;
       const percTarefas = total > 0 ? Math.round((concluidas / total) * 100) : 0;
       return {
         ...f,
@@ -5419,6 +5417,8 @@ app.put("/projetos/fases/:faseId", async (c: any) => {
         user,
       });
     }
+    // Fase reaberta: a percentagem volta a ser a das tarefas
+    if (body.estado && body.estado !== "concluida") await recalcularFase(pool, rows[0].id);
     return c.json(rows[0]);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
@@ -5435,6 +5435,7 @@ app.post("/projetos/fases/:faseId/tarefas", async (c: any) => {
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [id, c.req.param("faseId"), descricao.trim(), maxOrdem[0].m + 1, responsavel || null, deadline || null, notas || null],
     );
+    await recalcularFase(pool, c.req.param("faseId"));
     return c.json(rows[0], 201);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
@@ -5443,7 +5444,20 @@ app.post("/projetos/fases/:faseId/tarefas", async (c: any) => {
 app.put("/projetos/tarefas/:tarefaId", async (c: any) => {
   try {
     const body = await c.req.json().catch(() => ({}));
-    const allowed = ["descricao", "concluida", "responsavel", "deadline", "notas"];
+    const { rows: [atual] } = await pool.query("SELECT fase_id, checklist, opcional FROM projeto_tarefas WHERE id = $1", [c.req.param("tarefaId")]);
+    if (!atual) return c.json({ error: "Tarefa não encontrada" }, 404);
+    // Uma tarefa com checklist só se conclui com os itens obrigatórios feitos
+    if (body.concluida) {
+      const ch = lerChecklist(atual.checklist);
+      if (ch) {
+        const inv = ch.por_investidor ? await investidoresDaFase(pool, atual.fase_id) : [];
+        if (!checklistCompleta(ch, inv)) {
+          return c.json({ error: ch.por_investidor && !inv.length ? "Associa os investidores ao projeto antes de concluir esta tarefa" : "Completa a checklist antes de concluir a tarefa" }, 400);
+        }
+      }
+    }
+    if (body.ativa !== undefined && !atual.opcional) return c.json({ error: "Só as tarefas opcionais se ativam ou desativam" }, 400);
+    const allowed = ["descricao", "concluida", "responsavel", "deadline", "notas", "ativa"];
     const sets: string[] = [];
     const params: any[] = [];
     for (const k of allowed) {
@@ -5474,6 +5488,31 @@ app.put("/projetos/tarefas/:tarefaId", async (c: any) => {
         });
       }
     }
+    await recalcularFase(pool, rows[0].fase_id);
+    return c.json(rows[0]);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── PUT item da checklist de uma tarefa (regista quem e quando) — port de routes.js ──
+app.put("/projetos/tarefas/:tarefaId/checklist", async (c: any) => {
+  try {
+    const { chave, feito, nota } = await c.req.json().catch(() => ({}));
+    const { rows: [t] } = await pool.query("SELECT fase_id, checklist FROM projeto_tarefas WHERE id = $1", [c.req.param("tarefaId")]);
+    if (!t) return c.json({ error: "Tarefa não encontrada" }, 404);
+    const ch = lerChecklist(t.checklist);
+    const k = String(chave || "");
+    const itemK = k.includes(":") ? k.split(":").pop() : k;
+    if (!ch || !ch.itens.some((i: any) => i.k === itemK)) return c.json({ error: "Item da checklist inválido" }, 400);
+    const u = await resolveCrmUser(c).catch(() => null);
+    const anterior = ch.estado?.[k] || {};
+    ch.estado = { ...(ch.estado || {}), [k]: {
+      feito: feito !== undefined ? !!feito : !!anterior.feito,
+      nota: nota !== undefined ? String(nota) : (anterior.nota || ""),
+      por: feito !== undefined ? (u?.nome || u?.email || null) : anterior.por || null,
+      em: feito !== undefined ? new Date().toISOString() : anterior.em || null,
+    } };
+    const { rows } = await pool.query("UPDATE projeto_tarefas SET checklist = $1 WHERE id = $2 RETURNING *", [JSON.stringify(ch), c.req.param("tarefaId")]);
+    await recalcularFase(pool, t.fase_id);
     return c.json(rows[0]);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
@@ -5481,7 +5520,8 @@ app.put("/projetos/tarefas/:tarefaId", async (c: any) => {
 // ── DELETE tarefa — port de routes.js 3696-3701 ──
 app.delete("/projetos/tarefas/:tarefaId", async (c: any) => {
   try {
-    await pool.query("DELETE FROM projeto_tarefas WHERE id = $1", [c.req.param("tarefaId")]);
+    const { rows: [t] } = await pool.query("DELETE FROM projeto_tarefas WHERE id = $1 RETURNING fase_id", [c.req.param("tarefaId")]);
+    if (t) await recalcularFase(pool, t.fase_id);
     return c.json({ ok: true });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
@@ -6369,13 +6409,14 @@ app.post("/projetos/:negocioId/fracoes", async (c: any) => {
           [novaFaseId, c.req.param("negocioId"), id, f.fase_key, `${f.nome} · ${nome.trim()}`, f.ordem],
         );
         const { rows: tarefas } = await pool.query(
-          `SELECT descricao, ordem FROM projeto_tarefas WHERE fase_id = $1 ORDER BY ordem`,
+          `SELECT descricao, ordem, checklist, opcional, ativa FROM projeto_tarefas WHERE fase_id = $1 ORDER BY ordem`,
           [f.id],
         );
         for (const t of tarefas) {
+          const ch = lerChecklist(t.checklist);
           await pool.query(
-            `INSERT INTO projeto_tarefas (id, fase_id, descricao, ordem) VALUES ($1, $2, $3, $4)`,
-            [crypto.randomUUID(), novaFaseId, t.descricao, t.ordem],
+            `INSERT INTO projeto_tarefas (id, fase_id, descricao, ordem, checklist, opcional, ativa) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [crypto.randomUUID(), novaFaseId, t.descricao, t.ordem, ch ? JSON.stringify({ ...ch, estado: {} }) : null, t.opcional, t.ativa],
           );
         }
       }
