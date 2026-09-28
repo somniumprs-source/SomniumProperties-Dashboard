@@ -37,6 +37,7 @@ import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
 import { removeFromStorage, supabase, uploadPublic, uploadPrivate } from "../_shared/storage.ts";
 import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { isWholesaling } from "../_shared/modelos.ts";
+import { avaliarDealBreakers, painelDealBreakers } from "../_shared/dealBreakers.ts";
 import { CHECKLIST_ENFORCEMENT_START_DATE } from "../_shared/featureFlags.ts";
 import { diasFollowUpParaRegisto } from "../_shared/followupRules.ts";
 import { criarFollowUpConsultor } from "../_shared/consultorFollowups.ts";
@@ -937,6 +938,13 @@ crudRoutes("/imoveis", Imoveis, {
       if (!askPriceFinal || Number(askPriceFinal) <= 0) {
         return { error: "Preço (Ask Price) obrigatório a partir do Estudo de Mercado" };
       }
+    }
+
+    // Deal breakers: bloqueiam sempre, para todos os imóveis (sem data de corte).
+    const { rows: visitasDb } = await pool.query("SELECT data_hora, created_at, ficha FROM visitas WHERE imovel_id = $1", [id]);
+    const db = avaliarDealBreakers({ visitas: visitasDb }, body.estado);
+    if (db.bloqueado) {
+      return { error: "Deal breakers por resolver", deal_breakers: db.itens.filter((i: any) => i.estado !== "ok") };
     }
 
     if (!imovel.created_at || imovel.created_at < CHECKLIST_ENFORCEMENT_START_DATE) return null;
@@ -3084,6 +3092,16 @@ app.put("/imoveis/:id/fotos/:fotoId/mover", async (c: any) => {
 
 // ── Upload da imagem de localizacao — port de routes.js 1400-1422 ──
 // Multipart (multer single 'imagem') → Hono parseBody + uploadPublic.
+// ── Deal breakers do imóvel (painel do Comercial) — port de routes.js ──
+app.get("/imoveis/:id/deal-breakers", async (c: any) => {
+  try {
+    const { rows: [imovel] } = await pool.query("SELECT estado FROM imoveis WHERE id = $1", [c.req.param("id")]);
+    if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
+    const { rows: visitas } = await pool.query("SELECT data_hora, created_at, ficha FROM visitas WHERE imovel_id = $1", [c.req.param("id")]);
+    return c.json(painelDealBreakers({ visitas }, imovel.estado));
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
 app.post("/imoveis/:id/localizacao", async (c: any) => {
   const id = c.req.param("id");
   try {

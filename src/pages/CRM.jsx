@@ -971,7 +971,9 @@ export function CRM() {
     })
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
-      if (err.itens_em_falta?.length) {
+      if (err.deal_breakers?.length) {
+        toast(`Deal breakers por resolver: ${err.deal_breakers.map(d => d.titulo).join(', ')}`, 'error')
+      } else if (err.itens_em_falta?.length) {
         toast(`Checklist incompleta — falta: ${err.itens_em_falta.join(', ')}`, 'error')
       } else {
         toast(err.error || 'Não foi possível mover', 'error')

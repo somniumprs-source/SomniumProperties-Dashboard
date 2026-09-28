@@ -40,6 +40,7 @@ import { scrapePhotosFromLink } from './linkScraper.js'
 import { generateDocx, getAvailableTypes } from './docxGenerator.js'
 import { runEstudoLocalizacao } from '../lib/estudoLocalizacao.js'
 import { FASES_FIX_FLIP, FASES_POR_CATEGORIA, getTemplateFases, getFaseConfigGlobal } from './fasesFixFlip.js'
+import { avaliarDealBreakers, painelDealBreakers } from './dealBreakers.js'
 import { resolveAppUser, RECORD_RESTRICTED_ROLES } from './userRoutes.js'
 import {
   generateFichaAcompanhamento,
@@ -493,6 +494,13 @@ crudRoutes('/imoveis', Imoveis, {
       if (!askPriceFinal || Number(askPriceFinal) <= 0) {
         return { error: 'Preço (Ask Price) obrigatório a partir do Estudo de Mercado' }
       }
+    }
+
+    // Deal breakers: bloqueiam sempre, para todos os imóveis (sem data de corte).
+    const { rows: visitasDb } = await pool.query('SELECT data_hora, created_at, ficha FROM visitas WHERE imovel_id = $1', [id])
+    const db = avaliarDealBreakers({ visitas: visitasDb }, body.estado)
+    if (db.bloqueado) {
+      return { error: 'Deal breakers por resolver', deal_breakers: db.itens.filter(i => i.estado !== 'ok') }
     }
 
     if (!imovel.created_at || imovel.created_at < CHECKLIST_ENFORCEMENT_START_DATE) return null
@@ -2639,6 +2647,16 @@ router.put('/imoveis/:id/fotos/:fotoId/mover', async (req, res) => {
     const updated = fotos.map(f => f.id === req.params.fotoId ? { ...f, folder } : f)
     await Imoveis.update(req.params.id, { fotos: JSON.stringify(updated) })
     res.json({ ok: true, fotos: updated })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Deal breakers do imóvel (painel do Comercial) ─────────────
+router.get('/imoveis/:id/deal-breakers', async (req, res) => {
+  try {
+    const { rows: [imovel] } = await pool.query('SELECT estado FROM imoveis WHERE id = $1', [req.params.id])
+    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
+    const { rows: visitas } = await pool.query('SELECT data_hora, created_at, ficha FROM visitas WHERE imovel_id = $1', [req.params.id])
+    res.json(painelDealBreakers({ visitas }, imovel.estado))
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 

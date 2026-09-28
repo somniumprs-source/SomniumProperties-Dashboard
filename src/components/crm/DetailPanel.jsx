@@ -11,6 +11,7 @@ import { FollowUpsSection } from './FollowUpsSection.jsx'
 import { RegistoChamadasTab } from './RegistoChamadasTab.jsx'
 import { ImovelInteracoesSection } from './ImovelInteracoesSection.jsx'
 import { isWholesaling } from '../../lib/modelos.js'
+import { DealBreakersPanel } from './DealBreakersPanel.jsx'
 
 const AnaliseTab = lazy(() => import('../analise/AnaliseTab.jsx').then(m => ({ default: m.AnaliseTab })))
 const ObraTab = lazy(() => import('../obra/ObraTab.jsx').then(m => ({ default: m.ObraTab })))
@@ -783,6 +784,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       })
       if (!r.ok) {
         const err = await r.json().catch(() => ({}))
+        if (err.deal_breakers?.length) throw new Error(`Deal breakers por resolver: ${err.deal_breakers.map(d => d.titulo).join(', ')}`)
         throw new Error(err.error || 'Erro ao guardar')
       }
       // Data de follow-up mudada na ficha → agendar logo a tarefa 'A fazer'
@@ -946,6 +948,8 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
           <button onClick={attemptClose} disabled={saving} className="text-gray-400 hover:text-white text-xl leading-none disabled:opacity-50 disabled:cursor-not-allowed" title={editing ? 'Guardar e fechar' : 'Fechar'}>&times;</button>
         </div>
       </div>
+
+      {type === 'Imóveis' && <DealBreakersPanel imovelId={id} />}
 
       {/* Tabs */}
       {tabs.length > 1 && (
