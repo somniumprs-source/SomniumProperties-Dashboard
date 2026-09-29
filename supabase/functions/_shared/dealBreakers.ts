@@ -22,6 +22,27 @@ export const PORTA_DO_ESTADO = {
   'Negócio em Curso': 1,
 }
 
+// Ordem do pipeline, para distinguir avançar de recuar. Recuar (ou desistir
+// para Não interessa/Descartado) nunca é travado: é assim que se volta atrás
+// para completar a checklist ou corrigir dados. Wholesaling, CAEP e Fix and
+// Flip são alternativas ao mesmo nível.
+const ORDEM_ESTADO = {
+  'Adicionado': 0, 'Chamada Não Atendida': 1, 'Pendentes': 2, 'Pré-aprovação': 3,
+  'Necessidade de Visita': 4, 'Follow UP': 5, 'Visita Marcada': 6, 'Estudo de VVR': 7,
+  'Criar Proposta ao Proprietário': 8, 'Enviar proposta ao Proprietário': 9,
+  'Em negociação': 10, 'Proposta aceite': 11, 'Enviar proposta ao investidor': 12,
+  'Follow Up após proposta': 13, 'Wholesaling': 14, 'CAEP': 14, 'Fix and Flip': 14,
+  'Negócio em Curso': 15,
+}
+const ESTADOS_SAIDA = ['Não interessa', 'Nao interessa', 'Descartado']
+const limpa = e => String(e || '').replace(/^\d+-\s*/, '').trim()
+
+export function eRecuo(de, para) {
+  if (ESTADOS_SAIDA.includes(limpa(para))) return true
+  const a = ORDEM_ESTADO[limpa(de)], b = ORDEM_ESTADO[limpa(para)]
+  return a !== undefined && b !== undefined && b < a
+}
+
 export const PORTAS = {
   1: 'Depois da visita',
 }

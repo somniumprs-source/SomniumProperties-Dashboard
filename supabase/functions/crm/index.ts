@@ -37,7 +37,7 @@ import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
 import { removeFromStorage, supabase, uploadPublic, uploadPrivate } from "../_shared/storage.ts";
 import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { isWholesaling } from "../_shared/modelos.ts";
-import { avaliarDealBreakers, painelDealBreakers } from "../_shared/dealBreakers.ts";
+import { avaliarDealBreakers, painelDealBreakers, eRecuo } from "../_shared/dealBreakers.ts";
 import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase } from "../_shared/projetoTarefas.ts";
 import { CHECKLIST_ENFORCEMENT_START_DATE } from "../_shared/featureFlags.ts";
 import { diasFollowUpParaRegisto } from "../_shared/followupRules.ts";
@@ -925,6 +925,8 @@ crudRoutes("/imoveis", Imoveis, {
     const { rows: [imovel] } = await pool.query("SELECT estado, ask_price, created_at FROM imoveis WHERE id = $1", [id]);
     if (!imovel) return null;
     if (body.estado === imovel.estado) return null;
+    // Recuar ou desistir passa sempre (é assim que se volta atrás para completar a checklist).
+    if (eRecuo(imovel.estado, body.estado)) return null;
 
     // Preço (ask_price) só passa a ser obrigatório a partir do Estudo de
     // Mercado (Estudo de VVR) em diante — reutiliza o mesmo mapa de

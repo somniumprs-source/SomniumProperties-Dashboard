@@ -40,7 +40,7 @@ import { scrapePhotosFromLink } from './linkScraper.js'
 import { generateDocx, getAvailableTypes } from './docxGenerator.js'
 import { runEstudoLocalizacao } from '../lib/estudoLocalizacao.js'
 import { FASES_FIX_FLIP, FASES_POR_CATEGORIA, getTemplateFases, getFaseConfigGlobal } from './fasesFixFlip.js'
-import { avaliarDealBreakers, painelDealBreakers } from './dealBreakers.js'
+import { avaliarDealBreakers, painelDealBreakers, eRecuo } from './dealBreakers.js'
 import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase } from './projetoTarefas.js'
 import { resolveAppUser, RECORD_RESTRICTED_ROLES } from './userRoutes.js'
 import {
@@ -484,6 +484,8 @@ crudRoutes('/imoveis', Imoveis, {
     const { rows: [imovel] } = await pool.query('SELECT estado, ask_price, created_at FROM imoveis WHERE id = $1', [id])
     if (!imovel) return null
     if (body.estado === imovel.estado) return null
+    // Recuar ou desistir passa sempre (é assim que se volta atrás para completar a checklist).
+    if (eRecuo(imovel.estado, body.estado)) return null
 
     // Preço (ask_price) só passa a ser obrigatório a partir do Estudo de
     // Mercado (Estudo de VVR) em diante — reutiliza o mesmo mapa de
