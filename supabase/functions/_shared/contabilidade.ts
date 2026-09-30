@@ -49,15 +49,15 @@ export async function listarFaturas({ de, ate, pendentes = false }) {
 
   const { rows: despesas } = await pool.query(
     `SELECT d.id, d.movimento, d.categoria, d.data, d.custo_mensal, d.custo_anual, d.timing,
-            d.fornecedor, d.pago, d.documentos, d.negocio_id, d.enviada_contabilidade_em,
+            d.created_at, d.fornecedor, d.pago, d.documentos, d.negocio_id, d.enviada_contabilidade_em,
             n.movimento AS negocio_nome, i.nome AS imovel_nome
        FROM despesas d
        LEFT JOIN negocios n ON d.negocio_id = n.id
        LEFT JOIN imoveis i ON n.imovel_id = i.id
       WHERE d.documentos IS NOT NULL AND d.documentos NOT IN ('', '[]')
-        AND LEFT(d.data::text, 10) BETWEEN $1 AND $2
+        AND COALESCE(NULLIF(LEFT(d.data::text, 10), ''), LEFT(d.created_at::text, 10)) BETWEEN $1 AND $2
         AND ($3::boolean = false OR d.enviada_contabilidade_em IS NULL)
-      ORDER BY d.data, d.movimento`,
+      ORDER BY d.data NULLS LAST, d.movimento`,
     [de, ate, pendentes],
   )
   for (const d of despesas) {
@@ -65,7 +65,8 @@ export async function listarFaturas({ de, ate, pendentes = false }) {
       fonte: 'despesa',
       registo_id: d.id,
       origem: d.negocio_id ? 'Projecto' : 'Despesas',
-      data: String(d.data).slice(0, 10),
+      // Sem data de despesa → data de registo.
+      data: d.data ? String(d.data).slice(0, 10) : String(d.created_at).slice(0, 10),
       descricao: d.movimento,
       fornecedor: d.fornecedor || null,
       categoria: d.categoria || null,
