@@ -183,6 +183,8 @@ try {
   // ROLE_MODULES) — qualquer utilizador autenticado conseguia ler/criar/editar/
   // apagar TODAS as despesas da empresa.
   app.use('/api/crm/despesas', requireModule('crm.despesas'))
+  // Aba Contabilidade (Financeiro): faturas de despesas e projectos.
+  app.use('/api/crm/contabilidade', requireModule('crm.despesas'))
   // "relatorios-semanais"/"relatorios-documentos"/"reunioes-documentos" são
   // conteúdo interno de administração sem módulo nenhum a cobri-los — sem
   // caso de uso legítimo para parceiro/investidor (roles externos).

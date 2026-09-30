@@ -36,6 +36,7 @@ import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
 import { generateMeetingPDF } from './pdfMeetingReport.js'
 import { ensureLabels, organizeMessage, organizeBatch, autoOrganize, isConfigured as gmailConfigured } from './gmailSync.js'
 import { exportDepartment } from './excelExport.js'
+import { listarFaturas, exportarZip, marcarEnviadas } from './contabilidade.js'
 import { scrapePhotosFromLink } from './linkScraper.js'
 import { generateDocx, getAvailableTypes } from './docxGenerator.js'
 import { runEstudoLocalizacao } from '../lib/estudoLocalizacao.js'
@@ -3032,6 +3033,46 @@ router.get('/imoveis/:id/docx/:tipo', async (req, res) => {
 
 router.get('/docx/tipos', (req, res) => {
   res.json({ tipos: getAvailableTypes() })
+})
+
+// ── Contabilidade: faturas de todo o CRM por período (data da despesa) ──
+const DATA_RE = /^\d{4}-\d{2}-\d{2}$/
+function periodoContabilidade(q) {
+  const { de, ate } = q
+  if (!DATA_RE.test(de || '') || !DATA_RE.test(ate || '') || de > ate) return null
+  return { de, ate, pendentes: q.pendentes === '1' }
+}
+
+router.get('/contabilidade/faturas', async (req, res) => {
+  try {
+    const p = periodoContabilidade(req.query)
+    if (!p) return res.status(400).json({ error: 'Período inválido (de/ate em AAAA-MM-DD)' })
+    res.json(await listarFaturas(p))
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/contabilidade/export', async (req, res) => {
+  try {
+    const p = periodoContabilidade(req.query)
+    if (!p) return res.status(400).json({ error: 'Período inválido (de/ate em AAAA-MM-DD)' })
+    const { buffer, fileName, total, emFalta } = await exportarZip(p)
+    res.set({
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="${fileName}"`,
+      'X-Faturas-Total': String(total),
+      'X-Faturas-Em-Falta': String(emFalta),
+      'Access-Control-Expose-Headers': 'Content-Disposition, X-Faturas-Total, X-Faturas-Em-Falta',
+    })
+    res.send(Buffer.from(buffer))
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/contabilidade/marcar-enviadas', async (req, res) => {
+  try {
+    const { despesaIds, documentoIds } = req.body || {}
+    const lista = v => (Array.isArray(v) ? v.filter(x => typeof x === 'string') : [])
+    res.json(await marcarEnviadas({ despesaIds: lista(despesaIds), documentoIds: lista(documentoIds) }))
+  } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 // ── CSV Export ──────────────────────────────────────────────────

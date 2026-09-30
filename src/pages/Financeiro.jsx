@@ -4,7 +4,7 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, ComposedChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts'
-import { Upload, X, FileText, Image, Trash2, Plus, ChevronDown, ChevronUp, Check, Wallet } from 'lucide-react'
+import { Upload, X, FileText, Image, Trash2, Plus, ChevronDown, ChevronUp, Check, Wallet, Download, AlertTriangle } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { KPICard } from '../components/dashboard/KPICard.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
@@ -37,7 +37,7 @@ const TIMING_COLOR = {
   'Único':       'bg-gray-100 text-gray-600',
 }
 
-const TABS = ['Visão Geral', 'Conta Corrente', 'Despesas', 'Tesouraria', 'P&L', 'Rentabilidade']
+const TABS = ['Visão Geral', 'Conta Corrente', 'Despesas', 'Tesouraria', 'P&L', 'Rentabilidade', 'Contabilidade']
 
 export function Financeiro() {
   const [tab,      setTab]      = useUrlState('tab', 'Visão Geral')
@@ -393,6 +393,8 @@ export function Financeiro() {
         )}
 
         {/* ══════════════════ CONTA CORRENTE ══════════════════ */}
+        {tab === 'Contabilidade' && <ContabilidadeTab />}
+
         {tab === 'Conta Corrente' && (
           <ContaCorrenteTab conta={conta} />
         )}
@@ -696,6 +698,209 @@ export function Financeiro() {
 // ══════════════════════════════════════════════════════════════
 // CONTA CORRENTE
 // ══════════════════════════════════════════════════════════════
+// ── Contabilidade: todas as faturas anexadas no CRM (despesas + projectos) ──
+const isoDia = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+function periodoMeses(inicioOffset, fimOffset) {
+  const hoje = new Date()
+  const de = new Date(hoje.getFullYear(), hoje.getMonth() + inicioOffset, 1)
+  const ate = new Date(hoje.getFullYear(), hoje.getMonth() + fimOffset + 1, 0)
+  return { de: isoDia(de), ate: isoDia(ate) }
+}
+const PERIODOS_RAPIDOS = [
+  { label: 'Mês anterior', get: () => periodoMeses(-1, -1) },
+  { label: 'Este mês', get: () => periodoMeses(0, 0) },
+  { label: 'Últimos 2 meses', get: () => periodoMeses(-2, -1) },
+  { label: 'Últimos 3 meses', get: () => periodoMeses(-3, -1) },
+  { label: 'Este ano', get: () => ({ de: `${new Date().getFullYear()}-01-01`, ate: isoDia(new Date()) }) },
+]
+
+function ContabilidadeTab() {
+  const [periodo, setPeriodo] = useState(() => periodoMeses(-1, -1))
+  const [pendentes, setPendentes] = useState(false)
+  const [dados, setDados] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [exportando, setExportando] = useState(false)
+  const [erro, setErro] = useState(null)
+  const [aviso, setAviso] = useState(null)
+
+  const qs = `de=${periodo.de}&ate=${periodo.ate}${pendentes ? '&pendentes=1' : ''}`
+
+  async function carregar() {
+    if (!periodo.de || !periodo.ate) return
+    setLoading(true); setErro(null)
+    try {
+      const r = await apiFetch(`/api/crm/contabilidade/faturas?${qs}`)
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+      setDados(j)
+    } catch (e) { setErro(e.message); setDados(null) }
+    setLoading(false)
+  }
+  useEffect(() => { carregar() }, [qs]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const faturas = dados?.faturas ?? []
+  const semFatura = dados?.semFatura ?? []
+  // Valor conta uma vez por despesa (uma despesa pode ter vários anexos).
+  const total = Object.values(Object.fromEntries(faturas.map(f => [`${f.fonte}:${f.registo_id}`, Number(f.valor) || 0]))).reduce((a, b) => a + b, 0)
+  const porEnviar = faturas.filter(f => !f.enviada_em).length
+
+  async function exportar() {
+    setExportando(true); setErro(null); setAviso(null)
+    try {
+      const r = await apiFetch(`/api/crm/contabilidade/export?${qs}`, { timeoutMs: 300_000 })
+      if (!r.ok) {
+        const txt = await r.text()
+        let msg = `HTTP ${r.status}`
+        try { msg = JSON.parse(txt).error || msg } catch { /* texto cru */ }
+        throw new Error(msg)
+      }
+      const blob = await r.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Faturas_Somnium_${periodo.de}_a_${periodo.ate}.zip`
+      document.body.appendChild(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+
+      const emFalta = Number(r.headers.get('X-Faturas-Em-Falta') || 0)
+      if (emFalta) setAviso(`${emFalta} ficheiro(s) não foram incluídos no ZIP. Ver a coluna "Observações" no Resumo.xlsx.`)
+
+      if (faturas.length && window.confirm('ZIP descarregado. Marcar estas faturas como enviadas à contabilidade?')) {
+        const despesaIds = [...new Set(faturas.filter(f => f.fonte === 'despesa').map(f => f.registo_id))]
+        const documentoIds = [...new Set(faturas.filter(f => f.fonte === 'projeto_documento').map(f => f.registo_id))]
+        const m = await apiFetch('/api/crm/contabilidade/marcar-enviadas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ despesaIds, documentoIds }),
+        })
+        if (!m.ok) throw new Error('ZIP descarregado, mas falhou marcar como enviadas.')
+        await carregar()
+      }
+    } catch (e) { setErro(e.message) }
+    setExportando(false)
+  }
+
+  return (
+    <>
+      {/* Período + exportação */}
+      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs flex flex-col gap-4">
+        <div className="flex flex-wrap gap-2">
+          {PERIODOS_RAPIDOS.map(p => {
+            const v = p.get()
+            const activo = v.de === periodo.de && v.ate === periodo.ate
+            return (
+              <button key={p.label} onClick={() => setPeriodo(v)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${activo ? 'bg-[#0d0d0d] text-white border-[#0d0d0d]' : 'bg-white text-gray-600 border-gray-200 hover:border-[#C9A84C]'}`}>
+                {p.label}
+              </button>
+            )
+          })}
+        </div>
+        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+          <label className="flex flex-col gap-1 text-xs text-gray-500">
+            De
+            <input type="date" value={periodo.de} onChange={e => setPeriodo(p => ({ ...p, de: e.target.value }))}
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-800" />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-gray-500">
+            Até
+            <input type="date" value={periodo.ate} onChange={e => setPeriodo(p => ({ ...p, ate: e.target.value }))}
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-800" />
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-600 sm:pb-2">
+            <input type="checkbox" checked={pendentes} onChange={e => setPendentes(e.target.checked)} />
+            Só por enviar
+          </label>
+          <button onClick={exportar} disabled={exportando || loading || !faturas.length}
+            className="sm:ml-auto flex items-center justify-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#0d0d0d] text-sm font-semibold rounded-xl hover:brightness-95 disabled:opacity-50 transition">
+            <Download className="w-4 h-4" />
+            {exportando ? 'A preparar ZIP...' : `Exportar ZIP (${faturas.length})`}
+          </button>
+        </div>
+        <p className="text-xs text-gray-400">
+          O ZIP inclui as faturas organizadas por mês e um Resumo.xlsx. Período filtrado pela data da despesa
+          (documentos de projecto do tipo "Fatura" usam a data de carregamento).
+        </p>
+      </div>
+
+      {erro && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {erro}</div>}
+      {aviso && <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-sm">{aviso}</div>}
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+        <KPICard label="Faturas no período" value={String(faturas.length)} meta="—" status="green" trend="neutral" unit="" />
+        <KPICard label="Total faturado"     value={EUR2(total)}            meta="—" status="green" trend="neutral" unit="" />
+        <KPICard label="Por enviar"         value={String(porEnviar)}      meta="—" status={porEnviar ? 'yellow' : 'green'} trend="neutral" unit="" />
+      </div>
+
+      {/* Despesas sem fatura anexada */}
+      {semFatura.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-amber-800 mb-3">
+            <AlertTriangle className="w-4 h-4" /> {semFatura.length} despesa(s) sem fatura anexada neste período
+          </h2>
+          <ul className="flex flex-col gap-1 text-sm text-amber-900">
+            {semFatura.map(s => (
+              <li key={s.registo_id} className="flex justify-between gap-3">
+                <span>{s.data} · {s.descricao}{s.projeto ? ` · ${s.projeto}` : ''} <span className="text-xs text-amber-700">({s.origem})</span></span>
+                <span className="font-mono whitespace-nowrap">{EUR2(s.valor)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Lista de faturas */}
+      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
+        <h2 className="text-sm font-semibold text-gray-700 mb-4">Faturas</h2>
+        <ScrollableTable>
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-wide">
+                <th className="text-left py-2 px-3">Data</th>
+                <th className="text-left py-2 px-3">Descrição</th>
+                <th className="text-left py-2 px-3">Projecto / Imóvel</th>
+                <th className="text-left py-2 px-3">Origem</th>
+                <th className="text-right py-2 px-3">Valor</th>
+                <th className="text-left py-2 px-3">Ficheiro</th>
+                <th className="text-left py-2 px-3">Enviada</th>
+              </tr>
+            </thead>
+            <tbody>
+              {faturas.map(f => (
+                <tr key={f.id} className="border-b border-gray-50">
+                  <td className="py-2 px-3 text-xs text-gray-500 whitespace-nowrap">{f.data}</td>
+                  <td className="py-2 px-3 font-medium text-gray-800">
+                    {f.descricao}
+                    {f.fornecedor && <span className="block text-xs text-gray-400">{f.fornecedor}</span>}
+                  </td>
+                  <td className="py-2 px-3 text-xs text-gray-500">{f.projeto || '—'}</td>
+                  <td className="py-2 px-3 text-xs text-gray-500 whitespace-nowrap">{f.origem}</td>
+                  <td className="py-2 px-3 text-right font-mono whitespace-nowrap">{f.valor == null ? '—' : EUR2(f.valor)}</td>
+                  <td className="py-2 px-3 text-xs">
+                    <a href={f.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-indigo-600 hover:underline max-w-[220px] truncate">
+                      <FileText className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{f.ficheiro}</span>
+                    </a>
+                  </td>
+                  <td className="py-2 px-3 text-xs whitespace-nowrap">
+                    {f.enviada_em
+                      ? <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700">{String(f.enviada_em).slice(0, 10)}</span>
+                      : <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Por enviar</span>}
+                  </td>
+                </tr>
+              ))}
+              {!faturas.length && (
+                <tr><td colSpan={7} className="py-8 text-center text-gray-400 text-xs">
+                  {loading ? 'A carregar faturas...' : 'Sem faturas anexadas neste período'}
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+        </ScrollableTable>
+      </div>
+    </>
+  )
+}
+
 function ContaCorrenteTab({ conta }) {
   if (!conta) return <div className="text-center text-gray-400 py-12 text-sm">A carregar conta corrente...</div>
 

@@ -80,6 +80,7 @@ import { generateRelatorioSemanalPDF } from "../_shared/pdfRelatorioSemanal.ts";
 import { generateRelatorioExpansaoGaia } from "../_shared/pdfRelatorioExpansaoGaia.ts";
 import { DADOS_EXPANSAO_GAIA } from "../_shared/expansaoGaiaData.ts";
 import { exportDepartment } from "../_shared/excelExport.ts";
+import { listarFaturas, exportarZip, marcarEnviadas } from "../_shared/contabilidade.ts";
 import { generateDocx, getAvailableTypes } from "../_shared/docxGenerator.ts";
 import { CHECKLIST_TEMPLATES } from "../_shared/checklistTemplates.ts";
 import { agendarFollowUpImovel } from "../_shared/agendaEngine.ts";
@@ -3423,6 +3424,48 @@ app.post("/gmail/auto-organize", async (c: any) => {
     if (!gmailConfigured()) return c.json({ error: "Gmail não configurado" }, 503);
     const result = await autoOrganize();
     return c.json(result);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// ── Contabilidade: faturas de todo o CRM por período (data da despesa) — port de routes.js ──
+// Mesmo módulo que /despesas (financeiro + admin).
+app.use("/contabilidade/*", requireModule("crm.despesas"));
+const DATA_RE_CONTAB = /^\d{4}-\d{2}-\d{2}$/;
+function periodoContabilidade(c: any) {
+  const de = c.req.query("de") || "";
+  const ate = c.req.query("ate") || "";
+  if (!DATA_RE_CONTAB.test(de) || !DATA_RE_CONTAB.test(ate) || de > ate) return null;
+  return { de, ate, pendentes: c.req.query("pendentes") === "1" };
+}
+
+app.get("/contabilidade/faturas", async (c: any) => {
+  try {
+    const p = periodoContabilidade(c);
+    if (!p) return c.json({ error: "Período inválido (de/ate em AAAA-MM-DD)" }, 400);
+    return c.json(await listarFaturas(p));
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.get("/contabilidade/export", async (c: any) => {
+  try {
+    const p = periodoContabilidade(c);
+    if (!p) return c.json({ error: "Período inválido (de/ate em AAAA-MM-DD)" }, 400);
+    const { buffer, fileName, total, emFalta } = await exportarZip(p);
+    return c.body(buffer, 200, {
+      "Content-Type": "application/zip",
+      "Content-Disposition": `attachment; filename="${fileName}"`,
+      "X-Faturas-Total": String(total),
+      "X-Faturas-Em-Falta": String(emFalta),
+      "Access-Control-Expose-Headers": "Content-Disposition, X-Faturas-Total, X-Faturas-Em-Falta",
+    });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/contabilidade/marcar-enviadas", async (c: any) => {
+  try {
+    const { despesaIds, documentoIds } = await c.req.json().catch(() => ({}));
+    const lista = (v: any) => (Array.isArray(v) ? v.filter((x: any) => typeof x === "string") : []);
+    return c.json(await marcarEnviadas({ despesaIds: lista(despesaIds), documentoIds: lista(documentoIds) }));
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
