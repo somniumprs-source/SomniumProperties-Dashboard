@@ -1,10 +1,10 @@
-import { useState, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, ComposedChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts'
-import { Upload, X, FileText, Image, Trash2, Plus, ChevronDown, ChevronUp, Check, Wallet, Download, AlertTriangle } from 'lucide-react'
+import { Upload, X, FileText, Image, Trash2, Plus, ChevronDown, ChevronUp, Check, Wallet, Download } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { KPICard } from '../components/dashboard/KPICard.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
@@ -706,7 +706,9 @@ function periodoMeses(inicioOffset, fimOffset) {
   const ate = new Date(hoje.getFullYear(), hoje.getMonth() + fimOffset + 1, 0)
   return { de: isoDia(de), ate: isoDia(ate) }
 }
+const PERIODO_TODAS = { de: '2000-01-01', ate: '2100-12-31' }
 const PERIODOS_RAPIDOS = [
+  { label: 'Todas', get: () => PERIODO_TODAS },
   { label: 'Mês anterior', get: () => periodoMeses(-1, -1) },
   { label: 'Este mês', get: () => periodoMeses(0, 0) },
   { label: 'Últimos 2 meses', get: () => periodoMeses(-2, -1) },
@@ -715,7 +717,7 @@ const PERIODOS_RAPIDOS = [
 ]
 
 function ContabilidadeTab() {
-  const [periodo, setPeriodo] = useState(() => periodoMeses(-1, -1))
+  const [periodo, setPeriodo] = useState(PERIODO_TODAS)
   const [pendentes, setPendentes] = useState(false)
   const [dados, setDados] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -739,7 +741,6 @@ function ContabilidadeTab() {
   useEffect(() => { carregar() }, [qs]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const faturas = dados?.faturas ?? []
-  const semFatura = dados?.semFatura ?? []
   // Valor conta uma vez por despesa (uma despesa pode ter vários anexos).
   const total = Object.values(Object.fromEntries(faturas.map(f => [`${f.fonte}:${f.registo_id}`, Number(f.valor) || 0]))).reduce((a, b) => a + b, 0)
   const porEnviar = faturas.filter(f => !f.enviada_em).length
@@ -758,7 +759,7 @@ function ContabilidadeTab() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `Faturas_Somnium_${periodo.de}_a_${periodo.ate}.zip`
+      a.download = (r.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/)?.[1] || 'Faturas_Somnium.zip'
       document.body.appendChild(a); a.click(); a.remove()
       setTimeout(() => URL.revokeObjectURL(url), 60_000)
 
@@ -798,7 +799,7 @@ function ContabilidadeTab() {
         </div>
         <div className="flex flex-col sm:flex-row sm:items-end gap-3">
           <label className="flex flex-col gap-1 text-xs text-gray-500">
-            De
+            De (data da despesa)
             <input type="date" value={periodo.de} onChange={e => setPeriodo(p => ({ ...p, de: e.target.value }))}
               className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-800" />
           </label>
@@ -818,8 +819,8 @@ function ContabilidadeTab() {
           </button>
         </div>
         <p className="text-xs text-gray-400">
-          O ZIP inclui as faturas organizadas por mês e um Resumo.xlsx. Período filtrado pela data da despesa
-          (documentos de projecto do tipo "Fatura" usam a data de carregamento).
+          Aparecem todas as faturas com PDF anexado em Despesas e Projectos. O ZIP inclui as faturas organizadas por mês
+          e um Resumo.xlsx. Documentos de projecto do tipo "Fatura" usam a data de carregamento.
         </p>
       </div>
 
@@ -831,23 +832,6 @@ function ContabilidadeTab() {
         <KPICard label="Total faturado"     value={EUR2(total)}            meta="—" status="green" trend="neutral" unit="" />
         <KPICard label="Por enviar"         value={String(porEnviar)}      meta="—" status={porEnviar ? 'yellow' : 'green'} trend="neutral" unit="" />
       </div>
-
-      {/* Despesas sem fatura anexada */}
-      {semFatura.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-amber-800 mb-3">
-            <AlertTriangle className="w-4 h-4" /> {semFatura.length} despesa(s) sem fatura anexada neste período
-          </h2>
-          <ul className="flex flex-col gap-1 text-sm text-amber-900">
-            {semFatura.map(s => (
-              <li key={s.registo_id} className="flex justify-between gap-3">
-                <span>{s.data} · {s.descricao}{s.projeto ? ` · ${s.projeto}` : ''} <span className="text-xs text-amber-700">({s.origem})</span></span>
-                <span className="font-mono whitespace-nowrap">{EUR2(s.valor)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       {/* Lista de faturas */}
       <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
@@ -890,7 +874,7 @@ function ContabilidadeTab() {
               ))}
               {!faturas.length && (
                 <tr><td colSpan={7} className="py-8 text-center text-gray-400 text-xs">
-                  {loading ? 'A carregar faturas...' : 'Sem faturas anexadas neste período'}
+                  {loading ? 'A carregar faturas...' : 'Sem faturas com PDF anexado neste período'}
                 </td></tr>
               )}
             </tbody>

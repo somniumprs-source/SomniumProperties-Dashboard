@@ -41,12 +41,11 @@ function parseDocs(raw) {
 
 /**
  * @param {{de: string, ate: string, pendentes?: boolean}} opts  datas YYYY-MM-DD
- * @returns {{faturas: object[], semFatura: object[]}}
+ * @returns {{faturas: object[]}}  só registos com PDF anexado
  */
 export async function listarFaturas({ de, ate, pendentes = false }) {
   await ensureColunas()
   const faturas = []
-  const semFatura = []
 
   const { rows: despesas } = await pool.query(
     `SELECT d.id, d.movimento, d.categoria, d.data, d.custo_mensal, d.custo_anual, d.timing,
@@ -55,7 +54,8 @@ export async function listarFaturas({ de, ate, pendentes = false }) {
        FROM despesas d
        LEFT JOIN negocios n ON d.negocio_id = n.id
        LEFT JOIN imoveis i ON n.imovel_id = i.id
-      WHERE LEFT(d.data::text, 10) BETWEEN $1 AND $2
+      WHERE d.documentos IS NOT NULL AND d.documentos NOT IN ('', '[]')
+        AND LEFT(d.data::text, 10) BETWEEN $1 AND $2
         AND ($3::boolean = false OR d.enviada_contabilidade_em IS NULL)
       ORDER BY d.data, d.movimento`,
     [de, ate, pendentes],
@@ -75,7 +75,6 @@ export async function listarFaturas({ de, ate, pendentes = false }) {
       enviada_em: d.enviada_contabilidade_em || null,
     }
     const docs = parseDocs(d.documentos)
-    if (!docs.length) { semFatura.push(base); continue }
     for (const doc of docs) {
       faturas.push({ ...base, id: `d:${d.id}:${doc.id}`, ficheiro: doc.name, url: doc.path, mime: doc.type || null })
     }
@@ -114,7 +113,7 @@ export async function listarFaturas({ de, ate, pendentes = false }) {
   }
 
   faturas.sort((a, b) => a.data.localeCompare(b.data) || String(a.descricao).localeCompare(String(b.descricao)))
-  return { faturas, semFatura }
+  return { faturas }
 }
 
 /**
@@ -167,7 +166,7 @@ function valorNome(v) {
  * @returns {{buffer: Uint8Array, fileName: string, total: number, emFalta: number}}
  */
 export async function exportarZip({ de, ate, pendentes = false }) {
-  const { faturas, semFatura } = await listarFaturas({ de, ate, pendentes })
+  const { faturas } = await listarFaturas({ de, ate, pendentes })
   const entradas = {}
   const usados = new Set()
   const porHash = new Map() // mesmo ficheiro anexado em dois sítios → entra uma vez
@@ -198,17 +197,20 @@ export async function exportarZip({ de, ate, pendentes = false }) {
   }
 
   linhas.sort((a, b) => a.data.localeCompare(b.data) || String(a.descricao).localeCompare(String(b.descricao)))
-  entradas['Resumo.xlsx'] = new Uint8Array(await gerarResumo({ de, ate, linhas, semFatura }))
+  // Período real das faturas (a opção "Todas" usa limites largos).
+  const dMin = linhas[0]?.data || de
+  const dMax = linhas[linhas.length - 1]?.data || ate
+  entradas['Resumo.xlsx'] = new Uint8Array(await gerarResumo({ de: dMin, ate: dMax, linhas }))
   const buffer = zipSync(entradas)
   return {
     buffer,
-    fileName: `Faturas_Somnium_${de}_a_${ate}.zip`,
+    fileName: `Faturas_Somnium_${dMin}_a_${dMax}.zip`,
     total: linhas.filter(l => !l.erro && !l.duplicado).length,
     emFalta: linhas.filter(l => l.erro).length,
   }
 }
 
-async function gerarResumo({ de, ate, linhas, semFatura }) {
+async function gerarResumo({ de, ate, linhas }) {
   const wb = new ExcelJS.Workbook()
   wb.creator = 'Somnium Properties CRM'
 
@@ -238,20 +240,6 @@ async function gerarResumo({ de, ate, linhas, semFatura }) {
   const total = linhas.reduce((s, l) => s + (Number(l.valor) || 0), 0)
   const rTotal = ws.addRow({ descricao: `Total (${de} a ${ate})`, valor: total })
   rTotal.font = { bold: true }
-
-  if (semFatura.length) {
-    const ws2 = wb.addWorksheet('Despesas sem fatura')
-    ws2.columns = [
-      { header: 'Data', key: 'data', width: 12 },
-      { header: 'Descrição', key: 'descricao', width: 40 },
-      { header: 'Fornecedor', key: 'fornecedor', width: 24 },
-      { header: 'Projecto / Imóvel', key: 'projeto', width: 28 },
-      { header: 'Valor (€)', key: 'valor', width: 12 },
-    ]
-    for (const s of semFatura) ws2.addRow(s)
-    ws2.getColumn('valor').numFmt = '#,##0.00'
-    ws2.getRow(1).font = { bold: true }
-  }
 
   return wb.xlsx.writeBuffer()
 }
