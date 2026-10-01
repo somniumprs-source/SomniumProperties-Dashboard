@@ -245,6 +245,63 @@ app.delete("/templates/:id", async (c: any) => {
   }
 });
 
+// ── Tarefas pendentes das conversas WhatsApp (port agendaRoutes.js) ─
+// Criadas pelo pipeline semanal no Mac (sexta 04:00). Aqui só se listam
+// e se marcam como feitas/reabertas; uma tarefa feita sai do próximo relatório.
+
+// Conteúdo interno (investidores, negócios): bloqueado aos roles externos.
+async function bloquearRolesExternos(c: any, next: any) {
+  const email = userEmail(c);
+  if (email) {
+    const { rows } = await pool.query("SELECT role FROM users WHERE lower(email) = lower($1)", [email]);
+    if (["parceiro", "investidor"].includes(rows[0]?.role)) return c.json({ error: "Sem acesso" }, 403);
+  }
+  return await next();
+}
+app.use("/tarefas-conversas", bloquearRolesExternos);
+app.use("/tarefas-conversas/*", bloquearRolesExternos);
+
+// GET /agenda/tarefas-conversas?estado=aberta|feita|todas
+app.get("/tarefas-conversas", async (c: any) => {
+  try {
+    const estado = c.req.query("estado") || "aberta";
+    const params: any[] = [];
+    let where = "";
+    if (estado !== "todas") { params.push(estado); where = "WHERE estado = $1"; }
+    const { rows } = await pool.query(
+      `SELECT * FROM tarefas_conversas ${where}
+       ORDER BY estado, CASE prioridade WHEN 'Urgente' THEN 0 ELSE 1 END, id`,
+      params,
+    );
+    return c.json({ tarefas: rows });
+  } catch (e) {
+    console.error("[agenda] list tarefas-conversas erro:", e);
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+// PUT /agenda/tarefas-conversas/:id { estado: 'feita' | 'aberta' }
+app.put("/tarefas-conversas/:id", async (c: any) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const estado = body.estado;
+    if (!["feita", "aberta"].includes(estado)) return c.json({ error: `estado inválido: ${estado}` }, 400);
+    const feita = estado === "feita";
+    const { rows } = await pool.query(
+      `UPDATE tarefas_conversas
+       SET estado = $1, feita_em = ${feita ? "NOW()" : "NULL"}, feita_por = $2,
+           sugestao_concluida = ${feita ? "NULL" : "sugestao_concluida"}, updated_at = NOW()
+       WHERE id = $3 RETURNING *`,
+      [estado, feita ? userEmail(c) : null, c.req.param("id")],
+    );
+    if (!rows.length) return c.json({ error: "Tarefa não encontrada" }, 404);
+    return c.json({ tarefa: rows[0] });
+  } catch (e) {
+    console.error("[agenda] update tarefa-conversa erro:", e);
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
 // ── Fila priorizada + atribuição manual (Fase 2, revisão 21/08/2026) ─
 
 // POST /agenda/actualizar-fila { semana_inicio }

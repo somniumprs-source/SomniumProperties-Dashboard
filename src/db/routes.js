@@ -4664,6 +4664,37 @@ router.get('/relatorios-documentos', async (_req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// Relatórios das conversas WhatsApp (pipeline semanal no Mac, sexta 04:00).
+// Bucket privado "Relatorios", pasta conversas/<AAAA-MM-DD>/ (sexta em que terminou a semana).
+// Devolve [{ semana, ficheiros: [{ nome, tamanho, atualizado, url (assinada 1h) }] }]
+router.get('/relatorios-conversas', async (_req, res) => {
+  try {
+    if (!supabaseStorage) return res.json([])
+    const BUCKET = 'Relatorios'
+    const { data: folders, error } = await supabaseStorage.storage
+      .from(BUCKET).list('conversas', { limit: 200, sortBy: { column: 'name', order: 'desc' } })
+    if (error) throw error
+    const semanas = (folders || []).filter(f => f.id === null && /^\d{4}-\d{2}-\d{2}$/.test(f.name))
+    const out = []
+    for (const s of semanas) {
+      const pasta = `conversas/${s.name}`
+      const { data: files } = await supabaseStorage.storage.from(BUCKET).list(pasta, { limit: 200 })
+      const ficheiros = []
+      for (const f of (files || [])) {
+        if (!f.name.toLowerCase().endsWith('.pdf')) continue
+        const { data: signed } = await supabaseStorage.storage.from(BUCKET).createSignedUrl(`${pasta}/${f.name}`, 60 * 60)
+        ficheiros.push({ nome: f.name, tamanho: f.metadata?.size ?? null, atualizado: f.updated_at || f.created_at || null, url: signed?.signedUrl || null })
+      }
+      if (ficheiros.length) {
+        ficheiros.sort((a, b) => a.nome.localeCompare(b.nome))
+        out.push({ semana: s.name, ficheiros })
+      }
+    }
+    out.sort((a, b) => b.semana.localeCompare(a.semana))
+    res.json(out)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 // Eliminar um documento de reuniao do Storage (bucket Relatorios)
 router.delete('/relatorios-documentos', async (req, res) => {
   try {

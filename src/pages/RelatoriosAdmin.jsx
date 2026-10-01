@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { FileDown, Sparkles, Trash2, Calendar, Loader2, Plus, RefreshCw, Zap, FileText, Presentation, Upload, Pencil, X, CalendarPlus, Eye } from 'lucide-react'
 import { apiFetch, openDocument } from '../lib/api.js'
+import { Tabs } from '../components/ui/Tabs.jsx'
+import { MessageSquareText, ListChecks, ExternalLink } from 'lucide-react'
 
 const GOLD = '#C9A84C'
 
@@ -33,7 +35,7 @@ function currentSemanaIso() {
   return `${date.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`
 }
 
-export function RelatoriosAdmin() {
+function RelatoriosAdministrativos() {
   const [relatorios, setRelatorios] = useState([])
   const [reunioes, setReunioes] = useState([])
   const [loading, setLoading] = useState(true)
@@ -689,3 +691,106 @@ function HeroKpi({ label, value, sub, accent, green, red }) {
   )
 }
 
+
+// ════════════════════════════════════════════════════════════════
+// Separadores: Relatórios Administrativos (existente) | Relatórios Conversas
+// ════════════════════════════════════════════════════════════════
+export function RelatoriosAdmin() {
+  const [tab, setTab] = useState('administrativos')
+  return (
+    <div className="space-y-4">
+      <Tabs
+        variant="segmented"
+        items={[
+          { key: 'administrativos', label: 'Relatórios Administrativos', icon: FileText },
+          { key: 'conversas', label: 'Relatórios Conversas', icon: MessageSquareText },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
+      {tab === 'administrativos' ? <RelatoriosAdministrativos /> : <RelatoriosConversas />}
+    </div>
+  )
+}
+
+// Relatórios gerados automaticamente a partir das conversas WhatsApp da
+// comunidade (pipeline no Mac, sexta 04:00): 1 PDF de tarefas pendentes +
+// 1 PDF por grupo com actividade na semana.
+function nomeDocumento(nome) {
+  return nome.replace(/\.pdf$/i, '').replace(/^00_/, '').replace(/_-_/g, ' - ').replace(/_/g, ' ')
+}
+
+function semanaLabel(fimISO) {
+  const fim = new Date(fimISO + 'T00:00:00')
+  const ini = new Date(fim); ini.setDate(ini.getDate() - 7)
+  const f = d => d.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' })
+  return `${f(ini)} — ${f(fim)} ${fim.getFullYear()}`
+}
+
+function RelatoriosConversas() {
+  const [semanas, setSemanas] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  const load = useCallback(async () => {
+    setLoading(true); setError(null)
+    try {
+      const r = await apiFetch('/api/crm/relatorios-conversas')
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Falha ao carregar')
+      setSemanas(Array.isArray(j) ? j : [])
+    } catch (e) { setError(e.message) }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+          Gerados automaticamente todas as sextas-feiras às 04:00 a partir das conversas WhatsApp da comunidade
+          (texto e áudios). Um documento por grupo com actividade e um de tarefas pendentes. As tarefas
+          gerem-se em <span className="font-semibold">Agenda &rsaquo; Tarefas pendentes</span>.
+        </p>
+        <button onClick={load} className="p-2 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800" title="Actualizar">
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-neutral-500"><Loader2 className="w-4 h-4 animate-spin" /> A carregar…</div>
+      ) : !semanas.length ? (
+        <p className="text-sm text-neutral-500">Ainda não há relatórios de conversas.</p>
+      ) : semanas.map(s => {
+        const pend = s.ficheiros.filter(f => f.nome.startsWith('00_'))
+        const grupos = s.ficheiros.filter(f => !f.nome.startsWith('00_'))
+        return (
+          <div key={s.semana} className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold text-neutral-800 dark:text-neutral-100">Semana {semanaLabel(s.semana)}</h3>
+              <span className="text-xs text-neutral-500">{grupos.length} {grupos.length === 1 ? 'grupo' : 'grupos'}</span>
+            </div>
+            {pend.map(f => (
+              <a key={f.nome} href={f.url || '#'} target="_blank" rel="noreferrer"
+                className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg border border-brand-gold/40 bg-brand-gold/10 text-sm font-semibold text-neutral-800 dark:text-neutral-100 hover:bg-brand-gold/20">
+                <ListChecks className="w-4 h-4 text-brand-gold" /> Tarefas pendentes
+                <ExternalLink className="w-3.5 h-3.5 ml-auto text-neutral-400" />
+              </a>
+            ))}
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {grupos.map(f => (
+                <a key={f.nome} href={f.url || '#'} target="_blank" rel="noreferrer"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 text-sm text-neutral-700 dark:text-neutral-200 hover:border-brand-gold">
+                  <FileText className="w-4 h-4 text-neutral-400 shrink-0" />
+                  <span className="truncate">{nomeDocumento(f.nome)}</span>
+                  <span className="ml-auto text-xs text-neutral-400 shrink-0">{fmtSize(f.tamanho)}</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}

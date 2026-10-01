@@ -238,6 +238,62 @@ router.delete('/templates/:id', async (req, res) => {
   }
 })
 
+// ── Tarefas pendentes das conversas WhatsApp ─────────────────────
+// Criadas pelo pipeline semanal no Mac (sexta 04:00). Aqui só se listam
+// e se marcam como feitas/reabertas; uma tarefa feita sai do próximo relatório.
+
+// Conteúdo interno (investidores, negócios): bloqueado aos roles externos.
+router.use('/tarefas-conversas', async (req, res, next) => {
+  try {
+    const email = userEmail(req)
+    if (email) {
+      const { rows } = await pool.query('SELECT role FROM users WHERE lower(email) = lower($1)', [email])
+      if (['parceiro', 'investidor'].includes(rows[0]?.role)) return res.status(403).json({ error: 'Sem acesso' })
+    }
+    next()
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// GET /api/agenda/tarefas-conversas?estado=aberta|feita|todas
+router.get('/tarefas-conversas', async (req, res) => {
+  try {
+    const estado = req.query.estado || 'aberta'
+    const params = []
+    let where = ''
+    if (estado !== 'todas') { params.push(estado); where = 'WHERE estado = $1' }
+    const { rows } = await pool.query(
+      `SELECT * FROM tarefas_conversas ${where}
+       ORDER BY estado, CASE prioridade WHEN 'Urgente' THEN 0 ELSE 1 END, id`,
+      params
+    )
+    res.json({ tarefas: rows })
+  } catch (e) {
+    console.error('[agenda] list tarefas-conversas erro:', e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// PUT /api/agenda/tarefas-conversas/:id { estado: 'feita' | 'aberta' }
+router.put('/tarefas-conversas/:id', async (req, res) => {
+  try {
+    const { estado } = req.body || {}
+    if (!['feita', 'aberta'].includes(estado)) return res.status(400).json({ error: `estado inválido: ${estado}` })
+    const feita = estado === 'feita'
+    const { rows } = await pool.query(
+      `UPDATE tarefas_conversas
+       SET estado = $1, feita_em = ${feita ? 'NOW()' : 'NULL'}, feita_por = $2,
+           sugestao_concluida = ${feita ? 'NULL' : 'sugestao_concluida'}, updated_at = NOW()
+       WHERE id = $3 RETURNING *`,
+      [estado, feita ? userEmail(req) : null, req.params.id]
+    )
+    if (!rows.length) return res.status(404).json({ error: 'Tarefa não encontrada' })
+    res.json({ tarefa: rows[0] })
+  } catch (e) {
+    console.error('[agenda] update tarefa-conversa erro:', e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // ── Fila priorizada + atribuição manual (Fase 2, revisão 21/08/2026) ─
 // Encaixe automático substituído por escolha manual — ver agendaEngine.js.
 

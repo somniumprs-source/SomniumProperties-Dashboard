@@ -4984,6 +4984,11 @@ app.use("/relatorios-documentos", async (c: any, next: any) => {
   if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return c.json({ error: "Sem acesso" }, 403);
   return next();
 });
+app.use("/relatorios-conversas", async (c: any, next: any) => {
+  const u = await resolveCrmUser(c);
+  if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return c.json({ error: "Sem acesso" }, 403);
+  return next();
+});
 app.use("/reunioes-documentos", async (c: any, next: any) => {
   const u = await resolveCrmUser(c);
   if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return c.json({ error: "Sem acesso" }, 403);
@@ -5031,6 +5036,37 @@ app.get("/relatorios-documentos", async (c: any) => {
           atualizado: f.updated_at || f.created_at || null,
           url: signed?.signedUrl || null,
         });
+      }
+      if (ficheiros.length) {
+        ficheiros.sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+        out.push({ semana: s.name, ficheiros });
+      }
+    }
+    out.sort((a: any, b: any) => b.semana.localeCompare(a.semana));
+    return c.json(out);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// Relatórios das conversas WhatsApp (pipeline semanal no Mac, sexta 04:00).
+// Bucket privado "Relatorios", pasta conversas/<AAAA-MM-DD>/ (sexta em que terminou a semana).
+// Devolve [{ semana, ficheiros: [{ nome, tamanho, atualizado, url (assinada 1h) }] }]
+app.get("/relatorios-conversas", async (c: any) => {
+  try {
+    if (!supabase) return c.json([]);
+    const BUCKET = "Relatorios";
+    const { data: folders, error } = await supabase.storage
+      .from(BUCKET).list("conversas", { limit: 200, sortBy: { column: "name", order: "desc" } });
+    if (error) throw error;
+    const semanas = (folders || []).filter((f: any) => f.id === null && /^\d{4}-\d{2}-\d{2}$/.test(f.name));
+    const out: any[] = [];
+    for (const s of semanas) {
+      const pasta = `conversas/${s.name}`;
+      const { data: files } = await supabase.storage.from(BUCKET).list(pasta, { limit: 200 });
+      const ficheiros: any[] = [];
+      for (const f of (files || [])) {
+        if (!f.name.toLowerCase().endsWith(".pdf")) continue;
+        const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrl(`${pasta}/${f.name}`, 60 * 60);
+        ficheiros.push({ nome: f.name, tamanho: f.metadata?.size ?? null, atualizado: f.updated_at || f.created_at || null, url: signed?.signedUrl || null });
       }
       if (ficheiros.length) {
         ficheiros.sort((a: any, b: any) => a.nome.localeCompare(b.nome));

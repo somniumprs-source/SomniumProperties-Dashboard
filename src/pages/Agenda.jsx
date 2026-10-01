@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   Calendar, Plus, Trash2, ChevronLeft, ChevronRight, Copy, BookOpen,
   Pencil, Loader2, Sparkles, ListChecks, Wand2, Check, X, CalendarClock,
-  Inbox,
+  Inbox, MessageSquareText, RotateCcw,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { PageSkeleton } from '../components/ui/Skeleton.jsx'
@@ -115,11 +115,13 @@ export function Agenda() {
           items={[
             { key: 'calendario', label: 'Calendário', icon: CalendarClock },
             { key: 'catalogo', label: 'Catálogo de Tarefas Recorrentes', icon: BookOpen },
+            { key: 'pendentes', label: 'Tarefas pendentes', icon: ListChecks },
           ]}
           value={tab}
           onChange={setTab}
         />
-        {loadingUsers ? <PageSkeleton /> : tab === 'calendario'
+        {tab === 'pendentes' ? <TarefasPendentesTab />
+          : loadingUsers ? <PageSkeleton /> : tab === 'calendario'
           ? <CalendarioTab users={users} />
           : <CatalogoTab users={users} />}
       </div>
@@ -767,5 +769,144 @@ function TemplateModal({ open, onClose, template, users, onSaved }) {
         </label>
       </div>
     </Modal>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
+// Tarefas pendentes — identificadas automaticamente nas conversas
+// WhatsApp da comunidade (relatório semanal, sexta 04:00). Marcar como
+// feita retira a tarefa do relatório seguinte.
+// ════════════════════════════════════════════════════════════════
+function prazoISO(p) {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(p || '')
+  return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : ''
+}
+
+function TarefasPendentesTab() {
+  const toast = useToast()
+  const [tarefas, setTarefas] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [mostrarFeitas, setMostrarFeitas] = useState(false)
+  const [resp, setResp] = useState('')
+  const [grupo, setGrupo] = useState('')
+  const [busy, setBusy] = useState(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const r = await apiFetch(`/api/agenda/tarefas-conversas?estado=${mostrarFeitas ? 'todas' : 'aberta'}`)
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Falha ao carregar')
+      setTarefas(Array.isArray(j.tarefas) ? j.tarefas : [])
+    } catch (e) { toast?.(e.message, 'error') }
+    setLoading(false)
+  }, [mostrarFeitas])
+
+  useEffect(() => { load() }, [load])
+
+  async function alterar(t, estado) {
+    setBusy(t.id)
+    try {
+      const r = await apiFetch(`/api/agenda/tarefas-conversas/${t.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Falha ao actualizar')
+      setTarefas(prev => mostrarFeitas ? prev.map(x => x.id === t.id ? j.tarefa : x) : prev.filter(x => x.id !== t.id))
+      toast?.(estado === 'feita' ? `${t.id} marcada como feita` : `${t.id} reaberta`, 'success')
+    } catch (e) { toast?.(e.message, 'error') }
+    setBusy(null)
+  }
+
+  const hoje = new Date().toISOString().slice(0, 10)
+  const responsaveis = useMemo(() => [...new Set(tarefas.map(t => t.responsavel || 'Por atribuir'))].sort(), [tarefas])
+  const grupos = useMemo(() => [...new Set(tarefas.map(t => t.grupo).filter(Boolean))].sort(), [tarefas])
+  const filtradas = tarefas.filter(t =>
+    (!resp || (t.responsavel || 'Por atribuir') === resp) && (!grupo || t.grupo === grupo))
+  const porResp = useMemo(() => {
+    const m = new Map()
+    for (const t of filtradas) {
+      const k = t.responsavel || 'Por atribuir'
+      if (!m.has(k)) m.set(k, [])
+      m.get(k).push(t)
+    }
+    return [...m.entries()].sort((a, b) => (a[0] === 'Por atribuir') - (b[0] === 'Por atribuir') || a[0].localeCompare(b[0]))
+  }, [filtradas])
+
+  const abertas = tarefas.filter(t => t.estado === 'aberta')
+  const atrasadas = abertas.filter(t => { const p = prazoISO(t.prazo); return p && p < hoje }).length
+  const sugeridas = abertas.filter(t => t.sugestao_concluida).length
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-sm text-gray-600 dark:text-neutral-400 flex items-center gap-1.5 mr-auto">
+          <MessageSquareText className="w-4 h-4 text-brand-gold" />
+          Identificadas nas conversas WhatsApp. Ao marcar como feita, deixa de aparecer no relatório seguinte.
+        </p>
+        <Select size="sm" value={resp} onChange={e => setResp(e.target.value)} className="w-44" wrapperClassName="!m-0">
+          <option value="">Todos os responsáveis</option>
+          {responsaveis.map(r => <option key={r} value={r}>{r}</option>)}
+        </Select>
+        <Select size="sm" value={grupo} onChange={e => setGrupo(e.target.value)} className="w-48" wrapperClassName="!m-0">
+          <option value="">Todos os grupos</option>
+          {grupos.map(g => <option key={g} value={g}>{g}</option>)}
+        </Select>
+        <label className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-neutral-400 cursor-pointer">
+          <input type="checkbox" checked={mostrarFeitas} onChange={e => setMostrarFeitas(e.target.checked)} />
+          Mostrar feitas
+        </label>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Badge tone="dark">{abertas.length} em aberto</Badge>
+        {atrasadas > 0 && <Badge tone="red">{atrasadas} atrasadas</Badge>}
+        {sugeridas > 0 && <Badge tone="green">{sugeridas} possivelmente concluídas</Badge>}
+      </div>
+
+      {loading ? <PageSkeleton /> : !filtradas.length ? (
+        <EmptyState icon={ListChecks} title="Sem tarefas pendentes"
+          description="As tarefas são identificadas automaticamente no relatório semanal das conversas (sexta-feira, 04:00)." />
+      ) : porResp.map(([nome, lista]) => (
+        <Card key={nome} variant="default" padding="sm">
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-neutral-100 mb-2">{nome} <span className="text-gray-400 font-normal">({lista.length})</span></h3>
+          <ul className="divide-y divide-gray-100 dark:divide-neutral-800">
+            {lista.map(t => {
+              const feita = t.estado === 'feita'
+              const p = prazoISO(t.prazo)
+              const atrasada = !feita && p && p < hoje
+              return (
+                <li key={t.id} className="flex items-start gap-3 py-2">
+                  <button disabled={busy === t.id} onClick={() => alterar(t, feita ? 'aberta' : 'feita')}
+                    title={feita ? 'Reabrir' : 'Marcar como feita'}
+                    className={`mt-0.5 w-5 h-5 shrink-0 rounded border flex items-center justify-center ${feita ? 'bg-green-600 border-green-600 text-white' : 'border-gray-300 dark:border-neutral-600 hover:border-brand-gold'}`}>
+                    {busy === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : feita ? <Check className="w-3.5 h-3.5" /> : null}
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm ${feita ? 'line-through text-gray-400' : 'text-gray-800 dark:text-neutral-100'}`}>
+                      <span className="font-mono text-xs text-gray-400 mr-1.5">{t.id}</span>{t.tarefa}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                      {t.grupo && <Badge tone="gray" size="xs">{t.grupo}</Badge>}
+                      {t.prioridade === 'Urgente' && !feita && <Badge tone="red" size="xs">Urgente</Badge>}
+                      {t.prazo && <Badge tone={atrasada ? 'red' : 'blue'} size="xs">{atrasada ? 'Atrasada · ' : 'Prazo '}{t.prazo}</Badge>}
+                      {t.sugestao_concluida && !feita && (
+                        <Badge tone="green" size="xs" title={t.sugestao_concluida}>Possivelmente concluída</Badge>
+                      )}
+                      {feita && <span className="text-xs text-gray-400 flex items-center gap-1"><RotateCcw className="w-3 h-3" />feita {t.feita_em ? new Date(t.feita_em).toLocaleDateString('pt-PT') : ''}{t.feita_por ? ` por ${t.feita_por}` : ''}</span>}
+                    </div>
+                    {t.sugestao_concluida && !feita && (
+                      <p className="text-xs text-green-700 dark:text-green-400 mt-1 italic">{t.sugestao_concluida}</p>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </Card>
+      ))}
+    </div>
   )
 }
