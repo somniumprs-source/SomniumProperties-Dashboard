@@ -751,7 +751,7 @@ function RelatoriosConversas() {
         <p className="text-sm text-neutral-600 dark:text-neutral-400">
           Gerados automaticamente todas as sextas-feiras às 04:00 a partir das conversas WhatsApp da comunidade
           (texto e áudios). Um documento por grupo com actividade e um de tarefas pendentes. As tarefas
-          gerem-se em <span className="font-semibold">Agenda &rsaquo; Tarefas pendentes</span>.
+          entram em <span className="font-semibold">Operações &rsaquo; Tarefas</span> com o estado "A fazer".
         </p>
         <button onClick={load} className="p-2 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800" title="Actualizar">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
