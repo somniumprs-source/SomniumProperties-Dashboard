@@ -750,7 +750,7 @@ function RelatoriosConversas() {
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm text-neutral-600 dark:text-neutral-400">
           Gerados automaticamente todas as sextas-feiras às 04:00 a partir das conversas WhatsApp da comunidade
-          (texto e áudios). Um documento por grupo com actividade e um de tarefas pendentes. As tarefas
+          (texto e áudios): resumo executivo, tarefas pendentes e um anexo por grupo com actividade. As tarefas
           entram em <span className="font-semibold">Operações &rsaquo; Tarefas</span> com o estado "A fazer".
         </p>
         <button onClick={load} className="p-2 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800" title="Actualizar">
@@ -763,21 +763,28 @@ function RelatoriosConversas() {
       ) : !semanas.length ? (
         <p className="text-sm text-neutral-500">Ainda não há relatórios de conversas.</p>
       ) : semanas.map(s => {
-        const pend = s.ficheiros.filter(f => f.nome.startsWith('00_'))
-        const grupos = s.ficheiros.filter(f => !f.nome.startsWith('00_'))
+        const principais = s.ficheiros.filter(f => /^0\d_/.test(f.nome))
+        const grupos = s.ficheiros.filter(f => !/^0\d_/.test(f.nome))
         return (
           <div key={s.semana} className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-base font-semibold text-neutral-800 dark:text-neutral-100">Semana {semanaLabel(s.semana)}</h3>
               <span className="text-xs text-neutral-500">{grupos.length} {grupos.length === 1 ? 'grupo' : 'grupos'}</span>
             </div>
-            {pend.map(f => (
-              <a key={f.nome} href={f.url || '#'} target="_blank" rel="noreferrer"
-                className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg border border-brand-gold/40 bg-brand-gold/10 text-sm font-semibold text-neutral-800 dark:text-neutral-100 hover:bg-brand-gold/20">
-                <ListChecks className="w-4 h-4 text-brand-gold" /> Tarefas pendentes
-                <ExternalLink className="w-3.5 h-3.5 ml-auto text-neutral-400" />
-              </a>
-            ))}
+            <div className="grid sm:grid-cols-2 gap-2 mb-3">
+              {principais.map(f => {
+                const exec = /Resumo_executivo/i.test(f.nome)
+                const Icon = exec ? FileText : ListChecks
+                return (
+                  <a key={f.nome} href={f.url || '#'} target="_blank" rel="noreferrer"
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-brand-gold/40 bg-brand-gold/10 text-sm font-semibold text-neutral-800 dark:text-neutral-100 hover:bg-brand-gold/20">
+                    <Icon className="w-4 h-4 text-brand-gold" /> {exec ? 'Resumo executivo' : 'Tarefas pendentes'}
+                    <ExternalLink className="w-3.5 h-3.5 ml-auto text-neutral-400" />
+                  </a>
+                )
+              })}
+            </div>
+            {grupos.length > 0 && <p className="text-xs uppercase tracking-wide text-neutral-400 mb-1.5">Anexos por grupo</p>}
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {grupos.map(f => (
                 <a key={f.nome} href={f.url || '#'} target="_blank" rel="noreferrer"
