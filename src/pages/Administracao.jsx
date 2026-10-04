@@ -1,9 +1,11 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { FileText, BookOpen, Map, Phone } from 'lucide-react'
+import { FileText, BookOpen, Map, Phone, Clock, CalendarClock } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
 
 const TABS = [
+  { key: 'agenda',     label: 'Agenda',             icon: CalendarClock },
+  { key: 'operacoes',  label: 'Operações',          icon: Clock },
   { key: 'sop',        label: 'SOP',                icon: BookOpen },
   { key: 'relatorios', label: 'Relatórios',           icon: FileText },
   { key: 'regiao',     label: 'Multi-Região',        icon: Map },
@@ -11,6 +13,8 @@ const TABS = [
 ]
 
 const SUBTITLES = {
+  agenda:     'Google Calendar e registo das operações da equipa',
+  operacoes:  'Horas, custo, actividades e eficiência',
   sop:        'Procedimentos operacionais por departamento',
   relatorios: 'Sínteses semanais de reuniões e estudos estratégicos da Somnium Properties',
   regiao:     'Mercado de referência, compliance, hot zones e benchmarking por região',
@@ -37,7 +41,7 @@ export function Administracao() {
         />
       </div>
 
-      <main className="flex-1 px-4 sm:px-7 py-5 sm:py-7 max-w-7xl w-full mx-auto">
+      <main className={`flex-1 px-4 sm:px-7 py-5 sm:py-7 w-full mx-auto ${['agenda', 'operacoes'].includes(active) ? '' : 'max-w-7xl'}`}>
         <Outlet />
       </main>
     </div>

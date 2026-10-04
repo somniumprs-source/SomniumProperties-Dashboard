@@ -139,7 +139,7 @@ export function Dashboard() {
       title: 'Operações',
       icon: Clock,
       color: 'bg-orange-600',
-      link: '/operacoes',
+      link: '/administracao/operacoes',
       kpis: [
         { label: 'Projetos Ativos',  value: finKpis?.negóciosAtivos ?? '—',      meta: 5,   status: finKpis ? statusFromValue(finKpis.negóciosAtivos, 5) : 'yellow',        trend: 'neutral', unit: '' },
         { label: 'Classificados A/B', value: comKpis?.investClassificados ?? '—',  meta: 10,  status: comKpis ? statusFromValue(comKpis.investClassificados, 10) : 'yellow',  trend: 'neutral', unit: '' },

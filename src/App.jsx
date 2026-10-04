@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './lib/queryClient.js'
 import { Layout } from './components/layout/Layout.jsx'
@@ -10,6 +10,13 @@ import { ErrorBoundary } from './components/ui/ErrorBoundary.jsx'
 import { ChunkErrorBoundary } from './components/ui/ChunkErrorBoundary.jsx'
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
 import { ThemeProvider } from './contexts/ThemeContext.jsx'
+
+// Operações e Agenda passaram a separadores de Administração (04/10/2026):
+// os caminhos antigos seguem para o novo, mantendo os parâmetros (?tab=...).
+function RedirectComQuery({ to }) {
+  const { search } = useLocation()
+  return <Navigate to={to + search} replace />
+}
 
 const Financeiro  = lazy(() => import('./pages/Financeiro.jsx').then(m => ({ default: m.Financeiro })))
 const Alertas     = lazy(() => import('./pages/Alertas.jsx').then(m => ({ default: m.Alertas })))
@@ -109,13 +116,15 @@ function AppRoutes() {
             <Route path="/projectos/calendario" element={<ErrorBoundary><ProjectosCalendario /></ErrorBoundary>} />
             <Route path="/projectos/:id" element={<ErrorBoundary><ProjectoDetalhe /></ErrorBoundary>} />
             <Route path="/financeiro" element={<ErrorBoundary><Financeiro /></ErrorBoundary>} />
-            <Route path="/operacoes" element={<ErrorBoundary><Operacoes /></ErrorBoundary>} />
-            <Route path="/agenda" element={<ErrorBoundary><Agenda /></ErrorBoundary>} />
+            <Route path="/operacoes" element={<RedirectComQuery to="/administracao/operacoes" />} />
+            <Route path="/agenda" element={<RedirectComQuery to="/administracao/agenda" />} />
             <Route path="/marketing" element={<ErrorBoundary><Marketing /></ErrorBoundary>} />
             <Route path="/metricas" element={<ErrorBoundary><Metricas /></ErrorBoundary>} />
             <Route path="/alertas" element={<ErrorBoundary><Alertas /></ErrorBoundary>} />
             <Route path="/administracao" element={<ErrorBoundary><Administracao /></ErrorBoundary>}>
               <Route index element={<Navigate to="sop" replace />} />
+              <Route path="operacoes" element={<Operacoes embutido />} />
+              <Route path="agenda" element={<Agenda embutido />} />
               <Route path="relatorios" element={<RelatoriosAdmin />} />
               <Route path="sop" element={<AdministracaoSOP />} />
               <Route path="regiao" element={<AdministracaoMultiRegiao />} />

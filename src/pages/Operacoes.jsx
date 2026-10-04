@@ -59,14 +59,14 @@ function HBar({ items, valueKey = 'horas', labelKey = 'label', colorFn }) {
 }
 
 // ── Main ────────────────────────────────────────────────────────
-export function Operacoes() {
+export function Operacoes({ embutido = false }) {
   const [tab, setTab] = useUrlState('tab', 'resumo')
   const [mutationError] = useState(null)
   const navigate = useNavigate()
   // As abas Tarefas e Calendário passaram para a Agenda (04/10/2026): links antigos seguem para lá.
   useEffect(() => {
-    if (tab === 'tarefas') navigate('/agenda?tab=tarefas', { replace: true })
-    if (tab === 'calendario') navigate('/agenda', { replace: true })
+    if (tab === 'tarefas') navigate('/administracao/agenda?tab=tarefas', { replace: true })
+    if (tab === 'calendario') navigate('/administracao/agenda', { replace: true })
   }, [tab, navigate])
 
   // Migrado para React Query (Problema 23 da auditoria) — ver Financeiro.jsx/CRM.jsx.
@@ -104,9 +104,9 @@ export function Operacoes() {
 
   return (
     <>
-      <Header title="Operações" subtitle="Horas · Custo · Actividades · Eficiência" onRefresh={loadAll} loading={loading} />
+      {!embutido && <Header title="Operações" subtitle="Horas · Custo · Actividades · Eficiência" onRefresh={loadAll} loading={loading} />}
 
-      <div className="px-4 sm:px-6 pt-3 bg-white sticky top-0 z-10">
+      <div className={embutido ? 'bg-white dark:bg-neutral-900 rounded-xl px-3 pt-2 mb-4' : 'px-4 sm:px-6 pt-3 bg-white sticky top-0 z-10'}>
         <div className="flex items-center gap-2 sm:gap-4">
           <div className="flex-1 min-w-0">
             <Tabs
@@ -119,7 +119,7 @@ export function Operacoes() {
         </div>
       </div>
 
-      <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
+      <div className={`flex flex-col gap-4 sm:gap-6 ${embutido ? '' : 'p-4 sm:p-6'}`}>
         {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>}
 
         {/* Hero banner — Operações */}
@@ -141,7 +141,7 @@ export function Operacoes() {
                   <div>
                     <h2 className="text-overline uppercase tracking-widest font-semibold text-brand-gold">Operações</h2>
                     <p className="text-sm font-semibold text-white">Análise das tarefas registadas na Agenda</p>
-                    <Link to="/agenda?tab=tarefas" className="text-xs text-brand-gold hover:underline">Gerir tarefas na Agenda →</Link>
+                    <Link to="/administracao/agenda?tab=tarefas" className="text-xs text-brand-gold hover:underline">Gerir tarefas na Agenda →</Link>
                   </div>
                 </div>
               </div>

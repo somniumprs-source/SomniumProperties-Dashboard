@@ -74,7 +74,7 @@ function corResponsavel(func) {
 }
 
 // ════════════════════════════════════════════════════════════════
-export function Agenda() {
+export function Agenda({ embutido = false }) {
   const toast = useToast()
   const [tab, setTab] = useUrlState('tab', 'calendario')
   const [tarefas, setTarefas] = useState([])
@@ -159,8 +159,8 @@ export function Agenda() {
 
   return (
     <>
-      <Header title="Agenda" subtitle="Google Calendar e registo das operações da equipa" />
-      <div className="p-4 sm:p-6 space-y-4">
+      {!embutido && <Header title="Agenda" subtitle="Google Calendar e registo das operações da equipa" />}
+      <div className={embutido ? 'space-y-4' : 'p-4 sm:p-6 space-y-4'}>
         <div className="flex flex-wrap items-center gap-3">
           <Tabs
             variant="segmented"
