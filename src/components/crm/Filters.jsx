@@ -3,6 +3,7 @@
  * Mostra dropdown de concelho dinâmico baseado na região.
  */
 import { invStatusFor, concelhosDe } from '../../constants.js'
+import { ESTADOS_IMOVEIS } from '../../constants/pipelineImoveis.js'
 
 export function Filters({ tab, filters, onChange, regiao }) {
   const concelhos = concelhosDe(regiao)
@@ -26,7 +27,7 @@ export function Filters({ tab, filters, onChange, regiao }) {
       {tab === 'Imóveis' && <>
         <select value={filters.estado ?? ''} onChange={e => set('estado', e.target.value)} className={selectClass}>
           <option value="">Todos os estados</option>
-          {['Adicionado','Chamada Não Atendida','Pendentes','Pré-aprovação','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'].map(o =>
+          {ESTADOS_IMOVEIS.map(o =>
             <option key={o} value={o}>{o}</option>
           )}
         </select>

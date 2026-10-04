@@ -6,6 +6,7 @@
  * `funcionario` (antes fixo em 'Alexandre Mendes').
  */
 import { query as pgQuery } from './pg.js'
+import { avaliarEntrada } from './dealBreakers.js'
 import { randomUUID } from 'crypto'
 
 export async function processVoiceCommand(text, opts = {}) {
@@ -119,8 +120,16 @@ TODAS as tarefas devem ser sincronizadas com Google Calendar.`,
   } else if (accao === 'MOVER_ESTADO' && entNome && parsed.novo_estado) {
     const im = imoveis.find(i => i.nome.toLowerCase().includes(entNome.toLowerCase()))
     if (im) {
-      await pgQuery('UPDATE imoveis SET estado = $1, updated_at = $2 WHERE id = $3', [parsed.novo_estado, now, im.id])
-      msg = `"${im.nome}" movido para "${parsed.novo_estado}"`
+      // Mesmo travão do Kanban e da ficha (requisitos de entrada da fase).
+      const { rows: [atual] } = await pgQuery('SELECT estado, ask_price, valor_venda_remodelado, valor_proposta, data_proposta, data_proposta_aceite FROM imoveis WHERE id = $1', [im.id])
+      const { rows: visitas } = await pgQuery('SELECT data_hora, created_at, ficha FROM visitas WHERE imovel_id = $1', [im.id])
+      const entrada = avaliarEntrada(atual?.estado, parsed.novo_estado, { imovel: atual || {}, visitas })
+      if (entrada.bloqueado) {
+        msg = `"${im.nome}" não foi movido para "${parsed.novo_estado}". Falta: ${entrada.emFalta.map(i => i.titulo).join(', ')}`
+      } else {
+        await pgQuery('UPDATE imoveis SET estado = $1, updated_at = $2 WHERE id = $3', [parsed.novo_estado, now, im.id])
+        msg = `"${im.nome}" movido para "${parsed.novo_estado}"`
+      }
     } else { msg = `Imóvel "${entNome}" não encontrado` }
 
   } else if (accao === 'CLASSIFICAR' && entNome) {

@@ -37,9 +37,8 @@ import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
 import { removeFromStorage, supabase, uploadPublic, uploadPrivate } from "../_shared/storage.ts";
 import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { isWholesaling } from "../_shared/modelos.ts";
-import { avaliarDealBreakers, painelDealBreakers, eRecuo } from "../_shared/dealBreakers.ts";
+import { avaliarEntrada, painelRequisitos } from "../_shared/dealBreakers.ts";
 import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase } from "../_shared/projetoTarefas.ts";
-import { CHECKLIST_ENFORCEMENT_START_DATE } from "../_shared/featureFlags.ts";
 import { diasFollowUpParaRegisto } from "../_shared/followupRules.ts";
 import { criarFollowUpConsultor } from "../_shared/consultorFollowups.ts";
 import { ensureOportunidadesScraperTable } from "../_shared/oportunidadesScraper.ts";
@@ -82,8 +81,8 @@ import { DADOS_EXPANSAO_GAIA } from "../_shared/expansaoGaiaData.ts";
 import { exportDepartment } from "../_shared/excelExport.ts";
 import { listarFaturas, exportarZip, marcarEnviadas } from "../_shared/contabilidade.ts";
 import { generateDocx, getAvailableTypes } from "../_shared/docxGenerator.ts";
-import { CHECKLIST_TEMPLATES } from "../_shared/checklistTemplates.ts";
-import { agendarFollowUpImovel } from "../_shared/agendaEngine.ts";
+import { carregarChecklist, gravarManual } from "../_shared/checklistImovel.ts";
+import { agendarFollowUpImovel, agendarPassoImovel, sincronizarTarefaVisita } from "../_shared/agendaEngine.ts";
 import { createClient } from "@supabase/supabase-js";
 import { Buffer } from "node:buffer";
 
@@ -889,70 +888,21 @@ crudRoutes("/imoveis", Imoveis, {
     if (body.fee_cedencia !== undefined || body.valor_proposta !== undefined || body.modelo_negocio !== undefined) {
       await recalcAnaliseActivaCompra(item.id).catch((e: any) => console.error("[analise/recalc compra]", (e as Error).message));
     }
-    // Auto-complete checklist: verificar campos preenchidos
-    try {
-      const merged = { ...item, ...body };
-      const { rows: pending } = await pool.query(
-        "SELECT * FROM checklist_imovel WHERE imovel_id = $1 AND concluida = false AND campo_crm IS NOT NULL",
-        [item.id],
-      );
-      const now = new Date().toISOString();
-      const toComplete: any[] = [];
-      for (const cl of pending) {
-        if (/^(analise:|negocio:|doc:|tarefa calendario)/.test(cl.campo_crm)) continue;
-        const fields = cl.campo_crm.split(",").map((f: string) => f.trim()).filter((f: string) => f !== "notas" && f !== "fotos");
-        if (fields.length === 0) continue;
-        const allFilled = fields.every((f: string) => {
-          const v = merged[f];
-          return v !== null && v !== undefined && v !== "" && v !== 0;
-        });
-        if (allFilled) toComplete.push(cl.id);
-      }
-      if (toComplete.length > 0) {
-        await pool.query(
-          `UPDATE checklist_imovel SET concluida = true, concluida_em = $1, concluida_por = 'auto', updated_at = $1
-           WHERE id = ANY($2)`,
-          [now, toComplete],
-        );
-        console.log(`[checklist] Auto-completadas ${toComplete.length} tarefas para ${item.nome || item.id}`);
-      }
-    } catch (e) { console.error("[checklist] Erro auto-complete:", (e as Error).message); }
   },
-  // Bloqueia mudança de estado no Kanban se a checklist obrigatória do
-  // estado ACTUAL não estiver completa — só para imóveis criados depois de
-  // CHECKLIST_ENFORCEMENT_START_DATE (imóveis já existentes movem livremente).
+  // Travão de mudança de fase: valida só o que a fase de destino precisa,
+  // venha o imóvel de onde vier (ver _shared/dealBreakers.ts). Os campos que
+  // vêm no próprio pedido contam, para a janela de registo poder gravar e
+  // mover no mesmo passo.
   beforeUpdate: async (id: string, body: any) => {
     if (!body.estado) return null;
-    const { rows: [imovel] } = await pool.query("SELECT estado, ask_price, created_at FROM imoveis WHERE id = $1", [id]);
+    const { rows: [imovel] } = await pool.query(
+      "SELECT estado, ask_price, valor_venda_remodelado, valor_proposta, data_proposta, data_proposta_aceite FROM imoveis WHERE id = $1", [id]);
     if (!imovel) return null;
     if (body.estado === imovel.estado) return null;
-    // Recuar ou desistir passa sempre (é assim que se volta atrás para completar a checklist).
-    if (eRecuo(imovel.estado, body.estado)) return null;
-
-    // Preço (ask_price) só passa a ser obrigatório a partir do Estudo de
-    // Mercado (Estudo de VVR) em diante — reutiliza o mesmo mapa de
-    // qualidade por estado (>=0.50 = visita/VVR concluído ou mais avançado).
-    if (qualidadeImovel(body.estado) >= 0.50) {
-      const askPriceFinal = body.ask_price ?? imovel.ask_price;
-      if (!askPriceFinal || Number(askPriceFinal) <= 0) {
-        return { error: "Preço (Ask Price) obrigatório a partir do Estudo de Mercado" };
-      }
-    }
-
-    // Deal breakers: bloqueiam sempre, para todos os imóveis (sem data de corte).
-    const { rows: visitasDb } = await pool.query("SELECT data_hora, created_at, ficha FROM visitas WHERE imovel_id = $1", [id]);
-    const db = avaliarDealBreakers({ visitas: visitasDb }, body.estado);
-    if (db.bloqueado) {
-      return { error: "Deal breakers por resolver", deal_breakers: db.itens.filter((i: any) => i.estado !== "ok") };
-    }
-
-    if (!imovel.created_at || imovel.created_at < CHECKLIST_ENFORCEMENT_START_DATE) return null;
-    const { rows: pendentes } = await pool.query(
-      `SELECT titulo FROM checklist_imovel WHERE imovel_id = $1 AND estado = $2 AND obrigatoria = true AND concluida = false`,
-      [id, imovel.estado],
-    );
-    if (pendentes.length > 0) {
-      return { error: "Checklist incompleta", itens_em_falta: pendentes.map((p: any) => p.titulo) };
+    const { rows: visitas } = await pool.query("SELECT data_hora, created_at, ficha FROM visitas WHERE imovel_id = $1", [id]);
+    const r = avaliarEntrada(imovel.estado, body.estado, { imovel: { ...imovel, ...body }, visitas });
+    if (r.bloqueado) {
+      return { error: `Faltam requisitos para entrar em «${r.destino}»`, destino: r.destino, requisitos: r.emFalta };
     }
     return null;
   },
@@ -1968,6 +1918,7 @@ app.post("/visitas", async (c: any) => {
   try {
     const item: any = await Visitas.create(await c.req.json().catch(() => ({})));
     await syncDataVisitaDerivada(item.imovel_id);
+    await sincronizarTarefaVisita(item, { user: await resolveCrmUser(c) }).catch((e: any) => console.error("[visitas] tarefa:", e.message));
     return c.json(item, 201);
   } catch (e) { return c.json({ error: (e as Error).message }, 400); }
 });
@@ -1978,6 +1929,7 @@ app.put("/visitas/:id", async (c: any) => {
     const item = await Visitas.update(c.req.param("id"), await c.req.json().catch(() => ({})));
     if (!item) return c.json({ error: "Não encontrado" }, 404);
     await syncDataVisitaDerivada(item.imovel_id);
+    await sincronizarTarefaVisita(item, { user: await resolveCrmUser(c) }).catch((e: any) => console.error("[visitas] tarefa:", e.message));
     return c.json(item);
   } catch (e) { return c.json({ error: (e as Error).message }, 400); }
 });
@@ -1988,6 +1940,7 @@ app.delete("/visitas/:id", async (c: any) => {
     if (!existing) return c.json({ error: "Não encontrado" }, 404);
     await Visitas.delete(c.req.param("id"));
     await syncDataVisitaDerivada(existing.imovel_id);
+    await sincronizarTarefaVisita(existing, { apagada: true }).catch((e: any) => console.error("[visitas] tarefa:", e.message));
     return c.json({ ok: true });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
@@ -2731,6 +2684,52 @@ app.post("/imoveis/:id/follow-up", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 400); }
 });
 
+// ── Próximos passos do imóvel (bloco no topo da ficha) — port de routes.js ──
+// As tarefas em aberto ligadas ao imóvel são o registo do que está agendado
+// (chamada, visita, follow-up): não há campos de data paralelos.
+app.get("/imoveis/:id/proximos-passos", async (c: any) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, tarefa, categoria, status, inicio, data_limite, origem_campo, funcionario FROM tarefas
+       WHERE origem_tipo = 'imovel' AND origem_id = $1 AND status != 'Concluída' AND COALESCE(arquivada, false) = false
+       ORDER BY COALESCE(inicio, data_limite) ASC`,
+      [c.req.param("id")],
+    );
+    return c.json(rows);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/imoveis/:id/proximos-passos", async (c: any) => {
+  try {
+    const { tipo, quando } = await c.req.json().catch(() => ({}));
+    if (tipo !== "chamada") return c.json({ error: "Tipo de passo inválido" }, 400);
+    if (!quando || isNaN(new Date(quando).getTime())) return c.json({ error: "Data e hora são obrigatórias" }, 400);
+    const tarefaId = await agendarPassoImovel({
+      imovelId: c.req.param("id"), campo: "proxima_chamada", prefixo: "Chamada", categoria: "Cold Call",
+      quando, horas: 0.25, user: await resolveCrmUser(c),
+    });
+    if (!tarefaId) return c.json({ error: "Imóvel não encontrado" }, 404);
+    return c.json({ ok: true, tarefa_id: tarefaId });
+  } catch (e) { return c.json({ error: (e as Error).message }, 400); }
+});
+
+// Passo feito: conclui a tarefa. Uma chamada feita fica também como a data da
+// última chamada do imóvel.
+app.put("/imoveis/:id/proximos-passos/:tarefaId", async (c: any) => {
+  try {
+    const { rows: [t] } = await pool.query(
+      `UPDATE tarefas SET status = 'Concluída', updated_at = NOW()
+       WHERE id = $1 AND origem_tipo = 'imovel' AND origem_id = $2 RETURNING id, origem_campo`,
+      [c.req.param("tarefaId"), c.req.param("id")],
+    );
+    if (!t) return c.json({ error: "Passo não encontrado" }, 404);
+    if (t.origem_campo === "proxima_chamada") {
+      await Imoveis.update(c.req.param("id"), { data_chamada: new Date().toISOString().slice(0, 10) });
+    }
+    return c.json({ ok: true });
+  } catch (e) { return c.json({ error: (e as Error).message }, 400); }
+});
+
 app.get("/imoveis/:id/gravacoes", async (c: any) => {
   try {
     await ensureGravacoesTable();
@@ -3094,10 +3093,11 @@ app.put("/imoveis/:id/fotos/:fotoId/mover", async (c: any) => {
 // ── Deal breakers do imóvel (painel do Comercial) — port de routes.js ──
 app.get("/imoveis/:id/deal-breakers", async (c: any) => {
   try {
-    const { rows: [imovel] } = await pool.query("SELECT estado FROM imoveis WHERE id = $1", [c.req.param("id")]);
+    const { rows: [imovel] } = await pool.query(
+      "SELECT estado, ask_price, valor_venda_remodelado, valor_proposta, data_proposta, data_proposta_aceite FROM imoveis WHERE id = $1", [c.req.param("id")]);
     if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
     const { rows: visitas } = await pool.query("SELECT data_hora, created_at, ficha FROM visitas WHERE imovel_id = $1", [c.req.param("id")]);
-    return c.json(painelDealBreakers({ visitas }, imovel.estado));
+    return c.json(painelRequisitos({ imovel, visitas }, imovel.estado));
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
@@ -3600,40 +3600,13 @@ app.get("/imoveis/:id/full", async (c: any) => {
     const { rows: tarefas } = await pool.query("SELECT * FROM tarefas WHERE tarefa ILIKE $1 ORDER BY created_at DESC", [`%${imovel.nome}%`]);
     const { rows: analises } = await pool.query("SELECT * FROM analises WHERE imovel_id = $1 ORDER BY activa DESC, updated_at DESC", [imovel.id]);
     const { rows: timeline } = await pool.query("SELECT * FROM audit_log WHERE registo_id = $1 ORDER BY created_at DESC LIMIT 20", [imovel.id]);
-    const { rows: checklist } = await pool.query("SELECT * FROM checklist_imovel WHERE imovel_id = $1 ORDER BY estado, ordem", [imovel.id]);
-    const now = new Date().toISOString();
-    const autoCompleteIds: any[] = [];
-    for (const item of checklist) {
-      if (item.concluida) continue;
-      if (!item.campo_crm) continue;
-      if (/^(analise:|negocio:|doc:|tarefa calendario)/.test(item.campo_crm)) continue;
-      const fields = item.campo_crm.split(",").map((f: string) => f.trim()).filter((f: string) => f !== "notas" && f !== "fotos");
-      if (fields.length === 0) continue;
-      const allFilled = fields.every((f: string) => {
-        const v = imovel[f];
-        return v !== null && v !== undefined && v !== "" && v !== 0;
-      });
-      if (allFilled) {
-        autoCompleteIds.push(item.id);
-        item.concluida = true;
-        item.concluida_em = now;
-        item.concluida_por = "auto";
-      }
-    }
-    if (autoCompleteIds.length > 0) {
-      await pool.query(
-        `UPDATE checklist_imovel SET concluida = true, concluida_em = $1, concluida_por = 'auto', updated_at = $1
-         WHERE id = ANY($2) AND concluida = false`,
-        [now, autoCompleteIds],
-      );
-    }
     const { rows: interacoes } = await pool.query(
       `SELECT ci.*, c.nome as consultor_nome FROM consultor_interacoes ci
        LEFT JOIN consultores c ON c.id = ci.consultor_id
        WHERE ci.imovel_id = $1 ORDER BY ci.data_hora DESC`,
       [imovel.id],
     );
-    return c.json({ ...imovel, negocios, consultores, tarefas, analises, timeline, checklist, interacoes });
+    return c.json({ ...imovel, negocios, consultores, tarefas, analises, timeline, interacoes });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
@@ -3767,37 +3740,13 @@ app.get("/kpis/:tab", async (c: any) => {
 });
 
 // ── Tarefas automaticas por mudanca de fase — port de routes.js 2028-2091 ──
-// Imoveis: gera checklist a partir de CHECKLIST_TEMPLATES (de _shared, nao disco).
 // Investidores/consultores: cria 1 tarefa conforme TASK_MAP. randomUUID via crypto global.
 app.post("/auto-task", async (c: any) => {
   try {
     const { entity, entityId, entityName, newPhase } = await c.req.json();
 
-    // Para imoveis: gerar checklist automaticamente
-    if (entity === "imoveis" && entityId) {
-      const templates = (CHECKLIST_TEMPLATES as any)[newPhase];
-      if (templates && templates.length > 0) {
-        const now = new Date().toISOString();
-        let created = 0;
-        for (let i = 0; i < templates.length; i++) {
-          const t = templates[i];
-          const id = crypto.randomUUID();
-          try {
-            await pool.query(
-              `INSERT INTO checklist_imovel (id, imovel_id, estado, template_key, titulo, campo_crm, categoria, tempo_estimado, obrigatoria, ordem, created_at, updated_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-               ON CONFLICT (imovel_id, template_key) DO NOTHING`,
-              [id, entityId, newPhase, t.key, t.titulo, t.campo_crm, t.categoria, t.tempo_estimado, t.obrigatoria, i + 1, now, now],
-            );
-            created++;
-          } catch { /* duplicado, ignorar */ }
-        }
-        console.log(`[checklist] ${created} items gerados para ${entityName} → ${newPhase}`);
-        return c.json({ ok: true, created: true, count: created });
-      }
-    }
-
-    // Fallback para investidores/consultores: manter auto-task antigo
+    // Tarefa automática por fase (investidores/consultores). Os imóveis não
+    // geram itens: a checklist deles é calculada dos dados (checklistImovel.ts).
     const TASK_MAP: Record<string, Record<string, string>> = {
       investidores: {
         // Comuns
@@ -3833,77 +3782,23 @@ app.post("/auto-task", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Checklist de imoveis — port de routes.js 2094-2165 ──
-app.get("/checklist/progress-batch", async (c: any) => {
+// ── Checklist de imóveis (espelho dos dados reais; sob o guard de /imoveis) — port de routes.js ──
+app.get("/imoveis/:imovelId/checklist", async (c: any) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT imovel_id, estado,
-              COUNT(*) FILTER (WHERE obrigatoria) as total,
-              COUNT(*) FILTER (WHERE obrigatoria AND concluida) as done
-       FROM checklist_imovel
-       GROUP BY imovel_id, estado`,
-    );
-    const map: Record<string, any> = {};
-    for (const r of rows) {
-      if (!map[r.imovel_id]) map[r.imovel_id] = {};
-      map[r.imovel_id][r.estado] = { done: parseInt(r.done), total: parseInt(r.total) };
-    }
-    return c.json(map);
+    const checklist = await carregarChecklist(pool, c.req.param("imovelId"));
+    if (!checklist) return c.json({ error: "Imóvel não encontrado" }, 404);
+    return c.json(checklist);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-app.get("/checklist/:imovelId", async (c: any) => {
+// Declaração manual de um item que acontece fora do CRM.
+app.put("/imoveis/:imovelId/checklist/:key", async (c: any) => {
   try {
-    const { rows } = await pool.query(
-      "SELECT * FROM checklist_imovel WHERE imovel_id = $1 ORDER BY estado, ordem",
-      [c.req.param("imovelId")],
-    );
-    return c.json(rows);
-  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
-});
-
-app.put("/checklist/:itemId", async (c: any) => {
-  try {
-    const { concluida, notas, concluida_por } = await c.req.json().catch(() => ({}));
-    const now = new Date().toISOString();
-    const sets = ["updated_at = $2"];
-    const vals: any[] = [c.req.param("itemId"), now];
-    let idx = 3;
-    if (concluida !== undefined) {
-      sets.push(`concluida = $${idx}`);
-      vals.push(concluida);
-      idx++;
-      sets.push(`concluida_em = $${idx}`);
-      vals.push(concluida ? now : null);
-      idx++;
-      sets.push(`concluida_por = $${idx}`);
-      vals.push(concluida ? (concluida_por || null) : null);
-      idx++;
-    }
-    if (notas !== undefined) {
-      sets.push(`notas = $${idx}`);
-      vals.push(notas);
-      idx++;
-    }
-    const { rows: [item] } = await pool.query(
-      `UPDATE checklist_imovel SET ${sets.join(", ")} WHERE id = $1 RETURNING *`,
-      vals,
-    );
-    return c.json(item);
-  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
-});
-
-app.get("/checklist/:imovelId/progress", async (c: any) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT estado,
-              COUNT(*) FILTER (WHERE obrigatoria) as total,
-              COUNT(*) FILTER (WHERE obrigatoria AND concluida) as done
-       FROM checklist_imovel WHERE imovel_id = $1
-       GROUP BY estado`,
-      [c.req.param("imovelId")],
-    );
-    return c.json(rows);
+    const { valor, desfazer } = await c.req.json().catch(() => ({}));
+    const u = await resolveCrmUser(c);
+    const r: any = await gravarManual(pool, c.req.param("imovelId"), c.req.param("key"), { valor, desfazer: !!desfazer, por: u?.nome || null });
+    if (r.error) return c.json(r, 400);
+    return c.json(await carregarChecklist(pool, c.req.param("imovelId")));
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 

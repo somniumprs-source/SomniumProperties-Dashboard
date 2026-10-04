@@ -3,6 +3,9 @@ import { useQuery } from '@tanstack/react-query'
 import { Header } from '../components/layout/Header.jsx'
 import { KanbanBoard } from '../components/crm/KanbanBoard.jsx'
 import { MOTIVOS_NAO_INTERESSA_PADRAO } from '../components/crm/detailPanelConstants.js'
+import { TransicaoFaseModal } from '../components/crm/TransicaoFaseModal.jsx'
+import { AgendarPassoModal } from '../components/crm/AgendarPassoModal.jsx'
+import { ESTADOS_IMOVEIS } from '../constants/pipelineImoveis.js'
 const DetailPanel = lazy(() => import('../components/crm/DetailPanel.jsx').then(m => ({ default: m.DetailPanel })))
 import { Filters } from '../components/crm/Filters.jsx'
 import { TabKPIs } from '../components/crm/TabKPIs.jsx'
@@ -52,8 +55,6 @@ const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Construtores', 'Oportu
 const TABS_REGIONAIS = new Set(['Imóveis', 'Consultores', 'Construtores'])
 const tabKeyRegional = (t) => `crm-${(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()}`
 
-// Progresso checklist por imóvel (cache local)
-let checklistProgressCache = {}
 
 function Badge({ text, colorMap }) {
   const clean = cleanLabel(text)
@@ -682,6 +683,8 @@ export function CRM() {
   const [invSubTab, setInvSubTab] = useUrlState('invSubTab', 'Passivo') // sub-tab investidores
   const [detailName, setDetailName] = useState(null) // nome para breadcrumb
   const [moveModal, setMoveModal] = useState(null) // { id, newColumn, type } | null
+  const [agendar, setAgendar] = useState(null) // { id, newColumn, tipo } | null — janela de data ao mover para fases com passo agendado
+  const [transicao, setTransicao] = useState(null) // { id, newColumn, requisitos } | null — janela de registo ao mudar de fase
 
   const toast = useToast()
   const searchTimer = useRef(null)
@@ -735,12 +738,6 @@ export function CRM() {
         // Segurança extra: filtrar client-side para investidores
         if (tab === 'Investidores') items = items.filter(i => tipoPrincipalIncludes(i.tipo_principal, invSubTab))
       }
-      // Carregar progresso checklist para imóveis (fire-and-forget, como antes)
-      if (tab === 'Imóveis') {
-        apiFetchJson('/api/crm/checklist/progress-batch', { regiao: regiaoActiva }).then(d => {
-          checklistProgressCache = d
-        }).catch(() => {})
-      }
       return { items, total: items.length }
     },
   })
@@ -790,10 +787,9 @@ export function CRM() {
   // Kanban config por tab
   const KANBAN_CONFIG = {
     'Imóveis': {
-      columns: ['Pré-aprovação','Adicionado','Chamada Não Atendida','Pendentes','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'],
+      columns: ESTADOS_IMOVEIS,
       groupField: 'estado',
       renderCard: (item) => {
-        const cp = checklistProgressCache[item.id]?.[item.estado]
         return (
           <div>
             <p className="text-[13px] font-semibold text-gray-800 truncate">{item.nome}</p>
@@ -805,22 +801,6 @@ export function CRM() {
                 onClick={(e) => { e.stopPropagation(); navigateToConsultor(item.nome_consultor) }}>
                 {item.nome_consultor}
               </p>
-            )}
-            {cp && cp.total > 0 && (
-              <div className="mt-1.5">
-                <div className="flex items-center justify-between text-[10px] mb-0.5">
-                  <span className="text-gray-400">{cp.done}/{cp.total}</span>
-                  {cp.done < cp.total && <span className="text-amber-500 font-medium">Pendente</span>}
-                  {cp.done === cp.total && <span className="text-green-600 font-medium">Completa</span>}
-                </div>
-                <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full rounded-full transition-all"
-                    style={{
-                      width: `${(cp.done / cp.total) * 100}%`,
-                      backgroundColor: cp.done === cp.total ? '#22c55e' : '#C9A84C'
-                    }} />
-                </div>
-              </div>
             )}
           </div>
         )
@@ -971,15 +951,17 @@ export function CRM() {
     })
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
-      if (err.deal_breakers?.length) {
-        toast(`Deal breakers por resolver: ${err.deal_breakers.map(d => d.titulo).join(', ')}`, 'error')
+      if (err.requisitos?.length) {
+        // A fase de destino precisa de dados em falta: abre a janela de registo.
+        setTransicao({ id, newColumn, requisitos: err.requisitos })
       } else if (err.itens_em_falta?.length) {
-        toast(`Checklist incompleta — falta: ${err.itens_em_falta.join(', ')}`, 'error')
+        toast(`Falta: ${err.itens_em_falta.join(', ')}`, 'error')
       } else {
         toast(err.error || 'Não foi possível mover', 'error')
       }
-      return
+      return false
     }
+    setTransicao(null)
     // Auto-task on phase change
     apiFetch('/api/crm/auto-task', {
       method: 'POST',
@@ -1000,6 +982,12 @@ export function CRM() {
     const isNaoInteressaCol = newColumn === 'Não interessa' || newColumn === 'Nao interessa'
     if (tab === 'Imóveis' && (isFollowUpCol || isNaoInteressaCol)) {
       setMoveModal({ id, newColumn, type: isFollowUpCol ? 'follow_up' : 'nao_interessa' })
+      return
+    }
+    // Imóveis: fases que pedem uma data agendada (próxima chamada, visita)
+    const passo = { 'Chamada Não Atendida': 'chamada', 'Visita Marcada': 'visita' }[newColumn]
+    if (tab === 'Imóveis' && passo) {
+      setAgendar({ id, newColumn, tipo: passo })
       return
     }
     await persistMove(id, newColumn)
@@ -1380,6 +1368,28 @@ export function CRM() {
                 description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
               />
             )
+          )}
+          {transicao && (
+            <TransicaoFaseModal
+              key={`${transicao.id}-${transicao.requisitos.map(r => r.id).join()}`}
+              imovel={data.find(i => i.id === transicao.id)}
+              destino={transicao.newColumn}
+              requisitos={transicao.requisitos}
+              onCancel={() => setTransicao(null)}
+              onConfirm={extra => persistMove(transicao.id, transicao.newColumn, extra)}
+              onResolvido={msg => { setTransicao(null); toast(msg, 'success'); load() }}
+              onAbrirImovel={() => { const alvo = transicao.id; setTransicao(null); setDetail(alvo) }}
+            />
+          )}
+          {agendar && (
+            <AgendarPassoModal
+              imovel={data.find(i => i.id === agendar.id)}
+              tipo={agendar.tipo}
+              destino={agendar.newColumn}
+              onCancel={() => setAgendar(null)}
+              onAntes={() => persistMove(agendar.id, agendar.newColumn)}
+              onDone={msg => { setAgendar(null); toast(msg, 'success') }}
+            />
           )}
           {moveModal && (
             <MoveReasonModal
@@ -1876,15 +1886,14 @@ const FIELD_DEFS = {
     // — Identificação —
     // `quick: true` = campo visível na "Ficha Rápida" ao criar um imóvel novo
     // (dados normalmente já disponíveis no anúncio, antes do 1º contacto). O
-    // resto só é pedido pela checklist obrigatória ao avançar de estado
-    // (ver checklistTemplates.js — estado "Adicionado" já exige data_chamada,
-    // ask_price, notas, modelo_negocio e fotos antes de sair desse estado).
+    // resto regista-se à medida que o negócio avança: cada fase pede só o que
+    // precisa para entrar (ver src/db/dealBreakers.js).
     { key: 'nome', label: 'Nome do Imóvel', type: 'text', required: true, quick: true },
     // Obrigatório ao criar em "Geral" (sem regiao activa no toggle) — sem isto
     // o handleSave bloqueia com toast a mandar voltar ao toggle no topo, sem
     // dar hipotese de escolher a regiao aqui mesmo na ficha rapida.
     { key: 'regiao', label: 'Região', type: 'select', options: ['Coimbra', 'AMP'], required: true, quick: true },
-    { key: 'estado', label: 'Estado', type: 'select', options: ['Adicionado','Chamada Não Atendida','Pendentes','Pré-aprovação','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa'] },
+    { key: 'estado', label: 'Estado', type: 'select', options: ESTADOS_IMOVEIS },
     { key: 'modelo_negocio', label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix and Flip','CAEP','Mediação Imobiliária','Consultoria/Assessoria'], required: true },
     { key: 'ref_interna', label: 'REF Interna', type: 'text' },
     { key: 'tipo_oportunidade', label: 'Tipo Oportunidade', type: 'select', options: ['Portal', 'Off-Market'] },

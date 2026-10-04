@@ -230,6 +230,79 @@ export async function agendarFollowUpImovel(imovelId: string, user: { id?: strin
   return id;
 }
 
+// ── 3c. Próximos passos do imóvel (chamada, visita) agendados na hora ──
+// Mesmo mecanismo do follow-up, mas com data e hora: a tarefa é o registo do
+// agendamento (não há campo de data paralelo no imóvel) e segue para o Google
+// Calendar pela sincronização normal das tarefas. origem_campo identifica o
+// passo: 'proxima_chamada' ou 'visita:<id da visita>'. A região só segue em
+// passos presos ao local do imóvel (visita).
+export async function agendarPassoImovel({ imovelId, campo, prefixo, categoria, quando, horas = 0.5, comRegiao = false, user = null }: any) {
+  const inicio = new Date(quando)
+  if (!imovelId || isNaN(inicio.getTime())) return null
+  const { rows: [im] } = await pool.query('SELECT id, nome, regiao, morada FROM imoveis WHERE id = $1', [imovelId])
+  if (!im) return null
+  const ini = inicio.toISOString()
+  const fim = new Date(inicio.getTime() + horas * 3600000).toISOString()
+  const titulo = `${prefixo} — ${im.nome || 'Imóvel'}${comRegiao && im.morada ? ` (${im.morada})` : ''}`
+  const regiao = comRegiao ? (im.regiao || null) : null
+  const { rows: abertas } = await pool.query(
+    `SELECT id FROM tarefas
+     WHERE origem_tipo = 'imovel' AND origem_id = $1 AND origem_campo = $2 AND status != 'Concluída'
+     ORDER BY created_at DESC LIMIT 1`,
+    [imovelId, campo]
+  )
+  if (abertas.length) {
+    await pool.query(
+      `UPDATE tarefas SET tarefa = $1, data_limite = $2, inicio = $3, fim = $4, tempo_horas = $5, regiao = $6, updated_at = NOW()
+       WHERE id = $7`,
+      [titulo, ini.slice(0, 10), ini, fim, horas, regiao, abertas[0].id]
+    )
+    return abertas[0].id
+  }
+  const id = crypto.randomUUID()
+  await pool.query(
+    `INSERT INTO tarefas (id, tarefa, categoria, status, prioridade, data_limite, inicio, fim, user_id, funcionario,
+                          tempo_horas, regiao, origem_tipo, origem_id, origem_campo)
+     VALUES ($1,$2,$3,'A fazer','alta',$4,$5,$6,$7,$8,$9,$10,'imovel',$11,$12)`,
+    [id, titulo, categoria, ini.slice(0, 10), ini, fim, user?.id || null, user?.nome || null, horas, regiao, imovelId, campo]
+  )
+  return id
+}
+
+// Fecha o passo em aberto. feito=true conclui a tarefa; feito=false (passo
+// cancelado) apaga-a se ainda não chegou ao Google Calendar, senão conclui-a
+// com o título marcado, para o evento não ficar órfão.
+export async function fecharPassoImovel({ imovelId, campo, feito = true }: any) {
+  const { rows } = await pool.query(
+    `SELECT id, tarefa, gcal_event_id FROM tarefas
+     WHERE origem_tipo = 'imovel' AND origem_id = $1 AND origem_campo = $2 AND status != 'Concluída'`,
+    [imovelId, campo]
+  )
+  for (const t of rows) {
+    if (!feito && !t.gcal_event_id) {
+      await pool.query('DELETE FROM tarefas WHERE id = $1', [t.id])
+    } else {
+      await pool.query(
+        `UPDATE tarefas SET status = 'Concluída', tarefa = $1, updated_at = NOW() WHERE id = $2`,
+        [feito ? t.tarefa : `Cancelada: ${t.tarefa}`, t.id]
+      )
+    }
+  }
+  return rows.length
+}
+
+// Mantém a tarefa da visita alinhada com o registo da visita.
+export async function sincronizarTarefaVisita(visita: any, { apagada = false, user = null }: any = {}) {
+  if (!visita?.id || !visita.imovel_id) return
+  const campo = `visita:${visita.id}`
+  if (apagada || visita.estado === 'cancelada') return fecharPassoImovel({ imovelId: visita.imovel_id, campo, feito: false })
+  if (visita.estado === 'realizada') return fecharPassoImovel({ imovelId: visita.imovel_id, campo, feito: true })
+  return agendarPassoImovel({
+    imovelId: visita.imovel_id, campo, prefixo: 'Visita', categoria: 'Visita',
+    quando: visita.data_hora, horas: 1.5, comRegiao: true, user,
+  })
+}
+
 function diasAlvoTemplate(tpl: any, semanaInicio: string): string[] {
   if (tpl.dias_semana) {
     const nums = tpl.dias_semana.split(",").map(Number);

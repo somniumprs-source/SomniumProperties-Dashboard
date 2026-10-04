@@ -9,7 +9,6 @@ import { randomUUID, createHash } from 'crypto'
 import { readFile, unlink } from 'fs/promises'
 import { createClient } from '@supabase/supabase-js'
 import { isWholesaling } from '../lib/modelos.js'
-import { CHECKLIST_ENFORCEMENT_START_DATE } from '../constants/featureFlags.js'
 import { diasFollowUpParaRegisto } from '../constants/followupRules.js'
 
 // 'Resposta' foi renomeado para 'Recebido' numa migração antiga (ver pg.js);
@@ -23,7 +22,7 @@ const supabaseStorage = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABA
 export { supabaseStorage }
 import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, InvestidorInteracoes, ConsultorFollowups, DocumentosInvestidor, Visitas, Empreiteiros, getDashboardStats } from './crud.js'
 import pool from './pg.js'
-import { agendarFollowUpImovel } from './agendaEngine.js'
+import { agendarFollowUpImovel, agendarPassoImovel, sincronizarTarefaVisita } from './agendaEngine.js'
 import { getVisitasEnriquecidas, syncDataVisitaDerivada, getFichaVisitaParaImovel } from './queries.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
@@ -41,7 +40,8 @@ import { scrapePhotosFromLink } from './linkScraper.js'
 import { generateDocx, getAvailableTypes } from './docxGenerator.js'
 import { runEstudoLocalizacao } from '../lib/estudoLocalizacao.js'
 import { FASES_FIX_FLIP, FASES_POR_CATEGORIA, getTemplateFases, getFaseConfigGlobal } from './fasesFixFlip.js'
-import { avaliarDealBreakers, painelDealBreakers, eRecuo } from './dealBreakers.js'
+import { avaliarEntrada, painelRequisitos } from './dealBreakers.js'
+import { carregarChecklist, gravarManual } from './checklistImovel.js'
 import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase } from './projetoTarefas.js'
 import { resolveAppUser, RECORD_RESTRICTED_ROLES } from './userRoutes.js'
 import {
@@ -448,72 +448,21 @@ crudRoutes('/imoveis', Imoveis, {
     if (body.fee_cedencia !== undefined || body.valor_proposta !== undefined || body.modelo_negocio !== undefined) {
       await recalcAnaliseActivaCompra(item.id).catch(e => console.error('[analise/recalc compra]', e.message))
     }
-    // Auto-complete checklist: verificar campos preenchidos
-    try {
-      const merged = { ...item, ...body }
-      const { rows: pending } = await pool.query(
-        "SELECT * FROM checklist_imovel WHERE imovel_id = $1 AND concluida = false AND campo_crm IS NOT NULL",
-        [item.id]
-      )
-      const now = new Date().toISOString()
-      const toComplete = []
-      for (const cl of pending) {
-        if (/^(analise:|negocio:|doc:|tarefa calendario)/.test(cl.campo_crm)) continue
-        const fields = cl.campo_crm.split(',').map(f => f.trim()).filter(f => f !== 'notas' && f !== 'fotos')
-        if (fields.length === 0) continue
-        const allFilled = fields.every(f => {
-          const v = merged[f]
-          return v !== null && v !== undefined && v !== '' && v !== 0
-        })
-        if (allFilled) toComplete.push(cl.id)
-      }
-      if (toComplete.length > 0) {
-        await pool.query(
-          `UPDATE checklist_imovel SET concluida = true, concluida_em = $1, concluida_por = 'auto', updated_at = $1
-           WHERE id = ANY($2)`,
-          [now, toComplete]
-        )
-        console.log(`[checklist] Auto-completadas ${toComplete.length} tarefas para ${item.nome || item.id}`)
-      }
-    } catch (e) { console.error('[checklist] Erro auto-complete:', e.message) }
   },
-  // Bloqueia mudança de estado no Kanban se a checklist obrigatória do
-  // estado ACTUAL não estiver completa — só para imóveis criados depois de
-  // CHECKLIST_ENFORCEMENT_START_DATE (imóveis já existentes movem livremente).
+  // Travão de mudança de fase: valida só o que a fase de destino precisa,
+  // venha o imóvel de onde vier (ver src/db/dealBreakers.js). Os campos que
+  // vêm no próprio pedido contam, para a janela de registo poder gravar e
+  // mover no mesmo passo.
   beforeUpdate: async (id, body) => {
     if (!body.estado) return null
-    const { rows: [imovel] } = await pool.query('SELECT estado, ask_price, created_at FROM imoveis WHERE id = $1', [id])
+    const { rows: [imovel] } = await pool.query(
+      'SELECT estado, ask_price, valor_venda_remodelado, valor_proposta, data_proposta, data_proposta_aceite FROM imoveis WHERE id = $1', [id])
     if (!imovel) return null
     if (body.estado === imovel.estado) return null
-    // Recuar ou desistir passa sempre (é assim que se volta atrás para completar a checklist).
-    if (eRecuo(imovel.estado, body.estado)) return null
-
-    // Preço (ask_price) só passa a ser obrigatório a partir do Estudo de
-    // Mercado (Estudo de VVR) em diante — reutiliza o mesmo mapa de
-    // qualidade por estado (>=0.50 = visita/VVR concluído ou mais avançado).
-    // Estados anteriores (Adicionado, Pré-aprovação, Necessidade de Visita,
-    // etc.) não têm essa necessidade.
-    if (qualidadeImovel(body.estado) >= 0.50) {
-      const askPriceFinal = body.ask_price ?? imovel.ask_price
-      if (!askPriceFinal || Number(askPriceFinal) <= 0) {
-        return { error: 'Preço (Ask Price) obrigatório a partir do Estudo de Mercado' }
-      }
-    }
-
-    // Deal breakers: bloqueiam sempre, para todos os imóveis (sem data de corte).
-    const { rows: visitasDb } = await pool.query('SELECT data_hora, created_at, ficha FROM visitas WHERE imovel_id = $1', [id])
-    const db = avaliarDealBreakers({ visitas: visitasDb }, body.estado)
-    if (db.bloqueado) {
-      return { error: 'Deal breakers por resolver', deal_breakers: db.itens.filter(i => i.estado !== 'ok') }
-    }
-
-    if (!imovel.created_at || imovel.created_at < CHECKLIST_ENFORCEMENT_START_DATE) return null
-    const { rows: pendentes } = await pool.query(
-      `SELECT titulo FROM checklist_imovel WHERE imovel_id = $1 AND estado = $2 AND obrigatoria = true AND concluida = false`,
-      [id, imovel.estado]
-    )
-    if (pendentes.length > 0) {
-      return { error: 'Checklist incompleta', itens_em_falta: pendentes.map(p => p.titulo) }
+    const { rows: visitas } = await pool.query('SELECT data_hora, created_at, ficha FROM visitas WHERE imovel_id = $1', [id])
+    const r = avaliarEntrada(imovel.estado, body.estado, { imovel: { ...imovel, ...body }, visitas })
+    if (r.bloqueado) {
+      return { error: `Faltam requisitos para entrar em «${r.destino}»`, destino: r.destino, requisitos: r.emFalta }
     }
     return null
   },
@@ -1606,6 +1555,7 @@ router.post('/visitas', async (req, res) => {
   try {
     const item = await Visitas.create(req.body)
     await syncDataVisitaDerivada(item.imovel_id)
+    await sincronizarTarefaVisita(pool, item, { user: req.user || null }).catch(e => console.error('[visitas] tarefa:', e.message))
     res.status(201).json(item)
   } catch (e) { res.status(400).json({ error: e.message }) }
 })
@@ -1615,6 +1565,7 @@ router.put('/visitas/:id', async (req, res) => {
     const item = await Visitas.update(req.params.id, req.body)
     if (!item) return res.status(404).json({ error: 'Não encontrado' })
     await syncDataVisitaDerivada(item.imovel_id)
+    await sincronizarTarefaVisita(pool, item, { user: req.user || null }).catch(e => console.error('[visitas] tarefa:', e.message))
     res.json(item)
   } catch (e) { res.status(400).json({ error: e.message }) }
 })
@@ -1625,6 +1576,7 @@ router.delete('/visitas/:id', async (req, res) => {
     if (!existing) return res.status(404).json({ error: 'Não encontrado' })
     await Visitas.delete(req.params.id)
     await syncDataVisitaDerivada(existing.imovel_id)
+    await sincronizarTarefaVisita(pool, existing, { apagada: true }).catch(e => console.error('[visitas] tarefa:', e.message))
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -2322,6 +2274,52 @@ router.post('/imoveis/:id/follow-up', async (req, res) => {
   } catch (e) { res.status(400).json({ error: e.message }) }
 })
 
+// ── Próximos passos do imóvel (bloco no topo da ficha) ────────
+// As tarefas em aberto ligadas ao imóvel são o registo do que está agendado
+// (chamada, visita, follow-up): não há campos de data paralelos.
+router.get('/imoveis/:id/proximos-passos', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, tarefa, categoria, status, inicio, data_limite, origem_campo, funcionario FROM tarefas
+       WHERE origem_tipo = 'imovel' AND origem_id = $1 AND status != 'Concluída' AND COALESCE(arquivada, false) = false
+       ORDER BY COALESCE(inicio, data_limite) ASC`,
+      [req.params.id]
+    )
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/imoveis/:id/proximos-passos', async (req, res) => {
+  try {
+    const { tipo, quando } = req.body || {}
+    if (tipo !== 'chamada') return res.status(400).json({ error: 'Tipo de passo inválido' })
+    if (!quando || isNaN(new Date(quando))) return res.status(400).json({ error: 'Data e hora são obrigatórias' })
+    const tarefaId = await agendarPassoImovel(pool, {
+      imovelId: req.params.id, campo: 'proxima_chamada', prefixo: 'Chamada', categoria: 'Cold Call',
+      quando, horas: 0.25, user: req.user || null,
+    })
+    if (!tarefaId) return res.status(404).json({ error: 'Imóvel não encontrado' })
+    res.json({ ok: true, tarefa_id: tarefaId })
+  } catch (e) { res.status(400).json({ error: e.message }) }
+})
+
+// Passo feito: conclui a tarefa. Uma chamada feita fica também como a data da
+// última chamada do imóvel.
+router.put('/imoveis/:id/proximos-passos/:tarefaId', async (req, res) => {
+  try {
+    const { rows: [t] } = await pool.query(
+      `UPDATE tarefas SET status = 'Concluída', updated_at = NOW()
+       WHERE id = $1 AND origem_tipo = 'imovel' AND origem_id = $2 RETURNING id, origem_campo`,
+      [req.params.tarefaId, req.params.id]
+    )
+    if (!t) return res.status(404).json({ error: 'Passo não encontrado' })
+    if (t.origem_campo === 'proxima_chamada') {
+      await Imoveis.update(req.params.id, { data_chamada: new Date().toISOString().slice(0, 10) })
+    }
+    res.json({ ok: true })
+  } catch (e) { res.status(400).json({ error: e.message }) }
+})
+
 router.get('/imoveis/:id/gravacoes', async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -2649,13 +2647,14 @@ router.put('/imoveis/:id/fotos/:fotoId/mover', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// ── Deal breakers do imóvel (painel do Comercial) ─────────────
+// ── Requisitos da próxima fase do imóvel (painel do Comercial) ─
 router.get('/imoveis/:id/deal-breakers', async (req, res) => {
   try {
-    const { rows: [imovel] } = await pool.query('SELECT estado FROM imoveis WHERE id = $1', [req.params.id])
+    const { rows: [imovel] } = await pool.query(
+      'SELECT estado, ask_price, valor_venda_remodelado, valor_proposta, data_proposta, data_proposta_aceite FROM imoveis WHERE id = $1', [req.params.id])
     if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
     const { rows: visitas } = await pool.query('SELECT data_hora, created_at, ficha FROM visitas WHERE imovel_id = $1', [req.params.id])
-    res.json(painelDealBreakers({ visitas }, imovel.estado))
+    res.json(painelRequisitos({ imovel, visitas }, imovel.estado))
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -3173,37 +3172,6 @@ router.get('/imoveis/:id/full', async (req, res) => {
     const { rows: analises } = await pool.query('SELECT * FROM analises WHERE imovel_id = $1 ORDER BY activa DESC, updated_at DESC', [imovel.id])
     // Audit log (timeline)
     const { rows: timeline } = await pool.query("SELECT * FROM audit_log WHERE registo_id = $1 ORDER BY created_at DESC LIMIT 20", [imovel.id])
-    // Checklist obrigatória — com auto-complete de campos preenchidos
-    const { rows: checklist } = await pool.query('SELECT * FROM checklist_imovel WHERE imovel_id = $1 ORDER BY estado, ordem', [imovel.id])
-    const now = new Date().toISOString()
-    const autoCompleteIds = []
-    for (const item of checklist) {
-      if (item.concluida) continue
-      if (!item.campo_crm) continue
-      // Ignorar campos de análise, negócio, docs, calendário
-      if (/^(analise:|negocio:|doc:|tarefa calendario)/.test(item.campo_crm)) continue
-      // Verificar campos do imóvel
-      const fields = item.campo_crm.split(',').map(f => f.trim()).filter(f => f !== 'notas' && f !== 'fotos')
-      if (fields.length === 0) continue
-      const allFilled = fields.every(f => {
-        const v = imovel[f]
-        return v !== null && v !== undefined && v !== '' && v !== 0
-      })
-      if (allFilled) {
-        autoCompleteIds.push(item.id)
-        item.concluida = true
-        item.concluida_em = now
-        item.concluida_por = 'auto'
-      }
-    }
-    // Persistir auto-completes em batch
-    if (autoCompleteIds.length > 0) {
-      await pool.query(
-        `UPDATE checklist_imovel SET concluida = true, concluida_em = $1, concluida_por = 'auto', updated_at = $1
-         WHERE id = ANY($2) AND concluida = false`,
-        [now, autoCompleteIds]
-      )
-    }
     // Interacções com consultores (registadas no contexto deste imóvel)
     const { rows: interacoes } = await pool.query(
       `SELECT ci.*, c.nome as consultor_nome FROM consultor_interacoes ci
@@ -3211,7 +3179,7 @@ router.get('/imoveis/:id/full', async (req, res) => {
        WHERE ci.imovel_id = $1 ORDER BY ci.data_hora DESC`,
       [imovel.id]
     )
-    res.json({ ...imovel, negocios, consultores, tarefas, analises, timeline, checklist, interacoes })
+    res.json({ ...imovel, negocios, consultores, tarefas, analises, timeline, interacoes })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -3361,32 +3329,8 @@ router.post('/auto-task', async (req, res) => {
   try {
     const { entity, entityId, entityName, newPhase } = req.body
 
-    // Para imóveis: gerar checklist automaticamente
-    if (entity === 'imoveis' && entityId) {
-      const { CHECKLIST_TEMPLATES } = await import('../constants/checklistTemplates.js')
-      const templates = CHECKLIST_TEMPLATES[newPhase]
-      if (templates && templates.length > 0) {
-        const now = new Date().toISOString()
-        let created = 0
-        for (let i = 0; i < templates.length; i++) {
-          const t = templates[i]
-          const id = (await import('crypto')).randomUUID()
-          try {
-            await pool.query(
-              `INSERT INTO checklist_imovel (id, imovel_id, estado, template_key, titulo, campo_crm, categoria, tempo_estimado, obrigatoria, ordem, created_at, updated_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-               ON CONFLICT (imovel_id, template_key) DO NOTHING`,
-              [id, entityId, newPhase, t.key, t.titulo, t.campo_crm, t.categoria, t.tempo_estimado, t.obrigatoria, i + 1, now, now]
-            )
-            created++
-          } catch (e) { /* duplicado, ignorar */ }
-        }
-        console.log(`[checklist] ${created} items gerados para ${entityName} → ${newPhase}`)
-        return res.json({ ok: true, created: true, count: created })
-      }
-    }
-
-    // Fallback para investidores/consultores: manter auto-task antigo
+    // Tarefa automática por fase (investidores/consultores). Os imóveis não
+    // geram itens: a checklist deles é calculada dos dados (checklistImovel.js).
     const TASK_MAP = {
       investidores: {
         // Comuns
@@ -3422,77 +3366,23 @@ router.post('/auto-task', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// ── Checklist de imóveis ─────────────────────────────────────
-router.get('/checklist/progress-batch', async (req, res) => {
+// ── Checklist de imóveis (espelho dos dados reais; sob o guard de /imoveis) ───────────
+router.get('/imoveis/:imovelId/checklist', async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT imovel_id, estado,
-              COUNT(*) FILTER (WHERE obrigatoria) as total,
-              COUNT(*) FILTER (WHERE obrigatoria AND concluida) as done
-       FROM checklist_imovel
-       GROUP BY imovel_id, estado`
-    )
-    const map = {}
-    for (const r of rows) {
-      if (!map[r.imovel_id]) map[r.imovel_id] = {}
-      map[r.imovel_id][r.estado] = { done: parseInt(r.done), total: parseInt(r.total) }
-    }
-    res.json(map)
+    const checklist = await carregarChecklist(pool, req.params.imovelId)
+    if (!checklist) return res.status(404).json({ error: 'Imóvel não encontrado' })
+    res.json(checklist)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-router.get('/checklist/:imovelId', async (req, res) => {
+// Declaração manual de um item que acontece fora do CRM.
+router.put('/imoveis/:imovelId/checklist/:key', async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      'SELECT * FROM checklist_imovel WHERE imovel_id = $1 ORDER BY estado, ordem',
-      [req.params.imovelId]
-    )
-    res.json(rows)
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
-
-router.put('/checklist/:itemId', async (req, res) => {
-  try {
-    const { concluida, notas, concluida_por } = req.body
-    const now = new Date().toISOString()
-    const sets = ['updated_at = $2']
-    const vals = [req.params.itemId, now]
-    let idx = 3
-    if (concluida !== undefined) {
-      sets.push(`concluida = $${idx}`)
-      vals.push(concluida)
-      idx++
-      sets.push(`concluida_em = $${idx}`)
-      vals.push(concluida ? now : null)
-      idx++
-      sets.push(`concluida_por = $${idx}`)
-      vals.push(concluida ? (concluida_por || null) : null)
-      idx++
-    }
-    if (notas !== undefined) {
-      sets.push(`notas = $${idx}`)
-      vals.push(notas)
-      idx++
-    }
-    const { rows: [item] } = await pool.query(
-      `UPDATE checklist_imovel SET ${sets.join(', ')} WHERE id = $1 RETURNING *`,
-      vals
-    )
-    res.json(item)
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
-
-router.get('/checklist/:imovelId/progress', async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT estado,
-              COUNT(*) FILTER (WHERE obrigatoria) as total,
-              COUNT(*) FILTER (WHERE obrigatoria AND concluida) as done
-       FROM checklist_imovel WHERE imovel_id = $1
-       GROUP BY estado`,
-      [req.params.imovelId]
-    )
-    res.json(rows)
+    const { valor, desfazer } = req.body || {}
+    const u = await resolveAppUser(req).catch(() => null)
+    const r = await gravarManual(pool, req.params.imovelId, req.params.key, { valor, desfazer: !!desfazer, por: u?.nome || req.user?.nome || null })
+    if (r.error) return res.status(400).json(r)
+    res.json(await carregarChecklist(pool, req.params.imovelId))
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 

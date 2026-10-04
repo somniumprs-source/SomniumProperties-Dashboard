@@ -1,477 +1,147 @@
 /**
- * Tab de Checklist obrigatória para imóveis.
- * Mostra tarefas agrupadas por estado, com inputs inline para preencher campos do CRM.
- * Campos do imóvel (ask_price, zona, etc.) editam directamente o imóvel.
- * Campos "notas" editam as notas do próprio item da checklist (cada item tem o seu).
+ * Checklist do imóvel como espelho dos dados: cada item está feito porque o
+ * dado existe no CRM (src/db/checklistImovel.js). Não há vistos nem notas
+ * soltas. Só o que acontece fora do CRM é declarado à mão, e fica marcado com
+ * quem e quando. Itens em falta abrem o sítio onde se registam.
  */
-import { useState, useEffect, useMemo } from 'react'
-import { CheckCircle2, Circle, Clock, ChevronDown, ChevronRight, AlertTriangle, Save, Pencil } from 'lucide-react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { CheckCircle2, Circle, ChevronDown, ChevronRight, UserCheck } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
-import { CHECKLIST_TEMPLATES } from '../../constants/checklistTemplates.js'
+import { useRefreshOnMutation } from '../../hooks/useRefreshOnMutation.js'
+import { TransicaoFaseModal } from './TransicaoFaseModal.jsx'
+import { AgendarPassoModal } from './AgendarPassoModal.jsx'
 
-const PIPELINE_ORDER = [
-  'Pré-aprovação','Adicionado','Chamada Não Atendida','Pendentes',
-  'Necessidade de Visita','Visita Marcada','Estudo de VVR',
-  'Criar Proposta ao Proprietário','Enviar proposta ao Proprietário',
-  'Em negociação','Proposta aceite','Enviar proposta ao investidor',
-  'Follow Up após proposta','Follow UP',
-  'Wholesaling','CAEP','Fix and Flip','Não interessa',
-]
-
-// Campos editáveis do imóvel (NOT notas — notas vão para o item da checklist)
-const IMOVEL_FIELD_CONFIG = {
-  'nome': { label: 'Nome', type: 'text' },
-  'link': { label: 'Link', type: 'text' },
-  'origem': { label: 'Origem', type: 'select', options: ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro'] },
-  'ask_price': { label: 'Ask Price (€)', type: 'number' },
-  'tipologia': { label: 'Tipologia', type: 'text' },
-  'zona': { label: 'Zona', type: 'text' },
-  'area_bruta': { label: 'Área Bruta (m²)', type: 'number' },
-  'area_bruta_dependente': { label: 'ABD (m²)', type: 'number' },
-  'valor_proposta': { label: 'Valor Proposta (€)', type: 'number' },
-  'valor_venda_remodelado': { label: 'VVR (€)', type: 'number' },
-  'custo_estimado_obra': { label: 'Custo Obra (€)', type: 'number' },
-  'modelo_negocio': { label: 'Modelo de Negócio', type: 'select', options: ['Wholesaling','Fix and Flip','CAEP','Mediação Imobiliária','Consultoria/Assessoria'] },
-  'nome_consultor': { label: 'Consultor', type: 'text' },
-  // Mesmo campo usado pelo Kanban ao mover para "Não interessa" (MoveReasonModal,
-  // CRM.jsx) — texto porque o valor real combina presets + notas livres,
-  // separados por "; ", não é um único valor de select.
-  'motivo_nao_interessa': { label: 'Motivo Não Interessa', type: 'text' },
-  'data_chamada': { label: 'Data Chamada', type: 'date' },
-  // 'data_visita' removido de propósito: é derivado automaticamente da
-  // última visita realizada (tabela `visitas`, aba Visitas do imóvel) — não
-  // deve voltar a ser editável directamente aqui (ver src/db/pg.js).
-  'data_estudo_mercado': { label: 'Data Estudo Mercado', type: 'date' },
-  'data_proposta': { label: 'Data Proposta', type: 'date' },
-  'data_proposta_aceite': { label: 'Data Proposta Aceite', type: 'date' },
-  'data_follow_up': { label: 'Data Follow Up', type: 'date' },
-  'data_aceite_investidor': { label: 'Data Aceite Investidor', type: 'date' },
+const fmtData = v => {
+  if (!v) return ''
+  const d = new Date(v)
+  return isNaN(d) ? '' : d.toLocaleDateString('pt-PT')
 }
 
-// Extrair campos do imóvel (exclui notas, análise, negócio, docs, calendário)
-function parseImovelFields(campo_crm) {
-  if (!campo_crm) return null
-  if (campo_crm.startsWith('analise:') || campo_crm.startsWith('negocio:') || campo_crm.startsWith('doc:') || campo_crm === 'tarefa calendario') return null
-  const fields = campo_crm.split(',').map(f => f.trim()).filter(f => IMOVEL_FIELD_CONFIG[f])
-  return fields.length > 0 ? fields : null
-}
-
-// Verificar se o item deve ter campo de notas próprio (campo_crm contém 'notas' ou 'fotos')
-function hasOwnNotes(campo_crm) {
-  if (!campo_crm) return false
-  return campo_crm.split(',').map(f => f.trim()).some(f => f === 'notas' || f === 'fotos')
-}
-
-const inputClass = 'w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300'
-
-function InlineImovelField({ field, value, onChange }) {
-  const cfg = IMOVEL_FIELD_CONFIG[field]
-  if (!cfg) return null
-
-  if (cfg.type === 'select') {
-    return (
-      <select value={value ?? ''} onChange={e => onChange(field, e.target.value)} className={inputClass}>
-        <option value="">—</option>
-        {cfg.options.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
-    )
-  }
-  if (cfg.type === 'date') {
-    return <input type="date" value={(value || '').slice(0, 10)} onChange={e => onChange(field, e.target.value)} className={inputClass} />
-  }
-  if (cfg.type === 'number') {
-    return <input type="number" step="any" value={value ?? ''} onChange={e => onChange(field, +e.target.value || null)} className={inputClass} placeholder={cfg.label} onWheel={e => e.target.blur()} />
-  }
-  return <input type="text" value={value ?? ''} onChange={e => onChange(field, e.target.value)} className={inputClass} placeholder={cfg.label} />
-}
-
-export function ChecklistTab({ imovel, onUpdate }) {
-  const [items, setItems] = useState([])
+export function ChecklistTab({ imovel, onUpdate, onAbrirTab }) {
   const [expanded, setExpanded] = useState({})
-  const [loading, setLoading] = useState(true)
-  const [localData, setLocalData] = useState({})
-  const [dirty, setDirty] = useState({})
-  const [saving, setSaving] = useState(false)
-  // Notas locais por item (id -> texto)
-  const [itemNotes, setItemNotes] = useState({})
-  const [dirtyNotes, setDirtyNotes] = useState({})
+  const [janela, setJanela] = useState(null) // { tipo: 'visita' } | { agendar: 'chamada' | 'visita' }
+  const [erro, setErro] = useState('')
+  const query = useQuery({
+    queryKey: ['imovel-checklist', imovel?.id],
+    enabled: !!imovel?.id,
+    queryFn: async () => {
+      const r = await apiFetch(`/api/crm/imoveis/${imovel.id}/checklist`)
+      return r.ok ? r.json() : null
+    },
+  })
+  useRefreshOnMutation(query.refetch)
 
-  const estado = imovel?.estado
-
-  useEffect(() => {
-    if (!imovel) return
-    setLocalData({ ...imovel })
-    setDirty({})
-  }, [imovel?.id, imovel?.updated_at])
-
-  useEffect(() => {
-    if (!imovel?.id) return
-    loadChecklist()
-  }, [imovel?.id])
-
-  async function loadChecklist() {
-    setLoading(true)
-    try {
-      const r = await apiFetch(`/api/crm/checklist/${imovel.id}`)
-      const data = await r.json()
-      setItems(data)
-      // Inicializar notas locais
-      const notes = {}
-      for (const item of data) {
-        notes[item.id] = item.notas || ''
-      }
-      setItemNotes(notes)
-      setDirtyNotes({})
-      if (estado) setExpanded(prev => ({ ...prev, [estado]: true }))
-    } catch {}
-    setLoading(false)
+  async function declarar(item, body) {
+    setErro('')
+    const r = await apiFetch(`/api/crm/imoveis/${imovel.id}/checklist/${item.key}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    })
+    if (!r.ok) setErro((await r.json().catch(() => ({}))).error || 'Não foi possível guardar')
+    query.refetch()
   }
 
-  function handleFieldChange(field, value) {
-    setLocalData(prev => ({ ...prev, [field]: value }))
-    setDirty(prev => ({ ...prev, [field]: true }))
+  function abrir(item) {
+    const a = item.abrir || {}
+    if (a.tab) return onAbrirTab?.(a.tab)
+    if (a.janela === 'visita') return setJanela({ tipo: 'visita' })
+    if (a.agendar) return setJanela({ agendar: a.agendar })
   }
 
-  function handleItemNoteChange(itemId, value) {
-    setItemNotes(prev => ({ ...prev, [itemId]: value }))
-    setDirtyNotes(prev => ({ ...prev, [itemId]: true }))
-  }
-
-  async function saveAll() {
-    setSaving(true)
-    try {
-      // 1. Gravar campos do imóvel
-      const dirtyFields = Object.keys(dirty)
-      if (dirtyFields.length > 0) {
-        const payload = {}
-        for (const f of dirtyFields) payload[f] = localData[f]
-        await apiFetch(`/api/crm/imoveis/${imovel.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-      }
-
-      // 2. Gravar notas dos items da checklist
-      const dirtyNoteIds = Object.keys(dirtyNotes)
-      for (const itemId of dirtyNoteIds) {
-        await apiFetch(`/api/crm/checklist/${itemId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ notas: itemNotes[itemId] }),
-        })
-      }
-
-      setDirty({})
-      setDirtyNotes({})
-      if (onUpdate) onUpdate()
-    } catch {}
-    setSaving(false)
-  }
-
-  async function toggleItem(item) {
-    const newVal = !item.concluida
-    try {
-      await apiFetch(`/api/crm/checklist/${item.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ concluida: newVal }),
-      })
-      setItems(prev => prev.map(i => i.id === item.id
-        ? { ...i, concluida: newVal, concluida_em: newVal ? new Date().toISOString() : null }
-        : i
-      ))
-      if (onUpdate) onUpdate()
-    } catch {}
-  }
-
-  const grouped = useMemo(() => {
-    const map = {}
-    for (const item of items) {
-      if (!map[item.estado]) map[item.estado] = []
-      map[item.estado].push(item)
-    }
-    return map
-  }, [items])
-
-  const orderedEstados = useMemo(() => {
-    const present = new Set(Object.keys(grouped))
-    return PIPELINE_ORDER.filter(e => present.has(e))
-  }, [grouped])
-
-  const currentProgress = useMemo(() => {
-    const current = grouped[estado] || []
-    const obrigatorias = current.filter(i => i.obrigatoria)
-    const done = obrigatorias.filter(i => i.concluida).length
-    return { done, total: obrigatorias.length }
-  }, [grouped, estado])
-
-  const globalProgress = useMemo(() => {
-    const obrigatorias = items.filter(i => i.obrigatoria)
-    const done = obrigatorias.filter(i => i.concluida).length
-    return { done, total: obrigatorias.length }
-  }, [items])
-
-  const pipelineIdx = PIPELINE_ORDER.indexOf(estado)
-  const hasTemplates = estado && CHECKLIST_TEMPLATES[estado]?.length > 0
-  const isEmpty = items.length === 0
-  const hasDirty = Object.keys(dirty).length > 0 || Object.keys(dirtyNotes).length > 0
-  const dirtyCount = Object.keys(dirty).length + Object.keys(dirtyNotes).length
-
-  async function generateChecklist() {
-    try {
-      await apiFetch('/api/crm/auto-task', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entity: 'imoveis', entityId: imovel.id, entityName: imovel.nome, newPhase: estado }),
-      })
-      await loadChecklist()
-    } catch {}
-  }
-
-  function isFieldFilled(field) {
-    const val = localData[field]
-    return val !== null && val !== undefined && val !== '' && val !== 0
-  }
-
-  if (loading) return <div className="p-6 text-center text-gray-400">A carregar checklist...</div>
-
-  if (isEmpty && hasTemplates) {
-    return (
-      <div className="p-6 text-center">
-        <AlertTriangle className="mx-auto mb-3 text-amber-500" size={32} />
-        <p className="text-sm text-gray-600 mb-4">Ainda não foi gerada checklist para este imóvel.</p>
-        <button onClick={generateChecklist}
-          className="px-4 py-2 text-sm font-medium rounded-lg text-white"
-          style={{ backgroundColor: '#C9A84C' }}>
-          Gerar checklist para "{estado}"
-        </button>
-      </div>
-    )
-  }
-
-  if (isEmpty) {
-    return <div className="p-6 text-center text-gray-400">Sem checklist disponível para este estado.</div>
-  }
+  if (query.isLoading) return <div className="p-6 text-center text-gray-400">A carregar checklist...</div>
+  const grupos = query.data?.grupos || []
+  if (!grupos.length) return <div className="p-6 text-center text-gray-400">Sem itens para as fases deste imóvel.</div>
 
   return (
     <div className="p-4 space-y-4">
-      {/* Resumo do estado actual */}
-      {estado && grouped[estado] && (
-        <div className="rounded-lg border border-gray-200 p-4" style={{ backgroundColor: '#FAFAF8' }}>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-semibold text-gray-800">Estado atual: {estado}</span>
-            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-              currentProgress.done === currentProgress.total
-                ? 'bg-green-100 text-green-700'
-                : currentProgress.done > 0
-                  ? 'bg-amber-100 text-amber-700'
-                  : 'bg-red-100 text-red-600'
-            }`}>
-              {currentProgress.done}/{currentProgress.total} obrigatórias
-            </span>
-          </div>
-          <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-            <div className="h-full rounded-full transition-all duration-300"
-              style={{
-                width: currentProgress.total > 0 ? `${(currentProgress.done / currentProgress.total) * 100}%` : '0%',
-                backgroundColor: currentProgress.done === currentProgress.total ? '#22c55e' : '#C9A84C',
-              }} />
-          </div>
-          {currentProgress.done < currentProgress.total && (
-            <p className="text-xs text-gray-500 mt-2">
-              Faltam {currentProgress.total - currentProgress.done} tarefa(s) obrigatória(s) para garantir dados completos nas métricas.
-            </p>
-          )}
-        </div>
-      )}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+        <span className="inline-flex items-center gap-1.5"><CheckCircle2 size={14} className="text-green-500" /> Verificado pelo sistema</span>
+        <span className="inline-flex items-center gap-1.5"><UserCheck size={14} style={{ color: '#C9A84C' }} /> Declarado por uma pessoa</span>
+        <span className="inline-flex items-center gap-1.5"><Circle size={14} className="text-amber-400" /> Em falta</span>
+      </div>
+      <p className="text-xs text-gray-400">
+        Cada item marca-se sozinho quando o registo existe no imóvel. Só aparecem as fases por onde o imóvel passou. Nada aqui impede a mudança de fase.
+      </p>
+      {erro && <p className="text-xs text-red-600">{erro}</p>}
 
-      {/* Barra de gravar sticky */}
-      {hasDirty && (
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 p-3 rounded-lg border-2 border-amber-400 bg-amber-50 shadow-md">
-          <div className="flex items-center gap-2 text-sm text-amber-800">
-            <Pencil size={14} />
-            <span>{dirtyCount} campo(s) alterado(s)</span>
-          </div>
-          <button onClick={saveAll} disabled={saving}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg text-white transition-all hover:opacity-90 disabled:opacity-50"
-            style={{ backgroundColor: '#C9A84C' }}>
-            <Save size={14} />
-            {saving ? 'A gravar...' : 'Gravar alterações'}
-          </button>
-        </div>
-      )}
-
-      {/* Progresso global */}
-      {globalProgress.total > 0 && orderedEstados.length > 1 && (
-        <div className="flex items-center gap-2 text-xs text-gray-500">
-          <span>Global:</span>
-          <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full rounded-full bg-green-400 transition-all"
-              style={{ width: `${(globalProgress.done / globalProgress.total) * 100}%` }} />
-          </div>
-          <span>{globalProgress.done}/{globalProgress.total}</span>
-        </div>
-      )}
-
-      {/* Grupos por estado */}
-      {orderedEstados.map(est => {
-        const stateItems = grouped[est]
-        const isCurrentState = est === estado
-        const stateIdx = PIPELINE_ORDER.indexOf(est)
-        const isPast = stateIdx < pipelineIdx
-        const isExpanded = expanded[est] ?? isCurrentState
-        const obrig = stateItems.filter(i => i.obrigatoria)
-        const obrigDone = obrig.filter(i => i.concluida).length
-        const totalTime = stateItems.reduce((s, i) => s + (i.tempo_estimado || 0), 0)
-
+      {grupos.map(g => {
+        const aberto = expanded[g.fase] ?? (g.atual || g.feitos < g.total)
         return (
-          <div key={est} className={`rounded-lg border ${isCurrentState ? 'border-amber-300 shadow-sm' : 'border-gray-200'}`}>
-            <button
-              onClick={() => setExpanded(prev => ({ ...prev, [est]: !isExpanded }))}
-              className={`w-full flex items-center justify-between px-4 py-3 text-left ${
-                isCurrentState ? 'bg-gray-900 text-white rounded-t-lg' : 'bg-gray-50 text-gray-800 rounded-lg'
-              }`}
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                <span className={`text-sm font-semibold truncate ${isCurrentState ? 'text-white' : ''}`}>{est}</span>
-                {isPast && obrigDone === obrig.length && obrig.length > 0 && (
-                  <CheckCircle2 size={14} className="text-green-500 shrink-0" />
-                )}
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <span className={`text-xs ${isCurrentState ? 'text-gray-300' : 'text-gray-500'}`}>
-                  {obrigDone}/{obrig.length}
-                </span>
-                <span className={`text-xs ${isCurrentState ? 'text-gray-400' : 'text-gray-400'}`}>
-                  {totalTime.toFixed(1)}h
-                </span>
-              </div>
+          <div key={g.fase} className={`rounded-lg border ${g.atual ? 'border-amber-300 shadow-sm' : 'border-gray-200'}`}>
+            <button onClick={() => setExpanded(p => ({ ...p, [g.fase]: !aberto }))}
+              className={`w-full flex items-center justify-between px-4 py-3 text-left ${g.atual ? 'bg-gray-900 text-white rounded-t-lg' : 'bg-gray-50 text-gray-800 rounded-lg'}`}>
+              <span className="flex items-center gap-2 min-w-0">
+                {aberto ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                <span className="text-sm font-semibold truncate">{g.fase}{g.atual ? ' (fase atual)' : ''}</span>
+              </span>
+              <span className={`text-xs tabular-nums ${g.atual ? 'text-gray-300' : 'text-gray-500'}`}>{g.feitos}/{g.total}</span>
             </button>
-
-            {isExpanded && (
-              <div className="divide-y divide-gray-100">
-                {stateItems.map(item => {
-                  const imovelFields = parseImovelFields(item.campo_crm)
-                  const showOwnNotes = hasOwnNotes(item.campo_crm)
-
+            {aberto && (
+              <ul className="divide-y divide-gray-100">
+                {g.itens.map(item => {
+                  const ok = item.estado === 'ok'
+                  const manual = item.origem === 'manual'
                   return (
-                    <div key={item.id}
-                      className={`px-4 py-3 hover:bg-gray-50/50 transition-colors ${
-                        item.concluida ? 'bg-green-50/30' : ''
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <button onClick={() => toggleItem(item)} className="mt-0.5 shrink-0">
-                          {item.concluida
-                            ? <CheckCircle2 size={18} className="text-green-500" />
-                            : <Circle size={18} className={item.obrigatoria ? 'text-amber-400' : 'text-gray-300'} />
-                          }
+                    <li key={item.key} className="px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                      <span className="shrink-0">
+                        {ok
+                          ? (manual ? <UserCheck size={18} style={{ color: '#C9A84C' }} /> : <CheckCircle2 size={18} className="text-green-500" />)
+                          : <Circle size={18} className="text-amber-400" />}
+                      </span>
+                      <span className="flex-1 min-w-[160px]">
+                        <span className="text-sm text-gray-800">{item.titulo}</span>
+                        {item.detalhe && <span className="text-sm text-gray-500"> · {item.detalhe}</span>}
+                        <span className="block text-[11px] text-gray-400">
+                          {ok && manual && `Declarado${item.por ? ` por ${item.por}` : ''}${item.em ? ` em ${fmtData(item.em)}` : ''}`}
+                          {ok && !manual && `Automático · ${item.onde}`}
+                          {!ok && manual && 'Acontece fora do CRM: regista aqui'}
+                          {!ok && !manual && `Em falta · regista-se em ${item.onde}`}
+                        </span>
+                      </span>
+                      {!ok && !manual && item.abrir && (
+                        <button type="button" onClick={() => abrir(item)}
+                          className="text-xs font-medium px-2 py-1 rounded-lg bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200">
+                          {item.abrir.janela ? 'Registar visita' : item.abrir.agendar ? 'Agendar' : `Abrir ${item.onde}`}
                         </button>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm leading-tight ${
-                            item.concluida ? 'text-gray-400 line-through' : 'text-gray-800'
-                          }`}>
-                            {item.titulo}
-                            {item.obrigatoria && !item.concluida && (
-                              <span className="text-red-500 ml-1">*</span>
-                            )}
-                          </p>
-                          <div className="flex items-center gap-3 mt-1">
-                            <span className="text-[10px] text-gray-400 italic">{item.categoria}</span>
-                            <span className="text-[10px] text-gray-400 flex items-center gap-0.5">
-                              <Clock size={9} /> {item.tempo_estimado}h
-                            </span>
-                          </div>
-                          {item.concluida && item.concluida_em && (
-                            <p className="text-[10px] text-green-600 mt-0.5">
-                              Concluída em {new Date(item.concluida_em).toLocaleDateString('pt-PT')}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Inputs inline: campos do imóvel */}
-                      {imovelFields && !item.concluida && (
-                        <div className="ml-8 mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {imovelFields.map(field => {
-                            const cfg = IMOVEL_FIELD_CONFIG[field]
-                            if (!cfg) return null
-                            const filled = isFieldFilled(field)
-                            return (
-                              <div key={field}>
-                                <div className="flex items-center gap-1.5 mb-0.5">
-                                  <span className="text-[10px] font-medium text-gray-500">{cfg.label}</span>
-                                  {filled && <CheckCircle2 size={10} className="text-green-500" />}
-                                  {!filled && <span className="text-[10px] text-red-400">vazio</span>}
-                                  {dirty[field] && <span className="text-[10px] text-amber-500 font-medium">alterado</span>}
-                                </div>
-                                <InlineImovelField
-                                  field={field}
-                                  value={localData[field]}
-                                  onChange={handleFieldChange}
-                                />
-                              </div>
-                            )
-                          })}
-                        </div>
                       )}
-
-                      {/* Campo de notas próprio do item (para tarefas que pedem "registar nas notas") */}
-                      {showOwnNotes && !item.concluida && (
-                        <div className="ml-8 mt-2">
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <span className="text-[10px] font-medium text-gray-500">Notas desta tarefa</span>
-                            {(itemNotes[item.id] || '').trim() && <CheckCircle2 size={10} className="text-green-500" />}
-                            {!(itemNotes[item.id] || '').trim() && <span className="text-[10px] text-red-400">vazio</span>}
-                            {dirtyNotes[item.id] && <span className="text-[10px] text-amber-500 font-medium">alterado</span>}
-                          </div>
-                          <textarea
-                            value={itemNotes[item.id] || ''}
-                            onChange={e => handleItemNoteChange(item.id, e.target.value)}
-                            rows={2}
-                            className={inputClass}
-                            placeholder="Registar aqui..."
-                          />
-                        </div>
+                      {!ok && manual && item.manual === 'confirmar' && (
+                        <button type="button" onClick={() => declarar(item, {})}
+                          className="text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">
+                          Confirmar
+                        </button>
                       )}
-
-                      {/* Resumo quando concluído */}
-                      {imovelFields && item.concluida && (
-                        <div className="ml-8 mt-1 flex flex-wrap gap-2">
-                          {imovelFields.map(field => {
-                            const cfg = IMOVEL_FIELD_CONFIG[field]
-                            if (!cfg) return null
-                            const val = localData[field]
-                            const display = val != null && val !== '' && val !== 0
-                              ? (cfg.type === 'number' ? new Intl.NumberFormat('pt-PT').format(val) : String(val).slice(0, 50))
-                              : '—'
-                            return (
-                              <span key={field} className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-600">
-                                {cfg.label}: <strong>{display}</strong>
-                              </span>
-                            )
-                          })}
-                        </div>
+                      {!ok && manual && item.manual === 'resposta' && (
+                        <select value="" onChange={e => e.target.value && declarar(item, { valor: e.target.value })}
+                          className="text-xs px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-700">
+                          <option value="">Responder…</option>
+                          {(item.opcoes || []).map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
                       )}
-
-                      {/* Notas do item quando concluído */}
-                      {showOwnNotes && item.concluida && (itemNotes[item.id] || item.notas) && (
-                        <div className="ml-8 mt-1">
-                          <span className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-600">
-                            {itemNotes[item.id] || item.notas}
-                          </span>
-                        </div>
+                      {ok && manual && (
+                        <button type="button" onClick={() => declarar(item, { desfazer: true })}
+                          className="text-[11px] text-gray-400 hover:text-gray-600 underline">
+                          Desfazer
+                        </button>
                       )}
-                    </div>
+                    </li>
                   )
                 })}
-              </div>
+              </ul>
             )}
           </div>
         )
       })}
+
+      {janela?.tipo === 'visita' && (
+        <TransicaoFaseModal imovel={imovel} requisitos={[{ id: 'visita', acao: 'visita' }]} mover={false}
+          onCancel={() => setJanela(null)}
+          onResolvido={() => { setJanela(null); query.refetch(); onUpdate?.() }} />
+      )}
+      {janela?.agendar && (
+        <AgendarPassoModal imovel={imovel} tipo={janela.agendar}
+          onCancel={() => setJanela(null)}
+          onDone={() => { setJanela(null); query.refetch(); onUpdate?.() }} />
+      )}
     </div>
   )
 }

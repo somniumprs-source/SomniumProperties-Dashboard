@@ -12,6 +12,9 @@ import { RegistoChamadasTab } from './RegistoChamadasTab.jsx'
 import { ImovelInteracoesSection } from './ImovelInteracoesSection.jsx'
 import { isWholesaling } from '../../lib/modelos.js'
 import { DealBreakersPanel } from './DealBreakersPanel.jsx'
+import { TransicaoFaseModal } from './TransicaoFaseModal.jsx'
+import { ProximosPassos } from './ProximosPassos.jsx'
+import { ESTADOS_IMOVEIS } from '../../constants/pipelineImoveis.js'
 
 const AnaliseTab = lazy(() => import('../analise/AnaliseTab.jsx').then(m => ({ default: m.AnaliseTab })))
 const ObraTab = lazy(() => import('../obra/ObraTab.jsx').then(m => ({ default: m.ObraTab })))
@@ -686,6 +689,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
+  const [transicao, setTransicao] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
   const [openContactoForm, setOpenContactoForm] = useState(false)
@@ -757,7 +761,9 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
     prevTab.current = activeTab
   }, [activeTab])
 
-  async function saveEdit() {
+  // camposExtra: só quando chamado pela janela de registo de mudança de fase.
+  async function saveEdit(camposExtra) {
+    const extra = camposExtra && camposExtra.__transicao ? camposExtra.campos : {}
     // Validação: Follow Up e Não Interessa exigem motivo antes de guardar
     if (type === 'Imóveis') {
       const est = (form.estado || '').replace(/^\d+-\s*/, '').trim()
@@ -778,13 +784,18 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       // sobrescrever com um valor potencialmente desactualizado.
       const { negocios, consultores, imoveis, tarefas, timeline, analises, documentos, checklist, interacoes, montante_investido, ...rest } = form
       // Remover campos virtuais (prefixo _) que vêm da lista enriquecida e não existem na BD
-      const cleanForm = Object.fromEntries(Object.entries(rest).filter(([k]) => !k.startsWith('_')))
+      const cleanForm = { ...Object.fromEntries(Object.entries(rest).filter(([k]) => !k.startsWith('_'))), ...extra }
       const r = await apiFetch(`/api/crm/${endpoint}/${id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cleanForm),
       })
       if (!r.ok) {
         const err = await r.json().catch(() => ({}))
-        if (err.deal_breakers?.length) throw new Error(`Deal breakers por resolver: ${err.deal_breakers.map(d => d.titulo).join(', ')}`)
+        if (err.requisitos?.length) {
+          // A fase de destino precisa de dados em falta: abre a janela de registo.
+          setTransicao({ destino: err.destino || cleanForm.estado, requisitos: err.requisitos })
+          setSaving(false)
+          return false
+        }
         throw new Error(err.error || 'Erro ao guardar')
       }
       // Data de follow-up mudada na ficha → agendar logo a tarefa 'A fazer'
@@ -795,6 +806,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
           body: JSON.stringify({ data: String(cleanForm.data_follow_up).slice(0, 10) }),
         }).catch(() => {})
       }
+      setTransicao(null)
       await loadData()
       setEditing(false)
       if (onSave) onSave()
@@ -949,7 +961,20 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
         </div>
       </div>
 
-      {type === 'Imóveis' && <DealBreakersPanel imovelId={id} />}
+      {type === 'Imóveis' && <ProximosPassos imovelId={id} imovel={data} onAbrirTab={setActiveTab} />}
+      {type === 'Imóveis' && <DealBreakersPanel imovelId={id} imovel={data} onAbrirTab={setActiveTab} onUpdate={loadData} />}
+      {type === 'Imóveis' && transicao && (
+        <TransicaoFaseModal
+          key={transicao.requisitos.map(r => r.id).join()}
+          imovel={{ ...data, ...form }}
+          destino={transicao.destino}
+          requisitos={transicao.requisitos}
+          onCancel={() => setTransicao(null)}
+          onConfirm={campos => saveEdit({ __transicao: true, campos })}
+          onResolvido={msg => { setTransicao(null); setEditing(false); toast(msg, 'success'); loadData(); onSave?.() }}
+          onAbrirImovel={() => { setTransicao(null); setActiveTab('analise') }}
+        />
+      )}
 
       {/* Tabs */}
       {tabs.length > 1 && (
@@ -1076,48 +1101,6 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       ) : (
       /* Detalhe tab */
       <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-        {/* Barra de progresso checklist — só imóveis */}
-        {type === 'Imóveis' && data.checklist?.length > 0 && (() => {
-          const cl = data.checklist
-          const estadoAtual = data.estado
-          const obrigTotal = cl.filter(c => c.obrigatoria)
-          const doneTotal = obrigTotal.filter(c => c.concluida).length
-          const totalTotal = obrigTotal.length
-          const pctTotal = totalTotal > 0 ? Math.round((doneTotal / totalTotal) * 100) : 0
-          const obrigEstado = cl.filter(c => c.obrigatoria && c.estado === estadoAtual)
-          const doneEstado = obrigEstado.filter(c => c.concluida).length
-          const totalEstado = obrigEstado.length
-          const pctEstado = totalEstado > 0 ? Math.round((doneEstado / totalEstado) * 100) : 0
-          const isComplete = doneTotal === totalTotal && totalTotal > 0
-          return (
-            <div className="rounded-xl border border-gray-200 p-4" style={{ backgroundColor: '#FAFAF8' }}>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-gray-700">Checklist do imóvel</span>
-                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${isComplete ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                  {doneTotal}/{totalTotal} concluídas ({pctTotal}%)
-                </span>
-              </div>
-              {/* Barra global */}
-              <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden mb-3">
-                <div className="h-full rounded-full transition-all duration-500"
-                  style={{ width: `${pctTotal}%`, backgroundColor: isComplete ? '#22c55e' : '#C9A84C' }} />
-              </div>
-              {/* Estado actual */}
-              {totalEstado > 0 && (
-                <div className="flex items-center gap-3">
-                  <span className="text-[11px] text-gray-500 shrink-0">{estadoAtual}:</span>
-                  <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-500"
-                      style={{ width: `${pctEstado}%`, backgroundColor: doneEstado === totalEstado ? '#22c55e' : '#C9A84C' }} />
-                  </div>
-                  <span className={`text-[11px] font-medium shrink-0 ${doneEstado === totalEstado ? 'text-green-600' : 'text-gray-500'}`}>
-                    {doneEstado}/{totalEstado}
-                  </span>
-                </div>
-              )}
-            </div>
-          )
-        })()}
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
         {/* Main info */}
@@ -1815,7 +1798,7 @@ function useFreguesiasLookup(form) {
   return { concelhos, freguesias }
 }
 
-const ESTADOS_PIPELINE = ['Pré-aprovação','Adicionado','Chamada Não Atendida','Pendentes','Necessidade de Visita','Visita Marcada','Estudo de VVR','Criar Proposta ao Proprietário','Enviar proposta ao Proprietário','Em negociação','Proposta aceite','Enviar proposta ao investidor','Follow Up após proposta','Follow UP','Wholesaling','CAEP','Fix and Flip','Não interessa']
+const ESTADOS_PIPELINE = ESTADOS_IMOVEIS
 const ORIGEM_OPTS = ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro']
 const MODELO_NEGOCIO_OPTS = ['Wholesaling','Fix and Flip','CAEP','Mediação Imobiliária','Consultoria/Assessoria']
 const TIPO_OPERACAO_OPTS = ['Fix and Flip','Arrendamento']
