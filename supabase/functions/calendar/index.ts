@@ -199,6 +199,13 @@ app.get("/events", async (c: any) => {
     timeMin.setDate(timeMin.getDate() - past);
     const timeMax = new Date(now);
     timeMax.setDate(timeMax.getDate() + days);
+    // Agenda: intervalo explícito (?de=AAAA-MM-DD&ate=AAAA-MM-DD) para navegar entre semanas.
+    const de = c.req.query("de") || "";
+    const ate = c.req.query("ate") || "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(de) && /^\d{4}-\d{2}-\d{2}$/.test(ate)) {
+      timeMin.setTime(new Date(de + "T00:00:00+01:00").getTime());
+      timeMax.setTime(new Date(ate + "T23:59:59+01:00").getTime());
+    }
 
     const r = await gcal.events.list({
       calendarId: GCAL_ID,
@@ -206,7 +213,7 @@ app.get("/events", async (c: any) => {
       timeMax: timeMax.toISOString(),
       singleEvents: true,
       orderBy: "startTime",
-      maxResults: 100,
+      maxResults: 250,
     });
     const events = (r.data.items ?? []).map((e: any) => ({
       id: e.id,

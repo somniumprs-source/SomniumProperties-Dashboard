@@ -4250,6 +4250,12 @@ app.get('/api/calendar/events', async (req, res) => {
     timeMin.setDate(timeMin.getDate() - past)
     const timeMax = new Date(now)
     timeMax.setDate(timeMax.getDate() + days)
+    // Agenda: intervalo explícito (?de=AAAA-MM-DD&ate=AAAA-MM-DD) para navegar entre semanas.
+    const { de, ate } = req.query
+    if (/^\d{4}-\d{2}-\d{2}$/.test(de || '') && /^\d{4}-\d{2}-\d{2}$/.test(ate || '')) {
+      timeMin.setTime(new Date(de + 'T00:00:00').getTime())
+      timeMax.setTime(new Date(ate + 'T23:59:59').getTime())
+    }
 
     const r = await gcal.events.list({
       calendarId: GCAL_ID,
@@ -4257,7 +4263,7 @@ app.get('/api/calendar/events', async (req, res) => {
       timeMax: timeMax.toISOString(),
       singleEvents: true,
       orderBy: 'startTime',
-      maxResults: 100,
+      maxResults: 250,
     })
     const events = (r.data.items ?? []).map(e => ({
       id: e.id,
@@ -4339,7 +4345,7 @@ app.post('/api/tarefas', async (req, res) => {
   try {
     const pgPool = (await import('./src/db/pg.js')).default
     const { pushTarefaToGCal } = await import('./src/db/calendarSync.js')
-    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, regiao } = req.body
+    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, regiao, gcal_event_id } = req.body
     if (!tarefa) return res.status(400).json({ error: 'tarefa é obrigatória' })
     const id = (await import('crypto')).randomUUID()
     const now = new Date().toISOString()
@@ -4351,12 +4357,13 @@ app.post('/api/tarefas', async (req, res) => {
     // e ficam NULL — não há fallback para 'Coimbra' nem para o X-Regiao header.
     const regiaoFinal = regiao || null
     await pgPool.query(
-      `INSERT INTO tarefas (id, tarefa, status, categoria, regiao, inicio, fim, funcionario, tempo_horas, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-      [id, tarefa, status || 'A fazer', categoria || null, regiaoFinal, inicio || null, fim || null, funcionario || null, horas, now, now]
+      `INSERT INTO tarefas (id, tarefa, status, categoria, regiao, inicio, fim, funcionario, tempo_horas, created_at, updated_at, gcal_event_id, gcal_synced_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      [id, tarefa, status || 'A fazer', categoria || null, regiaoFinal, inicio || null, fim || null, funcionario || null, horas, now, now,
+       gcal_event_id || null, gcal_event_id ? now : null]
     )
-    // Sync automático com Google Calendar
-    if (inicio) {
+    // Sync automático com Google Calendar (não se o evento já existe no GCal: tarefa "adoptada" na Agenda)
+    if (inicio && !gcal_event_id) {
       pushTarefaToGCal(gcal, GCAL_ID, { id, tarefa, status: status || 'A fazer', inicio, fim, funcionario, tempo_horas: horas })
         .catch(e => console.error('[gcal-sync] auto-push:', e.message))
     }

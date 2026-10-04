@@ -3177,7 +3177,7 @@ app.get("/tarefas", async (c: any) => {
 app.post("/tarefas", async (c: any) => {
   try {
     const body = await c.req.json().catch(() => ({}));
-    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, regiao } = body;
+    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, regiao, gcal_event_id } = body;
     if (!tarefa) return c.json({ error: "tarefa é obrigatória" }, 400);
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
@@ -3189,9 +3189,11 @@ app.post("/tarefas", async (c: any) => {
     // e ficam NULL — não há fallback para 'Coimbra' nem para o X-Regiao header.
     const regiaoFinal = regiao || null;
     await pool.query(
-      `INSERT INTO tarefas (id, tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, regiao, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-      [id, tarefa, status || "A fazer", categoria || null, inicio || null, fim || null, funcionario || null, horas, regiaoFinal, now, now],
+      `INSERT INTO tarefas (id, tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, regiao, created_at, updated_at, gcal_event_id, gcal_synced_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      // gcal_event_id: tarefa "adoptada" na Agenda a partir de um evento que já existe no Google Calendar.
+      [id, tarefa, status || "A fazer", categoria || null, inicio || null, fim || null, funcionario || null, horas, regiaoFinal, now, now,
+       gcal_event_id || null, gcal_event_id ? now : null],
     );
     return c.json({ id, tarefa, status: status || "A fazer", inicio, fim, funcionario, tempo_horas: horas, regiao: regiaoFinal }, 201);
   } catch (e: any) {

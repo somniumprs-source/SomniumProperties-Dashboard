@@ -4,6 +4,10 @@
 // para os comentários completos de desenho.
 import pool from "./pg.ts";
 
+// Geração e agendamento automático de tarefas DESLIGADOS em 04/10/2026 (decisão do
+// utilizador): a Agenda só tem tarefas criadas manualmente, na app ou no Google
+// Calendar. Para reactivar, mudar para true (o código das funções está intacto).
+const GERACAO_AUTOMATICA = false;
 const ROLES_EQUIPA = ["admin", "comercial", "financeiro", "operacoes"];
 const GAP_MAX_CADEIA_MIN = 60;
 const PRAZO_ESTUDO_MERCADO_DIAS = 2;
@@ -44,6 +48,7 @@ async function resolverResponsavelPorHistorico(tabela: string, entidadeId: strin
 }
 
 export async function gerarCadeiasAngariacao() {
+  if (!GERACAO_AUTOMATICA) return { criadas: 0 } as any;
   const { rows: imoveis } = await pool.query(
     `SELECT id, nome FROM imoveis i
      WHERE i.created_at::timestamptz >= $1::timestamptz AND NOT EXISTS (
@@ -71,6 +76,7 @@ export async function gerarCadeiasAngariacao() {
 }
 
 export async function gerarEstudoDeMercado() {
+  if (!GERACAO_AUTOMATICA) return { criadas: 0 } as any;
   const { rows: imoveis } = await pool.query(
     `SELECT id, nome, data_chamada, created_at FROM imoveis i
      WHERE estado = 'Estudo de VVR' AND i.created_at::timestamptz >= $1::timestamptz
@@ -97,6 +103,7 @@ export async function gerarEstudoDeMercado() {
 // Análise de Negócio: só depois do Estudo de Mercado CONCLUÍDO (não só o
 // estado do imóvel) — sequência obrigatória, ver src/db/agendaEngine.js.
 export async function gerarAnaliseDeNegocio() {
+  if (!GERACAO_AUTOMATICA) return { criadas: 0 } as any;
   const { rows: imoveis } = await pool.query(
     `SELECT i.id, i.nome FROM imoveis i
      JOIN tarefas em ON em.origem_tipo = 'imovel' AND em.origem_id = i.id
@@ -122,6 +129,7 @@ export async function gerarAnaliseDeNegocio() {
 
 // Elaboração de Proposta: só depois da Análise de Negócio CONCLUÍDA.
 export async function gerarElaboracaoProposta() {
+  if (!GERACAO_AUTOMATICA) return { criadas: 0 } as any;
   const { rows: imoveis } = await pool.query(
     `SELECT i.id, i.nome FROM imoveis i
      JOIN tarefas an ON an.origem_tipo = 'imovel' AND an.origem_id = i.id
@@ -146,6 +154,7 @@ export async function gerarElaboracaoProposta() {
 }
 
 export async function gerarTarefasSinteticas() {
+  if (!GERACAO_AUTOMATICA) return { criadas: 0, actualizadas: 0 } as any;
   const hoje = hojeISO();
   let criadas = 0;
   let actualizadas = 0;
@@ -189,6 +198,7 @@ export async function gerarTarefasSinteticas() {
 
 // Port 1:1 de agendarFollowUpImovel (src/db/agendaEngine.js) — ver comentário lá.
 export async function agendarFollowUpImovel(imovelId: string, user: { id?: string; nome?: string } | null = null) {
+  if (!GERACAO_AUTOMATICA) return null as any;
   const { rows: [im] } = await pool.query(
     "SELECT id, nome, regiao, data_follow_up FROM imoveis WHERE id = $1",
     [imovelId],
@@ -245,6 +255,7 @@ function diasAlvoTemplate(tpl: any, semanaInicio: string): string[] {
 }
 
 export async function instanciarTemplatesDevidos(semanaInicio: string) {
+  if (!GERACAO_AUTOMATICA) return { criadas: 0 } as any;
   const { rows: templates } = await pool.query("SELECT * FROM tarefas_templates WHERE activo = true");
   let criadas = 0;
 
@@ -467,6 +478,7 @@ export async function desfazerAtribuicao(tarefaId: string) {
 // ── (legado) Motor de encaixe 100% automático — mantido por referência,
 // já não é chamado por nenhum endpoint activo. ──
 export async function gerarProposta(semanaInicio: string) {
+  if (!GERACAO_AUTOMATICA) return { criados: 0, naoAgendadas: [] } as any;
   const semanaFim = addDias(semanaInicio, 6);
 
   await pool.query(`DELETE FROM agendamentos WHERE data >= $1 AND data <= $2 AND estado = 'proposto'`, [semanaInicio, semanaFim]);

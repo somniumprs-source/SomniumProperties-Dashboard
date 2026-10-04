@@ -29,6 +29,10 @@ import { randomUUID } from 'crypto'
 
 // Papéis que contam como "equipa interna" para efeitos de agendamento —
 // exclui 'parceiro'/'investidor' (ver ROLES em userRoutes.js).
+// Geração e agendamento automático de tarefas DESLIGADOS em 04/10/2026 (decisão do
+// utilizador): a Agenda só tem tarefas criadas manualmente, na app ou no Google
+// Calendar. Para reactivar, mudar para true (o código das funções está intacto).
+const GERACAO_AUTOMATICA = false
 const ROLES_EQUIPA = ['admin', 'comercial', 'financeiro', 'operacoes']
 const GAP_MAX_CADEIA_MIN = 60 // Pesquisa -> Cold Call: no máximo 1h de intervalo
 const PRAZO_ESTUDO_MERCADO_DIAS = 2 // 48h após a Cold Call
@@ -83,6 +87,7 @@ async function resolverResponsavelPorHistorico(pool, tabela, entidadeId, campo) 
 
 // ── 1. Cadeia de angariação: Pesquisa de Imóveis -> Cold Call ──────
 export async function gerarCadeiasAngariacao(pool) {
+  if (!GERACAO_AUTOMATICA) return { criadas: 0 }
   // Só imóveis adicionados a partir do corte entram na cadeia automática
   // — imóveis já existentes na base não geram Pesquisa/Cold Call
   // retroactivamente (presume-se que já foram accionados na prática).
@@ -114,6 +119,7 @@ export async function gerarCadeiasAngariacao(pool) {
 
 // ── 2. Estudo de Mercado: gatilho por estado "Estudo de VVR" ───────
 export async function gerarEstudoDeMercado(pool) {
+  if (!GERACAO_AUTOMATICA) return { criadas: 0 }
   const { rows: imoveis } = await pool.query(
     `SELECT id, nome, data_chamada, created_at FROM imoveis i
      WHERE estado = 'Estudo de VVR' AND i.created_at::timestamptz >= $1::timestamptz
@@ -142,6 +148,7 @@ export async function gerarEstudoDeMercado(pool) {
 // de o estudo de mercado estar mesmo feito — por isso esta exige a
 // tarefa de Estudo de Mercado já 'Concluída', não só o estado do imóvel.
 export async function gerarAnaliseDeNegocio(pool) {
+  if (!GERACAO_AUTOMATICA) return { criadas: 0 }
   const { rows: imoveis } = await pool.query(
     `SELECT i.id, i.nome FROM imoveis i
      JOIN tarefas em ON em.origem_tipo = 'imovel' AND em.origem_id = i.id
@@ -172,6 +179,7 @@ export async function gerarAnaliseDeNegocio(pool) {
 // Pesquisa -> Cold Call -> Estudo de Mercado -> Análise de Negócio ->
 // Elaboração de Proposta, cada uma só nasce quando a anterior está feita.
 export async function gerarElaboracaoProposta(pool) {
+  if (!GERACAO_AUTOMATICA) return { criadas: 0 }
   const { rows: imoveis } = await pool.query(
     `SELECT i.id, i.nome FROM imoveis i
      JOIN tarefas an ON an.origem_tipo = 'imovel' AND an.origem_id = i.id
@@ -197,6 +205,7 @@ export async function gerarElaboracaoProposta(pool) {
 
 // ── 3. Tarefas automáticas por data em consultor/investidor/imóvel ─
 export async function gerarTarefasSinteticas(pool) {
+  if (!GERACAO_AUTOMATICA) return { criadas: 0, actualizadas: 0 }
   const hoje = hojeISO()
   let criadas = 0
   let actualizadas = 0
@@ -250,6 +259,7 @@ export async function gerarTarefasSinteticas(pool) {
 // lhe limpa o inicio. Data vazia não apaga nada (a tarefa pode já estar no
 // GCal; apagar aqui deixava o evento órfão e o pull recriava-a).
 export async function agendarFollowUpImovel(pool, imovelId, user = null) {
+  if (!GERACAO_AUTOMATICA) return null
   const { rows: [im] } = await pool.query(
     'SELECT id, nome, regiao, data_follow_up FROM imoveis WHERE id = $1',
     [imovelId]
@@ -307,6 +317,7 @@ function diasAlvoTemplate(tpl, semanaInicio) {
 }
 
 export async function instanciarTemplatesDevidos(pool, semanaInicio) {
+  if (!GERACAO_AUTOMATICA) return { criadas: 0 }
   const { rows: templates } = await pool.query('SELECT * FROM tarefas_templates WHERE activo = true')
   let criadas = 0
 
@@ -547,6 +558,7 @@ export async function desfazerAtribuicao(pool, tarefaId) {
 // já não é chamado por nenhum endpoint activo (ver secção 5 acima). ──
 
 export async function gerarProposta(pool, semanaInicio) {
+  if (!GERACAO_AUTOMATICA) return { criados: 0, naoAgendadas: [] }
   const semanaFim = addDias(semanaInicio, 6)
 
   await pool.query(`DELETE FROM agendamentos WHERE data >= $1 AND data <= $2 AND estado = 'proposto'`, [semanaInicio, semanaFim])

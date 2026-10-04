@@ -1,50 +1,21 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Header } from '../components/layout/Header.jsx'
 import { PageSkeleton } from '../components/ui/Skeleton.jsx'
 import { apiFetch } from '../lib/api.js'
 import { useUrlState } from '../hooks/useUrlState.js'
 import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
-import { EUR, PCT, NUM, REGIOES } from '../constants.js'
+import { EUR, PCT } from '../constants.js'
 import { Tabs } from '../components/ui/Tabs.jsx'
-import { ScrollableTable } from '../components/ui/ScrollableTable.jsx'
-import { Button } from '../components/ui/Button.jsx'
 import { KpiCard } from '../components/ui/KpiCard.jsx'
 import { Card } from '../components/ui/Card.jsx'
 import { Activity } from 'lucide-react'
 
 const HRS = v => v == null ? '—' : `${Number(v).toFixed(1)}h`
-const GOLD = '#C9A84C'
 const MES_LABEL = { '01':'Jan','02':'Fev','03':'Mar','04':'Abr','05':'Mai','06':'Jun','07':'Jul','08':'Ago','09':'Set','10':'Out','11':'Nov','12':'Dez' }
-const FUNCIONARIOS = ['João Abreu', 'Alexandre Mendes']
-const CATEGORIAS = [
-  'Cold Call', 'Pesquisa de Imóveis', 'Estudo de Mercado',
-  'Follow Up Consultores', 'Follow Up Investidores',
-  'Reunião Investidores', 'Reunião de Equipa Somnium',
-  'Reunião com Parceiros', 'Visita', 'Visita a Obra', 'Proposta',
-  'Apresentação de Negócios', 'Negociações',
-  'SOP / Formação', 'Planeamento', 'Implementação com IA',
-  'Análise de Negócio', 'Contacto Consultores',
-  'Networking / Eventos', 'Gestão Financeira', 'Outros',
-]
-const STATUS_OPTIONS = ['A fazer', 'Em andamento', 'Concluída', 'Atrasada']
-const STATUS_COLOR = { 'A fazer': 'bg-gray-100 text-gray-600', 'Em andamento': 'bg-blue-100 text-blue-700', 'Concluída': 'bg-green-100 text-green-700', 'Atrasada': 'bg-red-100 text-red-600' }
-
-// Categorias cuja tarefa é geograficamente situada — só nestas aparece o selector
-// de região no TaskForm e contam para o filtro por região. As restantes guardam
-// regiao = NULL e aparecem em qualquer vista, independentemente do filtro.
-const CATEGORIAS_COM_REGIAO = new Set([
-  'Cold Call', 'Pesquisa de Imóveis', 'Estudo de Mercado',
-  'Follow Up Consultores', 'Contacto Consultores',
-  'Visita', 'Visita a Obra',
-  'Análise de Negócio', 'Proposta', 'Negociações',
-  'Apresentação de Negócios', 'Networking / Eventos',
-])
-
 const TABS = [
   { id: 'resumo',     label: 'Visão Geral' },
-  { id: 'tarefas',    label: 'Tarefas' },
-  { id: 'calendario', label: 'Calendário da Equipa' },
   { id: 'horas',      label: 'Horas & Custo' },
   { id: 'categorias', label: 'Atividades' },
   { id: 'equipa',     label: 'Equipa' },
@@ -87,187 +58,16 @@ function HBar({ items, valueKey = 'horas', labelKey = 'label', colorFn }) {
   )
 }
 
-// ── Task Form (matches Notion "Tarefas a fazer") ────────────────
-function calcHoras(inicio, fim) {
-  if (!inicio || !fim) return null
-  const ms = new Date(fim) - new Date(inicio)
-  return ms > 0 ? Math.round(ms / 3600000 * 100) / 100 : null
-}
-
-function TaskForm({ onSave, onCancel, initial }) {
-  const defaults = { tarefa: '', status: 'A fazer', categoria: '', regiao: '', inicio: '', fim: '', funcionario: FUNCIONARIOS[0], tempo_horas: '' }
-  const [f, setF] = useState(() => {
-    if (!initial) return defaults
-    return {
-      ...defaults, ...initial,
-      regiao: initial.regiao || '',
-      inicio: initial.inicio?.slice(0, 16) || '',
-      fim: initial.fim?.slice(0, 16) || '',
-      tempo_horas: initial.tempo_horas || '',
-    }
-  })
-  const set = (k, v) => setF(p => {
-    const next = { ...p, [k]: v }
-    // Auto-calc horas when both dates set
-    if ((k === 'inicio' || k === 'fim') && next.inicio && next.fim) {
-      const h = calcHoras(next.inicio, next.fim)
-      if (h != null) next.tempo_horas = h
-    }
-    // Categoria sem dimensão geográfica → apaga a região previamente escolhida
-    if (k === 'categoria' && !CATEGORIAS_COM_REGIAO.has(v)) next.regiao = ''
-    return next
-  })
-  const podeTerRegiao = CATEGORIAS_COM_REGIAO.has(f.categoria)
-  const horasDisplay = f.tempo_horas || calcHoras(f.inicio, f.fim) || 0
-
-  return (
-    <div className="bg-white rounded-xl border-2 border-yellow-200 p-5 shadow-md">
-      <h3 className="text-sm font-semibold text-gray-700 mb-4">{initial ? 'Editar Tarefa' : 'Nova Tarefa'}</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3 sm:gap-4">
-        <div className="sm:col-span-2 xl:col-span-3">
-          <label className="text-xs text-gray-500 block mb-1">Tarefa *</label>
-          <input value={f.tarefa} onChange={e => set('tarefa', e.target.value)} autoFocus
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-yellow-300 focus:border-yellow-400 outline-none"
-            placeholder="Ex: Cold Call Investidor X, Visita M3..." />
-        </div>
-        <div>
-          <label className="text-xs text-gray-500 block mb-1">Categoria</label>
-          <select value={f.categoria} onChange={e => set('categoria', e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-            <option value="">Selecionar...</option>
-            {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="text-xs text-gray-500 block mb-1">Funcionário</label>
-          <select value={f.funcionario} onChange={e => set('funcionario', e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-            {FUNCIONARIOS.map(fn => <option key={fn} value={fn}>{fn}</option>)}
-            <option value="João Abreu, Alexandre Mendes">Ambos</option>
-          </select>
-        </div>
-        <div>
-          <label className="text-xs text-gray-500 block mb-1">Status</label>
-          <select value={f.status} onChange={e => set('status', e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-        {podeTerRegiao && (
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">Região</label>
-            <select value={f.regiao} onChange={e => set('regiao', e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-              <option value="">— (sem região)</option>
-              {REGIOES.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </div>
-        )}
-        <div className="sm:col-span-1 xl:col-span-2">
-          <label className="text-xs text-gray-500 block mb-1">Início da tarefa</label>
-          <input type="datetime-local" value={f.inicio} onChange={e => set('inicio', e.target.value)}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-        </div>
-        <div className="sm:col-span-1 xl:col-span-2">
-          <label className="text-xs text-gray-500 block mb-1">Fim da tarefa</label>
-          <input type="datetime-local" value={f.fim} onChange={e => set('fim', e.target.value)}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label className="text-xs text-gray-500 block mb-1">Horas (manual)</label>
-          <input type="number" step="0.25" min="0" max="24" value={f.tempo_horas} onChange={e => set('tempo_horas', e.target.value ? parseFloat(e.target.value) : '')}
-            placeholder={horasDisplay > 0 ? String(horasDisplay) : '0'}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-        </div>
-        <div className="flex items-end pb-1">
-          <div className="bg-indigo-50 rounded-lg px-4 py-2 text-center w-full">
-            <span className="text-[10px] text-indigo-400 uppercase block">Tempo</span>
-            <span className="text-lg font-bold text-indigo-700">{HRS(horasDisplay)}</span>
-          </div>
-        </div>
-      </div>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-end mt-4 gap-3">
-        <div className="flex gap-3">
-          {onCancel && <button onClick={onCancel} className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Cancelar</button>}
-          <button onClick={() => {
-            const payload = { ...f }
-            if (!payload.tempo_horas && payload.inicio && payload.fim) payload.tempo_horas = calcHoras(payload.inicio, payload.fim)
-            onSave(payload)
-          }} disabled={!f.tarefa.trim()}
-            className="px-5 py-2 text-sm font-medium rounded-lg text-white disabled:opacity-40" style={{ backgroundColor: GOLD }}>
-            {initial ? 'Guardar Alterações' : 'Criar Tarefa'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Calendar Week View ──────────────────────────────────────────
-function CalendarWeek({ events, tarefas }) {
-  const now = new Date()
-  const startOfWeek = new Date(now)
-  startOfWeek.setDate(now.getDate() - now.getDay() + 1) // Monday
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(startOfWeek)
-    d.setDate(startOfWeek.getDate() + i)
-    return d
-  })
-  const dayNames = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab', 'Dom']
-
-  const getEventsForDay = (date) => {
-    const ds = date.toISOString().slice(0, 10)
-    const calEvents = (events || []).filter(e => e.inicio?.slice(0, 10) === ds)
-    const taskEvents = (tarefas || []).filter(t => t.inicio?.slice(0, 10) === ds)
-    return { calEvents, taskEvents }
-  }
-
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
-      {days.map((day, i) => {
-        const { calEvents, taskEvents } = getEventsForDay(day)
-        const isToday = day.toDateString() === now.toDateString()
-        return (
-          <div key={i} className={`rounded-xl border p-2 sm:p-3 min-h-[120px] sm:min-h-[160px] ${isToday ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200 bg-white'}`}>
-            <div className="text-center mb-2">
-              <p className="text-[10px] text-gray-400 uppercase">{dayNames[i]}</p>
-              <p className={`text-base sm:text-lg font-bold ${isToday ? 'text-yellow-700' : 'text-gray-700'}`}>{day.getDate()}</p>
-            </div>
-            <div className="flex flex-col gap-1">
-              {calEvents.map((e, j) => (
-                <a key={`c${j}`} href={e.link} target="_blank" rel="noreferrer"
-                  className="block px-2 py-1 rounded text-[10px] bg-blue-100 text-blue-700 truncate hover:bg-blue-200">
-                  {e.inicio?.slice(11, 16)} {e.titulo}
-                </a>
-              ))}
-              {taskEvents.map((t, j) => (
-                <div key={`t${j}`} className={`px-2 py-1 rounded text-[10px] truncate ${STATUS_COLOR[t.status] || 'bg-gray-100 text-gray-600'}`}
-                  title={t.gcal_event_id ? 'Sincronizada do Google Calendar' : 'Criada na app'}>
-                  {t.gcal_event_id && <span className="mr-1 text-blue-500">●</span>}
-                  {t.inicio?.slice(11, 16)} {t.tarefa}
-                </div>
-              ))}
-              {calEvents.length === 0 && taskEvents.length === 0 && (
-                <p className="text-[10px] text-gray-300 text-center mt-4">—</p>
-              )}
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
 // ── Main ────────────────────────────────────────────────────────
 export function Operacoes() {
   const [tab, setTab] = useUrlState('tab', 'resumo')
-  const [syncingGcal, setSyncingGcal] = useState(false)
-  const [mutationError, setMutationError] = useState(null)
-  const [showForm, setShowForm] = useState(false)
-  const [editingTask, setEditingTask] = useState(null)
-  const [taskFilter, setTaskFilter] = useState('semana')
-  const [funcFilter, setFuncFilter] = useState('todos')
-  const [regFilter, setRegFilter] = useState('todas')
-  const [viewMode, setViewMode] = useState('board')
-  const [selectedIds, setSelectedIds] = useState(new Set())
-  const [draggedId, setDraggedId] = useState(null)
-  const [dragOverStatus, setDragOverStatus] = useState(null)
+  const [mutationError] = useState(null)
+  const navigate = useNavigate()
+  // As abas Tarefas e Calendário passaram para a Agenda (04/10/2026): links antigos seguem para lá.
+  useEffect(() => {
+    if (tab === 'tarefas') navigate('/agenda?tab=tarefas', { replace: true })
+    if (tab === 'calendario') navigate('/agenda', { replace: true })
+  }, [tab, navigate])
 
   // Migrado para React Query (Problema 23 da auditoria) — ver Financeiro.jsx/CRM.jsx.
   const query = useQuery({
@@ -297,114 +97,14 @@ export function Operacoes() {
 
   useRefreshOnMutation(loadAll)
 
-  // Força um pull GCal → tarefas e recarrega a lista. Antes era preciso esperar
-  // até 15 min pelo auto-sync; o botão dá controlo imediato ao utilizador.
-  async function syncGcalNow() {
-    setSyncingGcal(true)
-    try {
-      await apiFetch('/api/calendar/pull', { method: 'POST' })
-      await loadAll()
-    } catch (e) { setMutationError(e.message) }
-    finally { setSyncingGcal(false) }
-  }
-
-  async function saveTarefa(form) {
-    try {
-      const method = editingTask ? 'PUT' : 'POST'
-      const url = editingTask ? `/api/tarefas/${editingTask.id}` : '/api/tarefas'
-      const r = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
-      const d = await r.json()
-      if (d.error) throw new Error(d.error)
-      setShowForm(false); setEditingTask(null)
-      await loadAll()
-    } catch (e) { setMutationError(e.message) }
-  }
-
-  async function deleteTarefa(id) {
-    try {
-      await apiFetch(`/api/tarefas/${id}`, { method: 'DELETE' })
-      setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n })
-      await loadAll()
-    } catch (e) { setMutationError(e.message) }
-  }
-
-  async function updateStatus(id, status) {
-    try {
-      await apiFetch(`/api/tarefas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
-      await loadAll()
-    } catch (e) { setMutationError(e.message) }
-  }
-
-  async function handleDropStatus(status) {
-    const id = draggedId
-    setDraggedId(null); setDragOverStatus(null)
-    if (!id) return
-    const t = tarefas.find(x => x.id === id)
-    if (!t || t.status === status) return
-    await updateStatus(id, status)
-  }
-
   const r = data?.resumo
   const k = data?.kpis
 
-  // Week boundaries (Mon-Sun)
-  const now = new Date()
-  const mondayThis = new Date(now)
-  mondayThis.setDate(now.getDate() - ((now.getDay() + 6) % 7))
-  mondayThis.setHours(0, 0, 0, 0)
-  const sundayThis = new Date(mondayThis)
-  sundayThis.setDate(mondayThis.getDate() + 7)
-
-  const isThisWeek = (t) => {
-    if (!t.inicio) return true // sem data = pendente, mostra sempre
-    const d = new Date(t.inicio)
-    return d >= mondayThis && d < sundayThis
-  }
-
-  // Separar tarefas
   const ativas = tarefas.filter(t => t.status !== 'Concluída')
-  const concluídas = tarefas.filter(t => t.status === 'Concluída')
-  const semanaTodas = tarefas.filter(isThisWeek) // inclui concluídas da semana
-  const concluídasPassadas = concluídas.filter(t => !isThisWeek(t)) // só arquivo de semanas anteriores
-
-  const byTimeFilter = taskFilter === 'semana' ? semanaTodas
-    : taskFilter === 'pendentes' ? ativas
-    : taskFilter === 'arquivo' ? concluídasPassadas
-    : tarefas
-  const byFuncFilter = funcFilter === 'todos' ? byTimeFilter
-    : byTimeFilter.filter(t => (t.funcionario || '').includes(funcFilter))
-  // Filtro por região: 'todas' mostra tudo (inclui sem região); caso contrário
-  // mostra exactamente a região escolhida. Tarefas sem região (investidores,
-  // equipa, gestão) só aparecem quando 'todas' está activo.
-  const filteredTarefas = regFilter === 'todas' ? byFuncFilter
-    : byFuncFilter.filter(t => t.regiao === regFilter)
-
-  async function bulkDelete() {
-    if (selectedIds.size === 0) return
-    if (!confirm(`Apagar ${selectedIds.size} tarefa(s)?`)) return
-    try {
-      await Promise.all([...selectedIds].map(id => apiFetch(`/api/tarefas/${id}`, { method: 'DELETE' })))
-      setSelectedIds(new Set())
-      await loadAll()
-    } catch (e) { setMutationError(e.message) }
-  }
-
-  function toggleSelect(id) {
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
-      return next
-    })
-  }
-
-  function selectAll() {
-    if (selectedIds.size === filteredTarefas.length) setSelectedIds(new Set())
-    else setSelectedIds(new Set(filteredTarefas.map(t => t.id)))
-  }
 
   return (
     <>
-      <Header title="Operações" subtitle="Tarefas · Calendário · Horas · Eficiência" onRefresh={loadAll} loading={loading} />
+      <Header title="Operações" subtitle="Horas · Custo · Actividades · Eficiência" onRefresh={loadAll} loading={loading} />
 
       <div className="px-4 sm:px-6 pt-3 bg-white sticky top-0 z-10">
         <div className="flex items-center gap-2 sm:gap-4">
@@ -440,7 +140,8 @@ export function Operacoes() {
                   </div>
                   <div>
                     <h2 className="text-overline uppercase tracking-widest font-semibold text-brand-gold">Operações</h2>
-                    <p className="text-sm font-semibold text-white">Tarefas · Calendário · OKRs</p>
+                    <p className="text-sm font-semibold text-white">Análise das tarefas registadas na Agenda</p>
+                    <Link to="/agenda?tab=tarefas" className="text-xs text-brand-gold hover:underline">Gerir tarefas na Agenda →</Link>
                   </div>
                 </div>
               </div>
@@ -497,231 +198,6 @@ export function Operacoes() {
                 <M label="Custo total operação" value={EUR(r.custoOperacaoTotal)} highlight />
               </div>
             </Card>
-          </>
-        )}
-
-        {/* ══════════ TAREFAS ══════════ */}
-        {tab === 'tarefas' && (
-          <>
-            {/* Toolbar */}
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex gap-2 flex-wrap">
-                  {[
-                    { id: 'semana', label: `Esta semana (${semanaTodas.length})` },
-                    { id: 'pendentes', label: `Todas pendentes (${ativas.length})` },
-                    { id: 'arquivo', label: `Arquivo (${concluídasPassadas.length})` },
-                  ].map(f => (
-                    <button key={f.id} onClick={() => { setTaskFilter(f.id); setSelectedIds(new Set()) }}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-lg border ${taskFilter === f.id ? 'border-yellow-300 bg-yellow-50 text-yellow-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex gap-2 flex-wrap">
-                  {/* Filtro por funcionário */}
-                  {['todos', ...FUNCIONARIOS].map(f => (
-                    <button key={f} onClick={() => { setFuncFilter(f); setSelectedIds(new Set()) }}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-lg border ${funcFilter === f ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
-                      {f === 'todos' ? 'Todos' : f.split(' ')[0]}
-                    </button>
-                  ))}
-                  <button onClick={() => setViewMode(v => v === 'list' ? 'board' : 'list')}
-                    className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">
-                    {viewMode === 'list' ? 'Board' : 'Lista'}
-                  </button>
-                  <Button onClick={() => { setShowForm(true); setEditingTask(null) }}>
-                    + Nova Tarefa
-                  </Button>
-                </div>
-              </div>
-
-              {/* Filtro por região — opcional. 'Todas' inclui tarefas sem região
-                  (investidores, equipa, gestão); chips por região mostram só essa. */}
-              <div className="flex gap-2 flex-wrap">
-                {[
-                  { id: 'todas', label: 'Todas as regiões' },
-                  ...REGIOES.map(r => ({ id: r, label: r })),
-                ].map(r => (
-                  <button key={r.id} onClick={() => { setRegFilter(r.id); setSelectedIds(new Set()) }}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border ${regFilter === r.id ? 'border-purple-300 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
-                    {r.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Barra de selecção — sempre visível */}
-              <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200">
-                <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-500">
-                  <input type="checkbox"
-                    checked={selectedIds.size > 0 && selectedIds.size === filteredTarefas.length}
-                    onChange={selectAll}
-                    className="rounded border-gray-300" />
-                  {selectedIds.size > 0 ? `${selectedIds.size} selecionada(s)` : 'Selecionar todas'}
-                </label>
-                {selectedIds.size > 0 && (
-                  <button onClick={bulkDelete}
-                    className="px-3 py-1 text-xs font-semibold rounded-lg border border-red-300 text-red-600 bg-red-50 hover:bg-red-100 transition-colors">
-                    Apagar {selectedIds.size} tarefa(s)
-                  </button>
-                )}
-                {selectedIds.size > 0 && (
-                  <button onClick={() => setSelectedIds(new Set())}
-                    className="px-3 py-1 text-xs rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100">
-                    Limpar seleção
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {(showForm || editingTask) && (
-              <TaskForm
-                initial={editingTask || undefined}
-                onSave={saveTarefa}
-                onCancel={() => { setShowForm(false); setEditingTask(null) }}
-              />
-            )}
-
-            {/* Board View */}
-            {viewMode === 'board' && taskFilter !== 'arquivo' && (
-              <div className={`grid grid-cols-1 gap-4 ${taskFilter === 'semana' ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
-                {(taskFilter === 'semana' ? ['A fazer', 'Em andamento', 'Atrasada', 'Concluída'] : ['A fazer', 'Em andamento', 'Atrasada']).map(status => {
-                  const pool = filteredTarefas.filter(t => t.status === status)
-                  const totalH = pool.reduce((s, t) => s + (t.tempo_horas || 0), 0)
-                  return (
-                    <div key={status} className="flex flex-col">
-                      <div className={`flex items-center justify-between px-3 py-2 rounded-t-xl ${STATUS_COLOR[status]}`}>
-                        <span className="text-xs font-semibold uppercase">{status}</span>
-                        <span className="text-xs font-mono">{pool.length} · {HRS(totalH)}</span>
-                      </div>
-                      <div
-                        onDragOver={(e) => { e.preventDefault(); if (dragOverStatus !== status) setDragOverStatus(status) }}
-                        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverStatus(null) }}
-                        onDrop={() => handleDropStatus(status)}
-                        className={`flex flex-col gap-1.5 p-2 bg-gray-50 rounded-b-xl min-h-[200px] border border-t-0 transition-colors ${dragOverStatus === status ? 'border-yellow-400 bg-yellow-50/60 ring-1 ring-yellow-200' : 'border-gray-200'}`}>
-                        {pool.map(t => (
-                          <div key={t.id}
-                            draggable
-                            onDragStart={(e) => { setDraggedId(t.id); e.dataTransfer.effectAllowed = 'move' }}
-                            onDragEnd={() => { setDraggedId(null); setDragOverStatus(null) }}
-                            className={`bg-white rounded-lg p-3 shadow-sm border hover:border-gray-300 cursor-grab active:cursor-grabbing ${draggedId === t.id ? 'opacity-40' : ''} ${selectedIds.has(t.id) ? 'border-yellow-400 bg-yellow-50 ring-1 ring-yellow-200' : 'border-gray-100'}`}>
-                            <div className="flex items-start gap-2.5">
-                              <input type="checkbox" checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)}
-                                className="mt-0.5 w-4 h-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-400 shrink-0 cursor-pointer" />
-                              <div className="flex-1 min-w-0 cursor-pointer" onClick={() => { setEditingTask(t); setShowForm(false) }}>
-                                <p className="text-sm text-gray-700 font-medium leading-tight">{t.tarefa}</p>
-                                {t.categoria && <span className="text-[9px] px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded mt-1 inline-block">{t.categoria}</span>}
-                                {t.regiao && <span className="text-[9px] px-1.5 py-0.5 bg-purple-50 text-purple-700 rounded mt-1 ml-1 inline-block">{t.regiao}</span>}
-                                <div className="flex items-center justify-between mt-1.5">
-                                  <span className="text-[10px] text-gray-400">{t.funcionario?.split(',')[0] || '—'}</span>
-                                  <div className="flex items-center gap-2">
-                                    {t.inicio && <span className="text-[10px] font-mono text-gray-400">
-                                      {new Date(t.inicio).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' })}
-                                      {t.inicio?.includes('T') && ' ' + t.inicio.slice(11, 16)}
-                                    </span>}
-                                    {t.tempo_horas > 0 && <span className="text-[10px] font-mono font-bold text-indigo-600">{HRS(t.tempo_horas)}</span>}
-                                  </div>
-                                </div>
-                              </div>
-                              <button onClick={(e) => { e.stopPropagation(); deleteTarefa(t.id) }}
-                                className="text-gray-300 hover:text-red-500 hover:bg-red-50 rounded p-0.5 transition-colors text-sm shrink-0" title="Apagar">
-                                x
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                        {pool.length === 0 && <p className="text-xs text-gray-300 text-center py-8">Sem tarefas</p>}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* List View — para todos os filtros incluindo arquivo */}
-            {(viewMode === 'list' || taskFilter === 'arquivo') && (
-              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs overflow-hidden">
-                {taskFilter === 'arquivo' && (
-                  <div className="px-4 py-3 bg-green-50 border-b border-green-100 text-xs text-green-700">
-                    Arquivo — tarefas concluídas. Seleciona e apaga as que já não precisas.
-                  </div>
-                )}
-                <ScrollableTable>
-                <table className="min-w-[800px] w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase bg-gray-50">
-                      <th className="py-2.5 px-3 w-8"><input type="checkbox" onChange={selectAll} checked={selectedIds.size > 0 && selectedIds.size === filteredTarefas.length} className="rounded border-gray-300" /></th>
-                      <th className="text-left py-2.5 px-3">Tarefa</th>
-                      <th className="text-left py-2.5 px-3 w-32">Categoria</th>
-                      <th className="text-left py-2.5 px-3 w-28">Status</th>
-                      <th className="text-left py-2.5 px-3 w-36">Funcionário</th>
-                      <th className="text-left py-2.5 px-3 w-28">Início</th>
-                      <th className="text-left py-2.5 px-3 w-28">Fim</th>
-                      <th className="text-right py-2.5 px-3 w-16">Horas</th>
-                      <th className="text-right py-2.5 px-3 w-16"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredTarefas.slice(0, 100).map(t => (
-                      <tr key={t.id} className={`border-b border-gray-50 hover:bg-gray-50 ${selectedIds.has(t.id) ? 'bg-yellow-50' : ''} ${t.status === 'Concluída' ? 'opacity-60' : ''}`}>
-                        <td className="py-2 px-3"><input type="checkbox" checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)} className="rounded border-gray-300" /></td>
-                        <td className="py-2 px-3 text-gray-700 font-medium">
-                          <span className={`cursor-pointer hover:underline ${t.status === 'Concluída' ? 'line-through' : ''}`}
-                            onClick={() => { setEditingTask(t); setShowForm(false) }}>
-                            {t.tarefa}
-                          </span>
-                        </td>
-                        <td className="py-2 px-3 text-xs">
-                          {t.categoria ? <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded">{t.categoria}</span> : <span className="text-gray-300">—</span>}
-                          {t.regiao && <span className="ml-1 px-1.5 py-0.5 bg-purple-50 text-purple-700 rounded">{t.regiao}</span>}
-                        </td>
-                        <td className="py-2 px-3">
-                          <select value={t.status} onChange={e => updateStatus(t.id, e.target.value)}
-                            className={`px-2 py-0.5 rounded text-xs font-medium border-0 cursor-pointer ${STATUS_COLOR[t.status] || 'bg-gray-100'}`}>
-                            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                          </select>
-                        </td>
-                        <td className="py-2 px-3 text-xs text-gray-500">{t.funcionario || '—'}</td>
-                        <td className="py-2 px-3 text-xs font-mono text-gray-500">
-                          {t.inicio ? new Date(t.inicio).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) + (t.inicio?.includes('T') ? ' ' + t.inicio.slice(11, 16) : '') : '—'}
-                        </td>
-                        <td className="py-2 px-3 text-xs font-mono text-gray-500">
-                          {t.fim ? new Date(t.fim).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) + (t.fim?.includes('T') ? ' ' + t.fim.slice(11, 16) : '') : '—'}
-                        </td>
-                        <td className="py-2 px-3 text-right font-mono text-xs font-bold text-indigo-600">{t.tempo_horas > 0 ? HRS(t.tempo_horas) : '—'}</td>
-                        <td className="py-2 px-3 text-right">
-                          <button onClick={() => deleteTarefa(t.id)} className="text-gray-300 hover:text-red-500 text-sm">x</button>
-                        </td>
-                      </tr>
-                    ))}
-                    {filteredTarefas.length === 0 && (
-                      <tr><td colSpan={9} className="py-8 text-center text-gray-400 text-xs">
-                        {taskFilter === 'arquivo' ? 'Sem tarefas concluídas' : 'Sem tarefas — clica em "+ Nova Tarefa"'}
-                      </td></tr>
-                    )}
-                  </tbody>
-                </table>
-                </ScrollableTable>
-                <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex justify-between text-xs text-gray-400">
-                  <span>{filteredTarefas.length} tarefa(s)</span>
-                  <span>Total: {HRS(filteredTarefas.reduce((s, t) => s + (t.tempo_horas || 0), 0))}</span>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ══════════ CALENDARIO ══════════ */}
-        {tab === 'calendario' && (
-          <>
-            <div className="flex items-center justify-between mb-2">
-              <SectionTitle>Esta Semana</SectionTitle>
-              <button onClick={syncGcalNow} disabled={syncingGcal}
-                className="text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50">
-                {syncingGcal ? 'A sincronizar…' : 'Sincronizar GCal agora'}
-              </button>
-            </div>
-            <CalendarWeek tarefas={tarefas} />
           </>
         )}
 
