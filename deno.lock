@@ -256,6 +256,7 @@
     "packageJson": {
       "dependencies": [
         "npm:@anthropic-ai/sdk@0.88",
+        "npm:@notionhq/client@^2.2.15",
         "npm:@resvg/resvg-js@^2.6.2",
         "npm:@supabase/supabase-js@^2.103.0",
         "npm:@tanstack/react-query@^5.100.14",
@@ -284,7 +285,7 @@
         "npm:lucide-react@0.344",
         "npm:multer@^2.1.1",
         "npm:node-cron@^4.2.1",
-        "npm:nodemailer@^10.0.10",
+        "npm:nodemailer@^8.0.5",
         "npm:patch-package@^8.0.1",
         "npm:pdf-lib@^1.17.1",
         "npm:pdfkit@0.18",
@@ -301,12 +302,7 @@
         "npm:twilio@^5.13.1",
         "npm:upng-js@^2.1.0",
         "npm:vite@^5.1.6"
-      ],
-      "overrides": {
-        "exceljs": {
-          "uuid": "^11.1.1"
-        }
-      }
+      ]
     }
   }
 }
