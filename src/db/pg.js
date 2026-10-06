@@ -427,6 +427,12 @@ export async function initSchema() {
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
 
+      -- Migration: relatório PDF anexado a reuniões adicionadas manualmente
+      DO $$ BEGIN
+        ALTER TABLE reunioes ADD COLUMN IF NOT EXISTS relatorio_path TEXT;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END $$;
+
       -- Migration: adicionar ABD (area_bruta_dependente) à tabela imoveis
       DO $$ BEGIN
         ALTER TABLE imoveis ADD COLUMN IF NOT EXISTS area_bruta_dependente REAL;

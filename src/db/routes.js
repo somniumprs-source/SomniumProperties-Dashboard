@@ -2840,7 +2840,7 @@ router.get('/stats', async (req, res) => {
 router.get('/reunioes', async (req, res) => {
   try {
     const { entidade_tipo, entidade_id, limit = 50 } = req.query
-    let query = 'SELECT id, fireflies_id, titulo, data, duracao_min, participantes, resumo, keywords, action_items, entidade_tipo, entidade_id, organizador, created_at FROM reunioes'
+    let query = 'SELECT id, fireflies_id, titulo, data, duracao_min, participantes, resumo, keywords, action_items, entidade_tipo, entidade_id, organizador, relatorio_path, created_at FROM reunioes'
     const params = []
     if (entidade_tipo && entidade_id) {
       query += ' WHERE entidade_tipo = $1 AND entidade_id = $2'
@@ -2850,6 +2850,41 @@ router.get('/reunioes', async (req, res) => {
     params.push(+limit)
     const { rows } = await pool.query(query, params)
     res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Reunião adicionada manualmente na ficha (investidor/consultor) com relatório PDF anexado.
+router.post('/reunioes', uploadDocs.single('relatorio'), async (req, res) => {
+  try {
+    if (!supabaseStorage) return res.status(503).json({ error: 'Storage indisponível (sem SUPABASE_SERVICE_KEY)' })
+    const { titulo, data, duracao_min, resumo, transcricao, entidade_tipo, entidade_id } = req.body
+    if (!titulo?.trim() || !data) return res.status(400).json({ error: 'Título e data são obrigatórios' })
+    if (!['investidores', 'consultores'].includes(entidade_tipo) || !entidade_id) return res.status(400).json({ error: 'Contacto inválido' })
+    if (!req.file || !/\.pdf$/i.test(req.file.originalname)) return res.status(400).json({ error: 'Anexe o relatório em PDF' })
+    const id = randomUUID()
+    const relatorioPath = `reunioes-manuais/${id}/relatorio.pdf`
+    const { error: upErr } = await supabaseStorage.storage.from(REUNIOES_BUCKET)
+      .upload(relatorioPath, req.file.buffer, { contentType: 'application/pdf', upsert: true })
+    if (upErr) return res.status(500).json({ error: `Storage: ${upErr.message}` })
+    const { rows: [reuniao] } = await pool.query(
+      `INSERT INTO reunioes (id, titulo, data, duracao_min, resumo, transcricao, entidade_tipo, entidade_id, relatorio_path, analise_vista)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
+       RETURNING id, fireflies_id, titulo, data, duracao_min, participantes, resumo, keywords, action_items, entidade_tipo, entidade_id, organizador, relatorio_path, created_at`,
+      [id, titulo.trim(), data, parseInt(duracao_min) || 0, resumo?.trim() || null, transcricao?.trim() || null, entidade_tipo, entidade_id, relatorioPath]
+    )
+    res.json(reuniao)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Só reuniões manuais (com relatório anexado) podem ser apagadas; as do Fireflies voltariam no sync.
+router.delete('/reunioes/:id', async (req, res) => {
+  try {
+    const { rows: [r] } = await pool.query('SELECT relatorio_path FROM reunioes WHERE id = $1', [req.params.id])
+    if (!r) return res.status(404).json({ error: 'Reunião não encontrada' })
+    if (!r.relatorio_path) return res.status(400).json({ error: 'Só reuniões adicionadas manualmente podem ser apagadas' })
+    if (supabaseStorage) await supabaseStorage.storage.from(REUNIOES_BUCKET).remove([r.relatorio_path])
+    await pool.query('DELETE FROM reunioes WHERE id = $1', [req.params.id])
+    res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -2873,6 +2908,17 @@ router.get('/reunioes/:id/relatorio', async (req, res) => {
   try {
     const { rows: [reuniao] } = await pool.query('SELECT * FROM reunioes WHERE id = $1', [req.params.id])
     if (!reuniao) return res.status(404).json({ error: 'Reunião não encontrada' })
+
+    // Reunião manual: devolver o PDF anexado em vez de gerar um.
+    if (reuniao.relatorio_path) {
+      if (!supabaseStorage) return res.status(503).json({ error: 'Storage indisponível (sem SUPABASE_SERVICE_KEY)' })
+      const { data: blob, error: dlErr } = await supabaseStorage.storage.from(REUNIOES_BUCKET).download(reuniao.relatorio_path)
+      if (dlErr || !blob) return res.status(404).json({ error: 'Relatório não encontrado no Storage' })
+      const nomeAnexo = (reuniao.titulo || 'reuniao').replace(/[^a-zA-Z0-9À-ú ]/g, '').replace(/\s+/g, '_')
+      res.setHeader('Content-Type', 'application/pdf')
+      res.setHeader('Content-Disposition', pdfDisposition(req, `Relatorio_Reuniao_${nomeAnexo}.pdf`))
+      return res.send(Buffer.from(await blob.arrayBuffer()))
+    }
 
     // Usar analise_completa guardada se existir, senão fallback para análise por padrões
     let analise

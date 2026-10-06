@@ -1091,7 +1091,8 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       /* Relatórios reuniões (investidores/consultores) */
       ) : activeTab === 'relatorios' ? (
         <div className="p-4 sm:p-6">
-          <RelatoriosTab reunioes={reunioes} investidorNome={data.nome} />
+          <RelatoriosTab reunioes={reunioes} investidorNome={data.nome}
+            entidadeTipo={endpoint} entidadeId={id} onChange={setReunioes} />
         </div>
 
       /* Avaliação (Investidores) — fundir Scorecard + Histórico de Classificação */
@@ -1404,11 +1405,51 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
 }
 
 // ── Relatórios Tab ────────────────────────────────────────────
-function RelatoriosTab({ reunioes, investidorNome }) {
+const NOVA_REUNIAO_VAZIA = { titulo: '', data: '', duracao_min: '', resumo: '', file: null }
+
+function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onChange }) {
+  const toast = useToast()
   const [expanded, setExpanded] = useState(null)
   const [transcricao, setTranscricao] = useState({})
   const [analises, setAnalises] = useState({})
   const [analyzing, setAnalyzing] = useState(null)
+  const [adding, setAdding] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [nova, setNova] = useState(NOVA_REUNIAO_VAZIA)
+
+  async function adicionarReuniao(e) {
+    e.preventDefault()
+    if (!nova.titulo.trim() || !nova.data || !nova.file) return
+    setSaving(true)
+    try {
+      const fd = new FormData()
+      fd.append('relatorio', nova.file)
+      fd.append('titulo', nova.titulo.trim())
+      fd.append('data', new Date(nova.data).toISOString())
+      if (nova.duracao_min) fd.append('duracao_min', nova.duracao_min)
+      if (nova.resumo.trim()) fd.append('resumo', nova.resumo.trim())
+      fd.append('entidade_tipo', entidadeTipo)
+      fd.append('entidade_id', entidadeId)
+      const r = await apiFetch('/api/crm/reunioes', { method: 'POST', body: fd })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.error || 'Erro ao guardar a reunião')
+      onChange([d, ...reunioes].sort((a, b) => String(b.data).localeCompare(String(a.data))))
+      setNova(NOVA_REUNIAO_VAZIA)
+      setAdding(false)
+      toast('Reunião adicionada', 'success')
+    } catch (err) { toast('Erro: ' + err.message, 'error') }
+    setSaving(false)
+  }
+
+  async function apagarReuniao(r) {
+    if (!confirm(`Apagar a reunião "${r.titulo}" e o relatório anexado? Esta ação não pode ser desfeita.`)) return
+    try {
+      const res = await apiFetch(`/api/crm/reunioes/${r.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao apagar')
+      onChange(reunioes.filter(x => x.id !== r.id))
+      toast('Reunião apagada', 'success')
+    } catch (err) { toast('Erro: ' + err.message, 'error') }
+  }
 
   async function loadTranscricao(id) {
     if (transcricao[id]) return
@@ -1431,7 +1472,9 @@ function RelatoriosTab({ reunioes, investidorNome }) {
     if (expanded === id) { setExpanded(null); return }
     setExpanded(id)
     loadTranscricao(id)
-    if (!analises[id]) runAnalise(id)
+    // Reuniões manuais já trazem o relatório anexado: não correr a análise IA.
+    const manual = reunioes.find(x => x.id === id)?.relatorio_path
+    if (!manual && !analises[id]) runAnalise(id)
     apiFetch(`/api/crm/reunioes/${id}/marcar-vista`, { method: 'POST' }).catch(() => {})
   }
 
@@ -1439,8 +1482,54 @@ function RelatoriosTab({ reunioes, investidorNome }) {
     <div className="space-y-3">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-semibold text-gray-700">Histórico de Reuniões</h3>
-        <span className="text-xs text-gray-400">{reunioes.length} reunião(ões)</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-400">{reunioes.length} reunião(ões)</span>
+          {!adding && (
+            <button onClick={() => setAdding(true)}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg text-white" style={{ backgroundColor: '#0d0d0d' }}>
+              Adicionar reunião
+            </button>
+          )}
+        </div>
       </div>
+
+      {adding && (
+        <form onSubmit={adicionarReuniao} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <label className="sm:col-span-2 text-xs text-gray-500">Título
+              <input type="text" required value={nova.titulo} onChange={e => setNova(n => ({ ...n, titulo: e.target.value }))}
+                placeholder={`Reunião com ${investidorNome || 'contacto'}`}
+                className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-800" />
+            </label>
+            <label className="text-xs text-gray-500">Data e hora
+              <input type="datetime-local" required value={nova.data} onChange={e => setNova(n => ({ ...n, data: e.target.value }))}
+                className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-800" />
+            </label>
+            <label className="text-xs text-gray-500">Duração (min)
+              <input type="number" min="0" value={nova.duracao_min} onChange={e => setNova(n => ({ ...n, duracao_min: e.target.value }))}
+                className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-800" />
+            </label>
+          </div>
+          <label className="block text-xs text-gray-500">Resumo (opcional)
+            <textarea rows={3} value={nova.resumo} onChange={e => setNova(n => ({ ...n, resumo: e.target.value }))}
+              className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-800" />
+          </label>
+          <label className="block text-xs text-gray-500">Relatório (PDF)
+            <input type="file" required accept="application/pdf,.pdf" onChange={e => setNova(n => ({ ...n, file: e.target.files?.[0] || null }))}
+              className="mt-1 block w-full text-sm text-gray-600" />
+          </label>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => { setAdding(false); setNova(NOVA_REUNIAO_VAZIA) }} disabled={saving}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-gray-200 text-gray-600 hover:border-gray-300">
+              Cancelar
+            </button>
+            <button type="submit" disabled={saving || !nova.file}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg text-white disabled:opacity-50" style={{ backgroundColor: '#0d0d0d' }}>
+              {saving ? 'A guardar...' : 'Guardar reunião'}
+            </button>
+          </div>
+        </form>
+      )}
 
       {reunioes.map(r => {
         const isOpen = expanded === r.id
@@ -1481,6 +1570,13 @@ function RelatoriosTab({ reunioes, investidorNome }) {
                   className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-white border border-gray-200 text-gray-600 hover:border-gray-300">
                   <FileDown className="w-3 h-3" /> PDF
                 </button>
+                {r.relatorio_path && (
+                  <button onClick={(e) => { e.stopPropagation(); apagarReuniao(r) }}
+                    title="Apagar reunião e relatório"
+                    className="flex items-center px-2 py-1 rounded-lg bg-white border border-gray-200 text-gray-400 hover:text-red-600 hover:border-red-200">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                )}
                 {isOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
               </div>
             </button>

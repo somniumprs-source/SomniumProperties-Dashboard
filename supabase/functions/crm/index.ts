@@ -3246,12 +3246,21 @@ app.get("/stats", async (c: any) => {
 });
 
 // ── Reunioes (Fireflies) — port de routes.js 1563-1593 ──
+// Coluna relatorio_path (migração 0068) — as migrações não são auto-aplicadas em produção.
+let _reunioesRelatorioPathEnsured = false;
+async function ensureReunioesRelatorioPath() {
+  if (_reunioesRelatorioPathEnsured) return;
+  await pool.query("ALTER TABLE reunioes ADD COLUMN IF NOT EXISTS relatorio_path TEXT");
+  _reunioesRelatorioPathEnsured = true;
+}
+
 app.get("/reunioes", async (c: any) => {
   try {
+    await ensureReunioesRelatorioPath();
     const entidade_tipo = c.req.query("entidade_tipo");
     const entidade_id = c.req.query("entidade_id");
     const limit = c.req.query("limit") ?? "50";
-    let query = "SELECT id, fireflies_id, titulo, data, duracao_min, participantes, resumo, keywords, action_items, entidade_tipo, entidade_id, organizador, created_at FROM reunioes";
+    let query = "SELECT id, fireflies_id, titulo, data, duracao_min, participantes, resumo, keywords, action_items, entidade_tipo, entidade_id, organizador, relatorio_path, created_at FROM reunioes";
     const params: any[] = [];
     if (entidade_tipo && entidade_id) {
       query += " WHERE entidade_tipo = $1 AND entidade_id = $2";
@@ -3261,6 +3270,46 @@ app.get("/reunioes", async (c: any) => {
     params.push(+limit);
     const { rows } = await pool.query(query, params);
     return c.json(rows);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// Reunião adicionada manualmente na ficha (investidor/consultor) com relatório PDF anexado.
+app.post("/reunioes", async (c: any) => {
+  try {
+    const _rl = await checkUploadLimit(c); if (_rl) return _rl;
+    await ensureReunioesRelatorioPath();
+    if (!supabase) return c.json({ error: "Storage indisponível" }, 503);
+    const form = await c.req.formData();
+    const txt = (k: string) => { const v = form.get(k); return typeof v === "string" ? v.trim() : ""; };
+    const titulo = txt("titulo"), data = txt("data"), entidade_tipo = txt("entidade_tipo"), entidade_id = txt("entidade_id");
+    if (!titulo || !data) return c.json({ error: "Título e data são obrigatórios" }, 400);
+    if (!["investidores", "consultores"].includes(entidade_tipo) || !entidade_id) return c.json({ error: "Contacto inválido" }, 400);
+    const file = form.get("relatorio");
+    if (!(file instanceof File) || !/\.pdf$/i.test(file.name)) return c.json({ error: "Anexe o relatório em PDF" }, 400);
+    assertSafeUpload(file, 15 * 1024 * 1024, OFFICE_ALLOWED_EXT);
+    const id = crypto.randomUUID();
+    const relatorioPath = `reunioes-manuais/${id}/relatorio.pdf`;
+    await uploadPrivate(REUNIOES_BUCKET, relatorioPath, new Uint8Array(await file.arrayBuffer()), "application/pdf");
+    const { rows: [reuniao] } = await pool.query(
+      `INSERT INTO reunioes (id, titulo, data, duracao_min, resumo, transcricao, entidade_tipo, entidade_id, relatorio_path, analise_vista)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
+       RETURNING id, fireflies_id, titulo, data, duracao_min, participantes, resumo, keywords, action_items, entidade_tipo, entidade_id, organizador, relatorio_path, created_at`,
+      [id, titulo, data, parseInt(txt("duracao_min")) || 0, txt("resumo") || null, txt("transcricao") || null, entidade_tipo, entidade_id, relatorioPath],
+    );
+    return c.json(reuniao);
+  } catch (e) { console.error("[reunioes] criar manual", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
+
+// Só reuniões manuais (com relatório anexado) podem ser apagadas; as do Fireflies voltariam no sync.
+app.delete("/reunioes/:id", async (c: any) => {
+  try {
+    await ensureReunioesRelatorioPath();
+    const { rows: [r] } = await pool.query("SELECT relatorio_path FROM reunioes WHERE id = $1", [c.req.param("id")]);
+    if (!r) return c.json({ error: "Reunião não encontrada" }, 404);
+    if (!r.relatorio_path) return c.json({ error: "Só reuniões adicionadas manualmente podem ser apagadas" }, 400);
+    await removeFromStorage(REUNIOES_BUCKET, r.relatorio_path);
+    await pool.query("DELETE FROM reunioes WHERE id = $1", [c.req.param("id")]);
+    return c.json({ ok: true });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
@@ -3286,6 +3335,18 @@ app.get("/reunioes/:id/relatorio", async (c: any) => {
   try {
     const { rows: [reuniao] } = await pool.query("SELECT * FROM reunioes WHERE id = $1", [id]);
     if (!reuniao) return c.json({ error: "Reunião não encontrada" }, 404);
+
+    // Reunião manual: devolver o PDF anexado em vez de gerar um.
+    if (reuniao.relatorio_path) {
+      if (!supabase) return c.json({ error: "Storage indisponível" }, 503);
+      const { data: blob, error: dlErr } = await supabase.storage.from(REUNIOES_BUCKET).download(reuniao.relatorio_path);
+      if (dlErr || !blob) return c.json({ error: "Relatório não encontrado no Storage" }, 404);
+      const nomeAnexo = (reuniao.titulo || "reuniao").replace(/[^a-zA-Z0-9À-ú ]/g, "").replace(/\s+/g, "_");
+      return c.body(new Uint8Array(await blob.arrayBuffer()), 200, {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": pdfDisposition(c, `Relatorio_Reuniao_${nomeAnexo}.pdf`),
+      });
+    }
 
     // Usar analise_completa guardada se existir, senão fallback para análise por padrões
     let analise: any;
