@@ -61,13 +61,14 @@ const EUR = v => v == null || v === 0 ? '—' : new Intl.NumberFormat('pt-PT', {
 const PCT = v => v == null ? '—' : `${v}%`
 const FDATE = d => { if (!d) return '—'; try { return new Date(d).toLocaleDateString('pt-PT') } catch { return d } }
 // Tempo no mercado: contado da data de entrada (Casafari) até hoje, nunca guardado.
+// Como no Casafari, o dia de entrada conta como dia 1.
 const DIAS_MERCADO = d => {
   if (!d) return '—'
   const p = d instanceof Date ? [d.getFullYear(), d.getMonth() + 1, d.getDate()] : String(d).slice(0, 10).split('-').map(Number)
   if (p.length !== 3 || p.some(n => !Number.isFinite(n))) return '—'
   const h = new Date()
-  const dias = Math.round((Date.UTC(h.getFullYear(), h.getMonth(), h.getDate()) - Date.UTC(p[0], p[1] - 1, p[2])) / 86400000)
-  return dias < 0 ? '—' : String(dias)
+  const dias = Math.round((Date.UTC(h.getFullYear(), h.getMonth(), h.getDate()) - Date.UTC(p[0], p[1] - 1, p[2])) / 86400000) + 1
+  return dias < 1 ? '—' : String(dias)
 }
 const NOW = () => new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' })
 
