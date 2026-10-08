@@ -296,8 +296,8 @@ export async function agendarFollowUpImovel(pool, imovelId, user = null) {
 // Mesmo mecanismo do follow-up, mas com data e hora: a tarefa é o registo do
 // agendamento (não há campo de data paralelo no imóvel) e segue para o Google
 // Calendar pela sincronização normal das tarefas. origem_campo identifica o
-// passo: 'proxima_chamada' ou 'visita:<id da visita>'. A região só segue em
-// passos presos ao local do imóvel (visita).
+// passo: 'proxima_chamada' ou 'visita:<id da visita>'. A tarefa leva a região do
+// imóvel; comRegiao junta a morada ao título (passos feitos no local).
 export async function agendarPassoImovel(pool, { imovelId, campo, prefixo, categoria, quando, horas = 0.5, comRegiao = false, user = null }) {
   const inicio = new Date(quando)
   if (!imovelId || isNaN(inicio.getTime())) return null
@@ -306,7 +306,7 @@ export async function agendarPassoImovel(pool, { imovelId, campo, prefixo, categ
   const ini = inicio.toISOString()
   const fim = new Date(inicio.getTime() + horas * 3600000).toISOString()
   const titulo = `${prefixo} — ${im.nome || 'Imóvel'}${comRegiao && im.morada ? ` (${im.morada})` : ''}`
-  const regiao = comRegiao ? (im.regiao || null) : null
+  const regiao = im.regiao || null
   const { rows: abertas } = await pool.query(
     `SELECT id FROM tarefas
      WHERE origem_tipo = 'imovel' AND origem_id = $1 AND origem_campo = $2 AND status != 'Concluída'

@@ -281,7 +281,7 @@ export async function pushAllTarefas(gcal, calendarId, { sinceDate } = {}) {
   // 2. Tarefas alteradas depois do último sync (atualizar evento existente)
   const { rows: stale } = await pool.query(
     `SELECT * FROM tarefas WHERE gcal_event_id IS NOT NULL
-     AND updated_at > COALESCE(gcal_synced_at, '1970-01-01')${dateCond}`,
+     AND updated_at::timestamptz > COALESCE(gcal_synced_at, '1970-01-01')::timestamptz${dateCond}`,
     params
   )
   let updated = 0

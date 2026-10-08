@@ -1015,7 +1015,21 @@ export function CRM() {
       // header X-Regiao para preencher automaticamente body.regiao (ou
       // regioes_preferidas em investidores) quando ausente.
       const r = await apiFetch(url, { method, regiao: regiaoActiva, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) })
-      if (!r.ok) throw new Error('Erro ao guardar')
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        if (!isNew && tab === 'Imóveis' && err.requisitos?.length) {
+          // A fase escolhida precisa de dados em falta: guarda o resto do
+          // formulário e abre a janela de registo para a mudança de fase.
+          const { estado, ...resto } = item
+          const r2 = await apiFetch(url, { method, regiao: regiaoActiva, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(resto) })
+          if (!r2.ok) throw new Error((await r2.json().catch(() => ({}))).error || 'Erro ao guardar')
+          setEditing(null)
+          load()
+          setTransicao({ id: item.id, newColumn: estado, requisitos: err.requisitos })
+          return
+        }
+        throw new Error(err.error || 'Erro ao guardar')
+      }
       const saved = await r.json()
       toast(isNew ? 'Registo criado' : 'Registo atualizado', 'success')
 

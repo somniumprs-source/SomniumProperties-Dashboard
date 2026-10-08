@@ -64,11 +64,11 @@ export function TransicaoFaseModal({ imovel, destino, requisitos = [], mover = t
   const [erro, setErro] = useState('')
 
   // Reaproveita a visita mais recente do imóvel (por exemplo, uma agendada que
-  // já se realizou) em vez de criar outra.
+  // já se realizou) em vez de criar outra. Visitas com investidor não contam.
   useEffect(() => {
     if (!pedeVisita || !imovel?.id) return
     apiFetch(`/api/crm/imoveis/${imovel.id}/visitas`).then(r => r.ok ? r.json() : []).then(lista => {
-      const ult = [...(lista || [])].filter(x => x.estado !== 'cancelada')
+      const ult = [...(lista || [])].filter(x => x.estado !== 'cancelada' && !x.investidorId)
         .sort((a, b) => String(b.dataHora || '').localeCompare(String(a.dataHora || '')))[0]
       if (!ult) return
       const f = normalizeFicha(ult.ficha)

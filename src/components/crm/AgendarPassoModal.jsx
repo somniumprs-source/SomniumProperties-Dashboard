@@ -35,11 +35,12 @@ export function AgendarPassoModal({ imovel, tipo, destino, onAntes, onCancel, on
   const [erro, setErro] = useState('')
   const t = TEXTO[tipo]
 
-  // Se já há uma visita agendada, remarca-a em vez de criar outra.
+  // Se já há uma visita agendada, remarca-a em vez de criar outra. Visitas com
+  // investidor não contam.
   useEffect(() => {
     if (tipo !== 'visita' || !imovel?.id) return
     apiFetch(`/api/crm/imoveis/${imovel.id}/visitas`).then(r => r.ok ? r.json() : []).then(lista => {
-      const ag = (lista || []).filter(x => x.estado === 'agendada')
+      const ag = (lista || []).filter(x => x.estado === 'agendada' && !x.investidorId)
         .sort((a, b) => String(b.dataHora || '').localeCompare(String(a.dataHora || '')))[0]
       if (ag) { setVisitaAgendada(ag); if (ag.dataHora) setQuando(paraLocal(ag.dataHora)) }
     }).catch(() => {})
