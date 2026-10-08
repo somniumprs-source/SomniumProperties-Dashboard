@@ -11,6 +11,7 @@ import { FollowUpsSection } from './FollowUpsSection.jsx'
 import { RegistoChamadasTab } from './RegistoChamadasTab.jsx'
 import { ImovelInteracoesSection } from './ImovelInteracoesSection.jsx'
 import { isWholesaling } from '../../lib/modelos.js'
+import { fmtTempoMercado } from '../../lib/tempoMercado.js'
 import { DealBreakersPanel } from './DealBreakersPanel.jsx'
 import { TransicaoFaseModal } from './TransicaoFaseModal.jsx'
 import { ProximosPassos } from './ProximosPassos.jsx'
@@ -2019,7 +2020,7 @@ function ImovelEditSections({ data, form, setField }) {
     fisica:        ['tipologia','predio_tipo','area_util','area_bruta','area_bruta_dependente','andar','numero_pisos_predio','tem_elevador','ano_construcao','cru','licenca_utilizacao'],
     valores:       ['ask_price','valor_proposta','fee_cedencia','valor_venda_remodelado','custo_estimado_obra','vpt','imi_anual','condominio_mensal_anunciado'],
     legal:         ['artigo_matricial','descricao_predial','fracao','regime_propriedade','certificado_energetico','numero_ce','onus_registados'],
-    pipeline:      ['proprietario_nome','proprietario_nif','proprietario_contacto','motivo_venda_declarado','data_anuncio','tempo_no_mercado_dias','modelo_negocio','data_adicionado','data_chamada','data_visita','data_estudo_mercado','data_proposta','data_proposta_aceite','data_follow_up','data_aceite_investidor','motivo_follow_up','notas'],
+    pipeline:      ['proprietario_nome','proprietario_nif','proprietario_contacto','motivo_venda_declarado','data_anuncio','modelo_negocio','data_adicionado','data_chamada','data_visita','data_estudo_mercado','data_proposta','data_proposta_aceite','data_follow_up','data_aceite_investidor','motivo_follow_up','notas'],
   }
 
   return <>
@@ -2282,8 +2283,9 @@ function ImovelEditSections({ data, form, setField }) {
           {(lookups.motivo_venda || []).map(o => <option key={o} value={o}>{o}</option>)}
         </select>
       </div>
-      <EF label="Data do Anúncio" field="data_anuncio" form={form} set={setField} type="date" />
-      <EF label="Tempo no Mercado (dias)" field="tempo_no_mercado_dias" form={form} set={setField} type="number" />
+      <EF label="Data de Entrada no Mercado (Casafari)" field="data_anuncio" form={form} set={setField} type="date" />
+      {/* Read-only: contado a partir da data de entrada até hoje (ver src/lib/tempoMercado.js). */}
+      <Field label="Tempo no Mercado (auto)" value={fmtTempoMercado(form.data_anuncio)} />
       <EF label="Modelo de Negócio" field="modelo_negocio" form={form} set={setField} type="select" options={MODELO_NEGOCIO_OPTS} />
       <EF label="Data Adicionado" field="data_adicionado" form={form} set={setField} type="date" />
       <EF label="Data Chamada" field="data_chamada" form={form} set={setField} type="date" />
@@ -2337,7 +2339,7 @@ function ImovelReadSections({ data, onNavigate }) {
     fisica:        ['tipologia','predio_tipo','area_util','area_bruta','area_bruta_dependente','andar','numero_pisos_predio','tem_elevador','ano_construcao','cru','licenca_utilizacao'],
     valores:       ['ask_price','valor_proposta','fee_cedencia','valor_venda_remodelado','custo_estimado_obra','vpt','imi_anual','condominio_mensal_anunciado'],
     legal:         ['artigo_matricial','descricao_predial','fracao','regime_propriedade','certificado_energetico','numero_ce','onus_registados'],
-    pipeline:      ['proprietario_nome','proprietario_nif','proprietario_contacto','motivo_venda_declarado','data_anuncio','tempo_no_mercado_dias','modelo_negocio','data_adicionado','data_chamada','data_visita','data_estudo_mercado','data_proposta','data_proposta_aceite','data_follow_up','data_aceite_investidor','motivo_follow_up','notas'],
+    pipeline:      ['proprietario_nome','proprietario_nif','proprietario_contacto','motivo_venda_declarado','data_anuncio','modelo_negocio','data_adicionado','data_chamada','data_visita','data_estudo_mercado','data_proposta','data_proposta_aceite','data_follow_up','data_aceite_investidor','motivo_follow_up','notas'],
   }
 
   return <>
@@ -2435,8 +2437,8 @@ function ImovelReadSections({ data, onNavigate }) {
       <Field label="NIF" value={data.proprietario_nif} />
       <Field label="Contacto" value={data.proprietario_contacto} />
       <Field label="Motivo Venda" value={data.motivo_venda_declarado} />
-      <Field label="Data Anúncio" value={data.data_anuncio} />
-      <Field label="Tempo no Mercado" value={data.tempo_no_mercado_dias > 0 ? `${data.tempo_no_mercado_dias} dias` : '—'} />
+      <Field label="Entrada no Mercado" value={data.data_anuncio} />
+      <Field label="Tempo no Mercado" value={fmtTempoMercado(data.data_anuncio)} />
       <Field label="Modelo de Negócio" value={data.modelo_negocio} />
       <Field label="Data Adicionado" value={data.data_adicionado} />
       <Field label="Data Chamada" value={data.data_chamada} />

@@ -62,6 +62,15 @@ const CW = PW - ML - MR // content width
 const EUR = v => v == null || v === 0 ? '—' : new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v)
 const PCT = v => v == null ? '—' : `${v}%`
 const FDATE = d => { if (!d) return '—'; try { return new Date(d).toLocaleDateString('pt-PT') } catch { return d } }
+// Tempo no mercado: contado da data de entrada (Casafari) até hoje, nunca guardado.
+const DIAS_MERCADO = d => {
+  if (!d) return '—'
+  const p = d instanceof Date ? [d.getFullYear(), d.getMonth() + 1, d.getDate()] : String(d).slice(0, 10).split('-').map(Number)
+  if (p.length !== 3 || p.some(n => !Number.isFinite(n))) return '—'
+  const h = new Date()
+  const dias = Math.round((Date.UTC(h.getFullYear(), h.getMonth(), h.getDate()) - Date.UTC(p[0], p[1] - 1, p[2])) / 86400000)
+  return dias < 0 ? '—' : String(dias)
+}
 const NOW = () => new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' })
 
 // Limpa items de listas multi-linha (pontos_fortes, riscos, etc.):
@@ -1648,8 +1657,8 @@ function renderFichaImovel(b, im) {
     { label: 'NIF', value: im.proprietario_nif },
     { label: 'Contacto', value: im.proprietario_contacto },
     { label: 'Motivo de Venda Declarado', value: im.motivo_venda_declarado },
-    { label: 'Data do Anúncio', value: FDATE(im.data_anuncio) },
-    { label: 'Tempo no Mercado (dias)', value: NUM(im.tempo_no_mercado_dias) },
+    { label: 'Data de Entrada no Mercado', value: FDATE(im.data_anuncio) },
+    { label: 'Tempo no Mercado (dias)', value: DIAS_MERCADO(im.data_anuncio) },
   ])
   // Origem + Tipo de Oportunidade lado a lado (campos complementares: canal e natureza)
   b.splitRow(
