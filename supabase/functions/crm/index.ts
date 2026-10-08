@@ -82,7 +82,8 @@ import { exportDepartment } from "../_shared/excelExport.ts";
 import { listarFaturas, exportarZip, marcarEnviadas } from "../_shared/contabilidade.ts";
 import { generateDocx, getAvailableTypes } from "../_shared/docxGenerator.ts";
 import { carregarChecklist, gravarManual } from "../_shared/checklistImovel.ts";
-import { agendarFollowUpImovel, agendarPassoImovel, sincronizarTarefaVisita } from "../_shared/agendaEngine.ts";
+import { agendarPassoImovel, sincronizarTarefaVisita } from "../_shared/agendaEngine.ts";
+import { agendarFollowUpImovelManual, registarFollowUpFeito } from "../_shared/followUpImovel.ts";
 import { createClient } from "@supabase/supabase-js";
 import { Buffer } from "node:buffer";
 
@@ -2654,7 +2655,7 @@ app.get("/imoveis/:id/followups", async (c: any) => {
 
 // ── Follow Up do imóvel (aba "Follow Up") — port de routes.js ──
 // Grava data/motivo do follow-up e agenda logo a tarefa 'A fazer' para esse
-// dia (agendarFollowUpImovel) — não fica à espera do "gerar-semana".
+// dia (agendarFollowUpImovelManual) — não fica à espera do "gerar-semana".
 app.get("/imoveis/:id/follow-up", async (c: any) => {
   try {
     const imovel = await Imoveis.getById(c.req.param("id"));
@@ -2665,21 +2666,27 @@ app.get("/imoveis/:id/follow-up", async (c: any) => {
        ORDER BY COALESCE(data_limite, inicio) DESC, created_at DESC`,
       [c.req.param("id")],
     );
-    return c.json({ data_follow_up: imovel.data_follow_up, motivo_follow_up: imovel.motivo_follow_up, tarefas });
+    const { rows: historico } = await pool.query(
+      `SELECT id, data, resultado, motivo, proxima_data, autor FROM imovel_follow_ups
+       WHERE imovel_id = $1 ORDER BY data DESC, created_at DESC`,
+      [c.req.param("id")],
+    );
+    return c.json({ data_follow_up: imovel.data_follow_up, motivo_follow_up: imovel.motivo_follow_up, tarefas, historico });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
 app.post("/imoveis/:id/follow-up", async (c: any) => {
   try {
-    const { data, motivo } = await c.req.json().catch(() => ({}));
+    const { data, motivo, sem_sucesso } = await c.req.json().catch(() => ({}));
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data || "")) return c.json({ error: "Data do follow-up é obrigatória" }, 400);
+    if (sem_sucesso && !(motivo || "").trim()) return c.json({ error: "Indica o motivo do follow-up sem sucesso" }, 400);
     const id = c.req.param("id");
     const imovel = await Imoveis.getById(id);
     if (!imovel) return c.json({ error: "Não encontrado" }, 404);
     const patch: Record<string, any> = { data_follow_up: data };
     if (motivo !== undefined) patch.motivo_follow_up = (motivo || "").trim() || null;
     await Imoveis.update(id, patch);
-    const tarefaId = await agendarFollowUpImovel(id, await resolveCrmUser(c));
+    const tarefaId = await agendarFollowUpImovelManual(id, { semSucesso: !!sem_sucesso, motivo, user: await resolveCrmUser(c) });
     return c.json({ ok: true, tarefa_id: tarefaId });
   } catch (e) { return c.json({ error: (e as Error).message }, 400); }
 });
@@ -2714,7 +2721,7 @@ app.post("/imoveis/:id/proximos-passos", async (c: any) => {
 });
 
 // Passo feito: conclui a tarefa. Uma chamada feita fica também como a data da
-// última chamada do imóvel.
+// última chamada do imóvel; um follow-up feito entra no histórico de follow-ups.
 app.put("/imoveis/:id/proximos-passos/:tarefaId", async (c: any) => {
   try {
     const { rows: [t] } = await pool.query(
@@ -2725,6 +2732,9 @@ app.put("/imoveis/:id/proximos-passos/:tarefaId", async (c: any) => {
     if (!t) return c.json({ error: "Passo não encontrado" }, 404);
     if (t.origem_campo === "proxima_chamada") {
       await Imoveis.update(c.req.param("id"), { data_chamada: new Date().toISOString().slice(0, 10) });
+    }
+    if (t.origem_campo === "data_follow_up") {
+      await registarFollowUpFeito(c.req.param("id"), { resultado: "Feito", user: await resolveCrmUser(c) });
     }
     return c.json({ ok: true });
   } catch (e) { return c.json({ error: (e as Error).message }, 400); }

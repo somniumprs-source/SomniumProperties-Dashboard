@@ -22,7 +22,8 @@ const supabaseStorage = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABA
 export { supabaseStorage }
 import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, InvestidorInteracoes, ConsultorFollowups, DocumentosInvestidor, Visitas, Empreiteiros, getDashboardStats } from './crud.js'
 import pool from './pg.js'
-import { agendarFollowUpImovel, agendarPassoImovel, sincronizarTarefaVisita } from './agendaEngine.js'
+import { agendarPassoImovel, sincronizarTarefaVisita } from './agendaEngine.js'
+import { agendarFollowUpImovelManual, registarFollowUpFeito } from './followUpImovel.js'
 import { getVisitasEnriquecidas, syncDataVisitaDerivada, getFichaVisitaParaImovel } from './queries.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
@@ -2245,7 +2246,7 @@ router.get('/imoveis/:id/followups', async (req, res) => {
 
 // ── Follow Up do imóvel (aba "Follow Up") ─────────────────────
 // Grava data/motivo do follow-up e agenda logo a tarefa 'A fazer' para esse
-// dia (agendarFollowUpImovel) — não fica à espera do "gerar-semana".
+// dia (agendarFollowUpImovelManual) — não fica à espera do "gerar-semana".
 router.get('/imoveis/:id/follow-up', async (req, res) => {
   try {
     const imovel = await Imoveis.getById(req.params.id)
@@ -2256,20 +2257,26 @@ router.get('/imoveis/:id/follow-up', async (req, res) => {
        ORDER BY COALESCE(data_limite, inicio) DESC, created_at DESC`,
       [req.params.id]
     )
-    res.json({ data_follow_up: imovel.data_follow_up, motivo_follow_up: imovel.motivo_follow_up, tarefas })
+    const { rows: historico } = await pool.query(
+      `SELECT id, data, resultado, motivo, proxima_data, autor FROM imovel_follow_ups
+       WHERE imovel_id = $1 ORDER BY data DESC, created_at DESC`,
+      [req.params.id]
+    )
+    res.json({ data_follow_up: imovel.data_follow_up, motivo_follow_up: imovel.motivo_follow_up, tarefas, historico })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 router.post('/imoveis/:id/follow-up', async (req, res) => {
   try {
-    const { data, motivo } = req.body || {}
+    const { data, motivo, sem_sucesso } = req.body || {}
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data || '')) return res.status(400).json({ error: 'Data do follow-up é obrigatória' })
+    if (sem_sucesso && !(motivo || '').trim()) return res.status(400).json({ error: 'Indica o motivo do follow-up sem sucesso' })
     const imovel = await Imoveis.getById(req.params.id)
     if (!imovel) return res.status(404).json({ error: 'Não encontrado' })
     const patch = { data_follow_up: data }
     if (motivo !== undefined) patch.motivo_follow_up = (motivo || '').trim() || null
     await Imoveis.update(req.params.id, patch)
-    const tarefaId = await agendarFollowUpImovel(pool, req.params.id, req.user || null)
+    const tarefaId = await agendarFollowUpImovelManual(pool, req.params.id, { semSucesso: !!sem_sucesso, motivo, user: req.user || null })
     res.json({ ok: true, tarefa_id: tarefaId })
   } catch (e) { res.status(400).json({ error: e.message }) }
 })
@@ -2304,7 +2311,7 @@ router.post('/imoveis/:id/proximos-passos', async (req, res) => {
 })
 
 // Passo feito: conclui a tarefa. Uma chamada feita fica também como a data da
-// última chamada do imóvel.
+// última chamada do imóvel; um follow-up feito entra no histórico de follow-ups.
 router.put('/imoveis/:id/proximos-passos/:tarefaId', async (req, res) => {
   try {
     const { rows: [t] } = await pool.query(
@@ -2315,6 +2322,9 @@ router.put('/imoveis/:id/proximos-passos/:tarefaId', async (req, res) => {
     if (!t) return res.status(404).json({ error: 'Passo não encontrado' })
     if (t.origem_campo === 'proxima_chamada') {
       await Imoveis.update(req.params.id, { data_chamada: new Date().toISOString().slice(0, 10) })
+    }
+    if (t.origem_campo === 'data_follow_up') {
+      await registarFollowUpFeito(pool, req.params.id, { resultado: 'Feito', user: req.user || null })
     }
     res.json({ ok: true })
   } catch (e) { res.status(400).json({ error: e.message }) }

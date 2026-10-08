@@ -25,7 +25,6 @@ const MatchingInvestidoresTab = lazy(() => import('./MatchingInvestidoresTab.jsx
 const FicheirosTab = lazy(() => import('./FicheirosTab.jsx').then(m => ({ default: m.FicheirosTab })))
 const ChecklistTab = lazy(() => import('./ChecklistTab.jsx').then(m => ({ default: m.ChecklistTab })))
 const VisitasTab = lazy(() => import('./VisitasTab.jsx').then(m => ({ default: m.VisitasTab })))
-const FollowUpImovelTab = lazy(() => import('./FollowUpImovelTab.jsx').then(m => ({ default: m.FollowUpImovelTab })))
 const DocumentosInvestidorTab = lazy(() => import('./DocumentosInvestidorTab.jsx').then(m => ({ default: m.DocumentosInvestidorTab })))
 const DadosEmpresaInvestidorTab = lazy(() => import('./DadosEmpresaInvestidorTab.jsx').then(m => ({ default: m.DadosEmpresaInvestidorTab })))
 
@@ -799,14 +798,6 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
         }
         throw new Error(err.error || 'Erro ao guardar')
       }
-      // Data de follow-up mudada na ficha → agendar logo a tarefa 'A fazer'
-      // (mesmo endpoint da aba "Follow Up"; motivo já foi gravado no PUT).
-      if (type === 'Imóveis' && cleanForm.data_follow_up && cleanForm.data_follow_up !== data?.data_follow_up) {
-        await apiFetch(`/api/crm/imoveis/${id}/follow-up`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: String(cleanForm.data_follow_up).slice(0, 10) }),
-        }).catch(() => {})
-      }
       setTransicao(null)
       await loadData()
       setEditing(false)
@@ -879,7 +870,6 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
     { key: 'localizacao', label: 'Localização', icon: '📍', show: type === 'Imóveis' },
     { key: 'pontos_riscos', label: 'Pontos & Riscos', icon: '⚖️', show: type === 'Imóveis' },
     { key: 'visitas', label: 'Visitas', icon: '🚪', show: type === 'Imóveis' },
-    { key: 'follow_up', label: 'Follow Up', icon: '🔁', show: type === 'Imóveis' },
     { key: 'matching', label: 'Matching investidores', icon: '🎯', show: type === 'Imóveis' },
     { key: 'relatorios_imovel', label: 'Relatórios', icon: '📄', show: type === 'Imóveis' },
     { key: 'checklist', label: 'Checklist', icon: '📋', show: type === 'Imóveis' },
@@ -962,7 +952,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
         </div>
       </div>
 
-      {type === 'Imóveis' && <ProximosPassos imovelId={id} imovel={data} onAbrirTab={setActiveTab} />}
+      {type === 'Imóveis' && <ProximosPassos imovelId={id} imovel={data} onAbrirTab={setActiveTab} onUpdate={loadData} />}
       {type === 'Imóveis' && <DealBreakersPanel imovelId={id} imovel={data} onAbrirTab={setActiveTab} onUpdate={loadData} />}
       {type === 'Imóveis' && transicao && (
         <TransicaoFaseModal
@@ -1015,9 +1005,6 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
 
       ) : type === 'Imóveis' && activeTab === 'visitas' ? (
         <VisitasTab imovelId={data.id} onUpdate={loadData} />
-
-      ) : type === 'Imóveis' && activeTab === 'follow_up' ? (
-        <FollowUpImovelTab imovelId={data.id} onUpdate={loadData} toast={toast} />
 
       ) : type === 'Imóveis' && activeTab === 'matching' ? (
         <div className="p-4 sm:p-6">
@@ -2296,12 +2283,11 @@ function ImovelEditSections({ data, form, setField }) {
       <EF label="Data Estudo Mercado" field="data_estudo_mercado" form={form} set={setField} type="date" />
       <EF label="Data Proposta" field="data_proposta" form={form} set={setField} type="date" />
       <EF label="Data Proposta Aceite" field="data_proposta_aceite" form={form} set={setField} type="date" />
-      <EF label="Data Follow Up" field="data_follow_up" form={form} set={setField} type="date" />
+      {/* Read-only: o follow-up agenda-se e regista-se no bloco "Próximos passos" (topo da ficha). */}
+      <Field label="Data Follow Up (auto — ver Próximos passos)" value={(data.data_follow_up || '').slice(0, 10)} />
       <EF label="Data Aceite Investidor" field="data_aceite_investidor" form={form} set={setField} type="date" />
       <div className="col-span-2 md:col-span-3">
-        <label className="text-xs text-gray-400 block mb-1">Motivo Follow Up</label>
-        <textarea value={form.motivo_follow_up || ''} onChange={e => setField('motivo_follow_up', e.target.value)} rows={2}
-          className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+        <Field label="Motivo Follow Up (auto — ver Próximos passos)" value={form.motivo_follow_up} />
       </div>
       <div className="col-span-2 md:col-span-3">
         <label className="text-xs text-gray-400 block mb-1">Notas</label>

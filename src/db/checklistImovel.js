@@ -65,7 +65,7 @@ const ITENS = [
     calc: d => { const t = tarefa(d, c => c === 'proxima_chamada'); return campo(!!t, t ? fmtData(t.inicio) : null) } },
 
   // ── Pendentes ──
-  { fase: 'Pendentes', key: 'pend_data', titulo: 'Data de reativação agendada', onde: 'Follow Up', abrir: { tab: 'follow_up' },
+  { fase: 'Pendentes', key: 'pend_data', titulo: 'Data de reativação agendada', onde: 'Próximos passos',
     calc: d => campo(tem(d.imovel.data_follow_up), fmtData(d.imovel.data_follow_up)) },
 
   // ── Necessidade de Visita ──
@@ -101,7 +101,7 @@ const ITENS = [
   // ── Enviar proposta ao Proprietário ──
   { fase: 'Enviar proposta ao Proprietário', key: 'ep_data', titulo: 'Proposta enviada', onde: 'Ficha do imóvel', abrir: { tab: 'detalhe' },
     calc: d => campo(tem(d.imovel.data_proposta), fmtData(d.imovel.data_proposta)) },
-  { fase: 'Enviar proposta ao Proprietário', key: 'ep_followup', titulo: 'Follow-up agendado', onde: 'Follow Up', abrir: { tab: 'follow_up' },
+  { fase: 'Enviar proposta ao Proprietário', key: 'ep_followup', titulo: 'Follow-up agendado', onde: 'Próximos passos',
     calc: d => { const t = tarefa(d, c => c === 'data_follow_up'); return campo(!!t, t ? fmtData(t.inicio || t.data_limite) : null) } },
   { fase: 'Enviar proposta ao Proprietário', key: 'm_rececao', titulo: 'Receção da proposta confirmada por escrito', manual: 'confirmar' },
 
@@ -124,16 +124,16 @@ const ITENS = [
   // ── Enviar proposta ao investidor ──
   { fase: 'Enviar proposta ao investidor', key: 'ei_envio', titulo: 'Dossier enviado a investidores', onde: 'Matching investidores', abrir: { tab: 'matching' },
     calc: d => campo(d.envios > 0, `${d.envios} envio(s) registado(s)`) },
-  { fase: 'Enviar proposta ao investidor', key: 'ei_followup', titulo: 'Follow-up agendado', onde: 'Follow Up', abrir: { tab: 'follow_up' },
+  { fase: 'Enviar proposta ao investidor', key: 'ei_followup', titulo: 'Follow-up agendado', onde: 'Próximos passos',
     calc: d => { const t = tarefa(d, c => c === 'data_follow_up'); return campo(!!t, t ? fmtData(t.inicio || t.data_limite) : null) } },
 
   // ── Follow Up após proposta ──
   { fase: 'Follow Up após proposta', key: 'm_resposta_inv', titulo: 'Resposta dos investidores', manual: 'resposta', opcoes: ['Há interessado', 'Pedem mais informação', 'Sem interesse', 'Sem resposta'] },
 
   // ── Follow UP ──
-  { fase: 'Follow UP', key: 'fu_motivo', titulo: 'Motivo do follow-up', onde: 'Follow Up', abrir: { tab: 'follow_up' },
+  { fase: 'Follow UP', key: 'fu_motivo', titulo: 'Motivo do follow-up', onde: 'Próximos passos',
     calc: d => campo(tem(d.imovel.motivo_follow_up), d.imovel.motivo_follow_up) },
-  { fase: 'Follow UP', key: 'fu_data', titulo: 'Data do follow-up agendada', onde: 'Follow Up', abrir: { tab: 'follow_up' },
+  { fase: 'Follow UP', key: 'fu_data', titulo: 'Data do follow-up agendada', onde: 'Próximos passos',
     calc: d => campo(tem(d.imovel.data_follow_up), fmtData(d.imovel.data_follow_up)) },
 
   // ── Fecho: o acompanhamento passa para Projetos ──
