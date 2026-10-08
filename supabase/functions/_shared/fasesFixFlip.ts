@@ -173,7 +173,7 @@ export const FASES_CAEP = [
     nome: 'Pré-aquisição',
     icon: '📋',
     cor: '#1F4E5F',
-    descricao: 'Documentação do imóvel, contrato CAEP e capital dos investidores',
+    descricao: 'Documentação do imóvel, plano de venda, contrato CAEP e capital dos investidores',
     tarefas: [
       { t: 'Verificação final da documentação do imóvel', checklist: [
         { k: 'caderneta', t: 'Caderneta Predial Urbana', slot: 'caderneta_predial' },
@@ -183,6 +183,16 @@ export const FASES_CAEP = [
         { k: 'agua_luz', t: 'Água e luz sem dívidas' },
         { k: 'ce', t: 'Certificado Energético', slot: 'certificado_energetico' },
         { k: 'licenca', t: 'Licença de Utilização ou isenção', slot: 'licenca_utilizacao' },
+      ] },
+      // PEV (SOP 14): fecha-se antes da minuta, porque segue para o advogado como Anexo V.
+      { t: 'Plano Estratégico de Venda (Anexo V do CAEP)', checklist: [
+        { k: 'vvr', t: 'VVR validado com o consultor parceiro' },
+        { k: 'precos', t: 'Preço de Lançamento, Preço de Reserva e Limite de Corte definidos' },
+        { k: 'escada', t: 'Escada de Preço e prazos definidos' },
+        { k: 'kpi', t: 'KPI de procura confirmados com o consultor' },
+        { k: 'comissao', t: 'Teto da comissão de mediação fixado' },
+        { k: 'aprovacao', t: 'Plano aprovado pelos dois CEO' },
+        { k: 'anexo_v', t: 'Plano enviado ao advogado como Anexo V do CAEP' },
       ] },
       { t: 'Recolha e envio da documentação dos investidores ao advogado para a minuta do CAEP', porInvestidor: true, checklist: [
         { k: 'cc', t: 'Cartão de cidadão' },
