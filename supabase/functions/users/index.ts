@@ -211,6 +211,7 @@ app.get("/me", async (c: any) => {
       areas: ROLE_AREAS[u.role] || [],
       modules: ROLE_MODULES[u.role] || [],
       investidorId,
+      pode_editar: !!u.pode_editar,
     });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });

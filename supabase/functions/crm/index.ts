@@ -596,12 +596,44 @@ app.use("*", async (c, next) => {
 // ── Só consulta para roles externos (espelho de server.js) ──────────
 // Por agora só a equipa interna altera dados: parceiros e investidores veem
 // o que lhes foi partilhado mas não criam, editam nem apagam nada.
+// Exceção: parceiro com `users.pode_editar` edita os imóveis que lhe foram
+// partilhados (ficha, obra, análises, visitas) — nunca cria nem apaga imóveis
+// e continua em consulta em tudo o resto (ver parceiroPodeEscrever).
 app.use("*", async (c, next) => {
   if (["GET", "HEAD", "OPTIONS"].includes(c.req.method)) return await next();
   const u = await resolveCrmUser(c).catch(() => null);
-  if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return c.json({ error: "Acesso só de consulta" }, 403);
+  if (u && RECORD_RESTRICTED_ROLES.has(u.role)) {
+    const ok = await parceiroPodeEscrever(c, u).catch(() => false);
+    if (!ok) return c.json({ error: "Acesso só de consulta" }, 403);
+  }
   await next();
 });
+
+// Escrita de um parceiro com `pode_editar`: só em caminhos amarrados a um
+// imóvel a que tem acesso (tabela `acessos`). Em /imoveis/:id/... a verificação
+// do acesso é do restrictByAccessGeneric (que também recusa criar e apagar);
+// análises e visitas não vivem sob /imoveis, por isso o imóvel dono é resolvido aqui.
+async function parceiroPodeEscrever(c: any, u: any): Promise<boolean> {
+  if (!u.pode_editar || u.role !== "parceiro") return false;
+  const path = new URL(c.req.url).pathname;
+  const i = path.indexOf("/crm/");
+  const [seg, id] = (i >= 0 ? path.slice(i + 5) : path).split("/").filter(Boolean);
+  if (seg === "imoveis") return !!id && !NON_ID_SEGS.has(id);
+  let imovelId: string | null = null;
+  if (seg === "analises" && id) {
+    imovelId = (await pool.query("SELECT imovel_id FROM analises WHERE id = $1", [id])).rows[0]?.imovel_id || null;
+  } else if (seg === "visitas" && id) {
+    imovelId = (await pool.query("SELECT imovel_id FROM visitas WHERE id = $1", [id])).rows[0]?.imovel_id || null;
+  } else if (seg === "visitas" && c.req.method === "POST") {
+    imovelId = (await c.req.json().catch(() => ({})))?.imovel_id || null;
+  }
+  if (!imovelId) return false;
+  const r = await pool.query(
+    "SELECT 1 FROM acessos WHERE user_id = $1 AND entidade = 'imovel' AND entidade_id = $2",
+    [u.id, imovelId],
+  );
+  return r.rowCount > 0;
+}
 
 // ── Middleware de isolamento regional (port de routes.js 172-194) — 403 em edicao cruzada ──
 app.use("*", async (c, next) => {

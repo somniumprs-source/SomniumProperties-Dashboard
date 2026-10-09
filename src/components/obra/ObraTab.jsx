@@ -11,6 +11,7 @@ import { SeccaoCard } from './SeccaoCard.jsx'
 import { SECCOES, TIPOS_OBRA } from './seccoesConfig.js'
 import { calcOrcamentoObra, validarOrcamento } from '../../db/orcamentoObraEngine.js'
 import { openDocument } from '../../lib/api.js'
+import { useAuth } from '../../contexts/AuthContext.jsx'
 
 const GOLD = '#C9A84C'
 const BLACK = '#0d0d0d'
@@ -21,7 +22,10 @@ const EUR = v => {
 }
 
 export function ObraTab({ imovelId, imovelNome }) {
-  const { orcamento, loading, saving, update } = useOrcamentoObra(imovelId)
+  // Quem só consulta (parceiro sem edição, investidor) vê o orçamento mas não o altera.
+  const { podeEditarImoveis } = useAuth()
+  const readOnly = !podeEditarImoveis
+  const { orcamento, loading, saving, erro, update } = useOrcamentoObra(imovelId, { readOnly })
 
   const calc = useMemo(() => calcOrcamentoObra(orcamento), [orcamento])
   const avisos = useMemo(() => validarOrcamento(orcamento), [orcamento])
@@ -86,6 +90,10 @@ export function ObraTab({ imovelId, imovelNome }) {
                 <span className="flex items-center gap-1 text-amber-600">
                   <Loader2 className="w-3 h-3 animate-spin" /> A guardar
                 </span>
+              ) : erro ? (
+                <span className="text-red-600 normal-case tracking-normal font-semibold">● Não guardado — {erro}</span>
+              ) : readOnly ? (
+                <span className="text-gray-500">Só consulta</span>
               ) : orcamento.existe ? (
                 <span className="text-green-600">● Guardado</span>
               ) : (
@@ -184,6 +192,18 @@ export function ObraTab({ imovelId, imovelNome }) {
       </div>
 
       <div className="p-4 sm:p-6 space-y-4">
+        {readOnly && (
+          <div className="flex items-start gap-2 text-xs rounded-lg p-3 border bg-amber-50 border-amber-200 text-amber-800">
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>Só consulta: o teu perfil não permite alterar este orçamento, por isso nada do que escreveres aqui é guardado.</span>
+          </div>
+        )}
+        {erro && (
+          <div className="flex items-start gap-2 text-xs rounded-lg p-3 border bg-red-50 border-red-200 text-red-800">
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>As últimas alterações não foram guardadas ({erro}). Não feches esta ficha sem copiar os valores.</span>
+          </div>
+        )}
         {/* Painel BDI (colapsável) */}
         {showSettings && (
           <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">

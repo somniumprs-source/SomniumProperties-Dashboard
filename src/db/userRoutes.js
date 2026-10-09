@@ -249,6 +249,7 @@ router.get('/me', async (req, res) => {
       areas: ROLE_AREAS[u.role] || [],
       modules: ROLE_MODULES[u.role] || [],
       investidorId,
+      pode_editar: !!u.pode_editar,
     })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -557,6 +558,34 @@ async function getAccessibleIds(userId, entidade) {
     [userId, entidade]
   )
   return new Set(r.rows.map(x => x.entidade_id))
+}
+
+/**
+ * Escrita de um parceiro com `users.pode_editar`: só em caminhos amarrados a
+ * um imóvel a que tem acesso (tabela `acessos`). Em /imoveis/:id/... a
+ * verificação do acesso é do restrictByAccess (que também recusa criar e
+ * apagar); análises e visitas não vivem sob /imoveis, por isso o imóvel dono
+ * é resolvido aqui. `req.path` é relativo a /api/crm (onde o guard é montado).
+ * Espelho de parceiroPodeEscrever em supabase/functions/crm/index.ts.
+ */
+export async function parceiroPodeEscrever(req, u) {
+  if (!u.pode_editar || u.role !== 'parceiro') return false
+  const [seg, id] = req.path.split('/').filter(Boolean)
+  if (seg === 'imoveis') return !!id && !NON_ID_SEGS.has(id)
+  let imovelId = null
+  if (seg === 'analises' && id) {
+    imovelId = (await pool.query('SELECT imovel_id FROM analises WHERE id = $1', [id])).rows[0]?.imovel_id || null
+  } else if (seg === 'visitas' && id) {
+    imovelId = (await pool.query('SELECT imovel_id FROM visitas WHERE id = $1', [id])).rows[0]?.imovel_id || null
+  } else if (seg === 'visitas' && req.method === 'POST') {
+    imovelId = req.body?.imovel_id || null
+  }
+  if (!imovelId) return false
+  const r = await pool.query(
+    "SELECT 1 FROM acessos WHERE user_id = $1 AND entidade = 'imovel' AND entidade_id = $2",
+    [u.id, imovelId]
+  )
+  return r.rowCount > 0
 }
 
 /**

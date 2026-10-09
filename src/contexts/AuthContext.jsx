@@ -39,6 +39,7 @@ export function AuthProvider({ children }) {
         cor: j.cor || '#C9A84C',
         role: j.role, areas: j.areas || [], modules: j.modules || [],
         investidorId: j.investidorId || null,
+        pode_editar: !!j.pode_editar,
       })
     } catch { setProfile(null) }
   }, [])
@@ -105,6 +106,9 @@ export function AuthProvider({ children }) {
       investidorId: profile?.investidorId || null,
       isInvestidor: role === 'investidor',
       isReadOnly: role === 'investidor' || role === 'parceiro',
+      // Imóveis: a equipa interna edita sempre; um parceiro só com `pode_editar`
+      // (e só nos imóveis que lhe foram partilhados — o servidor é que valida).
+      podeEditarImoveis: !(role === 'investidor' || role === 'parceiro') || (role === 'parceiro' && !!profile?.pode_editar),
       canAccess: (area) => role === 'admin' || areas.includes(area),
       signIn, signOut,
       refreshProfile,

@@ -142,16 +142,21 @@ try {
   })
 
   // ── Gestão de utilizadores e camadas de acesso ──
-  const { default: userRoutes, accessRouter, requireRole, requireModule, requireModuleOrOwnInvestidor, restrictByAccess, restrictProjetosAccess, resolveAppUser, RECORD_RESTRICTED_ROLES } = await import('./src/db/userRoutes.js')
+  const { default: userRoutes, accessRouter, requireRole, requireModule, requireModuleOrOwnInvestidor, restrictByAccess, restrictProjetosAccess, resolveAppUser, parceiroPodeEscrever, RECORD_RESTRICTED_ROLES } = await import('./src/db/userRoutes.js')
   app.use('/api/users', userRoutes)
   app.use('/api/acessos', accessRouter)
   // Só consulta para roles externos: por agora só a equipa interna altera
   // dados — parceiros e investidores veem o que lhes foi partilhado mas não
   // criam, editam nem apagam nada (espelho em supabase/functions/crm).
+  // Exceção: parceiro com `users.pode_editar` edita os imóveis que lhe foram
+  // partilhados (ficha, obra, análises, visitas) — ver parceiroPodeEscrever.
   app.use('/api/crm', async (req, res, next) => {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next()
     const u = await resolveAppUser(req).catch(() => null)
-    if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return res.status(403).json({ error: 'Acesso só de consulta' })
+    if (u && RECORD_RESTRICTED_ROLES.has(u.role)) {
+      const ok = await parceiroPodeEscrever(req, u).catch(() => false)
+      if (!ok) return res.status(403).json({ error: 'Acesso só de consulta' })
+    }
     next()
   })
   // Camadas de acesso do CRM — montadas ANTES do router CRM para correrem primeiro.
