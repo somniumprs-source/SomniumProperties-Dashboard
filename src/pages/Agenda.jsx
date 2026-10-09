@@ -230,8 +230,8 @@ function TarefaModal({ modal, saving, onClose, onSave, onDelete }) {
         <Modal.Footer>
           {onDelete && <Button variant="secondary" onClick={() => { if (window.confirm('Eliminar esta tarefa (e o evento no Google Calendar)?')) onDelete() }}><Trash2 className="w-4 h-4" /> Eliminar</Button>}
           <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-          {t?.id && !concluida(t) && <Button variant="secondary" onClick={() => submeter({ status: 'Concluída' })} loading={saving}><Check className="w-4 h-4" /> Concluir</Button>}
-          <Button variant="primary" onClick={() => submeter()} loading={saving} disabled={!f.tarefa.trim()}>Guardar</Button>
+          {t?.id && !concluida(t) && <Button variant="secondary" onClick={() => submeter({ status: 'Concluída' })} loading={saving} disabled={!f.categoria}><Check className="w-4 h-4" /> Concluir</Button>}
+          <Button variant="primary" onClick={() => submeter()} loading={saving} disabled={!f.tarefa.trim() || !f.categoria}>Guardar</Button>
         </Modal.Footer>
       }>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -255,7 +255,7 @@ function TarefaModal({ modal, saving, onClose, onSave, onDelete }) {
           </select>
         </div>
         <div>
-          <label className={rotulo}>Categoria</label>
+          <label className={rotulo}>Categoria *</label>
           <select value={f.categoria || ''} onChange={e => set('categoria', e.target.value)} className={campo}>
             <option value="">Selecionar...</option>
             {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}

@@ -118,6 +118,13 @@ export async function deleteGCalEvent(gcal, calendarId, gcalEventId) {
 
 // ── PULL: Google Calendar → Tarefas ─────────────────────────
 
+// Eventos que ficam só no calendário: deslocações (bilhetes que o Gmail põe
+// no calendário, ex: "Bus to Coimbra") e blocos livres.
+const RE_SO_CALENDARIO = /^\s*((bus|train|flight|comboio|autocarro|voo)\s+(to|para|de)\b|(viagem|desloca[cç][aã]o)\b|bloco\s+livre\b)/i
+export function soCalendario(event) {
+  return event.eventType === 'fromGmail' || RE_SO_CALENDARIO.test(event.summary || '')
+}
+
 /**
  * Sincroniza eventos do GCal para a tabela tarefas.
  * - Eventos novos (sem match por gcal_event_id) → cria tarefa
@@ -154,6 +161,8 @@ export async function pullGCalToTarefas(gcal, calendarId, { days = 30 } = {}) {
       // uma tarefa nova, ex: "Exportar conversas WhatsApp" x5). Recorrência de
       // tarefas faz-se pelo catálogo (tarefas_templates), não pelo calendário.
       if (event.recurringEventId) { skipped++; continue }
+      // Deslocações e blocos livres ficam só no calendário, não são tarefas.
+      if (soCalendario(event)) { skipped++; continue }
 
       const eventId = event.id
       const inicio = event.start?.dateTime || event.start?.date || null
