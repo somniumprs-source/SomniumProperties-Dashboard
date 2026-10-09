@@ -28,21 +28,18 @@ import { REGIOES } from '../constants.js'
 
 const FUNCIONARIOS = ['João Abreu', 'Alexandre Mendes']
 const AMBOS = 'João Abreu, Alexandre Mendes'
-const CATEGORIAS = [
-  'Cold Call', 'Pesquisa de Imóveis', 'Estudo de Mercado',
-  'Follow Up Consultores', 'Follow Up Investidores',
-  'Reunião Investidores', 'Reunião de Equipa Somnium',
-  'Reunião com Parceiros', 'Visita', 'Visita a Obra', 'Proposta',
-  'Apresentação de Negócios', 'Negociações',
-  'SOP / Formação', 'Planeamento', 'Implementação com IA',
-  'Análise de Negócio', 'Contacto Consultores',
-  'Networking / Eventos', 'Gestão Financeira', 'Outros',
+// Categorias por departamento. Região só nas que estão amarradas a um imóvel.
+const GRUPOS_CATEGORIAS = [
+  { grupo: 'Comercial — Imóveis', regiao: true, itens: ['Pesquisa de Imóveis', 'Call de Imóveis Anunciados', 'Follow-up de Imóveis', 'Análise de Negócio', 'Proposta e Negociação'] },
+  { grupo: 'Visitas', regiao: true, itens: ['Visita a Potencial Oportunidade', 'Visita Go/No Go', 'Visita Pré-Obra', 'Visita de Acompanhamento', 'Visita de Fim de Obra', 'Visita com Investidores'] },
+  { grupo: 'Comercial — Consultores', regiao: false, itens: ['Prospeção de Consultores', 'Reunião com Consultores'] },
+  { grupo: 'Comercial — Investidores', regiao: false, itens: ['Call a Investidores', 'Follow-up de Investidores', 'Reunião com Investidores', 'Apresentação de Negócio a Investidores', 'Networking / Eventos'] },
+  { grupo: 'Operações — Projeto', regiao: true, itens: ['Documentação do Imóvel', 'Licenciamento e Câmara', 'Escrituras e Contratos', 'Seguros e Serviços', 'Venda do Imóvel'] },
+  { grupo: 'Financeiro', regiao: false, itens: ['Departamento Financeiro', 'Contabilidade'] },
+  { grupo: 'Administração', regiao: false, itens: ['Reunião de Equipa', 'Planeamento', 'Processos e SOP', 'Plataforma e IA'] },
 ]
-const CATEGORIAS_COM_REGIAO = new Set([
-  'Cold Call', 'Pesquisa de Imóveis', 'Estudo de Mercado', 'Follow Up Consultores', 'Contacto Consultores',
-  'Visita', 'Visita a Obra', 'Análise de Negócio', 'Proposta', 'Negociações',
-  'Apresentação de Negócios', 'Networking / Eventos',
-])
+const CATEGORIAS = GRUPOS_CATEGORIAS.flatMap(g => g.itens)
+const CATEGORIAS_COM_REGIAO = new Set(GRUPOS_CATEGORIAS.filter(g => g.regiao).flatMap(g => g.itens))
 const STATUS_OPTIONS = ['A fazer', 'Em andamento', 'Concluída', 'Atrasada']
 const STATUS_COLOR = { 'A fazer': 'bg-gray-100 text-gray-600', 'Em andamento': 'bg-blue-100 text-blue-700', 'Concluída': 'bg-green-100 text-green-700', 'Atrasada': 'bg-red-100 text-red-600' }
 const concluida = t => t.status === 'Concluída' || t.status === 'Concluida'
@@ -258,7 +255,12 @@ function TarefaModal({ modal, saving, onClose, onSave, onDelete }) {
           <label className={rotulo}>Categoria *</label>
           <select value={f.categoria || ''} onChange={e => set('categoria', e.target.value)} className={campo}>
             <option value="">Selecionar...</option>
-            {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+            {GRUPOS_CATEGORIAS.map(g => (
+              <optgroup key={g.grupo} label={g.grupo}>
+                {g.itens.map(c => <option key={c} value={c}>{c}</option>)}
+              </optgroup>
+            ))}
+            {f.categoria && !CATEGORIAS.includes(f.categoria) && <option value={f.categoria}>{f.categoria}</option>}
           </select>
         </div>
         {CATEGORIAS_COM_REGIAO.has(f.categoria) ? (

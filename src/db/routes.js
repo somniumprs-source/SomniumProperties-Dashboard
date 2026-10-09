@@ -2303,7 +2303,7 @@ router.post('/imoveis/:id/proximos-passos', async (req, res) => {
     if (tipo !== 'chamada') return res.status(400).json({ error: 'Tipo de passo inválido' })
     if (!quando || isNaN(new Date(quando))) return res.status(400).json({ error: 'Data e hora são obrigatórias' })
     const tarefaId = await agendarPassoImovel(pool, {
-      imovelId: req.params.id, campo: 'proxima_chamada', prefixo: 'Chamada', categoria: 'Cold Call',
+      imovelId: req.params.id, campo: 'proxima_chamada', prefixo: 'Chamada', categoria: 'Call de Imóveis Anunciados',
       quando, horas: 0.25, user: req.user || null,
     })
     if (!tarefaId) return res.status(404).json({ error: 'Imóvel não encontrado' })

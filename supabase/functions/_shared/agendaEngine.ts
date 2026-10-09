@@ -16,11 +16,11 @@ const PRAZO_ESTUDO_MERCADO_DIAS = 2;
 const DATA_CORTE_ORIGEM = "2026-08-21T22:00:00.000Z";
 
 const ORIGEM_CAMPOS = [
-  { tabela: "consultores", campo: "data_proximo_follow_up", origemTipo: "consultor", categoria: "Follow Up Consultores", duracaoHoras: 0.5, tituloPrefix: "Follow-up", historico: false },
-  { tabela: "investidores", campo: "data_proxima_acao", origemTipo: "investidor", categoria: "Follow Up Investidores", duracaoHoras: 0.5, tituloPrefix: "Próxima ação", historico: true },
-  { tabela: "imoveis", campo: "data_visita", origemTipo: "imovel", categoria: "Visita", duracaoHoras: 1.5, tituloPrefix: "Visita", historico: false },
-  { tabela: "imoveis", campo: "data_proposta", origemTipo: "imovel", categoria: "Proposta", duracaoHoras: 1, tituloPrefix: "Proposta", historico: true },
-  { tabela: "imoveis", campo: "data_follow_up", origemTipo: "imovel", categoria: "Follow Up Consultores", duracaoHoras: 0.5, tituloPrefix: "Follow-up imóvel", historico: true },
+  { tabela: "consultores", campo: "data_proximo_follow_up", origemTipo: "consultor", categoria: "Prospeção de Consultores", duracaoHoras: 0.5, tituloPrefix: "Follow-up", historico: false },
+  { tabela: "investidores", campo: "data_proxima_acao", origemTipo: "investidor", categoria: "Follow-up de Investidores", duracaoHoras: 0.5, tituloPrefix: "Próxima ação", historico: true },
+  { tabela: "imoveis", campo: "data_visita", origemTipo: "imovel", categoria: "Visita a Potencial Oportunidade", duracaoHoras: 1.5, tituloPrefix: "Visita", historico: false },
+  { tabela: "imoveis", campo: "data_proposta", origemTipo: "imovel", categoria: "Proposta e Negociação", duracaoHoras: 1, tituloPrefix: "Proposta", historico: true },
+  { tabela: "imoveis", campo: "data_follow_up", origemTipo: "imovel", categoria: "Follow-up de Imóveis", duracaoHoras: 0.5, tituloPrefix: "Follow-up imóvel", historico: true },
 ];
 
 function hojeISO(): string {
@@ -67,7 +67,7 @@ export async function gerarCadeiasAngariacao() {
     );
     await pool.query(
       `INSERT INTO tarefas (id, tarefa, categoria, status, prioridade, user_id, tempo_horas, origem_tipo, origem_id, origem_campo)
-       VALUES ($1,$2,'Cold Call','A fazer','alta',NULL,1,'imovel',$3,'cadeia_cold_call')`,
+       VALUES ($1,$2,'Call de Imóveis Anunciados','A fazer','alta',NULL,1,'imovel',$3,'cadeia_cold_call')`,
       [idColdCall, `Cold Call — ${im.nome}`, im.id],
     );
     criadas += 2;
@@ -92,7 +92,7 @@ export async function gerarEstudoDeMercado() {
     const id = crypto.randomUUID();
     await pool.query(
       `INSERT INTO tarefas (id, tarefa, categoria, status, prioridade, data_limite, user_id, tempo_horas, origem_tipo, origem_id, origem_campo)
-       VALUES ($1,$2,'Estudo de Mercado','A fazer','alta',$3,NULL,1.5,'imovel',$4,'estudo_mercado_vvr')`,
+       VALUES ($1,$2,'Análise de Negócio','A fazer','alta',$3,NULL,1.5,'imovel',$4,'estudo_mercado_vvr')`,
       [id, `Estudo de Mercado — ${im.nome}`, dataLimite, im.id],
     );
     criadas++;
@@ -145,7 +145,7 @@ export async function gerarElaboracaoProposta() {
     const id = crypto.randomUUID();
     await pool.query(
       `INSERT INTO tarefas (id, tarefa, categoria, status, prioridade, user_id, tempo_horas, origem_tipo, origem_id, origem_campo)
-       VALUES ($1,$2,'Proposta','A fazer','alta',NULL,2,'imovel',$3,'elaboracao_proposta')`,
+       VALUES ($1,$2,'Proposta e Negociação','A fazer','alta',NULL,2,'imovel',$3,'elaboracao_proposta')`,
       [id, `Elaboração de Proposta — ${im.nome}`, im.id],
     );
     criadas++;
@@ -224,7 +224,7 @@ export async function agendarFollowUpImovel(imovelId: string, user: { id?: strin
   await pool.query(
     `INSERT INTO tarefas (id, tarefa, categoria, status, prioridade, data_limite, inicio, fim, user_id, funcionario,
                           tempo_horas, regiao, origem_tipo, origem_id, origem_campo)
-     VALUES ($1,$2,'Follow Up Consultores','A fazer','alta',$3,$3,$3,$4,$5,0.5,$6,'imovel',$7,'data_follow_up')`,
+     VALUES ($1,$2,'Follow-up de Imóveis','A fazer','alta',$3,$3,$3,$4,$5,0.5,$6,'imovel',$7,'data_follow_up')`,
     [id, titulo, data, user?.id || null, user?.nome || null, im.regiao || null, imovelId],
   );
   return id;
@@ -298,7 +298,7 @@ export async function sincronizarTarefaVisita(visita: any, { apagada = false, us
   if (apagada || visita.estado === 'cancelada') return fecharPassoImovel({ imovelId: visita.imovel_id, campo, feito: false })
   if (visita.estado === 'realizada') return fecharPassoImovel({ imovelId: visita.imovel_id, campo, feito: true })
   return agendarPassoImovel({
-    imovelId: visita.imovel_id, campo, prefixo: 'Visita', categoria: 'Visita',
+    imovelId: visita.imovel_id, campo, prefixo: 'Visita', categoria: 'Visita a Potencial Oportunidade',
     quando: visita.data_hora, horas: 1.5, comRegiao: true, user,
   })
 }

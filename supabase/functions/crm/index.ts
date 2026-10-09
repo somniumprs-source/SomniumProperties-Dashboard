@@ -2745,7 +2745,7 @@ app.post("/imoveis/:id/proximos-passos", async (c: any) => {
     if (tipo !== "chamada") return c.json({ error: "Tipo de passo inválido" }, 400);
     if (!quando || isNaN(new Date(quando).getTime())) return c.json({ error: "Data e hora são obrigatórias" }, 400);
     const tarefaId = await agendarPassoImovel({
-      imovelId: c.req.param("id"), campo: "proxima_chamada", prefixo: "Chamada", categoria: "Cold Call",
+      imovelId: c.req.param("id"), campo: "proxima_chamada", prefixo: "Chamada", categoria: "Call de Imóveis Anunciados",
       quando, horas: 0.25, user: await resolveCrmUser(c),
     });
     if (!tarefaId) return c.json({ error: "Imóvel não encontrado" }, 404);

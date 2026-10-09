@@ -60,7 +60,7 @@ export async function agendarFollowUpImovelManual(imovelId: string, { semSucesso
   await pool.query(
     `INSERT INTO tarefas (id, tarefa, categoria, status, prioridade, data_limite, inicio, fim, user_id, funcionario,
                           tempo_horas, regiao, origem_tipo, origem_id, origem_campo)
-     VALUES ($1,$2,'Follow Up Consultores','A fazer','alta',$3,$4,$5,$6,$7,0.5,$8,'imovel',$9,'data_follow_up')`,
+     VALUES ($1,$2,'Follow-up de Imóveis','A fazer','alta',$3,$4,$5,$6,$7,0.5,$8,'imovel',$9,'data_follow_up')`,
     [id, titulo, data, inicio, fim, user?.id || null, user?.nome || null, im.regiao || null, imovelId]
   )
   return id

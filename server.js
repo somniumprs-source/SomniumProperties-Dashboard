@@ -5010,28 +5010,26 @@ app.get('/api/time-tracking', async (req, res) => {
 
     // ── Por tipo de actividade (normalizado) ──
     const CATEGORIAS = {
-      'Cold Call': /cold call/i,
+      'Call de Imóveis Anunciados': /cold call|discovery call/i,
       'Pesquisa de Imóveis': /pesquisa.*im[oó]ve/i,
-      'Estudo de Mercado': /estudo.*mercado/i,
-      'Follow Up Consultores': /follow.*up.*consult/i,
-      'Follow Up Investidores': /follow.*up.*invest|contacto.*invest/i,
-      'Reunião Investidores': /reuni[ãa]o.*invest|call.*invest/i,
-      'Reunião de Equipa Somnium': /reuni[ãa]o.*(semanal|lu[ií]s|parceria|equipa)/i,
-      'Visita': /visita/i,
-      'Proposta': /proposta/i,
-      'Apresentação de Negócios': /apresenta[çc][ãa]o|revis[ãa]o.*apresenta/i,
-      'SOP / Formação': /sop|forma[çc][ãa]o/i,
-      'Planeamento': /planeamento|an[aá]lise.*semanal|defini[çc][ãa]o|contabiliza/i,
-      'Implementação com IA': /dashboard|claude.*code|notion|crm|tech|otimiza[çc][ãa]o.*notion|implementa[çc][ãa]o.*claude/i,
-      'Análise de Negócio': /an[aá]lise.*neg[oó]cio|analise.*potencial/i,
-      'Contacto Consultores': /contacto.*consult|cold.*call.*consult/i,
+      'Prospeção de Consultores': /consult/i,
+      'Follow-up de Investidores': /follow.*up.*invest|contacto.*invest/i,
+      'Reunião com Investidores': /reuni[ãa]o.*invest|call.*invest/i,
+      'Reunião de Equipa': /reuni[ãa]o.*(semanal|lu[ií]s|equipa)/i,
+      'Visita a Potencial Oportunidade': /visita/i,
+      'Proposta e Negociação': /proposta|negocia/i,
+      'Apresentação de Negócio a Investidores': /apresenta[çc][ãa]o/i,
+      'Processos e SOP': /sop|processo/i,
+      'Planeamento': /planeamento|an[aá]lise.*semanal|defini[çc][ãa]o/i,
+      'Plataforma e IA': /dashboard|claude|crm|plataforma|otimiza[çc][ãa]o/i,
+      'Análise de Negócio': /an[aá]lise|estudo.*mercado|vvr/i,
     }
     const porCategoria = {}
     for (const t of tarefasValidas) {
       // Usar categoria guardada na DB; fallback para regex se vazia
       let cat = t.categoria || null
       if (!cat) {
-        cat = 'Outros'
+        cat = 'Sem categoria'
         for (const [nome, regex] of Object.entries(CATEGORIAS)) {
           if (regex.test(t.tarefa)) { cat = nome; break }
         }
@@ -5086,12 +5084,10 @@ app.get('/api/time-tracking', async (req, res) => {
     const taxaProdutividade = totalHoras > 0 ? round2(horasConcluidas / totalHoras * 100) : null
 
     // Horas por tipo de actividade comercial (para CAC refinado)
-    const horasProspeccao = round2((porCategoria['Cold Call']?.horas ?? 0) + (porCategoria['Pesquisa de Imóveis']?.horas ?? 0) + (porCategoria['Contacto Consultores']?.horas ?? 0))
-    const horasAnalise = round2((porCategoria['Estudo de Mercado']?.horas ?? 0) + (porCategoria['Análise de Negócio']?.horas ?? 0))
-    const horasRelacional = round2((porCategoria['Follow Up Consultores']?.horas ?? 0) + (porCategoria['Follow Up Investidores']?.horas ?? 0) +
-      (porCategoria['Reunião Investidores']?.horas ?? 0))
-    const horasGestao = round2((porCategoria['Planeamento']?.horas ?? 0) + (porCategoria['SOP / Formação']?.horas ?? 0) +
-      (porCategoria['Implementação com IA']?.horas ?? 0) + (porCategoria['Reunião de Equipa Somnium']?.horas ?? 0))
+    const horasProspeccao = round2((porCategoria['Pesquisa de Imóveis']?.horas ?? 0) + (porCategoria['Call de Imóveis Anunciados']?.horas ?? 0) + (porCategoria['Prospeção de Consultores']?.horas ?? 0))
+    const horasAnalise = round2((porCategoria['Análise de Negócio']?.horas ?? 0))
+    const horasRelacional = round2((porCategoria['Follow-up de Imóveis']?.horas ?? 0) + (porCategoria['Reunião com Consultores']?.horas ?? 0) + (porCategoria['Call a Investidores']?.horas ?? 0) + (porCategoria['Follow-up de Investidores']?.horas ?? 0) + (porCategoria['Reunião com Investidores']?.horas ?? 0))
+    const horasGestao = round2((porCategoria['Planeamento']?.horas ?? 0) + (porCategoria['Processos e SOP']?.horas ?? 0) + (porCategoria['Plataforma e IA']?.horas ?? 0) + (porCategoria['Reunião de Equipa']?.horas ?? 0))
 
     // Status das tarefas
     const statusTarefas = { aFazer: 0, emAndamento: 0, concluida: 0, atrasada: 0 }
