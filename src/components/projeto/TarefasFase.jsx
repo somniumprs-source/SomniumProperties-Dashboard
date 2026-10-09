@@ -2,11 +2,13 @@
  * Tarefas de uma fase do projeto: checklist dentro da tarefa (com o documento
  * do imóvel que já veio do Comercial), tarefas opcionais que se ativam quando
  * são precisas, e bloqueio de conclusão enquanto a checklist estiver incompleta.
+ * Um item com espaço (slot) também deixa carregar o documento a partir daqui:
+ * fica guardado nos documentos do imóvel, junto dos restantes.
  * A percentagem da fase é calculada no servidor (src/db/projetoTarefas.js).
  */
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CheckCircle2, Circle, Trash2, ChevronRight, Plus, FileText } from 'lucide-react'
+import { CheckCircle2, Circle, Trash2, ChevronRight, Plus, FileText, Upload } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { Button } from '../ui/Button.jsx'
@@ -31,7 +33,7 @@ function docsPorSlot(fotos) {
 
 const fmtData = iso => (iso ? new Date(iso).toLocaleDateString('pt-PT') : '')
 
-export function TarefasFase({ fase, negocioId, fotosImovel, readOnly, onChange }) {
+export function TarefasFase({ fase, negocioId, imovelId, fotosImovel, readOnly, onChange }) {
   const toast = useToast()
   const [novaTarefa, setNovaTarefa] = useState('')
   const tarefas = fase.tarefas || []
@@ -61,6 +63,23 @@ export function TarefasFase({ fase, negocioId, fotosImovel, readOnly, onChange }
     return true
   }
 
+  // Carrega um ficheiro para os documentos do imóvel, ligado ao espaço (slot) do item.
+  async function carregarDocumento(slot, files) {
+    if (!imovelId || !files?.length) return
+    const fd = new FormData()
+    fd.append('folder', 'documentos')
+    fd.append('slot', slot)
+    for (const f of files) fd.append('fotos', f)
+    const r = await apiFetch(`/api/crm/imoveis/${imovelId}/fotos`, { method: 'POST', body: fd, timeoutMs: 120000 }).catch(() => null)
+    if (!r?.ok) {
+      const err = await r?.json().catch(() => ({}))
+      toast?.(err?.error || 'Erro ao carregar o documento', 'error', 4000)
+      return
+    }
+    toast?.('Documento guardado nos documentos do imóvel', 'success', 3000)
+    onChange()
+  }
+
   async function adicionarTarefa() {
     if (!novaTarefa.trim()) return
     if (await pedido(`/api/crm/projetos/fases/${fase.id}/tarefas`, 'POST', { descricao: novaTarefa.trim() }, 'Erro ao adicionar tarefa')) setNovaTarefa('')
@@ -71,7 +90,8 @@ export function TarefasFase({ fase, negocioId, fotosImovel, readOnly, onChange }
       <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">Tarefas ({fase.tarefas_concluidas}/{fase.tarefas_total})</p>
       <div className="space-y-1.5 mb-2">
         {ativas.map(t => (
-          <TarefaItem key={t.id} t={t} readOnly={readOnly} docs={docs} investidores={investidores} pedido={pedido} />
+          <TarefaItem key={t.id} t={t} readOnly={readOnly} docs={docs} investidores={investidores} pedido={pedido}
+            onCarregar={imovelId ? carregarDocumento : null} />
         ))}
         {ativas.length === 0 && <p className="text-[11px] text-gray-400 italic">Sem tarefas.</p>}
       </div>
@@ -106,7 +126,7 @@ export function TarefasFase({ fase, negocioId, fotosImovel, readOnly, onChange }
   )
 }
 
-function TarefaItem({ t, readOnly, docs, investidores, pedido }) {
+function TarefaItem({ t, readOnly, docs, investidores, pedido, onCarregar }) {
   const ch = lerChecklist(t.checklist)
   const [aberta, setAberta] = useState(false)
   const obrig = ch ? ch.itens.filter(i => i.obrigatoria) : []
@@ -178,7 +198,14 @@ function TarefaItem({ t, readOnly, docs, investidores, pedido }) {
                       </label>
                       {i.slot && (doc
                         ? <a href={doc.path} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-brand-gold hover:underline"><FileText className="w-3 h-3" />{doc.name}</a>
-                        : <span className="text-[11px] text-gray-400">sem documento no Comercial</span>)}
+                        : <span className="text-[11px] text-gray-400">sem documento</span>)}
+                      {i.slot && !readOnly && onCarregar && (
+                        <label className="inline-flex items-center gap-1 text-[11px] text-gray-500 hover:text-brand-gold cursor-pointer">
+                          <Upload className="w-3 h-3" />{doc ? 'Carregar nova versão' : 'Carregar'}
+                          <input type="file" className="hidden"
+                            onChange={e => { const fs = Array.from(e.target.files || []); e.target.value = ''; onCarregar(i.slot, fs) }} />
+                        </label>
+                      )}
                       {est.feito && est.por && <span className="text-[10px] text-gray-400">· {est.por}, {fmtData(est.em)}</span>}
                       {!readOnly ? (
                         <input type="text" defaultValue={est.nota || ''} placeholder="Nota"

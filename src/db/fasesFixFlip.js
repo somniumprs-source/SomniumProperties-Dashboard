@@ -255,6 +255,7 @@ export const FASES_CAEP = [
         { k: 'certidao_aru', t: 'Pedir à solicitadora que inicie o processo de obtenção da certidão ARU e indique o custo associado' },
         { k: 'pedido', t: 'Pedido de vistoria à câmara' },
         { k: 'auto', t: 'Auto de vistoria com o nível de conservação inicial (antes de qualquer obra)' },
+        { k: 'certidao_emitida', t: 'Certidão ARU emitida', slot: 'certidao_aru' },
       ] },
       { t: 'Autorização do condomínio', opcional: true, checklist: [
         { k: 'assembleia', t: 'Assembleia de condóminos' },

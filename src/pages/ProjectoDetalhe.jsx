@@ -336,7 +336,7 @@ export function ProjectoDetalhe() {
                   </>
                 : <p className="text-sm text-gray-400 py-8 text-center">Sem imóvel associado a este projeto.</p>
             )}
-            {tab === 'fases' && <TabFases fases={fasesFiltradas} onChange={load} readOnly={isReadOnly} negocioId={id} fotosImovel={imovel?.fotos} />}
+            {tab === 'fases' && <TabFases fases={fasesFiltradas} onChange={load} readOnly={isReadOnly} negocioId={id} imovelId={imovel?.id} fotosImovel={imovel?.fotos} />}
             {tab === 'obras' && (
               <TabObras
                 imovel={imovel} negocio={negocio} negocioId={id}
@@ -548,18 +548,18 @@ function TabObras({ imovel, negocio, negocioId, fases, fotos, fracaoSel, isWhole
 // ════════════════════════════════════════════════════════════════
 // TAB: FASES & TAREFAS
 // ════════════════════════════════════════════════════════════════
-function TabFases({ fases, onChange, readOnly, negocioId, fotosImovel }) {
+function TabFases({ fases, onChange, readOnly, negocioId, imovelId, fotosImovel }) {
   if (fases.length === 0) {
     return <p className="text-center text-sm text-gray-400 py-8">Sem fases criadas. Inicializa-as no topo da página.</p>
   }
   return (
     <div className="space-y-3">
-      {fases.map(f => <FaseAccordion key={f.id} fase={f} onChange={onChange} readOnly={readOnly} negocioId={negocioId} fotosImovel={fotosImovel} />)}
+      {fases.map(f => <FaseAccordion key={f.id} fase={f} onChange={onChange} readOnly={readOnly} negocioId={negocioId} imovelId={imovelId} fotosImovel={fotosImovel} />)}
     </div>
   )
 }
 
-function FaseAccordion({ fase, onChange, readOnly, negocioId, fotosImovel }) {
+function FaseAccordion({ fase, onChange, readOnly, negocioId, imovelId, fotosImovel }) {
   const toast = useToast()
   const [open, setOpen] = useState(fase.estado === 'em_curso')
   const [novaDespesa, setNovaDespesa] = useState({ movimento: '', valor: '', data: '', categoria: 'Material' })
@@ -726,7 +726,7 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId, fotosImovel }) {
           </div>
 
           {/* Tarefas (com checklist e tarefas opcionais) */}
-          <TarefasFase fase={fase} negocioId={negocioId} fotosImovel={fotosImovel} onChange={onChange} />
+          <TarefasFase fase={fase} negocioId={negocioId} imovelId={imovelId} fotosImovel={fotosImovel} onChange={onChange} />
 
           {/* Despesas detalhadas (F2.6) */}
           <div>
