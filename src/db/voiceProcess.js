@@ -41,7 +41,7 @@ Devolve SEMPRE JSON com exactamente este schema:
   "hora_inicio": "HH:MM ou null",
   "hora_fim": "HH:MM ou null",
   "duracao_horas": numero (default 1 se nao especificado),
-  "categoria": "Follow-up Consultor|Visita|Análise|Proposta|Documentação|Reunião|Obra|Outro",
+  "categoria": "Pesquisa de Imóveis|Call de Imóveis Anunciados|Follow-up de Imóveis|Análise de Negócio|Proposta e Negociação|Visita a Potencial Oportunidade|Visita Go/No Go|Visita Pré-Obra|Visita de Acompanhamento|Visita de Fim de Obra|Visita com Investidores|Prospeção de Consultores|Reunião com Consultores|Call a Investidores|Follow-up de Investidores|Reunião com Investidores|Apresentação de Negócio a Investidores|Networking / Eventos|Documentação do Imóvel|Licenciamento e Câmara|Escrituras e Contratos|Seguros e Serviços|Venda do Imóvel|Departamento Financeiro|Contabilidade|Reunião de Equipa|Planeamento|Processos e SOP|Plataforma e IA" (escolhe exactamente uma destas),
   "novo_estado": "estado pipeline ou null",
   "canal": "chamada|whatsapp|null",
   "preencher_data_visita": true|false (true se for visita a imovel),
@@ -55,7 +55,7 @@ REGRAS DE INTERPRETAÇÃO:
 - Se diz "durante 2 horas" → duracao=2
 - Se diz "sexta-feira" → calcular a data exacta YYYY-MM-DD
 - Se diz "amanhã" → data de amanha
-- Se diz "visita ao imovel X" → preencher_data_visita=true + TAREFA categoria Visita
+- Se diz "visita ao imovel X" → preencher_data_visita=true + TAREFA categoria Visita a Potencial Oportunidade
 - Se diz "ligar ao consultor X" → preencher_data_chamada=true + INTERACAO/TAREFA
 - Se diz "follow up feito" → registar como ja realizado (INTERACAO passada)
 - Se diz "nota ao imovel/consultor" → NOTA_IMOVEL ou NOTA_CONSULTOR
@@ -226,7 +226,7 @@ TODAS as tarefas devem ser sincronizadas com Google Calendar.`,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tarefa: parsed.descricao || text,
-          categoria: parsed.categoria || 'Outro',
+          categoria: parsed.categoria || null,
           funcionario,
           inicio, fim,
         })
@@ -238,7 +238,7 @@ TODAS as tarefas devem ser sincronizadas com Google Calendar.`,
       await pgQuery(
         `INSERT INTO tarefas (id, tarefa, status, categoria, funcionario, inicio, fim, created_at, updated_at)
          VALUES ($1, $2, 'A fazer', $3, $4, $5, $6, $7, $7)`,
-        [tarefaId, parsed.descricao || text, parsed.categoria || 'Outro', funcionario, inicio, fim, now]
+        [tarefaId, parsed.descricao || text, parsed.categoria || null, funcionario, inicio, fim, now]
       )
     }
 

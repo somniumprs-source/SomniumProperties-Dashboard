@@ -145,11 +145,18 @@ export async function pullGCalToTarefas(gcal: any, calendarId: string, { days = 
       const { rows: [existing] } = await pool.query("SELECT * FROM tarefas WHERE gcal_event_id = $1", [eventId]);
 
       if (cancelled) {
-        if (existing && existing.status !== "Concluida") {
-          await pool.query(
-            "UPDATE tarefas SET status = $1, gcal_synced_at = $2, updated_at = $3 WHERE id = $4",
-            ["Concluida", new Date().toISOString(), new Date().toISOString(), existing.id],
-          );
+        // Evento apagado no GCal: a tarefa que já estava concluída fica como
+        // está (mantém as horas); a que nasceu de um registo do CRM (follow-up,
+        // visita…) fecha; a tarefa manual ainda por fazer é apagada também.
+        if (existing && !["Concluída", "Concluida"].includes(existing.status)) {
+          if (existing.origem_tipo) {
+            await pool.query(
+              "UPDATE tarefas SET status = $1, gcal_synced_at = $2, updated_at = $3 WHERE id = $4",
+              ["Concluída", new Date().toISOString(), new Date().toISOString(), existing.id],
+            );
+          } else {
+            await pool.query("DELETE FROM tarefas WHERE id = $1", [existing.id]);
+          }
           updated++;
         }
         continue;

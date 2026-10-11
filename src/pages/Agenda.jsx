@@ -137,7 +137,8 @@ export function Agenda({ embutido = false }) {
     // Em produção o DELETE da tarefa não apaga o evento: apaga-se primeiro no GCal,
     // senão o próximo pull voltava a criar a tarefa.
     if (tarefa.gcal_event_id) {
-      await apiFetch(`/api/calendar/events/${encodeURIComponent(tarefa.gcal_event_id)}`, { method: 'DELETE' }).catch(() => {})
+      const g = await apiFetch(`/api/calendar/events/${encodeURIComponent(tarefa.gcal_event_id)}`, { method: 'DELETE' }).catch(() => null)
+      if (!g?.ok) throw new Error('Não foi possível apagar o evento no Google Calendar. A tarefa não foi eliminada; tenta de novo.')
     }
     const r = await apiFetch(`/api/tarefas/${tarefa.id}`, { method: 'DELETE' })
     if (!r.ok) throw new Error('Falha ao eliminar')
