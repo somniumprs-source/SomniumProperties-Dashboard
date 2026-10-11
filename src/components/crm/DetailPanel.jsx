@@ -18,9 +18,9 @@ import { ProximosPassos } from './ProximosPassos.jsx'
 import { ESTADOS_IMOVEIS, eFaseFollowUp, limpaEstado } from '../../constants/pipelineImoveis.js'
 
 // Leads do consultor: só os imóveis que ele enviou por referência, anunciados
-// ou off-market. 'Referência' é a designação antiga da mesma origem.
-const ORIGENS_REFERENCIA = ['Referência por consultores', 'Referência']
-const leadsPorReferencia = imoveis => (imoveis || []).filter(i => ORIGENS_REFERENCIA.includes(i.origem))
+// ou off-market. A origem 'Referência' é outra coisa: leads vindas de quem não
+// é consultor.
+const leadsPorReferencia = imoveis => (imoveis || []).filter(i => i.origem === 'Referência por consultores')
 
 // A ficha está a pôr o imóvel numa fase de follow-up onde ele ainda não estava.
 const entraEmFollowUp = (form, data) => eFaseFollowUp(form?.estado) && limpaEstado(form.estado) !== limpaEstado(data?.estado)

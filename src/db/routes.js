@@ -252,8 +252,8 @@ const CLASSE_LABEL = { A: 'Parceiro', B: 'Activo', C: 'Em desenvolvimento', D: '
 // Imóveis que contam para o consultor (leads, qualidade, classificação): só os
 // que ele enviou por referência, anunciados ou off-market. Um imóvel que a
 // Somnium encontrou num portal não conta para o consultor que o tem anunciado.
-// 'Referência' é a designação antiga da mesma origem.
-const SQL_ORIGEM_REFERENCIA = "origem IN ('Referência por consultores', 'Referência')"
+// A origem 'Referência' é outra coisa: leads vindas de quem não é consultor.
+const SQL_ORIGEM_REFERENCIA = "origem = 'Referência por consultores'"
 
 function qualidadeImovel(estado) {
   const clean = (estado || '').replace(/^\d+-\s*/, '').trim()
