@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Header } from '../components/layout/Header.jsx'
 import { KanbanBoard } from '../components/crm/KanbanBoard.jsx'
 import { MOTIVOS_NAO_INTERESSA_PADRAO } from '../components/crm/detailPanelConstants.js'
@@ -687,6 +687,7 @@ export function CRM() {
   const [transicao, setTransicao] = useState(null) // { id, newColumn, requisitos } | null — janela de registo ao mudar de fase
 
   const toast = useToast()
+  const queryClient = useQueryClient()
   const searchTimer = useRef(null)
   const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores', 'Construtores': 'empreiteiros' }[tab]
 
@@ -1063,12 +1064,21 @@ export function CRM() {
 
   async function handleDelete(id) {
     if (!confirm('Tens a certeza que queres apagar este registo?')) return
+    // Tira já a linha da lista (sem esperar pelo servidor nem pelo re-fetch);
+    // se o pedido falhar, o load() repõe o que está na BD.
+    queryClient.setQueriesData({ queryKey: ['crm-list', tab] }, old => {
+      if (!old?.items) return old
+      const items = old.items.filter(i => i.id !== id)
+      return { ...old, items, total: items.length }
+    })
     try {
-      await apiFetch(`/api/crm/${endpoint}/${id}`, { method: 'DELETE' })
+      const r = await apiFetch(`/api/crm/${endpoint}/${id}`, { method: 'DELETE' })
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao apagar')
       toast('Registo apagado', 'success')
       load()
     } catch (e) {
-      toast('Erro ao apagar', 'error')
+      toast(e.message || 'Erro ao apagar', 'error')
+      load()
     }
   }
 

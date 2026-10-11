@@ -133,7 +133,21 @@ const _crmAuthClient = CRM_AUTH_CONFIGURED
   )
   : null;
 
-async function resolveCrmUser(c: any): Promise<any | null> {
+// Memoizado por pedido: os middlewares (audit, só-consulta, requireModule,
+// restrictByAccess) e os handlers chamam isto em cadeia — sem memo, cada pedido
+// fazia 3-5 idas seguidas ao Supabase Auth (getUser) + outros tantos SELECT a
+// `users`, o que tornava lento qualquer clique (notório no Apagar). Guarda-se a
+// promise no contexto do pedido; nada passa de um pedido para o seguinte.
+function resolveCrmUser(c: any): Promise<any | null> {
+  let p = c.get("crmUserPromise");
+  if (!p) {
+    p = resolveCrmUserUncached(c);
+    c.set("crmUserPromise", p);
+  }
+  return p;
+}
+
+async function resolveCrmUserUncached(c: any): Promise<any | null> {
   if (!_crmAuthClient) return null;
   const h = c.req.header("authorization");
   const token = (h?.startsWith("Bearer ") ? h.slice(7) : null) || c.req.query("token");
