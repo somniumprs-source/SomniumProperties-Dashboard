@@ -11,73 +11,14 @@ import { buscarOportunidadesIdealista } from './apifyIdealista.js'
 
 const TIMEZONE = 'Europe/Lisbon'
 
-// ── Follow-up config por classe ─────────────────────────────
-const FOLLOWUP_RULES = {
-  A: { dias: [7, 10, 15] },
-  B: { dias: [10, 15] },
-  C: { dias: [15] },
-  D: { dias: [15] },
-}
-
-// Consultores que já dão acesso a off-market ou estão em parceria não entram
-// na regra do follow-up: o contacto com eles não segue cadência automática.
-// Quem já tem o próximo contacto marcado à mão também fica de fora: a rotina
-// não lhe muda a data.
-const ESTATUTOS_SEM_FOLLOW_UP = ['Acesso imoveis Off market', 'Consultores em Parceria']
-
-// ── JOB 1: Follow-up diário (08:00 Europe/Lisbon) ──────────
-// Actualiza apenas a data de próximo follow-up por classe; o envio
-// automático de mensagens (agente WhatsApp) foi removido.
+// ── JOB 1: Follow-up diário (08:00) — DESLIGADO ─────────────
+// Escrevia sozinho a data do próximo follow-up de cada consultor, conforme a
+// classe. Desligado a 11/10/2026: o próximo contacto passa a ser sempre marcado
+// por quem regista o contacto (contactoPessoa), nunca aparece uma data que
+// ninguém escolheu. A função fica vazia porque o agendamento de produção
+// (cron-followup) e a rota manual ainda a chamam.
 async function runFollowUp() {
-  console.log('[cron] Follow-up diário — a correr')
-  try {
-    const { rows: consultores } = await pool.query(
-      `SELECT * FROM consultores WHERE estado_avaliacao != 'Inativo'
-       AND COALESCE(estatuto, '') NOT IN (${ESTATUTOS_SEM_FOLLOW_UP.map(e => `'${e}'`).join(', ')})
-       AND NOT EXISTS (SELECT 1 FROM tarefas t WHERE t.origem_tipo = 'consultor' AND t.origem_id = consultores.id
-                         AND t.origem_campo = 'proximo_contacto' AND t.status NOT IN ('Concluída', 'Concluida'))`
-    )
-    const { rows: interacoes } = await pool.query(
-      'SELECT consultor_id, MAX(data_hora) as ultima FROM consultor_interacoes GROUP BY consultor_id'
-    )
-    const ultimaInteracao = {}
-    for (const i of interacoes) ultimaInteracao[i.consultor_id] = new Date(i.ultima)
-
-    const now = new Date()
-
-    for (const c of consultores) {
-      const classe = c.classificacao || 'D'
-      const rules = FOLLOWUP_RULES[classe]
-      if (!rules) continue
-
-      // Calcular dias desde último contacto
-      const ultima = ultimaInteracao[c.id] || (c.updated_at ? new Date(c.updated_at) : new Date(c.created_at))
-      const diasSem = Math.floor((now - ultima) / 86400000)
-
-      // Verificar se está na janela de follow-up
-      const needsFollowUp = rules.dias.some(d => diasSem >= d)
-      if (!needsFollowUp) continue
-
-      // Verificar se já houve follow-up recente (últimas 48h)
-      const { rows: [recentFU] } = await pool.query(
-        "SELECT id FROM consultor_interacoes WHERE consultor_id = $1 AND direcao = 'Enviado' AND data_hora > $2",
-        [c.id, new Date(now - 48 * 3600000).toISOString()]
-      )
-      if (recentFU) continue
-
-      // Actualizar próximo follow-up
-      const proximoDias = rules.dias[0]
-      const proximo = new Date(now.getTime() + proximoDias * 86400000)
-      await pool.query(
-        'UPDATE consultores SET data_proximo_follow_up = $1, updated_at = $2 WHERE id = $3',
-        [proximo.toISOString().slice(0, 10), now.toISOString(), c.id]
-      )
-    }
-
-    console.log('[cron] Follow-up diário concluído')
-  } catch (e) {
-    console.error('[cron] Erro follow-up:', e.message)
-  }
+  console.log('[cron] Follow-up diário desligado — o próximo contacto marca-se à mão')
 }
 
 // ── JOB 2: Relatório diário Pré-aprovação (19:00) ──────────
@@ -378,9 +319,6 @@ async function runArquivoRelatoriosObra() {
 
 // ── Registar jobs ───────────────────────────────────────────
 export function startCronJobs() {
-  // Follow-up diário às 08:00
-  cron.schedule('0 8 * * *', runFollowUp, { timezone: TIMEZONE })
-  console.log('[cron] Follow-up diário registado → 08:00 Europe/Lisbon')
 
   // Relatório diário Pré-aprovação às 19:00
   cron.schedule('0 19 * * *', runRelatorioDiario, { timezone: TIMEZONE })

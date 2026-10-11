@@ -37,6 +37,25 @@ const PESSOAS = {
 }
 
 const eData = v => /^\d{4}-\d{2}-\d{2}$/.test(v || '')
+
+// Cada operação mexe em várias tabelas (tarefa, assuntos, interação, espelhos):
+// ou fica tudo gravado ou nada. Dentro de uma transação já aberta (quem chama
+// passou uma ligação, não o pool) limita-se a correr.
+async function emTransacao(pool, fn) {
+  if (typeof pool.release === 'function' || typeof pool.idleCount !== 'number') return fn(pool)
+  const cx = await pool.connect()
+  try {
+    await cx.query('BEGIN')
+    const r = await fn(cx)
+    await cx.query('COMMIT')
+    return r
+  } catch (e) {
+    await cx.query('ROLLBACK').catch(() => {})
+    throw e
+  } finally {
+    cx.release()
+  }
+}
 const rotuloDe = (cfg, fase) => (cfg.fasesFollowUp.includes(fase) ? 'Follow-up' : 'Próximo contacto')
 
 async function carregarPessoa(pool, tipo, id) {
@@ -158,7 +177,11 @@ export async function lerContactoPessoa(pool, tipo, id) {
 // assuntos (opcional): lista completa — substitui a que lá está.
 // juntar (opcional): assuntos a acrescentar aos que já lá estão.
 // quando (opcional): instante ISO com hora marcada; sem ele é o dia inteiro.
-export async function agendarContactoPessoa(pool, tipo, id, { data, quando = null, assuntos, juntar, user = null } = {}) {
+export async function agendarContactoPessoa(poolOuCx, tipo, id, { data, quando = null, assuntos, juntar, user = null } = {}) {
+  return emTransacao(poolOuCx, pool => agendarContactoPessoaTx(pool, tipo, id, { data, quando, assuntos, juntar, user }))
+}
+
+async function agendarContactoPessoaTx(pool, tipo, id, { data, quando = null, assuntos, juntar, user = null } = {}) {
   const p = await carregarPessoa(pool, tipo, id)
   if (!p) return null
   if (!eData(data)) throw new Error('Indica a data do contacto')
@@ -193,7 +216,11 @@ export async function agendarContactoPessoa(pool, tipo, id, { data, quando = nul
 // novos: assuntos que surgiram na conversa e não estavam marcados.
 // proximo: { data, quando } do contacto seguinte; os assuntos que ficaram por
 // tratar seguem para ele. Sem sucesso: nada foi tratado, segue tudo.
-export async function registarContactoPessoa(pool, tipo, id, {
+export async function registarContactoPessoa(poolOuCx, tipo, id, opcoes = {}) {
+  return emTransacao(poolOuCx, pool => registarContactoPessoaTx(pool, tipo, id, opcoes))
+}
+
+async function registarContactoPessoaTx(pool, tipo, id, {
   resultado, quando = null, canal = 'Chamada', notas = '', finalidade = null, tratados = [], novos = [], proximo = null, user = null,
 } = {}) {
   const p = await carregarPessoa(pool, tipo, id)
@@ -281,7 +308,11 @@ export async function lerContactosDoImovel(pool, imovelId) {
 // regista). Se não tem, é marcado para `data` (null se também não houver data).
 // As tarefas de follow-up ou de chamada que o imóvel tivesse em nome próprio
 // fecham-se, para não ficarem duas.
-export async function juntarImovelAoContacto(pool, imovelId, { data = null, quando = null, mover = false, user = null } = {}) {
+export async function juntarImovelAoContacto(poolOuCx, imovelId, { data = null, quando = null, mover = false, user = null } = {}) {
+  return emTransacao(poolOuCx, pool => juntarImovelAoContactoTx(pool, imovelId, { data, quando, mover, user }))
+}
+
+async function juntarImovelAoContactoTx(pool, imovelId, { data = null, quando = null, mover = false, user = null } = {}) {
   const { rows: [im] } = await pool.query('SELECT id, consultor_id FROM imoveis WHERE id = $1', [imovelId])
   if (!im?.consultor_id) return null
   const p = await carregarPessoa(pool, 'consultor', im.consultor_id)

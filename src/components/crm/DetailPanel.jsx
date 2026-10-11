@@ -978,7 +978,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       </div>
 
       {type === 'Imóveis' && <ProximosPassos imovelId={id} imovel={data} onAbrirTab={setActiveTab} onUpdate={aposFollowUp} onNavigate={onNavigate} />}
-      {type === 'Consultores' && <ContactoPessoa tipo="consultor" pessoaId={id} imoveis={data?.imoveis} onNavigate={onNavigate} onUpdate={loadData} />}
+      {type === 'Consultores' && <ContactoPessoa tipo="consultor" pessoaId={id} imoveis={data?.imoveis} regiao={data?.regiao} onNavigate={onNavigate} onUpdate={loadData} />}
       {type === 'Investidores' && <ContactoPessoa tipo="investidor" pessoaId={id} notaAntiga={data?.proxima_acao} onNavigate={onNavigate} onUpdate={loadData} />}
       {type === 'Imóveis' && <DealBreakersPanel imovelId={id} imovel={data} onAbrirTab={setActiveTab} onUpdate={loadData} />}
       {type === 'Imóveis' && transicao && (

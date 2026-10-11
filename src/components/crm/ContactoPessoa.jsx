@@ -6,10 +6,15 @@
  * Calendar — com os imóveis a tratar como assuntos. Daqui agenda-se, dá-se
  * como feito ou regista-se "sem sucesso"; o que não ficou tratado segue para o
  * contacto seguinte. O histórico junta os contactos novos e os registos antigos.
+ *
+ * No contacto feito com um consultor regista-se também, sem sair daqui, o que
+ * ele enviou a seguir à chamada: cada oportunidade cria o imóvel em
+ * «Pré-aprovação», já ligado a ele como referência, e fica como assunto do
+ * contacto. A gravação da conversa, se houver, anexa-se no mesmo passo.
  */
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Phone, RefreshCw, Check, X, ChevronDown, ChevronUp } from 'lucide-react'
+import { Phone, RefreshCw, Check, X, ChevronDown, ChevronUp, Mic, Upload, Plus } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useRefreshOnMutation } from '../../hooks/useRefreshOnMutation.js'
 import { inputClass, fmtQuando, fmtDia, emDias, agoraLocal, comHora } from './passosUtil.js'
@@ -54,8 +59,44 @@ function AssuntosEditor({ itens, setItens, opcoes }) {
   )
 }
 
+const OPORTUNIDADE_VAZIA = { nome: '', link: '', preco: '', tipologia: '', tipo: 'Market' }
+
+// Oportunidades que o consultor enviou a seguir à chamada: o mínimo para o
+// imóvel entrar em «Pré-aprovação»; o resto da ficha completa-se depois.
+function OportunidadesEditor({ itens, setItens }) {
+  const set = (i, k, v) => setItens(itens.map((o, j) => (j === i ? { ...o, [k]: v } : o)))
+  return (
+    <div className="rounded-lg border border-dashed border-yellow-300 bg-white/60 p-2 grid gap-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold text-gray-700">Oportunidades enviadas nesta chamada</p>
+        <span className="text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 bg-blue-50 text-blue-700">entram em Pré-aprovação</span>
+      </div>
+      {itens.map((o, i) => (
+        <div key={i} className="grid grid-cols-2 sm:grid-cols-[1.4fr_1.2fr_6.5rem_5rem_7.5rem_auto] gap-1.5 items-center">
+          <input type="text" value={o.nome} onChange={e => set(i, 'nome', e.target.value)} placeholder="Nome ou morada *" className={inputClass} aria-label={`Oportunidade ${i + 1}: nome ou morada`} />
+          <input type="url" value={o.link} onChange={e => set(i, 'link', e.target.value)} placeholder="Link (se houver)" className={inputClass} aria-label={`Oportunidade ${i + 1}: link`} />
+          <input type="number" min="0" step="any" value={o.preco} onChange={e => set(i, 'preco', e.target.value)} onWheel={e => e.target.blur()} placeholder="Preço €" className={inputClass} aria-label={`Oportunidade ${i + 1}: preço`} />
+          <input type="text" value={o.tipologia} onChange={e => set(i, 'tipologia', e.target.value)} placeholder="T2…" className={inputClass} aria-label={`Oportunidade ${i + 1}: tipologia`} />
+          <select value={o.tipo} onChange={e => set(i, 'tipo', e.target.value)} className={inputClass} aria-label={`Oportunidade ${i + 1}: tipo`}>
+            <option value="Market">Anunciado</option>
+            <option value="Off-Market">Off-market</option>
+          </select>
+          <button type="button" onClick={() => setItens(itens.filter((_, j) => j !== i))} aria-label={`Retirar oportunidade ${i + 1}`} className="justify-self-start text-gray-400 hover:text-red-600">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ))}
+      <button type="button" onClick={() => setItens([...itens, { ...OPORTUNIDADE_VAZIA }])}
+        className="justify-self-start inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border border-gray-200 bg-white text-gray-600 hover:bg-gray-50">
+        <Plus className="w-3 h-3" /> {itens.length ? 'outra oportunidade' : 'registar oportunidade'}
+      </button>
+    </div>
+  )
+}
+
 // modo: 'agendar' (marcar ou mudar o contacto), 'feito' ou 'sem_sucesso'.
-function ContactoForm({ tipo, pessoaId, modo, proximo, rotulo, opcoes, onCancel, onDone }) {
+// pessoa: { nome, regiao } — para ligar ao consultor as oportunidades registadas.
+function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, opcoes, onCancel, onDone }) {
   const marcados = proximo?.assuntos || []
   const dataMarcada = String(proximo?.quando || '').slice(0, 10)
   const [data, setData] = useState(modo === 'agendar' && dataMarcada ? dataMarcada : modo === 'feito' ? '' : emDias(1))
@@ -67,26 +108,68 @@ function ContactoForm({ tipo, pessoaId, modo, proximo, rotulo, opcoes, onCancel,
   const [tratados, setTratados] = useState(marcados.map(a => a.id))
   const [novos, setNovos] = useState([])
   const [notas, setNotas] = useState('')
+  const [oportunidades, setOportunidades] = useState([])
+  const criadas = useRef({}) // índice → id do imóvel já criado (se o resto falhar, não se cria outra vez)
+  const [audio, setAudio] = useState(null)
   const [saving, setSaving] = useState(false)
   const [erro, setErro] = useState('')
+  const comExtras = modo === 'feito' && tipo === 'consultor'
+
+  // Cria em «Pré-aprovação» os imóveis das oportunidades e devolve-os como assuntos.
+  async function criarOportunidades() {
+    const assuntos = []
+    for (const [i, o] of oportunidades.entries()) {
+      if (!criadas.current[i]) {
+        const r = await apiFetch('/api/crm/imoveis', {
+          method: 'POST', regiao: pessoa?.regiao || undefined, headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nome: o.nome.trim(), link: o.link.trim() || null, ask_price: o.preco === '' ? null : Number(o.preco),
+            tipologia: o.tipologia.trim() || null, tipo_oportunidade: o.tipo, estado: 'Pré-aprovação',
+            origem: 'Referência por consultores', nome_consultor: pessoa?.nome || null,
+            regiao: pessoa?.regiao || null, data_adicionado: emDias(0),
+          }),
+        })
+        const j = await r.json().catch(() => ({}))
+        if (!r.ok || !j.id) throw new Error(`Oportunidade «${o.nome.trim()}»: ${j.error || 'não foi possível criar o imóvel'}`)
+        criadas.current[i] = j.id
+      }
+      assuntos.push({ imovel_id: criadas.current[i] })
+    }
+    return assuntos
+  }
 
   async function guardar(e) {
     e.preventDefault()
     if (modo !== 'feito' && !data) return setErro('Indica a data.')
     if (modo === 'sem_sucesso' && !notas.trim()) return setErro('Indica o motivo.')
+    if (oportunidades.some(o => !o.nome.trim())) return setErro('Indica o nome ou a morada de cada oportunidade (ou retira a linha vazia).')
+    if (oportunidades.length && !pessoa?.regiao) return setErro('O consultor não tem região (Coimbra ou AMP): preenche-a na ficha antes de registar oportunidades.')
     setErro(''); setSaving(true)
     const limpos = lista => lista.map(a => (a.imovel_id ? { imovel_id: a.imovel_id } : { texto: a.texto }))
     const prox = data ? { data, quando: comHora(data, hora) } : null
+    let novosImoveis = []
+    if (comExtras && oportunidades.length) {
+      try { novosImoveis = await criarOportunidades() } catch (err) { setErro(err.message); setSaving(false); return }
+    }
     const [caminho, corpo] = modo === 'agendar'
       ? ['agendar', { data, quando: comHora(data, hora), assuntos: limpos(assuntos) }]
       : modo === 'sem_sucesso'
         ? ['registar', { resultado: 'Sem sucesso', notas, proximo: prox }]
-        : ['registar', { resultado: 'Feito', quando: quando ? new Date(quando).toISOString() : null, canal, finalidade, notas, tratados, novos: limpos(novos), proximo: prox }]
+        : ['registar', { resultado: 'Feito', quando: quando ? new Date(quando).toISOString() : null, canal, finalidade, notas, tratados, novos: [...limpos(novos), ...novosImoveis], proximo: prox }]
     try {
       const r = await apiFetch(`/api/crm/${ROTA[tipo]}/${pessoaId}/contacto/${caminho}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo),
       })
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao guardar')
+      // Gravação da conversa: fica nas gravações do consultor, transcrita e analisada.
+      if (comExtras && audio) {
+        const fd = new FormData()
+        fd.append('audio', audio)
+        fd.append('titulo', notas.trim().slice(0, 80) || `Contacto ${fmtDia(String(quando || '').slice(0, 10) || emDias(0))}`)
+        fd.append('data_chamada', String(quando || '').slice(0, 10) || emDias(0))
+        const ru = await apiFetch(`/api/crm/consultores/${pessoaId}/gravacoes`, { method: 'POST', body: fd }).catch(() => null)
+        if (!ru?.ok) alert(`O contacto ficou registado, mas a gravação não foi carregada: ${(await ru?.json().catch(() => ({})))?.error || 'erro no envio'}`)
+      }
       onDone?.()
     } catch (err) {
       setErro(err.message)
@@ -142,7 +225,30 @@ function ContactoForm({ tipo, pessoaId, modo, proximo, rotulo, opcoes, onCancel,
             <p className="text-[11px] text-gray-500 mb-1">Outros assuntos que surgiram</p>
             <AssuntosEditor itens={novos} setItens={setNovos} opcoes={opcoes} />
           </div>
+          {comExtras && <OportunidadesEditor itens={oportunidades} setItens={setOportunidades} />}
         </>
+      )}
+
+      {comExtras && (
+        <div>
+          <input type="file" id={`audio-contacto-${pessoaId}`} className="hidden"
+            accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg,.opus,.flac,.mp4,.webm"
+            onChange={e => setAudio(e.target.files?.[0] || null)} />
+          {audio ? (
+            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-yellow-200 bg-yellow-50 text-xs text-yellow-800">
+              <Mic className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate flex-1">{audio.name}</span>
+              <button type="button" onClick={() => setAudio(null)} className="text-yellow-700 hover:text-red-600 shrink-0" aria-label="Retirar gravação">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <label htmlFor={`audio-contacto-${pessoaId}`}
+              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border border-dashed border-gray-300 text-xs text-gray-500 cursor-pointer hover:border-yellow-300 hover:text-yellow-700">
+              <Upload className="w-3.5 h-3.5" /> Anexar gravação da conversa (opcional)
+            </label>
+          )}
+        </div>
       )}
 
       {modo !== 'agendar' && (
@@ -192,7 +298,8 @@ function ContactoForm({ tipo, pessoaId, modo, proximo, rotulo, opcoes, onCancel,
 // usa a lista de todos os imóveis.
 // notaAntiga: texto do antigo campo "Próxima ação" do investidor. Mostra-se até
 // haver contacto marcado e entra como assunto ao agendar (o campo é então limpo).
-export function ContactoPessoa({ tipo, pessoaId, imoveis, notaAntiga, onNavigate, onUpdate }) {
+// regiao: região da pessoa (consultor), para os imóveis das oportunidades registadas.
+export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, onNavigate, onUpdate }) {
   const [modo, setModo] = useState(null) // 'agendar' | 'feito' | 'sem_sucesso'
   const [verHistorico, setVerHistorico] = useState(false)
   const query = useQuery({
@@ -285,7 +392,7 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, notaAntiga, onNavigate
       )}
 
       {modo && (
-        <ContactoForm key={modo} tipo={tipo} pessoaId={pessoaId} modo={modo} rotulo={rotulo} opcoes={opcoes}
+        <ContactoForm key={modo} tipo={tipo} pessoaId={pessoaId} pessoa={{ nome: d.pessoa?.nome, regiao }} modo={modo} rotulo={rotulo} opcoes={opcoes}
           proximo={proximo || (nota && modo === 'agendar' ? { assuntos: [{ texto: nota }] } : null)}
           onCancel={() => setModo(null)} onDone={guardado} />
       )}
