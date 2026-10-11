@@ -39,7 +39,9 @@ function tipoDoPasso(t) {
 // e por isso também é obrigatório.
 // consultor: { nome, quando } quando o imóvel tem consultor; com quando, ele já
 // tem contacto marcado e é preciso escolher entre juntar e antecipar.
-function FollowUpForm({ imovelId, semSucesso, mover = null, consultor = null, motivoInicial = '', onCancel, onDone }) {
+// soContacto: marca só o contacto com o consultor sobre este imóvel — não é
+// follow-up, por isso não muda a fase nem pede motivo.
+function FollowUpForm({ imovelId, semSucesso, mover = null, consultor = null, soContacto = false, motivoInicial = '', onCancel, onDone }) {
   const escolhe = !semSucesso && !!consultor?.quando
   const [juntar, setJuntar] = useState(null) // null = por escolher
   const [data, setData] = useState(emDias(1))
@@ -56,12 +58,19 @@ function FollowUpForm({ imovelId, semSucesso, mover = null, consultor = null, mo
     if (pedeMotivo && !motivo.trim()) return setErro('Indica o motivo.')
     setErro(''); setSaving(true)
     try {
-      const r = await apiFetch(`/api/crm/imoveis/${imovelId}/follow-up`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(escolhe && juntar
-          ? { motivo, juntar: true }
-          : { data, motivo, sem_sucesso: semSucesso, quando: comHora(data, hora), mover_contacto: escolhe }),
-      })
+      const r = soContacto
+        ? await apiFetch(`/api/crm/imoveis/${imovelId}/proximos-passos`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(escolhe && juntar
+              ? { tipo: 'chamada', juntar: true }
+              : { tipo: 'chamada', data, quando: comHora(data, hora), mover_contacto: escolhe }),
+          })
+        : await apiFetch(`/api/crm/imoveis/${imovelId}/follow-up`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(escolhe && juntar
+              ? { motivo, juntar: true }
+              : { data, motivo, sem_sucesso: semSucesso, quando: comHora(data, hora), mover_contacto: escolhe }),
+          })
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao guardar')
       onDone?.()
     } catch (err) {
@@ -78,6 +87,8 @@ function FollowUpForm({ imovelId, semSucesso, mover = null, consultor = null, mo
           ? `Fica registado como feito hoje (${fmtDia(emDias(0))}) sem sucesso e é criada a tarefa para a nova data.`
           : mover
             ? `O imóvel passa para «${mover}» com este motivo${consultor ? ` e entra como assunto no contacto com ${consultor.nome}` : ' e fica com a tarefa de follow-up na agenda'}. A hora é opcional.`
+            : soContacto
+              ? `O imóvel entra como assunto no contacto com ${consultor?.nome}. O imóvel fica na fase onde está. A hora é opcional.`
             : consultor
               ? `O follow-up entra como assunto no contacto com ${consultor.nome}. A hora é opcional.`
               : 'Cria a tarefa de follow-up na agenda para esse dia. A hora é opcional.'}
@@ -110,8 +121,8 @@ function FollowUpForm({ imovelId, semSucesso, mover = null, consultor = null, mo
             ))}
           </div>
         </div>
-        <input type="text" value={motivo} onChange={e => setMotivo(e.target.value)} autoFocus
-          placeholder={semSucesso ? 'Motivo (ex.: não atendeu)' : mover ? 'Motivo (o que tem de mudar)' : 'Motivo (opcional)'} className={inputClass} aria-label="Motivo" />
+        {soContacto ? <span /> : <input type="text" value={motivo} onChange={e => setMotivo(e.target.value)} autoFocus
+          placeholder={semSucesso ? 'Motivo (ex.: não atendeu)' : mover ? 'Motivo (o que tem de mudar)' : 'Motivo (opcional)'} className={inputClass} aria-label="Motivo" />}
         <div className="flex gap-1.5">
           <button type="submit" disabled={saving}
             className="px-3 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-50" style={{ backgroundColor: '#1A1A1A', color: '#C9A84C' }}>
@@ -130,7 +141,7 @@ function FollowUpForm({ imovelId, semSucesso, mover = null, consultor = null, mo
 
 export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate, onNavigate }) {
   const [agendar, setAgendar] = useState(null) // 'chamada' | 'visita'
-  const [followUp, setFollowUp] = useState(null) // 'agendar' | 'sem_sucesso'
+  const [followUp, setFollowUp] = useState(null) // 'agendar' | 'sem_sucesso' | 'contacto'
   const [verHistorico, setVerHistorico] = useState(false)
   const query = useQuery({
     queryKey: ['imovel-proximos-passos', imovelId],
@@ -163,6 +174,7 @@ export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate, onNavig
   const motivoFollowUp = fup.data?.motivo_follow_up || ''
   const temFollowUp = passos.some(t => t.origem_campo === 'data_follow_up')
   const faseFollowUp = faseAoAgendarFollowUp(imovel?.estado)
+  const emFollowUp = faseFollowUp.aplica && !faseFollowUp.mover // fase de follow-up ou Pendentes
 
   async function concluir(t) {
     await apiFetch(`/api/crm/imoveis/${imovelId}/proximos-passos/${t.id}`, { method: 'PUT' })
@@ -180,8 +192,16 @@ export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate, onNavig
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm font-semibold text-gray-800 dark:text-neutral-100">Próximos passos</span>
         <span className="flex flex-wrap gap-1.5">
-          <button type="button" onClick={() => setAgendar('chamada')}
-            className="text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Agendar chamada</button>
+          {/* Com consultor, a chamada é o contacto com ele (um só por pessoa), com o imóvel como assunto. */}
+          {!cont.isFetched ? null : consultor
+            ? !noContacto && (
+              <button type="button" onClick={() => setFollowUp('contacto')}
+                className="text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Agendar contacto</button>
+            )
+            : (
+              <button type="button" onClick={() => setAgendar('chamada')}
+                className="text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Agendar chamada</button>
+            )}
           <button type="button" onClick={() => setAgendar('visita')}
             className="text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Marcar visita</button>
           {faseFollowUp.aplica && (faseFollowUp.mover || !(temFollowUp || noContacto)) && (
@@ -195,7 +215,7 @@ export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate, onNavig
       {noContacto && (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm mt-2">
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 bg-yellow-50 text-yellow-700">
-            <RefreshCw className="w-3 h-3" /> {faseFollowUp.aplica && !faseFollowUp.mover ? 'Follow-up' : 'Próximo contacto'}
+            <RefreshCw className="w-3 h-3" /> {emFollowUp ? 'Follow-up' : 'Próximo contacto'}
           </span>
           <span className="font-medium tabular-nums text-gray-800 dark:text-neutral-100">{fmtQuando(noContacto.quando)}</span>
           <span className="text-xs text-gray-500">no contacto com {consultor?.nome}</span>
@@ -207,6 +227,9 @@ export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate, onNavig
             </button>
           )}
         </div>
+      )}
+      {emFollowUp && motivoFollowUp && !noContacto && !temFollowUp && (
+        <p className="text-xs text-gray-500 mt-1.5">Motivo do follow-up: {motivoFollowUp}</p>
       )}
       {passos.length === 0 ? (
         !noContacto && <p className="text-xs text-gray-400 mt-1.5">Sem próximo passo agendado.</p>
@@ -253,7 +276,8 @@ export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate, onNavig
       {followUp && (
         <FollowUpForm key={followUp} imovelId={imovelId} semSucesso={followUp === 'sem_sucesso'} motivoInicial={motivoFollowUp}
           mover={followUp === 'agendar' ? faseFollowUp.mover : null}
-          consultor={followUp === 'agendar' && consultor ? { nome: consultor.nome, quando: cont.data?.contacto?.quando || null } : null}
+          soContacto={followUp === 'contacto'}
+          consultor={followUp !== 'sem_sucesso' && consultor ? { nome: consultor.nome, quando: cont.data?.contacto?.quando || null } : null}
           onCancel={() => setFollowUp(null)} onDone={followUpGuardado} />
       )}
       {historico.length > 0 && (

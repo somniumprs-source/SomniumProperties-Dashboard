@@ -36,6 +36,9 @@ const campo = (ok, detalhe) => ({ ok: !!ok, detalhe: ok ? detalhe || null : null
 const fotosDe = d => lista(d.imovel.fotos).filter(f => f?.folder !== 'documentos')
 const docSlot = (d, slot) => lista(d.imovel.fotos).some(f => f?.slot === slot)
 const tarefa = (d, teste) => d.tarefas.find(t => teste(t.origem_campo || ''))
+// Próximo contacto agendado: chamada ou follow-up do próprio imóvel, ou o
+// contacto com o consultor em que o imóvel é assunto ('contacto').
+const contactoAgendado = d => { const t = tarefa(d, c => ['proxima_chamada', 'data_follow_up', 'contacto'].includes(c)); return campo(!!t, t ? fmtData(t.inicio || t.data_limite) : null) }
 const visitaRegistada = d => fichaMaisRecente(d.visitas)
 
 // onde: sítio do CRM onde o dado vive. abrir: o que a interface abre para o
@@ -63,7 +66,7 @@ const ITENS = [
 
   // ── Chamada Não Atendida ──
   { fase: 'Chamada Não Atendida', key: 'cna_proxima', titulo: 'Próxima tentativa agendada', onde: 'Próximos passos', abrir: { agendar: 'chamada' },
-    calc: d => { const t = tarefa(d, c => c === 'proxima_chamada'); return campo(!!t, t ? fmtData(t.inicio) : null) } },
+    calc: contactoAgendado },
 
   // ── Pendentes ──
   { fase: 'Pendentes', key: 'pend_data', titulo: 'Data de reativação agendada', onde: 'Próximos passos',
@@ -102,8 +105,8 @@ const ITENS = [
   // ── Enviar proposta ao Proprietário ──
   { fase: 'Enviar proposta ao Proprietário', key: 'ep_data', titulo: 'Proposta enviada', onde: 'Ficha do imóvel', abrir: { tab: 'detalhe' },
     calc: d => campo(tem(d.imovel.data_proposta), fmtData(d.imovel.data_proposta)) },
-  { fase: 'Enviar proposta ao Proprietário', key: 'ep_followup', titulo: 'Follow-up agendado', onde: 'Próximos passos',
-    calc: d => { const t = tarefa(d, c => c === 'data_follow_up'); return campo(!!t, t ? fmtData(t.inicio || t.data_limite) : null) } },
+  { fase: 'Enviar proposta ao Proprietário', key: 'ep_followup', titulo: 'Próximo contacto agendado', onde: 'Próximos passos',
+    calc: contactoAgendado },
   { fase: 'Enviar proposta ao Proprietário', key: 'm_rececao', titulo: 'Receção da proposta confirmada por escrito', manual: 'confirmar' },
 
   // ── Em negociação ──
@@ -125,8 +128,8 @@ const ITENS = [
   // ── Enviar proposta ao investidor ──
   { fase: 'Enviar proposta ao investidor', key: 'ei_envio', titulo: 'Dossier enviado a investidores', onde: 'Matching investidores', abrir: { tab: 'matching' },
     calc: d => campo(d.envios > 0, `${d.envios} envio(s) registado(s)`) },
-  { fase: 'Enviar proposta ao investidor', key: 'ei_followup', titulo: 'Follow-up agendado', onde: 'Próximos passos',
-    calc: d => { const t = tarefa(d, c => c === 'data_follow_up'); return campo(!!t, t ? fmtData(t.inicio || t.data_limite) : null) } },
+  { fase: 'Enviar proposta ao investidor', key: 'ei_followup', titulo: 'Próximo contacto agendado', onde: 'Próximos passos',
+    calc: contactoAgendado },
 
   // ── Follow Up após proposta ──
   { fase: 'Follow Up após proposta', key: 'm_resposta_inv', titulo: 'Resposta dos investidores', manual: 'resposta', opcoes: ['Há interessado', 'Pedem mais informação', 'Sem interesse', 'Sem resposta'] },
@@ -202,7 +205,10 @@ export async function carregarChecklist(pool, imovelId) {
   const [visitas, analises, tarefas, negocios, envios, dup, historico, manuais] = await Promise.all([
     q('SELECT id, data_hora, created_at, estado, ficha FROM visitas WHERE imovel_id = $1', [imovelId]),
     q('SELECT compra, meses, retorno_total, comparaveis FROM analises WHERE imovel_id = $1 ORDER BY activa DESC, updated_at DESC LIMIT 1', [imovelId]),
-    q("SELECT origem_campo, inicio, data_limite, status FROM tarefas WHERE origem_tipo = 'imovel' AND origem_id = $1 ORDER BY created_at DESC", [imovelId]),
+    q(`SELECT origem_campo, inicio, data_limite, status FROM tarefas WHERE origem_tipo = 'imovel' AND origem_id = $1
+       UNION ALL
+       SELECT 'contacto', t.inicio, t.data_limite, t.status FROM contacto_assuntos a JOIN tarefas t ON t.id = a.origem_id
+        WHERE a.origem = 'tarefa' AND a.imovel_id = $1 AND t.origem_campo = 'proximo_contacto'`, [imovelId]),
     q('SELECT movimento, lucro_estimado FROM negocios WHERE imovel_id = $1 AND deleted_at IS NULL', [imovelId]),
     q('SELECT COUNT(*)::int AS c FROM documentos_investidor WHERE imovel_id = $1', [imovelId]),
     q("SELECT COUNT(*)::int AS c FROM imoveis WHERE link = $1 AND id <> $2 AND COALESCE(link, '') <> ''", [imovel.link, imovelId]),

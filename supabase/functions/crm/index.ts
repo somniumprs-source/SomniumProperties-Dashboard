@@ -2825,9 +2825,20 @@ app.get("/imoveis/:id/proximos-passos", async (c: any) => {
 
 app.post("/imoveis/:id/proximos-passos", async (c: any) => {
   try {
-    const { tipo, quando } = await c.req.json().catch(() => ({}));
+    const { tipo, quando, data, juntar, mover_contacto } = await c.req.json().catch(() => ({}));
     if (tipo !== "chamada") return c.json({ error: "Tipo de passo inválido" }, 400);
-    if (!quando || isNaN(new Date(quando).getTime())) return c.json({ error: "Data e hora são obrigatórias" }, 400);
+    // data (só o dia) serve para o contacto com o consultor; a chamada do próprio imóvel pede hora.
+    const soDia = /^\d{4}-\d{2}-\d{2}$/.test(data || "") && !quando;
+    if (!juntar && !soDia && (!quando || isNaN(new Date(quando).getTime()))) return c.json({ error: "Data e hora são obrigatórias" }, 400);
+    // Imóvel com consultor: a chamada é o contacto com ele (um só por pessoa),
+    // com o imóvel como assunto. juntar / mover_contacto: ver a rota do follow-up.
+    const noContacto = await juntarImovelAoContacto(pool, c.req.param("id"), {
+      data: juntar ? null : soDia ? data : new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lisbon" }).format(new Date(quando)),
+      quando: juntar || soDia ? null : quando, mover: !!mover_contacto, user: await resolveCrmUser(c),
+    });
+    if (noContacto) return c.json({ ok: true, tarefa_id: noContacto.tarefa_id, consultor: noContacto.consultor, data_contacto: noContacto.data });
+    if (juntar) return c.json({ error: "O consultor não tem contacto marcado: indica a data" }, 400);
+    if (soDia) return c.json({ error: "Data e hora são obrigatórias" }, 400);
     const tarefaId = await agendarPassoImovel({
       imovelId: c.req.param("id"), campo: "proxima_chamada", prefixo: "Chamada", categoria: "Call de Imóveis Anunciados",
       quando, horas: 0.25, user: await resolveCrmUser(c),

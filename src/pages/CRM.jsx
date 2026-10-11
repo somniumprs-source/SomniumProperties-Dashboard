@@ -435,120 +435,6 @@ function RelatorioInvestidores() {
   )
 }
 
-// ── Follow-up Priority View ──────────────────────────────────
-function FollowUpView({ data, onView, onDelete }) {
-  // Ordenar: vermelho primeiro, depois laranja, depois por dias sem contacto desc, depois sem dados
-  const { sorted, urgentes, atencao, pendentes, ok } = useMemo(() => {
-    const priority = { red: 0, orange: 1, green: 3, null: 2 }
-    const sorted = [...data].sort((a, b) => {
-      const pa = priority[a._alertStatus] ?? 2
-      const pb = priority[b._alertStatus] ?? 2
-      if (pa !== pb) return pa - pb
-      const da = a._diasSemContacto ?? -1
-      const db = b._diasSemContacto ?? -1
-      return db - da
-    })
-    return {
-      sorted,
-      urgentes: sorted.filter(c => c._alertStatus === 'red'),
-      atencao: sorted.filter(c => c._alertStatus === 'orange'),
-      pendentes: sorted.filter(c => !c._alertStatus || c._alertStatus === null),
-      ok: sorted.filter(c => c._alertStatus === 'green'),
-    }
-  }, [data])
-
-  function Section({ title, icon, color, items, borderColor }) {
-    if (items.length === 0) return null
-    return (
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <span className={`w-3 h-3 rounded-full ${color}`} />
-          <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
-          <span className="text-xs text-gray-400">({items.length})</span>
-        </div>
-        <div className="space-y-1.5">
-          {items.map(c => {
-            const agencia = c._agencia || (() => { try { return JSON.parse(c.imobiliaria || '[]').join(', ') } catch { return '' } })()
-            const diasLabel = c._diasSemContacto != null ? `${c._diasSemContacto}d sem contacto` : 'Sem contacto registado'
-            const followUp = c.data_proximo_follow_up
-            const followUpLabel = followUp ? fmtDate(followUp) : null
-            const isOverdue = followUp && new Date(followUp) < new Date()
-            return (
-              <div key={c.id}
-                onClick={() => onView(c.id)}
-                className={`flex items-center gap-3 p-3 bg-white rounded-lg border cursor-pointer hover:shadow-sm transition-all ${borderColor}`}>
-                <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${color}`} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-gray-800 truncate">{c.nome}</span>
-                    {agencia && <span className="text-xs text-gray-400 truncate hidden sm:inline">{agencia}</span>}
-                  </div>
-                  <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                    <span className="text-xs text-gray-500">{diasLabel}</span>
-                    {followUpLabel && (
-                      <span className={`text-xs ${isOverdue ? 'text-red-600 font-medium' : 'text-gray-400'}`}>
-                        Follow-up: {followUpLabel} {isOverdue ? '(atrasado)' : ''}
-                      </span>
-                    )}
-                    {c.contacto && (
-                      <a href={`tel:${c.contacto}`} onClick={e => e.stopPropagation()} className="text-xs text-green-600 hover:underline">
-                        {c.contacto}
-                      </a>
-                    )}
-                  </div>
-                  {c.notas && (
-                    <p className="text-xs text-gray-400 mt-1 truncate max-w-xl">{c.notas.split('\n')[0]}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Badge text={c.estatuto} colorMap={CONS_ESTATUTO_COLOR} />
-                  {c.score_prioridade > 0 && (
-                    <span className="text-xs font-mono font-semibold" style={{ color: '#C9A84C' }}>{c.score_prioridade}</span>
-                  )}
-                  <span className="text-xs text-gray-300">{c._totalImoveis ?? 0} im.</span>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* Resumo */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-red-50 rounded-xl p-3 text-center border border-red-200">
-          <p className="text-2xl font-bold text-red-600">{urgentes.length}</p>
-          <p className="text-xs text-red-500">Sem 1o contacto (&gt;48h)</p>
-        </div>
-        <div className="bg-orange-50 rounded-xl p-3 text-center border border-orange-200">
-          <p className="text-2xl font-bold text-orange-600">{atencao.length}</p>
-          <p className="text-xs text-orange-500">Inativos (&gt;15 dias)</p>
-        </div>
-        <div className="bg-gray-50 rounded-xl p-3 text-center border border-gray-200">
-          <p className="text-2xl font-bold text-gray-600">{pendentes.length}</p>
-          <p className="text-xs text-gray-500">Pendentes</p>
-        </div>
-        <div className="bg-green-50 rounded-xl p-3 text-center border border-green-200">
-          <p className="text-2xl font-bold text-green-600">{ok.length}</p>
-          <p className="text-xs text-green-500">Em dia</p>
-        </div>
-      </div>
-
-      <Section title="Urgente — Sem 1o contacto" color="bg-red-500" borderColor="border-red-200" items={urgentes} />
-      <Section title="Atenção — Inativos há mais de 15 dias" color="bg-orange-500" borderColor="border-orange-200" items={atencao} />
-      <Section title="Pendentes" color="bg-gray-400" borderColor="border-gray-200" items={pendentes} />
-      <Section title="Em dia — Check positivo recente" color="bg-green-500" borderColor="border-green-200" items={ok} />
-
-      {data.length === 0 && (
-        <EmptyState icon={UserCheck} title="Sem consultores" description="Ainda não existem consultores registados." />
-      )}
-    </div>
-  )
-}
-
 // ── Modal: capturar motivo (+ data) ao mover imóvel para Follow UP / Não interessa
 function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
   const isFollowUp = moveModal.type === 'follow_up'
@@ -676,7 +562,8 @@ export function CRM() {
   // automaticamente após ser consumido. Usado pelo fluxo "criar → continuar edit".
   const [detailDefaultEdit, setDetailDefaultEdit] = useState(false)
   const [stats, setStats] = useState(null)
-  const [view, setView] = useUrlState('view', 'kanban') // 'kanban' | 'table'
+  const [viewUrl, setView] = useUrlState('view', 'kanban') // 'kanban' | 'table'
+  const view = viewUrl === 'followups' ? 'kanban' : viewUrl // vista retirada: links antigos caem no Kanban
   const [filters, setFilters] = useUrlFilters()
   const [alertCount, setAlertCount] = useState(0)
   const [consultoresLookup, setConsultoresLookup] = useState([])
@@ -1183,9 +1070,8 @@ export function CRM() {
                   setDetail(null, { replace: true })
                   setEditing(null)
                   if (t.key !== tab) setFilters({})
-                  const followupsOnlyConsultores = view === 'followups' && t.key !== 'Consultores'
                   const relatorioOnlyCertasTabs = view === 'relatorio' && t.key !== 'Consultores' && t.key !== 'Investidores'
-                  if (followupsOnlyConsultores || relatorioOnlyCertasTabs) setView('kanban')
+                  if (relatorioOnlyCertasTabs) setView('kanban')
                 }}
               />
             ))}
@@ -1247,12 +1133,6 @@ export function CRM() {
                     className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'kanban' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
                     Kanban
                   </button>
-                  {tab === 'Consultores' && (
-                    <button onClick={() => setView('followups')}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'followups' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
-                      Follow-ups
-                    </button>
-                  )}
                   {(tab === 'Consultores' || tab === 'Investidores') && (
                     <button onClick={() => setView('relatorio')}
                       className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'relatorio' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
@@ -1363,10 +1243,6 @@ export function CRM() {
               onNavigate={(navType, navId) => { setDetail(null, { replace: true }); setDetailDefaultEdit(false); setTab(navType, { replace: true }); setTimeout(() => setDetail(navId), 150) }} />
           </Suspense>
         ) : (<>
-          {/* Follow-ups View (Consultores only) */}
-          {!loading && editing === null && view === 'followups' && tab === 'Consultores' && (
-            <FollowUpView data={data} onView={setDetail} onDelete={handleDelete} />
-          )}
 
           {/* Relatório View */}
           {!loading && editing === null && view === 'relatorio' && tab === 'Consultores' && (

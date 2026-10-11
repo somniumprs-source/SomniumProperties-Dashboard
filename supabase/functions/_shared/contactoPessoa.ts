@@ -280,8 +280,8 @@ export async function lerContactosDoImovel(pool, imovelId) {
 // dele. Se o consultor já tem contacto marcado, o imóvel junta-se a ele e a
 // data mantém-se — só muda com mover = true (escolha explícita de quem
 // regista). Se não tem, é marcado para `data` (null se também não houver data).
-// A tarefa de follow-up que o imóvel tivesse em nome próprio fecha-se, para
-// não ficarem duas.
+// As tarefas de follow-up ou de chamada que o imóvel tivesse em nome próprio
+// fecham-se, para não ficarem duas.
 export async function juntarImovelAoContacto(pool, imovelId, { data = null, quando = null, mover = false, user = null } = {}) {
   const { rows: [im] } = await pool.query('SELECT id, consultor_id FROM imoveis WHERE id = $1', [imovelId])
   if (!im?.consultor_id) return null
@@ -299,7 +299,7 @@ export async function juntarImovelAoContacto(pool, imovelId, { data = null, quan
   }
   await pool.query(
     `UPDATE tarefas SET status = 'Concluída', updated_at = NOW()
-     WHERE origem_tipo = 'imovel' AND origem_id = $1 AND origem_campo = 'data_follow_up' AND ${ABERTA}`,
+     WHERE origem_tipo = 'imovel' AND origem_id = $1 AND origem_campo IN ('data_follow_up', 'proxima_chamada') AND ${ABERTA}`,
     [imovelId]
   )
   return { tarefa_id: t.id, data: dataFinal, consultor: { id: p.id, nome: p.nome } }

@@ -7,9 +7,8 @@ import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save,
 import { apiFetch, apiFetchJson, openDocument } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { PartilharAcesso } from '../PartilharAcesso.jsx'
-import { FollowUpsSection } from './FollowUpsSection.jsx'
+import { GravacoesConsultor } from './GravacoesConsultor.jsx'
 import { RegistoChamadasTab } from './RegistoChamadasTab.jsx'
-import { ImovelInteracoesSection } from './ImovelInteracoesSection.jsx'
 import { isWholesaling } from '../../lib/modelos.js'
 import { fmtTempoMercado } from '../../lib/tempoMercado.js'
 import { DealBreakersPanel } from './DealBreakersPanel.jsx'
@@ -28,8 +27,6 @@ const entraEmFollowUp = (form, data) => eFaseFollowUp(form?.estado) && limpaEsta
 
 const AnaliseTab = lazy(() => import('../analise/AnaliseTab.jsx').then(m => ({ default: m.AnaliseTab })))
 const ObraTab = lazy(() => import('../obra/ObraTab.jsx').then(m => ({ default: m.ObraTab })))
-const InteracoesTab = lazy(() => import('./InteracoesTab.jsx').then(m => ({ default: m.InteracoesTab })))
-const InteracoesInvestidorTab = lazy(() => import('./InteracoesInvestidorTab.jsx').then(m => ({ default: m.InteracoesInvestidorTab })))
 const MatchingInvestidoresTab = lazy(() => import('./MatchingInvestidoresTab.jsx').then(m => ({ default: m.MatchingInvestidoresTab })))
 const FicheirosTab = lazy(() => import('./FicheirosTab.jsx').then(m => ({ default: m.FicheirosTab })))
 const ChecklistTab = lazy(() => import('./ChecklistTab.jsx').then(m => ({ default: m.ChecklistTab })))
@@ -701,7 +698,6 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
   const [transicao, setTransicao] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
-  const [openContactoForm, setOpenContactoForm] = useState(false)
   // Sugestões para autocomplete (imobiliárias + zonas) — alimentado pelos
   // valores já usados por outros consultores na região activa.
   const [sugestoesTags, setSugestoesTags] = useState({ imobiliarias: [], zonas: [] })
@@ -912,8 +908,6 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
     { key: 'matching', label: 'Matching investidores', icon: '🎯', show: type === 'Imóveis' },
     { key: 'relatorios_imovel', label: 'Relatórios', icon: '📄', show: type === 'Imóveis' },
     { key: 'checklist', label: 'Checklist', icon: '📋', show: type === 'Imóveis' },
-    { key: 'interacoes', label: `Interações (${data?.interacoes?.length ?? 0})`, icon: '💬', show: type === 'Consultores' },
-    { key: 'interacoes_inv', label: 'Chamadas', icon: '📞', show: type === 'Investidores' },
     { key: 'documentos', label: `Documentos (${data?.documentos?.length ?? 0})`, icon: '📎', show: type === 'Investidores' },
     { key: 'dados_empresa', label: 'Dados Empresa', icon: '🏢', show: type === 'Investidores' },
     { key: 'relatorios', label: `Reuniões (${reunioes.length})`, icon: '📄', show: (type === 'Investidores' || type === 'Consultores') },
@@ -972,14 +966,6 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
               <Trash2 className="w-3.5 h-3.5" /> {deleting ? 'A apagar...' : 'Apagar'}
             </button>
           )}
-          {type === 'Consultores' && !editing && (
-            <button onClick={() => { setActiveTab('interacoes'); setOpenContactoForm(true) }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
-              style={{ backgroundColor: '#22c55e', color: '#fff' }}
-              title="Registar contacto efetuado">
-              <PhoneCall className="w-3.5 h-3.5" /> Registar Contacto
-            </button>
-          )}
           {type === 'Imóveis' && !editing && (
             <button onClick={() => openDocument(`/api/crm/imoveis/${id}/relatorio`).catch(e => console.error('[relatorio imovel]', e.message))}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer"
@@ -993,7 +979,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
 
       {type === 'Imóveis' && <ProximosPassos imovelId={id} imovel={data} onAbrirTab={setActiveTab} onUpdate={aposFollowUp} onNavigate={onNavigate} />}
       {type === 'Consultores' && <ContactoPessoa tipo="consultor" pessoaId={id} imoveis={data?.imoveis} onNavigate={onNavigate} onUpdate={loadData} />}
-      {type === 'Investidores' && <ContactoPessoa tipo="investidor" pessoaId={id} onNavigate={onNavigate} onUpdate={loadData} />}
+      {type === 'Investidores' && <ContactoPessoa tipo="investidor" pessoaId={id} notaAntiga={data?.proxima_acao} onNavigate={onNavigate} onUpdate={loadData} />}
       {type === 'Imóveis' && <DealBreakersPanel imovelId={id} imovel={data} onAbrirTab={setActiveTab} onUpdate={loadData} />}
       {type === 'Imóveis' && transicao && (
         <TransicaoFaseModal
@@ -1033,12 +1019,6 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       {type === 'Consultores' && activeTab === 'registo_chamadas' ? (
         <div className="p-4 sm:p-6">
           <RegistoChamadasTab consultorId={data.id} onUpdate={loadData} />
-        </div>
-
-      ) : type === 'Consultores' && activeTab === 'interacoes' ? (
-        <div className="p-4 sm:p-6">
-          <InteracoesTab consultorId={data.id} onUpdate={loadData}
-            autoOpenForm={openContactoForm} onAutoOpenConsumed={() => setOpenContactoForm(false)} />
         </div>
 
       ) : type === 'Imóveis' && activeTab === 'checklist' ? (
@@ -1097,12 +1077,6 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       ) : type === 'Imóveis' && activeTab === 'relatorios_imovel' ? (
         <div className="p-4 sm:p-6">
           <RelatoriosImovelTab imovelId={data.id} estado={data.estado} driveFolderId={data.drive_folder_id} imovelNome={data.nome} />
-        </div>
-
-      /* Chamadas / interações de investidor (Discovery / Follow Up) */
-      ) : type === 'Investidores' && activeTab === 'interacoes_inv' ? (
-        <div className="p-4 sm:p-6">
-          <InteracoesInvestidorTab investidorId={data.id} onUpdate={loadData} />
         </div>
 
       /* Documentos enviados a investidor */
@@ -1231,7 +1205,6 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
             </>}
             {type === 'Investidores' && <>
               {!editing && <InvestidorHero data={data} />}
-              {!editing && <InvestidorProximoPasso data={data} onUpdate={loadData} />}
               {editing
                 ? <InvestidorEditSections data={data} form={form} setField={setField} />
                 : <InvestidorReadSections data={data} />}
@@ -1288,7 +1261,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
           )}
 
           {type === 'Consultores' && data.id && (
-            <FollowUpsSection consultorId={data.id} onUpdate={loadData} />
+            <GravacoesConsultor consultorId={data.id} />
           )}
 
           {/* Relações — Negócios Associados (resumo) */}
@@ -1347,14 +1320,6 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
                 ))}
               </div>
             </div>
-          )}
-
-          {type === 'Imóveis' && data.consultores?.length > 0 && (
-            <ImovelInteracoesSection
-              imovelId={data.id}
-              consultores={data.consultores}
-              onUpdate={loadData}
-            />
           )}
 
           {data.imoveis?.length > 0 && (
@@ -2050,7 +2015,7 @@ function ImovelEditSections({ data, form, setField }) {
     fisica:        ['tipologia','predio_tipo','area_util','area_bruta','area_bruta_dependente','andar','numero_pisos_predio','tem_elevador','ano_construcao','cru','licenca_utilizacao'],
     valores:       ['ask_price','valor_proposta','fee_cedencia','valor_venda_remodelado','custo_estimado_obra','vpt','imi_anual','condominio_mensal_anunciado'],
     legal:         ['artigo_matricial','descricao_predial','fracao','regime_propriedade','certificado_energetico','numero_ce','onus_registados'],
-    pipeline:      ['proprietario_nome','proprietario_nif','proprietario_contacto','motivo_venda_declarado','data_anuncio','modelo_negocio','data_adicionado','data_chamada','data_visita','data_estudo_mercado','data_proposta','data_proposta_aceite','data_follow_up','data_aceite_investidor','motivo_follow_up','notas'],
+    pipeline:      ['proprietario_nome','proprietario_nif','proprietario_contacto','motivo_venda_declarado','data_anuncio','modelo_negocio','data_adicionado','data_chamada','data_visita','data_estudo_mercado','data_proposta','data_proposta_aceite','data_aceite_investidor','notas'],
   }
 
   return <>
@@ -2333,12 +2298,7 @@ function ImovelEditSections({ data, form, setField }) {
       <EF label="Data Estudo Mercado" field="data_estudo_mercado" form={form} set={setField} type="date" />
       <EF label="Data Proposta" field="data_proposta" form={form} set={setField} type="date" />
       <EF label="Data Proposta Aceite" field="data_proposta_aceite" form={form} set={setField} type="date" />
-      {/* Read-only: o follow-up agenda-se e regista-se no bloco "Próximos passos" (topo da ficha). */}
-      <Field label="Data Follow Up (auto — ver Próximos passos)" value={(data.data_follow_up || '').slice(0, 10)} />
       <EF label="Data Aceite Investidor" field="data_aceite_investidor" form={form} set={setField} type="date" />
-      <div className="col-span-2 md:col-span-3">
-        <Field label="Motivo Follow Up (auto — ver Próximos passos)" value={form.motivo_follow_up} />
-      </div>
       <div className="col-span-2 md:col-span-3">
         <label className="text-xs text-gray-400 block mb-1">Notas</label>
         <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={4}
@@ -2375,7 +2335,7 @@ function ImovelReadSections({ data, onNavigate }) {
     fisica:        ['tipologia','predio_tipo','area_util','area_bruta','area_bruta_dependente','andar','numero_pisos_predio','tem_elevador','ano_construcao','cru','licenca_utilizacao'],
     valores:       ['ask_price','valor_proposta','fee_cedencia','valor_venda_remodelado','custo_estimado_obra','vpt','imi_anual','condominio_mensal_anunciado'],
     legal:         ['artigo_matricial','descricao_predial','fracao','regime_propriedade','certificado_energetico','numero_ce','onus_registados'],
-    pipeline:      ['proprietario_nome','proprietario_nif','proprietario_contacto','motivo_venda_declarado','data_anuncio','modelo_negocio','data_adicionado','data_chamada','data_visita','data_estudo_mercado','data_proposta','data_proposta_aceite','data_follow_up','data_aceite_investidor','motivo_follow_up','notas'],
+    pipeline:      ['proprietario_nome','proprietario_nif','proprietario_contacto','motivo_venda_declarado','data_anuncio','modelo_negocio','data_adicionado','data_chamada','data_visita','data_estudo_mercado','data_proposta','data_proposta_aceite','data_aceite_investidor','notas'],
   }
 
   return <>
@@ -2482,9 +2442,7 @@ function ImovelReadSections({ data, onNavigate }) {
       <Field label="Data Estudo Mercado" value={data.data_estudo_mercado} />
       <Field label="Data Proposta" value={data.data_proposta} />
       <Field label="Data Proposta Aceite" value={data.data_proposta_aceite} />
-      <Field label="Data Follow Up" value={data.data_follow_up} />
       <Field label="Data Aceite Investidor" value={data.data_aceite_investidor} />
-      {data.motivo_follow_up && <div className="col-span-2 md:col-span-3"><Field label="Motivo Follow Up" value={data.motivo_follow_up} /></div>}
       {data.notas && <div className="col-span-2 md:col-span-3"><Field label="Notas" value={data.notas} /></div>}
     </Section>
   </>
@@ -2767,119 +2725,13 @@ function MiniDate({ iso }) {
   )
 }
 
-// Card "Próximo passo" — accionável.
-function InvestidorProximoPasso({ data, onUpdate }) {
-  const dataIso = (data.data_proxima_acao || '').slice(0, 10)
-  const today = new Date().toISOString().slice(0, 10)
-  const [reagendarOpen, setReagendarOpen] = useState(false)
-  const [novaData, setNovaData] = useState(dataIso || today)
-  const [busy, setBusy] = useState(false)
-
-  if (!data.proxima_acao && !data.data_proxima_acao) return null
-
-  const atrasado = dataIso && dataIso < today
-  const diasAte = dataIso ? Math.floor((new Date(dataIso) - new Date(today)) / 86400000) : null
-  const acao = (data.proxima_acao || '').toLowerCase()
-  const ActionIcon = acao.includes('call') || acao.includes('lig') ? Phone
-                   : acao.includes('email') || acao.includes('envia') ? Mail
-                   : acao.includes('reuni') ? Calendar
-                   : acao.includes('whats') ? MessageCircle
-                   : Target
-
-  async function reagendar() {
-    if (!novaData || busy) return
-    setBusy(true)
-    try {
-      const r = await apiFetch(`/api/crm/investidores/${data.id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data_proxima_acao: novaData }),
-      })
-      if (!r.ok) throw new Error(await r.text())
-      setReagendarOpen(false)
-      onUpdate?.()
-    } catch (e) { alert('Erro: ' + e.message) }
-    finally { setBusy(false) }
-  }
-
-  async function concluir() {
-    if (busy) return
-    if (!confirm(`Marcar como concluído: "${data.proxima_acao}"?`)) return
-    setBusy(true)
-    try {
-      const r = await apiFetch(`/api/crm/investidores/${data.id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          proxima_acao: null,
-          data_proxima_acao: null,
-          data_ultimo_contacto: today,
-        }),
-      })
-      if (!r.ok) throw new Error(await r.text())
-      onUpdate?.()
-    } catch (e) { alert('Erro: ' + e.message) }
-    finally { setBusy(false) }
-  }
-
-  const cor = atrasado ? 'border-red-200 bg-red-50' : 'border-yellow-200 bg-yellow-50/60'
-  const corBadge = atrasado ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-800'
-
-  return (
-    <div className={`col-span-2 md:col-span-3 rounded-2xl border p-4 ${cor}`}>
-      <div className="flex items-center gap-3">
-        <div className="w-12 h-12 rounded-xl bg-white border border-gray-200 flex items-center justify-center shrink-0 shadow-sm">
-          <ActionIcon className="w-5 h-5 text-gray-600" />
-        </div>
-        {dataIso && <MiniDate iso={dataIso} />}
-        <div className="flex-1 min-w-0">
-          <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-0.5">Próximo passo</p>
-          <p className="text-sm font-bold text-gray-900 truncate">{data.proxima_acao || '—'}</p>
-          {dataIso && (
-            <div className="flex items-center gap-2 mt-1">
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${corBadge}`}>
-                {atrasado
-                  ? `${Math.abs(diasAte)}d atrasado`
-                  : diasAte === 0 ? 'Hoje' : diasAte === 1 ? 'Amanhã' : `Em ${diasAte}d`}
-              </span>
-              <span className="text-[11px] text-gray-500">{fmtDate(dataIso)}</span>
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button onClick={concluir} disabled={busy}
-            className="text-xs px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 inline-flex items-center gap-1.5 shadow-sm">
-            <Check className="w-3.5 h-3.5" /> Concluir
-          </button>
-          <button onClick={() => setReagendarOpen(o => !o)} disabled={busy}
-            className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 inline-flex items-center gap-1.5">
-            <RefreshCw className="w-3.5 h-3.5" /> Reagendar
-          </button>
-        </div>
-      </div>
-      {reagendarOpen && (
-        <div className="mt-3 pt-3 border-t border-yellow-200 flex items-center gap-2">
-          <input type="date" value={novaData} onChange={e => setNovaData(e.target.value)}
-            className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white" />
-          <button onClick={reagendar} disabled={busy || !novaData}
-            className="text-xs px-3 py-1.5 rounded-lg bg-yellow-600 text-white hover:bg-yellow-700 disabled:opacity-50">
-            Guardar
-          </button>
-          <button onClick={() => setReagendarOpen(false)}
-            className="text-xs px-2.5 py-1.5 rounded-lg text-gray-500 hover:bg-gray-100">Cancelar</button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Timeline cronológica enriquecida — eventos chave com ícone, gap em dias e estado (passado/hoje/futuro).
 function InvestidorTimeline({ data }) {
   const today = new Date().toISOString().slice(0, 10)
   const eventos = [
     { key: '1º contacto',     date: data.data_primeiro_contacto, Icon: Users },
     { key: 'Reunião',         date: data.data_reuniao,           Icon: Calendar },
     { key: 'Último contacto', date: data.data_ultimo_contacto,   Icon: PhoneCall },
-    { key: 'Follow-up',       date: data.data_follow_up,         Icon: RefreshCw },
-    { key: 'Próxima acção',   date: data.data_proxima_acao,      Icon: Target },
+    { key: 'Próximo contacto', date: data.data_proxima_acao,     Icon: Target },
   ].filter(e => e.date).sort((a, b) => (a.date || '').localeCompare(b.date || ''))
   if (eventos.length === 0) {
     return <p className="col-span-2 md:col-span-3 text-xs text-gray-400 italic">Sem eventos registados</p>
@@ -2926,7 +2778,7 @@ function InvestidorEditSections({ data, form, setField }) {
     capital:       ['capital_min','capital_max','estrategia','perfil_risco','roi_pretendido','roi_anualizado_pretendido','origem_capital','montante_investido'],
     preferencias:  ['tipo_imovel_preferido','localizacao_preferida','regioes_preferidas','experiencia_imobiliario','equipa_obras'],
     contacto:      ['telemovel','email','preferencia_contacto','nda_assinado'],
-    timeline:      ['data_primeiro_contacto','data_reuniao','data_ultimo_contacto','data_follow_up','data_proxima_acao','proxima_acao'],
+    timeline:      ['data_primeiro_contacto','data_reuniao','data_ultimo_contacto'],
     bloqueios:     ['motivo_nao_aprovacao','motivo_inatividade'],
   }
   const roiOpts = roiOptsFor(form.tipo_principal)
@@ -2989,9 +2841,6 @@ function InvestidorEditSections({ data, form, setField }) {
       <EF label="1º Contacto" field="data_primeiro_contacto" form={form} set={setField} type="date" />
       <EF label="Data Reunião" field="data_reuniao" form={form} set={setField} type="date" />
       <EF label="Último Contacto" field="data_ultimo_contacto" form={form} set={setField} type="date" />
-      <EF label="Data Follow Up" field="data_follow_up" form={form} set={setField} type="date" />
-      <EF label="Próxima Ação Data" field="data_proxima_acao" form={form} set={setField} type="date" />
-      <EF label="Próxima Ação" field="proxima_acao" form={form} set={setField} />
     </Section>
 
     {/* 6. Notas */}
@@ -3043,7 +2892,7 @@ function InvestidorReadSections({ data }) {
     capital:       ['capital_min','capital_max','estrategia','perfil_risco','roi_pretendido','roi_anualizado_pretendido','origem_capital','montante_investido'],
     preferencias:  ['tipo_imovel_preferido','localizacao_preferida','regioes_preferidas','experiencia_imobiliario','equipa_obras'],
     contacto:      ['telemovel','email','preferencia_contacto','nda_assinado'],
-    timeline:      ['data_primeiro_contacto','data_reuniao','data_ultimo_contacto','data_follow_up','data_proxima_acao','proxima_acao'],
+    timeline:      ['data_primeiro_contacto','data_reuniao','data_ultimo_contacto'],
     bloqueios:     ['motivo_nao_aprovacao','motivo_inatividade'],
   }
   return <>

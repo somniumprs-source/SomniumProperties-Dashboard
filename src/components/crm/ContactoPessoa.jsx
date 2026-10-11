@@ -190,7 +190,9 @@ function ContactoForm({ tipo, pessoaId, modo, proximo, rotulo, opcoes, onCancel,
 
 // imoveis: imóveis já ligados à pessoa (para escolher como assunto). Sem eles,
 // usa a lista de todos os imóveis.
-export function ContactoPessoa({ tipo, pessoaId, imoveis, onNavigate, onUpdate }) {
+// notaAntiga: texto do antigo campo "Próxima ação" do investidor. Mostra-se até
+// haver contacto marcado e entra como assunto ao agendar (o campo é então limpo).
+export function ContactoPessoa({ tipo, pessoaId, imoveis, notaAntiga, onNavigate, onUpdate }) {
   const [modo, setModo] = useState(null) // 'agendar' | 'feito' | 'sem_sucesso'
   const [verHistorico, setVerHistorico] = useState(false)
   const query = useQuery({
@@ -217,7 +219,13 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, onNavigate, onUpdate }
   const atrasado = proximo?.quando && new Date(proximo.quando).getTime() < Date.now() - 86400000
   const Icon = rotulo === 'Follow-up' ? RefreshCw : Phone
 
-  function guardado() {
+  const nota = !proximo ? (notaAntiga || '').trim() : ''
+  async function guardado() {
+    if (nota && modo === 'agendar') {
+      await apiFetch(`/api/crm/${ROTA[tipo]}/${pessoaId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ proxima_acao: null }),
+      }).catch(() => {})
+    }
     setModo(null)
     query.refetch()
     onUpdate?.()
@@ -234,7 +242,10 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, onNavigate, onUpdate }
       </div>
 
       {!proximo ? (
-        <p className="text-xs text-gray-400 mt-1.5">Sem contacto marcado.</p>
+        <p className="text-xs text-gray-400 mt-1.5">
+          Sem contacto marcado.
+          {nota && <span className="text-gray-600"> Próxima ação anotada antes: «{nota}». Ao agendar, entra como assunto.</span>}
+        </p>
       ) : (
         <div className="mt-2 grid gap-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
@@ -274,7 +285,8 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, onNavigate, onUpdate }
       )}
 
       {modo && (
-        <ContactoForm key={modo} tipo={tipo} pessoaId={pessoaId} modo={modo} proximo={proximo} rotulo={rotulo} opcoes={opcoes}
+        <ContactoForm key={modo} tipo={tipo} pessoaId={pessoaId} modo={modo} rotulo={rotulo} opcoes={opcoes}
+          proximo={proximo || (nota && modo === 'agendar' ? { assuntos: [{ texto: nota }] } : null)}
           onCancel={() => setModo(null)} onDone={guardado} />
       )}
 

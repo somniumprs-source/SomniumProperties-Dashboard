@@ -63,7 +63,11 @@ export function AgendarPassoModal({ imovel, tipo, destino, onAntes, onCancel, on
           })
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao agendar')
       const quandoTxt = new Date(quando).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-      onDone?.(`${t.feito} para ${quandoTxt}`)
+      // Imóvel com consultor: a chamada entra no contacto com ele (um só por pessoa).
+      const feito = tipo === 'chamada' ? await r.json().catch(() => ({})) : {}
+      onDone?.(feito.consultor
+        ? `O imóvel entrou no contacto com ${feito.consultor.nome} (${String(feito.data_contacto || '').slice(0, 10).split('-').reverse().join('/')})`
+        : `${t.feito} para ${quandoTxt}`)
     } catch (e) {
       setErro(e.message)
     } finally {
