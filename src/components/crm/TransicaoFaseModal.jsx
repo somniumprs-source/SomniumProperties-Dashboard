@@ -16,9 +16,9 @@ const DECISOES_ESPERA = { PERITO: 'Parecer técnico', SEGUNDA_VISITA: 'Segunda v
 const EFEITO_DECISAO = {
   GO: 'O imóvel pode entrar em «Estudo de VVR».',
   NO_GO: 'O imóvel não entra em estudo: passa para «Não interessa», com este motivo.',
-  PERITO: 'O imóvel passa para «Follow UP» até haver parecer. O follow-up vai para a agenda.',
-  SEGUNDA_VISITA: 'O imóvel passa para «Follow UP» até à segunda visita. O follow-up vai para a agenda.',
-  STAND_BY: 'O imóvel passa para «Follow UP». O follow-up vai para a agenda.',
+  PERITO: 'À espera de parecer: escolhe se o imóvel fica em «Pendentes» ou passa a «Follow UP». O follow-up vai para a agenda.',
+  SEGUNDA_VISITA: 'À espera da segunda visita: escolhe se o imóvel fica em «Pendentes» ou passa a «Follow UP». O follow-up vai para a agenda.',
+  STAND_BY: 'Em espera: escolhe se o imóvel fica em «Pendentes» ou passa a «Follow UP». O follow-up vai para a agenda.',
 }
 
 const hoje = () => new Date().toISOString().slice(0, 10)
@@ -53,7 +53,7 @@ export function TransicaoFaseModal({ imovel, destino, requisitos = [], mover = t
   const soVvr = pedeVvr && acoes.size === 1
 
   const [visitaExistente, setVisitaExistente] = useState(null)
-  const [v, setV] = useState({ data: agoraLocal(), decisao: '', area: '', obra: '', motivo: '', proximo: hoje() })
+  const [v, setV] = useState({ data: agoraLocal(), decisao: '', area: '', obra: '', motivo: '', proximo: hoje(), faseEspera: '' })
   const [campos, setCampos] = useState({
     ask_price: imovel?.ask_price || '',
     valor_proposta: imovel?.valor_proposta || '',
@@ -114,6 +114,7 @@ export function TransicaoFaseModal({ imovel, destino, requisitos = [], mover = t
     if (pedeVisita) {
       if (!v.data || !v.decisao || v.area === '' || v.obra === '') return setErro('Preenche a data, a decisão, a área medida e o custo de obra (pode ser 0).')
       if (v.decisao === 'NO_GO' && !v.motivo.trim()) return setErro('Indica o motivo do NO GO.')
+      if (espera && !v.faseEspera) return setErro('Escolhe se o imóvel fica em Pendentes ou passa a Follow UP.')
       if (espera && !v.proximo) return setErro('Indica a data do follow-up.')
     }
     if (pedePreco && !(Number(campos.ask_price) > 0)) return setErro('Indica o preço pedido.')
@@ -132,13 +133,13 @@ export function TransicaoFaseModal({ imovel, destino, requisitos = [], mover = t
         if (espera) {
           const r = await apiFetch(`/api/crm/imoveis/${imovel.id}/follow-up`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ data: v.proximo, motivo: [DECISOES_ESPERA[v.decisao], v.motivo.trim()].filter(Boolean).join(': ') }),
+            body: JSON.stringify({ data: v.proximo, motivo: [DECISOES_ESPERA[v.decisao], v.motivo.trim()].filter(Boolean).join(': '), destino: v.faseEspera }),
           })
           if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao agendar o próximo passo')
           const { estado } = await r.json().catch(() => ({}))
           return onResolvido?.(estado
             ? `Visita registada. O imóvel passou para «${estado}» e o follow-up foi agendado.`
-            : 'Visita registada. O imóvel fica na fase atual e o follow-up foi agendado.')
+            : `Visita registada. O imóvel fica em «${v.faseEspera}» e o follow-up foi agendado.`)
         }
       }
       const extra = {}
@@ -199,6 +200,15 @@ export function TransicaoFaseModal({ imovel, destino, requisitos = [], mover = t
               {(v.decisao === 'NO_GO' || espera) && (
                 <Campo label={v.decisao === 'NO_GO' ? 'Motivo do NO GO' : 'Notas (opcional)'}>
                   <textarea rows={2} className={inputClass} value={v.motivo} onChange={e => setV(p => ({ ...p, motivo: e.target.value }))} />
+                </Campo>
+              )}
+              {espera && (
+                <Campo label="O imóvel fica em">
+                  <select className={inputClass} value={v.faseEspera} onChange={e => setV(p => ({ ...p, faseEspera: e.target.value }))}>
+                    <option value="">Escolher…</option>
+                    <option value="Pendentes">Pendentes — algo a resolver antes de ser analisado</option>
+                    <option value="Follow UP">Follow UP — algo tem de mudar para o negócio ser viável</option>
+                  </select>
                 </Campo>
               )}
               {espera && (

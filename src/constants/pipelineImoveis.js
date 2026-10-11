@@ -55,12 +55,14 @@ export const eSaida = estado => ESTADOS_SAIDA.includes(limpaEstado(estado))
 //   Follow Up após proposta — proposta recusada e sem margem para subir: o
 //                             negócio já está alinhado, espera-se pelo vendedor
 export const FASES_FOLLOW_UP = ['Follow UP', 'Follow Up após proposta']
-// Fases em que a proposta já seguiu (o caminho normal daí é a negociação).
-const FASES_COM_PROPOSTA = ['Enviar proposta ao Proprietário', 'Em negociação', 'Proposta aceite', 'Enviar proposta ao investidor']
+// Proposta que seguiu passa para «Em negociação»: é a partir daí que um
+// follow-up é "após proposta".
+const FASES_COM_PROPOSTA = ['Em negociação', 'Proposta aceite', 'Enviar proposta ao investidor']
 export const eFaseFollowUp = estado => FASES_FOLLOW_UP.includes(limpaEstado(estado))
 
-// O que acontece à fase quando se agenda um follow-up. destino: fase de
-// follow-up pedida à partida (coluna do Kanban, fase escolhida na ficha).
+// O que acontece à fase quando se agenda um follow-up. destino: fase pedida à
+// partida — uma fase de follow-up (coluna do Kanban, fase escolhida na ficha)
+// ou Pendentes (visita com decisão de espera, decidido caso a caso).
 //   { aplica: false }             — negócio fechado, não há follow-up
 //   { aplica: true, mover: null } — fica na fase onde está
 //   { aplica: true, mover: fase } — passa para essa fase, com o motivo
@@ -69,7 +71,7 @@ export const eFaseFollowUp = estado => FASES_FOLLOW_UP.includes(limpaEstado(esta
 export function faseAoAgendarFollowUp(estado, destino = null) {
   const atual = limpaEstado(estado)
   const pedido = limpaEstado(destino)
-  if (FASES_FOLLOW_UP.includes(pedido)) return { aplica: true, mover: pedido === atual ? null : pedido }
+  if (FASES_FOLLOW_UP.includes(pedido) || pedido === 'Pendentes') return { aplica: true, mover: pedido === atual ? null : pedido }
   if (FASES_FOLLOW_UP.includes(atual) || atual === 'Pendentes') return { aplica: true, mover: null }
   if (tipoFase(atual) === 'fecho') return { aplica: false, mover: null }
   return { aplica: true, mover: FASES_COM_PROPOSTA.includes(atual) ? 'Follow Up após proposta' : 'Follow UP' }
