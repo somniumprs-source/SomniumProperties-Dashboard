@@ -21,6 +21,29 @@ function validateRequired(table: string, data: Record<string, any>): string | nu
   return null;
 }
 
+// ── Dependentes a limpar ao apagar ───────────────────────────
+// Tabelas filhas cuja FK não tem ON DELETE CASCADE/SET NULL: sem isto o
+// Postgres recusa apagar o pai ("violates foreign key constraint") — era o
+// caso de quase todos os consultores (interações/follow-ups) e dos
+// investidores com scorecard. `apagar` remove as linhas filhas (histórico que
+// só faz sentido com o pai); `desligar` põe a coluna a NULL (a filha sobrevive).
+// Corre tudo num único statement com o DELETE do pai — atómico, sem transação.
+const DEPENDENTES_AO_APAGAR: Record<string, { apagar?: string[][]; desligar?: string[][] }> = {
+  consultores: { apagar: [["consultor_interacoes", "consultor_id"], ["consultor_followups", "consultor_id"], ["whatsapp_last_seen", "consultor_id"]] },
+  investidores: { apagar: [["documentos_investidor", "investidor_id"], ["scorecards", "investidor_id"], ["classificacao_historico", "investidor_id"]] },
+  imoveis: { desligar: [["oportunidades_scraper", "imovel_id"]] },
+};
+
+function sqlApagarComDependentes(table: string): string {
+  const dep = DEPENDENTES_AO_APAGAR[table]
+  if (!dep) return `DELETE FROM ${table} WHERE id = $1`
+  const ctes = [
+    ...(dep.apagar || []).map(([t, col], i) => `a${i} AS (DELETE FROM ${t} WHERE ${col} = $1)`),
+    ...(dep.desligar || []).map(([t, col], i) => `d${i} AS (UPDATE ${t} SET ${col} = NULL WHERE ${col} = $1)`),
+  ]
+  return `WITH ${ctes.join(", ")} DELETE FROM ${table} WHERE id = $1`
+}
+
 // ── Audit log ────────────────────────────────────────────────
 async function auditLog(
   tabela: string, registoId: string, acao: string,
@@ -238,7 +261,7 @@ function createCRUD(table: string, { searchFields = ["nome"], defaultSort = "cre
     async delete(id: string, { regiaoActiva = null }: RegiaoOpt = {}) {
       const { rows: existing } = await pool.query(`SELECT * FROM ${table} WHERE id = $1`, [id]);
       if (!existing[0]) return false;
-      await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
+      await pool.query(sqlApagarComDependentes(table), [id]);
       await auditLog(table, id, "DELETE", existing[0], null, regiaoActiva).catch((e: Error) => console.error("[auditLog]", table, id, e.message));
       return true;
     },
