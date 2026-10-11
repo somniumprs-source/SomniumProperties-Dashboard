@@ -1433,7 +1433,10 @@ export function CRM() {
                     body: JSON.stringify({ data: extra.data_follow_up, motivo: extra.motivo_follow_up, destino: moveModal.newColumn }),
                   })
                   if (!r.ok) return toast((await r.json().catch(() => ({}))).error || 'Não foi possível mover', 'error')
-                  toast(`Imóvel em «${moveModal.newColumn}», com o follow-up na agenda`, 'success')
+                  const feito = await r.json().catch(() => ({}))
+                  toast(feito.consultor
+                    ? `Imóvel em «${moveModal.newColumn}». O follow-up entrou no contacto com ${feito.consultor.nome} (${String(feito.data_contacto || '').slice(0, 10).split('-').reverse().join('/')})`
+                    : `Imóvel em «${moveModal.newColumn}», com o follow-up na agenda`, 'success')
                   load()
                 } else {
                   await persistMove(moveModal.id, moveModal.newColumn, extra)

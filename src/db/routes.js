@@ -25,6 +25,7 @@ import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, Consul
 import pool from './pg.js'
 import { agendarPassoImovel, sincronizarTarefaVisita } from './agendaEngine.js'
 import { agendarFollowUpImovelManual, registarFollowUpFeito } from './followUpImovel.js'
+import { lerContactoPessoa, agendarContactoPessoa, registarContactoPessoa, lerContactosDoImovel, juntarImovelAoContacto } from './contactoPessoa.js'
 import { getVisitasEnriquecidas, syncDataVisitaDerivada, getFichaVisitaParaImovel } from './queries.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
@@ -2281,8 +2282,10 @@ router.get('/imoveis/:id/follow-up', async (req, res) => {
 
 router.post('/imoveis/:id/follow-up', async (req, res) => {
   try {
-    const { data, motivo, sem_sucesso, quando, destino } = req.body || {}
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(data || '')) return res.status(400).json({ error: 'Data do follow-up é obrigatória' })
+    const { data, motivo, sem_sucesso, quando, destino, juntar, mover_contacto } = req.body || {}
+    // juntar: o imóvel entra no contacto já marcado ao consultor, sem data própria.
+    // mover_contacto: o contacto já marcado ao consultor passa para esta data.
+    if (!juntar && !/^\d{4}-\d{2}-\d{2}$/.test(data || '')) return res.status(400).json({ error: 'Data do follow-up é obrigatória' })
     if (quando && isNaN(new Date(quando))) return res.status(400).json({ error: 'Hora do follow-up inválida' })
     if (sem_sucesso && !(motivo || '').trim()) return res.status(400).json({ error: 'Indica o motivo do follow-up sem sucesso' })
     const imovel = await Imoveis.getById(req.params.id)
@@ -2290,14 +2293,60 @@ router.post('/imoveis/:id/follow-up', async (req, res) => {
     const fase = faseAoAgendarFollowUp(imovel.estado, destino)
     if (!fase.aplica) return res.status(400).json({ error: 'Imóvel com negócio fechado: o acompanhamento faz-se em Projetos, não há follow-up' })
     if (fase.mover && !(motivo || '').trim()) return res.status(400).json({ error: `Indica o motivo: é a justificação da passagem para «${fase.mover}»` })
-    const patch = { data_follow_up: data }
+    // Imóvel com consultor: o follow-up é um assunto do contacto com ele (um
+    // só próximo contacto por pessoa), não uma tarefa do imóvel.
+    const noContacto = imovel.consultor_id && !sem_sucesso
+      ? await juntarImovelAoContacto(pool, req.params.id, { data: juntar ? null : data, quando: juntar ? null : quando, mover: !!mover_contacto, user: req.user || null })
+      : null
+    if (juntar && !noContacto) return res.status(400).json({ error: 'O consultor não tem contacto marcado: indica a data' })
+    const patch = { data_follow_up: noContacto ? noContacto.data : data }
     if (motivo !== undefined) patch.motivo_follow_up = (motivo || '').trim() || null
     if (fase.mover) patch.estado = fase.mover
     const item = await Imoveis.update(req.params.id, patch)
     if (fase.mover && item) HOOKS_IMOVEIS.onUpdate(item, { estado: fase.mover }).catch(e => console.error('[hook] follow-up imoveis:', e.message))
-    const tarefaId = await agendarFollowUpImovelManual(pool, req.params.id, { semSucesso: !!sem_sucesso, motivo, quando: quando || null, user: req.user || null })
-    res.json({ ok: true, tarefa_id: tarefaId, estado: fase.mover || null })
+    const tarefaId = noContacto
+      ? noContacto.tarefa_id
+      : await agendarFollowUpImovelManual(pool, req.params.id, { semSucesso: !!sem_sucesso, motivo, quando: quando || null, user: req.user || null })
+    res.json({ ok: true, tarefa_id: tarefaId, estado: fase.mover || null, consultor: noContacto?.consultor || null, data_contacto: noContacto?.data || null })
   } catch (e) { res.status(400).json({ error: e.message }) }
+})
+
+// ── Contacto único por pessoa (bloco "Próximos passos" do consultor e do
+// investidor) e o seu reflexo na ficha do imóvel. Ver src/db/contactoPessoa.js.
+for (const [rota, tipo] of [['consultores', 'consultor'], ['investidores', 'investidor']]) {
+  router.get(`/${rota}/:id/contacto`, async (req, res) => {
+    try {
+      // O investidor com acesso ao portal lê o seu próprio registo, mas não as
+      // notas internas dos contactos.
+      if (req.appUser?.role === 'investidor') return res.status(403).json({ error: 'Sem acesso' })
+      const r = await lerContactoPessoa(pool, tipo, req.params.id)
+      if (!r) return res.status(404).json({ error: 'Não encontrado' })
+      res.json(r)
+    } catch (e) { res.status(500).json({ error: e.message }) }
+  })
+  router.post(`/${rota}/:id/contacto/agendar`, async (req, res) => {
+    try {
+      const { data, quando, assuntos } = req.body || {}
+      const tarefaId = await agendarContactoPessoa(pool, tipo, req.params.id, { data, quando: quando || null, assuntos, user: req.user || null })
+      if (!tarefaId) return res.status(404).json({ error: 'Não encontrado' })
+      res.json({ ok: true, tarefa_id: tarefaId })
+    } catch (e) { res.status(400).json({ error: e.message }) }
+  })
+  router.post(`/${rota}/:id/contacto/registar`, async (req, res) => {
+    try {
+      const r = await registarContactoPessoa(pool, tipo, req.params.id, { ...(req.body || {}), user: req.user || null })
+      if (!r) return res.status(404).json({ error: 'Não encontrado' })
+      res.json({ ok: true, ...r })
+    } catch (e) { res.status(400).json({ error: e.message }) }
+  })
+}
+
+router.get('/imoveis/:id/contactos', async (req, res) => {
+  try {
+    const r = await lerContactosDoImovel(pool, req.params.id)
+    if (!r) return res.status(404).json({ error: 'Não encontrado' })
+    res.json(r)
+  } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 // ── Próximos passos do imóvel (bloco no topo da ficha) ────────

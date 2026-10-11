@@ -15,6 +15,7 @@ import { fmtTempoMercado } from '../../lib/tempoMercado.js'
 import { DealBreakersPanel } from './DealBreakersPanel.jsx'
 import { TransicaoFaseModal } from './TransicaoFaseModal.jsx'
 import { ProximosPassos } from './ProximosPassos.jsx'
+import { ContactoPessoa } from './ContactoPessoa.jsx'
 import { ESTADOS_IMOVEIS, eFaseFollowUp, limpaEstado } from '../../constants/pipelineImoveis.js'
 
 // Leads do consultor: só os imóveis que ele enviou por referência, anunciados
@@ -990,7 +991,9 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
         </div>
       </div>
 
-      {type === 'Imóveis' && <ProximosPassos imovelId={id} imovel={data} onAbrirTab={setActiveTab} onUpdate={aposFollowUp} />}
+      {type === 'Imóveis' && <ProximosPassos imovelId={id} imovel={data} onAbrirTab={setActiveTab} onUpdate={aposFollowUp} onNavigate={onNavigate} />}
+      {type === 'Consultores' && <ContactoPessoa tipo="consultor" pessoaId={id} imoveis={data?.imoveis} onNavigate={onNavigate} onUpdate={loadData} />}
+      {type === 'Investidores' && <ContactoPessoa tipo="investidor" pessoaId={id} onNavigate={onNavigate} onUpdate={loadData} />}
       {type === 'Imóveis' && <DealBreakersPanel imovelId={id} imovel={data} onAbrirTab={setActiveTab} onUpdate={loadData} />}
       {type === 'Imóveis' && transicao && (
         <TransicaoFaseModal

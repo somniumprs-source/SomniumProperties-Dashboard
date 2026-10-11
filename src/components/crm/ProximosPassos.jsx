@@ -10,6 +10,11 @@
  * Só há follow-up em fase de follow-up ou em Pendentes. Nas outras fases o
  * botão é "Passar a Follow UP": pede o motivo e muda o imóvel de fase no mesmo
  * passo (faseAoAgendarFollowUp); negócio fechado não tem follow-up.
+ *
+ * Imóvel com consultor: o follow-up não é uma chamada própria, é um assunto do
+ * contacto com o consultor (um só próximo contacto por pessoa). O bloco mostra
+ * esse contacto e, se o consultor já tiver um marcado, pergunta sempre se o
+ * imóvel se junta a ele ou se o contacto é antecipado.
  */
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -18,6 +23,7 @@ import { apiFetch } from '../../lib/api.js'
 import { useRefreshOnMutation } from '../../hooks/useRefreshOnMutation.js'
 import { AgendarPassoModal } from './AgendarPassoModal.jsx'
 import { faseAoAgendarFollowUp } from '../../constants/pipelineImoveis.js'
+import { inputClass, fmtQuando, fmtDia, emDias, comHora } from './passosUtil.js'
 
 function tipoDoPasso(t) {
   const c = t.origem_campo || ''
@@ -27,34 +33,15 @@ function tipoDoPasso(t) {
   return { rotulo: t.categoria || 'Tarefa', Icon: CalendarClock, concluir: 'Feito' }
 }
 
-function fmtQuando(v) {
-  if (!v) return 'Sem data'
-  const d = new Date(v)
-  if (isNaN(d)) return v
-  const soData = /^\d{4}-\d{2}-\d{2}$/.test(String(v))
-  return d.toLocaleString('pt-PT', soData
-    ? { weekday: 'short', day: '2-digit', month: '2-digit' }
-    : { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
-
-const fmtDia = v => {
-  const [y, m, d] = String(v || '').slice(0, 10).split('-')
-  return y && m && d ? `${d}/${m}/${y}` : '—'
-}
-function emDias(n) {
-  const d = new Date()
-  d.setDate(d.getDate() + n)
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
-  return d.toISOString().slice(0, 10)
-}
-
-const inputClass = 'w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300'
-
 // Formulário do follow-up, aberto dentro do bloco. semSucesso: o follow-up de
 // hoje foi tentado e falhou — o motivo é obrigatório e fica no histórico.
 // mover: fase para onde o imóvel passa ao guardar — o motivo é a justificação
 // e por isso também é obrigatório.
-function FollowUpForm({ imovelId, semSucesso, mover = null, motivoInicial = '', onCancel, onDone }) {
+// consultor: { nome, quando } quando o imóvel tem consultor; com quando, ele já
+// tem contacto marcado e é preciso escolher entre juntar e antecipar.
+function FollowUpForm({ imovelId, semSucesso, mover = null, consultor = null, motivoInicial = '', onCancel, onDone }) {
+  const escolhe = !semSucesso && !!consultor?.quando
+  const [juntar, setJuntar] = useState(null) // null = por escolher
   const [data, setData] = useState(emDias(1))
   const [hora, setHora] = useState('')
   const [motivo, setMotivo] = useState(semSucesso || mover ? '' : motivoInicial)
@@ -64,13 +51,16 @@ function FollowUpForm({ imovelId, semSucesso, mover = null, motivoInicial = '', 
 
   async function guardar(e) {
     e.preventDefault()
-    if (!data) return setErro('Indica a nova data.')
+    if (escolhe && juntar === null) return setErro(`Escolhe se o imóvel se junta ao contacto com ${consultor.nome} ou se o contacto é antecipado.`)
+    if (!(escolhe && juntar) && !data) return setErro('Indica a nova data.')
     if (pedeMotivo && !motivo.trim()) return setErro('Indica o motivo.')
     setErro(''); setSaving(true)
     try {
       const r = await apiFetch(`/api/crm/imoveis/${imovelId}/follow-up`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data, motivo, sem_sucesso: semSucesso, quando: hora ? new Date(`${data}T${hora}`).toISOString() : null }),
+        body: JSON.stringify(escolhe && juntar
+          ? { motivo, juntar: true }
+          : { data, motivo, sem_sucesso: semSucesso, quando: comHora(data, hora), mover_contacto: escolhe }),
       })
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao guardar')
       onDone?.()
@@ -87,11 +77,26 @@ function FollowUpForm({ imovelId, semSucesso, mover = null, motivoInicial = '', 
         {semSucesso
           ? `Fica registado como feito hoje (${fmtDia(emDias(0))}) sem sucesso e é criada a tarefa para a nova data.`
           : mover
-            ? `O imóvel passa para «${mover}» com este motivo e fica com a tarefa de follow-up na agenda. A hora é opcional.`
-            : 'Cria a tarefa de follow-up na agenda para esse dia. A hora é opcional.'}
+            ? `O imóvel passa para «${mover}» com este motivo${consultor ? ` e entra como assunto no contacto com ${consultor.nome}` : ' e fica com a tarefa de follow-up na agenda'}. A hora é opcional.`
+            : consultor
+              ? `O follow-up entra como assunto no contacto com ${consultor.nome}. A hora é opcional.`
+              : 'Cria a tarefa de follow-up na agenda para esse dia. A hora é opcional.'}
       </p>
+      {escolhe && (
+        <div className="mb-2 rounded-lg border border-yellow-300 bg-white p-2">
+          <p className="text-xs font-semibold text-gray-800">{consultor.nome} já tem contacto marcado para {fmtQuando(consultor.quando)}.</p>
+          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+            <label className="inline-flex items-center gap-1.5 text-xs text-gray-700">
+              <input type="radio" name="juntar-contacto" checked={juntar === true} onChange={() => setJuntar(true)} /> Juntar a esse contacto
+            </label>
+            <label className="inline-flex items-center gap-1.5 text-xs text-gray-700">
+              <input type="radio" name="juntar-contacto" checked={juntar === false} onChange={() => setJuntar(false)} /> Mudar o contacto para outra data
+            </label>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr_auto] gap-2 sm:items-start">
-        <div>
+        <div className={escolhe && juntar !== false ? 'opacity-40 pointer-events-none' : ''}>
           <div className="flex gap-1.5">
             <input type="date" value={data} onChange={e => setData(e.target.value)} className={inputClass} aria-label="Nova data do follow-up" />
             <input type="time" value={hora} onChange={e => setHora(e.target.value)} className={`${inputClass} sm:w-28`} aria-label="Hora do follow-up (opcional)" title="Hora (opcional)" />
@@ -123,7 +128,7 @@ function FollowUpForm({ imovelId, semSucesso, mover = null, motivoInicial = '', 
   )
 }
 
-export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate }) {
+export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate, onNavigate }) {
   const [agendar, setAgendar] = useState(null) // 'chamada' | 'visita'
   const [followUp, setFollowUp] = useState(null) // 'agendar' | 'sem_sucesso'
   const [verHistorico, setVerHistorico] = useState(false)
@@ -141,20 +146,31 @@ export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate }) {
       return r.ok ? r.json() : {}
     },
   })
-  useRefreshOnMutation(() => { query.refetch(); fup.refetch() })
+  // Contacto com o consultor em que este imóvel é (ou pode ser) assunto, e os
+  // contactos em que já foi tratado.
+  const cont = useQuery({
+    queryKey: ['imovel-contactos', imovelId],
+    queryFn: async () => {
+      const r = await apiFetch(`/api/crm/imoveis/${imovelId}/contactos`)
+      return r.ok ? r.json() : {}
+    },
+  })
+  useRefreshOnMutation(() => { query.refetch(); fup.refetch(); cont.refetch() })
   const passos = Array.isArray(query.data) ? query.data : []
-  const historico = Array.isArray(fup.data?.historico) ? fup.data.historico : []
+  const historico = Array.isArray(cont.data?.historico) ? cont.data.historico : []
+  const consultor = cont.data?.consultor || null
+  const noContacto = cont.data?.contacto?.incluido ? cont.data.contacto : null
   const motivoFollowUp = fup.data?.motivo_follow_up || ''
   const temFollowUp = passos.some(t => t.origem_campo === 'data_follow_up')
   const faseFollowUp = faseAoAgendarFollowUp(imovel?.estado)
 
   async function concluir(t) {
     await apiFetch(`/api/crm/imoveis/${imovelId}/proximos-passos/${t.id}`, { method: 'PUT' })
-    query.refetch(); fup.refetch()
+    query.refetch(); fup.refetch(); cont.refetch()
   }
   function followUpGuardado() {
     setFollowUp(null)
-    query.refetch(); fup.refetch()
+    query.refetch(); fup.refetch(); cont.refetch()
     onUpdate?.()
   }
 
@@ -168,7 +184,7 @@ export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate }) {
             className="text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Agendar chamada</button>
           <button type="button" onClick={() => setAgendar('visita')}
             className="text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Marcar visita</button>
-          {faseFollowUp.aplica && (faseFollowUp.mover || !temFollowUp) && (
+          {faseFollowUp.aplica && (faseFollowUp.mover || !(temFollowUp || noContacto)) && (
             <button type="button" onClick={() => setFollowUp('agendar')}
               className="text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
               {faseFollowUp.mover ? `Passar a ${faseFollowUp.mover}` : 'Agendar follow-up'}
@@ -176,8 +192,24 @@ export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate }) {
           )}
         </span>
       </div>
+      {noContacto && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm mt-2">
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 bg-yellow-50 text-yellow-700">
+            <RefreshCw className="w-3 h-3" /> {faseFollowUp.aplica && !faseFollowUp.mover ? 'Follow-up' : 'Próximo contacto'}
+          </span>
+          <span className="font-medium tabular-nums text-gray-800 dark:text-neutral-100">{fmtQuando(noContacto.quando)}</span>
+          <span className="text-xs text-gray-500">no contacto com {consultor?.nome}</span>
+          {motivoFollowUp && <span className="text-xs text-gray-500 truncate max-w-[16rem]" title={motivoFollowUp}>{motivoFollowUp}</span>}
+          {onNavigate && consultor && (
+            <button type="button" onClick={() => onNavigate('Consultores', consultor.id)}
+              className="ml-auto text-xs font-medium px-2 py-0.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+              Abrir contacto
+            </button>
+          )}
+        </div>
+      )}
       {passos.length === 0 ? (
-        <p className="text-xs text-gray-400 mt-1.5">Sem próximo passo agendado.</p>
+        !noContacto && <p className="text-xs text-gray-400 mt-1.5">Sem próximo passo agendado.</p>
       ) : (
         <ul className="grid gap-1.5 mt-2">
           {passos.map(t => {
@@ -221,6 +253,7 @@ export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate }) {
       {followUp && (
         <FollowUpForm key={followUp} imovelId={imovelId} semSucesso={followUp === 'sem_sucesso'} motivoInicial={motivoFollowUp}
           mover={followUp === 'agendar' ? faseFollowUp.mover : null}
+          consultor={followUp === 'agendar' && consultor ? { nome: consultor.nome, quando: cont.data?.contacto?.quando || null } : null}
           onCancel={() => setFollowUp(null)} onDone={followUpGuardado} />
       )}
       {historico.length > 0 && (
@@ -228,15 +261,18 @@ export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate }) {
           <button type="button" onClick={() => setVerHistorico(v => !v)}
             className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700">
             {verHistorico ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-            Histórico de follow-ups ({historico.length})
+            Contactos sobre este imóvel ({historico.length})
           </button>
           {verHistorico && (
             <ul className="mt-1.5 grid gap-1">
               {historico.map(h => (
                 <li key={h.id} className="flex flex-wrap items-baseline gap-x-2 text-xs">
-                  <span className="font-medium tabular-nums text-gray-700">{fmtDia(h.data)}</span>
-                  <span className={h.resultado === 'Feito' ? 'text-green-700' : 'text-orange-700'}>{h.resultado}</span>
-                  {h.motivo && <span className="text-gray-600">{h.motivo}</span>}
+                  <span className="font-medium tabular-nums text-gray-700">{fmtDia(h.quando)}</span>
+                  {h.resultado
+                    ? <span className={h.resultado === 'Feito' ? 'text-green-700' : 'text-orange-700'}>{h.resultado}</span>
+                    : <span className="text-gray-500">{h.canal || 'Registo'}</span>}
+                  {h.pessoa_nome && <span className="text-gray-700">{h.pessoa_nome}</span>}
+                  {h.notas && <span className="text-gray-600 min-w-0 break-words">{String(h.notas).replace(/^\[[^\]]+\]\s*/, '')}</span>}
                   {h.proxima_data && <span className="text-gray-400">reagendado para {fmtDia(h.proxima_data)}</span>}
                 </li>
               ))}

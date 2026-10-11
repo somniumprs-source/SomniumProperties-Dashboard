@@ -136,10 +136,11 @@ export function TransicaoFaseModal({ imovel, destino, requisitos = [], mover = t
             body: JSON.stringify({ data: v.proximo, motivo: [DECISOES_ESPERA[v.decisao], v.motivo.trim()].filter(Boolean).join(': '), destino: v.faseEspera }),
           })
           if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao agendar o próximo passo')
-          const { estado } = await r.json().catch(() => ({}))
+          const { estado, consultor } = await r.json().catch(() => ({}))
+          const onde = consultor ? `o follow-up entrou no contacto com ${consultor.nome}` : 'o follow-up foi agendado'
           return onResolvido?.(estado
-            ? `Visita registada. O imóvel passou para «${estado}» e o follow-up foi agendado.`
-            : `Visita registada. O imóvel fica em «${v.faseEspera}» e o follow-up foi agendado.`)
+            ? `Visita registada. O imóvel passou para «${estado}» e ${onde}.`
+            : `Visita registada. O imóvel fica em «${v.faseEspera}» e ${onde}.`)
         }
       }
       const extra = {}
