@@ -39,7 +39,6 @@ import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { isWholesaling } from "../_shared/modelos.ts";
 import { avaliarEntrada, painelRequisitos } from "../_shared/dealBreakers.ts";
 import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase } from "../_shared/projetoTarefas.ts";
-import { diasFollowUpParaRegisto } from "../_shared/followupRules.ts";
 import { criarFollowUpConsultor } from "../_shared/consultorFollowups.ts";
 import { ensureOportunidadesScraperTable } from "../_shared/oportunidadesScraper.ts";
 
@@ -2402,24 +2401,6 @@ app.patch("/gravacoes/:id/registo", async (c: any) => {
        registo.pp_compromisso_confirmado, registo.pp_criterios_pesquisa_enviados, registo.pp_negocios_fechados,
        now],
     );
-
-    // Follow-up automático por desfecho de chamada (ver C2 da auditoria) —
-    // valores de prazo em _shared/followupRules.ts ainda pendentes de
-    // confirmação com o SOP 2. Só na PRIMEIRA confirmação deste registo,
-    // para não criar um follow-up novo sempre que a chamada é reeditada.
-    try {
-      const primeiraConfirmacao = !current.registo_confirmado_em;
-      const dias = primeiraConfirmacao ? diasFollowUpParaRegisto(row) : null;
-      if (dias != null && row.consultor_id) {
-        const dataFollowUp = new Date(Date.now() + dias * 86400000).toISOString().slice(0, 10);
-        const desfecho = row.tipo_chamada === "cold_call" ? row.cc_resultado : row.cl_resultado;
-        await criarFollowUpConsultor(row.consultor_id, {
-          data: dataFollowUp,
-          motivo: `[Auto] Desfecho da chamada: ${desfecho}`,
-          imovel_id: row.imovel_id || null,
-        });
-      }
-    } catch (e) { console.error("[gravacoes/registo] follow-up automático:", (e as Error).message); }
 
     return c.json(row);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }

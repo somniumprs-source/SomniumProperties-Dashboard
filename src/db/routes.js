@@ -9,7 +9,6 @@ import { randomUUID, createHash } from 'crypto'
 import { readFile, unlink } from 'fs/promises'
 import { createClient } from '@supabase/supabase-js'
 import { isWholesaling } from '../lib/modelos.js'
-import { diasFollowUpParaRegisto } from '../constants/followupRules.js'
 import { faseAoAgendarFollowUp } from '../constants/pipelineImoveis.js'
 
 // 'Resposta' foi renomeado para 'Recebido' numa migração antiga (ver pg.js);
@@ -1938,24 +1937,6 @@ router.patch('/gravacoes/:id/registo', async (req, res) => {
        registo.pp_compromisso_confirmado, registo.pp_criterios_pesquisa_enviados, registo.pp_negocios_fechados,
        now]
     )
-
-    // Follow-up automático por desfecho de chamada (ver C2 da auditoria) —
-    // valores de prazo em followupRules.js ainda pendentes de confirmação
-    // com o SOP 2. Só na PRIMEIRA confirmação deste registo, para não criar
-    // um follow-up novo sempre que a chamada é reeditada.
-    try {
-      const primeiraConfirmacao = !current.registo_confirmado_em
-      const dias = primeiraConfirmacao ? diasFollowUpParaRegisto(row) : null
-      if (dias != null && row.consultor_id) {
-        const dataFollowUp = new Date(Date.now() + dias * 86400000).toISOString().slice(0, 10)
-        const desfecho = row.tipo_chamada === 'cold_call' ? row.cc_resultado : row.cl_resultado
-        await criarFollowUpConsultor(row.consultor_id, {
-          data: dataFollowUp,
-          motivo: `[Auto] Desfecho da chamada: ${desfecho}`,
-          imovel_id: row.imovel_id || null,
-        })
-      }
-    } catch (e) { console.error('[gravacoes/registo] follow-up automático:', e.message) }
 
     res.json(row)
   } catch (e) { res.status(500).json({ error: e.message }) }
