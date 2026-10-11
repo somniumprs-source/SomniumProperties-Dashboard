@@ -51,7 +51,7 @@ function FollowUpForm({ imovelId, semSucesso, mover = null, consultor = null, mo
 
   async function guardar(e) {
     e.preventDefault()
-    if (escolhe && juntar === null) return setErro(`Escolhe se o imóvel se junta ao contacto com ${consultor.nome} ou se o contacto é antecipado.`)
+    if (escolhe && juntar === null) return setErro(`Escolhe se o imóvel se junta ao contacto com ${consultor.nome} ou se o contacto muda de data.`)
     if (!(escolhe && juntar) && !data) return setErro('Indica a nova data.')
     if (pedeMotivo && !motivo.trim()) return setErro('Indica o motivo.')
     setErro(''); setSaving(true)
