@@ -16,9 +16,9 @@ const DECISOES_ESPERA = { PERITO: 'Parecer técnico', SEGUNDA_VISITA: 'Segunda v
 const EFEITO_DECISAO = {
   GO: 'O imóvel pode entrar em «Estudo de VVR».',
   NO_GO: 'O imóvel não entra em estudo: passa para «Não interessa», com este motivo.',
-  PERITO: 'O imóvel fica na fase atual até haver parecer. O próximo passo vai para a agenda.',
-  SEGUNDA_VISITA: 'O imóvel fica na fase atual até à segunda visita. O próximo passo vai para a agenda.',
-  STAND_BY: 'O imóvel fica na fase atual. O próximo passo vai para a agenda.',
+  PERITO: 'O imóvel passa para «Follow UP» até haver parecer. O follow-up vai para a agenda.',
+  SEGUNDA_VISITA: 'O imóvel passa para «Follow UP» até à segunda visita. O follow-up vai para a agenda.',
+  STAND_BY: 'O imóvel passa para «Follow UP». O follow-up vai para a agenda.',
 }
 
 const hoje = () => new Date().toISOString().slice(0, 10)
@@ -114,7 +114,7 @@ export function TransicaoFaseModal({ imovel, destino, requisitos = [], mover = t
     if (pedeVisita) {
       if (!v.data || !v.decisao || v.area === '' || v.obra === '') return setErro('Preenche a data, a decisão, a área medida e o custo de obra (pode ser 0).')
       if (v.decisao === 'NO_GO' && !v.motivo.trim()) return setErro('Indica o motivo do NO GO.')
-      if (espera && !v.proximo) return setErro('Indica a data do próximo passo.')
+      if (espera && !v.proximo) return setErro('Indica a data do follow-up.')
     }
     if (pedePreco && !(Number(campos.ask_price) > 0)) return setErro('Indica o preço pedido.')
     if ((pedeProposta || pedeAceite) && !(Number(campos.valor_proposta) > 0)) return setErro('Indica o valor da proposta.')
@@ -132,10 +132,13 @@ export function TransicaoFaseModal({ imovel, destino, requisitos = [], mover = t
         if (espera) {
           const r = await apiFetch(`/api/crm/imoveis/${imovel.id}/follow-up`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ data: v.proximo, motivo: DECISOES_ESPERA[v.decisao] }),
+            body: JSON.stringify({ data: v.proximo, motivo: [DECISOES_ESPERA[v.decisao], v.motivo.trim()].filter(Boolean).join(': ') }),
           })
           if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao agendar o próximo passo')
-          return onResolvido?.('Visita registada. O imóvel fica na fase atual e o próximo passo foi agendado.')
+          const { estado } = await r.json().catch(() => ({}))
+          return onResolvido?.(estado
+            ? `Visita registada. O imóvel passou para «${estado}» e o follow-up foi agendado.`
+            : 'Visita registada. O imóvel fica na fase atual e o follow-up foi agendado.')
         }
       }
       const extra = {}
@@ -199,7 +202,7 @@ export function TransicaoFaseModal({ imovel, destino, requisitos = [], mover = t
                 </Campo>
               )}
               {espera && (
-                <Campo label={`Data do próximo passo (${DECISOES_ESPERA[v.decisao].toLowerCase()})`}>
+                <Campo label={`Data do follow-up (${DECISOES_ESPERA[v.decisao].toLowerCase()})`}>
                   <input type="date" className={inputClass} value={v.proximo} onChange={e => setV(p => ({ ...p, proximo: e.target.value }))} />
                 </Campo>
               )}

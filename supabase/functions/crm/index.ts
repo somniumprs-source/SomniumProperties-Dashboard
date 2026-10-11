@@ -84,6 +84,7 @@ import { generateDocx, getAvailableTypes } from "../_shared/docxGenerator.ts";
 import { carregarChecklist, gravarManual } from "../_shared/checklistImovel.ts";
 import { agendarPassoImovel, sincronizarTarefaVisita } from "../_shared/agendaEngine.ts";
 import { agendarFollowUpImovelManual, registarFollowUpFeito } from "../_shared/followUpImovel.ts";
+import { faseAoAgendarFollowUp } from "../_shared/pipelineImoveis.ts";
 import { createClient } from "@supabase/supabase-js";
 import { Buffer } from "node:buffer";
 
@@ -839,7 +840,9 @@ app.use("/imoveis/*", async (c: any, next: any) => {
 });
 
 // Hooks dos imóveis ligados (port de routes.js 334-428). req.user?.email -> "system" (sem req nos hooks).
-crudRoutes("/imoveis", Imoveis, {
+// Em constante para a rota do follow-up correr os mesmos efeitos da mudança
+// de fase (pasta no Drive, documentos da fase) quando é ela a mover o imóvel.
+const HOOKS_IMOVEIS = {
   onCreate: async (item: any) => {
     if (driveConfigured()) {
       await createImovelFolder(item.id, item.nome || "Sem nome", item.estado || "Adicionado");
@@ -939,7 +942,8 @@ crudRoutes("/imoveis", Imoveis, {
     }
     return null;
   },
-});
+};
+crudRoutes("/imoveis", Imoveis, HOOKS_IMOVEIS);
 
 // ════════════════════════════════════════════════════════════════
 // OPORTUNIDADES — fila de candidatos a imóvel da pesquisa diária Idealista
@@ -2685,9 +2689,11 @@ app.get("/imoveis/:id/followups", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Follow Up do imóvel (aba "Follow Up") — port de routes.js ──
-// Grava data/motivo do follow-up e agenda logo a tarefa 'A fazer' para esse
-// dia (agendarFollowUpImovelManual) — não fica à espera do "gerar-semana".
+// ── Follow-up do imóvel (bloco "Próximos passos") — port de routes.js ──
+// Porta única do follow-up: grava data e motivo, agenda logo a tarefa 'A fazer'
+// (agendarFollowUpImovelManual) e trata da fase — fora de Pendentes e das
+// fases de follow-up, agendar um follow-up passa o imóvel para a fase de
+// follow-up com o motivo como justificação (faseAoAgendarFollowUp).
 app.get("/imoveis/:id/follow-up", async (c: any) => {
   try {
     const imovel = await Imoveis.getById(c.req.param("id"));
@@ -2709,18 +2715,23 @@ app.get("/imoveis/:id/follow-up", async (c: any) => {
 
 app.post("/imoveis/:id/follow-up", async (c: any) => {
   try {
-    const { data, motivo, sem_sucesso, quando } = await c.req.json().catch(() => ({}));
+    const { data, motivo, sem_sucesso, quando, destino } = await c.req.json().catch(() => ({}));
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data || "")) return c.json({ error: "Data do follow-up é obrigatória" }, 400);
     if (quando && isNaN(new Date(quando).getTime())) return c.json({ error: "Hora do follow-up inválida" }, 400);
     if (sem_sucesso && !(motivo || "").trim()) return c.json({ error: "Indica o motivo do follow-up sem sucesso" }, 400);
     const id = c.req.param("id");
     const imovel = await Imoveis.getById(id);
     if (!imovel) return c.json({ error: "Não encontrado" }, 404);
+    const fase = faseAoAgendarFollowUp(imovel.estado, destino);
+    if (!fase.aplica) return c.json({ error: "Imóvel com negócio fechado: o acompanhamento faz-se em Projetos, não há follow-up" }, 400);
+    if (fase.mover && !(motivo || "").trim()) return c.json({ error: `Indica o motivo: é a justificação da passagem para «${fase.mover}»` }, 400);
     const patch: Record<string, any> = { data_follow_up: data };
     if (motivo !== undefined) patch.motivo_follow_up = (motivo || "").trim() || null;
-    await Imoveis.update(id, patch);
+    if (fase.mover) patch.estado = fase.mover;
+    const item = await Imoveis.update(id, patch);
+    if (fase.mover && item) HOOKS_IMOVEIS.onUpdate(item, { estado: fase.mover }).catch((e: any) => console.error("[hook] follow-up imoveis:", e.message));
     const tarefaId = await agendarFollowUpImovelManual(id, { semSucesso: !!sem_sucesso, motivo, quando: quando || null, user: await resolveCrmUser(c) });
-    return c.json({ ok: true, tarefa_id: tarefaId });
+    return c.json({ ok: true, tarefa_id: tarefaId, estado: fase.mover || null });
   } catch (e) { return c.json({ error: (e as Error).message }, 400); }
 });
 

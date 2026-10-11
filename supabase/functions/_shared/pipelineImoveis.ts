@@ -47,3 +47,31 @@ export function tipoFase(estado) {
 }
 
 export const eSaida = estado => ESTADOS_SAIDA.includes(limpaEstado(estado))
+
+// Follow-up do imóvel. A designação só existe em dois casos: o imóvel está numa
+// fase de follow-up ou está em Pendentes (algo a resolver antes de ser
+// analisado, fica nessa fase). Nas restantes fases o que se agenda é o próximo
+// contacto (chamada, visita).
+//   Follow UP               — algo tem de mudar para o negócio ser viável
+//   Follow Up após proposta — proposta recusada e sem margem para subir: o
+//                             negócio já está alinhado, espera-se pelo vendedor
+export const FASES_FOLLOW_UP = ['Follow UP', 'Follow Up após proposta']
+// Fases em que a proposta já seguiu (o caminho normal daí é a negociação).
+const FASES_COM_PROPOSTA = ['Enviar proposta ao Proprietário', 'Em negociação', 'Proposta aceite', 'Enviar proposta ao investidor']
+export const eFaseFollowUp = estado => FASES_FOLLOW_UP.includes(limpaEstado(estado))
+
+// O que acontece à fase quando se agenda um follow-up. destino: fase de
+// follow-up pedida à partida (coluna do Kanban, fase escolhida na ficha).
+//   { aplica: false }             — negócio fechado, não há follow-up
+//   { aplica: true, mover: null } — fica na fase onde está
+//   { aplica: true, mover: fase } — passa para essa fase, com o motivo
+//                                   («Follow Up após proposta» se a proposta
+//                                   já seguiu, senão «Follow UP»)
+export function faseAoAgendarFollowUp(estado, destino = null) {
+  const atual = limpaEstado(estado)
+  const pedido = limpaEstado(destino)
+  if (FASES_FOLLOW_UP.includes(pedido)) return { aplica: true, mover: pedido === atual ? null : pedido }
+  if (FASES_FOLLOW_UP.includes(atual) || atual === 'Pendentes') return { aplica: true, mover: null }
+  if (tipoFase(atual) === 'fecho') return { aplica: false, mover: null }
+  return { aplica: true, mover: FASES_COM_PROPOSTA.includes(atual) ? 'Follow Up após proposta' : 'Follow UP' }
+}

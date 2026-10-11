@@ -553,7 +553,7 @@ function FollowUpView({ data, onView, onDelete }) {
 function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
   const isFollowUp = moveModal.type === 'follow_up'
   const today = new Date().toISOString().slice(0, 10)
-  const [data, setData] = useState(item?.data_follow_up || today)
+  const [data, setData] = useState(String(item?.data_follow_up || '').slice(0, 10) || today)
   const initialMotivo = isFollowUp ? (item?.motivo_follow_up || '') : (item?.motivo_nao_interessa || '')
   const padraoSet = new Set(MOTIVOS_NAO_INTERESSA_PADRAO)
   const partesIniciais = initialMotivo.split(/;\s*/).map(s => s.trim()).filter(Boolean)
@@ -579,7 +579,7 @@ function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
 
   async function confirm() {
     const motivoFinal = buildMotivo()
-    if (!motivoFinal) return
+    if (!motivoFinal || (isFollowUp && !data)) return
     setSaving(true)
     const extra = isFollowUp
       ? { motivo_follow_up: motivoFinal, data_follow_up: data || null }
@@ -601,7 +601,7 @@ function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
 
         {isFollowUp && (
           <div className="mb-4">
-            <label className="text-xs font-medium text-gray-600 block mb-1">Data Follow Up</label>
+            <label className="text-xs font-medium text-gray-600 block mb-1">Data do follow-up * (cria a tarefa na agenda)</label>
             <input type="date" value={data || ''} onChange={e => setData(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
           </div>
@@ -642,7 +642,7 @@ function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
             className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={confirm} disabled={saving || !motivoFinal}
+          <button onClick={confirm} disabled={saving || !motivoFinal || (isFollowUp && !data)}
             className="px-4 py-2 text-sm font-medium rounded-lg text-white disabled:opacity-50"
             style={{ backgroundColor: '#C9A84C' }}>
             {saving ? 'A guardar…' : 'Confirmar'}
@@ -1411,7 +1411,19 @@ export function CRM() {
               item={data.find(i => i.id === moveModal.id)}
               onCancel={() => setMoveModal(null)}
               onConfirm={async (extra) => {
-                await persistMove(moveModal.id, moveModal.newColumn, extra)
+                if (moveModal.type === 'follow_up') {
+                  // Mesma porta do bloco "Próximos passos": muda a fase, guarda
+                  // o motivo e cria a tarefa do follow-up de uma vez.
+                  const r = await apiFetch(`/api/crm/imoveis/${moveModal.id}/follow-up`, {
+                    method: 'POST', regiao: regiaoActiva, headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ data: extra.data_follow_up, motivo: extra.motivo_follow_up, destino: moveModal.newColumn }),
+                  })
+                  if (!r.ok) return toast((await r.json().catch(() => ({}))).error || 'Não foi possível mover', 'error')
+                  toast(`Imóvel em «${moveModal.newColumn}», com o follow-up na agenda`, 'success')
+                  load()
+                } else {
+                  await persistMove(moveModal.id, moveModal.newColumn, extra)
+                }
                 setMoveModal(null)
               }}
             />

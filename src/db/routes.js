@@ -10,6 +10,7 @@ import { readFile, unlink } from 'fs/promises'
 import { createClient } from '@supabase/supabase-js'
 import { isWholesaling } from '../lib/modelos.js'
 import { diasFollowUpParaRegisto } from '../constants/followupRules.js'
+import { faseAoAgendarFollowUp } from '../constants/pipelineImoveis.js'
 
 // 'Resposta' foi renomeado para 'Recebido' numa migração antiga (ver pg.js);
 // dados anteriores à migração ainda usam 'Resposta' — aceitar os dois.
@@ -374,7 +375,9 @@ async function autoCriarNegocioDeImovel(imovel, novoEstado) {
   return negocioId
 }
 
-crudRoutes('/imoveis', Imoveis, {
+// Em constante para a rota do follow-up correr os mesmos efeitos da mudança
+// de fase (pasta no Drive, documentos da fase) quando é ela a mover o imóvel.
+const HOOKS_IMOVEIS = {
   onCreate: async (item) => {
     if (driveConfigured()) {
       await createImovelFolder(item.id, item.nome || 'Sem nome', item.estado || 'Adicionado')
@@ -467,7 +470,8 @@ crudRoutes('/imoveis', Imoveis, {
     }
     return null
   },
-})
+}
+crudRoutes('/imoveis', Imoveis, HOOKS_IMOVEIS)
 
 // ════════════════════════════════════════════════════════════════
 // OPORTUNIDADES — fila de candidatos a imóvel da pesquisa diária Idealista
@@ -2244,9 +2248,11 @@ router.get('/imoveis/:id/followups', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// ── Follow Up do imóvel (aba "Follow Up") ─────────────────────
-// Grava data/motivo do follow-up e agenda logo a tarefa 'A fazer' para esse
-// dia (agendarFollowUpImovelManual) — não fica à espera do "gerar-semana".
+// ── Follow-up do imóvel (bloco "Próximos passos") ─────────────
+// Porta única do follow-up: grava data e motivo, agenda logo a tarefa 'A fazer'
+// (agendarFollowUpImovelManual) e trata da fase — fora de Pendentes e das
+// fases de follow-up, agendar um follow-up passa o imóvel para a fase de
+// follow-up com o motivo como justificação (faseAoAgendarFollowUp).
 router.get('/imoveis/:id/follow-up', async (req, res) => {
   try {
     const imovel = await Imoveis.getById(req.params.id)
@@ -2268,17 +2274,22 @@ router.get('/imoveis/:id/follow-up', async (req, res) => {
 
 router.post('/imoveis/:id/follow-up', async (req, res) => {
   try {
-    const { data, motivo, sem_sucesso, quando } = req.body || {}
+    const { data, motivo, sem_sucesso, quando, destino } = req.body || {}
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data || '')) return res.status(400).json({ error: 'Data do follow-up é obrigatória' })
     if (quando && isNaN(new Date(quando))) return res.status(400).json({ error: 'Hora do follow-up inválida' })
     if (sem_sucesso && !(motivo || '').trim()) return res.status(400).json({ error: 'Indica o motivo do follow-up sem sucesso' })
     const imovel = await Imoveis.getById(req.params.id)
     if (!imovel) return res.status(404).json({ error: 'Não encontrado' })
+    const fase = faseAoAgendarFollowUp(imovel.estado, destino)
+    if (!fase.aplica) return res.status(400).json({ error: 'Imóvel com negócio fechado: o acompanhamento faz-se em Projetos, não há follow-up' })
+    if (fase.mover && !(motivo || '').trim()) return res.status(400).json({ error: `Indica o motivo: é a justificação da passagem para «${fase.mover}»` })
     const patch = { data_follow_up: data }
     if (motivo !== undefined) patch.motivo_follow_up = (motivo || '').trim() || null
-    await Imoveis.update(req.params.id, patch)
+    if (fase.mover) patch.estado = fase.mover
+    const item = await Imoveis.update(req.params.id, patch)
+    if (fase.mover && item) HOOKS_IMOVEIS.onUpdate(item, { estado: fase.mover }).catch(e => console.error('[hook] follow-up imoveis:', e.message))
     const tarefaId = await agendarFollowUpImovelManual(pool, req.params.id, { semSucesso: !!sem_sucesso, motivo, quando: quando || null, user: req.user || null })
-    res.json({ ok: true, tarefa_id: tarefaId })
+    res.json({ ok: true, tarefa_id: tarefaId, estado: fase.mover || null })
   } catch (e) { res.status(400).json({ error: e.message }) }
 })
 

@@ -6,6 +6,10 @@
  * O follow-up trata-se todo aqui (não há aba própria): agenda-se, dá-se como
  * feito ou regista-se "sem sucesso" com nova data e motivo — o que fica no
  * histórico como feito hoje sem sucesso e cria logo a tarefa da nova data.
+ *
+ * Só há follow-up em fase de follow-up ou em Pendentes. Nas outras fases o
+ * botão é "Passar a Follow UP": pede o motivo e muda o imóvel de fase no mesmo
+ * passo (faseAoAgendarFollowUp); negócio fechado não tem follow-up.
  */
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -13,6 +17,7 @@ import { Phone, MapPin, RefreshCw, CalendarClock, Check, X, ChevronDown, Chevron
 import { apiFetch } from '../../lib/api.js'
 import { useRefreshOnMutation } from '../../hooks/useRefreshOnMutation.js'
 import { AgendarPassoModal } from './AgendarPassoModal.jsx'
+import { faseAoAgendarFollowUp } from '../../constants/pipelineImoveis.js'
 
 function tipoDoPasso(t) {
   const c = t.origem_campo || ''
@@ -47,17 +52,20 @@ const inputClass = 'w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm
 
 // Formulário do follow-up, aberto dentro do bloco. semSucesso: o follow-up de
 // hoje foi tentado e falhou — o motivo é obrigatório e fica no histórico.
-function FollowUpForm({ imovelId, semSucesso, motivoInicial = '', onCancel, onDone }) {
+// mover: fase para onde o imóvel passa ao guardar — o motivo é a justificação
+// e por isso também é obrigatório.
+function FollowUpForm({ imovelId, semSucesso, mover = null, motivoInicial = '', onCancel, onDone }) {
   const [data, setData] = useState(emDias(1))
   const [hora, setHora] = useState('')
-  const [motivo, setMotivo] = useState(semSucesso ? '' : motivoInicial)
+  const [motivo, setMotivo] = useState(semSucesso || mover ? '' : motivoInicial)
+  const pedeMotivo = semSucesso || !!mover
   const [saving, setSaving] = useState(false)
   const [erro, setErro] = useState('')
 
   async function guardar(e) {
     e.preventDefault()
     if (!data) return setErro('Indica a nova data.')
-    if (semSucesso && !motivo.trim()) return setErro('Indica o motivo.')
+    if (pedeMotivo && !motivo.trim()) return setErro('Indica o motivo.')
     setErro(''); setSaving(true)
     try {
       const r = await apiFetch(`/api/crm/imoveis/${imovelId}/follow-up`, {
@@ -78,7 +86,9 @@ function FollowUpForm({ imovelId, semSucesso, motivoInicial = '', onCancel, onDo
       <p className="text-xs text-gray-600 mb-2">
         {semSucesso
           ? `Fica registado como feito hoje (${fmtDia(emDias(0))}) sem sucesso e é criada a tarefa para a nova data.`
-          : 'Cria a tarefa de follow-up na agenda para esse dia. A hora é opcional.'}
+          : mover
+            ? `O imóvel passa para «${mover}» com este motivo e fica com a tarefa de follow-up na agenda. A hora é opcional.`
+            : 'Cria a tarefa de follow-up na agenda para esse dia. A hora é opcional.'}
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr_auto] gap-2 sm:items-start">
         <div>
@@ -96,7 +106,7 @@ function FollowUpForm({ imovelId, semSucesso, motivoInicial = '', onCancel, onDo
           </div>
         </div>
         <input type="text" value={motivo} onChange={e => setMotivo(e.target.value)} autoFocus
-          placeholder={semSucesso ? 'Motivo (ex.: não atendeu)' : 'Motivo (opcional)'} className={inputClass} aria-label="Motivo" />
+          placeholder={semSucesso ? 'Motivo (ex.: não atendeu)' : mover ? 'Motivo (o que tem de mudar)' : 'Motivo (opcional)'} className={inputClass} aria-label="Motivo" />
         <div className="flex gap-1.5">
           <button type="submit" disabled={saving}
             className="px-3 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-50" style={{ backgroundColor: '#1A1A1A', color: '#C9A84C' }}>
@@ -136,6 +146,7 @@ export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate }) {
   const historico = Array.isArray(fup.data?.historico) ? fup.data.historico : []
   const motivoFollowUp = fup.data?.motivo_follow_up || ''
   const temFollowUp = passos.some(t => t.origem_campo === 'data_follow_up')
+  const faseFollowUp = faseAoAgendarFollowUp(imovel?.estado)
 
   async function concluir(t) {
     await apiFetch(`/api/crm/imoveis/${imovelId}/proximos-passos/${t.id}`, { method: 'PUT' })
@@ -157,9 +168,11 @@ export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate }) {
             className="text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Agendar chamada</button>
           <button type="button" onClick={() => setAgendar('visita')}
             className="text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Marcar visita</button>
-          {!temFollowUp && (
+          {faseFollowUp.aplica && (faseFollowUp.mover || !temFollowUp) && (
             <button type="button" onClick={() => setFollowUp('agendar')}
-              className="text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Agendar follow-up</button>
+              className="text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+              {faseFollowUp.mover ? `Passar a ${faseFollowUp.mover}` : 'Agendar follow-up'}
+            </button>
           )}
         </span>
       </div>
@@ -207,6 +220,7 @@ export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate }) {
       )}
       {followUp && (
         <FollowUpForm key={followUp} imovelId={imovelId} semSucesso={followUp === 'sem_sucesso'} motivoInicial={motivoFollowUp}
+          mover={followUp === 'agendar' ? faseFollowUp.mover : null}
           onCancel={() => setFollowUp(null)} onDone={followUpGuardado} />
       )}
       {historico.length > 0 && (

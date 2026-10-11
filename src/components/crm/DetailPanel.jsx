@@ -15,7 +15,10 @@ import { fmtTempoMercado } from '../../lib/tempoMercado.js'
 import { DealBreakersPanel } from './DealBreakersPanel.jsx'
 import { TransicaoFaseModal } from './TransicaoFaseModal.jsx'
 import { ProximosPassos } from './ProximosPassos.jsx'
-import { ESTADOS_IMOVEIS } from '../../constants/pipelineImoveis.js'
+import { ESTADOS_IMOVEIS, eFaseFollowUp, limpaEstado } from '../../constants/pipelineImoveis.js'
+
+// A ficha está a pôr o imóvel numa fase de follow-up onde ele ainda não estava.
+const entraEmFollowUp = (form, data) => eFaseFollowUp(form?.estado) && limpaEstado(form.estado) !== limpaEstado(data?.estado)
 
 const AnaliseTab = lazy(() => import('../analise/AnaliseTab.jsx').then(m => ({ default: m.AnaliseTab })))
 const ObraTab = lazy(() => import('../obra/ObraTab.jsx').then(m => ({ default: m.ObraTab })))
@@ -753,6 +756,17 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
     return apiFetchJson(`/api/crm/${endpoint}/${id}/full`).then(setData).catch(() => {})
   }
 
+  // O follow-up pode ter mudado a fase do imóvel: recarrega, alinha o formulário
+  // em edição (senão o próximo "Guardar" repunha a fase antiga) e avisa a lista.
+  async function aposFollowUp() {
+    const d = await apiFetchJson(`/api/crm/${endpoint}/${id}/full`).catch(() => null)
+    if (!d) return
+    setData(d)
+    setForm(f => (f && Object.keys(f).length
+      ? { ...f, estado: d.estado, motivo_follow_up: d.motivo_follow_up, data_follow_up: d.data_follow_up } : f))
+    if (onSave) onSave()
+  }
+
   // Recarregar dados quando sai da tab analise (para reflectir alterações da calculadora)
   useEffect(() => {
     if (prevTab.current === 'analise' && activeTab !== 'analise') {
@@ -771,6 +785,10 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
         toast('Indica o "Motivo Follow Up" antes de guardar', 'error')
         return false
       }
+      if (entraEmFollowUp(form, data) && !form._follow_up_data) {
+        toast('Indica a data do follow-up antes de guardar', 'error')
+        return false
+      }
       if (/n[ãa]o interessa/i.test(est) && !(form.motivo_nao_interessa || '').trim()) {
         toast('Indica o "Motivo Não Interessa" antes de guardar', 'error')
         return false
@@ -785,6 +803,11 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       const { negocios, consultores, imoveis, tarefas, timeline, analises, documentos, checklist, interacoes, montante_investido, ...rest } = form
       // Remover campos virtuais (prefixo _) que vêm da lista enriquecida e não existem na BD
       const cleanForm = { ...Object.fromEntries(Object.entries(rest).filter(([k]) => !k.startsWith('_'))), ...extra }
+      // Entrada numa fase de follow-up: a fase, o motivo e a tarefa vão pela
+      // porta única do follow-up (abaixo), não por este PUT.
+      const followUp = type === 'Imóveis' && entraEmFollowUp(form, data)
+        ? { data: form._follow_up_data, motivo: form.motivo_follow_up, destino: limpaEstado(form.estado) } : null
+      if (followUp) { delete cleanForm.estado; delete cleanForm.motivo_follow_up; delete cleanForm.data_follow_up }
       const r = await apiFetch(`/api/crm/${endpoint}/${id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cleanForm),
       })
@@ -797,6 +820,12 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
           return false
         }
         throw new Error(err.error || 'Erro ao guardar')
+      }
+      if (followUp) {
+        const rf = await apiFetch(`/api/crm/imoveis/${id}/follow-up`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(followUp),
+        })
+        if (!rf.ok) throw new Error((await rf.json().catch(() => ({}))).error || 'Erro ao passar para follow-up')
       }
       setTransicao(null)
       await loadData()
@@ -952,7 +981,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
         </div>
       </div>
 
-      {type === 'Imóveis' && <ProximosPassos imovelId={id} imovel={data} onAbrirTab={setActiveTab} onUpdate={loadData} />}
+      {type === 'Imóveis' && <ProximosPassos imovelId={id} imovel={data} onAbrirTab={setActiveTab} onUpdate={aposFollowUp} />}
       {type === 'Imóveis' && <DealBreakersPanel imovelId={id} imovel={data} onAbrirTab={setActiveTab} onUpdate={loadData} />}
       {type === 'Imóveis' && transicao && (
         <TransicaoFaseModal
@@ -2033,6 +2062,13 @@ function ImovelEditSections({ data, form, setField }) {
               placeholder={isFup ? 'Ex: Aguardar resposta do proprietário…' : 'Ex: preço acima do mercado, sem margem…'}
               className="w-full px-3 py-2 rounded-lg border border-amber-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
             <p className="text-[11px] text-amber-500 mt-1">⚠ Obrigatório para gravar este estado.</p>
+            {isFup && entraEmFollowUp(form, data) && (
+              <div className="mt-2">
+                <label className="text-xs font-medium text-amber-600 block mb-1">Data do follow-up * (cria a tarefa na agenda)</label>
+                <input type="date" value={form._follow_up_data || ''} onChange={e => setField('_follow_up_data', e.target.value)}
+                  className="px-3 py-2 rounded-lg border border-amber-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
+              </div>
+            )}
           </div>
         )
       })()}
