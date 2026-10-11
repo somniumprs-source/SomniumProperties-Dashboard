@@ -17,6 +17,11 @@ import { TransicaoFaseModal } from './TransicaoFaseModal.jsx'
 import { ProximosPassos } from './ProximosPassos.jsx'
 import { ESTADOS_IMOVEIS, eFaseFollowUp, limpaEstado } from '../../constants/pipelineImoveis.js'
 
+// Leads do consultor: só os imóveis que ele enviou por referência, anunciados
+// ou off-market. 'Referência' é a designação antiga da mesma origem.
+const ORIGENS_REFERENCIA = ['Referência por consultores', 'Referência']
+const leadsPorReferencia = imoveis => (imoveis || []).filter(i => ORIGENS_REFERENCIA.includes(i.origem))
+
 // A ficha está a pôr o imóvel numa fase de follow-up onde ele ainda não estava.
 const entraEmFollowUp = (form, data) => eFaseFollowUp(form?.estado) && limpaEstado(form.estado) !== limpaEstado(data?.estado)
 
@@ -785,6 +790,10 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
         toast('Indica o "Motivo Follow Up" antes de guardar', 'error')
         return false
       }
+      if (form.origem === 'Referência por consultores' && !(form.nome_consultor || '').trim()) {
+        toast('Origem «Referência por consultores»: indica o consultor que enviou o imóvel', 'error')
+        return false
+      }
       if (entraEmFollowUp(form, data) && !form._follow_up_data) {
         toast('Indica a data do follow-up antes de guardar', 'error')
         return false
@@ -1234,8 +1243,6 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
                 <EF label="Contacto" field="contacto" form={form} set={setField} />
                 <EF label="Email" field="email" form={form} set={setField} />
                 <EF label="Comissão %" field="comissao" form={form} set={setField} type="number" />
-                <EF label="Leads Enviados" field="imoveis_enviados" form={form} set={setField} type="number" />
-                <EF label="Off-Market" field="imoveis_off_market" form={form} set={setField} type="number" />
                 <div className="col-span-1 sm:col-span-2 md:col-span-3">
                   <ChipsEditor label="Imobiliárias" jsonField={form.imobiliaria} onChange={v => setField('imobiliaria', JSON.stringify(v))} placeholder="Ex: Remax, Century 21…" suggestions={sugestoesTags.imobiliarias} />
                 </div>
@@ -1251,8 +1258,12 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
                 <Field label="Contacto" value={data.contacto} />
                 <Field label="Email" value={data.email} />
                 <Field label="Imobiliária" value={(() => { try { return JSON.parse(data.imobiliaria || '[]').join(', ') } catch { return '—' } })()} />
-                <Field label="Leads Enviados" value={data.imoveis_enviados} />
-                <Field label="Off-Market" value={data.imoveis_off_market} />
+                {/* Contado a partir dos imóveis que o consultor enviou por referência (não se escreve à mão). */}
+                <Field label="Leads por referência" value={(() => {
+                  const refs = leadsPorReferencia(data.imoveis)
+                  const off = refs.filter(i => /off/i.test(i.tipo_oportunidade || '')).length
+                  return off ? `${refs.length} (${off} off-market)` : refs.length
+                })()} />
                 <Field label="Comissão" value={data.comissao > 0 ? `${data.comissao}%` : '—'} />
                 <Field label="1º Contacto" value={data.data_primeira_call} />
               </>}

@@ -1000,6 +1000,10 @@ export function CRM() {
       toast('Preenche o nome/título', 'error')
       return
     }
+    if (tab === 'Imóveis' && item.origem === 'Referência por consultores' && !(item.nome_consultor || '').trim()) {
+      toast('Origem «Referência por consultores»: indica o consultor que enviou o imóvel', 'error')
+      return
+    }
     const isNew = !item.id
     // Tabs regionais (Imóveis, Consultores, Construtores) exigem Coimbra ou
     // AMP ao criar — em "Geral" o registo ficava sem regiao, quebrando a
@@ -2010,8 +2014,6 @@ const FIELD_DEFS = {
     { key: 'data_follow_up', label: 'Data Follow Up', type: 'date' },
     { key: 'data_proximo_follow_up', label: 'Data Próximo Follow Up', type: 'date' },
     { key: 'motivo_follow_up', label: 'Motivo Follow Up', type: 'text' },
-    { key: 'imoveis_enviados', label: 'Imóveis Enviados', type: 'number' },
-    { key: 'imoveis_off_market', label: 'Imóveis Off-Market', type: 'number' },
     { key: 'meta_mensal_leads', label: 'Meta Mensal Leads', type: 'number' },
     { key: 'comissao', label: 'Comissão %', type: 'number' },
     { key: 'motivo_descontinuacao', label: 'Motivo Descontinuação', type: 'text' },
