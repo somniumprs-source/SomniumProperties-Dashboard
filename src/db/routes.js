@@ -249,11 +249,11 @@ const ESTADO_QUALIDADE = {
 // Classificação por score (limiares da fórmula oficial)
 const CLASSE_POR_SCORE = (score) => score >= 80 ? 'A' : score >= 60 ? 'B' : score >= 30 ? 'C' : 'D'
 const CLASSE_LABEL = { A: 'Parceiro', B: 'Activo', C: 'Em desenvolvimento', D: 'Novo' }
-// Imóveis que contam para o consultor (leads, qualidade, classificação): só os
-// que ele enviou por referência, anunciados ou off-market. Um imóvel que a
-// Somnium encontrou num portal não conta para o consultor que o tem anunciado.
-// A origem 'Referência' é outra coisa: leads vindas de quem não é consultor.
-const SQL_ORIGEM_REFERENCIA = "origem = 'Referência por consultores'"
+// Os imóveis ligam-se ao consultor por imoveis.consultor_id. Qualidade e
+// classificação olham para todos os imóveis do consultor; os leads contam só
+// os que ele enviou por referência, anunciados ou off-market (a origem
+// 'Referência' é outra coisa: leads vindas de quem não é consultor).
+const eLeadReferencia = i => i.origem === 'Referência por consultores'
 
 function qualidadeImovel(estado) {
   const clean = (estado || '').replace(/^\d+-\s*/, '').trim()
@@ -1157,11 +1157,11 @@ router.get('/consultores/enriched', async (req, res) => {
     // Filtro por região nas tabelas que têm coluna `regiao` (consultores e imoveis).
     // Interacoes/followups herdam — agregadas por consultor_id depois filtra.
     const consultoresWhere = regiao ? 'WHERE regiao = $1' : ''
-    const imoveisWhere = `WHERE nome_consultor IS NOT NULL AND ${SQL_ORIGEM_REFERENCIA}${regiao ? ' AND regiao = $1' : ''}`
+    const imoveisWhere = `WHERE consultor_id IS NOT NULL${regiao ? ' AND regiao = $1' : ''}`
     const params = regiao ? [regiao] : []
     const [resConsultores, resImoveis, resInteracoes, resFollowupAgg] = await Promise.all([
       pool.query(`SELECT * FROM consultores ${consultoresWhere} ORDER BY score_prioridade DESC NULLS LAST, updated_at DESC`, params),
-      pool.query(`SELECT nome_consultor, estado, check_qualidade, data_adicionado FROM imoveis ${imoveisWhere}`, params),
+      pool.query(`SELECT consultor_id, origem, estado, check_qualidade, data_adicionado FROM imoveis ${imoveisWhere}`, params),
       pool.query('SELECT consultor_id, data_hora, direcao FROM consultor_interacoes ORDER BY data_hora DESC'),
       pool.query('SELECT consultor_id, MIN(data) AS primeiro_followup, MAX(data) AS ultimo_followup FROM consultor_followups GROUP BY consultor_id'),
     ])
@@ -1173,7 +1173,7 @@ router.get('/consultores/enriched', async (req, res) => {
 
     const now = Date.now()
     const enriched = consultores.map(c => {
-      const meusImoveis = imoveis.filter(i => i.nome_consultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase())
+      const meusImoveis = imoveis.filter(i => i.consultor_id === c.id)
       // Só contam como "entregues" os que passaram de Pré-aprovação (validados)
       const imoveisEntregues = meusImoveis.filter(im => (im.estado || '').replace(/^\d+-\s*/, '').trim() !== 'Pré-aprovação')
       const totalImoveis = imoveisEntregues.length
@@ -1216,6 +1216,7 @@ router.get('/consultores/enriched', async (req, res) => {
       return {
         ...c,
         _totalImoveis: totalImoveis,
+        _leadsReferencia: imoveisEntregues.filter(eLeadReferencia).length,
         _imoveisAvancados: imoveisAvancados,
         _diasSemContacto: diasSemContacto,
         _alertStatus: alertStatus,
@@ -3284,7 +3285,7 @@ router.get('/consultores/:id/full', async (req, res) => {
     const { rows: [cons] } = await pool.query('SELECT * FROM consultores WHERE id = $1', [req.params.id])
     if (!cons) return res.status(404).json({ error: 'Não encontrado' })
     // Imóveis deste consultor
-    const { rows: imoveis } = await pool.query("SELECT id, nome, estado, tipologia, ask_price, zona, tipo_oportunidade, origem, check_qualidade, data_adicionado FROM imoveis WHERE nome_consultor ILIKE $1", [`%${cons.nome}%`])
+    const { rows: imoveis } = await pool.query("SELECT id, nome, estado, tipologia, ask_price, zona, tipo_oportunidade, origem, check_qualidade, data_adicionado FROM imoveis WHERE consultor_id = $1", [cons.id])
     // Negócios
     const { rows: negocios } = await pool.query("SELECT * FROM negocios WHERE consultor_ids LIKE $1", [`%${cons.notion_id ?? cons.id}%`])
     const { rows: tarefas } = await pool.query("SELECT * FROM tarefas WHERE tarefa ILIKE $1 ORDER BY created_at DESC", [`%${cons.nome}%`])
@@ -3596,12 +3597,12 @@ router.post('/automation/score-investidores', async (req, res) => {
 router.post('/automation/score-prioridade-consultores', async (req, res) => {
   try {
     const { rows: consultores } = await pool.query('SELECT * FROM consultores')
-    const { rows: imoveis } = await pool.query(`SELECT nome_consultor, estado, check_qualidade FROM imoveis WHERE nome_consultor IS NOT NULL AND ${SQL_ORIGEM_REFERENCIA}`)
+    const { rows: imoveis } = await pool.query('SELECT consultor_id, origem, estado, check_qualidade FROM imoveis WHERE consultor_id IS NOT NULL')
     const { rows: interacoes } = await pool.query('SELECT consultor_id, data_hora, direcao FROM consultor_interacoes ORDER BY data_hora ASC')
     const now = Date.now()
 
     const leadCounts = consultores.map(c =>
-      imoveis.filter(i => i.nome_consultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase()).length
+      imoveis.filter(i => i.consultor_id === c.id).length
     )
     const maxLeads = Math.max(...leadCounts, 1)
 
@@ -3609,10 +3610,11 @@ router.post('/automation/score-prioridade-consultores', async (req, res) => {
     const relatorio = { total: consultores.length, reclassificados: 0, semDados: 0, inativos: 0, distribuicao: { A: 0, B: 0, C: 0, D: 0 }, top5: [], mudancas: [], semDadosList: [] }
 
     for (const c of consultores) {
-      const meusImoveis = imoveis.filter(i => i.nome_consultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase())
+      const meusImoveis = imoveis.filter(i => i.consultor_id === c.id)
       // Só contam como entregues os que passaram de Pré-aprovação
       const imoveisEntregues = meusImoveis.filter(im => (im.estado || '').replace(/^\d+-\s*/, '').trim() !== 'Pré-aprovação')
       const totalImoveis = imoveisEntregues.length
+      const leadsReferencia = imoveisEntregues.filter(eLeadReferencia).length
       const classeAnterior = c.classificacao
 
       // Regra: inactivo 60+ dias → manter Inativo, sem classe
@@ -3682,13 +3684,13 @@ router.post('/automation/score-prioridade-consultores', async (req, res) => {
                        Math.abs((c.taxa_qualidade || 0) - taxaQualidade) > 0.5 ||
                        (c.tempo_medio_resposta || null) !== tempoMedio ||
                        c.classificacao !== classificacao ||
-                       (c.imoveis_enviados || 0) !== totalImoveis
+                       (c.imoveis_enviados || 0) !== leadsReferencia
 
       if (changed) {
         await pool.query(
           `UPDATE consultores SET score_prioridade = $1, taxa_qualidade = $2, tempo_medio_resposta = $3,
            classificacao = $4, imoveis_enviados = $5, updated_at = $6 WHERE id = $7`,
-          [scorePrioridade, taxaQualidade, tempoMedio, classificacao, totalImoveis, new Date().toISOString(), c.id]
+          [scorePrioridade, taxaQualidade, tempoMedio, classificacao, leadsReferencia, new Date().toISOString(), c.id]
         )
         relatorio.reclassificados++
         if (classeAnterior && classeAnterior !== classificacao) {
@@ -4120,12 +4122,12 @@ router.post('/automation/reclassificar-investidores', async (req, res) => {
 router.get('/relatorio/consultores', async (req, res) => {
   try {
     const { rows: consultores } = await pool.query('SELECT * FROM consultores ORDER BY score_prioridade DESC NULLS LAST')
-    const { rows: imoveis } = await pool.query(`SELECT nome_consultor, estado, check_qualidade FROM imoveis WHERE nome_consultor IS NOT NULL AND ${SQL_ORIGEM_REFERENCIA}`)
+    const { rows: imoveis } = await pool.query('SELECT consultor_id, origem, estado, check_qualidade FROM imoveis WHERE consultor_id IS NOT NULL')
     const { rows: interacoes } = await pool.query('SELECT consultor_id, data_hora, direcao FROM consultor_interacoes')
     const now = new Date()
 
     const leadCounts = consultores.map(c =>
-      imoveis.filter(i => i.nome_consultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase()).length
+      imoveis.filter(i => i.consultor_id === c.id).length
     )
     const maxLeads = Math.max(...leadCounts, 1)
 
@@ -4143,7 +4145,7 @@ router.get('/relatorio/consultores', async (req, res) => {
     let somaScore = 0, somaQual = 0, comImoveis = 0
 
     for (const c of consultores) {
-      const meusImoveis = imoveis.filter(i => i.nome_consultor?.trim().toLowerCase() === c.nome?.trim().toLowerCase())
+      const meusImoveis = imoveis.filter(i => i.consultor_id === c.id)
       const totalIm = meusImoveis.length
       const minhasInt = interacoes.filter(i => i.consultor_id === c.id)
 

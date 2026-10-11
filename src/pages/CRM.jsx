@@ -914,8 +914,8 @@ export function CRM() {
             </div>
             {imobs && <p className="text-[11px] text-gray-500 mt-0.5">{imobs}</p>}
             {item.contacto && <p className="text-[11px] text-gray-400 mt-0.5">{item.contacto}</p>}
-            {(item._totalImoveis > 0 || item.imoveis_enviados > 0) && (
-              <p className="text-[11px] text-indigo-600 mt-0.5">{item._totalImoveis ?? item.imoveis_enviados} leads</p>
+            {(item._leadsReferencia ?? item.imoveis_enviados) > 0 && (
+              <p className="text-[11px] text-indigo-600 mt-0.5">{item._leadsReferencia ?? item.imoveis_enviados} leads por referência</p>
             )}
             {item.score_prioridade > 0 && <p className="text-[11px] text-amber-600 mt-0.5">Score: {item.score_prioridade}</p>}
           </div>
