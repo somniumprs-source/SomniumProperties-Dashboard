@@ -19,6 +19,10 @@ const FOLLOWUP_RULES = {
   D: { dias: [15] },
 }
 
+// Consultores que já dão acesso a off-market ou estão em parceria não entram
+// na regra do follow-up: o contacto com eles não segue cadência automática.
+const ESTATUTOS_SEM_FOLLOW_UP = ['Acesso imoveis Off market', 'Consultores em Parceria']
+
 // ── JOB 1: Follow-up diário (08:00 Europe/Lisbon) ──────────
 // Actualiza apenas a data de próximo follow-up por classe; o envio
 // automático de mensagens (agente WhatsApp) foi removido.
@@ -26,7 +30,8 @@ async function runFollowUp() {
   console.log('[cron] Follow-up diário — a correr')
   try {
     const { rows: consultores } = await pool.query(
-      "SELECT * FROM consultores WHERE estado_avaliacao != 'Inativo'"
+      `SELECT * FROM consultores WHERE estado_avaliacao != 'Inativo'
+       AND COALESCE(estatuto, '') NOT IN (${ESTATUTOS_SEM_FOLLOW_UP.map(e => `'${e}'`).join(', ')})`
     )
     const { rows: interacoes } = await pool.query(
       'SELECT consultor_id, MAX(data_hora) as ultima FROM consultor_interacoes GROUP BY consultor_id'
