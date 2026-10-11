@@ -2709,8 +2709,9 @@ app.get("/imoveis/:id/follow-up", async (c: any) => {
 
 app.post("/imoveis/:id/follow-up", async (c: any) => {
   try {
-    const { data, motivo, sem_sucesso } = await c.req.json().catch(() => ({}));
+    const { data, motivo, sem_sucesso, quando } = await c.req.json().catch(() => ({}));
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data || "")) return c.json({ error: "Data do follow-up é obrigatória" }, 400);
+    if (quando && isNaN(new Date(quando).getTime())) return c.json({ error: "Hora do follow-up inválida" }, 400);
     if (sem_sucesso && !(motivo || "").trim()) return c.json({ error: "Indica o motivo do follow-up sem sucesso" }, 400);
     const id = c.req.param("id");
     const imovel = await Imoveis.getById(id);
@@ -2718,7 +2719,7 @@ app.post("/imoveis/:id/follow-up", async (c: any) => {
     const patch: Record<string, any> = { data_follow_up: data };
     if (motivo !== undefined) patch.motivo_follow_up = (motivo || "").trim() || null;
     await Imoveis.update(id, patch);
-    const tarefaId = await agendarFollowUpImovelManual(id, { semSucesso: !!sem_sucesso, motivo, user: await resolveCrmUser(c) });
+    const tarefaId = await agendarFollowUpImovelManual(id, { semSucesso: !!sem_sucesso, motivo, quando: quando || null, user: await resolveCrmUser(c) });
     return c.json({ ok: true, tarefa_id: tarefaId });
   } catch (e) { return c.json({ error: (e as Error).message }, 400); }
 });

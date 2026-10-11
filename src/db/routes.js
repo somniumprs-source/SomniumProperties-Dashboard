@@ -2268,15 +2268,16 @@ router.get('/imoveis/:id/follow-up', async (req, res) => {
 
 router.post('/imoveis/:id/follow-up', async (req, res) => {
   try {
-    const { data, motivo, sem_sucesso } = req.body || {}
+    const { data, motivo, sem_sucesso, quando } = req.body || {}
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data || '')) return res.status(400).json({ error: 'Data do follow-up é obrigatória' })
+    if (quando && isNaN(new Date(quando))) return res.status(400).json({ error: 'Hora do follow-up inválida' })
     if (sem_sucesso && !(motivo || '').trim()) return res.status(400).json({ error: 'Indica o motivo do follow-up sem sucesso' })
     const imovel = await Imoveis.getById(req.params.id)
     if (!imovel) return res.status(404).json({ error: 'Não encontrado' })
     const patch = { data_follow_up: data }
     if (motivo !== undefined) patch.motivo_follow_up = (motivo || '').trim() || null
     await Imoveis.update(req.params.id, patch)
-    const tarefaId = await agendarFollowUpImovelManual(pool, req.params.id, { semSucesso: !!sem_sucesso, motivo, user: req.user || null })
+    const tarefaId = await agendarFollowUpImovelManual(pool, req.params.id, { semSucesso: !!sem_sucesso, motivo, quando: quando || null, user: req.user || null })
     res.json({ ok: true, tarefa_id: tarefaId })
   } catch (e) { res.status(400).json({ error: e.message }) }
 })

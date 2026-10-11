@@ -49,6 +49,7 @@ const inputClass = 'w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm
 // hoje foi tentado e falhou — o motivo é obrigatório e fica no histórico.
 function FollowUpForm({ imovelId, semSucesso, motivoInicial = '', onCancel, onDone }) {
   const [data, setData] = useState(emDias(1))
+  const [hora, setHora] = useState('')
   const [motivo, setMotivo] = useState(semSucesso ? '' : motivoInicial)
   const [saving, setSaving] = useState(false)
   const [erro, setErro] = useState('')
@@ -61,7 +62,7 @@ function FollowUpForm({ imovelId, semSucesso, motivoInicial = '', onCancel, onDo
     try {
       const r = await apiFetch(`/api/crm/imoveis/${imovelId}/follow-up`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data, motivo, sem_sucesso: semSucesso }),
+        body: JSON.stringify({ data, motivo, sem_sucesso: semSucesso, quando: hora ? new Date(`${data}T${hora}`).toISOString() : null }),
       })
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao guardar')
       onDone?.()
@@ -77,11 +78,14 @@ function FollowUpForm({ imovelId, semSucesso, motivoInicial = '', onCancel, onDo
       <p className="text-xs text-gray-600 mb-2">
         {semSucesso
           ? `Fica registado como feito hoje (${fmtDia(emDias(0))}) sem sucesso e é criada a tarefa para a nova data.`
-          : 'Cria a tarefa de follow-up na agenda para esse dia.'}
+          : 'Cria a tarefa de follow-up na agenda para esse dia. A hora é opcional.'}
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr_auto] gap-2 sm:items-start">
         <div>
-          <input type="date" value={data} onChange={e => setData(e.target.value)} className={inputClass} aria-label="Nova data do follow-up" />
+          <div className="flex gap-1.5">
+            <input type="date" value={data} onChange={e => setData(e.target.value)} className={inputClass} aria-label="Nova data do follow-up" />
+            <input type="time" value={hora} onChange={e => setHora(e.target.value)} className={`${inputClass} sm:w-28`} aria-label="Hora do follow-up (opcional)" title="Hora (opcional)" />
+          </div>
           <div className="flex gap-1 mt-1">
             {[[1, 'Amanhã'], [3, '3 dias'], [7, '1 semana']].map(([n, rotulo]) => (
               <button key={n} type="button" onClick={() => setData(emDias(n))}

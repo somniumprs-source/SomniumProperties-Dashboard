@@ -3,8 +3,9 @@
  *
  * Ao contrário da geração semanal da agenda (desligada em agendaEngine), isto
  * corre sempre: é o utilizador que regista a data, por isso a tarefa 'A fazer'
- * é criada na hora (inicio = data sem hora → evento de dia inteiro no Google
- * Calendar). Mesma origem de sempre (imovel/data_follow_up).
+ * é criada na hora. Com hora marcada, inicio/fim levam a hora; sem hora,
+ * inicio = data → evento de dia inteiro no Google Calendar. Mesma origem de
+ * sempre (imovel/data_follow_up).
  *
  * Mantido sem Express/Hono para ser portado 1:1 para
  * supabase/functions/_shared/followUpImovel.ts.
@@ -26,13 +27,19 @@ export async function registarFollowUpFeito(pool, imovelId, { resultado, motivo 
 // semSucesso: o follow-up de hoje foi tentado e falhou — fica registado, a
 // tarefa que estava por fazer é concluída e nasce uma nova para a nova data.
 // Sem isso, a tarefa por fazer (se houver) é só movida para a nova data.
-export async function agendarFollowUpImovelManual(pool, imovelId, { semSucesso = false, motivo = null, user = null } = {}) {
+// quando (opcional): instante ISO com a hora marcada — a tarefa fica com
+// hora (30 min); sem ele fica só o dia (evento de dia inteiro).
+export async function agendarFollowUpImovelManual(pool, imovelId, { semSucesso = false, motivo = null, quando = null, user = null } = {}) {
   const { rows: [im] } = await pool.query(
     'SELECT id, nome, regiao, data_follow_up FROM imoveis WHERE id = $1',
     [imovelId]
   )
   if (!im?.data_follow_up) return null
   const data = String(im.data_follow_up).slice(0, 10)
+  const hora = quando ? new Date(quando) : null
+  const comHora = !!hora && !isNaN(hora.getTime())
+  const inicio = comHora ? hora.toISOString() : data
+  const fim = comHora ? new Date(hora.getTime() + 0.5 * 3600000).toISOString() : data
   const titulo = `Follow-up imóvel — ${im.nome || 'Imóvel'}`
   if (semSucesso) {
     await registarFollowUpFeito(pool, imovelId, { resultado: 'Sem sucesso', motivo, proximaData: data, user })
@@ -50,9 +57,9 @@ export async function agendarFollowUpImovelManual(pool, imovelId, { semSucesso =
   )
   if (abertas.length) {
     await pool.query(
-      `UPDATE tarefas SET tarefa = $1, data_limite = $2, inicio = $2, fim = $2, regiao = $3, updated_at = NOW()
-       WHERE id = $4`,
-      [titulo, data, im.regiao || null, abertas[0].id]
+      `UPDATE tarefas SET tarefa = $1, data_limite = $2, inicio = $3, fim = $4, regiao = $5, updated_at = NOW()
+       WHERE id = $6`,
+      [titulo, data, inicio, fim, im.regiao || null, abertas[0].id]
     )
     return abertas[0].id
   }
@@ -60,8 +67,8 @@ export async function agendarFollowUpImovelManual(pool, imovelId, { semSucesso =
   await pool.query(
     `INSERT INTO tarefas (id, tarefa, categoria, status, prioridade, data_limite, inicio, fim, user_id, funcionario,
                           tempo_horas, regiao, origem_tipo, origem_id, origem_campo)
-     VALUES ($1,$2,'Follow Up Consultores','A fazer','alta',$3,$3,$3,$4,$5,0.5,$6,'imovel',$7,'data_follow_up')`,
-    [id, titulo, data, user?.id || null, user?.nome || null, im.regiao || null, imovelId]
+     VALUES ($1,$2,'Follow Up Consultores','A fazer','alta',$3,$4,$5,$6,$7,0.5,$8,'imovel',$9,'data_follow_up')`,
+    [id, titulo, data, inicio, fim, user?.id || null, user?.nome || null, im.regiao || null, imovelId]
   )
   return id
 }
