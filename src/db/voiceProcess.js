@@ -144,7 +144,7 @@ TODAS as tarefas devem ser sincronizadas com Google Calendar.`,
     const cons = consultores.find(c => c.nome.toLowerCase().includes(entNome.toLowerCase()))
     if (cons) {
       const data = parsed.data || hoje
-      await pgQuery('UPDATE consultores SET data_follow_up = $1, data_proximo_follow_up = $2, updated_at = $3 WHERE id = $4', [data, data, now, cons.id])
+      await pgQuery('UPDATE consultores SET data_follow_up = $1, updated_at = $2 WHERE id = $3', [data, now, cons.id])
       await pgQuery(
         'INSERT INTO consultor_interacoes (id, consultor_id, data_hora, canal, direcao, notas) VALUES ($1, $2, $3, $4, $5, $6)',
         [randomUUID(), cons.id, `${data}T${parsed.hora || '09:00'}:00Z`, parsed.canal || 'chamada', 'Enviado', `Follow-up: ${parsed.descricao}`]

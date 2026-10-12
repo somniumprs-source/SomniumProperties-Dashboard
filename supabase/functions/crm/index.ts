@@ -19,7 +19,7 @@ import pool from "../_shared/pg.ts";
 import { withAuditUser } from "../_shared/audit.ts";
 import {
   Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas,
-  ConsultorInteracoes, InvestidorInteracoes, ConsultorFollowups, DocumentosInvestidor, Visitas,
+  ConsultorInteracoes, InvestidorInteracoes, DocumentosInvestidor, Visitas,
   Empreiteiros, getDashboardStats, ensureColumn,
 } from "../_shared/crud.ts";
 import { getVisitasEnriquecidas, syncDataVisitaDerivada, getFichaVisitaParaImovel } from "../_shared/queries.ts";
@@ -39,7 +39,6 @@ import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { isWholesaling } from "../_shared/modelos.ts";
 import { avaliarEntrada, painelRequisitos } from "../_shared/dealBreakers.ts";
 import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase } from "../_shared/projetoTarefas.ts";
-import { criarFollowUpConsultor } from "../_shared/consultorFollowups.ts";
 import { ensureOportunidadesScraperTable } from "../_shared/oportunidadesScraper.ts";
 
 // 'Resposta' foi renomeado para 'Recebido' numa migração antiga (ver pg.ts);
@@ -2011,46 +2010,6 @@ app.delete("/visitas/:id", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
-// ── Historico de follow-ups por consultor — port de routes.js 1063-1139 ──
-app.get("/consultores/:id/followups", async (c: any) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT * FROM consultor_followups WHERE consultor_id = $1 ORDER BY data DESC, created_at DESC`,
-      [c.req.param("id")],
-    );
-    return c.json(rows);
-  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
-});
-
-app.post("/consultores/:id/followups", async (c: any) => {
-  try {
-    await ensureGravacoesTable();
-    const body = await c.req.json().catch(() => ({}));
-    const item = await criarFollowUpConsultor(c.req.param("id"), body);
-    return c.json(item, 201);
-  } catch (e) { return c.json({ error: (e as Error).message }, 400); }
-});
-
-app.delete("/consultores/:id/followups/:followupId", async (c: any) => {
-  try {
-    const ok = await ConsultorFollowups.delete(c.req.param("followupId"));
-    if (!ok) return c.json({ error: "Follow-up não encontrado" }, 404);
-
-    const { rows } = await pool.query(
-      `SELECT data, motivo, proximo_follow_up FROM consultor_followups
-       WHERE consultor_id = $1 ORDER BY data DESC, created_at DESC LIMIT 1`,
-      [c.req.param("id")],
-    );
-    await Consultores.update(c.req.param("id"), {
-      data_follow_up: rows[0]?.data || null,
-      motivo_follow_up: rows[0]?.motivo || null,
-      data_proximo_follow_up: rows[0]?.proximo_follow_up || null,
-    });
-
-    return c.json({ ok: true });
-  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
-});
-
 // ── Interaccoes por consultor — port de routes.js 1142-1152 ──
 app.get("/consultores/:id/interacoes", async (c: any) => {
   try {
@@ -2680,20 +2639,6 @@ app.get("/imoveis/:id/interacoes", async (c: any) => {
       `SELECT ci.*, c.nome as consultor_nome FROM consultor_interacoes ci
        LEFT JOIN consultores c ON c.id = ci.consultor_id
        WHERE ci.imovel_id = $1 ORDER BY ci.data_hora DESC`,
-      [c.req.param("id")],
-    );
-    return c.json(rows);
-  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
-});
-
-// ── Conversas (follow-ups + gravacoes) ligadas a um imovel ───
-app.get("/imoveis/:id/followups", async (c: any) => {
-  try {
-    await ensureGravacoesTable();
-    const { rows } = await pool.query(
-      `SELECT f.*, c.nome AS consultor_nome FROM consultor_followups f
-       LEFT JOIN consultores c ON c.id = f.consultor_id
-       WHERE f.imovel_id = $1 ORDER BY f.data DESC, f.created_at DESC`,
       [c.req.param("id")],
     );
     return c.json(rows);

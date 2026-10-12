@@ -20,7 +20,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.s
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
 const supabaseStorage = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null
 export { supabaseStorage }
-import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, InvestidorInteracoes, ConsultorFollowups, DocumentosInvestidor, Visitas, Empreiteiros, getDashboardStats } from './crud.js'
+import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, InvestidorInteracoes, DocumentosInvestidor, Visitas, Empreiteiros, getDashboardStats } from './crud.js'
 import pool from './pg.js'
 import { agendarPassoImovel, sincronizarTarefaVisita } from './agendaEngine.js'
 import { agendarFollowUpImovelManual, registarFollowUpFeito } from './followUpImovel.js'
@@ -1593,93 +1593,6 @@ router.delete('/visitas/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// ── Histórico de follow-ups por consultor ───────────────────
-router.get('/consultores/:id/followups', async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT * FROM consultor_followups WHERE consultor_id = $1 ORDER BY data DESC, created_at DESC`,
-      [req.params.id]
-    )
-    res.json(rows)
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
-
-// Extraído para ser reutilizável por PATCH /gravacoes/:id/registo (follow-up
-// automático por desfecho de chamada, ver C2 da auditoria) e por
-// autoFillConsultor (meetingAnalysis.js) — ambos devem criar uma entrada real
-// em consultor_followups, nunca escrever os campos legados directamente.
-export async function criarFollowUpConsultor(consultorId, { data, motivo, proximo_follow_up, imovel_id }) {
-  if (!data) throw new Error('Data do follow-up é obrigatória')
-
-  const item = await ConsultorFollowups.create({
-    consultor_id: consultorId,
-    imovel_id: imovel_id || null,
-    data,
-    motivo: motivo || null,
-    proximo_follow_up: proximo_follow_up || null,
-  })
-
-  // Sincronizar campos legados no consultor com a entrada mais recente
-  const { rows } = await pool.query(
-    `SELECT data, motivo, proximo_follow_up FROM consultor_followups
-     WHERE consultor_id = $1 ORDER BY data DESC, created_at DESC LIMIT 1`,
-    [consultorId]
-  )
-  if (rows[0]) {
-    await Consultores.update(consultorId, {
-      data_follow_up: rows[0].data,
-      motivo_follow_up: rows[0].motivo,
-      data_proximo_follow_up: rows[0].proximo_follow_up,
-    })
-  }
-
-  // Auto-preencher data_primeira_call com o follow-up mais antigo (apenas se vazio)
-  const { rows: cur } = await pool.query(
-    `SELECT data_primeira_call FROM consultores WHERE id = $1`,
-    [consultorId]
-  )
-  if (cur[0] && (cur[0].data_primeira_call == null || cur[0].data_primeira_call === '')) {
-    const { rows: oldest } = await pool.query(
-      `SELECT data FROM consultor_followups
-       WHERE consultor_id = $1 ORDER BY data ASC, created_at ASC LIMIT 1`,
-      [consultorId]
-    )
-    if (oldest[0]?.data) {
-      await Consultores.update(consultorId, { data_primeira_call: oldest[0].data })
-    }
-  }
-
-  return item
-}
-
-router.post('/consultores/:id/followups', async (req, res) => {
-  try {
-    const item = await criarFollowUpConsultor(req.params.id, req.body)
-    res.status(201).json(item)
-  } catch (e) { res.status(400).json({ error: e.message }) }
-})
-
-router.delete('/consultores/:id/followups/:followupId', async (req, res) => {
-  try {
-    const ok = await ConsultorFollowups.delete(req.params.followupId)
-    if (!ok) return res.status(404).json({ error: 'Follow-up não encontrado' })
-
-    // Re-sincronizar campos legados com a entrada mais recente que sobrou
-    const { rows } = await pool.query(
-      `SELECT data, motivo, proximo_follow_up FROM consultor_followups
-       WHERE consultor_id = $1 ORDER BY data DESC, created_at DESC LIMIT 1`,
-      [req.params.id]
-    )
-    await Consultores.update(req.params.id, {
-      data_follow_up: rows[0]?.data || null,
-      motivo_follow_up: rows[0]?.motivo || null,
-      data_proximo_follow_up: rows[0]?.proximo_follow_up || null,
-    })
-
-    res.json({ ok: true })
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
-
 // ── Gravacoes de chamadas (audio → transcricao Whisper → analise IA) ──────────
 const GRAVACOES_BUCKET = 'Gravacoes'
 
@@ -2217,20 +2130,6 @@ router.get('/imoveis/:id/interacoes', async (req, res) => {
       `SELECT ci.*, c.nome as consultor_nome FROM consultor_interacoes ci
        LEFT JOIN consultores c ON c.id = ci.consultor_id
        WHERE ci.imovel_id = $1 ORDER BY ci.data_hora DESC`,
-      [req.params.id]
-    )
-    res.json(rows)
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
-
-// ── Conversas (follow-ups + gravacoes) ligadas a um imovel ───
-// Espelha na ficha do imovel as conversas registadas no consultor com este imovel.
-router.get('/imoveis/:id/followups', async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT f.*, c.nome AS consultor_nome FROM consultor_followups f
-       LEFT JOIN consultores c ON c.id = f.consultor_id
-       WHERE f.imovel_id = $1 ORDER BY f.data DESC, f.created_at DESC`,
       [req.params.id]
     )
     res.json(rows)

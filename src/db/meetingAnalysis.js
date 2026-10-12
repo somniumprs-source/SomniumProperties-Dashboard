@@ -388,9 +388,7 @@ Responde APENAS em JSON válido com esta estrutura:
     "equipa_remax": null ou nome da equipa se mencionada,
     "imoveis_estimados_mes": null ou número aproximado de leads/imóveis por mês,
     "interesse_parceria": null ou "Alto" ou "Médio" ou "Baixo",
-    "objecoes": null ou texto breve com receios/objeções,
-    "data_proximo_followup": null ou data ISO (YYYY-MM-DD) se houver compromisso explícito,
-    "motivo_followup": null ou texto breve
+    "objecoes": null ou texto breve com receios/objeções
   },
   "resumo_executivo": "2-3 frases resumindo a reunião",
   "pontos_chave": ["ponto 1", "ponto 2", ...],
@@ -456,24 +454,6 @@ export async function autoFillConsultor(reuniaoId) {
   if (!cons.equipa_remax && dados.equipa_remax) updates.equipa_remax = dados.equipa_remax
   if (!cons.classificacao && analise.classificacao_sugerida) updates.classificacao = analise.classificacao_sugerida
 
-  // Follow-up sugerido pela IA: cria sempre uma entrada real em
-  // consultor_followups (histórico), nunca escreve os campos legados
-  // directamente — senão fica invisível no histórico e pode ser apagado
-  // sem aviso da próxima vez que alguém editar um follow-up manual.
-  let followUpCriado = false
-  if (dados.data_proximo_followup) {
-    try {
-      const { criarFollowUpConsultor } = await import('./routes.js')
-      await criarFollowUpConsultor(cons.id, {
-        data: dados.data_proximo_followup,
-        motivo: dados.motivo_followup ? `[Fireflies] ${dados.motivo_followup}` : '[Fireflies] Sugerido pela IA',
-      })
-      followUpCriado = true
-    } catch (e) {
-      console.error('[meetingAnalysis] Erro ao criar follow-up sugerido (consultor):', e.message)
-    }
-  }
-
   // Adicionar nota da reunião
   const notaReuniao = `[${reuniao.data?.slice(0, 10)}] ${analise.resumo_executivo || 'Reunião analisada por AI'}`
   if (cons.notas) {
@@ -507,7 +487,7 @@ export async function autoFillConsultor(reuniaoId) {
   return {
     ...analise,
     autoFilled: true,
-    fieldsUpdated: followUpCriado ? [...Object.keys(updates), 'follow_up'] : Object.keys(updates),
+    fieldsUpdated: Object.keys(updates),
     consultor_id: cons.id,
     consultor_nome: cons.nome,
   }
