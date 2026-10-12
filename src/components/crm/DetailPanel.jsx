@@ -1218,6 +1218,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
                 <EF label="Classificação" field="classificacao" form={form} set={setField} type="select" options={['A','B','C','D']} />
                 <EF label="Contacto" field="contacto" form={form} set={setField} />
                 <EF label="Email" field="email" form={form} set={setField} />
+                <EF label="Link de perfil" field="link_perfil" form={form} set={setField} />
                 <EF label="Comissão %" field="comissao" form={form} set={setField} type="number" />
                 <div className="col-span-1 sm:col-span-2 md:col-span-3">
                   <ChipsEditor label="Imobiliárias" jsonField={form.imobiliaria} onChange={v => setField('imobiliaria', JSON.stringify(v))} placeholder="Ex: Remax, Century 21…" suggestions={sugestoesTags.imobiliarias} />
@@ -1233,6 +1234,9 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
                 <Field label="Classificação" value={data.classificacao} />
                 <Field label="Contacto" value={data.contacto} />
                 <Field label="Email" value={data.email} />
+                <Field label="Link de perfil" value={data.link_perfil
+                  ? <a href={/^https?:\/\//i.test(data.link_perfil) ? data.link_perfil : `https://${data.link_perfil}`} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">{data.link_perfil}</a>
+                  : null} />
                 <Field label="Imobiliária" value={(() => { try { return JSON.parse(data.imobiliaria || '[]').join(', ') } catch { return '—' } })()} />
                 {/* Contado a partir dos imóveis que o consultor enviou por referência (não se escreve à mão). */}
                 <Field label="Leads por referência" value={(() => {

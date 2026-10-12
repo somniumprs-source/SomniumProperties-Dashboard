@@ -123,6 +123,7 @@ async function exportComercial() {
     { header: 'Zona', key: 'zona_actuacao', width: 20 },
     { header: 'Contacto', key: 'contacto', width: 18 },
     { header: 'Email', key: 'email', width: 25 },
+    { header: 'Link de perfil', key: 'link_perfil', width: 40 },
     { header: 'Pontuação', key: 'pontuacao', width: 12 },
     { header: 'Follow-up', key: 'data_follow_up', width: 14 },
   ]
@@ -130,7 +131,7 @@ async function exportComercial() {
   for (const r of consultores) {
     sc.addRow({
       nome: fmt(r.nome), estatuto: fmt(r.estatuto), zona_actuacao: fmt(r.zonas),
-      contacto: fmt(r.contacto), email: fmt(r.email),
+      contacto: fmt(r.contacto), email: fmt(r.email), link_perfil: fmt(r.link_perfil),
       pontuacao: r.score_prioridade ? Number(r.score_prioridade) : '',
       data_follow_up: fmtDate(r.data_follow_up),
     })

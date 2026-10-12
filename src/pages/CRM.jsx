@@ -1901,6 +1901,7 @@ const FIELD_DEFS = {
     { key: 'classificacao', label: 'Classificação', type: 'select', options: ['A','B','C','D'] },
     { key: 'contacto', label: 'Contacto (telefone)', type: 'tel' },
     { key: 'email', label: 'Email', type: 'email' },
+    { key: 'link_perfil', label: 'Link de perfil', type: 'text' },
     { key: 'imobiliaria', label: 'Imobiliária', type: 'chips_autocomplete' },
     { key: 'zonas', label: 'Zonas de Atuação', type: 'multiselect_regional' },
     { key: 'data_inicio', label: 'Data Início Parceria', type: 'date' },

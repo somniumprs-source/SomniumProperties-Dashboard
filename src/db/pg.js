@@ -1282,6 +1282,7 @@ export async function initSchema() {
 
       DO $$ BEGIN
         ALTER TABLE consultores ADD COLUMN IF NOT EXISTS regiao TEXT;
+        ALTER TABLE consultores ADD COLUMN IF NOT EXISTS link_perfil TEXT;
         UPDATE consultores SET regiao = 'Coimbra' WHERE regiao IS NULL;
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
