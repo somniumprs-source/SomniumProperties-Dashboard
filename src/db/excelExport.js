@@ -123,7 +123,7 @@ async function exportComercial() {
     { header: 'Zona', key: 'zona_actuacao', width: 20 },
     { header: 'Contacto', key: 'contacto', width: 18 },
     { header: 'Email', key: 'email', width: 25 },
-    { header: 'Link de perfil', key: 'link_perfil', width: 40 },
+    { header: 'Link da equipa', key: 'link_perfil', width: 40 },
     { header: 'Pontuação', key: 'pontuacao', width: 12 },
     { header: 'Follow-up', key: 'data_follow_up', width: 14 },
   ]

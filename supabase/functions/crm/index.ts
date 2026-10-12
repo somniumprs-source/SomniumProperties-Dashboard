@@ -1526,7 +1526,7 @@ app.delete("/imoveis/:id/orcamentos-obra/:docId", async (c: any) => {
 // chamar /consultores/enriched e obter todos os consultores sem módulo crm.consultores.
 app.use("/consultores", requireModule("crm.consultores"));
 app.use("/consultores/*", requireModule("crm.consultores"));
-// Link de perfil do consultor (migração 0073) — as migrações não são
+// Link da equipa do consultor (migração 0073) — as migrações não são
 // auto-aplicadas em produção, por isso garantimos a coluna em runtime.
 const ensureConsultorLinkPerfil = async (_c: any, next: any) => {
   await ensureColumn("consultores", "link_perfil TEXT");
