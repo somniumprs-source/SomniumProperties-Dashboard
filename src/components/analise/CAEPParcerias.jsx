@@ -51,6 +51,7 @@ export function CAEPParcerias({ analise, onUpdate }) {
     return parsed?.quota_somnium !== undefined ? parsed : null
   })()
 
+  const doProjeto = caepResult?.investidores_fonte === 'projeto'
   const capitalTotal = config.investidores.reduce((s, inv) => s + (parseFloat(inv.capital) || 0), 0)
   const capitalNecessario = analise?.capital_necessario || 0
   const progresso = capitalNecessario > 0 ? Math.min((capitalTotal / capitalNecessario) * 100, 100) : 0
@@ -144,22 +145,28 @@ export function CAEPParcerias({ analise, onUpdate }) {
         </div>
       </div>
 
-      {/* Investidores */}
+      {/* Investidores — com investidores ligados ao negócio CAEP, a lista vem
+          do separador Investidores do projeto e não se edita aqui. */}
+      {doProjeto && (
+        <p className="text-xs text-gray-400">
+          Capital e investidores geridos no separador <strong className="text-gray-600">Investidores</strong> do negócio CAEP — aqui só a distribuição do lucro.
+        </p>
+      )}
       <div className="space-y-3">
         {config.investidores.map((inv, idx) => {
           const result = caepResult?.investidores?.[idx]
           return (
             <div key={idx} className="rounded-xl border border-gray-200 p-4">
               <div className="flex items-center justify-between mb-3">
-                <input value={inv.nome} onChange={e => updateInvestidor(idx, 'nome', e.target.value)}
+                <input value={inv.nome} readOnly={doProjeto} onChange={e => updateInvestidor(idx, 'nome', e.target.value)}
                   className="text-sm font-semibold bg-transparent border-none outline-none" placeholder="Nome" />
-                <button onClick={() => removeInvestidor(idx)} className="text-xs text-red-400 hover:text-red-600">&times;</button>
+                {!doProjeto && <button onClick={() => removeInvestidor(idx)} className="text-xs text-red-400 hover:text-red-600">&times;</button>}
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                 <div>
                   <label className="text-gray-400">Capital</label>
-                  <input type="number" step="any" value={inv.capital || ''} onChange={e => updateInvestidor(idx, 'capital', parseFloat(e.target.value) || 0)}
-                    className="w-full border rounded px-2 py-1 font-mono" onWheel={e => e.target.blur()} />
+                  <input type="number" step="any" value={inv.capital || ''} readOnly={doProjeto} onChange={e => updateInvestidor(idx, 'capital', parseFloat(e.target.value) || 0)}
+                    className={`w-full border rounded px-2 py-1 font-mono ${doProjeto ? 'bg-gray-50 text-gray-600' : ''}`} onWheel={e => e.target.blur()} />
                 </div>
                 <div>
                   <label className="text-gray-400">% do pool</label>
@@ -169,7 +176,7 @@ export function CAEPParcerias({ analise, onUpdate }) {
                 </div>
                 <div>
                   <label className="text-gray-400">Tipo</label>
-                  <select value={inv.tipo} onChange={e => updateInvestidor(idx, 'tipo', e.target.value)}
+                  <select value={inv.tipo} disabled={doProjeto} onChange={e => updateInvestidor(idx, 'tipo', e.target.value)}
                     className="w-full border rounded px-2 py-1">
                     <option value="particular">Particular</option>
                     <option value="empresa">Empresa</option>
@@ -195,10 +202,12 @@ export function CAEPParcerias({ analise, onUpdate }) {
         })}
       </div>
 
-      <button onClick={addInvestidor}
-        className="w-full py-2 text-xs rounded-lg border-2 border-dashed border-gray-200 text-gray-400 hover:border-gray-400 hover:text-gray-600 transition-colors">
-        + Adicionar Investidor
-      </button>
+      {!doProjeto && (
+        <button onClick={addInvestidor}
+          className="w-full py-2 text-xs rounded-lg border-2 border-dashed border-gray-200 text-gray-400 hover:border-gray-400 hover:text-gray-600 transition-colors">
+          + Adicionar Investidor
+        </button>
+      )}
 
       {/* Resumo CAEP */}
       {caepResult && caepResult.quota_somnium !== undefined && (

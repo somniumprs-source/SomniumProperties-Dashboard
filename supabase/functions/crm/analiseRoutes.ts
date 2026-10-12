@@ -40,6 +40,61 @@ const CALC_FIELDS = new Set([
   "stress_tests",
 ]);
 
+// ── CAEP: investidores derivados de projeto_investidores (fonte única) ──
+// A aba "Investidores" de um negócio (projeto_investidores, com FK real ao
+// investidor) e a secção CAEP da calculadora (analises.caep.investidores)
+// costumavam ser duas listas mantidas à mão, independentes — divergiam em
+// silêncio (capital e até o nome do investidor podiam ficar diferentes).
+// Passa a haver uma única fonte: projeto_investidores. calcCAEP nunca mais
+// usa a lista que vier do cliente; o "tipo" (particular/empresa) é inferido
+// de investidores.dados_empresa em vez de guardado à parte.
+// Port de getCaepInvestidoresDoProjeto (src/db/analiseRoutes.js).
+async function getCaepInvestidoresDoProjeto(imovelId: string) {
+  const { rows: [neg] } = await pool.query(
+    `SELECT id FROM negocios WHERE imovel_id = $1 AND categoria = 'CAEP' AND deleted_at IS NULL ORDER BY created_at LIMIT 1`,
+    [imovelId],
+  );
+  if (!neg) return [];
+  const { rows } = await pool.query(
+    `SELECT pi.capital, i.nome, i.dados_empresa
+       FROM projeto_investidores pi
+       JOIN investidores i ON i.id = pi.investidor_id
+      WHERE pi.negocio_id = $1
+      ORDER BY pi.created_at`,
+    [neg.id],
+  );
+  return rows.map((r: any) => ({ nome: r.nome, capital: Number(r.capital) || 0, tipo: r.dados_empresa ? "empresa" : "particular" }));
+}
+
+// Chamada a partir de index.ts sempre que projeto_investidores muda, para
+// que a análise activa (e o PDF/relatório que lê dela) reflicta o novo
+// capital sem precisar que alguém abra e grave a calculadora manualmente.
+// Enquanto o negócio CAEP não tiver investidores ligados (análise feita antes
+// de haver projeto), vale a lista escrita à mão na calculadora; a partir daí a
+// fonte é só projeto_investidores. investidores_fonte diz ao ecrã qual é.
+async function calcCaepFonteUnica(inputs: any, caepConfig: any, imovelId: string) {
+  const doProjeto = await getCaepInvestidoresDoProjeto(imovelId);
+  const usarProjeto = doProjeto.length > 0;
+  const r: any = calcCAEP(inputs, usarProjeto ? { ...caepConfig, investidores: doProjeto } : caepConfig);
+  if (r) r.investidores_fonte = usarProjeto ? "projeto" : "manual";
+  return r;
+}
+
+// Port de resyncCaepInvestidores (src/db/analiseRoutes.js).
+export async function resyncCaepInvestidores(imovelId: string) {
+  const { rows: [analise] } = await pool.query(
+    "SELECT * FROM analises WHERE imovel_id = $1 AND activa = true LIMIT 1", [imovelId],
+  );
+  if (!analise || !analise.caep) return;
+  const caepConfig = typeof analise.caep === "string" ? JSON.parse(analise.caep) : analise.caep;
+  const caepResult = await calcCaepFonteUnica(analise, caepConfig, imovelId);
+  await pool.query(
+    "UPDATE analises SET caep = $1, updated_at = $2 WHERE id = $3",
+    [JSON.stringify(caepResult), new Date().toISOString(), analise.id],
+  );
+  await propagarParaImovel(imovelId, analise, analise, caepResult);
+}
+
 // ── Propagação: análise activa → imóvel + negócio ────────────
 // Exportada para ser reutilizada por recalcAnaliseActivaCompra (crm/index.ts),
 // disparada quando a ficha do imóvel é editada directamente — assim os dois
@@ -193,7 +248,10 @@ export function registerAnaliseRoutes(app: any) {
       // Calcular
       const calculados = calcAnalise(inputs);
       const stress = calcStressTests(inputs);
-      const caepResult = inputs.caep ? calcCAEP(inputs, typeof inputs.caep === "string" ? JSON.parse(inputs.caep) : inputs.caep) : null;
+      const caepConfigRaw = inputs.caep ? (typeof inputs.caep === "string" ? JSON.parse(inputs.caep) : inputs.caep) : null;
+      const caepResult = caepConfigRaw
+        ? await calcCaepFonteUnica(inputs, caepConfigRaw, imovelId)
+        : null;
 
       // Montar dados para insert
       const data: any = {
@@ -322,7 +380,9 @@ export function registerAnaliseRoutes(app: any) {
       const calculados = calcAnalise(merged);
       const stress = calcStressTests(merged);
       const caepConfig = merged.caep ? (typeof merged.caep === "string" ? JSON.parse(merged.caep) : merged.caep) : null;
-      const caepResult = caepConfig ? calcCAEP(merged, caepConfig) : null;
+      const caepResult = caepConfig
+        ? await calcCaepFonteUnica(merged, caepConfig, existing.imovel_id)
+        : null;
 
       // Montar SET
       const updates: any = { ...merged, ...calculados, stress_tests: stress, versao: (existing.versao || 1) + 1, updated_at: now };

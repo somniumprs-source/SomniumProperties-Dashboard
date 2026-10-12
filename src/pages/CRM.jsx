@@ -905,14 +905,19 @@ export function CRM() {
       const method = isNew ? 'POST' : 'PUT'
       // Propagar a região activa — o middleware regional do backend usa o
       // header X-Regiao para preencher automaticamente body.regiao (ou
-      // regioes_preferidas em investidores) quando ausente.
-      const r = await apiFetch(url, { method, regiao: regiaoActiva, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) })
+      // regioes_preferidas em investidores) quando ausente. Se a região foi
+      // trocada depois de abrir o formulário, item.regiao vem null explícito
+      // e o backend não o substitui: usa-se aqui a região ativa mais recente.
+      const payload = (isNew && TABS_REGIONAIS.has(tab) && !item.regiao && regiaoActiva)
+        ? { ...item, regiao: regiaoActiva }
+        : item
+      const r = await apiFetch(url, { method, regiao: regiaoActiva, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       if (!r.ok) {
         const err = await r.json().catch(() => ({}))
         if (!isNew && tab === 'Imóveis' && err.requisitos?.length) {
           // A fase escolhida precisa de dados em falta: guarda o resto do
           // formulário e abre a janela de registo para a mudança de fase.
-          const { estado, ...resto } = item
+          const { estado, ...resto } = payload
           const r2 = await apiFetch(url, { method, regiao: regiaoActiva, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(resto) })
           if (!r2.ok) throw new Error((await r2.json().catch(() => ({}))).error || 'Erro ao guardar')
           setEditing(null)
@@ -2124,6 +2129,7 @@ function ChipsAutocomplete({ value, suggestions = [], onChange, placeholder }) {
 function FormPanel({ tab, item, regiao, onSave, onCancel }) {
   const fields = FIELD_DEFS[tab] ?? []
   const [form, setForm] = useState({ ...item, regiao: item?.regiao || regiao || null })
+  const [saving, setSaving] = useState(false)
   const [lookups, setLookups] = useState({})
   const [tagSuggestions, setTagSuggestions] = useState({ imobiliarias: [], zonas: [] })
   const isNew = !item.id
@@ -2309,8 +2315,16 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
         )})}
       </div>
       <div className="flex gap-3 mt-6">
-        <button onClick={() => onSave(form)} className="px-6 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700">
-          {isNew ? 'Criar' : 'Guardar'}
+        <button
+          onClick={async () => {
+            if (saving) return
+            setSaving(true)
+            try { await onSave(form) } finally { setSaving(false) }
+          }}
+          disabled={saving}
+          className="px-6 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {saving ? '...' : (isNew ? 'Criar' : 'Guardar')}
         </button>
         <button onClick={onCancel} className="px-6 py-2 bg-gray-100 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-200">
           Cancelar

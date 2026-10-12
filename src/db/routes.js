@@ -5942,6 +5942,19 @@ async function iniciarOnboardingInvestidor(linkId, negocioId, investidorId) {
   } catch (e) { console.error('[onboarding-investidor]', e.message) }
 }
 
+// A análise activa do imóvel (secção CAEP da calculadora) deriva sempre os
+// investidores desta tabela — ver getCaepInvestidoresDoProjeto em
+// analiseRoutes.js. Reflecte aqui qualquer alteração de capital/ligação.
+async function resyncCaepAposProjetoInvestidor(negocioId) {
+  if (!negocioId) return
+  try {
+    const { rows: [neg] } = await pool.query('SELECT imovel_id, categoria FROM negocios WHERE id = $1', [negocioId])
+    if (!neg || neg.categoria !== 'CAEP' || !neg.imovel_id) return
+    const { resyncCaepInvestidores } = await import('./analiseRoutes.js')
+    await resyncCaepInvestidores(neg.imovel_id)
+  } catch (e) { console.error('[projeto-investidor] resyncCaep:', e.message) }
+}
+
 router.post('/projetos/:negocioId/investidores', async (req, res) => {
   try {
     const { investidor_id, capital, percentagem, notas } = req.body || {}
@@ -5966,6 +5979,7 @@ router.post('/projetos/:negocioId/investidores', async (req, res) => {
     if (!jaExistia) {
       iniciarOnboardingInvestidor(rows[0].id, req.params.negocioId, investidor_id).catch(e => console.error('[projeto-investidor] onboarding:', e.message))
     }
+    resyncCaepAposProjetoInvestidor(req.params.negocioId)
     res.status(201).json(rows[0])
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -5986,6 +6000,7 @@ router.put('/projetos/investidores/:linkId', async (req, res) => {
     const { rows } = await pool.query(`UPDATE projeto_investidores SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`, params)
     if (!rows.length) return res.status(404).json({ error: 'Ligação não encontrada' })
     syncMontanteInvestido(rows[0].investidor_id).catch(e => console.error('[projeto-investidor] syncMontante:', e.message))
+    resyncCaepAposProjetoInvestidor(rows[0].negocio_id)
     res.json(rows[0])
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -6010,8 +6025,11 @@ router.put('/projetos/investidores/:linkId/confirmar-contacto', async (req, res)
 
 router.delete('/projetos/investidores/:linkId', async (req, res) => {
   try {
-    const { rows } = await pool.query('DELETE FROM projeto_investidores WHERE id = $1 RETURNING investidor_id', [req.params.linkId])
-    if (rows[0]) syncMontanteInvestido(rows[0].investidor_id).catch(e => console.error('[projeto-investidor] syncMontante:', e.message))
+    const { rows } = await pool.query('DELETE FROM projeto_investidores WHERE id = $1 RETURNING investidor_id, negocio_id', [req.params.linkId])
+    if (rows[0]) {
+      syncMontanteInvestido(rows[0].investidor_id).catch(e => console.error('[projeto-investidor] syncMontante:', e.message))
+      resyncCaepAposProjetoInvestidor(rows[0].negocio_id)
+    }
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })

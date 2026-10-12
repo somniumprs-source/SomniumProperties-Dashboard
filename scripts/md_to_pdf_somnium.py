@@ -139,9 +139,45 @@ def md_paragraph(c, y, text):
     return wrap_text(c, ML, y, CW, _strip_md(text), 9, leading=12.5, color=BODY) - 5
 
 
+def render_figure(c, y, img_path: Path, caption: str) -> float:
+    """Imagem a largura de coluna (plantas, fotos, mapas) com legenda muted por baixo."""
+    try:
+        from PIL import Image
+        with Image.open(img_path) as im:
+            iw, ih = im.size
+        aspect = iw / ih if ih else 4 / 3
+    except Exception:
+        aspect = 4 / 3
+
+    max_h = (PH - PT - PB) * 0.62
+    w, h = CW, CW / aspect
+    if h > max_h:
+        h, w = max_h, max_h * aspect
+
+    y = page_break(c, y, h + 30)
+    x = ML + (CW - w) / 2
+    c.setFillColor(BORDER)
+    c.rect(x - 1, y - h - 1, w + 2, h + 2, stroke=0, fill=1)
+    try:
+        c.drawImage(str(img_path), x, y - h, width=w, height=h,
+                    preserveAspectRatio=True, anchor="c", mask="auto")
+    except Exception:
+        c.setFillColor(LIGHT_GRAY)
+        c.rect(x, y - h, w, h, stroke=0, fill=1)
+        c.setFillColor(MUTED)
+        c.setFont("Helvetica", 7)
+        c.drawString(x + 6, y - h / 2, f"[imagem nao encontrada: {img_path.name}]")
+
+    new_y = y - h - 4
+    if caption:
+        new_y = wrap_text(c, ML, new_y, CW, caption, 7.5, leading=10, color=MUTED)
+    return new_y - 8
+
+
 def render_markdown(c, md_text):
     y = None  # forca abertura de pagina no primeiro "# "
     num_re = re.compile(r"^(\d+)\.\s+(.*)$")
+    img_re = re.compile(r"^!\[(.*?)\]\((.*?)\)$")
     for raw in md_text.splitlines():
         line = raw.rstrip()
         stripped = line.strip()
@@ -171,6 +207,11 @@ def render_markdown(c, md_text):
         elif num_re.match(stripped):
             m = num_re.match(stripped)
             y = md_numbered(c, y, m.group(1), m.group(2))
+        elif img_re.match(stripped):
+            if y is None:
+                c.showPage(); y = PH - PT
+            m = img_re.match(stripped)
+            y = render_figure(c, y, Path(m.group(2)), m.group(1))
         else:
             if y is None:
                 c.showPage(); y = PH - PT
