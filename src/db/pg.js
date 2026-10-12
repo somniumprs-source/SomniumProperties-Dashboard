@@ -572,6 +572,21 @@ export async function initSchema() {
 
       -- Gravacoes de chamadas com consultores (audio no Storage; transcricao
       -- por Whisper local + analise comercial por Claude para optimizar scripts).
+      -- Documentos da ficha do consultor, opcionalmente ligados a uma tarefa da Agenda.
+      CREATE TABLE IF NOT EXISTS consultor_documentos (
+        id TEXT PRIMARY KEY,
+        consultor_id TEXT NOT NULL,
+        tarefa_id TEXT,
+        titulo TEXT NOT NULL,
+        ficheiro_nome TEXT NOT NULL,
+        ficheiro_path TEXT NOT NULL,
+        mime TEXT,
+        tamanho INTEGER,
+        created_at TEXT DEFAULT (NOW()::TEXT)
+      );
+      CREATE INDEX IF NOT EXISTS idx_cons_docs_consultor ON consultor_documentos(consultor_id);
+      CREATE INDEX IF NOT EXISTS idx_cons_docs_tarefa ON consultor_documentos(tarefa_id);
+
       CREATE TABLE IF NOT EXISTS consultor_gravacoes (
         id TEXT PRIMARY KEY,
         consultor_id TEXT NOT NULL,

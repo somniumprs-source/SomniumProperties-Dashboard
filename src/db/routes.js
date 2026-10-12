@@ -2101,6 +2101,81 @@ router.get('/gravacoes', async (req, res) => {
 })
 
 // ── Interacções por consultor ────────────────────────────────
+// ── Documentos do consultor (apresentações, propostas…), ligáveis a uma tarefa da Agenda ──
+const DOC_CONSULTOR_SELECT = `SELECT d.id, d.consultor_id, d.tarefa_id, d.titulo, d.ficheiro_nome, d.mime, d.tamanho, d.created_at,
+  t.tarefa AS tarefa_nome, COALESCE(t.inicio, t.data_limite) AS tarefa_quando, c.nome AS consultor_nome
+  FROM consultor_documentos d LEFT JOIN tarefas t ON t.id = d.tarefa_id LEFT JOIN consultores c ON c.id = d.consultor_id`
+
+// Documentos associados a uma tarefa (para o modal da Agenda).
+router.get('/consultores/documentos-tarefa/:tarefaId', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`${DOC_CONSULTOR_SELECT} WHERE d.tarefa_id = $1 ORDER BY d.created_at DESC`, [req.params.tarefaId])
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/consultores/:id/documentos', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`${DOC_CONSULTOR_SELECT} WHERE d.consultor_id = $1 ORDER BY d.created_at DESC`, [req.params.id])
+    res.json(rows)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.post('/consultores/:id/documentos', uploadDocs.single('ficheiro'), async (req, res) => {
+  try {
+    if (!supabaseStorage) return res.status(503).json({ error: 'Storage indisponível (sem SUPABASE_SERVICE_KEY)' })
+    if (!req.file) return res.status(400).json({ error: 'Anexe um ficheiro PDF, PowerPoint, Word ou Excel' })
+    const { rows: [cons] } = await pool.query('SELECT id FROM consultores WHERE id = $1', [req.params.id])
+    if (!cons) return res.status(404).json({ error: 'Consultor não encontrado' })
+    const id = randomUUID()
+    const nome = path.basename(req.file.originalname).replace(/[^a-zA-Z0-9À-ú._ -]/g, '_')
+    const ficheiroPath = `consultores-docs/${cons.id}/${id}/${nome.normalize('NFD').replace(/[^\x20-\x7E]/g, '')}`
+    const { error: upErr } = await supabaseStorage.storage.from(REUNIOES_BUCKET)
+      .upload(ficheiroPath, req.file.buffer, { contentType: req.file.mimetype || 'application/octet-stream', upsert: true })
+    if (upErr) return res.status(500).json({ error: `Storage: ${upErr.message}` })
+    await pool.query(
+      `INSERT INTO consultor_documentos (id, consultor_id, tarefa_id, titulo, ficheiro_nome, ficheiro_path, mime, tamanho)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [id, cons.id, req.body.tarefa_id || null, (req.body.titulo || '').trim() || nome, nome, ficheiroPath, req.file.mimetype || null, req.file.size]
+    )
+    const { rows: [doc] } = await pool.query(`${DOC_CONSULTOR_SELECT} WHERE d.id = $1`, [id])
+    res.json(doc)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Associar (ou desassociar) o documento a uma tarefa da Agenda.
+router.patch('/consultores/:id/documentos/:docId', async (req, res) => {
+  try {
+    await pool.query('UPDATE consultor_documentos SET tarefa_id = $1 WHERE id = $2 AND consultor_id = $3', [req.body?.tarefa_id || null, req.params.docId, req.params.id])
+    const { rows: [doc] } = await pool.query(`${DOC_CONSULTOR_SELECT} WHERE d.id = $1 AND d.consultor_id = $2`, [req.params.docId, req.params.id])
+    if (!doc) return res.status(404).json({ error: 'Documento não encontrado' })
+    res.json(doc)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/consultores/:id/documentos/:docId/ficheiro', async (req, res) => {
+  try {
+    const { rows: [d] } = await pool.query('SELECT * FROM consultor_documentos WHERE id = $1 AND consultor_id = $2', [req.params.docId, req.params.id])
+    if (!d) return res.status(404).json({ error: 'Documento não encontrado' })
+    if (!supabaseStorage) return res.status(503).json({ error: 'Storage indisponível (sem SUPABASE_SERVICE_KEY)' })
+    const { data: blob, error: dlErr } = await supabaseStorage.storage.from(REUNIOES_BUCKET).download(d.ficheiro_path)
+    if (dlErr || !blob) return res.status(404).json({ error: 'Ficheiro não encontrado no Storage' })
+    res.setHeader('Content-Type', d.mime || 'application/octet-stream')
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(d.ficheiro_nome)}`)
+    res.send(Buffer.from(await blob.arrayBuffer()))
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/consultores/:id/documentos/:docId', async (req, res) => {
+  try {
+    const { rows: [d] } = await pool.query('SELECT ficheiro_path FROM consultor_documentos WHERE id = $1 AND consultor_id = $2', [req.params.docId, req.params.id])
+    if (!d) return res.status(404).json({ error: 'Documento não encontrado' })
+    if (supabaseStorage) await supabaseStorage.storage.from(REUNIOES_BUCKET).remove([d.ficheiro_path])
+    await pool.query('DELETE FROM consultor_documentos WHERE id = $1', [req.params.docId])
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 router.get('/consultores/:id/interacoes', async (req, res) => {
   try {
     const { rows } = await pool.query(

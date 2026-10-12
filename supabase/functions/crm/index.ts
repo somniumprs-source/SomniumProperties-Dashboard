@@ -2011,6 +2011,115 @@ app.delete("/visitas/:id", async (c: any) => {
 });
 
 // ── Interaccoes por consultor — port de routes.js 1142-1152 ──
+// ── Documentos do consultor (apresentações, propostas…), ligáveis a uma tarefa da Agenda — port de routes.js ──
+// Tabela da migração 0074 — as migrações não são auto-aplicadas em produção.
+let _consDocsEnsured = false;
+async function ensureConsultorDocumentos() {
+  if (_consDocsEnsured) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS consultor_documentos (
+      id TEXT PRIMARY KEY,
+      consultor_id TEXT NOT NULL,
+      tarefa_id TEXT,
+      titulo TEXT NOT NULL,
+      ficheiro_nome TEXT NOT NULL,
+      ficheiro_path TEXT NOT NULL,
+      mime TEXT,
+      tamanho INTEGER,
+      created_at TEXT DEFAULT (NOW()::TEXT)
+    );
+    CREATE INDEX IF NOT EXISTS idx_cons_docs_consultor ON consultor_documentos(consultor_id);
+    CREATE INDEX IF NOT EXISTS idx_cons_docs_tarefa ON consultor_documentos(tarefa_id);
+  `);
+  _consDocsEnsured = true;
+}
+const CONS_DOCS_BUCKET = "Relatorios";
+const CONS_DOCS_EXT = new Set([".pdf", ".ppt", ".pptx", ".doc", ".docx", ".xls", ".xlsx"]);
+const DOC_CONSULTOR_SELECT = `SELECT d.id, d.consultor_id, d.tarefa_id, d.titulo, d.ficheiro_nome, d.mime, d.tamanho, d.created_at,
+  t.tarefa AS tarefa_nome, COALESCE(t.inicio, t.data_limite) AS tarefa_quando, c.nome AS consultor_nome
+  FROM consultor_documentos d LEFT JOIN tarefas t ON t.id = d.tarefa_id LEFT JOIN consultores c ON c.id = d.consultor_id`;
+
+// Documentos associados a uma tarefa (para o modal da Agenda).
+app.get("/consultores/documentos-tarefa/:tarefaId", async (c: any) => {
+  try {
+    await ensureConsultorDocumentos();
+    const { rows } = await pool.query(`${DOC_CONSULTOR_SELECT} WHERE d.tarefa_id = $1 ORDER BY d.created_at DESC`, [c.req.param("tarefaId")]);
+    return c.json(rows);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.get("/consultores/:id/documentos", async (c: any) => {
+  try {
+    await ensureConsultorDocumentos();
+    const { rows } = await pool.query(`${DOC_CONSULTOR_SELECT} WHERE d.consultor_id = $1 ORDER BY d.created_at DESC`, [c.req.param("id")]);
+    return c.json(rows);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.post("/consultores/:id/documentos", async (c: any) => {
+  try {
+    const _rl = await checkUploadLimit(c); if (_rl) return _rl;
+    await ensureConsultorDocumentos();
+    if (!supabase) return c.json({ error: "Storage indisponível" }, 503);
+    const form = await c.req.formData();
+    const txt = (k: string) => { const v = form.get(k); return typeof v === "string" ? v.trim() : ""; };
+    const file = form.get("ficheiro");
+    if (!(file instanceof File)) return c.json({ error: "Anexe um ficheiro PDF, PowerPoint, Word ou Excel" }, 400);
+    assertSafeUpload(file, 15 * 1024 * 1024, CONS_DOCS_EXT);
+    const { rows: [cons] } = await pool.query("SELECT id FROM consultores WHERE id = $1", [c.req.param("id")]);
+    if (!cons) return c.json({ error: "Consultor não encontrado" }, 404);
+    const id = crypto.randomUUID();
+    const nome = (file.name.split(/[\\/]/).pop() || "documento").replace(/[^a-zA-Z0-9À-ú._ -]/g, "_");
+    const ficheiroPath = `consultores-docs/${cons.id}/${id}/${nome.normalize("NFD").replace(/[^\x20-\x7E]/g, "")}`;
+    await uploadPrivate(CONS_DOCS_BUCKET, ficheiroPath, new Uint8Array(await file.arrayBuffer()), file.type || "application/octet-stream");
+    await pool.query(
+      `INSERT INTO consultor_documentos (id, consultor_id, tarefa_id, titulo, ficheiro_nome, ficheiro_path, mime, tamanho)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [id, cons.id, txt("tarefa_id") || null, txt("titulo") || nome, nome, ficheiroPath, file.type || null, file.size],
+    );
+    const { rows: [doc] } = await pool.query(`${DOC_CONSULTOR_SELECT} WHERE d.id = $1`, [id]);
+    return c.json(doc);
+  } catch (e) { console.error("[consultor-documentos] criar", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
+});
+
+// Associar (ou desassociar) o documento a uma tarefa da Agenda.
+app.patch("/consultores/:id/documentos/:docId", async (c: any) => {
+  try {
+    await ensureConsultorDocumentos();
+    const body = await c.req.json().catch(() => ({}));
+    await pool.query("UPDATE consultor_documentos SET tarefa_id = $1 WHERE id = $2 AND consultor_id = $3", [body?.tarefa_id || null, c.req.param("docId"), c.req.param("id")]);
+    const { rows: [doc] } = await pool.query(`${DOC_CONSULTOR_SELECT} WHERE d.id = $1 AND d.consultor_id = $2`, [c.req.param("docId"), c.req.param("id")]);
+    if (!doc) return c.json({ error: "Documento não encontrado" }, 404);
+    return c.json(doc);
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.get("/consultores/:id/documentos/:docId/ficheiro", async (c: any) => {
+  try {
+    await ensureConsultorDocumentos();
+    const { rows: [d] } = await pool.query("SELECT * FROM consultor_documentos WHERE id = $1 AND consultor_id = $2", [c.req.param("docId"), c.req.param("id")]);
+    if (!d) return c.json({ error: "Documento não encontrado" }, 404);
+    if (!supabase) return c.json({ error: "Storage indisponível" }, 503);
+    const { data: blob, error: dlErr } = await supabase.storage.from(CONS_DOCS_BUCKET).download(d.ficheiro_path);
+    if (dlErr || !blob) return c.json({ error: "Ficheiro não encontrado no Storage" }, 404);
+    return c.body(new Uint8Array(await blob.arrayBuffer()), 200, {
+      "Content-Type": d.mime || "application/octet-stream",
+      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(d.ficheiro_nome)}`,
+    });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.delete("/consultores/:id/documentos/:docId", async (c: any) => {
+  try {
+    await ensureConsultorDocumentos();
+    const { rows: [d] } = await pool.query("SELECT ficheiro_path FROM consultor_documentos WHERE id = $1 AND consultor_id = $2", [c.req.param("docId"), c.req.param("id")]);
+    if (!d) return c.json({ error: "Documento não encontrado" }, 404);
+    await removeFromStorage(CONS_DOCS_BUCKET, d.ficheiro_path);
+    await pool.query("DELETE FROM consultor_documentos WHERE id = $1", [c.req.param("docId")]);
+    return c.json({ ok: true });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
 app.get("/consultores/:id/interacoes", async (c: any) => {
   try {
     const { rows } = await pool.query(

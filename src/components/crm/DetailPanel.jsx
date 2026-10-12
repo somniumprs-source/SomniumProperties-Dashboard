@@ -8,6 +8,7 @@ import { apiFetch, apiFetchJson, openDocument } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { PartilharAcesso } from '../PartilharAcesso.jsx'
 import { GravacoesConsultor } from './GravacoesConsultor.jsx'
+import { DocumentosConsultor } from './DocumentosConsultor.jsx'
 import { RegistoChamadasTab } from './RegistoChamadasTab.jsx'
 import { isWholesaling } from '../../lib/modelos.js'
 import { fmtTempoMercado } from '../../lib/tempoMercado.js'
@@ -910,6 +911,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
     { key: 'checklist', label: 'Checklist', icon: '📋', show: type === 'Imóveis' },
     { key: 'documentos', label: `Documentos (${data?.documentos?.length ?? 0})`, icon: '📎', show: type === 'Investidores' },
     { key: 'dados_empresa', label: 'Dados Empresa', icon: '🏢', show: type === 'Investidores' },
+    { key: 'documentos_consultor', label: 'Documentos', icon: '📎', show: type === 'Consultores' },
     { key: 'relatorios', label: `Reuniões (${reunioes.length})`, icon: '📄', show: (type === 'Investidores' || type === 'Consultores') },
     { key: 'avaliacao', label: 'Avaliação', icon: '🎯', show: type === 'Investidores' },
   ].filter(t => t.show)
@@ -1092,6 +1094,11 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
         </div>
 
       /* Relatórios reuniões (investidores/consultores) */
+      ) : type === 'Consultores' && activeTab === 'documentos_consultor' ? (
+        <div className="p-4 sm:p-6">
+          <DocumentosConsultor consultorId={data.id} />
+        </div>
+
       ) : activeTab === 'relatorios' ? (
         <div className="p-4 sm:p-6">
           <RelatoriosTab reunioes={reunioes} investidorNome={data.nome}

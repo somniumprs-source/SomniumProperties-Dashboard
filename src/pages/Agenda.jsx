@@ -21,6 +21,7 @@ import { apiFetch } from '../lib/api.js'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { Modal } from '../components/ui/Modal.jsx'
+import { DocumentosTarefa } from '../components/crm/DocumentosConsultor.jsx'
 import { ScrollableTable } from '../components/ui/ScrollableTable.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { useUrlState } from '../hooks/useUrlState.js'
@@ -286,6 +287,7 @@ function TarefaModal({ modal, saving, onClose, onSave, onDelete }) {
           <input type="number" step="0.25" min="0" max="24" value={f.tempo_horas ?? ''} onChange={e => set('tempo_horas', e.target.value ? parseFloat(e.target.value) : '')} className={campo} />
         </div>
         <p className="text-xs text-gray-400 self-end pb-2">Sem início, a tarefa fica em "Sem hora marcada" e não aparece no Google Calendar.</p>
+        {t?.id && <DocumentosTarefa tarefaId={t.id} />}
       </div>
     </Modal>
   )
