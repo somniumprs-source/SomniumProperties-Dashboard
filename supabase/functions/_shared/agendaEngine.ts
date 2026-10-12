@@ -16,7 +16,7 @@ const PRAZO_ESTUDO_MERCADO_DIAS = 2;
 const DATA_CORTE_ORIGEM = "2026-08-21T22:00:00.000Z";
 
 const ORIGEM_CAMPOS = [
-  { tabela: "consultores", campo: "data_proximo_follow_up", origemTipo: "consultor", categoria: "Prospeção de Consultores", duracaoHoras: 0.5, tituloPrefix: "Follow-up", historico: false },
+  { tabela: "consultores", campo: "data_proximo_follow_up", origemTipo: "consultor", categoria: "Follow-up de Consultores", duracaoHoras: 0.5, tituloPrefix: "Follow-up", historico: false },
   { tabela: "investidores", campo: "data_proxima_acao", origemTipo: "investidor", categoria: "Follow-up de Investidores", duracaoHoras: 0.5, tituloPrefix: "Próxima ação", historico: true },
   { tabela: "imoveis", campo: "data_visita", origemTipo: "imovel", categoria: "Visita a Potencial Oportunidade", duracaoHoras: 1.5, tituloPrefix: "Visita", historico: false },
   { tabela: "imoveis", campo: "data_proposta", origemTipo: "imovel", categoria: "Proposta e Negociação", duracaoHoras: 1, tituloPrefix: "Proposta", historico: true },

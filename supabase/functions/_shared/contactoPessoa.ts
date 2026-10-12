@@ -28,7 +28,7 @@ const PESSOAS = {
   consultor: {
     tabela: 'consultores', interacoes: 'consultor_interacoes', fk: 'consultor_id', origem: 'consultor_interacao',
     espelho: 'data_proximo_follow_up', fase: 'estatuto', fasesFollowUp: ['Follow up'],
-    categoria: 'Prospeção de Consultores', categoriaFollowUp: 'Prospeção de Consultores',
+    categoria: 'Prospeção de Consultores', categoriaFollowUp: 'Follow-up de Consultores',
   },
   investidor: {
     tabela: 'investidores', interacoes: 'investidor_interacoes', fk: 'investidor_id', origem: 'investidor_interacao',

@@ -5086,7 +5086,7 @@ app.get('/api/time-tracking', async (req, res) => {
     // Horas por tipo de actividade comercial (para CAC refinado)
     const horasProspeccao = round2((porCategoria['Pesquisa de Imóveis']?.horas ?? 0) + (porCategoria['Call de Imóveis Anunciados']?.horas ?? 0) + (porCategoria['Prospeção de Consultores']?.horas ?? 0))
     const horasAnalise = round2((porCategoria['Análise de Negócio']?.horas ?? 0))
-    const horasRelacional = round2((porCategoria['Follow-up de Imóveis']?.horas ?? 0) + (porCategoria['Reunião com Consultores']?.horas ?? 0) + (porCategoria['Call a Investidores']?.horas ?? 0) + (porCategoria['Follow-up de Investidores']?.horas ?? 0) + (porCategoria['Reunião com Investidores']?.horas ?? 0))
+    const horasRelacional = round2((porCategoria['Follow-up de Imóveis']?.horas ?? 0) + (porCategoria['Follow-up de Consultores']?.horas ?? 0) + (porCategoria['Reunião com Consultores']?.horas ?? 0) + (porCategoria['Onboarding de Investidores']?.horas ?? 0) + (porCategoria['Call a Investidores']?.horas ?? 0) + (porCategoria['Follow-up de Investidores']?.horas ?? 0) + (porCategoria['Reunião com Investidores']?.horas ?? 0))
     const horasGestao = round2((porCategoria['Planeamento']?.horas ?? 0) + (porCategoria['Processos e SOP']?.horas ?? 0) + (porCategoria['Plataforma e IA']?.horas ?? 0) + (porCategoria['Reunião de Equipa']?.horas ?? 0))
 
     // Status das tarefas
