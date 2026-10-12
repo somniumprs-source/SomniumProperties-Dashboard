@@ -96,6 +96,44 @@ export async function deleteGCalEvent(gcal: any, calendarId: string, gcalEventId
 
 // ── PULL: Google Calendar -> Tarefas ─────────────────────────
 
+// Categoria sugerida pelo título, para eventos criados diretamente no Google
+// Calendar não entrarem como tarefas sem categoria. Primeira regra que acertar
+// ganha; sem acerto fica vazio e escolhe-se na Agenda.
+const REGRAS_CATEGORIA: [RegExp, string][] = [
+  [/visita.*pr[ée]-?\s?obra/i, "Visita Pré-Obra"],
+  [/go\s*\/?\s*(ou\s*)?no\s*go/i, "Visita Go/No Go"],
+  [/visita.*fim de obra|rece[çc][ãa]o.*obra/i, "Visita de Fim de Obra"],
+  [/acompanhamento.*obra|visita.*obra/i, "Visita de Acompanhamento"],
+  [/visita.*investidor/i, "Visita com Investidores"],
+  [/visita/i, "Visita a Potencial Oportunidade"],
+  [/reuni[ãa]o.*consultor|apresenta[çc][ãa]o.*parceria/i, "Reunião com Consultores"],
+  [/consultor/i, "Prospeção de Consultores"],
+  [/reuni[ãa]o.*investidor/i, "Reunião com Investidores"],
+  [/apresenta[çc][ãa]o.*(neg[óo]cio|investidor)/i, "Apresentação de Negócio a Investidores"],
+  [/follow.?up.*investidor/i, "Follow-up de Investidores"],
+  [/investidor/i, "Call a Investidores"],
+  [/pesquisa.*im[óo]ve/i, "Pesquisa de Imóveis"],
+  [/cold call|discovery call/i, "Call de Imóveis Anunciados"],
+  [/follow.?up/i, "Follow-up de Imóveis"],
+  [/proposta|negocia/i, "Proposta e Negociação"],
+  [/an[áa]lise|\bvvr\b|estudo de mercado/i, "Análise de Negócio"],
+  [/escritura|cpcv|hipoteca|procura[çc][ãa]o|solicitador/i, "Escrituras e Contratos"],
+  [/seguro|condom[íi]nio|[áa]gua e luz|luz de obra/i, "Seguros e Serviços"],
+  [/c[âa]mara|licenciamento|\baru\b|vistoria/i, "Licenciamento e Câmara"],
+  [/certid[ãa]o|caderneta|certificado energ/i, "Documentação do Imóvel"],
+  [/\bpev\b|venda do im[óo]vel/i, "Venda do Imóvel"],
+  [/contabili/i, "Contabilidade"],
+  [/fatura|pagamento|despesa|transfer[êe]ncia/i, "Departamento Financeiro"],
+  [/reuni[ãa]o.*(equipa|semanal)/i, "Reunião de Equipa"],
+  [/planeamento/i, "Planeamento"],
+  [/\bsop\b|processo/i, "Processos e SOP"],
+  [/\bcrm\b|plataforma|claude/i, "Plataforma e IA"],
+];
+export function categoriaPorTitulo(titulo: string): string | null {
+  for (const [re, cat] of REGRAS_CATEGORIA) if (re.test(titulo || "")) return cat;
+  return null;
+}
+
 // Eventos que ficam só no calendário: deslocações (bilhetes que o Gmail põe
 // no calendário, ex: "Bus to Coimbra") e blocos livres.
 const RE_SO_CALENDARIO = /^\s*((bus|train|flight|comboio|autocarro|voo)\s+(to|para|de)\b|(viagem|desloca[cç][aã]o)\b|bloco\s+livre\b)/i;
@@ -209,9 +247,9 @@ export async function pullGCalToTarefas(gcal: any, calendarId: string, { days = 
 
         await pool.query(
           `INSERT INTO tarefas (id, tarefa, status, inicio, fim, funcionario, tempo_horas,
-           gcal_event_id, gcal_synced_at, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-          [uuid, titulo, "A fazer", inicio, fim, funcMatch ? funcMatch[1].trim() : null, Math.round(horas * 100) / 100, eventId, nowStr, nowStr, nowStr],
+           gcal_event_id, gcal_synced_at, created_at, updated_at, categoria)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+          [uuid, titulo, "A fazer", inicio, fim, funcMatch ? funcMatch[1].trim() : null, Math.round(horas * 100) / 100, eventId, nowStr, nowStr, nowStr, categoriaPorTitulo(titulo)],
         );
         created++;
       }
