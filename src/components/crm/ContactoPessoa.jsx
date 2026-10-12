@@ -296,9 +296,15 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, opcoes, o
 
 // Registo simples de um contacto com o consultor: data e motivo. Vai directo
 // ao histórico, sem mexer no próximo contacto marcado nem nos seus assuntos.
-function NovoContactoForm({ pessoaId, onCancel, onDone }) {
+// Com reunião: marca-a como o próximo contacto da pessoa (tarefa na agenda),
+// com a reunião como assunto, mantendo os assuntos que já lá estavam.
+function NovoContactoForm({ pessoaId, proximo, onCancel, onDone }) {
   const [data, setData] = useState(emDias(0))
   const [motivo, setMotivo] = useState('')
+  const [comReuniao, setComReuniao] = useState(false)
+  const [dataReuniao, setDataReuniao] = useState('')
+  const [horaReuniao, setHoraReuniao] = useState('')
+  const [assuntoReuniao, setAssuntoReuniao] = useState('Reunião de parceria')
   const [saving, setSaving] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -306,16 +312,28 @@ function NovoContactoForm({ pessoaId, onCancel, onDone }) {
     e.preventDefault()
     if (!data) return setErro('Indica a data.')
     if (!motivo.trim()) return setErro('Indica o motivo do contacto.')
+    if (comReuniao && !dataReuniao) return setErro('Indica a data da reunião.')
+    if (comReuniao && dataReuniao < emDias(0)) return setErro('A reunião tem de ser numa data futura.')
     setErro(''); setSaving(true)
     try {
       const r = await apiFetch('/api/crm/consultor-interacoes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           consultor_id: pessoaId, canal: 'Chamada', direcao: 'Enviado', resultado: 'Feito', notas: motivo.trim(),
+          proxima_data: comReuniao ? dataReuniao : null,
           data_hora: data === emDias(0) ? new Date().toISOString() : new Date(`${data}T12:00:00`).toISOString(),
         }),
       })
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao guardar')
+      if (comReuniao) {
+        const texto = `${assuntoReuniao.trim() || 'Reunião'}${horaReuniao ? ` (${horaReuniao})` : ''}`
+        const atuais = (proximo?.assuntos || []).map(a => (a.imovel_id ? { imovel_id: a.imovel_id } : { texto: a.texto }))
+        const ra = await apiFetch(`/api/crm/consultores/${pessoaId}/contacto/agendar`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: dataReuniao, quando: comHora(dataReuniao, horaReuniao), assuntos: [...atuais, { texto }] }),
+        }).catch(() => null)
+        if (!ra?.ok) alert(`O contacto ficou registado, mas a reunião não foi agendada: ${(await ra?.json().catch(() => ({})))?.error || 'erro no envio'}`)
+      }
       onDone?.()
     } catch (err) {
       setErro(err.message)
@@ -332,6 +350,22 @@ function NovoContactoForm({ pessoaId, onCancel, onDone }) {
       </label>
       <textarea rows={2} value={motivo} onChange={e => setMotivo(e.target.value)} autoFocus
         placeholder="Motivo do contacto e o que foi falado" className={inputClass} aria-label="Motivo do contacto" />
+      <label className="inline-flex items-center gap-1.5 text-xs text-gray-700">
+        <input type="checkbox" checked={comReuniao} onChange={e => setComReuniao(e.target.checked)} />
+        Agendar reunião (fica como tarefa na agenda)
+      </label>
+      {comReuniao && (
+        <div className="grid gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <input type="date" value={dataReuniao} min={emDias(0)} onChange={e => setDataReuniao(e.target.value)} className={`${inputClass} sm:w-40`} aria-label="Data da reunião" />
+            <input type="time" value={horaReuniao} onChange={e => setHoraReuniao(e.target.value)} className={`${inputClass} sm:w-28`} aria-label="Hora da reunião (opcional)" title="Hora (opcional)" />
+            <input type="text" value={assuntoReuniao} onChange={e => setAssuntoReuniao(e.target.value)} placeholder="Assunto da reunião" className={`${inputClass} sm:flex-1 sm:w-auto`} aria-label="Assunto da reunião" />
+          </div>
+          {proximo?.quando && (
+            <p className="text-[11px] text-orange-700">Já há um contacto marcado para {fmtQuando(proximo.quando)}: passa para a data da reunião, com os mesmos assuntos.</p>
+          )}
+        </div>
+      )}
       {erro && <p className="text-xs text-red-600">{erro}</p>}
       <div className="flex justify-end gap-1.5">
         <button type="button" onClick={onCancel} disabled={saving} className={btn}>Cancelar</button>
@@ -447,7 +481,7 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
         </div>
       )}
 
-      {modo === 'novo' && <NovoContactoForm pessoaId={pessoaId} onCancel={() => setModo(null)} onDone={guardado} />}
+      {modo === 'novo' && <NovoContactoForm pessoaId={pessoaId} proximo={proximo} onCancel={() => setModo(null)} onDone={guardado} />}
       {modo && modo !== 'novo' && (
         <ContactoForm key={modo} tipo={tipo} pessoaId={pessoaId} pessoa={{ nome: d.pessoa?.nome, regiao }} modo={modo} rotulo={rotulo} opcoes={opcoes}
           proximo={proximo || (nota && modo === 'agendar' ? { assuntos: [{ texto: nota }] } : null)}
