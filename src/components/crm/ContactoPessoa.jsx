@@ -294,14 +294,64 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, opcoes, o
   )
 }
 
+// Registo simples de um contacto com o consultor: data e motivo. Vai directo
+// ao histórico, sem mexer no próximo contacto marcado nem nos seus assuntos.
+function NovoContactoForm({ pessoaId, onCancel, onDone }) {
+  const [data, setData] = useState(emDias(0))
+  const [motivo, setMotivo] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [erro, setErro] = useState('')
+
+  async function guardar(e) {
+    e.preventDefault()
+    if (!data) return setErro('Indica a data.')
+    if (!motivo.trim()) return setErro('Indica o motivo do contacto.')
+    setErro(''); setSaving(true)
+    try {
+      const r = await apiFetch('/api/crm/consultor-interacoes', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          consultor_id: pessoaId, canal: 'Chamada', direcao: 'Enviado', resultado: 'Feito', notas: motivo.trim(),
+          data_hora: data === emDias(0) ? new Date().toISOString() : new Date(`${data}T12:00:00`).toISOString(),
+        }),
+      })
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao guardar')
+      onDone?.()
+    } catch (err) {
+      setErro(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={guardar} className="mt-2 rounded-lg border border-yellow-200 bg-yellow-50/50 p-2.5 grid gap-2">
+      <p className="text-xs text-gray-600">Fica no histórico de contactos deste consultor.</p>
+      <label className="text-[11px] text-gray-500">Data do contacto
+        <input type="date" value={data} max={emDias(0)} onChange={e => setData(e.target.value)} className={`${inputClass} sm:w-40`} />
+      </label>
+      <textarea rows={2} value={motivo} onChange={e => setMotivo(e.target.value)} autoFocus
+        placeholder="Motivo do contacto e o que foi falado" className={inputClass} aria-label="Motivo do contacto" />
+      {erro && <p className="text-xs text-red-600">{erro}</p>}
+      <div className="flex justify-end gap-1.5">
+        <button type="button" onClick={onCancel} disabled={saving} className={btn}>Cancelar</button>
+        <button type="submit" disabled={saving}
+          className="text-xs font-medium px-3 py-1 rounded-lg bg-yellow-600 text-white hover:bg-yellow-700 disabled:opacity-50">
+          {saving ? 'A guardar…' : 'Guardar contacto'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
 // imoveis: imóveis já ligados à pessoa (para escolher como assunto). Sem eles,
 // usa a lista de todos os imóveis.
 // notaAntiga: texto do antigo campo "Próxima ação" do investidor. Mostra-se até
 // haver contacto marcado e entra como assunto ao agendar (o campo é então limpo).
 // regiao: região da pessoa (consultor), para os imóveis das oportunidades registadas.
 export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, onNavigate, onUpdate }) {
-  const [modo, setModo] = useState(null) // 'agendar' | 'feito' | 'sem_sucesso'
-  const [verHistorico, setVerHistorico] = useState(false)
+  const [modo, setModo] = useState(null) // 'agendar' | 'feito' | 'sem_sucesso' | 'novo' (registo simples, só consultor)
+  const [verHistorico, setVerHistorico] = useState(tipo === 'consultor')
   const query = useQuery({
     queryKey: ['contacto-pessoa', tipo, pessoaId],
     queryFn: async () => {
@@ -343,6 +393,12 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm font-semibold text-gray-800 dark:text-neutral-100">Próximos passos</span>
         <span className="flex flex-wrap gap-1.5">
+          {tipo === 'consultor' && (
+            <button type="button" onClick={() => setModo('novo')}
+              className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg bg-yellow-600 text-white hover:bg-yellow-700">
+              <Plus className="w-3 h-3" /> Novo contacto
+            </button>
+          )}
           {!proximo && <button type="button" onClick={() => setModo('agendar')} className={btn}>Agendar {rotulo.toLowerCase()}</button>}
           {!proximo && <button type="button" onClick={() => setModo('feito')} className={btn}>Registar contacto feito</button>}
         </span>
@@ -391,7 +447,8 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
         </div>
       )}
 
-      {modo && (
+      {modo === 'novo' && <NovoContactoForm pessoaId={pessoaId} onCancel={() => setModo(null)} onDone={guardado} />}
+      {modo && modo !== 'novo' && (
         <ContactoForm key={modo} tipo={tipo} pessoaId={pessoaId} pessoa={{ nome: d.pessoa?.nome, regiao }} modo={modo} rotulo={rotulo} opcoes={opcoes}
           proximo={proximo || (nota && modo === 'agendar' ? { assuntos: [{ texto: nota }] } : null)}
           onCancel={() => setModo(null)} onDone={guardado} />
