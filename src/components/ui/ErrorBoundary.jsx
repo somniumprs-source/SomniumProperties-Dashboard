@@ -1,20 +1,43 @@
 import { Component } from 'react'
+import { isChunkError, autoReloadOnChunkError, reloadFresh } from './ChunkErrorBoundary.jsx'
 
 export class ErrorBoundary extends Component {
   constructor(props) {
     super(props)
-    this.state = { hasError: false, error: null }
+    this.state = { hasError: false, isChunk: false, error: null }
   }
 
   static getDerivedStateFromError(error) {
-    return { hasError: true, error }
+    return { hasError: true, isChunk: isChunkError(error), error }
   }
 
   componentDidCatch(error, info) {
     console.error('[ErrorBoundary]', error, info.componentStack)
+    // Chunk com hash antigo (separador aberto desde antes de um deploy): este
+    // boundary fica por dentro do ChunkErrorBoundary e apanhava o erro primeiro.
+    // "Tentar novamente" não resolve — o React.lazy guarda o import falhado —
+    // por isso recarrega-se a app, tal como no ChunkErrorBoundary.
+    if (isChunkError(error)) autoReloadOnChunkError()
   }
 
   render() {
+    if (this.state.hasError && this.state.isChunk) {
+      return (
+        <div className="min-h-[60vh] flex items-center justify-center">
+          <div className="text-center max-w-md px-6">
+            <h2 className="text-lg font-semibold text-neutral-800 mb-2">Nova versão disponível</h2>
+            <p className="text-sm text-neutral-500 mb-4">O CRM foi atualizado enquanto tinhas esta página aberta.</p>
+            <button
+              onClick={reloadFresh}
+              className="px-4 py-2 text-sm font-medium text-white rounded-lg"
+              style={{ backgroundColor: '#C9A84C' }}
+            >
+              Atualizar
+            </button>
+          </div>
+        </div>
+      )
+    }
     if (this.state.hasError) {
       return (
         <div className="min-h-[60vh] flex items-center justify-center">
