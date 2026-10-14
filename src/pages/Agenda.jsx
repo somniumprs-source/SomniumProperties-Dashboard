@@ -33,8 +33,8 @@ const AMBOS = 'João Abreu, Alexandre Mendes'
 const GRUPOS_CATEGORIAS = [
   { grupo: 'Comercial — Imóveis', regiao: true, itens: ['Pesquisa de Imóveis', 'Call de Imóveis Anunciados', 'Follow-up de Imóveis', 'Análise de Negócio', 'Proposta e Negociação'] },
   { grupo: 'Visitas', regiao: true, itens: ['Visita a Potencial Oportunidade', 'Visita Go/No Go', 'Visita Pré-Obra', 'Visita de Acompanhamento', 'Visita de Fim de Obra', 'Visita com Investidores'] },
-  { grupo: 'Comercial — Consultores', regiao: false, itens: ['Prospeção de Consultores', 'Follow-up de Consultores', 'Reunião com Consultores'] },
-  { grupo: 'Comercial — Investidores', regiao: false, itens: ['Call a Investidores', 'Follow-up de Investidores', 'Onboarding de Investidores', 'Reunião com Investidores', 'Apresentação de Negócio a Investidores', 'Networking / Eventos'] },
+  { grupo: 'Comercial — Consultores', regiao: false, itens: ['Prospeção de Consultores', 'Follow-up de Consultores', 'Reunião com Consultores', 'Reunião com Parceiros'] },
+  { grupo: 'Comercial — Investidores', regiao: false, itens: ['Prospeção de Investidores', 'Call a Investidores', 'Follow-up de Investidores', 'Onboarding de Investidores', 'Reunião com Investidores', 'Apresentação de Negócio a Investidores', 'Networking / Eventos'] },
   { grupo: 'Operações — Projeto', regiao: true, itens: ['Documentação do Imóvel', 'Licenciamento e Câmara', 'Escrituras e Contratos', 'Seguros e Serviços', 'Venda do Imóvel'] },
   { grupo: 'Financeiro', regiao: false, itens: ['Departamento Financeiro', 'Contabilidade'] },
   { grupo: 'Administração', regiao: false, itens: ['Reunião de Equipa', 'Planeamento', 'Processos e SOP', 'Plataforma e IA'] },
