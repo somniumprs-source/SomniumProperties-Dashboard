@@ -653,11 +653,6 @@ export function CRM() {
     () => filtraArea ? dataTodos.filter(i => areasInvestidor(i).has(invArea)) : dataTodos,
     [dataTodos, filtraArea, invArea]
   )
-  const contagemAreas = useMemo(() => {
-    const c = { Coimbra: 0, AMP: 0, Geral: dataTodos.length }
-    for (const i of dataTodos) for (const a of areasInvestidor(i)) c[a]++
-    return c
-  }, [dataTodos])
   const total = filtraArea ? data.length : (listQuery.data?.total ?? 0)
   const loading = tab === 'Oportunidades' ? false : listQuery.isPending
   const loadError = listQuery.isError
@@ -1074,6 +1069,11 @@ export function CRM() {
             <RegiaoToggle value={regiaoActiva} onChange={setRegiaoActiva} />
           </div>
         )}
+        {tab === 'Investidores' && invSubTab === 'Ativo' && (
+          <div className="flex justify-end">
+            <RegiaoToggle value={invArea || null} onChange={r => { setInvArea(r || ''); setDetail(null, { replace: true }) }} />
+          </div>
+        )}
 
         {/* Pipelines — 5 cards centrados que actuam como tabs */}
         <div className="flex justify-center">
@@ -1131,13 +1131,6 @@ export function CRM() {
                   </button>
                 )
               })}
-              {invSubTab === 'Ativo' && (
-                <div className="sm:ml-auto flex items-center gap-2">
-                  <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Área de atuação</span>
-                  <RegiaoToggle value={invArea || null} counts={contagemAreas}
-                    onChange={r => { setInvArea(r || ''); setDetail(null, { replace: true }) }} />
-                </div>
-              )}
             </div>
 
             {/* KPIs do sub-tab seleccionado — A, B, Capital Angariado, Capital Investido */}

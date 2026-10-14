@@ -39,7 +39,7 @@ export function RegiaoBadge({ regiao, onTrocar, compact = false }) {
  *
  *   <RegiaoToggle value={regiao} onChange={setRegiao} />
  */
-export function RegiaoToggle({ value, onChange, options = ['Coimbra', 'AMP', 'Geral'], counts = null }) {
+export function RegiaoToggle({ value, onChange, options = ['Coimbra', 'AMP', 'Geral'] }) {
   return (
     <div className="inline-flex items-center gap-0.5 rounded-xl bg-gray-100 dark:bg-neutral-800 p-1">
       {options.map(o => {
@@ -57,7 +57,6 @@ export function RegiaoToggle({ value, onChange, options = ['Coimbra', 'AMP', 'Ge
           >
             <Icon className="w-3.5 h-3.5 shrink-0" />
             <span>{LABEL_TOGGLE[o] || o}</span>
-            {counts && counts[o] != null && <span className="font-mono opacity-60">{counts[o]}</span>}
           </button>
         )
       })}
