@@ -48,6 +48,17 @@ function tipoPrincipalIncludes(raw, val) {
   const arr = parseTipoPrincipalArr(raw)
   return arr.length > 0 ? arr.includes(val) : val === 'Passivo'
 }
+// Área de atuação de um investidor ativo: 'AMP' (Porto) e/ou 'Coimbra'.
+// Junta regioes_preferidas e localizacao_preferida (distritos), que nalguns
+// registos vem como texto solto ("Porto ") em vez de array JSON.
+function areasInvestidor(inv) {
+  const vals = [...parseTipoPrincipalArr(inv.regioes_preferidas), ...parseTipoPrincipalArr(inv.localizacao_preferida)]
+    .map(v => String(v || '').trim())
+  const areas = new Set()
+  if (vals.some(v => v === 'AMP' || v === 'Porto')) areas.add('AMP')
+  if (vals.includes('Coimbra')) areas.add('Coimbra')
+  return areas
+}
 
 const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Construtores', 'Oportunidades']
 // Sub-tabs que requerem distinção regional (modal ao entrar). Investidores
@@ -568,6 +579,7 @@ export function CRM() {
   const [alertCount, setAlertCount] = useState(0)
   const [consultoresLookup, setConsultoresLookup] = useState([])
   const [invSubTab, setInvSubTab] = useUrlState('invSubTab', 'Passivo') // sub-tab investidores
+  const [invArea, setInvArea] = useUrlState('invArea', '') // área dos ativos: '' (Geral) | 'Coimbra' | 'AMP'
   const [detailName, setDetailName] = useState(null) // nome para breadcrumb
   const [moveModal, setMoveModal] = useState(null) // { id, newColumn, type } | null
   const [agendar, setAgendar] = useState(null) // { id, newColumn, tipo } | null — janela de data ao mover para fases com passo agendado
@@ -633,8 +645,20 @@ export function CRM() {
   // enquanto os dados não mudam — um array novo a cada render invalidava
   // desnecessariamente os useCallback/useEffect noutros pontos do ficheiro
   // que dependem de `data`.
-  const data = useMemo(() => listQuery.data?.items ?? [], [listQuery.data])
-  const total = listQuery.data?.total ?? 0
+  const dataTodos = useMemo(() => listQuery.data?.items ?? [], [listQuery.data])
+  // Investidores ativos divididos por área de atuação (Porto | Coimbra).
+  // Filtro client-side: quem atua nas duas áreas aparece em ambas.
+  const filtraArea = tab === 'Investidores' && invSubTab === 'Ativo' && !!invArea
+  const data = useMemo(
+    () => filtraArea ? dataTodos.filter(i => areasInvestidor(i).has(invArea)) : dataTodos,
+    [dataTodos, filtraArea, invArea]
+  )
+  const contagemAreas = useMemo(() => {
+    const c = { Coimbra: 0, AMP: 0, Geral: dataTodos.length }
+    for (const i of dataTodos) for (const a of areasInvestidor(i)) c[a]++
+    return c
+  }, [dataTodos])
+  const total = filtraArea ? data.length : (listQuery.data?.total ?? 0)
   const loading = tab === 'Oportunidades' ? false : listQuery.isPending
   const loadError = listQuery.isError
   const load = listQuery.refetch
@@ -1107,6 +1131,13 @@ export function CRM() {
                   </button>
                 )
               })}
+              {invSubTab === 'Ativo' && (
+                <div className="sm:ml-auto flex items-center gap-2">
+                  <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Área de atuação</span>
+                  <RegiaoToggle value={invArea || null} counts={contagemAreas}
+                    onChange={r => { setInvArea(r || ''); setDetail(null, { replace: true }) }} />
+                </div>
+              )}
             </div>
 
             {/* KPIs do sub-tab seleccionado — A, B, Capital Angariado, Capital Investido */}
