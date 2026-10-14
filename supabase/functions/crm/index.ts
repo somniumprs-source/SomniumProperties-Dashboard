@@ -1582,7 +1582,11 @@ app.get("/consultores/sugestoes-tags", async (c: any) => {
     const where = regiaoActiva ? "WHERE regiao = $1" : "";
     const params = regiaoActiva ? [regiaoActiva] : [];
     const { rows } = await pool.query(`SELECT imobiliaria, zonas FROM consultores ${where}`, params);
-    const imobiliarias = new Set<string>();
+    // Lista fixa por região (lookups imobiliaria_coimbra, imobiliaria_amp…) —
+    // migração 0075. Sem região activa entram todas.
+    const catImob = regiaoActiva ? `imobiliaria_${String(regiaoActiva).toLowerCase()}` : "imobiliaria_%";
+    const { rows: fixas } = await pool.query("SELECT valor FROM lookups WHERE categoria LIKE $1 AND ativo = true", [catImob]);
+    const imobiliarias = new Set<string>(fixas.map((f: any) => f.valor));
     const zonas = new Set<string>();
     for (const r of rows) {
       try {

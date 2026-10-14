@@ -1129,7 +1129,11 @@ router.get('/consultores/sugestoes-tags', async (req, res) => {
     const where = req.regiaoActiva ? 'WHERE regiao = $1' : ''
     const params = req.regiaoActiva ? [req.regiaoActiva] : []
     const { rows } = await pool.query(`SELECT imobiliaria, zonas FROM consultores ${where}`, params)
-    const imobiliarias = new Set()
+    // Lista fixa por região (lookups imobiliaria_coimbra, imobiliaria_amp…) —
+    // migração 0075. Sem região activa entram todas.
+    const catImob = req.regiaoActiva ? `imobiliaria_${req.regiaoActiva.toLowerCase()}` : 'imobiliaria_%'
+    const { rows: fixas } = await pool.query('SELECT valor FROM lookups WHERE categoria LIKE $1 AND ativo = true', [catImob])
+    const imobiliarias = new Set(fixas.map(f => f.valor))
     const zonas = new Set()
     for (const r of rows) {
       try {

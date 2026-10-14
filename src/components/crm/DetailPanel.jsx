@@ -1838,7 +1838,7 @@ function ChipsEditor({ label, jsonField, onChange, placeholder, suggestions = []
   const filtered = useMemo(() => {
     const q = norm(input)
     const sel = new Set(items.map(norm))
-    return (suggestions || []).filter(s => !sel.has(norm(s)) && (q === '' || norm(s).includes(q))).slice(0, 8)
+    return (suggestions || []).filter(s => !sel.has(norm(s)) && (q === '' || norm(s).includes(q))).slice(0, 50)
   }, [suggestions, input, items])
 
   // Fechar dropdown ao clicar fora.
