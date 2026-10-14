@@ -83,7 +83,7 @@ import { carregarChecklist, gravarManual } from "../_shared/checklistImovel.ts";
 import { agendarPassoImovel, sincronizarTarefaVisita } from "../_shared/agendaEngine.ts";
 import { agendarFollowUpImovelManual, registarFollowUpFeito } from "../_shared/followUpImovel.ts";
 import { faseAoAgendarFollowUp } from "../_shared/pipelineImoveis.ts";
-import { lerContactoPessoa, agendarContactoPessoa, registarContactoPessoa, lerContactosDoImovel, juntarImovelAoContacto } from "../_shared/contactoPessoa.ts";
+import { lerContactoPessoa, agendarContactoPessoa, registarContactoPessoa, editarNotaContacto, lerContactosDoImovel, juntarImovelAoContacto } from "../_shared/contactoPessoa.ts";
 import { createClient } from "@supabase/supabase-js";
 import { Buffer } from "node:buffer";
 
@@ -2839,6 +2839,14 @@ for (const [rota, tipo] of [["consultores", "consultor"], ["investidores", "inve
       const r = await registarContactoPessoa(pool, tipo, c.req.param("id"), { ...body, user: await resolveCrmUser(c) });
       if (!r) return c.json({ error: "Não encontrado" }, 404);
       return c.json({ ok: true, ...r });
+    } catch (e) { return c.json({ error: (e as Error).message }, 400); }
+  });
+  app.put(`/${rota}/:id/contacto/historico/:hid`, async (c: any) => {
+    try {
+      const body = await c.req.json().catch(() => ({}));
+      const ok = await editarNotaContacto(pool, tipo, c.req.param("id"), c.req.param("hid"), body?.notas);
+      if (!ok) return c.json({ error: "Não encontrado" }, 404);
+      return c.json({ ok: true });
     } catch (e) { return c.json({ error: (e as Error).message }, 400); }
   });
 }

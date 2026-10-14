@@ -14,7 +14,7 @@
  */
 import { useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Phone, RefreshCw, Check, X, ChevronDown, ChevronUp, Mic, Upload, Plus } from 'lucide-react'
+import { Phone, RefreshCw, Check, X, ChevronDown, ChevronUp, Mic, Upload, Plus, Pencil } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useRefreshOnMutation } from '../../hooks/useRefreshOnMutation.js'
 import { inputClass, fmtQuando, fmtDia, emDias, agoraLocal, comHora } from './passosUtil.js'
@@ -23,7 +23,83 @@ const ROTA = { consultor: 'consultores', investidor: 'investidores' }
 const CANAIS = ['Chamada', 'WhatsApp', 'Email', 'Reunião']
 const btn = 'text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50'
 const nomeAssunto = a => a.imovel_nome || a.texto || 'Imóvel'
-const limpaNota = n => String(n || '').replace(/^\[[^\]]+\]\s*/, '')
+const PREFIXO = /^\[[^\]]+\]\s*/ // etiqueta automática, ex.: «[REACTIVAÇÃO EMAIL]»
+const limpaNota = n => String(n || '').replace(PREFIXO, '')
+// Dia e, quando a houver, a hora do contacto.
+const fmtContacto = v => {
+  if (!/T\d{2}:\d{2}/.test(String(v || ''))) return fmtDia(v)
+  const d = new Date(v)
+  return isNaN(d) ? fmtDia(v) : d.toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+// Uma linha do histórico. A nota corrige-se no sítio: o campo só aparece ao
+// clicar no lápis (ou em «+ nota», se o contacto ficou sem nota).
+function HistoricoItem({ h, rota, pessoaId, onSaved }) {
+  const [editar, setEditar] = useState(false)
+  const [texto, setTexto] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [erro, setErro] = useState('')
+  const prefixo = String(h.notas || '').match(PREFIXO)?.[0] || ''
+
+  function abrir() { setTexto(limpaNota(h.notas)); setErro(''); setEditar(true) }
+  async function guardar() {
+    setSaving(true); setErro('')
+    try {
+      const corpo = texto.trim() ? `${prefixo}${texto.trim()}` : ''
+      const r = await apiFetch(`/api/crm/${rota}/${pessoaId}/contacto/historico/${encodeURIComponent(h.id)}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notas: corpo }),
+      })
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao guardar')
+      setEditar(false)
+      onSaved?.()
+    } catch (err) {
+      setErro(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <li className="group text-xs">
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        <span className="font-medium tabular-nums text-gray-700">{fmtContacto(h.quando)}</span>
+        {h.resultado
+          ? <span className={h.resultado === 'Feito' ? 'text-green-700' : 'text-orange-700'}>{h.resultado}</span>
+          : <span className="text-gray-500">Registo</span>}
+        {h.canal && <span className="text-gray-500">{h.canal}</span>}
+        {h.assuntos?.length > 0 && <span className="text-gray-700">{h.assuntos.map(nomeAssunto).join(', ')}</span>}
+        {!editar && h.notas && <span className="text-gray-600 min-w-0 break-words whitespace-pre-line">{limpaNota(h.notas)}</span>}
+        {h.proxima_data && <span className="text-gray-400">seguinte a {fmtDia(h.proxima_data)}</span>}
+        {!editar && (h.notas ? (
+          <button type="button" onClick={abrir} aria-label="Editar nota" title="Editar nota"
+            className="self-center text-gray-300 hover:text-yellow-700 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100">
+            <Pencil className="w-3 h-3" />
+          </button>
+        ) : (
+          <button type="button" onClick={abrir} className="text-[11px] text-gray-400 hover:text-yellow-700">+ nota</button>
+        ))}
+      </div>
+      {editar && (
+        <div className="mt-1 grid gap-1">
+          <textarea rows={2} value={texto} onChange={e => setTexto(e.target.value)} autoFocus aria-label="Nota do contacto"
+            onKeyDown={e => {
+              if (e.key === 'Escape') setEditar(false)
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); guardar() }
+            }}
+            placeholder="Nota do contacto" className={inputClass} />
+          {erro && <p className="text-red-600">{erro}</p>}
+          <div className="flex justify-end gap-1.5">
+            <button type="button" onClick={() => setEditar(false)} disabled={saving} className={btn}>Cancelar</button>
+            <button type="button" onClick={guardar} disabled={saving}
+              className="text-xs font-semibold px-2 py-1 rounded-lg disabled:opacity-50" style={{ backgroundColor: '#1A1A1A', color: '#C9A84C' }}>
+              {saving ? 'A guardar…' : 'Guardar nota'}
+            </button>
+          </div>
+        </div>
+      )}
+    </li>
+  )
+}
 
 // Lista de assuntos em edição: imóveis (escolhidos da lista) e notas livres.
 function AssuntosEditor({ itens, setItens, opcoes }) {
@@ -496,18 +572,7 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
           </button>
           {verHistorico && (
             <ul className="mt-1.5 grid gap-1 max-h-72 overflow-y-auto">
-              {historico.map(h => (
-                <li key={h.id} className="flex flex-wrap items-baseline gap-x-2 text-xs">
-                  <span className="font-medium tabular-nums text-gray-700">{fmtDia(h.quando)}</span>
-                  {h.resultado
-                    ? <span className={h.resultado === 'Feito' ? 'text-green-700' : 'text-orange-700'}>{h.resultado}</span>
-                    : <span className="text-gray-500">Registo</span>}
-                  {h.canal && <span className="text-gray-500">{h.canal}</span>}
-                  {h.assuntos?.length > 0 && <span className="text-gray-700">{h.assuntos.map(nomeAssunto).join(', ')}</span>}
-                  {h.notas && <span className="text-gray-600 min-w-0 break-words">{limpaNota(h.notas)}</span>}
-                  {h.proxima_data && <span className="text-gray-400">seguinte a {fmtDia(h.proxima_data)}</span>}
-                </li>
-              ))}
+              {historico.map(h => <HistoricoItem key={h.id} h={h} rota={ROTA[tipo]} pessoaId={pessoaId} onSaved={() => query.refetch()} />)}
             </ul>
           )}
         </div>

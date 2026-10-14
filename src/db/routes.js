@@ -24,7 +24,7 @@ import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, Consul
 import pool from './pg.js'
 import { agendarPassoImovel, sincronizarTarefaVisita } from './agendaEngine.js'
 import { agendarFollowUpImovelManual, registarFollowUpFeito } from './followUpImovel.js'
-import { lerContactoPessoa, agendarContactoPessoa, registarContactoPessoa, lerContactosDoImovel, juntarImovelAoContacto } from './contactoPessoa.js'
+import { lerContactoPessoa, agendarContactoPessoa, registarContactoPessoa, editarNotaContacto, lerContactosDoImovel, juntarImovelAoContacto } from './contactoPessoa.js'
 import { getVisitasEnriquecidas, syncDataVisitaDerivada, getFichaVisitaParaImovel } from './queries.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
@@ -2292,6 +2292,13 @@ for (const [rota, tipo] of [['consultores', 'consultor'], ['investidores', 'inve
       const r = await registarContactoPessoa(pool, tipo, req.params.id, { ...(req.body || {}), user: req.user || null })
       if (!r) return res.status(404).json({ error: 'Não encontrado' })
       res.json({ ok: true, ...r })
+    } catch (e) { res.status(400).json({ error: e.message }) }
+  })
+  router.put(`/${rota}/:id/contacto/historico/:hid`, async (req, res) => {
+    try {
+      const ok = await editarNotaContacto(pool, tipo, req.params.id, req.params.hid, req.body?.notas)
+      if (!ok) return res.status(404).json({ error: 'Não encontrado' })
+      res.json({ ok: true })
     } catch (e) { res.status(400).json({ error: e.message }) }
   })
 }

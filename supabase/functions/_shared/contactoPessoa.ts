@@ -38,6 +38,7 @@ const PESSOAS = {
 }
 
 const eData = v => /^\d{4}-\d{2}-\d{2}$/.test(v || '')
+const instante = v => { const t = new Date(v || 0).getTime(); return isNaN(t) ? 0 : t }
 
 // Cada operação mexe em várias tabelas (tarefa, assuntos, interação, espelhos):
 // ou fica tudo gravado ou nada. Dentro de uma transação já aberta (quem chama
@@ -159,8 +160,10 @@ export async function lerContactoPessoa(pool, tipo, id) {
         assuntos: f.imovel_id ? [{ imovel_id: f.imovel_id, imovel_nome: f.imovel_nome, texto: null }] : [],
       })
     }
-    historico.sort((a, b) => String(b.quando || '').localeCompare(String(a.quando || '')))
   }
+  // Pela data do contacto (a mais recente primeiro). As datas vêm em formatos
+  // mistos (só dia, hora local, ISO em UTC): compara-se o instante, não o texto.
+  historico.sort((a, b) => instante(b.quando) - instante(a.quando))
   return {
     pessoa: { tipo, id: p.id, nome: p.nome, fase: p.fase },
     rotulo: p.rotulo,
@@ -266,6 +269,24 @@ async function registarContactoPessoaTx(pool, tipo, id, {
     await pool.query(`UPDATE ${cfg.tabela} SET ${cfg.espelho} = NULL WHERE id = $1`, [id])
   }
   return { interacao_id: interacaoId, tarefa_id: tarefaId }
+}
+
+// ── Corrigir a nota de um contacto do histórico ─────────────
+// hid: id da interação, ou "followup:<id>" nos registos antigos do consultor.
+// Só muda o texto: a data do contacto (e por isso a ordem) mantém-se.
+export async function editarNotaContacto(pool, tipo, id, hid, notas) {
+  const cfg = PESSOAS[tipo]
+  if (!cfg) return false
+  const texto = String(notas ?? '').trim() || null
+  const agora = new Date().toISOString()
+  const antigo = String(hid || '').match(/^followup:(.+)$/)
+  if (antigo) {
+    if (tipo !== 'consultor') return false
+    const r = await pool.query('UPDATE consultor_followups SET motivo = $1, updated_at = $2 WHERE id = $3 AND consultor_id = $4', [texto, agora, antigo[1], id])
+    return r.rowCount > 0
+  }
+  const r = await pool.query(`UPDATE ${cfg.interacoes} SET notas = $1, updated_at = $2 WHERE id = $3 AND ${cfg.fk} = $4`, [texto, agora, hid, id])
+  return r.rowCount > 0
 }
 
 // ── Lado do imóvel ───────────────────────────────────────────
