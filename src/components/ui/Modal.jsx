@@ -1,13 +1,15 @@
 /**
  * Modal — overlay + container com entrada e saída animadas (AnimatePresence).
  * Renderizado num portal em <body>; fecha com Esc e clique no fundo.
+ * Foco: entra no diálogo ao abrir, fica preso lá dentro (Tab) e volta ao
+ * elemento de origem ao fechar. O Esc não chega a outros atalhos globais.
  * Uso:
  *   <Modal open={open} onClose={close} title="Título" subtitle="..." size="md">
  *     ...body...
  *     <Modal.Footer>...</Modal.Footer>
  *   </Modal>
  */
-import { useEffect, useId } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
@@ -23,16 +25,46 @@ const SIZE = {
 
 export function Modal({ open, onClose, title, subtitle, size = 'md', children, footer, className = '' }) {
   const titleId = useId()
+  const dialogRef = useRef(null)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
   useEffect(() => {
     if (!open) return
-    function onKey(e) { if (e.key === 'Escape') onClose?.() }
-    window.addEventListener('keydown', onKey)
+    const origem = document.activeElement
+    const FOCAVEIS = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    const raf = requestAnimationFrame(() => {
+      const el = dialogRef.current
+      if (!el || el.contains(document.activeElement)) return
+      const alvo = el.querySelector('[autofocus]') || el.querySelector('input:not([type="hidden"]):not([disabled]), select, textarea') || el
+      alvo.focus({ preventScroll: true })
+    })
+    function onKey(e) {
+      const el = dialogRef.current
+      if (!el) return
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        onCloseRef.current?.()
+        return
+      }
+      if (e.key === 'Tab') {
+        const itens = [...el.querySelectorAll(FOCAVEIS)].filter(n => n.offsetParent !== null)
+        if (!itens.length) { e.preventDefault(); return }
+        const primeiro = itens[0], ultimo = itens[itens.length - 1]
+        if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus() }
+        else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus() }
+      }
+    }
+    // Captura: o modal trata o Esc antes dos atalhos globais da página.
+    window.addEventListener('keydown', onKey, true)
     document.body.style.overflow = 'hidden'
     return () => {
-      window.removeEventListener('keydown', onKey)
+      cancelAnimationFrame(raf)
+      window.removeEventListener('keydown', onKey, true)
       document.body.style.overflow = ''
+      if (origem && typeof origem.focus === 'function' && document.contains(origem)) origem.focus({ preventScroll: true })
     }
-  }, [open, onClose])
+  }, [open])
 
   return createPortal(
     <AnimatePresence>
@@ -40,9 +72,9 @@ export function Modal({ open, onClose, title, subtitle, size = 'md', children, f
         <motion.div key="modal" variants={overlayVariants} initial="initial" animate="animate" exit="exit"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 dark:bg-black/60 backdrop-blur-[2px]"
           onClick={onClose}>
-          <motion.div variants={dialogVariants}
+          <motion.div variants={dialogVariants} ref={dialogRef} tabIndex={-1}
             role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined}
-            className={`bg-surface-raised text-ink border border-line rounded-2xl shadow-xl w-full max-h-[calc(100dvh-2rem)] overflow-y-auto ${SIZE[size] || SIZE.md} ${className}`}
+            className={`bg-surface-raised text-ink border border-line rounded-2xl shadow-xl w-full outline-none max-h-[calc(100dvh-2rem)] overflow-y-auto ${SIZE[size] || SIZE.md} ${className}`}
             onClick={e => e.stopPropagation()}>
             {(title || subtitle) && (
               <div className="flex items-start justify-between gap-4 p-5 border-b border-line">
