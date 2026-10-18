@@ -116,34 +116,13 @@ try {
   const { initSchema } = await import('./src/db/pg.js')
   if (backgroundJobsDisabled) skipJob('initSchema (DDL e UPDATEs de arranque)')
   else await initSchema()
-  const { withAuditUser } = await import('./src/db/audit.js')
-  const { default: pgPoolAudit } = await import('./src/db/pg.js')
+  const { auditMiddleware } = await import('./src/db/audit.js')
 
-  // Cache de nome do perfil activo (X-User-Id -> nome) com TTL 5min
-  const _userNomeCache = new Map()
-  async function resolveUserNome(userId) {
-    if (!userId) return null
-    const e = _userNomeCache.get(userId)
-    if (e && e.expires > Date.now()) return e.nome
-    try {
-      const { rows } = await pgPoolAudit.query('SELECT nome FROM users WHERE id = $1 LIMIT 1', [userId])
-      const nome = rows[0]?.nome || null
-      _userNomeCache.set(userId, { nome, expires: Date.now() + 5 * 60 * 1000 })
-      return nome
-    } catch { return null }
-  }
-
-  // Middleware audit: envolve cada request /api/* com AsyncLocalStorage com
-  // email da sessao + nome do perfil activo (X-User-Id). O wrapper de pool.query
-  // (audit.js) usa-os para SET LOCAL nos GUC antes de writes em imoveis/etc.
-  // req.user já está definido nesta altura para qualquer path autenticado
-  // (incluindo /api/crm/*, desde que a autenticação deixou de ter bypass ali).
-  app.use('/api', async (req, res, next) => {
-    const email = req.user?.email || null
-    const userId = req.headers['x-user-id'] || null
-    const nome = userId ? await resolveUserNome(userId) : null
-    withAuditUser(email, nome, () => next())
-  })
+  // Autor de cada pedido /api/* para o histórico (historico_alteracoes): dono
+  // da sessão, ou o perfil escolhido (X-User-Id) quando a equipa partilha a
+  // sessão — aí, sem perfil, as escritas são recusadas (PERFIL_OBRIGATORIO).
+  // req.user já está definido nesta altura para qualquer path autenticado.
+  app.use('/api', auditMiddleware())
 
   // ── Gestão de utilizadores e camadas de acesso ──
   const { default: userRoutes, accessRouter, requireRole, requireModule, requireModuleOrOwnInvestidor, restrictByAccess, restrictProjetosAccess, resolveAppUser, parceiroPodeEscrever, RECORD_RESTRICTED_ROLES } = await import('./src/db/userRoutes.js')

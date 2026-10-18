@@ -16,7 +16,7 @@ import { assertSafeUpload, AUDIO_ALLOWED_EXT, OFFICE_ALLOWED_EXT, checkUploadRat
 import { ROLE_MODULES, RECORD_RESTRICTED_ROLES, NON_ID_SEGS } from "../_shared/roles.ts";
 import { resolveOrProvisionUser } from "../_shared/userResolve.ts";
 import pool from "../_shared/pg.ts";
-import { withAuditUser } from "../_shared/audit.ts";
+import { auditMiddleware } from "../_shared/audit.ts";
 import {
   Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas,
   ConsultorInteracoes, InvestidorInteracoes, DocumentosInvestidor, Visitas,
@@ -573,32 +573,10 @@ app.use("*", async (c, next) => {
   c.header("Expires", "0");
 });
 
-// ── Middleware audit: injecta user_email + user_nome no AsyncLocalStorage.
-// nome vem de X-User-Id (perfil activo) via lookup na tabela users — distingue
-// quem fez a alteracao quando a equipa partilha a mesma sessao Supabase.
-const _userNomeCache = new Map<string, { nome: string | null; expires: number }>();
-async function _resolveUserNome(userId: string | null): Promise<string | null> {
-  if (!userId) return null;
-  const e = _userNomeCache.get(userId);
-  if (e && e.expires > Date.now()) return e.nome;
-  try {
-    const { rows } = await pool.query("SELECT nome FROM users WHERE id = $1 LIMIT 1", [userId]);
-    const nome = rows[0]?.nome || null;
-    _userNomeCache.set(userId, { nome, expires: Date.now() + 5 * 60 * 1000 });
-    return nome;
-  } catch { return null; }
-}
-
-app.use("*", async (c, next) => {
-  let email: string | null = null;
-  try {
-    const u = await resolveCrmUser(c);
-    email = u?.email || null;
-  } catch { /* best-effort */ }
-  const userId = c.req.header("x-user-id") || null;
-  const nome = await _resolveUserNome(userId);
-  await withAuditUser(email, nome, () => next());
-});
+// ── Middleware audit: autor de cada pedido para o histórico — dono da
+// sessão, ou o perfil escolhido (X-User-Id) quando a equipa partilha a sessão;
+// aí, sem perfil, as escritas são recusadas (PERFIL_OBRIGATORIO).
+app.use("*", auditMiddleware(async (c) => (await resolveCrmUser(c))?.email || null));
 
 // ── Middleware regional (port de routes.js 149-167) ──────────────
 app.use("*", async (c, next) => {

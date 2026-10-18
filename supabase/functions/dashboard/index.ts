@@ -5,6 +5,7 @@ import { requireAuth } from "../_shared/auth.ts";
 import { RECORD_RESTRICTED_ROLES } from "../_shared/roles.ts";
 import { resolveOrProvisionUser } from "../_shared/userResolve.ts";
 import pool from "../_shared/pg.ts";
+import { auditMiddleware } from "../_shared/audit.ts";
 import {
   getNegócios as _getNegócios,
   getDespesas as _getDespesas,
@@ -67,6 +68,9 @@ app.use("*", async (c: any, next: any) => {
   if (c.req.path.endsWith("/_health")) return await next();
   return await requireAuth(c, next);
 });
+
+// Autor de cada pedido para o histórico; sessão partilhada sem perfil → escritas recusadas.
+app.use("*", auditMiddleware((c: any) => c.get("user")?.email || null));
 
 // ── Bloqueio de roles externos (parceiro/investidor) ──
 // Esta função expõe TODO o dashboard interno (financeiro, comercial, KPIs,

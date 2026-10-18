@@ -77,6 +77,9 @@ if (authEnabled && supabase) {
   async function fetchWithToken(url, options, token) {
     const next = { ...options, headers: withActiveUserHeader({ ...options.headers, 'Authorization': `Bearer ${token}` }) }
     const res = await _originalFetch(url, next)
+    // Sessão partilhada sem perfil escolhido: o servidor recusa escritas (428)
+    // e a janela «Quem está a operar?» abre (PerfilObrigatorio.jsx).
+    if (res.status === 428) window.dispatchEvent(new Event('somnium:perfil-obrigatorio'))
     if (res.status === 401) {
       // Token recusado: invalidar cache e RENOVAR a sessão (não apenas reler —
       // o JWT pode ter expirado, e getSession devolveria o mesmo token morto).

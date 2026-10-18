@@ -3,6 +3,7 @@
 import { createApp } from "../_shared/hono.ts";
 import { requireAuth } from "../_shared/auth.ts";
 import pool from "../_shared/pg.ts";
+import { auditMiddleware } from "../_shared/audit.ts";
 import { importFolderToSops, syncSopsFromDrive, isConfigured as driveConfigured, parseFolderId } from "../_shared/sopDriveImport.ts";
 
 const app = createApp("/sops");
@@ -13,6 +14,9 @@ app.use("*", async (c: any, next: any) => {
   if (c.req.path.endsWith("/_health")) return await next();
   return await requireAuth(c, next);
 });
+
+// Autor de cada pedido para o histórico; sessão partilhada sem perfil → escritas recusadas.
+app.use("*", auditMiddleware((c: any) => c.get("user")?.email || null));
 
 const DEPARTAMENTOS_VALIDOS = ["comercial", "financeiro", "administrativo", "geral"];
 

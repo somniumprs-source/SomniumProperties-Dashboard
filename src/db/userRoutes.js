@@ -10,6 +10,7 @@
  * Mapeamento de áreas → roles (qualquer um destes roles pode aceder):
  */
 import { Router } from 'express'
+import { perfisDaSessao } from './audit.js'
 import { createClient } from '@supabase/supabase-js'
 import pool from './pg.js'
 // ROLES/ROLE_AREAS/ROLE_MODULES/RECORD_RESTRICTED_ROLES/NON_ID_SEGS: gerados
@@ -250,9 +251,17 @@ router.get('/me', async (req, res) => {
       modules: ROLE_MODULES[u.role] || [],
       investidorId,
       pode_editar: !!u.pode_editar,
+      // Sessão partilhada (vários perfis com este email): a interface obriga a
+      // escolher quem está a operar. Vazio com sessão própria.
+      perfis: await perfisSePartilhada(u.email),
     })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
+
+async function perfisSePartilhada(email) {
+  const perfis = await perfisDaSessao(email).catch(() => [])
+  return perfis.length > 1 ? perfis : []
+}
 
 // Tudo abaixo é só para admins
 router.use(async (req, res, next) => {

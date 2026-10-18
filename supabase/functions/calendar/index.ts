@@ -12,6 +12,7 @@
 import { createApp } from "../_shared/hono.ts";
 import { requireAuth, requireInternalKey } from "../_shared/auth.ts";
 import pool from "../_shared/pg.ts";
+import { auditMiddleware } from "../_shared/audit.ts";
 import { OAuth2Client } from "google-auth-library";
 import { calendar } from "@googleapis/calendar";
 import { oauth2 } from "@googleapis/oauth2";
@@ -27,6 +28,9 @@ app.use("*", async (c: any, next: any) => {
   if (c.req.header("x-api-key") && requireInternalKey(c)) return await next();
   return await requireAuth(c, next);
 });
+
+// Autor de cada pedido para o histórico; sessão partilhada sem perfil → escritas recusadas.
+app.use("*", auditMiddleware((c: any) => c.get("user")?.email || null));
 
 const GCAL_ID = Deno.env.get("GOOGLE_CALENDAR_ID") || "somniumprs@gmail.com";
 

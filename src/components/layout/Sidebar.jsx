@@ -8,6 +8,7 @@ import { prefetchRoute } from '../../lib/prefetch.js'
 import { tabIndicatorTransition, dialogVariants, overlayVariants } from '../../lib/motion.js'
 import { VoiceButton } from '../ui/VoiceButton.jsx'
 import { navVisivel } from './navConfig.js'
+import { lerPerfilAtivo, definirPerfilAtivo, EVENTO_PERFIL_MUDOU } from '../../lib/perfilAtivo.js'
 
 // Barra lateral sempre escura (identidade Somnium), nos dois temas.
 // Dourado só no item ativo.
@@ -272,24 +273,21 @@ function NotificationsBell() {
 }
 
 // ════════════════════════════════════════════════════════════════
-// Selector de perfil activo — distingue quem opera quando a equipa
-// partilha a sessao Supabase. ID guardado em localStorage e enviado
-// no header X-User-Id em todos os apiFetch (ver src/lib/api.js e
-// src/main.jsx). O backend regista o nome no historico_alteracoes.
+// Selector de perfil ativo — distingue quem opera quando a equipa
+// partilha a sessão Supabase (ver src/lib/perfilAtivo.js). Só os perfis
+// dessa sessão; sem perfil abre PerfilObrigatorio.jsx.
 // ════════════════════════════════════════════════════════════════
-const ACTIVE_USER_KEY = 'somnium:active_user_id'
-
 function PerfilActivoSelector() {
-  const [users, setUsers] = useState([])
-  const [activeId, setActiveId] = useState(null)
+  const { profile } = useAuth()
+  const users = profile?.perfis || []
+  const [activeId, setActiveId] = useState(lerPerfilAtivo)
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
   useEffect(() => {
-    try { setActiveId(window.localStorage.getItem(ACTIVE_USER_KEY)) } catch {}
-    apiFetch('/api/users').then(r => r.ok ? r.json() : { data: [] }).then(j => {
-      setUsers((j.data || []).filter(u => u.ativo))
-    }).catch(() => {})
+    const mudou = () => setActiveId(lerPerfilAtivo())
+    window.addEventListener(EVENTO_PERFIL_MUDOU, mudou)
+    return () => window.removeEventListener(EVENTO_PERFIL_MUDOU, mudou)
   }, [])
 
   useEffect(() => {
@@ -299,15 +297,13 @@ function PerfilActivoSelector() {
   }, [open])
 
   function escolher(id) {
-    try {
-      if (id) window.localStorage.setItem(ACTIVE_USER_KEY, id)
-      else window.localStorage.removeItem(ACTIVE_USER_KEY)
-    } catch {}
-    setActiveId(id)
+    definirPerfilAtivo(id)
     setOpen(false)
   }
 
   const active = users.find(u => u.id === activeId) || null
+  // Sessão própria: o autor é o dono da sessão, não há perfil a escolher.
+  if (users.length < 2) return null
 
   return (
     <div className="relative" ref={ref}>
@@ -324,25 +320,12 @@ function PerfilActivoSelector() {
         {open && (
           <motion.div variants={dialogVariants} initial="initial" animate="animate" exit="exit"
             className={`${PAINEL} max-h-72 overflow-y-auto`} role="listbox" aria-label="Operar como">
-            <button onClick={() => escolher(null)}
-              className="w-full text-left px-3 py-2 text-caption text-ink-muted italic hover:bg-surface-muted border-b border-line">
-              (sem perfil ativo)
-            </button>
-            {users.length === 0 ? (
-              <p className="text-caption text-ink-muted py-3 text-center">Sem utilizadores</p>
-            ) : (
-              users.map(u => (
-                <button key={u.id} onClick={() => escolher(u.id)} role="option" aria-selected={activeId === u.id}
-                  className={`w-full text-left px-3 py-2 hover:bg-surface-muted flex items-center gap-2 border-b border-line last:border-0 ${activeId === u.id ? 'bg-accent/10' : ''}`}>
-                  <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold text-white shrink-0"
-                    style={{ backgroundColor: u.cor || '#6b6962' }}>{u.iniciais}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-caption text-ink truncate">{u.nome}</p>
-                    <p className="text-overline text-ink-muted truncate">{u.role}</p>
-                  </div>
-                </button>
-              ))
-            )}
+            {users.map(u => (
+              <button key={u.id} onClick={() => escolher(u.id)} role="option" aria-selected={activeId === u.id}
+                className={`w-full text-left px-3 py-2 hover:bg-surface-muted flex items-center gap-2 border-b border-line last:border-0 ${activeId === u.id ? 'bg-accent/10' : ''}`}>
+                <p className="flex-1 min-w-0 text-caption text-ink truncate">{u.nome}</p>
+              </button>
+            ))}
           </motion.div>
         )}
       </AnimatePresence>

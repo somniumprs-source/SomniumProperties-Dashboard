@@ -5,6 +5,7 @@
 import { createApp } from "../_shared/hono.ts";
 import { requireAuth } from "../_shared/auth.ts";
 import pool from "../_shared/pg.ts";
+import { auditMiddleware } from "../_shared/audit.ts";
 import {
   gerarCadeiasAngariacao, gerarEstudoDeMercado, gerarAnaliseDeNegocio, gerarElaboracaoProposta,
   gerarTarefasSinteticas, instanciarTemplatesDevidos, gerarProposta, gerarFila, atribuirTarefa, desfazerAtribuicao,
@@ -22,6 +23,9 @@ app.use("*", async (c: any, next: any) => {
   if (c.req.path.endsWith("/_health")) return await next();
   return await requireAuth(c, next);
 });
+
+// Autor de cada pedido para o histórico; sessão partilhada sem perfil → escritas recusadas.
+app.use("*", auditMiddleware((c: any) => c.get("user")?.email || null));
 
 const FREQUENCIAS_VALIDAS = ["diaria", "semanal", "quinzenal", "mensal", "custom"];
 const PRIORIDADES_VALIDAS = ["alta", "media", "baixa"];

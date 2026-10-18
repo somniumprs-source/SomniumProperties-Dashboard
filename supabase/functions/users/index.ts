@@ -10,6 +10,7 @@
 // preservando a semantica original (dev mode sem service key -> passa).
 import { createApp, isAllowedRedirectOrigin } from "../_shared/hono.ts";
 import pool from "../_shared/pg.ts";
+import { auditMiddleware, perfisDaSessao } from "../_shared/audit.ts";
 import { ROLES, ROLE_AREAS, ROLE_MODULES, RECORD_RESTRICTED_ROLES } from "../_shared/roles.ts";
 import { getUserByEmail, resolveOrProvisionUser } from "../_shared/userResolve.ts";
 import { createClient } from "@supabase/supabase-js";
@@ -173,6 +174,9 @@ app.use("*", async (c, next) => {
   c.header("Cache-Control", "no-store, no-cache, must-revalidate, private");
 });
 
+// Autor de cada pedido para o histórico; sessão partilhada sem perfil → escritas recusadas.
+app.use("*", auditMiddleware((c: any) => c.get("authUser")?.email || null));
+
 // ── GET /users/whoami — diagnostico (port 192-205) ──
 app.get("/whoami", async (c: any) => {
   try {
@@ -212,9 +216,17 @@ app.get("/me", async (c: any) => {
       modules: ROLE_MODULES[u.role] || [],
       investidorId,
       pode_editar: !!u.pode_editar,
+      // Sessão partilhada (vários perfis com este email): a interface obriga a
+      // escolher quem está a operar. Vazio com sessão própria.
+      perfis: await perfisSePartilhada(u.email),
     });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
+
+async function perfisSePartilhada(email: string) {
+  const perfis = await perfisDaSessao(email).catch(() => []);
+  return perfis.length > 1 ? perfis : [];
+}
 
 // ── Guarda admin-only para tudo abaixo (port 227-233) ──
 // Replica o router.use admin-only do Express como middleware Hono que cobre

@@ -40,6 +40,7 @@ export function AuthProvider({ children }) {
         role: j.role, areas: j.areas || [], modules: j.modules || [],
         investidorId: j.investidorId || null,
         pode_editar: !!j.pode_editar,
+        perfis: j.perfis || [],
       })
     } catch { setProfile(null) }
   }, [])

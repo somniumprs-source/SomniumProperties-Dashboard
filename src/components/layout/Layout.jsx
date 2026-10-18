@@ -1,6 +1,7 @@
 import { Sidebar } from './Sidebar.jsx'
 import { PageTransition } from '../ui/PageTransition.jsx'
 import { ScrollToTop } from '../ui/ScrollToTop.jsx'
+import { PerfilObrigatorio } from './PerfilObrigatorio.jsx'
 
 export function Layout() {
   return (
@@ -10,6 +11,7 @@ export function Layout() {
         <ScrollToTop />
         <PageTransition />
       </main>
+      <PerfilObrigatorio />
     </div>
   )
 }
