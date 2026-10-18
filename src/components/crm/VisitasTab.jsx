@@ -10,6 +10,8 @@ import { useToast } from '../ui/Toast.jsx'
 import { friendlyError } from '../../lib/friendlyError.js'
 import { FichaVisitaModal } from './FichaVisitaModal.jsx'
 import { fichaTemConteudo } from '../../constants/fichaVisitaSchema.js'
+import { confirmar } from '../ui/ConfirmDialog.jsx'
+import { AnimatePresence } from 'framer-motion'
 
 const ESTADOS = [
   { key: 'agendada',  label: 'Agendada',  color: '#C9A84C', bg: '#FEF3C7', icon: Clock },
@@ -135,7 +137,7 @@ export function VisitasTab({ imovelId, onUpdate }) {
   }
 
   async function handleDelete(id) {
-    if (!confirm('Apagar esta visita do histórico?')) return
+    if (!(await confirmar('Apagar esta visita do histórico?'))) return
     try {
       await apiFetch(`/api/crm/visitas/${id}`, { method: 'DELETE' })
       await load()
@@ -289,14 +291,16 @@ export function VisitasTab({ imovelId, onUpdate }) {
         </div>
       )}
 
-      {fichaVisita && (
-        <FichaVisitaModal
-          visita={fichaVisita}
-          imovelId={imovelId}
-          onClose={() => setFichaVisita(null)}
-          onSaved={async () => { await load(); setFichaVisita(null); onUpdate?.() }}
-        />
-      )}
+      <AnimatePresence>
+        {fichaVisita && (
+          <FichaVisitaModal
+            visita={fichaVisita}
+            imovelId={imovelId}
+            onClose={() => setFichaVisita(null)}
+            onSaved={async () => { await load(); setFichaVisita(null); onUpdate?.() }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

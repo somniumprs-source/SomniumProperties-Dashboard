@@ -8,6 +8,8 @@ import { useRegiaoGate } from '../contexts/RegiaoContext.jsx'
 import { RegiaoModal } from '../components/RegiaoModal.jsx'
 import { RegiaoBadge } from '../components/RegiaoBadge.jsx'
 import { REGIAO_LABEL, REGIAO_COR, concelhosDe, EUR, PCT } from '../constants.js'
+import { confirmar } from '../components/ui/ConfirmDialog.jsx'
+import { AnimatePresence } from 'framer-motion'
 
 const TABS = [
   { key: 'kpis', label: 'KPIs', Icon: Gauge },
@@ -151,7 +153,7 @@ function MercadoPanel({ regiao }) {
   useEffect(() => { reload() }, [regiao])
 
   async function remover(id) {
-    if (!confirm('Eliminar entrada de mercado?')) return
+    if (!(await confirmar('Eliminar entrada de mercado?'))) return
     await fetchR(`/api/crm/regiao/mercado/${id}`, regiao, { method: 'DELETE' })
     reload()
   }
@@ -383,7 +385,7 @@ function CompliancePanel({ regiao }) {
           </div>
         ))}
       </div>
-      {editing && <ComplianceForm initial={editing} onCancel={() => setEditing(null)} onSaved={save} />}
+      <AnimatePresence>{editing && <ComplianceForm initial={editing} onCancel={() => setEditing(null)} onSaved={save} />}</AnimatePresence>
     </div>
   )
 }

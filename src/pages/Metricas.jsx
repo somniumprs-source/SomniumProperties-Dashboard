@@ -12,6 +12,8 @@ import { EUR, PCT, DAYS, NUM, RATIO } from '../constants.js'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { Card } from '../components/ui/Card.jsx'
 import { Activity, TrendingUp, Users, Gauge, Target } from 'lucide-react'
+import { confirmar } from '../components/ui/ConfirmDialog.jsx'
+import { AnimatePresence } from 'framer-motion'
 
 const GOLD = '#C9A84C'
 const TABS = [
@@ -1222,7 +1224,7 @@ export function Metricas() {
             setShowOkrForm(false); load()
           }
           async function deleteOkr(id) {
-            if (!confirm('Apagar este objetivo e todos os KRs?')) return
+            if (!(await confirmar('Apagar este objetivo e todos os KRs?'))) return
             await apiFetch(`/api/okrs/${id}`, { method: 'DELETE' }); load()
           }
           async function deleteKr(id) {
@@ -1349,15 +1351,17 @@ export function Metricas() {
                 ))}
                 {okrs.length === 0 && <p className="text-xs text-ink-muted text-center py-8">Sem OKRs definidos — clica em "+ Novo Objetivo"</p>}
 
-                {editingOkr && (
-                  <KrFormModal
-                    okrId={editingOkr.okrId}
-                    kr={editingOkr.kr}
-                    fontes={fontes}
-                    onSave={form => saveKr(editingOkr.okrId, editingOkr.kr?.id, form)}
-                    onClose={() => setEditingOkr(null)}
-                  />
-                )}
+                <AnimatePresence>
+                  {editingOkr && (
+                    <KrFormModal
+                      okrId={editingOkr.okrId}
+                      kr={editingOkr.kr}
+                      fontes={fontes}
+                      onSave={form => saveKr(editingOkr.okrId, editingOkr.kr?.id, form)}
+                      onClose={() => setEditingOkr(null)}
+                    />
+                  )}
+                </AnimatePresence>
               </div>
             </>
           )

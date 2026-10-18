@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { CheckCircle2, AlertCircle, Upload, ExternalLink, RefreshCw, Trash2, Sparkles, Plus } from 'lucide-react'
 import { CHECKLIST_DOCUMENTACAO, getDocsBySlot, resumoChecklist } from './checklist.config.js'
 import { ResultadoAnalise } from './ResultadoAnalise.jsx'
+import { confirmar } from '../../ui/ConfirmDialog.jsx'
 
 /**
  * Checklist canónica de documentação do imóvel. Cada slot pode ter N ficheiros
@@ -123,7 +124,7 @@ function DocRow({ doc, erro, aAnalisar, analise, onRemove, onAnalisar, onRemover
   const [removing, setRemoving] = useState(false)
 
   async function handleRemove() {
-    if (!window.confirm(`Remover "${doc.name}"?`)) return
+    if (!(await confirmar(`Remover "${doc.name}"?`))) return
     setRemoving(true)
     try { await onRemove(doc.id) } finally { setRemoving(false) }
   }

@@ -29,6 +29,7 @@ import { calcOrcamentoObra } from '../db/orcamentoObraEngine.js'
 import { DocumentosOrcamentosTab } from '../components/obra/DocumentosOrcamentosTab.jsx'
 import { AnaliseTab } from '../components/analise/AnaliseTab.jsx'
 import { QuadroEstimadoVsReal, QuadroConsultoria, RubricaSelect, RUBRICA_EXTRA, MOTIVOS_EXTRA, rubricaDe, labelRubrica } from '../components/projeto/EstimadoVsReal.jsx'
+import { confirmar } from '../components/ui/ConfirmDialog.jsx'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const GOLD = '#C9A84C'
@@ -161,7 +162,7 @@ export function ProjectoDetalhe() {
     : fotos.filter(f => f.fracao_id === fracaoSel || (fracaoSel === '__comum__' && !f.fracao_id))
 
   async function inicializarFases() {
-    if (!confirm('Criar as fases deste projeto?')) return
+    if (!(await confirmar('Criar as fases deste projeto?'))) return
     const r = await apiFetch(`/api/crm/projetos/${id}/fases/inicializar`, { method: 'POST' })
     if (!r.ok) {
       const e = await r.json().catch(() => ({}))
@@ -270,7 +271,7 @@ export function ProjectoDetalhe() {
             {!isReadOnly && (
               <Button size="sm" variant="ghost" icon={Trash2} className="hover:!text-danger hover:!bg-danger/10"
                 onClick={async () => {
-                  if (!confirm(`Apagar o projeto "${negocio.movimento}"? Esta ação apaga também fases, tarefas e fotos. Não pode ser revertida.`)) return
+                  if (!(await confirmar(`Apagar o projeto "${negocio.movimento}"? Esta ação apaga também fases, tarefas e fotos. Não pode ser revertida.`))) return
                   const r = await apiFetch(`/api/crm/negocios/${id}`, { method: 'DELETE' })
                   if (r.ok) { toast('Projeto apagado.', 'success'); navigate('/projectos') }
                   else toast(friendlyError((await r.json().catch(() => ({}))).error || { status: r.status }), 'error')
@@ -404,7 +405,7 @@ function AnaliseFinalBar({ negocioId, analiseFinal, podeGuardar, onChange }) {
     const msg = analiseFinal
       ? 'Substituir a análise final guardada pela análise atual? O Estimado do projeto passa a usar os novos valores.'
       : 'Guardar a análise atual como final? O Estimado do projeto fica fixo nestes valores.'
-    if (!confirm(msg)) return
+    if (!(await confirmar(msg))) return
     setSaving(true)
     const r = await apiFetch(`/api/crm/projetos/${negocioId}/analise-final`, { method: 'POST' })
     setSaving(false)
@@ -637,7 +638,7 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId, imovelId, fotosImo
   }
 
   async function apagarDespesa(id) {
-    if (!confirm('Apagar esta despesa?')) return
+    if (!(await confirmar('Apagar esta despesa?'))) return
     const r = await apiFetch(`/api/crm/projetos/despesas/${id}`, { method: 'DELETE' })
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
@@ -832,7 +833,7 @@ function ImportarOrcamento({ imovel, negocio, onChange }) {
   const jaTemOrcamento = !!negocio?.orcamento_obra_snapshot
 
   async function importarInterno() {
-    if (jaTemOrcamento && !confirm('Já existe um orçamento importado, usado como o orçamento real do projeto. Substituir pelos valores atuais do Comercial?')) return
+    if (jaTemOrcamento && !(await confirmar('Já existe um orçamento importado, usado como o orçamento real do projeto. Substituir pelos valores atuais do Comercial?'))) return
     setImportando(true)
     try {
       const r = await apiFetch(`/api/crm/projetos/${negocio.id}/orcamento-interno/importar`, { method: 'POST' })
@@ -1046,7 +1047,7 @@ function TranchesRecebimento({ negocio, imovel, analise, onChange, readOnly }) {
   const [saving, setSaving] = useState(false)
 
   async function confirmar(idx) {
-    if (!confirm(`Confirmar recebimento desta tranche?`)) return
+    if (!(await confirmar(`Confirmar recebimento desta tranche?`))) return
     const r = await apiFetch(`/api/crm/negocios/${negocio.id}/confirmar-pagamento`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ trancheIndex: idx }),
@@ -1084,7 +1085,7 @@ function TranchesRecebimento({ negocio, imovel, analise, onChange, readOnly }) {
   }
 
   async function apagarTranche(idx) {
-    if (!confirm(`Apagar a tranche "${pags[idx].descricao || `Tranche ${idx + 1}`}"?`)) return
+    if (!(await confirmar(`Apagar a tranche "${pags[idx].descricao || `Tranche ${idx + 1}`}"?`))) return
     const novasPags = pags.filter((_, i) => i !== idx)
     const novoRecebido = novasPags.filter(p => p.recebido).reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
     const r = await apiFetch(`/api/crm/negocios/${negocio.id}`, {
@@ -1292,7 +1293,7 @@ function TabFaturas({ negocioId, analise, readOnly, consultoria = false }) {
   }
 
   async function apagar(id) {
-    if (!confirm('Apagar este documento?')) return
+    if (!(await confirmar('Apagar este documento?'))) return
     const r = await apiFetch(`/api/crm/projetos/despesas/${id}`, { method: 'DELETE' })
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
@@ -1558,7 +1559,7 @@ function TabFotos({ negocioId, fases, fotos, onChange, readOnly }) {
     }
   }
   async function apagarFoto(fotoId) {
-    if (!confirm('Apagar esta foto?')) return
+    if (!(await confirmar('Apagar esta foto?'))) return
     const r = await apiFetch(`/api/crm/projetos/fotos/${fotoId}`, { method: 'DELETE' })
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
@@ -1717,7 +1718,7 @@ function TabDocumentos({ negocio, imovel, fases, readOnly }) {
     }
   }
   async function apagarDoc(id) {
-    if (!confirm('Apagar este documento?')) return
+    if (!(await confirmar('Apagar este documento?'))) return
     const r = await apiFetch(`/api/crm/projetos/documentos/${id}`, { method: 'DELETE' })
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
@@ -1974,7 +1975,7 @@ function TabReunioes({ negocioId, readOnly }) {
   }
 
   async function apagar(id) {
-    if (!confirm('Apagar esta reunião?')) return
+    if (!(await confirmar('Apagar esta reunião?'))) return
     const r = await apiFetch(`/api/crm/projetos/reunioes/${id}`, { method: 'DELETE' })
     if (r.ok) load()
   }
@@ -2340,7 +2341,7 @@ function TabInvestidores({ negocio, readOnly }) {
     load()
   }
   async function apagar(linkId) {
-    if (!confirm('Remover este investidor do projeto?')) return
+    if (!(await confirmar('Remover este investidor do projeto?'))) return
     const r = await apiFetch(`/api/crm/projetos/investidores/${linkId}`, { method: 'DELETE' })
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
@@ -2588,7 +2589,7 @@ function TabFracoes({ negocioId, fracoes, onChange, readOnly, fasesComuns }) {
     setEditing(null); setShowForm(false); onChange()
   }
   async function apagar(id, nome) {
-    if (!confirm(`Apagar fração "${nome}"? Fases/fotos/despesas dessa fração ficarão como "comuns ao prédio".`)) return
+    if (!(await confirmar(`Apagar fração "${nome}"? Fases/fotos/despesas dessa fração ficarão como "comuns ao prédio".`))) return
     const r = await apiFetch(`/api/crm/projetos/fracoes/${id}`, { method: 'DELETE' })
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
@@ -2910,7 +2911,7 @@ function ComentariosFase({ faseId, readOnly }) {
     load()
   }
   async function apagar(id) {
-    if (!confirm("Apagar comentário?")) return
+    if (!(await confirmar("Apagar comentário?"))) return
     const r = await apiFetch(`/api/crm/projetos/comentarios/${id}`, { method: "DELETE" })
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))

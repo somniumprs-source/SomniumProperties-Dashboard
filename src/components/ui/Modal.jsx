@@ -23,6 +23,9 @@ const SIZE = {
   full: 'max-w-[calc(100vw-2rem)]',
 }
 
+// Janelas abertas, da mais antiga para a mais recente: só a de cima reage ao teclado.
+const pilha = []
+
 export function Modal({ open, onClose, title, subtitle, size = 'md', children, footer, className = '' }) {
   const titleId = useId()
   const dialogRef = useRef(null)
@@ -31,6 +34,8 @@ export function Modal({ open, onClose, title, subtitle, size = 'md', children, f
 
   useEffect(() => {
     if (!open) return
+    const marca = {}
+    pilha.push(marca)
     const origem = document.activeElement
     const FOCAVEIS = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
     const raf = requestAnimationFrame(() => {
@@ -41,7 +46,7 @@ export function Modal({ open, onClose, title, subtitle, size = 'md', children, f
     })
     function onKey(e) {
       const el = dialogRef.current
-      if (!el) return
+      if (!el || pilha[pilha.length - 1] !== marca) return
       if (e.key === 'Escape') {
         e.stopPropagation()
         onCloseRef.current?.()
@@ -61,13 +66,15 @@ export function Modal({ open, onClose, title, subtitle, size = 'md', children, f
     return () => {
       cancelAnimationFrame(raf)
       window.removeEventListener('keydown', onKey, true)
-      document.body.style.overflow = ''
+      pilha.splice(pilha.indexOf(marca), 1)
+      if (!pilha.length) document.body.style.overflow = ''
       if (origem && typeof origem.focus === 'function' && document.contains(origem)) origem.focus({ preventScroll: true })
     }
   }, [open])
 
+  // propagate: se quem usa o Modal o desmontar dentro de um <AnimatePresence>, a saída anima na mesma.
   return createPortal(
-    <AnimatePresence>
+    <AnimatePresence propagate>
       {open && (
         <motion.div key="modal" variants={overlayVariants} initial="initial" animate="animate" exit="exit"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 dark:bg-black/60 backdrop-blur-[2px]"

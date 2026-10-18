@@ -11,6 +11,7 @@ import { apiFetch } from '../../lib/api.js'
 import { useRefreshOnMutation } from '../../hooks/useRefreshOnMutation.js'
 import { TransicaoFaseModal } from './TransicaoFaseModal.jsx'
 import { AgendarPassoModal } from './AgendarPassoModal.jsx'
+import { AnimatePresence } from 'framer-motion'
 
 const fmtData = v => {
   if (!v) return ''
@@ -132,16 +133,20 @@ export function ChecklistTab({ imovel, onUpdate, onAbrirTab }) {
         )
       })}
 
-      {janela?.tipo === 'visita' && (
-        <TransicaoFaseModal imovel={imovel} requisitos={[{ id: 'visita', acao: 'visita' }]} mover={false}
-          onCancel={() => setJanela(null)}
-          onResolvido={() => { setJanela(null); query.refetch(); onUpdate?.() }} />
-      )}
-      {janela?.agendar && (
-        <AgendarPassoModal imovel={imovel} tipo={janela.agendar}
-          onCancel={() => setJanela(null)}
-          onDone={() => { setJanela(null); query.refetch(); onUpdate?.() }} />
-      )}
+      <AnimatePresence>
+        {janela?.tipo === 'visita' && (
+          <TransicaoFaseModal imovel={imovel} requisitos={[{ id: 'visita', acao: 'visita' }]} mover={false}
+            onCancel={() => setJanela(null)}
+            onResolvido={() => { setJanela(null); query.refetch(); onUpdate?.() }} />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {janela?.agendar && (
+          <AgendarPassoModal imovel={imovel} tipo={janela.agendar}
+            onCancel={() => setJanela(null)}
+            onDone={() => { setJanela(null); query.refetch(); onUpdate?.() }} />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

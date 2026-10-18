@@ -21,6 +21,8 @@ import {
   TIPO_CHAMADA_LABEL, TIPO_CHAMADA_COLOR, REGISTO_FIELD_LABEL, CAMPOS_POR_TIPO,
   fmtRegistoValor, resultadoResumo, estagiosCobertos, temDiscovery, fmtDate,
 } from '../../constants.js'
+import { confirmar } from '../ui/ConfirmDialog.jsx'
+import { dotClass } from '../../lib/statusTone.js'
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
 const REGISTO_KEYS = Object.keys(REGISTO_FIELD_LABEL)
@@ -32,8 +34,8 @@ function EstagiosBadges({ g }) {
   return (
     <div className="flex flex-wrap gap-1">
       {estagios.map(e => (
-        <span key={e} className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap ${TIPO_CHAMADA_COLOR[e] || 'bg-surface-muted text-ink-muted'}`}>
-          {TIPO_CHAMADA_LABEL[e]}
+        <span key={e} className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap bg-surface-muted text-ink">
+          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(TIPO_CHAMADA_COLOR[e])}`} aria-hidden="true" />{TIPO_CHAMADA_LABEL[e]}
         </span>
       ))}
     </div>
@@ -133,7 +135,7 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
   }
 
   async function apagar(id) {
-    if (!confirm('Apagar este registo de chamada?')) return
+    if (!(await confirmar('Apagar este registo de chamada?'))) return
     try {
       const r = await apiFetch(`/api/crm/gravacoes/${id}`, { method: 'DELETE' })
       if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Falha ao apagar') }

@@ -1,4 +1,6 @@
 import { useEffect } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { overlayVariants } from '../lib/motion.js'
 import { MapPin, Building2 } from 'lucide-react'
 import { REGIAO_LABEL, REGIAO_COR } from '../constants.js'
 import { getUltimaRegiao } from '../contexts/RegiaoContext.jsx'
@@ -35,10 +37,11 @@ export function RegiaoModal({ gate, contexto }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [modalAberto, regiao, fecharModal])
 
-  if (!modalAberto) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/70 backdrop-blur-md animate-fade-in">
+    <AnimatePresence>
+    {modalAberto && (
+    <motion.div key="regiao" variants={overlayVariants} initial="initial" animate="animate" exit="exit"
+      className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/70 backdrop-blur-md">
       <div className="w-full max-w-3xl">
         <div className="text-center mb-8">
           <img src="/logo-transparent.png" alt="Somnium" className="mx-auto opacity-80" style={{ height: 40 }} />
@@ -111,6 +114,8 @@ export function RegiaoModal({ gate, contexto }) {
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
+    )}
+    </AnimatePresence>
   )
 }

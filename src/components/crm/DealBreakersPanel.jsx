@@ -10,6 +10,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useRefreshOnMutation } from '../../hooks/useRefreshOnMutation.js'
 import { TransicaoFaseModal } from './TransicaoFaseModal.jsx'
+import { AnimatePresence } from 'framer-motion'
 
 const ESTADO = {
   ok:        { label: 'OK',       cls: 'bg-success/10 text-success' },
@@ -77,16 +78,18 @@ export function DealBreakersPanel({ imovelId, imovel, onAbrirTab, onUpdate }) {
           ))}
         </ul>
       )}
-      {registo && (
-        <TransicaoFaseModal
-          imovel={imovel || { id: imovelId }}
-          destino={d.destino}
-          requisitos={registo}
-          mover={false}
-          onCancel={() => setRegisto(null)}
-          onResolvido={() => { setRegisto(null); query.refetch(); onUpdate?.() }}
-        />
-      )}
+      <AnimatePresence>
+        {registo && (
+          <TransicaoFaseModal
+            imovel={imovel || { id: imovelId }}
+            destino={d.destino}
+            requisitos={registo}
+            mover={false}
+            onCancel={() => setRegisto(null)}
+            onResolvido={() => { setRegisto(null); query.refetch(); onUpdate?.() }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

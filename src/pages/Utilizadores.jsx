@@ -9,6 +9,7 @@ import { Button } from '../components/ui/Button.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { AcessosDoUser } from '../components/PartilharAcesso.jsx'
 import { Header } from '../components/layout/Header.jsx'
+import { confirmar } from '../components/ui/ConfirmDialog.jsx'
 
 const ROLES = [
   { id: 'admin',      label: 'Admin',      desc: 'Acesso total + gestão de utilizadores' },
@@ -77,7 +78,7 @@ export function Utilizadores() {
   }
 
   async function deleteUser(u) {
-    if (!confirm(`Apagar ${u.nome} (${u.email})?`)) return
+    if (!(await confirmar(`Apagar ${u.nome} (${u.email})?`))) return
     setBusy(u.id)
     try {
       const r = await apiFetch(`/api/users/${u.id}`, { method: 'DELETE' })
@@ -91,7 +92,7 @@ export function Utilizadores() {
   }
 
   async function resetPassword(u) {
-    if (!confirm(`Gerar link de reset de password para ${u.email}?`)) return
+    if (!(await confirmar(`Gerar link de reset de password para ${u.email}?`))) return
     setBusy(u.id)
     try {
       const r = await apiFetch(`/api/users/${u.id}/reset-password`, { method: 'POST' })

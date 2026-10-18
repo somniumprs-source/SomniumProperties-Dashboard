@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useCallback, useMemo, useRef, memo, lazy, Suspense } from 'react'
 import { FileDown, ChevronDown, ChevronUp, Phone, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin, Eye, Trash2, ThumbsUp, TrendingDown, Shield, Building2, UserRound, FolderOpen, Calculator, Hammer, Scale, DoorOpen, FileBarChart, ListChecks, Building, CalendarCheck, Star, Gauge, History, Briefcase, ShieldCheck, Timer } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { BrandLoader } from '../ui/BrandLoader.jsx'
 import { TabTransition, useTabDirection } from '../ui/PageTransition.jsx'
 import { tabIndicatorTransition } from '../../lib/motion.js'
@@ -119,6 +119,8 @@ const ACAO_COLOR = { INSERT: 'text-success', UPDATE: 'text-ink', DELETE: 'text-d
 
 export { MOTIVOS_NAO_INTERESSA_PADRAO } from './detailPanelConstants.js'
 import { MOTIVOS_NAO_INTERESSA_PADRAO } from './detailPanelConstants.js'
+import { confirmar } from '../ui/ConfirmDialog.jsx'
+import { dotClass } from '../../lib/statusTone.js'
 
 function PontosRiscosTab({ imovel, endpoint, id, onUpdate, toast }) {
   const CAMPOS = [
@@ -231,7 +233,7 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
   }
 
   async function removerImagem() {
-    if (!confirm('Remover imagem de localização?')) return
+    if (!(await confirmar('Remover imagem de localização?'))) return
     try {
       const r = await apiFetch(`/api/crm/imoveis/${imovel.id}/localizacao`, { method: 'DELETE' })
       if (!r.ok) throw new Error(await r.text())
@@ -738,7 +740,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
   // Apagar a entidade directamente a partir da ficha aberta (sem voltar à lista).
   async function handleDelete() {
     if (deleting) return
-    if (!confirm(`Apagar "${data?.nome || 'este registo'}"? Esta ação não pode ser desfeita.`)) return
+    if (!(await confirmar(`Apagar "${data?.nome || 'este registo'}"? Esta ação não pode ser desfeita.`))) return
     setDeleting(true)
     try {
       const r = await apiFetch(`/api/crm/${endpoint}/${id}`, { method: 'DELETE' })
@@ -860,7 +862,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
   async function handleTabChange(key) {
     if (key === activeTab) return
     if (editing && JSON.stringify(form) !== JSON.stringify(data)) {
-      const guardar = confirm('Tens alterações por guardar nesta aba.\n\nOK = Guardar e mudar de aba\nCancelar = Ficar nesta aba')
+      const guardar = await confirmar('Tens alterações por guardar nesta aba.\n\nGuarda antes de mudar de aba, ou fica para continuar a editar.', { confirmLabel: 'Guardar e mudar', cancelLabel: 'Ficar nesta aba' })
       if (!guardar) return
       const ok = await saveEdit()
       if (!ok) return
@@ -976,18 +978,20 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       {type === 'Investidores' && <ContactoPessoa tipo="investidor" pessoaId={id} notaAntiga={data?.proxima_acao} onNavigate={onNavigate} onUpdate={loadData} />}
       {type === 'Parceiros' && <ContactoPessoa tipo="parceiro" pessoaId={id} onNavigate={onNavigate} onUpdate={loadData} />}
       {type === 'Imóveis' && <DealBreakersPanel imovelId={id} imovel={data} onAbrirTab={setActiveTab} onUpdate={loadData} />}
-      {type === 'Imóveis' && transicao && (
-        <TransicaoFaseModal
-          key={transicao.requisitos.map(r => r.id).join()}
-          imovel={{ ...data, ...form }}
-          destino={transicao.destino}
-          requisitos={transicao.requisitos}
-          onCancel={() => setTransicao(null)}
-          onConfirm={campos => saveEdit({ __transicao: true, campos })}
-          onResolvido={msg => { setTransicao(null); setEditing(false); toast(msg, 'success'); loadData(); onSave?.() }}
-          onAbrirImovel={() => { setTransicao(null); setActiveTab('analise') }}
-        />
-      )}
+      <AnimatePresence>
+        {type === 'Imóveis' && transicao && (
+          <TransicaoFaseModal
+            key={transicao.requisitos.map(r => r.id).join()}
+            imovel={{ ...data, ...form }}
+            destino={transicao.destino}
+            requisitos={transicao.requisitos}
+            onCancel={() => setTransicao(null)}
+            onConfirm={campos => saveEdit({ __transicao: true, campos })}
+            onResolvido={msg => { setTransicao(null); setEditing(false); toast(msg, 'success'); loadData(); onSave?.() }}
+            onAbrirImovel={() => { setTransicao(null); setActiveTab('analise') }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Tabs */}
       {tabs.length > 1 && (
@@ -1465,7 +1469,7 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
   }
 
   async function apagarReuniao(r) {
-    if (!confirm(`Apagar a reunião "${r.titulo}" e o relatório anexado? Esta ação não pode ser desfeita.`)) return
+    if (!(await confirmar(`Apagar a reunião "${r.titulo}" e o relatório anexado? Esta ação não pode ser desfeita.`))) return
     try {
       const res = await apiFetch(`/api/crm/reunioes/${r.id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro ao apagar')
@@ -2163,7 +2167,7 @@ function ImovelEditSections({ data, form, setField }) {
                 }} />
               </label>
               <button type="button" onClick={async () => {
-                if (!confirm('Remover imagem de localização?')) return
+                if (!(await confirmar('Remover imagem de localização?'))) return
                 try {
                   const r = await apiFetch(`/api/crm/imoveis/${data.id}/localizacao`, { method: 'DELETE' })
                   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Não foi possível remover a imagem.')
@@ -2569,8 +2573,8 @@ function InvestidorHero({ data }) {
   const tipos = parseJsonArray(data.tipo_principal)
   const isAtivo = tipos.includes('Ativo')
   const tipo = tipos.length > 0 ? tipos.join(' + ') : 'Passivo'
-  const tipoBg = isAtivo ? 'from-green-500 to-emerald-600' : 'from-yellow-400 to-amber-500'
-  const statusColor = INV_STATUS_COLOR[data.status] || 'bg-surface-muted text-ink-muted'
+  // Ativo em dourado (opera deals connosco), Passivo em tinta: mesma linguagem do resto da ficha.
+  const tipoBg = isAtivo ? 'bg-accent text-accent-foreground' : 'bg-ink text-surface'
   const iniciais = (data.nome || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase()).join('') || '?'
   const tel = (data.telemovel || '').replace(/\s+/g, '')
   const phoneIntl = tel.startsWith('+') ? tel : (tel.startsWith('00') ? '+' + tel.slice(2) : (tel.length === 9 ? '+351' + tel : tel))
@@ -2606,7 +2610,7 @@ function InvestidorHero({ data }) {
       <div className="p-4 sm:p-5">
         <div className="flex items-start gap-4">
           {/* Avatar */}
-          <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${tipoBg} text-white flex items-center justify-center text-xl font-bold shrink-0 shadow-sm`}>
+          <div className={`w-16 h-16 rounded-2xl ${tipoBg} flex items-center justify-center text-xl font-bold shrink-0 shadow-sm`}>
             {iniciais}
           </div>
 
@@ -2622,7 +2626,7 @@ function InvestidorHero({ data }) {
                 <span className="text-[10px] px-2 py-0.5 rounded-full border font-semibold text-warning bg-warning/15 border-warning/30">Passivo</span>
               )}
               <InvClassBadge cls={data.classificacao} />
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusColor}`}>{data.status || '—'}</span>
+              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-surface-muted text-ink"><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(INV_STATUS_COLOR[data.status])}`} aria-hidden="true" />{data.status || '—'}</span>
               {!!data.nda_assinado && (
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success font-medium inline-flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" /> NDA

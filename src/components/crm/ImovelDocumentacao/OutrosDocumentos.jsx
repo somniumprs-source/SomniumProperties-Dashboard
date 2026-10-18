@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { Upload, FileText, ExternalLink, Trash2 } from 'lucide-react'
+import { confirmar } from '../../ui/ConfirmDialog.jsx'
 
 /**
  * Aba de armazenamento livre — documentos avulsos relevantes ao imóvel
@@ -66,7 +67,7 @@ function OutroRow({ doc, onRemove }) {
   const [removing, setRemoving] = useState(false)
 
   async function handleRemove() {
-    if (!window.confirm(`Remover "${doc.name}"?`)) return
+    if (!(await confirmar(`Remover "${doc.name}"?`))) return
     setRemoving(true)
     try { await onRemove(doc.id) } finally { setRemoving(false) }
   }

@@ -11,6 +11,7 @@ import { Comparaveis } from './Comparaveis.jsx'
 import { CAEPParcerias } from './CAEPParcerias.jsx'
 import { QuickCheck } from './QuickCheck.jsx'
 import { isWholesaling } from '../../lib/modelos.js'
+import { confirmar } from '../ui/ConfirmDialog.jsx'
 
 function RenameInput({ nome, onRename }) {
   const [editing, setEditing] = useState(false)
@@ -175,7 +176,7 @@ export function AnaliseTab({ imovelId, imovelNome, imovel, readOnly = false, emP
 
         {!readOnly && selected && analises.length > 1 && (
           <button
-            onClick={() => { if (confirm('Apagar esta análise?')) apagar(selected.id) }}
+            onClick={async () => { if (await confirmar('Apagar esta análise?')) apagar(selected.id) }}
             className="px-3 py-2 text-xs rounded-lg text-danger hover:bg-danger/10 transition-colors"
           >
             Apagar

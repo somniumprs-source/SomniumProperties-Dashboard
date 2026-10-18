@@ -5,6 +5,7 @@ import { useToast } from './ui/Toast.jsx'
 import { Modal } from './ui/Modal.jsx'
 import { Button } from './ui/Button.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
+import { confirmar } from './ui/ConfirmDialog.jsx'
 
 /**
  * Botão + modal para gerir quem tem acesso a um registo (imóvel ou negócio).
@@ -163,7 +164,7 @@ export function AcessosDoUser({ userId }) {
   useEffect(() => { load() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [userId])
 
   async function revoke(a) {
-    if (!confirm(`Remover acesso a "${a.nome || a.entidade_id}"?`)) return
+    if (!(await confirmar(`Remover acesso a "${a.nome || a.entidade_id}"?`))) return
     try {
       const r = await apiFetch(`/api/users/${userId}/acessos/${a.id}`, { method: 'DELETE' })
       if (!r.ok) throw new Error('Erro')

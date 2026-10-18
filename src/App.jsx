@@ -8,6 +8,7 @@ import { Layout } from './components/layout/Layout.jsx'
 import { Dashboard } from './pages/Dashboard.jsx'
 import { Login } from './pages/Login.jsx'
 import { ToastProvider } from './components/ui/Toast.jsx'
+import { ConfirmProvider } from './components/ui/ConfirmDialog.jsx'
 import { ErrorBoundary } from './components/ui/ErrorBoundary.jsx'
 import { ChunkErrorBoundary } from './components/ui/ChunkErrorBoundary.jsx'
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
@@ -146,9 +147,11 @@ export default function App() {
         <AuthProvider>
           <ToastProvider>
             <MotionConfig reducedMotion="user">
-              <BrowserRouter>
-                <AppRoutes />
-              </BrowserRouter>
+              <ConfirmProvider>
+                <BrowserRouter>
+                  <AppRoutes />
+                </BrowserRouter>
+              </ConfirmProvider>
             </MotionConfig>
           </ToastProvider>
         </AuthProvider>

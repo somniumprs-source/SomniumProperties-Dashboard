@@ -15,6 +15,7 @@ import {
 } from '../../constants.js'
 import { ScorecardBars } from './ScorecardBars.jsx'
 import { RegistoManualFieldset } from './RegistoManualFieldset.jsx'
+import { dotClass } from '../../lib/statusTone.js'
 
 const ESTADO_META = {
   pendente:      { label: 'Em fila',        cls: 'bg-warning/10 text-warning border-warning/30', spin: false },
@@ -125,8 +126,8 @@ export function GravacaoCard({ g, busy, onAnalisar, onRetomar, onApagar, onRegis
           <div className="flex items-center gap-1.5 flex-wrap">
             <p className="text-sm font-medium text-ink truncate">{g.titulo || g.ficheiro_nome || 'Gravacao'}</p>
             {estagios.map(e => (
-              <span key={e} className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${TIPO_CHAMADA_COLOR[e] || 'bg-surface-muted text-ink-muted'}`}>
-                {TIPO_CHAMADA_LABEL[e]}
+              <span key={e} className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full font-medium shrink-0 bg-surface-muted text-ink">
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(TIPO_CHAMADA_COLOR[e])}`} aria-hidden="true" />{TIPO_CHAMADA_LABEL[e]}
               </span>
             ))}
           </div>

@@ -7,6 +7,7 @@ import { friendlyError } from '../lib/friendlyError.js'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { ErrorState } from '../components/ui/ErrorState.jsx'
 import { MessageSquareText, ListChecks, ExternalLink } from 'lucide-react'
+import { confirmar } from '../components/ui/ConfirmDialog.jsx'
 
 function fmtSize(b) {
   if (b == null) return ''
@@ -128,7 +129,7 @@ function RelatoriosAdministrativos() {
   }
 
   async function eliminar(id) {
-    if (!confirm('Eliminar este relatório semanal?')) return
+    if (!(await confirmar('Eliminar este relatório semanal?'))) return
     try {
       const r = await apiFetch(`/api/crm/relatorios-semanais/${id}`, { method: 'DELETE' })
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Não foi possível eliminar o relatório.')
@@ -166,7 +167,7 @@ function RelatoriosAdministrativos() {
   }
 
   async function apagarReuniao(id) {
-    if (!confirm('Eliminar esta reunião e todos os seus documentos?')) return
+    if (!(await confirmar('Eliminar esta reunião e todos os seus documentos?'))) return
     try {
       const r = await apiFetch(`/api/crm/reunioes-documentos/${id}`, { method: 'DELETE' })
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Não foi possível eliminar a reunião.')
@@ -191,7 +192,7 @@ function RelatoriosAdministrativos() {
   }
 
   async function apagarFicheiro(id, nome) {
-    if (!confirm(`Eliminar "${nome}"?`)) return
+    if (!(await confirmar(`Eliminar "${nome}"?`))) return
     try {
       const r = await apiFetch(`/api/crm/reunioes-documentos/${id}/ficheiros/${encodeURIComponent(nome)}`, { method: 'DELETE' })
       const data = await r.json()

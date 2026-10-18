@@ -11,6 +11,7 @@ import { Card } from '../components/ui/Card.jsx'
 import { ScrollableTable } from '../components/ui/ScrollableTable.jsx'
 import { Bell, AlertTriangle, AlertCircle, Info, FileWarning, History, Database, Zap } from 'lucide-react'
 import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
+import { confirmar } from '../components/ui/ConfirmDialog.jsx'
 
 const SEV_STYLE = {
   critico: 'bg-danger/10 text-danger border-danger/25',
@@ -84,7 +85,7 @@ export function Alertas() {
   }
 
   async function restoreBackup(id) {
-    if (!confirm('Restaurar este backup? O estado atual será guardado antes da restauração.')) return
+    if (!(await confirmar('Restaurar este backup? O estado atual será guardado antes da restauração.'))) return
     setBackupLoading(true)
     try {
       const r = await apiFetch(`/api/crm/backup/restore/${id}`, { method: 'POST' })

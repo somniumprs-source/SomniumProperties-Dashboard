@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { apiFetch } from '../../lib/api.js'
 import { overlayVariants } from '../../lib/motion.js'
 import { ImovelDocumentacao } from './ImovelDocumentacao/index.jsx'
+import { confirmar } from '../ui/ConfirmDialog.jsx'
 
 function baseName(name) {
   if (!name || typeof name !== 'string') return ''
@@ -86,7 +87,7 @@ export function FicheirosTab({ imovelId, driveFolderId, tipoImovel }) {
 
   async function cleanBrokenPhotos() {
     if (brokenIds.size === 0) return
-    if (!confirm(`Remover ${brokenIds.size} foto${brokenIds.size > 1 ? 's' : ''} que não carregou${brokenIds.size > 1 ? 'aram' : ''}?`)) return
+    if (!(await confirmar(`Remover ${brokenIds.size} foto${brokenIds.size > 1 ? 's' : ''} que não carregou${brokenIds.size > 1 ? 'aram' : ''}?`))) return
     setCleaning(true)
     try {
       // Apaga em paralelo cada foto broken via endpoint existente.
@@ -131,7 +132,7 @@ export function FicheirosTab({ imovelId, driveFolderId, tipoImovel }) {
   }
 
   async function handleDelete(fotoId) {
-    if (!confirm('Apagar este ficheiro?')) return
+    if (!(await confirmar('Apagar este ficheiro?'))) return
     try {
       const r = await apiFetch(`/api/crm/imoveis/${imovelId}/fotos/${fotoId}`, { method: 'DELETE' })
       const data = await r.json()

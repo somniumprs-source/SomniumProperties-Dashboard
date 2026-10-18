@@ -9,6 +9,7 @@ import { apiFetch, openDocument } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { friendlyError } from '../../lib/friendlyError.js'
 import { fmtDate } from '../../constants.js'
+import { confirmar } from '../ui/ConfirmDialog.jsx'
 
 const ACEITES = '.pdf,.ppt,.pptx,.doc,.docx,.xls,.xlsx'
 const inputClass = 'w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300'
@@ -70,7 +71,7 @@ export function DocumentosConsultor({ consultorId }) {
   }
 
   async function apagar(d) {
-    if (!window.confirm(`Apagar o documento «${d.titulo}»?`)) return
+    if (!(await confirmar(`Apagar o documento «${d.titulo}»?`))) return
     const r = await apiFetch(`/api/crm/consultores/${consultorId}/documentos/${d.id}`, { method: 'DELETE' })
     if (r.ok) setDocs(p => p.filter(x => x.id !== d.id))
     else toast(friendlyError((await r.json().catch(() => ({}))).error || 'Falha ao apagar'), 'error')

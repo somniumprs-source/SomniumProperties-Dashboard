@@ -9,6 +9,7 @@ import { apiFetch, openDocument } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { friendlyError } from '../../lib/friendlyError.js'
 import { fmtDate } from '../../constants.js'
+import { confirmar } from '../ui/ConfirmDialog.jsx'
 
 const EUR = v => {
   if (v == null || !Number.isFinite(Number(v))) return null
@@ -76,7 +77,7 @@ export function DocumentosOrcamentosTab({ imovelId }) {
   }
 
   async function handleDelete(docId) {
-    if (!confirm('Remover este orçamento?')) return
+    if (!(await confirmar('Remover este orçamento?'))) return
     try {
       await apiFetch(`/api/crm/imoveis/${imovelId}/orcamentos-obra/${docId}`, { method: 'DELETE' })
       await load()

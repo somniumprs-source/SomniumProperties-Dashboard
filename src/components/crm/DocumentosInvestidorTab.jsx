@@ -8,6 +8,7 @@ import { apiFetch, openDocument } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { friendlyError } from '../../lib/friendlyError.js'
 import { fmtDate } from '../../constants.js'
+import { confirmar } from '../ui/ConfirmDialog.jsx'
 
 const TIPO_LABELS_ENVIADO = {
   dossier_investidor: 'Dossier de Investimento',
@@ -102,7 +103,7 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
   }
 
   async function handleDelete(docId) {
-    if (!confirm('Remover este registo?')) return
+    if (!(await confirmar('Remover este registo?'))) return
     try {
       await apiFetch(`/api/crm/investidores/${investidorId}/documentos/${docId}`, { method: 'DELETE' })
       await load()

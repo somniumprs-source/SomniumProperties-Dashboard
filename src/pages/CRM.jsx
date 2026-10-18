@@ -27,6 +27,8 @@ import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
 import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 import { RegiaoToggle } from '../components/RegiaoBadge.jsx'
 import { dotClass } from '../lib/statusTone.js'
+import { confirmar } from '../components/ui/ConfirmDialog.jsx'
+import { AnimatePresence } from 'framer-motion'
 
 // Sub-tabs regionais partilham as mesmas chaves de sessionStorage que o
 // apiFetch consulta via getRegiaoActivaFromStorage — não trocar o prefixo
@@ -973,7 +975,7 @@ export function CRM() {
   }
 
   async function handleDelete(id) {
-    if (!confirm('Tens a certeza que queres apagar este registo?')) return
+    if (!(await confirmar('Tens a certeza que queres apagar este registo?'))) return
     // Tira já a linha da lista (sem esperar pelo servidor nem pelo re-fetch);
     // se o pedido falhar, o load() repõe o que está na BD.
     queryClient.setQueriesData({ queryKey: ['crm-list', tab] }, old => {
@@ -992,8 +994,8 @@ export function CRM() {
     }
   }
 
-  const kanbanOnDelete = useCallback((id, nome) => {
-    if (!confirm(`Apagar "${nome || 'este registo'}"?`)) return
+  const kanbanOnDelete = useCallback(async (id, nome) => {
+    if (!(await confirmar(`Apagar "${nome || 'este registo'}"?`))) return
     handleDelete(id)
   }, [endpoint])
   const kanbanOnCardClick = useCallback((id) => {
@@ -1265,54 +1267,60 @@ export function CRM() {
                 />
               )
             )}
-            {transicao && (
-              <TransicaoFaseModal
-                key={`${transicao.id}-${transicao.requisitos.map(r => r.id).join()}`}
-                imovel={data.find(i => i.id === transicao.id)}
-                destino={transicao.newColumn}
-                requisitos={transicao.requisitos}
-                onCancel={() => setTransicao(null)}
-                onConfirm={extra => persistMove(transicao.id, transicao.newColumn, extra)}
-                onResolvido={msg => { setTransicao(null); toast(msg, 'success'); load() }}
-                onAbrirImovel={() => { const alvo = transicao.id; setTransicao(null); setDetail(alvo) }}
-              />
-            )}
-            {agendar && (
-              <AgendarPassoModal
-                imovel={data.find(i => i.id === agendar.id)}
-                tipo={agendar.tipo}
-                destino={agendar.newColumn}
-                onCancel={() => setAgendar(null)}
-                onAntes={() => persistMove(agendar.id, agendar.newColumn)}
-                onDone={msg => { setAgendar(null); toast(msg, 'success') }}
-              />
-            )}
-            {moveModal && (
-              <MoveReasonModal
-                moveModal={moveModal}
-                item={data.find(i => i.id === moveModal.id)}
-                onCancel={() => setMoveModal(null)}
-                onConfirm={async (extra) => {
-                  if (moveModal.type === 'follow_up') {
-                    // Mesma porta do bloco "Próximos passos": muda a fase, guarda
-                    // o motivo e cria a tarefa do follow-up de uma vez.
-                    const r = await apiFetch(`/api/crm/imoveis/${moveModal.id}/follow-up`, {
-                      method: 'POST', regiao: regiaoActiva, headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ data: extra.data_follow_up, motivo: extra.motivo_follow_up, destino: moveModal.newColumn }),
-                    })
-                    if (!r.ok) return toast((await r.json().catch(() => ({}))).error || 'Não foi possível mover', 'error')
-                    const feito = await r.json().catch(() => ({}))
-                    toast(feito.consultor
-                      ? `Imóvel em «${moveModal.newColumn}». O follow-up entrou no contacto com ${feito.consultor.nome} (${String(feito.data_contacto || '').slice(0, 10).split('-').reverse().join('/')})`
-                      : `Imóvel em «${moveModal.newColumn}», com o follow-up na agenda`, 'success')
-                    load()
-                  } else {
-                    await persistMove(moveModal.id, moveModal.newColumn, extra)
-                  }
-                  setMoveModal(null)
-                }}
-              />
-            )}
+            <AnimatePresence>
+              {transicao && (
+                <TransicaoFaseModal
+                  key={`${transicao.id}-${transicao.requisitos.map(r => r.id).join()}`}
+                  imovel={data.find(i => i.id === transicao.id)}
+                  destino={transicao.newColumn}
+                  requisitos={transicao.requisitos}
+                  onCancel={() => setTransicao(null)}
+                  onConfirm={extra => persistMove(transicao.id, transicao.newColumn, extra)}
+                  onResolvido={msg => { setTransicao(null); toast(msg, 'success'); load() }}
+                  onAbrirImovel={() => { const alvo = transicao.id; setTransicao(null); setDetail(alvo) }}
+                />
+              )}
+            </AnimatePresence>
+            <AnimatePresence>
+              {agendar && (
+                <AgendarPassoModal
+                  imovel={data.find(i => i.id === agendar.id)}
+                  tipo={agendar.tipo}
+                  destino={agendar.newColumn}
+                  onCancel={() => setAgendar(null)}
+                  onAntes={() => persistMove(agendar.id, agendar.newColumn)}
+                  onDone={msg => { setAgendar(null); toast(msg, 'success') }}
+                />
+              )}
+            </AnimatePresence>
+            <AnimatePresence>
+              {moveModal && (
+                <MoveReasonModal
+                  moveModal={moveModal}
+                  item={data.find(i => i.id === moveModal.id)}
+                  onCancel={() => setMoveModal(null)}
+                  onConfirm={async (extra) => {
+                    if (moveModal.type === 'follow_up') {
+                      // Mesma porta do bloco "Próximos passos": muda a fase, guarda
+                      // o motivo e cria a tarefa do follow-up de uma vez.
+                      const r = await apiFetch(`/api/crm/imoveis/${moveModal.id}/follow-up`, {
+                        method: 'POST', regiao: regiaoActiva, headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ data: extra.data_follow_up, motivo: extra.motivo_follow_up, destino: moveModal.newColumn }),
+                      })
+                      if (!r.ok) return toast((await r.json().catch(() => ({}))).error || 'Não foi possível mover', 'error')
+                      const feito = await r.json().catch(() => ({}))
+                      toast(feito.consultor
+                        ? `Imóvel em «${moveModal.newColumn}». O follow-up entrou no contacto com ${feito.consultor.nome} (${String(feito.data_contacto || '').slice(0, 10).split('-').reverse().join('/')})`
+                        : `Imóvel em «${moveModal.newColumn}», com o follow-up na agenda`, 'success')
+                      load()
+                    } else {
+                      await persistMove(moveModal.id, moveModal.newColumn, extra)
+                    }
+                    setMoveModal(null)
+                  }}
+                />
+              )}
+            </AnimatePresence>
             {!loading && editing === null && view === 'kanban' && kanbanConfig && data.length > 0 && (
               <KanbanBoard
                 columns={kanbanConfig.columns}

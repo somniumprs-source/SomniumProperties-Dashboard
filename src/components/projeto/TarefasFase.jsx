@@ -12,6 +12,7 @@ import { CheckCircle2, Circle, Trash2, ChevronRight, Plus, FileText, Upload } fr
 import { apiFetch } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { Button } from '../ui/Button.jsx'
+import { confirmar } from '../ui/ConfirmDialog.jsx'
 
 function lerChecklist(v) {
   if (!v) return null
@@ -142,7 +143,7 @@ function TarefaItem({ t, readOnly, docs, investidores, pedido, onCarregar }) {
     await pedido(`/api/crm/projetos/tarefas/${t.id}`, 'PUT', { concluida: t.concluida ? 0 : 1 }, 'Erro ao atualizar tarefa')
   }
   async function apagar() {
-    if (!confirm(`Apagar tarefa "${t.descricao}"?`)) return
+    if (!(await confirmar(`Apagar tarefa "${t.descricao}"?`))) return
     await pedido(`/api/crm/projetos/tarefas/${t.id}`, 'DELETE', null, 'Erro ao apagar tarefa')
   }
 

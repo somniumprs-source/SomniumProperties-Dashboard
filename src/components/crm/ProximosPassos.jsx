@@ -24,6 +24,7 @@ import { useRefreshOnMutation } from '../../hooks/useRefreshOnMutation.js'
 import { AgendarPassoModal } from './AgendarPassoModal.jsx'
 import { faseAoAgendarFollowUp } from '../../constants/pipelineImoveis.js'
 import { inputClass, fmtQuando, fmtDia, emDias, comHora } from './passosUtil.js'
+import { AnimatePresence } from 'framer-motion'
 
 function tipoDoPasso(t) {
   const c = t.origem_campo || ''
@@ -304,11 +305,13 @@ export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate, onNavig
           )}
         </div>
       )}
-      {agendar && (
-        <AgendarPassoModal imovel={imovel || { id: imovelId }} tipo={agendar}
-          onCancel={() => setAgendar(null)}
-          onDone={() => { setAgendar(null); query.refetch() }} />
-      )}
+      <AnimatePresence>
+        {agendar && (
+          <AgendarPassoModal imovel={imovel || { id: imovelId }} tipo={agendar}
+            onCancel={() => setAgendar(null)}
+            onDone={() => { setAgendar(null); query.refetch() }} />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

@@ -12,6 +12,7 @@ import { EUR } from '../../constants.js'
 import { apiFetch } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { friendlyError } from '../../lib/friendlyError.js'
+import { confirmar } from '../ui/ConfirmDialog.jsx'
 
 function formatTime(d) {
   if (!d) return ''
@@ -152,11 +153,11 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
     else if (typeof flush === 'function') await flush()
   }
 
-  const removeComp = (tIdx, cIdx) => {
+  const removeComp = async (tIdx, cIdx) => {
     const tip = tipologias[tIdx]
     const target = tip?.comparaveis?.[cIdx]
     const tag = (target?.descricao || target?.link || `#${cIdx + 1}`).toString().slice(0, 60)
-    if (!confirm(`Eliminar este comparável (${tag})?`)) return
+    if (!(await confirmar(`Eliminar este comparável (${tag})?`))) return
     const next = tipologias.map((t, i) => {
       if (i !== tIdx) return t
       const remaining = t.comparaveis.filter((_, j) => j !== cIdx)
@@ -205,8 +206,8 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
     persist(meta, next)
   }
 
-  const removeTipologia = (idx) => {
-    if (!confirm(`Remover tipologia "${tipologias[idx]?.tipologia}"?`)) return
+  const removeTipologia = async (idx) => {
+    if (!(await confirmar(`Remover tipologia "${tipologias[idx]?.tipologia}"?`))) return
     const next = tipologias.filter((_, i) => i !== idx)
     setTipCount(next.length)
     persist(meta, next)
@@ -342,7 +343,7 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
 
   const removeAlfredo = async () => {
     if (!analise?.id) return
-    if (!confirm('Remover captura do estudo de mercado?')) return
+    if (!(await confirmar('Remover captura do estudo de mercado?'))) return
     setUploadingAlfredo(true)
     try {
       const r = await apiFetch(`/api/crm/analises/${analise.id}/alfredo-imagem`, { method: 'DELETE' })

@@ -10,6 +10,7 @@ import { apiFetch } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { friendlyError } from '../../lib/friendlyError.js'
 import { GravacaoCard } from './GravacaoCard.jsx'
+import { confirmar } from '../ui/ConfirmDialog.jsx'
 
 export function GravacoesConsultor({ consultorId }) {
   const toast = useToast()
@@ -55,7 +56,7 @@ export function GravacoesConsultor({ consultorId }) {
   }
 
   async function apagarGravacao(id) {
-    if (!confirm('Apagar esta gravação e a respetiva análise?')) return
+    if (!(await confirmar('Apagar esta gravação e a respetiva análise?'))) return
     setBusy(p => ({ ...p, [id]: 'apagar' }))
     try {
       const r = await apiFetch(`/api/crm/gravacoes/${id}`, { method: 'DELETE' })

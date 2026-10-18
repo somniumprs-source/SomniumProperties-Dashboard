@@ -16,6 +16,7 @@ import { useToast } from '../components/ui/Toast.jsx'
 import { friendlyError } from '../lib/friendlyError.js'
 import { useUrlState } from '../hooks/useUrlState.js'
 import { REGIOES } from '../constants.js'
+import { confirmar } from '../components/ui/ConfirmDialog.jsx'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const EUR2 = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0)
@@ -37,7 +38,7 @@ const FASE_COLOR = {
 }
 const TIMING_COLOR = {
   'Mensalmente': 'bg-surface-muted text-ink',
-  'Anual':       'bg-purple-100 text-purple-700',
+  'Anual':       'bg-accent/15 text-ink',
   'Único':       'bg-surface-muted text-ink-muted',
 }
 
@@ -151,13 +152,13 @@ export function Financeiro() {
   }
 
   async function deleteDespesa(id) {
-    if (!confirm('Apagar esta despesa?')) return
+    if (!(await confirmar('Apagar esta despesa?'))) return
     await apiFetch(`/api/crm/despesas/${id}`, { method: 'DELETE' })
     coreQuery.refetch(); despesasQuery.refetch()
   }
 
   async function confirmarPagamento(negocioId, trancheIndex, descricao) {
-    if (!confirm(`Confirmar recebimento: ${descricao || 'Pagamento'}?`)) return
+    if (!(await confirmar(`Confirmar recebimento: ${descricao || 'Pagamento'}?`))) return
     try {
       const r = await apiFetch(`/api/crm/negocios/${negocioId}/confirmar-pagamento`, {
         method: 'PUT',
@@ -749,7 +750,7 @@ function ContabilidadeTab() {
       const emFalta = Number(r.headers.get('X-Faturas-Em-Falta') || 0)
       if (emFalta) setAviso(`${emFalta} ficheiro(s) não foram incluídos no ZIP. Ver a coluna "Observações" no Resumo.xlsx.`)
 
-      if (faturas.length && window.confirm('ZIP descarregado. Marcar estas faturas como enviadas à contabilidade?')) {
+      if (faturas.length && await confirmar('ZIP descarregado. Marcar estas faturas como enviadas à contabilidade?')) {
         const despesaIds = [...new Set(faturas.filter(f => f.fonte === 'despesa').map(f => f.registo_id))]
         const documentoIds = [...new Set(faturas.filter(f => f.fonte === 'projeto_documento').map(f => f.registo_id))]
         const m = await apiFetch('/api/crm/contabilidade/marcar-enviadas', {

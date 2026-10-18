@@ -26,6 +26,8 @@ import { ScrollableTable } from '../components/ui/ScrollableTable.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { useUrlState } from '../hooks/useUrlState.js'
 import { REGIOES } from '../constants.js'
+import { confirmar } from '../components/ui/ConfirmDialog.jsx'
+import { AnimatePresence } from 'framer-motion'
 
 const FUNCIONARIOS = ['João Abreu', 'Alexandre Mendes']
 const AMBOS = 'João Abreu, Alexandre Mendes'
@@ -187,10 +189,12 @@ export function Agenda({ embutido = false }) {
           : <TarefasTab tarefas={tarefas} guardar={guardar} eliminar={eliminar} accao={accao} abrir={setModal} />}
       </div>
 
-      {modal && (
-        <TarefaModal modal={modal} saving={saving} onClose={() => setModal(null)} onSave={guardarModal}
-          onDelete={modal.tarefa?.id ? () => accao(async () => { await eliminar(modal.tarefa); setModal(null) }) : null} />
-      )}
+      <AnimatePresence>
+        {modal && (
+          <TarefaModal modal={modal} saving={saving} onClose={() => setModal(null)} onSave={guardarModal}
+            onDelete={modal.tarefa?.id ? () => accao(async () => { await eliminar(modal.tarefa); setModal(null) }) : null} />
+        )}
+      </AnimatePresence>
     </>
   )
 }
@@ -229,7 +233,7 @@ function TarefaModal({ modal, saving, onClose, onSave, onDelete }) {
       subtitle={doGoogle ? 'Passa a tarefa do CRM, ligada ao mesmo evento' : 'Com hora marcada, aparece no Google Calendar'}
       footer={
         <Modal.Footer>
-          {onDelete && <Button variant="secondary" icon={Trash2} onClick={() => { if (window.confirm('Eliminar esta tarefa (e o evento no Google Calendar)?')) onDelete() }}>Eliminar</Button>}
+          {onDelete && <Button variant="secondary" icon={Trash2} onClick={async () => { if (await confirmar('Eliminar esta tarefa (e o evento no Google Calendar)?')) onDelete() }}>Eliminar</Button>}
           <Button variant="secondary" onClick={onClose}>Cancelar</Button>
           {t?.id && !concluida(t) && <Button variant="secondary" icon={Check} onClick={() => submeter({ status: 'Concluída' })} loading={saving} disabled={!f.categoria}>Concluir</Button>}
           <Button variant="primary" onClick={() => submeter()} loading={saving} disabled={!f.tarefa.trim() || !f.categoria}>Guardar</Button>
@@ -553,8 +557,8 @@ function TarefasTab({ tarefas, guardar, eliminar, accao, abrir }) {
   const alternar = id => setSel(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
   const todas = () => setSel(sel.size === lista.length ? new Set() : new Set(lista.map(t => t.id)))
   const mudarEstado = (t, status) => accao(() => guardar(t, { status }))
-  function apagarVarias() {
-    if (!sel.size || !window.confirm(`Apagar ${sel.size} tarefa(s)?`)) return
+  async function apagarVarias() {
+    if (!sel.size || !(await confirmar(`Apagar ${sel.size} tarefa(s)?`))) return
     accao(async () => { for (const t of tarefas.filter(x => sel.has(x.id))) await eliminar(t); setSel(new Set()) })
   }
   const data = s => s ? new Date(s).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) + (temHora(s) ? ' ' + s.slice(11, 16) : '') : '—'
