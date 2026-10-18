@@ -1984,7 +1984,7 @@ function RelationOrNew({ value, options, display, createEndpoint, regiao, onChan
           <input type="text" value={newImobiliaria} onChange={e => setNewImobiliaria(e.target.value)} placeholder="Imobiliária" className={inputClass} />
         </div>
         <div className="flex gap-2">
-          <button onClick={handleCreate} disabled={creating || !newName.trim()} className="px-3 py-2 bg-success text-white text-xs font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 shrink-0">
+          <button onClick={handleCreate} disabled={creating || !newName.trim()} className="px-3 py-2 bg-accent text-accent-foreground text-xs font-medium rounded-lg hover:brightness-[1.04] disabled:opacity-50 shrink-0">
             {creating ? '...' : 'Criar'}
           </button>
           <button onClick={() => setMode('select')} className="px-3 py-2 bg-surface-muted text-ink-muted text-xs rounded-lg shrink-0">Cancelar</button>
