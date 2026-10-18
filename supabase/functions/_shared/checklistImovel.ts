@@ -142,9 +142,9 @@ const ITENS = [
 
   // ── Fecho: o acompanhamento passa para Projetos ──
   ...['Wholesaling', 'CAEP', 'Fix and Flip'].flatMap(fase => [
-    { fase, key: `${fase}_negocio`, titulo: 'Negócio criado em Projetos', onde: 'Projetos',
+    { fase, key: `${fase}_negocio`, titulo: 'Negócio criado no Departamento de Obras', onde: 'Departamento de Obras',
       calc: d => campo(d.negocios.length > 0, d.negocios[0]?.movimento) },
-    { fase, key: `${fase}_lucro`, titulo: 'Lucro estimado do negócio', onde: 'Projetos',
+    { fase, key: `${fase}_lucro`, titulo: 'Lucro estimado do negócio', onde: 'Departamento de Obras',
       calc: d => campo(d.negocios.some(x => n(x.lucro_estimado) > 0), d.negocios[0] ? eur(d.negocios[0].lucro_estimado) : null) },
     { fase, key: 'm_capital_investidor', titulo: 'Comprovativo de capital do investidor visto', manual: 'confirmar' },
   ]),

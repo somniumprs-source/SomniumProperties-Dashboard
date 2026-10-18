@@ -2794,7 +2794,7 @@ app.post("/imoveis/:id/follow-up", async (c: any) => {
     const imovel = await Imoveis.getById(id);
     if (!imovel) return c.json({ error: "Não encontrado" }, 404);
     const fase = faseAoAgendarFollowUp(imovel.estado, destino);
-    if (!fase.aplica) return c.json({ error: "Imóvel com negócio fechado: o acompanhamento faz-se em Projetos, não há follow-up" }, 400);
+    if (!fase.aplica) return c.json({ error: "Imóvel com negócio fechado: o acompanhamento faz-se no Departamento de Obras, não há follow-up" }, 400);
     if (fase.mover && !(motivo || "").trim()) return c.json({ error: `Indica o motivo: é a justificação da passagem para «${fase.mover}»` }, 400);
     // Imóvel com consultor: o follow-up é um assunto do contacto com ele (um
     // só próximo contacto por pessoa), não uma tarefa do imóvel.
