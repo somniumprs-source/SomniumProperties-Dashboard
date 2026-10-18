@@ -1,9 +1,11 @@
-import { useEffect, useState, useCallback, Fragment } from 'react'
+import { useEffect, useState, useCallback, useId, Fragment } from 'react'
 import { SummaryStat } from '../components/ui/SummaryStat.jsx'
-import { Shield, Plus, Trash2, KeyRound, RefreshCw, X, Link as LinkIcon, Copy, Check, ChevronDown, ChevronRight, Users } from 'lucide-react'
+import { Plus, Trash2, KeyRound, RefreshCw, Link as LinkIcon, Copy, Check, ChevronDown, ChevronRight, Users } from 'lucide-react'
 import { apiFetch } from '../lib/api.js'
 import { useToast } from '../components/ui/Toast.jsx'
 import { ScrollableTable } from '../components/ui/ScrollableTable.jsx'
+import { Modal } from '../components/ui/Modal.jsx'
+import { Button } from '../components/ui/Button.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { AcessosDoUser } from '../components/PartilharAcesso.jsx'
 
@@ -18,15 +20,28 @@ const ROLES = [
 
 const COR_PALETTE = ['#C9A84C', '#475569', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899']
 
+const FIELD = 'w-full bg-surface-raised text-sm text-ink px-3 py-2 rounded-lg border border-line placeholder:text-ink-muted/70 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 transition-colors duration-fast'
+const FIELD_LABEL = 'block text-overline uppercase font-semibold text-ink-muted mb-1.5'
+const ICON_BTN = 'p-1.5 rounded-md text-ink-muted hover:text-ink hover:bg-surface-muted transition-colors duration-fast disabled:opacity-30 disabled:cursor-not-allowed'
+
 export function Utilizadores() {
   const toast = useToast()
   const { profile, refreshProfile } = useAuth()
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  // Cada abertura do convite monta um formulário novo (estado limpo); o
+  // componente fica montado ao fechar para a animação de saída correr.
+  const [inviteKey, setInviteKey] = useState(0)
   const [busy, setBusy] = useState(null)
-  const [linkModal, setLinkModal] = useState(null) // { url, note }
+  const [linkModal, setLinkModalData] = useState(null) // { url, note }
+  const [linkAberto, setLinkAberto] = useState(false)
   const [expandedUser, setExpandedUser] = useState(null) // userId expandido para mostrar acessos
+
+  function setLinkModal(data) {
+    setLinkModalData(data)
+    setLinkAberto(!!data)
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -122,14 +137,10 @@ export function Utilizadores() {
             </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={load}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs hover:bg-surface-muted border border-line text-ink-muted">
-              <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} /> Atualizar
-            </button>
-            <button onClick={() => setShowForm(true)}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold bg-brand-gold text-brand-dark hover:bg-brand-gold-light transition-colors shadow-gold">
-              <Plus className="w-3.5 h-3.5" strokeWidth={1.75} /> Convidar utilizador
-            </button>
+            <Button variant="secondary" size="sm" icon={RefreshCw} onClick={load}>Atualizar</Button>
+            <Button variant="primary" size="sm" icon={Plus} onClick={() => { setInviteKey(k => k + 1); setShowForm(true) }}>
+              Convidar utilizador
+            </Button>
           </div>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -144,53 +155,54 @@ export function Utilizadores() {
       <DiagnosticoPanel />
 
       {/* Legenda de roles */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-6">
         {ROLES.map(r => (
-          <div key={r.id} className="px-3 py-2 rounded-lg" style={{ border: '1px solid #1a1a1a', backgroundColor: '#0f0f0f' }}>
-            <p className="text-[10px] uppercase tracking-widest font-semibold text-accent-ink">{r.label}</p>
+          <div key={r.id} className="px-3 py-2 rounded-lg border border-line bg-surface-raised">
+            <p className="text-overline uppercase font-semibold text-ink">{r.label}</p>
             <p className="text-xs text-ink-muted mt-0.5">{r.desc}</p>
           </div>
         ))}
       </div>
 
       {/* Tabela */}
-      <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #1a1a1a' }}>
+      <div className="rounded-xl overflow-hidden border border-line bg-surface-raised">
         <ScrollableTable>
         <table className="w-full text-sm min-w-[560px]">
-          <thead style={{ backgroundColor: '#0f0f0f' }}>
-            <tr className="text-left text-[10px] uppercase tracking-widest text-ink-muted">
-              <th className="px-4 py-3">Nome</th>
-              <th className="px-4 py-3">Email</th>
-              <th className="px-4 py-3">Role</th>
-              <th className="px-4 py-3">Estado</th>
-              <th className="px-4 py-3 text-right">Ações</th>
+          <thead className="bg-surface-muted/60">
+            <tr className="text-left text-overline uppercase text-ink-muted">
+              <th className="px-4 py-3 font-semibold">Nome</th>
+              <th className="px-4 py-3 font-semibold">Email</th>
+              <th className="px-4 py-3 font-semibold">Role</th>
+              <th className="px-4 py-3 font-semibold">Estado</th>
+              <th className="px-4 py-3 font-semibold text-right">Ações</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-ink-muted text-xs">A carregar...</td></tr>
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-ink-muted text-xs">A carregar…</td></tr>
             )}
             {!loading && users.length === 0 && (
               <tr><td colSpan={5} className="px-4 py-8 text-center text-ink-muted text-xs">Sem utilizadores</td></tr>
             )}
             {users.map(u => (
               <Fragment key={u.id}>
-              <tr style={{ borderTop: '1px solid #1a1a1a' }}>
+              <tr className="border-t border-line">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     {u.role === 'parceiro' ? (
                       <button onClick={() => setExpandedUser(expandedUser === u.id ? null : u.id)}
-                        className="text-ink-muted hover:text-white" title="Ver acessos">
+                        aria-expanded={expandedUser === u.id}
+                        className="text-ink-muted hover:text-ink transition-colors duration-fast" title="Ver acessos" aria-label="Ver acessos">
                         {expandedUser === u.id ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                       </button>
                     ) : <span className="w-3.5" />}
-                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
-                      style={{ backgroundColor: u.cor || '#C9A84C' }}>
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 bg-[var(--cor)]"
+                      style={{ '--cor': u.cor || '#C9A84C' }}>
                       {u.iniciais}
                     </div>
-                    <span className="text-white">{u.nome}</span>
+                    <span className="text-ink font-medium">{u.nome}</span>
                     {u.id === profile?.id && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ color: '#C9A84C', backgroundColor: 'rgba(201,168,76,0.1)' }}>tu</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent-ink font-semibold">tu</span>
                     )}
                   </div>
                 </td>
@@ -200,51 +212,50 @@ export function Utilizadores() {
                     value={u.role}
                     disabled={busy === u.id}
                     onChange={e => updateUser(u.id, { role: e.target.value })}
-                    className="bg-transparent text-xs px-2 py-1 rounded outline-none"
-                    style={{ border: '1px solid #1a1a1a', color: '#fff' }}>
-                    {ROLES.map(r => <option key={r.id} value={r.id} style={{ backgroundColor: '#111' }}>{r.label}</option>)}
+                    aria-label={`Role de ${u.nome}`}
+                    className="bg-surface-raised text-ink text-xs px-2 py-1 rounded-md border border-line focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 transition-colors duration-fast disabled:opacity-50">
+                    {ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
                   </select>
                 </td>
                 <td className="px-4 py-3">
                   <button
                     disabled={busy === u.id}
                     onClick={() => updateUser(u.id, { ativo: !u.ativo })}
-                    className="text-[10px] px-2 py-1 rounded transition-colors"
-                    style={{
-                      backgroundColor: u.ativo ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-                      color: u.ativo ? '#10b981' : '#ef4444',
-                      border: `1px solid ${u.ativo ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
-                    }}>
+                    title={u.ativo ? 'Clicar para desativar' : 'Clicar para ativar'}
+                    className={`text-[11px] font-medium px-2 py-1 rounded-md border transition-colors duration-fast disabled:opacity-50 ${
+                      u.ativo
+                        ? 'bg-success/10 text-success border-success/30 hover:bg-success/15'
+                        : 'bg-danger/10 text-danger border-danger/30 hover:bg-danger/15'
+                    }`}>
                     {u.ativo ? 'Ativo' : 'Inativo'}
                   </button>
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="inline-flex gap-1">
                     <button onClick={() => magicLink(u)} disabled={busy === u.id}
-                      title="Gerar magic link de acesso"
-                      className="p-1.5 rounded hover:bg-surface-raised/5" style={{ color: '#999' }}>
+                      title="Gerar magic link de acesso" aria-label="Gerar magic link de acesso"
+                      className={ICON_BTN}>
                       <LinkIcon className="w-3.5 h-3.5" />
                     </button>
                     <button onClick={() => resetPassword(u)} disabled={busy === u.id}
-                      title="Gerar reset de password"
-                      className="p-1.5 rounded hover:bg-surface-raised/5" style={{ color: '#999' }}>
+                      title="Gerar reset de password" aria-label="Gerar reset de password"
+                      className={ICON_BTN}>
                       <KeyRound className="w-3.5 h-3.5" />
                     </button>
                     <button onClick={() => deleteUser(u)} disabled={busy === u.id || u.id === profile?.id}
-                      title="Apagar"
-                      className="p-1.5 rounded hover:bg-surface-raised/5 disabled:opacity-30 disabled:cursor-not-allowed"
-                      style={{ color: '#ef4444' }}>
+                      title="Apagar" aria-label={`Apagar ${u.nome}`}
+                      className="p-1.5 rounded-md text-danger/80 hover:text-danger hover:bg-danger/10 transition-colors duration-fast disabled:opacity-30 disabled:cursor-not-allowed">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </td>
               </tr>
               {u.role === 'parceiro' && expandedUser === u.id && (
-                <tr style={{ backgroundColor: '#0a0a0a', borderTop: '1px solid #1a1a1a' }}>
+                <tr className="bg-surface border-t border-line">
                   <td colSpan={5} className="p-0">
                     <div className="px-4 py-3">
-                      <p className="text-[10px] uppercase tracking-widest text-ink-muted mb-1">Acessos atribuídos</p>
-                      <p className="text-[10px] text-ink-muted mb-2">Para conceder acesso, vai ao detalhe do imóvel ou projeto e clica "Partilhar".</p>
+                      <p className="text-overline uppercase text-ink-muted mb-1">Acessos atribuídos</p>
+                      <p className="text-caption text-ink-muted mb-2">Para conceder acesso, vai ao detalhe do imóvel ou projeto e clica "Partilhar".</p>
                     </div>
                     <AcessosDoUser userId={u.id} />
                   </td>
@@ -257,18 +268,18 @@ export function Utilizadores() {
         </ScrollableTable>
       </div>
 
-      {showForm && (
-        <InviteForm
-          onClose={() => setShowForm(false)}
-          onCreated={(u) => {
-            setUsers(prev => [u, ...prev.filter(x => x.id !== u.id)])
-            setShowForm(false)
-            if (u.actionLink) setLinkModal({ url: u.actionLink, note: u.deliveryNote || `Link de acesso para ${u.email}` })
-            else if (u.deliveryNote) toast(u.deliveryNote, 'success')
-          }}
-        />
-      )}
-      {linkModal && <LinkModal {...linkModal} onClose={() => setLinkModal(null)} />}
+      <InviteForm
+        key={inviteKey}
+        open={showForm}
+        onClose={() => setShowForm(false)}
+        onCreated={(u) => {
+          setUsers(prev => [u, ...prev.filter(x => x.id !== u.id)])
+          setShowForm(false)
+          if (u.actionLink) setLinkModal({ url: u.actionLink, note: u.deliveryNote || `Link de acesso para ${u.email}` })
+          else if (u.deliveryNote) toast(u.deliveryNote, 'success')
+        }}
+      />
+      <LinkModal open={linkAberto} url={linkModal?.url || ''} note={linkModal?.note} onClose={() => setLinkAberto(false)} />
     </div>
   )
 }
@@ -288,13 +299,14 @@ function DiagnosticoPanel() {
 
   if (loading) return null
   return (
-    <div className="mb-4 rounded-lg overflow-hidden" style={{ border: '1px solid #1a1a1a', backgroundColor: '#0f0f0f' }}>
-      <button onClick={() => setOpen(!open)}
-        className="w-full px-3 py-2 text-left text-[10px] uppercase tracking-widest font-semibold flex items-center justify-between text-accent-ink">
-        Diagnóstico de sessão {open ? '▾' : '▸'}
+    <div className="mb-4 rounded-lg overflow-hidden border border-line bg-surface-raised">
+      <button onClick={() => setOpen(!open)} aria-expanded={open}
+        className="w-full px-3 py-2 text-left text-overline uppercase font-semibold flex items-center justify-between text-ink-muted hover:text-ink hover:bg-surface-muted transition-colors duration-fast">
+        Diagnóstico de sessão
+        {open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
       </button>
       {open && (
-        <pre className="p-3 text-[11px] text-ink-muted overflow-x-auto whitespace-pre-wrap" style={{ borderTop: '1px solid #1a1a1a' }}>
+        <pre className="p-3 text-[11px] text-ink-muted bg-surface overflow-x-auto whitespace-pre-wrap border-t border-line">
           {JSON.stringify(info, null, 2)}
         </pre>
       )}
@@ -302,37 +314,28 @@ function DiagnosticoPanel() {
   )
 }
 
-function LinkModal({ url, note, onClose }) {
+function LinkModal({ open, url, note, onClose }) {
   const [copied, setCopied] = useState(false)
   async function copy() {
     try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch {}
   }
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.7)' }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()}
-        className="rounded-2xl p-6 w-full max-w-lg" style={{ backgroundColor: '#111', border: '1px solid #1a1a1a' }}>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-white font-semibold">Link gerado</h3>
-          <button type="button" onClick={onClose} className="text-ink-muted hover:text-white"><X className="w-4 h-4" /></button>
-        </div>
-        <p className="text-xs text-ink-muted mb-3">{note}</p>
-        <div className="flex gap-2 items-stretch">
-          <input readOnly value={url} onFocus={e => e.target.select()}
-            className="flex-1 bg-transparent text-xs text-white px-3 py-2 rounded outline-none num"
-            style={{ border: '1px solid #1a1a1a' }} />
-          <button onClick={copy}
-            className="flex items-center gap-1.5 px-3 text-xs font-medium rounded bg-accent text-accent-foreground hover:brightness-[1.04]">
-            {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-            {copied ? 'Copiado' : 'Copiar'}
-          </button>
-        </div>
+    <Modal open={open} onClose={onClose} size="md" title="Link gerado" subtitle={note}
+      footer={<Modal.Footer><Button variant="secondary" onClick={onClose}>Fechar</Button></Modal.Footer>}>
+      <div className="flex gap-2 items-stretch">
+        <input readOnly value={url} onFocus={e => e.target.select()} aria-label="Link"
+          className={`${FIELD} flex-1 min-w-0 text-xs num`} />
+        <Button variant="primary" icon={copied ? Check : Copy} onClick={copy}>
+          {copied ? 'Copiado' : 'Copiar'}
+        </Button>
       </div>
-    </div>
+    </Modal>
   )
 }
 
-function InviteForm({ onClose, onCreated }) {
+function InviteForm({ open, onClose, onCreated }) {
   const toast = useToast()
+  const formId = useId()
   const [form, setForm] = useState({ email: '', nome: '', role: 'comercial', cor: COR_PALETTE[0], method: 'magic_link', password: '', investidor_id: '' })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -400,105 +403,96 @@ function InviteForm({ onClose, onCreated }) {
   ]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.7)' }} onClick={onClose}>
-      <form onClick={e => e.stopPropagation()} onSubmit={submit}
-        className="rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" style={{ backgroundColor: '#111', border: '1px solid #1a1a1a' }}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-white font-semibold">Dar acesso a uma pessoa</h3>
-          <button type="button" onClick={onClose} className="text-ink-muted hover:text-white"><X className="w-4 h-4" /></button>
+    <Modal open={open} onClose={onClose} size="md" title="Dar acesso a uma pessoa"
+      footer={
+        <Modal.Footer>
+          <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button type="submit" form={formId} variant="primary" loading={submitting}>
+            {submitting ? 'A criar…' : 'Dar acesso'}
+          </Button>
+        </Modal.Footer>
+      }>
+      <form id={formId} onSubmit={submit} className="flex flex-col gap-3">
+        <div>
+          <label className={FIELD_LABEL} htmlFor={`${formId}-email`}>Email</label>
+          <input id={`${formId}-email`} type="email" required value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
+            placeholder="pessoa@exemplo.com" className={FIELD} />
         </div>
 
-        <label className="block text-[10px] uppercase tracking-widest text-ink-muted mb-1">Email</label>
-        <input type="email" required value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
-          placeholder="pessoa@exemplo.com"
-          className="w-full bg-transparent text-sm text-white px-3 py-2 rounded mb-3 outline-none"
-          style={{ border: '1px solid #1a1a1a' }} />
+        <div>
+          <label className={FIELD_LABEL} htmlFor={`${formId}-nome`}>Nome</label>
+          <input id={`${formId}-nome`} required value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })}
+            className={FIELD} />
+        </div>
 
-        <label className="block text-[10px] uppercase tracking-widest text-ink-muted mb-1">Nome</label>
-        <input required value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })}
-          className="w-full bg-transparent text-sm text-white px-3 py-2 rounded mb-3 outline-none"
-          style={{ border: '1px solid #1a1a1a' }} />
-
-        <label className="block text-[10px] uppercase tracking-widest text-ink-muted mb-1">Role</label>
-        <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
-          className="w-full bg-transparent text-sm text-white px-3 py-2 rounded mb-3 outline-none"
-          style={{ border: '1px solid #1a1a1a' }}>
-          {ROLES.map(r => <option key={r.id} value={r.id} style={{ backgroundColor: '#111' }}>{r.label} — {r.desc}</option>)}
-        </select>
+        <div>
+          <label className={FIELD_LABEL} htmlFor={`${formId}-role`}>Role</label>
+          <select id={`${formId}-role`} value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} className={FIELD}>
+            {ROLES.map(r => <option key={r.id} value={r.id}>{r.label} — {r.desc}</option>)}
+          </select>
+        </div>
 
         {form.role === 'investidor' && (
-          <>
-            <label className="block text-[10px] uppercase tracking-widest text-ink-muted mb-1">Ligar a investidor existente (opcional)</label>
-            <select value={form.investidor_id} onChange={e => setForm({ ...form, investidor_id: e.target.value })}
-              className="w-full bg-transparent text-sm text-white px-3 py-2 rounded mb-3 outline-none"
-              style={{ border: '1px solid #1a1a1a' }}>
-              <option value="" style={{ backgroundColor: '#111' }}>— Sem ligação —</option>
+          <div>
+            <label className={FIELD_LABEL} htmlFor={`${formId}-inv`}>Ligar a investidor existente (opcional)</label>
+            <select id={`${formId}-inv`} value={form.investidor_id} onChange={e => setForm({ ...form, investidor_id: e.target.value })} className={FIELD}>
+              <option value="">— Sem ligação —</option>
               {investidores.map(i => (
-                <option key={i.id} value={i.id} style={{ backgroundColor: '#111' }}>{i.nome}{i.email ? ` · ${i.email}` : ''}</option>
+                <option key={i.id} value={i.id}>{i.nome}{i.email ? ` · ${i.email}` : ''}</option>
               ))}
             </select>
-            <p className="text-[10px] text-ink-muted mb-3 -mt-2">Sugestão: liga ao registo na lista de Investidores. Auto-preenche nome/email.</p>
-          </>
+            <p className="text-caption text-ink-muted mt-1">Sugestão: liga ao registo na lista de Investidores. Auto-preenche nome/email.</p>
+          </div>
         )}
 
-        <label className="block text-[10px] uppercase tracking-widest text-ink-muted mb-1">Cor</label>
-        <div className="flex gap-2 mb-4">
-          {COR_PALETTE.map(c => (
-            <button key={c} type="button" onClick={() => setForm({ ...form, cor: c })}
-              className="w-6 h-6 rounded-full transition-transform"
-              style={{ backgroundColor: c, transform: form.cor === c ? 'scale(1.2)' : 'scale(1)', border: form.cor === c ? '2px solid #fff' : 'none' }} />
-          ))}
+        <div>
+          <span className={FIELD_LABEL}>Cor</span>
+          <div className="flex flex-wrap gap-2.5">
+            {COR_PALETTE.map(c => (
+              <button key={c} type="button" onClick={() => setForm({ ...form, cor: c })}
+                aria-label={`Cor ${c}`} aria-pressed={form.cor === c}
+                className={`w-6 h-6 rounded-full bg-[var(--cor)] transition-transform duration-fast ease-entry ${form.cor === c ? 'scale-110 ring-2 ring-ink ring-offset-2 ring-offset-surface-raised' : ''}`}
+                style={{ '--cor': c }} />
+            ))}
+          </div>
         </div>
 
-        <label className="block text-[10px] uppercase tracking-widest text-ink-muted mb-2">Como dar acesso?</label>
-        <div className="flex flex-col gap-2 mb-4">
-          {methodOpts.map(opt => (
-            <label key={opt.id}
-              className="flex items-start gap-2 p-2.5 rounded cursor-pointer"
-              style={{
-                border: form.method === opt.id ? '1px solid #C9A84C' : '1px solid #1a1a1a',
-                backgroundColor: form.method === opt.id ? 'rgba(201,168,76,0.05)' : 'transparent',
-              }}>
-              <input type="radio" name="method" value={opt.id}
-                checked={form.method === opt.id}
-                onChange={() => setForm({ ...form, method: opt.id })}
-                className="mt-0.5 accent-brand-gold" />
-              <div>
-                <p className="text-xs text-white font-medium">{opt.label}</p>
-                <p className="text-[10px] text-ink-muted">{opt.hint}</p>
-              </div>
-            </label>
-          ))}
+        <div>
+          <span className={FIELD_LABEL}>Como dar acesso?</span>
+          <div className="flex flex-col gap-2">
+            {methodOpts.map(opt => (
+              <label key={opt.id}
+                className={`flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors duration-fast ${
+                  form.method === opt.id ? 'border-accent bg-accent/5' : 'border-line hover:bg-surface-muted'
+                }`}>
+                <input type="radio" name="method" value={opt.id}
+                  checked={form.method === opt.id}
+                  onChange={() => setForm({ ...form, method: opt.id })}
+                  className="mt-0.5 accent-accent" />
+                <div>
+                  <p className="text-xs text-ink font-medium">{opt.label}</p>
+                  <p className="text-caption text-ink-muted">{opt.hint}</p>
+                </div>
+              </label>
+            ))}
+          </div>
         </div>
 
         {form.method === 'password' && (
-          <>
-            <label className="block text-[10px] uppercase tracking-widest text-ink-muted mb-1">Password</label>
-            <input type="text" required minLength={8} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
-              placeholder="Mínimo 8 caracteres"
-              className="w-full bg-transparent text-sm text-white px-3 py-2 rounded mb-4 outline-none num"
-              style={{ border: '1px solid #1a1a1a' }} />
-          </>
+          <div>
+            <label className={FIELD_LABEL} htmlFor={`${formId}-pw`}>Password</label>
+            <input id={`${formId}-pw`} type="text" required minLength={8} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
+              placeholder="Mínimo 8 caracteres" className={`${FIELD} num`} />
+          </div>
         )}
 
         {error && (
-          <div className="mb-3 p-3 rounded text-xs" style={{ backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5' }}>
+          <div className="p-3 rounded-lg text-xs bg-danger/10 border border-danger/30 text-danger" role="alert">
             <p className="font-semibold mb-1">Erro a criar utilizador:</p>
             <p className="num break-words">{error}</p>
           </div>
         )}
-
-        <div className="flex gap-2 justify-end">
-          <button type="button" onClick={onClose}
-            className="px-4 py-2 text-xs rounded hover:bg-surface-raised/5" style={{ color: '#999' }}>
-            Cancelar
-          </button>
-          <button type="submit" disabled={submitting}
-            className="px-4 py-2 text-xs font-medium rounded bg-accent text-accent-foreground hover:brightness-[1.04]">
-            {submitting ? 'A criar...' : 'Dar acesso'}
-          </button>
-        </div>
       </form>
-    </div>
+    </Modal>
   )
 }

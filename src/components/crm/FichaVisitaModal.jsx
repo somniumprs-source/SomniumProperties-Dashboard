@@ -4,8 +4,11 @@
  * medicoes, estimativa de obra e relatorio com decisao. Grava em visitas.ficha.
  */
 import { useState } from 'react'
-import { X, Save } from 'lucide-react'
+import { Save } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
+import { Modal } from '../ui/Modal.jsx'
+import { Button } from '../ui/Button.jsx'
+import { useToast } from '../ui/Toast.jsx'
 import {
   CHECKLIST_SECTIONS, RATINGS, MEDICAO_COMPARTIMENTOS, OBRA_TRABALHOS,
   GRAUS_OBRA, RELATORIO_OBRAS, DECISOES, normalizeFicha,
@@ -19,13 +22,13 @@ const fmtDateTime = d => {
 }
 
 const RATING_STYLE = {
-  B: { on: 'bg-success text-white border-green-600', off: 'text-success border-success/30 hover:bg-success/10' },
-  R: { on: 'bg-warning text-white border-amber-500', off: 'text-warning border-warning/30 hover:bg-warning/10' },
-  M: { on: 'bg-danger text-white border-red-600', off: 'text-danger border-danger/30 hover:bg-danger/10' },
-  NA: { on: 'bg-ink-muted text-white border-ink/40', off: 'text-ink-muted border-line hover:bg-surface' },
+  B: { on: 'bg-success text-white dark:text-accent-foreground border-success', off: 'text-success border-success/30 hover:bg-success/10' },
+  R: { on: 'bg-warning text-white dark:text-accent-foreground border-warning', off: 'text-warning border-warning/30 hover:bg-warning/10' },
+  M: { on: 'bg-danger text-white dark:text-accent-foreground border-danger', off: 'text-danger border-danger/30 hover:bg-danger/10' },
+  NA: { on: 'bg-ink-muted text-surface border-ink-muted', off: 'text-ink-muted border-line hover:bg-surface-muted' },
 }
 
-const inputClass = 'w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300'
+const inputClass = 'w-full px-3 py-2 rounded-lg border border-line text-sm bg-surface-raised text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30'
 const labelClass = 'block text-xs text-ink-muted mb-1'
 const sectionClass = 'border border-line rounded-xl p-4 mb-4'
 const sectionTitle = 'text-sm font-semibold text-ink mb-3'
@@ -42,7 +45,7 @@ function RatingPicker({ value, onChange }) {
             type="button"
             title={r.label}
             onClick={() => onChange(active ? '' : r.key)}
-            className={`w-9 h-8 text-xs font-semibold rounded-md border transition-colors ${active ? st.on : st.off}`}
+            className={`w-9 h-8 text-xs font-semibold rounded-md border transition-colors duration-fast ${active ? st.on : st.off}`}
           >
             {r.key === 'NA' ? 'N/A' : r.key}
           </button>
@@ -52,7 +55,8 @@ function RatingPicker({ value, onChange }) {
   )
 }
 
-export function FichaVisitaModal({ visita, imovelId, imovelNome, onClose, onSaved }) {
+export function FichaVisitaModal({ open = true, visita, imovelId, imovelNome, onClose, onSaved }) {
+  const toast = useToast()
   const [ficha, setFicha] = useState(() => normalizeFicha(visita?.ficha))
   const [saving, setSaving] = useState(false)
 
@@ -80,32 +84,16 @@ export function FichaVisitaModal({ visita, imovelId, imovelNome, onClose, onSave
       }
       onSaved?.()
     } catch (err) {
-      alert(err.message || 'Erro ao gravar ficha')
+      toast(err.message || 'Erro ao gravar ficha', 'error')
     }
     setSaving(false)
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/40" onClick={onClose}>
-      <div
-        className="bg-surface-raised rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-line">
-          <div className="min-w-0">
-            <h2 className="text-base font-semibold text-ink">Ficha de Visita</h2>
-            <p className="text-xs text-ink-muted mt-0.5 truncate">
-              {imovelNome ? `${imovelNome} · ` : ''}{fmtDateTime(visita?.dataHora)}
-            </p>
-          </div>
-          <button onClick={onClose} className="text-ink-muted hover:text-ink p-1 shrink-0" title="Fechar">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="overflow-y-auto px-5 py-4 flex-1">
+    <Modal open={open} onClose={onClose} size="lg"
+      title="Ficha de visita"
+      subtitle={`${imovelNome ? `${imovelNome} · ` : ''}${fmtDateTime(visita?.dataHora)}`}>
+        <div>
           {/* Notas de campo (pre-visita) */}
           <div className={sectionClass}>
             <div className={sectionTitle}>Notas de campo (pré-visita)</div>
@@ -146,7 +134,7 @@ export function FichaVisitaModal({ visita, imovelId, imovelNome, onClose, onSave
                         <input
                           type="text"
                           placeholder="Observações"
-                          className="px-2 py-1.5 rounded-md border border-line text-xs w-full sm:w-44 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                          className="px-2 py-1.5 rounded-md border border-line text-xs w-full sm:w-44 bg-surface-raised text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
                           value={row.obs}
                           onChange={e => setChecklist(sec.key, idx, 'obs', e.target.value)}
                         />
@@ -165,9 +153,9 @@ export function FichaVisitaModal({ visita, imovelId, imovelNome, onClose, onSave
               {MEDICAO_COMPARTIMENTOS.map((comp, idx) => (
                 <div key={idx} className="flex items-center gap-2">
                   <span className="text-sm text-ink w-32 shrink-0">{comp}</span>
-                  <input type="text" placeholder="m²" className="px-2 py-1.5 rounded-md border border-line text-xs w-24 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                  <input type="text" placeholder="m²" className="px-2 py-1.5 rounded-md border border-line text-xs w-24 bg-surface-raised text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
                     value={ficha.medicoes[idx].m2} onChange={e => setMedicao(idx, 'm2', e.target.value)} />
-                  <input type="text" placeholder="Observações" className="px-2 py-1.5 rounded-md border border-line text-xs flex-1 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                  <input type="text" placeholder="Observações" className="px-2 py-1.5 rounded-md border border-line text-xs flex-1 bg-surface-raised text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
                     value={ficha.medicoes[idx].obs} onChange={e => setMedicao(idx, 'obs', e.target.value)} />
                 </div>
               ))}
@@ -178,7 +166,7 @@ export function FichaVisitaModal({ visita, imovelId, imovelNome, onClose, onSave
                 <input type="text" className={inputClass} value={ficha.areaMedida} onChange={e => setTop('areaMedida', e.target.value)} />
               </div>
               <label className="flex items-center gap-2 text-sm text-ink sm:mt-6">
-                <input type="checkbox" className="w-4 h-4 accent-yellow-500" checked={ficha.discrepancia}
+                <input type="checkbox" className="w-4 h-4 accent-accent" checked={ficha.discrepancia}
                   onChange={e => setTop('discrepancia', e.target.checked)} />
                 Discrepância face ao anunciado
               </label>
@@ -196,16 +184,16 @@ export function FichaVisitaModal({ visita, imovelId, imovelNome, onClose, onSave
                     <span className="text-sm text-ink flex-1 min-w-0">{trab}</span>
                     <div className="flex items-center gap-2">
                       <label className="flex items-center gap-1 text-xs text-ink-muted">
-                        <input type="checkbox" className="w-4 h-4 accent-yellow-500" checked={o.necessario}
+                        <input type="checkbox" className="w-4 h-4 accent-accent" checked={o.necessario}
                           onChange={e => setObra(idx, 'necessario', e.target.checked)} />
                         Necessário
                       </label>
-                      <select className="px-2 py-1.5 rounded-md border border-line text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                      <select className="px-2 py-1.5 rounded-md border border-line text-xs bg-surface-raised text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
                         value={o.grau} onChange={e => setObra(idx, 'grau', e.target.value)}>
                         <option value="">Grau</option>
                         {GRAUS_OBRA.map(g => <option key={g.key} value={g.key}>{g.label}</option>)}
                       </select>
-                      <input type="text" placeholder="€ custo" className="px-2 py-1.5 rounded-md border border-line text-xs w-24 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                      <input type="text" placeholder="€ custo" className="px-2 py-1.5 rounded-md border border-line text-xs w-24 bg-surface-raised text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
                         value={o.custo} onChange={e => setObra(idx, 'custo', e.target.value)} />
                     </div>
                   </div>
@@ -233,7 +221,7 @@ export function FichaVisitaModal({ visita, imovelId, imovelNome, onClose, onSave
                   {RELATORIO_OBRAS.map((trab, idx) => (
                     <div key={idx} className="flex items-center gap-2">
                       <span className="text-sm text-ink flex-1 min-w-0">{trab}</span>
-                      <input type="text" placeholder="€ custo estimado" className="px-2 py-1.5 rounded-md border border-line text-xs w-40 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                      <input type="text" placeholder="€ custo estimado" className="px-2 py-1.5 rounded-md border border-line text-xs w-40 bg-surface-raised text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
                         value={ficha.relatorio.obras[idx].custo} onChange={e => setRelatorioObra(idx, e.target.value)} />
                     </div>
                   ))}
@@ -258,7 +246,7 @@ export function FichaVisitaModal({ visita, imovelId, imovelNome, onClose, onSave
                 <div className="space-y-1.5">
                   {DECISOES.map(d => (
                     <label key={d.key} className="flex items-start gap-2 text-sm text-ink cursor-pointer">
-                      <input type="radio" name="decisao" className="mt-0.5 w-4 h-4 accent-yellow-500"
+                      <input type="radio" name="decisao" className="mt-0.5 w-4 h-4 accent-accent"
                         checked={ficha.relatorio.decisao === d.key}
                         onChange={() => setRelatorio('decisao', d.key)} />
                       <span>{d.label}</span>
@@ -279,18 +267,16 @@ export function FichaVisitaModal({ visita, imovelId, imovelNome, onClose, onSave
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-line bg-surface">
-          <button onClick={onClose} className="px-4 py-2 bg-surface-raised border border-line text-ink-muted text-xs font-medium rounded-lg hover:bg-surface-muted">
-            Fechar
-          </button>
-          <button onClick={handleSave} disabled={saving}
-            className="flex items-center gap-1.5 px-4 py-2 text-white text-xs font-medium rounded-lg bg-warning hover:bg-warning disabled:opacity-50">
-            <Save className="w-3.5 h-3.5" />
-            {saving ? 'A gravar...' : 'Guardar ficha'}
-          </button>
+        {/* Rodapé fixo no fundo do diálogo: o formulário é longo e o Guardar
+            tem de ficar sempre à vista. */}
+        <div className="sticky bottom-0 -mx-5 -mb-5 px-5 py-4 bg-surface-raised border-t border-line rounded-b-2xl">
+          <Modal.Footer>
+            <Button variant="secondary" onClick={onClose}>Fechar</Button>
+            <Button variant="primary" icon={Save} onClick={handleSave} loading={saving}>
+              {saving ? 'A gravar…' : 'Guardar ficha'}
+            </Button>
+          </Modal.Footer>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

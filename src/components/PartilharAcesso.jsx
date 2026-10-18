@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Share2, X, UserPlus, Trash2 } from 'lucide-react'
+import { Share2, UserPlus, Trash2 } from 'lucide-react'
 import { apiFetch, apiFetchJson } from '../lib/api.js'
 import { useToast } from './ui/Toast.jsx'
+import { Modal } from './ui/Modal.jsx'
+import { Button } from './ui/Button.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
 
 /**
@@ -31,12 +33,12 @@ export function PartilharAcesso({ entidade, entidadeId, nome, compact = false })
           <Share2 className="w-3.5 h-3.5" /> Partilhar
         </button>
       )}
-      {open && <PartilharModal entidade={entidade} entidadeId={entidadeId} nome={nome} onClose={() => setOpen(false)} />}
+      <PartilharModal open={open} entidade={entidade} entidadeId={entidadeId} nome={nome} onClose={() => setOpen(false)} />
     </>
   )
 }
 
-function PartilharModal({ entidade, entidadeId, nome, onClose }) {
+function PartilharModal({ open, entidade, entidadeId, nome, onClose }) {
   const toast = useToast()
   const [loading, setLoading] = useState(true)
   const [parceiros, setParceiros] = useState([])     // todos os users role=parceiro
@@ -56,7 +58,7 @@ function PartilharModal({ entidade, entidadeId, nome, onClose }) {
       toast(`Erro: ${e.message}`, 'error')
     } finally { setLoading(false) }
   }
-  useEffect(() => { load() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [entidade, entidadeId])
+  useEffect(() => { if (open) load() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [open, entidade, entidadeId])
 
   const acessoIdsByUser = Object.fromEntries(comAcesso.map(a => [a.user_id, a.acesso_id]))
 
@@ -93,19 +95,10 @@ function PartilharModal({ entidade, entidadeId, nome, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()}
-        className="bg-surface-raised rounded-2xl p-6 w-full max-w-md max-h-[85vh] overflow-y-auto shadow-2xl">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h3 className="font-semibold text-ink flex items-center gap-2">
-              <Share2 className="w-4 h-4 text-accent-ink" /> Partilhar acesso
-            </h3>
-            {nome && <p className="text-xs text-ink-muted mt-0.5 truncate">{nome}</p>}
-          </div>
-          <button onClick={onClose} className="text-ink-muted hover:text-ink"><X className="w-5 h-5" /></button>
-        </div>
-
+    <Modal open={open} onClose={onClose} size="md"
+      title={<span className="flex items-center gap-2"><Share2 className="w-4 h-4 text-accent-ink" /> Partilhar acesso</span>}
+      subtitle={nome || undefined}
+      footer={<Modal.Footer><Button variant="secondary" onClick={onClose}>Fechar</Button></Modal.Footer>}>
         <p className="text-xs text-ink-muted mb-4">
           Seleciona os parceiros externos que podem consultar este {entidade} (só leitura).
         </p>
@@ -133,8 +126,8 @@ function PartilharModal({ entidade, entidadeId, nome, onClose }) {
                     disabled={busy === p.id}
                     onChange={() => tem ? revoke(p) : grant(p)}
                     className="w-4 h-4 accent-accent" />
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-                    style={{ backgroundColor: p.cor || '#C9A84C' }}>
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 bg-[var(--cor)]"
+                    style={{ '--cor': p.cor || '#C9A84C' }}>
                     {p.iniciais}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -147,13 +140,7 @@ function PartilharModal({ entidade, entidadeId, nome, onClose }) {
             })}
           </div>
         )}
-
-        <div className="mt-5 pt-4 border-t flex justify-end">
-          <button onClick={onClose}
-            className="px-4 py-2 text-xs rounded text-ink-muted hover:bg-surface-muted">Fechar</button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
