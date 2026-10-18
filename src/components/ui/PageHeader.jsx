@@ -4,7 +4,7 @@
  *   <PageHeader title="Financeiro" subtitle="…" onRefresh={load} loading={loading}
  *     regiao={<RegiaoToggle … />} actions={<Button icon={Plus}>Novo</Button>} />
  *
- * - Título em Newsreader; subtítulo opcional (sem subtítulo mostra a data, uma só vez).
+ * - Título em IBM Plex Sans (font-display); subtítulo opcional (sem subtítulo mostra a data, uma só vez).
  * - `regiao`: seletor de região à esquerda das ações.
  * - `actions`: ações da página (a principal em Button primary).
  * - "Atualizar" é secundário, para não competir com a ação principal.

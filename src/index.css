@@ -98,6 +98,8 @@
 }
 
 @layer components {
+  /* Títulos e KPIs: IBM Plex Sans semibold, ligeiramente apertada (font-medium explícito continua a prevalecer) */
+  .font-display { font-weight: 600; letter-spacing: -0.015em; }
   /* Card pattern — uso .card como base */
   .card-base {
     @apply bg-surface-raised border border-line rounded-xl shadow-xs;
