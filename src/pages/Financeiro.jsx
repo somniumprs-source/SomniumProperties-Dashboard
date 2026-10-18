@@ -1356,11 +1356,11 @@ function DespesaForm({ item, onSave, onCancel, onReload }) {
           <label className="text-xs text-ink-muted block mb-2 font-semibold uppercase tracking-wide">Atribuição Regional</label>
           <div className="flex flex-wrap gap-2 mb-3">
             <button type="button" onClick={() => setModoAtribuicao('unica')}
-              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${modoAtribuicao === 'unica' ? 'bg-danger/10 border-danger/30 text-danger font-semibold' : 'bg-surface-raised border-line text-ink-muted hover:bg-surface'}`}>
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${modoAtribuicao === 'unica' ? 'bg-accent/15 border-accent text-ink font-semibold' : 'bg-surface-raised border-line text-ink-muted hover:bg-surface'}`}>
               Região única
             </button>
             <button type="button" onClick={() => setModoAtribuicao('partilhada')}
-              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${modoAtribuicao === 'partilhada' ? 'bg-danger/10 border-danger/30 text-danger font-semibold' : 'bg-surface-raised border-line text-ink-muted hover:bg-surface'}`}>
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${modoAtribuicao === 'partilhada' ? 'bg-accent/15 border-accent text-ink font-semibold' : 'bg-surface-raised border-line text-ink-muted hover:bg-surface'}`}>
               Partilhada (rateio %)
             </button>
           </div>
