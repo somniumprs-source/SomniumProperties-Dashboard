@@ -10,6 +10,8 @@
     "postinstall": "patch-package",
     "predev": "node scripts/generate-shared-roles.mjs",
     "dev": "concurrently \"node server.js\" \"vite\"",
+    "predev:safe": "node scripts/generate-shared-roles.mjs",
+    "dev:safe": "DISABLE_BACKGROUND_JOBS=true DEV_DB_READ_ONLY=true HOST=127.0.0.1 concurrently \"node server.js\" \"vite --host 127.0.0.1\"",
     "preserver": "node scripts/generate-shared-roles.mjs",
     "server": "node server.js",
     "sync-landing": "node scripts/sync-landing.mjs",

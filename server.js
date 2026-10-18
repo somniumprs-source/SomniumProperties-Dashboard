@@ -27,6 +27,9 @@ app.use('/investir', express.static(path.join(__dirname, 'public/investir')))
 
 // ── Auth middleware (Supabase JWT) ────────────────────────────
 import { createClient } from '@supabase/supabase-js'
+import { backgroundJobsDisabled, skipJob } from './src/db/devSafety.js'
+
+if (backgroundJobsDisabled) console.log('[dev-safe] DISABLE_BACKGROUND_JOBS ativo: crons, auto-syncs e escritas de arranque desligados')
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.supabase.co'
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
 const supabaseAdmin = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null
@@ -111,7 +114,8 @@ app.use('/api', async (req, res, next) => {
 // ── CRM API (PostgreSQL/Supabase) ────────────────────────────
 try {
   const { initSchema } = await import('./src/db/pg.js')
-  await initSchema()
+  if (backgroundJobsDisabled) skipJob('initSchema (DDL e UPDATEs de arranque)')
+  else await initSchema()
   const { withAuditUser } = await import('./src/db/audit.js')
   const { default: pgPoolAudit } = await import('./src/db/pg.js')
 
@@ -491,7 +495,8 @@ try {
     // /api/crm/reunioes-documentos, endpoints diferentes).
 
     // Iniciar cron jobs
-    startCronJobs()
+    if (backgroundJobsDisabled) skipJob('cron jobs (node-cron)')
+    else startCronJobs()
   } catch (e) {
     console.warn('[crm] Módulo de cron jobs não disponível:', e.message)
   }
@@ -4500,7 +4505,8 @@ app.post('/api/calendar/pull', async (req, res) => {
 // auditoria). O Calendário de Projectos continua disponível dentro do CRM.
 
 // Auto-sync bidirecional (~15 min, com jitter para não colidir com outros sincronizadores)
-if (gcal) {
+if (gcal && backgroundJobsDisabled) skipJob('auto-sync Google Calendar')
+if (gcal && !backgroundJobsDisabled) {
   const GCAL_SYNC_INTERVAL = 15 * 60 * 1000
   let _calendarRunning = false
   async function autoSyncCalendar() {
@@ -4527,7 +4533,8 @@ if (gcal) {
 // ── Auto-sync Fireflies (a cada 15 min) ──────────────────────
 try {
   const { isConfigured } = await import('./src/db/firefliesSync.js')
-  if (isConfigured()) {
+  if (isConfigured() && backgroundJobsDisabled) skipJob('auto-sync Fireflies')
+  else if (isConfigured()) {
     const FF_SYNC_INTERVAL = 16 * 60 * 1000
     let _ffRunning = false
     async function autoSyncFireflies() {
@@ -4599,7 +4606,8 @@ try {
 // ── Auto-sync Google Forms (a cada 15 min) ───────────────────
 try {
   const { isConfigured: formsConfigured, syncForms } = await import('./src/db/formsSync.js')
-  if (formsConfigured()) {
+  if (formsConfigured() && backgroundJobsDisabled) skipJob('auto-sync Google Forms')
+  else if (formsConfigured()) {
     const FORMS_SYNC_INTERVAL = 17 * 60 * 1000
     let _formsRunning = false
     async function autoSyncForms() {
@@ -5693,9 +5701,15 @@ async function autoMigrate() {
 }
 
 const PORT = process.env.PORT ?? 3001
+// HOST opcional (ex.: 127.0.0.1 no modo seguro); sem ele escuta em todas as interfaces, como antes.
+const HOST = process.env.HOST || undefined
 autoMigrate().then(() => {
-  app.listen(PORT, async () => {
-    console.log(`[server] a correr na porta ${PORT}`)
+  app.listen(PORT, HOST, async () => {
+    console.log(`[server] a correr na porta ${PORT}${HOST ? ` (${HOST})` : ''}`)
+    if (backgroundJobsDisabled) {
+      skipJob('pré-aquecimento de cache, recálculo de lucro_real, despesas recorrentes e backups')
+      return
+    }
 
     // Pré-aquecer cache do dashboard 60s após arranque. Atrasado para 60s
     // (era 30s) para dar tempo dos auto-syncs (gcal/forms) terminarem o

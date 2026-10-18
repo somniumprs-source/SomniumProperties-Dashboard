@@ -4,6 +4,7 @@
  */
 import pg from 'pg'
 import { installAuditedQuery } from './audit.js'
+import { devDbReadOnly, installReadOnlyGuard } from './devSafety.js'
 
 const DATABASE_URL = process.env.DATABASE_URL
 if (!DATABASE_URL) {
@@ -26,6 +27,8 @@ pool.on('error', (err) => {
 })
 
 installAuditedQuery(pool)
+// Modo dev seguro: o guarda fica por fora do wrapper de auditoria.
+if (devDbReadOnly) installReadOnlyGuard(pool)
 
 setInterval(() => {
   if (pool.waitingCount > 0) {
