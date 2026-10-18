@@ -22,14 +22,14 @@ export function Checklist({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-neutral-100 bg-white px-4 py-3">
-        <p className="text-[10px] uppercase tracking-wide text-neutral-400">Importados</p>
-        <p className="text-2xl font-bold text-neutral-700">
-          {resumo.importados}<span className="text-neutral-400 text-base font-normal">/{resumo.total}</span>
+      <div className="rounded-xl border border-line bg-surface-raised px-4 py-3">
+        <p className="text-overline uppercase text-ink-muted">Importados</p>
+        <p className="font-display text-2xl text-ink num">
+          {resumo.importados}<span className="text-ink-muted text-base font-normal">/{resumo.total}</span>
         </p>
       </div>
 
-      <p className="text-[11px] text-neutral-400">
+      <p className="text-caption text-ink-muted">
         Os documentos importados aqui ficam anexados ao Dossier de Investimento entregue ao investidor.
       </p>
 
@@ -64,8 +64,8 @@ function SlotRow({ item, docs, uploading, analyzing, erros, onUpload, onRemove, 
   const importado = count > 0
 
   const badge = importado
-    ? { txt: count === 1 ? '1 importado' : `${count} importados`, cor: '#27ae60', bg: '#eafaf0', icon: CheckCircle2 }
-    : { txt: 'Em falta', cor: '#9ca3af', bg: '#f3f4f6', icon: AlertCircle }
+    ? { txt: count === 1 ? '1 importado' : `${count} importados`, cls: 'bg-success/10 text-success', icon: CheckCircle2 }
+    : { txt: 'Em falta', cls: 'bg-surface-muted text-ink-muted', icon: AlertCircle }
   const BadgeIcon = badge.icon
 
   function handlePick(files) {
@@ -74,23 +74,21 @@ function SlotRow({ item, docs, uploading, analyzing, erros, onUpload, onRemove, 
   }
 
   return (
-    <div className="rounded-xl border border-neutral-100 bg-white overflow-hidden">
+    <div className="rounded-xl border border-line bg-surface-raised overflow-hidden">
       <div className="flex items-center gap-3 px-4 py-3">
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-neutral-700 truncate">{item.titulo}</p>
-          <p className="text-[11px] text-neutral-400 mt-0.5">{item.descricao}</p>
+          <p className="text-sm font-semibold text-ink truncate">{item.titulo}</p>
+          <p className="text-caption text-ink-muted mt-0.5">{item.descricao}</p>
         </div>
 
-        <span className="flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-lg shrink-0"
-          style={{ backgroundColor: badge.bg, color: badge.cor }}>
+        <span className={`flex items-center gap-1 text-caption font-semibold px-2 py-0.5 rounded-full shrink-0 ${badge.cls}`}>
           <BadgeIcon className="w-3 h-3" /> {badge.txt}
         </span>
 
         <div className="flex items-center gap-1 shrink-0">
           <button onClick={() => inputRef.current?.click()} disabled={uploading}
             title="Importar"
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white disabled:opacity-50"
-            style={{ backgroundColor: '#C9A84C' }}>
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-line text-ink hover:bg-surface-muted transition-colors duration-fast disabled:opacity-50">
             {importado ? <Plus className="w-3.5 h-3.5" /> : <Upload className="w-3.5 h-3.5" />}
             Importar
           </button>
@@ -98,7 +96,7 @@ function SlotRow({ item, docs, uploading, analyzing, erros, onUpload, onRemove, 
       </div>
 
       {importado && (
-        <div className="border-t border-neutral-100 divide-y divide-neutral-100 bg-neutral-50/30">
+        <div className="border-t border-line divide-y divide-line bg-surface">
           {docs.map(doc => (
             <DocRow
               key={doc.id}
@@ -134,10 +132,10 @@ function DocRow({ doc, erro, aAnalisar, analise, onRemove, onAnalisar, onRemover
     <div>
       <div className="flex items-center gap-3 px-4 py-2">
         <div className="flex-1 min-w-0 flex items-center gap-2">
-          <p className="text-[12px] text-neutral-700 truncate font-medium">{doc.name}</p>
+          <p className="text-caption text-ink truncate font-medium">{doc.name}</p>
           {doc.path && (
             <a href={doc.path} target="_blank" rel="noopener noreferrer"
-              className="p-1 rounded text-neutral-300 hover:text-neutral-600 hover:bg-neutral-100 shrink-0">
+              className="p-1 rounded text-ink-muted/70 hover:text-ink-muted hover:bg-surface-muted shrink-0">
               <ExternalLink className="w-3 h-3" />
             </a>
           )}
@@ -147,33 +145,32 @@ function DocRow({ doc, erro, aAnalisar, analise, onRemove, onAnalisar, onRemover
           {!analise && (
             <button onClick={() => onAnalisar(doc)} disabled={aAnalisar}
               title="Analisar com IA"
-              className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold rounded-lg text-white disabled:opacity-50"
-              style={{ backgroundColor: '#C9A84C' }}>
+              className="flex items-center gap-1.5 px-2.5 py-1 text-caption font-medium rounded-lg border border-line text-ink hover:bg-surface-muted transition-colors duration-fast disabled:opacity-50">
               {aAnalisar
-                ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                : <Sparkles className="w-3 h-3" />}
+                ? <div className="w-3 h-3 border-2 border-ink-muted border-t-transparent rounded-full animate-spin" />
+                : <Sparkles className="w-3 h-3 text-accent-ink" />}
               {aAnalisar ? 'A analisar…' : 'Analisar IA'}
             </button>
           )}
 
           {analise && (
             <button onClick={() => onRemoverAnalise(doc.id)} title="Limpar análise / reanalisar"
-              className="p-1.5 rounded-lg text-neutral-300 hover:text-neutral-700 hover:bg-neutral-100">
+              className="p-1.5 rounded-lg text-ink-muted/70 hover:text-ink hover:bg-surface-muted">
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
           )}
 
           <button onClick={handleRemove} disabled={removing} title="Remover documento"
-            className="p-1.5 rounded-lg text-neutral-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-50">
+            className="p-1.5 rounded-lg text-ink-muted/70 hover:text-danger hover:bg-danger/10 disabled:opacity-50">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
       {erro && (
-        <div className="px-4 py-2 border-t border-red-100 bg-red-50 flex items-center justify-between gap-3">
-          <p className="text-xs text-red-700">{erro}</p>
-          <button onClick={() => onAnalisar(doc)} className="text-xs font-semibold text-red-700 underline shrink-0">
+        <div className="px-4 py-2 border-t border-danger/30 bg-danger/10 flex items-center justify-between gap-3">
+          <p className="text-xs text-danger">{erro}</p>
+          <button onClick={() => onAnalisar(doc)} className="text-xs font-semibold text-danger underline shrink-0">
             Tentar novamente
           </button>
         </div>

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { FileDown, FileText, Eye } from 'lucide-react'
 import { openDocument } from '../../../lib/api.js'
-import { ESTADOS, SEVERIDADE, estadoFromValido, DADOS_CHAVE_LABELS } from './documentacao.config.js'
+import { ESTADOS, SEVERIDADE, TOM, estadoFromValido, DADOS_CHAVE_LABELS } from './documentacao.config.js'
 
 /**
  * Relatório consolidado da documentação importada: contagens, conclusão,
@@ -14,12 +14,12 @@ export function Relatorio({ imovelId, analises, flags, inconsistencias, resumoEs
   const temAlerta = r.alertas > 0 || flags.some(f => f.severity === 'warning')
 
   const conclusao = r.analisados === 0
-    ? { txt: 'Ainda não analisou nenhum documento. Importe e analise para gerar o relatório.', cor: '#6b7280', bg: '#f3f4f6' }
+    ? { txt: 'Ainda não analisou nenhum documento. Importe e analise para gerar o relatório.', tom: 'neutro' }
     : temBloqueio
-      ? { txt: 'Existem problemas a resolver: flags críticas, documentos inválidos ou inconsistências entre documentos.', cor: '#c0392b', bg: '#fdecea' }
+      ? { txt: 'Existem problemas a resolver: flags críticas, documentos inválidos ou inconsistências entre documentos.', tom: 'perigo' }
       : temAlerta
-        ? { txt: 'Há alertas a verificar na documentação antes de avançar.', cor: '#e67e22', bg: '#fdf2e8' }
-        : { txt: 'Documentação analisada sem problemas detectados.', cor: '#27ae60', bg: '#eafaf0' }
+        ? { txt: 'Há alertas a verificar na documentação antes de avançar.', tom: 'aviso' }
+        : { txt: 'Documentação analisada sem problemas detectados.', tom: 'sucesso' }
 
   async function exportarPdf({ download = false } = {}) {
     setExporting(true)
@@ -31,61 +31,60 @@ export function Relatorio({ imovelId, analises, flags, inconsistencias, resumoEs
   }
 
   const stats = [
-    { label: 'Documentos', valor: r.totalDocs, cor: '#0d0d0d' },
-    { label: 'Analisados', valor: r.analisados, cor: '#C9A84C' },
-    { label: 'Alertas', valor: r.alertas, cor: r.alertas ? '#e67e22' : '#27ae60' },
-    { label: 'Inconsistências', valor: r.nInconsistencias, cor: r.nInconsistencias ? '#c0392b' : '#27ae60' },
+    { label: 'Documentos', valor: r.totalDocs, cls: 'text-ink' },
+    { label: 'Analisados', valor: r.analisados, cls: 'text-ink' },
+    { label: 'Alertas', valor: r.alertas, cls: r.alertas ? 'text-warning' : 'text-ink' },
+    { label: 'Inconsistências', valor: r.nInconsistencias, cls: r.nInconsistencias ? 'text-danger' : 'text-ink' },
   ]
 
   return (
     <div className="space-y-5">
       {/* Contagens + export */}
-      <div className="flex items-center justify-between gap-4 rounded-xl border border-neutral-100 bg-white px-5 py-4">
-        <div className="grid grid-cols-4 gap-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-line bg-surface-raised px-5 py-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
           {stats.map(s => (
             <div key={s.label}>
-              <p className="text-[10px] uppercase tracking-wide text-neutral-400">{s.label}</p>
-              <p className="text-2xl font-bold" style={{ color: s.cor }}>{s.valor}</p>
+              <p className="text-overline uppercase text-ink-muted">{s.label}</p>
+              <p className={`font-display text-2xl num ${s.cls}`}>{s.valor}</p>
             </div>
           ))}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button onClick={() => exportarPdf({ download: false })} disabled={exporting}
-            className="flex items-center gap-2 px-3 py-2.5 text-sm font-semibold rounded-lg border border-neutral-200 text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-line text-ink hover:bg-surface-muted transition-colors duration-fast disabled:opacity-50"
             title="Abrir o PDF numa nova aba">
-            <Eye className="w-4 h-4" style={{ color: '#C9A84C' }} />
+            <Eye className="w-4 h-4 text-ink-muted" />
             Ver
           </button>
           <button onClick={() => exportarPdf({ download: true })} disabled={exporting}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg text-white disabled:opacity-50"
-            style={{ backgroundColor: '#0d0d0d' }}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-accent text-accent-foreground hover:bg-accent/90 transition-colors duration-fast disabled:opacity-50"
             title="Descarregar o PDF para enviar a investidores">
-            <FileDown className="w-4 h-4" style={{ color: '#C9A84C' }} />
+            <FileDown className="w-4 h-4" />
             {exporting ? 'A gerar…' : 'Download PDF'}
           </button>
         </div>
       </div>
 
       {/* Conclusão */}
-      <div className="rounded-xl px-4 py-3" style={{ backgroundColor: conclusao.bg }}>
-        <p className="text-sm font-semibold" style={{ color: conclusao.cor }}>{conclusao.txt}</p>
+      <div className={`rounded-xl px-4 py-3 ${TOM[conclusao.tom].box}`}>
+        <p className="text-sm font-medium">{conclusao.txt}</p>
       </div>
 
       {/* Inconsistências entre documentos */}
       {inconsistencias.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-neutral-600 mb-2">Inconsistências entre documentos ({inconsistencias.length})</p>
+          <p className="text-xs font-semibold text-ink-muted mb-2">Inconsistências entre documentos ({inconsistencias.length})</p>
           <div className="space-y-2">
             {inconsistencias.map((inc, i) => (
-              <div key={i} className="rounded-lg border px-3 py-2.5 bg-white" style={{ borderColor: '#f3d6d2' }}>
-                <p className="text-xs font-semibold" style={{ color: '#c0392b' }}>
+              <div key={i} className="rounded-lg border border-danger/30 px-3 py-2.5 bg-surface-raised">
+                <p className="text-xs font-semibold text-danger">
                   {inc.label} divergente entre documentos
                 </p>
                 <div className="mt-1.5 space-y-0.5">
                   {inc.valores.map((v, j) => (
-                    <p key={j} className="text-xs text-neutral-600">
+                    <p key={j} className="text-xs text-ink-muted">
                       <span className="font-medium">{v.valor}</span>
-                      <span className="text-neutral-400"> · {v.origem}</span>
+                      <span className="text-ink-muted"> · {v.origem}</span>
                     </p>
                   ))}
                 </div>
@@ -98,18 +97,18 @@ export function Relatorio({ imovelId, analises, flags, inconsistencias, resumoEs
       {/* Red flags ordenadas */}
       {flags.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-neutral-600 mb-2">Red flags ({flags.length})</p>
+          <p className="text-xs font-semibold text-ink-muted mb-2">Red flags ({flags.length})</p>
           <div className="space-y-2">
             {flags.map((f, i) => {
               const sev = SEVERIDADE[f.severity] || SEVERIDADE.info
               return (
-                <div key={i} className="flex gap-2.5 rounded-lg border border-neutral-100 px-3 py-2.5 bg-white">
+                <div key={i} className="flex gap-2.5 rounded-lg border border-line px-3 py-2.5 bg-surface-raised">
                   <span className="shrink-0">{sev.icone}</span>
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold" style={{ color: sev.cor }}>
-                      {f.titulo} <span className="font-normal text-neutral-400">· {f.origem}</span>
+                    <p className={`text-xs font-semibold ${TOM[sev.tom].text}`}>
+                      {f.titulo} <span className="font-normal text-ink-muted">· {f.origem}</span>
                     </p>
-                    {f.descricao && <p className="text-xs text-neutral-500 mt-0.5">{f.descricao}</p>}
+                    {f.descricao && <p className="text-xs text-ink-muted mt-0.5">{f.descricao}</p>}
                   </div>
                 </div>
               )
@@ -120,10 +119,10 @@ export function Relatorio({ imovelId, analises, flags, inconsistencias, resumoEs
 
       {/* Documentos analisados */}
       <div>
-        <p className="text-xs font-semibold text-neutral-600 mb-2">Documentos analisados</p>
+        <p className="text-xs font-semibold text-ink-muted mb-2">Documentos analisados</p>
         {analises.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-neutral-200 bg-neutral-50 px-4 py-6 text-center">
-            <p className="text-xs text-neutral-400">Sem documentos analisados.</p>
+          <div className="rounded-xl border border-dashed border-line bg-surface px-4 py-6 text-center">
+            <p className="text-xs text-ink-muted">Sem documentos analisados.</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -133,33 +132,32 @@ export function Relatorio({ imovelId, analises, flags, inconsistencias, resumoEs
                 ? Object.entries(a.dados_chave).filter(([, v]) => v != null && String(v).trim() !== '')
                 : []
               return (
-                <div key={a.fotoId || i} className="rounded-xl border border-neutral-100 bg-white px-4 py-3">
+                <div key={a.fotoId || i} className="rounded-xl border border-line bg-surface-raised px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: '#fef2f2' }}>
-                      <FileText className="w-4 h-4" style={{ color: '#c0392b' }} />
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-surface-muted">
+                      <FileText className="w-4 h-4 text-ink-muted" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-neutral-700 truncate">{a.tipo_documento || a.nome_ficheiro || 'Documento'}</p>
+                      <p className="text-sm font-medium text-ink truncate">{a.tipo_documento || a.nome_ficheiro || 'Documento'}</p>
                       {a.nome_ficheiro && a.tipo_documento && (
-                        <p className="text-[10px] text-neutral-400 truncate">{a.nome_ficheiro}</p>
+                        <p className="text-caption text-ink-muted truncate">{a.nome_ficheiro}</p>
                       )}
                     </div>
-                    <span className="text-[11px] font-semibold px-2 py-1 rounded-lg shrink-0"
-                      style={{ backgroundColor: est.bg, color: est.cor }}>
+                    <span className={`text-caption font-semibold px-2 py-0.5 rounded-full shrink-0 ${TOM[est.tom].pill}`}>
                       {est.label}
                     </span>
                   </div>
                   {chaves.length > 0 && (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3">
                       {chaves.map(([k, v]) => (
-                        <div key={k} className="rounded-lg bg-neutral-50 px-2.5 py-1.5">
-                          <p className="text-[9px] uppercase tracking-wide text-neutral-400 truncate">{DADOS_CHAVE_LABELS[k] || k}</p>
-                          <p className="text-xs font-medium text-neutral-700 truncate">{String(v)}</p>
+                        <div key={k} className="rounded-lg bg-surface px-2.5 py-1.5">
+                          <p className="text-overline uppercase text-ink-muted truncate">{DADOS_CHAVE_LABELS[k] || k}</p>
+                          <p className="text-xs font-medium text-ink truncate">{String(v)}</p>
                         </div>
                       ))}
                     </div>
                   )}
-                  {a.resumo && <p className="text-xs text-neutral-500 leading-relaxed mt-2">{a.resumo}</p>}
+                  {a.resumo && <p className="text-xs text-ink-muted leading-relaxed mt-2">{a.resumo}</p>}
                 </div>
               )
             })}

@@ -47,7 +47,7 @@ export function Combobox({ value, onChange, options = [], placeholder = 'Pesquis
 
   return (
     <div className={`relative ${className}`} ref={ref}>
-      {label && <label className="text-xs text-gray-400 block mb-1">{label}</label>}
+      {label && <label className="text-xs text-ink-muted block mb-1">{label}</label>}
       <input
         type="text"
         value={query}
@@ -56,24 +56,27 @@ export function Combobox({ value, onChange, options = [], placeholder = 'Pesquis
         onKeyDown={onKeyDown}
         placeholder={placeholder}
         disabled={disabled}
-        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300 disabled:bg-gray-50"
+        className="w-full px-3 py-2 rounded-lg border border-line bg-surface-raised text-ink text-sm placeholder:text-ink-muted/70 transition-colors duration-fast focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 disabled:bg-surface-muted disabled:opacity-60"
       />
       {open && (filtered.length > 0 || showCreate) && (
-        <div className="absolute z-30 mt-1 w-full max-h-60 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+        <div className="absolute z-30 mt-1 w-full max-h-60 overflow-auto rounded-lg border border-line bg-surface-raised shadow-lg">
           {filtered.map((o, i) => (
             <button
               type="button"
               key={o}
               onMouseEnter={() => setHover(i)}
               onClick={() => choose(o)}
-              className={`block w-full text-left px-3 py-1.5 text-sm ${i === hover ? 'bg-yellow-50' : 'hover:bg-gray-50'}`}
-            >{o}</button>
+              className={`flex w-full items-center justify-between gap-2 text-left px-3 py-1.5 text-sm text-ink ${i === hover ? 'bg-surface-muted' : ''}`}
+            >
+              <span className="truncate">{o}</span>
+              {o === value && <span className="text-accent-ink text-xs font-semibold" aria-hidden="true">✓</span>}
+            </button>
           ))}
           {showCreate && (
             <button
               type="button"
               onClick={triggerCreate}
-              className={`block w-full text-left px-3 py-1.5 text-sm border-t border-gray-100 ${filtered.length === 0 ? 'bg-yellow-50' : 'bg-white hover:bg-yellow-50'} text-yellow-700 font-medium`}
+              className={`block w-full text-left px-3 py-1.5 text-sm border-t border-line ${filtered.length === 0 ? 'bg-surface-muted' : 'hover:bg-surface-muted'} text-accent-ink font-medium`}
             >
               + {createLabel} “{query.trim()}”
             </button>

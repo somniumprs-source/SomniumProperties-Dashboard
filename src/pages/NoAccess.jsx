@@ -4,33 +4,31 @@ import { useAuth } from '../contexts/AuthContext.jsx'
 export function NoAccess({ area, message }) {
   const { signOut, profile, refreshProfile, session } = useAuth()
   return (
-    <div className="min-h-screen flex items-center justify-center p-6" style={{ backgroundColor: '#0d0d0d' }}>
-      <div className="max-w-md w-full text-center rounded-2xl p-8 border" style={{ backgroundColor: '#111', borderColor: '#1a1a1a' }}>
-        <div className="w-14 h-14 mx-auto rounded-full flex items-center justify-center mb-4"
-          style={{ backgroundColor: 'rgba(201,168,76,0.12)', border: '1px solid rgba(201,168,76,0.3)' }}>
-          <Lock className="w-6 h-6" style={{ color: '#C9A84C' }} />
+    // Ecrã de entrada: sempre escuro (bg-brand-dark é constante), cores brancas com opacidade.
+    <div className="min-h-screen flex items-center justify-center bg-brand-dark px-4 py-10">
+      <div className="max-w-md w-full text-center rounded-2xl p-6 sm:p-8 border border-white/10 bg-white/[0.03]">
+        <div className="w-12 h-12 mx-auto rounded-full flex items-center justify-center mb-4 bg-white/[0.06] border border-white/15">
+          <Lock className="w-5 h-5 text-white/70" />
         </div>
-        <h2 className="text-white text-lg font-semibold mb-2">Sem acesso</h2>
-        <p className="text-sm text-gray-400 mb-1">
+        <h1 className="font-display text-2xl text-white mb-2">Sem acesso</h1>
+        <p className="text-sm text-white/75 mb-1">
           {message || (area
             ? `O teu perfil (${profile?.role || 'sem role'}) não tem acesso à área "${area}".`
             : 'Não tens permissão para esta área.')}
         </p>
         {session?.user?.email && (
-          <p className="text-[10px] text-gray-600 mb-1">Sessão: {session.user.email}</p>
+          <p className="text-caption text-white/45 mb-1">Sessão: {session.user.email}</p>
         )}
-        <p className="text-xs text-gray-500 mb-6">Pede ao administrador para te dar acesso.</p>
-        <div className="flex justify-center gap-2">
+        <p className="text-ui text-white/60 mb-6">Pede ao administrador para te dar acesso.</p>
+        <div className="flex flex-wrap justify-center gap-2">
           {refreshProfile && (
             <button onClick={refreshProfile}
-              className="flex items-center gap-1.5 text-xs px-4 py-2 rounded transition-colors hover:bg-white/5"
-              style={{ color: '#999', border: '1px solid #1a1a1a' }}>
-              <RefreshCw className="w-3 h-3" /> Tentar de novo
+              className="flex items-center gap-1.5 text-ui font-semibold px-4 py-2 rounded-lg bg-accent text-accent-foreground hover:bg-accent/90 transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50">
+              <RefreshCw className="w-3.5 h-3.5" /> Tentar de novo
             </button>
           )}
           <button onClick={signOut}
-            className="text-xs px-4 py-2 rounded transition-colors hover:bg-white/5"
-            style={{ color: '#C9A84C', border: '1px solid rgba(201,168,76,0.3)' }}>
+            className="text-ui font-medium px-4 py-2 rounded-lg text-white/80 border border-white/15 hover:bg-white/[0.06] transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50">
             Terminar sessão
           </button>
         </div>

@@ -17,15 +17,15 @@ export function ImovelDocumentacao({ imovelId, tipoImovel }) {
   if (d.loading) {
     return (
       <div className="space-y-3">
-        <div className="h-10 bg-neutral-100 rounded-lg animate-pulse" />
-        <div className="h-32 bg-neutral-100 rounded-xl animate-pulse" />
+        <div className="h-10 bg-surface-muted rounded-lg animate-pulse" />
+        <div className="h-32 bg-surface-muted rounded-xl animate-pulse" />
       </div>
     )
   }
 
   const subs = [
-    { key: 'checklist', label: 'Documentos Obrigatórios', icon: ListChecks },
-    { key: 'outros', label: 'Outros Documentos', icon: Files },
+    { key: 'checklist', label: 'Documentos obrigatórios', icon: ListChecks },
+    { key: 'outros', label: 'Outros documentos', icon: Files },
     { key: 'relatorio', label: 'Relatório', icon: FileBarChart2 },
   ]
 
@@ -34,14 +34,14 @@ export function ImovelDocumentacao({ imovelId, tipoImovel }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex bg-neutral-100 rounded-lg p-0.5 w-fit">
+      <div className="flex bg-surface-muted rounded-lg p-0.5 w-fit">
         {subs.map(s => {
           const Icon = s.icon
           const active = sub === s.key
           return (
             <button key={s.key} onClick={() => setSub(s.key)}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-md text-xs font-semibold transition-all ${
-                active ? 'bg-white text-neutral-800 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-md text-xs font-semibold transition-colors duration-fast ${
+                active ? 'bg-surface-raised text-ink shadow-sm' : 'text-ink-muted hover:text-ink'
               }`}>
               <Icon className="w-3.5 h-3.5" />
               {s.label}
