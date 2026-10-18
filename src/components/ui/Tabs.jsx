@@ -1,8 +1,6 @@
 import { useId } from 'react'
 import { motion } from 'framer-motion'
-
-// Indicador ativo desliza entre abas (pílula ou traço dourado).
-const SLIDE = { type: 'tween', duration: 0.44, ease: [0.22, 1, 0.36, 1] }
+import { tabIndicatorTransition as SLIDE } from '../../lib/motion.js'
 
 /**
  * Segmented control / tab bar unificado.
@@ -18,7 +16,7 @@ const SLIDE = { type: 'tween', duration: 0.44, ease: [0.22, 1, 0.36, 1] }
 
 const SIZES_SEG = {
   sm: 'text-xs px-2.5 py-1.5 gap-1.5',
-  md: 'text-sm px-3.5 py-2 gap-2',
+  md: 'text-ui px-3.5 py-2 gap-2',
 }
 
 const ICON_SIZES = { sm: 'w-3.5 h-3.5', md: 'w-4 h-4' }
@@ -27,24 +25,25 @@ export function Tabs({ items, value, onChange, size = 'md', variant = 'segmented
   const id = useId()
   if (variant === 'underline') {
     return (
-      <div className={`flex border-b border-gray-200 overflow-x-auto ${className}`}>
+      <div role="tablist" className={`flex border-b border-line overflow-x-auto ${className}`}>
         {items.map(it => {
           const active = value === it.key
           const Icon = it.icon
           return (
             <button
               key={it.key}
+              role="tab" aria-selected={active}
               onClick={() => !it.disabled && onChange(it.key)}
               disabled={it.disabled}
-              className={`relative inline-flex items-center font-medium whitespace-nowrap transition-colors disabled:opacity-40 ${SIZES_SEG[size] || SIZES_SEG.md} ${
-                active ? 'text-brand-dark' : 'text-gray-500 hover:text-gray-800'
+              className={`relative inline-flex items-center font-medium whitespace-nowrap transition-colors duration-fast disabled:opacity-40 ${SIZES_SEG[size] || SIZES_SEG.md} ${
+                active ? 'text-ink' : 'text-ink-muted hover:text-ink'
               }`}>
               {Icon && <Icon className={`${ICON_SIZES[size]} shrink-0`} />}
               <span>{it.label}</span>
               {it.count != null && (
-                <span className={`ml-1 px-1.5 py-0.5 text-[10px] rounded-full font-semibold ${active ? 'bg-brand-dark text-brand-gold' : 'bg-gray-100 text-gray-600'}`}>{it.count}</span>
+                <span className={`ml-1 px-1.5 text-[11px] leading-4 rounded-full font-semibold num ${active ? 'bg-accent/20 text-accent-ink' : 'bg-surface-muted text-ink-muted'}`}>{it.count}</span>
               )}
-              {active && <motion.span layoutId={`tabs-bar-${id}`} transition={SLIDE} className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full" style={{ backgroundColor: '#C9A84C' }} />}
+              {active && <motion.span layoutId={`tabs-bar-${id}`} transition={SLIDE} className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full bg-accent" />}
             </button>
           )
         })}
@@ -54,25 +53,26 @@ export function Tabs({ items, value, onChange, size = 'md', variant = 'segmented
 
   // Segmented (default): pill bar com fundo cinza
   return (
-    <div className={`inline-flex items-center gap-0.5 rounded-xl bg-gray-100 p-1 ${fluid ? 'w-full' : ''} ${className}`}>
+    <div role="tablist" className={`inline-flex items-center gap-0.5 rounded-xl bg-surface-muted p-1 ${fluid ? 'w-full' : ''} ${className}`}>
       {items.map(it => {
         const active = value === it.key
         const Icon = it.icon
         return (
           <button
             key={it.key}
+            role="tab" aria-selected={active}
             onClick={() => !it.disabled && onChange(it.key)}
             disabled={it.disabled}
-            className={`relative inline-flex items-center justify-center font-semibold rounded-lg transition-colors duration-300 whitespace-nowrap disabled:opacity-40 ${fluid ? 'flex-1' : ''} ${SIZES_SEG[size] || SIZES_SEG.md} ${
+            className={`relative inline-flex items-center justify-center font-medium rounded-lg transition-colors duration-base whitespace-nowrap disabled:opacity-40 ${fluid ? 'flex-1' : ''} ${SIZES_SEG[size] || SIZES_SEG.md} ${
               active
-                ? 'text-brand-gold'
-                : 'bg-transparent text-gray-600 hover:text-gray-900 hover:bg-white/60'
+                ? 'text-ink'
+                : 'bg-transparent text-ink-muted hover:text-ink'
             }`}>
-            {active && <motion.span layoutId={`tabs-pill-${id}`} transition={SLIDE} className="absolute inset-0 rounded-lg bg-brand-dark shadow-sm" />}
+            {active && <motion.span layoutId={`tabs-pill-${id}`} transition={SLIDE} className="absolute inset-0 rounded-lg bg-surface-raised border border-line shadow-xs" />}
             {Icon && <Icon className={`relative ${ICON_SIZES[size]} shrink-0`} />}
             <span className="relative">{it.label}</span>
             {it.count != null && (
-              <span className={`relative ml-0.5 px-1.5 py-0.5 text-[10px] rounded-full font-semibold ${active ? 'bg-brand-gold/20 text-brand-gold' : 'bg-gray-200 text-gray-600'}`}>{it.count}</span>
+              <span className={`relative ml-0.5 px-1.5 text-[11px] leading-4 rounded-full font-semibold num ${active ? 'bg-accent/20 text-accent-ink' : 'bg-line text-ink-muted'}`}>{it.count}</span>
             )}
           </button>
         )

@@ -2,19 +2,67 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Tokens semânticos "Dossier Privado" — canais RGB para suportar opacidade
+   no Tailwind (bg-surface/80). Claro em :root, escuro em .dark. */
 @layer base {
+  :root {
+    --surface: 245 245 240;
+    --surface-raised: 252 252 249;
+    --surface-muted: 236 235 228;
+    --ink: 23 23 21;
+    --ink-muted: 107 105 98;
+    --line: 224 222 214;
+    --accent: 201 168 76;
+    --accent-foreground: 23 23 21;
+    --accent-ink: 133 105 36;
+    --success: 36 122 76;
+    --warning: 168 104 16;
+    --danger: 180 35 24;
+    --focus-ring: 201 168 76;
+    color-scheme: light;
+  }
+  .dark {
+    --surface: 12 12 11;
+    --surface-raised: 23 23 21;
+    --surface-muted: 32 32 29;
+    --ink: 237 236 231;
+    --ink-muted: 163 161 153;
+    --line: 46 45 41;
+    --accent: 201 168 76;
+    --accent-foreground: 18 18 16;
+    --accent-ink: 222 196 122;
+    --success: 92 190 132;
+    --warning: 230 172 70;
+    --danger: 244 112 100;
+    --focus-ring: 214 184 98;
+    color-scheme: dark;
+  }
+
   html {
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
   body {
-    @apply font-sans text-gray-900 dark:text-neutral-100 antialiased bg-gray-50 dark:bg-neutral-950;
+    @apply font-sans text-ink bg-surface antialiased;
     text-rendering: optimizeLegibility;
   }
-  /* Focus states acessíveis e elegantes */
+  /* Foco: anel dourado só com teclado; o outline segue o border-radius */
   *:focus-visible {
-    @apply outline-none ring-2 ring-brand-gold ring-offset-2 ring-offset-white dark:ring-offset-neutral-900 rounded-[8px];
+    outline: 2px solid rgb(var(--focus-ring));
+    outline-offset: 2px;
+  }
+  /* Números alinhados em tabelas */
+  td, th { font-variant-numeric: tabular-nums; }
+
+  /* Movimento reduzido: anula animações e transições CSS (o framer-motion
+     respeita a mesma preferência via MotionConfig em App.jsx). */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
   /* Scrollbar custom */
   *::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -29,7 +77,7 @@
   .dark *::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); background-clip: content-box; }
   .dark *::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.25); background-clip: content-box; }
   /* Selecção de texto com brand color */
-  ::selection { background: #C9A84C40; color: inherit; }
+  ::selection { background: rgb(var(--accent) / 0.25); color: inherit; }
   /* Tipografia tabular para números */
   .font-mono, [class*="font-mono"] { font-variant-numeric: tabular-nums; }
 
@@ -44,32 +92,35 @@
   }
 }
 
+@layer utilities {
+  /* Números de destaque: algarismos tabulares e alinhados */
+  .num { font-variant-numeric: tabular-nums lining-nums; }
+}
+
 @layer components {
   /* Card pattern — uso .card como base */
   .card-base {
-    @apply bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl shadow-xs;
+    @apply bg-surface-raised border border-line rounded-xl shadow-xs;
   }
   .card-hover {
-    @apply transition-all duration-200 hover:shadow-md hover:border-gray-300 dark:hover:border-neutral-700;
+    @apply transition-[box-shadow,border-color] duration-base ease-entry hover:shadow-md hover:border-ink/20;
   }
   /* Input pattern — partilhado por Input/Select/Textarea */
   .input-base {
-    @apply w-full px-3 py-2 text-sm rounded-lg bg-white dark:bg-neutral-900
-           border border-gray-200 dark:border-neutral-700
-           text-gray-900 dark:text-neutral-100
-           placeholder:text-gray-400 dark:placeholder:text-neutral-500
-           transition-colors
-           focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/30 focus:outline-none
-           disabled:bg-gray-50 dark:disabled:bg-neutral-800/50 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply w-full px-3 py-2 text-sm rounded-lg bg-surface-raised
+           border border-line text-ink placeholder:text-ink-muted/70
+           transition-colors duration-fast
+           focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none
+           disabled:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60;
   }
   /* Label pattern */
   .label-base {
-    @apply block text-overline uppercase tracking-widest font-semibold text-gray-500 dark:text-neutral-400 mb-1.5;
+    @apply block text-overline uppercase font-semibold text-ink-muted mb-1.5;
   }
 }
 
 /* Dark mode — override inline styles que usam cores claras */
-.dark body { background-color: #0a0a0a; color: #e5e5e5; }
+.dark body { background-color: rgb(var(--surface)); color: rgb(var(--ink)); }
 
 /* Textos — forcar contraste em dark mode */
 .dark [style*="color: #999"],
@@ -187,9 +238,9 @@
 }
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 .animate-fade-in {
-  animation: fade-in 0.2s ease-out;
+  animation: fade-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }

@@ -2,17 +2,9 @@ import { Suspense, useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { BrandLoader } from './BrandLoader.jsx'
 import { useLocation, Outlet } from 'react-router-dom'
+import { EASE, DURATION, pageVariants as variants } from '../../lib/motion.js'
 
-export const EASE_OUT = [0.22, 1, 0.36, 1]
-
-// Entrada: sobe 14 px e ganha nitidez. Saída curta para não fazer esperar.
-const variants = {
-  initial: { opacity: 0, y: 14, filter: 'blur(6px)' },
-  // No fim limpa filter/transform: senão os modais `fixed` dentro da página
-  // ficariam presos a este contentor em vez do ecrã.
-  animate: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { duration: 0.52, ease: EASE_OUT }, transitionEnd: { filter: 'none', transform: 'none' } },
-  exit:    { opacity: 0, y: -4, filter: 'blur(2px)', transition: { duration: 0.14, ease: 'easeIn' } },
-}
+export const EASE_OUT = EASE.entry
 
 // Secções com abas próprias por rota (ex.: /administracao/agenda) animam só o
 // conteúdo da aba; a página-mãe (cabeçalho + abas) fica fixa.
@@ -34,27 +26,14 @@ function chaveDaPagina(pathname) {
 }
 
 /**
- * Envolve o <Outlet/> com a transição entre páginas e a linha dourada de
- * progresso que percorre o topo a cada mudança.
+ * Envolve o <Outlet/> com a transição entre páginas: fade curto com 6 px de
+ * deslocação (260 ms a entrar, 120 ms a sair).
  */
 export function PageTransition() {
   const location = useLocation()
   const key = chaveDaPagina(location.pathname)
   return (
     <>
-      <div className="sticky top-0 z-40 h-0 pointer-events-none" aria-hidden="true">
-        <motion.div
-          key={key}
-          className="absolute top-0 left-0 right-0 h-0.5 origin-left"
-          style={{
-            background: 'linear-gradient(90deg, rgba(201,168,76,0) 0%, #C9A84C 40%, #f1dc9b 100%)',
-            boxShadow: '0 0 12px rgba(201,168,76,0.55)',
-          }}
-          initial={{ scaleX: 0, opacity: 1 }}
-          animate={{ scaleX: 1, opacity: [1, 1, 0] }}
-          transition={{ scaleX: { duration: 0.42, ease: EASE_OUT }, opacity: { duration: 0.6, times: [0, 0.7, 1] } }}
-        />
-      </div>
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={key}
@@ -81,9 +60,9 @@ export function TabTransition({ tabKey, direction = 0, children, className = '' 
   return (
     <motion.div
       key={tabKey}
-      initial={{ opacity: 0, x: direction * 18 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.42, ease: EASE_OUT }}
+      initial={{ opacity: 0, x: direction * 6 }}
+      animate={{ opacity: 1, x: 0, transitionEnd: { transform: 'none' } }}
+      transition={{ duration: DURATION.moderate, ease: EASE.entry }}
       className={className}
     >
       {children}

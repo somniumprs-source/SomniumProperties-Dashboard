@@ -1,13 +1,17 @@
 /**
- * Modal — overlay + container animado.
+ * Modal — overlay + container com entrada e saída animadas (AnimatePresence).
+ * Renderizado num portal em <body>; fecha com Esc e clique no fundo.
  * Uso:
  *   <Modal open={open} onClose={close} title="Título" subtitle="..." size="md">
  *     ...body...
  *     <Modal.Footer>...</Modal.Footer>
  *   </Modal>
  */
-import { useEffect } from 'react'
+import { useEffect, useId } from 'react'
+import { createPortal } from 'react-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
+import { overlayVariants, dialogVariants } from '../../lib/motion.js'
 
 const SIZE = {
   sm: 'max-w-sm',
@@ -18,6 +22,7 @@ const SIZE = {
 }
 
 export function Modal({ open, onClose, title, subtitle, size = 'md', children, footer, className = '' }) {
+  const titleId = useId()
   useEffect(() => {
     if (!open) return
     function onKey(e) { if (e.key === 'Escape') onClose?.() }
@@ -29,28 +34,34 @@ export function Modal({ open, onClose, title, subtitle, size = 'md', children, f
     }
   }, [open, onClose])
 
-  if (!open) return null
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in"
-      onClick={onClose}>
-      <div className={`bg-white dark:bg-neutral-900 rounded-2xl shadow-xl w-full ${SIZE[size] || SIZE.md} animate-scale-in ${className}`}
-        onClick={e => e.stopPropagation()}>
-        {(title || subtitle) && (
-          <div className="flex items-start justify-between gap-4 p-5 border-b border-gray-100 dark:border-neutral-800">
-            <div className="min-w-0">
-              {title && <h2 className="text-base font-semibold text-gray-900 dark:text-neutral-100">{title}</h2>}
-              {subtitle && <p className="text-caption text-gray-500 dark:text-neutral-400 mt-0.5">{subtitle}</p>}
-            </div>
-            <button onClick={onClose} className="p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:text-neutral-200 dark:hover:bg-neutral-800 transition-colors">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-        <div className="p-5">{children}</div>
-        {footer && <div className="px-5 py-4 bg-gray-50 dark:bg-neutral-900/50 border-t border-gray-100 dark:border-neutral-800 rounded-b-2xl">{footer}</div>}
-      </div>
-    </div>
+  return createPortal(
+    <AnimatePresence>
+      {open && (
+        <motion.div key="modal" variants={overlayVariants} initial="initial" animate="animate" exit="exit"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 dark:bg-black/60 backdrop-blur-[2px]"
+          onClick={onClose}>
+          <motion.div variants={dialogVariants}
+            role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined}
+            className={`bg-surface-raised text-ink border border-line rounded-2xl shadow-xl w-full max-h-[calc(100dvh-2rem)] overflow-y-auto ${SIZE[size] || SIZE.md} ${className}`}
+            onClick={e => e.stopPropagation()}>
+            {(title || subtitle) && (
+              <div className="flex items-start justify-between gap-4 p-5 border-b border-line">
+                <div className="min-w-0">
+                  {title && <h2 id={titleId} className="text-base font-semibold text-ink">{title}</h2>}
+                  {subtitle && <p className="text-caption text-ink-muted mt-0.5">{subtitle}</p>}
+                </div>
+                <button onClick={onClose} aria-label="Fechar" className="p-1 rounded-md text-ink-muted hover:text-ink hover:bg-surface-muted transition-colors duration-fast">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+            <div className="p-5">{children}</div>
+            {footer && <div className="px-5 py-4 bg-surface-muted/60 border-t border-line rounded-b-2xl">{footer}</div>}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
   )
 }
 

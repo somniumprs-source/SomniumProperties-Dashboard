@@ -12,15 +12,15 @@ const SIZE = {
 
 function baseClass(size, error, disabled) {
   return [
-    'w-full bg-white dark:bg-neutral-900',
-    'border text-gray-900 dark:text-neutral-100',
-    'placeholder:text-gray-400 dark:placeholder:text-neutral-500',
-    'transition-colors',
+    'w-full bg-surface-raised',
+    'border text-ink',
+    'placeholder:text-ink-muted/70',
+    'transition-colors duration-fast',
     'focus:outline-none focus:ring-2',
     error
-      ? 'border-red-300 dark:border-red-700 focus:border-red-500 focus:ring-red-500/20'
-      : 'border-gray-200 dark:border-neutral-700 focus:border-brand-gold focus:ring-brand-gold/30',
-    disabled ? 'bg-gray-50 dark:bg-neutral-800/50 cursor-not-allowed opacity-60' : '',
+      ? 'border-danger/60 focus:border-danger focus:ring-danger/20'
+      : 'border-line focus:border-accent focus:ring-accent/30',
+    disabled ? 'bg-surface-muted cursor-not-allowed opacity-60' : '',
     SIZE[size] || SIZE.md,
   ].filter(Boolean).join(' ')
 }
@@ -29,13 +29,13 @@ function Wrapper({ label, error, hint, children, className = '' }) {
   return (
     <div className={className}>
       {label && (
-        <label className="block text-overline uppercase tracking-widest font-semibold text-gray-500 dark:text-neutral-400 mb-1.5">
+        <label className="block text-overline uppercase font-semibold text-ink-muted mb-1.5">
           {label}
         </label>
       )}
       {children}
-      {error && <p className="mt-1 text-caption text-red-600 dark:text-red-400">{error}</p>}
-      {hint && !error && <p className="mt-1 text-caption text-gray-400 dark:text-neutral-500">{hint}</p>}
+      {error && <p className="mt-1 text-caption text-danger">{error}</p>}
+      {hint && !error && <p className="mt-1 text-caption text-ink-muted">{hint}</p>}
     </div>
   )
 }
@@ -54,9 +54,9 @@ export const Input = forwardRef(function Input(
   )
   const inner = (prefix || suffix) ? (
     <div className="relative">
-      {prefix && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">{prefix}</span>}
+      {prefix && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none">{prefix}</span>}
       {input}
-      {suffix && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">{suffix}</span>}
+      {suffix && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none">{suffix}</span>}
     </div>
   ) : input
   return <Wrapper label={label} error={error} hint={hint} className={wrapperClassName}>{inner}</Wrapper>
