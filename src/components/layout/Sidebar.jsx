@@ -1,5 +1,6 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
 import { LayoutDashboard, Bell, Menu, X, LogOut, UserCheck, ChevronDown, BookOpen, Map, Megaphone, CalendarClock, Building, Timer, FileBarChart, Headphones, Handshake, Construction, Wallet, UserCog, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { apiFetch, apiFetchJson } from '../../lib/api.js'
@@ -156,7 +157,7 @@ export function Sidebar() {
 
       {/* Desktop sidebar */}
       <aside className="hidden md:flex w-56 min-h-screen flex-col shrink-0" style={{ backgroundColor: '#0d0d0d' }}>
-        {sidebarContent}
+        <LayoutGroup id="sidebar-desktop">{sidebarContent}</LayoutGroup>
       </aside>
 
       {/* Mobile sidebar */}
@@ -166,7 +167,7 @@ export function Sidebar() {
         }`}
         style={{ backgroundColor: '#0d0d0d' }}
       >
-        {sidebarContent}
+        <LayoutGroup id="sidebar-mobile">{sidebarContent}</LayoutGroup>
       </aside>
     </>
   )
@@ -186,23 +187,32 @@ function NavLeaf({ item, badges, onNav, nested }) {
       onFocus={() => prefetchRoute(to)}
       onTouchStart={() => prefetchRoute(to)}
       className={({ isActive }) =>
-        `group flex items-center gap-3 ${nested ? 'pl-9 pr-3' : 'px-3'} py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+        `group relative flex items-center gap-3 ${nested ? 'pl-9 pr-3' : 'px-3'} py-2.5 rounded-xl text-sm font-medium transition-colors duration-300 ${
           isActive ? 'active-nav' : 'text-neutral-500 hover:text-white'
         }`
       }
-      style={({ isActive }) => isActive ? {
-        background: 'linear-gradient(90deg, rgba(201,168,76,0.15) 0%, rgba(201,168,76,0.05) 100%)',
-        color: '#C9A84C',
-        borderLeft: '2px solid #C9A84C',
-      } : { borderLeft: '2px solid transparent' }}
+      style={({ isActive }) => ({ borderLeft: '2px solid transparent', color: isActive ? '#C9A84C' : undefined })}
     >
       {({ isActive }) => (
         <>
-          <Icon className="w-4 h-4 shrink-0 transition-colors"
+          {/* Realce do item ativo: desliza de um item para o outro */}
+          {isActive && (
+            <motion.span
+              layoutId="nav-active"
+              className="absolute inset-0 rounded-xl pointer-events-none"
+              style={{
+                background: 'linear-gradient(90deg, rgba(201,168,76,0.15) 0%, rgba(201,168,76,0.05) 100%)',
+                borderLeft: '2px solid #C9A84C',
+                marginLeft: -2,
+              }}
+              transition={{ type: 'tween', duration: 0.46, ease: [0.22, 1, 0.36, 1] }}
+            />
+          )}
+          <Icon className={`relative w-4 h-4 shrink-0 transition-[transform,color] duration-300 ${isActive ? '' : 'group-hover:translate-x-0.5 group-hover:text-[#C9A84C]'}`}
             style={{ color: isActive ? '#C9A84C' : undefined }} />
-          {label}
+          <span className="relative">{label}</span>
           {badgeKey && badges[badgeKey] > 0 && (
-            <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+            <span className="relative ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
               {badges[badgeKey] > 9 ? '9+' : badges[badgeKey]}
             </span>
           )}
@@ -243,15 +253,27 @@ function NavGroup({ group, badges, onNav }) {
             {badgeCount > 9 ? '9+' : badgeCount}
           </span>
         )}
-        <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${expanded ? '' : '-rotate-90'}`} style={{ color: '#666' }} />
+        <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform duration-300 ${expanded ? '' : '-rotate-90'}`} style={{ color: '#666' }} />
       </button>
-      {expanded && (
-        <div className="flex flex-col gap-0.5 mt-0.5">
-          {group.children.map(c => (
-            <NavLeaf key={c.to} item={c} badges={badges} onNav={onNav} nested />
-          ))}
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            className="flex flex-col gap-0.5 mt-0.5 overflow-hidden"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {group.children.map((c, i) => (
+              <motion.div key={c.to}
+                initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1], delay: i * 0.04 }}>
+                <NavLeaf item={c} badges={badges} onNav={onNav} nested />
+              </motion.div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

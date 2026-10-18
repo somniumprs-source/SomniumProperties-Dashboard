@@ -2,6 +2,9 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, Circle, Plus, Trash2, Upload, FileText, BarChart3, ChevronRight, FileDown, AlertTriangle, RefreshCw, Home, Layers, History, FileSpreadsheet, Pencil, Eye, CalendarClock, ClipboardCheck, Calculator, Receipt, Hammer, FolderOpen, HandCoins, CalendarCheck, Building, Trees, Footprints, ArrowUpDown, Zap, Car, MoreHorizontal } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { BrandLoader, useMinLoading } from '../components/ui/BrandLoader.jsx'
+import { TabTransition, useTabDirection, EASE_OUT } from '../components/ui/PageTransition.jsx'
 import { FASE_ICONS, FASE_ICON_DEFAULT } from '../lib/faseIcons.js'
 import { ProjectoForm } from './Projectos.jsx'
 import { TarefasFase } from '../components/projeto/TarefasFase.jsx'
@@ -111,6 +114,7 @@ export function ProjectoDetalhe() {
   const [fracaoSel, setFracaoSel] = useState(null)  // null = "Prédio inteiro"
   const [searchParams] = useSearchParams()
   const [tab, setTab] = useState(() => searchParams.get('tab') || 'resumo')
+  const direcaoAba = useTabDirection(tab, TABS_BASE.map(t => t.key))
   const [obrasSub, setObrasSub] = useState(null)  // sub-aba das Obras a abrir (alerta do relatório semanal)
   const [editing, setEditing] = useState(false)
   const [savingEdit, setSavingEdit] = useState(false)
@@ -140,6 +144,7 @@ export function ProjectoDetalhe() {
   const fotos = useMemo(() => query.data?.fotos ?? [], [query.data])
   const fracoes = useMemo(() => query.data?.fracoes ?? [], [query.data])
   const loading = query.isPending
+  const mostrarCarregamento = useMinLoading(loading)
   const error = query.error?.message || null
   const load = query.refetch
 
@@ -164,7 +169,7 @@ export function ProjectoDetalhe() {
 
   useRefreshOnMutation(load)
 
-  if (loading) return <><Header title="Projeto" subtitle="A carregar..." /><div className="p-8 text-center text-gray-400">A carregar…</div></>
+  if (mostrarCarregamento) return <BrandLoader label="Departamento de Obras" />
   if (error || !resumo) return <><Header title="Projeto" subtitle="Erro" /><div className="p-8 text-center text-red-500">{error || 'Sem dados'}</div></>
 
   const { negocio, imovel, analise, percGlobal, custoReal, orcAlocado, faseAtual } = resumo
@@ -349,13 +354,13 @@ export function ProjectoDetalhe() {
                       ? 'text-brand-dark dark:text-brand-gold'
                       : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'}`}>
                   <Icon className="w-3.5 h-3.5" /> {t.label}
-                  {active && <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-brand-gold rounded-t-full" />}
+                  {active && <motion.span layoutId="projeto-tab-bar" transition={{ type: 'tween', duration: 0.44, ease: EASE_OUT }} className="absolute bottom-0 left-2 right-2 h-0.5 bg-brand-gold rounded-t-full" />}
                 </button>
               )
             })}
           </div>
 
-          <div className="p-4 sm:p-6">
+          <TabTransition tabKey={tab} direction={direcaoAba} className="p-4 sm:p-6">
             {tab === 'resumo' && <TabResumo resumo={resumo} fases={fasesFiltradas} fracaoSel={fracaoSel} fracoes={fracoes} onChange={load} readOnly={isReadOnly} />}
             {tab === 'fracoes' && <TabFracoes negocioId={id} fracoes={fracoes} onChange={load} readOnly={isReadOnly} fasesComuns={fases.filter(f => !f.fracao_id)} />}
             {tab === 'analise' && (
@@ -379,7 +384,7 @@ export function ProjectoDetalhe() {
             {tab === 'investidores' && <TabInvestidores negocio={negocio} readOnly={isReadOnly} />}
             {tab === 'reunioes' && <TabReunioes negocioId={id} readOnly={isReadOnly} />}
             {tab === 'historico' && <TabHistorico negocioId={id} />}
-          </div>
+          </TabTransition>
         </Card>
       </div>
     </>
@@ -1313,7 +1318,7 @@ function TabFaturas({ negocioId, analise, readOnly, consultoria = false }) {
   const totalPago = faturas.filter(f => f.pago).reduce((s, f) => s + (Number(f.custo_mensal) || 0), 0)
   const totalPendente = faturas.filter(f => !f.pago).reduce((s, f) => s + (Number(f.custo_mensal) || 0), 0)
 
-  if (loading) return <div className="py-8 text-center text-sm text-gray-400">A carregar...</div>
+  if (loading) return <BrandLoader variant="inline" label="Faturas e comprovativos" />
 
   return (
     <div className="space-y-4">

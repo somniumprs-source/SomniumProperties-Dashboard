@@ -2,12 +2,12 @@ import { motion } from 'framer-motion'
 
 const container = {
   hidden: { opacity: 1 },
-  show:   { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.02 } },
+  show:   { opacity: 1, transition: { staggerChildren: 0.045, delayChildren: 0.14 } },
 }
 
 const item = {
-  hidden: { opacity: 0, y: 6 },
-  show:   { opacity: 1, y: 0, transition: { duration: 0.22, ease: [0.16, 1, 0.3, 1] } },
+  hidden: { opacity: 0, y: 10, scale: 0.985 },
+  show:   { opacity: 1, y: 0, scale: 1, transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] } },
 }
 
 /**

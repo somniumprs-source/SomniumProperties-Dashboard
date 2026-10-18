@@ -1,3 +1,5 @@
+import { CountUp } from './CountUp.jsx'
+
 /**
  * Card de métrica/KPI.
  *
@@ -49,7 +51,7 @@ export function KpiCard({ icon: Icon, label, value, sub, tone = 'gray', size = '
       )}
       <div className="min-w-0 flex-1">
         {label && <p className={`${s.label} uppercase tracking-wide font-semibold truncate ${active ? 'text-brand-gold' : 'text-gray-400'}`}>{label}</p>}
-        <p className={`${s.value} font-bold leading-tight truncate ${active ? 'text-white' : t.accent}`}>{value ?? '—'}</p>
+        <p className={`${s.value} font-bold leading-tight truncate ${active ? 'text-white' : t.accent}`}>{value == null ? '—' : <CountUp value={value} />}</p>
         {sub && <p className={`text-[11px] truncate mt-0.5 ${active ? 'text-gray-400' : 'text-gray-400'}`}>{sub}</p>}
       </div>
     </div>

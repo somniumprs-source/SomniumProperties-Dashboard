@@ -3,6 +3,9 @@ import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useNavigate, Link } from 'react-router-dom'
 import { Plus, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle, TrendingUp, Briefcase, Calendar as CalendarIcon, Search, Sparkles, Hammer, Handshake, Home, Zap, FileText } from 'lucide-react'
 import { FASE_ICONS, FASE_ICON_DEFAULT } from '../lib/faseIcons.js'
+import { motion } from 'framer-motion'
+import { EASE_OUT } from '../components/ui/PageTransition.jsx'
+import { BrandLoader, useMinLoading } from '../components/ui/BrandLoader.jsx'
 import { Header } from '../components/layout/Header.jsx'
 import { apiFetch } from '../lib/api.js'
 import { Button } from '../components/ui/Button.jsx'
@@ -249,6 +252,7 @@ export function Projectos() {
   const kpis = query.data?.kpis ?? null
   const projectos = useMemo(() => query.data?.projectos ?? [], [query.data])
   const loading = query.isPending
+  const mostrarCarregamento = useMinLoading(loading)
   const error = mutationError || query.error?.message || null
 
   // Carrega as fases de todos os projectos uma só vez: mudar de modelo de
@@ -366,6 +370,7 @@ export function Projectos() {
 
   return (
     <>
+      {mostrarCarregamento && <BrandLoader label="Departamento de Obras" />}
       <Header title="Departamento de Obras" onRefresh={load} loading={loading} />
 
       <div className="p-4 sm:p-6 flex flex-col gap-4">
@@ -653,11 +658,14 @@ function KanbanBoard({ colunas, cardsPorColuna, fasesInfo, onCardClick, onMoveCa
   return (
     <div className="overflow-x-auto pb-4 -mx-4 sm:-mx-6 px-4 sm:px-6">
       <div className="flex flex-col sm:flex-row gap-3 sm:min-w-max">
-        {colunas.map(col => {
+        {colunas.map((col, i) => {
           const cards = cardsPorColuna[col.key] || []
           const isOver = overCol === col.key
           return (
-            <div key={col.key} className="w-full sm:w-72 sm:flex-shrink-0"
+            <motion.div key={col.key}
+              initial={{ opacity: 0, y: 10, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.55, ease: EASE_OUT, delay: 0.14 + i * 0.045 }}
+              className="w-full sm:w-72 sm:flex-shrink-0"
               onDragOver={onDragOver(col.key)}
               onDragLeave={() => overCol === col.key && setOverCol(null)}
               onDrop={onDrop(col.key)}>
@@ -690,7 +698,7 @@ function KanbanBoard({ colunas, cardsPorColuna, fasesInfo, onCardClick, onMoveCa
                   />
                 ))}
               </div>
-            </div>
+            </motion.div>
           )
         })}
       </div>

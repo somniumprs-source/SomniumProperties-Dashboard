@@ -1,4 +1,6 @@
 import { lazy, Suspense } from 'react'
+import { MotionConfig } from 'framer-motion'
+import { BrandLoader } from './components/ui/BrandLoader.jsx'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './lib/queryClient.js'
@@ -40,9 +42,7 @@ const Agenda = lazy(() => import('./pages/Agenda.jsx').then(m => ({ default: m.A
 
 function PageFallback() {
   return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#C9A84C', borderTopColor: 'transparent' }} />
-    </div>
+    <BrandLoader variant="screen" />
   )
 }
 
@@ -51,11 +51,8 @@ function AppRoutes() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#0d0d0d' }}>
-        <div className="flex flex-col items-center gap-3">
-          <img src="/logo-transparent.png" alt="Somnium" className="opacity-50" style={{ height: 48 }} />
-          <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#C9A84C', borderTopColor: 'transparent' }} />
-        </div>
+      <div className="min-h-screen" style={{ backgroundColor: '#070707' }}>
+        <BrandLoader variant="screen" label="A preparar a plataforma" delay={0} />
       </div>
     )
   }
@@ -148,9 +145,11 @@ export default function App() {
       <ThemeProvider>
         <AuthProvider>
           <ToastProvider>
-            <BrowserRouter>
-              <AppRoutes />
-            </BrowserRouter>
+            <MotionConfig reducedMotion="user">
+              <BrowserRouter>
+                <AppRoutes />
+              </BrowserRouter>
+            </MotionConfig>
           </ToastProvider>
         </AuthProvider>
       </ThemeProvider>

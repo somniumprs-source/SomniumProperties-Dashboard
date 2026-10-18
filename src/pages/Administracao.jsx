@@ -1,6 +1,9 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { BookOpen, Map, CalendarClock, Timer, FileBarChart, Headphones } from 'lucide-react'
+import { Suspense } from 'react'
 import { Header } from '../components/layout/Header.jsx'
+import { BrandLoader } from '../components/ui/BrandLoader.jsx'
+import { TabTransition, useTabDirection } from '../components/ui/PageTransition.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
 
 const TABS = [
@@ -27,6 +30,7 @@ export function Administracao() {
 
   const seg = location.pathname.split('/')[2] || 'sop'
   const active = TABS.some(t => t.key === seg) ? seg : 'sop'
+  const direction = useTabDirection(active, TABS.map(t => t.key))
 
   return (
     <div className="flex-1 flex flex-col bg-neutral-50 dark:bg-neutral-950 min-h-screen">
@@ -41,8 +45,12 @@ export function Administracao() {
         />
       </div>
 
-      <main className={`flex-1 px-4 sm:px-7 py-5 sm:py-7 w-full mx-auto ${['agenda', 'operacoes'].includes(active) ? '' : 'max-w-7xl'}`}>
-        <Outlet />
+      <main className={`relative flex-1 px-4 sm:px-7 py-5 sm:py-7 w-full mx-auto ${['agenda', 'operacoes'].includes(active) ? '' : 'max-w-7xl'}`}>
+        <TabTransition tabKey={active} direction={direction}>
+          <Suspense fallback={<BrandLoader variant="inline" label={TABS.find(t => t.key === active)?.label} />}>
+            <Outlet />
+          </Suspense>
+        </TabTransition>
       </main>
     </div>
   )

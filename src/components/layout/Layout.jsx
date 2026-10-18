@@ -7,7 +7,7 @@ export function Layout() {
   return (
     <div className="flex min-h-screen bg-[#f5f5f0] dark:bg-neutral-950">
       <Sidebar />
-      <main className="flex-1 flex flex-col overflow-auto min-w-0">
+      <main className="flex-1 flex flex-col overflow-auto min-w-0 relative">
         <ScrollToTop />
         <PageTransition />
       </main>

@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { BrandLoader } from '../components/ui/BrandLoader.jsx'
+import { TabTransition, useTabDirection } from '../components/ui/PageTransition.jsx'
 import { Header } from '../components/layout/Header.jsx'
 import { KanbanBoard } from '../components/crm/KanbanBoard.jsx'
 import { MOTIVOS_NAO_INTERESSA_PADRAO } from '../components/crm/detailPanelConstants.js'
@@ -10,7 +12,6 @@ const DetailPanel = lazy(() => import('../components/crm/DetailPanel.jsx').then(
 import { Filters } from '../components/crm/Filters.jsx'
 import { TabKPIs } from '../components/crm/TabKPIs.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
-import { KanbanSkeleton, TableSkeleton } from '../components/ui/Skeleton.jsx'
 import { EmptyState } from '../components/ui/EmptyState.jsx'
 import { Building2, UserCheck, HardHat, ChevronLeft, ChevronRight, Phone, MessageCircle, Wallet, AlertTriangle, Clock as Clock3, Plus, RefreshCw, HandCoins, Radar } from 'lucide-react'
 import { OportunidadesPanel } from '../components/crm/OportunidadesPanel.jsx'
@@ -552,6 +553,7 @@ function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
 
 export function CRM() {
   const [tab, setTab] = useUrlState('tab', 'Imóveis')
+  const direcaoAba = useTabDirection(tab, TABS)
   // Filtro regional inline (Coimbra | AMP | Geral). Uma chave de sessionStorage
   // por sub-tab regional — partilhada com apiFetch.getRegiaoActivaFromStorage.
   const regionalKey = TABS_REGIONAIS.has(tab) ? tabKeyRegional(tab) : null
@@ -1183,224 +1185,226 @@ export function CRM() {
           <FormPanel tab={tab} item={editing} regiao={regiaoActiva} onSave={handleSave} onCancel={() => setEditing(null)} />
         )}
 
-        {/* Loading */}
-        {loading && editing === null && tab !== 'Oportunidades' && (
-          view === 'kanban' ? <KanbanSkeleton columns={5} /> : <TableSkeleton rows={8} cols={6} />
-        )}
+        <TabTransition tabKey={tab} direction={direcaoAba} className="flex flex-col gap-3 sm:gap-4">
+          {/* Loading */}
+          {loading && editing === null && tab !== 'Oportunidades' && (
+            <div className="rounded-xl overflow-hidden"><BrandLoader variant="inline" label={tab} delay={250} /></div>
+          )}
 
-        {/* Oportunidades — fila de aprovar/rejeitar da pesquisa diária Idealista */}
-        {tab === 'Oportunidades' && <OportunidadesPanel regiao={regiaoActiva} />}
+          {/* Oportunidades — fila de aprovar/rejeitar da pesquisa diária Idealista */}
+          {tab === 'Oportunidades' && <OportunidadesPanel regiao={regiaoActiva} />}
 
-        {/* Investidores: Split View (lista compacta + detalhe lado a lado) */}
-        {tab === 'Investidores' && detail ? (
-          <div className="flex gap-4" style={{ minHeight: '70vh' }}>
-            {/* Lista compacta à esquerda */}
-            <div className="w-72 shrink-0 bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs overflow-hidden flex flex-col">
-              <div className="flex-1 overflow-y-auto">
-                {[...data].sort((a, b) => {
-                  // Estados desconhecidos vão para o fim (não para o topo).
-                  const ai = INV_STATUS.indexOf(a.status); const bi = INV_STATUS.indexOf(b.status)
-                  const ax = ai === -1 ? Infinity : ai; const bx = bi === -1 ? Infinity : bi
-                  return (ax - bx) || (a.nome || '').localeCompare(b.nome || '')
-                }).map((inv, idx, sorted) => {
-                  const isActive = inv.id === detail
-                  const prevInv = idx > 0 ? sorted[idx - 1] : null
-                  const statusChanged = !prevInv || prevInv.status !== inv.status
+          {/* Investidores: Split View (lista compacta + detalhe lado a lado) */}
+          {tab === 'Investidores' && detail ? (
+            <div className="flex gap-4" style={{ minHeight: '70vh' }}>
+              {/* Lista compacta à esquerda */}
+              <div className="w-72 shrink-0 bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs overflow-hidden flex flex-col">
+                <div className="flex-1 overflow-y-auto">
+                  {[...data].sort((a, b) => {
+                    // Estados desconhecidos vão para o fim (não para o topo).
+                    const ai = INV_STATUS.indexOf(a.status); const bi = INV_STATUS.indexOf(b.status)
+                    const ax = ai === -1 ? Infinity : ai; const bx = bi === -1 ? Infinity : bi
+                    return (ax - bx) || (a.nome || '').localeCompare(b.nome || '')
+                  }).map((inv, idx, sorted) => {
+                    const isActive = inv.id === detail
+                    const prevInv = idx > 0 ? sorted[idx - 1] : null
+                    const statusChanged = !prevInv || prevInv.status !== inv.status
+                    return (
+                      <div key={inv.id}>
+                        {statusChanged && (
+                          <div className="px-3 py-1 bg-gray-50 border-b border-gray-100">
+                            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{inv.status}</span>
+                          </div>
+                        )}
+                        <button onClick={() => setDetail(inv.id)}
+                          className={`w-full text-left px-3 py-2.5 border-b border-gray-50 transition-all ${
+                            isActive
+                              ? `${invSubTab === 'Ativo' ? 'bg-green-50 border-l-3 border-l-green-500' : 'bg-yellow-50 border-l-3 border-l-yellow-400'}`
+                              : 'hover:bg-gray-50'
+                          }`}>
+                          <div className="flex items-center gap-2">
+                            <ClassBadge cls={inv.classificacao} />
+                            <span className={`text-sm truncate ${isActive ? 'font-bold text-gray-900' : 'text-gray-700'}`}>{inv.nome}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {inv.capital_max > 0 && <span className="text-[10px] font-mono text-indigo-600">{EUR(inv.capital_max)}</span>}
+                            {inv.telemovel && <span className="text-[10px] text-gray-400">{inv.telemovel}</span>}
+                          </div>
+                        </button>
+                      </div>
+                    )
+                  })}
+                  {data.length === 0 && <p className="text-xs text-gray-400 text-center py-6">Sem investidores</p>}
+                </div>
+                <div className="px-3 py-2 border-t border-gray-100 bg-gray-50 text-[10px] text-gray-400 text-center">
+                  {data.length} investidor{data.length !== 1 ? 'es' : ''} {invSubTab === 'Ativo' ? 'ativos' : 'passivos'}
+                </div>
+              </div>
+
+              {/* Detalhe à direita */}
+              <div className="flex-1 min-w-0">
+                {/* Navegação anterior/seguinte */}
+                {(() => {
+                  const currentIdx = data.findIndex(i => i.id === detail)
+                  const prev = currentIdx > 0 ? data[currentIdx - 1] : null
+                  const next = currentIdx < data.length - 1 ? data[currentIdx + 1] : null
                   return (
-                    <div key={inv.id}>
-                      {statusChanged && (
-                        <div className="px-3 py-1 bg-gray-50 border-b border-gray-100">
-                          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{inv.status}</span>
-                        </div>
-                      )}
-                      <button onClick={() => setDetail(inv.id)}
-                        className={`w-full text-left px-3 py-2.5 border-b border-gray-50 transition-all ${
-                          isActive
-                            ? `${invSubTab === 'Ativo' ? 'bg-green-50 border-l-3 border-l-green-500' : 'bg-yellow-50 border-l-3 border-l-yellow-400'}`
-                            : 'hover:bg-gray-50'
-                        }`}>
-                        <div className="flex items-center gap-2">
-                          <ClassBadge cls={inv.classificacao} />
-                          <span className={`text-sm truncate ${isActive ? 'font-bold text-gray-900' : 'text-gray-700'}`}>{inv.nome}</span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          {inv.capital_max > 0 && <span className="text-[10px] font-mono text-indigo-600">{EUR(inv.capital_max)}</span>}
-                          {inv.telemovel && <span className="text-[10px] text-gray-400">{inv.telemovel}</span>}
-                        </div>
+                    <div className="flex items-center justify-between mb-2">
+                      <button onClick={() => prev && setDetail(prev.id)} disabled={!prev}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition">
+                        <ChevronLeft className="w-3.5 h-3.5" /> {prev ? prev.nome : 'Anterior'}
+                      </button>
+                      <span className="text-[10px] text-gray-400">{currentIdx + 1} de {data.length}</span>
+                      <button onClick={() => next && setDetail(next.id)} disabled={!next}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition">
+                        {next ? next.nome : 'Seguinte'} <ChevronRight className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   )
-                })}
-                {data.length === 0 && <p className="text-xs text-gray-400 text-center py-6">Sem investidores</p>}
-              </div>
-              <div className="px-3 py-2 border-t border-gray-100 bg-gray-50 text-[10px] text-gray-400 text-center">
-                {data.length} investidor{data.length !== 1 ? 'es' : ''} {invSubTab === 'Ativo' ? 'ativos' : 'passivos'}
+                })()}
+                <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#C9A84C', borderTopColor: 'transparent' }} /></div>}>
+                  <DetailPanel type="Investidores" id={detail} onClose={() => { setDetail(null, { replace: true }); load() }} onSave={load}
+                    onNavigate={(navType, navId) => { setDetail(null, { replace: true }); setTab(navType, { replace: true }); setTimeout(() => setDetail(navId), 150) }} />
+                </Suspense>
               </div>
             </div>
+          ) : detail && ['Imóveis', 'Consultores'].includes(tab) ? (
+            <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#C9A84C', borderTopColor: 'transparent' }} /></div>}>
+              <DetailPanel type={tab} id={detail} defaultEdit={detailDefaultEdit}
+                onClose={() => { setDetail(null, { replace: true }); setDetailDefaultEdit(false); load() }} onSave={load}
+                onNavigate={(navType, navId) => { setDetail(null, { replace: true }); setDetailDefaultEdit(false); setTab(navType, { replace: true }); setTimeout(() => setDetail(navId), 150) }} />
+            </Suspense>
+          ) : (<>
 
-            {/* Detalhe à direita */}
-            <div className="flex-1 min-w-0">
-              {/* Navegação anterior/seguinte */}
-              {(() => {
-                const currentIdx = data.findIndex(i => i.id === detail)
-                const prev = currentIdx > 0 ? data[currentIdx - 1] : null
-                const next = currentIdx < data.length - 1 ? data[currentIdx + 1] : null
-                return (
-                  <div className="flex items-center justify-between mb-2">
-                    <button onClick={() => prev && setDetail(prev.id)} disabled={!prev}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition">
-                      <ChevronLeft className="w-3.5 h-3.5" /> {prev ? prev.nome : 'Anterior'}
+            {/* Relatório View */}
+            {!loading && editing === null && view === 'relatorio' && tab === 'Consultores' && (
+              <RelatorioConsultores />
+            )}
+            {!loading && editing === null && view === 'relatorio' && tab === 'Investidores' && (
+              <RelatorioInvestidores />
+            )}
+
+            {/* Kanban View */}
+            {!loading && editing === null && view === 'kanban' && kanbanConfig && data.length === 0 && (
+              loadError ? (
+                <EmptyState
+                  icon={AlertTriangle}
+                  title="Erro ao carregar"
+                  description="Não foi possível ligar ao servidor. Verifica a tua ligação e tenta novamente."
+                  action={
+                    <button onClick={load} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-neutral-800 text-white hover:bg-neutral-700 transition-colors">
+                      <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
                     </button>
-                    <span className="text-[10px] text-gray-400">{currentIdx + 1} de {data.length}</span>
-                    <button onClick={() => next && setDetail(next.id)} disabled={!next}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition">
-                      {next ? next.nome : 'Seguinte'} <ChevronRight className="w-3.5 h-3.5" />
+                  }
+                />
+              ) : (
+                <EmptyState
+                  icon={{ 'Imóveis': Building2, 'Investidores': HandCoins, 'Consultores': UserCheck, 'Construtores': HardHat, 'Oportunidades': Radar }[tab] || Building2}
+                  title={`Sem ${tab.toLowerCase()}`}
+                  description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
+                />
+              )
+            )}
+            {transicao && (
+              <TransicaoFaseModal
+                key={`${transicao.id}-${transicao.requisitos.map(r => r.id).join()}`}
+                imovel={data.find(i => i.id === transicao.id)}
+                destino={transicao.newColumn}
+                requisitos={transicao.requisitos}
+                onCancel={() => setTransicao(null)}
+                onConfirm={extra => persistMove(transicao.id, transicao.newColumn, extra)}
+                onResolvido={msg => { setTransicao(null); toast(msg, 'success'); load() }}
+                onAbrirImovel={() => { const alvo = transicao.id; setTransicao(null); setDetail(alvo) }}
+              />
+            )}
+            {agendar && (
+              <AgendarPassoModal
+                imovel={data.find(i => i.id === agendar.id)}
+                tipo={agendar.tipo}
+                destino={agendar.newColumn}
+                onCancel={() => setAgendar(null)}
+                onAntes={() => persistMove(agendar.id, agendar.newColumn)}
+                onDone={msg => { setAgendar(null); toast(msg, 'success') }}
+              />
+            )}
+            {moveModal && (
+              <MoveReasonModal
+                moveModal={moveModal}
+                item={data.find(i => i.id === moveModal.id)}
+                onCancel={() => setMoveModal(null)}
+                onConfirm={async (extra) => {
+                  if (moveModal.type === 'follow_up') {
+                    // Mesma porta do bloco "Próximos passos": muda a fase, guarda
+                    // o motivo e cria a tarefa do follow-up de uma vez.
+                    const r = await apiFetch(`/api/crm/imoveis/${moveModal.id}/follow-up`, {
+                      method: 'POST', regiao: regiaoActiva, headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ data: extra.data_follow_up, motivo: extra.motivo_follow_up, destino: moveModal.newColumn }),
+                    })
+                    if (!r.ok) return toast((await r.json().catch(() => ({}))).error || 'Não foi possível mover', 'error')
+                    const feito = await r.json().catch(() => ({}))
+                    toast(feito.consultor
+                      ? `Imóvel em «${moveModal.newColumn}». O follow-up entrou no contacto com ${feito.consultor.nome} (${String(feito.data_contacto || '').slice(0, 10).split('-').reverse().join('/')})`
+                      : `Imóvel em «${moveModal.newColumn}», com o follow-up na agenda`, 'success')
+                    load()
+                  } else {
+                    await persistMove(moveModal.id, moveModal.newColumn, extra)
+                  }
+                  setMoveModal(null)
+                }}
+              />
+            )}
+            {!loading && editing === null && view === 'kanban' && kanbanConfig && data.length > 0 && (
+              <KanbanBoard
+                columns={kanbanConfig.columns}
+                items={data}
+                groupField={kanbanConfig.groupField}
+                renderCard={kanbanConfig.renderCard}
+                onMove={handleMove}
+                onDelete={kanbanOnDelete}
+                onCardClick={kanbanOnCardClick}
+              />
+            )}
+
+            {/* Table View */}
+            {!loading && editing === null && tab !== 'Oportunidades' && (view === 'table' || !hasKanban) && data.length === 0 && (
+              loadError ? (
+                <EmptyState
+                  icon={AlertTriangle}
+                  title="Erro ao carregar"
+                  description="Não foi possível ligar ao servidor. Verifica a tua ligação e tenta novamente."
+                  action={
+                    <button onClick={load} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-neutral-800 text-white hover:bg-neutral-700 transition-colors">
+                      <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
                     </button>
-                  </div>
-                )
-              })()}
-              <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#C9A84C', borderTopColor: 'transparent' }} /></div>}>
-                <DetailPanel type="Investidores" id={detail} onClose={() => { setDetail(null, { replace: true }); load() }} onSave={load}
-                  onNavigate={(navType, navId) => { setDetail(null, { replace: true }); setTab(navType, { replace: true }); setTimeout(() => setDetail(navId), 150) }} />
-              </Suspense>
-            </div>
-          </div>
-        ) : detail && ['Imóveis', 'Consultores'].includes(tab) ? (
-          <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#C9A84C', borderTopColor: 'transparent' }} /></div>}>
-            <DetailPanel type={tab} id={detail} defaultEdit={detailDefaultEdit}
-              onClose={() => { setDetail(null, { replace: true }); setDetailDefaultEdit(false); load() }} onSave={load}
-              onNavigate={(navType, navId) => { setDetail(null, { replace: true }); setDetailDefaultEdit(false); setTab(navType, { replace: true }); setTimeout(() => setDetail(navId), 150) }} />
-          </Suspense>
-        ) : (<>
-
-          {/* Relatório View */}
-          {!loading && editing === null && view === 'relatorio' && tab === 'Consultores' && (
-            <RelatorioConsultores />
-          )}
-          {!loading && editing === null && view === 'relatorio' && tab === 'Investidores' && (
-            <RelatorioInvestidores />
-          )}
-
-          {/* Kanban View */}
-          {!loading && editing === null && view === 'kanban' && kanbanConfig && data.length === 0 && (
-            loadError ? (
-              <EmptyState
-                icon={AlertTriangle}
-                title="Erro ao carregar"
-                description="Não foi possível ligar ao servidor. Verifica a tua ligação e tenta novamente."
-                action={
-                  <button onClick={load} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-neutral-800 text-white hover:bg-neutral-700 transition-colors">
-                    <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
-                  </button>
-                }
-              />
-            ) : (
-              <EmptyState
-                icon={{ 'Imóveis': Building2, 'Investidores': HandCoins, 'Consultores': UserCheck, 'Construtores': HardHat, 'Oportunidades': Radar }[tab] || Building2}
-                title={`Sem ${tab.toLowerCase()}`}
-                description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
-              />
-            )
-          )}
-          {transicao && (
-            <TransicaoFaseModal
-              key={`${transicao.id}-${transicao.requisitos.map(r => r.id).join()}`}
-              imovel={data.find(i => i.id === transicao.id)}
-              destino={transicao.newColumn}
-              requisitos={transicao.requisitos}
-              onCancel={() => setTransicao(null)}
-              onConfirm={extra => persistMove(transicao.id, transicao.newColumn, extra)}
-              onResolvido={msg => { setTransicao(null); toast(msg, 'success'); load() }}
-              onAbrirImovel={() => { const alvo = transicao.id; setTransicao(null); setDetail(alvo) }}
-            />
-          )}
-          {agendar && (
-            <AgendarPassoModal
-              imovel={data.find(i => i.id === agendar.id)}
-              tipo={agendar.tipo}
-              destino={agendar.newColumn}
-              onCancel={() => setAgendar(null)}
-              onAntes={() => persistMove(agendar.id, agendar.newColumn)}
-              onDone={msg => { setAgendar(null); toast(msg, 'success') }}
-            />
-          )}
-          {moveModal && (
-            <MoveReasonModal
-              moveModal={moveModal}
-              item={data.find(i => i.id === moveModal.id)}
-              onCancel={() => setMoveModal(null)}
-              onConfirm={async (extra) => {
-                if (moveModal.type === 'follow_up') {
-                  // Mesma porta do bloco "Próximos passos": muda a fase, guarda
-                  // o motivo e cria a tarefa do follow-up de uma vez.
-                  const r = await apiFetch(`/api/crm/imoveis/${moveModal.id}/follow-up`, {
-                    method: 'POST', regiao: regiaoActiva, headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ data: extra.data_follow_up, motivo: extra.motivo_follow_up, destino: moveModal.newColumn }),
-                  })
-                  if (!r.ok) return toast((await r.json().catch(() => ({}))).error || 'Não foi possível mover', 'error')
-                  const feito = await r.json().catch(() => ({}))
-                  toast(feito.consultor
-                    ? `Imóvel em «${moveModal.newColumn}». O follow-up entrou no contacto com ${feito.consultor.nome} (${String(feito.data_contacto || '').slice(0, 10).split('-').reverse().join('/')})`
-                    : `Imóvel em «${moveModal.newColumn}», com o follow-up na agenda`, 'success')
-                  load()
-                } else {
-                  await persistMove(moveModal.id, moveModal.newColumn, extra)
-                }
-                setMoveModal(null)
-              }}
-            />
-          )}
-          {!loading && editing === null && view === 'kanban' && kanbanConfig && data.length > 0 && (
-            <KanbanBoard
-              columns={kanbanConfig.columns}
-              items={data}
-              groupField={kanbanConfig.groupField}
-              renderCard={kanbanConfig.renderCard}
-              onMove={handleMove}
-              onDelete={kanbanOnDelete}
-              onCardClick={kanbanOnCardClick}
-            />
-          )}
-
-          {/* Table View */}
-          {!loading && editing === null && tab !== 'Oportunidades' && (view === 'table' || !hasKanban) && data.length === 0 && (
-            loadError ? (
-              <EmptyState
-                icon={AlertTriangle}
-                title="Erro ao carregar"
-                description="Não foi possível ligar ao servidor. Verifica a tua ligação e tenta novamente."
-                action={
-                  <button onClick={load} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-neutral-800 text-white hover:bg-neutral-700 transition-colors">
-                    <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
-                  </button>
-                }
-              />
-            ) : (
-              <EmptyState
-                icon={{ 'Imóveis': Building2, 'Investidores': HandCoins, 'Consultores': UserCheck, 'Construtores': HardHat, 'Oportunidades': Radar }[tab] || Building2}
-                title={`Sem ${tab.toLowerCase()}`}
-                description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
-              />
-            )
-          )}
-          {!loading && editing === null && (view === 'table' || !hasKanban) && data.length > 0 && (
-            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs overflow-hidden">
-              <div className="overflow-x-auto -webkit-overflow-scrolling-touch">
-                {tab === 'Imóveis' && <ImoveisTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} onConsultorClick={navigateToConsultor} />}
-                {tab === 'Investidores' && <InvestidoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
-                {tab === 'Consultores' && <ConsultoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
-                {tab === 'Negócios' && <NegociosTable data={data} onEdit={setEditing} onDelete={handleDelete}
-                  onViewImovel={(imovelId) => { setTab('Imóveis'); setTimeout(() => setDetail(imovelId), 100) }} />}
-                {tab === 'Construtores' && <GenericTable data={data} onEdit={setEditing} onDelete={handleDelete}
-                  columns={['nome','empresa','estado','zona','especializacao','score','custo_medio_m2']}
-                  labels={{ nome:'Nome', empresa:'Empresa', estado:'Estado', zona:'Zona', especializacao:'Especialização', score:'Score', custo_medio_m2:'Custo/m²' }} />}
+                  }
+                />
+              ) : (
+                <EmptyState
+                  icon={{ 'Imóveis': Building2, 'Investidores': HandCoins, 'Consultores': UserCheck, 'Construtores': HardHat, 'Oportunidades': Radar }[tab] || Building2}
+                  title={`Sem ${tab.toLowerCase()}`}
+                  description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
+                />
+              )
+            )}
+            {!loading && editing === null && (view === 'table' || !hasKanban) && data.length > 0 && (
+              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs overflow-hidden">
+                <div className="overflow-x-auto -webkit-overflow-scrolling-touch">
+                  {tab === 'Imóveis' && <ImoveisTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} onConsultorClick={navigateToConsultor} />}
+                  {tab === 'Investidores' && <InvestidoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
+                  {tab === 'Consultores' && <ConsultoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
+                  {tab === 'Negócios' && <NegociosTable data={data} onEdit={setEditing} onDelete={handleDelete}
+                    onViewImovel={(imovelId) => { setTab('Imóveis'); setTimeout(() => setDetail(imovelId), 100) }} />}
+                  {tab === 'Construtores' && <GenericTable data={data} onEdit={setEditing} onDelete={handleDelete}
+                    columns={['nome','empresa','estado','zona','especializacao','score','custo_medio_m2']}
+                    labels={{ nome:'Nome', empresa:'Empresa', estado:'Estado', zona:'Zona', especializacao:'Especialização', score:'Score', custo_medio_m2:'Custo/m²' }} />}
+                </div>
+                <div className="px-4 py-2 bg-gray-50 text-xs text-gray-400 border-t">
+                  {total} registos {search && `(pesquisa: "${search}")`}
+                </div>
               </div>
-              <div className="px-4 py-2 bg-gray-50 text-xs text-gray-400 border-t">
-                {total} registos {search && `(pesquisa: "${search}")`}
-              </div>
-            </div>
-          )}
-        </>)}
+            )}
+          </>)}
+        </TabTransition>
       </div>
     </>
   )

@@ -1,3 +1,9 @@
+import { useId } from 'react'
+import { motion } from 'framer-motion'
+
+// Indicador ativo desliza entre abas (pílula ou traço dourado).
+const SLIDE = { type: 'tween', duration: 0.44, ease: [0.22, 1, 0.36, 1] }
+
 /**
  * Segmented control / tab bar unificado.
  *
@@ -18,6 +24,7 @@ const SIZES_SEG = {
 const ICON_SIZES = { sm: 'w-3.5 h-3.5', md: 'w-4 h-4' }
 
 export function Tabs({ items, value, onChange, size = 'md', variant = 'segmented', fluid = false, className = '' }) {
+  const id = useId()
   if (variant === 'underline') {
     return (
       <div className={`flex border-b border-gray-200 overflow-x-auto ${className}`}>
@@ -37,7 +44,7 @@ export function Tabs({ items, value, onChange, size = 'md', variant = 'segmented
               {it.count != null && (
                 <span className={`ml-1 px-1.5 py-0.5 text-[10px] rounded-full font-semibold ${active ? 'bg-brand-dark text-brand-gold' : 'bg-gray-100 text-gray-600'}`}>{it.count}</span>
               )}
-              {active && <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full" style={{ backgroundColor: '#C9A84C' }} />}
+              {active && <motion.span layoutId={`tabs-bar-${id}`} transition={SLIDE} className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full" style={{ backgroundColor: '#C9A84C' }} />}
             </button>
           )
         })}
@@ -56,15 +63,16 @@ export function Tabs({ items, value, onChange, size = 'md', variant = 'segmented
             key={it.key}
             onClick={() => !it.disabled && onChange(it.key)}
             disabled={it.disabled}
-            className={`inline-flex items-center justify-center font-semibold rounded-lg transition-all whitespace-nowrap disabled:opacity-40 ${fluid ? 'flex-1' : ''} ${SIZES_SEG[size] || SIZES_SEG.md} ${
+            className={`relative inline-flex items-center justify-center font-semibold rounded-lg transition-colors duration-300 whitespace-nowrap disabled:opacity-40 ${fluid ? 'flex-1' : ''} ${SIZES_SEG[size] || SIZES_SEG.md} ${
               active
-                ? 'bg-brand-dark text-brand-gold shadow-sm'
+                ? 'text-brand-gold'
                 : 'bg-transparent text-gray-600 hover:text-gray-900 hover:bg-white/60'
             }`}>
-            {Icon && <Icon className={`${ICON_SIZES[size]} shrink-0`} />}
-            <span>{it.label}</span>
+            {active && <motion.span layoutId={`tabs-pill-${id}`} transition={SLIDE} className="absolute inset-0 rounded-lg bg-brand-dark shadow-sm" />}
+            {Icon && <Icon className={`relative ${ICON_SIZES[size]} shrink-0`} />}
+            <span className="relative">{it.label}</span>
             {it.count != null && (
-              <span className={`ml-0.5 px-1.5 py-0.5 text-[10px] rounded-full font-semibold ${active ? 'bg-brand-gold/20 text-brand-gold' : 'bg-gray-200 text-gray-600'}`}>{it.count}</span>
+              <span className={`relative ml-0.5 px-1.5 py-0.5 text-[10px] rounded-full font-semibold ${active ? 'bg-brand-gold/20 text-brand-gold' : 'bg-gray-200 text-gray-600'}`}>{it.count}</span>
             )}
           </button>
         )

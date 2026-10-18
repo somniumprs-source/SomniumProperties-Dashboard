@@ -4,6 +4,9 @@
  */
 import { useState, useEffect, useCallback, useMemo, useRef, memo, lazy, Suspense } from 'react'
 import { FileDown, ChevronDown, ChevronUp, Phone, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin, Eye, Trash2, ThumbsUp, TrendingDown, Shield, Building2, UserRound, FolderOpen, Calculator, Hammer, Scale, DoorOpen, FileBarChart, ListChecks, Building, CalendarCheck, Star, Gauge, History, Briefcase, ShieldCheck, Timer } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { BrandLoader } from '../ui/BrandLoader.jsx'
+import { TabTransition, useTabDirection, EASE_OUT } from '../ui/PageTransition.jsx'
 import { apiFetch, apiFetchJson, openDocument } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { PartilharAcesso } from '../PartilharAcesso.jsx'
@@ -36,12 +39,11 @@ const DocumentosInvestidorTab = lazy(() => import('./DocumentosInvestidorTab.jsx
 const DadosEmpresaInvestidorTab = lazy(() => import('./DadosEmpresaInvestidorTab.jsx').then(m => ({ default: m.DadosEmpresaInvestidorTab })))
 
 function TabFallback() {
-  return (
-    <div className="flex items-center justify-center py-12">
-      <div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#C9A84C', borderTopColor: 'transparent' }} />
-    </div>
-  )
+  return <BrandLoader variant="inline" />
 }
+
+// Ordem de todas as abas possíveis (para saber de que lado entra o conteúdo).
+const ORDEM_ABAS = ['detalhe', 'registo_chamadas', 'ficheiros', 'analise', 'obra', 'localizacao', 'pontos_riscos', 'visitas', 'matching', 'relatorios_imovel', 'checklist', 'documentos', 'dados_empresa', 'documentos_consultor', 'relatorios', 'avaliacao']
 import { Combobox } from '../ui/Combobox.jsx'
 import coimbraFreguesiasData from '../../constants/coimbra-freguesias.json'
 import ampFreguesiasData from '../../constants/amp-freguesias.json'
@@ -692,6 +694,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('detalhe')
+  const direcaoAba = useTabDirection(activeTab, ORDEM_ABAS)
   const [reunioes, setReunioes] = useState([])
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({})
@@ -893,7 +896,11 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
     }
   }, [id, endpoint])
 
-  if (loading) return <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400">A carregar...</div>
+  if (loading) return (
+    <div className="rounded-xl overflow-hidden">
+      <BrandLoader variant="inline" label={type === 'Imóveis' ? 'Ficha do imóvel' : type === 'Investidores' ? 'Ficha do investidor' : type === 'Consultores' ? 'Ficha do consultor' : 'A carregar'} />
+    </div>
+  )
   if (!data) return null
 
   // Tabs dinâmicos por tipo
@@ -1001,15 +1008,15 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
         <div className="flex border-b border-gray-200 overflow-x-auto" style={{ backgroundColor: '#F5F4F0' }}>
           {tabs.map(t => (
             <button key={t.key} onClick={() => handleTabChange(t.key)}
-              className="relative px-4 sm:px-5 py-3 text-sm font-medium transition-colors whitespace-nowrap"
-              style={{
-                color: activeTab === t.key ? '#1A1A1A' : '#9ca3af',
-                backgroundColor: activeTab === t.key ? 'white' : 'transparent',
-              }}>
-              <t.icon className="w-4 h-4 mr-1.5 inline-block align-[-3px]" />{t.label}
+              className="relative px-4 sm:px-5 py-3 text-sm font-medium transition-colors duration-300 whitespace-nowrap"
+              style={{ color: activeTab === t.key ? '#1A1A1A' : '#9ca3af' }}>
               {activeTab === t.key && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5" style={{ backgroundColor: '#C9A84C' }} />
+                <motion.span layoutId="ficha-tab" className="absolute inset-0 bg-white"
+                  transition={{ type: 'tween', duration: 0.44, ease: EASE_OUT }}>
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5" style={{ backgroundColor: '#C9A84C' }} />
+                </motion.span>
               )}
+              <span className="relative"><t.icon className="w-4 h-4 mr-1.5 inline-block align-[-3px]" />{t.label}</span>
             </button>
           ))}
         </div>
@@ -1017,6 +1024,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
 
       {/* Análise Financeira tab */}
       {/* Interacções (Consultores) */}
+      <TabTransition tabKey={activeTab} direction={direcaoAba}>
       <Suspense fallback={<TabFallback />}>
       {type === 'Consultores' && activeTab === 'registo_chamadas' ? (
         <div className="p-4 sm:p-6">
@@ -1407,6 +1415,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       </div>
       )}
       </Suspense>
+      </TabTransition>
     </div>
   )
 }
@@ -3157,7 +3166,7 @@ function AvaliacaoTab({ data, onUpdate }) {
             className="relative px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap"
             style={{ color: sub === s.key ? '#1A1A1A' : '#9ca3af' }}>
             <s.icon className="w-4 h-4 mr-1.5 inline-block align-[-3px]" />{s.label}
-            {sub === s.key && <span className="absolute bottom-0 left-0 right-0 h-0.5" style={{ backgroundColor: '#C9A84C' }} />}
+            {sub === s.key && <motion.span layoutId="avaliacao-sub" transition={{ type: 'tween', duration: 0.44, ease: EASE_OUT }} className="absolute bottom-0 left-0 right-0 h-0.5" style={{ backgroundColor: '#C9A84C' }} />}
           </button>
         ))}
       </div>
