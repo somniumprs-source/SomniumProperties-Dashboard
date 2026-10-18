@@ -84,10 +84,6 @@ app.post("/", async (c) => {
       if (rows.length > 0) {
         action = "updated";
         investidorId = rows[0].id;
-        const existingNotas = rows[0].notas || "";
-        const novasNotas = existingNotas
-          ? `${existingNotas}\n\n--- Nova submissão Landing Page ---\n${submissaoNotas}`
-          : submissaoNotas;
         await Investidores.update(rows[0].id, {
           nome,
           email,
@@ -97,7 +93,6 @@ app.post("/", async (c) => {
           roi_anualizado_investidor: roiNum,
           origem: "Landing Page",
           status: rows[0].status, // mantém status existente
-          notas: novasNotas,
           data_ultimo_contacto: today,
         });
       }
@@ -114,10 +109,17 @@ app.post("/", async (c) => {
         capital_max: capitalNum,
         roi_investidor: retornoNum,
         roi_anualizado_investidor: roiNum,
-        notas: submissaoNotas,
         data_ultimo_contacto: today,
       });
       investidorId = created.id;
+    }
+    // A submissão fica como nota na linha do tempo do investidor.
+    if (investidorId) {
+      const agoraIso = new Date().toISOString();
+      await pool.query(
+        "INSERT INTO investidor_interacoes (id, investidor_id, data_hora, canal, direcao, notas, created_at, updated_at) VALUES ($1, $2, $3, 'Nota', 'Nota', $4, $3, $3)",
+        [crypto.randomUUID(), investidorId, agoraIso, submissaoNotas],
+      ).catch((e: any) => console.error('[landing-lead] nota:', e.message));
     }
 
     // Email de notificação para somniumprs@gmail.com

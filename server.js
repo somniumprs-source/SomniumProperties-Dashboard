@@ -308,10 +308,6 @@ try {
           if (rows.length > 0) {
             action = 'updated'
             investidorId = rows[0].id
-            const existingNotas = rows[0].notas || ''
-            const novasNotas = existingNotas
-              ? `${existingNotas}\n\n--- Nova submissão Landing Page ---\n${submissaoNotas}`
-              : submissaoNotas
             await Investidores.update(rows[0].id, {
               nome,
               email,
@@ -321,7 +317,6 @@ try {
               roi_anualizado_investidor: roiNum,
               origem: 'Landing Page',
               status: rows[0].status, // mantém status existente
-              notas: novasNotas,
               data_ultimo_contacto: today,
             })
           }
@@ -338,10 +333,17 @@ try {
             capital_max: capitalNum,
             roi_investidor: retornoNum,
             roi_anualizado_investidor: roiNum,
-            notas: submissaoNotas,
             data_ultimo_contacto: today,
           })
           investidorId = created.id
+        }
+        // A submissão fica como nota na linha do tempo do investidor.
+        if (investidorId) {
+          const agoraIso = new Date().toISOString()
+          await pgPool.query(
+            "INSERT INTO investidor_interacoes (id, investidor_id, data_hora, canal, direcao, notas, created_at, updated_at) VALUES ($1, $2, $3, 'Nota', 'Nota', $4, $3, $3)",
+            [(await import('crypto')).randomUUID(), investidorId, agoraIso, submissaoNotas],
+          ).catch((e) => console.error('[landing-lead] nota:', e.message))
         }
 
         // Email de notificação para somniumprs@gmail.com
@@ -1920,8 +1922,8 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
       getConsultores({ regiao }).catch(() => []),
       getNegócios({ regiao }).catch(() => []),
       getDespesas({ regiao }).catch(() => []),
-      pool.query(`SELECT consultor_id, canal, direcao, data_hora FROM consultor_interacoes ORDER BY consultor_id, data_hora`).catch(() => ({ rows: [] })),
-      pool.query(`SELECT finalidade, data_hora FROM investidor_interacoes`).catch(() => ({ rows: [] })),
+      pool.query(`SELECT consultor_id, canal, direcao, data_hora FROM consultor_interacoes WHERE canal IS DISTINCT FROM 'Nota' ORDER BY consultor_id, data_hora`).catch(() => ({ rows: [] })),
+      pool.query(`SELECT finalidade, data_hora FROM investidor_interacoes WHERE canal IS DISTINCT FROM 'Nota'`).catch(() => ({ rows: [] })),
       pool.query(`SELECT negocio_id, capital FROM projeto_investidores WHERE capital > 0`).catch(() => ({ rows: [] })),
     ])
     const investidores = investidoresRaw.filter(isInvestidorPrincipal)
@@ -5222,7 +5224,7 @@ app.get('/api/alertas', endpointCache(300000), async (req, res) => {
     try {
       const { query: pgQuery } = await import('./src/db/pg.js')
       const { rows: pgConsultores } = await pgQuery('SELECT id, nome, estatuto, created_at FROM consultores')
-      const { rows: todasInteracoes } = await pgQuery('SELECT consultor_id, data_hora FROM consultor_interacoes')
+      const { rows: todasInteracoes } = await pgQuery("SELECT consultor_id, data_hora FROM consultor_interacoes WHERE canal IS DISTINCT FROM 'Nota'")
       const interacoesPorConsultor = {}
       for (const i of todasInteracoes) {
         if (!interacoesPorConsultor[i.consultor_id]) interacoesPorConsultor[i.consultor_id] = []

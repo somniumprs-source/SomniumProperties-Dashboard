@@ -1937,7 +1937,6 @@ const FIELD_DEFS = {
     { key: 'proxima_acao', label: 'Próxima Ação', type: 'text' },
     { key: 'motivo_nao_aprovacao', label: 'Motivo Não Aprovação', type: 'text' },
     { key: 'motivo_inatividade', label: 'Motivo Inatividade', type: 'text' },
-    { key: 'notas', label: 'Notas', type: 'textarea' },
   ],
   'Consultores': [
     { key: 'nome', label: 'Nome', type: 'text', required: true },
@@ -1957,7 +1956,6 @@ const FIELD_DEFS = {
     { key: 'meta_mensal_leads', label: 'Meta Mensal Leads', type: 'number' },
     { key: 'comissao', label: 'Comissão %', type: 'number' },
     { key: 'motivo_descontinuacao', label: 'Motivo Descontinuação', type: 'text' },
-    { key: 'notas', label: 'Notas', type: 'textarea' },
   ],
   'Parceiros': [
     { key: 'nome', label: 'Nome', type: 'text', required: true },
@@ -1972,7 +1970,6 @@ const FIELD_DEFS = {
     { key: 'classificacao', label: 'Classificação', type: 'select', options: ['A','B','C','D'] },
     { key: 'honorarios', label: 'Honorários', type: 'text' },
     { key: 'data_primeiro_contacto', label: 'Data 1º Contacto', type: 'date' },
-    { key: 'notas', label: 'Notas', type: 'textarea' },
   ],
   'Construtores': [
     { key: 'nome', label: 'Nome', type: 'text', required: true },

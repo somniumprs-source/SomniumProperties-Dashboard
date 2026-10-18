@@ -83,7 +83,7 @@ import { carregarChecklist, gravarManual } from "../_shared/checklistImovel.ts";
 import { agendarPassoImovel, sincronizarTarefaVisita } from "../_shared/agendaEngine.ts";
 import { agendarFollowUpImovelManual, registarFollowUpFeito } from "../_shared/followUpImovel.ts";
 import { faseAoAgendarFollowUp, CHAMADAS_IMOVEL, chamadaSugerida } from "../_shared/pipelineImoveis.ts";
-import { lerContactoPessoa, agendarContactoPessoa, registarContactoPessoa, editarNotaContacto, lerContactosDoImovel, juntarImovelAoContacto } from "../_shared/contactoPessoa.ts";
+import { lerContactoPessoa, agendarContactoPessoa, registarContactoPessoa, editarNotaContacto, anotarPessoa, lerContactosDoImovel, juntarImovelAoContacto } from "../_shared/contactoPessoa.ts";
 import { createClient } from "@supabase/supabase-js";
 import { Buffer } from "node:buffer";
 
@@ -1617,7 +1617,7 @@ app.get("/consultores/enriched", async (c: any) => {
     const [resConsultores, resImoveis, resInteracoes, resFollowupAgg] = await Promise.all([
       pool.query(`SELECT * FROM consultores ${consultoresWhere} ORDER BY score_prioridade DESC NULLS LAST, updated_at DESC`, params),
       pool.query(`SELECT consultor_id, origem, estado, check_qualidade, data_adicionado FROM imoveis ${imoveisWhere}`, params),
-      pool.query("SELECT consultor_id, data_hora, direcao FROM consultor_interacoes ORDER BY data_hora DESC"),
+      pool.query("SELECT consultor_id, data_hora, direcao FROM consultor_interacoes WHERE canal IS DISTINCT FROM 'Nota' ORDER BY data_hora DESC"),
       pool.query("SELECT consultor_id, MIN(data) AS primeiro_followup, MAX(data) AS ultimo_followup FROM consultor_followups GROUP BY consultor_id"),
     ]);
     const consultores = resConsultores.rows;
@@ -2847,6 +2847,14 @@ for (const [rota, tipo] of [["consultores", "consultor"], ["investidores", "inve
       const r = await registarContactoPessoa(pool, tipo, c.req.param("id"), { ...body, user: await resolveCrmUser(c) });
       if (!r) return c.json({ error: "Não encontrado" }, 404);
       return c.json({ ok: true, ...r });
+    } catch (e) { return c.json({ error: (e as Error).message }, 400); }
+  });
+  app.post(`/${rota}/:id/contacto/nota`, async (c: any) => {
+    try {
+      const body = await c.req.json().catch(() => ({}));
+      const nid = await anotarPessoa(pool, tipo, c.req.param("id"), { notas: body?.notas, quando: body?.quando || null, user: await resolveCrmUser(c) });
+      if (!nid) return c.json({ error: "Não encontrado" }, 404);
+      return c.json({ ok: true, id: nid });
     } catch (e) { return c.json({ error: (e as Error).message }, 400); }
   });
   app.put(`/${rota}/:id/contacto/historico/:hid`, async (c: any) => {
@@ -4288,7 +4296,7 @@ app.post("/automation/score-prioridade-consultores", async (c: any) => {
   try {
     const { rows: consultores } = await pool.query("SELECT * FROM consultores");
     const { rows: imoveis } = await pool.query("SELECT consultor_id, origem, estado, check_qualidade FROM imoveis WHERE consultor_id IS NOT NULL");
-    const { rows: interacoes } = await pool.query("SELECT consultor_id, data_hora, direcao FROM consultor_interacoes ORDER BY data_hora ASC");
+    const { rows: interacoes } = await pool.query("SELECT consultor_id, data_hora, direcao FROM consultor_interacoes WHERE canal IS DISTINCT FROM 'Nota' ORDER BY data_hora ASC");
     const now = Date.now();
 
     const leadCounts = consultores.map((cn: any) =>
@@ -4678,7 +4686,7 @@ app.get("/relatorio/consultores", async (c: any) => {
   try {
     const { rows: consultores } = await pool.query("SELECT * FROM consultores ORDER BY score_prioridade DESC NULLS LAST");
     const { rows: imoveis } = await pool.query("SELECT consultor_id, origem, estado, check_qualidade FROM imoveis WHERE consultor_id IS NOT NULL");
-    const { rows: interacoes } = await pool.query("SELECT consultor_id, data_hora, direcao FROM consultor_interacoes");
+    const { rows: interacoes } = await pool.query("SELECT consultor_id, data_hora, direcao FROM consultor_interacoes WHERE canal IS DISTINCT FROM 'Nota'");
     const now = new Date();
 
     const leadCounts = consultores.map((cn: any) =>

@@ -101,9 +101,11 @@ TODAS as tarefas devem ser sincronizadas com Google Calendar.`,
   } else if (accao === "NOTA_CONSULTOR" && entNome) {
     const cons = consultores.find((c: any) => c.nome.toLowerCase().includes(entNome.toLowerCase()));
     if (cons) {
-      const { rows: [existing] } = await pgQuery("SELECT notas FROM consultores WHERE id = $1", [cons.id]);
-      const notas = (existing?.notas || "") + "\n" + `[${hoje}] ${parsed.descricao}`;
-      await pgQuery("UPDATE consultores SET notas = $1, updated_at = $2 WHERE id = $3", [notas.trim(), now, cons.id]);
+      // Fica como nota na linha do tempo do consultor (não conta como contacto).
+      await pgQuery(
+        "INSERT INTO consultor_interacoes (id, consultor_id, data_hora, canal, direcao, notas, created_at, updated_at) VALUES ($1, $2, $3, 'Nota', 'Nota', $4, $3, $3)",
+        [crypto.randomUUID(), cons.id, now, parsed.descricao]
+      );
       msg = `Nota adicionada ao consultor "${cons.nome}"`;
     } else { msg = `Consultor "${entNome}" não encontrado`; }
   } else if (accao === "INTERACAO" && entNome) {

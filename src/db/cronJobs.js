@@ -106,7 +106,7 @@ async function runRelatorioSemanal() {
 
     const { rows: consultores } = await pool.query('SELECT * FROM consultores')
     const { rows: imoveis } = await pool.query('SELECT * FROM imoveis')
-    const { rows: interacoes } = await pool.query('SELECT * FROM consultor_interacoes WHERE data_hora >= $1', [semanaStr])
+    const { rows: interacoes } = await pool.query("SELECT * FROM consultor_interacoes WHERE data_hora >= $1 AND canal IS DISTINCT FROM 'Nota'", [semanaStr])
 
     const novosConsultores = consultores.filter(c => c.created_at >= semanaStr)
     const imoveisRecebidos = imoveis.filter(i => i.created_at >= semanaStr)

@@ -16,7 +16,7 @@
  */
 import { useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Phone, RefreshCw, Check, X, ChevronDown, ChevronUp, Mic, Upload, Plus, Pencil } from 'lucide-react'
+import { Phone, RefreshCw, Check, X, Mic, Upload, Plus, Pencil, MessageCircle, Mail, Users, StickyNote } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useRefreshOnMutation } from '../../hooks/useRefreshOnMutation.js'
 import { inputClass, fmtQuando, fmtDia, emDias, agoraLocal, comHora } from './passosUtil.js'
@@ -27,25 +27,59 @@ const TIPOS = { cold_call: 'Cold Call', discovery_call: 'Discovery Call', follow
 const CANAIS = ['Chamada', 'WhatsApp', 'Email', 'Reunião']
 const btn = 'text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50'
 const nomeAssunto = a => a.imovel_nome || a.texto || 'Imóvel'
+const MOSTRAR = 12 // registos visíveis antes de «Ver mais antigos»
 const PREFIXO = /^\[[^\]]+\]\s*/ // etiqueta automática, ex.: «[REACTIVAÇÃO EMAIL]»
 const limpaNota = n => String(n || '').replace(PREFIXO, '')
-// Dia e, quando a houver, a hora do contacto.
-const fmtContacto = v => {
-  if (!/T\d{2}:\d{2}/.test(String(v || ''))) return fmtDia(v)
-  const d = new Date(v)
-  return isNaN(d) ? fmtDia(v) : d.toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+// Canal tal como foi gravado (registos antigos em minúsculas) → grafia única.
+const CANAL = { chamada: 'Chamada', whatsapp: 'WhatsApp', email: 'Email', 'reunião': 'Reunião', reuniao: 'Reunião', nota: 'Nota' }
+const canalDe = h => (h.antigo || !h.canal ? 'Follow-up' : CANAL[String(h.canal).toLowerCase()] || h.canal)
+const COR = { Chamada: '#C9A84C', WhatsApp: '#16A34A', Email: '#2563EB', 'Reunião': '#7C3AED', Nota: '#8A857A', 'Follow-up': '#B08A2E' }
+const ICONE = { Chamada: Phone, WhatsApp: MessageCircle, Email: Mail, 'Reunião': Users, Nota: StickyNote, 'Follow-up': RefreshCw }
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+
+// Título curto do registo: «Call <imóvel>», «Follow Up», «Nota»… O resto só ao abrir.
+function tituloDe(h) {
+  const canal = canalDe(h)
+  if (canal === 'Nota') return 'Nota'
+  const etiqueta = String(h.notas || '').match(PREFIXO)?.[0]
+  if (etiqueta) {
+    const t = etiqueta.replace(/[[\]]/g, '').trim().toLowerCase().replace(/reactiva/g, 'reativa').replace(/\s*(email|whatsapp)$/, '')
+    return `${canal} · ${t.charAt(0).toUpperCase()}${t.slice(1)}`
+  }
+  const imoveis = (h.assuntos || []).filter(a => a.imovel_id).map(nomeAssunto)
+  if (imoveis.length) return `${canal === 'Chamada' || canal === 'Follow-up' ? 'Call' : canal} ${imoveis.join(', ')}`
+  if (h.finalidade === 'discovery') return 'Discovery'
+  return canal === 'Chamada' || canal === 'Follow-up' ? 'Follow Up' : canal
 }
 
-// Uma linha do histórico. A nota corrige-se no sítio: o campo só aparece ao
-// clicar no lápis (ou em «+ nota», se o contacto ficou sem nota).
-function HistoricoItem({ h, rota, pessoaId, onSaved }) {
+// Data partida para o lado oposto ao cartão: «12 jun» e «2026 · 12:30».
+function dataDe(v) {
+  const s = String(v || '')
+  const comHoraMarcada = /T\d{2}:\d{2}/.test(s)
+  const d = comHoraMarcada ? new Date(s) : null
+  if (d && !isNaN(d)) {
+    return { dia: `${d.getDate()} ${MESES[d.getMonth()]}`, resto: `${d.getFullYear()} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` }
+  }
+  const [y, m, dd] = s.slice(0, 10).split('-')
+  return y && m && dd ? { dia: `${+dd} ${MESES[+m - 1]}`, resto: y } : { dia: '—', resto: '' }
+}
+
+// Um registo da linha cronológica em árvore. Fechado mostra só título e data;
+// ao clicar abre o detalhe, com a nota editável (o campo só aparece no lápis).
+function RegistoArvore({ h, lado, rota, pessoaId, onSaved }) {
+  const [aberto, setAberto] = useState(false)
   const [editar, setEditar] = useState(false)
   const [texto, setTexto] = useState('')
   const [saving, setSaving] = useState(false)
   const [erro, setErro] = useState('')
+  const canal = canalDe(h)
+  const cor = COR[canal] || COR.Nota
+  const Icone = ICONE[canal] || StickyNote
+  const { dia, resto } = dataDe(h.quando)
   const prefixo = String(h.notas || '').match(PREFIXO)?.[0] || ''
+  const dir = lado === 'dir'
 
-  function abrir() { setTexto(limpaNota(h.notas)); setErro(''); setEditar(true) }
+  function abrirEdicao() { setTexto(limpaNota(h.notas)); setErro(''); setEditar(true); setAberto(true) }
   async function guardar() {
     setSaving(true); setErro('')
     try {
@@ -64,44 +98,102 @@ function HistoricoItem({ h, rota, pessoaId, onSaved }) {
   }
 
   return (
-    <li className="group text-xs">
-      <div className="flex flex-wrap items-baseline gap-x-2">
-        <span className="font-medium tabular-nums text-gray-700">{fmtContacto(h.quando)}</span>
-        {h.resultado
-          ? <span className={h.resultado === 'Feito' ? 'text-green-700' : 'text-orange-700'}>{h.resultado}</span>
-          : <span className="text-gray-500">Registo</span>}
-        {h.canal && <span className="text-gray-500">{h.canal}</span>}
-        {h.assuntos?.length > 0 && <span className="text-gray-700">{h.assuntos.map(nomeAssunto).join(', ')}</span>}
-        {!editar && h.notas && <span className="text-gray-600 min-w-0 break-words whitespace-pre-line">{limpaNota(h.notas)}</span>}
-        {h.proxima_data && <span className="text-gray-400">seguinte a {fmtDia(h.proxima_data)}</span>}
-        {!editar && (h.notas ? (
-          <button type="button" onClick={abrir} aria-label="Editar nota" title="Editar nota"
-            className="self-center text-gray-300 hover:text-yellow-700 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100">
-            <Pencil className="w-3 h-3" />
-          </button>
-        ) : (
-          <button type="button" onClick={abrir} className="text-[11px] text-gray-400 hover:text-yellow-700">+ nota</button>
-        ))}
+    <li className="relative grid grid-cols-[36px_1fr] sm:grid-cols-[1fr_44px_1fr] gap-x-3 sm:gap-x-0 items-start">
+      <span className="col-start-1 row-start-1 row-span-2 sm:row-span-1 sm:col-start-2 justify-self-center z-10 w-9 h-9 rounded-full border-2 bg-white dark:bg-neutral-900 grid place-items-center"
+        style={{ borderColor: cor, color: cor }} title={canal}>
+        <Icone className="w-4 h-4" />
+      </span>
+      <div className={`col-start-2 row-start-1 sm:row-start-1 pt-0.5 sm:pt-1.5 tabular-nums leading-tight ${dir ? 'sm:col-start-1 sm:text-right sm:pr-3' : 'sm:col-start-3 sm:pl-3'}`}>
+        <span className="text-sm sm:text-base font-bold mr-1.5 sm:mr-0 sm:block" style={{ color: cor }}>{dia}</span>
+        <span className="text-[11px] text-gray-400">{resto}</span>
       </div>
-      {editar && (
-        <div className="mt-1 grid gap-1">
-          <textarea rows={2} value={texto} onChange={e => setTexto(e.target.value)} autoFocus aria-label="Nota do contacto"
-            onKeyDown={e => {
-              if (e.key === 'Escape') setEditar(false)
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); guardar() }
-            }}
-            placeholder="Nota do contacto" className={inputClass} />
-          {erro && <p className="text-red-600">{erro}</p>}
-          <div className="flex justify-end gap-1.5">
-            <button type="button" onClick={() => setEditar(false)} disabled={saving} className={btn}>Cancelar</button>
-            <button type="button" onClick={guardar} disabled={saving}
-              className="text-xs font-semibold px-2 py-1 rounded-lg disabled:opacity-50" style={{ backgroundColor: '#1A1A1A', color: '#C9A84C' }}>
-              {saving ? 'A guardar…' : 'Guardar nota'}
-            </button>
+      <div className={`col-start-2 row-start-2 sm:row-start-1 min-w-0 grid gap-1.5 pb-1 ${dir ? 'sm:col-start-3 sm:pl-3' : 'sm:col-start-1 sm:pr-3'}`}>
+        <button type="button" onClick={() => setAberto(v => !v)} aria-expanded={aberto}
+          className={`w-full rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 hover:shadow-sm transition-shadow text-left ${dir ? '' : 'sm:text-right'}`}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = cor }} onMouseLeave={e => { e.currentTarget.style.borderColor = '' }}>
+          <span className="block text-[10px] font-semibold uppercase tracking-wider" style={{ color: cor }}>{canal}</span>
+          <span className="block text-sm font-semibold text-gray-800 dark:text-neutral-100 break-words">{tituloDe(h)}</span>
+        </button>
+        {aberto && (
+          <div className="rounded-lg bg-gray-50 dark:bg-neutral-800/60 px-3 py-2 grid gap-1.5 text-xs text-left">
+            {(h.resultado || h.proxima_data || h.autor) && (
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                {h.resultado && <span className={h.resultado === 'Feito' ? 'text-green-700' : 'text-orange-700'}>{h.resultado}</span>}
+                {h.proxima_data && <span className="text-gray-400">seguinte a {fmtDia(h.proxima_data)}</span>}
+                {h.autor && <span className="text-gray-400">{h.autor}</span>}
+              </div>
+            )}
+            {h.assuntos?.some(a => !a.imovel_id) && (
+              <p className="text-gray-500">Assuntos: {h.assuntos.filter(a => !a.imovel_id).map(nomeAssunto).join(', ')}</p>
+            )}
+            {editar ? (
+              <div className="grid gap-1">
+                <textarea rows={3} value={texto} onChange={e => setTexto(e.target.value)} autoFocus aria-label="Nota"
+                  onKeyDown={e => {
+                    if (e.key === 'Escape') setEditar(false)
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); guardar() }
+                  }}
+                  placeholder="Nota" className={inputClass} />
+                {erro && <p className="text-red-600">{erro}</p>}
+                <div className="flex justify-end gap-1.5">
+                  <button type="button" onClick={() => setEditar(false)} disabled={saving} className={btn}>Cancelar</button>
+                  <button type="button" onClick={guardar} disabled={saving}
+                    className="text-xs font-semibold px-2 py-1 rounded-lg disabled:opacity-50" style={{ backgroundColor: '#1A1A1A', color: '#C9A84C' }}>
+                    {saving ? 'A guardar…' : 'Guardar nota'}
+                  </button>
+                </div>
+              </div>
+            ) : h.notas ? (
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-gray-700 dark:text-neutral-200 whitespace-pre-line break-words min-w-0">{limpaNota(h.notas)}</p>
+                <button type="button" onClick={abrirEdicao} aria-label="Editar nota" title="Editar nota" className="shrink-0 text-gray-400 hover:text-yellow-700">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button type="button" onClick={abrirEdicao} className="justify-self-start text-gray-400 hover:text-yellow-700">+ nota</button>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </li>
+  )
+}
+
+// Nota solta: fica na linha do tempo, mas não conta como contacto.
+function NotaForm({ rota, pessoaId, onCancel, onDone }) {
+  const [texto, setTexto] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [erro, setErro] = useState('')
+  async function guardar(e) {
+    e.preventDefault()
+    if (!texto.trim()) return setErro('Escreve a nota.')
+    setSaving(true); setErro('')
+    try {
+      const r = await apiFetch(`/api/crm/${rota}/${pessoaId}/contacto/nota`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notas: texto.trim() }),
+      })
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao guardar')
+      onDone?.()
+    } catch (err) {
+      setErro(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+  return (
+    <form onSubmit={guardar} className="mt-2 rounded-lg border border-yellow-200 bg-yellow-50/50 p-2.5 grid gap-2">
+      <textarea rows={3} value={texto} onChange={e => setTexto(e.target.value)} autoFocus placeholder="Escreve a nota" aria-label="Nova nota" className={inputClass}
+        onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) guardar(e) }} />
+      {erro && <p className="text-xs text-red-600">{erro}</p>}
+      <div className="flex justify-end gap-1.5">
+        <button type="button" onClick={onCancel} disabled={saving} className={btn}>Cancelar</button>
+        <button type="submit" disabled={saving}
+          className="px-3 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-50" style={{ backgroundColor: '#1A1A1A', color: '#C9A84C' }}>
+          {saving ? 'A guardar…' : 'Guardar nota'}
+        </button>
+      </div>
+    </form>
   )
 }
 
@@ -174,12 +266,14 @@ function OportunidadesEditor({ itens, setItens }) {
   )
 }
 
-// modo: 'agendar' (marcar ou mudar o contacto), 'feito' ou 'sem_sucesso'.
+// modo: 'agendar' (marcar ou mudar o contacto), 'feito' (o contacto marcado),
+// 'novo' (contacto fora do marcado: não o fecha nem lhe mexe nos assuntos) ou 'sem_sucesso'.
 // pessoa: { nome, regiao } — para ligar ao consultor as oportunidades registadas.
 function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSugerido, opcoes, onCancel, onDone }) {
-  const marcados = proximo?.assuntos || []
+  const feito = modo === 'feito' || modo === 'novo'
+  const marcados = modo === 'novo' ? [] : proximo?.assuntos || []
   const dataMarcada = String(proximo?.quando || '').slice(0, 10)
-  const [data, setData] = useState(modo === 'agendar' && dataMarcada ? dataMarcada : modo === 'feito' ? '' : emDias(1))
+  const [data, setData] = useState(modo === 'agendar' && dataMarcada ? dataMarcada : feito ? '' : emDias(1))
   const [hora, setHora] = useState('')
   const [assuntos, setAssuntos] = useState(marcados)
   const [quando, setQuando] = useState(agoraLocal())
@@ -195,7 +289,7 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
   const [audio, setAudio] = useState(null)
   const [saving, setSaving] = useState(false)
   const [erro, setErro] = useState('')
-  const comExtras = modo === 'feito' && tipo === 'consultor'
+  const comExtras = feito && tipo === 'consultor'
 
   // Cria em «Pré-aprovação» os imóveis das oportunidades e devolve-os como assuntos.
   async function criarOportunidades() {
@@ -222,7 +316,7 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
 
   async function guardar(e) {
     e.preventDefault()
-    if (modo !== 'feito' && !data) return setErro('Indica a data.')
+    if (!feito && !data) return setErro('Indica a data.')
     if (modo === 'sem_sucesso' && !notas.trim()) return setErro('Indica o motivo.')
     if (oportunidades.some(o => !o.nome.trim())) return setErro('Indica o nome ou a morada de cada oportunidade (ou retira a linha vazia).')
     if (oportunidades.length && !pessoa?.regiao) return setErro('O consultor não tem região (Coimbra ou AMP): preenche-a na ficha antes de registar oportunidades.')
@@ -237,7 +331,7 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
       ? ['agendar', { data, quando: comHora(data, hora), assuntos: limpos(assuntos), tipo_contacto: tipoContacto }]
       : modo === 'sem_sucesso'
         ? ['registar', { resultado: 'Sem sucesso', notas, proximo: prox }]
-        : ['registar', { resultado: 'Feito', quando: quando ? new Date(quando).toISOString() : null, canal, finalidade, notas, tratados, novos: [...limpos(novos), ...novosImoveis], proximo: prox }]
+        : ['registar', { resultado: 'Feito', quando: quando ? new Date(quando).toISOString() : null, canal, finalidade, notas, tratados, novos: [...limpos(novos), ...novosImoveis], proximo: prox, avulso: modo === 'novo' && !!proximo }]
     try {
       const r = await apiFetch(`/api/crm/${ROTA[tipo]}/${pessoaId}/contacto/${caminho}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo),
@@ -266,10 +360,11 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
       <p className="text-xs text-gray-600">
         {modo === 'agendar' ? `Fica como tarefa na agenda. Só há um ${rotuloMin} por pessoa: os imóveis a tratar entram como assuntos.`
           : modo === 'sem_sucesso' ? `Fica registado como tentado hoje (${fmtDia(emDias(0))}) sem sucesso. Os assuntos seguem para a nova data.`
+          : modo === 'novo' ? `Fica na linha do tempo.${proximo ? ` O ${rotuloMin} marcado mantém-se, a não ser que indiques outra data em baixo.` : ''}`
           : 'Fica no histórico. O que não foi tratado segue para o contacto seguinte.'}
       </p>
 
-      {modo === 'feito' && (
+      {feito && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <label className="text-[11px] text-gray-500">Quando
@@ -304,7 +399,7 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
             </div>
           )}
           <div>
-            <p className="text-[11px] text-gray-500 mb-1">Outros assuntos que surgiram</p>
+            <p className="text-[11px] text-gray-500 mb-1">{modo === 'novo' ? 'Assuntos (imóveis falados)' : 'Outros assuntos que surgiram'}</p>
             <AssuntosEditor itens={novos} setItens={setNovos} opcoes={opcoes} />
           </div>
           {comExtras && <OportunidadesEditor itens={oportunidades} setItens={setOportunidades} />}
@@ -340,7 +435,7 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
 
       <div>
         <p className="text-[11px] text-gray-500 mb-1">
-          {modo === 'agendar' ? 'Data do contacto' : modo === 'sem_sucesso' ? 'Nova data' : 'Próximo contacto (opcional)'}
+          {modo === 'agendar' ? 'Data do contacto' : modo === 'sem_sucesso' ? 'Nova data' : modo === 'novo' && proximo ? 'Mudar o próximo contacto para (opcional)' : 'Próximo contacto (opcional)'}
         </p>
         <div className="flex flex-wrap items-center gap-1.5">
           <input type="date" value={data} onChange={e => setData(e.target.value)} className={`${inputClass} sm:w-40`} aria-label="Data" />
@@ -352,7 +447,7 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
             </button>
           ))}
         </div>
-        {(modo !== 'feito' || data) && (
+        {(!feito || data) && (
           <div className="flex flex-wrap items-center gap-1.5 mt-1.5" role="radiogroup" aria-label="Tipo de contacto">
             <span className="text-[11px] text-gray-500">Tipo</span>
             {Object.entries(TIPOS).map(([k, r]) => (
@@ -387,98 +482,14 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
   )
 }
 
-// Registo simples de um contacto com o consultor: data e motivo. Vai directo
-// ao histórico, sem mexer no próximo contacto marcado nem nos seus assuntos.
-// Com reunião: marca-a como o próximo contacto da pessoa (tarefa na agenda),
-// com a reunião como assunto, mantendo os assuntos que já lá estavam.
-function NovoContactoForm({ pessoaId, proximo, onCancel, onDone }) {
-  const [data, setData] = useState(emDias(0))
-  const [motivo, setMotivo] = useState('')
-  const [comReuniao, setComReuniao] = useState(false)
-  const [dataReuniao, setDataReuniao] = useState('')
-  const [horaReuniao, setHoraReuniao] = useState('')
-  const [assuntoReuniao, setAssuntoReuniao] = useState('Reunião de parceria')
-  const [saving, setSaving] = useState(false)
-  const [erro, setErro] = useState('')
-
-  async function guardar(e) {
-    e.preventDefault()
-    if (!data) return setErro('Indica a data.')
-    if (!motivo.trim()) return setErro('Indica o motivo do contacto.')
-    if (comReuniao && !dataReuniao) return setErro('Indica a data da reunião.')
-    if (comReuniao && dataReuniao < emDias(0)) return setErro('A reunião tem de ser numa data futura.')
-    setErro(''); setSaving(true)
-    try {
-      const r = await apiFetch('/api/crm/consultor-interacoes', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          consultor_id: pessoaId, canal: 'Chamada', direcao: 'Enviado', resultado: 'Feito', notas: motivo.trim(),
-          proxima_data: comReuniao ? dataReuniao : null,
-          data_hora: data === emDias(0) ? new Date().toISOString() : new Date(`${data}T12:00:00`).toISOString(),
-        }),
-      })
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao guardar')
-      if (comReuniao) {
-        const texto = `${assuntoReuniao.trim() || 'Reunião'}${horaReuniao ? ` (${horaReuniao})` : ''}`
-        const atuais = (proximo?.assuntos || []).map(a => (a.imovel_id ? { imovel_id: a.imovel_id } : { texto: a.texto }))
-        const ra = await apiFetch(`/api/crm/consultores/${pessoaId}/contacto/agendar`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: dataReuniao, quando: comHora(dataReuniao, horaReuniao), assuntos: [...atuais, { texto }] }),
-        }).catch(() => null)
-        if (!ra?.ok) alert(`O contacto ficou registado, mas a reunião não foi agendada: ${(await ra?.json().catch(() => ({})))?.error || 'erro no envio'}`)
-      }
-      onDone?.()
-    } catch (err) {
-      setErro(err.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <form onSubmit={guardar} className="mt-2 rounded-lg border border-yellow-200 bg-yellow-50/50 p-2.5 grid gap-2">
-      <p className="text-xs text-gray-600">Fica no histórico de contactos deste consultor.</p>
-      <label className="text-[11px] text-gray-500">Data do contacto
-        <input type="date" value={data} max={emDias(0)} onChange={e => setData(e.target.value)} className={`${inputClass} sm:w-40`} />
-      </label>
-      <textarea rows={2} value={motivo} onChange={e => setMotivo(e.target.value)} autoFocus
-        placeholder="Motivo do contacto e o que foi falado" className={inputClass} aria-label="Motivo do contacto" />
-      <label className="inline-flex items-center gap-1.5 text-xs text-gray-700">
-        <input type="checkbox" checked={comReuniao} onChange={e => setComReuniao(e.target.checked)} />
-        Agendar reunião (fica como tarefa na agenda)
-      </label>
-      {comReuniao && (
-        <div className="grid gap-1.5">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <input type="date" value={dataReuniao} min={emDias(0)} onChange={e => setDataReuniao(e.target.value)} className={`${inputClass} sm:w-40`} aria-label="Data da reunião" />
-            <input type="time" value={horaReuniao} onChange={e => setHoraReuniao(e.target.value)} className={`${inputClass} sm:w-28`} aria-label="Hora da reunião (opcional)" title="Hora (opcional)" />
-            <input type="text" value={assuntoReuniao} onChange={e => setAssuntoReuniao(e.target.value)} placeholder="Assunto da reunião" className={`${inputClass} sm:flex-1 sm:w-auto`} aria-label="Assunto da reunião" />
-          </div>
-          {proximo?.quando && (
-            <p className="text-[11px] text-orange-700">Já há um contacto marcado para {fmtQuando(proximo.quando)}: passa para a data da reunião, com os mesmos assuntos.</p>
-          )}
-        </div>
-      )}
-      {erro && <p className="text-xs text-red-600">{erro}</p>}
-      <div className="flex justify-end gap-1.5">
-        <button type="button" onClick={onCancel} disabled={saving} className={btn}>Cancelar</button>
-        <button type="submit" disabled={saving}
-          className="text-xs font-medium px-3 py-1 rounded-lg bg-yellow-600 text-white hover:bg-yellow-700 disabled:opacity-50">
-          {saving ? 'A guardar…' : 'Guardar contacto'}
-        </button>
-      </div>
-    </form>
-  )
-}
-
 // imoveis: imóveis já ligados à pessoa (para escolher como assunto). Sem eles,
 // usa a lista de todos os imóveis.
 // notaAntiga: texto do antigo campo "Próxima ação" do investidor. Mostra-se até
 // haver contacto marcado e entra como assunto ao agendar (o campo é então limpo).
 // regiao: região da pessoa (consultor), para os imóveis das oportunidades registadas.
 export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, onNavigate, onUpdate }) {
-  const [modo, setModo] = useState(null) // 'agendar' | 'feito' | 'sem_sucesso' | 'novo' (registo simples, só consultor)
-  const [verHistorico, setVerHistorico] = useState(tipo === 'consultor')
+  const [modo, setModo] = useState(null) // 'agendar' | 'feito' | 'sem_sucesso' | 'novo' (contacto fora do marcado) | 'nota'
+  const [verTodos, setVerTodos] = useState(false)
   const query = useQuery({
     queryKey: ['contacto-pessoa', tipo, pessoaId],
     queryFn: async () => {
@@ -521,14 +532,14 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm font-semibold text-gray-800 dark:text-neutral-100">Próximos passos</span>
         <span className="flex flex-wrap gap-1.5">
-          {tipo === 'consultor' && (
-            <button type="button" onClick={() => setModo('novo')}
-              className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg bg-yellow-600 text-white hover:bg-yellow-700">
-              <Plus className="w-3 h-3" /> Novo contacto
-            </button>
-          )}
+          <button type="button" onClick={() => setModo(modo === 'novo' ? null : 'novo')}
+            className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg bg-yellow-600 text-white hover:bg-yellow-700">
+            <Plus className="w-3 h-3" /> Novo contacto
+          </button>
+          <button type="button" onClick={() => setModo(modo === 'nota' ? null : 'nota')} className={`inline-flex items-center gap-1 ${btn}`}>
+            <StickyNote className="w-3 h-3" /> Nova nota
+          </button>
           {!proximo && <button type="button" onClick={() => setModo('agendar')} className={btn}>Agendar contacto</button>}
-          {!proximo && <button type="button" onClick={() => setModo('feito')} className={btn}>Registar contacto feito</button>}
         </span>
       </div>
 
@@ -575,23 +586,31 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
         </div>
       )}
 
-      {modo === 'novo' && <NovoContactoForm pessoaId={pessoaId} proximo={proximo} onCancel={() => setModo(null)} onDone={guardado} />}
-      {modo && modo !== 'novo' && (
+      {modo === 'nota' && <NotaForm rota={ROTA[tipo]} pessoaId={pessoaId} onCancel={() => setModo(null)} onDone={guardado} />}
+      {modo && modo !== 'nota' && (
         <ContactoForm key={modo} tipo={tipo} pessoaId={pessoaId} pessoa={{ nome: d.pessoa?.nome, regiao }} modo={modo} rotulo={rotulo} tipoSugerido={tipoSugerido} opcoes={opcoes}
           proximo={proximo || (nota && modo === 'agendar' ? { assuntos: [{ texto: nota }] } : null)}
           onCancel={() => setModo(null)} onDone={guardado} />
       )}
 
       {historico.length > 0 && (
-        <div className="mt-2">
-          <button type="button" onClick={() => setVerHistorico(v => !v)} className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700">
-            {verHistorico ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-            Histórico de contactos ({historico.length})
-          </button>
-          {verHistorico && (
-            <ul className="mt-1.5 grid gap-1 max-h-72 overflow-y-auto">
-              {historico.map(h => <HistoricoItem key={h.id} h={h} rota={ROTA[tipo]} pessoaId={pessoaId} onSaved={() => query.refetch()} />)}
-            </ul>
+        <div className="mt-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
+            <span className="text-[11px] uppercase tracking-wider text-gray-400">Histórico · {historico.length}</span>
+            <span className="text-[11px] text-gray-400">Clica num registo para ver o detalhe</span>
+          </div>
+          {/* Linha cronológica em árvore: eixo ao centro (à esquerda no telemóvel), mais recente em cima. */}
+          <ol className="relative grid gap-2.5 py-1 before:absolute before:top-0 before:bottom-0 before:w-0.5 before:rounded before:bg-gray-200 dark:before:bg-neutral-700 before:left-[17px] sm:before:left-1/2 sm:before:-translate-x-1/2">
+            {(verTodos ? historico : historico.slice(0, MOSTRAR)).map((h, i) => (
+              <RegistoArvore key={h.id} h={h} lado={i % 2 === 0 ? 'dir' : 'esq'} rota={ROTA[tipo]} pessoaId={pessoaId} onSaved={() => query.refetch()} />
+            ))}
+          </ol>
+          {historico.length > MOSTRAR && (
+            <div className="text-center mt-2">
+              <button type="button" onClick={() => setVerTodos(v => !v)} className={btn}>
+                {verTodos ? 'Mostrar menos' : `Ver mais antigos (${historico.length - MOSTRAR})`}
+              </button>
+            </div>
           )}
         </div>
       )}

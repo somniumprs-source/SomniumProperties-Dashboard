@@ -252,15 +252,7 @@ export async function autoFillInvestidor(reuniaoId) {
   if (!inv.tipo_investidor && dados.tipo_investidor?.length) updates.tipo_investidor = JSON.stringify(dados.tipo_investidor)
   if (!inv.classificacao && analise.classificacao_sugerida) updates.classificacao = analise.classificacao_sugerida
 
-  // Adicionar notas da reunião
-  const notaReuniao = `[${reuniao.data?.slice(0, 10)}] ${analise.resumo_executivo}`
-  if (inv.notas) {
-    if (!inv.notas.includes(notaReuniao.slice(0, 30))) {
-      updates.notas = inv.notas + '\n\n' + notaReuniao
-    }
-  } else {
-    updates.notas = notaReuniao
-  }
+  // O resumo da reunião fica na aba Reuniões (não se copia para notas).
 
   if (Object.keys(updates).length > 0) {
     const sets = Object.entries(updates).map(([k], i) => `${k} = $${i + 1}`)
@@ -454,15 +446,7 @@ export async function autoFillConsultor(reuniaoId) {
   if (!cons.equipa_remax && dados.equipa_remax) updates.equipa_remax = dados.equipa_remax
   if (!cons.classificacao && analise.classificacao_sugerida) updates.classificacao = analise.classificacao_sugerida
 
-  // Adicionar nota da reunião
-  const notaReuniao = `[${reuniao.data?.slice(0, 10)}] ${analise.resumo_executivo || 'Reunião analisada por AI'}`
-  if (cons.notas) {
-    if (!cons.notas.includes(notaReuniao.slice(0, 30))) {
-      updates.notas = cons.notas + '\n\n' + notaReuniao
-    }
-  } else {
-    updates.notas = notaReuniao
-  }
+  // O resumo da reunião fica na aba Reuniões (não se copia para notas).
 
   if (Object.keys(updates).length > 0) {
     const sets = Object.entries(updates).map(([k], i) => `${k} = $${i + 1}`)

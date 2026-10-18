@@ -1342,8 +1342,8 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
       getConsultores({ regiao }).catch(() => [] as any[]),
       getNegócios({ regiao }).catch(() => [] as any[]),
       getDespesas({ regiao }).catch(() => [] as any[]),
-      pool.query(`SELECT consultor_id, canal, direcao, data_hora FROM consultor_interacoes ORDER BY consultor_id, data_hora`).catch(() => ({ rows: [] as any[] })),
-      pool.query(`SELECT finalidade, data_hora FROM investidor_interacoes`).catch(() => ({ rows: [] as any[] })),
+      pool.query(`SELECT consultor_id, canal, direcao, data_hora FROM consultor_interacoes WHERE canal IS DISTINCT FROM 'Nota' ORDER BY consultor_id, data_hora`).catch(() => ({ rows: [] as any[] })),
+      pool.query(`SELECT finalidade, data_hora FROM investidor_interacoes WHERE canal IS DISTINCT FROM 'Nota'`).catch(() => ({ rows: [] as any[] })),
       pool.query(`SELECT negocio_id, capital FROM projeto_investidores WHERE capital > 0`).catch(() => ({ rows: [] as any[] })),
     ]);
     const investidores = investidoresRaw.filter(isInvestidorPrincipal);
@@ -3685,7 +3685,7 @@ app.get("/alertas", endpointCache(300000), async (c: any) => {
     // ── Consultores: sem primeiro contacto >48h / inativo >15d ──
     try {
       const { rows: pgConsultores } = await pool.query("SELECT id, nome, estatuto, created_at FROM consultores");
-      const { rows: todasInteracoes } = await pool.query("SELECT consultor_id, data_hora FROM consultor_interacoes");
+      const { rows: todasInteracoes } = await pool.query("SELECT consultor_id, data_hora FROM consultor_interacoes WHERE canal IS DISTINCT FROM 'Nota'");
       const interacoesPorConsultor: Record<string, any[]> = {};
       for (const i of todasInteracoes) {
         if (!interacoesPorConsultor[i.consultor_id]) interacoesPorConsultor[i.consultor_id] = [];

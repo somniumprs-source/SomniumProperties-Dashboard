@@ -24,7 +24,7 @@ import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, Consul
 import pool from './pg.js'
 import { agendarPassoImovel, sincronizarTarefaVisita } from './agendaEngine.js'
 import { agendarFollowUpImovelManual, registarFollowUpFeito } from './followUpImovel.js'
-import { lerContactoPessoa, agendarContactoPessoa, registarContactoPessoa, editarNotaContacto, lerContactosDoImovel, juntarImovelAoContacto } from './contactoPessoa.js'
+import { lerContactoPessoa, agendarContactoPessoa, registarContactoPessoa, editarNotaContacto, anotarPessoa, lerContactosDoImovel, juntarImovelAoContacto } from './contactoPessoa.js'
 import { getVisitasEnriquecidas, syncDataVisitaDerivada, getFichaVisitaParaImovel } from './queries.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
@@ -1166,7 +1166,7 @@ router.get('/consultores/enriched', async (req, res) => {
     const [resConsultores, resImoveis, resInteracoes, resFollowupAgg] = await Promise.all([
       pool.query(`SELECT * FROM consultores ${consultoresWhere} ORDER BY score_prioridade DESC NULLS LAST, updated_at DESC`, params),
       pool.query(`SELECT consultor_id, origem, estado, check_qualidade, data_adicionado FROM imoveis ${imoveisWhere}`, params),
-      pool.query('SELECT consultor_id, data_hora, direcao FROM consultor_interacoes ORDER BY data_hora DESC'),
+      pool.query("SELECT consultor_id, data_hora, direcao FROM consultor_interacoes WHERE canal IS DISTINCT FROM 'Nota' ORDER BY data_hora DESC"),
       pool.query('SELECT consultor_id, MIN(data) AS primeiro_followup, MAX(data) AS ultimo_followup FROM consultor_followups GROUP BY consultor_id'),
     ])
     const consultores = resConsultores.rows
@@ -2298,6 +2298,13 @@ for (const [rota, tipo] of [['consultores', 'consultor'], ['investidores', 'inve
       const r = await registarContactoPessoa(pool, tipo, req.params.id, { ...(req.body || {}), user: req.user || null })
       if (!r) return res.status(404).json({ error: 'Não encontrado' })
       res.json({ ok: true, ...r })
+    } catch (e) { res.status(400).json({ error: e.message }) }
+  })
+  router.post(`/${rota}/:id/contacto/nota`, async (req, res) => {
+    try {
+      const nid = await anotarPessoa(pool, tipo, req.params.id, { notas: req.body?.notas, quando: req.body?.quando || null, user: req.user || null })
+      if (!nid) return res.status(404).json({ error: 'Não encontrado' })
+      res.json({ ok: true, id: nid })
     } catch (e) { res.status(400).json({ error: e.message }) }
   })
   router.put(`/${rota}/:id/contacto/historico/:hid`, async (req, res) => {
@@ -3637,7 +3644,7 @@ router.post('/automation/score-prioridade-consultores', async (req, res) => {
   try {
     const { rows: consultores } = await pool.query('SELECT * FROM consultores')
     const { rows: imoveis } = await pool.query('SELECT consultor_id, origem, estado, check_qualidade FROM imoveis WHERE consultor_id IS NOT NULL')
-    const { rows: interacoes } = await pool.query('SELECT consultor_id, data_hora, direcao FROM consultor_interacoes ORDER BY data_hora ASC')
+    const { rows: interacoes } = await pool.query("SELECT consultor_id, data_hora, direcao FROM consultor_interacoes WHERE canal IS DISTINCT FROM 'Nota' ORDER BY data_hora ASC")
     const now = Date.now()
 
     const leadCounts = consultores.map(c =>
@@ -4162,7 +4169,7 @@ router.get('/relatorio/consultores', async (req, res) => {
   try {
     const { rows: consultores } = await pool.query('SELECT * FROM consultores ORDER BY score_prioridade DESC NULLS LAST')
     const { rows: imoveis } = await pool.query('SELECT consultor_id, origem, estado, check_qualidade FROM imoveis WHERE consultor_id IS NOT NULL')
-    const { rows: interacoes } = await pool.query('SELECT consultor_id, data_hora, direcao FROM consultor_interacoes')
+    const { rows: interacoes } = await pool.query("SELECT consultor_id, data_hora, direcao FROM consultor_interacoes WHERE canal IS DISTINCT FROM 'Nota'")
     const now = new Date()
 
     const leadCounts = consultores.map(c =>

@@ -135,7 +135,7 @@ async function runRelatorioSemanal() {
     const { rows: consultores } = await pool.query("SELECT * FROM consultores");
     const { rows: imoveis } = await pool.query("SELECT * FROM imoveis");
     const { rows: interacoes } = await pool.query(
-      "SELECT * FROM consultor_interacoes WHERE data_hora >= $1",
+      "SELECT * FROM consultor_interacoes WHERE data_hora >= $1 AND canal IS DISTINCT FROM 'Nota'",
       [semanaStr],
     );
 

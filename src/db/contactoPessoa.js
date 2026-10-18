@@ -242,12 +242,14 @@ async function agendarContactoPessoaTx(pool, tipo, id, { data, quando = null, as
 // novos: assuntos que surgiram na conversa e não estavam marcados.
 // proximo: { data, quando } do contacto seguinte; os assuntos que ficaram por
 // tratar seguem para ele. Sem sucesso: nada foi tratado, segue tudo.
+// avulso: contacto fora do que está marcado («Novo contacto»): o contacto
+// marcado e os seus assuntos ficam como estão; com `proximo`, só muda a data.
 export async function registarContactoPessoa(poolOuCx, tipo, id, opcoes = {}) {
   return emTransacao(poolOuCx, pool => registarContactoPessoaTx(pool, tipo, id, opcoes))
 }
 
 async function registarContactoPessoaTx(pool, tipo, id, {
-  resultado, quando = null, canal = 'Chamada', notas = '', finalidade = null, tratados = [], novos = [], proximo = null, user = null,
+  resultado, quando = null, canal = 'Chamada', notas = '', finalidade = null, tratados = [], novos = [], proximo = null, avulso = false, user = null,
 } = {}) {
   const p = await carregarPessoa(pool, tipo, id)
   if (!p) return null
@@ -260,7 +262,7 @@ async function registarContactoPessoaTx(pool, tipo, id, {
   if (proximo?.data && !eData(proximo.data)) throw new Error('Data do próximo contacto inválida')
   const feitoEm = quando && !isNaN(new Date(quando).getTime()) ? new Date(quando).toISOString() : new Date().toISOString()
 
-  const t = await tarefaAberta(pool, tipo, id)
+  const t = avulso ? null : await tarefaAberta(pool, tipo, id)
   const marcados = t ? await assuntosDe(pool, 'tarefa', [t.id]) : []
   const idsTratados = semSucesso ? [] : marcados.filter(a => (tratados || []).includes(a.id)).map(a => a.id)
   const pendentes = marcados.filter(a => !idsTratados.includes(a.id))
@@ -285,12 +287,30 @@ async function registarContactoPessoaTx(pool, tipo, id, {
       await pool.query("UPDATE contacto_assuntos SET origem_id = $1 WHERE origem = 'tarefa' AND id = ANY($2)", [tarefaId, pendentes.map(a => a.id)])
       await afinarTarefa(pool, p, tarefaId, proximo.data, proximo.tipo || null)
     }
-  } else {
+  } else if (!avulso) {
     // Sem contacto seguinte, o que ficou por tratar deixa de estar marcado.
     if (pendentes.length) await pool.query('DELETE FROM contacto_assuntos WHERE id = ANY($1)', [pendentes.map(a => a.id)])
     await pool.query(`UPDATE ${cfg.tabela} SET ${cfg.espelho} = NULL WHERE id = $1`, [id])
   }
   return { interacao_id: interacaoId, tarefa_id: tarefaId }
+}
+
+// ── Nota solta no histórico da pessoa ──────────────────────
+// Fica na mesma tabela dos contactos, com canal 'Nota' e sem resultado: aparece
+// na linha do tempo, mas não conta como contacto nas métricas nem no churn.
+export async function anotarPessoa(pool, tipo, id, { notas, quando = null, user = null } = {}) {
+  const p = await carregarPessoa(pool, tipo, id)
+  if (!p) return null
+  const texto = String(notas ?? '').trim()
+  if (!texto) throw new Error('Escreve a nota')
+  const { cfg } = p
+  const agora = new Date().toISOString()
+  const em = quando && !isNaN(new Date(quando).getTime()) ? new Date(quando).toISOString() : agora
+  const nid = randomUUID()
+  const cols = ['id', cfg.fk, 'data_hora', 'canal', 'direcao', 'notas', 'autor', 'created_at', 'updated_at']
+  const vals = [nid, id, em, 'Nota', 'Nota', texto, user?.nome || user?.email || null, agora, agora]
+  await pool.query(`INSERT INTO ${cfg.interacoes} (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(', ')})`, vals)
+  return nid
 }
 
 // ── Corrigir a nota de um contacto do histórico ─────────────

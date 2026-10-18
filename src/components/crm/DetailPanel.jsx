@@ -1292,14 +1292,8 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
             </>}
           </div>
 
-          {editing && (type === 'Consultores' || type === 'Parceiros') && (
-            <div>
-              <label className="text-xs text-gray-400 block mb-1">Notas</label>
-              <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={4}
-                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
-            </div>
-          )}
-          {!editing && data.notas && (
+          {/* Consultores e parceiros: as notas vivem na linha do tempo dos Próximos passos. */}
+          {!editing && data.notas && !['Consultores', 'Parceiros'].includes(type) && (
             <div>
               <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Notas</p>
               <p className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3 whitespace-pre-line">{data.notas}</p>
@@ -1423,7 +1417,9 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
             </div>
           )}
 
-          {/* Timeline */}
+          {/* Timeline de alterações: nas pessoas o histórico é a linha do tempo dos
+              Próximos passos (o registo de alterações fica na Auditoria). */}
+          {!['Consultores', 'Investidores', 'Parceiros'].includes(type) && (
           <div>
             <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Timeline</p>
             {data.timeline?.length > 0 ? (
@@ -1437,6 +1433,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
               </div>
             ) : <p className="text-xs text-gray-300">Sem histórico</p>}
           </div>
+          )}
         </div>
       </div>
       </div>
@@ -2884,18 +2881,10 @@ function InvestidorEditSections({ data, form, setField }) {
     </Section>
 
     {/* 5. Timeline */}
-    <Section icon="🕐" title="Timeline" fields={sec.timeline} form={form} defaultOpen>
+    <Section icon="🕐" title="Datas" fields={sec.timeline} form={form} defaultOpen>
       <EF label="1º Contacto" field="data_primeiro_contacto" form={form} set={setField} type="date" />
       <EF label="Data Reunião" field="data_reuniao" form={form} set={setField} type="date" />
       <EF label="Último Contacto" field="data_ultimo_contacto" form={form} set={setField} type="date" />
-    </Section>
-
-    {/* 6. Notas */}
-    <Section icon="📝" title="Notas" fields={['notas']} form={form} defaultOpen>
-      <div className="col-span-2 md:col-span-3">
-        <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={5}
-          className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
-      </div>
     </Section>
 
     {/* 7. Reinvestimento / Churn — declaração explícita de saída */}
@@ -3018,18 +3007,9 @@ function InvestidorReadSections({ data }) {
     </Section>
 
     {/* 5. Timeline */}
-    <Section icon="🕐" title="Timeline" fields={sec.timeline} form={data} defaultOpen>
+    <Section icon="🕐" title="Datas" fields={sec.timeline} form={data} defaultOpen>
       <InvestidorTimeline data={data} />
     </Section>
-
-    {/* 6. Notas */}
-    {data.notas && (
-      <Section icon="📝" title="Notas" fields={['notas']} form={data} defaultOpen>
-        <div className="col-span-2 md:col-span-3">
-          <p className="text-sm text-gray-700 whitespace-pre-line">{data.notas}</p>
-        </div>
-      </Section>
-    )}
 
     {/* 7. Bloqueios — só se preenchido */}
     {(data.motivo_nao_aprovacao || data.motivo_inatividade) && (
