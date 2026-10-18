@@ -28,16 +28,16 @@ export function AiResumoCard({ negocioId }) {
   }
 
   const sinalCor = {
-    verde:    { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700', dot: 'bg-green-500' },
-    amarelo:  { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-700', dot: 'bg-yellow-500' },
-    vermelho: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', dot: 'bg-red-500' },
-  }[data?.sinal] || { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-700', dot: 'bg-gray-400' }
+    verde:    { bg: 'bg-success/10', border: 'border-success/30', text: 'text-success', dot: 'bg-success' },
+    amarelo:  { bg: 'bg-warning/10', border: 'border-warning/30', text: 'text-warning', dot: 'bg-warning' },
+    vermelho: { bg: 'bg-danger/10', border: 'border-danger/30', text: 'text-danger', dot: 'bg-danger' },
+  }[data?.sinal] || { bg: 'bg-surface', border: 'border-line', text: 'text-ink', dot: 'bg-ink/40' }
 
   if (!data && !loading && !error) {
     return (
       <div className="rounded-2xl border-2 border-dashed border-brand-gold/50 p-4 text-center bg-gradient-to-br from-brand-dark/5 to-brand-gold/5">
         <Sparkles className="w-5 h-5 mx-auto text-brand-gold mb-1.5" />
-        <p className="text-xs text-gray-600 mb-2">Pede uma análise rápida deste projeto à IA Somnium</p>
+        <p className="text-xs text-ink-muted mb-2">Pede uma análise rápida deste projeto à IA Somnium</p>
         <button onClick={() => carregar(false)}
           className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-brand-dark text-brand-gold text-xs font-medium hover:bg-brand-dark-light">
           <Sparkles className="w-3.5 h-3.5" /> Gerar resumo IA
@@ -47,8 +47,8 @@ export function AiResumoCard({ negocioId }) {
   }
   if (loading) {
     return (
-      <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50 text-center">
-        <div className="inline-flex items-center gap-2 text-xs text-gray-500">
+      <div className="rounded-2xl border border-line p-4 bg-surface text-center">
+        <div className="inline-flex items-center gap-2 text-xs text-ink-muted">
           <RefreshCw className="w-3.5 h-3.5 animate-spin" /> A pensar...
         </div>
       </div>
@@ -56,9 +56,9 @@ export function AiResumoCard({ negocioId }) {
   }
   if (error) {
     return (
-      <div className="rounded-2xl border border-red-200 p-4 bg-red-50 text-center">
-        <p className="text-xs text-red-700">Erro: {error}</p>
-        <button onClick={() => carregar(false)} className="text-xs text-red-700 underline mt-1">Tentar de novo</button>
+      <div className="rounded-2xl border border-danger/30 p-4 bg-danger/10 text-center">
+        <p className="text-xs text-danger">Erro: {error}</p>
+        <button onClick={() => carregar(false)} className="text-xs text-danger underline mt-1">Tentar de novo</button>
       </div>
     )
   }
@@ -68,24 +68,24 @@ export function AiResumoCard({ negocioId }) {
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-brand-gold" />
-          <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Resumo IA</p>
+          <p className="text-[10px] uppercase tracking-wider text-ink-muted font-semibold">Resumo IA</p>
           <span className={`w-2 h-2 rounded-full ${sinalCor.dot}`} />
           <span className={`text-[10px] font-bold uppercase ${sinalCor.text}`}>{data.sinal}</span>
         </div>
         <button onClick={() => carregar(true)} title="Regenerar"
-          className="text-[10px] text-gray-400 hover:text-gray-700 inline-flex items-center gap-1">
+          className="text-[10px] text-ink-muted hover:text-ink inline-flex items-center gap-1">
           <RefreshCw className="w-3 h-3" /> Atualizar
         </button>
       </div>
 
-      <p className="text-sm text-gray-800 leading-relaxed mb-3">{data.resumo}</p>
+      <p className="text-sm text-ink leading-relaxed mb-3">{data.resumo}</p>
 
       {data.destaques?.length > 0 && (
         <div className="mb-3">
-          <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1.5">Destaques</p>
+          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">Destaques</p>
           <div className="flex flex-wrap gap-1.5">
             {data.destaques.map((d, i) => (
-              <span key={i} className="px-2 py-1 rounded-md bg-white text-xs text-gray-700 border border-gray-200">{d}</span>
+              <span key={i} className="px-2 py-1 rounded-md bg-surface-raised text-xs text-ink border border-line">{d}</span>
             ))}
           </div>
         </div>
@@ -93,10 +93,10 @@ export function AiResumoCard({ negocioId }) {
 
       {data.proximos_passos?.length > 0 && (
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1.5">Próximos passos sugeridos</p>
+          <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1.5">Próximos passos sugeridos</p>
           <ul className="space-y-1">
             {data.proximos_passos.map((p, i) => (
-              <li key={i} className="text-xs text-gray-700 flex items-start gap-1.5">
+              <li key={i} className="text-xs text-ink flex items-start gap-1.5">
                 <span className="text-brand-gold font-bold">→</span>
                 <span>{p}</span>
               </li>
@@ -105,7 +105,7 @@ export function AiResumoCard({ negocioId }) {
         </div>
       )}
 
-      <p className="text-[9px] text-gray-400 mt-3 text-right">
+      <p className="text-[9px] text-ink-muted mt-3 text-right">
         {data.cached ? 'Cache · ' : ''}{data.modelo} · {data.ms}ms
       </p>
     </div>
@@ -128,9 +128,9 @@ export function GanttFases({ fases, negocio }) {
 
   if (datas.length < 2) {
     return (
-      <div className="bg-gray-50 dark:bg-neutral-900/50 rounded-xl p-4 border border-gray-200 dark:border-neutral-800">
-        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Cronograma</h3>
-        <p className="text-xs text-gray-400">Define datas de início/fim previstos em cada fase para ver o cronograma.</p>
+      <div className="bg-surface  rounded-xl p-4 border border-line ">
+        <h3 className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-2">Cronograma</h3>
+        <p className="text-xs text-ink-muted">Define datas de início/fim previstos em cada fase para ver o cronograma.</p>
       </div>
     )
   }
@@ -154,12 +154,12 @@ export function GanttFases({ fases, negocio }) {
   const CORES = ['#475569', '#1F4E5F', '#7C2D40', '#5F4D20', '#C9A84C', '#D5B65A', '#866B2D', '#0d0d0d']
 
   return (
-    <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-4">
-      <h3 className="text-xs font-semibold text-gray-500 dark:text-neutral-400 uppercase tracking-widest mb-4">Cronograma Gantt</h3>
+    <div className="bg-surface-raised  rounded-xl border border-line  p-4">
+      <h3 className="text-xs font-semibold text-ink-muted  uppercase tracking-widest mb-4">Cronograma Gantt</h3>
 
       <div className="hidden sm:block relative h-6 mb-2 ml-44">
         {marcas.map((t, i) => (
-          <div key={i} className="absolute top-0 text-[9px] text-gray-400" style={{ left: `${((t - minT) / range) * 100}%` }}>
+          <div key={i} className="absolute top-0 text-[9px] text-ink-muted" style={{ left: `${((t - minT) / range) * 100}%` }}>
             {fmtMes(t)}
           </div>
         ))}
@@ -184,12 +184,12 @@ export function GanttFases({ fases, negocio }) {
           return (
             <div key={f.id} className="flex items-center gap-2 group">
               <div className="w-40 flex-shrink-0">
-                <p className="text-xs font-medium text-gray-700 dark:text-neutral-300 truncate">{f.nome}</p>
-                <p className="text-[10px] text-gray-400">{f.perc_execucao || 0}%</p>
+                <p className="text-xs font-medium text-ink  truncate">{f.nome}</p>
+                <p className="text-[10px] text-ink-muted">{f.perc_execucao || 0}%</p>
               </div>
-              <div className="relative flex-1 h-6 bg-gray-50 dark:bg-neutral-800 rounded overflow-hidden">
+              <div className="relative flex-1 h-6 bg-surface  rounded overflow-hidden">
                 {marcas.map((t, i) => (
-                  <div key={i} className="absolute top-0 bottom-0 border-l border-gray-100 dark:border-neutral-700" style={{ left: `${((t - minT) / range) * 100}%` }} />
+                  <div key={i} className="absolute top-0 bottom-0 border-l border-line " style={{ left: `${((t - minT) / range) * 100}%` }} />
                 ))}
                 {hasPrev && (
                   <div className="absolute top-1 h-2 rounded opacity-40" style={{ left: `${prevLeft}%`, width: `${prevWidth}%`, background: cor }} />
@@ -198,7 +198,7 @@ export function GanttFases({ fases, negocio }) {
                   <div className="absolute top-3 h-2 rounded" style={{ left: `${realLeft}%`, width: `${realWidth}%`, background: cor }} />
                 )}
                 {todayPct >= 0 && todayPct <= 100 && (
-                  <div className="absolute top-0 bottom-0 w-0.5 bg-red-500" style={{ left: `${todayPct}%` }} title="Hoje" />
+                  <div className="absolute top-0 bottom-0 w-0.5 bg-danger" style={{ left: `${todayPct}%` }} title="Hoje" />
                 )}
               </div>
             </div>
@@ -206,10 +206,10 @@ export function GanttFases({ fases, negocio }) {
         })}
       </div>
 
-      <div className="flex items-center gap-4 mt-3 text-[10px] text-gray-500">
-        <span className="flex items-center gap-1.5"><span className="w-3 h-2 rounded bg-gray-400 opacity-40" /> Previsto</span>
+      <div className="flex items-center gap-4 mt-3 text-[10px] text-ink-muted">
+        <span className="flex items-center gap-1.5"><span className="w-3 h-2 rounded bg-ink/40 opacity-40" /> Previsto</span>
         <span className="flex items-center gap-1.5"><span className="w-3 h-2 rounded bg-gray-700" /> Real</span>
-        <span className="flex items-center gap-1.5"><span className="w-0.5 h-3 bg-red-500" /> Hoje</span>
+        <span className="flex items-center gap-1.5"><span className="w-0.5 h-3 bg-danger" /> Hoje</span>
       </div>
     </div>
   )
@@ -236,22 +236,22 @@ export function TabHistorico({ negocioId }) {
       .finally(() => setLoading(false))
   }, [negocioId])
 
-  if (loading) return <p className="text-sm text-gray-400 py-8 text-center">A carregar…</p>
-  if (eventos.length === 0) return <p className="text-sm text-gray-400 py-8 text-center">Sem atividade registada.</p>
+  if (loading) return <p className="text-sm text-ink-muted py-8 text-center">A carregar…</p>
+  if (eventos.length === 0) return <p className="text-sm text-ink-muted py-8 text-center">Sem atividade registada.</p>
 
   return (
     <div className="space-y-2">
       {eventos.map(e => (
-        <div key={e.id} className="flex items-start gap-3 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-100 dark:border-neutral-800">
+        <div key={e.id} className="flex items-start gap-3 p-3 bg-surface-raised  rounded-lg border border-line ">
           <span className="text-base flex-shrink-0">{AUDIT_ICONS[e.entidade] || '•'}</span>
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-gray-800 dark:text-neutral-200">
+            <p className="text-sm text-ink ">
               <span className="font-semibold">{AUDIT_ACAO_LABEL[e.acao] || e.acao}</span>
-              <span className="text-gray-500 dark:text-neutral-400"> · {e.descricao || `${e.entidade} ${e.entidade_id}`}</span>
+              <span className="text-ink-muted "> · {e.descricao || `${e.entidade} ${e.entidade_id}`}</span>
             </p>
             <div className="flex items-center gap-2 mt-0.5">
-              {e.user_nome && <span className="text-[10px] text-gray-400">por {e.user_nome}</span>}
-              <span className="text-[10px] text-gray-400">{new Date(e.created_at).toLocaleString('pt-PT')}</span>
+              {e.user_nome && <span className="text-[10px] text-ink-muted">por {e.user_nome}</span>}
+              <span className="text-[10px] text-ink-muted">{new Date(e.created_at).toLocaleString('pt-PT')}</span>
             </div>
           </div>
         </div>

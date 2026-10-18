@@ -179,7 +179,7 @@ export function QuadroConsultoria({ negocioId, faturacao }) {
     return { porTipo, semTipo, totalSemTipo: round2(semTipo.reduce((s, d) => s + n(d.custo_mensal), 0)), total, pagas, obraCliente }
   }, [despesas])
 
-  if (despesasQuery.isPending) return <Card><p className="py-4 text-center text-sm text-gray-400">A carregar quadro…</p></Card>
+  if (despesasQuery.isPending) return <Card><p className="py-4 text-center text-sm text-ink-muted">A carregar quadro…</p></Card>
 
   const honorario = n(faturacao?.totalExpectavel)
   const faturado = n(faturacao?.somniumReal)
@@ -194,7 +194,7 @@ export function QuadroConsultoria({ negocioId, faturacao }) {
         action={faturacao?.modeloLabel && <Badge tone="gold" size="sm">{faturacao.modeloLabel}</Badge>} />
 
       {honorario <= 0 && (
-        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800/50 px-3 py-2 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+        <div className="mb-3 rounded-lg border border-warning/30 bg-warning/10 dark:bg-amber-900/20 dark:border-amber-800/50 px-3 py-2 text-xs text-warning dark:text-amber-300 flex items-start gap-2">
           <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
           Define o honorário acordado nas tranches, mais abaixo no Resumo.
         </div>
@@ -209,7 +209,7 @@ export function QuadroConsultoria({ negocioId, faturacao }) {
 
       <Card.Footer className="flex items-center justify-between gap-3 flex-wrap">
         <button type="button" onClick={() => setAberto(v => !v)}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-neutral-300 hover:text-brand-gold">
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-muted  hover:text-brand-gold">
           {aberto ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           {aberto ? 'Esconder despesas por tipo' : 'Ver despesas por tipo'}
         </button>
@@ -218,10 +218,10 @@ export function QuadroConsultoria({ negocioId, faturacao }) {
 
       {aberto && (
         <div className="mt-4 space-y-2">
-          <div className="rounded-xl border border-gray-200 dark:border-neutral-800 overflow-hidden">
+          <div className="rounded-xl border border-line  overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 dark:border-neutral-800 text-xs text-gray-400 uppercase bg-gray-50 dark:bg-neutral-800/50">
+                <tr className="border-b border-line  text-xs text-ink-muted uppercase bg-surface ">
                   <th className="text-left py-2.5 px-4">Tipo de custo</th>
                   <th className="text-right py-2.5 px-3 w-24">Faturas</th>
                   <th className="text-right py-2.5 px-4 w-32">Valor</th>
@@ -229,34 +229,34 @@ export function QuadroConsultoria({ negocioId, faturacao }) {
               </thead>
               <tbody>
                 {calc.porTipo.filter(t => t.n > 0).map(t => (
-                  <tr key={t.key} className="border-b border-gray-50 dark:border-neutral-800">
-                    <td className="py-2 px-4 text-gray-700 dark:text-neutral-300">{t.label}</td>
-                    <td className="py-2 px-3 text-right text-xs text-gray-400">{t.n}</td>
-                    <td className="py-2 px-4 text-right font-mono text-gray-800 dark:text-neutral-100">{EUR2(t.total)}</td>
+                  <tr key={t.key} className="border-b border-line ">
+                    <td className="py-2 px-4 text-ink ">{t.label}</td>
+                    <td className="py-2 px-3 text-right text-xs text-ink-muted">{t.n}</td>
+                    <td className="py-2 px-4 text-right num text-ink ">{EUR2(t.total)}</td>
                   </tr>
                 ))}
                 {calc.semTipo.length > 0 && (
-                  <tr className="border-b border-gray-50 bg-amber-50/50 dark:bg-amber-900/10">
-                    <td className="py-2 px-4 text-amber-800 dark:text-amber-300">Por classificar — escolher o tipo na aba Faturas</td>
-                    <td className="py-2 px-3 text-right text-xs text-amber-700">{calc.semTipo.length}</td>
-                    <td className="py-2 px-4 text-right font-mono text-amber-800 dark:text-amber-300">{EUR2(calc.totalSemTipo)}</td>
+                  <tr className="border-b border-line bg-warning/10 dark:bg-amber-900/10">
+                    <td className="py-2 px-4 text-warning dark:text-amber-300">Por classificar — escolher o tipo na aba Faturas</td>
+                    <td className="py-2 px-3 text-right text-xs text-warning">{calc.semTipo.length}</td>
+                    <td className="py-2 px-4 text-right num text-warning dark:text-amber-300">{EUR2(calc.totalSemTipo)}</td>
                   </tr>
                 )}
                 {calc.total === 0 && calc.semTipo.length === 0 && (
-                  <tr><td colSpan={3} className="py-4 text-center text-sm text-gray-400">Sem despesas próprias registadas.</td></tr>
+                  <tr><td colSpan={3} className="py-4 text-center text-sm text-ink-muted">Sem despesas próprias registadas.</td></tr>
                 )}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-gray-200 dark:border-neutral-700 font-semibold">
-                  <td className="py-2.5 px-4 text-gray-900 dark:text-neutral-100">Total despesas próprias</td>
+                <tr className="border-t-2 border-line  font-semibold">
+                  <td className="py-2.5 px-4 text-ink ">Total despesas próprias</td>
                   <td />
-                  <td className="py-2.5 px-4 text-right font-mono text-gray-900 dark:text-neutral-100">{EUR2(calc.total)}</td>
+                  <td className="py-2.5 px-4 text-right num text-ink ">{EUR2(calc.total)}</td>
                 </tr>
               </tfoot>
             </table>
           </div>
           {calc.obraCliente > 0 && (
-            <p className="text-[11px] text-gray-400">Custos de obra do cliente lançados nas fases ({EUR(calc.obraCliente)}) não contam como despesa da Somnium.</p>
+            <p className="text-[11px] text-ink-muted">Custos de obra do cliente lançados nas fases ({EUR(calc.obraCliente)}) não contam como despesa da Somnium.</p>
           )}
         </div>
       )}
@@ -355,7 +355,7 @@ export function QuadroEstimadoVsReal({ negocioId, analise, faturacao }) {
     }
   }, [analise, despesas])
 
-  if (despesasQuery.isPending) return <Card><p className="py-4 text-center text-sm text-gray-400">A carregar quadro Estimado vs Real…</p></Card>
+  if (despesasQuery.isPending) return <Card><p className="py-4 text-center text-sm text-ink-muted">A carregar quadro Estimado vs Real…</p></Card>
 
   const semAnalise = !analise
   const execPct = calc.despesasEstimadas > 0 ? Math.round((calc.despesasReais / calc.despesasEstimadas) * 100) : 0
@@ -392,7 +392,7 @@ export function QuadroEstimadoVsReal({ negocioId, analise, faturacao }) {
           action={faturacao?.modeloLabel && <Badge tone="gold" size="sm">{faturacao.modeloLabel}</Badge>} />
 
         {semAnalise && (
-          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800/50 px-3 py-2 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+          <div className="mb-3 rounded-lg border border-warning/30 bg-warning/10 dark:bg-amber-900/20 dark:border-amber-800/50 px-3 py-2 text-xs text-warning dark:text-amber-300 flex items-start gap-2">
             <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
             Sem Análise Financeira ativa para o imóvel — os valores estimados ficam a zero.
           </div>
@@ -419,7 +419,7 @@ export function QuadroEstimadoVsReal({ negocioId, analise, faturacao }) {
         {/* Painel de desvios — fechado por defeito */}
         <Card.Footer className="flex items-center justify-between gap-3 flex-wrap">
           <button type="button" onClick={() => setAberto(v => !v)}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-neutral-300 hover:text-brand-gold">
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-muted  hover:text-brand-gold">
             {aberto ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
             {aberto ? 'Esconder desvios ponto a ponto' : 'Ver desvios ponto a ponto'}
           </button>
@@ -433,11 +433,11 @@ export function QuadroEstimadoVsReal({ negocioId, analise, faturacao }) {
 
         {aberto && (
           <div className="mt-4 space-y-4">
-            <div className="rounded-xl border border-gray-200 dark:border-neutral-800 overflow-hidden">
+            <div className="rounded-xl border border-line  overflow-hidden">
               <ScrollableTable>
                 <table className="w-full min-w-[640px] text-sm">
                   <thead>
-                    <tr className="border-b border-gray-100 dark:border-neutral-800 text-xs text-gray-400 uppercase bg-gray-50 dark:bg-neutral-800/50">
+                    <tr className="border-b border-line  text-xs text-ink-muted uppercase bg-surface ">
                       <th className="text-left py-2.5 px-4">Rubrica</th>
                       <th className="text-right py-2.5 px-3">Estimado</th>
                       <th className="text-right py-2.5 px-3">Real</th>
@@ -463,10 +463,10 @@ export function QuadroEstimadoVsReal({ negocioId, analise, faturacao }) {
                       <GrupoLinha key="__sem" label="Por classificar — atribuir rubrica na aba Faturas e Comprovativos" ls={calc.linhasSem} tom="amber" />,
                       ...calc.linhasSem.map(l => <EspelhoLinha key={l.key} l={l} />),
                     ]}
-                    <tr className="border-y-2 border-gray-200 dark:border-neutral-700 font-semibold bg-white dark:bg-neutral-900">
-                      <td className="py-2.5 px-4 text-gray-900 dark:text-neutral-100">Total despesas <span className="text-[11px] font-normal text-gray-400">(pagas pelo capital)</span></td>
-                      <td className="py-2.5 px-3 text-right font-mono text-gray-600 dark:text-neutral-300">{EUR(calc.despesasEstimadas)}</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-gray-900 dark:text-neutral-100">{EUR(calc.despesasReais)}</td>
+                    <tr className="border-y-2 border-line  font-semibold bg-surface-raised ">
+                      <td className="py-2.5 px-4 text-ink ">Total despesas <span className="text-[11px] font-normal text-ink-muted">(pagas pelo capital)</span></td>
+                      <td className="py-2.5 px-3 text-right num text-ink-muted ">{EUR(calc.despesasEstimadas)}</td>
+                      <td className="py-2.5 px-3 text-right num text-ink ">{EUR(calc.despesasReais)}</td>
                       <td colSpan={3} />
                     </tr>
                     {(() => {
@@ -479,12 +479,12 @@ export function QuadroEstimadoVsReal({ negocioId, analise, faturacao }) {
                     })()}
                   </tbody>
                   <tfoot>
-                    <tr className="border-t-2 border-gray-200 dark:border-neutral-700 font-semibold">
-                      <td className="py-2.5 px-4 text-gray-900 dark:text-neutral-100">Soma do desvio <span className="text-[11px] font-normal text-gray-400">(despesas + descontado na venda)</span></td>
+                    <tr className="border-t-2 border-line  font-semibold">
+                      <td className="py-2.5 px-4 text-ink ">Soma do desvio <span className="text-[11px] font-normal text-ink-muted">(despesas + descontado na venda)</span></td>
                       <td />
                       <td />
                       <DesvioCell valor={calc.desvioTotal} custo />
-                      <td className="py-2.5 px-3 text-right font-mono text-xs text-gray-500">{fmtPctDesvio(calc.desvioTotal, calc.despesasEstimadas + calc.deducaoVendaEst)}</td>
+                      <td className="py-2.5 px-3 text-right num text-xs text-ink-muted">{fmtPctDesvio(calc.desvioTotal, calc.despesasEstimadas + calc.deducaoVendaEst)}</td>
                       <td className="py-2.5 px-4">
                         <Badge tone={calc.desvioTotal > 0 ? 'red' : calc.desvioTotal < 0 ? 'green' : 'gray'} size="sm">{veredicto(calc.desvioTotal)}</Badge>
                       </td>
@@ -501,7 +501,7 @@ export function QuadroEstimadoVsReal({ negocioId, analise, faturacao }) {
               <ImpactoBox label="Lucro bruto" de={calc.lucroEstimado} para={calc.lucroAjustado} />
               <ImpactoBox label="ROI" de={calc.roiEstimado} para={calc.roiAjustado} pct />
             </div>
-            <p className="text-[11px] text-gray-400">
+            <p className="text-[11px] text-ink-muted">
               Desvio positivo = gastou-se mais do que o estimado (desfavorável); negativo = poupança (favorável). Rubricas por faturar e obra/custos mensais ainda abaixo do estimado (em curso) não contam como poupança até fecharem.
             </p>
 
@@ -530,11 +530,11 @@ const PP = v => `${v > 0 ? '+' : ''}${v.toLocaleString('pt-PT', { minimumFractio
 
 // Desvio colorido: para custos, positivo é mau; para receita/lucro/ROI, é bom.
 function DesvioCell({ valor, custo, pp, className = 'py-2.5 px-3' }) {
-  if (valor == null) return <td className={`${className} text-right font-mono text-gray-300`}>—</td>
+  if (valor == null) return <td className={`${className} text-right num text-ink-muted/70`}>—</td>
   const mau = custo ? valor > 0 : valor < 0
   const Icon = valor === 0 ? null : (valor > 0 ? TrendingUp : TrendingDown)
   return (
-    <td className={`${className} text-right font-mono font-semibold whitespace-nowrap ${valor === 0 ? 'text-gray-400' : mau ? 'text-red-600' : 'text-emerald-600'}`}>
+    <td className={`${className} text-right num font-semibold whitespace-nowrap ${valor === 0 ? 'text-ink-muted' : mau ? 'text-danger' : 'text-success'}`}>
       <span className="inline-flex items-center gap-1 justify-end">
         {Icon && <Icon className="w-3.5 h-3.5" />}{pp ? PP(valor) : `${valor > 0 ? '+' : ''}${EUR(valor)}`}
       </span>
@@ -546,21 +546,21 @@ function ImpactoBox({ label, de, para, valor, sub, custo, pct }) {
   const fmt = v => pct ? `${n(v).toLocaleString('pt-PT', { maximumFractionDigits: 1 })}%` : EUR(v)
   const delta = valor != null ? valor : round2(n(para) - n(de))
   const mau = custo ? delta > 0 : delta < 0
-  const cor = delta === 0 ? 'text-gray-500' : mau ? 'text-red-600' : 'text-emerald-600'
-  const borda = delta === 0 ? 'border-gray-200 dark:border-neutral-800' : mau ? 'border-red-200 dark:border-red-800/50' : 'border-emerald-200 dark:border-emerald-800/50'
+  const cor = delta === 0 ? 'text-ink-muted' : mau ? 'text-danger' : 'text-success'
+  const borda = delta === 0 ? 'border-line ' : mau ? 'border-danger/30 dark:border-red-800/50' : 'border-success/30 dark:border-emerald-800/50'
   return (
-    <div className={`rounded-xl border ${borda} bg-white dark:bg-neutral-900 p-3`}>
-      <p className="text-[10px] uppercase tracking-wide font-semibold text-gray-400">{label}</p>
+    <div className={`rounded-xl border ${borda} bg-surface-raised  p-3`}>
+      <p className="text-[10px] uppercase tracking-wide font-semibold text-ink-muted">{label}</p>
       {valor != null ? (
-        <p className={`text-lg font-bold font-mono ${cor}`}>{delta > 0 ? '+' : ''}{EUR(delta)}</p>
+        <p className={`text-lg font-bold num ${cor}`}>{delta > 0 ? '+' : ''}{EUR(delta)}</p>
       ) : (
-        <p className="text-sm font-mono mt-0.5">
-          <span className="text-gray-400">{fmt(de)}</span>
-          <span className="mx-1.5 text-gray-300">→</span>
-          <span className="text-lg font-bold text-gray-900 dark:text-neutral-100">{fmt(para)}</span>
+        <p className="text-sm num mt-0.5">
+          <span className="text-ink-muted">{fmt(de)}</span>
+          <span className="mx-1.5 text-ink-muted/70">→</span>
+          <span className="text-lg font-bold text-ink ">{fmt(para)}</span>
         </p>
       )}
-      <p className={`text-[11px] mt-0.5 ${valor != null ? 'text-gray-400' : cor}`}>
+      <p className={`text-[11px] mt-0.5 ${valor != null ? 'text-ink-muted' : cor}`}>
         {sub || (pct ? PP(delta) : `${delta > 0 ? '+' : ''}${EUR(delta)}`)}
       </p>
     </div>
@@ -571,14 +571,14 @@ function GrupoLinha({ label, ls, tom }) {
   const est = round2(ls.reduce((s, l) => s + l.estimado, 0))
   const real = round2(ls.reduce((s, l) => s + l.real, 0))
   const desvio = round2(ls.reduce((s, l) => s + l.desvioEfetivo, 0))
-  const bg = tom === 'red' ? 'bg-red-50/60 dark:bg-red-900/10' : tom === 'amber' ? 'bg-amber-50/60 dark:bg-amber-900/10' : 'bg-gray-50/60 dark:bg-neutral-800/30'
+  const bg = tom === 'red' ? 'bg-danger/10 dark:bg-red-900/10' : tom === 'amber' ? 'bg-warning/10 dark:bg-amber-900/10' : 'bg-surface/60 '
   return (
-    <tr className={`border-b border-gray-100 dark:border-neutral-800 ${bg}`}>
-      <td className="py-2 px-4 text-xs font-semibold text-gray-700 dark:text-neutral-200">{label}</td>
-      <td className="py-2 px-3 text-right font-mono text-xs text-gray-500">{EUR(est)}</td>
-      <td className="py-2 px-3 text-right font-mono text-xs font-semibold text-gray-700 dark:text-neutral-200">{EUR(real)}</td>
+    <tr className={`border-b border-line  ${bg}`}>
+      <td className="py-2 px-4 text-xs font-semibold text-ink ">{label}</td>
+      <td className="py-2 px-3 text-right num text-xs text-ink-muted">{EUR(est)}</td>
+      <td className="py-2 px-3 text-right num text-xs font-semibold text-ink ">{EUR(real)}</td>
       <DesvioCell valor={desvio} custo className="py-2 px-3 text-xs" />
-      <td className="py-2 px-3 text-right font-mono text-[11px] text-gray-400">{fmtPctDesvio(desvio, est)}</td>
+      <td className="py-2 px-3 text-right num text-[11px] text-ink-muted">{fmtPctDesvio(desvio, est)}</td>
       <td />
     </tr>
   )
@@ -598,17 +598,17 @@ function EspelhoLinha({ l }) {
     : ESTADO_BADGE[l.estado]
   const contaImpacto = l.estado === 'fechado'
   return (
-    <tr className="border-b border-gray-50 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800/40">
-      <td className="py-2 px-4 pl-7 text-gray-700 dark:text-neutral-300">
+    <tr className="border-b border-line  hover:bg-surface ">
+      <td className="py-2 px-4 pl-7 text-ink ">
         {l.label}
-        {l.nFaturas > 0 && <span className="ml-1.5 text-[10px] text-gray-400">{l.nFaturas} doc.</span>}
+        {l.nFaturas > 0 && <span className="ml-1.5 text-[10px] text-ink-muted">{l.nFaturas} doc.</span>}
       </td>
-      <td className="py-2 px-3 text-right font-mono text-gray-500 dark:text-neutral-400">{EUR(l.estimado)}</td>
-      <td className="py-2 px-3 text-right font-mono text-gray-800 dark:text-neutral-100">{l.temReal ? EUR(l.real) : <span className="text-gray-300">—</span>}</td>
+      <td className="py-2 px-3 text-right num text-ink-muted ">{EUR(l.estimado)}</td>
+      <td className="py-2 px-3 text-right num text-ink ">{l.temReal ? EUR(l.real) : <span className="text-ink-muted/70">—</span>}</td>
       {l.estado === 'em_curso'
-        ? <td className="py-2 px-3 text-right font-mono text-xs text-blue-600 whitespace-nowrap">faltam {EUR(l.estimado - l.real)}</td>
+        ? <td className="py-2 px-3 text-right num text-xs text-ink whitespace-nowrap">faltam {EUR(l.estimado - l.real)}</td>
         : <DesvioCell valor={l.desvio} custo className="py-2 px-3" />}
-      <td className={`py-2 px-3 text-right font-mono text-xs ${!contaImpacto ? 'text-gray-300' : l.desvio > 0 ? 'text-red-600' : l.desvio < 0 ? 'text-emerald-600' : 'text-gray-400'}`}>
+      <td className={`py-2 px-3 text-right num text-xs ${!contaImpacto ? 'text-ink-muted/70' : l.desvio > 0 ? 'text-danger' : l.desvio < 0 ? 'text-success' : 'text-ink-muted'}`}>
         {contaImpacto ? fmtPctDesvio(l.desvio, l.estimado) : '—'}
       </td>
       <td className="py-2 px-4"><Badge tone={badge.tone} size="sm">{badge.label}</Badge></td>
@@ -632,7 +632,7 @@ function ListaCustosExtra({ extras, total, embutido }) {
     <Wrapper>
       <Card.Header icon={FilePlus2} title="Custos extra — fora da Análise Financeira"
         subtitle='Registados na aba Faturas e Comprovativos com a rubrica "Custo extra", motivo e justificação'
-        action={<span className="text-sm font-mono font-bold text-red-600">{EUR(total)}</span>} />
+        action={<span className="text-sm num font-bold text-danger">{EUR(total)}</span>} />
 
       {porMotivo.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-3">
@@ -643,13 +643,13 @@ function ListaCustosExtra({ extras, total, embutido }) {
       )}
 
       {extras.length === 0 ? (
-        <p className="py-4 text-center text-sm text-gray-400">Sem custos extra registados.</p>
+        <p className="py-4 text-center text-sm text-ink-muted">Sem custos extra registados.</p>
       ) : (
-        <div className="rounded-xl border border-gray-200 dark:border-neutral-800 overflow-hidden">
+        <div className="rounded-xl border border-line  overflow-hidden">
           <ScrollableTable>
             <table className="w-full min-w-[640px] text-sm">
               <thead>
-                <tr className="border-b border-gray-100 dark:border-neutral-800 text-xs text-gray-400 uppercase bg-gray-50 dark:bg-neutral-800/50">
+                <tr className="border-b border-line  text-xs text-ink-muted uppercase bg-surface ">
                   <th className="text-left py-2.5 px-3">Descrição</th>
                   <th className="text-left py-2.5 px-3 w-44">Motivo</th>
                   <th className="text-left py-2.5 px-3">Justificação</th>
@@ -662,28 +662,28 @@ function ListaCustosExtra({ extras, total, embutido }) {
                   let docs = []
                   try { docs = d.documentos ? JSON.parse(d.documentos) : [] } catch {}
                   return (
-                    <tr key={d.id} className="border-b border-gray-50 dark:border-neutral-800 last:border-0 align-top hover:bg-gray-50 dark:hover:bg-neutral-800/40">
+                    <tr key={d.id} className="border-b border-line  last:border-0 align-top hover:bg-surface ">
                       <td className="py-2.5 px-3">
-                        <p className="font-medium text-gray-800 dark:text-neutral-100">{d.movimento}</p>
-                        <p className="text-[11px] text-gray-400 flex items-center gap-1.5">
+                        <p className="font-medium text-ink ">{d.movimento}</p>
+                        <p className="text-[11px] text-ink-muted flex items-center gap-1.5">
                           {[d.fornecedor, d.data].filter(Boolean).join(' · ')}
                           {docs.map(doc => (
-                            <a key={doc.id} href={doc.path} target="_blank" rel="noreferrer" title={doc.name} className="text-gray-400 hover:text-brand-gold">
+                            <a key={doc.id} href={doc.path} target="_blank" rel="noreferrer" title={doc.name} className="text-ink-muted hover:text-brand-gold">
                               <FileText className="w-3 h-3" />
                             </a>
                           ))}
                         </p>
                       </td>
                       <td className="py-2.5 px-3 text-xs">
-                        <span className="px-1.5 py-0.5 bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded">{d.motivo_extra || 'Outro'}</span>
+                        <span className="px-1.5 py-0.5 bg-danger/10 text-danger dark:bg-red-900/30 dark:text-red-300 rounded">{d.motivo_extra || 'Outro'}</span>
                       </td>
-                      <td className="py-2.5 px-3 text-xs text-gray-600 dark:text-neutral-300 whitespace-pre-line">
-                        {d.justificacao || <span className="text-amber-700">Sem justificação — completar na aba Faturas e Comprovativos</span>}
+                      <td className="py-2.5 px-3 text-xs text-ink-muted  whitespace-pre-line">
+                        {d.justificacao || <span className="text-warning">Sem justificação — completar na aba Faturas e Comprovativos</span>}
                       </td>
                       <td className="py-2.5 px-3">
                         <Badge tone={d.pago ? 'green' : 'yellow'} size="sm">{d.pago ? 'Pago' : 'Pendente'}</Badge>
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono font-semibold text-gray-800 dark:text-neutral-100">{EUR2(d.custo_mensal)}</td>
+                      <td className="py-2.5 px-3 text-right num font-semibold text-ink ">{EUR2(d.custo_mensal)}</td>
                     </tr>
                   )
                 })}

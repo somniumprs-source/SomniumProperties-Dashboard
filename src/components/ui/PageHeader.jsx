@@ -9,6 +9,7 @@
  * - `actions`: ações da página (a principal em Button primary).
  * - "Atualizar" é secundário, para não competir com a ação principal.
  * - `breadcrumbs`: [{ label, to? | onClick? }]; o último é o título.
+ * - `backTo`: destino fixo da seta de voltar (sem ele, volta no histórico).
  */
 import { RefreshCw, Moon, Sun, ArrowLeft, ChevronRight } from 'lucide-react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
@@ -20,7 +21,7 @@ function hoje() {
   return new Date().toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-export function PageHeader({ title, subtitle, onRefresh, loading, breadcrumbs, regiao, actions }) {
+export function PageHeader({ title, subtitle, onRefresh, loading, breadcrumbs, regiao, actions, backTo }) {
   const { isDark, toggle } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
@@ -34,7 +35,7 @@ export function PageHeader({ title, subtitle, onRefresh, loading, breadcrumbs, r
     <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 pl-14 pr-4 sm:px-7 py-3 sm:py-4 bg-surface-raised border-b border-line">
       <div className="min-w-0 flex-1 flex items-center gap-3">
         {canGoBack && (
-          <button onClick={() => navigate(-1)} className={`${ICON_BTN} shrink-0`} title="Voltar (Alt+←)" aria-label="Voltar">
+          <button onClick={() => (backTo ? navigate(backTo) : navigate(-1))} className={`${ICON_BTN} shrink-0`} title="Voltar (Alt+←)" aria-label="Voltar">
             <ArrowLeft className="w-4 h-4" />
           </button>
         )}

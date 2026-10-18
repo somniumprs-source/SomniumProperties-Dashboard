@@ -21,7 +21,7 @@ export function DocumentosOrcamentosTab({ imovelId }) {
   const [saving, setSaving] = useState(false)
   const [construtores, setConstrutores] = useState([])
 
-  const inputClass = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300'
+  const inputClass = 'w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-accent/40'
 
   async function load() {
     try {
@@ -81,25 +81,25 @@ export function DocumentosOrcamentosTab({ imovelId }) {
   }
 
   if (loading) {
-    return <div className="py-8 text-center text-sm text-gray-400">A carregar...</div>
+    return <div className="py-8 text-center text-sm text-ink-muted">A carregar...</div>
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-700">Orçamentos recebidos ({documentos.length})</h3>
+        <h3 className="text-sm font-semibold text-ink">Orçamentos recebidos ({documentos.length})</h3>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-accent-foreground hover:brightness-[1.04] transition-colors"
         >
           <Plus className="w-3.5 h-3.5" /> Importar Orçamento
         </button>
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-200">
+        <form onSubmit={handleSubmit} className="bg-surface rounded-xl p-4 space-y-3 border border-line">
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Construtor (pipeline) — opcional</label>
+            <label className="block text-xs font-medium text-ink-muted mb-1">Construtor (pipeline) — opcional</label>
             <select value={form.empreiteiro_id} onChange={e => handleConstrutorChange(e.target.value)} className={inputClass}>
               <option value="">— Não listado / outro fornecedor —</option>
               {construtores.map(c => (
@@ -109,26 +109,26 @@ export function DocumentosOrcamentosTab({ imovelId }) {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Fornecedor</label>
+              <label className="block text-xs font-medium text-ink-muted mb-1">Fornecedor</label>
               <input value={form.fornecedor} onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))} placeholder="Ex: Construções Silva & Filhos" className={inputClass} required />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Valor (€) — opcional</label>
+              <label className="block text-xs font-medium text-ink-muted mb-1">Valor (€) — opcional</label>
               <input type="number" step="0.01" value={form.valor} onChange={e => setForm(f => ({ ...f, valor: e.target.value }))} className={inputClass} />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Notas (opcional)</label>
+            <label className="block text-xs font-medium text-ink-muted mb-1">Notas (opcional)</label>
             <input value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} placeholder="Observações..." className={inputClass} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Ficheiro (PDF, DOCX, XLSX...)</label>
+            <label className="block text-xs font-medium text-ink-muted mb-1">Ficheiro (PDF, DOCX, XLSX...)</label>
             <input type="file" onChange={e => setForm(f => ({ ...f, file: e.target.files?.[0] || null }))}
-              className="w-full text-sm text-gray-600 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:text-xs file:font-medium hover:file:bg-indigo-100" />
+              className="w-full text-sm text-ink-muted file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-surface-muted file:text-ink file:text-xs file:font-medium hover:file:bg-surface-muted" />
           </div>
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setShowForm(false)} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100">Cancelar</button>
-            <button type="submit" disabled={saving} className="px-4 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
+            <button type="button" onClick={() => setShowForm(false)} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-line text-ink-muted hover:bg-surface-muted">Cancelar</button>
+            <button type="submit" disabled={saving} className="px-4 py-1.5 text-xs font-medium rounded-lg bg-accent text-accent-foreground hover:brightness-[1.04] disabled:opacity-50">
               {saving ? 'A guardar...' : 'Guardar'}
             </button>
           </div>
@@ -136,26 +136,26 @@ export function DocumentosOrcamentosTab({ imovelId }) {
       )}
 
       {documentos.length === 0 ? (
-        <div className="text-center py-8 text-gray-400 text-sm">Nenhum orçamento importado.</div>
+        <div className="text-center py-8 text-ink-muted text-sm">Nenhum orçamento importado.</div>
       ) : (
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-line">
           {documentos.map(doc => (
             <div key={doc.id} className="flex items-center gap-3 py-3 group">
-              <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
-                <FileText className="w-4 h-4 text-indigo-500" />
+              <div className="w-8 h-8 rounded-lg bg-surface-muted flex items-center justify-center shrink-0">
+                <FileText className="w-4 h-4 text-ink-muted" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-800 truncate">{doc.fornecedor}</p>
-                <div className="flex items-center gap-2 text-xs text-gray-400">
+                <p className="text-sm font-medium text-ink truncate">{doc.fornecedor}</p>
+                <div className="flex items-center gap-2 text-xs text-ink-muted">
                   {doc.empreiteiro_id && (
-                    <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600" title="Ligado ao Construtor no pipeline">
+                    <span className="px-1.5 py-0.5 rounded bg-surface-muted text-ink" title="Ligado ao Construtor no pipeline">
                       {doc.empreiteiro_empresa || doc.empreiteiro_nome}
                     </span>
                   )}
-                  {EUR(doc.valor) && <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{EUR(doc.valor)}</span>}
+                  {EUR(doc.valor) && <span className="px-1.5 py-0.5 rounded bg-surface-muted text-ink-muted">{EUR(doc.valor)}</span>}
                   <span>{fmtDate(doc.created_at)}</span>
                 </div>
-                {doc.notas && <p className="text-xs text-gray-400 mt-0.5 truncate">{doc.notas}</p>}
+                {doc.notas && <p className="text-xs text-ink-muted mt-0.5 truncate">{doc.notas}</p>}
               </div>
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 {doc.storage_path && (
@@ -163,7 +163,7 @@ export function DocumentosOrcamentosTab({ imovelId }) {
                     <button
                       type="button"
                       onClick={() => openDocument(`/api/crm/imoveis/${imovelId}/orcamentos-obra/${doc.id}/ficheiro`).catch(() => {})}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600"
+                      className="p-1.5 rounded-lg hover:bg-surface-muted text-ink-muted hover:text-ink"
                       title="Abrir o ficheiro"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -171,7 +171,7 @@ export function DocumentosOrcamentosTab({ imovelId }) {
                     <button
                       type="button"
                       onClick={() => openDocument(`/api/crm/imoveis/${imovelId}/orcamentos-obra/${doc.id}/ficheiro`, { download: true, filename: doc.fornecedor }).catch(() => {})}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600"
+                      className="p-1.5 rounded-lg hover:bg-surface-muted text-ink-muted hover:text-ink"
                       title="Descarregar o ficheiro"
                     >
                       <FileDown className="w-3.5 h-3.5" />
@@ -180,7 +180,7 @@ export function DocumentosOrcamentosTab({ imovelId }) {
                 )}
                 <button
                   onClick={() => handleDelete(doc.id)}
-                  className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
+                  className="p-1.5 rounded-lg hover:bg-danger/10 text-ink-muted hover:text-danger"
                   title="Remover"
                 >
                   <Trash2 className="w-3.5 h-3.5" />

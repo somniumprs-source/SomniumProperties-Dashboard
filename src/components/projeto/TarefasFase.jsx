@@ -87,22 +87,22 @@ export function TarefasFase({ fase, negocioId, imovelId, fotosImovel, readOnly, 
 
   return (
     <div>
-      <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">Tarefas ({fase.tarefas_concluidas}/{fase.tarefas_total})</p>
+      <p className="text-[10px] text-ink-muted uppercase tracking-wide mb-2">Tarefas ({fase.tarefas_concluidas}/{fase.tarefas_total})</p>
       <div className="space-y-1.5 mb-2">
         {ativas.map(t => (
           <TarefaItem key={t.id} t={t} readOnly={readOnly} docs={docs} investidores={investidores} pedido={pedido}
             onCarregar={imovelId ? carregarDocumento : null} />
         ))}
-        {ativas.length === 0 && <p className="text-[11px] text-gray-400 italic">Sem tarefas.</p>}
+        {ativas.length === 0 && <p className="text-[11px] text-ink-muted italic">Sem tarefas.</p>}
       </div>
 
       {porAtivar.length > 0 && (
         <div className="mt-3 mb-2">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1.5">Só quando for preciso · ativar se se aplicar a este imóvel</p>
+          <p className="text-[10px] text-ink-muted uppercase tracking-wide mb-1.5">Só quando for preciso · ativar se se aplicar a este imóvel</p>
           <div className="space-y-1">
             {porAtivar.map(t => (
-              <div key={t.id} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 border border-dashed border-gray-200 dark:border-neutral-700">
-                <span className="flex-1 text-xs text-gray-500 dark:text-neutral-400">{t.descricao}</span>
+              <div key={t.id} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 border border-dashed border-line ">
+                <span className="flex-1 text-xs text-ink-muted ">{t.descricao}</span>
                 {!readOnly && (
                   <button type="button" onClick={() => pedido(`/api/crm/projetos/tarefas/${t.id}`, 'PUT', { ativa: true }, 'Erro ao ativar')}
                     className="text-[11px] font-semibold text-brand-gold hover:underline">Ativar</button>
@@ -118,7 +118,7 @@ export function TarefasFase({ fase, negocioId, imovelId, fotosImovel, readOnly, 
           <input value={novaTarefa} onChange={e => setNovaTarefa(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && adicionarTarefa()}
             placeholder="Nova tarefa..."
-            className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 bg-white dark:bg-neutral-900 dark:border-neutral-700" />
+            className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-line bg-surface-raised  " />
           <Button size="sm" icon={Plus} onClick={adicionarTarefa} disabled={!novaTarefa.trim()}>Adicionar</Button>
         </div>
       )}
@@ -147,42 +147,42 @@ function TarefaItem({ t, readOnly, docs, investidores, pedido, onCarregar }) {
   }
 
   return (
-    <div className="bg-white dark:bg-neutral-900 rounded-lg border border-gray-100 dark:border-neutral-800">
+    <div className="bg-surface-raised  rounded-lg border border-line ">
       <div className="flex items-center gap-2 group px-2.5 py-2">
         <button type="button" onClick={toggleTarefa} className="flex-shrink-0" disabled={readOnly}
           title={ch && feitosObrig < totalObrig && !t.concluida ? 'Completa a checklist para concluir' : undefined}>
-          {t.concluida ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Circle className="w-4 h-4 text-gray-300 hover:text-gray-500" />}
+          {t.concluida ? <CheckCircle2 className="w-4 h-4 text-success" /> : <Circle className="w-4 h-4 text-ink-muted/70 hover:text-ink-muted" />}
         </button>
         <button type="button" onClick={() => ch && setAberta(!aberta)}
-          className={`flex-1 text-left text-xs ${t.concluida ? 'line-through text-gray-400' : 'text-gray-700 dark:text-neutral-200'} ${ch ? 'cursor-pointer' : 'cursor-default'}`}>
+          className={`flex-1 text-left text-xs ${t.concluida ? 'line-through text-ink-muted' : 'text-ink '} ${ch ? 'cursor-pointer' : 'cursor-default'}`}>
           {t.descricao}
         </button>
         {ch && (
-          <button type="button" onClick={() => setAberta(!aberta)} className="flex items-center gap-1 text-[11px] font-mono text-gray-500">
+          <button type="button" onClick={() => setAberta(!aberta)} className="flex items-center gap-1 text-[11px] num text-ink-muted">
             {ch.por_investidor && grupos.length === 0 ? 'sem investidores' : `${feitosObrig}/${totalObrig}`}
             <ChevronRight className={`w-3.5 h-3.5 transition-transform ${aberta ? 'rotate-90' : ''}`} />
           </button>
         )}
-        {t.deadline && <span className="text-[10px] text-gray-400">{t.deadline}</span>}
+        {t.deadline && <span className="text-[10px] text-ink-muted">{t.deadline}</span>}
         {!readOnly && t.opcional && (
           <button type="button" onClick={() => pedido(`/api/crm/projetos/tarefas/${t.id}`, 'PUT', { ativa: false }, 'Erro ao desativar')}
-            className="opacity-0 group-hover:opacity-100 text-[10px] text-gray-400 hover:text-gray-600">Desativar</button>
+            className="opacity-0 group-hover:opacity-100 text-[10px] text-ink-muted hover:text-ink-muted">Desativar</button>
         )}
         {!readOnly && (
-          <button type="button" onClick={apagar} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-opacity" aria-label="Apagar tarefa">
+          <button type="button" onClick={apagar} className="opacity-0 group-hover:opacity-100 text-ink-muted/70 hover:text-danger transition-opacity" aria-label="Apagar tarefa">
             <Trash2 className="w-3 h-3" />
           </button>
         )}
       </div>
 
       {ch && aberta && (
-        <div className="border-t border-gray-100 dark:border-neutral-800 px-3 py-2 space-y-2">
+        <div className="border-t border-line  px-3 py-2 space-y-2">
           {ch.por_investidor && grupos.length === 0 && (
-            <p className="text-[11px] text-gray-500">Associa os investidores ao projeto (separador Investidores) para preencher esta checklist.</p>
+            <p className="text-[11px] text-ink-muted">Associa os investidores ao projeto (separador Investidores) para preencher esta checklist.</p>
           )}
           {grupos.map(g => (
             <div key={g.id || 'unico'}>
-              {g.nome && <p className="text-[11px] font-semibold text-gray-600 dark:text-neutral-300 mb-1">{g.nome}</p>}
+              {g.nome && <p className="text-[11px] font-semibold text-ink-muted  mb-1">{g.nome}</p>}
               <ul className="space-y-1">
                 {ch.itens.map(i => {
                   const k = chave(g, i)
@@ -193,25 +193,25 @@ function TarefaItem({ t, readOnly, docs, investidores, pedido, onCarregar }) {
                       <input type="checkbox" id={`ck-${t.id}-${k}`} checked={!!est.feito} disabled={readOnly}
                         onChange={e => pedido(`/api/crm/projetos/tarefas/${t.id}/checklist`, 'PUT', { chave: k, feito: e.target.checked }, 'Erro ao guardar')}
                         className="accent-brand-gold w-3.5 h-3.5" />
-                      <label htmlFor={`ck-${t.id}-${k}`} className={`${est.feito ? 'text-gray-400' : 'text-gray-700 dark:text-neutral-200'}`}>
-                        {i.t}{!i.obrigatoria && <span className="text-gray-400"> (se aplicável)</span>}
+                      <label htmlFor={`ck-${t.id}-${k}`} className={`${est.feito ? 'text-ink-muted' : 'text-ink '}`}>
+                        {i.t}{!i.obrigatoria && <span className="text-ink-muted"> (se aplicável)</span>}
                       </label>
                       {i.slot && (doc
                         ? <a href={doc.path} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-brand-gold hover:underline"><FileText className="w-3 h-3" />{doc.name}</a>
-                        : <span className="text-[11px] text-gray-400">sem documento</span>)}
+                        : <span className="text-[11px] text-ink-muted">sem documento</span>)}
                       {i.slot && !readOnly && onCarregar && (
-                        <label className="inline-flex items-center gap-1 text-[11px] text-gray-500 hover:text-brand-gold cursor-pointer">
+                        <label className="inline-flex items-center gap-1 text-[11px] text-ink-muted hover:text-brand-gold cursor-pointer">
                           <Upload className="w-3 h-3" />{doc ? 'Carregar nova versão' : 'Carregar'}
                           <input type="file" className="hidden"
                             onChange={e => { const fs = Array.from(e.target.files || []); e.target.value = ''; onCarregar(i.slot, fs) }} />
                         </label>
                       )}
-                      {est.feito && est.por && <span className="text-[10px] text-gray-400">· {est.por}, {fmtData(est.em)}</span>}
+                      {est.feito && est.por && <span className="text-[10px] text-ink-muted">· {est.por}, {fmtData(est.em)}</span>}
                       {!readOnly ? (
                         <input type="text" defaultValue={est.nota || ''} placeholder="Nota"
                           onBlur={e => e.target.value !== (est.nota || '') && pedido(`/api/crm/projetos/tarefas/${t.id}/checklist`, 'PUT', { chave: k, nota: e.target.value }, 'Erro ao guardar nota')}
-                          className="ml-auto w-40 max-w-full px-2 py-0.5 text-[11px] rounded border border-gray-200 bg-white dark:bg-neutral-900 dark:border-neutral-700" />
-                      ) : est.nota ? <span className="text-[11px] text-gray-500 italic">— {est.nota}</span> : null}
+                          className="ml-auto w-40 max-w-full px-2 py-0.5 text-[11px] rounded border border-line bg-surface-raised  " />
+                      ) : est.nota ? <span className="text-[11px] text-ink-muted italic">— {est.nota}</span> : null}
                     </li>
                   )
                 })}

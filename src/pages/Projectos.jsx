@@ -4,11 +4,12 @@ import { useNavigate, Link } from 'react-router-dom'
 import { Plus, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle, TrendingUp, Briefcase, Calendar as CalendarIcon, Search, Sparkles, Hammer, Handshake, Home, Zap, FileText } from 'lucide-react'
 import { FASE_ICONS, FASE_ICON_DEFAULT } from '../lib/faseIcons.js'
 import { motion } from 'framer-motion'
-import { EASE_OUT } from '../components/ui/PageTransition.jsx'
+import { staggerItemVariants } from '../lib/motion.js'
 import { BrandLoader, useMinLoading } from '../components/ui/BrandLoader.jsx'
 import { Header } from '../components/layout/Header.jsx'
 import { apiFetch } from '../lib/api.js'
 import { Button } from '../components/ui/Button.jsx'
+import { Tabs } from '../components/ui/Tabs.jsx'
 import { Card } from '../components/ui/Card.jsx'
 import { Badge } from '../components/ui/Badge.jsx'
 import { Input, Select } from '../components/ui/Input.jsx'
@@ -28,7 +29,7 @@ function readRegiaoFromStorage() {
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 
 const CAT_COLORS = {
-  'Wholesaling':         '#6366f1',
+  'Wholesaling':         '#475569',
   'Mediação Imobiliária': '#10b981',
   'CAEP':                 '#f59e0b',
   'Fix and Flip':         '#ef4444',
@@ -156,17 +157,17 @@ function MeusDocumentosPanel({ investidorId }) {
   }
 
   return (
-    <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl overflow-hidden">
-      <button onClick={toggle} className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-neutral-800">
-        <span className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-neutral-200">
+    <div className="bg-surface-raised  border border-line  rounded-xl overflow-hidden">
+      <button onClick={toggle} className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left hover:bg-surface ">
+        <span className="flex items-center gap-2 text-sm font-semibold text-ink ">
           <FileText className="w-4 h-4 text-brand-gold" /> Os meus documentos
         </span>
-        <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${aberto ? 'rotate-90' : ''}`} />
+        <ChevronRight className={`w-4 h-4 text-ink-muted transition-transform ${aberto ? 'rotate-90' : ''}`} />
       </button>
       {aberto && (
-        <div className="px-4 pb-4 border-t border-gray-100 dark:border-neutral-800 pt-3 space-y-3">
+        <div className="px-4 pb-4 border-t border-line  pt-3 space-y-3">
           {loading ? (
-            <p className="text-sm text-gray-400">A carregar...</p>
+            <p className="text-sm text-ink-muted">A carregar...</p>
           ) : (
             <>
               {driveFolderId && (
@@ -374,56 +375,35 @@ export function Projectos() {
       <Header title="Departamento de Obras" onRefresh={load} loading={loading} regiao={<RegiaoToggle value={regiao} onChange={setRegiao} />} />
 
       <div className="p-4 sm:p-6 flex flex-col gap-4">
-        {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>}
+        {error && <div className="p-4 bg-danger/10 border border-danger/30 text-danger rounded-xl text-sm">Erro: {error}</div>}
 
         {isInvestidor && investidorId && <MeusDocumentosPanel investidorId={investidorId} />}
 
-        {/* Caixas individuais por modelo de negócio — em série no topo, clicáveis */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {MODELOS_NEGOCIO.map(m => {
-            const projDoModelo = m.key === '' ? lista : lista.filter(n => n.categoria === m.key)
-            const contagem = projDoModelo.length
-            const lucroEsperado = projDoModelo.reduce((s, n) => s + (Number(n.lucroEstimado) || 0), 0)
-            const lucroReal = projDoModelo.reduce((s, n) => s + (Number(n.lucroReal) || 0), 0)
-            const ativo = filterCat === m.key
-            const corCat = CAT_COLORS[m.key] || '#C9A84C'
+        {/* Modelos de negócio: seletor compacto com contagem */}
+        <div>
+          <Tabs
+            variant="underline"
+            value={filterCat}
+            onChange={setFilterCat}
+            items={MODELOS_NEGOCIO.map(m => ({
+              key: m.key, label: m.nome, icon: m.Icon,
+              count: (m.key === '' ? lista : lista.filter(n => n.categoria === m.key)).length,
+            }))}
+          />
+          {(() => {
+            const doModelo = filterCat === '' ? lista : lista.filter(n => n.categoria === filterCat)
+            const est = doModelo.reduce((s, n) => s + (Number(n.lucroEstimado) || 0), 0)
+            const real = doModelo.reduce((s, n) => s + (Number(n.lucroReal) || 0), 0)
+            const desc = MODELOS_NEGOCIO.find(m => m.key === filterCat)?.desc
+            if (!desc && !est && !real) return null
             return (
-              <button key={m.key || 'todos'} onClick={() => setFilterCat(filterCat === m.key ? '' : m.key)}
-                title={m.desc}
-                className={`group relative text-left p-4 rounded-xl border-2 transition-all overflow-hidden
-                  ${ativo
-                    ? 'bg-brand-dark border-brand-dark text-white shadow-lg -translate-y-0.5'
-                    : 'bg-white dark:bg-neutral-900 border-gray-200 dark:border-neutral-800 hover:border-gray-300 dark:hover:border-neutral-600 hover:-translate-y-0.5 hover:shadow-md'}`}>
-                {/* Acento de cor vertical à esquerda */}
-                <span className="absolute left-0 top-0 bottom-0 w-1" style={{ background: ativo ? '#C9A84C' : corCat }} />
-
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
-                    ativo ? 'bg-brand-gold/15 border border-brand-gold/30' : 'bg-gray-100 dark:bg-neutral-800 border border-transparent group-hover:border-gray-200 dark:group-hover:border-neutral-700'
-                  }`}>
-                    <m.Icon className={`w-5 h-5 ${ativo ? 'text-brand-gold' : 'text-gray-600 dark:text-neutral-300'}`} strokeWidth={1.75} />
-                  </div>
-                  <span className={`text-3xl font-bold leading-none font-mono ${ativo ? 'text-brand-gold' : 'text-gray-900 dark:text-neutral-100'}`}>{contagem}</span>
-                </div>
-                <p className={`text-sm font-semibold leading-tight ${ativo ? 'text-brand-gold' : 'text-gray-900 dark:text-neutral-100'}`}>{m.nome}</p>
-
-                {(lucroEsperado > 0 || lucroReal > 0) && (
-                  <div className={`mt-3 pt-2 border-t ${ativo ? 'border-white/10' : 'border-gray-100 dark:border-neutral-800'} space-y-0.5`}>
-                    {lucroEsperado > 0 && (
-                      <p className={`text-[10px] font-mono ${ativo ? 'text-brand-gold/70' : 'text-indigo-600 dark:text-indigo-400'}`}>
-                        {EUR(lucroEsperado)} estimado
-                      </p>
-                    )}
-                    {lucroReal > 0 && (
-                      <p className={`text-[10px] font-mono ${ativo ? 'text-green-300' : 'text-green-600 dark:text-green-400'}`}>
-                        {EUR(lucroReal)} real
-                      </p>
-                    )}
-                  </div>
-                )}
-              </button>
+              <p className="mt-2 text-caption text-ink-muted num">
+                {desc}{desc && (est > 0 || real > 0) ? ' · ' : ''}
+                {est > 0 && <>{EUR(est)} estimado</>}{est > 0 && real > 0 && ' · '}
+                {real > 0 && <span className="text-success">{EUR(real)} real</span>}
+              </p>
             )
-          })}
+          })()}
         </div>
 
         {/* Toolbar */}
@@ -433,13 +413,13 @@ export function Projectos() {
             <Link to="/projectos/calendario">
               <Button variant="secondary" size="md" icon={CalendarIcon}>Calendário</Button>
             </Link>
-            {filterCat && <div className="inline-flex bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg p-0.5 shadow-xs">
+            {filterCat && <div className="inline-flex bg-surface-muted rounded-lg p-0.5">
               <button onClick={() => setView('kanban')}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${view === 'kanban' ? 'bg-brand-dark text-brand-gold shadow-xs' : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'}`}>
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-[background-color,border-color,color,box-shadow,opacity,transform] ${view === 'kanban' ? 'bg-surface-raised text-ink shadow-xs' : 'text-ink-muted hover:text-ink'}`}>
                 <LayoutGrid className="w-3.5 h-3.5" /> Kanban
               </button>
               <button onClick={() => setView('lista')}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${view === 'lista' ? 'bg-brand-dark text-brand-gold shadow-xs' : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'}`}>
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-[background-color,border-color,color,box-shadow,opacity,transform] ${view === 'lista' ? 'bg-surface-raised text-ink shadow-xs' : 'text-ink-muted hover:text-ink'}`}>
                 <ListIcon className="w-3.5 h-3.5" /> Lista
               </button>
             </div>}
@@ -466,18 +446,16 @@ export function Projectos() {
 
         {/* Portfolio overview — KPIs Fix and Flip agregados */}
         {portfolio?.totais && (
-          <div className="relative overflow-hidden bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700 rounded-2xl p-5 sm:p-6 text-white shadow-lg">
-            {/* Acento dourado decorativo */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+          <div className="rounded-xl border border-line bg-surface-raised p-5 sm:p-6 shadow-xs">
 
             <div className="relative flex items-center justify-between mb-5">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-brand-gold/15 border border-brand-gold/30 flex items-center justify-center">
-                  <Briefcase className="w-4 h-4 text-brand-gold" />
+                <div className="w-8 h-8 rounded-lg bg-surface-muted flex items-center justify-center">
+                  <Briefcase className="w-4 h-4 text-ink-muted" />
                 </div>
                 <div>
-                  <h2 className="text-overline uppercase tracking-widest font-semibold text-brand-gold">Portfolio</h2>
-                  <p className="text-sm font-semibold text-white">
+                  <h2 className="text-overline uppercase text-ink-muted">Portfolio</h2>
+                  <p className="text-ui font-semibold text-ink">
                     {MODELOS_NEGOCIO.find(m => m.key === filterCat)?.nome || 'Todos'}
                   </p>
                 </div>
@@ -490,7 +468,7 @@ export function Projectos() {
                     if (r.ok) setPredicoes(await r.json())
                   } finally { setPredicoesLoading(false) }
                 }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-brand-gold border border-brand-gold/40 bg-brand-gold/5 hover:bg-brand-gold/15 hover:border-brand-gold transition-all shadow-xs">
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-caption font-medium text-ink border border-line bg-surface-raised hover:bg-surface-muted transition-colors duration-fast">
                   <Sparkles className="w-3.5 h-3.5" /> {predicoesLoading ? 'A analisar...' : 'Análise IA'}
                 </button>
               )}
@@ -503,20 +481,20 @@ export function Projectos() {
               <PortfolioKpi label="Em curso" value={portfolio.fases?.em_curso || 0} />
             </div>
             {predicoes?.predicoes?.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-white/10">
-                <p className="text-[10px] uppercase tracking-wider text-brand-gold mb-2 flex items-center gap-1.5">
+              <div className="mt-4 pt-4 border-t border-line">
+                <p className="text-overline uppercase text-ink-muted mb-2 flex items-center gap-1.5">
                   <Sparkles className="w-3 h-3" /> Riscos identificados pela IA ({predicoes.predicoes.length})
                 </p>
                 <div className="space-y-1.5">
                   {predicoes.predicoes.map((p, i) => {
-                    const corRisco = p.risco === 'alto' ? 'bg-red-500/20 border-red-400/40' : p.risco === 'medio' ? 'bg-yellow-500/20 border-yellow-400/40' : 'bg-gray-500/20 border-gray-400/40'
+                    const corRisco = p.risco === 'alto' ? 'bg-danger/10 border-danger/30' : p.risco === 'medio' ? 'bg-warning/10 border-warning/30' : 'bg-surface border-line'
                     return (
                       <Link key={i} to={`/projectos/${p.projeto_id}`} className={`block rounded-lg p-2.5 border ${corRisco} hover:opacity-80`}>
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <p className="text-xs font-semibold text-white">{p.projeto_nome} <span className="text-[10px] uppercase ml-1 opacity-80">{p.risco}</span></p>
-                            <p className="text-[10px] text-gray-300 mt-0.5">{p.razao}</p>
-                            <p className="text-[10px] text-brand-gold mt-1">→ {p.acao_recomendada}</p>
+                            <p className="text-xs font-semibold text-ink">{p.projeto_nome} <span className="text-[10px] uppercase ml-1 opacity-80">{p.risco}</span></p>
+                            <p className="text-caption text-ink-muted mt-0.5">{p.razao}</p>
+                            <p className="text-caption text-ink mt-1">→ {p.acao_recomendada}</p>
                           </div>
                         </div>
                       </Link>
@@ -526,16 +504,16 @@ export function Projectos() {
               </div>
             )}
             {(portfolio.topAtrasos?.length > 0 || portfolio.distribuicaoFases?.length > 0) && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5 pt-5 border-t border-white/10">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5 pt-5 border-t border-line">
                 {portfolio.topAtrasos?.length > 0 && (
                   <div>
-                    <p className="text-[10px] uppercase tracking-wider text-red-300 mb-2 flex items-center gap-1.5"><AlertTriangle className="w-3 h-3" /> Top atrasos</p>
+                    <p className="text-overline uppercase text-danger mb-2 flex items-center gap-1.5"><AlertTriangle className="w-3 h-3" /> Top atrasos</p>
                     <div className="space-y-1.5">
                       {portfolio.topAtrasos.slice(0, 3).map(a => (
-                        <Link key={a.id} to={`/projectos/${a.negocio_id}`} className="block bg-red-500/10 hover:bg-red-500/20 rounded-lg px-2.5 py-1.5 transition-colors">
+                        <Link key={a.id} to={`/projectos/${a.negocio_id}`} className="block bg-danger/10 hover:bg-danger/15 rounded-lg px-2.5 py-1.5 transition-colors duration-fast">
                           <div className="flex items-center justify-between">
-                            <span className="text-xs text-white">{a.movimento} · {a.nome}</span>
-                            <span className="text-xs font-bold text-red-300">{a.dias_atraso}d</span>
+                            <span className="text-xs text-ink">{a.movimento} · {a.nome}</span>
+                            <span className="text-xs font-semibold text-danger num">{a.dias_atraso}d</span>
                           </div>
                         </Link>
                       ))}
@@ -544,12 +522,12 @@ export function Projectos() {
                 )}
                 {portfolio.distribuicaoFases?.length > 0 && (
                   <div>
-                    <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-1.5"><TrendingUp className="w-3 h-3" /> Distribuição por fase atual</p>
+                    <p className="text-overline uppercase text-ink-muted mb-2 flex items-center gap-1.5"><TrendingUp className="w-3 h-3" /> Distribuição por fase atual</p>
                     <div className="space-y-1.5">
                       {portfolio.distribuicaoFases.slice(0, 4).map(d => (
-                        <div key={d.fase_key} className="flex items-center justify-between bg-white/5 rounded-lg px-2.5 py-1.5">
-                          <span className="text-xs text-gray-200">{d.nome}</span>
-                          <span className="text-xs font-bold" style={{ color: '#C9A84C' }}>{d.projetos}</span>
+                        <div key={d.fase_key} className="flex items-center justify-between bg-surface rounded-lg px-2.5 py-1.5">
+                          <span className="text-xs text-ink">{d.nome}</span>
+                          <span className="text-xs font-semibold text-ink num">{d.projetos}</span>
                         </div>
                       ))}
                     </div>
@@ -607,12 +585,12 @@ export function Projectos() {
 // ════════════════════════════════════════════════════════════════
 // KANBAN
 // ════════════════════════════════════════════════════════════════
-function PortfolioKpi({ label, value, sub, accent, green }) {
+function PortfolioKpi({ label, value, sub, green }) {
   return (
     <div className="min-w-0">
-      <p className="text-overline uppercase tracking-widest text-gray-400 font-semibold">{label}</p>
-      <p className={`text-2xl font-mono font-bold mt-1 truncate ${accent ? 'text-brand-gold' : green ? 'text-green-400' : 'text-white'}`}>{value}</p>
-      {sub && <p className="text-caption text-gray-500 mt-0.5 truncate">{sub}</p>}
+      <p className="text-overline uppercase text-ink-muted">{label}</p>
+      <p className={`font-display text-2xl num mt-1 truncate ${green ? 'text-success' : 'text-ink'}`}>{value}</p>
+      {sub && <p className="text-caption text-ink-muted mt-0.5 truncate">{sub}</p>}
     </div>
   )
 }
@@ -660,27 +638,25 @@ function KanbanBoard({ colunas, cardsPorColuna, fasesInfo, onCardClick, onMoveCa
           const isOver = overCol === col.key
           return (
             <motion.div key={col.key}
-              initial={{ opacity: 0, y: 10, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.55, ease: EASE_OUT, delay: 0.14 + i * 0.045 }}
+              variants={staggerItemVariants} initial="hidden" animate="show" custom={i}
               className="w-full sm:w-72 sm:flex-shrink-0"
               onDragOver={onDragOver(col.key)}
               onDragLeave={() => overCol === col.key && setOverCol(null)}
               onDrop={onDrop(col.key)}>
-              <div className="rounded-t-xl px-3 py-2.5 flex items-center justify-between bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 border-b-0"
-                style={{ borderTop: `3px solid ${col.cor}` }}>
+              <div className="rounded-t-xl px-3 py-2.5 flex items-center justify-between bg-surface-muted/50 border border-line border-b-0">
                 <div className="flex items-center gap-2 min-w-0">
-                  {(() => { const I = FASE_ICONS[col.key] || FASE_ICON_DEFAULT; return <I className="w-4 h-4 shrink-0" style={{ color: col.cor }} /> })()}
-                  <span className="text-xs font-semibold text-gray-700 dark:text-neutral-200 truncate">{col.nome}</span>
+                  {(() => { const I = FASE_ICONS[col.key] || FASE_ICON_DEFAULT; return <I className="w-4 h-4 shrink-0 text-ink-muted" aria-hidden="true" /> })()}
+                  <span className="text-caption font-semibold text-ink truncate">{col.nome}</span>
                 </div>
-                <Badge tone="gray" size="xs" className="font-mono">{cards.length}</Badge>
+                <span className="text-overline font-medium text-ink-muted num">{cards.length}</span>
               </div>
               <div className={`rounded-b-xl p-2 min-h-[400px] space-y-2 border-x border-b transition-colors ${
                 isOver
-                  ? 'bg-brand-gold/10 border-brand-gold dark:bg-brand-gold/10'
-                  : 'bg-gray-50/50 dark:bg-neutral-900/50 border-gray-200 dark:border-neutral-800'
+                  ? 'bg-accent/10 border-accent'
+                  : 'bg-surface-muted/50 border-line'
               }`}>
                 {cards.length === 0 && (
-                  <p className="text-center text-overline text-gray-300 dark:text-neutral-600 py-6 uppercase tracking-widest">{isOver ? 'Soltar aqui' : 'Vazio'}</p>
+                  <p className="text-center text-caption text-ink-muted/70 py-6">{isOver ? 'Largar aqui' : 'Vazio'}</p>
                 )}
                 {cards.map(n => (
                   <KanbanCard
@@ -710,7 +686,7 @@ function GrelhaProjetos({ projectos, fasesInfo, onCardClick }) {
     .map(m => ({ ...m, itens: projectos.filter(n => n.categoria === m.key) }))
     .filter(g => g.itens.length > 0)
   if (!grupos.length) {
-    return <p className="py-12 text-center text-sm text-gray-400 dark:text-neutral-500">Sem projetos a mostrar.</p>
+    return <p className="py-12 text-center text-sm text-ink-muted ">Sem projetos a mostrar.</p>
   }
   return (
     <div className="flex flex-col gap-5">
@@ -718,8 +694,8 @@ function GrelhaProjetos({ projectos, fasesInfo, onCardClick }) {
         <div key={g.key}>
           <div className="flex items-center gap-2 mb-2">
             <span className="w-2 h-2 rounded-full" style={{ background: CAT_COLORS[g.key] }} />
-            <h3 className="text-overline uppercase tracking-widest font-semibold text-gray-500 dark:text-neutral-400">{g.nome}</h3>
-            <Badge tone="gray" size="xs" className="font-mono">{g.itens.length}</Badge>
+            <h3 className="text-overline uppercase tracking-widest font-semibold text-ink-muted ">{g.nome}</h3>
+            <Badge tone="gray" size="xs" className="num">{g.itens.length}</Badge>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {g.itens.map(n => (
@@ -741,19 +717,19 @@ function KanbanCard({ negocio: n, info, onClick, onDragStart, onDragEnd, isDragg
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onClick}
-      className={`group relative bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-800 p-3 cursor-pointer
+      className={`group relative bg-surface-raised  rounded-lg border border-line  p-3 cursor-pointer
         hover:shadow-md hover:border-brand-gold/50 hover:-translate-y-0.5
-        transition-all duration-200
+        transition-[background-color,border-color,color,box-shadow,opacity,transform] duration-200
         ${isDragging ? 'opacity-40 scale-95 rotate-1' : ''}
         ${podeArrastar ? 'cursor-grab active:cursor-grabbing' : ''}`}
       title={podeArrastar ? 'Arrastar para mover entre fases' : undefined}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-neutral-100 line-clamp-2 flex-1 leading-snug">{n.movimento}</h3>
-        <span className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ background: CAT_COLORS[n.categoria] ?? '#6366f1' }} title={n.categoria} />
+        <h3 className="text-sm font-semibold text-ink  line-clamp-2 flex-1 leading-snug">{n.movimento}</h3>
+        <span className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ background: CAT_COLORS[n.categoria] ?? '#6b6962' }} title={n.categoria} />
       </div>
       {n.imovelNome && (
-        <p className="text-caption text-gray-500 dark:text-neutral-400 truncate mb-2 flex items-center gap-1">
+        <p className="text-caption text-ink-muted  truncate mb-2 flex items-center gap-1">
           <span className="opacity-60">📍</span> {n.imovelNome}
         </p>
       )}
@@ -763,8 +739,8 @@ function KanbanCard({ negocio: n, info, onClick, onDragStart, onDragEnd, isDragg
           ? FASES_KANBAN_POR_CATEGORIA[n.categoria]?.find(f => f.key === info.faseAtualKey)?.nome
           : n.fase
         return faseNome ? (
-          <p className="text-xs text-gray-700 dark:text-neutral-300 mb-2">
-            <span className="text-gray-400 dark:text-neutral-500">Fase:</span> <span className="font-semibold">{faseNome}</span>
+          <p className="text-xs text-ink  mb-2">
+            <span className="text-ink-muted ">Fase:</span> <span className="font-semibold">{faseNome}</span>
           </p>
         ) : null
       })()}
@@ -777,19 +753,19 @@ function KanbanCard({ negocio: n, info, onClick, onDragStart, onDragEnd, isDragg
 
       {temWorkflow && info && (
         <div className="mb-2">
-          <div className="flex items-center justify-between text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 mb-1">
+          <div className="flex items-center justify-between text-overline uppercase tracking-widest text-ink-muted  mb-1">
             <span>{info.concluidas}/{info.totalFases} fases</span>
-            <span className="font-mono font-bold text-gray-700 dark:text-neutral-200 normal-case tracking-normal text-xs">{info.percGlobal}%</span>
+            <span className="num font-bold text-ink  normal-case tracking-normal text-xs">{info.percGlobal}%</span>
           </div>
-          <div className="w-full bg-gray-100 dark:bg-neutral-800 rounded-full h-1.5 overflow-hidden">
-            <div className="h-full rounded-full bg-gradient-to-r from-brand-gold to-brand-dark transition-all duration-300" style={{ width: `${info.percGlobal}%` }} />
+          <div className="w-full bg-surface-muted  rounded-full h-1.5 overflow-hidden">
+            <div className="h-full rounded-full bg-accent transition-[width] duration-moderate ease-entry" style={{ width: `${info.percGlobal}%` }} />
           </div>
         </div>
       )}
 
-      <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100 dark:border-neutral-800">
-        <span className="text-xs font-mono font-semibold text-indigo-600 dark:text-indigo-400">{EUR(n.lucroEstimado)}</span>
-        <ChevronRight className="w-3.5 h-3.5 text-gray-300 dark:text-neutral-600 group-hover:text-brand-gold group-hover:translate-x-0.5 transition-all" />
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-line ">
+        <span className="text-xs num font-semibold text-ink">{EUR(n.lucroEstimado)}</span>
+        <ChevronRight className="w-3.5 h-3.5 text-ink-muted/70  group-hover:text-brand-gold group-hover:translate-x-0.5 transition-[background-color,border-color,color,box-shadow,opacity,transform]" />
       </div>
     </div>
   )
@@ -802,15 +778,15 @@ function ListaProjetos({ projectos, fasesInfo, onCardClick }) {
   return (
     <Card padding="none" className="overflow-x-auto">
       <table className="min-w-full text-sm">
-        <thead className="bg-gray-50 dark:bg-neutral-900/50">
-          <tr className="border-b border-gray-200 dark:border-neutral-800">
-            <th className="text-left py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Projeto</th>
-            <th className="text-left py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Categoria</th>
-            <th className="text-left py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Imóvel</th>
-            <th className="text-left py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Fase atual</th>
-            <th className="text-right py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">% Exec.</th>
-            <th className="text-right py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Faturação estimada</th>
-            <th className="text-right py-3 px-4 text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Faturação real</th>
+        <thead className="bg-surface ">
+          <tr className="border-b border-line ">
+            <th className="text-left py-3 px-4 text-overline uppercase tracking-widest text-ink-muted  font-semibold">Projeto</th>
+            <th className="text-left py-3 px-4 text-overline uppercase tracking-widest text-ink-muted  font-semibold">Categoria</th>
+            <th className="text-left py-3 px-4 text-overline uppercase tracking-widest text-ink-muted  font-semibold">Imóvel</th>
+            <th className="text-left py-3 px-4 text-overline uppercase tracking-widest text-ink-muted  font-semibold">Fase atual</th>
+            <th className="text-right py-3 px-4 text-overline uppercase tracking-widest text-ink-muted  font-semibold">% Exec.</th>
+            <th className="text-right py-3 px-4 text-overline uppercase tracking-widest text-ink-muted  font-semibold">Faturação estimada</th>
+            <th className="text-right py-3 px-4 text-overline uppercase tracking-widest text-ink-muted  font-semibold">Faturação real</th>
           </tr>
         </thead>
         <tbody>
@@ -821,30 +797,30 @@ function ListaProjetos({ projectos, fasesInfo, onCardClick }) {
               ? colunasCat.find(f => f.key === info.faseAtualKey)?.nome
               : n.fase || '—'
             const cat = n.categoria
-            const corCat = CAT_COLORS[cat] ?? '#6366f1'
+            const corCat = CAT_COLORS[cat] ?? '#6b6962'
             return (
               <tr key={n.id} onClick={() => onCardClick(n.id)}
-                className="border-b border-gray-100 dark:border-neutral-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800/50 transition-colors group">
-                <td className="py-2.5 px-4 font-semibold text-gray-900 dark:text-neutral-100">
+                className="border-b border-line  cursor-pointer hover:bg-surface  transition-colors group">
+                <td className="py-2.5 px-4 font-semibold text-ink ">
                   <span className="flex items-center gap-2">
                     {n.movimento}
-                    <ChevronRight className="w-3.5 h-3.5 text-gray-300 dark:text-neutral-600 group-hover:text-brand-gold transition-colors opacity-0 group-hover:opacity-100" />
+                    <ChevronRight className="w-3.5 h-3.5 text-ink-muted/70  group-hover:text-brand-gold transition-colors opacity-0 group-hover:opacity-100" />
                   </span>
                 </td>
                 <td className="py-2.5 px-4">
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
                     style={{ backgroundColor: corCat + '20', color: corCat }}>{cat}</span>
                 </td>
-                <td className="py-2.5 px-4 text-xs text-gray-500 dark:text-neutral-400">{n.imovelNome || '—'}</td>
-                <td className="py-2.5 px-4 text-xs text-gray-700 dark:text-neutral-300">{faseNome}</td>
-                <td className="py-2.5 px-4 text-right text-xs font-mono text-gray-700 dark:text-neutral-300">{info ? `${info.percGlobal}%` : '—'}</td>
-                <td className="py-2.5 px-4 text-right font-mono text-indigo-600 dark:text-indigo-400 font-semibold">{EUR(n.lucroEstimado)}</td>
-                <td className="py-2.5 px-4 text-right font-mono text-green-600 dark:text-green-400 font-semibold">{n.lucroReal > 0 ? EUR(n.lucroReal) : <span className="text-gray-300 dark:text-neutral-700">—</span>}</td>
+                <td className="py-2.5 px-4 text-xs text-ink-muted ">{n.imovelNome || '—'}</td>
+                <td className="py-2.5 px-4 text-xs text-ink ">{faseNome}</td>
+                <td className="py-2.5 px-4 text-right text-xs num text-ink ">{info ? `${info.percGlobal}%` : '—'}</td>
+                <td className="py-2.5 px-4 text-right num text-ink font-semibold">{EUR(n.lucroEstimado)}</td>
+                <td className="py-2.5 px-4 text-right num text-success dark:text-green-400 font-semibold">{n.lucroReal > 0 ? EUR(n.lucroReal) : <span className="text-ink-muted/70 ">—</span>}</td>
               </tr>
             )
           })}
           {!projectos.length && (
-            <tr><td colSpan={7} className="py-12 text-center text-sm text-gray-400 dark:text-neutral-500">Sem projetos a mostrar.</td></tr>
+            <tr><td colSpan={7} className="py-12 text-center text-sm text-ink-muted ">Sem projetos a mostrar.</td></tr>
           )}
         </tbody>
       </table>
@@ -867,7 +843,7 @@ export function ProjectoForm({ item, onSave, onCancel }) {
 
   return (
     <Card variant="default" padding="lg" className="border-2 border-brand-gold shadow-gold animate-slide-down">
-      <h3 className="text-base font-semibold text-gray-900 dark:text-neutral-100 mb-4 flex items-center gap-2">
+      <h3 className="text-base font-semibold text-ink  mb-4 flex items-center gap-2">
         <span className="w-1 h-5 bg-brand-gold rounded-full" />
         {isNew ? 'Novo Projeto' : 'Editar Projeto'}
       </h3>
@@ -890,34 +866,34 @@ export function ProjectoForm({ item, onSave, onCancel }) {
         <Input type="date" label="Data Compra" value={f.data_compra || ''} onChange={e => set('data_compra', e.target.value)} />
         <Input type="date" label="Data Estimada Venda" value={f.data_estimada_venda || ''} onChange={e => set('data_estimada_venda', e.target.value)} />
         <div className="sm:col-span-2 xl:col-span-3">
-          <label className="block text-overline uppercase tracking-widest font-semibold text-gray-500 dark:text-neutral-400 mb-1.5">Notas</label>
+          <label className="block text-overline uppercase tracking-widest font-semibold text-ink-muted  mb-1.5">Notas</label>
           <textarea
             value={f.notas ?? ''} onChange={e => set('notas', e.target.value)} rows={3}
-            className="w-full px-3 py-2 text-sm rounded-lg bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 text-gray-900 dark:text-neutral-100 placeholder:text-gray-400 transition-colors focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/30 focus:outline-none resize-y" />
+            className="w-full px-3 py-2 text-sm rounded-lg bg-surface-raised  border border-line  text-ink  placeholder:text-ink-muted transition-colors focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/30 focus:outline-none resize-y" />
         </div>
 
         {f.categoria === 'Fix and Flip' && (
           <div className="sm:col-span-2 xl:col-span-3">
-            <label className="block text-overline uppercase tracking-widest font-semibold text-gray-500 dark:text-neutral-400 mb-2">Formato</label>
+            <label className="block text-overline uppercase tracking-widest font-semibold text-ink-muted  mb-2">Formato</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className={`flex items-start gap-3 p-4 rounded-xl cursor-pointer border-2 transition-all ${f.tipo_projeto === 'fracao_unica' ? 'border-brand-gold bg-brand-gold/5 shadow-xs' : 'border-gray-200 dark:border-neutral-700 hover:border-gray-300 dark:hover:border-neutral-600'}`}>
+              <label className={`flex items-start gap-3 p-4 rounded-xl cursor-pointer border-2 transition-[background-color,border-color,color,box-shadow,opacity,transform] ${f.tipo_projeto === 'fracao_unica' ? 'border-brand-gold bg-brand-gold/5 shadow-xs' : 'border-line  hover:border-line '}`}>
                 <input type="radio" name="tipo_projeto" value="fracao_unica"
                   checked={f.tipo_projeto === 'fracao_unica'}
                   onChange={() => set('tipo_projeto', 'fracao_unica')}
                   className="mt-1 accent-brand-gold w-4 h-4" />
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-neutral-100">Fração única</p>
-                  <p className="text-caption text-gray-500 dark:text-neutral-400 mt-1 leading-relaxed">1 apartamento ou moradia. Cronograma simples sem subdivisões.</p>
+                  <p className="text-sm font-semibold text-ink ">Fração única</p>
+                  <p className="text-caption text-ink-muted  mt-1 leading-relaxed">1 apartamento ou moradia. Cronograma simples sem subdivisões.</p>
                 </div>
               </label>
-              <label className={`flex items-start gap-3 p-4 rounded-xl cursor-pointer border-2 transition-all ${f.tipo_projeto === 'predio' ? 'border-brand-gold bg-brand-gold/5 shadow-xs' : 'border-gray-200 dark:border-neutral-700 hover:border-gray-300 dark:hover:border-neutral-600'}`}>
+              <label className={`flex items-start gap-3 p-4 rounded-xl cursor-pointer border-2 transition-[background-color,border-color,color,box-shadow,opacity,transform] ${f.tipo_projeto === 'predio' ? 'border-brand-gold bg-brand-gold/5 shadow-xs' : 'border-line  hover:border-line '}`}>
                 <input type="radio" name="tipo_projeto" value="predio"
                   checked={f.tipo_projeto === 'predio'}
                   onChange={() => set('tipo_projeto', 'predio')}
                   className="mt-1 accent-brand-gold w-4 h-4" />
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-neutral-100">Prédio com várias frações</p>
-                  <p className="text-caption text-gray-500 dark:text-neutral-400 mt-1 leading-relaxed">2-10 frações autónomas + áreas comuns (fachada, telhado, escadas) com cronogramas independentes.</p>
+                  <p className="text-sm font-semibold text-ink ">Prédio com várias frações</p>
+                  <p className="text-caption text-ink-muted  mt-1 leading-relaxed">2-10 frações autónomas + áreas comuns (fachada, telhado, escadas) com cronogramas independentes.</p>
                 </div>
               </label>
             </div>
@@ -932,7 +908,7 @@ export function ProjectoForm({ item, onSave, onCancel }) {
             : 'Ao criar este projeto, serão geradas automaticamente as 8 fases de obra com tarefas-template profissionais.'}</p>
         </div>
       )}
-      <div className="flex gap-3 mt-5 pt-4 border-t border-gray-100 dark:border-neutral-800">
+      <div className="flex gap-3 mt-5 pt-4 border-t border-line ">
         <Button size="lg" onClick={() => onSave(f)} disabled={!f.movimento?.trim()}>
           {isNew ? 'Criar projeto' : 'Guardar alterações'}
         </Button>

@@ -13,8 +13,6 @@ import { calcOrcamentoObra, validarOrcamento } from '../../db/orcamentoObraEngin
 import { openDocument } from '../../lib/api.js'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 
-const GOLD = '#C9A84C'
-const BLACK = '#0d0d0d'
 
 const EUR = v => {
   if (v == null || !Number.isFinite(Number(v))) return '—'
@@ -35,8 +33,8 @@ export function ObraTab({ imovelId, imovelNome }) {
   if (loading) {
     return (
       <div className="py-12 text-center">
-        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-3 text-gray-400" />
-        <p className="text-sm text-gray-400">A carregar orçamento...</p>
+        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-3 text-ink-muted" />
+        <p className="text-sm text-ink-muted">A carregar orçamento...</p>
       </div>
     )
   }
@@ -79,34 +77,34 @@ export function ObraTab({ imovelId, imovelNome }) {
   const regimeLabel = `${zonaAru ? 'ARU' : 'Não-ARU'} · ${tipoObra === 'construcao_nova' ? 'Construção nova' : 'Remodelação'}`
 
   return (
-    <div className="bg-gray-50 min-h-full">
+    <div className="bg-surface min-h-full">
       {/* ── Header ─────────────────────────────────────────── */}
-      <div className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 sticky top-0 z-10">
+      <div className="bg-surface-raised border-b border-line px-4 sm:px-6 py-4 sticky top-0 z-10">
         <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 text-[11px] uppercase tracking-widest text-gray-400 mb-0.5">
+            <div className="flex items-center gap-2 text-[11px] uppercase tracking-widest text-ink-muted mb-0.5">
               <span>Orçamento de obra</span>
               {saving ? (
-                <span className="flex items-center gap-1 text-amber-600">
+                <span className="flex items-center gap-1 text-warning">
                   <Loader2 className="w-3 h-3 animate-spin" /> A guardar
                 </span>
               ) : erro ? (
-                <span className="text-red-600 normal-case tracking-normal font-semibold">● Não guardado — {erro}</span>
+                <span className="text-danger normal-case tracking-normal font-semibold">● Não guardado — {erro}</span>
               ) : readOnly ? (
-                <span className="text-gray-500">Só consulta</span>
+                <span className="text-ink-muted">Só consulta</span>
               ) : orcamento.existe ? (
-                <span className="text-green-600">● Guardado</span>
+                <span className="text-success">● Guardado</span>
               ) : (
-                <span className="text-gray-400">Por preencher</span>
+                <span className="text-ink-muted">Por preencher</span>
               )}
             </div>
-            <h2 className="text-xl font-bold text-gray-900 truncate">{imovelNome || 'Sem imóvel'}</h2>
+            <h2 className="text-xl font-bold text-ink truncate">{imovelNome || 'Sem imóvel'}</h2>
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-              <span className="text-[10px] text-gray-500 inline-flex items-center gap-2">
-                <span className="text-sky-700">Mat. {calc.taxas.material}%</span>
-                <span className="text-blue-700">MO {calc.taxas.mo}%</span>
+              <span className="text-[10px] text-ink-muted inline-flex items-center gap-2">
+                <span className="text-ink">Mat. {calc.taxas.material}%</span>
+                <span className="text-ink">MO {calc.taxas.mo}%</span>
               </span>
-              <span className="text-[11px] text-gray-500">
+              <span className="text-[11px] text-ink-muted">
                 {pisos.length} piso{pisos.length !== 1 ? 's' : ''} · {seccoesPreenchidas}/{seccoesObra.length} secções
               </span>
             </div>
@@ -115,7 +113,7 @@ export function ObraTab({ imovelId, imovelNome }) {
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-line text-ink-muted hover:bg-surface transition-colors"
             >
               <Settings2 className="w-3.5 h-3.5" /> BDI
             </button>
@@ -123,7 +121,7 @@ export function ObraTab({ imovelId, imovelNome }) {
               onClick={() => abrirPDF({ download: false })}
               disabled={!orcamento.existe}
               title="Abrir o PDF numa nova aba"
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-line text-ink-muted hover:bg-surface transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Eye className="w-3.5 h-3.5" /> Ver PDF
             </button>
@@ -131,8 +129,7 @@ export function ObraTab({ imovelId, imovelNome }) {
               onClick={() => abrirPDF({ download: true })}
               disabled={!orcamento.existe}
               title="Descarregar o PDF"
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ backgroundColor: BLACK, color: GOLD, border: `1px solid ${GOLD}33` }}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-line bg-surface-raised text-ink hover:bg-surface-muted transition-colors duration-fast disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <FileDown className="w-3.5 h-3.5" /> Download
             </button>
@@ -140,9 +137,9 @@ export function ObraTab({ imovelId, imovelNome }) {
         </div>
 
         {/* ── Selectores fiscais SEMPRE visíveis ────────────── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3 p-3 rounded-lg" style={{ backgroundColor: GOLD + '12', border: `1px solid ${GOLD}44` }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3 p-3 rounded-lg bg-surface-muted/60 border border-line">
           <div>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-gray-700 block mb-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-ink block mb-1.5">
               Zona ARU?
             </label>
             <div className="flex gap-2">
@@ -151,7 +148,7 @@ export function ObraTab({ imovelId, imovelNome }) {
             </div>
           </div>
           <div>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-gray-700 block mb-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-ink block mb-1.5">
               Tipo de obra
             </label>
             <div className="flex gap-2">
@@ -179,7 +176,7 @@ export function ObraTab({ imovelId, imovelNome }) {
                 key={s.key}
                 onClick={() => scrollTo(s.key)}
                 className={`flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-md whitespace-nowrap transition-colors shrink-0 ${
-                  tem ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  tem ? 'bg-ink text-surface' : 'bg-surface-muted text-ink-muted hover:bg-line'
                 }`}
               >
                 <span>{s.icon}</span>
@@ -193,48 +190,48 @@ export function ObraTab({ imovelId, imovelNome }) {
 
       <div className="p-4 sm:p-6 space-y-4">
         {readOnly && (
-          <div className="flex items-start gap-2 text-xs rounded-lg p-3 border bg-amber-50 border-amber-200 text-amber-800">
+          <div className="flex items-start gap-2 text-xs rounded-lg p-3 border bg-warning/10 border-warning/30 text-warning">
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
             <span>Só consulta: o teu perfil não permite alterar este orçamento, por isso nada do que escreveres aqui é guardado.</span>
           </div>
         )}
         {erro && (
-          <div className="flex items-start gap-2 text-xs rounded-lg p-3 border bg-red-50 border-red-200 text-red-800">
+          <div className="flex items-start gap-2 text-xs rounded-lg p-3 border bg-danger/10 border-danger/30 text-danger">
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
             <span>As últimas alterações não foram guardadas ({erro}). Não feches esta ficha sem copiar os valores.</span>
           </div>
         )}
         {/* Painel BDI (colapsável) */}
         {showSettings && (
-          <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+          <div className="bg-surface-raised border border-line rounded-xl p-4 space-y-3">
             <div>
-              <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">BDI — Imprevistos e margem</label>
+              <label className="text-xs font-semibold text-ink uppercase tracking-wide">BDI — Imprevistos e margem</label>
               <div className="grid grid-cols-2 gap-3 mt-1.5">
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
                     value={bdi?.imprevistos_perc ?? ''}
                     onChange={(e) => setBdi({ imprevistos_perc: e.target.value === '' ? 0 : Number(e.target.value) })}
-                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:border-gray-500"
+                    className="w-full px-2 py-1.5 text-sm border border-line rounded focus:outline-none focus:border-ink/40"
                     placeholder="0"
                     step="any"
                   />
-                  <span className="text-xs text-gray-500 whitespace-nowrap">% imprev.</span>
+                  <span className="text-xs text-ink-muted whitespace-nowrap">% imprev.</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
                     value={bdi?.margem_perc ?? ''}
                     onChange={(e) => setBdi({ margem_perc: e.target.value === '' ? 0 : Number(e.target.value) })}
-                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:border-gray-500"
+                    className="w-full px-2 py-1.5 text-sm border border-line rounded focus:outline-none focus:border-ink/40"
                     placeholder="0"
                     step="any"
                   />
-                  <span className="text-xs text-gray-500 whitespace-nowrap">% margem</span>
+                  <span className="text-xs text-ink-muted whitespace-nowrap">% margem</span>
                 </div>
               </div>
               {(calc.bdi.imprevistos_base > 0 || calc.bdi.margem_base > 0) && (
-                <p className="text-[11px] text-gray-500 mt-1">
+                <p className="text-[11px] text-ink-muted mt-1">
                   Imprev. {EUR(calc.bdi.imprevistos_base)} · Margem {EUR(calc.bdi.margem_base)}
                 </p>
               )}
@@ -247,9 +244,9 @@ export function ObraTab({ imovelId, imovelNome }) {
           <div className="space-y-2">
             {avisos.map((a, i) => (
               <div key={i} className={`flex items-start gap-2 text-xs rounded-lg p-3 border ${
-                a.tipo === 'fiscal_critico' ? 'bg-red-50 border-red-200 text-red-800'
+                a.tipo === 'fiscal_critico' ? 'bg-danger/10 border-danger/30 text-danger'
                 : a.tipo === 'aritmetica' ? 'bg-orange-50 border-orange-200 text-orange-800'
-                : 'bg-amber-50 border-amber-200 text-amber-800'
+                : 'bg-warning/10 border-warning/30 text-warning'
               }`}>
                 <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
                 <span>{a.msg}</span>
@@ -260,13 +257,13 @@ export function ObraTab({ imovelId, imovelNome }) {
 
         <PisosManager pisos={pisos} onChange={setPisos} />
 
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Notas gerais</label>
+        <div className="bg-surface-raised border border-line rounded-xl p-4">
+          <label className="text-xs font-semibold text-ink uppercase tracking-wide">Notas gerais</label>
           <textarea
             value={notas || ''}
             onChange={(e) => setNotas(e.target.value)}
             placeholder="Composição, premissas globais, legalidade do edificado..."
-            className="w-full mt-1.5 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-gray-500 resize-none"
+            className="w-full mt-1.5 px-3 py-2 text-sm border border-line rounded-lg focus:outline-none focus:border-ink/40 resize-none"
             rows={2}
           />
         </div>
@@ -298,8 +295,8 @@ export function ObraTab({ imovelId, imovelNome }) {
         ))}
 
         {/* Decomposição por tipo */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-3">Decomposição por tipo fiscal</h3>
+        <div className="bg-surface-raised border border-line rounded-xl p-4">
+          <h3 className="text-xs font-semibold text-ink uppercase tracking-wide mb-3">Decomposição por tipo fiscal</h3>
           <div className="space-y-1.5">
             {t.por_tipo.material.base > 0   && <LinhaTipo cor="sky"    label={`Material (${calc.taxas.material}%)`} tipo={t.por_tipo.material} />}
             {t.por_tipo.mo.base > 0         && <LinhaTipo cor="blue"   label={`Mão-de-obra (${calc.taxas.mo}%)`} tipo={t.por_tipo.mo} mostraAutoliq />}
@@ -312,8 +309,8 @@ export function ObraTab({ imovelId, imovelNome }) {
         </div>
 
         {/* Resumo fiscal */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-3">Resumo fiscal</h3>
+        <div className="bg-surface-raised border border-line rounded-xl p-4">
+          <h3 className="text-xs font-semibold text-ink uppercase tracking-wide mb-3">Resumo fiscal</h3>
           <div className="space-y-1 text-sm">
             <Linha label="Base obra (com BDI)"             valor={t.base_obra_com_bdi} />
             <Linha label="Base licenciamento + fecho"      valor={t.base_extra} />
@@ -329,14 +326,13 @@ export function ObraTab({ imovelId, imovelNome }) {
 
       {/* Total bruto sticky */}
       <div
-        className="sticky bottom-0 left-0 right-0 px-4 sm:px-6 py-3 flex items-center justify-between border-t-2 z-10"
-        style={{ backgroundColor: BLACK, borderColor: GOLD }}
+        className="sticky bottom-0 left-0 right-0 px-4 sm:px-6 py-3 flex items-center justify-between border-t border-line bg-surface-raised/95 backdrop-blur-sm z-10"
       >
         <div>
-          <span className="text-[10px] uppercase tracking-widest" style={{ color: GOLD }}>Total bruto fiscal</span>
-          <p className="text-[10px] text-gray-400">Sincroniza com custo_estimado_obra</p>
+          <span className="text-overline uppercase text-ink-muted">Total bruto fiscal</span>
+          <p className="text-caption text-ink-muted">Atualiza o custo estimado da obra</p>
         </div>
-        <span className="text-2xl font-bold" style={{ color: GOLD }}>{EUR(calc.total_geral)}</span>
+        <span className="font-display text-2xl text-ink num">{EUR(calc.total_geral)}</span>
       </div>
     </div>
   )
@@ -349,8 +345,8 @@ function ToggleBtn({ ativo, onClick, label }) {
       onClick={onClick}
       className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
         ativo
-          ? 'bg-gray-900 text-white border-gray-900'
-          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+          ? 'bg-ink text-surface border-ink'
+          : 'bg-surface-raised text-ink border-line hover:bg-surface'
       }`}
     >
       {label}
@@ -360,17 +356,16 @@ function ToggleBtn({ ativo, onClick, label }) {
 
 function Kpi({ label, valor, destaque }) {
   return (
-    <div className={`rounded-lg px-3 py-2 ${destaque ? 'text-white' : 'bg-gray-50 border border-gray-200'}`}
-         style={destaque ? { backgroundColor: BLACK } : {}}>
-      <p className={`text-[10px] uppercase tracking-wide ${destaque ? 'opacity-70' : 'text-gray-500'}`} style={destaque ? { color: GOLD } : {}}>{label}</p>
-      <p className={`text-base font-bold mt-0.5 ${destaque ? '' : 'text-gray-900'}`} style={destaque ? { color: GOLD } : {}}>{valor}</p>
+    <div className={`rounded-lg px-3 py-2 border ${destaque ? 'bg-surface-muted border-ink/20' : 'bg-surface border-line'}`}>
+      <p className="text-overline uppercase text-ink-muted">{label}</p>
+      <p className={`mt-0.5 text-ink num ${destaque ? 'font-display text-lg' : 'text-base font-semibold'}`}>{valor}</p>
     </div>
   )
 }
 
 function Linha({ label, valor, destaque }) {
   return (
-    <div className={`flex items-center justify-between ${destaque ? 'bg-gray-50 px-2 py-1.5 rounded font-semibold text-gray-900' : 'text-gray-700 px-2'}`}>
+    <div className={`flex items-center justify-between ${destaque ? 'bg-surface px-2 py-1.5 rounded font-semibold text-ink' : 'text-ink px-2'}`}>
       <span>{label}</span>
       <span>{EUR(valor)}</span>
     </div>
@@ -379,20 +374,20 @@ function Linha({ label, valor, destaque }) {
 
 function LinhaTipo({ label, tipo, cor = 'gray', mostraAutoliq, mostraRetencoes }) {
   const corMap = {
-    sky:    'bg-sky-50 text-sky-700 border-sky-200',
-    blue:   'bg-blue-50 text-blue-800 border-blue-300',
-    amber:  'bg-amber-50 text-amber-700 border-amber-200',
+    sky:    'bg-surface-muted text-ink border-line',
+    blue:   'bg-surface-muted text-ink border-line',
+    amber:  'bg-warning/10 text-warning border-warning/30',
     purple: 'bg-purple-50 text-purple-700 border-purple-200',
-    gray:   'bg-gray-50 text-gray-600 border-gray-200',
+    gray:   'bg-surface text-ink-muted border-line',
   }
   return (
     <div className="flex items-center justify-between gap-2">
       <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded border whitespace-nowrap ${corMap[cor]}`}>{label}</span>
-      <div className="flex-1 text-right text-xs text-gray-500">
-        Base <span className="text-gray-800 font-medium">{EUR(tipo.base)}</span>
-        {tipo.iva > 0 && <> · IVA <span className="text-gray-800 font-medium">{EUR(tipo.iva)}</span></>}
-        {mostraAutoliq && tipo.autoliq > 0 && <> · autoliq. <span className="text-amber-700 font-medium">{EUR(tipo.autoliq)}</span></>}
-        {mostraRetencoes && tipo.retencoes > 0 && <> · ret. <span className="text-red-700 font-medium">-{EUR(tipo.retencoes)}</span></>}
+      <div className="flex-1 text-right text-xs text-ink-muted">
+        Base <span className="text-ink font-medium">{EUR(tipo.base)}</span>
+        {tipo.iva > 0 && <> · IVA <span className="text-ink font-medium">{EUR(tipo.iva)}</span></>}
+        {mostraAutoliq && tipo.autoliq > 0 && <> · autoliq. <span className="text-warning font-medium">{EUR(tipo.autoliq)}</span></>}
+        {mostraRetencoes && tipo.retencoes > 0 && <> · ret. <span className="text-danger font-medium">-{EUR(tipo.retencoes)}</span></>}
       </div>
     </div>
   )
