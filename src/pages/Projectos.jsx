@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useNavigate, Link } from 'react-router-dom'
 import { Plus, LayoutGrid, List as ListIcon, ChevronRight, AlertTriangle, TrendingUp, Briefcase, Calendar as CalendarIcon, Search, Sparkles, Hammer, Handshake, Home, Zap, FileText } from 'lucide-react'
+import { FASE_ICONS, FASE_ICON_DEFAULT } from '../lib/faseIcons.js'
 import { Header } from '../components/layout/Header.jsx'
 import { apiFetch } from '../lib/api.js'
 import { Button } from '../components/ui/Button.jsx'
@@ -46,48 +47,48 @@ const MODELOS_NEGOCIO = [
 // Fases do Kanban por categoria — paleta Somnium (gold + dark + acentos elegantes)
 // Fix and Flip e CAEP partilham as mesmas 8 fases operacionais
 const FASES_FIX_FLIP_KANBAN = [
-  { key: 'aquisicao',                nome: 'Aquisição',                  icon: '🔑', cor: '#475569' },
-  { key: 'projeto_licenca',          nome: 'Projeto & Licença',          icon: '📐', cor: '#1F4E5F' },
-  { key: 'demolicoes',               nome: 'Demolições',                 icon: '🔨', cor: '#7C2D40' },
-  { key: 'estrutura_especialidades', nome: 'Estrutura & Especialidades', icon: '⚡', cor: '#5F4D20' },
-  { key: 'acabamentos',              nome: 'Acabamentos',                icon: '🎨', cor: '#C9A84C' },
-  { key: 'exterior_fecho',           nome: 'Exterior & Fecho',           icon: '🏠', cor: '#D5B65A' },
-  { key: 'comercializacao',          nome: 'Comercialização',            icon: '📣', cor: '#866B2D' },
-  { key: 'vendido',                  nome: 'Vendido',                    icon: '✅', cor: '#0d0d0d' },
+  { key: 'aquisicao',                nome: 'Aquisição',                  cor: '#475569' },
+  { key: 'projeto_licenca',          nome: 'Projeto & Licença',          cor: '#1F4E5F' },
+  { key: 'demolicoes',               nome: 'Demolições',                 cor: '#7C2D40' },
+  { key: 'estrutura_especialidades', nome: 'Estrutura & Especialidades', cor: '#5F4D20' },
+  { key: 'acabamentos',              nome: 'Acabamentos',                cor: '#C9A84C' },
+  { key: 'exterior_fecho',           nome: 'Exterior & Fecho',           cor: '#D5B65A' },
+  { key: 'comercializacao',          nome: 'Comercialização',            cor: '#866B2D' },
+  { key: 'vendido',                  nome: 'Vendido',                    cor: '#0d0d0d' },
 ]
 
 const FASES_WHOLESALLING_KANBAN = [
-  { key: 'procurar_investidor',    nome: 'Procurar Investidor',      icon: '🔎', cor: '#5F4D20' },
-  { key: 'negociacao_investidor',  nome: 'Negociação Investidor',    icon: '💬', cor: '#C9A84C' },
-  { key: 'cpcv_compra',            nome: 'CPCV de Compra',           icon: '📝', cor: '#7C2D40' },
-  { key: 'cpcv_cedencia',          nome: 'CPCV de Cedência',         icon: '✍️', cor: '#D5B65A' },
-  { key: 'fee_recebido',           nome: 'Fee Recebido',             icon: '💰', cor: '#0d0d0d' },
+  { key: 'procurar_investidor',    nome: 'Procurar Investidor',      cor: '#5F4D20' },
+  { key: 'negociacao_investidor',  nome: 'Negociação Investidor',    cor: '#C9A84C' },
+  { key: 'cpcv_compra',            nome: 'CPCV de Compra',           cor: '#7C2D40' },
+  { key: 'cpcv_cedencia',          nome: 'CPCV de Cedência',         cor: '#D5B65A' },
+  { key: 'fee_recebido',           nome: 'Fee Recebido',             cor: '#0d0d0d' },
 ]
 
 const FASES_MEDIACAO_KANBAN = [
-  { key: 'captacao',           nome: 'Captação',                icon: '📋', cor: '#475569' },
-  { key: 'preparacao_imovel',  nome: 'Preparação do Imóvel',    icon: '🛠️', cor: '#1F4E5F' },
-  { key: 'publicacao',         nome: 'Publicação & Divulgação', icon: '🌐', cor: '#5F4D20' },
-  { key: 'visitas',            nome: 'Visitas',                 icon: '👀', cor: '#866B2D' },
-  { key: 'propostas',          nome: 'Propostas',               icon: '💬', cor: '#C9A84C' },
-  { key: 'cpcv',               nome: 'CPCV',                    icon: '📝', cor: '#D5B65A' },
-  { key: 'escritura',          nome: 'Escritura',               icon: '🔑', cor: '#0d0d0d' },
+  { key: 'captacao',           nome: 'Captação',                cor: '#475569' },
+  { key: 'preparacao_imovel',  nome: 'Preparação do Imóvel',    cor: '#1F4E5F' },
+  { key: 'publicacao',         nome: 'Publicação & Divulgação', cor: '#5F4D20' },
+  { key: 'visitas',            nome: 'Visitas',                 cor: '#866B2D' },
+  { key: 'propostas',          nome: 'Propostas',               cor: '#C9A84C' },
+  { key: 'cpcv',               nome: 'CPCV',                    cor: '#D5B65A' },
+  { key: 'escritura',          nome: 'Escritura',               cor: '#0d0d0d' },
 ]
 
 const FASES_CONSULTORIA_KANBAN = [
-  { key: 'cons_proposta',    nome: 'Proposta e Contrato',   icon: '📝', cor: '#475569' },
-  { key: 'cons_diagnostico', nome: 'Diagnóstico',           icon: '🔍', cor: '#1F4E5F' },
-  { key: 'cons_plano',       nome: 'Plano de Ação',         icon: '🗺️', cor: '#5F4D20' },
-  { key: 'cons_execucao',    nome: 'Execução / Obra',       icon: '🏗️', cor: '#C9A84C' },
-  { key: 'cons_entrega',     nome: 'Entrega',               icon: '📦', cor: '#2E7D5B' },
-  { key: 'cons_fecho',       nome: 'Fecho e Faturação',     icon: '✅', cor: '#0d0d0d' },
+  { key: 'cons_proposta',    nome: 'Proposta e Contrato',   cor: '#475569' },
+  { key: 'cons_diagnostico', nome: 'Diagnóstico',           cor: '#1F4E5F' },
+  { key: 'cons_plano',       nome: 'Plano de Ação',         cor: '#5F4D20' },
+  { key: 'cons_execucao',    nome: 'Execução / Obra',       cor: '#C9A84C' },
+  { key: 'cons_entrega',     nome: 'Entrega',               cor: '#2E7D5B' },
+  { key: 'cons_fecho',       nome: 'Fecho e Faturação',     cor: '#0d0d0d' },
 ]
 
 // CAEP: Pré-aquisição → Aquisição → Pré-obra; das Demolições em diante segue o Fix and Flip
 const FASES_CAEP_KANBAN = [
-  { key: 'pre_aquisicao', nome: 'Pré-aquisição', icon: '📋', cor: '#1F4E5F' },
+  { key: 'pre_aquisicao', nome: 'Pré-aquisição', cor: '#1F4E5F' },
   ...FASES_FIX_FLIP_KANBAN.filter(f => f.key === 'aquisicao'),
-  { key: 'pre_obra', nome: 'Pré-obra', icon: '🧭', cor: '#5F4D20' },
+  { key: 'pre_obra', nome: 'Pré-obra', cor: '#5F4D20' },
   ...FASES_FIX_FLIP_KANBAN.filter(f => f.key !== 'aquisicao' && f.key !== 'projeto_licenca'),
 ]
 
@@ -663,7 +664,7 @@ function KanbanBoard({ colunas, cardsPorColuna, fasesInfo, onCardClick, onMoveCa
               <div className="rounded-t-xl px-3 py-2.5 flex items-center justify-between bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 border-b-0"
                 style={{ borderTop: `3px solid ${col.cor}` }}>
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-base">{col.icon}</span>
+                  {(() => { const I = FASE_ICONS[col.key] || FASE_ICON_DEFAULT; return <I className="w-4 h-4 shrink-0" style={{ color: col.cor }} /> })()}
                   <span className="text-xs font-semibold text-gray-700 dark:text-neutral-200 truncate">{col.nome}</span>
                 </div>
                 <Badge tone="gray" size="xs" className="font-mono">{cards.length}</Badge>

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { Map, TrendingUp, Scale, Trophy, Plus, Save, X, Globe2 } from 'lucide-react'
+import { Scale, Trophy, Plus, Save, X, Globe2, Gauge, LineChart, Flame } from 'lucide-react'
 import { apiFetch } from '../lib/api.js'
 import { useRegiaoGate } from '../contexts/RegiaoContext.jsx'
 import { RegiaoModal } from '../components/RegiaoModal.jsx'
@@ -7,9 +7,9 @@ import { RegiaoBadge } from '../components/RegiaoBadge.jsx'
 import { REGIAO_LABEL, REGIAO_COR, concelhosDe, EUR, PCT } from '../constants.js'
 
 const TABS = [
-  { key: 'kpis', label: 'KPIs', Icon: TrendingUp },
-  { key: 'mercado', label: 'Mercado de Referência', Icon: TrendingUp },
-  { key: 'hotzones', label: 'Hot Zones', Icon: Map },
+  { key: 'kpis', label: 'KPIs', Icon: Gauge },
+  { key: 'mercado', label: 'Mercado de Referência', Icon: LineChart },
+  { key: 'hotzones', label: 'Hot Zones', Icon: Flame },
   { key: 'compliance', label: 'Compliance', Icon: Scale },
   { key: 'benchmarking', label: 'Benchmarking', Icon: Trophy },
 ]

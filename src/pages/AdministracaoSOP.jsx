@@ -1,8 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import {
-  BookOpen, Search, ExternalLink, Loader2, LayoutGrid,
-  Briefcase, Wallet, Shield, RefreshCw,
-} from 'lucide-react'
+import { BookOpen, Search, ExternalLink, Loader2, LayoutGrid, Wallet, RefreshCw, Handshake, Building, Library } from 'lucide-react'
 import { apiFetch } from '../lib/api.js'
 import { Button } from '../components/ui/Button.jsx'
 import { Card } from '../components/ui/Card.jsx'
@@ -12,10 +9,10 @@ const DRIVE_FOLDER_URL = 'https://drive.google.com/drive/folders/1XCHqPJsnQGNoXs
 
 const DEPARTAMENTOS = [
   { key: '',               nome: 'Todos',          Icon: LayoutGrid, cor: '#6b7280', desc: 'Todos os SOPs' },
-  { key: 'comercial',      nome: 'Comercial',      Icon: Briefcase,  cor: '#3b82f6', desc: 'CRM, investidores, imóveis' },
+  { key: 'comercial',      nome: 'Comercial',      Icon: Handshake,  cor: '#3b82f6', desc: 'CRM, investidores, imóveis' },
   { key: 'financeiro',     nome: 'Financeiro',     Icon: Wallet,     cor: '#10b981', desc: 'Orçamentos, despesas, análises' },
-  { key: 'administrativo', nome: 'Administrativo', Icon: Shield,     cor: '#f59e0b', desc: 'Operações internas, sistemas' },
-  { key: 'geral',          nome: 'Geral',          Icon: BookOpen,   cor: '#a855f7', desc: 'Documentação transversal' },
+  { key: 'administrativo', nome: 'Administrativo', Icon: Building,     cor: '#f59e0b', desc: 'Operações internas, sistemas' },
+  { key: 'geral',          nome: 'Geral',          Icon: Library,   cor: '#a855f7', desc: 'Documentação transversal' },
 ]
 const DEPT_MAP = Object.fromEntries(DEPARTAMENTOS.filter(d => d.key).map(d => [d.key, d]))
 

@@ -1,6 +1,6 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
-import { LayoutDashboard, TrendingUp, Database, Bell, Clock, BarChart3, Menu, X, LogOut, Briefcase, Shield, ScrollText, History, UserCheck, ChevronDown, FileText, BookOpen, Map, Megaphone, Phone, CalendarClock } from 'lucide-react'
+import { LayoutDashboard, Bell, Menu, X, LogOut, UserCheck, ChevronDown, BookOpen, Map, Megaphone, CalendarClock, Building, Timer, FileBarChart, Headphones, Handshake, Construction, Wallet, UserCog, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { apiFetch, apiFetchJson } from '../../lib/api.js'
 import { prefetchRoute } from '../../lib/prefetch.js'
@@ -9,24 +9,24 @@ import { prefetchRoute } from '../../lib/prefetch.js'
 // grupos expansíveis na sidebar; o resto são links directos.
 const nav = [
   {
-    label: 'Administração', Icon: ScrollText, area: 'administracao',
+    label: 'Administração', Icon: Building, area: 'administracao',
     children: [
       { to: '/',                         label: 'Dashboard',    Icon: LayoutDashboard, end: true, area: 'dashboard' },
       { to: '/administracao/agenda',     label: 'Agenda',       Icon: CalendarClock, area: 'operacoes' },
-      { to: '/administracao/operacoes',  label: 'Operações',    Icon: Clock, badgeKey: 'tarefas', area: 'operacoes' },
-      { to: '/administracao/relatorios', label: 'Relatórios',   Icon: FileText, area: 'administracao' },
+      { to: '/administracao/operacoes',  label: 'Operações',    Icon: Timer, badgeKey: 'tarefas', area: 'operacoes' },
+      { to: '/administracao/relatorios', label: 'Relatórios',   Icon: FileBarChart, area: 'administracao' },
       { to: '/administracao/sop',        label: 'SOPs',         Icon: BookOpen, area: 'administracao' },
       { to: '/administracao/regiao',     label: 'Multi-Região', Icon: Map, area: 'administracao' },
-      { to: '/administracao/chamadas',   label: 'Avaliação de Calls', Icon: Phone, area: 'administracao' },
+      { to: '/administracao/chamadas',   label: 'Avaliação de Calls', Icon: Headphones, area: 'administracao' },
     ],
   },
-  { to: '/crm', label: 'Departamento Comercial', Icon: Database, badgeKey: 'crm', area: 'crm' },
-  { to: '/projectos', label: 'Departamento de Obras', Icon: Briefcase, area: 'projectos' },
-  { to: '/financeiro',         label: 'Departamento Financeiro', Icon: TrendingUp, area: 'financeiro' },
+  { to: '/crm', label: 'Departamento Comercial', Icon: Handshake, badgeKey: 'crm', area: 'crm' },
+  { to: '/projectos', label: 'Departamento de Obras', Icon: Construction, area: 'projectos' },
+  { to: '/financeiro',         label: 'Departamento Financeiro', Icon: Wallet, area: 'financeiro' },
   { to: '/marketing',          label: 'Marketing e Marca Pessoal', Icon: Megaphone, area: 'marketing' },
   { to: '/alertas',            label: 'Alertas',    Icon: Bell, badgeKey: 'alertas', area: 'alertas' },
-  { to: '/admin/utilizadores', label: 'Utilizadores', Icon: Shield, area: 'admin' },
-  { to: '/admin/auditoria',    label: 'Auditoria',   Icon: History, area: 'admin' },
+  { to: '/admin/utilizadores', label: 'Utilizadores', Icon: UserCog, area: 'admin' },
+  { to: '/admin/auditoria',    label: 'Auditoria',   Icon: ShieldCheck, area: 'admin' },
 ]
 
 export function Sidebar() {

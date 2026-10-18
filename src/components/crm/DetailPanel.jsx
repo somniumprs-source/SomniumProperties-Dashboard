@@ -3,7 +3,7 @@
  * Mostra: campos editáveis + relações + timeline + tarefas + reuniões.
  */
 import { useState, useEffect, useCallback, useMemo, useRef, memo, lazy, Suspense } from 'react'
-import { FileDown, ChevronDown, ChevronUp, Phone, Clock, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, RefreshCw, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin, Eye, Trash2 } from 'lucide-react'
+import { FileDown, ChevronDown, ChevronUp, Phone, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin, Eye, Trash2, ThumbsUp, TrendingDown, Shield, Building2, UserRound, FolderOpen, Calculator, Hammer, Scale, DoorOpen, FileBarChart, ListChecks, Building, CalendarCheck, Star, Gauge, History, Briefcase, ShieldCheck, Timer } from 'lucide-react'
 import { apiFetch, apiFetchJson, openDocument } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { PartilharAcesso } from '../PartilharAcesso.jsx'
@@ -117,11 +117,11 @@ import { MOTIVOS_NAO_INTERESSA_PADRAO } from './detailPanelConstants.js'
 
 function PontosRiscosTab({ imovel, endpoint, id, onUpdate, toast }) {
   const CAMPOS = [
-    { key: 'tese_investimento', label: 'Tese de investimento', color: 'indigo', icon: '🎯' },
-    { key: 'pontos_fortes', label: 'Pontos fortes', color: 'emerald', icon: '✅' },
-    { key: 'pontos_fracos', label: 'Pontos fracos', color: 'amber', icon: '⚠️' },
-    { key: 'riscos', label: 'Riscos', color: 'rose', icon: '🚨' },
-    { key: 'mitigacao_riscos', label: 'Mitigação de riscos', color: 'sky', icon: '🛡️' },
+    { key: 'tese_investimento', label: 'Tese de investimento', color: 'indigo', icon: Target },
+    { key: 'pontos_fortes', label: 'Pontos fortes', color: 'emerald', icon: ThumbsUp },
+    { key: 'pontos_fracos', label: 'Pontos fracos', color: 'amber', icon: TrendingDown },
+    { key: 'riscos', label: 'Riscos', color: 'rose', icon: AlertTriangle },
+    { key: 'mitigacao_riscos', label: 'Mitigação de riscos', color: 'sky', icon: Shield },
   ]
   const [valores, setValores] = useState({
     tese_investimento: imovel.tese_investimento || '',
@@ -161,7 +161,7 @@ function PontosRiscosTab({ imovel, endpoint, id, onUpdate, toast }) {
           return (
             <div key={c.key} className="rounded-xl border border-gray-200 p-4 bg-white">
               <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 mb-2">
-                <span>{c.icon}</span>{c.label}
+                <c.icon className="w-3.5 h-3.5 text-brand-gold shrink-0" />{c.label}
               </label>
               <textarea
                 value={valores[c.key]}
@@ -898,22 +898,22 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
 
   // Tabs dinâmicos por tipo
   const tabs = [
-    { key: 'detalhe', label: type === 'Imóveis' ? 'Imóvel' : type === 'Investidores' ? 'Ficha do investidor' : type === 'Consultores' ? 'Ficha do consultor' : 'Detalhe', icon: '📋', show: true },
-    { key: 'registo_chamadas', label: 'Registo de Chamada', icon: '📞', show: type === 'Consultores' },
-    { key: 'ficheiros', label: 'Documentos', icon: '📷', show: type === 'Imóveis' },
-    { key: 'analise', label: 'Análise Financeira', icon: '📊', show: type === 'Imóveis' },
-    { key: 'obra', label: 'Obra', icon: '🏗️', show: type === 'Imóveis' },
-    { key: 'localizacao', label: 'Localização', icon: '📍', show: type === 'Imóveis' },
-    { key: 'pontos_riscos', label: 'Pontos & Riscos', icon: '⚖️', show: type === 'Imóveis' },
-    { key: 'visitas', label: 'Visitas', icon: '🚪', show: type === 'Imóveis' },
-    { key: 'matching', label: 'Matching investidores', icon: '🎯', show: type === 'Imóveis' },
-    { key: 'relatorios_imovel', label: 'Relatórios', icon: '📄', show: type === 'Imóveis' },
-    { key: 'checklist', label: 'Checklist', icon: '📋', show: type === 'Imóveis' },
-    { key: 'documentos', label: `Documentos (${data?.documentos?.length ?? 0})`, icon: '📎', show: type === 'Investidores' },
-    { key: 'dados_empresa', label: 'Dados Empresa', icon: '🏢', show: type === 'Investidores' },
-    { key: 'documentos_consultor', label: 'Documentos', icon: '📎', show: type === 'Consultores' },
-    { key: 'relatorios', label: `Reuniões (${reunioes.length})`, icon: '📄', show: (type === 'Investidores' || type === 'Consultores') },
-    { key: 'avaliacao', label: 'Avaliação', icon: '🎯', show: type === 'Investidores' },
+    { key: 'detalhe', label: type === 'Imóveis' ? 'Imóvel' : type === 'Investidores' ? 'Ficha do investidor' : type === 'Consultores' ? 'Ficha do consultor' : 'Detalhe', icon: type === 'Imóveis' ? Building2 : UserRound, show: true },
+    { key: 'registo_chamadas', label: 'Registo de Chamada', icon: PhoneCall, show: type === 'Consultores' },
+    { key: 'ficheiros', label: 'Documentos', icon: FolderOpen, show: type === 'Imóveis' },
+    { key: 'analise', label: 'Análise Financeira', icon: Calculator, show: type === 'Imóveis' },
+    { key: 'obra', label: 'Obra', icon: Hammer, show: type === 'Imóveis' },
+    { key: 'localizacao', label: 'Localização', icon: MapPin, show: type === 'Imóveis' },
+    { key: 'pontos_riscos', label: 'Pontos & Riscos', icon: Scale, show: type === 'Imóveis' },
+    { key: 'visitas', label: 'Visitas', icon: DoorOpen, show: type === 'Imóveis' },
+    { key: 'matching', label: 'Matching investidores', icon: Link2, show: type === 'Imóveis' },
+    { key: 'relatorios_imovel', label: 'Relatórios', icon: FileBarChart, show: type === 'Imóveis' },
+    { key: 'checklist', label: 'Checklist', icon: ListChecks, show: type === 'Imóveis' },
+    { key: 'documentos', label: `Documentos (${data?.documentos?.length ?? 0})`, icon: FolderOpen, show: type === 'Investidores' },
+    { key: 'dados_empresa', label: 'Dados Empresa', icon: Building, show: type === 'Investidores' },
+    { key: 'documentos_consultor', label: 'Documentos', icon: FolderOpen, show: type === 'Consultores' },
+    { key: 'relatorios', label: `Reuniões (${reunioes.length})`, icon: CalendarCheck, show: (type === 'Investidores' || type === 'Consultores') },
+    { key: 'avaliacao', label: 'Avaliação', icon: Star, show: type === 'Investidores' },
   ].filter(t => t.show)
 
   return (
@@ -1006,7 +1006,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
                 color: activeTab === t.key ? '#1A1A1A' : '#9ca3af',
                 backgroundColor: activeTab === t.key ? 'white' : 'transparent',
               }}>
-              <span className="mr-1.5">{t.icon}</span>{t.label}
+              <t.icon className="w-4 h-4 mr-1.5 inline-block align-[-3px]" />{t.label}
               {activeTab === t.key && (
                 <span className="absolute bottom-0 left-0 right-0 h-0.5" style={{ backgroundColor: '#C9A84C' }} />
               )}
@@ -3007,11 +3007,11 @@ function InvestidorReadSections({ data }) {
 
 // ── Scorecard Tab (Discovery Call — SOP 2) ────────────────────
 const CRITERIOS_INFO = {
-  c1: { label: 'Capacidade Financeira', icon: '💰' },
-  c2: { label: 'Experiência Imobiliária', icon: '🏗️' },
-  c3: { label: 'Alinhamento Estratégico', icon: '🎯' },
-  c4: { label: 'Estabilidade e Credibilidade', icon: '🔒' },
-  c5: { label: 'Disponibilidade e Compromisso', icon: '⏱️' },
+  c1: { label: 'Capacidade Financeira', icon: Wallet },
+  c2: { label: 'Experiência Imobiliária', icon: Briefcase },
+  c3: { label: 'Alinhamento Estratégico', icon: Target },
+  c4: { label: 'Estabilidade e Credibilidade', icon: ShieldCheck },
+  c5: { label: 'Disponibilidade e Compromisso', icon: Timer },
 }
 
 // Script de perguntas SOP 2 — guião para Discovery Call
@@ -3150,13 +3150,13 @@ function AvaliacaoTab({ data, onUpdate }) {
     <div>
       <div className="flex border-b border-gray-200 px-4 sm:px-6 pt-3" style={{ backgroundColor: '#FAFAF7' }}>
         {[
-          { key: 'scorecard', label: 'Scorecard', icon: '🎯' },
-          { key: 'historico',  label: 'Histórico', icon: '📈' },
+          { key: 'scorecard', label: 'Scorecard', icon: Gauge },
+          { key: 'historico',  label: 'Histórico', icon: History },
         ].map(s => (
           <button key={s.key} onClick={() => setSub(s.key)}
             className="relative px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap"
             style={{ color: sub === s.key ? '#1A1A1A' : '#9ca3af' }}>
-            <span className="mr-1.5">{s.icon}</span>{s.label}
+            <s.icon className="w-4 h-4 mr-1.5 inline-block align-[-3px]" />{s.label}
             {sub === s.key && <span className="absolute bottom-0 left-0 right-0 h-0.5" style={{ backgroundColor: '#C9A84C' }} />}
           </button>
         ))}
@@ -3302,7 +3302,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                 return (
                   <div className="space-y-4">
                     <div className="flex items-center gap-2">
-                      <span className="text-lg">{CRITERIOS_INFO[ck].icon}</span>
+                      {(() => { const I = CRITERIOS_INFO[ck].icon; return <I className="w-5 h-5 text-brand-gold shrink-0" /> })()}
                       <h4 className="text-sm font-bold text-gray-800">{bloco.label}</h4>
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#C9A84C22] text-brand-gold font-medium">Critério {scriptStep}/5</span>
                     </div>
@@ -3422,7 +3422,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                 <div key={c} className="rounded-lg border border-gray-200 bg-white p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm">{info.icon}</span>
+                      <info.icon className="w-4 h-4 text-brand-gold shrink-0" />
                       <span className="text-sm font-semibold text-gray-800">{info.label}</span>
                     </div>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">
@@ -3485,7 +3485,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                 const p = pesos[c]
                 return (
                   <div key={c} className="flex items-center gap-2">
-                    <span className="text-[10px] text-gray-400 w-8">{CRITERIOS_INFO[c].icon}</span>
+                    <span className="w-8 flex text-gray-400">{(() => { const I = CRITERIOS_INFO[c].icon; return <I className="w-3.5 h-3.5" /> })()}</span>
                     <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                       <div className={`h-full rounded-full transition-all ${CLASSE_CORES[previewClasse]?.bar || 'bg-gray-400'}`}
                         style={{ width: `${(s / 5) * 100}%` }} />
@@ -3532,7 +3532,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                 <div className="grid grid-cols-5 gap-2">
                   {['c1', 'c2', 'c3', 'c4', 'c5'].map(c => (
                     <div key={c} className="text-center">
-                      <p className="text-[10px] text-gray-400">{CRITERIOS_INFO[c].icon}</p>
+                      <p className="flex justify-center text-gray-400">{(() => { const I = CRITERIOS_INFO[c].icon; return <I className="w-3.5 h-3.5" /> })()}</p>
                       <p className="text-sm font-bold text-gray-800">{sc[`${c}_score`]}</p>
                       {sc[`${c}_notas`] && (
                         <p className="text-[9px] text-gray-400 mt-1 line-clamp-2">{sc[`${c}_notas`]}</p>

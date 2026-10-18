@@ -1,15 +1,15 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { FileText, BookOpen, Map, Phone, Clock, CalendarClock } from 'lucide-react'
+import { BookOpen, Map, CalendarClock, Timer, FileBarChart, Headphones } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
 
 const TABS = [
   { key: 'agenda',     label: 'Agenda',             icon: CalendarClock },
-  { key: 'operacoes',  label: 'Operações',          icon: Clock },
+  { key: 'operacoes',  label: 'Operações',          icon: Timer },
   { key: 'sop',        label: 'SOP',                icon: BookOpen },
-  { key: 'relatorios', label: 'Relatórios',           icon: FileText },
+  { key: 'relatorios', label: 'Relatórios',           icon: FileBarChart },
   { key: 'regiao',     label: 'Multi-Região',        icon: Map },
-  { key: 'chamadas',   label: 'Avaliação de Calls', icon: Phone },
+  { key: 'chamadas',   label: 'Avaliação de Calls', icon: Headphones },
 ]
 
 const SUBTITLES = {

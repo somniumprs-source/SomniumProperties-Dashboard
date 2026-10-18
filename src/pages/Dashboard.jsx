@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { TrendingUp, Database, Clock, Calculator, Megaphone } from 'lucide-react'
+import { TrendingUp, Clock, Calculator, Megaphone, Handshake, Timer, Wallet } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
 import { DepartmentSection } from '../components/dashboard/DepartmentSection.jsx'
 import { ComercialDashboard } from '../components/dashboard/ComercialDashboard.jsx'
@@ -15,9 +15,9 @@ import { RegiaoToggle } from '../components/RegiaoBadge.jsx'
 
 // Dashboard organizado por departamentos (dentro de Administração).
 const DEPT_TABS = [
-  { key: 'comercial',  label: 'Comercial',  icon: Database,   tone: 'gold' },
-  { key: 'operacoes',  label: 'Operações',  icon: Clock,      tone: 'amber' },
-  { key: 'financeiro', label: 'Financeiro', icon: TrendingUp, tone: 'green' },
+  { key: 'comercial',  label: 'Comercial',  icon: Handshake,   tone: 'gold' },
+  { key: 'operacoes',  label: 'Operações',  icon: Timer,      tone: 'amber' },
+  { key: 'financeiro', label: 'Financeiro', icon: Wallet, tone: 'green' },
   { key: 'marketing',  label: 'Marketing',  icon: Megaphone,  tone: 'indigo' },
 ]
 

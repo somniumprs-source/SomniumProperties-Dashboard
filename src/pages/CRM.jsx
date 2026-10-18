@@ -12,7 +12,7 @@ import { TabKPIs } from '../components/crm/TabKPIs.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { KanbanSkeleton, TableSkeleton } from '../components/ui/Skeleton.jsx'
 import { EmptyState } from '../components/ui/EmptyState.jsx'
-import { Building2, Users, UserCheck, HardHat, Sparkles, ChevronLeft, ChevronRight, Phone, MessageCircle, Wallet, AlertTriangle, Clock as Clock3, Plus, RefreshCw } from 'lucide-react'
+import { Building2, UserCheck, HardHat, ChevronLeft, ChevronRight, Phone, MessageCircle, Wallet, AlertTriangle, Clock as Clock3, Plus, RefreshCw, HandCoins, Radar } from 'lucide-react'
 import { OportunidadesPanel } from '../components/crm/OportunidadesPanel.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { Button } from '../components/ui/Button.jsx'
@@ -1080,10 +1080,10 @@ export function CRM() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 w-full max-w-6xl">
             {[
               { key: 'Imóveis',       icon: Building2, tone: 'indigo', statsKey: 'imoveis' },
-              { key: 'Investidores',  icon: Users,     tone: 'gold',   statsKey: 'investidores' },
+              { key: 'Investidores',  icon: HandCoins, tone: 'gold',   statsKey: 'investidores' },
               { key: 'Consultores',   icon: UserCheck, tone: 'green',  statsKey: 'consultores' },
               { key: 'Construtores',  icon: HardHat,   tone: 'amber',  statsKey: null },
-              { key: 'Oportunidades', icon: Sparkles,  tone: 'blue',   statsKey: null },
+              { key: 'Oportunidades', icon: Radar,     tone: 'blue',   statsKey: null },
             ].map(t => (
               <KpiCard
                 key={t.key}
@@ -1296,7 +1296,7 @@ export function CRM() {
               />
             ) : (
               <EmptyState
-                icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Construtores': HardHat, 'Oportunidades': Sparkles }[tab] || Building2}
+                icon={{ 'Imóveis': Building2, 'Investidores': HandCoins, 'Consultores': UserCheck, 'Construtores': HardHat, 'Oportunidades': Radar }[tab] || Building2}
                 title={`Sem ${tab.toLowerCase()}`}
                 description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
               />
@@ -1377,7 +1377,7 @@ export function CRM() {
               />
             ) : (
               <EmptyState
-                icon={{ 'Imóveis': Building2, 'Investidores': Users, 'Consultores': UserCheck, 'Construtores': HardHat, 'Oportunidades': Sparkles }[tab] || Building2}
+                icon={{ 'Imóveis': Building2, 'Investidores': HandCoins, 'Consultores': UserCheck, 'Construtores': HardHat, 'Oportunidades': Radar }[tab] || Building2}
                 title={`Sem ${tab.toLowerCase()}`}
                 description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
               />

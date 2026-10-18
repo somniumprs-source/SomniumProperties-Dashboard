@@ -1,13 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
-import {
-  ArrowLeft, CheckCircle2, Circle, Plus, Trash2, Upload, X,
-  FileText, Users, BarChart3, ChevronRight,
-  FileDown, AlertTriangle, Sparkles, RefreshCw, Home, Layers,
-  History, MessageSquare, FileSpreadsheet, Pencil, Eye,
-  CalendarClock, ClipboardCheck, Calculator, Receipt,
-} from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Circle, Plus, Trash2, Upload, FileText, BarChart3, ChevronRight, FileDown, AlertTriangle, RefreshCw, Home, Layers, History, FileSpreadsheet, Pencil, Eye, CalendarClock, ClipboardCheck, Calculator, Receipt, Hammer, FolderOpen, HandCoins, CalendarCheck, Building, Trees, Footprints, ArrowUpDown, Zap, Car, MoreHorizontal } from 'lucide-react'
+import { FASE_ICONS, FASE_ICON_DEFAULT } from '../lib/faseIcons.js'
 import { ProjectoForm } from './Projectos.jsx'
 import { TarefasFase } from '../components/projeto/TarefasFase.jsx'
 import { DESP_CATEGORIAS } from '../constants.js'
@@ -48,10 +43,6 @@ const FASE_COR = {
   comercializacao: '#866B2D',            // gold-700 (venda)
   vendido: '#0d0d0d',                    // brand dark (sucesso)
 }
-const FASE_ICON = {
-  pre_aquisicao: '📋', aquisicao: '🔑', pre_obra: '🧭', projeto_licenca: '📐', demolicoes: '🔨', estrutura_especialidades: '⚡',
-  acabamentos: '🎨', exterior_fecho: '🏠', comercializacao: '📣', vendido: '✅',
-}
 const ESTADO_LABEL = { pendente: 'Pendente', em_curso: 'Em curso', concluida: 'Concluída', bloqueada: 'Bloqueada' }
 
 // Calcula se uma fase está em atraso: data_fim_prevista passou e ainda não está concluída.
@@ -87,11 +78,11 @@ const TABS_BASE = [
   { key: 'fases',        label: 'Fases e Tarefas',  icon: ClipboardCheck },
   { key: 'fracoes',      label: 'Frações e Áreas',  icon: Layers, predioOnly: true },
   { key: 'analise',      label: 'Análise Financeira', icon: Calculator },
-  { key: 'obras',        label: 'Obras',            icon: Home },
+  { key: 'obras',        label: 'Obras',            icon: Hammer },
   { key: 'faturas',      label: 'Faturas e Comprovativos', icon: Receipt },
-  { key: 'documentos',   label: 'Documentos',       icon: FileText },
-  { key: 'investidores', label: 'Investidores',     icon: Users },
-  { key: 'reunioes',     label: 'Reuniões',         icon: CalendarClock },
+  { key: 'documentos',   label: 'Documentos',       icon: FolderOpen },
+  { key: 'investidores', label: 'Investidores',     icon: HandCoins },
+  { key: 'reunioes',     label: 'Reuniões',         icon: CalendarCheck },
   { key: 'historico',    label: 'Histórico',        icon: History },
 ]
 
@@ -103,14 +94,14 @@ const FRACAO_ESTADO_COR = {
 }
 
 const CATEGORIAS_COMUM = [
-  { key: 'fachada',     label: 'Fachada',                icon: '🧱' },
-  { key: 'telhado',     label: 'Telhado / Cobertura',    icon: '🏠' },
-  { key: 'jardim',      label: 'Jardim / Pátio',         icon: '🌿' },
-  { key: 'escadas',     label: 'Escadas / Caixa',        icon: '🪜' },
-  { key: 'elevador',    label: 'Elevador',               icon: '🛗' },
-  { key: 'instalacoes', label: 'Instalações verticais',  icon: '⚡' },
-  { key: 'garagem',     label: 'Garagem / Parqueamento', icon: '🚗' },
-  { key: 'outro',       label: 'Outro',                  icon: '📐' },
+  { key: 'fachada',     label: 'Fachada',                icon: Building },
+  { key: 'telhado',     label: 'Telhado / Cobertura',    icon: Home },
+  { key: 'jardim',      label: 'Jardim / Pátio',         icon: Trees },
+  { key: 'escadas',     label: 'Escadas / Caixa',        icon: Footprints },
+  { key: 'elevador',    label: 'Elevador',               icon: ArrowUpDown },
+  { key: 'instalacoes', label: 'Instalações verticais',  icon: Zap },
+  { key: 'garagem',     label: 'Garagem / Parqueamento', icon: Car },
+  { key: 'outro',       label: 'Outro',                  icon: MoreHorizontal },
 ]
 
 export function ProjectoDetalhe() {
@@ -333,7 +324,7 @@ export function ProjectoDetalhe() {
                 <div className="sm:text-right col-span-2 sm:col-span-1">
                   <p className="text-overline uppercase tracking-widest text-white/50 font-semibold">Fase atual</p>
                   <p className="text-sm font-semibold mt-1 text-brand-gold truncate">
-                    <span className="mr-1">{FASE_ICON[faseAtual.fase_key]}</span> {faseAtual.nome}
+                    {(() => { const I = FASE_ICONS[faseAtual.fase_key] || FASE_ICON_DEFAULT; return <I className="w-4 h-4 mr-1 inline-block align-[-3px]" /> })()} {faseAtual.nome}
                   </p>
                 </div>
               )}
@@ -607,7 +598,7 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId, imovelId, fotosImo
   const [open, setOpen] = useState(fase.estado === 'em_curso')
   const [novaDespesa, setNovaDespesa] = useState({ movimento: '', valor: '', data: '', categoria: 'Material' })
   const cor = FASE_COR[fase.fase_key] || '#6366f1'
-  const icon = FASE_ICON[fase.fase_key] || '🛠️'
+  const FaseIcon = FASE_ICONS[fase.fase_key] || FASE_ICON_DEFAULT
   const diasAtraso = calcularAtraso(fase)
 
   // Migrado para React Query (Problema 23/24 da auditoria) — só busca quando
@@ -689,7 +680,7 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId, imovelId, fotosImo
         className="w-full px-4 py-3.5 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-neutral-800/50 transition-colors">
         <div className="flex items-center gap-3 flex-1 text-left min-w-0">
           <div className="w-10 h-10 rounded-lg flex items-center justify-center text-lg flex-shrink-0 transition-transform group-hover:scale-105"
-            style={{ background: `${cor}18`, border: `1px solid ${cor}30` }}>{icon}</div>
+            style={{ background: `${cor}18`, border: `1px solid ${cor}30`, color: cor }}><FaseIcon className="w-5 h-5" /></div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-semibold text-gray-900 dark:text-neutral-100">{fase.nome}</span>
@@ -1585,7 +1576,7 @@ function TabFotos({ negocioId, fases, fotos, onChange, readOnly }) {
           <div className="flex-1">
             <label className="text-[10px] text-gray-500 uppercase tracking-wide block mb-1">Fase</label>
             <select value={faseSel || ''} onChange={e => setFaseSel(e.target.value)} className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-gray-200 bg-white">
-              {fases.map(f => <option key={f.id} value={f.id}>{FASE_ICON[f.fase_key]} {f.nome}</option>)}
+              {fases.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
             </select>
           </div>
           <div>
@@ -1626,7 +1617,7 @@ function FotosGaleriaPorFase({ fotos, onDelete }) {
       {Object.entries(grupos).map(([k, g]) => (
         <div key={k}>
           <h4 className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1.5">
-            {FASE_ICON[g.faseKey]} {g.nome} <span className="text-gray-300">({g.fotos.length})</span>
+            {(() => { const I = FASE_ICONS[g.faseKey] || FASE_ICON_DEFAULT; return <I className="w-3.5 h-3.5 text-brand-gold shrink-0" /> })()} {g.nome} <span className="text-gray-300">({g.fotos.length})</span>
           </h4>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
             {g.fotos.map(foto => (
@@ -2541,7 +2532,7 @@ function FracaoChips({ fracoes, fracaoSel, setFracaoSel }) {
         className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap inline-flex items-center gap-1.5 border ${
           sel ? 'bg-brand-dark text-brand-gold border-brand-dark' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
         }`}>
-        {cat && <span>{cat.icon}</span>}
+        {cat && <cat.icon className="w-3.5 h-3.5 shrink-0" />}
         <span className="font-semibold">{fr.nome}</span>
         {fr.tipologia && <span className="text-gray-400">·</span>}
         {fr.tipologia && <span className="text-gray-500">{fr.tipologia}</span>}
@@ -2686,7 +2677,7 @@ function FracaoCard({ fracao: fr, readOnly, onEdit, onDelete }) {
     <div className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow group">
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-start gap-2">
-          {cat && <span className="text-xl mt-0.5">{cat.icon}</span>}
+          {cat && <cat.icon className="w-5 h-5 mt-0.5 text-brand-gold shrink-0" />}
           <div>
             <h3 className="text-base font-bold text-gray-800">{fr.nome}</h3>
             <p className="text-xs text-gray-500">
@@ -2796,7 +2787,7 @@ function FracaoForm({ fracao, onSave, onCancel, fasesComunsCount }) {
             {CATEGORIAS_COMUM.map(c => (
               <button key={c.key} type="button" onClick={() => selectCategoria(c.key)}
                 className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs border ${f.categoria_comum === c.key ? 'border-brand-gold bg-brand-gold/10 text-brand-dark' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
-                <span>{c.icon}</span> {c.label}
+                <c.icon className="w-3.5 h-3.5 shrink-0" /> {c.label}
               </button>
             ))}
           </div>
