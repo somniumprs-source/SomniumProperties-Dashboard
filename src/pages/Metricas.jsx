@@ -1,5 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useId } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Modal } from '../components/ui/Modal.jsx'
+import { Button } from '../components/ui/Button.jsx'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { Header } from '../components/layout/Header.jsx'
 import { PageSkeleton } from '../components/ui/Skeleton.jsx'
@@ -1370,30 +1372,37 @@ export function Metricas() {
 // Fonte "Manual" (id vazio na lista de fontes) mostra um campo de valor
 // actual, que fica guardado em valor_manual e é a única forma de um KR
 // manual sair de 0% (antes não existia onde guardar esse valor).
-function KrFormModal({ okrId, kr, fontes, onSave, onClose }) {
+const KR_INPUT = 'w-full border border-line rounded-lg px-3 py-2 text-sm mt-1 bg-surface-raised text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 transition-colors duration-fast'
+
+function KrFormModal({ open = true, okrId: _okrId, kr, fontes, onSave, onClose }) {
+  const formId = useId()
   const [form, setForm] = useState({
     kr: kr?.kr || '', meta: kr?.meta ?? 1, fonte: kr?.fonte || '', valor_manual: kr?.valor_manual ?? 0,
   })
   const isManual = !form.fonte
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-surface-raised rounded-xl border border-line p-5 shadow-lg w-full max-w-md" onClick={e => e.stopPropagation()}>
-        <h3 className="text-sm font-semibold text-ink mb-3">{kr ? 'Editar Key Result' : 'Novo Key Result'}</h3>
-        <form onSubmit={e => { e.preventDefault(); onSave(form) }} className="flex flex-col gap-3">
+    <Modal open={open} onClose={onClose} size="md" title={kr ? 'Editar Key Result' : 'Novo Key Result'}
+      footer={
+        <Modal.Footer>
+          <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button type="submit" form={formId} variant="primary">Guardar</Button>
+        </Modal.Footer>
+      }>
+        <form id={formId} onSubmit={e => { e.preventDefault(); onSave(form) }} className="flex flex-col gap-3">
           <div>
             <label className="text-xs text-ink-muted">Descrição</label>
             <input value={form.kr} onChange={e => setForm(f => ({ ...f, kr: e.target.value }))}
-              className="w-full border border-line rounded-lg px-3 py-2 text-sm mt-1" required autoFocus />
+              className={KR_INPUT} required autoFocus />
           </div>
           <div>
             <label className="text-xs text-ink-muted">Meta (número)</label>
             <input type="number" step="any" value={form.meta} onChange={e => setForm(f => ({ ...f, meta: e.target.value }))}
-              className="w-full border border-line rounded-lg px-3 py-2 text-sm mt-1" required />
+              className={KR_INPUT} required />
           </div>
           <div>
             <label className="text-xs text-ink-muted">Fonte</label>
             <select value={form.fonte} onChange={e => setForm(f => ({ ...f, fonte: e.target.value }))}
-              className="w-full border border-line rounded-lg px-3 py-2 text-sm mt-1 bg-surface-raised">
+              className={KR_INPUT}>
               {fontes.map(f => <option key={f.id ?? 'manual'} value={f.id ?? ''}>{f.label}</option>)}
             </select>
           </div>
@@ -1401,16 +1410,11 @@ function KrFormModal({ okrId, kr, fontes, onSave, onClose }) {
             <div>
               <label className="text-xs text-ink-muted">Valor atual (atualiza-se à mão)</label>
               <input type="number" step="any" value={form.valor_manual} onChange={e => setForm(f => ({ ...f, valor_manual: e.target.value }))}
-                className="w-full border border-line rounded-lg px-3 py-2 text-sm mt-1" />
+                className={KR_INPUT} />
             </div>
           )}
-          <div className="flex gap-2 mt-2">
-            <button type="submit" className="px-4 py-2 text-sm font-medium rounded-lg  flex-1 bg-accent text-accent-foreground hover:brightness-[1.04]">Guardar</button>
-            <button type="button" onClick={onClose} className="px-3 py-2 text-sm rounded-lg border border-line text-ink-muted">Cancelar</button>
-          </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
 

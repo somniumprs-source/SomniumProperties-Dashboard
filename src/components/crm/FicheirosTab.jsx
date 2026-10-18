@@ -3,7 +3,10 @@
  */
 import { useState, useEffect, useRef } from 'react'
 import { Upload, Image, FileText, Trash2, ExternalLink, FolderOpen, X, ChevronLeft, ChevronRight, Plus, ArrowRightLeft, Camera } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import { apiFetch } from '../../lib/api.js'
+import { overlayVariants } from '../../lib/motion.js'
 import { ImovelDocumentacao } from './ImovelDocumentacao/index.jsx'
 
 function baseName(name) {
@@ -165,6 +168,24 @@ export function FicheirosTab({ imovelId, driveFolderId, tipoImovel }) {
     ...localDocs.map(f => ({ ...f, source: 'local' })),
     ...driveDocuments.map(f => ({ ...f, source: 'drive' })),
   ]
+
+  // Visualizador em ecrã inteiro: Esc fecha, setas navegam, página não rola.
+  const lightboxAberto = lightbox !== null && !!galleryPhotos[lightbox]
+  const totalFotos = galleryPhotos.length
+  useEffect(() => {
+    if (!lightboxAberto) return
+    function onKey(e) {
+      if (e.key === 'Escape') setLightbox(null)
+      else if (e.key === 'ArrowLeft') setLightbox(i => (i > 0 ? i - 1 : i))
+      else if (e.key === 'ArrowRight') setLightbox(i => (i < totalFotos - 1 ? i + 1 : i))
+    }
+    window.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = ''
+    }
+  }, [lightboxAberto, totalFotos])
 
   if (loading) {
     return (
@@ -333,22 +354,27 @@ export function FicheirosTab({ imovelId, driveFolderId, tipoImovel }) {
       )}
 
       {/* ── LIGHTBOX ── */}
-      {lightbox !== null && galleryPhotos[lightbox] && (
-        <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center backdrop-blur-sm" onClick={() => setLightbox(null)}>
+      {/* Propositadamente escuro (fotografias), igual nos dois temas. */}
+      {createPortal(
+      <AnimatePresence>
+      {lightboxAberto && (
+        <motion.div key="lightbox" variants={overlayVariants} initial="initial" animate="animate" exit="exit"
+          role="dialog" aria-modal="true" aria-label={`Fotografia ${lightbox + 1} de ${galleryPhotos.length}`}
+          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center backdrop-blur-sm" onClick={() => setLightbox(null)}>
           {/* Close */}
-          <button className="absolute top-4 right-4 w-10 h-10 rounded-full bg-surface-raised/10 flex items-center justify-center text-white/80 hover:bg-surface-raised/20 hover:text-white z-10 transition-colors"
+          <button aria-label="Fechar" className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white/80 hover:bg-white/20 hover:text-white z-10 transition-colors duration-fast"
             onClick={() => setLightbox(null)}>
             <X className="w-5 h-5" />
           </button>
           {/* Nav */}
           {lightbox > 0 && (
-            <button className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-surface-raised/10 flex items-center justify-center text-white/60 hover:bg-surface-raised/20 hover:text-white z-10 transition-colors"
+            <button aria-label="Fotografia anterior" className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white/60 hover:bg-white/20 hover:text-white z-10 transition-colors duration-fast"
               onClick={e => { e.stopPropagation(); setLightbox(lightbox - 1) }}>
               <ChevronLeft className="w-6 h-6" />
             </button>
           )}
           {lightbox < galleryPhotos.length - 1 && (
-            <button className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-surface-raised/10 flex items-center justify-center text-white/60 hover:bg-surface-raised/20 hover:text-white z-10 transition-colors"
+            <button aria-label="Fotografia seguinte" className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white/60 hover:bg-white/20 hover:text-white z-10 transition-colors duration-fast"
               onClick={e => { e.stopPropagation(); setLightbox(lightbox + 1) }}>
               <ChevronRight className="w-6 h-6" />
             </button>
@@ -365,7 +391,7 @@ export function FicheirosTab({ imovelId, driveFolderId, tipoImovel }) {
           {/* Bottom bar */}
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-black/60 backdrop-blur-sm px-5 py-2.5 rounded-full">
             <span className="text-xs text-white/60">{lightbox + 1} / {galleryPhotos.length}</span>
-            <span className="w-px h-3 bg-surface-raised/20" />
+            <span className="w-px h-3 bg-white/20" />
             <span className="text-xs text-white/80 max-w-[200px] truncate">{galleryPhotos[lightbox].name}</span>
           </div>
           {/* Thumbnail strip */}
@@ -373,7 +399,7 @@ export function FicheirosTab({ imovelId, driveFolderId, tipoImovel }) {
             <div className="absolute bottom-14 left-1/2 -translate-x-1/2 flex gap-1 max-w-[80vw] overflow-x-auto px-2 py-1">
               {galleryPhotos.map((f, i) => (
                 <div key={f.id + '-t-' + i}
-                  className={`w-10 h-10 rounded-md overflow-hidden shrink-0 cursor-pointer transition-[background-color,border-color,color,box-shadow,opacity,transform] ${
+                  className={`w-10 h-10 rounded-md overflow-hidden shrink-0 cursor-pointer transition-[box-shadow,opacity,transform] duration-fast ${
                     i === lightbox ? 'ring-2 ring-white scale-110' : 'opacity-50 hover:opacity-80'
                   }`}
                   onClick={e => { e.stopPropagation(); setLightbox(i) }}>
@@ -383,7 +409,10 @@ export function FicheirosTab({ imovelId, driveFolderId, tipoImovel }) {
               ))}
             </div>
           )}
-        </div>
+        </motion.div>
+      )}
+      </AnimatePresence>,
+      document.body,
       )}
     </div>
   )

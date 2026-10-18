@@ -1,5 +1,7 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useId } from 'react'
 import { SummaryStat } from '../components/ui/SummaryStat.jsx'
+import { Modal } from '../components/ui/Modal.jsx'
+import { Button } from '../components/ui/Button.jsx'
 import { Scale, Trophy, Plus, Save, X, Globe2, Gauge, LineChart, Flame } from 'lucide-react'
 import { apiFetch } from '../lib/api.js'
 import { useRegiaoGate } from '../contexts/RegiaoContext.jsx'
@@ -386,35 +388,37 @@ function CompliancePanel({ regiao }) {
   )
 }
 
-function ComplianceForm({ initial, onCancel, onSaved }) {
+function ComplianceForm({ open = true, initial, onCancel, onSaved }) {
   const [form, setForm] = useState({ ...initial })
+  const formId = useId()
   function f(k) { return e => setForm({ ...form, [k]: e.target.value }) }
-  const ipt = 'px-3 py-2 rounded-lg border border-line  bg-surface-raised  text-sm w-full'
+  const ipt = 'px-3 py-2 rounded-lg border border-line bg-surface-raised text-ink text-sm w-full placeholder:text-ink-muted/70 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 transition-colors duration-fast'
 
   return (
-    <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4" onClick={onCancel}>
+    <Modal open={open} onClose={onCancel} size="md" title={`${form.concelho} · Compliance`}
+      footer={
+        <Modal.Footer>
+          <Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button>
+          <Button type="submit" form={formId} variant="primary">Guardar</Button>
+        </Modal.Footer>
+      }>
       <form
-        onClick={e => e.stopPropagation()}
+        id={formId}
         onSubmit={e => { e.preventDefault(); onSaved({ ...form, imt_perc_base: parseFloat(form.imt_perc_base) || null, imi_perc: parseFloat(form.imi_perc) || null, aimi_perc: parseFloat(form.aimi_perc) || null }) }}
-        className="bg-surface-raised  rounded-xl p-5 w-full max-w-lg space-y-3"
+        className="space-y-3"
       >
-        <h3 className="text-lg font-semibold">{form.concelho} · Compliance</h3>
         <div className="grid grid-cols-3 gap-2">
           <input type="number" step="any" placeholder="IMT %" value={form.imt_perc_base || ''} onChange={f('imt_perc_base')} className={ipt} />
           <input type="number" step="any" placeholder="IMI %" value={form.imi_perc || ''} onChange={f('imi_perc')} className={ipt} />
           <input type="number" step="any" placeholder="AIMI %" value={form.aimi_perc || ''} onChange={f('aimi_perc')} className={ipt} />
         </div>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={!!form.zona_aru} onChange={e => setForm({ ...form, zona_aru: e.target.checked })} /> Zona ARU
+        <label className="flex items-center gap-2 text-sm text-ink">
+          <input type="checkbox" className="w-4 h-4 accent-accent" checked={!!form.zona_aru} onChange={e => setForm({ ...form, zona_aru: e.target.checked })} /> Zona ARU
         </label>
         <textarea placeholder="Notas legais" value={form.notas_legais || ''} onChange={f('notas_legais')} className={ipt} rows="3" />
         <textarea placeholder="Contactos úteis (cartório, finanças, câmara)" value={form.contactos_uteis || ''} onChange={f('contactos_uteis')} className={ipt} rows="2" />
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onCancel} className="px-3 py-2 text-sm rounded-lg text-ink-muted hover:bg-surface-muted ">Cancelar</button>
-          <button type="submit" className="px-3 py-2 text-sm rounded-lg bg-ink text-surface">Guardar</button>
-        </div>
       </form>
-    </div>
+    </Modal>
   )
 }
 

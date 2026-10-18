@@ -10,8 +10,10 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '../../lib/api.js'
 import { DECISOES, normalizeFicha } from '../../constants/fichaVisitaSchema.js'
+import { Modal } from '../ui/Modal.jsx'
+import { Button } from '../ui/Button.jsx'
 
-const inputClass = 'w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300'
+const inputClass = 'w-full px-3 py-2 rounded-lg border border-line bg-surface-raised text-ink text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 transition-colors duration-fast'
 const DECISOES_ESPERA = { PERITO: 'Parecer técnico', SEGUNDA_VISITA: 'Segunda visita', STAND_BY: 'Rever informação em falta' }
 const EFEITO_DECISAO = {
   GO: 'O imóvel pode entrar em «Estudo de VVR».',
@@ -43,7 +45,7 @@ function Campo({ label, children }) {
   )
 }
 
-export function TransicaoFaseModal({ imovel, destino, requisitos = [], mover = true, onCancel, onConfirm, onResolvido, onAbrirImovel }) {
+export function TransicaoFaseModal({ open = true, imovel, destino, requisitos = [], mover = true, onCancel, onConfirm, onResolvido, onAbrirImovel }) {
   const acoes = new Set(requisitos.map(r => r.acao))
   const pedeVisita = acoes.has('visita')
   const pedePreco = acoes.has('preco')
@@ -159,17 +161,22 @@ export function TransicaoFaseModal({ imovel, destino, requisitos = [], mover = t
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center backdrop-blur-sm p-4" onClick={onCancel}>
-      <div className="bg-surface-raised rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-bold text-ink mb-1">
-          {mover ? `Mover para ${destino}` : pedeVisita ? 'Registar visita' : 'Registar em falta'}
-        </h3>
-        <p className="text-xs text-ink-muted mb-4">
-          {imovel?.nome ? `Imóvel: ${imovel.nome}. ` : ''}
-          {mover ? 'Esta fase precisa do seguinte:' : 'Fica gravado no registo do imóvel.'}
-        </p>
-
-        <div className="space-y-3 mb-4">
+    <Modal open={open} onClose={onCancel} size="md"
+      title={mover ? `Mover para ${destino}` : pedeVisita ? 'Registar visita' : 'Registar em falta'}
+      subtitle={`${imovel?.nome ? `Imóvel: ${imovel.nome}. ` : ''}${mover ? 'Esta fase precisa do seguinte:' : 'Fica gravado no registo do imóvel.'}`}
+      footer={
+        <Modal.Footer>
+          <Button variant="secondary" onClick={onCancel} disabled={saving}>
+            {soVvr ? 'Fechar' : 'Cancelar'}
+          </Button>
+          {!soVvr && (
+            <Button variant="primary" onClick={confirmar} loading={saving}>
+              {saving ? 'A guardar…' : mover && !(pedeVisita && v.decisao && v.decisao !== 'GO') ? 'Guardar e mover' : 'Guardar'}
+            </Button>
+          )}
+        </Modal.Footer>
+      }>
+        <div className="space-y-3">
           {pedePreco && (
             <Campo label="Preço pedido (€)">
               <input type="number" min="0" step="any" className={inputClass} value={campos.ask_price}
@@ -251,21 +258,7 @@ export function TransicaoFaseModal({ imovel, destino, requisitos = [], mover = t
           )}
         </div>
 
-        {erro && <p className="text-xs text-danger mb-3">{erro}</p>}
-
-        <div className="flex justify-end gap-2">
-          <button onClick={onCancel} disabled={saving}
-            className="px-4 py-2 text-sm font-medium rounded-lg border border-line text-ink-muted hover:bg-surface disabled:opacity-50">
-            {soVvr ? 'Fechar' : 'Cancelar'}
-          </button>
-          {!soVvr && (
-            <button onClick={confirmar} disabled={saving}
-              className="px-4 py-2 text-sm font-medium rounded-lg bg-accent text-accent-foreground hover:brightness-[1.04] disabled:opacity-50">
-              {saving ? 'A guardar…' : mover && !(pedeVisita && v.decisao && v.decisao !== 'GO') ? 'Guardar e mover' : 'Guardar'}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+        {erro && <p className="text-xs text-danger mt-3" role="alert">{erro}</p>}
+    </Modal>
   )
 }

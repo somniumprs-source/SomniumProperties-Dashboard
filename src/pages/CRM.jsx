@@ -18,6 +18,7 @@ import { Building2, UserCheck, HardHat, ChevronLeft, ChevronRight, Phone, Messag
 import { OportunidadesPanel } from '../components/crm/OportunidadesPanel.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { Button } from '../components/ui/Button.jsx'
+import { Modal } from '../components/ui/Modal.jsx'
 import { MultiSelect } from '../components/ui/MultiSelect.jsx'
 import { Combobox } from '../components/ui/Combobox.jsx'
 import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR, PARC_TIPOS, PARC_ESTADOS } from '../constants.js'
@@ -484,20 +485,22 @@ function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
   const motivoFinal = buildMotivo()
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center backdrop-blur-sm p-4" onClick={onCancel}>
-      <div className="bg-surface-raised rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-bold text-ink mb-1">
-          {isFollowUp ? 'Mover para Follow UP' : 'Mover para Não Interessa'}
-        </h3>
-        <p className="text-xs text-ink-muted mb-4">
-          {item?.nome ? `Imóvel: ${item.nome}` : 'Indica o motivo da transição.'}
-        </p>
-
+    <Modal open onClose={onCancel} size="md"
+      title={isFollowUp ? 'Mover para Follow UP' : 'Mover para Não Interessa'}
+      subtitle={item?.nome ? `Imóvel: ${item.nome}` : 'Indica o motivo da transição.'}
+      footer={
+        <Modal.Footer>
+          <Button variant="secondary" onClick={onCancel} disabled={saving}>Cancelar</Button>
+          <Button variant="primary" onClick={confirm} loading={saving} disabled={!motivoFinal || (isFollowUp && !data)}>
+            {saving ? 'A guardar…' : 'Confirmar'}
+          </Button>
+        </Modal.Footer>
+      }>
         {isFollowUp && (
           <div className="mb-4">
             <label className="text-xs font-medium text-ink-muted block mb-1">Data do follow-up * (cria a tarefa na agenda)</label>
             <input type="date" value={data || ''} onChange={e => setData(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+              className="w-full px-3 py-2 rounded-lg border border-line bg-surface-raised text-ink text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 transition-colors duration-fast" />
           </div>
         )}
 
@@ -509,8 +512,9 @@ function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
                 const on = selectedPresets.has(m)
                 return (
                   <button key={m} type="button" onClick={() => togglePreset(m)}
-                    className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
-                      on ? 'border-accent bg-accent text-accent-foreground' : 'bg-surface-raised border-line text-ink-muted hover:bg-surface'
+                    aria-pressed={on}
+                    className={`px-2.5 py-1 text-xs rounded-full border transition-colors duration-fast ${
+                      on ? 'border-accent bg-accent text-accent-foreground' : 'bg-surface-raised border-line text-ink-muted hover:bg-surface-muted'
                     }`}>
                     {on && <span className="mr-1">✓</span>}{m}
                   </button>
@@ -520,28 +524,16 @@ function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
           </div>
         )}
 
-        <div className="mb-5">
+        <div>
           <label className="text-xs font-medium text-ink-muted block mb-1">
             {isFollowUp ? 'Motivo do Follow Up *' : 'Outras notas (opcional)'}
           </label>
           <textarea value={notas} onChange={e => setNotas(e.target.value)} rows={isFollowUp ? 4 : 2}
             placeholder={isFollowUp ? 'Ex: Aguardar resposta do proprietário…' : 'Ex: detalhe específico, contexto adicional…'}
             autoFocus={isFollowUp}
-            className="w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+            className="w-full px-3 py-2 rounded-lg border border-line bg-surface-raised text-ink text-sm placeholder:text-ink-muted/70 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 transition-colors duration-fast" />
         </div>
-
-        <div className="flex justify-end gap-2">
-          <button onClick={onCancel} disabled={saving}
-            className="px-4 py-2 text-sm font-medium rounded-lg border border-line text-ink-muted hover:bg-surface disabled:opacity-50">
-            Cancelar
-          </button>
-          <button onClick={confirm} disabled={saving || !motivoFinal || (isFollowUp && !data)}
-            className="px-4 py-2 text-sm font-medium rounded-lg bg-accent text-accent-foreground hover:brightness-[1.04] disabled:opacity-50">
-            {saving ? 'A guardar…' : 'Confirmar'}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -1033,6 +1025,8 @@ export function CRM() {
   // Atalhos de teclado: Esc fecha detalhe, ←/→ navega entre propriedades, /  foca pesquisa
   useEffect(() => {
     function onKey(e) {
+      // Com um diálogo aberto, o Esc e as setas pertencem-lhe (fecha só o diálogo).
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName)) {
         if (e.key === 'Escape') e.target.blur()
         return
