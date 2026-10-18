@@ -47,7 +47,7 @@ const ORDEM_ABAS = ['detalhe', 'registo_chamadas', 'ficheiros', 'analise', 'obra
 import { Combobox } from '../ui/Combobox.jsx'
 import coimbraFreguesiasData from '../../constants/coimbra-freguesias.json'
 import ampFreguesiasData from '../../constants/amp-freguesias.json'
-import { CLASS_COLOR, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, ORIGENS_INVESTIDORES, fmtDate, fmtDateRelative } from '../../constants.js'
+import { CLASS_COLOR, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, ORIGENS_INVESTIDORES, PARC_TIPOS, PARC_ESTADOS, fmtDate, fmtDateRelative } from '../../constants.js'
 
 // Hook simples — carrega lookups uma vez e mantém em memória. Invalidada
 // automaticamente pelo evento global `somnium:refresh` (mesmo padrão do
@@ -733,7 +733,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
     }
   }
 
-  const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores' }[type]
+  const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores', 'Parceiros': 'parceiros' }[type]
   const prevTab = useRef(activeTab)
 
   // Apagar a entidade directamente a partir da ficha aberta (sem voltar à lista).
@@ -898,14 +898,14 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
 
   if (loading) return (
     <div className="rounded-xl overflow-hidden">
-      <BrandLoader variant="inline" label={type === 'Imóveis' ? 'Ficha do imóvel' : type === 'Investidores' ? 'Ficha do investidor' : type === 'Consultores' ? 'Ficha do consultor' : 'A carregar'} />
+      <BrandLoader variant="inline" label={type === 'Imóveis' ? 'Ficha do imóvel' : type === 'Investidores' ? 'Ficha do investidor' : type === 'Consultores' ? 'Ficha do consultor' : type === 'Parceiros' ? 'Ficha do parceiro' : 'A carregar'} />
     </div>
   )
   if (!data) return null
 
   // Tabs dinâmicos por tipo
   const tabs = [
-    { key: 'detalhe', label: type === 'Imóveis' ? 'Imóvel' : type === 'Investidores' ? 'Ficha do investidor' : type === 'Consultores' ? 'Ficha do consultor' : 'Detalhe', icon: type === 'Imóveis' ? Building2 : UserRound, show: true },
+    { key: 'detalhe', label: type === 'Imóveis' ? 'Imóvel' : type === 'Investidores' ? 'Ficha do investidor' : type === 'Consultores' ? 'Ficha do consultor' : type === 'Parceiros' ? 'Ficha do parceiro' : 'Detalhe', icon: type === 'Imóveis' ? Building2 : UserRound, show: true },
     { key: 'registo_chamadas', label: 'Registo de Chamada', icon: PhoneCall, show: type === 'Consultores' },
     { key: 'ficheiros', label: 'Documentos', icon: FolderOpen, show: type === 'Imóveis' },
     { key: 'analise', label: 'Análise Financeira', icon: Calculator, show: type === 'Imóveis' },
@@ -967,11 +967,11 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
               <Pencil className="w-3.5 h-3.5" /> Editar
             </button>
           )}
-          {type === 'Investidores' && !editing && (
+          {(type === 'Investidores' || type === 'Parceiros') && !editing && (
             <button onClick={handleDelete} disabled={deleting}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ backgroundColor: '#1a1a1a', color: '#f87171', border: '1px solid #f8717133' }}
-              title="Apagar este investidor">
+              title={type === 'Parceiros' ? 'Apagar este parceiro' : 'Apagar este investidor'}>
               <Trash2 className="w-3.5 h-3.5" /> {deleting ? 'A apagar...' : 'Apagar'}
             </button>
           )}
@@ -989,6 +989,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       {type === 'Imóveis' && <ProximosPassos imovelId={id} imovel={data} onAbrirTab={setActiveTab} onUpdate={aposFollowUp} onNavigate={onNavigate} />}
       {type === 'Consultores' && <ContactoPessoa tipo="consultor" pessoaId={id} imoveis={data?.imoveis} regiao={data?.regiao} onNavigate={onNavigate} onUpdate={loadData} />}
       {type === 'Investidores' && <ContactoPessoa tipo="investidor" pessoaId={id} notaAntiga={data?.proxima_acao} onNavigate={onNavigate} onUpdate={loadData} />}
+      {type === 'Parceiros' && <ContactoPessoa tipo="parceiro" pessoaId={id} onNavigate={onNavigate} onUpdate={loadData} />}
       {type === 'Imóveis' && <DealBreakersPanel imovelId={id} imovel={data} onAbrirTab={setActiveTab} onUpdate={loadData} />}
       {type === 'Imóveis' && transicao && (
         <TransicaoFaseModal
@@ -1224,6 +1225,32 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
                 ? <InvestidorEditSections data={data} form={form} setField={setField} />
                 : <InvestidorReadSections data={data} />}
             </>}
+            {type === 'Parceiros' && <>
+              {editing ? <>
+                <EF label="Nome" field="nome" form={form} set={setField} />
+                <EF label="Tipo" field="tipo" form={form} set={setField} type="select" options={PARC_TIPOS} />
+                <EF label="Estado" field="estado" form={form} set={setField} type="select" options={PARC_ESTADOS} />
+                <EF label="Classificação" field="classificacao" form={form} set={setField} type="select" options={['A','B','C','D']} />
+                <EF label="Empresa" field="empresa" form={form} set={setField} />
+                <EF label="NIF" field="nif" form={form} set={setField} />
+                <EF label="Contacto" field="contacto" form={form} set={setField} />
+                <EF label="Email" field="email" form={form} set={setField} />
+                <EF label="Morada" field="morada" form={form} set={setField} />
+                <EF label="Zona de atuação" field="zona_atuacao" form={form} set={setField} />
+                <EF label="Honorários" field="honorarios" form={form} set={setField} />
+                <EF label="1º Contacto" field="data_primeiro_contacto" form={form} set={setField} type="date" />
+              </> : <>
+                <Field label="Tipo" value={data.tipo} />
+                <Field label="Estado" value={data.estado} />
+                <Field label="Classificação" value={data.classificacao} />
+                <Field label="Empresa" value={data.empresa} />
+                <Field label="Contacto" value={data.contacto} />
+                <Field label="Email" value={data.email} />
+                <Field label="Zona de atuação" value={data.zona_atuacao} />
+                <Field label="Honorários" value={data.honorarios} />
+                <Field label="1º Contacto" value={data.data_primeiro_contacto} />
+              </>}
+            </>}
             {type === 'Consultores' && <>
               {editing ? <>
                 <EF label="Nome" field="nome" form={form} set={setField} />
@@ -1265,7 +1292,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
             </>}
           </div>
 
-          {editing && type === 'Consultores' && (
+          {editing && (type === 'Consultores' || type === 'Parceiros') && (
             <div>
               <label className="text-xs text-gray-400 block mb-1">Notas</label>
               <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={4}

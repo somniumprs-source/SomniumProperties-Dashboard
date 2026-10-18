@@ -9,7 +9,7 @@ import { randomUUID, createHash } from 'crypto'
 import { readFile, unlink } from 'fs/promises'
 import { createClient } from '@supabase/supabase-js'
 import { isWholesaling } from '../lib/modelos.js'
-import { faseAoAgendarFollowUp } from '../constants/pipelineImoveis.js'
+import { faseAoAgendarFollowUp, CHAMADAS_IMOVEL, chamadaSugerida } from '../constants/pipelineImoveis.js'
 
 // 'Resposta' foi renomeado para 'Recebido' numa migração antiga (ver pg.js);
 // dados anteriores à migração ainda usam 'Resposta' — aceitar os dois.
@@ -20,7 +20,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mjgusjuougzoeiyavsor.s
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
 const supabaseStorage = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null
 export { supabaseStorage }
-import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, InvestidorInteracoes, DocumentosInvestidor, Visitas, Empreiteiros, getDashboardStats } from './crud.js'
+import { Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas, ConsultorInteracoes, InvestidorInteracoes, DocumentosInvestidor, Visitas, Empreiteiros, Parceiros, getDashboardStats } from './crud.js'
 import pool from './pg.js'
 import { agendarPassoImovel, sincronizarTarefaVisita } from './agendaEngine.js'
 import { agendarFollowUpImovelManual, registarFollowUpFeito } from './followUpImovel.js'
@@ -1549,6 +1549,8 @@ crudRoutes('/tarefas', Tarefas)
 crudRoutes('/consultor-interacoes', ConsultorInteracoes)
 crudRoutes('/investidor-interacoes', InvestidorInteracoes)
 crudRoutes('/empreiteiros', Empreiteiros)
+// Parceiros: prestadores de serviços aos projetos (migração 0076).
+crudRoutes('/parceiros', Parceiros)
 
 // ── Visitas — CRUD com sync de imoveis.data_visita ───────────
 // Cada mutacao (create/update/delete) re-sincroniza o campo derivado
@@ -2272,7 +2274,7 @@ router.post('/imoveis/:id/follow-up', async (req, res) => {
 
 // ── Contacto único por pessoa (bloco "Próximos passos" do consultor e do
 // investidor) e o seu reflexo na ficha do imóvel. Ver src/db/contactoPessoa.js.
-for (const [rota, tipo] of [['consultores', 'consultor'], ['investidores', 'investidor']]) {
+for (const [rota, tipo] of [['consultores', 'consultor'], ['investidores', 'investidor'], ['parceiros', 'parceiro']]) {
   router.get(`/${rota}/:id/contacto`, async (req, res) => {
     try {
       // O investidor com acesso ao portal lê o seu próprio registo, mas não as
@@ -2285,8 +2287,8 @@ for (const [rota, tipo] of [['consultores', 'consultor'], ['investidores', 'inve
   })
   router.post(`/${rota}/:id/contacto/agendar`, async (req, res) => {
     try {
-      const { data, quando, assuntos } = req.body || {}
-      const tarefaId = await agendarContactoPessoa(pool, tipo, req.params.id, { data, quando: quando || null, assuntos, user: req.user || null })
+      const { data, quando, assuntos, tipo_contacto } = req.body || {}
+      const tarefaId = await agendarContactoPessoa(pool, tipo, req.params.id, { data, quando: quando || null, assuntos, tipoContacto: tipo_contacto || null, user: req.user || null })
       if (!tarefaId) return res.status(404).json({ error: 'Não encontrado' })
       res.json({ ok: true, tarefa_id: tarefaId })
     } catch (e) { res.status(400).json({ error: e.message }) }
@@ -2332,7 +2334,7 @@ router.get('/imoveis/:id/proximos-passos', async (req, res) => {
 
 router.post('/imoveis/:id/proximos-passos', async (req, res) => {
   try {
-    const { tipo, quando, data, juntar, mover_contacto } = req.body || {}
+    const { tipo, quando, data, juntar, mover_contacto, tipo_chamada } = req.body || {}
     if (tipo !== 'chamada') return res.status(400).json({ error: 'Tipo de passo inválido' })
     // data (só o dia) serve para o contacto com o consultor; a chamada do próprio imóvel pede hora.
     const soDia = /^\d{4}-\d{2}-\d{2}$/.test(data || '') && !quando
@@ -2346,8 +2348,11 @@ router.post('/imoveis/:id/proximos-passos', async (req, res) => {
     if (noContacto) return res.json({ ok: true, tarefa_id: noContacto.tarefa_id, consultor: noContacto.consultor, data_contacto: noContacto.data })
     if (juntar) return res.status(400).json({ error: 'O consultor não tem contacto marcado: indica a data' })
     if (soDia) return res.status(400).json({ error: 'Data e hora são obrigatórias' })
+    // Cold Call ou Discovery Call: o escolhido, ou o sugerido pela fase do imóvel.
+    const { rows: [im] } = await pool.query('SELECT estado FROM imoveis WHERE id = $1', [req.params.id])
+    const chamada = CHAMADAS_IMOVEL[tipo_chamada] || CHAMADAS_IMOVEL[chamadaSugerida(im?.estado)]
     const tarefaId = await agendarPassoImovel(pool, {
-      imovelId: req.params.id, campo: 'proxima_chamada', prefixo: 'Chamada', categoria: 'Call de Imóveis Anunciados',
+      imovelId: req.params.id, campo: 'proxima_chamada', prefixo: chamada.nome, categoria: chamada.categoria,
       quando, horas: 0.25, user: req.user || null,
     })
     if (!tarefaId) return res.status(404).json({ error: 'Imóvel não encontrado' })
@@ -3303,6 +3308,14 @@ router.get('/investidores/:id/full', async (req, res) => {
       [inv.id]
     )
     res.json({ ...inv, negocios, tarefas, timeline, documentos })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/parceiros/:id/full', async (req, res) => {
+  try {
+    const { rows: [p] } = await pool.query('SELECT * FROM parceiros WHERE id = $1', [req.params.id])
+    if (!p) return res.status(404).json({ error: 'Não encontrado' })
+    res.json(p)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 

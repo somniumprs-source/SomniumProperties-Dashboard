@@ -334,6 +334,7 @@ export const ConsultorFollowups = createCRUD('consultor_followups', { searchFiel
 export const DocumentosInvestidor = createCRUD('documentos_investidor', { searchFields: ['nome', 'tipo'], defaultSort: 'created_at DESC' })
 export const Visitas = createCRUD('visitas', { searchFields: ['notas', 'resultado'], defaultSort: 'data_hora DESC' })
 export const Empreiteiros = createCRUD('empreiteiros', { searchFields: ['nome', 'empresa', 'contacto', 'email', 'alvara'], defaultSort: 'updated_at DESC' })
+export const Parceiros = createCRUD('parceiros', { searchFields: ['nome', 'empresa', 'tipo', 'contacto', 'email'], defaultSort: 'updated_at DESC' })
 
 export async function getDashboardStats({ regiao } = {}) {
   const opts = { regiao }

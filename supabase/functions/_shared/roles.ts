@@ -31,8 +31,8 @@ export const ROLE_AREAS: Record<string, string[]> = {
 // (requireModule). financeiro/admin são os únicos roles com a área
 // "financeiro" em ROLE_AREAS acima, por isso só eles têm "crm.despesas".
 export const ROLE_MODULES: Record<string, string[]> = {
-  admin: ["crm.imoveis", "crm.investidores", "crm.consultores", "crm.empreiteiros", "crm.negocios", "crm.despesas"],
-  comercial: ["crm.imoveis", "crm.investidores", "crm.consultores", "crm.empreiteiros", "crm.negocios"],
+  admin: ["crm.imoveis", "crm.investidores", "crm.consultores", "crm.empreiteiros", "crm.parceiros", "crm.negocios", "crm.despesas"],
+  comercial: ["crm.imoveis", "crm.investidores", "crm.consultores", "crm.empreiteiros", "crm.parceiros", "crm.negocios"],
   financeiro: ["crm.negocios", "crm.despesas"],
   operacoes: [],
   parceiro: ["crm.imoveis", "crm.negocios"],

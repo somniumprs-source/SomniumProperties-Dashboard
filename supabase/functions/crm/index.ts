@@ -20,7 +20,7 @@ import { withAuditUser } from "../_shared/audit.ts";
 import {
   Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas,
   ConsultorInteracoes, InvestidorInteracoes, DocumentosInvestidor, Visitas,
-  Empreiteiros, getDashboardStats, ensureColumn,
+  Empreiteiros, Parceiros, getDashboardStats, ensureColumn,
 } from "../_shared/crud.ts";
 import { getVisitasEnriquecidas, syncDataVisitaDerivada, getFichaVisitaParaImovel } from "../_shared/queries.ts";
 import {
@@ -82,7 +82,7 @@ import { generateDocx, getAvailableTypes } from "../_shared/docxGenerator.ts";
 import { carregarChecklist, gravarManual } from "../_shared/checklistImovel.ts";
 import { agendarPassoImovel, sincronizarTarefaVisita } from "../_shared/agendaEngine.ts";
 import { agendarFollowUpImovelManual, registarFollowUpFeito } from "../_shared/followUpImovel.ts";
-import { faseAoAgendarFollowUp } from "../_shared/pipelineImoveis.ts";
+import { faseAoAgendarFollowUp, CHAMADAS_IMOVEL, chamadaSugerida } from "../_shared/pipelineImoveis.ts";
 import { lerContactoPessoa, agendarContactoPessoa, registarContactoPessoa, editarNotaContacto, lerContactosDoImovel, juntarImovelAoContacto } from "../_shared/contactoPessoa.ts";
 import { createClient } from "@supabase/supabase-js";
 import { Buffer } from "node:buffer";
@@ -1967,6 +1967,10 @@ crudRoutes("/investidor-interacoes", InvestidorInteracoes);
 app.use("/empreiteiros", requireModule("crm.empreiteiros"));
 app.use("/empreiteiros/*", requireModule("crm.empreiteiros"));
 crudRoutes("/empreiteiros", Empreiteiros);
+// Parceiros: prestadores de serviços aos projetos (migração 0076).
+app.use("/parceiros", requireModule("crm.parceiros"));
+app.use("/parceiros/*", requireModule("crm.parceiros"));
+crudRoutes("/parceiros", Parceiros);
 
 // ── Visitas — CRUD com sync de imoveis.data_visita — port de routes.js 1021-1060 ──
 app.get("/visitas", async (c: any) => {
@@ -2818,7 +2822,7 @@ app.post("/imoveis/:id/follow-up", async (c: any) => {
 // ── Contacto único por pessoa (bloco "Próximos passos" do consultor e do
 // investidor) e o seu reflexo na ficha do imóvel — port de routes.js. Ver
 // ../_shared/contactoPessoa.ts.
-for (const [rota, tipo] of [["consultores", "consultor"], ["investidores", "investidor"]]) {
+for (const [rota, tipo] of [["consultores", "consultor"], ["investidores", "investidor"], ["parceiros", "parceiro"]]) {
   app.get(`/${rota}/:id/contacto`, async (c: any) => {
     try {
       // O investidor com acesso ao portal lê o seu próprio registo, mas não as
@@ -2831,8 +2835,8 @@ for (const [rota, tipo] of [["consultores", "consultor"], ["investidores", "inve
   });
   app.post(`/${rota}/:id/contacto/agendar`, async (c: any) => {
     try {
-      const { data, quando, assuntos } = await c.req.json().catch(() => ({}));
-      const tarefaId = await agendarContactoPessoa(pool, tipo, c.req.param("id"), { data, quando: quando || null, assuntos, user: await resolveCrmUser(c) });
+      const { data, quando, assuntos, tipo_contacto } = await c.req.json().catch(() => ({}));
+      const tarefaId = await agendarContactoPessoa(pool, tipo, c.req.param("id"), { data, quando: quando || null, assuntos, tipoContacto: tipo_contacto || null, user: await resolveCrmUser(c) });
       if (!tarefaId) return c.json({ error: "Não encontrado" }, 404);
       return c.json({ ok: true, tarefa_id: tarefaId });
     } catch (e) { return c.json({ error: (e as Error).message }, 400); }
@@ -2880,7 +2884,7 @@ app.get("/imoveis/:id/proximos-passos", async (c: any) => {
 
 app.post("/imoveis/:id/proximos-passos", async (c: any) => {
   try {
-    const { tipo, quando, data, juntar, mover_contacto } = await c.req.json().catch(() => ({}));
+    const { tipo, quando, data, juntar, mover_contacto, tipo_chamada } = await c.req.json().catch(() => ({}));
     if (tipo !== "chamada") return c.json({ error: "Tipo de passo inválido" }, 400);
     // data (só o dia) serve para o contacto com o consultor; a chamada do próprio imóvel pede hora.
     const soDia = /^\d{4}-\d{2}-\d{2}$/.test(data || "") && !quando;
@@ -2894,8 +2898,12 @@ app.post("/imoveis/:id/proximos-passos", async (c: any) => {
     if (noContacto) return c.json({ ok: true, tarefa_id: noContacto.tarefa_id, consultor: noContacto.consultor, data_contacto: noContacto.data });
     if (juntar) return c.json({ error: "O consultor não tem contacto marcado: indica a data" }, 400);
     if (soDia) return c.json({ error: "Data e hora são obrigatórias" }, 400);
+    // Cold Call ou Discovery Call: o escolhido, ou o sugerido pela fase do imóvel.
+    const { rows: [im] } = await pool.query("SELECT estado FROM imoveis WHERE id = $1", [c.req.param("id")]);
+    const chamadas: Record<string, { nome: string; categoria: string }> = CHAMADAS_IMOVEL;
+    const chamada = chamadas[tipo_chamada] || chamadas[chamadaSugerida(im?.estado)];
     const tarefaId = await agendarPassoImovel({
-      imovelId: c.req.param("id"), campo: "proxima_chamada", prefixo: "Chamada", categoria: "Call de Imóveis Anunciados",
+      imovelId: c.req.param("id"), campo: "proxima_chamada", prefixo: chamada.nome, categoria: chamada.categoria,
       quando, horas: 0.25, user: await resolveCrmUser(c),
     });
     if (!tarefaId) return c.json({ error: "Imóvel não encontrado" }, 404);
@@ -3882,6 +3890,14 @@ app.get("/investidores/:id/full", async (c: any) => {
       [inv.id],
     );
     return c.json({ ...inv, negocios, tarefas, timeline, documentos });
+  } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+app.get("/parceiros/:id/full", async (c: any) => {
+  try {
+    const { rows: [p] } = await pool.query("SELECT * FROM parceiros WHERE id = $1", [c.req.param("id")]);
+    if (!p) return c.json({ error: "Não encontrado" }, 404);
+    return c.json(p);
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 

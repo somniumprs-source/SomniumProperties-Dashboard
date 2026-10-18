@@ -1,5 +1,7 @@
 /**
- * Próximos passos da pessoa (consultor ou investidor): o contacto único.
+ * Próximos passos da pessoa (consultor, investidor ou parceiro): o contacto único.
+ * Cada contacto tem um tipo (Cold Call, Discovery Call ou Follow-up), que dá a
+ * categoria e o título da tarefa na agenda; sugere-se o da fase da pessoa.
  *
  * A lead é a pessoa, o imóvel é o assunto. Cada pessoa tem, no máximo, um
  * próximo contacto por fazer — a mesma tarefa que aparece na agenda e no Google
@@ -19,7 +21,9 @@ import { apiFetch } from '../../lib/api.js'
 import { useRefreshOnMutation } from '../../hooks/useRefreshOnMutation.js'
 import { inputClass, fmtQuando, fmtDia, emDias, agoraLocal, comHora } from './passosUtil.js'
 
-const ROTA = { consultor: 'consultores', investidor: 'investidores' }
+const ROTA = { consultor: 'consultores', investidor: 'investidores', parceiro: 'parceiros' }
+// Espelho de TIPOS_CONTACTO em src/db/contactoPessoa.js.
+const TIPOS = { cold_call: 'Cold Call', discovery_call: 'Discovery Call', follow_up: 'Follow-up' }
 const CANAIS = ['Chamada', 'WhatsApp', 'Email', 'Reunião']
 const btn = 'text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50'
 const nomeAssunto = a => a.imovel_nome || a.texto || 'Imóvel'
@@ -172,7 +176,7 @@ function OportunidadesEditor({ itens, setItens }) {
 
 // modo: 'agendar' (marcar ou mudar o contacto), 'feito' ou 'sem_sucesso'.
 // pessoa: { nome, regiao } — para ligar ao consultor as oportunidades registadas.
-function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, opcoes, onCancel, onDone }) {
+function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSugerido, opcoes, onCancel, onDone }) {
   const marcados = proximo?.assuntos || []
   const dataMarcada = String(proximo?.quando || '').slice(0, 10)
   const [data, setData] = useState(modo === 'agendar' && dataMarcada ? dataMarcada : modo === 'feito' ? '' : emDias(1))
@@ -180,7 +184,9 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, opcoes, o
   const [assuntos, setAssuntos] = useState(marcados)
   const [quando, setQuando] = useState(agoraLocal())
   const [canal, setCanal] = useState('Chamada')
-  const [finalidade, setFinalidade] = useState('follow_up')
+  const [finalidade, setFinalidade] = useState(proximo?.tipo === 'discovery_call' ? 'discovery' : 'follow_up')
+  // Tipo do contacto a marcar (no agendar, ou o seguinte ao registar).
+  const [tipoContacto, setTipoContacto] = useState(modo === 'agendar' ? (proximo?.tipo || tipoSugerido || 'follow_up') : modo === 'sem_sucesso' ? (proximo?.tipo || tipoSugerido || 'follow_up') : 'follow_up')
   const [tratados, setTratados] = useState(marcados.map(a => a.id))
   const [novos, setNovos] = useState([])
   const [notas, setNotas] = useState('')
@@ -222,13 +228,13 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, opcoes, o
     if (oportunidades.length && !pessoa?.regiao) return setErro('O consultor não tem região (Coimbra ou AMP): preenche-a na ficha antes de registar oportunidades.')
     setErro(''); setSaving(true)
     const limpos = lista => lista.map(a => (a.imovel_id ? { imovel_id: a.imovel_id } : { texto: a.texto }))
-    const prox = data ? { data, quando: comHora(data, hora) } : null
+    const prox = data ? { data, quando: comHora(data, hora), tipo: tipoContacto } : null
     let novosImoveis = []
     if (comExtras && oportunidades.length) {
       try { novosImoveis = await criarOportunidades() } catch (err) { setErro(err.message); setSaving(false); return }
     }
     const [caminho, corpo] = modo === 'agendar'
-      ? ['agendar', { data, quando: comHora(data, hora), assuntos: limpos(assuntos) }]
+      ? ['agendar', { data, quando: comHora(data, hora), assuntos: limpos(assuntos), tipo_contacto: tipoContacto }]
       : modo === 'sem_sucesso'
         ? ['registar', { resultado: 'Sem sucesso', notas, proximo: prox }]
         : ['registar', { resultado: 'Feito', quando: quando ? new Date(quando).toISOString() : null, canal, finalidade, notas, tratados, novos: [...limpos(novos), ...novosImoveis], proximo: prox }]
@@ -346,6 +352,17 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, opcoes, o
             </button>
           ))}
         </div>
+        {(modo !== 'feito' || data) && (
+          <div className="flex flex-wrap items-center gap-1.5 mt-1.5" role="radiogroup" aria-label="Tipo de contacto">
+            <span className="text-[11px] text-gray-500">Tipo</span>
+            {Object.entries(TIPOS).map(([k, r]) => (
+              <button key={k} type="button" role="radio" aria-checked={tipoContacto === k} onClick={() => setTipoContacto(k)}
+                className={`px-2 py-0.5 text-[11px] rounded-full border ${tipoContacto === k ? 'border-yellow-400 bg-yellow-100 text-yellow-800' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+                {r}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {modo === 'agendar' && (
@@ -480,11 +497,12 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
   useRefreshOnMutation(() => query.refetch())
   const d = query.data
   if (!d) return null
-  const { proximo, rotulo } = d
+  const { proximo, rotulo, tipo_sugerido: tipoSugerido } = d
+  const etiqueta = proximo?.assuntos?.some(a => a.imovel_id) ? 'Follow-up' : TIPOS[proximo?.tipo] || rotulo
   const historico = Array.isArray(d.historico) ? d.historico : []
   const opcoes = (imoveis?.length > 0 ? imoveis : Array.isArray(todos.data) ? todos.data : []).map(i => ({ id: i.id, nome: i.nome }))
   const atrasado = proximo?.quando && new Date(proximo.quando).getTime() < Date.now() - 86400000
-  const Icon = rotulo === 'Follow-up' ? RefreshCw : Phone
+  const Icon = etiqueta === 'Follow-up' ? RefreshCw : Phone
 
   const nota = !proximo ? (notaAntiga || '').trim() : ''
   async function guardado() {
@@ -509,7 +527,7 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
               <Plus className="w-3 h-3" /> Novo contacto
             </button>
           )}
-          {!proximo && <button type="button" onClick={() => setModo('agendar')} className={btn}>Agendar {rotulo.toLowerCase()}</button>}
+          {!proximo && <button type="button" onClick={() => setModo('agendar')} className={btn}>Agendar contacto</button>}
           {!proximo && <button type="button" onClick={() => setModo('feito')} className={btn}>Registar contacto feito</button>}
         </span>
       </div>
@@ -523,7 +541,7 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
         <div className="mt-2 grid gap-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
             <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 bg-yellow-50 text-yellow-700">
-              <Icon className="w-3 h-3" /> {rotulo}
+              <Icon className="w-3 h-3" /> {etiqueta}
             </span>
             <span className={`font-medium tabular-nums ${atrasado ? 'text-orange-700' : 'text-gray-800 dark:text-neutral-100'}`}>{fmtQuando(proximo.quando)}</span>
             {atrasado && <span className="text-xs text-orange-700">em atraso</span>}
@@ -559,7 +577,7 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
 
       {modo === 'novo' && <NovoContactoForm pessoaId={pessoaId} proximo={proximo} onCancel={() => setModo(null)} onDone={guardado} />}
       {modo && modo !== 'novo' && (
-        <ContactoForm key={modo} tipo={tipo} pessoaId={pessoaId} pessoa={{ nome: d.pessoa?.nome, regiao }} modo={modo} rotulo={rotulo} opcoes={opcoes}
+        <ContactoForm key={modo} tipo={tipo} pessoaId={pessoaId} pessoa={{ nome: d.pessoa?.nome, regiao }} modo={modo} rotulo={rotulo} tipoSugerido={tipoSugerido} opcoes={opcoes}
           proximo={proximo || (nota && modo === 'agendar' ? { assuntos: [{ texto: nota }] } : null)}
           onCancel={() => setModo(null)} onDone={guardado} />
       )}

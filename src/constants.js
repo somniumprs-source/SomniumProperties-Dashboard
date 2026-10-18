@@ -146,6 +146,20 @@ export const CONS_ESTATUTO_COLOR = {
   'Consultores em Parceria':    'bg-green-100 text-green-700',
 }
 
+// ── Parceiros (prestadores de serviços aos projetos) ─────────
+// Estados espelhados em src/db/contactoPessoa.js (tipo de contacto sugerido).
+export const PARC_TIPOS = [
+  'Advogado', 'Solicitadora', 'Contabilista', 'Arquiteto', 'Engenheiro', 'Topógrafo',
+  'Certificação Energética', 'Fotógrafo', 'Home Staging', 'Seguradora', 'Banco / Crédito', 'Outro',
+]
+export const PARC_ESTADOS = ['Por contactar', 'Em avaliação', 'Parceiro ativo', 'Inativo']
+export const PARC_ESTADO_COLOR = {
+  'Por contactar':  'bg-gray-100 text-gray-600',
+  'Em avaliação':   'bg-yellow-100 text-yellow-700',
+  'Parceiro ativo': 'bg-green-100 text-green-700',
+  'Inativo':        'bg-gray-100 text-gray-500',
+}
+
 // ── Consultores — Estado de Avaliação ────────────────────────
 export const CONS_ESTADO_AVALIACAO = ['Em avaliação', 'Ativo', 'Inativo']
 

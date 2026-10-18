@@ -21,20 +21,34 @@ const ABERTA = "status NOT IN ('Concluída', 'Concluida') AND COALESCE(arquivada
 export const CANAIS_CONTACTO = ['Chamada', 'WhatsApp', 'Email', 'Reunião']
 export const RESULTADOS_CONTACTO = ['Feito', 'Sem sucesso']
 
+// Tipo do contacto: decide a categoria e o título da tarefa na Agenda.
+export const TIPOS_CONTACTO = { cold_call: 'Cold Call', discovery_call: 'Discovery Call', follow_up: 'Follow-up' }
+
 // espelho: campo de data da pessoa que as listas e os dashboards já leem.
 // fasesFollowUp: só nessas fases o contacto se chama "Follow-up".
+// tipoPorFase: tipo sugerido ao marcar o contacto (sem fase listada: follow-up).
 const PESSOAS = {
   consultor: {
     tabela: 'consultores', interacoes: 'consultor_interacoes', fk: 'consultor_id', origem: 'consultor_interacao',
     espelho: 'data_proximo_follow_up', fase: 'estatuto', fasesFollowUp: ['Follow up'],
-    categoria: 'Prospeção de Consultores', categoriaFollowUp: 'Follow-up de Consultores',
+    tipoPorFase: { 'Cold Call': 'cold_call', 'Aberto Parcerias': 'discovery_call' },
+    categorias: { cold_call: 'Cold Call a Consultores', discovery_call: 'Discovery Call a Consultores', follow_up: 'Follow-up de Consultores' },
   },
   investidor: {
     tabela: 'investidores', interacoes: 'investidor_interacoes', fk: 'investidor_id', origem: 'investidor_interacao',
     espelho: 'data_proxima_acao', fase: 'status', fasesFollowUp: ['Follow Up'],
-    categoria: 'Call a Investidores', categoriaFollowUp: 'Follow-up de Investidores',
+    tipoPorFase: { 'Pendente de Aprovação': 'cold_call', 'Potencial Investidor': 'cold_call', 'Marcar call': 'discovery_call', 'Call marcada': 'discovery_call' },
+    categorias: { cold_call: 'Cold Call a Investidores', discovery_call: 'Discovery Call a Investidores', follow_up: 'Follow-up de Investidores' },
+  },
+  parceiro: {
+    tabela: 'parceiros', interacoes: 'parceiro_interacoes', fk: 'parceiro_id', origem: 'parceiro_interacao',
+    espelho: 'data_proximo_contacto', fase: 'estado', fasesFollowUp: ['Parceiro ativo'],
+    tipoPorFase: { 'Por contactar': 'cold_call', 'Em avaliação': 'discovery_call' },
+    categorias: { cold_call: 'Cold Call a Parceiros', discovery_call: 'Discovery Call a Parceiros', follow_up: 'Follow-up de Parceiros' },
   },
 }
+const tipoPadrao = (cfg, fase) => cfg.tipoPorFase[fase] || 'follow_up'
+const tipoDaCategoria = (cfg, categoria) => Object.keys(cfg.categorias).find(k => cfg.categorias[k] === categoria) || null
 
 const eData = v => /^\d{4}-\d{2}-\d{2}$/.test(v || '')
 const instante = v => { const t = new Date(v || 0).getTime(); return isNaN(t) ? 0 : t }
@@ -68,7 +82,7 @@ async function carregarPessoa(pool, tipo, id) {
 
 async function tarefaAberta(pool, tipo, id) {
   const { rows: [t] } = await pool.query(
-    `SELECT id, inicio, data_limite, funcionario FROM tarefas
+    `SELECT id, inicio, data_limite, funcionario, categoria FROM tarefas
      WHERE origem_tipo = $1 AND origem_id = $2 AND origem_campo = $3 AND ${ABERTA}
      ORDER BY created_at DESC LIMIT 1`,
     [tipo, id, CAMPO]
@@ -106,12 +120,18 @@ async function juntarAssuntos(pool, origem, origemId, assuntos) {
 
 // Título, categoria e região da tarefa acompanham os assuntos: com imóveis é
 // um follow-up de imóveis (leva a região do primeiro); sem eles é contacto com
-// a pessoa, sem região.
-async function afinarTarefa(pool, p, tarefaId, data) {
+// a pessoa, sem região, com o tipo escolhido (ou o que a tarefa já tinha, ou o
+// sugerido pela fase).
+async function afinarTarefa(pool, p, tarefaId, data, tipoContacto = null) {
   const assuntos = await assuntosDe(pool, 'tarefa', [tarefaId])
   const imoveis = assuntos.filter(a => a.imovel_id)
-  const categoria = imoveis.length ? 'Follow-up de Imóveis' : p.rotulo === 'Follow-up' ? p.cfg.categoriaFollowUp : p.cfg.categoria
-  const titulo = `${p.rotulo} — ${p.nome || 'Sem nome'}${imoveis.length ? ` (${imoveis.map(a => a.imovel_nome || 'Imóvel').join(', ')})` : ''}`
+  let tipo = TIPOS_CONTACTO[tipoContacto] ? tipoContacto : null
+  if (!tipo) {
+    const { rows: [t] } = await pool.query('SELECT categoria FROM tarefas WHERE id = $1', [tarefaId])
+    tipo = tipoDaCategoria(p.cfg, t?.categoria) || tipoPadrao(p.cfg, p.fase)
+  }
+  const categoria = imoveis.length ? 'Follow-up de Imóveis' : p.cfg.categorias[tipo]
+  const titulo = `${imoveis.length ? 'Follow-up' : TIPOS_CONTACTO[tipo]} — ${p.nome || 'Sem nome'}${imoveis.length ? ` (${imoveis.map(a => a.imovel_nome || 'Imóvel').join(', ')})` : ''}`
   await pool.query(
     'UPDATE tarefas SET tarefa = $1, categoria = $2, regiao = $3, updated_at = NOW() WHERE id = $4',
     [titulo, categoria, imoveis[0]?.imovel_regiao || null, tarefaId]
@@ -129,7 +149,7 @@ export async function lerContactoPessoa(pool, tipo, id) {
   const t = await tarefaAberta(pool, tipo, id)
   const { rows: feitos } = await pool.query(
     `SELECT x.id, x.data_hora AS quando, x.canal, x.notas, x.resultado, x.proxima_data, x.autor,
-            ${tipo === 'consultor' ? 'x.imovel_id AS imovel_antigo_id, i.nome AS imovel_antigo_nome' : 'NULL AS imovel_antigo_id, NULL AS imovel_antigo_nome, x.finalidade'}
+            ${tipo === 'consultor' ? 'x.imovel_id AS imovel_antigo_id, i.nome AS imovel_antigo_nome' : `NULL AS imovel_antigo_id, NULL AS imovel_antigo_nome, ${tipo === 'investidor' ? 'x.finalidade' : 'NULL AS finalidade'}`}
      FROM ${cfg.interacoes} x ${tipo === 'consultor' ? 'LEFT JOIN imoveis i ON i.id = x.imovel_id' : ''}
      WHERE x.${cfg.fk} = $1 ORDER BY x.data_hora DESC LIMIT 100`,
     [id]
@@ -166,8 +186,10 @@ export async function lerContactoPessoa(pool, tipo, id) {
   return {
     pessoa: { tipo, id: p.id, nome: p.nome, fase: p.fase },
     rotulo: p.rotulo,
+    tipo_sugerido: tipoPadrao(cfg, p.fase),
     proximo: t ? {
       tarefa_id: t.id, quando: t.inicio || t.data_limite, funcionario: t.funcionario,
+      tipo: tipoDaCategoria(cfg, t.categoria) || tipoPadrao(cfg, p.fase),
       assuntos: (await assuntosDe(pool, 'tarefa', [t.id])).map(a => ({
         id: a.id, imovel_id: a.imovel_id, imovel_nome: a.imovel_nome, imovel_estado: a.imovel_estado, texto: a.texto,
       })),
@@ -180,11 +202,12 @@ export async function lerContactoPessoa(pool, tipo, id) {
 // assuntos (opcional): lista completa — substitui a que lá está.
 // juntar (opcional): assuntos a acrescentar aos que já lá estão.
 // quando (opcional): instante ISO com hora marcada; sem ele é o dia inteiro.
-export async function agendarContactoPessoa(poolOuCx, tipo, id, { data, quando = null, assuntos, juntar, user = null } = {}) {
-  return emTransacao(poolOuCx, pool => agendarContactoPessoaTx(pool, tipo, id, { data, quando, assuntos, juntar, user }))
+// tipoContacto (opcional): cold_call | discovery_call | follow_up.
+export async function agendarContactoPessoa(poolOuCx, tipo, id, { data, quando = null, assuntos, juntar, tipoContacto = null, user = null } = {}) {
+  return emTransacao(poolOuCx, pool => agendarContactoPessoaTx(pool, tipo, id, { data, quando, assuntos, juntar, tipoContacto, user }))
 }
 
-async function agendarContactoPessoaTx(pool, tipo, id, { data, quando = null, assuntos, juntar, user = null } = {}) {
+async function agendarContactoPessoaTx(pool, tipo, id, { data, quando = null, assuntos, juntar, tipoContacto = null, user = null } = {}) {
   const p = await carregarPessoa(pool, tipo, id)
   if (!p) return null
   if (!eData(data)) throw new Error('Indica a data do contacto')
@@ -201,7 +224,7 @@ async function agendarContactoPessoaTx(pool, tipo, id, { data, quando = null, as
       `INSERT INTO tarefas (id, tarefa, categoria, status, prioridade, data_limite, inicio, fim, user_id, funcionario,
                             tempo_horas, origem_tipo, origem_id, origem_campo)
        VALUES ($1,$2,$3,'A fazer','alta',$4,$5,$6,$7,$8,0.5,$9,$10,$11)`,
-      [t.id, `${p.rotulo} — ${p.nome || 'Sem nome'}`, p.cfg.categoria, data, inicio, fim, user?.id || null, user?.nome || null, tipo, id, CAMPO]
+      [t.id, `${p.rotulo} — ${p.nome || 'Sem nome'}`, p.cfg.categorias[tipoPadrao(p.cfg, p.fase)], data, inicio, fim, user?.id || null, user?.nome || null, tipo, id, CAMPO]
     )
   }
   if (Array.isArray(assuntos)) {
@@ -209,7 +232,7 @@ async function agendarContactoPessoaTx(pool, tipo, id, { data, quando = null, as
     await juntarAssuntos(pool, 'tarefa', t.id, assuntos)
   }
   if (Array.isArray(juntar)) await juntarAssuntos(pool, 'tarefa', t.id, juntar)
-  await afinarTarefa(pool, p, t.id, data)
+  await afinarTarefa(pool, p, t.id, data, tipoContacto)
   await pool.query(`UPDATE ${p.cfg.tabela} SET ${p.cfg.espelho} = $1 WHERE id = $2`, [data, id])
   return t.id
 }
@@ -257,10 +280,10 @@ async function registarContactoPessoaTx(pool, tipo, id, {
 
   let tarefaId = null
   if (proximo?.data) {
-    tarefaId = await agendarContactoPessoa(pool, tipo, id, { data: proximo.data, quando: proximo.quando || null, user })
+    tarefaId = await agendarContactoPessoa(pool, tipo, id, { data: proximo.data, quando: proximo.quando || null, tipoContacto: proximo.tipo || null, user })
     if (pendentes.length) {
       await pool.query("UPDATE contacto_assuntos SET origem_id = $1 WHERE origem = 'tarefa' AND id = ANY($2)", [tarefaId, pendentes.map(a => a.id)])
-      await afinarTarefa(pool, p, tarefaId, proximo.data)
+      await afinarTarefa(pool, p, tarefaId, proximo.data, proximo.tipo || null)
     }
   } else {
     // Sem contacto seguinte, o que ficou por tratar deixa de estar marcado.

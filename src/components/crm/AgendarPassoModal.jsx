@@ -8,6 +8,7 @@
  */
 import { useEffect, useState } from 'react'
 import { apiFetch } from '../../lib/api.js'
+import { CHAMADAS_IMOVEL, chamadaSugerida } from '../../constants/pipelineImoveis.js'
 
 const inputClass = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300'
 
@@ -30,6 +31,7 @@ const TEXTO = {
 
 export function AgendarPassoModal({ imovel, tipo, destino, onAntes, onCancel, onDone }) {
   const [quando, setQuando] = useState(emHoras(tipo === 'chamada' ? 24 : 48))
+  const [tipoChamada, setTipoChamada] = useState(() => chamadaSugerida(destino || imovel?.estado))
   const [visitaAgendada, setVisitaAgendada] = useState(null)
   const [saving, setSaving] = useState(false)
   const [erro, setErro] = useState('')
@@ -55,7 +57,7 @@ export function AgendarPassoModal({ imovel, tipo, destino, onAntes, onCancel, on
       const r = tipo === 'chamada'
         ? await apiFetch(`/api/crm/imoveis/${imovel.id}/proximos-passos`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tipo: 'chamada', quando: iso }),
+            body: JSON.stringify({ tipo: 'chamada', quando: iso, tipo_chamada: tipoChamada }),
           })
         : await apiFetch(visitaAgendada ? `/api/crm/visitas/${visitaAgendada.id}` : '/api/crm/visitas', {
             method: visitaAgendada ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' },
@@ -80,6 +82,16 @@ export function AgendarPassoModal({ imovel, tipo, destino, onAntes, onCancel, on
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
         <h3 className="text-lg font-bold text-gray-800 mb-1">{destino ? `Mover para ${destino}` : t.titulo}</h3>
         <p className="text-xs text-gray-500 mb-4">{imovel?.nome ? `Imóvel: ${imovel.nome}. ` : ''}{t.ajuda}</p>
+        {tipo === 'chamada' && (
+          <div className="flex gap-1.5 mb-3">
+            {Object.entries(CHAMADAS_IMOVEL).map(([k, c]) => (
+              <button key={k} type="button" onClick={() => setTipoChamada(k)}
+                className={`px-3 py-1 text-xs font-medium rounded-full border ${tipoChamada === k ? 'border-yellow-400 bg-yellow-50 text-gray-800' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                {c.nome}
+              </button>
+            ))}
+          </div>
+        )}
         <label className="text-xs font-medium text-gray-600 block mb-1">
           {tipo === 'chamada' ? 'Data e hora da próxima tentativa' : visitaAgendada ? 'Data e hora da visita (remarcar)' : 'Data e hora da visita'}
         </label>

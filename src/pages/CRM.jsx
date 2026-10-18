@@ -13,14 +13,14 @@ import { Filters } from '../components/crm/Filters.jsx'
 import { TabKPIs } from '../components/crm/TabKPIs.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { EmptyState } from '../components/ui/EmptyState.jsx'
-import { Building2, UserCheck, HardHat, ChevronLeft, ChevronRight, Phone, MessageCircle, Wallet, AlertTriangle, Clock as Clock3, Plus, RefreshCw, HandCoins, Radar } from 'lucide-react'
+import { Building2, UserCheck, HardHat, ChevronLeft, ChevronRight, Phone, MessageCircle, Wallet, AlertTriangle, Clock as Clock3, Plus, RefreshCw, HandCoins, Radar, Handshake } from 'lucide-react'
 import { OportunidadesPanel } from '../components/crm/OportunidadesPanel.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { KpiCard } from '../components/ui/KpiCard.jsx'
 import { MultiSelect } from '../components/ui/MultiSelect.jsx'
 import { Combobox } from '../components/ui/Combobox.jsx'
-import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR } from '../constants.js'
+import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR, PARC_TIPOS, PARC_ESTADOS } from '../constants.js'
 import { apiFetch, apiFetchJson, openDocument } from '../lib/api.js'
 import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
 import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
@@ -61,7 +61,7 @@ function areasInvestidor(inv) {
   return areas
 }
 
-const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Construtores', 'Oportunidades']
+const TABS = ['Imóveis', 'Investidores', 'Consultores', 'Construtores', 'Parceiros', 'Oportunidades']
 // Sub-tabs que requerem distinção regional (modal ao entrar). Investidores
 // é pool unificado (sem filtro).
 const TABS_REGIONAIS = new Set(['Imóveis', 'Consultores', 'Construtores'])
@@ -590,7 +590,7 @@ export function CRM() {
   const toast = useToast()
   const queryClient = useQueryClient()
   const searchTimer = useRef(null)
-  const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores', 'Construtores': 'empreiteiros' }[tab]
+  const endpoint = { 'Imóveis': 'imoveis', 'Investidores': 'investidores', 'Consultores': 'consultores', 'Construtores': 'empreiteiros', 'Parceiros': 'parceiros' }[tab]
 
   // Garantir filtro tipo_principal sincronizado para investidores.
   // useMemo estabiliza referencia entre renders — sem isto, o load (useCallback)
@@ -831,6 +831,17 @@ export function CRM() {
         )
       },
     },
+    'Parceiros': {
+      columns: PARC_ESTADOS,
+      groupField: 'estado',
+      renderCard: (item) => (
+        <div>
+          <p className="text-[13px] font-semibold text-gray-800 truncate">{item.nome}</p>
+          {item.tipo && <p className="text-[11px] text-gray-500 mt-0.5">{item.tipo}{item.empresa ? ` · ${item.empresa}` : ''}</p>}
+          {item.data_proximo_contacto && <p className="text-[11px] text-indigo-600 mt-0.5">Próximo contacto: {fmtDate(item.data_proximo_contacto)}</p>}
+        </div>
+      ),
+    },
     'Construtores': {
       columns: ['Qualificado','Em avaliação','Rejeitado','Inativo'],
       groupField: 'estado',
@@ -1000,7 +1011,7 @@ export function CRM() {
     handleDelete(id)
   }, [endpoint])
   const kanbanOnCardClick = useCallback((id) => {
-    if (['Imóveis', 'Investidores', 'Consultores'].includes(tab)) {
+    if (['Imóveis', 'Investidores', 'Consultores', 'Parceiros'].includes(tab)) {
       setDetail(id)
     } else if (tab === 'Negócios') {
       const item = data.find(i => i.id === id)
@@ -1079,12 +1090,13 @@ export function CRM() {
 
         {/* Pipelines — 5 cards centrados que actuam como tabs */}
         <div className="flex justify-center">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 w-full max-w-6xl">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 w-full max-w-6xl">
             {[
               { key: 'Imóveis',       icon: Building2, tone: 'indigo', statsKey: 'imoveis' },
               { key: 'Investidores',  icon: HandCoins, tone: 'gold',   statsKey: 'investidores' },
               { key: 'Consultores',   icon: UserCheck, tone: 'green',  statsKey: 'consultores' },
               { key: 'Construtores',  icon: HardHat,   tone: 'amber',  statsKey: null },
+              { key: 'Parceiros',     icon: Handshake, tone: 'green',  statsKey: null },
               { key: 'Oportunidades', icon: Radar,     tone: 'blue',   statsKey: null },
             ].map(t => (
               <KpiCard
@@ -1268,7 +1280,7 @@ export function CRM() {
                 </Suspense>
               </div>
             </div>
-          ) : detail && ['Imóveis', 'Consultores'].includes(tab) ? (
+          ) : detail && ['Imóveis', 'Consultores', 'Parceiros'].includes(tab) ? (
             <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#C9A84C', borderTopColor: 'transparent' }} /></div>}>
               <DetailPanel type={tab} id={detail} defaultEdit={detailDefaultEdit}
                 onClose={() => { setDetail(null, { replace: true }); setDetailDefaultEdit(false); load() }} onSave={load}
@@ -1299,7 +1311,7 @@ export function CRM() {
                 />
               ) : (
                 <EmptyState
-                  icon={{ 'Imóveis': Building2, 'Investidores': HandCoins, 'Consultores': UserCheck, 'Construtores': HardHat, 'Oportunidades': Radar }[tab] || Building2}
+                  icon={{ 'Imóveis': Building2, 'Investidores': HandCoins, 'Consultores': UserCheck, 'Construtores': HardHat, 'Parceiros': Handshake, 'Oportunidades': Radar }[tab] || Building2}
                   title={`Sem ${tab.toLowerCase()}`}
                   description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
                 />
@@ -1380,7 +1392,7 @@ export function CRM() {
                 />
               ) : (
                 <EmptyState
-                  icon={{ 'Imóveis': Building2, 'Investidores': HandCoins, 'Consultores': UserCheck, 'Construtores': HardHat, 'Oportunidades': Radar }[tab] || Building2}
+                  icon={{ 'Imóveis': Building2, 'Investidores': HandCoins, 'Consultores': UserCheck, 'Construtores': HardHat, 'Parceiros': Handshake, 'Oportunidades': Radar }[tab] || Building2}
                   title={`Sem ${tab.toLowerCase()}`}
                   description={search ? `Nenhum resultado para "${search}".` : `Ainda não existem ${tab.toLowerCase()} registados.`}
                 />
@@ -1397,6 +1409,9 @@ export function CRM() {
                   {tab === 'Construtores' && <GenericTable data={data} onEdit={setEditing} onDelete={handleDelete}
                     columns={['nome','empresa','estado','zona','especializacao','score','custo_medio_m2']}
                     labels={{ nome:'Nome', empresa:'Empresa', estado:'Estado', zona:'Zona', especializacao:'Especialização', score:'Score', custo_medio_m2:'Custo/m²' }} />}
+                {tab === 'Parceiros' && <GenericTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail}
+                  columns={['nome','tipo','empresa','estado','contacto','zona_atuacao','data_proximo_contacto']}
+                  labels={{ nome:'Nome', tipo:'Tipo', empresa:'Empresa', estado:'Estado', contacto:'Contacto', zona_atuacao:'Zona de atuação', data_proximo_contacto:'Próximo contacto' }} />}
                 </div>
                 <div className="px-4 py-2 bg-gray-50 text-xs text-gray-400 border-t">
                   {total} registos {search && `(pesquisa: "${search}")`}
@@ -1765,14 +1780,16 @@ function NegociosTable({ data, onEdit, onDelete, onViewImovel }) {
   )
 }
 
-function GenericTable({ data, onEdit, onDelete, columns, labels }) {
+// onView (opcional): o nome abre a ficha em vez do formulário.
+function GenericTable({ data, onEdit, onDelete, onView, columns, labels }) {
   const { sorted, sortField, sortDir, onSort } = useSortableData(data)
   const sp = { sortField, sortDir, onSort }
+  const abrir = r => (onView ? onView(r.id) : onEdit?.(r))
   return (
     <>
     <MobileCardList items={sorted} renderCard={r => (
-      <EntityCard key={r.id} name={r[columns[0]]} onClick={() => onEdit?.(r)}
-        item={r} onEdit={onEdit} onDelete={onDelete}
+      <EntityCard key={r.id} name={r[columns[0]]} onClick={() => abrir(r)}
+        item={r} onEdit={onEdit} onDelete={onDelete} onView={onView}
         fields={columns.slice(1).map(c => ({ label: labels[c] || c, value: r[c] }))} />
     )} />
     <table className="hidden md:table min-w-[700px] w-full text-xs">
@@ -1785,10 +1802,10 @@ function GenericTable({ data, onEdit, onDelete, columns, labels }) {
           <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
             {columns.map(c => (
               <td key={c} className="py-2 px-3 text-gray-600">
-                {c === columns[0] ? <ClickableName name={r[c]} item={r} onEdit={onEdit} /> : (r[c] ?? '—')}
+                {c === columns[0] ? <ClickableName name={r[c]} onClick={() => abrir(r)} /> : (r[c] ?? '—')}
               </td>
             ))}
-            <td className="py-3 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} /></td>
+            <td className="py-3 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
           </tr>
         ))}
         {!sorted.length && <tr><td colSpan={columns.length + 1} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
@@ -1940,6 +1957,21 @@ const FIELD_DEFS = {
     { key: 'meta_mensal_leads', label: 'Meta Mensal Leads', type: 'number' },
     { key: 'comissao', label: 'Comissão %', type: 'number' },
     { key: 'motivo_descontinuacao', label: 'Motivo Descontinuação', type: 'text' },
+    { key: 'notas', label: 'Notas', type: 'textarea' },
+  ],
+  'Parceiros': [
+    { key: 'nome', label: 'Nome', type: 'text', required: true },
+    { key: 'tipo', label: 'Tipo', type: 'select', options: PARC_TIPOS },
+    { key: 'estado', label: 'Estado', type: 'select', options: PARC_ESTADOS },
+    { key: 'empresa', label: 'Empresa', type: 'text' },
+    { key: 'nif', label: 'NIF', type: 'text' },
+    { key: 'contacto', label: 'Contacto (telefone)', type: 'tel' },
+    { key: 'email', label: 'Email', type: 'email' },
+    { key: 'morada', label: 'Morada', type: 'text' },
+    { key: 'zona_atuacao', label: 'Zona de atuação', type: 'text' },
+    { key: 'classificacao', label: 'Classificação', type: 'select', options: ['A','B','C','D'] },
+    { key: 'honorarios', label: 'Honorários', type: 'text' },
+    { key: 'data_primeiro_contacto', label: 'Data 1º Contacto', type: 'date' },
     { key: 'notas', label: 'Notas', type: 'textarea' },
   ],
   'Construtores': [

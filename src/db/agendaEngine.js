@@ -109,7 +109,7 @@ export async function gerarCadeiasAngariacao(pool) {
     )
     await pool.query(
       `INSERT INTO tarefas (id, tarefa, categoria, status, prioridade, user_id, tempo_horas, origem_tipo, origem_id, origem_campo)
-       VALUES ($1,$2,'Call de Imóveis Anunciados','A fazer','alta',NULL,1,'imovel',$3,'cadeia_cold_call')`,
+       VALUES ($1,$2,'Cold Call de Imóveis','A fazer','alta',NULL,1,'imovel',$3,'cadeia_cold_call')`,
       [idColdCall, `Cold Call — ${im.nome}`, im.id]
     )
     criadas += 2

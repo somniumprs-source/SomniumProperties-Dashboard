@@ -77,3 +77,13 @@ export function faseAoAgendarFollowUp(estado, destino = null) {
   if (tipoFase(atual) === 'fecho') return { aplica: false, mover: null }
   return { aplica: true, mover: FASES_COM_PROPOSTA.includes(atual) ? 'Follow Up após proposta' : 'Follow UP' }
 }
+
+// Chamada do imóvel (proprietário ou consultor do anúncio). Cold Call é o
+// primeiro contacto; a partir daí é Discovery Call (perceber o negócio a fundo).
+// A categoria da Agenda segue o tipo.
+export const CHAMADAS_IMOVEL = {
+  cold_call: { nome: 'Cold Call', categoria: 'Cold Call de Imóveis' },
+  discovery_call: { nome: 'Discovery Call', categoria: 'Discovery Call de Imóveis' },
+}
+const FASES_COLD_CALL = ['Pré-aprovação', 'Adicionado', 'Chamada Não Atendida']
+export const chamadaSugerida = estado => (FASES_COLD_CALL.includes(limpaEstado(estado)) ? 'cold_call' : 'discovery_call')
