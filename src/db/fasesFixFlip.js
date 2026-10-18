@@ -202,9 +202,24 @@ export const FASES_CAEP = [
         { k: 'nda', t: 'NDA' },
         { k: 'risco', t: 'Declaração de risco' },
       ] },
-      'Revisão da minuta do CAEP',
+      { t: 'Revisão da minuta do CAEP', checklist: [
+        { k: 'parecer', t: 'Parecer do advogado externo arquivado' },
+        { k: 'versao', t: 'Versão final da minuta registada' },
+        { k: 'investidores', t: 'Minuta revista enviada aos investidores, com recomendação de apreciação jurídica própria' },
+      ] },
       'Assinatura do CAEP por todos os intervenientes',
-      'Transferência do capital dos investidores',
+      { t: 'Transferência do capital dos investidores', porInvestidor: true, checklist: [
+        { k: 'recebido', t: 'Capital recebido na conta do projeto' },
+        { k: 'confirmacao', t: 'Confirmação escrita da receção enviada ao investidor' },
+      ] },
+      // SOP 12, 8.7: fecha o ciclo de entrada e arranca os reportes periódicos.
+      { t: 'Dossiê de Investidor e comunicação de boas-vindas', porInvestidor: true, checklist: [
+        { k: 'dossie', t: 'Dossiê consolidado (KYC, NDA, declaração de risco, minutas, parecer, contrato assinado e comprovativo)' },
+        { k: 'arquivo', t: 'Dossiê arquivado no CRM com acesso restrito' },
+        { k: 'boas_vindas', t: 'Email de boas-vindas com o calendário de reportes e o ponto de contacto' },
+        { k: 'rgpd', t: 'Prazo de conservação do dossiê definido (RGPD)' },
+      ] },
+      'Calendário de obrigações declarativas enviado à contabilista',
     ],
   },
   {
@@ -288,6 +303,13 @@ export const FASES_CAEP = [
         { k: 'pagamentos', t: 'Plano de pagamentos' },
         { k: 'proposta_final', t: 'Proposta final revista carregada' },
       ] },
+      // Nomes fixos dos dois documentos: «<Projeto> - Visita pré-obra» e
+      // «<Projeto> - Relatório visita pré-obra».
+      { t: 'Visita pré-obra e relatório', checklist: [
+        { k: 'registo', t: 'Folha «Visita pré-obra» preenchida na visita' },
+        { k: 'relatorio', t: '«Relatório visita pré-obra» carregado' },
+        { k: 'investidores', t: 'Relatório enviado aos investidores' },
+      ] },
       { t: 'IVA a 6%', checklist: [
         { k: 'contabilista', t: 'Enquadramento validado pela contabilista (verba, 20% de materiais, autoliquidação)' },
         { k: 'materiais', t: 'Divisão entre materiais e mão de obra obtida' },
@@ -308,17 +330,126 @@ export const FASES_CAEP = [
         { k: 'assinado', t: 'Contrato assinado' },
         { k: 'adiantamento', t: 'Adiantamento pago (depois de assinar)' },
       ] },
+      // Base do Estimado vs Real e do alerta de atrasos das fases.
+      { t: 'Orçamento base e cronograma da obra', checklist: [
+        { k: 'orcamento', t: 'Orçamento interno importado para o projeto' },
+        { k: 'rubricas', t: 'Rubricas do Estimado vs Real alinhadas com a proposta final do empreiteiro' },
+        { k: 'cronograma', t: 'Datas previstas das fases de obra preenchidas (D1 e fim de obra)' },
+      ] },
       { t: 'Consignação da obra e fotografias do estado zero', checklist: [
         { k: 'auto', t: 'Auto de consignação com a data do D1' },
         { k: 'fotos', t: 'Fotografias do estado zero (todas as divisões)' },
         { k: 'chaves', t: 'Entrega das chaves ao empreiteiro (quantas)' },
         { k: 'contadores', t: 'Leitura dos contadores' },
         { k: 'vizinhos', t: 'Comunicação a vizinhos ou condomínio', obrigatoria: false },
+        { k: 'investidores', t: 'Data do D1 comunicada aos investidores' },
       ] },
     ],
   },
-  ...FASES_FIX_FLIP.filter(f => f.key !== 'aquisicao' && f.key !== 'projeto_licenca'),
+  ...fasesObraCaep(),
+  {
+    ...getFaseConfig('comercializacao'),
+    descricao: 'Staging, fotografias, lançamento e janelas de redução do PEV',
+    tarefas: [
+      'Home staging (mobiliário/decoração)',
+      'Sessão fotográfica profissional',
+      'Tour virtual / vídeo',
+      'Memória descritiva de acabamentos',
+      { t: 'Lançamento ao mercado conforme o PEV', checklist: [
+        { k: 'anuncio', t: 'Anúncio publicado nos portais ao Preço de Lançamento' },
+        { k: 'd0', t: 'Data de entrada no mercado registada (início da Janela 0–30 dias)' },
+        { k: 'consultor', t: 'Imóvel entregue ao consultor parceiro com o PEV' },
+        { k: 'open_house', t: 'Open House agendado para as primeiras semanas' },
+      ] },
+      'Plano de marketing digital',
+      'Visitas e qualificação de propostas',
+      relatorioJanela(30),
+      relatorioJanela(60),
+      { t: 'Limite de Corte atingido: decisão dos dois CEO', opcional: true, checklist: [
+        { k: 'relatorio', t: 'Relatório de situação (procura, propostas e custo de retenção)' },
+        { k: 'decisao', t: 'Decisão registada pelos dois CEO' },
+        { k: 'investidores', t: 'Decisão comunicada aos investidores' },
+      ] },
+      { t: 'Negociação e CPCV', checklist: [
+        { k: 'reserva', t: 'Proposta aceite igual ou acima do Preço de Reserva (abaixo, só com decisão dos dois CEO)' },
+        { k: 'cpcv', t: 'CPCV assinado' },
+        { k: 'sinal', t: 'Sinal recebido' },
+      ] },
+    ],
+  },
+  {
+    ...getFaseConfig('vendido'),
+    descricao: 'Escritura, prestação de contas aos investidores e balanço do projeto',
+    tarefas: [
+      'Escritura de venda',
+      'Liquidação de despesas pendentes (empreiteiros, fornecedores)',
+      'Reconciliação financeira final',
+      // SOP 12, 8.8.
+      { t: 'Prestação de contas e liquidação ao investidor', porInvestidor: true, checklist: [
+        { k: 'mapa', t: 'Relatório de saída (PDF do CRM) com o mapa de receitas e custos' },
+        { k: 'suporte', t: 'Documentos de suporte anexados' },
+        { k: 'resultado', t: 'Resultado Líquido e montante devido calculados' },
+        { k: 'envio', t: 'Prestação de contas enviada ao investidor' },
+        { k: 'contestacao', t: 'Prazo de contestação decorrido (ou contestação resolvida)' },
+        { k: 'retencao', t: 'Retenção na fonte validada com a contabilista' },
+        { k: 'pagamento', t: 'Contribuição e participação nos lucros pagas para o IBAN do contrato' },
+        { k: 'comprovativo', t: 'Comprovativo do pagamento final arquivado' },
+      ] },
+      { t: 'Balanço interno do projeto', checklist: [
+        { k: 'evr', t: 'Estimado vs Real final fechado' },
+        { k: 'tir', t: 'TIR realizada calculada' },
+        { k: 'desvios', t: 'Desvios por rubrica e de prazo explicados' },
+        { k: 'licoes', t: 'Lições registadas para as próximas análises' },
+      ] },
+      'Arquivo do dossier completo',
+    ],
+  },
 ]
+
+// Fases de obra do CAEP: as do Fix and Flip, cada uma fechada com medição,
+// pagamento e ficha aos investidores. As fotografias do estado zero já estão
+// na consignação (Pré-obra); o fim de obra fecha com receção provisória e
+// relatório aos investidores.
+function fasesObraCaep() {
+  const fecho = { t: 'Fecho da fase: medição, pagamento e ficha aos investidores', checklist: [
+    { k: 'medicao', t: 'Trabalhos da fase medidos e validados em obra' },
+    { k: 'fotos', t: 'Fotografias do fim da fase' },
+    { k: 'fatura', t: 'Fatura do empreiteiro carregada, com rubrica', obrigatoria: false },
+    { k: 'pagamento', t: 'Pagamento ao empreiteiro feito (se previsto no plano de pagamentos)', obrigatoria: false },
+    { k: 'evr', t: 'Estimado vs Real atualizado' },
+    { k: 'ficha', t: 'Ficha da fase (PDF do CRM) enviada aos investidores' },
+  ] }
+  const fimDeObra = [
+    { t: 'Receção provisória da obra', checklist: [
+      { k: 'auto', t: 'Auto de receção provisória assinado com o empreiteiro' },
+      { k: 'defeitos', t: 'Lista de defeitos a corrigir, com prazo' },
+      { k: 'pagamento', t: 'Pagamento final ao empreiteiro, com a retenção acordada' },
+      { k: 'garantia', t: 'Início do prazo de garantia e da retenção registado' },
+    ] },
+    { t: 'Relatório de fim de obra aos investidores', checklist: [
+      { k: 'fotos', t: 'Fotografias antes e depois' },
+      { k: 'evr', t: 'Estimado vs Real da obra' },
+      { k: 'prazo', t: 'Prazo real face ao previsto no contrato de empreitada' },
+      { k: 'envio', t: 'Relatório enviado aos investidores' },
+    ] },
+  ]
+  return ['demolicoes', 'estrutura_especialidades', 'acabamentos', 'exterior_fecho'].map(key => {
+    const f = getFaseConfig(key)
+    const tarefas = f.tarefas.filter(t => t !== 'Fotografias do estado zero (todas as divisões)')
+    return { ...f, tarefas: key === 'exterior_fecho' ? [...tarefas, ...fimDeObra] : [...tarefas, fecho] }
+  })
+}
+
+// Relatório de mercado no fim de cada Janela de Redução do PEV (SOP 14).
+function relatorioJanela(dias) {
+  return { t: `Relatório de mercado aos ${dias} dias e decisão da Janela de Redução`, checklist: [
+    { k: 'kpi', t: 'KPI de procura face à meta do PEV (contactos, visitas e propostas)' },
+    { k: 'consultor', t: 'Leitura do consultor parceiro' },
+    { k: 'decisao', t: 'Decisão: manter o preço ou descer para o degrau seguinte da Escada de Preço' },
+    { k: 'aprovacao', t: 'Decisão aprovada pelos dois CEO' },
+    { k: 'investidores', t: 'Relatório enviado aos investidores' },
+  ] }
+}
 
 // Fluxo Wholesaling: alinhar investidor antes de comprometer a compra.
 // Procurar Investidor → Negociação → CPCV de Compra → CPCV de Cedência → Fee Recebido
@@ -369,6 +500,7 @@ export const FASES_WHOLESALLING = [
     cor: '#D5B65A',
     descricao: 'Cessão de posição contratual ao investidor',
     tarefas: [
+      'Proposta de cedência de posição (PDF do CRM) enviada ao investidor',
       'Redigir cessão de posição',
       'Assinatura tripartida (Somnium + vendedor + investidor)',
       'Registo da cessão',
@@ -385,6 +517,12 @@ export const FASES_WHOLESALLING = [
       'Emitir fatura',
       'Confirmar recebimento do fee',
       'Reconciliar com financeiro',
+      { t: 'Relatório de fecho do negócio', checklist: [
+        { k: 'fee', t: 'Fee recebido face ao fee previsto' },
+        { k: 'custos', t: 'Custos do negócio (sinal, honorários e outros)' },
+        { k: 'prazo', t: 'Prazo do CPCV de Compra à cedência' },
+        { k: 'analise', t: 'Comparação com a análise inicial' },
+      ] },
       'Arquivo do dossier',
     ],
   },

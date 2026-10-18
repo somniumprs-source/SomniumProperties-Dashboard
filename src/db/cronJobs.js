@@ -278,9 +278,9 @@ async function runArquivoRelatoriosObra() {
     const { fileURLToPath } = await import('url')
     const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-    // Projectos Fix and Flip activos (não vendidos)
+    // Projetos com obra (Fix and Flip e CAEP) ativos e não vendidos
     const { rows: negocios } = await pool.query(
-      `SELECT * FROM negocios WHERE categoria = 'Fix and Flip' AND (fase IS NULL OR fase <> 'Vendido')`
+      `SELECT * FROM negocios WHERE categoria IN ('Fix and Flip', 'CAEP') AND deleted_at IS NULL AND (fase IS NULL OR fase <> 'Vendido')`
     )
 
     const dirBase = path.resolve(__dirname, '../../public/uploads/relatorios-obra')

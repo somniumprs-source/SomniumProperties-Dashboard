@@ -334,9 +334,9 @@ async function runAutoInactivoInvestidores() {
 async function runArquivoRelatoriosObra() {
   console.log("[cron] Arquivo mensal de relatórios de obra — a correr");
   try {
-    // Projectos Fix and Flip activos (não vendidos)
+    // Projetos com obra (Fix and Flip e CAEP) ativos e não vendidos
     const { rows: negocios } = await pool.query(
-      `SELECT * FROM negocios WHERE categoria = 'Fix and Flip' AND (fase IS NULL OR fase <> 'Vendido')`,
+      `SELECT * FROM negocios WHERE categoria IN ('Fix and Flip', 'CAEP') AND deleted_at IS NULL AND (fase IS NULL OR fase <> 'Vendido')`,
     );
 
     const mesIso = new Date().toISOString().slice(0, 7); // YYYY-MM

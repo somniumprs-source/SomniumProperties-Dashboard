@@ -63,6 +63,20 @@ function calcularAtraso(fase) {
   const diff = Math.floor((hoje - fim) / 86400000)
   return diff > 0 ? diff : null
 }
+// Reporte semanal aos investidores (SOP 12, 8.7): com uma fase de obra em
+// curso, o relatório semanal (vistoria) não deve passar de 7 dias.
+const FASES_OBRA = new Set(['demolicoes', 'estrutura_especialidades', 'acabamentos', 'exterior_fecho'])
+function relatorioSemanalEmFalta(fases, vistorias) {
+  const emObra = fases.filter(f => FASES_OBRA.has(f.fase_key) && f.estado === 'em_curso')
+  if (emObra.length === 0) return null
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
+  const ultima = vistorias.map(v => v.semana_data).filter(Boolean).sort().pop()
+  const inicio = emObra.map(f => f.data_inicio_real).filter(Boolean).sort()[0]
+  const desde = ultima || inicio
+  const dias = desde ? Math.floor((hoje - new Date(desde)) / 86400000) : null
+  if (dias != null && dias <= 7) return null
+  return { dias, nunca: !ultima }
+}
 const ESTADO_COR = {
   pendente: 'bg-gray-100 text-gray-600', em_curso: 'bg-blue-100 text-blue-700',
   concluida: 'bg-green-100 text-green-700', bloqueada: 'bg-red-100 text-red-700',
@@ -106,6 +120,7 @@ export function ProjectoDetalhe() {
   const [fracaoSel, setFracaoSel] = useState(null)  // null = "Prédio inteiro"
   const [searchParams] = useSearchParams()
   const [tab, setTab] = useState(() => searchParams.get('tab') || 'resumo')
+  const [obrasSub, setObrasSub] = useState(null)  // sub-aba das Obras a abrir (alerta do relatório semanal)
   const [editing, setEditing] = useState(false)
   const [savingEdit, setSavingEdit] = useState(false)
 
@@ -113,18 +128,20 @@ export function ProjectoDetalhe() {
   const query = useQuery({
     queryKey: ['projeto-detalhe', id],
     queryFn: async () => {
-      const [rResumo, rFases, rFotos, rFracoes] = await Promise.all([
+      const [rResumo, rFases, rFotos, rFracoes, rVist] = await Promise.all([
         apiFetch(`/api/crm/projetos/${id}/resumo`),
         apiFetch(`/api/crm/projetos/${id}/fases`),
         apiFetch(`/api/crm/projetos/${id}/fotos`),
         apiFetch(`/api/crm/projetos/${id}/fracoes`),
+        apiFetch(`/api/crm/projetos/${id}/vistorias`),
       ])
       if (!rResumo.ok) throw new Error('Projeto não encontrado')
       const resumo = await rResumo.json()
       const fases = rFases.ok ? (await rFases.json()).fases || [] : []
       const fotos = rFotos.ok ? (await rFotos.json()).fotos || [] : []
       const fracoes = rFracoes.ok ? (await rFracoes.json()).fracoes || [] : []
-      return { resumo, fases, fotos, fracoes }
+      const vistorias = rVist.ok ? (await rVist.json()).vistorias || [] : []
+      return { resumo, fases, fotos, fracoes, vistorias }
     },
   })
   const resumo = query.data?.resumo ?? null
@@ -202,6 +219,28 @@ export function ProjectoDetalhe() {
                   {atrasadas.map(f => f.nome).join(' · ')}
                 </p>
               </div>
+            </div>
+          )
+        })()}
+
+        {/* Relatório semanal de obra em falta */}
+        {(() => {
+          if (isWholesalling || isReadOnly) return null
+          const falta = relatorioSemanalEmFalta(fases, query.data?.vistorias ?? [])
+          if (!falta) return null
+          return (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-amber-800">
+                  {falta.nunca ? 'Ainda sem relatório semanal de obra' : `Relatório semanal de obra em falta · último há ${falta.dias} dias`}
+                </p>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  Com a obra em curso, os investidores recebem um relatório por semana. Regista a vistoria da semana e envia o PDF.
+                </p>
+              </div>
+              <button type="button" onClick={() => { setObrasSub('vistorias'); setTab('obras') }}
+                className="text-xs font-medium text-amber-800 hover:underline whitespace-nowrap">Abrir Obras</button>
             </div>
           )
         })()}
@@ -341,7 +380,7 @@ export function ProjectoDetalhe() {
               <TabObras
                 imovel={imovel} negocio={negocio} negocioId={id}
                 fases={fasesFiltradas} fotos={fotosFiltradas} fracaoSel={fracaoSel}
-                isWholesalling={isWholesalling} isReadOnly={isReadOnly} onChange={load}
+                isWholesalling={isWholesalling} isReadOnly={isReadOnly} onChange={load} subInicial={obrasSub}
               />
             )}
             {tab === 'faturas' && <TabFaturas negocioId={id} analise={analise} readOnly={isReadOnly} consultoria={isConsultoria} />}
@@ -510,14 +549,18 @@ function Field({ label, value, accent }) {
 // separador com sub-abas: Orçamento, Fotos, Vistoria Semanal. As fases e
 // tarefas vivem no separador próprio "Fases e Tarefas" (não são só de obra).
 // ════════════════════════════════════════════════════════════════
-function TabObras({ imovel, negocio, negocioId, fases, fotos, fracaoSel, isWholesalling, isReadOnly, onChange }) {
+function TabObras({ imovel, negocio, negocioId, fases, fotos, fracaoSel, isWholesalling, isReadOnly, onChange, subInicial = null }) {
   const SUBTABS_OBRAS = [
     { key: 'orcamento', label: 'Orçamento',        hidden: isWholesalling },
     { key: 'fotos',     label: 'Fotos',            hidden: isWholesalling },
     { key: 'vistorias', label: 'Vistoria Semanal', hidden: isReadOnly },
   ].filter(t => !t.hidden)
 
-  const [sub, setSub] = useState(SUBTABS_OBRAS[0]?.key)
+  const [sub, setSub] = useState(SUBTABS_OBRAS.some(t => t.key === subInicial) ? subInicial : SUBTABS_OBRAS[0]?.key)
+  useEffect(() => {
+    if (SUBTABS_OBRAS.some(t => t.key === subInicial)) setSub(subInicial)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subInicial])
   useEffect(() => {
     if (!SUBTABS_OBRAS.some(t => t.key === sub)) setSub(SUBTABS_OBRAS[0]?.key)
     // eslint-disable-next-line react-hooks/exhaustive-deps
