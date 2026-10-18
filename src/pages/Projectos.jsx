@@ -371,12 +371,9 @@ export function Projectos() {
   return (
     <>
       {mostrarCarregamento && <BrandLoader label="Departamento de Obras" />}
-      <Header title="Departamento de Obras" onRefresh={load} loading={loading} />
+      <Header title="Departamento de Obras" onRefresh={load} loading={loading} regiao={<RegiaoToggle value={regiao} onChange={setRegiao} />} />
 
       <div className="p-4 sm:p-6 flex flex-col gap-4">
-        <div className="flex justify-end">
-          <RegiaoToggle value={regiao} onChange={setRegiao} />
-        </div>
         {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>}
 
         {isInvestidor && investidorId && <MeusDocumentosPanel investidorId={investidorId} />}

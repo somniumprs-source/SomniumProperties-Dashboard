@@ -33,29 +33,28 @@ export function RegiaoBadge({ regiao, onTrocar, compact = false }) {
 }
 
 /**
- * Toggle Coimbra | Porto | Geral — segmented control alinhado com o estilo
- * Somnium (mesmo look-and-feel dos Tabs segmentados: fundo cinza claro,
- * opção activa em preto com texto dourado). Geral = null = sem filtro.
+ * Toggle Coimbra | Porto | Geral — controlo segmentado do cabeçalho da página
+ * (mesmo desenho dos Tabs segmentados). Geral = null = sem filtro.
  *
- *   <RegiaoToggle value={regiao} onChange={setRegiao} />
+ *   <PageHeader regiao={<RegiaoToggle value={regiao} onChange={setRegiao} />} />
  */
 export function RegiaoToggle({ value, onChange, options = ['Coimbra', 'AMP', 'Geral'] }) {
   return (
-    <div className="inline-flex items-center gap-0.5 rounded-xl bg-gray-100 dark:bg-neutral-800 p-1">
+    <div role="radiogroup" aria-label="Região" className="inline-flex items-center gap-0.5 rounded-lg bg-surface-muted p-0.5">
       {options.map(o => {
         const active = (value || 'Geral') === o
         const Icon = ICONS[o] || MapPin
         return (
           <button
             key={o}
+            role="radio"
+            aria-checked={active}
             onClick={() => onChange(o === 'Geral' ? null : o)}
-            className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-all ${
-              active
-                ? 'bg-brand-dark text-brand-gold shadow-sm'
-                : 'bg-transparent text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-neutral-100 hover:bg-white/60 dark:hover:bg-neutral-700/60'
+            className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-caption font-medium rounded-md whitespace-nowrap transition-[background-color,color,box-shadow] duration-fast ease-entry ${
+              active ? 'bg-surface-raised text-ink shadow-xs' : 'text-ink-muted hover:text-ink'
             }`}
           >
-            <Icon className="w-3.5 h-3.5 shrink-0" />
+            <Icon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
             <span>{LABEL_TOGGLE[o] || o}</span>
           </button>
         )

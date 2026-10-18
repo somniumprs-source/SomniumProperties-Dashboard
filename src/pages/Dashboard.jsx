@@ -183,11 +183,9 @@ export function Dashboard() {
         subtitle={updatedAt ? `Última atualização: ${updatedAt}` : 'A carregar dados...'}
         onRefresh={refreshManual}
         loading={loading}
+        regiao={<RegiaoToggle value={regiao} onChange={setRegiao} />}
       />
       <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
-        <div className="flex justify-end">
-          <RegiaoToggle value={regiao} onChange={setRegiao} />
-        </div>
         {error && (
           <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">
             Erro ao carregar KPIs: {error}

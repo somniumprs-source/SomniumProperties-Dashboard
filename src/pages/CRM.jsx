@@ -1075,18 +1075,11 @@ export function CRM() {
 
   return (
     <>
-      <Header title="CRM" subtitle="Gestão de dados — Base de dados local" onRefresh={load} loading={loading} breadcrumbs={breadcrumbs} />
+      <Header title="CRM" subtitle="Gestão de dados — Base de dados local" onRefresh={load} loading={loading} breadcrumbs={breadcrumbs}
+        regiao={regionalKey ? <RegiaoToggle value={regiaoActiva} onChange={setRegiaoActiva} />
+          : tab === 'Investidores' && invSubTab === 'Ativo' ? <RegiaoToggle value={invArea || null} onChange={r => { setInvArea(r || ''); setDetail(null, { replace: true }) }} />
+          : null} />
       <div className="p-4 sm:p-6 flex flex-col gap-3 sm:gap-4">
-        {regionalKey && (
-          <div className="flex justify-end">
-            <RegiaoToggle value={regiaoActiva} onChange={setRegiaoActiva} />
-          </div>
-        )}
-        {tab === 'Investidores' && invSubTab === 'Ativo' && (
-          <div className="flex justify-end">
-            <RegiaoToggle value={invArea || null} onChange={r => { setInvArea(r || ''); setDetail(null, { replace: true }) }} />
-          </div>
-        )}
 
         {/* Pipelines — 5 cards centrados que actuam como tabs */}
         <div className="flex justify-center">

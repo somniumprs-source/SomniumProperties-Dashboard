@@ -1,4 +1,5 @@
 import { Component } from 'react'
+import { ErrorState } from './ErrorState.jsx'
 
 const RELOAD_KEY = 'somnium_chunk_reload_at'
 const RELOAD_COOLDOWN_MS = 60_000
@@ -63,34 +64,13 @@ export class ChunkErrorBoundary extends Component {
   render() {
     if (!this.state.hasError) return this.props.children
 
-    if (this.state.isChunk) {
-      return (
-        <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#0d0d0d' }}>
-          <div className="text-center max-w-md px-6">
-            <p className="text-sm mb-4" style={{ color: '#C9A84C' }}>Nova versão disponível</p>
-            <button onClick={this.handleManualReload}
-              className="px-5 py-2.5 text-sm font-semibold rounded-xl"
-              style={{ backgroundColor: '#C9A84C', color: '#0d0d0d' }}>
-              Atualizar
-            </button>
-          </div>
-        </div>
-      )
-    }
-
+    // Fica por fora do Layout: ocupa o ecrã inteiro.
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-center max-w-md px-6">
-          <h2 className="text-lg font-semibold text-neutral-800 mb-2">Algo correu mal</h2>
-          <p className="text-sm text-neutral-500 mb-4">
-            {this.state.error?.message || 'Erro inesperado.'}
-          </p>
-          <button onClick={this.handleManualReload}
-            className="px-4 py-2 text-sm font-medium text-white rounded-lg"
-            style={{ backgroundColor: '#C9A84C' }}>
-            Recarregar
-          </button>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-surface">
+        {this.state.isChunk
+          ? <ErrorState title="Nova versão disponível" retryVariant="primary" retryLabel="Atualizar" onRetry={this.handleManualReload}
+              description="A plataforma foi atualizada enquanto tinhas esta página aberta." />
+          : <ErrorState title="Algo correu mal" error={this.state.error} retryLabel="Recarregar" onRetry={this.handleManualReload} />}
       </div>
     )
   }

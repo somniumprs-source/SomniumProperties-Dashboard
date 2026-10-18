@@ -1,55 +1,25 @@
-import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
-import { LayoutDashboard, Bell, Menu, X, LogOut, UserCheck, ChevronDown, BookOpen, Map, Megaphone, CalendarClock, Building, Timer, FileBarChart, Headphones, Handshake, Construction, Wallet, UserCog, ShieldCheck } from 'lucide-react'
+import { Bell, Menu, X, LogOut, UserCheck, ChevronDown } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { apiFetch, apiFetchJson } from '../../lib/api.js'
 import { prefetchRoute } from '../../lib/prefetch.js'
+import { tabIndicatorTransition, dialogVariants, overlayVariants } from '../../lib/motion.js'
+import { VoiceButton } from '../ui/VoiceButton.jsx'
+import { navVisivel } from './navConfig.js'
 
-// Estrutura da plataforma por departamento. Itens com `children` viram
-// grupos expansíveis na sidebar; o resto são links directos.
-const nav = [
-  {
-    label: 'Administração', Icon: Building, area: 'administracao',
-    children: [
-      { to: '/',                         label: 'Dashboard',    Icon: LayoutDashboard, end: true, area: 'dashboard' },
-      { to: '/administracao/agenda',     label: 'Agenda',       Icon: CalendarClock, area: 'operacoes' },
-      { to: '/administracao/operacoes',  label: 'Operações',    Icon: Timer, badgeKey: 'tarefas', area: 'operacoes' },
-      { to: '/administracao/relatorios', label: 'Relatórios',   Icon: FileBarChart, area: 'administracao' },
-      { to: '/administracao/sop',        label: 'SOPs',         Icon: BookOpen, area: 'administracao' },
-      { to: '/administracao/regiao',     label: 'Multi-Região', Icon: Map, area: 'administracao' },
-      { to: '/administracao/chamadas',   label: 'Avaliação de Calls', Icon: Headphones, area: 'administracao' },
-    ],
-  },
-  { to: '/crm', label: 'Departamento Comercial', Icon: Handshake, badgeKey: 'crm', area: 'crm' },
-  { to: '/projectos', label: 'Departamento de Obras', Icon: Construction, area: 'projectos' },
-  { to: '/financeiro',         label: 'Departamento Financeiro', Icon: Wallet, area: 'financeiro' },
-  { to: '/marketing',          label: 'Marketing e Marca Pessoal', Icon: Megaphone, area: 'marketing' },
-  { to: '/alertas',            label: 'Alertas',    Icon: Bell, badgeKey: 'alertas', area: 'alertas' },
-  { to: '/admin/utilizadores', label: 'Utilizadores', Icon: UserCog, area: 'admin' },
-  { to: '/admin/auditoria',    label: 'Auditoria',   Icon: ShieldCheck, area: 'admin' },
-]
+// Barra lateral sempre escura (identidade Somnium), nos dois temas.
+// Dourado só no item ativo.
+// Painéis do rodapé: abrem à direita da barra (em mobile, por cima da gaveta).
+const PAINEL = 'fixed z-50 bottom-16 left-3 md:left-[236px] w-[min(18rem,calc(100vw-1.5rem))] bg-surface-raised text-ink rounded-xl shadow-lg border border-line'
+const FOOTER_BTN = 'inline-flex items-center justify-center w-8 h-8 rounded-lg text-neutral-400 hover:text-white hover:bg-white/5 transition-colors duration-fast ease-entry'
 
 export function Sidebar() {
   const { profile, signOut, role, areas } = useAuth()
   const [badges, setBadges] = useState({ alertas: 0, crm: 0, tarefas: 0 })
   const [open, setOpen] = useState(false)
-  // Filtro por areas declaradas pelo backend. Admin vê tudo.
-  // Para roles restritos (investidor, parceiro), respeitar `areas`.
-  const canSee = (area) => {
-    if (role === 'admin') return true
-    if (!role) return area !== 'admin'
-    return areas.includes(area)
-  }
-  // Grupos: visíveis se o utilizador puder ver pelo menos um sub-item
-  // (ou o próprio grupo). Sub-itens não permitidos são removidos.
-  const visibleNav = nav.map(item => {
-    if (item.children) {
-      const children = item.children.filter(c => canSee(c.area) || canSee(item.area))
-      return children.length ? { ...item, children } : null
-    }
-    return canSee(item.area) ? item : null
-  }).filter(Boolean)
+  const secoes = navVisivel(role, areas)
 
   useEffect(() => {
     const load = async () => {
@@ -67,10 +37,9 @@ export function Sidebar() {
       } catch {}
     }
     load()
-    // 90s (era 60s) — badges informativos, não críticos.
+    // 90s — badges informativos, não críticos.
     const interval = setInterval(load, 90000)
-    // Refresh imediato quando a tab volta a estar visível (mais ágil sem
-    // pagar overhead constante).
+    // Refresh imediato quando a tab volta a estar visível.
     const onVisible = () => { if (!document.hidden) load() }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
@@ -79,105 +48,91 @@ export function Sidebar() {
     }
   }, [])
 
-  // Close mobile sidebar on navigation
+  // Esc fecha o menu em mobile
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open])
+
   const handleNav = () => setOpen(false)
-
-  const sidebarContent = (
-    <>
-      {/* Logo */}
-      <div className="w-full" style={{ backgroundColor: '#0d0d0d' }}>
-        <img src="/logo-transparent.png" alt="Somnium Properties" className="mx-auto py-5 px-4" style={{ maxWidth: '85%', height: 'auto' }} />
-      </div>
-
-      {/* Separador dourado */}
-      <div className="mx-4 h-px" style={{ background: 'linear-gradient(90deg, transparent, #C9A84C55, transparent)' }} />
-
-      {/* Nav label */}
-      <p className="px-5 mt-5 mb-2 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#333' }}>Navegação</p>
-
-      {/* Nav */}
-      <nav className="flex flex-col gap-0.5 px-3 flex-1">
-        {visibleNav.map(item => (
-          item.children
-            ? <NavGroup key={item.label} group={item} badges={badges} onNav={handleNav} />
-            : <NavLeaf key={item.to} item={item} badges={badges} onNav={handleNav} />
-        ))}
-      </nav>
-
-      {/* Profile + Footer */}
-      <div className="px-4 py-4 flex flex-col gap-3" style={{ borderTop: '1px solid #1a1a1a' }}>
-        <PerfilActivoSelector />
-        {profile && (
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-              style={{ backgroundColor: profile.cor }}>
-              {profile.iniciais}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-white truncate">{profile.nome}</p>
-              <p className="text-[10px]" style={{ color: '#444' }}>Sessao</p>
-            </div>
-          </div>
-        )}
-        <div className="flex items-center justify-between gap-2">
-          {profile?.role && (
-            <span className="text-[9px] uppercase tracking-widest px-2 py-0.5 rounded"
-              style={{ color: '#C9A84C', backgroundColor: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.25)' }}>
-              {profile.role}
-            </span>
-          )}
-          <div className="flex items-center gap-1">
-            <NotificationsBell />
-            <button onClick={signOut}
-              className="flex items-center gap-1.5 text-[10px] px-2 py-1 rounded transition-colors hover:bg-white/5"
-              style={{ color: '#555' }} title="Sair">
-              <LogOut className="w-3 h-3" /> Sair
-            </button>
-          </div>
-        </div>
-      </div>
-    </>
-  )
 
   return (
     <>
-      {/* Mobile hamburger */}
+      {/* Botão do menu em mobile */}
       <button
-        onClick={() => setOpen(!open)}
-        className="fixed top-3 left-3 z-50 md:hidden p-2 rounded-lg"
-        style={{ backgroundColor: '#0d0d0d', border: '1px solid #1a1a1a' }}
+        onClick={() => setOpen(o => !o)}
+        className="fixed top-3 left-3 z-50 md:hidden inline-flex items-center justify-center w-9 h-9 rounded-lg bg-brand-dark border border-white/10 text-white"
+        aria-label={open ? 'Fechar menu' : 'Abrir menu'} aria-expanded={open}
       >
-        {open ? <X className="w-5 h-5 text-white" /> : <Menu className="w-5 h-5" style={{ color: '#C9A84C' }} />}
+        {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
       </button>
 
-      {/* Mobile overlay */}
-      {open && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden" onClick={() => setOpen(false)} />
-      )}
+      <AnimatePresence>
+        {open && (
+          <motion.div key="sidebar-overlay" variants={overlayVariants} initial="initial" animate="animate" exit="exit"
+            className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setOpen(false)} />
+        )}
+      </AnimatePresence>
 
-      {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-56 min-h-screen flex-col shrink-0" style={{ backgroundColor: '#0d0d0d' }}>
-        <LayoutGroup id="sidebar-desktop">{sidebarContent}</LayoutGroup>
-      </aside>
-
-      {/* Mobile sidebar */}
+      {/* Um só aside: gaveta em mobile, coluna fixa em desktop */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-56 flex flex-col transform transition-transform duration-200 md:hidden ${
-          open ? 'translate-x-0' : '-translate-x-full'
-        }`}
-        style={{ backgroundColor: '#0d0d0d' }}
+        className={`fixed inset-y-0 left-0 z-40 w-56 flex flex-col shrink-0 bg-brand-dark border-r border-white/5
+          transition-transform duration-moderate ease-entry
+          md:sticky md:top-0 md:h-screen md:z-30 md:transform-none
+          ${open ? 'translate-x-0' : '-translate-x-full'}`}
       >
-        <LayoutGroup id="sidebar-mobile">{sidebarContent}</LayoutGroup>
+        <div className="border-b border-white/5">
+          <img src="/logo-transparent.png" alt="Somnium Properties" className="mx-auto py-4 px-4" style={{ maxWidth: '78%', height: 'auto' }} />
+        </div>
+
+        <LayoutGroup id="sidebar">
+          <nav className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-4" aria-label="Navegação principal">
+            {secoes.map(s => (
+              <div key={s.label}>
+                <p className="px-3 mb-1 text-overline uppercase text-neutral-500">{s.label}</p>
+                <div className="flex flex-col gap-px">
+                  {s.items.map(item => <NavLeaf key={item.to} item={item} badges={badges} onNav={handleNav} />)}
+                </div>
+              </div>
+            ))}
+          </nav>
+        </LayoutGroup>
+
+        {/* Perfil e ações */}
+        <div className="px-3 py-3 flex flex-col gap-2.5 border-t border-white/5">
+          <PerfilActivoSelector />
+          <div className="flex items-center gap-2 px-1">
+            {profile && (
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <div className="w-7 h-7 rounded-full flex items-center justify-center text-overline font-semibold text-white shrink-0"
+                  style={{ backgroundColor: profile.cor }}>
+                  {profile.iniciais}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-caption font-medium text-white truncate">{profile.nome}</p>
+                  {profile.role && <p className="text-overline uppercase text-neutral-500 truncate">{profile.role}</p>}
+                </div>
+              </div>
+            )}
+            <div className="flex items-center shrink-0">
+              <VoiceButton className={FOOTER_BTN} />
+              <NotificationsBell />
+              <button onClick={signOut} className={FOOTER_BTN} title="Sair" aria-label="Sair">
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
       </aside>
     </>
   )
 }
 
-// ════════════════════════════════════════════════════════════════
-// Item de navegação (link directo). `nested` indenta sub-itens de grupo.
-// ════════════════════════════════════════════════════════════════
-function NavLeaf({ item, badges, onNav, nested }) {
+function NavLeaf({ item, badges, onNav }) {
   const { to, label, Icon, end, badgeKey } = item
+  const n = badgeKey ? badges[badgeKey] || 0 : 0
   return (
     <NavLink
       to={to}
@@ -187,33 +142,25 @@ function NavLeaf({ item, badges, onNav, nested }) {
       onFocus={() => prefetchRoute(to)}
       onTouchStart={() => prefetchRoute(to)}
       className={({ isActive }) =>
-        `group relative flex items-center gap-3 ${nested ? 'pl-9 pr-3' : 'px-3'} py-2.5 rounded-xl text-sm font-medium transition-colors duration-300 ${
-          isActive ? 'active-nav' : 'text-neutral-500 hover:text-white'
+        `relative flex items-center gap-3 px-3 py-[7px] rounded-lg text-ui font-medium transition-colors duration-fast ease-entry ${
+          isActive ? 'text-white' : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
         }`
       }
-      style={({ isActive }) => ({ borderLeft: '2px solid transparent', color: isActive ? '#C9A84C' : undefined })}
     >
       {({ isActive }) => (
         <>
-          {/* Realce do item ativo: desliza de um item para o outro */}
           {isActive && (
-            <motion.span
-              layoutId="nav-active"
-              className="absolute inset-0 rounded-xl pointer-events-none"
-              style={{
-                background: 'linear-gradient(90deg, rgba(201,168,76,0.15) 0%, rgba(201,168,76,0.05) 100%)',
-                borderLeft: '2px solid #C9A84C',
-                marginLeft: -2,
-              }}
-              transition={{ type: 'tween', duration: 0.46, ease: [0.22, 1, 0.36, 1] }}
-            />
+            <motion.span layoutId="nav-active" transition={tabIndicatorTransition}
+              className="absolute inset-0 rounded-lg bg-white/[0.07] pointer-events-none">
+              <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-accent" />
+            </motion.span>
           )}
-          <Icon className={`relative w-4 h-4 shrink-0 transition-[transform,color] duration-300 ${isActive ? '' : 'group-hover:translate-x-0.5 group-hover:text-[#C9A84C]'}`}
-            style={{ color: isActive ? '#C9A84C' : undefined }} />
-          <span className="relative">{label}</span>
-          {badgeKey && badges[badgeKey] > 0 && (
-            <span className="relative ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
-              {badges[badgeKey] > 9 ? '9+' : badges[badgeKey]}
+          <Icon className={`relative w-4 h-4 shrink-0 ${isActive ? 'text-accent' : ''}`} aria-hidden="true" />
+          <span className="relative truncate">{label}</span>
+          {n > 0 && (
+            <span className="relative ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-danger text-white text-overline font-semibold num flex items-center justify-center"
+              aria-label={`${n} pendentes`}>
+              {n > 9 ? '9+' : n}
             </span>
           )}
         </>
@@ -222,61 +169,6 @@ function NavLeaf({ item, badges, onNav, nested }) {
   )
 }
 
-// ════════════════════════════════════════════════════════════════
-// Grupo expansível (departamento com sub-secções). Auto-abre quando
-// uma sub-rota está activa.
-// ════════════════════════════════════════════════════════════════
-function NavGroup({ group, badges, onNav }) {
-  const location = useLocation()
-  const { Icon, label, badgeKey } = group
-  const childActive = group.children.some(c =>
-    c.end ? location.pathname === c.to : location.pathname.startsWith(c.to)
-  )
-  const [expanded, setExpanded] = useState(childActive)
-  useEffect(() => { if (childActive) setExpanded(true) }, [childActive])
-
-  const badgeCount = badgeKey ? (badges[badgeKey] || 0) : 0
-
-  return (
-    <div>
-      <button
-        onClick={() => setExpanded(e => !e)}
-        className={`group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
-          childActive ? 'text-white' : 'text-neutral-500 hover:text-white'
-        }`}
-        style={{ borderLeft: '2px solid transparent' }}
-      >
-        <Icon className="w-4 h-4 shrink-0" style={{ color: childActive ? '#C9A84C' : undefined }} />
-        <span className="flex-1 text-left">{label}</span>
-        {badgeCount > 0 && (
-          <span className="bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
-            {badgeCount > 9 ? '9+' : badgeCount}
-          </span>
-        )}
-        <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform duration-300 ${expanded ? '' : '-rotate-90'}`} style={{ color: '#666' }} />
-      </button>
-      <AnimatePresence initial={false}>
-        {expanded && (
-          <motion.div
-            className="flex flex-col gap-0.5 mt-0.5 overflow-hidden"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-          >
-            {group.children.map((c, i) => (
-              <motion.div key={c.to}
-                initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1], delay: i * 0.04 }}>
-                <NavLeaf item={c} badges={badges} onNav={onNav} nested />
-              </motion.div>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  )
-}
 
 // ════════════════════════════════════════════════════════════════
 // F19 — Bell icon com notificações in-app
@@ -346,31 +238,35 @@ function NotificationsBell() {
 
   return (
     <div className="relative" ref={panelRef}>
-      <button onClick={abrir} className="relative p-1.5 rounded hover:bg-white/5" style={{ color: unread > 0 ? '#C9A84C' : '#555' }} title="Notificações">
-        <Bell className="w-3.5 h-3.5" />
+      <button onClick={abrir} className={`relative ${FOOTER_BTN} ${unread > 0 ? 'text-white' : ''}`}
+        title="Notificações" aria-label={unread > 0 ? `Notificações (${unread} por ler)` : 'Notificações'} aria-expanded={open}>
+        <Bell className="w-4 h-4" />
         {unread > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white rounded-full text-[8px] font-bold w-3.5 h-3.5 flex items-center justify-center">{unread}</span>
+          <span className="absolute top-0.5 right-0.5 min-w-[14px] h-3.5 px-0.5 rounded-full bg-danger text-white text-[10px] leading-none font-semibold num flex items-center justify-center">{unread > 9 ? '9+' : unread}</span>
         )}
       </button>
-      {open && (
-        <div className="absolute right-0 bottom-full mb-2 w-72 max-h-96 overflow-y-auto bg-white rounded-xl shadow-xl border border-gray-200 z-50">
-          <div className="px-3 py-2 border-b border-gray-100 sticky top-0 bg-white">
-            <p className="text-xs font-semibold text-gray-700">Notificações</p>
-          </div>
-          {items.length === 0 ? (
-            <p className="text-xs text-gray-400 py-6 text-center">Sem notificações</p>
-          ) : (
-            items.map(n => (
-              <button key={n.id} onClick={() => { setOpenPanel(false); if (n.link) navigate(n.link) }}
-                className={`w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-50 ${!n.lida ? 'bg-yellow-50' : ''}`}>
-                <p className="text-xs font-semibold text-gray-800">{n.titulo}</p>
-                {n.mensagem && <p className="text-[11px] text-gray-500 mt-0.5">{n.mensagem}</p>}
-                <p className="text-[9px] text-gray-400 mt-1">{new Date(n.created_at).toLocaleString('pt-PT')}</p>
-              </button>
-            ))
-          )}
-        </div>
-      )}
+      <AnimatePresence>
+        {open && (
+          <motion.div variants={dialogVariants} initial="initial" animate="animate" exit="exit"
+            className={`${PAINEL} max-h-96 overflow-y-auto`} role="dialog" aria-label="Notificações">
+            <div className="px-3 py-2 border-b border-line sticky top-0 bg-surface-raised">
+              <p className="text-overline uppercase text-ink-muted">Notificações</p>
+            </div>
+            {items.length === 0 ? (
+              <p className="text-caption text-ink-muted py-6 text-center">Sem notificações</p>
+            ) : (
+              items.map(n => (
+                <button key={n.id} onClick={() => { setOpenPanel(false); if (n.link) navigate(n.link) }}
+                  className={`w-full text-left px-3 py-2.5 border-b border-line last:border-0 hover:bg-surface-muted transition-colors duration-fast ${!n.lida ? 'bg-accent/10' : ''}`}>
+                  <p className="text-caption font-semibold text-ink">{n.titulo}</p>
+                  {n.mensagem && <p className="text-caption text-ink-muted mt-0.5">{n.mensagem}</p>}
+                  <p className="text-overline text-ink-muted num mt-1">{new Date(n.created_at).toLocaleString('pt-PT')}</p>
+                </button>
+              ))
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -415,40 +311,41 @@ function PerfilActivoSelector() {
 
   return (
     <div className="relative" ref={ref}>
-      <button onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors hover:bg-white/5"
-        style={{ backgroundColor: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.2)' }}
-        title="Quem esta a operar (para historico de alteracoes)">
-        <UserCheck className="w-3.5 h-3.5 shrink-0" style={{ color: '#C9A84C' }} />
-        <span className="flex-1 text-left truncate" style={{ color: active ? '#fff' : '#888' }}>
-          {active ? active.nome : 'Operar como...'}
+      <button onClick={() => setOpen(!open)} aria-expanded={open}
+        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-caption border border-white/10 hover:bg-white/5 transition-colors duration-fast ease-entry"
+        title="Quem está a operar (para o histórico de alterações)">
+        <UserCheck className="w-3.5 h-3.5 shrink-0 text-neutral-400" />
+        <span className={`flex-1 text-left truncate ${active ? 'text-white' : 'text-neutral-400'}`}>
+          {active ? active.nome : 'Operar como…'}
         </span>
-        <ChevronDown className="w-3 h-3 shrink-0" style={{ color: '#888' }} />
+        <ChevronDown className={`w-3 h-3 shrink-0 text-neutral-500 transition-transform duration-fast ${open ? 'rotate-180' : ''}`} />
       </button>
-      {open && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 bg-neutral-900 rounded-xl shadow-xl border border-neutral-800 z-50 max-h-72 overflow-y-auto">
-          <button onClick={() => escolher(null)}
-            className="w-full text-left px-3 py-2 text-xs hover:bg-white/5 border-b border-neutral-800"
-            style={{ color: '#888' }}>
-            <span className="italic">(sem perfil ativo)</span>
-          </button>
-          {users.length === 0 ? (
-            <p className="text-xs text-neutral-500 py-3 text-center">Sem utilizadores</p>
-          ) : (
-            users.map(u => (
-              <button key={u.id} onClick={() => escolher(u.id)}
-                className={`w-full text-left px-3 py-2 hover:bg-white/5 flex items-center gap-2 border-b border-neutral-800 last:border-0 ${activeId === u.id ? 'bg-white/5' : ''}`}>
-                <span className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
-                  style={{ backgroundColor: u.cor || '#C9A84C' }}>{u.iniciais}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-white truncate">{u.nome}</p>
-                  <p className="text-[10px] text-neutral-500 truncate">{u.role}</p>
-                </div>
-              </button>
-            ))
-          )}
-        </div>
-      )}
+      <AnimatePresence>
+        {open && (
+          <motion.div variants={dialogVariants} initial="initial" animate="animate" exit="exit"
+            className={`${PAINEL} max-h-72 overflow-y-auto`} role="listbox" aria-label="Operar como">
+            <button onClick={() => escolher(null)}
+              className="w-full text-left px-3 py-2 text-caption text-ink-muted italic hover:bg-surface-muted border-b border-line">
+              (sem perfil ativo)
+            </button>
+            {users.length === 0 ? (
+              <p className="text-caption text-ink-muted py-3 text-center">Sem utilizadores</p>
+            ) : (
+              users.map(u => (
+                <button key={u.id} onClick={() => escolher(u.id)} role="option" aria-selected={activeId === u.id}
+                  className={`w-full text-left px-3 py-2 hover:bg-surface-muted flex items-center gap-2 border-b border-line last:border-0 ${activeId === u.id ? 'bg-accent/10' : ''}`}>
+                  <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold text-white shrink-0"
+                    style={{ backgroundColor: u.cor || '#6b6962' }}>{u.iniciais}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-caption text-ink truncate">{u.nome}</p>
+                    <p className="text-overline text-ink-muted truncate">{u.role}</p>
+                  </div>
+                </button>
+              ))
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
