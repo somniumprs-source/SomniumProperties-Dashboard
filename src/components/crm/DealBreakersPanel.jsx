@@ -19,7 +19,10 @@ const ESTADO = {
 }
 // Requisitos que se registam numa aba do imóvel, e não na janela.
 const TAB_DA_ACAO = { vvr: 'analise' }
-const ROTULO_ACAO = { visita: 'Registar visita', preco: 'Indicar preço', proposta: 'Registar proposta', aceite: 'Registar aceitação', vvr: 'Abrir Análise' }
+const ROTULO_ACAO = {
+  visita: 'Registar visita', preco: 'Indicar preço', proposta: 'Registar proposta', aceite: 'Registar aceitação', vvr: 'Abrir Análise',
+  follow_up: 'Indicar motivo e data', chamada_registada: 'Registar chamada', visita_agendada: 'Marcar visita', chamada_agendada: 'Agendar chamada',
+}
 
 export function DealBreakersPanel({ imovelId, imovel, onAbrirTab, onUpdate }) {
   const [aberto, setAberto] = useState(null)

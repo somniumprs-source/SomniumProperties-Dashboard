@@ -3,8 +3,9 @@
  * chamada ou a visita. Cria a tarefa que segue para o Google Calendar (a
  * visita fica também no registo de visitas do imóvel).
  *
- * onAntes (opcional): corre antes de agendar, por exemplo a mudança de fase no
- * Kanban. Se devolver false, não agenda.
+ * onDepois (opcional): corre depois de agendar, por exemplo a mudança de fase no
+ * Kanban, que exige o passo já marcado (requisito de entrada, auditoria D8).
+ * Se devolver false, a janela fica aberta com o aviso.
  */
 import { useEffect, useState } from 'react'
 import { apiFetch } from '../../lib/api.js'
@@ -31,11 +32,12 @@ const TEXTO = {
   visita: { titulo: 'Marcar visita', ajuda: 'Fica no registo de visitas do imóvel e cria a tarefa na agenda.', feito: 'Visita marcada' },
 }
 
-export function AgendarPassoModal({ open = true, imovel, tipo, destino, onAntes, onCancel, onDone }) {
+export function AgendarPassoModal({ open = true, imovel, tipo, destino, onDepois, onCancel, onDone }) {
   const [quando, setQuando] = useState(emHoras(tipo === 'chamada' ? 24 : 48))
   const [tipoChamada, setTipoChamada] = useState(() => chamadaSugerida(destino || imovel?.estado))
   const [visitaAgendada, setVisitaAgendada] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [agendado, setAgendado] = useState(null) // passo já gravado: repetir só move
   const [erro, setErro] = useState('')
   const t = TEXTO[tipo]
 
@@ -54,9 +56,8 @@ export function AgendarPassoModal({ open = true, imovel, tipo, destino, onAntes,
     if (!quando) return setErro('Indica a data e a hora.')
     setErro(''); setSaving(true)
     try {
-      if (onAntes && (await onAntes()) === false) return
       const iso = new Date(quando).toISOString()
-      const r = tipo === 'chamada'
+      const r = agendado ? null : tipo === 'chamada'
         ? await apiFetch(`/api/crm/imoveis/${imovel.id}/proximos-passos`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ tipo: 'chamada', quando: iso, tipo_chamada: tipoChamada }),
@@ -65,10 +66,14 @@ export function AgendarPassoModal({ open = true, imovel, tipo, destino, onAntes,
             method: visitaAgendada ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ imovel_id: imovel.id, data_hora: iso, estado: 'agendada' }),
           })
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao agendar')
+      if (r && !r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao agendar')
       const quandoTxt = new Date(quando).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
       // Imóvel com consultor: a chamada entra no contacto com ele (um só por pessoa).
-      const feito = tipo === 'chamada' ? await r.json().catch(() => ({})) : {}
+      const feito = agendado || (tipo === 'chamada' ? await r.json().catch(() => ({})) : {})
+      if (onDepois && (await onDepois()) === false) {
+        setAgendado(feito)
+        return setErro(`${t.feito}, mas o imóvel não mudou de fase. Tenta de novo para mover.`)
+      }
       onDone?.(feito.consultor
         ? `O imóvel entrou no contacto com ${feito.consultor.nome} (${String(feito.data_contacto || '').slice(0, 10).split('-').reverse().join('/')})`
         : `${t.feito} para ${quandoTxt}`)

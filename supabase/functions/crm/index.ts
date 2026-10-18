@@ -37,7 +37,7 @@ import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
 import { removeFromStorage, supabase, uploadPublic, uploadPrivate } from "../_shared/storage.ts";
 import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { isWholesaling } from "../_shared/modelos.ts";
-import { avaliarEntrada, painelRequisitos } from "../_shared/dealBreakers.ts";
+import { avaliarEntrada, painelRequisitos, carregarDadosEntrada } from "../_shared/dealBreakers.ts";
 import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase, pedeDocumento, documentoDoItem, documentosEmFalta, contextoDocumentos } from "../_shared/projetoTarefas.ts";
 import { baseLegal, mapaEstados, registar, retirar, retirados } from "../_shared/consentimentos.ts";
 import { ensureOportunidadesScraperTable } from "../_shared/oportunidadesScraper.ts";
@@ -931,12 +931,11 @@ const HOOKS_IMOVEIS = {
   // mover no mesmo passo.
   beforeUpdate: async (id: string, body: any) => {
     if (!body.estado) return null;
-    const { rows: [imovel] } = await pool.query(
-      "SELECT estado, ask_price, valor_venda_remodelado, valor_proposta, data_proposta, data_proposta_aceite FROM imoveis WHERE id = $1", [id]);
-    if (!imovel) return null;
+    const dados = await carregarDadosEntrada((sql: string, p: unknown[]) => pool.query(sql, p), id);
+    if (!dados) return null;
+    const { imovel } = dados;
     if (body.estado === imovel.estado) return null;
-    const { rows: visitas } = await pool.query("SELECT data_hora, created_at, ficha FROM visitas WHERE imovel_id = $1", [id]);
-    const r = avaliarEntrada(imovel.estado, body.estado, { imovel: { ...imovel, ...body }, visitas });
+    const r = avaliarEntrada(imovel.estado, body.estado, { ...dados, imovel: { ...imovel, ...body } });
     if (r.bloqueado) {
       return { error: `Faltam requisitos para entrar em «${r.destino}»`, destino: r.destino, requisitos: r.emFalta };
     }
@@ -2817,6 +2816,7 @@ app.post("/imoveis/:id/follow-up", async (c: any) => {
     const fase = faseAoAgendarFollowUp(imovel.estado, destino);
     if (!fase.aplica) return c.json({ error: "Imóvel com negócio fechado: o acompanhamento faz-se no Departamento de Obras, não há follow-up" }, 400);
     if (fase.mover && !(motivo || "").trim()) return c.json({ error: `Indica o motivo: é a justificação da passagem para «${fase.mover}»` }, 400);
+    if (fase.mover && !juntar && data < new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Lisbon' })) return c.json({ error: "A data tem de ser hoje ou depois: entrar na fase pede um passo à frente" }, 400);
     // Imóvel com consultor: o follow-up é um assunto do contacto com ele (um
     // só próximo contacto por pessoa), não uma tarefa do imóvel.
     const user = await resolveCrmUser(c);
@@ -3319,11 +3319,9 @@ app.put("/imoveis/:id/fotos/:fotoId/mover", async (c: any) => {
 // ── Deal breakers do imóvel (painel do Comercial) — port de routes.js ──
 app.get("/imoveis/:id/deal-breakers", async (c: any) => {
   try {
-    const { rows: [imovel] } = await pool.query(
-      "SELECT estado, ask_price, valor_venda_remodelado, valor_proposta, data_proposta, data_proposta_aceite FROM imoveis WHERE id = $1", [c.req.param("id")]);
-    if (!imovel) return c.json({ error: "Imóvel não encontrado" }, 404);
-    const { rows: visitas } = await pool.query("SELECT data_hora, created_at, ficha FROM visitas WHERE imovel_id = $1", [c.req.param("id")]);
-    return c.json(painelRequisitos({ imovel, visitas }, imovel.estado));
+    const dados = await carregarDadosEntrada((sql: string, p: unknown[]) => pool.query(sql, p), c.req.param("id"));
+    if (!dados) return c.json({ error: "Imóvel não encontrado" }, 404);
+    return c.json(painelRequisitos(dados, dados.imovel.estado));
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 

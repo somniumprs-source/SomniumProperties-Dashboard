@@ -42,7 +42,7 @@ import { scrapePhotosFromLink } from './linkScraper.js'
 import { generateDocx, getAvailableTypes } from './docxGenerator.js'
 import { runEstudoLocalizacao } from '../lib/estudoLocalizacao.js'
 import { FASES_FIX_FLIP, FASES_POR_CATEGORIA, getTemplateFases, getFaseConfigGlobal } from './fasesFixFlip.js'
-import { avaliarEntrada, painelRequisitos } from './dealBreakers.js'
+import { avaliarEntrada, painelRequisitos, carregarDadosEntrada } from './dealBreakers.js'
 import { carregarChecklist, gravarManual } from './checklistImovel.js'
 import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase, pedeDocumento, documentoDoItem, documentosEmFalta, contextoDocumentos } from './projetoTarefas.js'
 import { baseLegal, mapaEstados, registar, retirar, retirados } from './consentimentos.js'
@@ -467,12 +467,11 @@ const HOOKS_IMOVEIS = {
   // mover no mesmo passo.
   beforeUpdate: async (id, body) => {
     if (!body.estado) return null
-    const { rows: [imovel] } = await pool.query(
-      'SELECT estado, ask_price, valor_venda_remodelado, valor_proposta, data_proposta, data_proposta_aceite FROM imoveis WHERE id = $1', [id])
-    if (!imovel) return null
+    const dados = await carregarDadosEntrada((sql, p) => pool.query(sql, p), id)
+    if (!dados) return null
+    const { imovel } = dados
     if (body.estado === imovel.estado) return null
-    const { rows: visitas } = await pool.query('SELECT data_hora, created_at, ficha FROM visitas WHERE imovel_id = $1', [id])
-    const r = avaliarEntrada(imovel.estado, body.estado, { imovel: { ...imovel, ...body }, visitas })
+    const r = avaliarEntrada(imovel.estado, body.estado, { ...dados, imovel: { ...imovel, ...body } })
     if (r.bloqueado) {
       return { error: `Faltam requisitos para entrar em «${r.destino}»`, destino: r.destino, requisitos: r.emFalta }
     }
@@ -2289,6 +2288,7 @@ router.post('/imoveis/:id/follow-up', async (req, res) => {
     const fase = faseAoAgendarFollowUp(imovel.estado, destino)
     if (!fase.aplica) return res.status(400).json({ error: 'Imóvel com negócio fechado: o acompanhamento faz-se no Departamento de Obras, não há follow-up' })
     if (fase.mover && !(motivo || '').trim()) return res.status(400).json({ error: `Indica o motivo: é a justificação da passagem para «${fase.mover}»` })
+    if (fase.mover && !juntar && data < new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Lisbon' })) return res.status(400).json({ error: 'A data tem de ser hoje ou depois: entrar na fase pede um passo à frente' })
     // Imóvel com consultor: o follow-up é um assunto do contacto com ele (um
     // só próximo contacto por pessoa), não uma tarefa do imóvel.
     const noContacto = imovel.consultor_id && !sem_sucesso
@@ -2752,11 +2752,9 @@ router.put('/imoveis/:id/fotos/:fotoId/mover', async (req, res) => {
 // ── Requisitos da próxima fase do imóvel (painel do Comercial) ─
 router.get('/imoveis/:id/deal-breakers', async (req, res) => {
   try {
-    const { rows: [imovel] } = await pool.query(
-      'SELECT estado, ask_price, valor_venda_remodelado, valor_proposta, data_proposta, data_proposta_aceite FROM imoveis WHERE id = $1', [req.params.id])
-    if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' })
-    const { rows: visitas } = await pool.query('SELECT data_hora, created_at, ficha FROM visitas WHERE imovel_id = $1', [req.params.id])
-    res.json(painelRequisitos({ imovel, visitas }, imovel.estado))
+    const dados = await carregarDadosEntrada((sql, p) => pool.query(sql, p), req.params.id)
+    if (!dados) return res.status(404).json({ error: 'Imóvel não encontrado' })
+    res.json(painelRequisitos(dados, dados.imovel.estado))
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 

@@ -1,20 +1,49 @@
 // Requisitos de entrada das fases do pipeline de imóveis. Cada fase valida só
 // o que ela própria precisa, venha o imóvel de onde vier: fases saltadas nunca
-// são cobradas e as excecionais não exigem nada. Os mesmos requisitos servem o
-// travão do servidor, o painel do imóvel e a janela que abre ao mudar de fase.
+// são cobradas. Os mesmos requisitos servem o travão do servidor, o painel do
+// imóvel e a janela que abre ao mudar de fase.
+// Fases de espera e de agendamento (auditoria D8): entrar nelas exige o próximo
+// passo marcado, para nenhum imóvel ficar parado sem data nem motivo. Continuam
+// a poder ser saltadas: só se valida a fase de destino.
 // Espelho: supabase/functions/_shared/dealBreakers.ts (manter em sync).
 import { normalizeFicha, CHECKLIST_SECTIONS } from '../constants/fichaVisitaSchema.js'
 import { MODELOS_FECHO, limpaEstado, indiceFase, tipoFase, eSaida } from '../constants/pipelineImoveis.js'
 
 // Fases com requisitos de entrada, pela ordem do caminho principal. Os três
 // modelos de fecho partilham o mesmo requisito.
-const FASES_COM_REQUISITOS = ['Estudo de VVR', 'Criar Proposta ao Proprietário', 'Em negociação', 'Proposta aceite', ...MODELOS_FECHO]
+const FASES_ESPERA = ['Pendentes', 'Follow UP', 'Follow Up após proposta']
+const FASES_AGENDAMENTO = ['Chamada Não Atendida', 'Necessidade de Visita', 'Visita Marcada']
+const FASES_COM_REQUISITOS = [...FASES_AGENDAMENTO, ...FASES_ESPERA, 'Estudo de VVR', 'Criar Proposta ao Proprietário', 'Em negociação', 'Proposta aceite', ...MODELOS_FECHO]
 
 const n = v => {
   const x = parseFloat(String(v ?? '').replace(',', '.'))
   return Number.isFinite(x) ? x : 0
 }
 const temTexto = v => v !== null && v !== undefined && String(v).trim() !== ''
+const hojeLisboa = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Lisbon' })
+const dataPt = d => String(d).slice(0, 10).split('-').reverse().join('/')
+const isoData = v => (v instanceof Date ? (isNaN(v) ? '' : v.toISOString()) : String(v || '')).slice(0, 10)
+
+// Dados que os requisitos leem. query(sql, params) → { rows }.
+//   contactos: próxima chamada ou follow-up por fazer, do próprio imóvel ou no
+//   contacto com o consultor em que o imóvel é assunto.
+export async function carregarDadosEntrada(query, id) {
+  const { rows: [imovel] } = await query(
+    `SELECT estado, ask_price, valor_venda_remodelado, valor_proposta, data_proposta, data_proposta_aceite,
+            data_chamada, data_follow_up, motivo_follow_up FROM imoveis WHERE id = $1`, [id])
+  if (!imovel) return null
+  const [{ rows: visitas }, { rows: contactos }] = await Promise.all([
+    query('SELECT data_hora, created_at, estado, investidor_id, ficha FROM visitas WHERE imovel_id = $1', [id]),
+    query(`SELECT t.inicio, t.data_limite FROM tarefas t
+            WHERE t.origem_tipo = 'imovel' AND t.origem_id = $1 AND t.origem_campo IN ('proxima_chamada', 'data_follow_up')
+              AND t.status <> 'Concluída' AND COALESCE(t.arquivada, false) = false
+           UNION ALL
+           SELECT t.inicio, t.data_limite FROM contacto_assuntos a JOIN tarefas t ON t.id = a.origem_id
+            WHERE a.origem = 'tarefa' AND a.imovel_id = $1 AND t.origem_campo = 'proximo_contacto'
+              AND t.status <> 'Concluída' AND COALESCE(t.arquivada, false) = false`, [id]),
+  ])
+  return { imovel, visitas, contactos }
+}
 
 function temConteudo(f) {
   const nc = f.preVisita.notasCampo
@@ -75,6 +104,27 @@ export function requisitosVisita(visitas) {
 export function requisitosDeEntrada(estado, dados = {}) {
   const fase = limpaEstado(estado)
   const im = dados.imovel || {}
+  // fase: a janela de registo usa-a para gravar o follow-up na fase certa.
+  if (FASES_ESPERA.includes(fase)) {
+    const motivo = temTexto(im.motivo_follow_up)
+    const d = isoData(im.data_follow_up)
+    const data = /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= hojeLisboa()
+    const falta = [!motivo && 'o motivo', !data && (d ? `uma data nova (a de ${dataPt(d)} já passou)` : 'a data')].filter(Boolean)
+    const titulo = fase === 'Pendentes' ? 'Motivo e data de reativação' : 'Motivo e data do follow-up'
+    return [{ ...item('follow_up', titulo, falta.length ? 'por_fazer' : 'ok', falta.length ? `Falta ${falta.join(' e ')}` : null, 'follow_up', 'Próximos passos'), fase }]
+  }
+  if (fase === 'Chamada Não Atendida') {
+    const ok = (dados.contactos || []).length > 0
+    return [item('chamada_agendada', 'Próxima tentativa agendada', ok ? 'ok' : 'por_fazer', ok ? null : 'Falta agendar a próxima chamada', 'chamada_agendada', 'Próximos passos')]
+  }
+  if (fase === 'Necessidade de Visita') {
+    const ok = temTexto(im.data_chamada)
+    return [item('chamada_registada', 'Primeira chamada registada', ok ? 'ok' : 'por_fazer', ok ? null : 'Falta a data da primeira chamada', 'chamada_registada', 'Ficha do imóvel')]
+  }
+  if (fase === 'Visita Marcada') {
+    const ok = (dados.visitas || []).some(v => v.estado !== 'cancelada' && !v.investidor_id && v.data_hora)
+    return [item('visita_agendada', 'Visita marcada com data e hora', ok ? 'ok' : 'por_fazer', ok ? null : 'Falta marcar a visita', 'visita_agendada', 'Visitas')]
+  }
   if (fase === 'Estudo de VVR') {
     const preco = n(im.ask_price) > 0
     return [
@@ -141,6 +191,10 @@ export function painelRequisitos(dados, estadoAtual) {
 
   // Visita por registar em imóveis que já estão no estudo ou mais à frente.
   const avisos = []
+  // Imóvel que entrou numa fase de espera ou de agendamento antes do travão (D8).
+  if ([...FASES_ESPERA, ...FASES_AGENDAMENTO].includes(atual)) {
+    avisos.push(...requisitosDeEntrada(atual, dados).filter(i => i.estado !== 'ok'))
+  }
   const jaPassouEstudo = (tipo === 'principal' && idx >= indiceFase('Estudo de VVR')) || MODELOS_FECHO.includes(atual)
   if (jaPassouEstudo && !fichaMaisRecente(dados.visitas)) {
     avisos.push(item('visita', 'Visita por registar', 'por_fazer', 'O imóvel já passou o estudo sem visita registada', 'visita', 'Visitas'))

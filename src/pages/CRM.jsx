@@ -446,11 +446,12 @@ function RelatorioInvestidores() {
   )
 }
 
-// ── Modal: capturar motivo (+ data) ao mover imóvel para Follow UP / Não interessa
+// ── Modal: capturar motivo (+ data) ao mover imóvel para Follow UP, Pendentes ou Não interessa
 function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
   const isFollowUp = moveModal.type === 'follow_up'
   const today = new Date().toISOString().slice(0, 10)
-  const [data, setData] = useState(String(item?.data_follow_up || '').slice(0, 10) || today)
+  // Data guardada só se ainda não passou: entrar na fase pede um passo à frente.
+  const [data, setData] = useState(() => { const d = String(item?.data_follow_up || '').slice(0, 10); return d >= today ? d : today })
   const initialMotivo = isFollowUp ? (item?.motivo_follow_up || '') : (item?.motivo_nao_interessa || '')
   const padraoSet = new Set(MOTIVOS_NAO_INTERESSA_PADRAO)
   const partesIniciais = initialMotivo.split(/;\s*/).map(s => s.trim()).filter(Boolean)
@@ -488,7 +489,7 @@ function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
 
   return (
     <Modal open onClose={onCancel} size="md"
-      title={isFollowUp ? 'Mover para Follow UP' : 'Mover para Não Interessa'}
+      title={isFollowUp ? `Mover para ${moveModal.newColumn}` : 'Mover para Não Interessa'}
       subtitle={item?.nome ? `Imóvel: ${item.nome}` : 'Indica o motivo da transição.'}
       footer={
         <Modal.Footer>
@@ -500,8 +501,8 @@ function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
       }>
         {isFollowUp && (
           <div className="mb-4">
-            <label className="text-xs font-medium text-ink-muted block mb-1">Data do follow-up * (cria a tarefa na agenda)</label>
-            <input type="date" value={data || ''} onChange={e => setData(e.target.value)}
+            <label className="text-xs font-medium text-ink-muted block mb-1">{moveModal.newColumn === 'Pendentes' ? 'Data de reativação' : 'Data do follow-up'} * (cria a tarefa na agenda)</label>
+            <input type="date" min={today} value={data || ''} onChange={e => setData(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-line bg-surface-raised text-ink text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 transition-colors duration-fast" />
           </div>
         )}
@@ -528,7 +529,7 @@ function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
 
         <div>
           <label className="text-xs font-medium text-ink-muted block mb-1">
-            {isFollowUp ? 'Motivo do Follow Up *' : 'Outras notas (opcional)'}
+            {isFollowUp ? (moveModal.newColumn === 'Pendentes' ? 'Motivo (o que falta resolver) *' : 'Motivo do Follow Up *') : 'Outras notas (opcional)'}
           </label>
           <textarea value={notas} onChange={e => setNotas(e.target.value)} rows={isFollowUp ? 4 : 2}
             placeholder={isFollowUp ? 'Ex: Aguardar resposta do proprietário…' : 'Ex: detalhe específico, contexto adicional…'}
@@ -895,14 +896,16 @@ export function CRM() {
 
   async function handleMove(id, newColumn) {
     if (!kanbanConfig) return
-    // Imóveis: capturar motivo ao mover para Follow Up ou Não interessa via Kanban
-    const isFollowUpCol = newColumn === 'Follow UP' || newColumn === 'Follow Up' || newColumn === 'Follow Up após proposta'
+    // Imóveis: capturar motivo (e data) ao mover para Follow Up, Pendentes ou
+    // Não interessa via Kanban. Pendentes passa pela mesma porta do follow-up.
+    const isFollowUpCol = ['Follow UP', 'Follow Up', 'Follow Up após proposta', 'Pendentes'].includes(newColumn)
     const isNaoInteressaCol = newColumn === 'Não interessa' || newColumn === 'Nao interessa'
     if (tab === 'Imóveis' && (isFollowUpCol || isNaoInteressaCol)) {
       setMoveModal({ id, newColumn, type: isFollowUpCol ? 'follow_up' : 'nao_interessa' })
       return
     }
-    // Imóveis: fases que pedem uma data agendada (próxima chamada, visita)
+    // Imóveis: fases que pedem uma data agendada (próxima chamada, visita). O
+    // passo grava-se primeiro e só depois muda a fase (requisito de entrada).
     const passo = { 'Chamada Não Atendida': 'chamada', 'Visita Marcada': 'visita' }[newColumn]
     if (tab === 'Imóveis' && passo) {
       setAgendar({ id, newColumn, tipo: passo })
@@ -1298,7 +1301,7 @@ export function CRM() {
                   tipo={agendar.tipo}
                   destino={agendar.newColumn}
                   onCancel={() => setAgendar(null)}
-                  onAntes={() => persistMove(agendar.id, agendar.newColumn)}
+                  onDepois={() => persistMove(agendar.id, agendar.newColumn)}
                   onDone={msg => { setAgendar(null); toast(msg, 'success') }}
                 />
               )}

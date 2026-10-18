@@ -6,7 +6,7 @@
 // Lógica preservada verbatim, só ganhou o parâmetro `funcionario` (antes
 // fixo em 'Alexandre Mendes').
 import pool from "./pg.ts";
-import { avaliarEntrada } from "./dealBreakers.ts";
+import { avaliarEntrada, carregarDadosEntrada } from "./dealBreakers.ts";
 import Anthropic from "@anthropic-ai/sdk";
 
 const pgQuery = (text: string, params?: any[]) => pool.query(text, params);
@@ -121,9 +121,8 @@ TODAS as tarefas devem ser sincronizadas com Google Calendar.`,
     const im = imoveis.find((i: any) => i.nome.toLowerCase().includes(entNome.toLowerCase()));
     if (im) {
       // Mesmo travão do Kanban e da ficha (requisitos de entrada da fase).
-      const { rows: [atual] } = await pgQuery("SELECT estado, ask_price, valor_venda_remodelado, valor_proposta, data_proposta, data_proposta_aceite FROM imoveis WHERE id = $1", [im.id]);
-      const { rows: visitas } = await pgQuery("SELECT data_hora, created_at, ficha FROM visitas WHERE imovel_id = $1", [im.id]);
-      const entrada = avaliarEntrada(atual?.estado, parsed.novo_estado, { imovel: atual || {}, visitas });
+      const dados = await carregarDadosEntrada(pgQuery, im.id);
+      const entrada = avaliarEntrada(dados?.imovel?.estado, parsed.novo_estado, dados || {});
       if (entrada.bloqueado) {
         msg = `"${im.nome}" não foi movido para "${parsed.novo_estado}". Falta: ${entrada.emFalta.map(i => i.titulo).join(', ')}`;
       } else {

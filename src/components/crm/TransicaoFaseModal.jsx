@@ -4,12 +4,18 @@
  * só isso, grava no sítio real (visita, campos do imóvel) e devolve ao pai os
  * campos que seguem com a mudança de fase.
  *
+ * Fases de espera e de agendamento (auditoria D8): o follow-up segue pela
+ * porta única /follow-up (que também muda a fase); a visita e a chamada
+ * agendam-se antes de a fase mudar; a data da primeira chamada segue com a
+ * mudança de fase.
+ *
  * mover=true  → o pai repete a mudança de fase com os campos (onConfirm).
  * mover=false → só regista o que falta, sem mudar de fase (painel do imóvel).
  */
 import { useEffect, useState } from 'react'
 import { apiFetch } from '../../lib/api.js'
 import { DECISOES, normalizeFicha } from '../../constants/fichaVisitaSchema.js'
+import { chamadaSugerida } from '../../constants/pipelineImoveis.js'
 import { Modal } from '../ui/Modal.jsx'
 import { Button } from '../ui/Button.jsx'
 
@@ -26,6 +32,12 @@ const EFEITO_DECISAO = {
 const hoje = () => new Date().toISOString().slice(0, 10)
 const agoraLocal = () => {
   const d = new Date()
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
+  return d.toISOString().slice(0, 16)
+}
+const emHoras = h => {
+  const d = new Date(Date.now() + h * 3600000)
+  d.setMinutes(0, 0, 0)
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
   return d.toISOString().slice(0, 16)
 }
@@ -53,6 +65,16 @@ export function TransicaoFaseModal({ open = true, imovel, destino, requisitos = 
   const pedeAceite = acoes.has('aceite')
   const pedeVvr = acoes.has('vvr')
   const soVvr = pedeVvr && acoes.size === 1
+  const reqFollowUp = requisitos.find(r => r.acao === 'follow_up')
+  const faseFollowUp = reqFollowUp?.fase || destino
+  const pedeChamadaReg = acoes.has('chamada_registada')
+  const pedeVisitaAg = acoes.has('visita_agendada')
+  const pedeChamadaAg = acoes.has('chamada_agendada')
+  const [fu, setFu] = useState(() => {
+    const d = String(imovel?.data_follow_up || '').slice(0, 10)
+    return { motivo: imovel?.motivo_follow_up || '', data: d >= hoje() ? d : hoje() }
+  })
+  const [agenda, setAgenda] = useState({ chamada: (imovel?.data_chamada || '').slice(0, 10) || hoje(), visita: emHoras(48), proxima: emHoras(24) })
 
   const [visitaExistente, setVisitaExistente] = useState(null)
   const [v, setV] = useState({ data: agoraLocal(), decisao: '', area: '', obra: '', motivo: '', proximo: hoje(), faseEspera: '' })
@@ -111,8 +133,21 @@ export function TransicaoFaseModal({ open = true, imovel, destino, requisitos = 
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao guardar')
   }
 
+  async function post(url, body, falha) {
+    const r = await apiFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || falha)
+    return r.json().catch(() => ({}))
+  }
+
   async function confirmar() {
     setErro('')
+    if (reqFollowUp) {
+      if (!fu.motivo.trim()) return setErro('Indica o motivo.')
+      if (!fu.data || fu.data < hoje()) return setErro('Indica uma data a partir de hoje.')
+    }
+    if (pedeChamadaReg && !agenda.chamada) return setErro('Indica a data da primeira chamada.')
+    if (pedeVisitaAg && !agenda.visita) return setErro('Indica a data e a hora da visita.')
+    if (pedeChamadaAg && !agenda.proxima) return setErro('Indica a data e a hora da próxima tentativa.')
     if (pedeVisita) {
       if (!v.data || !v.decisao || v.area === '' || v.obra === '') return setErro('Preenche a data, a decisão, a área medida e o custo de obra (pode ser 0).')
       if (v.decisao === 'NO_GO' && !v.motivo.trim()) return setErro('Indica o motivo do NO GO.')
@@ -126,6 +161,19 @@ export function TransicaoFaseModal({ open = true, imovel, destino, requisitos = 
 
     setSaving(true)
     try {
+      if (reqFollowUp) {
+        const { estado, consultor } = await post(`/api/crm/imoveis/${imovel.id}/follow-up`,
+          { data: fu.data, motivo: fu.motivo.trim(), destino: faseFollowUp }, 'Erro ao agendar o follow-up')
+        const onde = consultor ? `o follow-up entrou no contacto com ${consultor.nome}` : 'o follow-up está na agenda'
+        return onResolvido?.(estado ? `O imóvel passou para «${estado}» e ${onde}.` : `Guardado: ${onde}.`)
+      }
+      if (pedeVisitaAg) {
+        await post('/api/crm/visitas', { imovel_id: imovel.id, data_hora: new Date(agenda.visita).toISOString(), estado: 'agendada' }, 'Erro ao marcar a visita')
+      }
+      if (pedeChamadaAg) {
+        await post(`/api/crm/imoveis/${imovel.id}/proximos-passos`,
+          { tipo: 'chamada', quando: new Date(agenda.proxima).toISOString(), tipo_chamada: chamadaSugerida(destino || imovel?.estado) }, 'Erro ao agendar a chamada')
+      }
       if (pedeVisita) {
         await gravarVisita()
         if (v.decisao === 'NO_GO') {
@@ -150,9 +198,10 @@ export function TransicaoFaseModal({ open = true, imovel, destino, requisitos = 
       if (pedeProposta || pedeAceite) extra.valor_proposta = Number(campos.valor_proposta)
       if (pedeProposta) extra.data_proposta = campos.data_proposta
       if (pedeAceite) extra.data_proposta_aceite = campos.data_proposta_aceite
+      if (pedeChamadaReg) extra.data_chamada = agenda.chamada
       if (mover) return await onConfirm?.(extra)
       if (Object.keys(extra).length) await put(extra)
-      onResolvido?.(pedeVisita ? 'Visita registada.' : 'Guardado.')
+      onResolvido?.(pedeVisita ? 'Visita registada.' : pedeVisitaAg ? 'Visita marcada.' : pedeChamadaAg ? 'Chamada agendada.' : 'Guardado.')
     } catch (e) {
       setErro(e.message)
     } finally {
@@ -177,6 +226,36 @@ export function TransicaoFaseModal({ open = true, imovel, destino, requisitos = 
         </Modal.Footer>
       }>
         <div className="space-y-3">
+          {reqFollowUp && (
+            <>
+              <Campo label={faseFollowUp === 'Pendentes' ? 'Motivo (o que falta resolver)' : 'Motivo do follow-up'}>
+                <textarea rows={3} className={inputClass} value={fu.motivo} autoFocus
+                  onChange={e => setFu(p => ({ ...p, motivo: e.target.value }))} />
+              </Campo>
+              <Campo label={`${faseFollowUp === 'Pendentes' ? 'Data de reativação' : 'Data do follow-up'} (cria a tarefa na agenda)`}>
+                <input type="date" min={hoje()} className={inputClass} value={fu.data} onChange={e => setFu(p => ({ ...p, data: e.target.value }))} />
+              </Campo>
+            </>
+          )}
+
+          {pedeChamadaReg && (
+            <Campo label="Data da primeira chamada ao proprietário ou consultor">
+              <input type="date" max={hoje()} className={inputClass} value={agenda.chamada} onChange={e => setAgenda(p => ({ ...p, chamada: e.target.value }))} />
+            </Campo>
+          )}
+
+          {pedeVisitaAg && (
+            <Campo label="Data e hora da visita (fica no registo de visitas e na agenda)">
+              <input type="datetime-local" className={inputClass} value={agenda.visita} onChange={e => setAgenda(p => ({ ...p, visita: e.target.value }))} />
+            </Campo>
+          )}
+
+          {pedeChamadaAg && (
+            <Campo label="Data e hora da próxima tentativa (cria a tarefa na agenda)">
+              <input type="datetime-local" className={inputClass} value={agenda.proxima} onChange={e => setAgenda(p => ({ ...p, proxima: e.target.value }))} />
+            </Campo>
+          )}
+
           {pedePreco && (
             <Campo label="Preço pedido (€)">
               <input type="number" min="0" step="any" className={inputClass} value={campos.ask_price}
