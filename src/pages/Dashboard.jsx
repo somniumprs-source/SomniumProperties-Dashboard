@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { TrendingUp, Clock, Calculator, Megaphone, Handshake, Timer, Wallet } from 'lucide-react'
 import { Header } from '../components/layout/Header.jsx'
+import { ErrorState } from '../components/ui/ErrorState.jsx'
 import { DepartmentSection } from '../components/dashboard/DepartmentSection.jsx'
 import { ComercialDashboard } from '../components/dashboard/ComercialDashboard.jsx'
 import { FinanceiroDashboard } from '../components/dashboard/FinanceiroDashboard.jsx'
@@ -18,7 +19,7 @@ const DEPT_TABS = [
   { key: 'comercial',  label: 'Comercial',  icon: Handshake,   tone: 'gold' },
   { key: 'operacoes',  label: 'Operações',  icon: Timer,      tone: 'amber' },
   { key: 'financeiro', label: 'Financeiro', icon: Wallet, tone: 'green' },
-  { key: 'marketing',  label: 'Marketing',  icon: Megaphone,  tone: 'indigo' },
+  { key: 'marketing',  label: 'Marketing',  icon: Megaphone,  tone: 'gray' },
 ]
 
 const REFRESH_INTERVAL_MS = 30_000
@@ -151,7 +152,7 @@ export function Dashboard() {
       dept: 'financeiro',
       title: 'Financeiro',
       icon: TrendingUp,
-      color: 'bg-emerald-600',
+      color: 'bg-success',
       link: '/financeiro',
       kpis: [
         { label: 'Pipeline de Lucro',  value: finKpis ? formatEur(finKpis.lucroEstimadoTotal) : '—', meta: formatEur(100000), status: finKpis ? statusFromValue(finKpis.lucroEstimadoTotal, 100000) : 'yellow', trend: 'neutral', unit: '' },
@@ -164,7 +165,7 @@ export function Dashboard() {
       dept: 'financeiro',
       title: 'Análises de Rentabilidade',
       icon: Calculator,
-      color: 'bg-yellow-600',
+      color: 'bg-warning',
       link: '/crm',
       kpis: [
         { label: 'Pipeline Lucro Líq.', value: formatEur(anaKpis.pipeline_lucro_liquido), meta: formatEur(100000), status: statusFromValue(anaKpis.pipeline_lucro_liquido, 100000), trend: 'neutral', unit: '' },
@@ -187,9 +188,7 @@ export function Dashboard() {
       />
       <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
         {error && (
-          <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">
-            Erro ao carregar KPIs: {error}
-          </div>
+          <ErrorState compact title="Não foi possível carregar os indicadores" error={error} onRetry={refreshManual} />
         )}
 
         {/* Skeleton inicial — só aparece no primeiro boot (quando ainda não há
@@ -197,43 +196,27 @@ export function Dashboard() {
             visíveis sem flash. */}
         {loading && !error && !pulse && !kpis && <KPISkeleton count={8} />}
 
-        {/* Banner principal — refinado em linha com Projetos */}
-        <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 text-white shadow-lg bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700">
-          <div className="absolute top-0 right-0 w-72 h-72 bg-brand-gold/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-          <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-brand-gold to-transparent" />
-
-          <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <p className="text-overline uppercase tracking-widest font-semibold text-brand-gold mb-1.5">Dashboard Empresarial</p>
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Visão Geral do Negócio</h2>
-              <p className="text-sm mt-1 text-white/60">Todos os departamentos em tempo real</p>
-            </div>
-            <div className="hidden sm:flex items-center gap-7">
-              {pulse && (
-                <div className="text-right">
-                  <p className="text-3xl font-bold font-mono" style={{ color: PULSE_COLOR[pulse.status] ?? '#C9A84C' }}>{pulse.score}</p>
-                  <p className="text-overline mt-0.5 uppercase tracking-widest font-semibold" style={{ color: PULSE_COLOR[pulse.status] ?? '#888' }}>{pulse.status}</p>
-                </div>
-              )}
-              <div className="text-right">
-                <p className="text-3xl font-bold font-mono text-brand-gold">{ns?.roicAnualizado != null ? `${ns.roicAnualizado}%` : '—'}</p>
-                <p className="text-overline mt-0.5 uppercase tracking-widest font-semibold text-white/40">ROIC anual · North Star</p>
+        {/* Saúde do negócio: score, North Star e alertas transversais numa só faixa */}
+        {(pulse || ns) && (
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-3 rounded-xl border border-line bg-surface-raised px-4 sm:px-5 py-3.5 shadow-xs">
+            {pulse && (
+              <div className="flex items-baseline gap-2">
+                <span className="w-2 h-2 rounded-full self-center" style={{ backgroundColor: PULSE_COLOR[pulse.status] ?? '#6b6962' }} aria-hidden="true" />
+                <span className="font-display text-2xl text-ink num leading-none">{pulse.score}</span>
+                <span className="text-caption text-ink-muted">saúde · {pulse.status}</span>
               </div>
+            )}
+            <div className="flex items-baseline gap-2">
+              <span className="font-display text-2xl text-ink num leading-none">{ns?.roicAnualizado != null ? `${ns.roicAnualizado}%` : '—'}</span>
+              <span className="text-caption text-ink-muted">ROIC anual · North Star</span>
             </div>
-            <div className="absolute right-6 top-1/2 -translate-y-1/2 opacity-5 pointer-events-none">
-              <img src="/logo-transparent.png" alt="" className="w-auto" style={{ height: 48 }} />
-            </div>
-          </div>
-        </div>
-
-        {/* Header de saúde — alertas transversais (o score está no banner).
-            Atividade detalhada vive no bloco de cada departamento, com período. */}
-        {pulse && (pulse.alertas.imoveisParados > 0 || pulse.alertas.investSemContacto > 0 || pulse.alertas.consFollowUpAtrasado > 0) && (
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-xl px-4 py-3 border bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-xs">
-            <span className="font-semibold text-neutral-400 uppercase tracking-widest text-[10px]">Saúde</span>
-            {pulse.alertas.imoveisParados > 0 && <span className="text-red-600">⚠ {pulse.alertas.imoveisParados} imóveis parados</span>}
-            {pulse.alertas.investSemContacto > 0 && <span className="text-orange-600">⚠ {pulse.alertas.investSemContacto} investidores sem contacto</span>}
-            {pulse.alertas.consFollowUpAtrasado > 0 && <span className="text-yellow-700">⚠ {pulse.alertas.consFollowUpAtrasado} follow-ups atrasados</span>}
+            {pulse && (pulse.alertas.imoveisParados > 0 || pulse.alertas.investSemContacto > 0 || pulse.alertas.consFollowUpAtrasado > 0) && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-caption sm:ml-auto">
+                {pulse.alertas.imoveisParados > 0 && <span className="text-danger">{pulse.alertas.imoveisParados} imóveis parados</span>}
+                {pulse.alertas.investSemContacto > 0 && <span className="text-warning">{pulse.alertas.investSemContacto} investidores sem contacto</span>}
+                {pulse.alertas.consFollowUpAtrasado > 0 && <span className="text-warning">{pulse.alertas.consFollowUpAtrasado} follow-ups atrasados</span>}
+              </div>
+            )}
           </div>
         )}
 
@@ -257,7 +240,7 @@ export function Dashboard() {
           {(dept === 'comercial' || dept === 'financeiro') && (
             <div className="flex items-center justify-end gap-3">
               {dashData?.intervalo && (
-                <span className="text-[11px] text-neutral-400 hidden sm:inline">{dashData.intervalo.de} a {dashData.intervalo.ate}</span>
+                <span className="text-[11px] text-ink-muted hidden sm:inline">{dashData.intervalo.de} a {dashData.intervalo.ate}</span>
               )}
               <PeriodSelector value={periodo} onChange={setPeriodo} />
             </div>
@@ -271,7 +254,7 @@ export function Dashboard() {
         {(dept === 'financeiro' || dept === 'operacoes') && !loading && deptSections.length > 0 && (
           <>
             {dept === 'financeiro' && (
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-neutral-400 -mb-2">Tesouraria & Análises (totais atuais)</p>
+              <p className="text-overline uppercase text-ink-muted -mb-2">Tesouraria e análises (totais atuais)</p>
             )}
             <Stagger className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
               {deptSections.map((s) => (
@@ -284,13 +267,12 @@ export function Dashboard() {
         )}
 
         {dept === 'marketing' && (
-          <div className="flex flex-col items-center justify-center text-center py-16 rounded-2xl border border-dashed border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900">
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3"
-              style={{ backgroundColor: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.25)' }}>
-              <Megaphone className="w-6 h-6" style={{ color: '#C9A84C' }} />
+          <div className="flex flex-col items-center justify-center text-center py-16 rounded-2xl border border-dashed border-line  bg-surface-raised ">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3 bg-surface-muted">
+              <Megaphone className="w-6 h-6 text-ink-muted" />
             </div>
-            <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-200">Marketing — a montar</p>
-            <p className="text-xs text-neutral-500 mt-1 max-w-sm">Métricas, KPIs e OKRs de marketing entram na próxima fase, no mesmo formato do Comercial.</p>
+            <p className="text-sm font-semibold text-ink ">Marketing — a montar</p>
+            <p className="text-xs text-ink-muted mt-1 max-w-sm">Métricas, KPIs e OKRs de marketing entram na próxima fase, no mesmo formato do Comercial.</p>
           </div>
         )}
       </div>

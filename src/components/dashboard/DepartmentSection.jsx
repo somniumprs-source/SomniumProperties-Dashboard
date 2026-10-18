@@ -4,24 +4,19 @@ import { ArrowRight } from 'lucide-react'
 
 export function DepartmentSection({ title, icon: Icon, kpis, link }) {
   return (
-    <div className="bg-white rounded-2xl overflow-hidden flex flex-col"
-      style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.05)' }}>
+    <div className="bg-surface-raised rounded-xl border border-line shadow-xs overflow-hidden flex flex-col">
 
-      {/* Header — preto com acento dourado */}
-      <div className="px-5 py-4 flex items-center justify-between"
-        style={{ backgroundColor: '#0d0d0d', borderBottom: '1px solid #1a1a1a' }}>
+      <div className="px-5 py-3.5 flex items-center justify-between border-b border-line">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: '#1a1a1a', border: '1px solid #2a2a2a' }}>
-            <Icon className="w-4 h-4" style={{ color: '#C9A84C' }} />
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-surface-muted">
+            <Icon className="w-4 h-4 text-ink-muted" />
           </div>
-          <h2 className="font-bold text-sm tracking-wide text-white">{title}</h2>
+          <h2 className="text-ui font-semibold text-ink">{title}</h2>
         </div>
         <Link to={link}
-          className="flex items-center gap-1.5 text-xs font-semibold transition-colors group"
-          style={{ color: '#C9A84C' }}>
+          className="flex items-center gap-1.5 text-caption font-medium text-ink-muted hover:text-ink transition-colors duration-fast group">
           Ver detalhe
-          <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+          <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform duration-fast" />
         </Link>
       </div>
 

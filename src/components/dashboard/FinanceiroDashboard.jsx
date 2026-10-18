@@ -16,8 +16,8 @@ export function FinanceiroDashboard({ data: d }) {
           <KpiCard label="Lucro Médio Previsto / negócio" value={EUR(ec?.lucroMedio)} sub="Real quando fechado, senão estimado" tone="green" size="md" />
           <KpiCard label="Margem média" value={fmtPct(ec?.margemPct)} sub="Margin %" tone="green" size="md" />
           <KpiCard label="Custo por negócio" value={EUR(ec?.cac)} sub="CAC" tone="amber" size="md" />
-          <KpiCard label="ROI médio" value={fmtPct(ec?.roiMedio)} sub="ROI" tone="indigo" size="md" />
-          <KpiCard label="ROI anualizado" value={fmtPct(ec?.roiAnualizadoMedio)} sub="Annualized ROI" tone="indigo" size="md" />
+          <KpiCard label="ROI médio" value={fmtPct(ec?.roiMedio)} tone="indigo" size="md" />
+          <KpiCard label="ROI anualizado" value={fmtPct(ec?.roiAnualizadoMedio)} tone="indigo" size="md" />
         </Group>
       </Pillar>
 
