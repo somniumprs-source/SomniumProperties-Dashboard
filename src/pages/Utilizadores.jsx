@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useId, Fragment } from 'react'
 import { SummaryStat } from '../components/ui/SummaryStat.jsx'
-import { Plus, Trash2, KeyRound, RefreshCw, Link as LinkIcon, Copy, Check, ChevronDown, ChevronRight, Users } from 'lucide-react'
+import { Plus, Trash2, KeyRound, Link as LinkIcon, Copy, Check, ChevronDown, ChevronRight, Users } from 'lucide-react'
 import { apiFetch } from '../lib/api.js'
 import { useToast } from '../components/ui/Toast.jsx'
 import { ScrollableTable } from '../components/ui/ScrollableTable.jsx'
@@ -8,6 +8,7 @@ import { Modal } from '../components/ui/Modal.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { AcessosDoUser } from '../components/PartilharAcesso.jsx'
+import { Header } from '../components/layout/Header.jsx'
 
 const ROLES = [
   { id: 'admin',      label: 'Admin',      desc: 'Acesso total + gestão de utilizadores' },
@@ -123,6 +124,8 @@ export function Utilizadores() {
   const ativos = users.filter(u => u.ativo).length
 
   return (
+    <>
+    <Header title="Utilizadores" subtitle="Acessos, roles e permissões da equipa" onRefresh={load} loading={loading} />
     <div className="p-4 sm:p-6 max-w-6xl mx-auto min-w-0 w-full">
       {/* Hero banner — Gestão de Acessos */}
       <div className="rounded-xl border border-line bg-surface-raised p-5 sm:p-6 shadow-xs mb-6">
@@ -137,7 +140,6 @@ export function Utilizadores() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="secondary" size="sm" icon={RefreshCw} onClick={load}>Atualizar</Button>
             <Button variant="primary" size="sm" icon={Plus} onClick={() => { setInviteKey(k => k + 1); setShowForm(true) }}>
               Convidar utilizador
             </Button>
@@ -281,6 +283,7 @@ export function Utilizadores() {
       />
       <LinkModal open={linkAberto} url={linkModal?.url || ''} note={linkModal?.note} onClose={() => setLinkAberto(false)} />
     </div>
+    </>
   )
 }
 
