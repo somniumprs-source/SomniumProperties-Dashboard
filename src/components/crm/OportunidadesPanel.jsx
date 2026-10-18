@@ -184,9 +184,9 @@ function Stat({ icon: Icon, label, value }) {
 }
 
 const BADGE_TONE = {
-  green: 'bg-success/10 text-success dark:bg-green-500/10 dark:text-green-400',
-  amber: 'bg-warning/10 text-warning dark:bg-amber-500/10 dark:text-amber-400',
-  gray: 'bg-surface-muted text-ink-muted  ',
+  green: 'bg-success/10 text-success',
+  amber: 'bg-warning/10 text-warning',
+  gray: 'bg-surface-muted text-ink-muted',
 }
 function Badge({ tone, children }) {
   return <span className={`text-[10.5px] font-semibold px-2 py-0.5 rounded-md ${BADGE_TONE[tone]}`}>{children}</span>

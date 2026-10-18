@@ -1,5 +1,5 @@
 // Formatação partilhada pelos blocos "Próximos passos" (imóvel e pessoa).
-export const inputClass = 'w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300'
+export const inputClass = 'w-full px-2 py-1.5 rounded-lg border border-line bg-surface-raised text-ink text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30'
 
 export function fmtQuando(v) {
   if (!v) return 'Sem data'

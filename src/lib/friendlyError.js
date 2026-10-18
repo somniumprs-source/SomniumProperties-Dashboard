@@ -3,7 +3,7 @@
 const GENERICA = 'Ocorreu um erro inesperado. Tenta novamente; se continuar, avisa a equipa técnica.'
 
 // Mensagem técnica? (JSON, stack, códigos HTTP, nomes de exceções)
-const TECNICA = /^\s*[{[]|\bat \S+ \(|\b[A-Z][a-zA-Z]*Error\b|\bHTTP \d{3}\b|undefined|null|\bfetch\b|\bstatus\b|<\/?[a-z]/
+const TECNICA = /^\s*[{[]|\bat \S+ \(|\b[A-Z][a-zA-Z]*Error\b|\bHTTP \d{3}\b|undefined|null|\bfetch\b|\bstatus\b|<\/?[a-z]|\b(is not|cannot|unexpected|failed|invalid|properties|function|token|reading|minified|react|module|chunk|error)\b|#\d/i
 
 /** Converte qualquer erro numa frase compreensível para quem usa a plataforma. */
 export function friendlyError(err) {
@@ -19,6 +19,6 @@ export function friendlyError(err) {
   if (status === 404) return 'Não encontrámos o que procuras. Pode ter sido removido.'
   if (status >= 500) return 'O servidor não respondeu como esperado. Tenta novamente daqui a pouco.'
   // Texto já escrito para pessoas (ex.: vindo da própria página) passa tal como está.
-  if (typeof err === 'string' && msg.length <= 160 && !TECNICA.test(msg)) return msg
+  if (msg && msg.length <= 160 && !TECNICA.test(msg)) return msg
   return GENERICA
 }
