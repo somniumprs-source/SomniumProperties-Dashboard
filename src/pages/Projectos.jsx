@@ -493,7 +493,7 @@ export function Projectos() {
               )}
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-              <PortfolioKpi label="Projetos ativos" value={portfolio.totais.ativos} sub={`de ${portfolio.totais.total} total`} />
+              <PortfolioKpi label="Obras ativas" value={portfolio.totais.ativos} sub={`de ${portfolio.totais.total} total`} />
               <PortfolioKpi label="Capital agregado" value={EUR(portfolio.totais.capital_total)} />
               <PortfolioKpi label="Faturação estimada" value={EUR(portfolio.totais.lucro_estimado_total)} accent />
               <PortfolioKpi label="Faturação real" value={EUR(portfolio.totais.lucro_real_total)} green />

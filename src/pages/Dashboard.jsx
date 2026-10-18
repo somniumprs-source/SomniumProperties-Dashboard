@@ -128,7 +128,7 @@ export function Dashboard() {
   // Número de cabeçalho de cada card de departamento (valor grande + caption).
   const deptMeta = {
     comercial:  { value: dashData?.funil?.atividade?.adicionados?.valor ?? '—', sub: 'Adicionados' },
-    operacoes:  { value: finKpis?.negóciosAtivos ?? '—', sub: 'Projetos ativos' },
+    operacoes:  { value: finKpis?.negóciosAtivos ?? '—', sub: 'Obras ativas' },
     financeiro: { value: finKpis ? formatEur(finKpis.lucroEstimadoTotal) : '—', sub: 'Pipeline de lucro' },
     marketing:  { value: '—', sub: 'Em breve' },
   }
@@ -141,7 +141,7 @@ export function Dashboard() {
       color: 'bg-orange-600',
       link: '/administracao/operacoes',
       kpis: [
-        { label: 'Projetos Ativos',  value: finKpis?.negóciosAtivos ?? '—',      meta: 5,   status: finKpis ? statusFromValue(finKpis.negóciosAtivos, 5) : 'yellow',        trend: 'neutral', unit: '' },
+        { label: 'Obras Ativas',     value: finKpis?.negóciosAtivos ?? '—',      meta: 5,   status: finKpis ? statusFromValue(finKpis.negóciosAtivos, 5) : 'yellow',        trend: 'neutral', unit: '' },
         { label: 'Classificados A/B', value: comKpis?.investClassificados ?? '—',  meta: 10,  status: comKpis ? statusFromValue(comKpis.investClassificados, 10) : 'yellow',  trend: 'neutral', unit: '' },
         { label: 'Deals Fechados',    value: finKpis?.dealsFechados ?? '0',        meta: 6,   status: finKpis ? statusFromValue(finKpis.dealsFechados, 6) : 'yellow',         trend: 'neutral', unit: '' },
         { label: 'Runway (meses)',    value: finKpis?.runway != null ? `${Math.round(finKpis.runway)}` : '—', meta: '12', unit: '', status: finKpis?.runway > 12 ? 'green' : 'yellow', trend: 'neutral' },
