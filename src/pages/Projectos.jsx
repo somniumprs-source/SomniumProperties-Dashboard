@@ -365,7 +365,7 @@ export function Projectos() {
 
   return (
     <>
-      <Header title="Projetos" onRefresh={load} loading={loading} />
+      <Header title="Departamento de Obras" onRefresh={load} loading={loading} />
 
       <div className="p-4 sm:p-6 flex flex-col gap-4">
         <div className="flex justify-end">

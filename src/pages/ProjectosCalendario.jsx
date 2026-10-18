@@ -101,7 +101,7 @@ export function ProjectosCalendario() {
 
   return (
     <>
-      <Header title="Calendário de Projetos" subtitle="Deadlines de fases e tarefas" onRefresh={load} loading={loading} />
+      <Header title="Calendário de Obras" subtitle="Deadlines de fases e tarefas" onRefresh={load} loading={loading} />
 
       <div className="p-4 sm:p-6 space-y-4">
         {/* Toolbar */}

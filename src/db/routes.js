@@ -2250,7 +2250,7 @@ router.post('/imoveis/:id/follow-up', async (req, res) => {
     const imovel = await Imoveis.getById(req.params.id)
     if (!imovel) return res.status(404).json({ error: 'Não encontrado' })
     const fase = faseAoAgendarFollowUp(imovel.estado, destino)
-    if (!fase.aplica) return res.status(400).json({ error: 'Imóvel com negócio fechado: o acompanhamento faz-se em Projetos, não há follow-up' })
+    if (!fase.aplica) return res.status(400).json({ error: 'Imóvel com negócio fechado: o acompanhamento faz-se no Departamento de Obras, não há follow-up' })
     if (fase.mover && !(motivo || '').trim()) return res.status(400).json({ error: `Indica o motivo: é a justificação da passagem para «${fase.mover}»` })
     // Imóvel com consultor: o follow-up é um assunto do contacto com ele (um
     // só próximo contacto por pessoa), não uma tarefa do imóvel.

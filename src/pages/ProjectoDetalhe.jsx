@@ -209,7 +209,7 @@ export function ProjectoDetalhe() {
         {/* Voltar + ações topo */}
         <div className="flex items-center justify-between gap-2">
           <Link to="/projectos" className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-brand-gold">
-            <ArrowLeft className="w-3.5 h-3.5" /> Voltar a Projetos
+            <ArrowLeft className="w-3.5 h-3.5" /> Voltar ao Departamento de Obras
           </Link>
           <div className="flex items-center gap-2">
             {!isReadOnly && semFases && (
