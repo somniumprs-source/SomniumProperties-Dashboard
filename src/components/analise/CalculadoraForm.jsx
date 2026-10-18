@@ -320,7 +320,7 @@ function CalcRow({ items }) {
   return (
     <div className="mt-3 flex flex-wrap gap-2">
       {items.map((item, i) => (
-        <div key={i} className="rounded-lg px-3 py-1.5 text-xs" style={{ backgroundColor: item.bold ? GOLD + '15' : '#f3f4f6' }}>
+        <div key={i} className={`rounded-lg px-3 py-1.5 text-xs ${item.bold ? 'bg-accent/10' : 'bg-surface-muted'}`}>
           <span className="text-ink-muted">{item.label}: </span>
           <span className={`num ${item.bold ? 'font-semibold text-ink' : 'text-ink-muted'}`}>{EUR(item.value)}</span>
         </div>

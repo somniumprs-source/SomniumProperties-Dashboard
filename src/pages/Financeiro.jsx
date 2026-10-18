@@ -1191,9 +1191,8 @@ function RentabilidadeTab({ rent }) {
 function CatBadge({ cat }) {
   const color = CAT_COLORS[cat] ?? '#475569'
   return (
-    <span className="px-2 py-0.5 rounded-full text-xs font-medium"
-      style={{ backgroundColor: color + '22', color }}>
-      {cat}
+    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-surface-muted text-ink whitespace-nowrap">
+      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color }} aria-hidden="true" />{cat}
     </span>
   )
 }

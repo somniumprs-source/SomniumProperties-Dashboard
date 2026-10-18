@@ -812,8 +812,9 @@ function ListaProjetos({ projectos, fasesInfo, onCardClick }) {
                   </span>
                 </td>
                 <td className="py-2.5 px-4">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
-                    style={{ backgroundColor: corCat + '20', color: corCat }}>{cat}</span>
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-surface-muted text-ink whitespace-nowrap">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: corCat }} aria-hidden="true" />{cat}
+                  </span>
                 </td>
                 <td className="py-2.5 px-4 text-xs text-ink-muted ">{n.imovelNome || '—'}</td>
                 <td className="py-2.5 px-4 text-xs text-ink ">{faseNome}</td>

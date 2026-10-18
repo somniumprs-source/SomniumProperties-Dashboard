@@ -245,8 +245,8 @@ function RelatorioConsultores() {
           <div className="space-y-2">
             {report.top5.map((c, i) => (
               <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-surface">
-                <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                  style={{ backgroundColor: i === 0 ? '#C9A84C' : i === 1 ? '#9CA3AF' : i === 2 ? '#B87333' : '#E5E7EB', color: i > 2 ? '#6B7280' : '#fff' }}>
+                <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${i > 2 ? 'bg-surface-muted text-ink-muted' : 'text-white'}`}
+                  style={i > 2 ? undefined : { backgroundColor: i === 0 ? '#C9A84C' : i === 1 ? '#9CA3AF' : '#B87333' }}>
                   {i + 1}
                 </span>
                 <div className="flex-1 min-w-0">
@@ -408,8 +408,8 @@ function RelatorioInvestidores() {
           <div className="space-y-2">
             {report.top5.map((inv, i) => (
               <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-surface">
-                <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                  style={{ backgroundColor: i === 0 ? '#C9A84C' : i === 1 ? '#9CA3AF' : i === 2 ? '#B87333' : '#E5E7EB', color: i > 2 ? '#6B7280' : '#fff' }}>
+                <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${i > 2 ? 'bg-surface-muted text-ink-muted' : 'text-white'}`}
+                  style={i > 2 ? undefined : { backgroundColor: i === 0 ? '#C9A84C' : i === 1 ? '#9CA3AF' : '#B87333' }}>
                   {i + 1}
                 </span>
                 <div className="flex-1 min-w-0">
