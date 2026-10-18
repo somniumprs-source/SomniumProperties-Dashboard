@@ -35,11 +35,11 @@ const GRUPOS_CATEGORIAS = [
   { grupo: 'Visitas', regiao: true, itens: ['Visita a Potencial Oportunidade', 'Visita Go/No Go', 'Visita Pré-Obra', 'Visita de Acompanhamento', 'Visita de Fim de Obra', 'Visita com Investidores'] },
   { grupo: 'Comercial — Consultores', regiao: false, itens: ['Prospeção de Consultores', 'Cold Call a Consultores', 'Discovery Call a Consultores', 'Follow-up de Consultores', 'Reunião com Consultores'] },
   { grupo: 'Comercial — Investidores', regiao: false, itens: ['Prospeção de Investidores', 'Cold Call a Investidores', 'Discovery Call a Investidores', 'Follow-up de Investidores', 'Onboarding de Investidores', 'Reunião com Investidores', 'Apresentação de Negócio a Investidores', 'Networking / Eventos'] },
-  { grupo: 'Parceiros', regiao: false, itens: ['Cold Call a Parceiros', 'Discovery Call a Parceiros', 'Follow-up de Parceiros'] },
+  { grupo: 'Parceiros', regiao: false, itens: ['Cold Call a Parceiros', 'Discovery Call a Parceiros', 'Follow-up de Parceiros', 'Reunião com Parceiros'] },
   { grupo: 'Operações — Projeto', regiao: true, itens: ['Documentação do Imóvel', 'Licenciamento e Câmara', 'Escrituras e Contratos', 'Seguros e Serviços', 'Venda do Imóvel'] },
   { grupo: 'Operações — Relatórios', regiao: false, itens: ['Relatórios de Projeto'] },
   { grupo: 'Financeiro', regiao: false, itens: ['Departamento Financeiro', 'Contabilidade'] },
-  { grupo: 'Administração', regiao: false, itens: ['Reunião de Equipa', 'Reunião com Parceiros', 'Planeamento', 'Processos e SOP', 'Plataforma e IA'] },
+  { grupo: 'Administração', regiao: false, itens: ['Reunião de Equipa', 'Planeamento', 'Processos e SOP', 'Plataforma e IA'] },
 ]
 const CATEGORIAS = GRUPOS_CATEGORIAS.flatMap(g => g.itens)
 const CATEGORIAS_COM_REGIAO = new Set(GRUPOS_CATEGORIAS.filter(g => g.regiao).flatMap(g => g.itens))
