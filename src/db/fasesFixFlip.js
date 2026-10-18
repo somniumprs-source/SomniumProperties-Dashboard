@@ -177,8 +177,7 @@ export const FASES_CAEP = [
       { t: 'Verificação final da documentação do imóvel', checklist: [
         { k: 'caderneta', t: 'Caderneta Predial Urbana', slot: 'caderneta_predial' },
         { k: 'certidao', t: 'Certidão Permanente do Registo Predial', slot: 'certidao_permanente' },
-        { k: 'condominio', t: 'Declaração de dívidas do condomínio' },
-        { k: 'imi', t: 'Comprovativo de IMI', slot: 'comprovativo_imi' },
+        { k: 'condominio', t: 'Declaração de dívidas do condomínio', doc: 'certificado' },
         { k: 'agua_luz', t: 'Água e luz sem dívidas' },
         { k: 'ce', t: 'Certificado Energético', slot: 'certificado_energetico' },
         { k: 'licenca', t: 'Licença de Utilização ou isenção', slot: 'licenca_utilizacao' },
@@ -194,22 +193,22 @@ export const FASES_CAEP = [
         { k: 'anexo_v', t: 'Plano enviado ao advogado como Anexo V do CAEP' },
       ] },
       { t: 'Recolha e envio da documentação dos investidores ao advogado para a minuta do CAEP', porInvestidor: true, checklist: [
-        { k: 'cc', t: 'Cartão de cidadão' },
+        { k: 'cc', t: 'Cartão de cidadão', docInvestidor: 'identificacao' },
         { k: 'nif', t: 'NIF' },
-        { k: 'morada', t: 'Comprovativo de morada' },
+        { k: 'morada', t: 'Comprovativo de morada', docInvestidor: 'comprovativo_morada' },
         { k: 'iban', t: 'IBAN' },
-        { k: 'origem_fundos', t: 'Declaração de origem dos fundos' },
-        { k: 'nda', t: 'NDA' },
-        { k: 'risco', t: 'Declaração de risco' },
+        { k: 'origem_fundos', t: 'Declaração de origem dos fundos', docInvestidor: 'comprovativo_fundos', porProjeto: true },
+        { k: 'nda', t: 'NDA', docInvestidor: 'nda_assinado' },
+        { k: 'risco', t: 'Declaração de risco', docInvestidor: 'declaracao_risco', porProjeto: true },
       ] },
       { t: 'Revisão da minuta do CAEP', checklist: [
-        { k: 'parecer', t: 'Parecer do advogado externo arquivado' },
-        { k: 'versao', t: 'Versão final da minuta registada' },
+        { k: 'parecer', t: 'Parecer do advogado externo arquivado', doc: 'relatorio' },
+        { k: 'versao', t: 'Versão final da minuta registada', doc: 'contrato' },
         { k: 'investidores', t: 'Minuta revista enviada aos investidores, com recomendação de apreciação jurídica própria' },
       ] },
       'Assinatura do CAEP por todos os intervenientes',
       { t: 'Transferência do capital dos investidores', porInvestidor: true, checklist: [
-        { k: 'recebido', t: 'Capital recebido na conta do projeto' },
+        { k: 'recebido', t: 'Capital recebido na conta do projeto', docInvestidor: 'comprovativo_transferencia', porProjeto: true },
         { k: 'confirmacao', t: 'Confirmação escrita da receção enviada ao investidor' },
       ] },
       // SOP 12, 8.7: fecha o ciclo de entrada e arranca os reportes periódicos.
@@ -235,16 +234,16 @@ export const FASES_CAEP = [
         { k: 'certidao', t: 'Certidão Permanente do Registo Predial', slot: 'certidao_permanente' },
         { k: 'ce', t: 'Certificado Energético', slot: 'certificado_energetico' },
         { k: 'licenca', t: 'Licença de Utilização ou isenção', slot: 'licenca_utilizacao' },
-        { k: 'condominio', t: 'Declaração de dívidas do condomínio' },
+        { k: 'condominio', t: 'Declaração de dívidas do condomínio', doc: 'certificado' },
         { k: 'ficha_tecnica', t: 'Ficha Técnica de Habitação', slot: 'ficha_tecnica', obrigatoria: false },
-        { k: 'imt_is', t: 'Comprovativos de pagamento do IMT e do IS' },
-        { k: 'distrate', t: 'Distrate da hipoteca presente (banco do vendedor ou documento)', obrigatoria: false },
+        { k: 'imt_is', t: 'Comprovativos de pagamento do IMT e do IS', doc: 'comprovativo' },
+        { k: 'distrate', t: 'Distrate da hipoteca presente (banco do vendedor ou documento)', obrigatoria: false, doc: 'outro' },
       ] },
       'Pagamento do IMT e do Imposto do Selo',
       'Escritura de compra e venda',
       'Pagamento dos honorários do solicitador ou advogado',
       { t: 'Confirmação do registo predial e fiscal', checklist: [
-        { k: 'escritura', t: 'Cópia da escritura' },
+        { k: 'escritura', t: 'Cópia da escritura', doc: 'escritura' },
         { k: 'certidao', t: 'Certidão permanente: aquisição registada e ónus cancelados (usar o código já comprado)', slot: 'certidao_permanente' },
         { k: 'caderneta', t: 'Caderneta atualizada', slot: 'caderneta_predial' },
       ] },
@@ -274,7 +273,7 @@ export const FASES_CAEP = [
       ] },
       { t: 'Autorização do condomínio', opcional: true, checklist: [
         { k: 'assembleia', t: 'Assembleia de condóminos' },
-        { k: 'ata', t: 'Ata com a aprovação' },
+        { k: 'ata', t: 'Ata com a aprovação', doc: 'outro' },
       ] },
       { t: 'Legalização: projeto submetido', opcional: true, checklist: [
         { k: 'levantamento', t: 'Levantamento do existente' },
@@ -301,7 +300,7 @@ export const FASES_CAEP = [
         { k: 'nao_incluidos', t: 'Trabalhos não incluídos e quem os assume' },
         { k: 'prazo', t: 'Prazo definido (dias úteis ou de calendário)' },
         { k: 'pagamentos', t: 'Plano de pagamentos' },
-        { k: 'proposta_final', t: 'Proposta final revista carregada' },
+        { k: 'proposta_final', t: 'Proposta final revista carregada', doc: 'contrato' },
       ] },
       // Nomes fixos dos dois documentos: «<Projeto> - Visita pré-obra» e
       // «<Projeto> - Relatório visita pré-obra».
@@ -327,7 +326,7 @@ export const FASES_CAEP = [
         { k: 'seguros', t: 'Seguros do empreiteiro' },
         { k: 'alvara', t: 'Alvará do empreiteiro' },
         { k: 'garantia_bancaria', t: 'Garantia bancária do adiantamento (se acordada)', obrigatoria: false },
-        { k: 'assinado', t: 'Contrato assinado' },
+        { k: 'assinado', t: 'Contrato assinado', doc: 'contrato' },
         { k: 'adiantamento', t: 'Adiantamento pago (depois de assinar)' },
       ] },
       // Base do Estimado vs Real e do alerta de atrasos das fases.
@@ -337,7 +336,7 @@ export const FASES_CAEP = [
         { k: 'cronograma', t: 'Datas previstas das fases de obra preenchidas (D1 e fim de obra)' },
       ] },
       { t: 'Consignação da obra e fotografias do estado zero', checklist: [
-        { k: 'auto', t: 'Auto de consignação com a data do D1' },
+        { k: 'auto', t: 'Auto de consignação com a data do D1', doc: 'outro' },
         { k: 'fotos', t: 'Fotografias do estado zero (todas as divisões)' },
         { k: 'chaves', t: 'Entrega das chaves ao empreiteiro (quantas)' },
         { k: 'contadores', t: 'Leitura dos contadores' },
@@ -372,7 +371,7 @@ export const FASES_CAEP = [
       ] },
       { t: 'Negociação e CPCV', checklist: [
         { k: 'reserva', t: 'Proposta aceite igual ou acima do Preço de Reserva (abaixo, só com decisão dos dois CEO)' },
-        { k: 'cpcv', t: 'CPCV assinado' },
+        { k: 'cpcv', t: 'CPCV assinado', doc: 'contrato' },
         { k: 'sinal', t: 'Sinal recebido' },
       ] },
     ],
@@ -393,7 +392,7 @@ export const FASES_CAEP = [
         { k: 'contestacao', t: 'Prazo de contestação decorrido (ou contestação resolvida)' },
         { k: 'retencao', t: 'Retenção na fonte validada com a contabilista' },
         { k: 'pagamento', t: 'Contribuição e participação nos lucros pagas para o IBAN do contrato' },
-        { k: 'comprovativo', t: 'Comprovativo do pagamento final arquivado' },
+        { k: 'comprovativo', t: 'Comprovativo do pagamento final arquivado', docInvestidor: 'comprovativo_liquidacao', porProjeto: true },
       ] },
       { t: 'Balanço interno do projeto', checklist: [
         { k: 'evr', t: 'Estimado vs Real final fechado' },
@@ -421,7 +420,7 @@ function fasesObraCaep() {
   ] }
   const fimDeObra = [
     { t: 'Receção provisória da obra', checklist: [
-      { k: 'auto', t: 'Auto de receção provisória assinado com o empreiteiro' },
+      { k: 'auto', t: 'Auto de receção provisória assinado com o empreiteiro', doc: 'outro' },
       { k: 'defeitos', t: 'Lista de defeitos a corrigir, com prazo' },
       { k: 'pagamento', t: 'Pagamento final ao empreiteiro, com a retenção acordada' },
       { k: 'garantia', t: 'Início do prazo de garantia e da retenção registado' },

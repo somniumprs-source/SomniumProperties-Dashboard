@@ -28,6 +28,9 @@ const TIPO_LABELS_RECEBIDO = {
   nda_assinado: 'NDA Assinado',
   contrato_assinado: 'Contrato Assinado',
   certidao_permanente: 'Certidao Permanente / Registo Comercial',
+  declaracao_risco: 'Declaração de Risco',
+  comprovativo_transferencia: 'Comprovativo de Transferência',
+  comprovativo_liquidacao: 'Comprovativo de Liquidação',
   outro: 'Outro',
 }
 

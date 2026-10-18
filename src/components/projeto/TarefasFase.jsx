@@ -2,14 +2,15 @@
  * Tarefas de uma fase do projeto: checklist dentro da tarefa (com o documento
  * do imóvel que já veio do Comercial), tarefas opcionais que se ativam quando
  * são precisas, e bloqueio de conclusão enquanto a checklist estiver incompleta.
- * Um item com espaço (slot) também deixa carregar o documento a partir daqui:
- * fica guardado nos documentos do imóvel, junto dos restantes.
+ * Itens que pedem documento só se assinalam com ele carregado (a prova do que
+ * foi feito) e deixam carregá-lo a partir daqui: espaço (slot) → documentos do
+ * imóvel; doc → documentos do projeto; docInvestidor → ficha do investidor.
  * A percentagem da fase é calculada no servidor (src/db/projetoTarefas.js).
  */
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, Circle, Trash2, ChevronRight, Plus, FileText, Upload } from 'lucide-react'
-import { apiFetch } from '../../lib/api.js'
+import { apiFetch, openDocument } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { Button } from '../ui/Button.jsx'
 import { confirmar } from '../ui/ConfirmDialog.jsx'
@@ -34,6 +35,16 @@ function docsPorSlot(fotos) {
 
 const fmtData = iso => (iso ? new Date(iso).toLocaleDateString('pt-PT') : '')
 
+const pedeDocumento = i => !!(i?.slot || i?.doc || i?.docInvestidor)
+
+// Documento do investidor que prova o item (o mais recente do tipo; com
+// porProjeto, só o deste imóvel). Espelho de documentoDoItem (projetoTarefas.js).
+function docDoInvestidor(docs, item, imovelId) {
+  return (docs || [])
+    .filter(d => d.tipo === item.docInvestidor && d.storage_path && (!item.porProjeto || d.imovel_id === imovelId))
+    .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))[0] || null
+}
+
 export function TarefasFase({ fase, negocioId, imovelId, fotosImovel, readOnly, onChange }) {
   const toast = useToast()
   const [novaTarefa, setNovaTarefa] = useState('')
@@ -52,6 +63,21 @@ export function TarefasFase({ fase, negocioId, imovelId, fotosImovel, readOnly, 
     },
   })
   const investidores = invQuery.data ?? []
+
+  const precisaDocsInv = tarefas.some(t => lerChecklist(t.checklist)?.itens.some(i => i.docInvestidor))
+  const invIds = investidores.map(i => i.investidor_id)
+  const docsInvQuery = useQuery({
+    queryKey: ['projeto-docs-investidores', negocioId, invIds.join(',')],
+    enabled: precisaDocsInv && invIds.length > 0,
+    queryFn: async () => {
+      const pares = await Promise.all(invIds.map(async id => {
+        const r = await apiFetch(`/api/crm/investidores/${id}/documentos`).catch(() => null)
+        return [id, r?.ok ? await r.json() : []]
+      }))
+      return Object.fromEntries(pares)
+    },
+  })
+  const docsInv = docsInvQuery.data ?? {}
 
   async function pedido(url, method, body, erro) {
     const r = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })
@@ -81,6 +107,46 @@ export function TarefasFase({ fase, negocioId, imovelId, fotosImovel, readOnly, 
     onChange()
   }
 
+  // Documento do projeto (separador Documentos) ligado ao item da checklist.
+  async function carregarDocProjeto(t, chave, item, files) {
+    if (!negocioId || !files?.length) return
+    const fd = new FormData()
+    fd.append('files', files[0])
+    fd.append('faseId', fase.id)
+    fd.append('tipo', item.doc)
+    fd.append('notas', item.t)
+    const r = await apiFetch(`/api/crm/projetos/${negocioId}/documentos`, { method: 'POST', body: fd, timeoutMs: 120000 }).catch(() => null)
+    if (!r?.ok) {
+      const err = await r?.json().catch(() => ({}))
+      toast?.(err?.error || 'Erro ao carregar o documento', 'error', 4000)
+      return
+    }
+    const doc = (await r.json()).documentos?.[0]
+    if (doc && await pedido(`/api/crm/projetos/tarefas/${t.id}/checklist`, 'PUT', { chave, doc_id: doc.id }, 'Erro ao ligar o documento')) {
+      toast?.('Documento guardado nos documentos do projeto', 'success', 3000)
+    }
+  }
+
+  // Documento na ficha do investidor (reutilizado nos projetos seguintes, exceto porProjeto).
+  async function carregarDocInvestidor(investidorId, item, files) {
+    if (!files?.length) return
+    const fd = new FormData()
+    fd.append('tipo', item.docInvestidor)
+    fd.append('nome', files[0].name)
+    fd.append('direcao', 'recebido')
+    fd.append('notas', item.t)
+    if (item.porProjeto && imovelId) fd.append('imovel_id', imovelId)
+    fd.append('file', files[0])
+    const r = await apiFetch(`/api/crm/investidores/${investidorId}/documentos`, { method: 'POST', body: fd, timeoutMs: 120000 }).catch(() => null)
+    if (!r?.ok) {
+      const err = await r?.json().catch(() => ({}))
+      toast?.(err?.error || 'Erro ao carregar o documento', 'error', 4000)
+      return
+    }
+    toast?.('Documento guardado na ficha do investidor', 'success', 3000)
+    await docsInvQuery.refetch()
+  }
+
   async function adicionarTarefa() {
     if (!novaTarefa.trim()) return
     if (await pedido(`/api/crm/projetos/fases/${fase.id}/tarefas`, 'POST', { descricao: novaTarefa.trim() }, 'Erro ao adicionar tarefa')) setNovaTarefa('')
@@ -92,7 +158,10 @@ export function TarefasFase({ fase, negocioId, imovelId, fotosImovel, readOnly, 
       <div className="space-y-1.5 mb-2">
         {ativas.map(t => (
           <TarefaItem key={t.id} t={t} readOnly={readOnly} docs={docs} investidores={investidores} pedido={pedido}
-            onCarregar={imovelId ? carregarDocumento : null} />
+            docsInv={docsInv} imovelId={imovelId}
+            onCarregar={imovelId ? carregarDocumento : null}
+            onCarregarProjeto={negocioId ? carregarDocProjeto : null}
+            onCarregarInvestidor={carregarDocInvestidor} />
         ))}
         {ativas.length === 0 && <p className="text-[11px] text-ink-muted italic">Sem tarefas.</p>}
       </div>
@@ -127,9 +196,11 @@ export function TarefasFase({ fase, negocioId, imovelId, fotosImovel, readOnly, 
   )
 }
 
-function TarefaItem({ t, readOnly, docs, investidores, pedido, onCarregar }) {
+function TarefaItem({ t, readOnly, docs, investidores, pedido, docsInv, imovelId, onCarregar, onCarregarProjeto, onCarregarInvestidor }) {
   const ch = lerChecklist(t.checklist)
   const [aberta, setAberta] = useState(false)
+  const [naAberto, setNaAberto] = useState(null)  // chave do item a marcar «Não aplicável»
+  const [naMotivo, setNaMotivo] = useState('')
   const obrig = ch ? ch.itens.filter(i => i.obrigatoria) : []
   const grupos = ch?.por_investidor
     ? investidores.map(inv => ({ id: inv.investidor_id, nome: inv.investidor_nome }))
@@ -141,6 +212,12 @@ function TarefaItem({ t, readOnly, docs, investidores, pedido, onCarregar }) {
   async function toggleTarefa() {
     if (readOnly) return
     await pedido(`/api/crm/projetos/tarefas/${t.id}`, 'PUT', { concluida: t.concluida ? 0 : 1 }, 'Erro ao atualizar tarefa')
+  }
+  async function marcarNaoAplicavel(k) {
+    if (!naMotivo.trim()) return
+    if (await pedido(`/api/crm/projetos/tarefas/${t.id}/checklist`, 'PUT', { chave: k, na: naMotivo.trim() }, 'Erro ao guardar')) {
+      setNaAberto(null); setNaMotivo('')
+    }
   }
   async function apagar() {
     if (!(await confirmar(`Apagar tarefa "${t.descricao}"?`))) return
@@ -189,23 +266,55 @@ function TarefaItem({ t, readOnly, docs, investidores, pedido, onCarregar }) {
                   const k = chave(g, i)
                   const est = ch.estado?.[k] || {}
                   const doc = i.slot ? docs[i.slot] : null
+                  const docProjeto = i.doc ? est.doc || null : null
+                  const docInv = i.docInvestidor && g.id ? docDoInvestidor(docsInv[g.id], i, imovelId) : null
+                  const prova = doc || docProjeto || docInv
+                  const semProva = pedeDocumento(i) && !prova
+                  const podeCarregar = !readOnly && ((i.slot && onCarregar) || (i.doc && onCarregarProjeto) || (i.docInvestidor && g.id))
+                  const carregar = fs => {
+                    if (i.slot) onCarregar(i.slot, fs)
+                    else if (i.doc) onCarregarProjeto(t, k, i, fs)
+                    else onCarregarInvestidor(g.id, i, fs)
+                  }
                   return (
                     <li key={k} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-                      <input type="checkbox" id={`ck-${t.id}-${k}`} checked={!!est.feito} disabled={readOnly}
+                      <input type="checkbox" id={`ck-${t.id}-${k}`} checked={!!est.feito} disabled={readOnly || (semProva && !est.feito)}
+                        title={semProva && !est.feito ? 'Carrega o documento para assinalar' : undefined}
                         onChange={e => pedido(`/api/crm/projetos/tarefas/${t.id}/checklist`, 'PUT', { chave: k, feito: e.target.checked }, 'Erro ao guardar')}
                         className="accent-brand-gold w-3.5 h-3.5" />
                       <label htmlFor={`ck-${t.id}-${k}`} className={`${est.feito ? 'text-ink-muted' : 'text-ink '}`}>
                         {i.t}{!i.obrigatoria && <span className="text-ink-muted"> (se aplicável)</span>}
                       </label>
-                      {i.slot && (doc
+                      {pedeDocumento(i) && (doc
                         ? <a href={doc.path} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-brand-gold hover:underline"><FileText className="w-3 h-3" />{doc.name}</a>
-                        : <span className="text-[11px] text-ink-muted">sem documento</span>)}
-                      {i.slot && !readOnly && onCarregar && (
+                        : docProjeto
+                          ? <a href={docProjeto.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-brand-gold hover:underline"><FileText className="w-3 h-3" />{docProjeto.nome}</a>
+                          : docInv
+                            ? <button type="button" onClick={() => openDocument(`/api/crm/investidores/${g.id}/documentos/${docInv.id}/ficheiro`).catch(() => {})}
+                                className="inline-flex items-center gap-1 text-[11px] text-brand-gold hover:underline"><FileText className="w-3 h-3" />{docInv.nome}</button>
+                            : est.na
+                              ? <span className="text-[11px] text-ink-muted">Não aplicável: {est.na}</span>
+                              : <span className={`text-[11px] ${est.feito ? 'text-danger' : 'text-ink-muted'}`}>{est.feito ? 'assinalado sem documento' : 'sem documento'}</span>)}
+                      {podeCarregar && !est.na && (
                         <label className="inline-flex items-center gap-1 text-[11px] text-ink-muted hover:text-brand-gold cursor-pointer">
-                          <Upload className="w-3 h-3" />{doc ? 'Carregar nova versão' : 'Carregar'}
+                          <Upload className="w-3 h-3" />{prova ? 'Carregar nova versão' : 'Carregar'}
                           <input type="file" className="hidden"
-                            onChange={e => { const fs = Array.from(e.target.files || []); e.target.value = ''; onCarregar(i.slot, fs) }} />
+                            onChange={e => { const fs = Array.from(e.target.files || []); e.target.value = ''; carregar(fs) }} />
                         </label>
+                      )}
+                      {!readOnly && semProva && !est.feito && naAberto !== k && (
+                        <button type="button" onClick={() => { setNaAberto(k); setNaMotivo('') }}
+                          className="text-[11px] text-ink-muted hover:text-brand-gold">Não aplicável</button>
+                      )}
+                      {naAberto === k && (
+                        <span className="inline-flex items-center gap-1">
+                          <input type="text" autoFocus value={naMotivo} onChange={e => setNaMotivo(e.target.value)} placeholder="Motivo (obrigatório)"
+                            onKeyDown={e => { if (e.key === 'Enter') marcarNaoAplicavel(k); if (e.key === 'Escape') setNaAberto(null) }}
+                            className="w-48 max-w-full px-2 py-0.5 text-[11px] rounded border border-line bg-surface-raised" />
+                          <button type="button" onClick={() => marcarNaoAplicavel(k)} disabled={!naMotivo.trim()}
+                            className="text-[11px] text-brand-gold disabled:text-ink-muted">Guardar</button>
+                          <button type="button" onClick={() => setNaAberto(null)} className="text-[11px] text-ink-muted">Cancelar</button>
+                        </span>
                       )}
                       {est.feito && est.por && <span className="text-[10px] text-ink-muted">· {est.por}, {fmtData(est.em)}</span>}
                       {!readOnly ? (

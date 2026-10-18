@@ -44,7 +44,8 @@ import { runEstudoLocalizacao } from '../lib/estudoLocalizacao.js'
 import { FASES_FIX_FLIP, FASES_POR_CATEGORIA, getTemplateFases, getFaseConfigGlobal } from './fasesFixFlip.js'
 import { avaliarEntrada, painelRequisitos } from './dealBreakers.js'
 import { carregarChecklist, gravarManual } from './checklistImovel.js'
-import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase } from './projetoTarefas.js'
+import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase, pedeDocumento, documentoDoItem, documentosEmFalta, contextoDocumentos } from './projetoTarefas.js'
+import { getAuditUser } from './audit.js'
 import { resolveAppUser, RECORD_RESTRICTED_ROLES } from './userRoutes.js'
 import {
   generateFichaAcompanhamento,
@@ -5131,6 +5132,10 @@ router.put('/projetos/tarefas/:tarefaId', async (req, res) => {
         if (!checklistCompleta(ch, inv)) {
           return res.status(400).json({ error: ch.por_investidor && !inv.length ? 'Associa os investidores ao projeto antes de concluir esta tarefa' : 'Completa a checklist antes de concluir a tarefa' })
         }
+        const emFalta = documentosEmFalta(ch, inv, await contextoDocumentos(pool, atual.fase_id))
+        if (emFalta.length) {
+          return res.status(400).json({ error: `Faltam ${emFalta.length} documento(s) na checklist: carrega-os antes de concluir a tarefa` })
+        }
       }
     }
     if (req.body.ativa !== undefined && !atual.opcional) return res.status(400).json({ error: 'Só as tarefas opcionais se ativam ou desativam' })
@@ -5175,23 +5180,45 @@ router.put('/projetos/tarefas/:tarefaId', async (req, res) => {
 })
 
 // Marca ou desmarca um item da checklist de uma tarefa (regista quem e quando).
+// Um item que pede documento só fica feito com o documento carregado (projetoTarefas.js);
+// doc_id liga um documento do projeto ao item.
 router.put('/projetos/tarefas/:tarefaId/checklist', async (req, res) => {
   try {
-    const { chave, feito, nota } = req.body || {}
+    const { chave, feito, nota, doc_id, na } = req.body || {}
     const { rows: [t] } = await pool.query('SELECT fase_id, checklist FROM projeto_tarefas WHERE id = $1', [req.params.tarefaId])
     if (!t) return res.status(404).json({ error: 'Tarefa não encontrada' })
     const ch = lerChecklist(t.checklist)
     const k = String(chave || '')
     const itemK = k.includes(':') ? k.split(':').pop() : k
-    if (!ch || !ch.itens.some(i => i.k === itemK)) return res.status(400).json({ error: 'Item da checklist inválido' })
+    const item = ch?.itens.find(i => i.k === itemK)
+    if (!item) return res.status(400).json({ error: 'Item da checklist inválido' })
     const u = await resolveCrmUser(req).catch(() => null)
+    const autor = getAuditUser().userNome || u?.nome || u?.email || null
     const anterior = ch.estado?.[k] || {}
+    const ctx = pedeDocumento(item) ? await contextoDocumentos(pool, t.fase_id) : null
+    let doc = anterior.doc || null
+    if (doc_id !== undefined) {
+      const d = doc_id ? ctx?.docsProjeto.find(x => x.id === doc_id) : null
+      if (doc_id && (!item.doc || !d)) return res.status(400).json({ error: 'Documento inválido para este item' })
+      doc = d ? { id: d.id, nome: d.nome, url: d.url } : null
+    }
+    // «Não aplicável» (só itens com documento): fica feito sem prova, com o motivo.
+    // na = motivo marca; na = null (ou desmarcar o item) anula.
+    if (na !== undefined && !pedeDocumento(item)) return res.status(400).json({ error: 'Só os itens com documento se marcam como não aplicáveis' })
+    if (na && !String(na).trim()) return res.status(400).json({ error: 'Indica o motivo de não se aplicar' })
+    const naFinal = na !== undefined ? (na ? String(na).trim() : null) : (feito === false ? null : anterior.na || null)
+    const mudou = feito !== undefined || na !== undefined
     ch.estado = { ...(ch.estado || {}), [k]: {
-      feito: feito !== undefined ? !!feito : !!anterior.feito,
+      feito: na !== undefined ? !!naFinal : feito !== undefined ? !!feito : !!anterior.feito,
       nota: nota !== undefined ? String(nota) : (anterior.nota || ''),
-      por: feito !== undefined ? (u?.nome || u?.email || null) : anterior.por || null,
-      em: feito !== undefined ? new Date().toISOString() : anterior.em || null,
+      por: mudou ? autor : anterior.por || null,
+      em: mudou ? new Date().toISOString() : anterior.em || null,
+      ...(doc ? { doc } : {}),
+      ...(naFinal ? { na: naFinal } : {}),
     } }
+    if (ch.estado[k].feito && !ch.estado[k].na && ctx && !documentoDoItem(item, k, ch.estado, ctx)) {
+      return res.status(400).json({ error: 'Carrega o documento antes de assinalar este item' })
+    }
     const { rows } = await pool.query('UPDATE projeto_tarefas SET checklist = $1 WHERE id = $2 RETURNING *', [JSON.stringify(ch), req.params.tarefaId])
     await recalcularFase(pool, t.fase_id)
     res.json(rows[0])

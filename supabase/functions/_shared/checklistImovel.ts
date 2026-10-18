@@ -121,8 +121,6 @@ const ITENS = [
     calc: d => campo(docSlot(d, 'certidao_permanente')) },
   { fase: 'Proposta aceite', key: 'pa_caderneta', titulo: 'Caderneta Predial carregada', onde: 'Documentos', abrir: { tab: 'ficheiros' },
     calc: d => campo(docSlot(d, 'caderneta_predial')) },
-  { fase: 'Proposta aceite', key: 'pa_imi', titulo: 'Comprovativo de IMI carregado', onde: 'Documentos', abrir: { tab: 'ficheiros' },
-    calc: d => campo(docSlot(d, 'comprovativo_imi')) },
   { fase: 'Proposta aceite', key: 'm_onus', titulo: 'Ónus, hipotecas e penhoras verificados na certidão', manual: 'confirmar' },
 
   // ── Enviar proposta ao investidor ──

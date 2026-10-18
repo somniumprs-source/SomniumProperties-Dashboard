@@ -16,7 +16,7 @@ import { assertSafeUpload, AUDIO_ALLOWED_EXT, OFFICE_ALLOWED_EXT, checkUploadRat
 import { ROLE_MODULES, RECORD_RESTRICTED_ROLES, NON_ID_SEGS } from "../_shared/roles.ts";
 import { resolveOrProvisionUser } from "../_shared/userResolve.ts";
 import pool from "../_shared/pg.ts";
-import { auditMiddleware } from "../_shared/audit.ts";
+import { auditMiddleware, getAuditUser } from "../_shared/audit.ts";
 import {
   Imoveis, Investidores, Consultores, Negocios, Despesas, Tarefas,
   ConsultorInteracoes, InvestidorInteracoes, DocumentosInvestidor, Visitas,
@@ -38,7 +38,7 @@ import { removeFromStorage, supabase, uploadPublic, uploadPrivate } from "../_sh
 import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { isWholesaling } from "../_shared/modelos.ts";
 import { avaliarEntrada, painelRequisitos } from "../_shared/dealBreakers.ts";
-import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase } from "../_shared/projetoTarefas.ts";
+import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase, pedeDocumento, documentoDoItem, documentosEmFalta, contextoDocumentos } from "../_shared/projetoTarefas.ts";
 import { ensureOportunidadesScraperTable } from "../_shared/oportunidadesScraper.ts";
 
 // 'Resposta' foi renomeado para 'Recebido' numa migração antiga (ver pg.ts);
@@ -5687,6 +5687,10 @@ app.put("/projetos/tarefas/:tarefaId", async (c: any) => {
         if (!checklistCompleta(ch, inv)) {
           return c.json({ error: ch.por_investidor && !inv.length ? "Associa os investidores ao projeto antes de concluir esta tarefa" : "Completa a checklist antes de concluir a tarefa" }, 400);
         }
+        const emFalta = documentosEmFalta(ch, inv, await contextoDocumentos(pool, atual.fase_id));
+        if (emFalta.length) {
+          return c.json({ error: `Faltam ${emFalta.length} documento(s) na checklist: carrega-os antes de concluir a tarefa` }, 400);
+        }
       }
     }
     if (body.ativa !== undefined && !atual.opcional) return c.json({ error: "Só as tarefas opcionais se ativam ou desativam" }, 400);
@@ -5727,23 +5731,45 @@ app.put("/projetos/tarefas/:tarefaId", async (c: any) => {
 });
 
 // ── PUT item da checklist de uma tarefa (regista quem e quando) — port de routes.js ──
+// Um item que pede documento só fica feito com o documento carregado
+// (projetoTarefas.ts); doc_id liga um documento do projeto ao item.
 app.put("/projetos/tarefas/:tarefaId/checklist", async (c: any) => {
   try {
-    const { chave, feito, nota } = await c.req.json().catch(() => ({}));
+    const { chave, feito, nota, doc_id, na } = await c.req.json().catch(() => ({}));
     const { rows: [t] } = await pool.query("SELECT fase_id, checklist FROM projeto_tarefas WHERE id = $1", [c.req.param("tarefaId")]);
     if (!t) return c.json({ error: "Tarefa não encontrada" }, 404);
     const ch = lerChecklist(t.checklist);
     const k = String(chave || "");
     const itemK = k.includes(":") ? k.split(":").pop() : k;
-    if (!ch || !ch.itens.some((i: any) => i.k === itemK)) return c.json({ error: "Item da checklist inválido" }, 400);
+    const item = ch?.itens.find((i: any) => i.k === itemK);
+    if (!item) return c.json({ error: "Item da checklist inválido" }, 400);
     const u = await resolveCrmUser(c).catch(() => null);
+    const autor = getAuditUser().userNome || u?.nome || u?.email || null;
     const anterior = ch.estado?.[k] || {};
+    const ctx = pedeDocumento(item) ? await contextoDocumentos(pool, t.fase_id) : null;
+    let doc = anterior.doc || null;
+    if (doc_id !== undefined) {
+      const d = doc_id ? ctx?.docsProjeto.find((x: any) => x.id === doc_id) : null;
+      if (doc_id && (!item.doc || !d)) return c.json({ error: "Documento inválido para este item" }, 400);
+      doc = d ? { id: d.id, nome: d.nome, url: d.url } : null;
+    }
+    // «Não aplicável» (só itens com documento): fica feito sem prova, com o motivo.
+    // na = motivo marca; na = null (ou desmarcar o item) anula.
+    if (na !== undefined && !pedeDocumento(item)) return c.json({ error: "Só os itens com documento se marcam como não aplicáveis" }, 400);
+    if (na && !String(na).trim()) return c.json({ error: "Indica o motivo de não se aplicar" }, 400);
+    const naFinal = na !== undefined ? (na ? String(na).trim() : null) : (feito === false ? null : anterior.na || null);
+    const mudou = feito !== undefined || na !== undefined;
     ch.estado = { ...(ch.estado || {}), [k]: {
-      feito: feito !== undefined ? !!feito : !!anterior.feito,
+      feito: na !== undefined ? !!naFinal : feito !== undefined ? !!feito : !!anterior.feito,
       nota: nota !== undefined ? String(nota) : (anterior.nota || ""),
-      por: feito !== undefined ? (u?.nome || u?.email || null) : anterior.por || null,
-      em: feito !== undefined ? new Date().toISOString() : anterior.em || null,
+      por: mudou ? autor : anterior.por || null,
+      em: mudou ? new Date().toISOString() : anterior.em || null,
+      ...(doc ? { doc } : {}),
+      ...(naFinal ? { na: naFinal } : {}),
     } };
+    if (ch.estado[k].feito && !ch.estado[k].na && ctx && !documentoDoItem(item, k, ch.estado, ctx)) {
+      return c.json({ error: "Carrega o documento antes de assinalar este item" }, 400);
+    }
     const { rows } = await pool.query("UPDATE projeto_tarefas SET checklist = $1 WHERE id = $2 RETURNING *", [JSON.stringify(ch), c.req.param("tarefaId")]);
     await recalcularFase(pool, t.fase_id);
     return c.json(rows[0]);

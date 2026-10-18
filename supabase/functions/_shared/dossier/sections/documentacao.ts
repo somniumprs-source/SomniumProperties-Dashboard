@@ -10,7 +10,6 @@ export const CHECKLIST_DOCUMENTACAO = [
   { slot: "planta_imovel", titulo: "Planta do imóvel" },
   { slot: "cpcv", titulo: "Contrato Promessa Compra e Venda" },
   { slot: "id_vendedor", titulo: "Documento de identificação do vendedor" },
-  { slot: "comprovativo_imi", titulo: "Comprovativo de IMI" },
 ];
 
 export function renderDocumentacaoChecklist(b: any, im: any) {

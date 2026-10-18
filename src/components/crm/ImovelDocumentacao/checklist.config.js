@@ -14,7 +14,6 @@ export const CHECKLIST_DOCUMENTACAO = [
   { slot: 'planta_imovel', titulo: 'Planta do imóvel', descricao: 'Planta arquitectónica ou cadastral.' },
   { slot: 'cpcv', titulo: 'Contrato Promessa Compra e Venda', descricao: 'CPCV assinado entre vendedor e Somnium.' },
   { slot: 'id_vendedor', titulo: 'Documento de identificação do vendedor', descricao: 'CC/passaporte e NIF do titular.' },
-  { slot: 'comprovativo_imi', titulo: 'Comprovativo de IMI', descricao: 'Último comprovativo de pagamento de IMI.' },
 ]
 
 export const CHECKLIST_SLOTS = new Set(CHECKLIST_DOCUMENTACAO.map(c => c.slot))
