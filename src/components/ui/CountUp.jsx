@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { animate, useReducedMotion } from 'framer-motion'
 
 // Encontra o primeiro número num valor já formatado ("186 400 €", "18%", "1.234,5").
-const NUM = /-?\d{1,3}(?:[ .  ]\d{3})+(?:,\d+)?|-?\d+(?:,\d+)?/
+const NUM = /-?\d{1,3}(?:[ .\u00a0\u202f]\d{3})+(?:,\d+)?|-?\d+(?:,\d+)?/
 
 function analisar(valor) {
   if (typeof valor === 'number' && Number.isFinite(valor)) {
@@ -13,8 +13,8 @@ function analisar(valor) {
   const m = valor.match(NUM)
   if (!m) return null
   const token = m[0]
-  const grupo = (token.match(/[ .  ]/) || [null])[0]
-  const [int, dec] = token.replace(/[ .  ]/g, '').split(',')
+  const grupo = (token.match(/[ .\u00a0\u202f]/) || [null])[0]
+  const [int, dec] = token.replace(/[ .\u00a0\u202f]/g, '').split(',')
   const casas = dec?.length ?? 0
   const alvo = parseFloat(`${int}.${dec ?? 0}`)
   const antes = valor.slice(0, m.index), depois = valor.slice(m.index + token.length)

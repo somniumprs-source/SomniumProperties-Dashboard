@@ -59,10 +59,13 @@ jobs:
           deno-version: v2.x
       - name: deno check das funcoes criticas
         run: |
+          # Corre dentro de supabase/functions (onde está o deno.json): na raiz o
+          # Deno lê o package.json do Node e exige node_modules.
+          cd supabase/functions
           falhou=0
           for fn in crm dashboard users sops calendar voice; do
             echo "::group::deno check $fn"
-            deno check "supabase/functions/$fn/index.ts" || { echo "::error::deno check falhou em $fn"; falhou=1; }
+            deno check "$fn/index.ts" || { echo "::error::deno check falhou em $fn"; falhou=1; }
             echo "::endgroup::"
           done
           exit $falhou
