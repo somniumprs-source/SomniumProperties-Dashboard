@@ -21,12 +21,12 @@ import { Button } from '../components/ui/Button.jsx'
 import { Modal } from '../components/ui/Modal.jsx'
 import { MultiSelect } from '../components/ui/MultiSelect.jsx'
 import { Combobox } from '../components/ui/Combobox.jsx'
-import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR, PARC_TIPOS, PARC_ESTADOS } from '../constants.js'
+import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, etapaImovel, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR, PARC_TIPOS, PARC_ESTADOS } from '../constants.js'
 import { apiFetch, apiFetchJson, openDocument } from '../lib/api.js'
 import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
 import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 import { RegiaoToggle } from '../components/RegiaoBadge.jsx'
-import { dotClass } from '../lib/statusTone.js'
+import { dotClass, pillClass } from '../lib/statusTone.js'
 import { confirmar } from '../components/ui/ConfirmDialog.jsx'
 import { AnimatePresence } from 'framer-motion'
 
@@ -77,7 +77,7 @@ function Badge({ text, colorMap }) {
   const cls = colorMap?.[clean] ?? colorMap?.[text]
   if (!clean) return <span className="text-caption text-ink-muted">—</span>
   return (
-    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface-muted text-caption font-medium text-ink whitespace-nowrap">
+    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-caption font-medium whitespace-nowrap ${pillClass(cls)}`}>
       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(cls)}`} aria-hidden="true" />{clean}
     </span>
   )
@@ -686,6 +686,8 @@ export function CRM() {
     'Imóveis': {
       columns: ESTADOS_IMOVEIS,
       groupField: 'estado',
+      colorMap: IMOVEL_ESTADO_COLOR,
+      etapaDe: etapaImovel,
       renderCard: (item) => {
         return (
           <div>
@@ -707,6 +709,7 @@ export function CRM() {
       // Colunas dependem do sub-tab (Passivo vs Ativo). Estados terminais
       // (Não qualificado, Inactivo) ficam fora do kanban diário — vê-los na vista tabela.
       columns: (invSubTab === 'Ativo' ? INV_STATUS_ATIVO : INV_STATUS_PASSIVO).filter(s => s !== 'Não qualificado' && s !== 'Inactivo'),
+      colorMap: INV_STATUS_COLOR,
       groupField: 'status',
       renderCard: (item) => {
         const parseArr = (v) => { try { return Array.isArray(v) ? v : JSON.parse(v || '[]') } catch { return [] } }
@@ -798,6 +801,7 @@ export function CRM() {
     },
     'Consultores': {
       columns: ['Cold Call','Follow up','Aberto Parcerias','Acesso imoveis Off market','Consultores em Parceria'],
+      colorMap: CONS_ESTATUTO_COLOR,
       groupField: 'estatuto',
       renderCard: (item) => {
         const imobs = (() => { try { return JSON.parse(item.imobiliaria || '[]').join(', ') } catch { return '' } })()
@@ -1330,6 +1334,8 @@ export function CRM() {
                 onMove={handleMove}
                 onDelete={kanbanOnDelete}
                 onCardClick={kanbanOnCardClick}
+                colorMap={kanbanConfig.colorMap}
+                etapaDe={kanbanConfig.etapaDe}
               />
             )}
 

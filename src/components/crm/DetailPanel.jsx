@@ -120,7 +120,7 @@ const ACAO_COLOR = { INSERT: 'text-success', UPDATE: 'text-ink', DELETE: 'text-d
 export { MOTIVOS_NAO_INTERESSA_PADRAO } from './detailPanelConstants.js'
 import { MOTIVOS_NAO_INTERESSA_PADRAO } from './detailPanelConstants.js'
 import { confirmar } from '../ui/ConfirmDialog.jsx'
-import { dotClass } from '../../lib/statusTone.js'
+import { dotClass, pillClass } from '../../lib/statusTone.js'
 
 function PontosRiscosTab({ imovel, endpoint, id, onUpdate, toast }) {
   const CAMPOS = [
@@ -2626,7 +2626,7 @@ function InvestidorHero({ data }) {
                 <span className="text-[10px] px-2 py-0.5 rounded-full border font-semibold text-warning bg-warning/15 border-warning/30">Passivo</span>
               )}
               <InvClassBadge cls={data.classificacao} />
-              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-surface-muted text-ink"><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(INV_STATUS_COLOR[data.status])}`} aria-hidden="true" />{data.status || '—'}</span>
+              <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${pillClass(INV_STATUS_COLOR[data.status])}`}><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(INV_STATUS_COLOR[data.status])}`} aria-hidden="true" />{data.status || '—'}</span>
               {!!data.nda_assinado && (
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success font-medium inline-flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" /> NDA

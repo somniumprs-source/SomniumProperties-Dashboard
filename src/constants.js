@@ -62,28 +62,23 @@ export const IMOVEL_ESTADOS = [
   'Nao interessa', 'Descartado',
 ]
 
-export const IMOVEL_ESTADO_COLOR = {
-  'Adicionado':                     'bg-gray-100 text-gray-600',
-  'Chamada Não Atendida':           'bg-gray-100 text-gray-600',
-  'Pendentes':                      'bg-gray-100 text-gray-600',
-  'Pré-aprovação':                  'bg-amber-100 text-amber-700',
-  'Necessidade de Visita':          'bg-blue-100 text-blue-700',
-  'Visita Marcada':                 'bg-indigo-100 text-indigo-700',
-  'Follow UP':                      'bg-yellow-100 text-yellow-700',
-  'Estudo de VVR':                  'bg-purple-100 text-purple-700',
-  'Criar Proposta ao Proprietário': 'bg-cyan-100 text-cyan-700',
-  'Enviar proposta ao Proprietário':'bg-cyan-100 text-cyan-700',
-  'Em negociação':                  'bg-orange-100 text-orange-700',
-  'Proposta aceite':                'bg-amber-100 text-amber-700',
-  'Enviar proposta ao investidor':  'bg-teal-100 text-teal-700',
-  'Follow Up após proposta':        'bg-yellow-100 text-yellow-700',
-  'Wholesaling':                    'bg-green-100 text-green-700',
-  'CAEP':                           'bg-green-100 text-green-700',
-  'Fix and Flip':                   'bg-green-100 text-green-700',
-  'Não interessa':                  'bg-red-100 text-red-700',
-  'Nao interessa':                  'bg-red-100 text-red-700',
-  'Descartado':                     'bg-red-100 text-red-700',
-}
+// Fases de imóveis agrupadas por etapa do negócio: a cor é a da etapa, para o
+// pipeline se ler de relance (prospeção → qualificação → análise → proposta →
+// fecho). Follow-ups e saída têm cor própria.
+export const ETAPAS_IMOVEIS = [
+  { nome: 'Prospeção',   cor: 'bg-gray-100 text-gray-600',     fases: ['Pré-aprovação', 'Adicionado', 'Chamada Não Atendida', 'Pendentes'] },
+  { nome: 'Qualificação', cor: 'bg-blue-100 text-blue-700',    fases: ['Necessidade de Visita', 'Visita Marcada'] },
+  { nome: 'Análise',     cor: 'bg-purple-100 text-purple-700', fases: ['Estudo de VVR'] },
+  { nome: 'Proposta',    cor: 'bg-amber-100 text-amber-700',   fases: ['Criar Proposta ao Proprietário', 'Enviar proposta ao Proprietário', 'Em negociação', 'Proposta aceite', 'Enviar proposta ao investidor'] },
+  { nome: 'Follow-up',   cor: 'bg-orange-100 text-orange-700', fases: ['Follow Up após proposta', 'Follow UP'] },
+  { nome: 'Fecho',       cor: 'bg-green-100 text-green-700',   fases: ['Wholesaling', 'CAEP', 'Fix and Flip'] },
+  { nome: 'Saída',       cor: 'bg-red-100 text-red-700',       fases: ['Não interessa', 'Nao interessa', 'Descartado'] },
+]
+export const etapaImovel = fase => ETAPAS_IMOVEIS.find(e => e.fases.includes(fase))?.nome ?? null
+
+export const IMOVEL_ESTADO_COLOR = Object.fromEntries(
+  ETAPAS_IMOVEIS.flatMap(e => e.fases.map(f => [f, e.cor]))
+)
 
 // ── Investidores — Status ────────────────────────────────────
 // Pipeline Passivo (capital em CAEP/Wholesaling — não opera deals)
