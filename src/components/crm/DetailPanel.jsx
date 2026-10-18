@@ -2173,7 +2173,7 @@ function ImovelEditSections({ data, form, setField }) {
             </div>
           </div>
         ) : (
-          <label className="flex items-center justify-center gap-2 px-4 py-6 rounded-lg border-2 border-dashed border-line hover:border-yellow-400 hover:bg-warning/10 cursor-pointer transition-colors">
+          <label className="flex items-center justify-center gap-2 px-4 py-6 rounded-lg border-2 border-dashed border-line hover:border-ink/30 hover:bg-warning/10 cursor-pointer transition-colors">
             <span className="text-sm text-ink-muted">Clique para carregar print do Google Maps (JPG, PNG, WEBP)</span>
             <input type="file" accept="image/*" className="hidden" onChange={async e => {
               const file = e.target.files?.[0]

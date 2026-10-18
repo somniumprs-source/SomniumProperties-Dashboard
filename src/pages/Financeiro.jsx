@@ -775,7 +775,7 @@ function ContabilidadeTab() {
             const activo = v.de === periodo.de && v.ate === periodo.ate
             return (
               <button key={p.label} onClick={() => setPeriodo(v)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${activo ? 'bg-ink text-surface border-ink' : 'bg-surface-raised text-ink-muted border-line hover:border-[#C9A84C]'}`}>
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${activo ? 'bg-ink text-surface border-ink' : 'bg-surface-raised text-ink-muted border-line hover:border-ink/30'}`}>
                 {p.label}
               </button>
             )
@@ -1269,7 +1269,7 @@ function DespesaForm({ item, onSave, onCancel, onReload }) {
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef(null)
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
-  const inputClass = "w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
+  const inputClass = "w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-accent/30"
 
   async function handleUpload(e) {
     const file = e.target.files?.[0]
