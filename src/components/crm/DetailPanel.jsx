@@ -22,6 +22,7 @@ import { DealBreakersPanel } from './DealBreakersPanel.jsx'
 import { TransicaoFaseModal } from './TransicaoFaseModal.jsx'
 import { ProximosPassos } from './ProximosPassos.jsx'
 import { ContactoPessoa } from './ContactoPessoa.jsx'
+import { BaseLegalRGPD } from './BaseLegalRGPD.jsx'
 import { ESTADOS_IMOVEIS, eFaseFollowUp, limpaEstado } from '../../constants/pipelineImoveis.js'
 
 // Leads do consultor: só os imóveis que ele enviou por referência, anunciados
@@ -1371,6 +1372,10 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
 
         {/* Sidebar: Tarefas + Timeline */}
         <div className="space-y-6">
+          {/* Proteção de dados (RGPD) */}
+          {type === 'Investidores' && <BaseLegalRGPD entidade="investidor" id={data.id} />}
+          {type === 'Consultores' && <BaseLegalRGPD entidade="consultor" id={data.id} />}
+          {type === 'Imóveis' && data.proprietario_nome && <BaseLegalRGPD entidade="proprietario" id={data.id} titulo="Proteção de dados do proprietário" />}
           {/* Tarefas */}
           <div>
             <p className="text-xs text-ink-muted uppercase tracking-wide mb-2">Tarefas</p>

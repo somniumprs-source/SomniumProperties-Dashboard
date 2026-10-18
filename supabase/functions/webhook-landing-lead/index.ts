@@ -4,6 +4,7 @@ import { createApp } from "../_shared/hono.ts";
 import { Investidores } from "../_shared/crud.ts";
 import { sendEmail } from "../_shared/emailService.ts";
 import pool from "../_shared/pg.ts";
+import { registar, POLITICA_VERSAO } from "../_shared/consentimentos.ts";
 
 const app = createApp("/webhook-landing-lead");
 
@@ -51,6 +52,10 @@ app.post("/", async (c) => {
     const telemovel = (body.telemovel || "").trim();
     if (!nome || !email) {
       return c.json({ ok: false, error: "Nome e email são obrigatórios" }, 400);
+    }
+    // RGPD (auditoria D4): sem consentimento não se trata o pedido.
+    if (body.consentimento !== true) {
+      return c.json({ ok: false, error: "É preciso aceitar a política de privacidade" }, 400);
     }
 
     const parseNum = (v: any): number | null => {
@@ -120,6 +125,10 @@ app.post("/", async (c) => {
         "INSERT INTO investidor_interacoes (id, investidor_id, data_hora, canal, direcao, notas, created_at, updated_at) VALUES ($1, $2, $3, 'Nota', 'Nota', $4, $3, $3)",
         [crypto.randomUUID(), investidorId, agoraIso, submissaoNotas],
       ).catch((e: any) => console.error('[landing-lead] nota:', e.message));
+      await registar(pool, {
+        entidade: "investidor", id: investidorId, base_legal: "consentimento", origem: "Landing Page",
+        prova: `Caixa «Autorizo a Somnium Properties a contactar-me e a tratar os meus dados, conforme a política de privacidade» assinalada no formulário /investir (política v${body.politica_versao || POLITICA_VERSAO}, ${agoraIso})`,
+      }).catch((e: any) => console.error("[landing-lead] consentimento:", e.message));
     }
 
     // Email de notificação para somniumprs@gmail.com

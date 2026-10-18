@@ -39,6 +39,7 @@ import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { isWholesaling } from "../_shared/modelos.ts";
 import { avaliarEntrada, painelRequisitos } from "../_shared/dealBreakers.ts";
 import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase, pedeDocumento, documentoDoItem, documentosEmFalta, contextoDocumentos } from "../_shared/projetoTarefas.ts";
+import { baseLegal, mapaEstados, registar, retirar, retirados } from "../_shared/consentimentos.ts";
 import { ensureOportunidadesScraperTable } from "../_shared/oportunidadesScraper.ts";
 
 // 'Resposta' foi renomeado para 'Recebido' numa migração antiga (ver pg.ts);
@@ -410,7 +411,9 @@ async function notificarInvestidoresMudancaFase(negocioId: string, novaFaseKey: 
        WHERE id = ANY($1) AND (canal_notificacao IS NULL OR canal_notificacao <> 'nenhum')`,
       [invIds],
     );
+    const semEnvio = await retirados(pool, "investidor", invs.map((i: any) => i.id)); // RGPD: retiraram o consentimento
     const invsFiltered = invs.filter((inv: any) => {
+      if (semEnvio.has(inv.id)) return false;
       let prefs: any[] = [];
       try { prefs = typeof inv.regioes_preferidas === "string" ? JSON.parse(inv.regioes_preferidas || "[]") : (inv.regioes_preferidas || []); } catch { /* ignore */ }
       if (!Array.isArray(prefs) || prefs.length === 0) return true;
@@ -940,6 +943,40 @@ const HOOKS_IMOVEIS = {
     return null;
   },
 };
+// ── Base legal RGPD (auditoria D4): _shared/consentimentos.ts ──
+// Registadas DEPOIS do guard de cada entidade (no Hono, um handler registado
+// antes do app.use não passa por ele) e ANTES do crudRoutes/:id.
+function rotasBaseLegal(path: string, entidade: string) {
+  const autor = async (c: any) => {
+    const u = await resolveCrmUser(c).catch(() => null);
+    return getAuditUser().userNome || u?.nome || u?.email || null;
+  };
+  const erro = (c: any, e: any) => c.json({ error: e.message }, e.status || 500);
+  if (entidade !== "proprietario") {
+    app.get(`${path}/bases-legais`, async (c: any) => {
+      try { return c.json(await mapaEstados(pool, entidade)); } catch (e) { return erro(c, e); }
+    });
+  }
+  app.get(`${path}/:id/base-legal`, async (c: any) => {
+    try { return c.json(await baseLegal(pool, entidade, c.req.param("id"))); } catch (e) { return erro(c, e); }
+  });
+  app.post(`${path}/:id/base-legal`, async (c: any) => {
+    try {
+      const body = await c.req.json().catch(() => ({}));
+      await registar(pool, { ...body, entidade, id: c.req.param("id"), por: await autor(c) });
+      return c.json(await baseLegal(pool, entidade, c.req.param("id")));
+    } catch (e) { return erro(c, e); }
+  });
+  app.post(`${path}/:id/base-legal/retirar`, async (c: any) => {
+    try {
+      const body = await c.req.json().catch(() => ({}));
+      await retirar(pool, { entidade, id: c.req.param("id"), motivo: body?.motivo, por: await autor(c) });
+      return c.json(await baseLegal(pool, entidade, c.req.param("id")));
+    } catch (e) { return erro(c, e); }
+  });
+}
+
+rotasBaseLegal("/imoveis", "proprietario");
 crudRoutes("/imoveis", Imoveis, HOOKS_IMOVEIS);
 
 // ════════════════════════════════════════════════════════════════
@@ -1256,6 +1293,7 @@ const INV_ESTADO_CAMPOS_OBRIGATORIOS: Record<string, { campo: string; label: str
 
 app.use("/investidores", requireModuleOrOwnInvestidor("crm.investidores"));
 app.use("/investidores/*", requireModuleOrOwnInvestidor("crm.investidores"));
+rotasBaseLegal("/investidores", "investidor");
 crudRoutes("/investidores", Investidores, {
   onCreate: async (item: any) => {
     if (driveConfigured()) {
@@ -1656,6 +1694,7 @@ app.get("/consultores/enriched", async (c: any) => {
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
+rotasBaseLegal("/consultores", "consultor");
 crudRoutes("/consultores", Consultores);
 
 // Wholesaling: lucro esperado = fee de cedência da ficha do imóvel (imoveis.fee_cedencia).

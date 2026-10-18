@@ -45,6 +45,7 @@ import { FASES_FIX_FLIP, FASES_POR_CATEGORIA, getTemplateFases, getFaseConfigGlo
 import { avaliarEntrada, painelRequisitos } from './dealBreakers.js'
 import { carregarChecklist, gravarManual } from './checklistImovel.js'
 import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase, pedeDocumento, documentoDoItem, documentosEmFalta, contextoDocumentos } from './projetoTarefas.js'
+import { baseLegal, mapaEstados, registar, retirar, retirados } from './consentimentos.js'
 import { getAuditUser } from './audit.js'
 import { resolveAppUser, RECORD_RESTRICTED_ROLES } from './userRoutes.js'
 import {
@@ -478,6 +479,37 @@ const HOOKS_IMOVEIS = {
     return null
   },
 }
+// ── Base legal RGPD (auditoria D4): src/db/consentimentos.js ──
+// Rotas sob o caminho de cada entidade, para herdarem os guards de acesso.
+function rotasBaseLegal(path, entidade) {
+  const autor = async req => {
+    const u = await resolveCrmUser(req).catch(() => null)
+    return getAuditUser().userNome || u?.nome || u?.email || null
+  }
+  const erro = (res, e) => res.status(e.status || 500).json({ error: e.message })
+  if (entidade !== 'proprietario') {
+    router.get(`${path}/bases-legais`, async (req, res) => {
+      try { res.json(await mapaEstados(pool, entidade)) } catch (e) { erro(res, e) }
+    })
+  }
+  router.get(`${path}/:id/base-legal`, async (req, res) => {
+    try { res.json(await baseLegal(pool, entidade, req.params.id)) } catch (e) { erro(res, e) }
+  })
+  router.post(`${path}/:id/base-legal`, async (req, res) => {
+    try {
+      await registar(pool, { ...(req.body || {}), entidade, id: req.params.id, por: await autor(req) })
+      res.json(await baseLegal(pool, entidade, req.params.id))
+    } catch (e) { erro(res, e) }
+  })
+  router.post(`${path}/:id/base-legal/retirar`, async (req, res) => {
+    try {
+      await retirar(pool, { entidade, id: req.params.id, motivo: req.body?.motivo, por: await autor(req) })
+      res.json(await baseLegal(pool, entidade, req.params.id))
+    } catch (e) { erro(res, e) }
+  })
+}
+
+rotasBaseLegal('/imoveis', 'proprietario')
 crudRoutes('/imoveis', Imoveis, HOOKS_IMOVEIS)
 
 // ════════════════════════════════════════════════════════════════
@@ -824,6 +856,7 @@ const INV_ESTADO_CAMPOS_OBRIGATORIOS = {
   'Investidor Ativo': [{ campo: 'montante_investido', label: 'Montante Investido' }],
 }
 
+rotasBaseLegal('/investidores', 'investidor')
 crudRoutes('/investidores', Investidores, {
   onCreate: async (item) => {
     if (driveConfigured()) {
@@ -1245,6 +1278,7 @@ router.use((req, res, next) => {
   }
   next()
 })
+rotasBaseLegal('/consultores', 'consultor')
 crudRoutes('/consultores', Consultores)
 
 // ── Negocios: auto-criar fases conforme template da categoria ──
@@ -5540,7 +5574,9 @@ async function notificarInvestidoresMudancaFase(negocioId, novaFaseKey) {
        WHERE id = ANY($1) AND (canal_notificacao IS NULL OR canal_notificacao <> 'nenhum')`,
       [invIds]
     )
+    const semEnvio = await retirados(pool, 'investidor', invs.map(i => i.id))  // RGPD: retiraram o consentimento
     const invsFiltered = invs.filter(inv => {
+      if (semEnvio.has(inv.id)) return false
       let prefs = []
       try { prefs = typeof inv.regioes_preferidas === 'string' ? JSON.parse(inv.regioes_preferidas || '[]') : (inv.regioes_preferidas || []) } catch {}
       if (!Array.isArray(prefs) || prefs.length === 0) return true // sem preferência definida → recebe tudo

@@ -6,6 +6,7 @@ import { google } from 'googleapis'
 import pool from './pg.js'
 import { Investidores } from './crud.js'
 import { getGoogleAuth, isGoogleConfigured } from './googleAuth.js'
+import { registar } from './consentimentos.js'
 import { mapRoi, mapExperiencia, mapTipoImovel, mapLocalizacao, mapEquipa } from './investidorMappers.js'
 
 const SHEET_ID = process.env.GOOGLE_FORMS_SHEET_ID || '1NxsPoLBwLuoCh6SvBOrr_sph8BugwJPuZ4vihriIA1s'
@@ -21,6 +22,21 @@ export function isConfigured() {
 /**
  * Sync respostas do Google Forms → investidores no CRM
  */
+// RGPD (auditoria D4): a pergunta de consentimento do formulário (obrigatória)
+// fica registada como base legal, uma vez por investidor. A coluna procura-se
+// pelo texto da pergunta, para não depender da posição no Sheet.
+const PERGUNTA_CONSENTIMENTO = /autorizo|consentimento|rgpd|privacidade|dados pessoais/i
+const RESPOSTA_SIM = /^(sim|aceito|autorizo|concordo|li e aceito)/i
+async function registarConsentimentoForms(id, pergunta, resposta, timestamp) {
+  const { rows } = await pool.query(
+    "SELECT 1 FROM consentimentos WHERE entidade = 'investidor' AND entidade_id = $1 AND origem = 'Google Forms' LIMIT 1", [id])
+  if (rows.length) return
+  await registar(pool, {
+    entidade: 'investidor', id, base_legal: 'consentimento', origem: 'Google Forms',
+    prova: `Resposta «${resposta}» à pergunta «${pergunta}» do Google Forms (${timestamp || 'sem data'})`,
+  })
+}
+
 export async function syncForms() {
   const auth = getAuth()
   if (!auth) throw new Error('Google OAuth não configurado')
@@ -28,13 +44,14 @@ export async function syncForms() {
   const sheets = google.sheets({ version: 'v4', auth })
   const r = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
-    range: 'A:O',
+    range: 'A:Z',
   })
 
   const rows = r.data.values || []
   if (rows.length < 2) return { created: 0, updated: 0, skipped: 0, total: 0 }
 
   const headers = rows[0]
+  const colConsentimento = headers.findIndex(h => PERGUNTA_CONSENTIMENTO.test(h || ''))
   let created = 0, updated = 0, skipped = 0
 
   for (let i = 1; i < rows.length; i++) {
@@ -56,6 +73,7 @@ export async function syncForms() {
     const experiencia = mapExperiencia(row[13])
     const origem = parseOrigem(row[14])
     const timestamp = (row[0] || '').trim()
+    const consentiu = colConsentimento >= 0 && RESPOSTA_SIM.test((row[colConsentimento] || '').trim())
 
     // Verificar duplicados por nome, email OU telefone
     const normNome = nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
@@ -118,6 +136,7 @@ export async function syncForms() {
       } else {
         skipped++
       }
+      if (consentiu) await registarConsentimentoForms(existing.id, headers[colConsentimento], row[colConsentimento], timestamp)
     } else {
       // Criar novo investidor
       const data = {
@@ -146,8 +165,9 @@ export async function syncForms() {
       // região; default ["Coimbra"] se nada bater. Permite múltiplas regiões.
       data.regioes_preferidas = JSON.stringify(detectarRegioes(localizacao))
 
-      await Investidores.create(data)
+      const novo = await Investidores.create(data)
       created++
+      if (consentiu && novo?.id) await registarConsentimentoForms(novo.id, headers[colConsentimento], row[colConsentimento], timestamp)
     }
   }
 

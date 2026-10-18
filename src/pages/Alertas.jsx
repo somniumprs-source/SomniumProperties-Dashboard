@@ -36,6 +36,7 @@ const TIPO_LABEL = {
   vpt_superior:                  'VPT superior',
   imt_caducidade:                'Isenção IMT a caducar',
   relatorio_reuniao_disponivel:  'Relatório de reunião',
+  conservacao_dados:             'RGPD: conservação de dados',
 }
 
 const HEALTH_COLOR = pct =>

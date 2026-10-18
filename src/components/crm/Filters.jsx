@@ -22,6 +22,18 @@ export function Filters({ tab, filters, onChange, regiao }) {
     </select>
   )
 
+  // RGPD (auditoria D4): filtrado no cliente a partir de /bases-legais (CRM.jsx).
+  const baseLegalFilter = (
+    <select value={filters.base_legal ?? ''} onChange={e => set('base_legal', e.target.value)} className={selectClass}>
+      <option value="">RGPD: todas as bases</option>
+      <option value="sem">Sem base registada</option>
+      <option value="consentimento">Consentimento</option>
+      <option value="contrato">Execução de contrato</option>
+      <option value="interesse_legitimo">Interesse legítimo</option>
+      <option value="retirado">Consentimento retirado</option>
+    </select>
+  )
+
   return (
     <div className="flex flex-wrap gap-2 items-center">
       {tab === 'Imóveis' && <>
@@ -62,6 +74,7 @@ export function Filters({ tab, filters, onChange, regiao }) {
             <option key={o} value={o}>{o}</option>
           )}
         </select>
+        {baseLegalFilter}
       </>}
       {tab === 'Consultores' && <>
         <select value={filters.estatuto ?? ''} onChange={e => set('estatuto', e.target.value)} className={selectClass}>
@@ -80,6 +93,7 @@ export function Filters({ tab, filters, onChange, regiao }) {
           <option value="">Todas as classes</option>
           {['A','B','C','D'].map(o => <option key={o} value={o}>{o}</option>)}
         </select>
+        {baseLegalFilter}
         {concelhoFilter}
       </>}
       {tab === 'Negócios' && <>

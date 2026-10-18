@@ -259,6 +259,10 @@ try {
         if (!nome || !email) {
           return res.status(400).json({ ok: false, error: 'Nome e email são obrigatórios' })
         }
+        // RGPD (auditoria D4): sem consentimento não se trata o pedido.
+        if (body.consentimento !== true) {
+          return res.status(400).json({ ok: false, error: 'É preciso aceitar a política de privacidade' })
+        }
 
         const parseNum = (v) => {
           if (v == null) return null
@@ -327,6 +331,11 @@ try {
             "INSERT INTO investidor_interacoes (id, investidor_id, data_hora, canal, direcao, notas, created_at, updated_at) VALUES ($1, $2, $3, 'Nota', 'Nota', $4, $3, $3)",
             [(await import('crypto')).randomUUID(), investidorId, agoraIso, submissaoNotas],
           ).catch((e) => console.error('[landing-lead] nota:', e.message))
+          const { registar, POLITICA_VERSAO } = await import('./src/db/consentimentos.js')
+          await registar(pgPool, {
+            entidade: 'investidor', id: investidorId, base_legal: 'consentimento', origem: 'Landing Page',
+            prova: `Caixa «Autorizo a Somnium Properties a contactar-me e a tratar os meus dados, conforme a política de privacidade» assinalada no formulário /investir (política v${body.politica_versao || POLITICA_VERSAO}, ${agoraIso})`,
+          }).catch((e) => console.error('[landing-lead] consentimento:', e.message))
         }
 
         // Email de notificação para somniumprs@gmail.com
@@ -798,6 +807,7 @@ const getObras        = async () => []
 // Cache com TTL para endpoints que fazem queries pesadas
 import { TTLCache } from './src/db/utils/ttlCache.js'
 import pool from './src/db/pg.js'
+import { alertasConservacao } from './src/db/consentimentos.js'
 import http from 'node:http'
 const cache = new TTLCache(60000) // 60s default TTL
 app.post('/api/cache/clear', (_req, res) => { cache.clear(); res.json({ ok: true }) })
@@ -5412,6 +5422,9 @@ app.get('/api/alertas', endpointCache(300000), async (req, res) => {
     } catch (e) {
       console.warn('[alertas] Erro ao verificar análises:', e.message)
     }
+
+    // ── RGPD: dados a rever pelo prazo de conservação (auditoria D4) ──
+    try { alerts.push(...await alertasConservacao(pool)) } catch (e) { console.warn('[alertas] conservação:', e.message) }
 
     // Sort by severity
     const SEV_ORDER = { critico: 0, aviso: 1, info: 2 }

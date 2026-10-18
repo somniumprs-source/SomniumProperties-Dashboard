@@ -600,12 +600,14 @@ export function CRM() {
     enabled: tab !== 'Oportunidades',
     queryFn: async () => {
       // Geral (regiaoActiva = null) é válido — backend devolve sem filtro.
+      // base_legal (RGPD) não é coluna: filtra-se no fim, a partir de /bases-legais.
+      const { base_legal: filtroBaseLegal, ...filtrosApi } = effectiveFilters
       let items
       if (search) {
         const params = new URLSearchParams({ search })
         // Investidores: sempre filtrar por tipo mesmo na pesquisa
         if (tab === 'Investidores') params.set('tipo_principal', invSubTab)
-        for (const [k, v] of Object.entries(effectiveFilters)) { if (v && k !== 'tipo_principal') params.set(k, v) }
+        for (const [k, v] of Object.entries(filtrosApi)) { if (v && k !== 'tipo_principal') params.set(k, v) }
         const d = await apiFetchJson(`/api/crm/${endpoint}?${params}`, { regiao: regiaoActiva })
         items = d.data ?? []
         // Filtrar client-side se backend não suportar tipo_principal na pesquisa
@@ -613,7 +615,7 @@ export function CRM() {
       } else if (tab === 'Consultores') {
         // Usar endpoint enriquecido para consultores (com métricas e alertas)
         const params = new URLSearchParams()
-        for (const [k, v] of Object.entries(effectiveFilters)) { if (v) params.set(k, v) }
+        for (const [k, v] of Object.entries(filtrosApi)) { if (v) params.set(k, v) }
         const d = await apiFetchJson(`/api/crm/consultores/enriched${params.toString() ? '?' + params : ''}`, { regiao: regiaoActiva })
         items = d.data ?? []
         // Filtrar client-side por estado_avaliacao se necessário
@@ -622,11 +624,15 @@ export function CRM() {
         // limit generoso (achado da auditoria: volumes reais são pequenos —
         // ver Problema 24 — mas 200 já não tinha margem nenhuma de segurança)
         const params = new URLSearchParams({ limit: '1000' })
-        for (const [k, v] of Object.entries(effectiveFilters)) { if (v) params.set(k, v) }
+        for (const [k, v] of Object.entries(filtrosApi)) { if (v) params.set(k, v) }
         const d = await apiFetchJson(`/api/crm/${endpoint}?${params}`, { regiao: regiaoActiva })
         items = d.data ?? []
         // Segurança extra: filtrar client-side para investidores
         if (tab === 'Investidores') items = items.filter(i => tipoPrincipalIncludes(i.tipo_principal, invSubTab))
+      }
+      if (filtroBaseLegal && (tab === 'Investidores' || tab === 'Consultores')) {
+        const mapa = await apiFetchJson(`/api/crm/${tab === 'Investidores' ? 'investidores' : 'consultores'}/bases-legais`)
+        items = items.filter(i => (mapa[i.id] || 'sem') === filtroBaseLegal)
       }
       return { items, total: items.length }
     },
