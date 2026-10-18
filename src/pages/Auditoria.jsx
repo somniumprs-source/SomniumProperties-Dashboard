@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronDown, ChevronRight, History, Search, RefreshCcw } from 'lucide-react'
+import { ChevronDown, ChevronRight, Search, RefreshCcw } from 'lucide-react'
 import { apiFetch } from '../lib/api.js'
+import { friendlyError } from '../lib/friendlyError.js'
 import { ScrollableTable } from '../components/ui/ScrollableTable.jsx'
+import { Header } from '../components/layout/Header.jsx'
 
 const ENTIDADES = [
   { value: '', label: 'Todas' },
@@ -30,9 +32,9 @@ function formatValor(v) {
 
 function entidadeLink(row) {
   const nome = row.entidade_nome || row.entidade_id
-  if (row.entidade === 'imoveis') return <Link to={`/crm?aba=imoveis&id=${row.entidade_id}`} className="text-brand-gold hover:underline">{nome}</Link>
-  if (row.entidade === 'investidores') return <Link to={`/crm?aba=investidores&id=${row.entidade_id}`} className="text-brand-gold hover:underline">{nome}</Link>
-  if (row.entidade === 'negocios') return <Link to={`/financeiro?id=${row.entidade_id}`} className="text-brand-gold hover:underline">{nome}</Link>
+  if (row.entidade === 'imoveis') return <Link to={`/crm?aba=imoveis&id=${row.entidade_id}`} className="text-ink font-medium underline decoration-line underline-offset-2 hover:decoration-ink">{nome}</Link>
+  if (row.entidade === 'investidores') return <Link to={`/crm?aba=investidores&id=${row.entidade_id}`} className="text-ink font-medium underline decoration-line underline-offset-2 hover:decoration-ink">{nome}</Link>
+  if (row.entidade === 'negocios') return <Link to={`/financeiro?id=${row.entidade_id}`} className="text-ink font-medium underline decoration-line underline-offset-2 hover:decoration-ink">{nome}</Link>
   return nome
 }
 
@@ -71,7 +73,7 @@ export default function Auditoria() {
       setRows(j.rows || [])
       setTotal(j.total || 0)
     } catch (e) {
-      setError('Erro a carregar: ' + e.message)
+      setError(friendlyError(e))
     } finally {
       setLoading(false)
     }
@@ -80,7 +82,7 @@ export default function Auditoria() {
   useEffect(() => { load() }, [offset])
 
   useEffect(() => {
-    apiFetch('/api/crm/auditoria/utilizadores').then(r => r.ok ? r.json() : []).then(setUtilizadores).catch(() => {})
+    apiFetch('/api/crm/auditoria/utilizadores').then(r => r.ok ? r.json() : []).then(u => setUtilizadores(Array.isArray(u) ? u : [])).catch(() => {})
   }, [])
 
   function toggleExpand(id) {
@@ -99,52 +101,45 @@ export default function Auditoria() {
   const paginaActual = Math.floor(offset / limit) + 1
 
   return (
+    <>
+    <Header title="Auditoria" subtitle="Histórico de alterações em imóveis, investidores e negócios" onRefresh={load} loading={loading} />
     <div className="p-4 sm:p-6 max-w-7xl mx-auto min-w-0 w-full">
-      <header className="flex items-center gap-3 mb-6 pl-12 sm:pl-0">
-        <div className="w-10 h-10 rounded-xl bg-brand-gold/10 flex items-center justify-center">
-          <History className="w-5 h-5 text-brand-gold" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-brand-dark">Auditoria</h1>
-          <p className="text-sm text-ink-muted">Histórico de alterações em imóveis, investidores e negócios</p>
-        </div>
-      </header>
 
       <form onSubmit={aplicarFiltros} className="bg-surface-raised border border-line rounded-2xl p-4 mb-4 grid grid-cols-1 md:grid-cols-5 gap-3">
         <div>
-          <label className="text-[11px] uppercase tracking-wider text-ink-muted font-semibold">Entidade</label>
+          <label className="text-overline uppercase text-ink-muted font-semibold">Entidade</label>
           <select value={filtros.entidade} onChange={e => setFiltros(f => ({ ...f, entidade: e.target.value }))}
-            className="mt-1 w-full text-sm border border-line rounded-lg px-3 py-2 bg-surface-raised focus:border-brand-gold focus:outline-none">
+            className="mt-1 w-full text-sm border border-line rounded-lg px-3 py-2 bg-surface-raised text-ink transition-colors duration-fast focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none">
             {ENTIDADES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
         <div>
-          <label className="text-[11px] uppercase tracking-wider text-ink-muted font-semibold">Utilizador</label>
+          <label className="text-overline uppercase text-ink-muted font-semibold">Utilizador</label>
           <input type="text" list="audit-users" value={filtros.user_email}
             onChange={e => setFiltros(f => ({ ...f, user_email: e.target.value }))}
             placeholder="nome ou email"
-            className="mt-1 w-full text-sm border border-line rounded-lg px-3 py-2 focus:border-brand-gold focus:outline-none" />
+            className="mt-1 w-full text-sm border border-line rounded-lg px-3 py-2 bg-surface-raised text-ink transition-colors duration-fast focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none" />
           <datalist id="audit-users">
             {utilizadores.map(u => <option key={u} value={u} />)}
           </datalist>
         </div>
         <div>
-          <label className="text-[11px] uppercase tracking-wider text-ink-muted font-semibold">Desde</label>
+          <label className="text-overline uppercase text-ink-muted font-semibold">Desde</label>
           <input type="date" value={filtros.from} onChange={e => setFiltros(f => ({ ...f, from: e.target.value }))}
-            className="mt-1 w-full text-sm border border-line rounded-lg px-3 py-2 focus:border-brand-gold focus:outline-none" />
+            className="mt-1 w-full text-sm border border-line rounded-lg px-3 py-2 bg-surface-raised text-ink transition-colors duration-fast focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none" />
         </div>
         <div>
-          <label className="text-[11px] uppercase tracking-wider text-ink-muted font-semibold">Até</label>
+          <label className="text-overline uppercase text-ink-muted font-semibold">Até</label>
           <input type="date" value={filtros.to} onChange={e => setFiltros(f => ({ ...f, to: e.target.value }))}
-            className="mt-1 w-full text-sm border border-line rounded-lg px-3 py-2 focus:border-brand-gold focus:outline-none" />
+            className="mt-1 w-full text-sm border border-line rounded-lg px-3 py-2 bg-surface-raised text-ink transition-colors duration-fast focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none" />
         </div>
         <div className="flex items-end gap-2">
           <button type="submit" disabled={loading}
-            className="flex-1 bg-brand-gold text-brand-dark font-semibold text-sm rounded-lg px-3 py-2 hover:bg-brand-gold/90 disabled:opacity-50 flex items-center justify-center gap-2">
+            className="flex-1 bg-accent text-accent-foreground font-semibold text-sm rounded-lg px-3 py-2 hover:bg-accent/90 transition-colors duration-fast disabled:opacity-50 flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50">
             <Search className="w-4 h-4" /> Filtrar
           </button>
           <button type="button" onClick={() => { setFiltros({ entidade: '', user_email: '', from: '', to: '' }); setOffset(0); setTimeout(load, 0) }}
-            className="p-2 text-ink-muted hover:bg-surface-muted rounded-lg" title="Limpar filtros">
+            className="p-2 text-ink-muted hover:text-ink hover:bg-surface-muted rounded-lg transition-colors duration-fast" title="Limpar filtros" aria-label="Limpar filtros">
             <RefreshCcw className="w-4 h-4" />
           </button>
         </div>
@@ -158,7 +153,7 @@ export default function Auditoria() {
         <ScrollableTable>
         <table className="w-full text-sm min-w-[680px]">
           <thead className="bg-surface border-b border-line">
-            <tr className="text-[11px] uppercase tracking-wider text-ink-muted">
+            <tr className="text-overline uppercase text-ink-muted">
               <th className="text-left px-3 py-2 w-8"></th>
               <th className="text-left px-3 py-2">Data/Hora</th>
               <th className="text-left px-3 py-2">Utilizador</th>
@@ -190,13 +185,14 @@ export default function Auditoria() {
           <span>{total} registos · página {paginaActual} de {totalPaginas}</span>
           <div className="flex items-center gap-2">
             <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}
-              className="px-3 py-1 rounded border border-line disabled:opacity-30">Anterior</button>
+              className="px-3 py-1 rounded-lg border border-line text-ink hover:bg-surface-muted transition-colors duration-fast disabled:opacity-30">Anterior</button>
             <button disabled={offset + limit >= total} onClick={() => setOffset(offset + limit)}
-              className="px-3 py-1 rounded border border-line disabled:opacity-30">Seguinte</button>
+              className="px-3 py-1 rounded-lg border border-line text-ink hover:bg-surface-muted transition-colors duration-fast disabled:opacity-30">Seguinte</button>
           </div>
         </div>
       </div>
     </div>
+    </>
   )
 }
 
@@ -207,7 +203,7 @@ function RowAuditoria({ row, isOpen, op, nCampos, onToggle }) {
         <td className="px-3 py-2 text-ink-muted">
           {nCampos > 0 ? (isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />) : null}
         </td>
-        <td className="px-3 py-2 whitespace-nowrap text-ink">
+        <td className="px-3 py-2 whitespace-nowrap text-ink num">
           {new Date(row.created_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'medium' })}
         </td>
         <td className="px-3 py-2 text-ink">
@@ -222,10 +218,10 @@ function RowAuditoria({ row, isOpen, op, nCampos, onToggle }) {
             <span className="text-ink-muted italic">sistema</span>
           )}
         </td>
-        <td className="px-3 py-2 text-ink-muted text-[11px] uppercase tracking-wider">{ENTIDADE_LABEL[row.entidade] || row.entidade}</td>
+        <td className="px-3 py-2 text-ink-muted text-caption">{ENTIDADE_LABEL[row.entidade] || row.entidade}</td>
         <td className="px-3 py-2">{entidadeLink(row)}</td>
         <td className="px-3 py-2">
-          <span className={`text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded ${op.cls}`}>{op.label}</span>
+          <span className={`text-caption font-medium px-2 py-0.5 rounded-full ${op.cls}`}>{op.label}</span>
         </td>
         <td className="px-3 py-2 text-ink-muted">{nCampos}</td>
       </tr>
@@ -241,7 +237,7 @@ function RowAuditoria({ row, isOpen, op, nCampos, onToggle }) {
             ) : (
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="text-[10px] uppercase tracking-wider text-ink-muted">
+                  <tr className="text-overline uppercase text-ink-muted">
                     <th className="text-left px-2 py-1">Campo</th>
                     <th className="text-left px-2 py-1">Antes</th>
                     <th className="text-left px-2 py-1">Depois</th>
@@ -250,7 +246,7 @@ function RowAuditoria({ row, isOpen, op, nCampos, onToggle }) {
                 <tbody>
                   {(row.alteracoes || []).map((a, i) => (
                     <tr key={i} className="border-t border-line">
-                      <td className="px-2 py-1.5 num text-[11px] text-brand-gold">{a.campo}</td>
+                      <td className="px-2 py-1.5 text-caption text-ink-muted">{a.campo}</td>
                       <td className="px-2 py-1.5 text-ink-muted">{formatValor(a.antes)}</td>
                       <td className="px-2 py-1.5 text-ink font-medium">{formatValor(a.depois)}</td>
                     </tr>

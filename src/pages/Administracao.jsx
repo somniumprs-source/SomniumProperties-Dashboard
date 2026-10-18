@@ -11,17 +11,17 @@ const TABS = [
   { key: 'operacoes',  label: 'Operações',          icon: Timer },
   { key: 'sop',        label: 'SOP',                icon: BookOpen },
   { key: 'relatorios', label: 'Relatórios',           icon: FileBarChart },
-  { key: 'regiao',     label: 'Multi-Região',        icon: Map },
-  { key: 'chamadas',   label: 'Avaliação de Calls', icon: Headphones },
+  { key: 'regiao',     label: 'Multi-região',        icon: Map },
+  { key: 'chamadas',   label: 'Avaliação de calls', icon: Headphones },
 ]
 
 const SUBTITLES = {
   agenda:     'Google Calendar e registo das operações da equipa',
-  operacoes:  'Horas, custo, actividades e eficiência',
+  operacoes:  'Horas, custo, atividades e eficiência',
   sop:        'Procedimentos operacionais por departamento',
   relatorios: 'Sínteses semanais de reuniões e estudos estratégicos da Somnium Properties',
   regiao:     'Mercado de referência, compliance, hot zones e benchmarking por região',
-  chamadas:   'KPIs de Cold/Discovery/Close Call e Pivot para Parceria (SOP 2)',
+  chamadas:   'KPIs de cold, discovery e close call e pivot para parceria (SOP 2)',
 }
 
 export function Administracao() {
@@ -33,10 +33,10 @@ export function Administracao() {
   const direction = useTabDirection(active, TABS.map(t => t.key))
 
   return (
-    <div className="flex-1 flex flex-col bg-surface  min-h-screen">
+    <div className="flex-1 flex flex-col bg-surface min-h-screen">
       <Header title="Administração" subtitle={SUBTITLES[active]} />
 
-      <div className="bg-surface-raised  px-4 sm:px-7 border-b border-line ">
+      <div className="bg-surface-raised px-4 sm:px-7 border-b border-line">
         <Tabs
           variant="underline"
           items={TABS}

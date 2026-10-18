@@ -4,12 +4,21 @@
  * (detectarInconsistencias) a partir do objecto dados_chave de cada análise.
  */
 
-// Estados visuais (palette Somnium).
+// Estados visuais. `cor`/`bg` (hex) servem o PDF (src/db/pdfImovelDocs.js);
+// no ecrã usa-se `tom` → classes de TOM (tokens, tratam o modo escuro).
 export const ESTADOS = {
-  pendente: { label: 'Não analisado', cor: '#9ca3af', bg: '#f3f4f6' },
-  validado: { label: 'Válido', cor: '#27ae60', bg: '#eafaf0' },
-  warning: { label: 'Com alertas', cor: '#e67e22', bg: '#fdf2e8' },
-  erro: { label: 'Problema', cor: '#c0392b', bg: '#fdecea' },
+  pendente: { label: 'Não analisado', cor: '#9ca3af', bg: '#f3f4f6', tom: 'neutro' },
+  validado: { label: 'Válido', cor: '#27ae60', bg: '#eafaf0', tom: 'sucesso' },
+  warning: { label: 'Com alertas', cor: '#e67e22', bg: '#fdf2e8', tom: 'aviso' },
+  erro: { label: 'Problema', cor: '#c0392b', bg: '#fdecea', tom: 'perigo' },
+}
+
+// Classes por tom: `pill` para etiquetas, `text` para texto colorido, `box` para faixas.
+export const TOM = {
+  neutro: { pill: 'bg-surface-muted text-ink-muted', text: 'text-ink-muted', box: 'bg-surface-muted text-ink' },
+  sucesso: { pill: 'bg-success/10 text-success', text: 'text-success', box: 'bg-success/10 text-success' },
+  aviso: { pill: 'bg-warning/10 text-warning', text: 'text-warning', box: 'bg-warning/10 text-warning' },
+  perigo: { pill: 'bg-danger/10 text-danger', text: 'text-danger', box: 'bg-danger/10 text-danger' },
 }
 
 // Converte o campo `valido` da análise (true|false|'warning') no estado visual.
@@ -20,9 +29,9 @@ export function estadoFromValido(valido) {
 }
 
 export const SEVERIDADE = {
-  critical: { label: 'Crítico', icone: '⛔', cor: '#c0392b', rank: 0 },
-  warning: { label: 'Alerta', icone: '⚠️', cor: '#e67e22', rank: 1 },
-  info: { label: 'Info', icone: 'ℹ️', cor: '#6b7280', rank: 2 },
+  critical: { label: 'Crítico', icone: '⛔', cor: '#c0392b', rank: 0, tom: 'perigo' },
+  warning: { label: 'Alerta', icone: '⚠️', cor: '#e67e22', rank: 1, tom: 'aviso' },
+  info: { label: 'Info', icone: 'ℹ️', cor: '#6b7280', rank: 2, tom: 'neutro' },
 }
 
 // Chaves comparáveis entre documentos (extraídas pela IA em dados_chave).

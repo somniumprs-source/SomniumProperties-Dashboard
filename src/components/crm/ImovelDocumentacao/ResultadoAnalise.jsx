@@ -1,25 +1,25 @@
-import { SEVERIDADE } from './documentacao.config.js'
+import { SEVERIDADE, TOM } from './documentacao.config.js'
 
 export function ResultadoAnalise({ analise }) {
   const badge = analise.valido === true
-    ? { txt: 'Válido', cor: '#27ae60', bg: '#eafaf0' }
+    ? { txt: 'Válido', tom: 'sucesso' }
     : analise.valido === 'warning'
-      ? { txt: 'Atenção', cor: '#e67e22', bg: '#fdf2e8' }
-      : { txt: 'Inválido', cor: '#c0392b', bg: '#fdecea' }
+      ? { txt: 'Atenção', tom: 'aviso' }
+      : { txt: 'Inválido', tom: 'perigo' }
 
   return (
-    <div className="px-4 py-3 border-t border-neutral-100 space-y-3">
+    <div className="px-4 py-3 border-t border-line space-y-3">
       <div className="flex items-center gap-2">
-        <span className="text-[11px] font-bold px-2 py-1 rounded-lg" style={{ backgroundColor: badge.bg, color: badge.cor }}>{badge.txt}</span>
-        {analise.tipo_documento && <span className="text-[11px] text-neutral-500">{analise.tipo_documento}</span>}
+        <span className={`text-caption font-semibold px-2 py-0.5 rounded-full ${TOM[badge.tom].pill}`}>{badge.txt}</span>
+        {analise.tipo_documento && <span className="text-caption text-ink-muted">{analise.tipo_documento}</span>}
       </div>
 
       {analise.campos?.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {analise.campos.slice(0, 6).map((c, i) => (
-            <div key={i} className="rounded-lg bg-neutral-50 px-2.5 py-1.5">
-              <p className="text-[9px] uppercase tracking-wide text-neutral-400 truncate">{c.label}</p>
-              <p className="text-xs font-medium text-neutral-700 truncate">{c.valor}</p>
+            <div key={i} className="rounded-lg bg-surface px-2.5 py-1.5">
+              <p className="text-overline uppercase text-ink-muted truncate">{c.label}</p>
+              <p className="text-xs font-medium text-ink truncate">{c.valor}</p>
             </div>
           ))}
         </div>
@@ -32,14 +32,14 @@ export function ResultadoAnalise({ analise }) {
             return (
               <div key={i} className="flex gap-2 text-xs">
                 <span className="shrink-0">{sev.icone}</span>
-                <span><strong style={{ color: sev.cor }}>{f.titulo}</strong>{f.descricao ? ` — ${f.descricao}` : ''}</span>
+                <span><strong className={TOM[sev.tom].text}>{f.titulo}</strong>{f.descricao ? ` — ${f.descricao}` : ''}</span>
               </div>
             )
           })}
         </div>
       )}
 
-      {analise.resumo && <p className="text-xs text-neutral-500 leading-relaxed">{analise.resumo}</p>}
+      {analise.resumo && <p className="text-xs text-ink-muted leading-relaxed">{analise.resumo}</p>}
     </div>
   )
 }

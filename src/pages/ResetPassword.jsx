@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase.js'
+import { friendlyError } from '../lib/friendlyError.js'
 
-const GOLD = '#C9A84C'
+// Ecrã de entrada: sempre escuro (bg-brand-dark é constante), cores brancas com opacidade.
+const LABEL = 'block text-caption font-medium text-white/70 mb-1.5'
+const INPUT = 'w-full rounded-lg px-3.5 py-2.5 text-sm text-white bg-white/[0.06] border border-white/15 placeholder:text-white/30 transition-colors duration-fast focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30'
 
 // Página pública de reset de password. Link gerado com o token como
 // segmento do caminho (/resetpassword/<token>) em vez do action_link bruto
@@ -61,30 +64,29 @@ export function ResetPassword({ firstAccess = false }) {
       setStatus('done')
       setTimeout(() => { window.location.href = '/' }, 1500)
     } catch (err) {
-      setError(err.message || 'Erro ao definir password')
+      setError(/should be different|same.*password/i.test(String(err?.message)) ? 'A nova password tem de ser diferente da anterior.' : /weak|at least/i.test(String(err?.message)) ? 'A password é demasiado fraca. Usa pelo menos 6 caracteres, com letras e números.' : friendlyError(err))
       setStatus('ready')
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#0d0d0d' }}>
+    <div className="min-h-screen flex items-center justify-center bg-brand-dark px-4 py-10">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <img src="/logo-transparent.png" alt="Somnium Properties" className="mx-auto mb-4" style={{ height: 140 }} />
-          <div className="h-px mx-auto w-32" style={{ background: `linear-gradient(90deg, transparent, ${GOLD}55, transparent)` }} />
+        <div className="text-center mb-6">
+          <img src="/logo-transparent.png" alt="Somnium Properties" className="mx-auto h-28 sm:h-32 w-auto" />
         </div>
 
-        <div className="rounded-2xl p-8 border" style={{ backgroundColor: '#111', borderColor: '#1a1a1a' }}>
-          <h2 className="text-white text-lg font-semibold text-center mb-6">
+        <div className="rounded-2xl p-6 sm:p-8 border border-white/10 bg-white/[0.03]">
+          <h1 className="font-display text-2xl text-white text-center mb-6">
             {firstAccess ? 'Criar a tua password' : 'Definir nova password'}
-          </h2>
+          </h1>
 
           {status === 'validating' && (
-            <p className="text-ink-muted text-sm text-center">A validar o link...</p>
+            <p className="text-white/60 text-sm text-center">A validar o link…</p>
           )}
 
           {status === 'invalid' && (
-            <div className="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm text-center">
+            <div role="alert" className="px-3 py-2.5 rounded-lg bg-red-500/10 border border-red-400/30 text-red-200 text-ui">
               {firstAccess
                 ? 'Este link é inválido ou já expirou. Pede um novo link de acesso.'
                 : 'Este link é inválido ou já expirou. Pede um novo link de reset.'}
@@ -94,37 +96,35 @@ export function ResetPassword({ firstAccess = false }) {
           {(status === 'ready' || status === 'saving') && (
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               {error && (
-                <div className="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm text-center">
+                <div role="alert" className="px-3 py-2.5 rounded-lg bg-red-500/10 border border-red-400/30 text-red-200 text-ui">
                   {error}
                 </div>
               )}
               <div>
-                <label className="text-xs text-ink-muted block mb-1.5">{firstAccess ? 'Password' : 'Nova password'}</label>
-                <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                  className="w-full rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:ring-2"
-                  style={{ backgroundColor: '#1a1a1a', borderColor: '#333' }}
+                <label htmlFor="reset-password" className={LABEL}>{firstAccess ? 'Password' : 'Nova password'}</label>
+                <input id="reset-password" type="password" value={password} onChange={e => setPassword(e.target.value)}
+                  className={INPUT} autoComplete="new-password"
                   placeholder="••••••••" autoFocus required />
               </div>
               <div>
-                <label className="text-xs text-ink-muted block mb-1.5">Confirmar password</label>
-                <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
-                  className="w-full rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:ring-2"
-                  style={{ backgroundColor: '#1a1a1a', borderColor: '#333' }}
+                <label htmlFor="reset-confirmar" className={LABEL}>Confirmar password</label>
+                <input id="reset-confirmar" type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
+                  className={INPUT} autoComplete="new-password"
                   placeholder="••••••••" required />
               </div>
               <button type="submit" disabled={status === 'saving' || !password || !confirm}
-                className="w-full py-2.5 rounded-lg text-sm font-semibold text-ink disabled:opacity-40 transition-opacity mt-2 bg-accent text-accent-foreground hover:brightness-[1.04]">
-                {status === 'saving' ? 'A guardar...' : 'Guardar password'}
+                className="w-full mt-2 py-2.5 rounded-lg text-sm font-semibold bg-accent text-accent-foreground hover:bg-accent/90 transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-dark disabled:opacity-40 disabled:cursor-not-allowed">
+                {status === 'saving' ? 'A guardar…' : 'Guardar password'}
               </button>
             </form>
           )}
 
           {status === 'done' && (
-            <p className="text-ink-muted/70 text-sm text-center">Password definida. A entrar...</p>
+            <p className="text-white/70 text-sm text-center">Password definida. A entrar…</p>
           )}
         </div>
 
-        <p className="text-center text-xs mt-6" style={{ color: '#333' }}>
+        <p className="text-center text-caption text-white/35 mt-6">
           Somnium Properties © 2026
         </p>
       </div>
