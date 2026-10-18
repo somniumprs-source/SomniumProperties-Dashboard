@@ -202,6 +202,9 @@
 .dark input, .dark select, .dark textarea {
   background-color: #171717 !important;
   color: #e5e5e5 !important;
+}
+/* Campos com erro (aria-invalid) ficam de fora para manter a borda vermelha. */
+.dark input:not([aria-invalid="true"]), .dark select:not([aria-invalid="true"]), .dark textarea:not([aria-invalid="true"]) {
   border-color: #333 !important;
 }
 .dark input::placeholder, .dark textarea::placeholder {

@@ -50,7 +50,7 @@ export const Input = forwardRef(function Input(
     ? { step: rest.step ?? 'any', onWheel: rest.onWheel ?? (e => e.target.blur()) }
     : null
   const input = (
-    <input ref={ref} className={`${baseClass(size, error, rest.disabled)} ${prefix ? 'pl-9' : ''} ${suffix ? 'pr-9' : ''} ${className}`} {...rest} {...numberProps} />
+    <input ref={ref} aria-invalid={error ? true : undefined} className={`${baseClass(size, error, rest.disabled)} ${prefix ? 'pl-9' : ''} ${suffix ? 'pr-9' : ''} ${className}`} {...rest} {...numberProps} />
   )
   const inner = (prefix || suffix) ? (
     <div className="relative">
@@ -67,7 +67,7 @@ export const Select = forwardRef(function Select(
 ) {
   return (
     <Wrapper label={label} error={error} hint={hint} className={wrapperClassName}>
-      <select ref={ref} className={`${baseClass(size, error, rest.disabled)} cursor-pointer pr-8 appearance-none bg-no-repeat bg-right ${className}`}
+      <select ref={ref} aria-invalid={error ? true : undefined} className={`${baseClass(size, error, rest.disabled)} cursor-pointer pr-8 appearance-none bg-no-repeat bg-right ${className}`}
         style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundPosition: 'right 10px center', backgroundSize: '12px' }}
         {...rest}>
         {children}
@@ -81,7 +81,7 @@ export const Textarea = forwardRef(function Textarea(
 ) {
   return (
     <Wrapper label={label} error={error} hint={hint} className={wrapperClassName}>
-      <textarea ref={ref} className={`${baseClass(size, error, rest.disabled)} resize-y min-h-[60px] ${className}`} {...rest} />
+      <textarea ref={ref} aria-invalid={error ? true : undefined} className={`${baseClass(size, error, rest.disabled)} resize-y min-h-[60px] ${className}`} {...rest} />
     </Wrapper>
   )
 })
