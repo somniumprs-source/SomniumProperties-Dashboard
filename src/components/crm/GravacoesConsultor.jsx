@@ -7,9 +7,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Mic } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
+import { useToast } from '../ui/Toast.jsx'
+import { friendlyError } from '../../lib/friendlyError.js'
 import { GravacaoCard } from './GravacaoCard.jsx'
 
 export function GravacoesConsultor({ consultorId }) {
+  const toast = useToast()
   const [gravacoes, setGravacoes] = useState([])
   const [busy, setBusy] = useState({}) // { [gravacaoId]: 'analisar' | 'apagar' | 'retomar' }
 
@@ -37,7 +40,7 @@ export function GravacoesConsultor({ consultorId }) {
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || 'Falha na análise')
       setGravacoes(p => p.map(g => g.id === id ? data : g))
-    } catch (err) { alert(err.message || 'Falha na análise') }
+    } catch (err) { toast(friendlyError(err.message || 'Falha na análise'), 'error') }
     setBusy(p => ({ ...p, [id]: null }))
   }
 
@@ -47,7 +50,7 @@ export function GravacoesConsultor({ consultorId }) {
       const r = await apiFetch(`/api/crm/gravacoes/${id}/retomar`, { method: 'POST' })
       if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Falha') }
       await loadGravacoes()
-    } catch (err) { alert(err.message || 'Falha') }
+    } catch (err) { toast(friendlyError(err.message || 'Não foi possível retomar a gravação.'), 'error') }
     setBusy(p => ({ ...p, [id]: null }))
   }
 
@@ -58,7 +61,7 @@ export function GravacoesConsultor({ consultorId }) {
       const r = await apiFetch(`/api/crm/gravacoes/${id}`, { method: 'DELETE' })
       if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Falha ao apagar') }
       setGravacoes(p => p.filter(g => g.id !== id))
-    } catch (err) { alert(err.message || 'Falha ao apagar'); setBusy(p => ({ ...p, [id]: null })) }
+    } catch (err) { toast(friendlyError(err.message || 'Falha ao apagar'), 'error'); setBusy(p => ({ ...p, [id]: null })) }
   }
 
   // Guardar registo manual (edição direta no cartão ou "Aceitar sugestão" da IA).
@@ -72,7 +75,7 @@ export function GravacoesConsultor({ consultorId }) {
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || 'Falha ao guardar registo')
       setGravacoes(p => p.map(g => g.id === id ? data : g))
-    } catch (err) { alert(err.message || 'Falha ao guardar registo') }
+    } catch (err) { toast(friendlyError(err.message || 'Falha ao guardar registo'), 'error') }
   }
 
   const lista = gravacoes.filter(g => !g.tipo_chamada)

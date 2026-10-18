@@ -6,6 +6,8 @@
 import { useEffect, useState } from 'react'
 import { FileText, Plus, Trash2, ExternalLink, FileDown } from 'lucide-react'
 import { apiFetch, openDocument } from '../../lib/api.js'
+import { useToast } from '../ui/Toast.jsx'
+import { friendlyError } from '../../lib/friendlyError.js'
 import { fmtDate } from '../../constants.js'
 
 const EUR = v => {
@@ -14,6 +16,7 @@ const EUR = v => {
 }
 
 export function DocumentosOrcamentosTab({ imovelId }) {
+  const toast = useToast()
   const [documentos, setDocumentos] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -67,7 +70,7 @@ export function DocumentosOrcamentosTab({ imovelId }) {
       setShowForm(false)
       await load()
     } catch (err) {
-      alert(err.message || 'Erro ao importar orçamento')
+      toast(friendlyError(err.message || 'Erro ao importar orçamento'), 'error')
     }
     setSaving(false)
   }

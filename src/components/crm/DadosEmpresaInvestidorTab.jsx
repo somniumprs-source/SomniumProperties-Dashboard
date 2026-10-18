@@ -5,6 +5,8 @@
 import { useState } from 'react'
 import { Building2, Plus, Trash2 } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
+import { useToast } from '../ui/Toast.jsx'
+import { friendlyError } from '../../lib/friendlyError.js'
 
 const EMPRESA_VAZIA = {
   firma: '', forma_juridica: '', nipc: '', niss: '', capital_social: '',
@@ -46,6 +48,7 @@ const SOCIO_CAMPOS = [
 ]
 
 export function DadosEmpresaInvestidorTab({ investidorId, dadosEmpresa: initial, onUpdate, readOnly = false }) {
+  const toast = useToast()
   const [form, setForm] = useState(() => normalizeDadosEmpresa(initial))
   const [saving, setSaving] = useState(false)
 
@@ -77,7 +80,7 @@ export function DadosEmpresaInvestidorTab({ investidorId, dadosEmpresa: initial,
       })
       if (onUpdate) onUpdate()
     } catch (err) {
-      alert(err.message || 'Erro ao guardar dados da empresa')
+      toast(friendlyError(err.message || 'Erro ao guardar dados da empresa'), 'error')
     }
     setSaving(false)
   }

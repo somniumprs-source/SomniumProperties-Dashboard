@@ -12,6 +12,8 @@ import { KPICard } from '../components/dashboard/KPICard.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { ScrollableTable } from '../components/ui/ScrollableTable.jsx'
 import { apiFetch } from '../lib/api.js'
+import { useToast } from '../components/ui/Toast.jsx'
+import { friendlyError } from '../lib/friendlyError.js'
 import { useUrlState } from '../hooks/useUrlState.js'
 import { REGIOES } from '../constants.js'
 
@@ -697,6 +699,7 @@ const PERIODOS_RAPIDOS = [
 ]
 
 function ContabilidadeTab() {
+  const toast = useToast()
   const [periodo, setPeriodo] = useState(PERIODO_TODAS)
   const [pendentes, setPendentes] = useState(false)
   const [dados, setDados] = useState(null)
@@ -713,9 +716,9 @@ function ContabilidadeTab() {
     try {
       const r = await apiFetch(`/api/crm/contabilidade/faturas?${qs}`)
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+      if (!r.ok) throw Object.assign(new Error(j.error || ''), { status: r.status })
       setDados(j)
-    } catch (e) { setErro(e.message); setDados(null) }
+    } catch (e) { setErro(e); setDados(null) }
     setLoading(false)
   }
   useEffect(() => { carregar() }, [qs]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -726,7 +729,7 @@ function ContabilidadeTab() {
   const porEnviar = faturas.filter(f => !f.enviada_em).length
 
   async function exportar() {
-    setExportando(true); setErro(null); setAviso(null)
+    setExportando(true); setAviso(null)
     try {
       const r = await apiFetch(`/api/crm/contabilidade/export?${qs}`, { timeoutMs: 300_000 })
       if (!r.ok) {
@@ -755,9 +758,10 @@ function ContabilidadeTab() {
           body: JSON.stringify({ despesaIds, documentoIds }),
         })
         if (!m.ok) throw new Error('ZIP descarregado, mas falhou marcar como enviadas.')
+        toast('Faturas marcadas como enviadas.', 'success')
         await carregar()
       }
-    } catch (e) { setErro(e.message) }
+    } catch (e) { toast(friendlyError(e.message), 'error') }
     setExportando(false)
   }
 
@@ -804,7 +808,7 @@ function ContabilidadeTab() {
         </p>
       </div>
 
-      {erro && <div className="p-4 bg-danger/10 border border-danger/30 text-danger rounded-xl text-sm">Erro: {erro}</div>}
+      {erro && <ErrorState compact title="Não foi possível carregar as faturas" error={erro} onRetry={carregar} />}
       {aviso && <div className="p-4 bg-warning/10 border border-warning/30 text-warning rounded-xl text-sm">{aviso}</div>}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
@@ -1236,6 +1240,7 @@ const DESP_CATEGORIAS = ['Salários', 'Operação', 'Marketing', 'Ferramentas', 
 const DESP_TIMING = ['Mensalmente', 'Anual', 'Único']
 
 function DespesaForm({ item, onSave, onCancel, onReload }) {
+  const toast = useToast()
   const isNew = !item.id
   // Normalizar campos camelCase → snake_case (endpoint financeiro vs CRM)
   const normalized = { ...item }
@@ -1277,7 +1282,7 @@ function DespesaForm({ item, onSave, onCancel, onReload }) {
       const d = await r.json()
       if (d.error) throw new Error(d.error)
       setDocs(d.documentos)
-    } catch (err) { alert('Erro ao enviar: ' + err.message) }
+    } catch (err) { toast(friendlyError(err.message || 'Não foi possível enviar o ficheiro.'), 'error') }
     finally { setUploading(false); if (fileRef.current) fileRef.current.value = '' }
   }
 
@@ -1287,7 +1292,7 @@ function DespesaForm({ item, onSave, onCancel, onReload }) {
       const d = await r.json()
       if (d.error) throw new Error(d.error)
       setDocs(d.documentos)
-    } catch (err) { alert('Erro: ' + err.message) }
+    } catch (err) { toast(friendlyError(err.message || 'Não foi possível remover o documento.'), 'error') }
   }
 
   return (

@@ -6,6 +6,8 @@
 import { useState, useEffect } from 'react'
 import { Plus, Trash2, MapPin, CheckCircle2, XCircle, Clock, ClipboardList } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
+import { useToast } from '../ui/Toast.jsx'
+import { friendlyError } from '../../lib/friendlyError.js'
 import { FichaVisitaModal } from './FichaVisitaModal.jsx'
 import { fichaTemConteudo } from '../../constants/fichaVisitaSchema.js'
 
@@ -34,6 +36,7 @@ const fmtDateTime = d => {
 const inputClass = 'w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300'
 
 export function VisitasTab({ imovelId, onUpdate }) {
+  const toast = useToast()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [investidores, setInvestidores] = useState([])
@@ -111,7 +114,7 @@ export function VisitasTab({ imovelId, onUpdate }) {
       await load()
       onUpdate?.()
     } catch (err) {
-      alert(err.message || 'Erro ao gravar visita')
+      toast(friendlyError(err.message || 'Erro ao gravar visita'), 'error')
     }
     setSaving(false)
   }
@@ -127,7 +130,7 @@ export function VisitasTab({ imovelId, onUpdate }) {
       await load()
       onUpdate?.()
     } catch (err) {
-      alert(err.message || 'Erro')
+      toast(friendlyError(err.message || 'Não foi possível atualizar o estado da visita.'), 'error')
     }
   }
 
@@ -138,7 +141,7 @@ export function VisitasTab({ imovelId, onUpdate }) {
       await load()
       onUpdate?.()
     } catch (err) {
-      alert(err.message || 'Erro ao apagar')
+      toast(friendlyError(err.message || 'Erro ao apagar'), 'error')
     }
   }
 

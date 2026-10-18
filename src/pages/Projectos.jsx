@@ -8,7 +8,10 @@ import { staggerItemVariants } from '../lib/motion.js'
 import { BrandLoader, useMinLoading } from '../components/ui/BrandLoader.jsx'
 import { Header } from '../components/layout/Header.jsx'
 import { apiFetch } from '../lib/api.js'
+import { useToast } from '../components/ui/Toast.jsx'
+import { friendlyError } from '../lib/friendlyError.js'
 import { Button } from '../components/ui/Button.jsx'
+import { ErrorState } from '../components/ui/ErrorState.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { Card } from '../components/ui/Card.jsx'
 import { Badge } from '../components/ui/Badge.jsx'
@@ -186,6 +189,7 @@ function MeusDocumentosPanel({ investidorId }) {
 }
 
 export function Projectos() {
+  const toast = useToast()
   const navigate = useNavigate()
   const { isInvestidor, isReadOnly, investidorId } = useAuth()
   // Filtro regional inline (Coimbra | AMP | Geral). Geral = null = ver todas.
@@ -200,7 +204,6 @@ export function Projectos() {
     } catch {}
   }
   const [fasesPorNegocio, setFasesPorNegocio] = useState({})  // negocioId → { faseAtualKey, percGlobal }
-  const [mutationError, setMutationError] = useState(null)
   const [editing, setEditing] = useState(null)
   const [view, setView] = useState('kanban')  // 'kanban' | 'lista'
   const [filterCat, setFilterCat] = useState(isInvestidor ? '' : 'Fix and Flip')
@@ -254,7 +257,7 @@ export function Projectos() {
   const projectos = useMemo(() => query.data?.projectos ?? [], [query.data])
   const loading = query.isPending
   const mostrarCarregamento = useMinLoading(loading)
-  const error = mutationError || query.error?.message || null
+  const error = query.error || null
 
   // Carrega as fases de todos os projectos uma só vez: mudar de modelo de
   // negócio filtra no cliente, sem voltar a pedir nada ao servidor.
@@ -331,9 +334,10 @@ export function Projectos() {
       const isNew = !form.id
       const url = isNew ? '/api/crm/negocios' : `/api/crm/negocios/${form.id}`
       const r = await apiFetch(url, { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
-      if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error || `Erro ${r.status}`) }
-      setEditing(null); setMutationError(null); load()
-    } catch (e) { console.error('[saveProjecto]', e); setMutationError(e.message) }
+      if (!r.ok) { const err = await r.json().catch(() => ({})); throw Object.assign(new Error(err.error || ''), { status: r.status }) }
+      setEditing(null); load()
+      toast(isNew ? 'Projeto criado.' : 'Projeto guardado.', 'success')
+    } catch (e) { console.error('[saveProjecto]', e); toast(friendlyError(e.message || e), 'error') }
   }
 
   // Para admin: usar negociosLista (com KPIs financeiros). Para investidor: usar projectos directo.
@@ -375,7 +379,7 @@ export function Projectos() {
       <Header title="Departamento de Obras" onRefresh={load} loading={loading} regiao={<RegiaoToggle value={regiao} onChange={setRegiao} />} />
 
       <div className="p-4 sm:p-6 flex flex-col gap-4">
-        {error && <div className="p-4 bg-danger/10 border border-danger/30 text-danger rounded-xl text-sm">Erro: {error}</div>}
+        {error && <ErrorState compact title="Não foi possível carregar os projetos" error={error} onRetry={load} />}
 
         {isInvestidor && investidorId && <MeusDocumentosPanel investidorId={investidorId} />}
 
@@ -560,13 +564,13 @@ export function Projectos() {
                 if (!r.ok) {
                   const err = await r.json().catch(() => ({}))
                   console.error('[kanban] mover-fase falhou:', r.status, err)
-                  alert(err.error || `Não foi possível mover (HTTP ${r.status})`)
+                  toast(friendlyError(err.error || { status: r.status }), 'error')
                   return
                 }
                 load()
               } catch (e) {
                 console.error('[kanban] mover-fase exception:', e)
-                alert(e.message)
+                toast(friendlyError(e.message), 'error')
               }
             }}
           />

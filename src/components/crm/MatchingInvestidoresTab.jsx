@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Target, TrendingUp, MapPin, Send, AlertTriangle } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
+import { useToast } from '../ui/Toast.jsx'
+import { friendlyError } from '../../lib/friendlyError.js'
 import { EUR } from '../../constants.js'
 
 const CAMPO_LABEL = {
@@ -12,6 +14,7 @@ const CAMPO_LABEL = {
 }
 
 export function MatchingInvestidoresTab({ imovelId, imovelNome }) {
+  const toast = useToast()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -116,7 +119,7 @@ export function MatchingInvestidoresTab({ imovelId, imovelNome }) {
               <button
                 className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-ink text-surface hover:opacity-90"
                 onClick={async () => {
-                  await apiFetch('/api/crm/regiao/lead-360', {
+                  const r = await apiFetch('/api/crm/regiao/lead-360', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -125,8 +128,9 @@ export function MatchingInvestidoresTab({ imovelId, imovelNome }) {
                       assunto: `Match com ${imovelNome}`,
                       conteudo: `Marcado como compatível (score ${inv.score}). Motivos: ${inv.reasons.join('; ')}`,
                     }),
-                  })
-                  alert(`Registo guardado no Lead 360 de ${inv.nome}.`)
+                  }).catch(e => e)
+                  if (r?.ok) toast(`Registo guardado no Lead 360 de ${inv.nome}.`, 'success')
+                  else toast(friendlyError(r instanceof Error ? r : { status: r?.status }), 'error')
                 }}
               >
                 <Send className="w-3 h-3" /> Marcar como contactado

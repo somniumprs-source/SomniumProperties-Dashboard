@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from 'react'
 import { SummaryStat } from '../components/ui/SummaryStat.jsx'
 import { FileDown, Sparkles, Trash2, Calendar, Loader2, Plus, RefreshCw, Zap, FileText, Presentation, Upload, Pencil, X, CalendarPlus, Eye } from 'lucide-react'
 import { apiFetch, openDocument } from '../lib/api.js'
+import { useToast } from '../components/ui/Toast.jsx'
+import { friendlyError } from '../lib/friendlyError.js'
 import { Tabs } from '../components/ui/Tabs.jsx'
+import { ErrorState } from '../components/ui/ErrorState.jsx'
 import { MessageSquareText, ListChecks, ExternalLink } from 'lucide-react'
-
-const GOLD = '#C9A84C'
 
 function fmtSize(b) {
   if (b == null) return ''
@@ -37,6 +38,7 @@ function currentSemanaIso() {
 }
 
 function RelatoriosAdministrativos() {
+  const toast = useToast()
   const [relatorios, setRelatorios] = useState([])
   const [reunioes, setReunioes] = useState([])
   const [loading, setLoading] = useState(true)
@@ -65,12 +67,13 @@ function RelatoriosAdministrativos() {
     try {
       setLoading(true)
       const r = await apiFetch('/api/crm/relatorios-semanais')
+      if (!r.ok) throw Object.assign(new Error('Erro ao carregar relatórios'), { status: r.status })
       const data = await r.json()
       setRelatorios(Array.isArray(data) ? data : [])
       await loadReunioes()
       setError(null)
     } catch (e) {
-      setError(e.message)
+      setError(e)
     } finally {
       setLoading(false)
     }
@@ -80,7 +83,6 @@ function RelatoriosAdministrativos() {
 
   async function gerar() {
     setGenerating(true)
-    setError(null)
     try {
       const r = await apiFetch('/api/crm/relatorios-semanais/gerar', {
         method: 'POST',
@@ -90,19 +92,19 @@ function RelatoriosAdministrativos() {
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || 'Erro ao gerar relatório')
       setShowForm(false)
+      toast('Relatório gerado.', 'success')
       await load()
       if (data.id) {
         await abrirPdf(data.id)
       }
     } catch (e) {
-      setError(e.message)
+      toast(friendlyError(e.message), 'error')
     }
     setGenerating(false)
   }
 
   async function sincronizarFireflies() {
     setSyncing(true)
-    setError(null)
     setSyncStatus(null)
     try {
       const r = await apiFetch('/api/crm/relatorios-semanais/auto-gerar', {
@@ -112,10 +114,10 @@ function RelatoriosAdministrativos() {
       })
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || 'Erro ao sincronizar')
-      setSyncStatus(`${data.criados} criados · ${data.actualizados} actualizados · €${data.custoEur.toFixed(2)} (${data.semanasProcessadas} semanas)`)
+      setSyncStatus(`${data.criados} criados · ${data.actualizados} atualizados · €${data.custoEur.toFixed(2)} (${data.semanasProcessadas} semanas)`)
       await load()
     } catch (e) {
-      setError(e.message)
+      toast(friendlyError(e.message), 'error')
     }
     setSyncing(false)
   }
@@ -128,9 +130,11 @@ function RelatoriosAdministrativos() {
   async function eliminar(id) {
     if (!confirm('Eliminar este relatório semanal?')) return
     try {
-      await apiFetch(`/api/crm/relatorios-semanais/${id}`, { method: 'DELETE' })
+      const r = await apiFetch(`/api/crm/relatorios-semanais/${id}`, { method: 'DELETE' })
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Não foi possível eliminar o relatório.')
+      toast('Relatório eliminado.', 'success')
       await load()
-    } catch (e) { alert(e.message) }
+    } catch (e) { toast(friendlyError(e.message), 'error') }
   }
 
   // ── Reunioes ──────────────────────────────────────────────────
@@ -147,7 +151,6 @@ function RelatoriosAdministrativos() {
   async function guardarReuniao() {
     if (!reuniaoForm.titulo.trim()) return
     setSavingReuniao(true)
-    setError(null)
     try {
       const body = { titulo: reuniaoForm.titulo.trim(), data: reuniaoForm.data || null, notas: reuniaoForm.notas || null }
       const url = reuniaoForm.id ? `/api/crm/reunioes-documentos/${reuniaoForm.id}` : '/api/crm/reunioes-documentos'
@@ -156,23 +159,25 @@ function RelatoriosAdministrativos() {
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || 'Erro ao guardar reunião')
       setShowReuniaoForm(false)
+      toast(reuniaoForm.id ? 'Reunião guardada.' : 'Reunião criada.', 'success')
       await loadReunioes()
-    } catch (e) { setError(e.message) }
+    } catch (e) { toast(friendlyError(e.message), 'error') }
     setSavingReuniao(false)
   }
 
   async function apagarReuniao(id) {
     if (!confirm('Eliminar esta reunião e todos os seus documentos?')) return
     try {
-      await apiFetch(`/api/crm/reunioes-documentos/${id}`, { method: 'DELETE' })
+      const r = await apiFetch(`/api/crm/reunioes-documentos/${id}`, { method: 'DELETE' })
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Não foi possível eliminar a reunião.')
+      toast('Reunião eliminada.', 'success')
       await loadReunioes()
-    } catch (e) { alert(e.message) }
+    } catch (e) { toast(friendlyError(e.message), 'error') }
   }
 
   async function uploadFicheiros(id, files) {
     if (!files?.length) return
     setUploadingId(id)
-    setError(null)
     try {
       const fd = new FormData()
       for (const f of files) fd.append('ficheiros', f)
@@ -180,7 +185,8 @@ function RelatoriosAdministrativos() {
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || 'Erro ao carregar ficheiros')
       setReunioes(prev => prev.map(x => x.id === id ? { ...x, ficheiros: data.ficheiros } : x))
-    } catch (e) { setError(e.message) }
+      toast(files.length === 1 ? 'Documento carregado.' : `${files.length} documentos carregados.`, 'success')
+    } catch (e) { toast(friendlyError(e.message), 'error') }
     setUploadingId(null)
   }
 
@@ -191,7 +197,7 @@ function RelatoriosAdministrativos() {
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || 'Erro ao eliminar')
       setReunioes(prev => prev.map(x => x.id === id ? { ...x, ficheiros: data.ficheiros } : x))
-    } catch (e) { alert(e.message) }
+    } catch (e) { toast(friendlyError(e.message), 'error') }
   }
 
   const totalRelatorios = relatorios.length
@@ -226,11 +232,11 @@ function RelatoriosAdministrativos() {
       </div>
 
       {/* Estudos Estrategicos — relatorios de mercado estaticos */}
-      <div className="mb-6 rounded-2xl border border-brand-gold/30 bg-gradient-to-br from-neutral-50 to-white dark:from-neutral-900 dark:to-neutral-900/40 p-5">
+      <div className="mb-6 rounded-2xl border border-line bg-surface-raised p-5 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-start gap-3">
-            <div className="p-2.5 rounded-lg" style={{ backgroundColor: 'rgba(201,168,76,0.15)' }}>
-              <FileText className="w-5 h-5 text-accent-ink" />
+            <div className="p-2.5 rounded-lg bg-surface-muted">
+              <FileText className="w-5 h-5 text-ink-muted" />
             </div>
             <div>
               <h2 className="text-base font-semibold text-ink ">Estudos Estratégicos</h2>
@@ -239,22 +245,22 @@ function RelatoriosAdministrativos() {
               </p>
             </div>
           </div>
-          <div className="flex flex-col gap-2 shrink-0">
+          <div className="flex flex-col gap-2 shrink-0 w-full sm:w-auto">
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => openDocument('/api/crm/relatorios/expansao-gaia').catch(() => {})}
                 title="Abrir numa nova aba"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-[background-color,border-color,color,box-shadow,opacity,transform] whitespace-nowrap flex-1 bg-accent text-accent-foreground hover:brightness-[1.04]"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-[filter] duration-fast sm:whitespace-nowrap flex-1 min-w-0 bg-accent text-accent-foreground hover:brightness-[1.04]"
               >
-                <Eye className="w-4 h-4" />
+                <Eye className="w-4 h-4 shrink-0" />
                 Relatório de Expansão — Vila Nova de Gaia
               </button>
               <button
                 type="button"
                 onClick={() => openDocument('/api/crm/relatorios/expansao-gaia', { download: true }).catch(() => {})}
                 title="Descarregar o PDF"
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-[background-color,border-color,color,box-shadow,opacity,transform] whitespace-nowrap bg-ink text-surface hover:opacity-90"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors duration-fast whitespace-nowrap bg-surface-raised text-ink border border-line hover:bg-surface-muted hover:border-ink/20"
               >
                 <FileDown className="w-4 h-4" />
                 PDF
@@ -264,7 +270,7 @@ function RelatoriosAdministrativos() {
               href="/relatorios/Relatorio_Precos_Mercado_AMP.pdf"
               target="_blank"
               rel="noopener"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-[background-color,border-color,color,box-shadow,opacity,transform] whitespace-nowrap bg-accent text-accent-foreground hover:brightness-[1.04]"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors duration-fast sm:whitespace-nowrap bg-surface-raised text-ink border border-line hover:bg-surface-muted hover:border-ink/20"
             >
               <FileDown className="w-4 h-4" />
               Guia de Zonas — Preços de Mercado (AMP)
@@ -274,11 +280,11 @@ function RelatoriosAdministrativos() {
       </div>
 
       {/* Reunioes — documentos por reuniao (criar / editar / upload / apagar) */}
-      <div className="mb-6 rounded-2xl border border-brand-gold/30 bg-gradient-to-br from-neutral-50 to-white dark:from-neutral-900 dark:to-neutral-900/40 p-5">
+      <div className="mb-6 rounded-2xl border border-line bg-surface-raised p-5 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
           <div className="flex items-start gap-3">
-            <div className="p-2.5 rounded-lg" style={{ backgroundColor: 'rgba(201,168,76,0.15)' }}>
-              <FileDown className="w-5 h-5 text-accent-ink" />
+            <div className="p-2.5 rounded-lg bg-surface-muted">
+              <FileDown className="w-5 h-5 text-ink-muted" />
             </div>
             <div>
               <h2 className="text-base font-semibold text-ink ">Documentos da reunião</h2>
@@ -315,7 +321,7 @@ function RelatoriosAdministrativos() {
                   value={reuniaoForm.titulo}
                   onChange={e => setReuniaoForm(f => ({ ...f, titulo: e.target.value }))}
                   placeholder="Reunião Semanal 07-06 22h"
-                  className="w-full border border-line    rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-line bg-surface-raised text-ink rounded-lg px-3 py-2 text-sm"
                 />
               </div>
               <div>
@@ -324,7 +330,7 @@ function RelatoriosAdministrativos() {
                   type="date"
                   value={reuniaoForm.data || ''}
                   onChange={e => setReuniaoForm(f => ({ ...f, data: e.target.value }))}
-                  className="w-full border border-line    rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-line bg-surface-raised text-ink rounded-lg px-3 py-2 text-sm"
                 />
               </div>
             </div>
@@ -335,7 +341,7 @@ function RelatoriosAdministrativos() {
                 value={reuniaoForm.notas}
                 onChange={e => setReuniaoForm(f => ({ ...f, notas: e.target.value }))}
                 placeholder="Breve descrição da reunião"
-                className="w-full border border-line    rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-line bg-surface-raised text-ink rounded-lg px-3 py-2 text-sm"
               />
             </div>
             <div className="flex justify-end gap-2 mt-4">
@@ -372,7 +378,7 @@ function RelatoriosAdministrativos() {
                   <div className="min-w-0">
                     <h3 className="font-semibold text-ink  truncate">{g.titulo}</h3>
                     <div className="flex items-center gap-2 mt-0.5 text-xs text-ink-muted ">
-                      <Calendar className="w-3.5 h-3.5 text-accent-ink" />
+                      <Calendar className="w-3.5 h-3.5" />
                       <span>{g.data ? fmtDate(g.data) : (g.semana_iso || '—')}</span>
                       {g.notas ? <span className="truncate">· {g.notas}</span> : null}
                     </div>
@@ -380,7 +386,7 @@ function RelatoriosAdministrativos() {
                   <div className="flex items-center gap-1 shrink-0">
                     <label
                       title="Carregar documentos"
-                      className="p-2 rounded-lg text-ink-muted hover:text-brand-gold hover:bg-brand-gold/10 transition-colors cursor-pointer"
+                      className="p-2 rounded-lg text-ink-muted hover:text-ink hover:bg-surface-muted transition-colors cursor-pointer"
                     >
                       {uploadingId === g.id
                         ? <Loader2 className="w-4 h-4 animate-spin text-accent-ink" />
@@ -404,7 +410,7 @@ function RelatoriosAdministrativos() {
                     <button
                       onClick={() => apagarReuniao(g.id)}
                       title="Eliminar reunião"
-                      className="p-2 rounded-lg text-ink-muted hover:text-danger hover:bg-danger/10 dark:hover:bg-red-950/30 transition-colors"
+                      className="p-2 rounded-lg text-ink-muted hover:text-danger hover:bg-danger/10 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -416,32 +422,32 @@ function RelatoriosAdministrativos() {
                     Sem documentos. Use o botão de upload para adicionar PDF/PowerPoint.
                   </p>
                 ) : (
-                  <div className="grid sm:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {g.ficheiros.map((f) => (
                       <div
                         key={f.nome}
-                        className="group flex items-center gap-2 p-3 rounded-xl border border-line  bg-surface  hover:border-brand-gold/50 transition-[background-color,border-color,color,box-shadow,opacity,transform]"
+                        className="group flex items-center gap-2 p-3 min-w-0 rounded-xl border border-line  bg-surface  hover:border-ink/20 transition-colors duration-fast"
                       >
                         <button
                           onClick={() => f.url && window.open(f.url, '_blank', 'noopener')}
                           disabled={!f.url}
                           className="flex items-center gap-3 flex-1 min-w-0 text-left disabled:opacity-50"
                         >
-                          <div className="p-2 rounded-lg shrink-0" style={{ backgroundColor: 'rgba(201,168,76,0.12)' }}>
+                          <div className="p-2 rounded-lg shrink-0 bg-surface-muted">
                             {f.ext === 'pptx' || f.ext === 'ppt'
-                              ? <Presentation className="w-4 h-4 text-accent-ink" />
-                              : <FileText className="w-4 h-4 text-accent-ink" />}
+                              ? <Presentation className="w-4 h-4 text-ink-muted" />
+                              : <FileText className="w-4 h-4 text-ink-muted" />}
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium text-ink  truncate">{f.nome}</p>
                             <p className="text-xs text-ink-muted">{f.ext.toUpperCase()}{f.tamanho ? ` · ${fmtSize(f.tamanho)}` : ''}</p>
                           </div>
-                          <FileDown className="w-4 h-4 text-ink-muted/70 group-hover:text-brand-gold transition-colors shrink-0" />
+                          <FileDown className="w-4 h-4 text-ink-muted/70 group-hover:text-ink transition-colors shrink-0" />
                         </button>
                         <button
                           onClick={() => apagarFicheiro(g.id, f.nome)}
                           title="Eliminar documento"
-                          className="p-2 rounded-lg text-ink-muted/70 hover:text-danger hover:bg-danger/10 dark:hover:bg-red-950/30 transition-colors shrink-0"
+                          className="p-2 rounded-lg text-ink-muted/70 hover:text-danger hover:bg-danger/10 transition-colors shrink-0"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -466,8 +472,7 @@ function RelatoriosAdministrativos() {
               onClick={sincronizarFireflies}
               disabled={syncing}
               title="Cria/atualiza relatórios de todas as semanas com reuniões 'Reunião Semanal'"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition-[background-color,border-color,color,box-shadow,opacity,transform] disabled:opacity-50"
-              style={{ borderColor: GOLD, color: GOLD }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors duration-fast disabled:opacity-50 bg-surface-raised text-ink border border-line hover:bg-surface-muted hover:border-ink/20"
             >
               {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
               {syncing ? 'A sincronizar...' : 'Sincronizar Fireflies'}
@@ -483,7 +488,7 @@ function RelatoriosAdministrativos() {
         </div>
 
         {syncStatus && (
-          <div className="mb-4 rounded-xl border border-success/30 bg-success/10 dark:bg-emerald-900/20 dark:border-emerald-900 p-3 text-sm text-success dark:text-emerald-300">
+          <div className="mb-4 rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success">
             Sincronização concluída: {syncStatus}
           </div>
         )}
@@ -492,11 +497,11 @@ function RelatoriosAdministrativos() {
         {showForm && (
           <div className="mb-6 rounded-2xl border border-line  bg-surface-raised  p-5">
             <div className="flex items-start gap-3 mb-4">
-              <div className="p-2 rounded-lg" style={{ backgroundColor: 'rgba(201,168,76,0.12)' }}>
-                <Sparkles className="w-5 h-5 text-accent-ink" />
+              <div className="p-2 rounded-lg bg-surface-muted">
+                <Sparkles className="w-5 h-5 text-ink-muted" />
               </div>
               <div>
-                <h3 className="font-semibold text-ink ">Gerar Relatório Semanal</h3>
+                <h3 className="font-semibold text-ink ">Gerar relatório semanal</h3>
                 <p className="text-xs text-ink-muted ">
                   Compila todas as reuniões com título "Reunião Semanal" da semana indicada e produz um relatório executivo via Claude Sonnet 4 (~€0,10).
                 </p>
@@ -511,7 +516,7 @@ function RelatoriosAdministrativos() {
                   value={form.semana_iso}
                   onChange={e => setForm(f => ({ ...f, semana_iso: e.target.value }))}
                   placeholder="2026-W18"
-                  className="w-full border border-line    rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-line bg-surface-raised text-ink rounded-lg px-3 py-2 text-sm"
                 />
               </div>
               <div>
@@ -520,7 +525,7 @@ function RelatoriosAdministrativos() {
                   type="date"
                   value={form.data_inicio || ''}
                   onChange={e => setForm(f => ({ ...f, data_inicio: e.target.value }))}
-                  className="w-full border border-line    rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-line bg-surface-raised text-ink rounded-lg px-3 py-2 text-sm"
                 />
               </div>
               <div>
@@ -529,7 +534,7 @@ function RelatoriosAdministrativos() {
                   type="date"
                   value={form.data_fim || ''}
                   onChange={e => setForm(f => ({ ...f, data_fim: e.target.value }))}
-                  className="w-full border border-line    rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-line bg-surface-raised text-ink rounded-lg px-3 py-2 text-sm"
                 />
               </div>
             </div>
@@ -569,9 +574,7 @@ function RelatoriosAdministrativos() {
 
         {/* Error */}
         {error && (
-          <div className="mb-6 rounded-xl border border-danger/30 bg-danger/10 dark:bg-red-900/20 dark:border-red-900 p-4 text-sm text-danger dark:text-red-300">
-            {error}
-          </div>
+          <ErrorState compact className="mb-6" title="Não foi possível carregar os relatórios" error={error} onRetry={load} />
         )}
 
         {/* Lista */}
@@ -597,7 +600,7 @@ function RelatoriosAdministrativos() {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <div className="text-[10px] font-semibold uppercase tracking-widest text-accent-ink">
+                      <div className="text-overline uppercase font-semibold text-ink-muted num">
                         {r.semana_iso}
                       </div>
                       <h3 className="font-semibold text-ink  mt-1 truncate">
@@ -608,7 +611,7 @@ function RelatoriosAdministrativos() {
                     <button
                       onClick={() => eliminar(r.id)}
                       title="Eliminar"
-                      className="p-1.5 rounded-lg text-ink-muted hover:text-danger hover:bg-danger/10 dark:hover:bg-red-900/20 transition-colors"
+                      className="p-1.5 rounded-lg text-ink-muted hover:text-danger hover:bg-danger/10 transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -638,8 +641,7 @@ function RelatoriosAdministrativos() {
                       <button
                         onClick={() => abrirPdf(r.id, { download: true })}
                         title="Descarregar o PDF"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors"
-                        style={{ borderColor: GOLD, color: GOLD }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-line text-ink-muted hover:bg-surface-muted transition-colors"
                       >
                         <FileDown className="w-3.5 h-3.5" />
                         Download
@@ -649,13 +651,15 @@ function RelatoriosAdministrativos() {
                       onClick={async () => {
                         setGenerating(true)
                         try {
-                          await apiFetch('/api/crm/relatorios-semanais/gerar', {
+                          const res = await apiFetch('/api/crm/relatorios-semanais/gerar', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ semana_iso: r.semana_iso, regenerar: true }),
                           })
+                          if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Não foi possível regenerar o relatório.')
+                          toast('Relatório regenerado.', 'success')
                           await load()
-                        } catch (e) { alert(e.message) }
+                        } catch (e) { toast(friendlyError(e.message), 'error') }
                         setGenerating(false)
                       }}
                       title="Regenerar via Claude"
@@ -722,7 +726,7 @@ function RelatoriosConversas() {
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || 'Falha ao carregar')
       setSemanas(Array.isArray(j) ? j : [])
-    } catch (e) { setError(e.message) }
+    } catch (e) { setError(e) }
     setLoading(false)
   }, [])
 
@@ -736,11 +740,11 @@ function RelatoriosConversas() {
           (texto e áudios): resumo executivo, tarefas pendentes e um anexo por grupo com actividade. As tarefas
           entram em <span className="font-semibold">Agenda &rsaquo; Tarefas</span> com o estado "A fazer".
         </p>
-        <button onClick={load} className="p-2 rounded-lg border border-line  hover:bg-surface " title="Actualizar">
+        <button onClick={load} className="p-2 rounded-lg border border-line text-ink-muted hover:text-ink hover:bg-surface-muted transition-colors duration-fast" title="Atualizar" aria-label="Atualizar">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
-      {error && <p className="text-sm text-danger">{error}</p>}
+      {error && <ErrorState compact title="Não foi possível carregar os relatórios de conversas" error={error} onRetry={load} />}
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-ink-muted"><Loader2 className="w-4 h-4 animate-spin" /> A carregar…</div>
       ) : !semanas.length ? (
@@ -754,14 +758,14 @@ function RelatoriosConversas() {
               <h3 className="text-base font-semibold text-ink ">Semana {semanaLabel(s.semana)}</h3>
               <span className="text-xs text-ink-muted">{grupos.length} {grupos.length === 1 ? 'grupo' : 'grupos'}</span>
             </div>
-            <div className="grid sm:grid-cols-2 gap-2 mb-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
               {principais.map(f => {
                 const exec = /Resumo_executivo/i.test(f.nome)
                 const Icon = exec ? FileText : ListChecks
                 return (
                   <a key={f.nome} href={f.url || '#'} target="_blank" rel="noreferrer"
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-brand-gold/40 bg-brand-gold/10 text-sm font-semibold text-ink  hover:bg-brand-gold/20">
-                    <Icon className="w-4 h-4 text-brand-gold" /> {exec ? 'Resumo executivo' : 'Tarefas pendentes'}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-line bg-surface text-sm font-semibold text-ink hover:bg-surface-muted transition-colors duration-fast">
+                    <Icon className="w-4 h-4 text-ink-muted" /> {exec ? 'Resumo executivo' : 'Tarefas pendentes'}
                     <ExternalLink className="w-3.5 h-3.5 ml-auto text-ink-muted" />
                   </a>
                 )
@@ -771,7 +775,7 @@ function RelatoriosConversas() {
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {grupos.map(f => (
                 <a key={f.nome} href={f.url || '#'} target="_blank" rel="noreferrer"
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-line  text-sm text-ink  hover:border-brand-gold">
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-line  text-sm text-ink hover:border-ink/20 hover:bg-surface-muted transition-colors duration-fast">
                   <FileText className="w-4 h-4 text-ink-muted shrink-0" />
                   <span className="truncate">{nomeDocumento(f.nome)}</span>
                   <span className="ml-auto text-xs text-ink-muted shrink-0">{fmtSize(f.tamanho)}</span>

@@ -11,6 +11,7 @@ import { ProjectoForm } from './Projectos.jsx'
 import { TarefasFase } from '../components/projeto/TarefasFase.jsx'
 import { DESP_CATEGORIAS } from '../constants.js'
 import { apiFetch, getToken, openDocument } from '../lib/api.js'
+import { friendlyError } from '../lib/friendlyError.js'
 import { Header } from '../components/layout/Header.jsx'
 import { ErrorState } from '../components/ui/ErrorState.jsx'
 import { Button } from '../components/ui/Button.jsx'
@@ -110,6 +111,7 @@ const CATEGORIAS_COMUM = [
 ]
 
 export function ProjectoDetalhe() {
+  const toast = useToast()
   const { id } = useParams()
   const navigate = useNavigate()
   const { isReadOnly, isInvestidor, role } = useAuth()
@@ -163,9 +165,10 @@ export function ProjectoDetalhe() {
     const r = await apiFetch(`/api/crm/projetos/${id}/fases/inicializar`, { method: 'POST' })
     if (!r.ok) {
       const e = await r.json().catch(() => ({}))
-      alert('Erro ao inicializar fases: ' + (e.error || `HTTP ${r.status}`))
+      toast(friendlyError(e.error || { status: r.status }), 'error')
       return
     }
+    toast('Fases criadas.', 'success')
     load()
   }
 
@@ -269,8 +272,8 @@ export function ProjectoDetalhe() {
                 onClick={async () => {
                   if (!confirm(`Apagar o projeto "${negocio.movimento}"? Esta ação apaga também fases, tarefas e fotos. Não pode ser revertida.`)) return
                   const r = await apiFetch(`/api/crm/negocios/${id}`, { method: 'DELETE' })
-                  if (r.ok) navigate('/projectos')
-                  else alert('Erro ao apagar')
+                  if (r.ok) { toast('Projeto apagado.', 'success'); navigate('/projectos') }
+                  else toast(friendlyError((await r.json().catch(() => ({}))).error || { status: r.status }), 'error')
                 }}
               >Apagar</Button>
             )}
@@ -294,10 +297,11 @@ export function ProjectoDetalhe() {
                 })
                 if (!r.ok) {
                   const err = await r.json().catch(() => ({}))
-                  alert(err.error || `Erro ${r.status}`)
+                  toast(friendlyError(err.error || { status: r.status }), 'error')
                   return
                 }
                 setEditing(false)
+                toast('Projeto guardado.', 'success')
                 load()
               } finally { setSavingEdit(false) }
             }}
@@ -1524,6 +1528,7 @@ function TabFaturas({ negocioId, analise, readOnly, consultoria = false }) {
 // TAB: FOTOS
 // ════════════════════════════════════════════════════════════════
 function TabFotos({ negocioId, fases, fotos, onChange, readOnly }) {
+  const toast = useToast()
   const [faseSel, setFaseSel] = useState(fases[0]?.id || null)
   const [tipoSel, setTipoSel] = useState('durante')
   const [uploading, setUploading] = useState(false)
@@ -1543,9 +1548,10 @@ function TabFotos({ negocioId, fases, fotos, onChange, readOnly }) {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
         body: fd,
       })
-      if (!r.ok) throw new Error('Erro upload')
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Não foi possível carregar as fotos.')
+      toast(files.length === 1 ? 'Foto carregada.' : `${files.length} fotos carregadas.`, 'success')
       onChange()
-    } catch (err) { alert(err.message) }
+    } catch (err) { toast(friendlyError(err.message), 'error') }
     finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
@@ -1556,7 +1562,7 @@ function TabFotos({ negocioId, fases, fotos, onChange, readOnly }) {
     const r = await apiFetch(`/api/crm/projetos/fotos/${fotoId}`, { method: 'DELETE' })
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
-      alert('Erro ao apagar foto: ' + (err.error || `HTTP ${r.status}`))
+      toast(friendlyError(err.error || { status: r.status }), 'error')
       return
     }
     onChange()
@@ -1640,6 +1646,7 @@ function FotosGaleriaPorFase({ fotos, onDelete }) {
 // TAB: DOCUMENTOS (placeholder V1 — geração V2)
 // ════════════════════════════════════════════════════════════════
 function TabDocumentos({ negocio, imovel, fases, readOnly }) {
+  const toast = useToast()
   const isWS = negocio.categoria === 'Wholesaling'
   const [faseFichaSel, setFaseFichaSel] = useState(fases[0]?.id || '')
   const [vistoriaSel, setVistoriaSel] = useState('')
@@ -1700,9 +1707,10 @@ function TabDocumentos({ negocio, imovel, fases, readOnly }) {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: fd,
       })
-      if (!r.ok) throw new Error('Erro upload')
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Não foi possível carregar os documentos.')
+      toast(files.length === 1 ? 'Documento carregado.' : `${files.length} documentos carregados.`, 'success')
       load()
-    } catch (err) { alert(err.message) }
+    } catch (err) { toast(friendlyError(err.message), 'error') }
     finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
@@ -1713,7 +1721,7 @@ function TabDocumentos({ negocio, imovel, fases, readOnly }) {
     const r = await apiFetch(`/api/crm/projetos/documentos/${id}`, { method: 'DELETE' })
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
-      alert('Erro ao apagar documento: ' + (err.error || `HTTP ${r.status}`))
+      toast(friendlyError(err.error || { status: r.status }), 'error')
       return
     }
     load()
@@ -2576,7 +2584,7 @@ function TabFracoes({ negocioId, fracoes, onChange, readOnly, fasesComuns }) {
       method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    if (!r.ok) { const e = await r.json().catch(() => ({})); alert(e.error || 'Erro'); return }
+    if (!r.ok) { const e = await r.json().catch(() => ({})); toast(friendlyError(e.error || { status: r.status }), 'error'); return }
     setEditing(null); setShowForm(false); onChange()
   }
   async function apagar(id, nome) {

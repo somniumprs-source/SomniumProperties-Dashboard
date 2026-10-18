@@ -2,10 +2,13 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { SummaryStat } from '../components/ui/SummaryStat.jsx'
 import { BookOpen, Search, ExternalLink, Loader2, LayoutGrid, Wallet, RefreshCw, Handshake, Building, Library } from 'lucide-react'
 import { apiFetch } from '../lib/api.js'
+import { useToast } from '../components/ui/Toast.jsx'
+import { friendlyError } from '../lib/friendlyError.js'
 import { Button } from '../components/ui/Button.jsx'
 import { Card } from '../components/ui/Card.jsx'
 import { Input } from '../components/ui/Input.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
+import { ErrorState } from '../components/ui/ErrorState.jsx'
 
 const DRIVE_FOLDER_URL = 'https://drive.google.com/drive/folders/1XCHqPJsnQGNoXsVC35W04vN4e1BR42hE'
 
@@ -26,6 +29,7 @@ function fmtDate(d) {
 }
 
 export function AdministracaoSOP() {
+  const toast = useToast()
   const [sops, setSops] = useState([])
   const [filterDep, setFilterDep] = useState('')
   const [search, setSearch] = useState('')
@@ -36,11 +40,13 @@ export function AdministracaoSOP() {
   const loadList = useCallback(async () => {
     try {
       setLoading(true)
+      setError(null)
       const r = await apiFetch('/api/sops')
+      if (!r.ok) throw Object.assign(new Error('Erro ao carregar SOPs'), { status: r.status })
       const data = await r.json()
       setSops(Array.isArray(data.sops) ? data.sops : [])
     } catch (e) {
-      setError(e.message)
+      setError(e)
     } finally {
       setLoading(false)
     }
@@ -50,12 +56,14 @@ export function AdministracaoSOP() {
   // divisão por pastas, por isso o sync sozinho nunca traria isto correcto.
   async function reclassificar(sopId, departamento) {
     try {
-      await apiFetch(`/api/sops/${sopId}`, {
+      const r = await apiFetch(`/api/sops/${sopId}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ departamento }),
       })
+      if (!r.ok) throw Object.assign(new Error('Erro ao reclassificar'), { status: r.status })
       setSops(prev => prev.map(s => s.id === sopId ? { ...s, departamento } : s))
-    } catch (e) { setError(e.message) }
+      toast('Departamento atualizado.', 'success')
+    } catch (e) { toast(friendlyError(e), 'error') }
   }
 
   useEffect(() => { loadList() }, [loadList])
@@ -86,10 +94,10 @@ export function AdministracaoSOP() {
       await loadList()
       const partes = []
       if (data.importados) partes.push(`${data.importados} novo(s)`)
-      if (data.actualizados) partes.push(`${data.actualizados} actualizado(s)`)
+      if (data.actualizados) partes.push(`${data.actualizados} atualizado(s)`)
       if (data.removidos) partes.push(`${data.removidos} removido(s) (já não existem no Drive)`)
-      if (partes.length) alert(`Sincronização concluída: ${partes.join(', ')}.`)
-    } catch (e) { alert(e.message) }
+      toast(partes.length ? `Sincronização concluída: ${partes.join(', ')}.` : 'Sincronização concluída: sem alterações.', 'success')
+    } catch (e) { toast(friendlyError(e.message), 'error') }
     setSyncing(false)
   }
 
@@ -102,7 +110,7 @@ export function AdministracaoSOP() {
 
   return (
     <div className="flex flex-col gap-4">
-      {error && <div className="p-4 bg-danger/10 border border-danger/30 text-danger rounded-xl text-sm">Erro: {error}</div>}
+      {error && <ErrorState compact title="Não foi possível carregar os SOPs" error={error} onRetry={loadList} />}
 
       {/* Hero banner — identidade Somnium */}
       <div className="rounded-xl border border-line bg-surface-raised p-5 sm:p-6 shadow-xs">
@@ -117,7 +125,7 @@ export function AdministracaoSOP() {
             </div>
           </div>
           <a href={DRIVE_FOLDER_URL} target="_blank" rel="noopener noreferrer">
-            <Button variant="gold" icon={ExternalLink}>Abrir pasta no Drive</Button>
+            <Button variant="secondary" icon={ExternalLink}>Abrir pasta no Drive</Button>
           </a>
         </div>
         <div className="grid grid-cols-3 gap-4">
@@ -162,7 +170,7 @@ export function AdministracaoSOP() {
         <div className="text-center py-20 text-ink-muted">
           <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" /> A carregar...
         </div>
-      ) : filtered.length === 0 ? (
+      ) : error ? null : filtered.length === 0 ? (
         <Card padding="lg" variant="outlined" className="text-center py-12">
           <BookOpen className="w-10 h-10 mx-auto mb-3 text-ink-muted/70 " />
           <p className="font-medium text-ink-muted ">Sem SOPs nesta vista.</p>
@@ -180,7 +188,7 @@ export function AdministracaoSOP() {
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group bg-surface-raised  border border-line  rounded-xl p-4 flex items-center gap-3 transition-[background-color,border-color,color,box-shadow,opacity,transform] hover:border-brand-gold hover:shadow-md hover:-translate-y-0.5"
+                className="group bg-surface-raised  border border-line  rounded-xl p-4 flex items-center gap-3 transition-[background-color,border-color,color,box-shadow,opacity,transform] hover:border-ink/20 hover:shadow-md hover:-translate-y-0.5"
               >
                 <div
                   className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
@@ -209,7 +217,7 @@ export function AdministracaoSOP() {
                     <span>{fmtDate(s.updated_at)}</span>
                   </div>
                 </div>
-                <ExternalLink className="w-4 h-4 text-ink-muted/70  group-hover:text-brand-gold transition-colors shrink-0" />
+                <ExternalLink className="w-4 h-4 text-ink-muted/70  group-hover:text-ink transition-colors shrink-0" />
               </a>
             )
           })}
