@@ -10,6 +10,8 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { ChevronDown, ChevronRight, Upload, Trash2, Save, Check, AlertTriangle, Loader2 } from 'lucide-react'
 import { EUR } from '../../constants.js'
 import { apiFetch } from '../../lib/api.js'
+import { useToast } from '../ui/Toast.jsx'
+import { friendlyError } from '../../lib/friendlyError.js'
 
 function formatTime(d) {
   if (!d) return ''
@@ -89,6 +91,7 @@ function parseAndMigrate(raw) {
 }
 
 export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, lastSaveStatus }) {
+  const toast = useToast()
   const [meta, setMeta] = useState(DEFAULT_META)
   const [tipologias, setTipologias] = useState([])
   const [tipCount, setTipCount] = useState(1)
@@ -325,7 +328,7 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
       const r = await apiFetch(`/api/crm/analises/${analise.id}/alfredo-imagem`, { method: 'POST', body: fd })
       if (!r.ok) {
         const err = await r.json().catch(() => ({}))
-        alert(`Erro: ${err.error || r.statusText}`)
+        toast(friendlyError(err.error || { status: r.status }), 'error')
         return
       }
       const { alfredo_imagem } = await r.json()
@@ -345,7 +348,7 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
       const r = await apiFetch(`/api/crm/analises/${analise.id}/alfredo-imagem`, { method: 'DELETE' })
       if (!r.ok) {
         const err = await r.json().catch(() => ({}))
-        alert(`Erro: ${err.error || r.statusText}`)
+        toast(friendlyError(err.error || { status: r.status }), 'error')
         return
       }
       const nextMeta = { ...meta }

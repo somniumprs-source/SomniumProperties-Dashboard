@@ -18,6 +18,7 @@ import { useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Phone, RefreshCw, Check, X, Mic, Upload, Plus, Pencil, MessageCircle, Mail, Users, StickyNote } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
+import { useToast } from '../ui/Toast.jsx'
 import { useRefreshOnMutation } from '../../hooks/useRefreshOnMutation.js'
 import { inputClass, fmtQuando, fmtDia, emDias, agoraLocal, comHora } from './passosUtil.js'
 
@@ -270,6 +271,7 @@ function OportunidadesEditor({ itens, setItens }) {
 // 'novo' (contacto fora do marcado: não o fecha nem lhe mexe nos assuntos) ou 'sem_sucesso'.
 // pessoa: { nome, regiao } — para ligar ao consultor as oportunidades registadas.
 function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSugerido, opcoes, onCancel, onDone }) {
+  const toast = useToast()
   const feito = modo === 'feito' || modo === 'novo'
   const marcados = modo === 'novo' ? [] : proximo?.assuntos || []
   const dataMarcada = String(proximo?.quando || '').slice(0, 10)
@@ -344,7 +346,7 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
         fd.append('titulo', notas.trim().slice(0, 80) || `Contacto ${fmtDia(String(quando || '').slice(0, 10) || emDias(0))}`)
         fd.append('data_chamada', String(quando || '').slice(0, 10) || emDias(0))
         const ru = await apiFetch(`/api/crm/consultores/${pessoaId}/gravacoes`, { method: 'POST', body: fd }).catch(() => null)
-        if (!ru?.ok) alert(`O contacto ficou registado, mas a gravação não foi carregada: ${(await ru?.json().catch(() => ({})))?.error || 'erro no envio'}`)
+        if (!ru?.ok) toast('O contacto ficou registado, mas a gravação não foi carregada. Tenta carregá-la de novo nas gravações.', 'error')
       }
       onDone?.()
     } catch (err) {

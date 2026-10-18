@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Header } from '../components/layout/Header.jsx'
 import { apiFetch, openDocument } from '../lib/api.js'
+import { useToast } from '../components/ui/Toast.jsx'
+import { friendlyError } from '../lib/friendlyError.js'
 import { EUR, PCT } from '../constants.js'
 import { Button } from '../components/ui/Button.jsx'
+import { ErrorState } from '../components/ui/ErrorState.jsx'
 import { KpiCard } from '../components/ui/KpiCard.jsx'
 import { Card } from '../components/ui/Card.jsx'
 import { ScrollableTable } from '../components/ui/ScrollableTable.jsx'
@@ -10,14 +13,14 @@ import { Bell, AlertTriangle, AlertCircle, Info, FileWarning, History, Database,
 import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 
 const SEV_STYLE = {
-  critico: 'bg-danger/15 text-danger border-danger/30',
-  aviso:   'bg-warning/15 text-warning border-warning/30',
+  critico: 'bg-danger/10 text-danger border-danger/25',
+  aviso:   'bg-warning/10 text-warning border-warning/25',
   info:    'bg-surface-muted text-ink border-line',
 }
 const SEV_DOT = {
   critico: 'bg-danger',
   aviso:   'bg-warning',
-  info:    'bg-blue-400',
+  info:    'bg-ink-muted',
 }
 const TIPO_LABEL = {
   inatividade_investidor:        'Investidor inativo',
@@ -40,6 +43,7 @@ const HEALTH_BAR = pct =>
   pct >= 80 ? 'bg-success' : pct >= 50 ? 'bg-warning' : 'bg-danger'
 
 export function Alertas() {
+  const toast = useToast()
   const [alertas, setAlertas]     = useState(null)
   const [health, setHealth]       = useState(null)
   const [loading, setLoading]     = useState(true)
@@ -59,20 +63,23 @@ export function Alertas() {
         apiFetch('/api/crm/backup/list').then(r => r.json()).catch(() => []),
         apiFetch('/api/crm/audit?limit=30').then(r => r.json()).catch(() => []),
       ])
-      if (!ar.ok || !hr.ok) throw new Error('Erro no servidor')
+      if (!ar.ok || !hr.ok) throw Object.assign(new Error('Erro no servidor'), { status: ar.ok ? hr.status : ar.status })
       const [a, h] = await Promise.all([ar.json(), hr.json()])
       if (a.error) throw new Error(a.error)
       setAlertas(a); setHealth(h); setBackups(bl); setAuditLog(al)
-    } catch (err) { setError(err.message) }
+    } catch (err) { setError(err) }
     finally { setLoading(false) }
   }
 
   async function createBackup() {
     setBackupLoading(true)
     try {
-      await apiFetch('/api/crm/backup/auto', { method: 'POST' })
+      const r = await apiFetch('/api/crm/backup/auto', { method: 'POST' })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || d.error) throw new Error(d.error || 'Não foi possível criar o backup.')
+      toast('Backup criado.', 'success')
       await load()
-    } catch (e) { setError(e.message) }
+    } catch (e) { toast(friendlyError(e.message), 'error') }
     finally { setBackupLoading(false) }
   }
 
@@ -83,9 +90,9 @@ export function Alertas() {
       const r = await apiFetch(`/api/crm/backup/restore/${id}`, { method: 'POST' })
       const d = await r.json()
       if (d.error) throw new Error(d.error)
-      alert(`Restaurado: ${d.restored} registos de ${d.fromBackup}`)
+      toast(`Restaurado: ${d.restored} registos de ${d.fromBackup}`, 'success')
       await load()
-    } catch (e) { setError(e.message) }
+    } catch (e) { toast(friendlyError(e.message), 'error') }
     finally { setBackupLoading(false) }
   }
 
@@ -94,8 +101,9 @@ export function Alertas() {
       const r = await apiFetch(`/api/crm/undo/${auditId}`, { method: 'POST' })
       const d = await r.json()
       if (d.error) throw new Error(d.error)
+      toast('Alteração desfeita.', 'success')
       await load()
-    } catch (e) { setError(e.message) }
+    } catch (e) { toast(friendlyError(e.message), 'error') }
   }
 
   useEffect(() => { load() }, [])
@@ -119,7 +127,7 @@ export function Alertas() {
     <>
       <Header title="Centro de Alertas" subtitle="Automações & Higiene de Dados" onRefresh={load} loading={loading} />
       <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
-        {error && <div className="p-4 bg-danger/10 border border-danger/30 text-danger rounded-xl text-sm">Erro: {error}</div>}
+        {error && <ErrorState compact title="Não foi possível carregar os alertas" error={error} onRetry={load} />}
 
 
         {/* Resumo */}
@@ -157,7 +165,7 @@ export function Alertas() {
           </div>
           {runResult && (
             <div className={`mt-4 p-4 rounded-xl text-sm ${runResult.error ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success'}`}>
-              <p className="font-semibold">{runResult.name}: {runResult.error ? `Erro — ${runResult.error}` : 'Conclu\u00eddo'}</p>
+              <p className="font-semibold">{runResult.name}: {runResult.error ? `Erro — ${friendlyError(runResult.error)}` : 'Conclu\u00eddo'}</p>
               {runResult.atualizados != null && <p className="mt-1">{runResult.atualizados} registos atualizados</p>}
               {runResult.criados != null && <p className="mt-1">{runResult.criados} registos criados</p>}
               {runResult.results && (
@@ -254,7 +262,7 @@ export function Alertas() {
                       <td className="py-2 px-3">
                         <div className="flex flex-wrap gap-1">
                           {item.campos.map(c => (
-                            <span key={c} className="px-2 py-0.5 rounded-full text-xs bg-orange-100 text-orange-700">{c}</span>
+                            <span key={c} className="px-2 py-0.5 rounded-full text-xs bg-warning/10 text-warning">{c}</span>
                           ))}
                         </div>
                       </td>
@@ -270,7 +278,7 @@ export function Alertas() {
         <Card padding="md">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Database className="w-4 h-4 text-brand-gold" strokeWidth={1.75} />
+              <Database className="w-4 h-4 text-ink-muted" strokeWidth={1.75} />
               <h2 className="text-sm font-semibold text-ink ">Higiene de Dados</h2>
             </div>
             {health?.scoreGlobal != null && (
@@ -299,7 +307,7 @@ export function Alertas() {
                 </div>
                 {db.scoreMedio != null && (
                   <p className={`text-xs mt-2 font-semibold ${HEALTH_COLOR(db.scoreMedio)}`}>
-                    Score m\u00e9dio: {PCT(db.scoreMedio)}
+                    Score médio: {PCT(db.scoreMedio)}
                   </p>
                 )}
               </div>
@@ -311,13 +319,12 @@ export function Alertas() {
         <Card padding="md">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Database className="w-4 h-4 text-brand-gold" strokeWidth={1.75} />
+              <Database className="w-4 h-4 text-ink-muted" strokeWidth={1.75} />
               <h2 className="text-sm font-semibold text-ink ">Backups</h2>
             </div>
-            <button onClick={createBackup} disabled={backupLoading}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg  disabled:opacity-50 bg-accent text-accent-foreground hover:brightness-[1.04]">
-              {backupLoading ? 'A guardar...' : 'Criar Backup Agora'}
-            </button>
+            <Button size="sm" onClick={createBackup} loading={backupLoading}>
+              {backupLoading ? 'A guardar...' : 'Criar backup agora'}
+            </Button>
           </div>
           <p className="text-xs text-ink-muted mb-3">Backup automático diário às 03:00. Últimos 30 guardados. Cada restauro guarda o estado atual primeiro.</p>
           {backups.length > 0 ? (
@@ -337,7 +344,7 @@ export function Alertas() {
                         <div className="flex gap-2 justify-end">
                           <button type="button" onClick={() => openDocument(`/api/crm/backup/${b.id}/download`, { download: true }).catch(e => console.error('[backup download]', e.message))}
                             className="text-xs text-ink hover:underline">Descarregar</button>
-                          <button onClick={() => restoreBackup(b.id)} className="text-xs text-orange-600 hover:underline">Restaurar</button>
+                          <button onClick={() => restoreBackup(b.id)} className="text-xs text-ink font-medium hover:underline">Restaurar</button>
                         </div>
                       </td>
                     </tr>
@@ -345,7 +352,7 @@ export function Alertas() {
                 </tbody>
               </table>
             </ScrollableTable>
-          ) : <p className="text-xs text-ink-muted text-center py-4">Sem backups — clica em "Criar Backup Agora"</p>}
+          ) : <p className="text-xs text-ink-muted text-center py-4">Sem backups — clica em "Criar backup agora"</p>}
         </Card>
 
         {/* ── Histórico de Alterações ─────────── */}
@@ -382,7 +389,7 @@ export function Alertas() {
                         <td className="py-2 px-3 text-ink-muted max-w-[200px] truncate">{nome}</td>
                         <td className="py-2 px-3 text-right">
                           {canUndo && (
-                            <button onClick={() => undoAction(a.id)} className="text-xs text-orange-600 hover:underline">Desfazer</button>
+                            <button onClick={() => undoAction(a.id)} className="text-xs text-ink font-medium hover:underline">Desfazer</button>
                           )}
                         </td>
                       </tr>

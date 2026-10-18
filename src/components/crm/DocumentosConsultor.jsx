@@ -6,6 +6,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { FileDown, FileText, Trash2, Upload, Plus } from 'lucide-react'
 import { apiFetch, openDocument } from '../../lib/api.js'
+import { useToast } from '../ui/Toast.jsx'
+import { friendlyError } from '../../lib/friendlyError.js'
 import { fmtDate } from '../../constants.js'
 
 const ACEITES = '.pdf,.ppt,.pptx,.doc,.docx,.xls,.xlsx'
@@ -15,6 +17,7 @@ const descarregar = d => openDocument(`/api/crm/consultores/${d.consultor_id}/do
   .catch(err => console.error('[documento consultor]', err.message))
 
 export function DocumentosConsultor({ consultorId }) {
+  const toast = useToast()
   const [docs, setDocs] = useState([])
   const [tarefas, setTarefas] = useState([])
   const [loading, setLoading] = useState(true)
@@ -70,7 +73,7 @@ export function DocumentosConsultor({ consultorId }) {
     if (!window.confirm(`Apagar o documento «${d.titulo}»?`)) return
     const r = await apiFetch(`/api/crm/consultores/${consultorId}/documentos/${d.id}`, { method: 'DELETE' })
     if (r.ok) setDocs(p => p.filter(x => x.id !== d.id))
-    else alert((await r.json().catch(() => ({}))).error || 'Falha ao apagar')
+    else toast(friendlyError((await r.json().catch(() => ({}))).error || 'Falha ao apagar'), 'error')
   }
 
   return (

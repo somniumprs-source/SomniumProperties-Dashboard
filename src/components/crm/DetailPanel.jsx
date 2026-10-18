@@ -10,6 +10,7 @@ import { TabTransition, useTabDirection } from '../ui/PageTransition.jsx'
 import { tabIndicatorTransition } from '../../lib/motion.js'
 import { Button } from '../ui/Button.jsx'
 import { apiFetch, apiFetchJson, openDocument } from '../../lib/api.js'
+import { friendlyError } from '../../lib/friendlyError.js'
 import { useToast } from '../ui/Toast.jsx'
 import { PartilharAcesso } from '../PartilharAcesso.jsx'
 import { GravacoesConsultor } from './GravacoesConsultor.jsx'
@@ -2013,6 +2014,7 @@ function ConsultorInlineCreator({ initialNome, regiao, sugestoesImobiliarias = [
 
 // Bloco editável da Ficha do Imóvel — 6 secções colapsáveis sem duplicação.
 function ImovelEditSections({ data, form, setField }) {
+  const toast = useToast()
   const lookups = useLookups()
   const { concelhos, freguesias } = useFreguesiasLookup(form)
   const consultoresRegiao = useConsultoresLookup(form?.regiao)
@@ -2154,19 +2156,19 @@ function ImovelEditSections({ data, form, setField }) {
                     const fd = new FormData()
                     fd.append('imagem', file)
                     const r = await apiFetch(`/api/crm/imoveis/${data.id}/localizacao`, { method: 'POST', body: fd })
-                    if (!r.ok) throw new Error(await r.text())
+                    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Não foi possível carregar a imagem.')
                     const j = await r.json()
                     setField('localizacao_imagem', j.localizacao_imagem)
-                  } catch (err) { alert('Erro ao carregar: ' + err.message) }
+                  } catch (err) { toast(friendlyError(err.message), 'error') }
                 }} />
               </label>
               <button type="button" onClick={async () => {
                 if (!confirm('Remover imagem de localização?')) return
                 try {
                   const r = await apiFetch(`/api/crm/imoveis/${data.id}/localizacao`, { method: 'DELETE' })
-                  if (!r.ok) throw new Error(await r.text())
+                  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Não foi possível remover a imagem.')
                   setField('localizacao_imagem', null)
-                } catch (e) { alert('Erro ao remover: ' + e.message) }
+                } catch (e) { toast(friendlyError(e.message), 'error') }
               }} className="text-xs px-3 py-1.5 rounded-md bg-danger/10 border border-danger/30 text-danger hover:bg-danger/15">Remover</button>
             </div>
           </div>
@@ -2180,10 +2182,10 @@ function ImovelEditSections({ data, form, setField }) {
                 const fd = new FormData()
                 fd.append('imagem', file)
                 const r = await apiFetch(`/api/crm/imoveis/${data.id}/localizacao`, { method: 'POST', body: fd })
-                if (!r.ok) throw new Error(await r.text())
+                if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Não foi possível carregar a imagem.')
                 const j = await r.json()
                 setField('localizacao_imagem', j.localizacao_imagem)
-              } catch (err) { alert('Erro ao carregar: ' + err.message) }
+              } catch (err) { toast(friendlyError(err.message), 'error') }
             }} />
           </label>
         )}

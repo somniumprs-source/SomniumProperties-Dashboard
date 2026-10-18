@@ -13,6 +13,8 @@
 import { useState, useEffect, useCallback, Fragment } from 'react'
 import { Plus, Trash2, Pencil, Check, Loader2, Phone } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
+import { useToast } from '../ui/Toast.jsx'
+import { friendlyError } from '../../lib/friendlyError.js'
 import { RegistoManualFieldset, inputClass } from './RegistoManualFieldset.jsx'
 import { ScorecardBars } from './ScorecardBars.jsx'
 import {
@@ -61,6 +63,7 @@ function DetalheChamada({ g }) {
 }
 
 export function RegistoChamadasTab({ consultorId, onUpdate }) {
+  const toast = useToast()
   const [chamadas, setChamadas] = useState([])
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
@@ -103,7 +106,7 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
       setNovoRegisto({})
       setAdding(false)
       onUpdate?.()
-    } catch (err) { alert(err.message || 'Falha ao registar chamada') }
+    } catch (err) { toast(friendlyError(err.message || 'Falha ao registar chamada'), 'error') }
     setSaving(false)
   }
 
@@ -125,7 +128,7 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
       if (!r.ok) throw new Error(data.error || 'Falha ao guardar registo')
       setChamadas(p => p.map(g => g.id === id ? data : g))
       setEditId(null)
-    } catch (err) { alert(err.message || 'Falha ao guardar registo') }
+    } catch (err) { toast(friendlyError(err.message || 'Falha ao guardar registo'), 'error') }
     setSaving(false)
   }
 
@@ -136,7 +139,7 @@ export function RegistoChamadasTab({ consultorId, onUpdate }) {
       if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Falha ao apagar') }
       setChamadas(p => p.filter(g => g.id !== id))
       onUpdate?.()
-    } catch (err) { alert(err.message || 'Falha ao apagar') }
+    } catch (err) { toast(friendlyError(err.message || 'Falha ao apagar'), 'error') }
   }
 
   return (

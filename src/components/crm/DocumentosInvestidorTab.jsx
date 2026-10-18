@@ -5,6 +5,8 @@
 import { useState } from 'react'
 import { FileText, Plus, Trash2, ExternalLink, FileDown } from 'lucide-react'
 import { apiFetch, openDocument } from '../../lib/api.js'
+import { useToast } from '../ui/Toast.jsx'
+import { friendlyError } from '../../lib/friendlyError.js'
 import { fmtDate } from '../../constants.js'
 
 const TIPO_LABELS_ENVIADO = {
@@ -36,6 +38,7 @@ const SUBTABS = [
 ]
 
 export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs, onUpdate, readOnly = false }) {
+  const toast = useToast()
   const [documentos, setDocumentos] = useState(initialDocs || [])
   const [direcao, setDirecao] = useState('enviado')
   const [showForm, setShowForm] = useState(false)
@@ -93,7 +96,7 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
       await load()
       if (onUpdate) onUpdate()
     } catch (err) {
-      alert(err.message || 'Erro ao registar documento')
+      toast(friendlyError(err.message || 'Erro ao registar documento'), 'error')
     }
     setSaving(false)
   }
