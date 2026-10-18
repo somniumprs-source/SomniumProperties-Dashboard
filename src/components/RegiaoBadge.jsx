@@ -19,15 +19,15 @@ export function RegiaoBadge({ regiao, onTrocar, compact = false }) {
   return (
     <button
       onClick={onTrocar}
-      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800"
+      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors hover:bg-surface "
       style={{ borderColor: `${cor}55`, color: cor }}
       title="Trocar de região"
     >
       <Icon className="w-3.5 h-3.5" />
       <span>{label}</span>
-      <span className="text-gray-400 dark:text-neutral-500">·</span>
-      <span className="text-gray-500 dark:text-neutral-400">trocar</span>
-      <ChevronDown className="w-3 h-3 text-gray-400 dark:text-neutral-500" />
+      <span className="text-ink-muted ">·</span>
+      <span className="text-ink-muted ">trocar</span>
+      <ChevronDown className="w-3 h-3 text-ink-muted " />
     </button>
   )
 }

@@ -96,7 +96,7 @@ export function CAEPParcerias({ analise, onUpdate }) {
   return (
     <div className="space-y-6">
       {/* Aviso fiscal — caminho CAEP precisa de validação contabilística */}
-      <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+      <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-amber-900">
         <p className="font-semibold mb-1">⚠ Cálculo fiscal CAEP — validação pendente</p>
         <p>
           A tributação do investidor pode estar sobrestimada (cenário conservador): com base
@@ -108,17 +108,17 @@ export function CAEPParcerias({ analise, onUpdate }) {
       </div>
 
       {/* Configuração */}
-      <div className="rounded-xl border border-gray-200 p-4">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Estrutura da Parceria</p>
+      <div className="rounded-xl border border-line p-4">
+        <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-3">Estrutura da Parceria</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div>
-            <label className="text-xs text-gray-500">% Somnium</label>
+            <label className="text-xs text-ink-muted">% Somnium</label>
             <input type="number" step="any" value={config.perc_somnium}
               onChange={e => save({ ...config, perc_somnium: parseFloat(e.target.value) || 0 })}
-              className="w-full border rounded-lg px-3 py-1.5 text-sm font-mono" onWheel={e => e.target.blur()} />
+              className="w-full border rounded-lg px-3 py-1.5 text-sm num" onWheel={e => e.target.blur()} />
           </div>
           <div>
-            <label className="text-xs text-gray-500">Base de distribuição</label>
+            <label className="text-xs text-ink-muted">Base de distribuição</label>
             <select value={config.base_distribuicao}
               onChange={e => save({ ...config, base_distribuicao: e.target.value })}
               className="w-full border rounded-lg px-3 py-1.5 text-sm">
@@ -130,52 +130,52 @@ export function CAEPParcerias({ analise, onUpdate }) {
       </div>
 
       {/* Info split */}
-      <p className="text-xs text-gray-400">
-        Somnium: <strong className="text-gray-600">{config.perc_somnium}%</strong> · Investidores: <strong className="text-gray-600">{100 - config.perc_somnium}%</strong> distribuído proporcionalmente ao capital de cada um
+      <p className="text-xs text-ink-muted">
+        Somnium: <strong className="text-ink-muted">{config.perc_somnium}%</strong> · Investidores: <strong className="text-ink-muted">{100 - config.perc_somnium}%</strong> distribuído proporcionalmente ao capital de cada um
       </p>
 
       {/* Barra de capital */}
       <div>
         <div className="flex justify-between text-xs mb-1">
-          <span className="text-gray-500">Capital angariado</span>
-          <span className="font-mono">{EUR(capitalTotal)} / {EUR(capitalNecessario)}</span>
+          <span className="text-ink-muted">Capital angariado</span>
+          <span className="num">{EUR(capitalTotal)} / {EUR(capitalNecessario)}</span>
         </div>
-        <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-          <div className="h-full bg-yellow-500 rounded-full transition-all" style={{ width: `${progresso}%` }} />
+        <div className="h-3 bg-surface-muted rounded-full overflow-hidden">
+          <div className="h-full bg-warning rounded-full transition-[background-color,border-color,color,box-shadow,opacity,transform]" style={{ width: `${progresso}%` }} />
         </div>
       </div>
 
       {/* Investidores — com investidores ligados ao negócio CAEP, a lista vem
           do separador Investidores do projeto e não se edita aqui. */}
       {doProjeto && (
-        <p className="text-xs text-gray-400">
-          Capital e investidores geridos no separador <strong className="text-gray-600">Investidores</strong> do negócio CAEP — aqui só a distribuição do lucro.
+        <p className="text-xs text-ink-muted">
+          Capital e investidores geridos no separador <strong className="text-ink-muted">Investidores</strong> do negócio CAEP — aqui só a distribuição do lucro.
         </p>
       )}
       <div className="space-y-3">
         {config.investidores.map((inv, idx) => {
           const result = caepResult?.investidores?.[idx]
           return (
-            <div key={idx} className="rounded-xl border border-gray-200 p-4">
+            <div key={idx} className="rounded-xl border border-line p-4">
               <div className="flex items-center justify-between mb-3">
                 <input value={inv.nome} readOnly={doProjeto} onChange={e => updateInvestidor(idx, 'nome', e.target.value)}
                   className="text-sm font-semibold bg-transparent border-none outline-none" placeholder="Nome" />
-                {!doProjeto && <button onClick={() => removeInvestidor(idx)} className="text-xs text-red-400 hover:text-red-600">&times;</button>}
+                {!doProjeto && <button onClick={() => removeInvestidor(idx)} className="text-xs text-red-400 hover:text-danger">&times;</button>}
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                 <div>
-                  <label className="text-gray-400">Capital</label>
+                  <label className="text-ink-muted">Capital</label>
                   <input type="number" step="any" value={inv.capital || ''} readOnly={doProjeto} onChange={e => updateInvestidor(idx, 'capital', parseFloat(e.target.value) || 0)}
-                    className={`w-full border rounded px-2 py-1 font-mono ${doProjeto ? 'bg-gray-50 text-gray-600' : ''}`} onWheel={e => e.target.blur()} />
+                    className={`w-full border rounded px-2 py-1 num ${doProjeto ? 'bg-surface text-ink-muted' : ''}`} onWheel={e => e.target.blur()} />
                 </div>
                 <div>
-                  <label className="text-gray-400">% do pool</label>
-                  <p className="w-full border rounded px-2 py-1 font-mono bg-gray-50 text-gray-600">
+                  <label className="text-ink-muted">% do pool</label>
+                  <p className="w-full border rounded px-2 py-1 num bg-surface text-ink-muted">
                     {capitalTotal > 0 ? ((parseFloat(inv.capital) || 0) / capitalTotal * 100).toFixed(1) : '0.0'}%
                   </p>
                 </div>
                 <div>
-                  <label className="text-gray-400">Tipo</label>
+                  <label className="text-ink-muted">Tipo</label>
                   <select value={inv.tipo} disabled={doProjeto} onChange={e => updateInvestidor(idx, 'tipo', e.target.value)}
                     className="w-full border rounded px-2 py-1">
                     <option value="particular">Particular</option>
@@ -187,12 +187,12 @@ export function CAEPParcerias({ analise, onUpdate }) {
                   const label = isBruto ? 'Lucro Bruto' : 'Lucro Líq.'
                   const valor = isBruto ? result.lucro_bruto : result.lucro_liquido
                   return (
-                    <div className="bg-gray-50 rounded p-2">
-                      <p className="text-gray-400">{label}</p>
-                      <p className={`font-mono font-semibold ${valor >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                    <div className="bg-surface rounded p-2">
+                      <p className="text-ink-muted">{label}</p>
+                      <p className={`num font-semibold ${valor >= 0 ? 'text-success' : 'text-danger'}`}>
                         {EUR(valor)}
                       </p>
-                      <p className="text-gray-400 mt-1">ROI: {PCT(result.roi)} · CoC: {PCT(result.cash_on_cash)} · RA: {PCT(result.retorno_anualizado)}</p>
+                      <p className="text-ink-muted mt-1">ROI: {PCT(result.roi)} · CoC: {PCT(result.cash_on_cash)} · RA: {PCT(result.retorno_anualizado)}</p>
                     </div>
                   )
                 })()}
@@ -204,50 +204,50 @@ export function CAEPParcerias({ analise, onUpdate }) {
 
       {!doProjeto && (
         <button onClick={addInvestidor}
-          className="w-full py-2 text-xs rounded-lg border-2 border-dashed border-gray-200 text-gray-400 hover:border-gray-400 hover:text-gray-600 transition-colors">
+          className="w-full py-2 text-xs rounded-lg border-2 border-dashed border-line text-ink-muted hover:border-ink/30 hover:text-ink-muted transition-colors">
           + Adicionar Investidor
         </button>
       )}
 
       {/* Resumo CAEP */}
       {caepResult && caepResult.quota_somnium !== undefined && (
-        <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4">
-          <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-2">Distribuição</p>
+        <div className="rounded-xl border border-warning/30 bg-warning/10 p-4">
+          <p className="text-xs font-semibold text-warning uppercase tracking-wide mb-2">Distribuição</p>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div>
-              <span className="text-gray-500">Quota Somnium</span>
-              <p className="font-mono font-semibold text-gray-800">{EUR(caepResult.quota_somnium)}</p>
+              <span className="text-ink-muted">Quota Somnium</span>
+              <p className="num font-semibold text-ink">{EUR(caepResult.quota_somnium)}</p>
             </div>
             <div>
-              <span className="text-gray-500">Capital Total</span>
-              <p className="font-mono font-semibold text-gray-800">{EUR(caepResult.capital_total)}</p>
+              <span className="text-ink-muted">Capital Total</span>
+              <p className="num font-semibold text-ink">{EUR(caepResult.capital_total)}</p>
             </div>
           </div>
         </div>
       )}
 
       {/* ── Mediação própria ────────────────────────────────── */}
-      <div className="rounded-xl border border-gray-200 p-4 space-y-4">
+      <div className="rounded-xl border border-line p-4 space-y-4">
         <label className="flex items-center justify-between cursor-pointer">
           <span>
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Mediação própria</span>
-            <span className="block text-xs text-gray-400 mt-0.5">A Somnium é a mediadora: comissão {PCT(comissaoPerc)} (líquida de IVA) distribuída à parte, em bruto.</span>
+            <span className="text-xs font-semibold text-ink-muted uppercase tracking-wide">Mediação própria</span>
+            <span className="block text-xs text-ink-muted mt-0.5">A Somnium é a mediadora: comissão {PCT(comissaoPerc)} (líquida de IVA) distribuída à parte, em bruto.</span>
           </span>
           <input type="checkbox" checked={!!med.ativo} onChange={e => toggleMediacao(e.target.checked)} className="h-4 w-4 accent-yellow-500" />
         </label>
 
         {med.ativo && (
           <>
-            <p className="text-xs text-gray-400">
-              Comissão a distribuir: <strong className="text-gray-700 font-mono">{EUR(mediacaoTotal)}</strong> (VVR × {PCT(comissaoPerc)})
+            <p className="text-xs text-ink-muted">
+              Comissão a distribuir: <strong className="text-ink num">{EUR(mediacaoTotal)}</strong> (VVR × {PCT(comissaoPerc)})
             </p>
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <div>
-                <label className="text-xs text-gray-500">% Somnium</label>
+                <label className="text-xs text-ink-muted">% Somnium</label>
                 <input type="number" step="any" value={med.perc_somnium}
                   onChange={e => updateMedPercSomnium(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-1.5 text-sm font-mono" onWheel={e => e.target.blur()} />
+                  className="w-full border rounded-lg px-3 py-1.5 text-sm num" onWheel={e => e.target.blur()} />
               </div>
             </div>
 
@@ -257,15 +257,15 @@ export function CAEPParcerias({ analise, onUpdate }) {
                 return (
                   <div key={r.nome} className="grid grid-cols-3 gap-3 items-end text-xs">
                     <div>
-                      <label className="text-gray-400">{r.nome || 'Investidor'}</label>
-                      <p className="text-gray-400">% da comissão</p>
+                      <label className="text-ink-muted">{r.nome || 'Investidor'}</label>
+                      <p className="text-ink-muted">% da comissão</p>
                     </div>
                     <div>
                       <input type="number" step="any" value={r.perc}
                         onChange={e => updateMedInvestidor(r.nome, e.target.value)}
-                        className="w-full border rounded px-2 py-1 font-mono" onWheel={e => e.target.blur()} />
+                        className="w-full border rounded px-2 py-1 num" onWheel={e => e.target.blur()} />
                     </div>
-                    <div className="text-right font-mono font-semibold text-gray-700">
+                    <div className="text-right num font-semibold text-ink">
                       {EUR(resultado ? resultado.valor : mediacaoTotal * r.perc / 100)}
                     </div>
                   </div>
@@ -274,21 +274,21 @@ export function CAEPParcerias({ analise, onUpdate }) {
             </div>
 
             {/* Validação da soma */}
-            <p className={`text-xs ${medSomaPerc === 100 ? 'text-gray-400' : 'text-red-600 font-semibold'}`}>
+            <p className={`text-xs ${medSomaPerc === 100 ? 'text-ink-muted' : 'text-danger font-semibold'}`}>
               Soma: Somnium {PCT(med.perc_somnium)} + investidores = <strong>{PCT(medSomaPerc)}</strong>
               {medSomaPerc !== 100 && ' — deve totalizar 100%'}
             </p>
 
             {/* Resultado da distribuição */}
             {medResult && (
-              <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <span className="text-gray-500">Quota Somnium ({PCT(medResult.perc_somnium)})</span>
-                  <p className="font-mono font-semibold text-gray-800">{EUR(medResult.quota_somnium)}</p>
+                  <span className="text-ink-muted">Quota Somnium ({PCT(medResult.perc_somnium)})</span>
+                  <p className="num font-semibold text-ink">{EUR(medResult.quota_somnium)}</p>
                 </div>
                 <div>
-                  <span className="text-gray-500">Total mediação</span>
-                  <p className="font-mono font-semibold text-gray-800">{EUR(medResult.total)}</p>
+                  <span className="text-ink-muted">Total mediação</span>
+                  <p className="num font-semibold text-ink">{EUR(medResult.total)}</p>
                 </div>
               </div>
             )}

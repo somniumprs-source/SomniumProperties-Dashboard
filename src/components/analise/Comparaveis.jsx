@@ -375,32 +375,32 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
     <div className="space-y-6">
       {/* Barra fixa: Guardar manual + Indicador de estado */}
       <div className="sticky top-0 z-10 -mx-1 px-1">
-        <div className="flex items-center justify-between gap-3 rounded-xl bg-white border border-gray-200 shadow-sm px-3 py-2">
+        <div className="flex items-center justify-between gap-3 rounded-xl bg-surface-raised border border-line shadow-sm px-3 py-2">
           <div className="flex items-center gap-2 text-xs">
             {status === 'saving' && (
-              <span className="inline-flex items-center gap-1.5 text-gray-500">
+              <span className="inline-flex items-center gap-1.5 text-ink-muted">
                 <Loader2 size={12} className="animate-spin" /> A guardar...
               </span>
             )}
             {status === 'saved' && (
-              <span className="inline-flex items-center gap-1.5 text-green-600">
+              <span className="inline-flex items-center gap-1.5 text-success">
                 <Check size={12} /> Guardado{statusAt ? ` às ${formatTime(statusAt)}` : ''}
               </span>
             )}
             {status === 'error' && (
-              <span className="inline-flex items-center gap-1.5 text-red-600" title={statusErr || ''}>
+              <span className="inline-flex items-center gap-1.5 text-danger" title={statusErr || ''}>
                 <AlertTriangle size={12} /> Erro a guardar — clique em "Guardar" para tentar de novo
               </span>
             )}
             {status === 'idle' && (
-              <span className="text-gray-400">Alterações guardam automaticamente ao sair da aba</span>
+              <span className="text-ink-muted">Alterações guardam automaticamente ao sair da aba</span>
             )}
           </div>
           <button
             type="button"
             onClick={guardarManual}
             disabled={status === 'saving'}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-ink text-surface hover:opacity-90 disabled:opacity-50 transition-colors"
           >
             <Save size={12} /> Guardar
           </button>
@@ -408,103 +408,103 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
       </div>
 
       {/* Bloco Metadados do Estudo */}
-      <div className="rounded-xl border border-gray-200 overflow-hidden bg-gray-50">
+      <div className="rounded-xl border border-line overflow-hidden bg-surface">
         <button
           onClick={() => setMetaExpanded(!metaExpanded)}
-          className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-gray-100 transition-colors"
+          className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-surface-muted transition-colors"
         >
-          {metaExpanded ? <ChevronDown size={16} className="text-gray-500" /> : <ChevronRight size={16} className="text-gray-500" />}
-          <span className="text-sm font-semibold text-gray-700">Metadados do Estudo</span>
-          <span className="text-xs text-gray-400">— Metodologia + Atributos do Imóvel Alvo</span>
+          {metaExpanded ? <ChevronDown size={16} className="text-ink-muted" /> : <ChevronRight size={16} className="text-ink-muted" />}
+          <span className="text-sm font-semibold text-ink">Metadados do Estudo</span>
+          <span className="text-xs text-ink-muted">— Metodologia + Atributos do Imóvel Alvo</span>
         </button>
         {metaExpanded && (
           <div className="px-4 pb-4 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Coluna 1 - Metodologia */}
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Metodologia</h4>
+              <h4 className="text-xs font-semibold text-ink-muted uppercase tracking-wide">Metodologia</h4>
               <label className="block text-xs">
-                <span className="text-gray-500">Fonte dos Dados</span>
+                <span className="text-ink-muted">Fonte dos Dados</span>
                 <input type="text" value={meta.fonte_dados} onChange={e => updateMeta('fonte_dados', e.target.value)}
                   className="w-full mt-0.5 border rounded px-2 py-1 text-sm" />
               </label>
               <label className="block text-xs">
-                <span className="text-gray-500">Tipo de Preço</span>
+                <span className="text-ink-muted">Tipo de Preço</span>
                 <select value={meta.tipo_preco} onChange={e => updateMeta('tipo_preco', e.target.value)}
-                  className="w-full mt-0.5 border rounded px-2 py-1 text-sm bg-white">
+                  className="w-full mt-0.5 border rounded px-2 py-1 text-sm bg-surface-raised">
                   {TIPO_PRECO_OPCOES.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <label className="block text-xs">
-                  <span className="text-gray-500">Desconto Negocial (%)</span>
+                  <span className="text-ink-muted">Desconto Negocial (%)</span>
                   <input type="number" step="0.5" value={meta.desconto_negocial_pct} onChange={e => updateMeta('desconto_negocial_pct', parseFloat(e.target.value) || 0)}
-                    className="w-full mt-0.5 border rounded px-2 py-1 text-sm font-mono" />
+                    className="w-full mt-0.5 border rounded px-2 py-1 text-sm num" />
                 </label>
                 <label className="block text-xs">
-                  <span className="text-gray-500">Raio de Pesquisa (km)</span>
+                  <span className="text-ink-muted">Raio de Pesquisa (km)</span>
                   <input type="number" step="0.5" value={meta.raio_pesquisa_km} onChange={e => updateMeta('raio_pesquisa_km', parseFloat(e.target.value) || 0)}
-                    className="w-full mt-0.5 border rounded px-2 py-1 text-sm font-mono" />
+                    className="w-full mt-0.5 border rounded px-2 py-1 text-sm num" />
                 </label>
               </div>
               <label className="block text-xs">
-                <span className="text-gray-500">Data de Recolha dos Dados</span>
+                <span className="text-ink-muted">Data de Recolha dos Dados</span>
                 <input type="date" value={meta.data_recolha} onChange={e => updateMeta('data_recolha', e.target.value)}
-                  className="w-full mt-0.5 border rounded px-2 py-1 text-sm font-mono" />
+                  className="w-full mt-0.5 border rounded px-2 py-1 text-sm num" />
               </label>
               <label className="block text-xs">
-                <span className="text-gray-500">Notas de Metodologia</span>
+                <span className="text-ink-muted">Notas de Metodologia</span>
                 <textarea value={meta.metodologia} onChange={e => updateMeta('metodologia', e.target.value)} rows={2}
                   className="w-full mt-0.5 border rounded px-2 py-1 text-sm" placeholder="Observações sobre a recolha, critérios de seleção..." />
               </label>
               <label className="block text-xs">
-                <span className="text-gray-500">Conclusão do Estudo</span>
+                <span className="text-ink-muted">Conclusão do Estudo</span>
                 <textarea value={meta.conclusao_estudo} onChange={e => updateMeta('conclusao_estudo', e.target.value)} rows={3}
                   className="w-full mt-0.5 border rounded px-2 py-1 text-sm"
                   placeholder="Deixe vazio para gerar automaticamente a partir dos dados (mediana, intervalo, posicionamento, desconto negocial)." />
-                <span className="text-[10px] text-gray-400 italic">Aparece em destaque no topo do PDF (caixa preta).</span>
+                <span className="text-[10px] text-ink-muted italic">Aparece em destaque no topo do PDF (caixa preta).</span>
               </label>
             </div>
 
             {/* Coluna 2 - Atributos do Alvo */}
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Atributos do Imóvel Alvo</h4>
+              <h4 className="text-xs font-semibold text-ink-muted uppercase tracking-wide">Atributos do Imóvel Alvo</h4>
               <div className="grid grid-cols-2 gap-2">
                 <div className="text-xs">
-                  <span className="text-gray-500">Tipologia</span>
+                  <span className="text-ink-muted">Tipologia</span>
                   <input type="text" value={imovel?.tipologia || '—'} readOnly
-                    className="w-full mt-0.5 border rounded px-2 py-1 text-sm bg-white text-gray-500 cursor-not-allowed" />
+                    className="w-full mt-0.5 border rounded px-2 py-1 text-sm bg-surface-raised text-ink-muted cursor-not-allowed" />
                 </div>
                 <div className="text-xs">
-                  <span className="text-gray-500">Área Útil (m²)</span>
+                  <span className="text-ink-muted">Área Útil (m²)</span>
                   <input type="text" value={imovel?.area_bruta || '—'} readOnly
-                    className="w-full mt-0.5 border rounded px-2 py-1 text-sm bg-white text-gray-500 cursor-not-allowed font-mono" />
+                    className="w-full mt-0.5 border rounded px-2 py-1 text-sm bg-surface-raised text-ink-muted cursor-not-allowed num" />
                 </div>
               </div>
               <div className="text-xs">
-                <span className="text-gray-500">Estado Esperado após Obra</span>
+                <span className="text-ink-muted">Estado Esperado após Obra</span>
                 <input type="text" value="Reabilitado (após obra)" readOnly
-                  className="w-full mt-0.5 border rounded px-2 py-1 text-sm bg-white text-gray-500 cursor-not-allowed" />
+                  className="w-full mt-0.5 border rounded px-2 py-1 text-sm bg-surface-raised text-ink-muted cursor-not-allowed" />
               </div>
               <label className="block text-xs">
-                <span className="text-gray-500">Piso do Imóvel</span>
+                <span className="text-ink-muted">Piso do Imóvel</span>
                 <select value={meta.alvo_atributos.piso} onChange={e => updateMeta('alvo_piso', e.target.value)}
-                  className="w-full mt-0.5 border rounded px-2 py-1 text-sm bg-white">
+                  className="w-full mt-0.5 border rounded px-2 py-1 text-sm bg-surface-raised">
                   {PISO_OPCOES.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <label className="block text-xs">
-                  <span className="text-gray-500">Tem Elevador?</span>
+                  <span className="text-ink-muted">Tem Elevador?</span>
                   <select value={meta.alvo_atributos.elevador ? 'Sim' : 'Não'} onChange={e => updateMeta('alvo_elevador', e.target.value === 'Sim')}
-                    className="w-full mt-0.5 border rounded px-2 py-1 text-sm bg-white">
+                    className="w-full mt-0.5 border rounded px-2 py-1 text-sm bg-surface-raised">
                     <option>Não</option><option>Sim</option>
                   </select>
                 </label>
                 <label className="block text-xs">
-                  <span className="text-gray-500">Tem Garagem?</span>
+                  <span className="text-ink-muted">Tem Garagem?</span>
                   <select value={meta.alvo_atributos.garagem ? 'Sim' : 'Não'} onChange={e => updateMeta('alvo_garagem', e.target.value === 'Sim')}
-                    className="w-full mt-0.5 border rounded px-2 py-1 text-sm bg-white">
+                    className="w-full mt-0.5 border rounded px-2 py-1 text-sm bg-surface-raised">
                     <option>Não</option><option>Sim</option>
                   </select>
                 </label>
@@ -520,23 +520,23 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
       <div className="rounded-xl border-2 border-brand-gold/40 bg-[#FAF7EE] p-4">
         <div className="flex items-start justify-between gap-3 mb-2">
           <div>
-            <h3 className="text-sm font-semibold text-gray-800">Estudo de Mercado de Referência (Alfredo)</h3>
-            <p className="text-[11px] text-gray-500 mt-0.5">Captura de ecrã do estudo externo. Aparece no PDF antes da tabela de comparáveis ajustados.</p>
+            <h3 className="text-sm font-semibold text-ink">Estudo de Mercado de Referência (Alfredo)</h3>
+            <p className="text-[11px] text-ink-muted mt-0.5">Captura de ecrã do estudo externo. Aparece no PDF antes da tabela de comparáveis ajustados.</p>
           </div>
         </div>
         {meta.alfredo_imagem ? (
           <div className="flex items-start gap-3">
             <img src={meta.alfredo_imagem} alt="Estudo Alfredo" loading="lazy" decoding="async"
-              className="rounded border border-gray-200 max-h-56 object-contain bg-white" />
+              className="rounded border border-line max-h-56 object-contain bg-surface-raised" />
             <div className="flex flex-col gap-2">
               <button type="button" disabled={uploadingAlfredo}
                 onClick={() => alfredoInputRef.current?.click()}
-                className="text-xs px-3 py-1.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-50 inline-flex items-center gap-1.5">
+                className="text-xs px-3 py-1.5 rounded bg-surface-muted hover:bg-line text-ink disabled:opacity-50 inline-flex items-center gap-1.5">
                 <Upload size={12} /> Substituir
               </button>
               <button type="button" disabled={uploadingAlfredo}
                 onClick={removeAlfredo}
-                className="text-xs px-3 py-1.5 rounded bg-red-50 hover:bg-red-100 text-red-600 disabled:opacity-50 inline-flex items-center gap-1.5">
+                className="text-xs px-3 py-1.5 rounded bg-danger/10 hover:bg-danger/15 text-danger disabled:opacity-50 inline-flex items-center gap-1.5">
                 <Trash2 size={12} /> Remover
               </button>
             </div>
@@ -544,7 +544,7 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
         ) : (
           <button type="button" disabled={uploadingAlfredo || !analise?.id}
             onClick={() => alfredoInputRef.current?.click()}
-            className="w-full text-xs px-4 py-4 rounded border-2 border-dashed border-brand-gold/60 hover:border-brand-gold hover:bg-white text-gray-600 disabled:opacity-50 inline-flex items-center justify-center gap-2 font-semibold">
+            className="w-full text-xs px-4 py-4 rounded border-2 border-dashed border-brand-gold/60 hover:border-brand-gold hover:bg-surface-raised text-ink-muted disabled:opacity-50 inline-flex items-center justify-center gap-2 font-semibold">
             <Upload size={16} /> {uploadingAlfredo ? 'A carregar...' : (analise?.id ? 'Carregar captura do estudo (JPG, PNG, WEBP — máx. 15MB)' : 'Guarde a análise primeiro para ativar este upload')}
           </button>
         )}
@@ -558,21 +558,21 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
         <div className="flex items-center gap-2">
           {tipCount < 3 && (
             <button onClick={addTipologia}
-              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-900 text-white hover:bg-gray-800 transition-colors">
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-ink text-surface hover:opacity-90 transition-colors">
               + Tipologia
             </button>
           )}
-          <span className="text-xs text-gray-400">{tipCount} de 3</span>
+          <span className="text-xs text-ink-muted">{tipCount} de 3</span>
         </div>
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-1.5 cursor-pointer">
             <input type="checkbox" checked={autoAjustes} onChange={e => setAutoAjustes(e.target.checked)}
-              className="w-3.5 h-3.5 rounded border-gray-300 text-indigo-600" />
-            <span className="text-xs text-gray-500">Ajustes automáticos</span>
+              className="w-3.5 h-3.5 rounded border-line text-ink" />
+            <span className="text-xs text-ink-muted">Ajustes automáticos</span>
           </label>
           {autoAjustes && (
             <button onClick={recalcAll}
-              className="text-xs px-2 py-1 rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100">
+              className="text-xs px-2 py-1 rounded bg-surface-muted text-ink hover:bg-surface-muted">
               Recalcular
             </button>
           )}
@@ -585,10 +585,10 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
           const { mediaAjust, count } = calcTip(t)
           const vvr = mediaAjust > 0 && t.area > 0 ? mediaAjust * t.area : 0
           return (
-            <div key={i} className="bg-gray-50 rounded-lg px-3 py-2 flex-1 text-center">
-              <p className="text-xs text-gray-400">{t.tipologia} ({count} comp.)</p>
-              <p className="text-sm font-mono font-semibold">{vvr > 0 ? EUR(vvr) : '—'}</p>
-              <p className="text-xs text-gray-400">{mediaAjust > 0 ? `${mediaAjust} €/m²` : '—'}</p>
+            <div key={i} className="bg-surface rounded-lg px-3 py-2 flex-1 text-center">
+              <p className="text-xs text-ink-muted">{t.tipologia} ({count} comp.)</p>
+              <p className="text-sm num font-semibold">{vvr > 0 ? EUR(vvr) : '—'}</p>
+              <p className="text-xs text-ink-muted">{mediaAjust > 0 ? `${mediaAjust} €/m²` : '—'}</p>
             </div>
           )
         })}
@@ -598,9 +598,9 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
             return s + (mediaAjust > 0 && t.area > 0 ? mediaAjust * t.area : 0)
           }, 0)
           return totalVVR > 0 ? (
-            <div className="bg-gray-900 rounded-lg px-3 py-2 text-center" style={{ minWidth: 100 }}>
-              <p className="text-xs text-gray-400">Total</p>
-              <p className="text-sm font-mono font-semibold text-white">{EUR(totalVVR)}</p>
+            <div className="bg-brand-dark rounded-lg px-3 py-2 text-center" style={{ minWidth: 100 }}>
+              <p className="text-xs text-ink-muted">Total</p>
+              <p className="text-sm num font-semibold text-white">{EUR(totalVVR)}</p>
             </div>
           ) : null
         })()}
@@ -610,34 +610,34 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
       {tipologias.slice(0, tipCount).map((tip, tIdx) => {
         const { media, mediaAjust } = calcTip(tip)
         return (
-          <div key={tIdx} className="rounded-xl border border-gray-200 overflow-hidden">
-            <div className="px-4 py-3 bg-gray-50 flex items-center gap-3 flex-wrap">
+          <div key={tIdx} className="rounded-xl border border-line overflow-hidden">
+            <div className="px-4 py-3 bg-surface flex items-center gap-3 flex-wrap">
               <input value={tip.tipologia} onChange={e => updateTip(tIdx, 'tipologia', e.target.value)}
                 className="text-sm font-semibold bg-transparent border-none outline-none w-20" />
               <button onClick={() => removeTipologia(tIdx)}
-                className="text-xs text-red-400 hover:text-red-600 transition-colors">✕</button>
-              <div className="flex gap-3 text-xs text-gray-400 items-center flex-wrap">
+                className="text-xs text-red-400 hover:text-danger transition-colors">✕</button>
+              <div className="flex gap-3 text-xs text-ink-muted items-center flex-wrap">
                 <label>Área imóvel: <input type="number" step="any" value={tip.area || ''} onChange={e => updateTip(tIdx, 'area', parseFloat(e.target.value) || 0)}
-                  className="w-16 bg-white border rounded px-1 py-0.5 font-mono" onWheel={e => e.target.blur()} /> m²</label>
+                  className="w-16 bg-surface-raised border rounded px-1 py-0.5 num" onWheel={e => e.target.blur()} /> m²</label>
                 <label title="VVR adotado para esta tipologia (deixar vazio usa o VVR da análise)">VVR adotado: <input type="number" step="any" value={tip.vvr || ''} placeholder={mediaAjust > 0 && tip.area > 0 ? Math.round(mediaAjust * tip.area) : ''} onChange={e => updateTip(tIdx, 'vvr', parseFloat(e.target.value) || 0)}
-                  className="w-24 bg-white border rounded px-1 py-0.5 font-mono" onWheel={e => e.target.blur()} /> €</label>
+                  className="w-24 bg-surface-raised border rounded px-1 py-0.5 num" onWheel={e => e.target.blur()} /> €</label>
                 <span className="hidden sm:inline">|</span>
-                <span>Média: <strong className="text-gray-600">{media} €/m²</strong></span>
-                <span>Ajustada: <strong className="text-gray-600">{mediaAjust} €/m²</strong></span>
+                <span>Média: <strong className="text-ink-muted">{media} €/m²</strong></span>
+                <span>Ajustada: <strong className="text-ink-muted">{mediaAjust} €/m²</strong></span>
                 {mediaAjust > 0 && tip.area > 0 && (
-                  <span className="font-semibold text-gray-700">VVR sugerido: {EUR(mediaAjust * tip.area)}</span>
+                  <span className="font-semibold text-ink">VVR sugerido: {EUR(mediaAjust * tip.area)}</span>
                 )}
               </div>
             </div>
 
             {/* Header da tabela */}
-            <div className="px-4 pt-2 grid grid-cols-12 gap-2 text-[10px] text-gray-400 uppercase tracking-wide border-b border-gray-100 pb-1">
+            <div className="px-4 pt-2 grid grid-cols-12 gap-2 text-[10px] text-ink-muted uppercase tracking-wide border-b border-line pb-1">
               <span className="col-span-1">#</span>
               <span className="col-span-2">Preço</span>
               <span className="col-span-1">Área</span>
               <div className="col-span-6 grid grid-cols-6 gap-1 text-center">
                 {Object.entries(AJUSTE_LABELS).map(([k, label]) => (
-                  <span key={k} className={AUTO_FIELDS.has(k) ? 'text-indigo-400' : ''}>{label}{AUTO_FIELDS.has(k) ? ' ⚡' : ''}</span>
+                  <span key={k} className={AUTO_FIELDS.has(k) ? 'text-ink-muted' : ''}>{label}{AUTO_FIELDS.has(k) ? ' ⚡' : ''}</span>
                 ))}
               </div>
               <span className="col-span-1 text-right">€/m²</span>
@@ -654,9 +654,9 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
                 const adjOpen = expandedAdj.has(key)
 
                 return (
-                  <div key={cIdx} className="border-b border-gray-50 pb-2 space-y-1">
+                  <div key={cIdx} className="border-b border-line pb-2 space-y-1">
                     <div className="grid grid-cols-12 gap-2 items-center text-xs">
-                      <span className="col-span-1 text-gray-300 font-semibold">
+                      <span className="col-span-1 text-ink-muted/70 font-semibold">
                         {comp.link ? (
                           <a href={comp.link} target="_blank" rel="noopener noreferrer"
                             className="text-brand-gold hover:underline cursor-pointer">{cIdx + 1}</a>
@@ -664,11 +664,11 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
                       </span>
                       <div className="col-span-2">
                         <input type="number" step="any" value={comp.preco || ''} onChange={e => updateComp(tIdx, cIdx, 'preco', parseFloat(e.target.value) || 0)}
-                          placeholder="€" className="w-full border rounded px-2 py-1 font-mono" onWheel={e => e.target.blur()} />
+                          placeholder="€" className="w-full border rounded px-2 py-1 num" onWheel={e => e.target.blur()} />
                       </div>
                       <div className="col-span-1">
                         <input type="number" step="any" value={comp.area || ''} onChange={e => updateComp(tIdx, cIdx, 'area', parseFloat(e.target.value) || 0)}
-                          placeholder="m²" className="w-full border rounded px-2 py-1 font-mono" onWheel={e => e.target.blur()} />
+                          placeholder="m²" className="w-full border rounded px-2 py-1 num" onWheel={e => e.target.blur()} />
                       </div>
                       <div className="col-span-6 grid grid-cols-6 gap-1">
                         {Object.keys(AJUSTE_LABELS).map(aj => {
@@ -679,19 +679,19 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
                                 value={comp.ajustes?.[aj] ?? ''}
                                 onChange={e => updateComp(tIdx, cIdx, `ajuste_${aj}`, parseFloat(e.target.value) || 0)}
                                 readOnly={isAuto}
-                                className={`w-full border rounded px-1 py-1 font-mono text-center ${
-                                  isAuto ? 'bg-indigo-50 text-indigo-600 border-indigo-200 cursor-not-allowed' : ''
-                                } ${(comp.ajustes?.[aj] || 0) > 0 ? 'text-green-600' : (comp.ajustes?.[aj] || 0) < 0 ? 'text-red-600' : 'text-gray-500'}`}
+                                className={`w-full border rounded px-1 py-1 num text-center ${
+                                  isAuto ? 'bg-surface-muted text-ink border-line cursor-not-allowed' : ''
+                                } ${(comp.ajustes?.[aj] || 0) > 0 ? 'text-success' : (comp.ajustes?.[aj] || 0) < 0 ? 'text-danger' : 'text-ink-muted'}`}
                               />
                             </div>
                           )
                         })}
                       </div>
                       <div className="col-span-1 text-right">
-                        <p className="font-mono text-gray-600">{euroM2 > 0 ? euroM2 : '—'}</p>
+                        <p className="num text-ink-muted">{euroM2 > 0 ? euroM2 : '—'}</p>
                       </div>
                       <div className="col-span-1 text-right">
-                        <p className={`font-mono font-semibold ${ajusteTotal > 0 ? 'text-green-600' : ajusteTotal < 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                        <p className={`num font-semibold ${ajusteTotal > 0 ? 'text-success' : ajusteTotal < 0 ? 'text-danger' : 'text-ink-muted'}`}>
                           {euroM2Ajust > 0 ? euroM2Ajust : '—'}
                         </p>
                       </div>
@@ -701,18 +701,18 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
                     <div className="grid grid-cols-12 gap-2 items-center text-xs">
                       <span className="col-span-1" />
                       <div className="col-span-9 flex items-center gap-3">
-                        <button onClick={() => toggleAttrs(key)} className="text-[11px] text-gray-500 hover:text-gray-700 flex items-center gap-1">
+                        <button onClick={() => toggleAttrs(key)} className="text-[11px] text-ink-muted hover:text-ink flex items-center gap-1">
                           {attrsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                           Atributos detalhados
                         </button>
-                        <button onClick={() => toggleAdj(key)} className="text-[11px] text-gray-500 hover:text-gray-700 flex items-center gap-1">
+                        <button onClick={() => toggleAdj(key)} className="text-[11px] text-ink-muted hover:text-ink flex items-center gap-1">
                           {adjOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                           Ajustes desagregados
                         </button>
                         <button
                           type="button"
                           onClick={() => removeComp(tIdx, cIdx)}
-                          className="text-[11px] text-red-400 hover:text-red-600 inline-flex items-center gap-1"
+                          className="text-[11px] text-red-400 hover:text-danger inline-flex items-center gap-1"
                           title="Eliminar este comparável"
                         >
                           <Trash2 size={12} /> Eliminar
@@ -720,7 +720,7 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
                       </div>
                       <div className="col-span-2 text-right">
                         {ajusteTotal !== 0 && (
-                          <span className={`text-[10px] font-mono ${ajusteTotal > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                          <span className={`text-[10px] num ${ajusteTotal > 0 ? 'text-success' : 'text-danger'}`}>
                             {ajusteTotal > 0 ? '+' : ''}{ajusteTotal.toFixed(1)}%
                           </span>
                         )}
@@ -729,56 +729,56 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
 
                     {/* Accordion: Atributos detalhados */}
                     {attrsOpen && (
-                      <div className="ml-8 mr-2 mt-1 p-3 bg-gray-50 rounded-md grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                      <div className="ml-8 mr-2 mt-1 p-3 bg-surface rounded-md grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
                         <label className="md:col-span-2">
-                          <span className="text-gray-500">Descrição breve</span>
+                          <span className="text-ink-muted">Descrição breve</span>
                           <input type="text" value={comp.descricao || ''} onChange={e => updateComp(tIdx, cIdx, 'descricao', e.target.value)}
                             className="w-full mt-0.5 border rounded px-2 py-1" placeholder="Ex: Apartamento remodelado, ar cond., garagem fechada" />
                         </label>
                         <label>
-                          <span className="text-gray-500">Dias em Mercado</span>
+                          <span className="text-ink-muted">Dias em Mercado</span>
                           <input type="number" value={comp.dias_mercado ?? ''} onChange={e => updateComp(tIdx, cIdx, 'dias_mercado', e.target.value === '' ? null : parseInt(e.target.value))}
-                            className="w-full mt-0.5 border rounded px-2 py-1 font-mono" />
+                            className="w-full mt-0.5 border rounded px-2 py-1 num" />
                         </label>
                         <label>
-                          <span className="text-gray-500">Estado de Conservação</span>
+                          <span className="text-ink-muted">Estado de Conservação</span>
                           <select value={comp.estado || ''} onChange={e => updateComp(tIdx, cIdx, 'estado', e.target.value)}
-                            className="w-full mt-0.5 border rounded px-2 py-1 bg-white">
+                            className="w-full mt-0.5 border rounded px-2 py-1 bg-surface-raised">
                             <option value="">— Selecionar —</option>
                             {ESTADO_OPCOES.map(o => <option key={o} value={o}>{o}</option>)}
                           </select>
                         </label>
                         <label>
-                          <span className="text-gray-500">Piso</span>
+                          <span className="text-ink-muted">Piso</span>
                           <select value={comp.piso || ''} onChange={e => updateComp(tIdx, cIdx, 'piso', e.target.value)}
-                            className="w-full mt-0.5 border rounded px-2 py-1 bg-white">
+                            className="w-full mt-0.5 border rounded px-2 py-1 bg-surface-raised">
                             <option value="">— Selecionar —</option>
                             {PISO_OPCOES.map(o => <option key={o} value={o}>{o}</option>)}
                           </select>
                         </label>
                         <div className="grid grid-cols-2 gap-2">
                           <label>
-                            <span className="text-gray-500">Elevador?</span>
+                            <span className="text-ink-muted">Elevador?</span>
                             <select value={comp.elevador ? 'Sim' : 'Não'} onChange={e => updateComp(tIdx, cIdx, 'elevador', e.target.value === 'Sim')}
-                              className="w-full mt-0.5 border rounded px-2 py-1 bg-white">
+                              className="w-full mt-0.5 border rounded px-2 py-1 bg-surface-raised">
                               <option>Não</option><option>Sim</option>
                             </select>
                           </label>
                           <label>
-                            <span className="text-gray-500">Garagem?</span>
+                            <span className="text-ink-muted">Garagem?</span>
                             <select value={comp.garagem ? 'Sim' : 'Não'} onChange={e => updateComp(tIdx, cIdx, 'garagem', e.target.value === 'Sim')}
-                              className="w-full mt-0.5 border rounded px-2 py-1 bg-white">
+                              className="w-full mt-0.5 border rounded px-2 py-1 bg-surface-raised">
                               <option>Não</option><option>Sim</option>
                             </select>
                           </label>
                         </div>
                         <label className="md:col-span-2">
-                          <span className="text-gray-500">URL do Anúncio</span>
+                          <span className="text-ink-muted">URL do Anúncio</span>
                           <input type="url" value={comp.link || ''} onChange={e => updateComp(tIdx, cIdx, 'link', e.target.value)}
                             className="w-full mt-0.5 border rounded px-2 py-1 truncate" placeholder="https://..." />
                         </label>
                         <label className="md:col-span-3">
-                          <span className="text-gray-500">Notas</span>
+                          <span className="text-ink-muted">Notas</span>
                           <textarea value={comp.notas || ''} onChange={e => updateComp(tIdx, cIdx, 'notas', e.target.value)} rows={2}
                             className="w-full mt-0.5 border rounded px-2 py-1" />
                         </label>
@@ -787,21 +787,21 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
 
                     {/* Accordion: Ajustes desagregados */}
                     {adjOpen && (
-                      <div className="ml-8 mr-2 mt-1 p-3 bg-gray-50 rounded-md grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                      <div className="ml-8 mr-2 mt-1 p-3 bg-surface rounded-md grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
                         <label title="+ : comparável em piso menos valorizado e alvo em piso mais alto → VVR sobe.&#10;− : comparável em andar e alvo em cave → VVR desce.&#10;Ex: alvo em cave, comp. em 1.º andar → +3% a +8%.">
-                          <span className="text-gray-500">Ajuste Piso (%)</span>
+                          <span className="text-ink-muted">Ajuste Piso (%)</span>
                           <input type="number" step="0.5" value={comp.ajustes?.piso_pct ?? 0} onChange={e => updateComp(tIdx, cIdx, 'ajuste_piso_pct', parseFloat(e.target.value) || 0)}
-                            className="w-full mt-0.5 border rounded px-2 py-1 font-mono" />
+                            className="w-full mt-0.5 border rounded px-2 py-1 num" />
                         </label>
                         <label title="− : comparável tem elevador e alvo não tem → remover prémio → VVR desce.&#10;0 : ambos com ou ambos sem.&#10;Ex: comp. com elevador, alvo sem → −3% a −5%.">
-                          <span className="text-gray-500">Ajuste Elevador (%)</span>
+                          <span className="text-ink-muted">Ajuste Elevador (%)</span>
                           <input type="number" step="0.5" value={comp.ajustes?.elevador_pct ?? 0} onChange={e => updateComp(tIdx, cIdx, 'ajuste_elevador_pct', parseFloat(e.target.value) || 0)}
-                            className="w-full mt-0.5 border rounded px-2 py-1 font-mono" />
+                            className="w-full mt-0.5 border rounded px-2 py-1 num" />
                         </label>
                         <label title="− : comparável tem garagem e alvo não tem → remover valor da garagem → VVR desce.&#10;0 : ambos com ou ambos sem.&#10;Ex: comp. com garagem, alvo sem → −5% a −8%.">
-                          <span className="text-gray-500">Ajuste Garagem (%)</span>
+                          <span className="text-ink-muted">Ajuste Garagem (%)</span>
                           <input type="number" step="0.5" value={comp.ajustes?.garagem_pct ?? 0} onChange={e => updateComp(tIdx, cIdx, 'ajuste_garagem_pct', parseFloat(e.target.value) || 0)}
-                            className="w-full mt-0.5 border rounded px-2 py-1 font-mono" />
+                            className="w-full mt-0.5 border rounded px-2 py-1 num" />
                         </label>
                       </div>
                     )}
@@ -815,45 +815,45 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
 
       {/* Resumo Estatistico */}
       {stats && (
-        <div className="rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 bg-gray-900 text-white">
+        <div className="rounded-xl border border-line overflow-hidden">
+          <div className="px-4 py-3 bg-brand-dark text-white">
             <h3 className="text-sm font-semibold">Resumo Estatístico do Estudo</h3>
-            <p className="text-xs text-gray-400">Análise agregada de todos os comparáveis válidos</p>
+            <p className="text-xs text-ink-muted">Análise agregada de todos os comparáveis válidos</p>
           </div>
           <div className="p-4 grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
             <div>
-              <p className="text-xs text-gray-400 uppercase">Comparáveis</p>
-              <p className="text-lg font-mono font-semibold">{stats.n}</p>
+              <p className="text-xs text-ink-muted uppercase">Comparáveis</p>
+              <p className="text-lg num font-semibold">{stats.n}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-400 uppercase">Média VVR</p>
-              <p className="text-lg font-mono font-semibold">{EUR(stats.media)}</p>
+              <p className="text-xs text-ink-muted uppercase">Média VVR</p>
+              <p className="text-lg num font-semibold">{EUR(stats.media)}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-400 uppercase">Mediana VVR</p>
-              <p className="text-lg font-mono font-semibold">{EUR(stats.mediana)}</p>
+              <p className="text-xs text-ink-muted uppercase">Mediana VVR</p>
+              <p className="text-lg num font-semibold">{EUR(stats.mediana)}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-400 uppercase">Mín. VVR</p>
-              <p className="text-lg font-mono font-semibold">{EUR(stats.min)}</p>
+              <p className="text-xs text-ink-muted uppercase">Mín. VVR</p>
+              <p className="text-lg num font-semibold">{EUR(stats.min)}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-400 uppercase">Máx. VVR</p>
-              <p className="text-lg font-mono font-semibold">{EUR(stats.max)}</p>
+              <p className="text-xs text-ink-muted uppercase">Máx. VVR</p>
+              <p className="text-lg num font-semibold">{EUR(stats.max)}</p>
             </div>
           </div>
           {stats.delta != null && stats.posicionamento && (
             <div className="px-4 pb-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-              <div className="text-xs text-gray-500">
-                VVR Adotado <strong className="font-mono text-gray-700">{EUR(stats.vvrAdoptado)}</strong> vs. Mediana
-                <span className={`ml-2 font-mono font-semibold ${stats.delta < 0 ? 'text-green-600' : stats.delta > 5 ? 'text-red-600' : 'text-brand-gold'}`}>
+              <div className="text-xs text-ink-muted">
+                VVR Adotado <strong className="num text-ink">{EUR(stats.vvrAdoptado)}</strong> vs. Mediana
+                <span className={`ml-2 num font-semibold ${stats.delta < 0 ? 'text-success' : stats.delta > 5 ? 'text-danger' : 'text-brand-gold'}`}>
                   {stats.delta >= 0 ? '+' : ''}{stats.delta.toFixed(1)}%
                 </span>
               </div>
               <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
-                stats.posicionamento.cor === 'verde' ? 'bg-green-50 text-green-700 border border-green-200'
-                : stats.posicionamento.cor === 'vermelho' ? 'bg-red-50 text-red-700 border border-red-200'
-                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                stats.posicionamento.cor === 'verde' ? 'bg-success/10 text-success border border-success/30'
+                : stats.posicionamento.cor === 'vermelho' ? 'bg-danger/10 text-danger border border-danger/30'
+                : 'bg-warning/10 text-warning border border-warning/30'
               }`}>{stats.posicionamento.texto}</span>
             </div>
           )}

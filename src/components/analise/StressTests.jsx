@@ -43,10 +43,10 @@ export function StressTests({ analise }) {
     return () => clearTimeout(timer)
   }, [captureScreenshot, st])
 
-  if (!st) return <p className="text-sm text-gray-400 py-8 text-center">Preenche a calculadora para ver stress tests</p>
+  if (!st) return <p className="text-sm text-ink-muted py-8 text-center">Preenche a calculadora para ver stress tests</p>
 
-  const verdColor = st.veredicto === 'resiliente' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
-  const verdText = st.veredicto === 'resiliente' ? 'text-green-700' : 'text-red-700'
+  const verdColor = st.veredicto === 'resiliente' ? 'border-success/30 bg-success/10' : 'border-danger/30 bg-danger/10'
+  const verdText = st.veredicto === 'resiliente' ? 'text-success' : 'text-danger'
 
   return (
     <div ref={containerRef} className="space-y-6">
@@ -66,13 +66,13 @@ export function StressTests({ analise }) {
 
       {/* Tabela Downside */}
       <div>
-        <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-2">Cenários de Risco</p>
+        <p className="text-xs font-semibold text-danger uppercase tracking-wide mb-2">Cenários de Risco</p>
         <Table rows={st.downside} baseLucro={st.base.lucro_liquido} />
       </div>
 
       {/* Tabela Upside */}
       <div>
-        <p className="text-xs font-semibold text-green-600 uppercase tracking-wide mb-2">Cenários Favoráveis</p>
+        <p className="text-xs font-semibold text-success uppercase tracking-wide mb-2">Cenários Favoráveis</p>
         <Table rows={st.upside} baseLucro={st.base.lucro_liquido} good />
       </div>
     </div>
@@ -80,15 +80,15 @@ export function StressTests({ analise }) {
 }
 
 function Card({ label, lucro, ra, bad, good }) {
-  const border = bad ? 'border-red-200' : good ? 'border-green-200' : 'border-gray-200'
-  const bg = bad ? 'bg-red-50' : good ? 'bg-green-50' : 'bg-gray-50'
-  const color = lucro >= 0 ? 'text-green-700' : 'text-red-700'
+  const border = bad ? 'border-danger/30' : good ? 'border-success/30' : 'border-line'
+  const bg = bad ? 'bg-danger/10' : good ? 'bg-success/10' : 'bg-surface'
+  const color = lucro >= 0 ? 'text-success' : 'text-danger'
 
   return (
     <div className={`rounded-xl border ${border} ${bg} p-3 text-center`}>
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className={`text-lg font-bold font-mono ${color}`}>{EUR(lucro)}</p>
-      <p className="text-xs text-gray-400">RA: {PCT(ra)}</p>
+      <p className="text-xs text-ink-muted">{label}</p>
+      <p className={`text-lg font-bold num ${color}`}>{EUR(lucro)}</p>
+      <p className="text-xs text-ink-muted">RA: {PCT(ra)}</p>
     </div>
   )
 }
@@ -98,7 +98,7 @@ function Table({ rows, baseLucro, good }) {
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
-          <tr className="text-gray-400 border-b">
+          <tr className="text-ink-muted border-b">
             <th className="text-left py-1.5 pr-4">Cenário</th>
             <th className="text-left py-1.5 pr-4">Descrição</th>
             <th className="text-right py-1.5 pr-4">Lucro Líquido</th>
@@ -109,17 +109,17 @@ function Table({ rows, baseLucro, good }) {
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
-              <td className="py-1.5 pr-4 font-medium text-gray-700">{r.label}</td>
-              <td className="py-1.5 pr-4 text-gray-400">{r.descricao}</td>
-              <td className={`py-1.5 pr-4 text-right font-mono ${r.lucro_liquido >= 0 ? 'text-gray-700' : 'text-red-600'}`}>
+            <tr key={i} className="border-b border-line hover:bg-surface">
+              <td className="py-1.5 pr-4 font-medium text-ink">{r.label}</td>
+              <td className="py-1.5 pr-4 text-ink-muted">{r.descricao}</td>
+              <td className={`py-1.5 pr-4 text-right num ${r.lucro_liquido >= 0 ? 'text-ink' : 'text-danger'}`}>
                 {EUR(r.lucro_liquido)}
               </td>
-              <td className={`py-1.5 pr-4 text-right font-mono ${r.delta >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <td className={`py-1.5 pr-4 text-right num ${r.delta >= 0 ? 'text-success' : 'text-danger'}`}>
                 {r.delta >= 0 ? '+' : ''}{EUR(r.delta)}
               </td>
-              <td className="py-1.5 pr-4 text-right font-mono text-gray-600">{PCT(r.retorno_total)}</td>
-              <td className="py-1.5 text-right font-mono text-gray-600">{PCT(r.retorno_anualizado)}</td>
+              <td className="py-1.5 pr-4 text-right num text-ink-muted">{PCT(r.retorno_total)}</td>
+              <td className="py-1.5 text-right num text-ink-muted">{PCT(r.retorno_anualizado)}</td>
             </tr>
           ))}
         </tbody>

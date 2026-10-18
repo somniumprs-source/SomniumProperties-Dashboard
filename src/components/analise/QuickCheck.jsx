@@ -34,14 +34,14 @@ export function QuickCheck({ analise, onTransfer }) {
   }
 
   const VEREDICTO = {
-    ENTRA: { label: 'ENTRA', bg: 'bg-green-500', border: 'border-green-400', text: 'text-white' },
-    ANALISAR: { label: 'ANALISAR', bg: 'bg-yellow-500', border: 'border-yellow-400', text: 'text-white' },
-    NAO_ENTRA: { label: 'NÃO ENTRA', bg: 'bg-red-500', border: 'border-red-400', text: 'text-white' },
+    ENTRA: { label: 'ENTRA', bg: 'bg-success', border: 'border-green-400', text: 'text-white' },
+    ANALISAR: { label: 'ANALISAR', bg: 'bg-warning', border: 'border-yellow-400', text: 'text-white' },
+    NAO_ENTRA: { label: 'NÃO ENTRA', bg: 'bg-danger', border: 'border-red-400', text: 'text-white' },
   }
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
-      <p className="text-xs text-gray-400 text-center">Decisão rápida em 30 segundos</p>
+      <p className="text-xs text-ink-muted text-center">Decisão rápida em 30 segundos</p>
 
       {/* 4 inputs */}
       <div className="grid grid-cols-2 gap-4">
@@ -52,7 +52,7 @@ export function QuickCheck({ analise, onTransfer }) {
       </div>
 
       <button onClick={calcular} disabled={loading}
-        className="w-full py-3 rounded-xl bg-gray-900 text-white font-semibold text-sm hover:bg-gray-700 disabled:opacity-50 transition-colors">
+        className="w-full py-3 rounded-xl bg-ink text-surface font-semibold text-sm hover:opacity-90 disabled:opacity-50 transition-colors">
         {loading ? 'A calcular...' : 'Verificar'}
       </button>
 
@@ -78,8 +78,8 @@ export function QuickCheck({ analise, onTransfer }) {
           </div>
 
           {/* Decomposição */}
-          <div className="rounded-xl border border-gray-200 p-4 space-y-1 text-xs">
-            <p className="font-semibold text-gray-500 uppercase tracking-wide mb-2">Decomposição</p>
+          <div className="rounded-xl border border-line p-4 space-y-1 text-xs">
+            <p className="font-semibold text-ink-muted uppercase tracking-wide mb-2">Decomposição</p>
             <Row label="Imposto de Selo" value={result.decomposicao.is} />
             <Row label="Escritura" value={result.decomposicao.escritura} />
             <Row label="Obra c/ IVA" value={result.decomposicao.obra} />
@@ -88,14 +88,14 @@ export function QuickCheck({ analise, onTransfer }) {
             <Row label="IRC estimado" value={result.decomposicao.irc} />
             <div className="border-t pt-1 mt-1 flex justify-between font-semibold">
               <span>Lucro Líquido</span>
-              <span className={result.lucro_liquido >= 0 ? 'text-green-700' : 'text-red-600'}>{EUR(result.lucro_liquido)}</span>
+              <span className={result.lucro_liquido >= 0 ? 'text-success' : 'text-danger'}>{EUR(result.lucro_liquido)}</span>
             </div>
           </div>
 
           {/* Transferir */}
           {onTransfer && (
             <button onClick={transferir}
-              className="w-full py-2 text-xs rounded-lg border border-yellow-500 text-yellow-700 hover:bg-yellow-50 transition-colors">
+              className="w-full py-2 text-xs rounded-lg border border-yellow-500 text-warning hover:bg-warning/10 transition-colors">
               Abrir na Calculadora Completa
             </button>
           )}
@@ -108,28 +108,28 @@ export function QuickCheck({ analise, onTransfer }) {
 function QInput({ label, value, onChange, step = 100 }) {
   return (
     <div>
-      <label className="text-xs text-gray-500 block mb-1">{label}</label>
+      <label className="text-xs text-ink-muted block mb-1">{label}</label>
       <input type="number" step={step} value={value || ''}
         onChange={e => onChange(parseFloat(e.target.value) || 0)}
-        className="w-full rounded-xl border border-gray-200 px-4 py-3 text-lg font-mono focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 outline-none" />
+        className="w-full rounded-xl border border-line px-4 py-3 text-lg num focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 outline-none" />
     </div>
   )
 }
 
 function Metric({ label, value }) {
   return (
-    <div className="bg-gray-50 rounded-xl p-3 text-center">
-      <p className="text-xs text-gray-400">{label}</p>
-      <p className="text-lg font-mono font-bold text-gray-800">{value}</p>
+    <div className="bg-surface rounded-xl p-3 text-center">
+      <p className="text-xs text-ink-muted">{label}</p>
+      <p className="text-lg num font-bold text-ink">{value}</p>
     </div>
   )
 }
 
 function Row({ label, value }) {
   return (
-    <div className="flex justify-between text-gray-600">
+    <div className="flex justify-between text-ink-muted">
       <span>{label}</span>
-      <span className="font-mono">{EUR(value)}</span>
+      <span className="num">{EUR(value)}</span>
     </div>
   )
 }

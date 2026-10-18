@@ -107,22 +107,22 @@ export function ProjectosCalendario() {
         {/* Toolbar */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-2">
-            <button onClick={() => navegar(-1)} className="p-2 rounded-lg bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors">
+            <button onClick={() => navegar(-1)} className="p-2 rounded-lg bg-surface-raised  border border-line  hover:bg-surface  transition-colors">
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <h2 className="text-base font-bold text-gray-900 dark:text-neutral-100 min-w-[200px] text-center">
-              {MESES[month]} <span className="font-normal text-gray-400">{year}</span>
+            <h2 className="text-base font-bold text-ink  min-w-[200px] text-center">
+              {MESES[month]} <span className="font-normal text-ink-muted">{year}</span>
             </h2>
-            <button onClick={() => navegar(1)} className="p-2 rounded-lg bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors">
+            <button onClick={() => navegar(1)} className="p-2 rounded-lg bg-surface-raised  border border-line  hover:bg-surface  transition-colors">
               <ChevronRight className="w-4 h-4" />
             </button>
             <Button variant="secondary" size="sm" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()) }}>Hoje</Button>
           </div>
           <div className="flex items-center gap-2">
-            <div className="inline-flex bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg p-0.5 shadow-xs">
+            <div className="inline-flex bg-surface-raised  border border-line  rounded-lg p-0.5 shadow-xs">
               {[{ key: 'todos', label: 'Todos' }, { key: 'fase', label: 'Fases' }, { key: 'tarefa', label: 'Tarefas' }].map(o => (
                 <button key={o.key} onClick={() => setTipoFiltro(o.key)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${tipoFiltro === o.key ? 'bg-brand-dark text-brand-gold shadow-xs' : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'}`}>
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-[background-color,border-color,color,box-shadow,opacity,transform] ${tipoFiltro === o.key ? 'bg-brand-dark text-brand-gold shadow-xs' : 'text-ink-muted  hover:text-ink '}`}>
                   {o.label}
                 </button>
               ))}
@@ -142,22 +142,22 @@ export function ProjectosCalendario() {
 
         {/* Calendário */}
         <Card variant="default" padding="none" className="overflow-hidden">
-          <div className="grid grid-cols-7 bg-gray-50 dark:bg-neutral-900/50 border-b border-gray-200 dark:border-neutral-800">
+          <div className="grid grid-cols-7 bg-surface  border-b border-line ">
             {DIAS_SEMANA.map(d => (
-              <div key={d} className="px-2 py-2.5 text-center text-overline font-semibold uppercase tracking-widest text-gray-500 dark:text-neutral-400">{d}</div>
+              <div key={d} className="px-2 py-2.5 text-center text-overline font-semibold uppercase tracking-widest text-ink-muted ">{d}</div>
             ))}
           </div>
           <div className="grid grid-cols-7">
             {matrix.flat().map((d, idx) => {
-              if (!d) return <div key={idx} className="min-h-[120px] bg-gray-50 dark:bg-neutral-900/50 border-r border-b border-gray-100 dark:border-neutral-800" />
+              if (!d) return <div key={idx} className="min-h-[120px] bg-surface  border-r border-b border-line " />
               const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
               const events = eventosPorDia[key] || []
               const isToday = d.toDateString() === today.toDateString()
               const isPast = d < new Date(today.getFullYear(), today.getMonth(), today.getDate())
               return (
-                <div key={idx} className={`min-h-[120px] border-r border-b border-gray-100 dark:border-neutral-800 p-2 transition-colors ${isToday ? 'bg-brand-gold/10' : 'hover:bg-gray-50 dark:hover:bg-neutral-900/30'}`}>
+                <div key={idx} className={`min-h-[120px] border-r border-b border-line  p-2 transition-colors ${isToday ? 'bg-accent/10' : 'hover:bg-surface'}`}>
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className={`text-xs font-bold ${isToday ? 'inline-flex items-center justify-center w-6 h-6 rounded-full bg-brand-gold text-brand-dark' : isPast ? 'text-gray-400 dark:text-neutral-600' : 'text-gray-700 dark:text-neutral-300'}`}>
+                    <span className={`text-xs font-bold ${isToday ? 'inline-flex items-center justify-center w-6 h-6 rounded-full bg-accent text-accent-foreground' : isPast ? 'text-ink-muted ' : 'text-ink '}`}>
                       {d.getDate()}
                     </span>
                   </div>
@@ -168,19 +168,15 @@ export function ProjectosCalendario() {
                       const isAtraso = isPast && !isConcluido
                       return (
                         <Link key={`${e.tipo}-${e.id}`} to={`/projectos/${e.negocio_id}`}
-                          className={`block px-1.5 py-1 rounded text-[10px] truncate transition-all hover:translate-x-0.5 ${isConcluido ? 'opacity-50 line-through' : ''}`}
-                          style={{
-                            background: isAtraso ? '#fee2e2' : `${cor}20`,
-                            color: isAtraso ? '#991b1b' : cor,
-                            borderLeft: `2px solid ${isAtraso ? '#ef4444' : cor}`,
-                          }}
+                          className={`${isAtraso ? 'bg-danger/10 text-danger' : 'bg-surface-muted text-ink'} block px-1.5 py-1 rounded text-[10px] truncate transition-[background-color,border-color,color,box-shadow,opacity,transform] hover:translate-x-0.5 ${isConcluido ? 'opacity-50 line-through' : ''}`}
+                          style={{ borderLeft: `2px solid ${isAtraso ? 'rgb(var(--danger))' : cor}` }}
                           title={`${e.projeto} · ${e.titulo}`}>
                           <span className="font-semibold">{e.projeto.split(' ')[0]}</span> · {e.titulo}
                         </Link>
                       )
                     })}
                     {events.length > 4 && (
-                      <p className="text-[10px] text-gray-400 dark:text-neutral-500 pl-1.5 font-medium">+{events.length - 4} mais</p>
+                      <p className="text-[10px] text-ink-muted  pl-1.5 font-medium">+{events.length - 4} mais</p>
                     )}
                   </div>
                 </div>
@@ -200,8 +196,8 @@ function KpiCard({ icon: Icon, label, value, cor }) {
         <Icon className="w-4 h-4" style={{ color: cor }} />
       </div>
       <div className="min-w-0">
-        <p className="text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">{label}</p>
-        <p className="text-xl font-bold text-gray-900 dark:text-neutral-100 truncate">{value}</p>
+        <p className="text-overline uppercase tracking-widest text-ink-muted  font-semibold">{label}</p>
+        <p className="text-xl font-bold text-ink  truncate">{value}</p>
       </div>
     </Card>
   )

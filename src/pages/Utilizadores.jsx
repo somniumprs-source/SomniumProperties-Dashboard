@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, Fragment } from 'react'
+import { SummaryStat } from '../components/ui/SummaryStat.jsx'
 import { Shield, Plus, Trash2, KeyRound, RefreshCw, X, Link as LinkIcon, Copy, Check, ChevronDown, ChevronRight, Users } from 'lucide-react'
 import { apiFetch } from '../lib/api.js'
 import { useToast } from '../components/ui/Toast.jsx'
@@ -15,7 +16,7 @@ const ROLES = [
   { id: 'investidor', label: 'Investidor', desc: 'Externo — só vê projetos onde foi adicionado' },
 ]
 
-const COR_PALETTE = ['#C9A84C', '#6366f1', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899']
+const COR_PALETTE = ['#C9A84C', '#475569', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899']
 
 export function Utilizadores() {
   const toast = useToast()
@@ -109,22 +110,20 @@ export function Utilizadores() {
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto min-w-0 w-full">
       {/* Hero banner — Gestão de Acessos */}
-      <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 pl-14 sm:pl-6 text-white shadow-lg bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700 mb-6">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-brand-gold to-transparent" />
+      <div className="rounded-xl border border-line bg-surface-raised p-5 sm:p-6 shadow-xs mb-6">
         <div className="relative flex items-center justify-between mb-5 gap-3 flex-wrap">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-brand-gold/15 border border-brand-gold/30 flex items-center justify-center">
-              <Users className="w-4 h-4 text-brand-gold" strokeWidth={1.75} />
+            <div className="w-8 h-8 rounded-lg bg-surface-muted flex items-center justify-center">
+              <Users className="w-4 h-4 text-ink-muted" strokeWidth={1.75} />
             </div>
             <div>
-              <h2 className="text-overline uppercase tracking-widest font-semibold text-brand-gold">Gestão de Acessos</h2>
-              <p className="text-sm font-semibold text-white">Utilizadores · Roles · Permissões</p>
+              <h2 className="text-overline uppercase text-ink-muted">Gestão de Acessos</h2>
+              <p className="text-ui font-semibold text-ink">Utilizadores · Roles · Permissões</p>
             </div>
           </div>
           <div className="flex gap-2">
             <button onClick={load}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs hover:bg-white/5 border border-white/10 text-gray-300">
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs hover:bg-surface-muted border border-line text-ink-muted">
               <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} /> Atualizar
             </button>
             <button onClick={() => setShowForm(true)}
@@ -134,10 +133,10 @@ export function Utilizadores() {
           </div>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <HeroKpi label="Total utilizadores" value={totalUsers} sub={`${ROLES.length} roles definidos`} />
-          <HeroKpi label="Admins" value={admins} sub="acesso total" accent />
-          <HeroKpi label="Investidores" value={investidores} sub="acesso externo" />
-          <HeroKpi label="Ativos" value={ativos} sub={`${totalUsers - ativos} inativos`} green />
+          <SummaryStat label="Total utilizadores" value={totalUsers} sub={`${ROLES.length} roles definidos`} />
+          <SummaryStat label="Admins" value={admins} sub="acesso total" />
+          <SummaryStat label="Investidores" value={investidores} sub="acesso externo" />
+          <SummaryStat label="Ativos" value={ativos} sub={`${totalUsers - ativos} inativos`} />
         </div>
       </div>
 
@@ -148,8 +147,8 @@ export function Utilizadores() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-6">
         {ROLES.map(r => (
           <div key={r.id} className="px-3 py-2 rounded-lg" style={{ border: '1px solid #1a1a1a', backgroundColor: '#0f0f0f' }}>
-            <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: '#C9A84C' }}>{r.label}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{r.desc}</p>
+            <p className="text-[10px] uppercase tracking-widest font-semibold text-accent-ink">{r.label}</p>
+            <p className="text-xs text-ink-muted mt-0.5">{r.desc}</p>
           </div>
         ))}
       </div>
@@ -159,7 +158,7 @@ export function Utilizadores() {
         <ScrollableTable>
         <table className="w-full text-sm min-w-[560px]">
           <thead style={{ backgroundColor: '#0f0f0f' }}>
-            <tr className="text-left text-[10px] uppercase tracking-widest text-gray-500">
+            <tr className="text-left text-[10px] uppercase tracking-widest text-ink-muted">
               <th className="px-4 py-3">Nome</th>
               <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3">Role</th>
@@ -169,10 +168,10 @@ export function Utilizadores() {
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500 text-xs">A carregar...</td></tr>
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-ink-muted text-xs">A carregar...</td></tr>
             )}
             {!loading && users.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500 text-xs">Sem utilizadores</td></tr>
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-ink-muted text-xs">Sem utilizadores</td></tr>
             )}
             {users.map(u => (
               <Fragment key={u.id}>
@@ -181,7 +180,7 @@ export function Utilizadores() {
                   <div className="flex items-center gap-2">
                     {u.role === 'parceiro' ? (
                       <button onClick={() => setExpandedUser(expandedUser === u.id ? null : u.id)}
-                        className="text-gray-500 hover:text-white" title="Ver acessos">
+                        className="text-ink-muted hover:text-white" title="Ver acessos">
                         {expandedUser === u.id ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                       </button>
                     ) : <span className="w-3.5" />}
@@ -195,7 +194,7 @@ export function Utilizadores() {
                     )}
                   </div>
                 </td>
-                <td className="px-4 py-3 text-gray-400 text-xs">{u.email}</td>
+                <td className="px-4 py-3 text-ink-muted text-xs">{u.email}</td>
                 <td className="px-4 py-3">
                   <select
                     value={u.role}
@@ -223,17 +222,17 @@ export function Utilizadores() {
                   <div className="inline-flex gap-1">
                     <button onClick={() => magicLink(u)} disabled={busy === u.id}
                       title="Gerar magic link de acesso"
-                      className="p-1.5 rounded hover:bg-white/5" style={{ color: '#999' }}>
+                      className="p-1.5 rounded hover:bg-surface-raised/5" style={{ color: '#999' }}>
                       <LinkIcon className="w-3.5 h-3.5" />
                     </button>
                     <button onClick={() => resetPassword(u)} disabled={busy === u.id}
                       title="Gerar reset de password"
-                      className="p-1.5 rounded hover:bg-white/5" style={{ color: '#999' }}>
+                      className="p-1.5 rounded hover:bg-surface-raised/5" style={{ color: '#999' }}>
                       <KeyRound className="w-3.5 h-3.5" />
                     </button>
                     <button onClick={() => deleteUser(u)} disabled={busy === u.id || u.id === profile?.id}
                       title="Apagar"
-                      className="p-1.5 rounded hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="p-1.5 rounded hover:bg-surface-raised/5 disabled:opacity-30 disabled:cursor-not-allowed"
                       style={{ color: '#ef4444' }}>
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -244,8 +243,8 @@ export function Utilizadores() {
                 <tr style={{ backgroundColor: '#0a0a0a', borderTop: '1px solid #1a1a1a' }}>
                   <td colSpan={5} className="p-0">
                     <div className="px-4 py-3">
-                      <p className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">Acessos atribuídos</p>
-                      <p className="text-[10px] text-gray-600 mb-2">Para conceder acesso, vai ao detalhe do imóvel ou projeto e clica "Partilhar".</p>
+                      <p className="text-[10px] uppercase tracking-widest text-ink-muted mb-1">Acessos atribuídos</p>
+                      <p className="text-[10px] text-ink-muted mb-2">Para conceder acesso, vai ao detalhe do imóvel ou projeto e clica "Partilhar".</p>
                     </div>
                     <AcessosDoUser userId={u.id} />
                   </td>
@@ -274,15 +273,6 @@ export function Utilizadores() {
   )
 }
 
-function HeroKpi({ label, value, sub, accent, green, red }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-overline uppercase tracking-widest text-gray-400 font-semibold">{label}</p>
-      <p className={`text-2xl font-mono font-bold mt-1 truncate ${accent ? 'text-brand-gold' : green ? 'text-green-400' : red ? 'text-red-400' : 'text-white'}`}>{value}</p>
-      {sub && <p className="text-caption text-gray-500 mt-0.5 truncate">{sub}</p>}
-    </div>
-  )
-}
 
 function DiagnosticoPanel() {
   const [info, setInfo] = useState(null)
@@ -300,12 +290,11 @@ function DiagnosticoPanel() {
   return (
     <div className="mb-4 rounded-lg overflow-hidden" style={{ border: '1px solid #1a1a1a', backgroundColor: '#0f0f0f' }}>
       <button onClick={() => setOpen(!open)}
-        className="w-full px-3 py-2 text-left text-[10px] uppercase tracking-widest font-semibold flex items-center justify-between"
-        style={{ color: '#C9A84C' }}>
+        className="w-full px-3 py-2 text-left text-[10px] uppercase tracking-widest font-semibold flex items-center justify-between text-accent-ink">
         Diagnóstico de sessão {open ? '▾' : '▸'}
       </button>
       {open && (
-        <pre className="p-3 text-[11px] text-gray-400 overflow-x-auto whitespace-pre-wrap" style={{ borderTop: '1px solid #1a1a1a' }}>
+        <pre className="p-3 text-[11px] text-ink-muted overflow-x-auto whitespace-pre-wrap" style={{ borderTop: '1px solid #1a1a1a' }}>
           {JSON.stringify(info, null, 2)}
         </pre>
       )}
@@ -324,16 +313,15 @@ function LinkModal({ url, note, onClose }) {
         className="rounded-2xl p-6 w-full max-w-lg" style={{ backgroundColor: '#111', border: '1px solid #1a1a1a' }}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-white font-semibold">Link gerado</h3>
-          <button type="button" onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-4 h-4" /></button>
+          <button type="button" onClick={onClose} className="text-ink-muted hover:text-white"><X className="w-4 h-4" /></button>
         </div>
-        <p className="text-xs text-gray-400 mb-3">{note}</p>
+        <p className="text-xs text-ink-muted mb-3">{note}</p>
         <div className="flex gap-2 items-stretch">
           <input readOnly value={url} onFocus={e => e.target.select()}
-            className="flex-1 bg-transparent text-xs text-white px-3 py-2 rounded outline-none font-mono"
+            className="flex-1 bg-transparent text-xs text-white px-3 py-2 rounded outline-none num"
             style={{ border: '1px solid #1a1a1a' }} />
           <button onClick={copy}
-            className="flex items-center gap-1.5 px-3 text-xs font-medium rounded"
-            style={{ backgroundColor: '#C9A84C', color: '#0d0d0d' }}>
+            className="flex items-center gap-1.5 px-3 text-xs font-medium rounded bg-accent text-accent-foreground hover:brightness-[1.04]">
             {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
             {copied ? 'Copiado' : 'Copiar'}
           </button>
@@ -417,21 +405,21 @@ function InviteForm({ onClose, onCreated }) {
         className="rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" style={{ backgroundColor: '#111', border: '1px solid #1a1a1a' }}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-white font-semibold">Dar acesso a uma pessoa</h3>
-          <button type="button" onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-4 h-4" /></button>
+          <button type="button" onClick={onClose} className="text-ink-muted hover:text-white"><X className="w-4 h-4" /></button>
         </div>
 
-        <label className="block text-[10px] uppercase tracking-widest text-gray-500 mb-1">Email</label>
+        <label className="block text-[10px] uppercase tracking-widest text-ink-muted mb-1">Email</label>
         <input type="email" required value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
           placeholder="pessoa@exemplo.com"
           className="w-full bg-transparent text-sm text-white px-3 py-2 rounded mb-3 outline-none"
           style={{ border: '1px solid #1a1a1a' }} />
 
-        <label className="block text-[10px] uppercase tracking-widest text-gray-500 mb-1">Nome</label>
+        <label className="block text-[10px] uppercase tracking-widest text-ink-muted mb-1">Nome</label>
         <input required value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })}
           className="w-full bg-transparent text-sm text-white px-3 py-2 rounded mb-3 outline-none"
           style={{ border: '1px solid #1a1a1a' }} />
 
-        <label className="block text-[10px] uppercase tracking-widest text-gray-500 mb-1">Role</label>
+        <label className="block text-[10px] uppercase tracking-widest text-ink-muted mb-1">Role</label>
         <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
           className="w-full bg-transparent text-sm text-white px-3 py-2 rounded mb-3 outline-none"
           style={{ border: '1px solid #1a1a1a' }}>
@@ -440,7 +428,7 @@ function InviteForm({ onClose, onCreated }) {
 
         {form.role === 'investidor' && (
           <>
-            <label className="block text-[10px] uppercase tracking-widest text-gray-500 mb-1">Ligar a investidor existente (opcional)</label>
+            <label className="block text-[10px] uppercase tracking-widest text-ink-muted mb-1">Ligar a investidor existente (opcional)</label>
             <select value={form.investidor_id} onChange={e => setForm({ ...form, investidor_id: e.target.value })}
               className="w-full bg-transparent text-sm text-white px-3 py-2 rounded mb-3 outline-none"
               style={{ border: '1px solid #1a1a1a' }}>
@@ -449,11 +437,11 @@ function InviteForm({ onClose, onCreated }) {
                 <option key={i.id} value={i.id} style={{ backgroundColor: '#111' }}>{i.nome}{i.email ? ` · ${i.email}` : ''}</option>
               ))}
             </select>
-            <p className="text-[10px] text-gray-500 mb-3 -mt-2">Sugestão: liga ao registo na lista de Investidores. Auto-preenche nome/email.</p>
+            <p className="text-[10px] text-ink-muted mb-3 -mt-2">Sugestão: liga ao registo na lista de Investidores. Auto-preenche nome/email.</p>
           </>
         )}
 
-        <label className="block text-[10px] uppercase tracking-widest text-gray-500 mb-1">Cor</label>
+        <label className="block text-[10px] uppercase tracking-widest text-ink-muted mb-1">Cor</label>
         <div className="flex gap-2 mb-4">
           {COR_PALETTE.map(c => (
             <button key={c} type="button" onClick={() => setForm({ ...form, cor: c })}
@@ -462,7 +450,7 @@ function InviteForm({ onClose, onCreated }) {
           ))}
         </div>
 
-        <label className="block text-[10px] uppercase tracking-widest text-gray-500 mb-2">Como dar acesso?</label>
+        <label className="block text-[10px] uppercase tracking-widest text-ink-muted mb-2">Como dar acesso?</label>
         <div className="flex flex-col gap-2 mb-4">
           {methodOpts.map(opt => (
             <label key={opt.id}
@@ -477,7 +465,7 @@ function InviteForm({ onClose, onCreated }) {
                 className="mt-0.5 accent-brand-gold" />
               <div>
                 <p className="text-xs text-white font-medium">{opt.label}</p>
-                <p className="text-[10px] text-gray-500">{opt.hint}</p>
+                <p className="text-[10px] text-ink-muted">{opt.hint}</p>
               </div>
             </label>
           ))}
@@ -485,10 +473,10 @@ function InviteForm({ onClose, onCreated }) {
 
         {form.method === 'password' && (
           <>
-            <label className="block text-[10px] uppercase tracking-widest text-gray-500 mb-1">Password</label>
+            <label className="block text-[10px] uppercase tracking-widest text-ink-muted mb-1">Password</label>
             <input type="text" required minLength={8} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
               placeholder="Mínimo 8 caracteres"
-              className="w-full bg-transparent text-sm text-white px-3 py-2 rounded mb-4 outline-none font-mono"
+              className="w-full bg-transparent text-sm text-white px-3 py-2 rounded mb-4 outline-none num"
               style={{ border: '1px solid #1a1a1a' }} />
           </>
         )}
@@ -496,18 +484,17 @@ function InviteForm({ onClose, onCreated }) {
         {error && (
           <div className="mb-3 p-3 rounded text-xs" style={{ backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5' }}>
             <p className="font-semibold mb-1">Erro a criar utilizador:</p>
-            <p className="font-mono break-words">{error}</p>
+            <p className="num break-words">{error}</p>
           </div>
         )}
 
         <div className="flex gap-2 justify-end">
           <button type="button" onClick={onClose}
-            className="px-4 py-2 text-xs rounded hover:bg-white/5" style={{ color: '#999' }}>
+            className="px-4 py-2 text-xs rounded hover:bg-surface-raised/5" style={{ color: '#999' }}>
             Cancelar
           </button>
           <button type="submit" disabled={submitting}
-            className="px-4 py-2 text-xs font-medium rounded"
-            style={{ backgroundColor: '#C9A84C', color: '#0d0d0d' }}>
+            className="px-4 py-2 text-xs font-medium rounded bg-accent text-accent-foreground hover:brightness-[1.04]">
             {submitting ? 'A criar...' : 'Dar acesso'}
           </button>
         </div>

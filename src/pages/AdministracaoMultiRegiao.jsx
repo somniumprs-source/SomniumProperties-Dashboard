@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { SummaryStat } from '../components/ui/SummaryStat.jsx'
 import { Scale, Trophy, Plus, Save, X, Globe2, Gauge, LineChart, Flame } from 'lucide-react'
 import { apiFetch } from '../lib/api.js'
 import { useRegiaoGate } from '../contexts/RegiaoContext.jsx'
@@ -23,46 +24,40 @@ export function AdministracaoMultiRegiao() {
     return (
       <>
         <RegiaoModal gate={gate} contexto="Esta área de Multi-Região" />
-        <div className="text-center py-12 text-sm text-neutral-500">
+        <div className="text-center py-12 text-sm text-ink-muted">
           Escolha uma região para ver os dados.
         </div>
       </>
     )
   }
 
-  const cor = REGIAO_COR[regiaoAtiva]
 
   const concelhosCount = concelhosDe(regiaoAtiva).length
-  const tabActual = TABS.find(t => t.key === tab)?.label ?? '—'
   return (
     <div className="space-y-6">
       <RegiaoModal gate={gate} contexto="Esta área de Multi-Região" />
 
       {/* Hero banner — identidade Somnium */}
-      <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 text-white shadow-lg bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-brand-gold to-transparent" />
+      <div className="rounded-xl border border-line bg-surface-raised p-5 sm:p-6 shadow-xs">
         <div className="relative flex items-center justify-between mb-5">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-brand-gold/15 border border-brand-gold/30 flex items-center justify-center">
-              <Globe2 className="w-4 h-4 text-brand-gold" />
+            <div className="w-8 h-8 rounded-lg bg-surface-muted flex items-center justify-center">
+              <Globe2 className="w-4 h-4 text-ink-muted" />
             </div>
             <div>
-              <h2 className="text-overline uppercase tracking-widest font-semibold text-brand-gold">Multi-Região</h2>
-              <p className="text-sm font-semibold text-white">Coimbra · AMP · Configurações regionais</p>
+              <h2 className="text-overline uppercase text-ink-muted">Multi-Região</h2>
+              <p className="text-ui font-semibold text-ink">Coimbra · AMP · Configurações regionais</p>
             </div>
           </div>
           <RegiaoBadge regiao={regiaoAtiva} onTrocar={gate.abrirModal} />
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <HeroKpi label="Região ativa" value={REGIAO_LABEL[regiaoAtiva]} sub="filtro principal" accent />
-          <HeroKpi label="Concelhos" value={concelhosCount} sub="cobertos" />
-          <HeroKpi label="Vista atual" value={tabActual} sub="painel" />
-          <HeroKpi label="Identidade" value={regiaoAtiva.toUpperCase()} sub="cor regional" green />
+        <div className="grid grid-cols-2 gap-4">
+          <SummaryStat label="Região ativa" value={REGIAO_LABEL[regiaoAtiva]} sub="filtro principal" />
+          <SummaryStat label="Concelhos" value={concelhosCount} sub="cobertos" />
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 border-b border-neutral-200 dark:border-neutral-800 pb-2">
+      <div className="flex flex-wrap gap-2 border-b border-line  pb-2">
         {TABS.map(t => {
           const I = t.Icon
           const active = tab === t.key
@@ -72,8 +67,8 @@ export function AdministracaoMultiRegiao() {
               onClick={() => setTab(t.key)}
               className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors
                 ${active
-                  ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900'
-                  : 'text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100'}`}
+                  ? 'bg-ink text-surface  '
+                  : 'text-ink-muted hover:text-ink '}`}
             >
               <I className="w-4 h-4" />
               {t.label}
@@ -108,8 +103,8 @@ function KpisPanel({ regiao }) {
     fetchR('/api/crm/regiao/kpis', regiao).then(r => r.json()).then(d => { setData(d); setLoading(false) })
   }, [regiao])
 
-  if (loading) return <div className="text-sm text-neutral-500">A carregar…</div>
-  if (!data || data.error) return <div className="text-sm text-red-500">{data?.error || 'Sem dados'}</div>
+  if (loading) return <div className="text-sm text-ink-muted">A carregar…</div>
+  if (!data || data.error) return <div className="text-sm text-danger">{data?.error || 'Sem dados'}</div>
 
   const cards = [
     { label: 'Imóveis no pipeline', v: data.imoveis.em_pipeline, sub: `${data.imoveis.total} totais` },
@@ -126,10 +121,10 @@ function KpisPanel({ regiao }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {cards.map((c, i) => (
-        <div key={i} className="p-4 bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800">
-          <p className="text-xs text-neutral-500">{c.label}</p>
-          <p className="text-2xl font-semibold text-neutral-900 dark:text-white mt-1">{c.v}</p>
-          <p className="text-xs text-neutral-400 mt-1">{c.sub}</p>
+        <div key={i} className="p-4 bg-surface-raised  rounded-xl border border-line ">
+          <p className="text-xs text-ink-muted">{c.label}</p>
+          <p className="text-2xl font-semibold text-ink  mt-1">{c.v}</p>
+          <p className="text-xs text-ink-muted mt-1">{c.sub}</p>
         </div>
       ))}
     </div>
@@ -162,12 +157,12 @@ function MercadoPanel({ regiao }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-neutral-500">
+        <p className="text-sm text-ink-muted">
           Preços médios por concelho e tipologia. Base para análises de wholesaling e estudos de comparáveis.
         </p>
         <button
           onClick={() => { setEditing(null); setShowForm(true) }}
-          className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-neutral-900 text-white hover:opacity-90"
+          className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-ink text-surface hover:opacity-90"
         >
           <Plus className="w-4 h-4" /> Adicionar
         </button>
@@ -183,10 +178,10 @@ function MercadoPanel({ regiao }) {
         />
       )}
 
-      {loading ? <p className="text-sm text-neutral-500">A carregar…</p> : (
-        <div className="overflow-x-auto bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800">
+      {loading ? <p className="text-sm text-ink-muted">A carregar…</p> : (
+        <div className="overflow-x-auto bg-surface-raised  rounded-xl border border-line ">
           <table className="w-full text-sm">
-            <thead className="bg-neutral-50 dark:bg-neutral-800/50 text-xs text-neutral-500">
+            <thead className="bg-surface  text-xs text-ink-muted">
               <tr>
                 <th className="text-left px-4 py-2">Concelho</th>
                 <th className="text-left px-4 py-2">Freguesia</th>
@@ -201,21 +196,21 @@ function MercadoPanel({ regiao }) {
             </thead>
             <tbody>
               {data.length === 0 && (
-                <tr><td colSpan="9" className="text-center text-sm text-neutral-400 py-8">Sem entradas. Adiciona a primeira referência para esta região.</td></tr>
+                <tr><td colSpan="9" className="text-center text-sm text-ink-muted py-8">Sem entradas. Adiciona a primeira referência para esta região.</td></tr>
               )}
               {data.map(r => (
-                <tr key={r.id} className="border-t border-neutral-100 dark:border-neutral-800">
+                <tr key={r.id} className="border-t border-line ">
                   <td className="px-4 py-2 font-medium">{r.concelho}</td>
-                  <td className="px-4 py-2 text-neutral-500">{r.freguesia || '—'}</td>
+                  <td className="px-4 py-2 text-ink-muted">{r.freguesia || '—'}</td>
                   <td className="px-4 py-2">{r.tipologia || '—'}</td>
                   <td className="px-4 py-2 text-right">{r.eur_m2_compra ? EUR(r.eur_m2_compra) : '—'}</td>
                   <td className="px-4 py-2 text-right">{r.eur_m2_venda ? EUR(r.eur_m2_venda) : '—'}</td>
                   <td className="px-4 py-2 text-right">{r.tempo_medio_venda_dias ? `${r.tempo_medio_venda_dias}d` : '—'}</td>
                   <td className="px-4 py-2 text-right">{r.taxa_absorcao_pct ? PCT(r.taxa_absorcao_pct) : '—'}</td>
-                  <td className="px-4 py-2 text-neutral-500">{r.fonte || '—'}</td>
+                  <td className="px-4 py-2 text-ink-muted">{r.fonte || '—'}</td>
                   <td className="px-4 py-2 text-right">
-                    <button onClick={() => { setEditing(r); setShowForm(true) }} className="text-xs text-blue-600 hover:underline mr-2">Editar</button>
-                    <button onClick={() => remover(r.id)} className="text-xs text-red-600 hover:underline">Eliminar</button>
+                    <button onClick={() => { setEditing(r); setShowForm(true) }} className="text-xs text-ink hover:underline mr-2">Editar</button>
+                    <button onClick={() => remover(r.id)} className="text-xs text-danger hover:underline">Eliminar</button>
                   </td>
                 </tr>
               ))}
@@ -253,10 +248,10 @@ function MercadoForm({ regiao, concelhos, initial, onCancel, onSaved }) {
   }
 
   function f(k) { return e => setForm({ ...form, [k]: e.target.value }) }
-  const ipt = 'px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm w-full'
+  const ipt = 'px-3 py-2 rounded-lg border border-line  bg-surface-raised  text-sm w-full'
 
   return (
-    <form onSubmit={submit} className="bg-neutral-50 dark:bg-neutral-900/50 p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 space-y-3">
+    <form onSubmit={submit} className="bg-surface  p-4 rounded-xl border border-line  space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <select value={form.concelho} onChange={f('concelho')} className={ipt} required>
           {concelhos.map(c => <option key={c} value={c}>{c}</option>)}
@@ -276,10 +271,10 @@ function MercadoForm({ regiao, concelhos, initial, onCancel, onSaved }) {
       <input type="date" value={form.data_referencia || ''} onChange={f('data_referencia')} className={ipt} />
       <textarea placeholder="Notas" value={form.notas} onChange={f('notas')} className={ipt} rows="2" />
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onCancel} className="flex items-center gap-1 px-3 py-2 text-sm rounded-lg text-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+        <button type="button" onClick={onCancel} className="flex items-center gap-1 px-3 py-2 text-sm rounded-lg text-ink-muted hover:bg-surface-muted ">
           <X className="w-4 h-4" /> Cancelar
         </button>
-        <button type="submit" disabled={saving} className="flex items-center gap-1 px-3 py-2 text-sm rounded-lg bg-neutral-900 text-white hover:opacity-90">
+        <button type="submit" disabled={saving} className="flex items-center gap-1 px-3 py-2 text-sm rounded-lg bg-ink text-surface hover:opacity-90">
           <Save className="w-4 h-4" /> {saving ? 'A guardar…' : 'Guardar'}
         </button>
       </div>
@@ -301,33 +296,33 @@ function HotZonesPanel({ regiao }) {
 
   const maxTotal = useMemo(() => Math.max(...data.map(d => Number(d.total)), 1), [data])
 
-  if (loading) return <p className="text-sm text-neutral-500">A carregar…</p>
+  if (loading) return <p className="text-sm text-ink-muted">A carregar…</p>
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-neutral-500">
+      <p className="text-sm text-ink-muted">
         Distribuição de imóveis por concelho — onde estão as oportunidades, onde o pipeline está ativo, qual o ticket médio.
       </p>
       <div className="space-y-2">
-        {data.length === 0 && <p className="text-sm text-neutral-400 py-4">Sem dados na região.</p>}
+        {data.length === 0 && <p className="text-sm text-ink-muted py-4">Sem dados na região.</p>}
         {data.map(z => {
           const pct = (Number(z.total) / maxTotal) * 100
           return (
-            <div key={z.concelho} className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4">
+            <div key={z.concelho} className="bg-surface-raised  rounded-xl border border-line  p-4">
               <div className="flex items-center justify-between mb-2">
                 <div>
-                  <p className="font-medium text-neutral-900 dark:text-white">{z.concelho}</p>
-                  <p className="text-xs text-neutral-500">
+                  <p className="font-medium text-ink ">{z.concelho}</p>
+                  <p className="text-xs text-ink-muted">
                     {z.total} imóveis · {z.oportunidades} oportunidades ativas
                   </p>
                 </div>
-                <div className="text-right text-xs text-neutral-500">
-                  <p>ROI médio: <strong className="text-neutral-900 dark:text-white">{z.roi_medio ? PCT(z.roi_medio) : '—'}</strong></p>
-                  <p>Ticket médio: <strong className="text-neutral-900 dark:text-white">{z.ticket_medio ? EUR(z.ticket_medio) : '—'}</strong></p>
+                <div className="text-right text-xs text-ink-muted">
+                  <p>ROI médio: <strong className="text-ink ">{z.roi_medio ? PCT(z.roi_medio) : '—'}</strong></p>
+                  <p>Ticket médio: <strong className="text-ink ">{z.ticket_medio ? EUR(z.ticket_medio) : '—'}</strong></p>
                 </div>
               </div>
-              <div className="h-2 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
-                <div className="h-full transition-all" style={{ width: `${pct}%`, backgroundColor: REGIAO_COR[regiao] }} />
+              <div className="h-2 bg-surface-muted  rounded-full overflow-hidden">
+                <div className="h-full transition-[background-color,border-color,color,box-shadow,opacity,transform]" style={{ width: `${pct}%`, backgroundColor: REGIAO_COR[regiao] }} />
               </div>
             </div>
           )
@@ -362,27 +357,27 @@ function CompliancePanel({ regiao }) {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-neutral-500">
+      <p className="text-sm text-ink-muted">
         Regras municipais por concelho: IMT base, IMI, AIMI, zonas ARU, notas legais e contactos úteis. Usado nas análises de rentabilidade.
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {data.length === 0 && <p className="text-sm text-neutral-400">Sem entradas para esta região.</p>}
+        {data.length === 0 && <p className="text-sm text-ink-muted">Sem entradas para esta região.</p>}
         {data.map(c => (
-          <div key={c.concelho} className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4">
+          <div key={c.concelho} className="bg-surface-raised  rounded-xl border border-line  p-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="font-medium text-neutral-900 dark:text-white">{c.concelho}</p>
-                <p className="text-xs text-neutral-500">{REGIAO_LABEL[c.regiao]}</p>
+                <p className="font-medium text-ink ">{c.concelho}</p>
+                <p className="text-xs text-ink-muted">{REGIAO_LABEL[c.regiao]}</p>
               </div>
-              {c.zona_aru && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">ARU</span>}
+              {c.zona_aru && <span className="text-xs px-2 py-0.5 rounded-full bg-warning/15 text-warning">ARU</span>}
             </div>
             <div className="grid grid-cols-3 gap-2 mt-3 text-center">
-              <div><p className="text-xs text-neutral-500">IMT</p><p className="text-sm font-medium">{c.imt_perc_base ? PCT(c.imt_perc_base) : '—'}</p></div>
-              <div><p className="text-xs text-neutral-500">IMI</p><p className="text-sm font-medium">{c.imi_perc ? PCT(c.imi_perc) : '—'}</p></div>
-              <div><p className="text-xs text-neutral-500">AIMI</p><p className="text-sm font-medium">{c.aimi_perc ? PCT(c.aimi_perc) : '—'}</p></div>
+              <div><p className="text-xs text-ink-muted">IMT</p><p className="text-sm font-medium">{c.imt_perc_base ? PCT(c.imt_perc_base) : '—'}</p></div>
+              <div><p className="text-xs text-ink-muted">IMI</p><p className="text-sm font-medium">{c.imi_perc ? PCT(c.imi_perc) : '—'}</p></div>
+              <div><p className="text-xs text-ink-muted">AIMI</p><p className="text-sm font-medium">{c.aimi_perc ? PCT(c.aimi_perc) : '—'}</p></div>
             </div>
-            {c.notas_legais && <p className="text-xs text-neutral-500 mt-3">{c.notas_legais}</p>}
-            <button onClick={() => setEditing(c)} className="mt-3 text-xs text-blue-600 hover:underline">Editar</button>
+            {c.notas_legais && <p className="text-xs text-ink-muted mt-3">{c.notas_legais}</p>}
+            <button onClick={() => setEditing(c)} className="mt-3 text-xs text-ink hover:underline">Editar</button>
           </div>
         ))}
       </div>
@@ -394,14 +389,14 @@ function CompliancePanel({ regiao }) {
 function ComplianceForm({ initial, onCancel, onSaved }) {
   const [form, setForm] = useState({ ...initial })
   function f(k) { return e => setForm({ ...form, [k]: e.target.value }) }
-  const ipt = 'px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm w-full'
+  const ipt = 'px-3 py-2 rounded-lg border border-line  bg-surface-raised  text-sm w-full'
 
   return (
     <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4" onClick={onCancel}>
       <form
         onClick={e => e.stopPropagation()}
         onSubmit={e => { e.preventDefault(); onSaved({ ...form, imt_perc_base: parseFloat(form.imt_perc_base) || null, imi_perc: parseFloat(form.imi_perc) || null, aimi_perc: parseFloat(form.aimi_perc) || null }) }}
-        className="bg-white dark:bg-neutral-900 rounded-xl p-5 w-full max-w-lg space-y-3"
+        className="bg-surface-raised  rounded-xl p-5 w-full max-w-lg space-y-3"
       >
         <h3 className="text-lg font-semibold">{form.concelho} · Compliance</h3>
         <div className="grid grid-cols-3 gap-2">
@@ -415,8 +410,8 @@ function ComplianceForm({ initial, onCancel, onSaved }) {
         <textarea placeholder="Notas legais" value={form.notas_legais || ''} onChange={f('notas_legais')} className={ipt} rows="3" />
         <textarea placeholder="Contactos úteis (cartório, finanças, câmara)" value={form.contactos_uteis || ''} onChange={f('contactos_uteis')} className={ipt} rows="2" />
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onCancel} className="px-3 py-2 text-sm rounded-lg text-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800">Cancelar</button>
-          <button type="submit" className="px-3 py-2 text-sm rounded-lg bg-neutral-900 text-white">Guardar</button>
+          <button type="button" onClick={onCancel} className="px-3 py-2 text-sm rounded-lg text-ink-muted hover:bg-surface-muted ">Cancelar</button>
+          <button type="submit" className="px-3 py-2 text-sm rounded-lg bg-ink text-surface">Guardar</button>
         </div>
       </form>
     </div>
@@ -435,16 +430,16 @@ function BenchmarkingPanel({ regiao }) {
     fetchR('/api/crm/regiao/benchmarking/consultores', regiao).then(r => r.json()).then(d => { setData(d.data || []); setLoading(false) })
   }, [regiao])
 
-  if (loading) return <p className="text-sm text-neutral-500">A carregar…</p>
+  if (loading) return <p className="text-sm text-ink-muted">A carregar…</p>
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-neutral-500">
+      <p className="text-sm text-ink-muted">
         Leaderboard de consultores nesta região. Ordenado por score de prioridade e lucro gerado.
       </p>
-      <div className="overflow-x-auto bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800">
+      <div className="overflow-x-auto bg-surface-raised  rounded-xl border border-line ">
         <table className="w-full text-sm">
-          <thead className="bg-neutral-50 dark:bg-neutral-800/50 text-xs text-neutral-500">
+          <thead className="bg-surface  text-xs text-ink-muted">
             <tr>
               <th className="text-left px-4 py-2">#</th>
               <th className="text-left px-4 py-2">Consultor</th>
@@ -458,12 +453,12 @@ function BenchmarkingPanel({ regiao }) {
             </tr>
           </thead>
           <tbody>
-            {data.length === 0 && <tr><td colSpan="9" className="text-center py-8 text-neutral-400">Sem consultores nesta região.</td></tr>}
+            {data.length === 0 && <tr><td colSpan="9" className="text-center py-8 text-ink-muted">Sem consultores nesta região.</td></tr>}
             {data.map((c, i) => (
-              <tr key={c.id} className="border-t border-neutral-100 dark:border-neutral-800">
+              <tr key={c.id} className="border-t border-line ">
                 <td className="px-4 py-2">{i + 1}</td>
                 <td className="px-4 py-2 font-medium">{c.nome}</td>
-                <td className="px-4 py-2 text-neutral-500">{c.estatuto}</td>
+                <td className="px-4 py-2 text-ink-muted">{c.estatuto}</td>
                 <td className="px-4 py-2">{c.classificacao || '—'}</td>
                 <td className="px-4 py-2 text-right">{c.score_prioridade != null ? Number(c.score_prioridade).toFixed(1) : '—'}</td>
                 <td className="px-4 py-2 text-right">{c.taxa_qualidade != null ? PCT(c.taxa_qualidade) : '—'}</td>
@@ -479,13 +474,4 @@ function BenchmarkingPanel({ regiao }) {
   )
 }
 
-function HeroKpi({ label, value, sub, accent, green, red }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-overline uppercase tracking-widest text-gray-400 font-semibold">{label}</p>
-      <p className={`text-2xl font-mono font-bold mt-1 truncate ${accent ? 'text-brand-gold' : green ? 'text-green-400' : red ? 'text-red-400' : 'text-white'}`}>{value}</p>
-      {sub && <p className="text-caption text-gray-500 mt-0.5 truncate">{sub}</p>}
-    </div>
-  )
-}
 

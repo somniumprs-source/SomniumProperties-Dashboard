@@ -20,7 +20,7 @@ function RenameInput({ nome, onRename }) {
     return (
       <button
         onClick={() => { setValue(nome || ''); setEditing(true) }}
-        className="rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:border-gray-400 hover:bg-white transition-colors"
+        className="rounded-lg border border-dashed border-line px-3 py-2 text-sm font-medium text-ink-muted hover:border-ink/30 hover:bg-surface-raised transition-colors"
         title="Clica para renomear"
       >
         ✏️ {nome || 'Sem nome'}
@@ -35,7 +35,7 @@ function RenameInput({ nome, onRename }) {
       onChange={(e) => setValue(e.target.value)}
       onBlur={() => { if (value.trim() && value !== nome) onRename(value.trim()); setEditing(false) }}
       onKeyDown={(e) => { if (e.key === 'Enter') { if (value.trim() && value !== nome) onRename(value.trim()); setEditing(false) } if (e.key === 'Escape') setEditing(false) }}
-      className="rounded-lg border-2 border-yellow-400 px-3 py-2 text-sm font-medium outline-none bg-white"
+      className="rounded-lg border-2 border-yellow-400 px-3 py-2 text-sm font-medium outline-none bg-surface-raised"
       style={{ minWidth: 160 }}
       placeholder="Nome do cenário"
     />
@@ -84,7 +84,7 @@ export function AnaliseTab({ imovelId, imovelNome, imovel, readOnly = false, emP
     return (
       <div className="py-12 text-center">
         <div className="animate-spin w-6 h-6 border-2 border-t-transparent rounded-full mx-auto mb-3" style={{ borderColor: GOLD, borderTopColor: 'transparent' }} />
-        <p className="text-sm text-gray-400">A carregar análises...</p>
+        <p className="text-sm text-ink-muted">A carregar análises...</p>
       </div>
     )
   }
@@ -97,8 +97,8 @@ export function AnaliseTab({ imovelId, imovelNome, imovel, readOnly = false, emP
           📊
         </div>
         <div className="text-center max-w-sm">
-          <h3 className="text-base font-semibold text-gray-800 mb-1">Análise de Rentabilidade</h3>
-          <p className="text-sm text-gray-500 leading-relaxed">
+          <h3 className="text-base font-semibold text-ink mb-1">Análise de Rentabilidade</h3>
+          <p className="text-sm text-ink-muted leading-relaxed">
             {readOnly
               ? <>Ainda não há análise financeira para <strong>{imovelNome}</strong>.</>
               : <>Cria a primeira análise financeira para <strong>{imovelNome}</strong>. Calcula custos, lucro, impostos e retorno com as fórmulas OE 2026.</>}
@@ -107,13 +107,13 @@ export function AnaliseTab({ imovelId, imovelNome, imovel, readOnly = false, emP
         {!readOnly && (
           <button
             onClick={() => criar({ nome: 'Cenário Base' })}
-            className="px-5 py-2.5 text-sm font-semibold rounded-xl text-white transition-all hover:scale-105"
+            className="px-5 py-2.5 text-sm font-semibold rounded-xl text-white transition-[background-color,border-color,color,box-shadow,opacity,transform] hover:scale-105"
             style={{ backgroundColor: BLACK }}
           >
             + Criar Primeira Análise
           </button>
         )}
-        <div className="flex gap-6 text-xs text-gray-400 mt-2">
+        <div className="flex gap-6 text-xs text-ink-muted mt-2">
           <span>IMT · IS · IVA · IRC · IRS</span>
           <span>Stress Tests</span>
           <span>Comparáveis</span>
@@ -130,7 +130,7 @@ export function AnaliseTab({ imovelId, imovelNome, imovel, readOnly = false, emP
         <select
           value={selected?.id || ''}
           onChange={(e) => select(e.target.value)}
-          className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium outline-none"
+          className="rounded-lg border border-line px-3 py-2 text-sm font-medium outline-none"
           style={{ minWidth: 180 }}
         >
           {analises.map(a => (
@@ -167,7 +167,7 @@ export function AnaliseTab({ imovelId, imovelNome, imovel, readOnly = false, emP
         {!readOnly && selected && (
           <button
             onClick={() => duplicar(selected.id)}
-            className="px-3 py-2 text-xs rounded-lg border border-gray-300 text-gray-600 hover:bg-white transition-colors"
+            className="px-3 py-2 text-xs rounded-lg border border-line text-ink-muted hover:bg-surface-raised transition-colors"
           >
             Duplicar
           </button>
@@ -176,7 +176,7 @@ export function AnaliseTab({ imovelId, imovelNome, imovel, readOnly = false, emP
         {!readOnly && selected && analises.length > 1 && (
           <button
             onClick={() => { if (confirm('Apagar esta análise?')) apagar(selected.id) }}
-            className="px-3 py-2 text-xs rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+            className="px-3 py-2 text-xs rounded-lg text-danger hover:bg-danger/10 transition-colors"
           >
             Apagar
           </button>
@@ -191,11 +191,11 @@ export function AnaliseTab({ imovelId, imovelNome, imovel, readOnly = false, emP
         )}
 
         {readOnly ? (
-          <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700">
+          <span className="px-3 py-1 rounded-full text-xs font-bold bg-warning/15 text-warning">
             👁 SÓ CONSULTA
           </span>
         ) : saving && (
-          <span className="flex items-center gap-1.5 text-xs text-gray-400">
+          <span className="flex items-center gap-1.5 text-xs text-ink-muted">
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
             Guardado automaticamente
           </span>
@@ -206,9 +206,9 @@ export function AnaliseTab({ imovelId, imovelNome, imovel, readOnly = false, emP
       {selected && (
         <div className="xl:hidden rounded-xl p-3 flex items-center justify-between" style={{ backgroundColor: selected.retorno_anualizado >= 15 ? '#22c55e15' : selected.retorno_anualizado >= 8 ? '#f59e0b15' : '#ef444415' }}>
           <div className="flex gap-4 text-xs">
-            <div><span className="text-gray-400">Lucro </span><strong className={selected.lucro_liquido >= 0 ? 'text-green-700' : 'text-red-600'}>{fmtEur(selected.lucro_liquido)}</strong></div>
-            <div><span className="text-gray-400">RA </span><strong>{(selected.retorno_anualizado || 0).toFixed(1)}%</strong></div>
-            <div><span className="text-gray-400">Capital </span><strong>{fmtEur(selected.capital_necessario)}</strong></div>
+            <div><span className="text-ink-muted">Lucro </span><strong className={selected.lucro_liquido >= 0 ? 'text-success' : 'text-danger'}>{fmtEur(selected.lucro_liquido)}</strong></div>
+            <div><span className="text-ink-muted">RA </span><strong>{(selected.retorno_anualizado || 0).toFixed(1)}%</strong></div>
+            <div><span className="text-ink-muted">Capital </span><strong>{fmtEur(selected.capital_necessario)}</strong></div>
           </div>
         </div>
       )}
@@ -220,10 +220,10 @@ export function AnaliseTab({ imovelId, imovelNome, imovel, readOnly = false, emP
             <button
               key={t.key}
               onClick={() => changeSubTab(t.key)}
-              className={`px-3 py-2 text-xs font-medium rounded-lg whitespace-nowrap transition-all ${
+              className={`px-3 py-2 text-xs font-medium rounded-lg whitespace-nowrap transition-[background-color,border-color,color,box-shadow,opacity,transform] ${
                 effectiveSubTab === t.key
                   ? 'text-white shadow-sm'
-                  : 'text-gray-500 hover:bg-gray-100'
+                  : 'text-ink-muted hover:bg-surface-muted'
               }`}
               style={effectiveSubTab === t.key ? { backgroundColor: BLACK } : undefined}
             >

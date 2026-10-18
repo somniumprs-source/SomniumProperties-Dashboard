@@ -25,7 +25,7 @@ const TABS = [
 const SEMAFORO_COLORS = { verde: '#22c55e', amarelo: '#C9A84C', laranja: '#f97316', vermelho: '#ef4444' }
 const SEMAFORO_LABELS = { verde: 'Verde', amarelo: 'Amarelo', laranja: 'Laranja', vermelho: 'Vermelho' }
 
-const FUNNEL_COLORS = ['#94a3b8', '#60a5fa', '#818cf8', '#f59e0b', '#22c55e']
+const FUNNEL_COLORS = ['#94a3b8', '#60a5fa', '#64748b', '#f59e0b', '#22c55e']
 
 // ── Metric card with target comparison ──────────────────────────
 function M({ label, value, sub, highlight = false, warn = false, meta, metaLabel }) {
@@ -34,16 +34,16 @@ function M({ label, value, sub, highlight = false, warn = false, meta, metaLabel
     : false
   return (
     <div className={`rounded-xl border p-4 flex flex-col gap-1 shadow-sm ${
-      highlight ? 'border-yellow-300 bg-yellow-50' :
-      warn      ? 'border-red-200 bg-red-50' :
-                  'border-gray-200 bg-white'
+      highlight ? 'border-warning/30 bg-warning/10' :
+      warn      ? 'border-danger/30 bg-danger/10' :
+                  'border-line bg-surface-raised'
     }`}>
-      <span className="text-[11px] text-gray-400 uppercase tracking-wide leading-tight">{label}</span>
+      <span className="text-[11px] text-ink-muted uppercase tracking-wide leading-tight">{label}</span>
       <span className={`text-xl font-bold ${
-        highlight ? 'text-yellow-700' : warn ? 'text-red-600' : 'text-gray-900'
+        highlight ? 'text-warning' : warn ? 'text-danger' : 'text-ink'
       }`}>{value}</span>
-      {sub && <span className="text-xs text-gray-400 leading-tight">{sub}</span>}
-      {meta != null && <span className="text-[10px] text-gray-300">{metaLabel || 'Meta'}: {typeof meta === 'number' && meta > 100 ? EUR(meta) : meta}</span>}
+      {sub && <span className="text-xs text-ink-muted leading-tight">{sub}</span>}
+      {meta != null && <span className="text-[10px] text-ink-muted/70">{metaLabel || 'Meta'}: {typeof meta === 'number' && meta > 100 ? EUR(meta) : meta}</span>}
     </div>
   )
 }
@@ -57,16 +57,16 @@ function MvsMeta({ label, value, meta, format = 'num', invert = false, sub }) {
     : null
   return (
     <div className={`rounded-xl border p-4 flex flex-col gap-1 shadow-sm ${
-      ok === true ? 'border-green-200 bg-green-50' :
-      ok === false ? 'border-red-200 bg-red-50' :
-      'border-gray-200 bg-white'
+      ok === true ? 'border-success/30 bg-success/10' :
+      ok === false ? 'border-danger/30 bg-danger/10' :
+      'border-line bg-surface-raised'
     }`}>
-      <span className="text-[11px] text-gray-400 uppercase tracking-wide leading-tight">{label}</span>
+      <span className="text-[11px] text-ink-muted uppercase tracking-wide leading-tight">{label}</span>
       <span className={`text-xl font-bold ${
-        ok === true ? 'text-green-700' : ok === false ? 'text-red-600' : 'text-gray-900'
+        ok === true ? 'text-success' : ok === false ? 'text-danger' : 'text-ink'
       }`}>{fmt(raw)}</span>
-      <span className="text-[10px] text-gray-300">Meta: {fmt(meta)} {ok === true ? '✓' : ok === false ? '✗' : ''}</span>
-      {sub && <span className="text-xs text-gray-400 leading-tight">{sub}</span>}
+      <span className="text-[10px] text-ink-muted/70">Meta: {fmt(meta)} {ok === true ? '✓' : ok === false ? '✗' : ''}</span>
+      {sub && <span className="text-xs text-ink-muted leading-tight">{sub}</span>}
     </div>
   )
 }
@@ -84,14 +84,14 @@ function Funil({ steps, colors }) {
           : ''
         return (
           <div key={s.label} className="flex items-center gap-3">
-            <span className="text-xs text-gray-500 w-44 text-right shrink-0 leading-tight">{s.label}</span>
-            <div className="flex-1 bg-gray-100 rounded-full h-8 overflow-hidden">
-              <div className="h-full rounded-full flex items-center px-3 transition-all"
-                style={{ width: `${pct}%`, backgroundColor: colors[i] ?? '#6366f1' }}>
+            <span className="text-xs text-ink-muted w-44 text-right shrink-0 leading-tight">{s.label}</span>
+            <div className="flex-1 bg-surface-muted rounded-full h-8 overflow-hidden">
+              <div className="h-full rounded-full flex items-center px-3 transition-[background-color,border-color,color,box-shadow,opacity,transform]"
+                style={{ width: `${pct}%`, backgroundColor: colors[i] ?? '#475569' }}>
                 <span className="text-white text-xs font-bold">{s.value}</span>
               </div>
             </div>
-            <span className="text-xs text-gray-400 w-28 shrink-0">{conv}</span>
+            <span className="text-xs text-ink-muted w-28 shrink-0">{conv}</span>
           </div>
         )
       })}
@@ -102,49 +102,49 @@ function Funil({ steps, colors }) {
 function SectionTitle({ children }) {
   return (
     <div className="flex items-center gap-3 mb-4">
-      <div className="h-px flex-1 bg-gray-100" />
-      <span className="text-xs font-semibold uppercase tracking-widest text-gray-400">{children}</span>
-      <div className="h-px flex-1 bg-gray-100" />
+      <div className="h-px flex-1 bg-surface-muted" />
+      <span className="text-xs font-semibold uppercase tracking-widest text-ink-muted">{children}</span>
+      <div className="h-px flex-1 bg-surface-muted" />
     </div>
   )
 }
 
 function EmptyState() {
-  return <p className="text-xs text-gray-400 text-center py-8">Sem dados suficientes — preenche os campos no CRM</p>
+  return <p className="text-xs text-ink-muted text-center py-8">Sem dados suficientes — preenche os campos no CRM</p>
 }
 
 function Row({ label, value }) {
   return (
-    <div className="flex items-center justify-between py-1 border-b border-gray-50 last:border-0">
-      <span className="text-gray-500 text-xs">{label}</span>
-      <span className="font-semibold text-gray-800 text-sm">{value}</span>
+    <div className="flex items-center justify-between py-1 border-b border-line last:border-0">
+      <span className="text-ink-muted text-xs">{label}</span>
+      <span className="font-semibold text-ink text-sm">{value}</span>
     </div>
   )
 }
 
 function Diagnostico({ label, value, renderMsg }) {
   return (
-    <div className="p-4 bg-gray-50 rounded-xl">
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{label}</p>
-      <p className="text-sm text-gray-700">{renderMsg(value)}</p>
+    <div className="p-4 bg-surface rounded-xl">
+      <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-1">{label}</p>
+      <p className="text-sm text-ink">{renderMsg(value)}</p>
     </div>
   )
 }
 
 // ── Motivo bar list ─────────────────────────────────────────────
 function MotivoList({ items, emptyMsg }) {
-  if (!items?.length) return <p className="text-xs text-gray-400 text-center py-4">{emptyMsg || 'Sem dados'}</p>
+  if (!items?.length) return <p className="text-xs text-ink-muted text-center py-4">{emptyMsg || 'Sem dados'}</p>
   const max = items[0]?.count || 1
   return (
     <div className="flex flex-col gap-2">
       {items.map(m => (
         <div key={m.motivo || m.fase} className="flex items-center justify-between text-sm">
-          <span className="text-gray-600 truncate max-w-[200px]">{m.motivo || m.fase}</span>
+          <span className="text-ink-muted truncate max-w-[200px]">{m.motivo || m.fase}</span>
           <div className="flex items-center gap-3">
-            <div className="w-32 bg-gray-100 rounded-full h-2">
+            <div className="w-32 bg-surface-muted rounded-full h-2">
               <div className="h-2 rounded-full bg-red-400" style={{ width: `${Math.round(m.count / max * 100)}%` }} />
             </div>
-            <span className="text-xs font-mono text-gray-500 w-8 text-right">{m.count}{m.pct != null ? ` (${PCT(m.pct)})` : ''}</span>
+            <span className="text-xs num text-ink-muted w-8 text-right">{m.count}{m.pct != null ? ` (${PCT(m.pct)})` : ''}</span>
           </div>
         </div>
       ))}
@@ -159,14 +159,14 @@ function ProgressMeta({ label, value, meta, format = 'eur' }) {
   return (
     <div className="flex flex-col gap-1">
       <div className="flex justify-between text-xs">
-        <span className="text-gray-500">{label}</span>
-        <span className="font-semibold text-gray-700">{fmt(value)} / {fmt(meta)}</span>
+        <span className="text-ink-muted">{label}</span>
+        <span className="font-semibold text-ink">{fmt(value)} / {fmt(meta)}</span>
       </div>
-      <div className="w-full bg-gray-100 rounded-full h-3">
-        <div className={`h-3 rounded-full transition-all ${pct >= 100 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-400' : 'bg-red-400'}`}
+      <div className="w-full bg-surface-muted rounded-full h-3">
+        <div className={`h-3 rounded-full transition-[background-color,border-color,color,box-shadow,opacity,transform] ${pct >= 100 ? 'bg-success' : pct >= 50 ? 'bg-yellow-400' : 'bg-red-400'}`}
           style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-[10px] text-gray-400 text-right">{pct}% da meta</span>
+      <span className="text-[10px] text-ink-muted text-right">{pct}% da meta</span>
     </div>
   )
 }
@@ -221,7 +221,7 @@ export function Metricas() {
         onRefresh={load} loading={loading} />
 
       {/* Tab bar */}
-      <div className="px-4 sm:px-6 pt-3 bg-white sticky top-0 z-10">
+      <div className="px-4 sm:px-6 pt-3 bg-surface-raised sticky top-0 z-10">
         <Tabs
           variant="underline"
           value={tab}
@@ -231,34 +231,9 @@ export function Metricas() {
       </div>
 
       <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-6">
-        {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>}
+        {error && <div className="p-4 bg-danger/10 border border-danger/30 text-danger rounded-xl text-sm">Erro: {error}</div>}
 
         {loading && !error && <PageSkeleton />}
-
-        {/* Hero banner — Métricas Avançadas (visível em todas as tabs) */}
-        {!loading && data && (
-          <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 text-white shadow-lg bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-brand-gold to-transparent" />
-            <div className="relative flex items-center justify-between mb-5">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-brand-gold/15 border border-brand-gold/30 flex items-center justify-center">
-                  <Gauge className="w-4 h-4 text-brand-gold" strokeWidth={1.75} />
-                </div>
-                <div>
-                  <h2 className="text-overline uppercase tracking-widest font-semibold text-brand-gold">Métricas Avançadas</h2>
-                  <p className="text-sm font-semibold text-white">OKRs · Atividade · Performance</p>
-                </div>
-              </div>
-            </div>
-            <div className="relative grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <HeroKpi label="Receita Prevista / Mês" value={EUR(top?.receitaPrevistaMes)} sub="Pipeline ativo" accent />
-              <HeroKpi label="Deals Fechados / Mês" value={NUM(top?.dealsFechadosMes)} sub={`${p2?.totalDeals ?? '—'} total`} green />
-              <HeroKpi label="Capital Captado" value={EUR(top?.capitalPassivoCaptado)} sub={`${p3?.investidoresAtivos ?? 0} investidores`} />
-              <HeroKpi label="Ciclo Médio" value={DAYS(top?.velocidadeMediaCiclo)} sub="Abordagem → fecho" red={(top?.velocidadeMediaCiclo ?? 0) > 90} />
-            </div>
-          </div>
-        )}
 
         {/* ══════════ VISÃO GERAL ══════════ */}
         {tab === 'resumo' && (
@@ -367,10 +342,10 @@ export function Metricas() {
               {caep.lucroEstVsReal?.length > 0 && (
                 <>
                   <SectionTitle>CAEP — Estimado vs Real</SectionTitle>
-                  <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
+                  <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs overflow-x-auto">
                     <table className="min-w-[700px] w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
+                        <tr className="border-b border-line text-xs text-ink-muted uppercase">
                           <th className="text-left py-2 px-3">Negócio</th>
                           <th className="text-right py-2 px-3">Estimado</th>
                           <th className="text-right py-2 px-3">Real</th>
@@ -379,11 +354,11 @@ export function Metricas() {
                       </thead>
                       <tbody>
                         {caep.lucroEstVsReal.map((n, i) => (
-                          <tr key={i} className="border-b border-gray-50">
-                            <td className="py-2 px-3 text-gray-700">{n.movimento}</td>
-                            <td className="py-2 px-3 text-right font-mono text-xs">{EUR(n.estimado)}</td>
-                            <td className="py-2 px-3 text-right font-mono text-xs font-semibold">{n.real > 0 ? EUR(n.real) : '—'}</td>
-                            <td className={`py-2 px-3 text-right font-mono text-xs ${n.desvio != null && n.desvio < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          <tr key={i} className="border-b border-line">
+                            <td className="py-2 px-3 text-ink">{n.movimento}</td>
+                            <td className="py-2 px-3 text-right num text-xs">{EUR(n.estimado)}</td>
+                            <td className="py-2 px-3 text-right num text-xs font-semibold">{n.real > 0 ? EUR(n.real) : '—'}</td>
+                            <td className={`py-2 px-3 text-right num text-xs ${n.desvio != null && n.desvio < 0 ? 'text-danger' : 'text-success'}`}>
                               {n.desvio != null ? `${n.desvio > 0 ? '+' : ''}${PCT(n.desvio)}` : '—'}
                             </td>
                           </tr>
@@ -405,7 +380,7 @@ export function Metricas() {
           return (
             <>
               <SectionTitle>Funil Imóveis — Taxa de Conversão</SectionTitle>
-              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
+              <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs">
                 <Funil steps={[
                   { label: `Adicionados (${im.totais.leads})`, value: im.totais.leads },
                   { label: `Chamadas (${im.totais.chamadas})`, value: im.totais.chamadas },
@@ -436,7 +411,7 @@ export function Metricas() {
               </div>
 
               <SectionTitle>Funil Investidores — Taxa de Conversão</SectionTitle>
-              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
+              <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs">
                 <Funil steps={[
                   { label: `Contactados (${inv.totais.contactos})`, value: inv.totais.contactos },
                   { label: `Reunião (${inv.totais.reunioes})`, value: inv.totais.reunioes },
@@ -453,7 +428,7 @@ export function Metricas() {
               </div>
 
               <SectionTitle>Funil Consultores — Taxa de Conversão</SectionTitle>
-              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
+              <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs">
                 <Funil steps={[
                   { label: `Contactados (${cons.totais.contactos})`, value: cons.totais.contactos },
                   { label: `Com call (${cons.totais.calls})`, value: cons.totais.calls },
@@ -508,10 +483,10 @@ export function Metricas() {
               {cons.rankingValor?.length > 0 && (
                 <>
                   <SectionTitle>Ranking de Valor por Consultor</SectionTitle>
-                  <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
+                  <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs overflow-x-auto">
                     <table className="min-w-[700px] w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
+                        <tr className="border-b border-line text-xs text-ink-muted uppercase">
                           <th className="text-left py-2 px-3">#</th>
                           <th className="text-left py-2 px-3">Consultor</th>
                           <th className="text-right py-2 px-3">Lucro Gerado</th>
@@ -520,11 +495,11 @@ export function Metricas() {
                       </thead>
                       <tbody>
                         {cons.rankingValor.map((c, i) => (
-                          <tr key={i} className="border-b border-gray-50">
-                            <td className="py-2 px-3 text-gray-400 font-mono text-xs">{i + 1}</td>
-                            <td className="py-2 px-3 text-gray-700 font-medium">{c.nome}</td>
-                            <td className="py-2 px-3 text-right font-mono font-bold text-green-700">{EUR(c.lucroGerado)}</td>
-                            <td className="py-2 px-3"><span className="px-2 py-0.5 bg-gray-100 rounded text-xs">{c.classificacao || '—'}</span></td>
+                          <tr key={i} className="border-b border-line">
+                            <td className="py-2 px-3 text-ink-muted num text-xs">{i + 1}</td>
+                            <td className="py-2 px-3 text-ink font-medium">{c.nome}</td>
+                            <td className="py-2 px-3 text-right num font-bold text-success">{EUR(c.lucroGerado)}</td>
+                            <td className="py-2 px-3"><span className="px-2 py-0.5 bg-surface-muted rounded text-xs">{c.classificacao || '—'}</span></td>
                           </tr>
                         ))}
                       </tbody>
@@ -591,10 +566,10 @@ export function Metricas() {
               {tk.margem.porNegocio?.length > 0 && (
                 <>
                   <SectionTitle>Margens por Negócio</SectionTitle>
-                  <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
+                  <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs overflow-x-auto">
                     <table className="min-w-[700px] w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
+                        <tr className="border-b border-line text-xs text-ink-muted uppercase">
                           <th className="text-left py-2 px-3">Negócio</th>
                           <th className="text-left py-2 px-3">Categoria</th>
                           <th className="text-right py-2 px-3">Margem Bruta</th>
@@ -604,12 +579,12 @@ export function Metricas() {
                       </thead>
                       <tbody>
                         {tk.margem.porNegocio.map((n, i) => (
-                          <tr key={i} className="border-b border-gray-50">
-                            <td className="py-2 px-3 text-gray-700">{n.movimento}</td>
-                            <td className="py-2 px-3 text-xs"><span className="px-2 py-0.5 bg-gray-100 rounded">{n.categoria}</span></td>
-                            <td className="py-2 px-3 text-right font-mono text-xs">{PCT(n.margemBruta)}</td>
-                            <td className="py-2 px-3 text-right font-mono text-xs">{PCT(n.margemLiquida)}</td>
-                            <td className={`py-2 px-3 text-right font-mono text-xs ${n.desvioObra != null && n.desvioObra > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          <tr key={i} className="border-b border-line">
+                            <td className="py-2 px-3 text-ink">{n.movimento}</td>
+                            <td className="py-2 px-3 text-xs"><span className="px-2 py-0.5 bg-surface-muted rounded">{n.categoria}</span></td>
+                            <td className="py-2 px-3 text-right num text-xs">{PCT(n.margemBruta)}</td>
+                            <td className="py-2 px-3 text-right num text-xs">{PCT(n.margemLiquida)}</td>
+                            <td className={`py-2 px-3 text-right num text-xs ${n.desvioObra != null && n.desvioObra > 0 ? 'text-danger' : 'text-success'}`}>
                               {n.desvioObra != null ? `${n.desvioObra > 0 ? '+' : ''}${PCT(n.desvioObra)}` : '—'}
                             </td>
                           </tr>
@@ -688,19 +663,19 @@ export function Metricas() {
               </div>
 
               {im.faseMaiorDemora && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700">
+                <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 text-sm text-warning">
                   <strong>Bottleneck:</strong> A fase com maior demora é <strong>{im.faseMaiorDemora.fase}</strong> com média de <strong>{DAYS(im.faseMaiorDemora.dias)}</strong>.
                 </div>
               )}
 
               {im.fases?.length > 0 && (
-                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Todas as Fases (ordenadas por demora)</h3>
+                <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs">
+                  <h3 className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-3">Todas as Fases (ordenadas por demora)</h3>
                   <div className="flex flex-col gap-2">
                     {im.fases.map(f => (
                       <div key={f.fase} className="flex items-center gap-3">
-                        <span className="text-xs text-gray-500 w-24 sm:w-40 text-right shrink-0">{f.fase}</span>
-                        <div className="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden">
+                        <span className="text-xs text-ink-muted w-24 sm:w-40 text-right shrink-0">{f.fase}</span>
+                        <div className="flex-1 bg-surface-muted rounded-full h-6 overflow-hidden">
                           <div className="h-full rounded-full flex items-center px-3"
                             style={{ width: `${Math.max(5, Math.round(f.dias / (im.fases[0]?.dias || 1) * 100))}%`, backgroundColor: '#C9A84C' }}>
                             <span className="text-white text-xs font-bold">{DAYS(f.dias)}</span>
@@ -737,12 +712,12 @@ export function Metricas() {
             <>
               <SectionTitle>Imóveis — Motivos de Descarte</SectionTitle>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
-                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Top Motivos de Descarte</h3>
+                <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs">
+                  <h3 className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-3">Top Motivos de Descarte</h3>
                   <MotivoList items={im.todosPorPct} emptyMsg="Preenche 'Motivo Descarte' nos imóveis descartados" />
                 </div>
-                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Fase de Descarte</h3>
+                <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs">
+                  <h3 className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-3">Fase de Descarte</h3>
                   <MotivoList items={im.faseMediaDescarte} emptyMsg="Sem dados de fase de descarte" />
                 </div>
               </div>
@@ -750,20 +725,20 @@ export function Metricas() {
 
               <SectionTitle>Investidores — Motivos</SectionTitle>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
-                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Motivos de Não Aprovação</h3>
+                <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs">
+                  <h3 className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-3">Motivos de Não Aprovação</h3>
                   <MotivoList items={inv.motivosNaoAprovacao} emptyMsg="Preenche 'Motivo Não Aprovação' nos investidores" />
                 </div>
-                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Motivos de Inatividade</h3>
+                <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs">
+                  <h3 className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-3">Motivos de Inatividade</h3>
                   <MotivoList items={inv.motivosInatividade} emptyMsg="Preenche 'Motivo Inatividade' nos investidores" />
                 </div>
               </div>
 
               <SectionTitle>Consultores — Descontinuação</SectionTitle>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
-                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Motivos de Descontinuação</h3>
+                <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs">
+                  <h3 className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-3">Motivos de Descontinuação</h3>
                   <MotivoList items={cons.motivosDescontinuacao} emptyMsg="Preenche 'Motivo Descontinuação' nos consultores" />
                 </div>
                 <div className="flex flex-col gap-4">
@@ -826,10 +801,10 @@ export function Metricas() {
                 <M label="Meta LTV / investidor" value={EUR(inv.metaLTV)} sub="≥ 25.000€ por investidor" />
               </div>
               {inv.porInvestidor?.length > 0 && (
-                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
+                <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs overflow-x-auto">
                   <table className="min-w-[700px] w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
+                      <tr className="border-b border-line text-xs text-ink-muted uppercase">
                         <th className="text-left py-2 px-3">Investidor</th>
                         <th className="text-left py-2 px-3">Status</th>
                         <th className="text-right py-2 px-3">LTV (Capital)</th>
@@ -840,17 +815,17 @@ export function Metricas() {
                     </thead>
                     <tbody>
                       {inv.porInvestidor.map((i, idx) => (
-                        <tr key={idx} className="border-b border-gray-50">
-                          <td className="py-2 px-3 font-medium text-gray-800">{i.nome}</td>
+                        <tr key={idx} className="border-b border-line">
+                          <td className="py-2 px-3 font-medium text-ink">{i.nome}</td>
                           <td className="py-2 px-3 text-xs"><span className={`px-2 py-0.5 rounded-full font-medium ${
-                            i.status === 'Investidor em parceria' || i.status === 'Em Parceria' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                            i.status === 'Investidor em parceria' || i.status === 'Em Parceria' ? 'bg-success/15 text-success' : 'bg-surface-muted text-ink-muted'
                           }`}>{i.status}</span></td>
-                          <td className="py-2 px-3 text-right font-mono font-bold text-indigo-600">{EUR(i.ltv)}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs">{i.negocios || '—'}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs">{i.roiInvestidor ? PCT(i.roiInvestidor) : '—'}</td>
+                          <td className="py-2 px-3 text-right num font-bold text-ink">{EUR(i.ltv)}</td>
+                          <td className="py-2 px-3 text-right num text-xs">{i.negocios || '—'}</td>
+                          <td className="py-2 px-3 text-right num text-xs">{i.roiInvestidor ? PCT(i.roiInvestidor) : '—'}</td>
                           <td className="py-2 px-3 text-right text-xs">{i.ltv >= 25000
-                            ? <span className="text-green-600 font-semibold">Acima</span>
-                            : <span className="text-red-500">Abaixo</span>}</td>
+                            ? <span className="text-success font-semibold">Acima</span>
+                            : <span className="text-danger">Abaixo</span>}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -863,10 +838,10 @@ export function Metricas() {
                 <M label="Meta LTV / consultor" value={EUR(cons.metaLTV)} sub="≥ 8.000€ por consultor ativo" />
               </div>
               {cons.top5?.length > 0 ? (
-                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
+                <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs overflow-x-auto">
                   <table className="min-w-[700px] w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
+                      <tr className="border-b border-line text-xs text-ink-muted uppercase">
                         <th className="text-left py-2 px-3">#</th>
                         <th className="text-left py-2 px-3">Consultor</th>
                         <th className="text-right py-2 px-3">Lucro Gerado</th>
@@ -875,13 +850,13 @@ export function Metricas() {
                     </thead>
                     <tbody>
                       {cons.top5.map((c, idx) => (
-                        <tr key={idx} className="border-b border-gray-50">
-                          <td className="py-2 px-3 text-gray-400 font-mono text-xs">{idx + 1}</td>
-                          <td className="py-2 px-3 font-medium text-gray-700">{c.nome}</td>
-                          <td className="py-2 px-3 text-right font-mono font-bold text-green-700">{EUR(c.ltv)}</td>
+                        <tr key={idx} className="border-b border-line">
+                          <td className="py-2 px-3 text-ink-muted num text-xs">{idx + 1}</td>
+                          <td className="py-2 px-3 font-medium text-ink">{c.nome}</td>
+                          <td className="py-2 px-3 text-right num font-bold text-success">{EUR(c.ltv)}</td>
                           <td className="py-2 px-3 text-right text-xs">{c.ltv >= 8000
-                            ? <span className="text-green-600 font-semibold">Acima</span>
-                            : <span className="text-red-500">Abaixo</span>}</td>
+                            ? <span className="text-success font-semibold">Acima</span>
+                            : <span className="text-danger">Abaixo</span>}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -961,10 +936,10 @@ export function Metricas() {
                 <MvsMeta label="Taxa média de entrega" value={oo.entregaRelatorioSemanal?.media} meta={100} format="pct" sub="Vistorias registadas / semanas de obra ativa" />
               </div>
               {porProjectoEntrega.length > 0 ? (
-                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
+                <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs overflow-x-auto">
                   <table className="min-w-[500px] w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
+                      <tr className="border-b border-line text-xs text-ink-muted uppercase">
                         <th className="text-left py-2 px-3">Projeto</th>
                         <th className="text-right py-2 px-3">Vistorias</th>
                         <th className="text-right py-2 px-3">Semanas de obra</th>
@@ -973,11 +948,11 @@ export function Metricas() {
                     </thead>
                     <tbody>
                       {porProjectoEntrega.map((p, idx) => (
-                        <tr key={idx} className="border-b border-gray-50">
-                          <td className="py-2 px-3 font-medium text-gray-800">{p.movimento}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs">{p.vistorias}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs">{p.semanas}</td>
-                          <td className="py-2 px-3 text-right font-mono font-bold text-indigo-600">{PCT(p.taxa)}</td>
+                        <tr key={idx} className="border-b border-line">
+                          <td className="py-2 px-3 font-medium text-ink">{p.movimento}</td>
+                          <td className="py-2 px-3 text-right num text-xs">{p.vistorias}</td>
+                          <td className="py-2 px-3 text-right num text-xs">{p.semanas}</td>
+                          <td className="py-2 px-3 text-right num font-bold text-ink">{PCT(p.taxa)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -987,8 +962,8 @@ export function Metricas() {
 
               <SectionTitle>Distribuição do Semáforo de Desvio Orçamental (trimestre corrente)</SectionTitle>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
-                  <h2 className="text-sm font-semibold text-gray-700 mb-4">Vistorias por cor (trimestre corrente)</h2>
+                <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs">
+                  <h2 className="text-sm font-semibold text-ink mb-4">Vistorias por cor (trimestre corrente)</h2>
                   {semaforoPie.length > 0 ? (
                     <ResponsiveContainer width="100%" height={220}>
                       <PieChart>
@@ -1002,12 +977,12 @@ export function Metricas() {
                   ) : <EmptyState />}
                 </div>
 
-                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
-                  <h2 className="text-sm font-semibold text-gray-700 mb-4">Cor mais recente por projeto</h2>
+                <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs overflow-x-auto">
+                  <h2 className="text-sm font-semibold text-ink mb-4">Cor mais recente por projeto</h2>
                   {porProjectoSemaforo.length > 0 ? (
                     <table className="min-w-[380px] w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
+                        <tr className="border-b border-line text-xs text-ink-muted uppercase">
                           <th className="text-left py-2 px-3">Projeto</th>
                           <th className="text-right py-2 px-3">Desvio</th>
                           <th className="text-right py-2 px-3">Semáforo</th>
@@ -1015,9 +990,9 @@ export function Metricas() {
                       </thead>
                       <tbody>
                         {porProjectoSemaforo.map((p, idx) => (
-                          <tr key={idx} className="border-b border-gray-50">
-                            <td className="py-2 px-3 font-medium text-gray-800">{p.movimento || '—'}</td>
-                            <td className="py-2 px-3 text-right font-mono text-xs">{p.pct != null ? `${p.pct > 0 ? '+' : ''}${p.pct.toFixed(1)}%` : '—'}</td>
+                          <tr key={idx} className="border-b border-line">
+                            <td className="py-2 px-3 font-medium text-ink">{p.movimento || '—'}</td>
+                            <td className="py-2 px-3 text-right num text-xs">{p.pct != null ? `${p.pct > 0 ? '+' : ''}${p.pct.toFixed(1)}%` : '—'}</td>
                             <td className="py-2 px-3 text-right">
                               <span className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: SEMAFORO_COLORS[p.cor] }}>
                                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: SEMAFORO_COLORS[p.cor] }} />
@@ -1059,10 +1034,10 @@ export function Metricas() {
 
               <SectionTitle>Deal Qualification Score</SectionTitle>
               {av.dealQualification?.length > 0 ? (
-                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
+                <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs overflow-x-auto">
                   <table className="min-w-[700px] w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
+                      <tr className="border-b border-line text-xs text-ink-muted uppercase">
                         <th className="text-left py-2 px-3">Imóvel</th>
                         <th className="text-left py-2 px-3">Estado</th>
                         <th className="text-left py-2 px-3">Modelo</th>
@@ -1072,13 +1047,13 @@ export function Metricas() {
                     </thead>
                     <tbody>
                       {av.dealQualification.slice(0, 10).map((d, i) => (
-                        <tr key={i} className="border-b border-gray-50">
-                          <td className="py-2 px-3 font-medium text-gray-700">{d.nome}</td>
-                          <td className="py-2 px-3 text-xs"><span className="px-2 py-0.5 bg-gray-100 rounded">{d.estado}</span></td>
+                        <tr key={i} className="border-b border-line">
+                          <td className="py-2 px-3 font-medium text-ink">{d.nome}</td>
+                          <td className="py-2 px-3 text-xs"><span className="px-2 py-0.5 bg-surface-muted rounded">{d.estado}</span></td>
                           <td className="py-2 px-3 text-xs">{d.modeloNegocio || '—'}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs">{d.roi > 0 ? PCT(d.roi) : '—'}</td>
+                          <td className="py-2 px-3 text-right num text-xs">{d.roi > 0 ? PCT(d.roi) : '—'}</td>
                           <td className="py-2 px-3 text-right">
-                            <span className={`font-mono font-bold text-sm ${d.score >= 50 ? 'text-green-600' : d.score >= 25 ? 'text-yellow-600' : 'text-red-500'}`}>
+                            <span className={`num font-bold text-sm ${d.score >= 50 ? 'text-success' : d.score >= 25 ? 'text-warning' : 'text-danger'}`}>
                               {d.score}
                             </span>
                           </td>
@@ -1087,14 +1062,14 @@ export function Metricas() {
                     </tbody>
                   </table>
                 </div>
-              ) : <p className="text-xs text-gray-400 text-center py-4">Sem imóveis ativos</p>}
+              ) : <p className="text-xs text-ink-muted text-center py-4">Sem imóveis ativos</p>}
 
               <SectionTitle>Win/Loss por Fonte</SectionTitle>
               {av.winLossBySource?.length > 0 && (
-                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
+                <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs overflow-x-auto">
                   <table className="min-w-[700px] w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
+                      <tr className="border-b border-line text-xs text-ink-muted uppercase">
                         <th className="text-left py-2 px-3">Fonte</th>
                         <th className="text-right py-2 px-3">Total</th>
                         <th className="text-right py-2 px-3">Wins</th>
@@ -1105,13 +1080,13 @@ export function Metricas() {
                     </thead>
                     <tbody>
                       {av.winLossBySource.map((s, i) => (
-                        <tr key={i} className="border-b border-gray-50">
-                          <td className="py-2 px-3 font-medium text-gray-700">{s.fonte}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs">{s.total}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs text-green-600 font-bold">{s.wins}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs text-red-500">{s.losses}</td>
-                          <td className={`py-2 px-3 text-right font-mono text-xs font-bold ${s.winRate > 0 ? 'text-green-600' : 'text-gray-400'}`}>{PCT(s.winRate)}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs text-red-400">{PCT(s.lossRate)}</td>
+                        <tr key={i} className="border-b border-line">
+                          <td className="py-2 px-3 font-medium text-ink">{s.fonte}</td>
+                          <td className="py-2 px-3 text-right num text-xs">{s.total}</td>
+                          <td className="py-2 px-3 text-right num text-xs text-success font-bold">{s.wins}</td>
+                          <td className="py-2 px-3 text-right num text-xs text-danger">{s.losses}</td>
+                          <td className={`py-2 px-3 text-right num text-xs font-bold ${s.winRate > 0 ? 'text-success' : 'text-ink-muted'}`}>{PCT(s.winRate)}</td>
+                          <td className="py-2 px-3 text-right num text-xs text-red-400">{PCT(s.lossRate)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1132,10 +1107,10 @@ export function Metricas() {
 
               <SectionTitle>Performance por Zona</SectionTitle>
               {av.zonaPerformance?.length > 0 && (
-                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
+                <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs overflow-x-auto">
                   <table className="min-w-[700px] w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
+                      <tr className="border-b border-line text-xs text-ink-muted uppercase">
                         <th className="text-left py-2 px-3">Zona</th>
                         <th className="text-right py-2 px-3">Total</th>
                         <th className="text-right py-2 px-3">Ativos</th>
@@ -1148,15 +1123,15 @@ export function Metricas() {
                     </thead>
                     <tbody>
                       {av.zonaPerformance.map((z, i) => (
-                        <tr key={i} className="border-b border-gray-50">
-                          <td className="py-2 px-3 font-medium text-gray-700">{z.zona}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs">{z.total}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs text-green-600">{z.ativos}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs font-bold">{z.comDeal}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs">{z.roiMedio != null ? PCT(z.roiMedio) : '—'}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs">{z.askMedio ? EUR(z.askMedio) : '—'}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs">{z.cicloMedio ? DAYS(z.cicloMedio) : '—'}</td>
-                          <td className={`py-2 px-3 text-right font-mono text-xs font-bold ${z.winRate > 0 ? 'text-green-600' : 'text-gray-400'}`}>{PCT(z.winRate)}</td>
+                        <tr key={i} className="border-b border-line">
+                          <td className="py-2 px-3 font-medium text-ink">{z.zona}</td>
+                          <td className="py-2 px-3 text-right num text-xs">{z.total}</td>
+                          <td className="py-2 px-3 text-right num text-xs text-success">{z.ativos}</td>
+                          <td className="py-2 px-3 text-right num text-xs font-bold">{z.comDeal}</td>
+                          <td className="py-2 px-3 text-right num text-xs">{z.roiMedio != null ? PCT(z.roiMedio) : '—'}</td>
+                          <td className="py-2 px-3 text-right num text-xs">{z.askMedio ? EUR(z.askMedio) : '—'}</td>
+                          <td className="py-2 px-3 text-right num text-xs">{z.cicloMedio ? DAYS(z.cicloMedio) : '—'}</td>
+                          <td className={`py-2 px-3 text-right num text-xs font-bold ${z.winRate > 0 ? 'text-success' : 'text-ink-muted'}`}>{PCT(z.winRate)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1166,10 +1141,10 @@ export function Metricas() {
 
               <SectionTitle>CPA por Cohort Mensal</SectionTitle>
               {av.cacCohort?.length > 0 && (
-                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
+                <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs overflow-x-auto">
                   <table className="min-w-[700px] w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
+                      <tr className="border-b border-line text-xs text-ink-muted uppercase">
                         <th className="text-left py-2 px-3">Cohort</th>
                         <th className="text-right py-2 px-3">Leads</th>
                         <th className="text-right py-2 px-3">Chamadas</th>
@@ -1182,15 +1157,15 @@ export function Metricas() {
                     </thead>
                     <tbody>
                       {av.cacCohort.map((c, i) => (
-                        <tr key={i} className="border-b border-gray-50">
-                          <td className="py-2 px-3 font-medium text-gray-700">{c.mes}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs">{c.leads}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs">{c.chamadas}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs">{c.visitas}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs font-bold text-green-600">{c.fechos}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs">{c.cacPorLead ? EUR(c.cacPorLead) : '—'}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs">{c.cacPorDeal ? EUR(c.cacPorDeal) : '—'}</td>
-                          <td className="py-2 px-3 text-right font-mono text-xs">{PCT(c.taxaConversao)}</td>
+                        <tr key={i} className="border-b border-line">
+                          <td className="py-2 px-3 font-medium text-ink">{c.mes}</td>
+                          <td className="py-2 px-3 text-right num text-xs">{c.leads}</td>
+                          <td className="py-2 px-3 text-right num text-xs">{c.chamadas}</td>
+                          <td className="py-2 px-3 text-right num text-xs">{c.visitas}</td>
+                          <td className="py-2 px-3 text-right num text-xs font-bold text-success">{c.fechos}</td>
+                          <td className="py-2 px-3 text-right num text-xs">{c.cacPorLead ? EUR(c.cacPorLead) : '—'}</td>
+                          <td className="py-2 px-3 text-right num text-xs">{c.cacPorDeal ? EUR(c.cacPorDeal) : '—'}</td>
+                          <td className="py-2 px-3 text-right num text-xs">{PCT(c.taxaConversao)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1201,10 +1176,10 @@ export function Metricas() {
               {av.reFinancials?.length > 0 && (
                 <>
                   <SectionTitle>Metricas RE — Cash-on-Cash, IRR, Equity Multiple</SectionTitle>
-                  <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs overflow-x-auto">
+                  <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs overflow-x-auto">
                     <table className="min-w-[700px] w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
+                        <tr className="border-b border-line text-xs text-ink-muted uppercase">
                           <th className="text-left py-2 px-3">Negócio</th>
                           <th className="text-left py-2 px-3">Cat.</th>
                           <th className="text-right py-2 px-3">Cap. Proprio</th>
@@ -1217,15 +1192,15 @@ export function Metricas() {
                       </thead>
                       <tbody>
                         {av.reFinancials.map((rf, i) => (
-                          <tr key={i} className="border-b border-gray-50">
-                            <td className="py-2 px-3 font-medium text-gray-700">{rf.movimento}</td>
-                            <td className="py-2 px-3 text-xs"><span className="px-2 py-0.5 bg-gray-100 rounded">{rf.categoria}</span></td>
-                            <td className="py-2 px-3 text-right font-mono text-xs">{EUR(rf.capitalProprio)}</td>
-                            <td className="py-2 px-3 text-right font-mono text-xs">{rf.capitalPassivo > 0 ? EUR(rf.capitalPassivo) : '—'}</td>
-                            <td className="py-2 px-3 text-right font-mono text-xs font-bold">{rf.cashOnCash != null ? PCT(rf.cashOnCash) : '—'}</td>
-                            <td className="py-2 px-3 text-right font-mono text-xs">{rf.irr != null ? PCT(rf.irr) : '—'}</td>
-                            <td className="py-2 px-3 text-right font-mono text-xs">{rf.equityMultiple != null ? `${rf.equityMultiple}x` : '—'}</td>
-                            <td className="py-2 px-3 text-right font-mono text-xs">{rf.dpi != null ? `${rf.dpi}x` : '—'}</td>
+                          <tr key={i} className="border-b border-line">
+                            <td className="py-2 px-3 font-medium text-ink">{rf.movimento}</td>
+                            <td className="py-2 px-3 text-xs"><span className="px-2 py-0.5 bg-surface-muted rounded">{rf.categoria}</span></td>
+                            <td className="py-2 px-3 text-right num text-xs">{EUR(rf.capitalProprio)}</td>
+                            <td className="py-2 px-3 text-right num text-xs">{rf.capitalPassivo > 0 ? EUR(rf.capitalPassivo) : '—'}</td>
+                            <td className="py-2 px-3 text-right num text-xs font-bold">{rf.cashOnCash != null ? PCT(rf.cashOnCash) : '—'}</td>
+                            <td className="py-2 px-3 text-right num text-xs">{rf.irr != null ? PCT(rf.irr) : '—'}</td>
+                            <td className="py-2 px-3 text-right num text-xs">{rf.equityMultiple != null ? `${rf.equityMultiple}x` : '—'}</td>
+                            <td className="py-2 px-3 text-right num text-xs">{rf.dpi != null ? `${rf.dpi}x` : '—'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1268,10 +1243,10 @@ export function Metricas() {
             <>
               {/* Weekly Activity Score */}
               {wa && (
-                <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
+                <div className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold text-gray-700">Atividade Semanal</h3>
-                    <span className={`text-2xl font-bold ${wa.score >= 70 ? 'text-green-600' : wa.score >= 40 ? 'text-yellow-600' : 'text-red-500'}`}>
+                    <h3 className="text-sm font-semibold text-ink">Atividade Semanal</h3>
+                    <span className={`text-2xl font-bold ${wa.score >= 70 ? 'text-success' : wa.score >= 40 ? 'text-warning' : 'text-danger'}`}>
                       {wa.score}%
                     </span>
                   </div>
@@ -1282,11 +1257,11 @@ export function Metricas() {
                       return (
                         <div key={key} className="flex flex-col gap-1">
                           <div className="flex justify-between text-xs">
-                            <span className="text-gray-500">{label}</span>
+                            <span className="text-ink-muted">{label}</span>
                             <span className="font-semibold">{v.valor} / {v.meta}</span>
                           </div>
-                          <div className="w-full bg-gray-100 rounded-full h-2.5">
-                            <div className={`h-2.5 rounded-full ${pct >= 100 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-400' : 'bg-red-400'}`}
+                          <div className="w-full bg-surface-muted rounded-full h-2.5">
+                            <div className={`h-2.5 rounded-full ${pct >= 100 ? 'bg-success' : pct >= 50 ? 'bg-yellow-400' : 'bg-red-400'}`}
                               style={{ width: `${pct}%` }} />
                           </div>
                         </div>
@@ -1300,22 +1275,22 @@ export function Metricas() {
               <div className="flex items-center justify-between">
                 <SectionTitle>OKRs</SectionTitle>
                 <button onClick={() => setShowOkrForm(true)}
-                  className="px-4 py-2 text-sm font-medium rounded-lg text-white" style={{ backgroundColor: GOLD }}>
+                  className="px-4 py-2 text-sm font-medium rounded-lg bg-accent text-accent-foreground hover:brightness-[1.04]">
                   + Novo Objetivo
                 </button>
               </div>
 
               {/* Create OKR form */}
               {showOkrForm && (
-                <div className="bg-white rounded-xl border-2 border-yellow-200 p-5 shadow-md">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Novo Objetivo</h3>
+                <div className="bg-surface-raised rounded-xl border-2 border-warning/30 p-5 shadow-md">
+                  <h3 className="text-sm font-semibold text-ink mb-3">Novo Objetivo</h3>
                   <form onSubmit={e => { e.preventDefault(); const fd = new FormData(e.target); createOkr({ trimestre: fd.get('trimestre'), objectivo: fd.get('objectivo'), krs: [] }) }}>
                     <div className="grid grid-cols-1 xl:grid-cols-4 gap-3">
-                      <input name="trimestre" defaultValue="Q2 2026" placeholder="Trimestre (ex: Q3 2026)" className="border border-gray-200 rounded-lg px-3 py-2 text-sm" required />
-                      <input name="objectivo" placeholder="Objetivo" className="xl:col-span-2 border border-gray-200 rounded-lg px-3 py-2 text-sm" autoFocus required />
+                      <input name="trimestre" defaultValue="Q2 2026" placeholder="Trimestre (ex: Q3 2026)" className="border border-line rounded-lg px-3 py-2 text-sm" required />
+                      <input name="objectivo" placeholder="Objetivo" className="xl:col-span-2 border border-line rounded-lg px-3 py-2 text-sm" autoFocus required />
                       <div className="flex gap-2">
-                        <button type="submit" className="px-4 py-2 text-sm font-medium rounded-lg text-white flex-1" style={{ backgroundColor: GOLD }}>Criar</button>
-                        <button type="button" onClick={() => setShowOkrForm(false)} className="px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-500">Cancelar</button>
+                        <button type="submit" className="px-4 py-2 text-sm font-medium rounded-lg  flex-1 bg-accent text-accent-foreground hover:brightness-[1.04]">Criar</button>
+                        <button type="button" onClick={() => setShowOkrForm(false)} className="px-3 py-2 text-sm rounded-lg border border-line text-ink-muted">Cancelar</button>
                       </div>
                     </div>
                   </form>
@@ -1325,52 +1300,52 @@ export function Metricas() {
               {/* OKR Cards */}
               <div className="flex flex-col gap-5">
                 {okrs.map((okr, oi) => (
-                  <div key={okr.id} className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-5 shadow-xs">
+                  <div key={okr.id} className="bg-surface-raised  rounded-xl border border-line  p-5 shadow-xs">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
-                        <span className="text-xs px-2 py-0.5 bg-gray-100 rounded text-gray-500">{okr.trimestre}</span>
-                        <h3 className="text-sm font-semibold text-gray-700">O{oi + 1}: {okr.objectivo}</h3>
+                        <span className="text-xs px-2 py-0.5 bg-surface-muted rounded text-ink-muted">{okr.trimestre}</span>
+                        <h3 className="text-sm font-semibold text-ink">O{oi + 1}: {okr.objectivo}</h3>
                       </div>
                       <div className="flex items-center gap-3">
-                        <div className="w-24 bg-gray-100 rounded-full h-3">
-                          <div className={`h-3 rounded-full ${okr.progresso >= 75 ? 'bg-green-500' : okr.progresso >= 40 ? 'bg-yellow-400' : 'bg-red-400'}`}
+                        <div className="w-24 bg-surface-muted rounded-full h-3">
+                          <div className={`h-3 rounded-full ${okr.progresso >= 75 ? 'bg-success' : okr.progresso >= 40 ? 'bg-yellow-400' : 'bg-red-400'}`}
                             style={{ width: `${okr.progresso}%` }} />
                         </div>
-                        <span className={`text-sm font-bold ${okr.progresso >= 75 ? 'text-green-600' : okr.progresso >= 40 ? 'text-yellow-600' : 'text-red-500'}`}>
+                        <span className={`text-sm font-bold ${okr.progresso >= 75 ? 'text-success' : okr.progresso >= 40 ? 'text-warning' : 'text-danger'}`}>
                           {okr.progresso}%
                         </span>
-                        <button onClick={() => deleteOkr(okr.id)} className="text-xs text-gray-300 hover:text-red-500" title="Apagar">x</button>
+                        <button onClick={() => deleteOkr(okr.id)} className="text-xs text-ink-muted/70 hover:text-danger" title="Apagar">x</button>
                       </div>
                     </div>
                     <div className="flex flex-col gap-3">
                       {(okr.krs || []).map((kr, ki) => (
                         <div key={kr.id} className="flex items-center gap-3">
                           <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
-                            kr.progresso >= 100 ? 'bg-green-100 text-green-700' : kr.progresso >= 50 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-600'
+                            kr.progresso >= 100 ? 'bg-success/15 text-success' : kr.progresso >= 50 ? 'bg-warning/15 text-warning' : 'bg-danger/15 text-danger'
                           }`}>{kr.progresso >= 100 ? '✓' : ki + 1}</span>
                           <div className="flex-1">
                             <div className="flex justify-between text-xs mb-1">
-                              <span className="text-gray-600">{kr.kr}</span>
-                              <span className="font-mono font-semibold">{kr.valor ?? 0}{kr.unidade} / {kr.meta}{kr.unidade}</span>
+                              <span className="text-ink-muted">{kr.kr}</span>
+                              <span className="num font-semibold">{kr.valor ?? 0}{kr.unidade} / {kr.meta}{kr.unidade}</span>
                             </div>
-                            <div className="w-full bg-gray-100 rounded-full h-2">
-                              <div className={`h-2 rounded-full transition-all ${
-                                kr.progresso >= 100 ? 'bg-green-500' : kr.progresso >= 50 ? 'bg-yellow-400' : 'bg-red-400'
+                            <div className="w-full bg-surface-muted rounded-full h-2">
+                              <div className={`h-2 rounded-full transition-[background-color,border-color,color,box-shadow,opacity,transform] ${
+                                kr.progresso >= 100 ? 'bg-success' : kr.progresso >= 50 ? 'bg-yellow-400' : 'bg-red-400'
                               }`} style={{ width: `${Math.min(100, kr.progresso)}%` }} />
                             </div>
                             {kr.fonte
-                              ? <span className="text-[9px] text-gray-300">Auto: {kr.fonte}</span>
-                              : <span className="text-[9px] text-amber-500">Manual</span>}
+                              ? <span className="text-[9px] text-ink-muted/70">Auto: {kr.fonte}</span>
+                              : <span className="text-[9px] text-warning">Manual</span>}
                           </div>
-                          <button onClick={() => setEditingOkr({ okrId: okr.id, kr })} className="text-xs text-gray-300 hover:text-indigo-500 shrink-0" title="Editar KR">✎</button>
-                          <button onClick={() => deleteKr(kr.id)} className="text-xs text-gray-300 hover:text-red-500 shrink-0" title="Apagar KR">x</button>
+                          <button onClick={() => setEditingOkr({ okrId: okr.id, kr })} className="text-xs text-ink-muted/70 hover:text-ink-muted shrink-0" title="Editar KR">✎</button>
+                          <button onClick={() => deleteKr(kr.id)} className="text-xs text-ink-muted/70 hover:text-danger shrink-0" title="Apagar KR">x</button>
                         </div>
                       ))}
                     </div>
-                    <button onClick={() => setEditingOkr({ okrId: okr.id, kr: null })} className="mt-3 text-xs text-indigo-500 hover:underline">+ Adicionar Key Result</button>
+                    <button onClick={() => setEditingOkr({ okrId: okr.id, kr: null })} className="mt-3 text-xs text-ink-muted hover:underline">+ Adicionar Key Result</button>
                   </div>
                 ))}
-                {okrs.length === 0 && <p className="text-xs text-gray-400 text-center py-8">Sem OKRs definidos — clica em "+ Novo Objetivo"</p>}
+                {okrs.length === 0 && <p className="text-xs text-ink-muted text-center py-8">Sem OKRs definidos — clica em "+ Novo Objetivo"</p>}
 
                 {editingOkr && (
                   <KrFormModal
@@ -1402,36 +1377,36 @@ function KrFormModal({ okrId, kr, fontes, onSave, onClose }) {
   const isManual = !form.fonte
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-lg w-full max-w-md" onClick={e => e.stopPropagation()}>
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">{kr ? 'Editar Key Result' : 'Novo Key Result'}</h3>
+      <div className="bg-surface-raised rounded-xl border border-line p-5 shadow-lg w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <h3 className="text-sm font-semibold text-ink mb-3">{kr ? 'Editar Key Result' : 'Novo Key Result'}</h3>
         <form onSubmit={e => { e.preventDefault(); onSave(form) }} className="flex flex-col gap-3">
           <div>
-            <label className="text-xs text-gray-500">Descrição</label>
+            <label className="text-xs text-ink-muted">Descrição</label>
             <input value={form.kr} onChange={e => setForm(f => ({ ...f, kr: e.target.value }))}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1" required autoFocus />
+              className="w-full border border-line rounded-lg px-3 py-2 text-sm mt-1" required autoFocus />
           </div>
           <div>
-            <label className="text-xs text-gray-500">Meta (número)</label>
+            <label className="text-xs text-ink-muted">Meta (número)</label>
             <input type="number" step="any" value={form.meta} onChange={e => setForm(f => ({ ...f, meta: e.target.value }))}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1" required />
+              className="w-full border border-line rounded-lg px-3 py-2 text-sm mt-1" required />
           </div>
           <div>
-            <label className="text-xs text-gray-500">Fonte</label>
+            <label className="text-xs text-ink-muted">Fonte</label>
             <select value={form.fonte} onChange={e => setForm(f => ({ ...f, fonte: e.target.value }))}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 bg-white">
+              className="w-full border border-line rounded-lg px-3 py-2 text-sm mt-1 bg-surface-raised">
               {fontes.map(f => <option key={f.id ?? 'manual'} value={f.id ?? ''}>{f.label}</option>)}
             </select>
           </div>
           {isManual && (
             <div>
-              <label className="text-xs text-gray-500">Valor atual (atualiza-se à mão)</label>
+              <label className="text-xs text-ink-muted">Valor atual (atualiza-se à mão)</label>
               <input type="number" step="any" value={form.valor_manual} onChange={e => setForm(f => ({ ...f, valor_manual: e.target.value }))}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1" />
+                className="w-full border border-line rounded-lg px-3 py-2 text-sm mt-1" />
             </div>
           )}
           <div className="flex gap-2 mt-2">
-            <button type="submit" className="px-4 py-2 text-sm font-medium rounded-lg text-white flex-1" style={{ backgroundColor: GOLD }}>Guardar</button>
-            <button type="button" onClick={onClose} className="px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-500">Cancelar</button>
+            <button type="submit" className="px-4 py-2 text-sm font-medium rounded-lg  flex-1 bg-accent text-accent-foreground hover:brightness-[1.04]">Guardar</button>
+            <button type="button" onClick={onClose} className="px-3 py-2 text-sm rounded-lg border border-line text-ink-muted">Cancelar</button>
           </div>
         </form>
       </div>
@@ -1440,12 +1415,3 @@ function KrFormModal({ okrId, kr, fontes, onSave, onClose }) {
 }
 
 // ── Hero KPI (banner topo) ──────────────────────────────────────
-function HeroKpi({ label, value, sub, accent, green, red }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-overline uppercase tracking-widest text-gray-400 font-semibold">{label}</p>
-      <p className={`text-2xl font-mono font-bold mt-1 truncate ${accent ? 'text-brand-gold' : green ? 'text-green-400' : red ? 'text-red-400' : 'text-white'}`}>{value}</p>
-      {sub && <p className="text-caption text-gray-500 mt-0.5 truncate">{sub}</p>}
-    </div>
-  )
-}

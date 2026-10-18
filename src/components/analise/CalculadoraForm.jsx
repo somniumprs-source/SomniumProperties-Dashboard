@@ -139,7 +139,7 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <Input label="Valor final (c/ IVA, do empreiteiro)" field="obra" value={form.obra} onChange={handleChange} placeholder="Ex: 36900" />
             </div>
-            <div className="mt-2 text-xs text-gray-400">
+            <div className="mt-2 text-xs text-ink-muted">
               Valor usado tal e qual — sem IVA computado, sem PMO % nem regimes ARU/Ampliação.
             </div>
             <CalcRow items={[
@@ -156,7 +156,7 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
             </div>
             {(form.pmo_perc > 0) && (
               <div className="mt-3 pl-3 border-l-2" style={{ borderColor: GOLD + '60' }}>
-                <div className="text-xs text-gray-500 mb-2">Desagregação do PMO (opcional — mostra detalhe no relatório):</div>
+                <div className="text-xs text-ink-muted mb-2">Desagregação do PMO (opcional — mostra detalhe no relatório):</div>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   <Input label="Arquitetura %" field="pmo_arq_perc" value={form.pmo_arq_perc} onChange={handleChange} step="0.5" placeholder="0" />
                   <Input label="Fiscalização %" field="pmo_fisc_perc" value={form.pmo_fisc_perc} onChange={handleChange} step="0.5" placeholder="0" />
@@ -235,14 +235,14 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
           </>}
         </div>
         {form.regime_fiscal === 'Sem' && (
-          <div className="mt-2 text-xs text-gray-400 leading-relaxed">
+          <div className="mt-2 text-xs text-ink-muted leading-relaxed">
             <strong>Sem regime fiscal</strong>: apresenta o lucro bruto ao investidor, sem deduzir qualquer imposto.
             O lucro líquido iguala o lucro bruto. A fiscalidade fica a cargo do investidor, conforme a estrutura
             jurídica que adotar para o negócio.
           </div>
         )}
         {form.regime_fiscal === 'Particular' && (
-          <div className="mt-2 text-xs text-gray-400 leading-relaxed">
+          <div className="mt-2 text-xs text-ink-muted leading-relaxed">
             <strong>Cat. G</strong>: mais-valia ocasional — 50% × 28% (autónoma) ou × marginal (englobada). Art. 43.º n.º 2 CIRS.<br />
             <strong>Cat. B simplificado</strong>: atividade habitual de revenda — base = VVR × 0,15 (Art. 31.º), tributada à marginal IRS.<br />
             <strong>Cat. B organizada</strong>: contabilidade organizada — base = lucro bruto × marginal IRS.<br />
@@ -264,7 +264,7 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
           <Input label="Vacancy %" field="vacancy_pct" value={form.vacancy_pct} onChange={handleChange} step="0.5" placeholder="5" />
           <Input label="Custos Gestão %" field="gestao_arr_pct" value={form.gestao_arr_pct} onChange={handleChange} step="0.5" placeholder="8" />
         </div>
-        <div className="mt-2 text-xs text-gray-400">
+        <div className="mt-2 text-xs text-ink-muted">
           Ativa a secção "K. Exit Alternativo" no relatório PDF.
         </div>
       </Section>
@@ -297,21 +297,21 @@ function PMOValidation({ form }) {
 
 function Section({ title, tag, open, onToggle, summary, hint, children }) {
   return (
-    <div className="rounded-xl border border-gray-200 overflow-hidden transition-shadow hover:shadow-sm">
-      <button onClick={onToggle} className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-gray-50">
+    <div className="rounded-xl border border-line overflow-hidden transition-shadow hover:shadow-sm">
+      <button onClick={onToggle} className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface">
         <span className="w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ backgroundColor: BLACK }}>
           {tag}
         </span>
         <div className="flex-1 text-left">
-          <span className="text-sm font-semibold text-gray-800">{title}</span>
-          {!open && hint && <span className="text-xs text-gray-400 ml-2">{hint}</span>}
+          <span className="text-sm font-semibold text-ink">{title}</span>
+          {!open && hint && <span className="text-xs text-ink-muted ml-2">{hint}</span>}
         </div>
         <div className="flex items-center gap-2">
-          {summary && <span className="text-xs font-mono text-gray-500 hidden sm:inline">{summary}</span>}
-          <span className="text-gray-400 text-sm transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'none' }}>▾</span>
+          {summary && <span className="text-xs num text-ink-muted hidden sm:inline">{summary}</span>}
+          <span className="text-ink-muted text-sm transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'none' }}>▾</span>
         </div>
       </button>
-      {open && <div className="px-4 pb-4 pt-1 border-t border-gray-100">{children}</div>}
+      {open && <div className="px-4 pb-4 pt-1 border-t border-line">{children}</div>}
     </div>
   )
 }
@@ -321,8 +321,8 @@ function CalcRow({ items }) {
     <div className="mt-3 flex flex-wrap gap-2">
       {items.map((item, i) => (
         <div key={i} className="rounded-lg px-3 py-1.5 text-xs" style={{ backgroundColor: item.bold ? GOLD + '15' : '#f3f4f6' }}>
-          <span className="text-gray-400">{item.label}: </span>
-          <span className={`font-mono ${item.bold ? 'font-semibold text-gray-800' : 'text-gray-600'}`}>{EUR(item.value)}</span>
+          <span className="text-ink-muted">{item.label}: </span>
+          <span className={`num ${item.bold ? 'font-semibold text-ink' : 'text-ink-muted'}`}>{EUR(item.value)}</span>
         </div>
       ))}
     </div>
@@ -333,14 +333,14 @@ function CalcRow({ items }) {
 // a partir destas 3 linhas; não incluir estes valores no custo da obra.
 function LicencasCertificacoes({ form, analise, onChange }) {
   return (
-    <div className="mt-4 pt-3 border-t border-gray-100">
-      <div className="text-xs font-semibold text-gray-500 mb-2">Licenças e certificações</div>
+    <div className="mt-4 pt-3 border-t border-line">
+      <div className="text-xs font-semibold text-ink-muted mb-2">Licenças e certificações</div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Input label="Licenças e taxas camarárias" field="lic_camara" value={form.lic_camara} onChange={onChange} placeholder="0" />
         <Input label="Certificação ARU" field="lic_aru" value={form.lic_aru} onChange={onChange} placeholder="0" />
         <Input label="Outras licenças e certidões" field="lic_outros" value={form.lic_outros} onChange={onChange} placeholder="0" />
       </div>
-      <div className="mt-2 text-xs text-gray-400">Não incluir estes valores no custo da obra acima, para não duplicar.</div>
+      <div className="mt-2 text-xs text-ink-muted">Não incluir estes valores no custo da obra acima, para não duplicar.</div>
       <CalcRow items={[{ label: 'Total licenças e certificações', value: analise.licenciamento, bold: true }]} />
     </div>
   )
@@ -353,8 +353,8 @@ function Input({ label, field, value, onChange, step, placeholder, required, rea
   }
   return (
     <div>
-      <label className="text-xs text-gray-500 block mb-1">
-        {label}{required && <span style={{ color: GOLD }}> *</span>}
+      <label className="text-xs text-ink-muted block mb-1">
+        {label}{required && <span className="text-accent-ink"> *</span>}
       </label>
       <input
         type="number"
@@ -364,10 +364,10 @@ function Input({ label, field, value, onChange, step, placeholder, required, rea
         onWheel={e => e.target.blur()}
         placeholder={placeholder}
         readOnly={readOnly}
-        className={`w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm font-mono placeholder:text-gray-300 focus:outline-none focus:ring-2 transition-shadow ${readOnly ? 'bg-gray-50 cursor-not-allowed text-gray-600' : ''}`}
+        className={`w-full rounded-lg border border-line px-3 py-2.5 text-sm num placeholder:text-ink-muted/70 focus:outline-none focus:ring-2 transition-shadow ${readOnly ? 'bg-surface cursor-not-allowed text-ink-muted' : ''}`}
         style={{ '--tw-ring-color': GOLD + '66' }}
       />
-      {hint && <p className="text-[10px] text-gray-400 mt-1 italic">{hint}</p>}
+      {hint && <p className="text-[10px] text-ink-muted mt-1 italic">{hint}</p>}
     </div>
   )
 }
@@ -375,11 +375,11 @@ function Input({ label, field, value, onChange, step, placeholder, required, rea
 function Select({ label, field, value, options, onChange }) {
   return (
     <div>
-      <label className="text-xs text-gray-500 block mb-1">{label}</label>
+      <label className="text-xs text-ink-muted block mb-1">{label}</label>
       <select
         value={value ?? options[0]?.value}
         onChange={(e) => onChange(field, e.target.value)}
-        className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 transition-shadow"
+        className="w-full rounded-lg border border-line px-3 py-2.5 text-sm focus:outline-none focus:ring-2 transition-shadow"
         style={{ '--tw-ring-color': GOLD + '66' }}
       >
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -397,9 +397,9 @@ function Toggle({ label, field, value, onChange }) {
         className="w-10 h-5 rounded-full transition-colors relative"
         style={{ backgroundColor: value ? GOLD : '#d1d5db' }}
       >
-        <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${value ? 'left-5' : 'left-0.5'}`} />
+        <div className={`absolute top-0.5 w-4 h-4 bg-surface-raised rounded-full shadow transition-[background-color,border-color,color,box-shadow,opacity,transform] ${value ? 'left-5' : 'left-0.5'}`} />
       </button>
-      <span className="text-sm text-gray-700">{label}</span>
+      <span className="text-sm text-ink">{label}</span>
     </div>
   )
 }

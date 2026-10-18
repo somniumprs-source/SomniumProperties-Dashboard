@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Header } from '../components/layout/Header.jsx'
+import { SummaryStat } from '../components/ui/SummaryStat.jsx'
 import { PageSkeleton } from '../components/ui/Skeleton.jsx'
 import { apiFetch } from '../lib/api.js'
 import { useUrlState } from '../hooks/useUrlState.js'
@@ -22,7 +23,7 @@ const TABS = [
   { id: 'eficiencia', label: 'Eficiência' },
 ]
 
-const CAT_COLORS = ['#6366f1','#f59e0b','#ef4444','#10b981','#8b5cf6','#ec4899','#14b8a6','#f97316','#06b6d4','#84cc16','#a855f7','#e11d48','#0ea5e9','#65a30d']
+const CAT_COLORS = ['#475569','#f59e0b','#ef4444','#10b981','#8b5cf6','#ec4899','#14b8a6','#f97316','#06b6d4','#84cc16','#a855f7','#e11d48','#0ea5e9','#65a30d']
 
 // ── Components ──────────────────────────────────────────────────
 function M({ label, value, sub, highlight = false, warn = false }) {
@@ -31,11 +32,11 @@ function M({ label, value, sub, highlight = false, warn = false }) {
 }
 
 function SectionTitle({ children }) {
-  return (<div className="flex items-center gap-3 mb-4"><div className="h-px flex-1 bg-gray-100" /><span className="text-xs font-semibold uppercase tracking-widest text-gray-400">{children}</span><div className="h-px flex-1 bg-gray-100" /></div>)
+  return (<div className="flex items-center gap-3 mb-4"><div className="h-px flex-1 bg-surface-muted" /><span className="text-xs font-semibold uppercase tracking-widest text-ink-muted">{children}</span><div className="h-px flex-1 bg-surface-muted" /></div>)
 }
 
 function HBar({ items, valueKey = 'horas', labelKey = 'label', colorFn }) {
-  if (!items?.length) return <p className="text-xs text-gray-400 text-center py-8">Sem dados</p>
+  if (!items?.length) return <p className="text-xs text-ink-muted text-center py-8">Sem dados</p>
   const max = Math.max(...items.map(i => i[valueKey] || 0), 1)
   return (
     <div className="flex flex-col gap-2">
@@ -44,13 +45,13 @@ function HBar({ items, valueKey = 'horas', labelKey = 'label', colorFn }) {
         const pct = Math.max(Math.round(val / max * 100), 3)
         return (
           <div key={item[labelKey] || idx} className="flex items-center gap-3">
-            <span className="text-xs text-gray-500 w-24 sm:w-40 text-right shrink-0 leading-tight truncate">{item[labelKey]}</span>
-            <div className="flex-1 bg-gray-100 rounded-full h-7 overflow-hidden">
-              <div className="h-full rounded-full flex items-center px-3 transition-all" style={{ width: `${pct}%`, backgroundColor: colorFn ? colorFn(item, idx) : '#6366f1' }}>
+            <span className="text-xs text-ink-muted w-24 sm:w-40 text-right shrink-0 leading-tight truncate">{item[labelKey]}</span>
+            <div className="flex-1 bg-surface-muted rounded-full h-7 overflow-hidden">
+              <div className="h-full rounded-full flex items-center px-3 transition-[background-color,border-color,color,box-shadow,opacity,transform]" style={{ width: `${pct}%`, backgroundColor: colorFn ? colorFn(item, idx) : '#475569' }}>
                 <span className="text-white text-xs font-bold whitespace-nowrap">{HRS(val)}</span>
               </div>
             </div>
-            {item.tarefas != null && <span className="text-xs text-gray-400 w-16 shrink-0">{item.tarefas}x</span>}
+            {item.tarefas != null && <span className="text-xs text-ink-muted w-16 shrink-0">{item.tarefas}x</span>}
           </div>
         )
       })}
@@ -106,7 +107,7 @@ export function Operacoes({ embutido = false }) {
     <>
       {!embutido && <Header title="Operações" subtitle="Horas · Custo · Actividades · Eficiência" onRefresh={loadAll} loading={loading} />}
 
-      <div className={embutido ? 'bg-white dark:bg-neutral-900 rounded-xl px-3 pt-2 mb-4' : 'px-4 sm:px-6 pt-3 bg-white sticky top-0 z-10'}>
+      <div className={embutido ? 'bg-surface-raised  rounded-xl px-3 pt-2 mb-4' : 'px-4 sm:px-6 pt-3 bg-surface-raised sticky top-0 z-10'}>
         <div className="flex items-center gap-2 sm:gap-4">
           <div className="flex-1 min-w-0">
             <Tabs
@@ -120,7 +121,7 @@ export function Operacoes({ embutido = false }) {
       </div>
 
       <div className={`flex flex-col gap-4 sm:gap-6 ${embutido ? '' : 'p-4 sm:p-6'}`}>
-        {error && <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">Erro: {error}</div>}
+        {error && <div className="p-4 bg-danger/10 border border-danger/30 text-danger rounded-xl text-sm">Erro: {error}</div>}
 
         {/* Hero banner — Operações */}
         {(() => {
@@ -130,26 +131,24 @@ export function Operacoes({ embutido = false }) {
           const tarefasHoje = tarefas.filter(t => t.inicio?.slice(0, 10) === todayStr).length
           const horasSemana = r?.horasSemana ?? 0
           return (
-            <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 text-white shadow-lg bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-              <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-brand-gold to-transparent" />
+            <div className="rounded-xl border border-line bg-surface-raised p-5 sm:p-6 shadow-xs">
               <div className="relative flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-brand-gold/15 border border-brand-gold/30 flex items-center justify-center">
-                    <Activity className="w-4 h-4 text-brand-gold" strokeWidth={1.75} />
+                  <div className="w-8 h-8 rounded-lg bg-surface-muted flex items-center justify-center">
+                    <Activity className="w-4 h-4 text-ink-muted" strokeWidth={1.75} />
                   </div>
                   <div>
-                    <h2 className="text-overline uppercase tracking-widest font-semibold text-brand-gold">Operações</h2>
-                    <p className="text-sm font-semibold text-white">Análise das tarefas registadas na Agenda</p>
-                    <Link to="/administracao/agenda?tab=tarefas" className="text-xs text-brand-gold hover:underline">Gerir tarefas na Agenda →</Link>
+                    <h2 className="text-overline uppercase text-ink-muted">Operações</h2>
+                    <p className="text-ui font-semibold text-ink">Análise das tarefas registadas na Agenda</p>
+                    <Link to="/administracao/agenda?tab=tarefas" className="text-xs text-ink-muted hover:text-ink underline-offset-2 hover:underline">Gerir tarefas na Agenda →</Link>
                   </div>
                 </div>
               </div>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <HeroKpi label="Tarefas abertas" value={tarefasAbertas} sub={`de ${tarefas.length} total`} />
-                <HeroKpi label="Tarefas atrasadas" value={tarefasAtrasadas} sub="a recuperar" accent />
-                <HeroKpi label="Horas esta semana" value={HRS(horasSemana)} sub={r?.totalTarefas != null ? `${r.totalTarefas} tarefas total` : ''} green />
-                <HeroKpi label="Tarefas hoje" value={tarefasHoje} sub={new Date().toLocaleDateString('pt-PT', { day:'2-digit', month:'2-digit' })} />
+                <SummaryStat label="Tarefas abertas" value={tarefasAbertas} sub={`de ${tarefas.length} total`} />
+                <SummaryStat label="Tarefas atrasadas" value={tarefasAtrasadas} sub="a recuperar" />
+                <SummaryStat label="Horas esta semana" value={HRS(horasSemana)} sub={r?.totalTarefas != null ? `${r.totalTarefas} tarefas total` : ''} />
+                <SummaryStat label="Tarefas hoje" value={tarefasHoje} sub={new Date().toLocaleDateString('pt-PT', { day:'2-digit', month:'2-digit' })} />
               </div>
             </div>
           )
@@ -175,10 +174,10 @@ export function Operacoes({ embutido = false }) {
             <Card padding="md">
               <Card.Header title="Estado das Tarefas" subtitle="Distribuição por status" />
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-                <div className="text-center"><span className="text-2xl font-mono font-bold text-gray-400">{r.statusTarefas.aFazer}</span><p className="text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold mt-1">A fazer</p></div>
-                <div className="text-center"><span className="text-2xl font-mono font-bold text-blue-500">{r.statusTarefas.emAndamento}</span><p className="text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold mt-1">Em andamento</p></div>
-                <div className="text-center"><span className="text-2xl font-mono font-bold text-green-600">{r.statusTarefas.concluida}</span><p className="text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold mt-1">Concluídas</p></div>
-                <div className="text-center"><span className="text-2xl font-mono font-bold text-red-500">{r.statusTarefas.atrasada}</span><p className="text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold mt-1">Atrasadas</p></div>
+                <div className="text-center"><span className="text-2xl num font-bold text-ink-muted">{r.statusTarefas.aFazer}</span><p className="text-overline uppercase tracking-widest text-ink-muted  font-semibold mt-1">A fazer</p></div>
+                <div className="text-center"><span className="text-2xl num font-bold text-ink-muted">{r.statusTarefas.emAndamento}</span><p className="text-overline uppercase tracking-widest text-ink-muted  font-semibold mt-1">Em andamento</p></div>
+                <div className="text-center"><span className="text-2xl num font-bold text-success">{r.statusTarefas.concluida}</span><p className="text-overline uppercase tracking-widest text-ink-muted  font-semibold mt-1">Concluídas</p></div>
+                <div className="text-center"><span className="text-2xl num font-bold text-danger">{r.statusTarefas.atrasada}</span><p className="text-overline uppercase tracking-widest text-ink-muted  font-semibold mt-1">Atrasadas</p></div>
               </div>
             </Card>
             <Card padding="md">
@@ -206,24 +205,24 @@ export function Operacoes({ embutido = false }) {
           <>
             <SectionTitle>Horas por Mes</SectionTitle>
             <Card padding="md">
-              <HBar items={data.meses.map(m => ({ label: `${MES_LABEL[m.mes.slice(5)] || m.mes.slice(5)} ${m.mes.slice(0,4)}`, horas: m.horas, tarefas: m.tarefas }))} labelKey="label" colorFn={() => '#6366f1'} />
+              <HBar items={data.meses.map(m => ({ label: `${MES_LABEL[m.mes.slice(5)] || m.mes.slice(5)} ${m.mes.slice(0,4)}`, horas: m.horas, tarefas: m.tarefas }))} labelKey="label" colorFn={() => '#475569'} />
             </Card>
             <SectionTitle>Detalhe Mensal</SectionTitle>
             <Card padding="md" className="overflow-x-auto">
               <table className="min-w-[600px] w-full text-sm">
-                <thead><tr className="border-b border-gray-100 text-xs text-gray-400 uppercase"><th className="text-left py-2 px-3">Mes</th><th className="text-right py-2 px-3">Horas</th><th className="text-right py-2 px-3">Tarefas</th><th className="text-right py-2 px-3">Custo</th><th className="text-right py-2 px-3">h/sem</th></tr></thead>
+                <thead><tr className="border-b border-line text-xs text-ink-muted uppercase"><th className="text-left py-2 px-3">Mes</th><th className="text-right py-2 px-3">Horas</th><th className="text-right py-2 px-3">Tarefas</th><th className="text-right py-2 px-3">Custo</th><th className="text-right py-2 px-3">h/sem</th></tr></thead>
                 <tbody>
                   {data.meses.map(m => (
-                    <tr key={m.mes} className="border-b border-gray-50">
-                      <td className="py-2 px-3 font-medium text-gray-700">{MES_LABEL[m.mes.slice(5)] || m.mes.slice(5)} {m.mes.slice(0,4)}</td>
-                      <td className="py-2 px-3 text-right font-mono text-xs font-bold">{HRS(m.horas)}</td>
-                      <td className="py-2 px-3 text-right font-mono text-xs">{m.tarefas}</td>
-                      <td className="py-2 px-3 text-right font-mono text-xs text-indigo-600">{EUR(m.custoHoras)}</td>
-                      <td className="py-2 px-3 text-right font-mono text-xs text-gray-500">{HRS(m.horas / 4.33)}</td>
+                    <tr key={m.mes} className="border-b border-line">
+                      <td className="py-2 px-3 font-medium text-ink">{MES_LABEL[m.mes.slice(5)] || m.mes.slice(5)} {m.mes.slice(0,4)}</td>
+                      <td className="py-2 px-3 text-right num text-xs font-bold">{HRS(m.horas)}</td>
+                      <td className="py-2 px-3 text-right num text-xs">{m.tarefas}</td>
+                      <td className="py-2 px-3 text-right num text-xs text-ink">{EUR(m.custoHoras)}</td>
+                      <td className="py-2 px-3 text-right num text-xs text-ink-muted">{HRS(m.horas / 4.33)}</td>
                     </tr>
                   ))}
                 </tbody>
-                <tfoot><tr className="border-t-2 border-gray-200 font-bold"><td className="py-2 px-3">Total</td><td className="py-2 px-3 text-right font-mono">{HRS(r?.totalHoras)}</td><td className="py-2 px-3 text-right font-mono">{r?.totalTarefas}</td><td className="py-2 px-3 text-right font-mono text-indigo-600">{EUR(r?.custoHorasTotal)}</td><td className="py-2 px-3">—</td></tr></tfoot>
+                <tfoot><tr className="border-t-2 border-line font-bold"><td className="py-2 px-3">Total</td><td className="py-2 px-3 text-right num">{HRS(r?.totalHoras)}</td><td className="py-2 px-3 text-right num">{r?.totalTarefas}</td><td className="py-2 px-3 text-right num text-ink">{EUR(r?.custoHorasTotal)}</td><td className="py-2 px-3">—</td></tr></tfoot>
               </table>
             </Card>
           </>
@@ -239,16 +238,16 @@ export function Operacoes({ embutido = false }) {
             <SectionTitle>Detalhe</SectionTitle>
             <Card padding="md" className="overflow-x-auto">
               <table className="min-w-[700px] w-full text-sm">
-                <thead><tr className="border-b border-gray-100 text-xs text-gray-400 uppercase"><th className="text-left py-2 px-3">Atividade</th><th className="text-right py-2 px-3">Horas</th><th className="text-right py-2 px-3">%</th><th className="text-right py-2 px-3">Tarefas</th><th className="text-right py-2 px-3">h/tarefa</th><th className="text-right py-2 px-3">Custo</th></tr></thead>
+                <thead><tr className="border-b border-line text-xs text-ink-muted uppercase"><th className="text-left py-2 px-3">Atividade</th><th className="text-right py-2 px-3">Horas</th><th className="text-right py-2 px-3">%</th><th className="text-right py-2 px-3">Tarefas</th><th className="text-right py-2 px-3">h/tarefa</th><th className="text-right py-2 px-3">Custo</th></tr></thead>
                 <tbody>
                   {data.categorias.map((c, i) => (
-                    <tr key={c.categoria} className="border-b border-gray-50">
-                      <td className="py-2 px-3"><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: CAT_COLORS[i % CAT_COLORS.length] }} /><span className="text-gray-700 font-medium">{c.categoria}</span></div></td>
-                      <td className="py-2 px-3 text-right font-mono text-xs font-bold">{HRS(c.horas)}</td>
-                      <td className="py-2 px-3 text-right font-mono text-xs">{PCT(c.pctHoras)}</td>
-                      <td className="py-2 px-3 text-right font-mono text-xs">{c.tarefas}</td>
-                      <td className="py-2 px-3 text-right font-mono text-xs text-gray-500">{c.tarefas > 0 ? HRS(c.horas / c.tarefas) : '—'}</td>
-                      <td className="py-2 px-3 text-right font-mono text-xs text-indigo-600">{EUR(c.custoTotal)}</td>
+                    <tr key={c.categoria} className="border-b border-line">
+                      <td className="py-2 px-3"><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: CAT_COLORS[i % CAT_COLORS.length] }} /><span className="text-ink font-medium">{c.categoria}</span></div></td>
+                      <td className="py-2 px-3 text-right num text-xs font-bold">{HRS(c.horas)}</td>
+                      <td className="py-2 px-3 text-right num text-xs">{PCT(c.pctHoras)}</td>
+                      <td className="py-2 px-3 text-right num text-xs">{c.tarefas}</td>
+                      <td className="py-2 px-3 text-right num text-xs text-ink-muted">{c.tarefas > 0 ? HRS(c.horas / c.tarefas) : '—'}</td>
+                      <td className="py-2 px-3 text-right num text-xs text-ink">{EUR(c.custoTotal)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -265,26 +264,26 @@ export function Operacoes({ embutido = false }) {
               {data.funcionarios.map(f => (
                 <Card key={f.nome} padding="md">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold text-gray-700 dark:text-neutral-100">{f.nome}</h3>
-                    <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium">{HRS(f.horas)}</span>
+                    <h3 className="text-sm font-semibold text-ink ">{f.nome}</h3>
+                    <span className="text-xs num px-2 py-0.5 rounded-full bg-surface-muted text-ink font-medium">{HRS(f.horas)}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div><span className="text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Tarefas</span><p className="text-lg font-mono font-bold text-gray-800 dark:text-neutral-100">{f.tarefas}</p></div>
-                    <div><span className="text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Concluídas</span><p className="text-lg font-mono font-bold text-green-600">{f.concluídas}</p></div>
-                    <div><span className="text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Taxa Conclusao</span><p className="text-lg font-mono font-bold text-gray-800 dark:text-neutral-100">{PCT(f.taxaConclusao)}</p></div>
-                    <div><span className="text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Custo Total</span><p className="text-lg font-mono font-bold text-indigo-600">{EUR(f.custoTotal)}</p></div>
+                    <div><span className="text-overline uppercase tracking-widest text-ink-muted  font-semibold">Tarefas</span><p className="text-lg num font-bold text-ink ">{f.tarefas}</p></div>
+                    <div><span className="text-overline uppercase tracking-widest text-ink-muted  font-semibold">Concluídas</span><p className="text-lg num font-bold text-success">{f.concluídas}</p></div>
+                    <div><span className="text-overline uppercase tracking-widest text-ink-muted  font-semibold">Taxa Conclusao</span><p className="text-lg num font-bold text-ink ">{PCT(f.taxaConclusao)}</p></div>
+                    <div><span className="text-overline uppercase tracking-widest text-ink-muted  font-semibold">Custo Total</span><p className="text-lg num font-bold text-ink">{EUR(f.custoTotal)}</p></div>
                   </div>
                   {data.mesesFuncionário && (
-                    <div className="mt-4 pt-3 border-t border-gray-100 dark:border-neutral-800">
-                      <span className="text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold">Evolução mensal</span>
+                    <div className="mt-4 pt-3 border-t border-line ">
+                      <span className="text-overline uppercase tracking-widest text-ink-muted  font-semibold">Evolução mensal</span>
                       <div className="flex gap-2 mt-2">
                         {data.mesesFuncionário.filter(mf => mf.funcionario === f.nome).map(mf => (
                           <div key={mf.mes} className="flex flex-col items-center">
-                            <div className="w-10 bg-gray-100 dark:bg-neutral-800 rounded-t overflow-hidden flex flex-col-reverse" style={{ height: '60px' }}>
-                              <div className="bg-indigo-400 rounded-t transition-all" style={{ height: `${Math.max(4, Math.round(mf.horas / Math.max(...data.mesesFuncionário.filter(x => x.funcionario === f.nome).map(x => x.horas), 1) * 60))}px` }} />
+                            <div className="w-10 bg-surface-muted  rounded-t overflow-hidden flex flex-col-reverse" style={{ height: '60px' }}>
+                              <div className="bg-ink-muted/60 rounded-t transition-[background-color,border-color,color,box-shadow,opacity,transform]" style={{ height: `${Math.max(4, Math.round(mf.horas / Math.max(...data.mesesFuncionário.filter(x => x.funcionario === f.nome).map(x => x.horas), 1) * 60))}px` }} />
                             </div>
-                            <span className="text-[9px] text-gray-400 mt-1">{MES_LABEL[mf.mes.slice(5)] || mf.mes.slice(5)}</span>
-                            <span className="text-[9px] font-mono font-bold">{HRS(mf.horas)}</span>
+                            <span className="text-[9px] text-ink-muted mt-1">{MES_LABEL[mf.mes.slice(5)] || mf.mes.slice(5)}</span>
+                            <span className="text-[9px] num font-bold">{HRS(mf.horas)}</span>
                           </div>
                         ))}
                       </div>
@@ -316,13 +315,13 @@ export function Operacoes({ embutido = false }) {
             <Card padding="md">
               <Card.Header title="Diagnóstico" subtitle="Leitura rápida da operação" />
               <div className="flex flex-col gap-4">
-                <div className="p-4 bg-gray-50 dark:bg-neutral-800 rounded-xl">
-                  <p className="text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold mb-1">Alocação</p>
-                  <p className="text-sm text-gray-700 dark:text-neutral-200">{k.pctProspeção >= 40 ? 'Forte em prospeção — bom para fase de crescimento.' : k.pctProspeção >= 20 ? 'Equilibrada.' : 'Pouco tempo em prospeção — deveria ser >40%.'}</p>
+                <div className="p-4 bg-surface  rounded-xl">
+                  <p className="text-overline uppercase tracking-widest text-ink-muted  font-semibold mb-1">Alocação</p>
+                  <p className="text-sm text-ink ">{k.pctProspeção >= 40 ? 'Forte em prospeção — bom para fase de crescimento.' : k.pctProspeção >= 20 ? 'Equilibrada.' : 'Pouco tempo em prospeção — deveria ser >40%.'}</p>
                 </div>
-                <div className="p-4 bg-gray-50 dark:bg-neutral-800 rounded-xl">
-                  <p className="text-overline uppercase tracking-widest text-gray-500 dark:text-neutral-400 font-semibold mb-1">RPH</p>
-                  <p className="text-sm text-gray-700 dark:text-neutral-200">{k.rphRealizado > 0 ? `${EUR(k.rphRealizado)}/h realizado.` : k.rph > 0 ? `Pipeline sugere ${EUR(k.rph)}/h. Meta: >30EUR/h.` : 'Sem receita — RPH fica positivo apos 1o deal.'}</p>
+                <div className="p-4 bg-surface  rounded-xl">
+                  <p className="text-overline uppercase tracking-widest text-ink-muted  font-semibold mb-1">RPH</p>
+                  <p className="text-sm text-ink ">{k.rphRealizado > 0 ? `${EUR(k.rphRealizado)}/h realizado.` : k.rph > 0 ? `Pipeline sugere ${EUR(k.rph)}/h. Meta: >30EUR/h.` : 'Sem receita — RPH fica positivo apos 1o deal.'}</p>
                 </div>
               </div>
             </Card>
@@ -333,12 +332,3 @@ export function Operacoes({ embutido = false }) {
   )
 }
 
-function HeroKpi({ label, value, sub, accent, green, red }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-overline uppercase tracking-widest text-gray-400 font-semibold">{label}</p>
-      <p className={`text-2xl font-mono font-bold mt-1 truncate ${accent ? 'text-brand-gold' : green ? 'text-green-400' : red ? 'text-red-400' : 'text-white'}`}>{value}</p>
-      {sub && <p className="text-caption text-gray-500 mt-0.5 truncate">{sub}</p>}
-    </div>
-  )
-}

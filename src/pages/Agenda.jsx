@@ -44,7 +44,7 @@ const GRUPOS_CATEGORIAS = [
 const CATEGORIAS = GRUPOS_CATEGORIAS.flatMap(g => g.itens)
 const CATEGORIAS_COM_REGIAO = new Set(GRUPOS_CATEGORIAS.filter(g => g.regiao).flatMap(g => g.itens))
 const STATUS_OPTIONS = ['A fazer', 'Em andamento', 'Concluída', 'Atrasada']
-const STATUS_COLOR = { 'A fazer': 'bg-gray-100 text-gray-600', 'Em andamento': 'bg-blue-100 text-blue-700', 'Concluída': 'bg-green-100 text-green-700', 'Atrasada': 'bg-red-100 text-red-600' }
+const STATUS_COLOR = { 'A fazer': 'bg-surface-muted text-ink-muted', 'Em andamento': 'bg-surface-muted text-ink', 'Concluída': 'bg-success/15 text-success', 'Atrasada': 'bg-danger/15 text-danger' }
 const concluida = t => t.status === 'Concluída' || t.status === 'Concluida'
 const HRS = v => v == null ? '—' : `${Number(v).toFixed(1)}h`
 
@@ -67,10 +67,10 @@ function calcHoras(inicio, fim) {
 
 function corResponsavel(func) {
   const j = (func || '').includes('João'), a = (func || '').includes('Alexandre')
-  if (j && a) return 'bg-emerald-100 border-emerald-400 text-emerald-900'
-  if (j) return 'bg-amber-100 border-amber-400 text-amber-900'
-  if (a) return 'bg-indigo-100 border-indigo-400 text-indigo-900'
-  return 'bg-gray-100 border-gray-400 text-gray-700'
+  if (j && a) return 'bg-success/15 border-emerald-400 text-emerald-900'
+  if (j) return 'bg-warning/15 border-amber-400 text-amber-900'
+  if (a) return 'bg-surface-muted border-slate-400 text-ink'
+  return 'bg-surface-muted border-ink/30 text-ink'
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -173,9 +173,9 @@ export function Agenda({ embutido = false }) {
             onChange={setTab}
           />
           <div className="ml-auto flex items-center gap-2">
-            {ultimaSync && <span className="text-xs text-gray-400 hidden sm:inline">Sincronizado às {hhmm(ultimaSync.getHours() * 60 + ultimaSync.getMinutes())}</span>}
+            {ultimaSync && <span className="text-xs text-ink-muted hidden sm:inline">Sincronizado às {hhmm(ultimaSync.getHours() * 60 + ultimaSync.getMinutes())}</span>}
             <button onClick={() => sincronizar()} disabled={syncing}
-              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50">
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-surface-muted text-ink hover:bg-surface-muted disabled:opacity-50">
               <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} /> Sincronizar Google Calendar
             </button>
             <Button onClick={() => setModal({ inicial: {} })}><Plus className="w-4 h-4" /> Nova tarefa</Button>
@@ -212,8 +212,8 @@ function TarefaModal({ modal, saving, onClose, onSave, onDelete }) {
     if (k === 'categoria' && !CATEGORIAS_COM_REGIAO.has(v)) n.regiao = ''
     return n
   })
-  const campo = 'w-full border border-gray-200 dark:border-neutral-700 dark:bg-neutral-900 rounded-lg px-3 py-2 text-sm'
-  const rotulo = 'text-xs text-gray-500 block mb-1'
+  const campo = 'w-full border border-line   rounded-lg px-3 py-2 text-sm'
+  const rotulo = 'text-xs text-ink-muted block mb-1'
   const doGoogle = modal.inicial?.gcal_event_id && !t?.id
   function submeter(extra = {}) {
     const d = { ...f, ...extra }
@@ -288,7 +288,7 @@ function TarefaModal({ modal, saving, onClose, onSave, onDelete }) {
           <label className={rotulo}>Horas reais</label>
           <input type="number" step="0.25" min="0" max="24" value={f.tempo_horas ?? ''} onChange={e => set('tempo_horas', e.target.value ? parseFloat(e.target.value) : '')} className={campo} />
         </div>
-        <p className="text-xs text-gray-400 self-end pb-2">Sem início, a tarefa fica em "Sem hora marcada" e não aparece no Google Calendar.</p>
+        <p className="text-xs text-ink-muted self-end pb-2">Sem início, a tarefa fica em "Sem hora marcada" e não aparece no Google Calendar.</p>
         {t?.id && <DocumentosTarefa tarefaId={t.id} />}
       </div>
     </Modal>
@@ -425,16 +425,16 @@ function CalendarioTab({ tarefas, guardar, accao, abrir, sincronizar }) {
 
   return (
     <div className="flex flex-col lg:flex-row gap-4">
-      <div className="flex-1 min-w-0 bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800">
-        <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-100 dark:border-neutral-800">
-          <button onClick={() => setRef(d => maisDias(d, -7))} className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50"><ChevronLeft className="w-4 h-4" /></button>
-          <button onClick={() => setRef(new Date())} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 hover:bg-gray-50">Hoje</button>
-          <button onClick={() => setRef(d => maisDias(d, 7))} className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50"><ChevronRight className="w-4 h-4" /></button>
-          <span className="text-sm font-semibold text-gray-700 dark:text-neutral-200 ml-1">{titulo}</span>
+      <div className="flex-1 min-w-0 bg-surface-raised  rounded-xl border border-line ">
+        <div className="flex flex-wrap items-center gap-2 p-3 border-b border-line ">
+          <button onClick={() => setRef(d => maisDias(d, -7))} className="p-1.5 rounded-lg border border-line hover:bg-surface"><ChevronLeft className="w-4 h-4" /></button>
+          <button onClick={() => setRef(new Date())} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-line hover:bg-surface">Hoje</button>
+          <button onClick={() => setRef(d => maisDias(d, 7))} className="p-1.5 rounded-lg border border-line hover:bg-surface"><ChevronRight className="w-4 h-4" /></button>
+          <span className="text-sm font-semibold text-ink  ml-1">{titulo}</span>
           <div className="ml-auto flex gap-1.5 flex-wrap">
             {[['todos', 'Todos'], ['João', 'João'], ['Alexandre', 'Alexandre'], ['nenhum', 'Por atribuir']].map(([k, l]) => (
               <button key={k} onClick={() => setQuem(k)}
-                className={`px-2.5 py-1 text-xs font-medium rounded-lg border ${quem === k ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>{l}</button>
+                className={`px-2.5 py-1 text-xs font-medium rounded-lg border ${quem === k ? 'border-ink/30 bg-surface-muted text-ink' : 'border-line text-ink-muted hover:bg-surface'}`}>{l}</button>
             ))}
           </div>
         </div>
@@ -442,14 +442,14 @@ function CalendarioTab({ tarefas, guardar, accao, abrir, sincronizar }) {
         <div className="overflow-x-auto">
           <div className="min-w-[860px]">
             {/* Cabeçalho + dia inteiro */}
-            <div className="flex border-b border-gray-100 dark:border-neutral-800">
+            <div className="flex border-b border-line ">
               <div className="w-12 shrink-0" />
               {dias.map((d, i) => (
-                <div key={d} className={`flex-1 min-w-0 px-1 py-1.5 border-l border-gray-100 dark:border-neutral-800 ${d === hoje ? 'bg-yellow-50 dark:bg-yellow-900/10' : ''}`}>
-                  <p className="text-center text-[11px] text-gray-400 uppercase">{DIAS[i]} <span className={`font-bold text-sm ${d === hoje ? 'text-yellow-700' : 'text-gray-700 dark:text-neutral-200'}`}>{Number(d.slice(8))}</span></p>
+                <div key={d} className={`flex-1 min-w-0 px-1 py-1.5 border-l border-line  ${d === hoje ? 'bg-warning/10 dark:bg-yellow-900/10' : ''}`}>
+                  <p className="text-center text-[11px] text-ink-muted uppercase">{DIAS[i]} <span className={`font-bold text-sm ${d === hoje ? 'text-warning' : 'text-ink '}`}>{Number(d.slice(8))}</span></p>
                   {diaInteiro[d].map(ev => (
                     <button key={ev.key} onClick={() => abrir(ev.tarefa ? { tarefa: ev.tarefa } : { inicial: { tarefa: ev.titulo, inicio: ev.ev.inicio, fim: ev.ev.inicio, gcal_event_id: ev.ev.id } })}
-                      className={`block w-full text-left truncate text-[10px] px-1.5 py-0.5 mt-0.5 rounded border-l-2 ${ev.tarefa ? corResponsavel(ev.tarefa.funcionario) : 'bg-white border-blue-400 text-blue-700 border border-dashed'} ${ev.tarefa && concluida(ev.tarefa) ? 'opacity-50 line-through' : ''}`}>
+                      className={`block w-full text-left truncate text-[10px] px-1.5 py-0.5 mt-0.5 rounded border-l-2 ${ev.tarefa ? corResponsavel(ev.tarefa.funcionario) : 'bg-surface-raised border-blue-400 text-ink border border-dashed'} ${ev.tarefa && concluida(ev.tarefa) ? 'opacity-50 line-through' : ''}`}>
                       {ev.titulo}
                     </button>
                   ))}
@@ -461,13 +461,13 @@ function CalendarioTab({ tarefas, guardar, accao, abrir, sincronizar }) {
             <div className="flex">
               <div className="w-12 shrink-0 relative" style={{ height: ALTURA }}>
                 {Array.from({ length: HORA_FIM - HORA_INI }, (_, i) => (
-                  <span key={i} className="absolute right-1.5 text-[10px] text-gray-400 -translate-y-1.5" style={{ top: i * 60 * PX_MIN }}>{p2(HORA_INI + i)}:00</span>
+                  <span key={i} className="absolute right-1.5 text-[10px] text-ink-muted -translate-y-1.5" style={{ top: i * 60 * PX_MIN }}>{p2(HORA_INI + i)}:00</span>
                 ))}
               </div>
               <div ref={grelha} className="flex flex-1 relative select-none" style={{ height: ALTURA }}>
                 {dias.map((d, ci) => (
                   <div key={d} onMouseDown={e => iniciar(e, 'criar')} onDragOver={e => e.preventDefault()} onDrop={e => largarSemHora(e, d)}
-                    className={`flex-1 min-w-0 relative border-l border-gray-100 dark:border-neutral-800 cursor-crosshair ${d === hoje ? 'bg-yellow-50/40 dark:bg-yellow-900/5' : ''}`}
+                    className={`flex-1 min-w-0 relative border-l border-line  cursor-crosshair ${d === hoje ? 'bg-warning/10 dark:bg-yellow-900/5' : ''}`}
                     style={{ backgroundImage: 'linear-gradient(to bottom, rgba(0,0,0,0.06) 1px, transparent 1px)', backgroundSize: `100% ${60 * PX_MIN}px` }}>
                     {comHora[d].map(ev => {
                       const aMover = drag?.moveu && drag.item?.key === ev.key
@@ -475,16 +475,16 @@ function CalendarioTab({ tarefas, guardar, accao, abrir, sincronizar }) {
                         <button key={ev.key} onMouseDown={e => e.stopPropagation()} style={estilo(ev)}
                           onClick={() => abrir({ inicial: { tarefa: ev.titulo, inicio: ev.ev.inicio.slice(0, 16), fim: (ev.ev.fim || '').slice(0, 16), gcal_event_id: ev.ev.id } })}
                           title="Evento do Google Calendar ainda não registado. Clica para atribuir quem fez."
-                          className="absolute overflow-hidden text-left rounded-md border border-dashed border-blue-400 bg-white/90 dark:bg-neutral-900 text-blue-700 px-1.5 py-0.5 text-[10px] leading-tight hover:bg-blue-50">
-                          <span className="font-mono">{hhmm(ev.ini)}</span> {ev.titulo}
+                          className="absolute overflow-hidden text-left rounded-md border border-dashed border-blue-400 bg-surface-raised/90  text-ink px-1.5 py-0.5 text-[10px] leading-tight hover:bg-surface-muted">
+                          <span className="num">{hhmm(ev.ini)}</span> {ev.titulo}
                         </button>
                       )
                       const t = ev.tarefa
                       return (
                         <div key={ev.key} onMouseDown={e => iniciar(e, 'mover', ev)} style={estilo(ev)}
                           className={`absolute overflow-hidden rounded-md border-l-4 px-1.5 py-0.5 text-[10px] leading-tight cursor-grab shadow-sm ${corResponsavel(t.funcionario)} ${concluida(t) ? 'opacity-50 line-through' : ''} ${aMover ? 'opacity-30' : ''}`}>
-                          <span className="font-mono">{hhmm(ev.ini)}</span> {ev.titulo}
-                          {!t.funcionario && <span className="block text-[9px] text-gray-500 no-underline">Por atribuir</span>}
+                          <span className="num">{hhmm(ev.ini)}</span> {ev.titulo}
+                          {!t.funcionario && <span className="block text-[9px] text-ink-muted no-underline">Por atribuir</span>}
                           <span onMouseDown={e => iniciar(e, 'esticar', ev)} className="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize" />
                         </div>
                       )
@@ -501,8 +501,8 @@ function CalendarioTab({ tarefas, guardar, accao, abrir, sincronizar }) {
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap gap-3 px-3 py-2 border-t border-gray-100 dark:border-neutral-800 text-[11px] text-gray-500">
-          {[['bg-amber-300', 'João'], ['bg-indigo-300', 'Alexandre'], ['bg-emerald-300', 'Ambos'], ['bg-gray-300', 'Por atribuir']].map(([c, l]) => (
+        <div className="flex flex-wrap gap-3 px-3 py-2 border-t border-line  text-[11px] text-ink-muted">
+          {[['bg-amber-300', 'João'], ['bg-slate-400', 'Alexandre'], ['bg-emerald-300', 'Ambos'], ['bg-ink/20', 'Por atribuir']].map(([c, l]) => (
             <span key={l} className="flex items-center gap-1"><span className={`w-2.5 h-2.5 rounded-sm ${c}`} />{l}</span>
           ))}
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm border border-dashed border-blue-400" />Evento do Google por registar</span>
@@ -511,9 +511,9 @@ function CalendarioTab({ tarefas, guardar, accao, abrir, sincronizar }) {
       </div>
 
       {/* Sem hora marcada */}
-      <aside className="lg:w-72 shrink-0 bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-3 self-start w-full">
-        <h3 className="text-sm font-semibold text-gray-700 dark:text-neutral-200 flex items-center gap-1.5"><Inbox className="w-4 h-4 text-brand-gold" /> Sem hora marcada <span className="text-gray-400 font-normal">({semHora.length})</span></h3>
-        <p className="text-[11px] text-gray-400 mt-0.5 mb-2">Arrasta para um dia da grelha para agendar.</p>
+      <aside className="lg:w-72 shrink-0 bg-surface-raised  rounded-xl border border-line  p-3 self-start w-full">
+        <h3 className="text-sm font-semibold text-ink  flex items-center gap-1.5"><Inbox className="w-4 h-4 text-brand-gold" /> Sem hora marcada <span className="text-ink-muted font-normal">({semHora.length})</span></h3>
+        <p className="text-[11px] text-ink-muted mt-0.5 mb-2">Arrasta para um dia da grelha para agendar.</p>
         <div className="flex flex-col gap-1.5 max-h-[640px] overflow-y-auto">
           {semHora.map(t => (
             <div key={t.id} draggable onDragStart={e => { e.dataTransfer.setData('text/tarefa', t.id); e.dataTransfer.effectAllowed = 'move' }}
@@ -523,7 +523,7 @@ function CalendarioTab({ tarefas, guardar, accao, abrir, sincronizar }) {
               <p className="text-[10px] opacity-70 mt-0.5">{t.funcionario || 'Por atribuir'}{t.data_limite ? ` · até ${t.data_limite.slice(8, 10)}/${t.data_limite.slice(5, 7)}` : ''}{t.origem_tipo === 'whatsapp' ? ' · WhatsApp' : ''}</p>
             </div>
           ))}
-          {!semHora.length && <p className="text-xs text-gray-300 text-center py-6">Nada por agendar</p>}
+          {!semHora.length && <p className="text-xs text-ink-muted/70 text-center py-6">Nada por agendar</p>}
         </div>
       </aside>
     </div>
@@ -558,7 +558,7 @@ function TarefasTab({ tarefas, guardar, eliminar, accao, abrir }) {
     accao(async () => { for (const t of tarefas.filter(x => sel.has(x.id))) await eliminar(t); setSel(new Set()) })
   }
   const data = s => s ? new Date(s).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) + (temHora(s) ? ' ' + s.slice(11, 16) : '') : '—'
-  const chip = (activo, cor) => `px-3 py-1.5 text-xs font-medium rounded-lg border ${activo ? cor : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`
+  const chip = (activo, cor) => `px-3 py-1.5 text-xs font-medium rounded-lg border ${activo ? cor : 'border-line text-ink-muted hover:bg-surface'}`
   const colunas = filtro === 'semana' ? ['A fazer', 'Em andamento', 'Atrasada', 'Concluída'] : ['A fazer', 'Em andamento', 'Atrasada']
 
   return (
@@ -566,12 +566,12 @@ function TarefasTab({ tarefas, guardar, eliminar, accao, abrir }) {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex gap-2 flex-wrap">
           {[['semana', `Esta semana (${semana.length})`], ['pendentes', `Todas pendentes (${ativas.length})`], ['arquivo', `Arquivo (${arquivo.length})`]].map(([k, l]) => (
-            <button key={k} onClick={() => { setFiltro(k); setSel(new Set()) }} className={chip(filtro === k, 'border-yellow-300 bg-yellow-50 text-yellow-700')}>{l}</button>
+            <button key={k} onClick={() => { setFiltro(k); setSel(new Set()) }} className={chip(filtro === k, 'border-warning/30 bg-warning/10 text-warning')}>{l}</button>
           ))}
         </div>
         <div className="flex gap-2 flex-wrap">
           {['todos', ...FUNCIONARIOS].map(f => (
-            <button key={f} onClick={() => { setFunc(f); setSel(new Set()) }} className={chip(func === f, 'border-indigo-300 bg-indigo-50 text-indigo-700')}>{f === 'todos' ? 'Todos' : f.split(' ')[0]}</button>
+            <button key={f} onClick={() => { setFunc(f); setSel(new Set()) }} className={chip(func === f, 'border-ink/30 bg-surface-muted text-ink')}>{f === 'todos' ? 'Todos' : f.split(' ')[0]}</button>
           ))}
           <button onClick={() => setVista(v => v === 'list' ? 'board' : 'list')} className={chip(false)}>{vista === 'list' ? 'Quadro' : 'Lista'}</button>
         </div>
@@ -581,13 +581,13 @@ function TarefasTab({ tarefas, guardar, eliminar, accao, abrir }) {
           <button key={r} onClick={() => { setReg(r); setSel(new Set()) }} className={chip(reg === r, 'border-purple-300 bg-purple-50 text-purple-700')}>{r === 'todas' ? 'Todas as regiões' : r}</button>
         ))}
       </div>
-      <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-800">
-        <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-500">
-          <input type="checkbox" checked={sel.size > 0 && sel.size === lista.length} onChange={todas} className="rounded border-gray-300" />
+      <div className="flex items-center gap-3 px-4 py-2 bg-surface  rounded-lg border border-line ">
+        <label className="flex items-center gap-2 cursor-pointer text-xs text-ink-muted">
+          <input type="checkbox" checked={sel.size > 0 && sel.size === lista.length} onChange={todas} className="rounded border-line" />
           {sel.size > 0 ? `${sel.size} selecionada(s)` : 'Selecionar todas'}
         </label>
-        {sel.size > 0 && <button onClick={apagarVarias} className="px-3 py-1 text-xs font-semibold rounded-lg border border-red-300 text-red-600 bg-red-50 hover:bg-red-100">Apagar {sel.size} tarefa(s)</button>}
-        {sel.size > 0 && <button onClick={() => setSel(new Set())} className="px-3 py-1 text-xs rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100">Limpar seleção</button>}
+        {sel.size > 0 && <button onClick={apagarVarias} className="px-3 py-1 text-xs font-semibold rounded-lg border border-danger/30 text-danger bg-danger/10 hover:bg-danger/15">Apagar {sel.size} tarefa(s)</button>}
+        {sel.size > 0 && <button onClick={() => setSel(new Set())} className="px-3 py-1 text-xs rounded-lg border border-line text-ink-muted hover:bg-surface-muted">Limpar seleção</button>}
       </div>
 
       {vista === 'board' && filtro !== 'arquivo' ? (
@@ -598,48 +598,48 @@ function TarefasTab({ tarefas, guardar, eliminar, accao, abrir }) {
               <div key={status} className="flex flex-col">
                 <div className={`flex items-center justify-between px-3 py-2 rounded-t-xl ${STATUS_COLOR[status]}`}>
                   <span className="text-xs font-semibold uppercase">{status}</span>
-                  <span className="text-xs font-mono">{col.length} · {HRS(col.reduce((s, t) => s + (t.tempo_horas || 0), 0))}</span>
+                  <span className="text-xs num">{col.length} · {HRS(col.reduce((s, t) => s + (t.tempo_horas || 0), 0))}</span>
                 </div>
                 <div onDragOver={e => { e.preventDefault(); if (sobre !== status) setSobre(status) }}
                   onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setSobre(null) }}
                   onDrop={() => { const t = tarefas.find(x => x.id === arrastada); setArrastada(null); setSobre(null); if (t && t.status !== status) mudarEstado(t, status) }}
-                  className={`flex flex-col gap-1.5 p-2 bg-gray-50 dark:bg-neutral-900 rounded-b-xl min-h-[200px] border border-t-0 transition-colors ${sobre === status ? 'border-yellow-400 bg-yellow-50/60 ring-1 ring-yellow-200' : 'border-gray-200 dark:border-neutral-800'}`}>
+                  className={`flex flex-col gap-1.5 p-2 bg-surface  rounded-b-xl min-h-[200px] border border-t-0 transition-colors ${sobre === status ? 'border-yellow-400 bg-warning/10 ring-1 ring-yellow-200' : 'border-line '}`}>
                   {col.map(t => (
                     <div key={t.id} draggable onDragStart={e => { setArrastada(t.id); e.dataTransfer.effectAllowed = 'move' }} onDragEnd={() => { setArrastada(null); setSobre(null) }}
-                      className={`bg-white dark:bg-neutral-800 rounded-lg p-3 shadow-sm border cursor-grab active:cursor-grabbing ${arrastada === t.id ? 'opacity-40' : ''} ${sel.has(t.id) ? 'border-yellow-400 bg-yellow-50 ring-1 ring-yellow-200' : 'border-gray-100 dark:border-neutral-700 hover:border-gray-300'}`}>
+                      className={`bg-surface-raised  rounded-lg p-3 shadow-sm border cursor-grab active:cursor-grabbing ${arrastada === t.id ? 'opacity-40' : ''} ${sel.has(t.id) ? 'border-yellow-400 bg-warning/10 ring-1 ring-yellow-200' : 'border-line  hover:border-line'}`}>
                       <div className="flex items-start gap-2.5">
-                        <input type="checkbox" checked={sel.has(t.id)} onChange={() => alternar(t.id)} className="mt-0.5 w-4 h-4 rounded border-gray-300 shrink-0 cursor-pointer" />
+                        <input type="checkbox" checked={sel.has(t.id)} onChange={() => alternar(t.id)} className="mt-0.5 w-4 h-4 rounded border-line shrink-0 cursor-pointer" />
                         <div className="flex-1 min-w-0 cursor-pointer" onClick={() => abrir({ tarefa: t })}>
-                          <p className="text-sm text-gray-700 dark:text-neutral-100 font-medium leading-tight">{t.tarefa}</p>
-                          {t.categoria && <span className="text-[9px] px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded mt-1 inline-block">{t.categoria}</span>}
+                          <p className="text-sm text-ink  font-medium leading-tight">{t.tarefa}</p>
+                          {t.categoria && <span className="text-[9px] px-1.5 py-0.5 bg-surface-muted text-ink rounded mt-1 inline-block">{t.categoria}</span>}
                           {t.regiao && <span className="text-[9px] px-1.5 py-0.5 bg-purple-50 text-purple-700 rounded mt-1 ml-1 inline-block">{t.regiao}</span>}
-                          {t.origem_tipo === 'whatsapp' && <span className="text-[9px] px-1.5 py-0.5 bg-green-50 text-green-700 rounded mt-1 ml-1 inline-block">WhatsApp</span>}
+                          {t.origem_tipo === 'whatsapp' && <span className="text-[9px] px-1.5 py-0.5 bg-success/10 text-success rounded mt-1 ml-1 inline-block">WhatsApp</span>}
                           <div className="flex items-center justify-between mt-1.5">
-                            <span className="text-[10px] text-gray-400">{t.funcionario?.split(',')[0] || 'Por atribuir'}</span>
+                            <span className="text-[10px] text-ink-muted">{t.funcionario?.split(',')[0] || 'Por atribuir'}</span>
                             <div className="flex items-center gap-2">
-                              {t.inicio && <span className="text-[10px] font-mono text-gray-400">{data(t.inicio)}</span>}
-                              {t.tempo_horas > 0 && <span className="text-[10px] font-mono font-bold text-indigo-600">{HRS(t.tempo_horas)}</span>}
+                              {t.inicio && <span className="text-[10px] num text-ink-muted">{data(t.inicio)}</span>}
+                              {t.tempo_horas > 0 && <span className="text-[10px] num font-bold text-ink">{HRS(t.tempo_horas)}</span>}
                             </div>
                           </div>
                         </div>
-                        <button onClick={() => accao(() => eliminar(t))} className="text-gray-300 hover:text-red-500 hover:bg-red-50 rounded p-0.5 text-sm shrink-0" title="Apagar">x</button>
+                        <button onClick={() => accao(() => eliminar(t))} className="text-ink-muted/70 hover:text-danger hover:bg-danger/10 rounded p-0.5 text-sm shrink-0" title="Apagar">x</button>
                       </div>
                     </div>
                   ))}
-                  {!col.length && <p className="text-xs text-gray-300 text-center py-8">Sem tarefas</p>}
+                  {!col.length && <p className="text-xs text-ink-muted/70 text-center py-8">Sem tarefas</p>}
                 </div>
               </div>
             )
           })}
         </div>
       ) : (
-        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs overflow-hidden">
-          {filtro === 'arquivo' && <div className="px-4 py-3 bg-green-50 border-b border-green-100 text-xs text-green-700">Arquivo — tarefas concluídas de semanas anteriores.</div>}
+        <div className="bg-surface-raised  rounded-xl border border-line  shadow-xs overflow-hidden">
+          {filtro === 'arquivo' && <div className="px-4 py-3 bg-success/10 border-b border-success/30 text-xs text-success">Arquivo — tarefas concluídas de semanas anteriores.</div>}
           <ScrollableTable>
             <table className="min-w-[800px] w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase bg-gray-50 dark:bg-neutral-900">
-                  <th className="py-2.5 px-3 w-8"><input type="checkbox" onChange={todas} checked={sel.size > 0 && sel.size === lista.length} className="rounded border-gray-300" /></th>
+                <tr className="border-b border-line text-xs text-ink-muted uppercase bg-surface ">
+                  <th className="py-2.5 px-3 w-8"><input type="checkbox" onChange={todas} checked={sel.size > 0 && sel.size === lista.length} className="rounded border-line" /></th>
                   <th className="text-left py-2.5 px-3">Tarefa</th>
                   <th className="text-left py-2.5 px-3 w-32">Categoria</th>
                   <th className="text-left py-2.5 px-3 w-28">Estado</th>
@@ -652,30 +652,30 @@ function TarefasTab({ tarefas, guardar, eliminar, accao, abrir }) {
               </thead>
               <tbody>
                 {lista.slice(0, 200).map(t => (
-                  <tr key={t.id} className={`border-b border-gray-50 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800 ${sel.has(t.id) ? 'bg-yellow-50' : ''} ${concluida(t) ? 'opacity-60' : ''}`}>
-                    <td className="py-2 px-3"><input type="checkbox" checked={sel.has(t.id)} onChange={() => alternar(t.id)} className="rounded border-gray-300" /></td>
-                    <td className="py-2 px-3 text-gray-700 dark:text-neutral-100 font-medium">
+                  <tr key={t.id} className={`border-b border-line  hover:bg-surface  ${sel.has(t.id) ? 'bg-warning/10' : ''} ${concluida(t) ? 'opacity-60' : ''}`}>
+                    <td className="py-2 px-3"><input type="checkbox" checked={sel.has(t.id)} onChange={() => alternar(t.id)} className="rounded border-line" /></td>
+                    <td className="py-2 px-3 text-ink  font-medium">
                       <span className={`cursor-pointer hover:underline ${concluida(t) ? 'line-through' : ''}`} onClick={() => abrir({ tarefa: t })}>{t.tarefa}</span>
                       {t.gcal_event_id && <ExternalLink className="inline w-3 h-3 ml-1 text-blue-400" title="No Google Calendar" />}
                     </td>
-                    <td className="py-2 px-3 text-xs">{t.categoria ? <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded">{t.categoria}</span> : <span className="text-gray-300">—</span>}</td>
+                    <td className="py-2 px-3 text-xs">{t.categoria ? <span className="px-1.5 py-0.5 bg-surface-muted text-ink rounded">{t.categoria}</span> : <span className="text-ink-muted/70">—</span>}</td>
                     <td className="py-2 px-3">
-                      <select value={concluida(t) ? 'Concluída' : t.status} onChange={e => mudarEstado(t, e.target.value)} className={`px-2 py-0.5 rounded text-xs font-medium border-0 cursor-pointer ${STATUS_COLOR[concluida(t) ? 'Concluída' : t.status] || 'bg-gray-100'}`}>
+                      <select value={concluida(t) ? 'Concluída' : t.status} onChange={e => mudarEstado(t, e.target.value)} className={`px-2 py-0.5 rounded text-xs font-medium border-0 cursor-pointer ${STATUS_COLOR[concluida(t) ? 'Concluída' : t.status] || 'bg-surface-muted'}`}>
                         {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </td>
-                    <td className="py-2 px-3 text-xs text-gray-500">{t.funcionario || 'Por atribuir'}</td>
-                    <td className="py-2 px-3 text-xs font-mono text-gray-500">{data(t.inicio)}</td>
-                    <td className="py-2 px-3 text-xs font-mono text-gray-500">{data(t.fim)}</td>
-                    <td className="py-2 px-3 text-right font-mono text-xs font-bold text-indigo-600">{t.tempo_horas > 0 ? HRS(t.tempo_horas) : '—'}</td>
-                    <td className="py-2 px-3 text-right"><button onClick={() => accao(() => eliminar(t))} className="text-gray-300 hover:text-red-500 text-sm">x</button></td>
+                    <td className="py-2 px-3 text-xs text-ink-muted">{t.funcionario || 'Por atribuir'}</td>
+                    <td className="py-2 px-3 text-xs num text-ink-muted">{data(t.inicio)}</td>
+                    <td className="py-2 px-3 text-xs num text-ink-muted">{data(t.fim)}</td>
+                    <td className="py-2 px-3 text-right num text-xs font-bold text-ink">{t.tempo_horas > 0 ? HRS(t.tempo_horas) : '—'}</td>
+                    <td className="py-2 px-3 text-right"><button onClick={() => accao(() => eliminar(t))} className="text-ink-muted/70 hover:text-danger text-sm">x</button></td>
                   </tr>
                 ))}
-                {!lista.length && <tr><td colSpan={9} className="py-8 text-center text-gray-400 text-xs">Sem tarefas. Usa "Nova tarefa" ou cria no Google Calendar.</td></tr>}
+                {!lista.length && <tr><td colSpan={9} className="py-8 text-center text-ink-muted text-xs">Sem tarefas. Usa "Nova tarefa" ou cria no Google Calendar.</td></tr>}
               </tbody>
             </table>
           </ScrollableTable>
-          <div className="px-4 py-2 bg-gray-50 dark:bg-neutral-900 border-t border-gray-100 dark:border-neutral-800 flex justify-between text-xs text-gray-400">
+          <div className="px-4 py-2 bg-surface  border-t border-line  flex justify-between text-xs text-ink-muted">
             <span>{lista.length} tarefa(s)</span>
             <span>Total: {HRS(lista.reduce((s, t) => s + (t.tempo_horas || 0), 0))}</span>
           </div>

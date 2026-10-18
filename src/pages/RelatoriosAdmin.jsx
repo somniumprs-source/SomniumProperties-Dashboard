@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { SummaryStat } from '../components/ui/SummaryStat.jsx'
 import { FileDown, Sparkles, Trash2, Calendar, Loader2, Plus, RefreshCw, Zap, FileText, Presentation, Upload, Pencil, X, CalendarPlus, Eye } from 'lucide-react'
 import { apiFetch, openDocument } from '../lib/api.js'
 import { Tabs } from '../components/ui/Tabs.jsx'
@@ -204,25 +205,23 @@ function RelatoriosAdministrativos() {
   return (
     <>
       {/* Hero banner — identidade Somnium */}
-      <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 text-white shadow-lg bg-gradient-to-br from-brand-dark via-brand-dark-light to-brand-dark-700 mb-6">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-brand-gold to-transparent" />
+      <div className="rounded-xl border border-line bg-surface-raised p-5 sm:p-6 shadow-xs mb-6">
         <div className="relative flex items-center justify-between mb-5">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-brand-gold/15 border border-brand-gold/30 flex items-center justify-center">
-              <FileText className="w-4 h-4 text-brand-gold" />
+            <div className="w-8 h-8 rounded-lg bg-surface-muted flex items-center justify-center">
+              <FileText className="w-4 h-4 text-ink-muted" />
             </div>
             <div>
-              <h2 className="text-overline uppercase tracking-widest font-semibold text-brand-gold">Relatórios Administrativos</h2>
-              <p className="text-sm font-semibold text-white">Análises · Auditoria · Exports</p>
+              <h2 className="text-overline uppercase text-ink-muted">Relatórios Administrativos</h2>
+              <p className="text-ui font-semibold text-ink">Análises · Auditoria · Exports</p>
             </div>
           </div>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <HeroKpi label="Relatórios gerados" value={totalRelatorios} sub="total" />
-          <HeroKpi label="Recentes" value={recentes} sub="últimos 30 dias" accent />
-          <HeroKpi label="Reuniões cobertas" value={totalReunioes} sub="origem Fireflies" green />
-          <HeroKpi label="Status" value={syncing ? 'A sincronizar' : 'OK'} sub={syncStatus ? 'última sync OK' : 'pronto'} />
+          <SummaryStat label="Relatórios gerados" value={totalRelatorios} sub="total" />
+          <SummaryStat label="Recentes" value={recentes} sub="últimos 30 dias" />
+          <SummaryStat label="Reuniões cobertas" value={totalReunioes} sub="origem Fireflies" />
+          <SummaryStat label="Status" value={syncing ? 'A sincronizar' : 'OK'} sub={syncStatus ? 'última sync OK' : 'pronto'} />
         </div>
       </div>
 
@@ -231,11 +230,11 @@ function RelatoriosAdministrativos() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-start gap-3">
             <div className="p-2.5 rounded-lg" style={{ backgroundColor: 'rgba(201,168,76,0.15)' }}>
-              <FileText className="w-5 h-5" style={{ color: GOLD }} />
+              <FileText className="w-5 h-5 text-accent-ink" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-neutral-800 dark:text-neutral-100">Estudos Estratégicos</h2>
-              <p className="text-sm text-neutral-500 dark:text-neutral-400 max-w-xl">
+              <h2 className="text-base font-semibold text-ink ">Estudos Estratégicos</h2>
+              <p className="text-sm text-ink-muted  max-w-xl">
                 Relatórios de mercado e expansão para apresentar a investidores e equipa. Documentos confidenciais Somnium Properties.
               </p>
             </div>
@@ -246,8 +245,7 @@ function RelatoriosAdministrativos() {
                 type="button"
                 onClick={() => openDocument('/api/crm/relatorios/expansao-gaia').catch(() => {})}
                 title="Abrir numa nova aba"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap flex-1"
-                style={{ backgroundColor: GOLD, color: '#0d0d0d' }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-[background-color,border-color,color,box-shadow,opacity,transform] whitespace-nowrap flex-1 bg-accent text-accent-foreground hover:brightness-[1.04]"
               >
                 <Eye className="w-4 h-4" />
                 Relatório de Expansão — Vila Nova de Gaia
@@ -256,8 +254,7 @@ function RelatoriosAdministrativos() {
                 type="button"
                 onClick={() => openDocument('/api/crm/relatorios/expansao-gaia', { download: true }).catch(() => {})}
                 title="Descarregar o PDF"
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap"
-                style={{ backgroundColor: '#0d0d0d', color: GOLD }}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-[background-color,border-color,color,box-shadow,opacity,transform] whitespace-nowrap bg-ink text-surface hover:opacity-90"
               >
                 <FileDown className="w-4 h-4" />
                 PDF
@@ -267,8 +264,7 @@ function RelatoriosAdministrativos() {
               href="/relatorios/Relatorio_Precos_Mercado_AMP.pdf"
               target="_blank"
               rel="noopener"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap"
-              style={{ backgroundColor: GOLD, color: '#0d0d0d' }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-[background-color,border-color,color,box-shadow,opacity,transform] whitespace-nowrap bg-accent text-accent-foreground hover:brightness-[1.04]"
             >
               <FileDown className="w-4 h-4" />
               Guia de Zonas — Preços de Mercado (AMP)
@@ -282,19 +278,18 @@ function RelatoriosAdministrativos() {
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
           <div className="flex items-start gap-3">
             <div className="p-2.5 rounded-lg" style={{ backgroundColor: 'rgba(201,168,76,0.15)' }}>
-              <FileDown className="w-5 h-5" style={{ color: GOLD }} />
+              <FileDown className="w-5 h-5 text-accent-ink" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-neutral-800 dark:text-neutral-100">Documentos da reunião</h2>
-              <p className="text-sm text-neutral-500 dark:text-neutral-400 max-w-xl">
+              <h2 className="text-base font-semibold text-ink ">Documentos da reunião</h2>
+              <p className="text-sm text-ink-muted  max-w-xl">
                 Relatórios e apresentações por reunião (PDF, PowerPoint, Word, Excel). Documentos confidenciais Somnium Properties.
               </p>
             </div>
           </div>
           <button
             onClick={abrirNovaReuniao}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap shrink-0"
-            style={{ backgroundColor: GOLD, color: '#0d0d0d' }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-[background-color,border-color,color,box-shadow,opacity,transform] whitespace-nowrap shrink-0 bg-accent text-accent-foreground hover:brightness-[1.04]"
           >
             <CalendarPlus className="w-4 h-4" />
             Nova reunião
@@ -303,59 +298,58 @@ function RelatoriosAdministrativos() {
 
         {/* Form criar/editar reuniao */}
         {showReuniaoForm && (
-          <div className="mb-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-4">
+          <div className="mb-4 rounded-xl border border-line  bg-surface-raised  p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-sm text-neutral-800 dark:text-neutral-100">
+              <h3 className="font-semibold text-sm text-ink ">
                 {reuniaoForm.id ? 'Editar reunião' : 'Nova reunião'}
               </h3>
-              <button onClick={() => setShowReuniaoForm(false)} className="p-1 rounded-lg text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+              <button onClick={() => setShowReuniaoForm(false)} className="p-1 rounded-lg text-ink-muted hover:bg-surface-muted ">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="sm:col-span-2">
-                <label className="text-xs text-neutral-500 dark:text-neutral-400 block mb-1">Título *</label>
+                <label className="text-xs text-ink-muted  block mb-1">Título *</label>
                 <input
                   type="text"
                   value={reuniaoForm.titulo}
                   onChange={e => setReuniaoForm(f => ({ ...f, titulo: e.target.value }))}
                   placeholder="Reunião Semanal 07-06 22h"
-                  className="w-full border border-neutral-200 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-line    rounded-lg px-3 py-2 text-sm"
                 />
               </div>
               <div>
-                <label className="text-xs text-neutral-500 dark:text-neutral-400 block mb-1">Data</label>
+                <label className="text-xs text-ink-muted  block mb-1">Data</label>
                 <input
                   type="date"
                   value={reuniaoForm.data || ''}
                   onChange={e => setReuniaoForm(f => ({ ...f, data: e.target.value }))}
-                  className="w-full border border-neutral-200 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-line    rounded-lg px-3 py-2 text-sm"
                 />
               </div>
             </div>
             <div className="mt-3">
-              <label className="text-xs text-neutral-500 dark:text-neutral-400 block mb-1">Notas (opcional)</label>
+              <label className="text-xs text-ink-muted  block mb-1">Notas (opcional)</label>
               <input
                 type="text"
                 value={reuniaoForm.notas}
                 onChange={e => setReuniaoForm(f => ({ ...f, notas: e.target.value }))}
                 placeholder="Breve descrição da reunião"
-                className="w-full border border-neutral-200 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-line    rounded-lg px-3 py-2 text-sm"
               />
             </div>
             <div className="flex justify-end gap-2 mt-4">
               <button
                 onClick={() => setShowReuniaoForm(false)}
                 disabled={savingReuniao}
-                className="px-4 py-2 rounded-lg text-sm text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                className="px-4 py-2 rounded-lg text-sm text-ink-muted  hover:bg-surface-muted "
               >
                 Cancelar
               </button>
               <button
                 onClick={guardarReuniao}
                 disabled={savingReuniao || !reuniaoForm.titulo.trim()}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
-                style={{ backgroundColor: GOLD, color: '#0d0d0d' }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 bg-accent text-accent-foreground hover:brightness-[1.04]"
               >
                 {savingReuniao ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 {reuniaoForm.id ? 'Guardar' : 'Criar reunião'}
@@ -365,20 +359,20 @@ function RelatoriosAdministrativos() {
         )}
 
         {reunioes.length === 0 && !showReuniaoForm ? (
-          <div className="text-center py-10 rounded-xl border-2 border-dashed border-neutral-200 dark:border-neutral-800">
-            <Calendar className="w-9 h-9 mx-auto mb-2 text-neutral-300 dark:text-neutral-700" />
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">Sem reuniões ainda</p>
-            <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">Clique em "Nova reunião" para criar a primeira</p>
+          <div className="text-center py-10 rounded-xl border-2 border-dashed border-line ">
+            <Calendar className="w-9 h-9 mx-auto mb-2 text-ink-muted/70 " />
+            <p className="text-sm text-ink-muted ">Sem reuniões ainda</p>
+            <p className="text-xs text-ink-muted  mt-1">Clique em "Nova reunião" para criar a primeira</p>
           </div>
         ) : (
           <div className="space-y-4">
             {reunioes.map((g) => (
-              <div key={g.id} className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4">
+              <div key={g.id} className="rounded-xl border border-line  bg-surface-raised  p-4">
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div className="min-w-0">
-                    <h3 className="font-semibold text-neutral-800 dark:text-neutral-100 truncate">{g.titulo}</h3>
-                    <div className="flex items-center gap-2 mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
-                      <Calendar className="w-3.5 h-3.5" style={{ color: GOLD }} />
+                    <h3 className="font-semibold text-ink  truncate">{g.titulo}</h3>
+                    <div className="flex items-center gap-2 mt-0.5 text-xs text-ink-muted ">
+                      <Calendar className="w-3.5 h-3.5 text-accent-ink" />
                       <span>{g.data ? fmtDate(g.data) : (g.semana_iso || '—')}</span>
                       {g.notas ? <span className="truncate">· {g.notas}</span> : null}
                     </div>
@@ -386,10 +380,10 @@ function RelatoriosAdministrativos() {
                   <div className="flex items-center gap-1 shrink-0">
                     <label
                       title="Carregar documentos"
-                      className="p-2 rounded-lg text-neutral-400 hover:text-brand-gold hover:bg-brand-gold/10 transition-colors cursor-pointer"
+                      className="p-2 rounded-lg text-ink-muted hover:text-brand-gold hover:bg-brand-gold/10 transition-colors cursor-pointer"
                     >
                       {uploadingId === g.id
-                        ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: GOLD }} />
+                        ? <Loader2 className="w-4 h-4 animate-spin text-accent-ink" />
                         : <Upload className="w-4 h-4" />}
                       <input
                         type="file"
@@ -403,14 +397,14 @@ function RelatoriosAdministrativos() {
                     <button
                       onClick={() => editarReuniao(g)}
                       title="Editar reunião"
-                      className="p-2 rounded-lg text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                      className="p-2 rounded-lg text-ink-muted hover:text-ink  hover:bg-surface-muted  transition-colors"
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => apagarReuniao(g.id)}
                       title="Eliminar reunião"
-                      className="p-2 rounded-lg text-neutral-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                      className="p-2 rounded-lg text-ink-muted hover:text-danger hover:bg-danger/10 dark:hover:bg-red-950/30 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -418,7 +412,7 @@ function RelatoriosAdministrativos() {
                 </div>
 
                 {g.ficheiros.length === 0 ? (
-                  <p className="text-xs text-neutral-400 dark:text-neutral-500 italic py-2">
+                  <p className="text-xs text-ink-muted  italic py-2">
                     Sem documentos. Use o botão de upload para adicionar PDF/PowerPoint.
                   </p>
                 ) : (
@@ -426,7 +420,7 @@ function RelatoriosAdministrativos() {
                     {g.ficheiros.map((f) => (
                       <div
                         key={f.nome}
-                        className="group flex items-center gap-2 p-3 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/40 hover:border-brand-gold/50 transition-all"
+                        className="group flex items-center gap-2 p-3 rounded-xl border border-line  bg-surface  hover:border-brand-gold/50 transition-[background-color,border-color,color,box-shadow,opacity,transform]"
                       >
                         <button
                           onClick={() => f.url && window.open(f.url, '_blank', 'noopener')}
@@ -435,19 +429,19 @@ function RelatoriosAdministrativos() {
                         >
                           <div className="p-2 rounded-lg shrink-0" style={{ backgroundColor: 'rgba(201,168,76,0.12)' }}>
                             {f.ext === 'pptx' || f.ext === 'ppt'
-                              ? <Presentation className="w-4 h-4" style={{ color: GOLD }} />
-                              : <FileText className="w-4 h-4" style={{ color: GOLD }} />}
+                              ? <Presentation className="w-4 h-4 text-accent-ink" />
+                              : <FileText className="w-4 h-4 text-accent-ink" />}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100 truncate">{f.nome}</p>
-                            <p className="text-xs text-neutral-400">{f.ext.toUpperCase()}{f.tamanho ? ` · ${fmtSize(f.tamanho)}` : ''}</p>
+                            <p className="text-sm font-medium text-ink  truncate">{f.nome}</p>
+                            <p className="text-xs text-ink-muted">{f.ext.toUpperCase()}{f.tamanho ? ` · ${fmtSize(f.tamanho)}` : ''}</p>
                           </div>
-                          <FileDown className="w-4 h-4 text-neutral-300 group-hover:text-brand-gold transition-colors shrink-0" />
+                          <FileDown className="w-4 h-4 text-ink-muted/70 group-hover:text-brand-gold transition-colors shrink-0" />
                         </button>
                         <button
                           onClick={() => apagarFicheiro(g.id, f.nome)}
                           title="Eliminar documento"
-                          className="p-2 rounded-lg text-neutral-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors shrink-0"
+                          className="p-2 rounded-lg text-ink-muted/70 hover:text-danger hover:bg-danger/10 dark:hover:bg-red-950/30 transition-colors shrink-0"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -464,15 +458,15 @@ function RelatoriosAdministrativos() {
       {/* Action bar */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
           <div>
-            <h2 className="text-lg font-semibold text-neutral-800 dark:text-neutral-100">Relatórios Semanais</h2>
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">Gerados a partir de reuniões com título "Reunião Semanal"</p>
+            <h2 className="text-lg font-semibold text-ink ">Relatórios Semanais</h2>
+            <p className="text-sm text-ink-muted ">Gerados a partir de reuniões com título "Reunião Semanal"</p>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={sincronizarFireflies}
               disabled={syncing}
               title="Cria/atualiza relatórios de todas as semanas com reuniões 'Reunião Semanal'"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition-all disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition-[background-color,border-color,color,box-shadow,opacity,transform] disabled:opacity-50"
               style={{ borderColor: GOLD, color: GOLD }}
             >
               {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
@@ -480,8 +474,7 @@ function RelatoriosAdministrativos() {
             </button>
             <button
               onClick={() => setShowForm(s => !s)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all"
-              style={{ backgroundColor: GOLD, color: '#0d0d0d' }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-[background-color,border-color,color,box-shadow,opacity,transform] bg-accent text-accent-foreground hover:brightness-[1.04]"
             >
               <Plus className="w-4 h-4" />
               Gerar relatório
@@ -490,21 +483,21 @@ function RelatoriosAdministrativos() {
         </div>
 
         {syncStatus && (
-          <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-900 p-3 text-sm text-emerald-700 dark:text-emerald-300">
+          <div className="mb-4 rounded-xl border border-success/30 bg-success/10 dark:bg-emerald-900/20 dark:border-emerald-900 p-3 text-sm text-success dark:text-emerald-300">
             Sincronização concluída: {syncStatus}
           </div>
         )}
 
         {/* Form */}
         {showForm && (
-          <div className="mb-6 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-5">
+          <div className="mb-6 rounded-2xl border border-line  bg-surface-raised  p-5">
             <div className="flex items-start gap-3 mb-4">
               <div className="p-2 rounded-lg" style={{ backgroundColor: 'rgba(201,168,76,0.12)' }}>
-                <Sparkles className="w-5 h-5" style={{ color: GOLD }} />
+                <Sparkles className="w-5 h-5 text-accent-ink" />
               </div>
               <div>
-                <h3 className="font-semibold text-neutral-800 dark:text-neutral-100">Gerar Relatório Semanal</h3>
-                <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                <h3 className="font-semibold text-ink ">Gerar Relatório Semanal</h3>
+                <p className="text-xs text-ink-muted ">
                   Compila todas as reuniões com título "Reunião Semanal" da semana indicada e produz um relatório executivo via Claude Sonnet 4 (~€0,10).
                 </p>
               </div>
@@ -512,31 +505,31 @@ function RelatoriosAdministrativos() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="text-xs text-neutral-500 dark:text-neutral-400 block mb-1">Semana ISO</label>
+                <label className="text-xs text-ink-muted  block mb-1">Semana ISO</label>
                 <input
                   type="text"
                   value={form.semana_iso}
                   onChange={e => setForm(f => ({ ...f, semana_iso: e.target.value }))}
                   placeholder="2026-W18"
-                  className="w-full border border-neutral-200 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-line    rounded-lg px-3 py-2 text-sm"
                 />
               </div>
               <div>
-                <label className="text-xs text-neutral-500 dark:text-neutral-400 block mb-1">Data início (opcional)</label>
+                <label className="text-xs text-ink-muted  block mb-1">Data início (opcional)</label>
                 <input
                   type="date"
                   value={form.data_inicio || ''}
                   onChange={e => setForm(f => ({ ...f, data_inicio: e.target.value }))}
-                  className="w-full border border-neutral-200 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-line    rounded-lg px-3 py-2 text-sm"
                 />
               </div>
               <div>
-                <label className="text-xs text-neutral-500 dark:text-neutral-400 block mb-1">Data fim (opcional)</label>
+                <label className="text-xs text-ink-muted  block mb-1">Data fim (opcional)</label>
                 <input
                   type="date"
                   value={form.data_fim || ''}
                   onChange={e => setForm(f => ({ ...f, data_fim: e.target.value }))}
-                  className="w-full border border-neutral-200 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-line    rounded-lg px-3 py-2 text-sm"
                 />
               </div>
             </div>
@@ -549,7 +542,7 @@ function RelatoriosAdministrativos() {
                 onChange={e => setForm(f => ({ ...f, regenerar: e.target.checked }))}
                 className="rounded"
               />
-              <label htmlFor="regenerar" className="text-xs text-neutral-600 dark:text-neutral-400">
+              <label htmlFor="regenerar" className="text-xs text-ink-muted ">
                 Regenerar (sobrescreve relatório existente da mesma semana)
               </label>
             </div>
@@ -557,7 +550,7 @@ function RelatoriosAdministrativos() {
             <div className="flex justify-end gap-2 mt-5">
               <button
                 onClick={() => setShowForm(false)}
-                className="px-4 py-2 rounded-lg text-sm text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                className="px-4 py-2 rounded-lg text-sm text-ink-muted  hover:bg-surface-muted "
                 disabled={generating}
               >
                 Cancelar
@@ -565,8 +558,7 @@ function RelatoriosAdministrativos() {
               <button
                 onClick={gerar}
                 disabled={generating || !form.semana_iso}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
-                style={{ backgroundColor: GOLD, color: '#0d0d0d' }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 bg-accent text-accent-foreground hover:brightness-[1.04]"
               >
                 {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                 {generating ? 'A gerar via Claude...' : 'Gerar agora'}
@@ -577,22 +569,22 @@ function RelatoriosAdministrativos() {
 
         {/* Error */}
         {error && (
-          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-900 p-4 text-sm text-red-700 dark:text-red-300">
+          <div className="mb-6 rounded-xl border border-danger/30 bg-danger/10 dark:bg-red-900/20 dark:border-red-900 p-4 text-sm text-danger dark:text-red-300">
             {error}
           </div>
         )}
 
         {/* Lista */}
         {loading ? (
-          <div className="text-center py-16 text-neutral-400 dark:text-neutral-600">
+          <div className="text-center py-16 text-ink-muted ">
             <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
             A carregar...
           </div>
         ) : relatorios.length === 0 ? (
-          <div className="text-center py-16 rounded-2xl border-2 border-dashed border-neutral-200 dark:border-neutral-800">
-            <Calendar className="w-12 h-12 mx-auto mb-3 text-neutral-300 dark:text-neutral-700" />
-            <p className="text-neutral-500 dark:text-neutral-400 font-medium">Sem relatórios semanais gerados ainda</p>
-            <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">Clique em "Gerar relatório" para criar o primeiro a partir das reuniões da semana</p>
+          <div className="text-center py-16 rounded-2xl border-2 border-dashed border-line ">
+            <Calendar className="w-12 h-12 mx-auto mb-3 text-ink-muted/70 " />
+            <p className="text-ink-muted  font-medium">Sem relatórios semanais gerados ainda</p>
+            <p className="text-xs text-ink-muted  mt-1">Clique em "Gerar relatório" para criar o primeiro a partir das reuniões da semana</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -601,44 +593,44 @@ function RelatoriosAdministrativos() {
               return (
                 <div
                   key={r.id}
-                  className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-5 flex flex-col gap-3 hover:shadow-md transition-shadow"
+                  className="rounded-2xl border border-line  bg-surface-raised  p-5 flex flex-col gap-3 hover:shadow-md transition-shadow"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <div className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: GOLD }}>
+                      <div className="text-[10px] font-semibold uppercase tracking-widest text-accent-ink">
                         {r.semana_iso}
                       </div>
-                      <h3 className="font-semibold text-neutral-800 dark:text-neutral-100 mt-1 truncate">
+                      <h3 className="font-semibold text-ink  mt-1 truncate">
                         {r.titulo}
                       </h3>
-                      <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate">{r.subtitulo}</p>
+                      <p className="text-xs text-ink-muted  truncate">{r.subtitulo}</p>
                     </div>
                     <button
                       onClick={() => eliminar(r.id)}
                       title="Eliminar"
-                      className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      className="p-1.5 rounded-lg text-ink-muted hover:text-danger hover:bg-danger/10 dark:hover:bg-red-900/20 transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
-                  <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+                  <div className="flex items-center gap-2 text-xs text-ink-muted ">
                     <Calendar className="w-3.5 h-3.5" />
                     <span>{fmtRange(r.data_inicio, r.data_fim)}</span>
                   </div>
 
-                  <div className="flex items-center gap-3 text-xs text-neutral-400 dark:text-neutral-500">
+                  <div className="flex items-center gap-3 text-xs text-ink-muted ">
                     <span>{reuniaoIds.length} reunião(ões)</span>
                     <span>·</span>
                     <span>Criado {fmtDate(r.created_at)}</span>
                   </div>
 
-                  <div className="pt-2 border-t border-neutral-100 dark:border-neutral-800 flex items-center justify-between">
+                  <div className="pt-2 border-t border-line  flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => abrirPdf(r.id)}
                         title="Abrir o PDF numa nova aba"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-100 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-line text-ink-muted hover:bg-surface-muted transition-colors"
                       >
                         <Eye className="w-3.5 h-3.5" />
                         Ver
@@ -667,7 +659,7 @@ function RelatoriosAdministrativos() {
                         setGenerating(false)
                       }}
                       title="Regenerar via Claude"
-                      className="p-1.5 rounded-lg text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                      className="p-1.5 rounded-lg text-ink-muted hover:text-ink  hover:bg-surface-muted  transition-colors"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
                     </button>
@@ -681,15 +673,6 @@ function RelatoriosAdministrativos() {
   )
 }
 
-function HeroKpi({ label, value, sub, accent, green, red }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-overline uppercase tracking-widest text-gray-400 font-semibold">{label}</p>
-      <p className={`text-2xl font-mono font-bold mt-1 truncate ${accent ? 'text-brand-gold' : green ? 'text-green-400' : red ? 'text-red-400' : 'text-white'}`}>{value}</p>
-      {sub && <p className="text-caption text-gray-500 mt-0.5 truncate">{sub}</p>}
-    </div>
-  )
-}
 
 
 // ════════════════════════════════════════════════════════════════
@@ -748,28 +731,28 @@ function RelatoriosConversas() {
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+        <p className="text-sm text-ink-muted ">
           Gerados automaticamente todas as sextas-feiras às 04:00 a partir das conversas WhatsApp da comunidade
           (texto e áudios): resumo executivo, tarefas pendentes e um anexo por grupo com actividade. As tarefas
           entram em <span className="font-semibold">Agenda &rsaquo; Tarefas</span> com o estado "A fazer".
         </p>
-        <button onClick={load} className="p-2 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800" title="Actualizar">
+        <button onClick={load} className="p-2 rounded-lg border border-line  hover:bg-surface " title="Actualizar">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
       {loading ? (
-        <div className="flex items-center gap-2 text-sm text-neutral-500"><Loader2 className="w-4 h-4 animate-spin" /> A carregar…</div>
+        <div className="flex items-center gap-2 text-sm text-ink-muted"><Loader2 className="w-4 h-4 animate-spin" /> A carregar…</div>
       ) : !semanas.length ? (
-        <p className="text-sm text-neutral-500">Ainda não há relatórios de conversas.</p>
+        <p className="text-sm text-ink-muted">Ainda não há relatórios de conversas.</p>
       ) : semanas.map(s => {
         const principais = s.ficheiros.filter(f => /^0\d_/.test(f.nome))
         const grupos = s.ficheiros.filter(f => !/^0\d_/.test(f.nome))
         return (
-          <div key={s.semana} className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4">
+          <div key={s.semana} className="rounded-xl border border-line  bg-surface-raised  p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base font-semibold text-neutral-800 dark:text-neutral-100">Semana {semanaLabel(s.semana)}</h3>
-              <span className="text-xs text-neutral-500">{grupos.length} {grupos.length === 1 ? 'grupo' : 'grupos'}</span>
+              <h3 className="text-base font-semibold text-ink ">Semana {semanaLabel(s.semana)}</h3>
+              <span className="text-xs text-ink-muted">{grupos.length} {grupos.length === 1 ? 'grupo' : 'grupos'}</span>
             </div>
             <div className="grid sm:grid-cols-2 gap-2 mb-3">
               {principais.map(f => {
@@ -777,21 +760,21 @@ function RelatoriosConversas() {
                 const Icon = exec ? FileText : ListChecks
                 return (
                   <a key={f.nome} href={f.url || '#'} target="_blank" rel="noreferrer"
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-brand-gold/40 bg-brand-gold/10 text-sm font-semibold text-neutral-800 dark:text-neutral-100 hover:bg-brand-gold/20">
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-brand-gold/40 bg-brand-gold/10 text-sm font-semibold text-ink  hover:bg-brand-gold/20">
                     <Icon className="w-4 h-4 text-brand-gold" /> {exec ? 'Resumo executivo' : 'Tarefas pendentes'}
-                    <ExternalLink className="w-3.5 h-3.5 ml-auto text-neutral-400" />
+                    <ExternalLink className="w-3.5 h-3.5 ml-auto text-ink-muted" />
                   </a>
                 )
               })}
             </div>
-            {grupos.length > 0 && <p className="text-xs uppercase tracking-wide text-neutral-400 mb-1.5">Anexos por grupo</p>}
+            {grupos.length > 0 && <p className="text-xs uppercase tracking-wide text-ink-muted mb-1.5">Anexos por grupo</p>}
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {grupos.map(f => (
                 <a key={f.nome} href={f.url || '#'} target="_blank" rel="noreferrer"
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 text-sm text-neutral-700 dark:text-neutral-200 hover:border-brand-gold">
-                  <FileText className="w-4 h-4 text-neutral-400 shrink-0" />
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-line  text-sm text-ink  hover:border-brand-gold">
+                  <FileText className="w-4 h-4 text-ink-muted shrink-0" />
                   <span className="truncate">{nomeDocumento(f.nome)}</span>
-                  <span className="ml-auto text-xs text-neutral-400 shrink-0">{fmtSize(f.tamanho)}</span>
+                  <span className="ml-auto text-xs text-ink-muted shrink-0">{fmtSize(f.tamanho)}</span>
                 </a>
               ))}
             </div>

@@ -80,7 +80,7 @@ export function ResetPassword({ firstAccess = false }) {
           </h2>
 
           {status === 'validating' && (
-            <p className="text-gray-400 text-sm text-center">A validar o link...</p>
+            <p className="text-ink-muted text-sm text-center">A validar o link...</p>
           )}
 
           {status === 'invalid' && (
@@ -99,29 +99,28 @@ export function ResetPassword({ firstAccess = false }) {
                 </div>
               )}
               <div>
-                <label className="text-xs text-gray-400 block mb-1.5">{firstAccess ? 'Password' : 'Nova password'}</label>
+                <label className="text-xs text-ink-muted block mb-1.5">{firstAccess ? 'Password' : 'Nova password'}</label>
                 <input type="password" value={password} onChange={e => setPassword(e.target.value)}
                   className="w-full rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:ring-2"
                   style={{ backgroundColor: '#1a1a1a', borderColor: '#333' }}
                   placeholder="••••••••" autoFocus required />
               </div>
               <div>
-                <label className="text-xs text-gray-400 block mb-1.5">Confirmar password</label>
+                <label className="text-xs text-ink-muted block mb-1.5">Confirmar password</label>
                 <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
                   className="w-full rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:ring-2"
                   style={{ backgroundColor: '#1a1a1a', borderColor: '#333' }}
                   placeholder="••••••••" required />
               </div>
               <button type="submit" disabled={status === 'saving' || !password || !confirm}
-                className="w-full py-2.5 rounded-lg text-sm font-semibold text-black disabled:opacity-40 transition-opacity mt-2"
-                style={{ backgroundColor: GOLD }}>
+                className="w-full py-2.5 rounded-lg text-sm font-semibold text-ink disabled:opacity-40 transition-opacity mt-2 bg-accent text-accent-foreground hover:brightness-[1.04]">
                 {status === 'saving' ? 'A guardar...' : 'Guardar password'}
               </button>
             </form>
           )}
 
           {status === 'done' && (
-            <p className="text-gray-300 text-sm text-center">Password definida. A entrar...</p>
+            <p className="text-ink-muted/70 text-sm text-center">Password definida. A entrar...</p>
           )}
         </div>
 

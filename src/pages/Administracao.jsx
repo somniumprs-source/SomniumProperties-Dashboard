@@ -33,10 +33,10 @@ export function Administracao() {
   const direction = useTabDirection(active, TABS.map(t => t.key))
 
   return (
-    <div className="flex-1 flex flex-col bg-neutral-50 dark:bg-neutral-950 min-h-screen">
+    <div className="flex-1 flex flex-col bg-surface  min-h-screen">
       <Header title="Administração" subtitle={SUBTITLES[active]} />
 
-      <div className="bg-white dark:bg-neutral-900 px-4 sm:px-7 border-b border-neutral-200 dark:border-neutral-800">
+      <div className="bg-surface-raised  px-4 sm:px-7 border-b border-line ">
         <Tabs
           variant="underline"
           items={TABS}
