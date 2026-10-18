@@ -13,11 +13,11 @@ import { Filters } from '../components/crm/Filters.jsx'
 import { TabKPIs } from '../components/crm/TabKPIs.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { EmptyState } from '../components/ui/EmptyState.jsx'
+import { ErrorState } from '../components/ui/ErrorState.jsx'
 import { Building2, UserCheck, HardHat, ChevronLeft, ChevronRight, Phone, MessageCircle, Wallet, AlertTriangle, Clock as Clock3, Plus, RefreshCw, HandCoins, Radar, Handshake } from 'lucide-react'
 import { OportunidadesPanel } from '../components/crm/OportunidadesPanel.jsx'
 import { Tabs } from '../components/ui/Tabs.jsx'
 import { Button } from '../components/ui/Button.jsx'
-import { KpiCard } from '../components/ui/KpiCard.jsx'
 import { MultiSelect } from '../components/ui/MultiSelect.jsx'
 import { Combobox } from '../components/ui/Combobox.jsx'
 import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR, PARC_TIPOS, PARC_ESTADOS } from '../constants.js'
@@ -25,6 +25,7 @@ import { apiFetch, apiFetchJson, openDocument } from '../lib/api.js'
 import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
 import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
 import { RegiaoToggle } from '../components/RegiaoBadge.jsx'
+import { dotClass } from '../lib/statusTone.js'
 
 // Sub-tabs regionais partilham as mesmas chaves de sessionStorage que o
 // apiFetch consulta via getRegiaoActivaFromStorage — não trocar o prefixo
@@ -70,13 +71,18 @@ const tabKeyRegional = (t) => `crm-${(t || '').normalize('NFD').replace(/[̀-ͯ]
 
 function Badge({ text, colorMap }) {
   const clean = cleanLabel(text)
-  const cls = colorMap?.[clean] ?? colorMap?.[text] ?? 'bg-gray-100 text-gray-600'
-  return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{clean || '—'}</span>
+  const cls = colorMap?.[clean] ?? colorMap?.[text]
+  if (!clean) return <span className="text-caption text-ink-muted">—</span>
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface-muted text-caption font-medium text-ink whitespace-nowrap">
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(cls)}`} aria-hidden="true" />{clean}
+    </span>
+  )
 }
 
 function ClassBadge({ cls }) {
-  if (!cls) return <span className="text-xs text-gray-300">—</span>
-  return <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white ${CLASS_COLOR[cls] ?? 'bg-gray-400'}`}>{cls}</span>
+  if (!cls) return <span className="text-xs text-ink-muted/70">—</span>
+  return <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white ${CLASS_COLOR[cls] ?? 'bg-ink/40'}`}>{cls}</span>
 }
 
 // ── Cards de KPI para Investidores (após escolher Activos/Passivos) ─────
@@ -97,29 +103,20 @@ function InvestidoresKPICards({ data }) {
   }, { classA: 0, classB: 0, capAngariado: 0, capInvestido: 0 })
 
   const cards = [
-    { label: 'Investidores A',  value: stats.classA,          tone: 'emerald' },
-    { label: 'Investidores B',  value: stats.classB,          tone: 'sky' },
-    { label: 'Capital Angariado', value: EUR(stats.capAngariado), tone: 'amber',  hint: 'Qualificados + Parceria' },
-    { label: 'Capital Investido', value: EUR(stats.capInvestido), tone: 'indigo', hint: 'Investidores em Parceria' },
+    { label: 'Investidores A',    value: stats.classA },
+    { label: 'Investidores B',    value: stats.classB },
+    { label: 'Capital angariado', value: EUR(stats.capAngariado), hint: 'Qualificados + parceria' },
+    { label: 'Capital investido', value: EUR(stats.capInvestido), hint: 'Investidores em parceria' },
   ]
-  const tones = {
-    emerald: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', label: 'text-emerald-600' },
-    sky:     { bg: 'bg-sky-50',     border: 'border-sky-200',     text: 'text-sky-700',     label: 'text-sky-600' },
-    amber:   { bg: 'bg-amber-50',   border: 'border-amber-200',   text: 'text-amber-700',   label: 'text-amber-600' },
-    indigo:  { bg: 'bg-indigo-50',  border: 'border-indigo-200',  text: 'text-indigo-700',  label: 'text-indigo-600' },
-  }
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      {cards.map((c, i) => {
-        const t = tones[c.tone]
-        return (
-          <div key={i} className={`rounded-2xl border ${t.border} ${t.bg} px-4 py-3 shadow-xs`}>
-            <p className={`text-[11px] uppercase tracking-wider font-semibold ${t.label}`}>{c.label}</p>
-            <p className={`text-2xl sm:text-3xl font-bold mt-1 ${t.text}`}>{c.value}</p>
-            {c.hint && <p className="text-[10px] text-gray-400 mt-0.5">{c.hint}</p>}
-          </div>
-        )
-      })}
+      {cards.map((c, i) => (
+        <div key={i} className="rounded-xl border border-line bg-surface-raised px-4 py-3 shadow-xs">
+          <p className="text-overline uppercase text-ink-muted">{c.label}</p>
+          <p className="font-display text-2xl text-ink num mt-1">{c.value}</p>
+          {c.hint && <p className="text-caption text-ink-muted mt-0.5">{c.hint}</p>}
+        </div>
+      ))}
     </div>
   )
 }
@@ -149,10 +146,10 @@ function RelatorioConsultores() {
     setReclassifying(false)
   }
 
-  if (loading) return <div className="text-center py-12 text-gray-400">A gerar relatório...</div>
-  if (!report) return <div className="text-center py-12 text-gray-400">Erro ao carregar relatório</div>
+  if (loading) return <div className="text-center py-12 text-ink-muted">A gerar relatório...</div>
+  if (!report) return <div className="text-center py-12 text-ink-muted">Erro ao carregar relatório</div>
 
-  const classeColor = { A: 'bg-green-100 text-green-700 border-green-200', B: 'bg-blue-100 text-blue-700 border-blue-200', C: 'bg-yellow-100 text-yellow-700 border-yellow-200', D: 'bg-gray-100 text-gray-600 border-gray-200' }
+  const classeColor = { A: 'bg-success/15 text-success border-success/30', B: 'bg-surface-muted text-ink border-line', C: 'bg-warning/15 text-warning border-warning/30', D: 'bg-surface-muted text-ink-muted border-line' }
   const classeLabel = { A: 'Parceiro', B: 'Activo', C: 'Em desenvolvimento', D: 'Novo' }
 
   return (
@@ -160,28 +157,27 @@ function RelatorioConsultores() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold text-gray-800">Relatório Semanal de Consultores</h2>
-          <p className="text-xs text-gray-400">{report.semana} — Gerado: {new Date(report.gerado_em).toLocaleString('pt-PT')}</p>
+          <h2 className="text-lg font-bold text-ink">Relatório Semanal de Consultores</h2>
+          <p className="text-xs text-ink-muted">{report.semana} — Gerado: {new Date(report.gerado_em).toLocaleString('pt-PT')}</p>
         </div>
         <button onClick={handleReclassificar} disabled={reclassifying}
-          className="px-4 py-2 text-xs font-medium rounded-xl transition-colors text-white disabled:opacity-50"
-          style={{ backgroundColor: '#C9A84C' }}>
+          className="px-4 py-2 text-xs font-medium rounded-xl transition-colors bg-accent text-accent-foreground hover:brightness-[1.04] disabled:opacity-50">
           {reclassifying ? 'A reclassificar...' : 'Reclassificar Agora'}
         </button>
       </div>
 
       {/* Resultado da reclassificação */}
       {reclassResult && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-2">
-          <p className="text-sm font-semibold text-green-800">Reclassificação concluída</p>
-          <p className="text-xs text-green-700">
+        <div className="bg-success/10 border border-success/30 rounded-xl p-4 space-y-2">
+          <p className="text-sm font-semibold text-success">Reclassificação concluída</p>
+          <p className="text-xs text-success">
             {reclassResult.reclassificados ?? reclassResult.atualizados ?? 0} consultores atualizados
           </p>
           {reclassResult.mudancas?.length > 0 && (
             <div className="mt-2">
-              <p className="text-xs font-medium text-green-700 mb-1">Mudanças de classe:</p>
+              <p className="text-xs font-medium text-success mb-1">Mudanças de classe:</p>
               {reclassResult.mudancas.map((m, i) => (
-                <p key={i} className="text-xs text-green-600">{m.nome}: {m.de} → {m.para} (score {m.score})</p>
+                <p key={i} className="text-xs text-success">{m.nome}: {m.de} → {m.para} (score {m.score})</p>
               ))}
             </div>
           )}
@@ -190,35 +186,35 @@ function RelatorioConsultores() {
 
       {/* KPIs globais */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
-          <p className="text-2xl font-bold text-gray-800">{report.total_consultores}</p>
-          <p className="text-xs text-gray-500">Total Consultores</p>
+        <div className="bg-surface-raised rounded-xl p-3 text-center border border-line shadow-sm">
+          <p className="text-2xl font-bold text-ink">{report.total_consultores}</p>
+          <p className="text-xs text-ink-muted">Total Consultores</p>
         </div>
-        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
-          <p className="text-2xl font-bold" style={{ color: '#C9A84C' }}>{report.metricas_globais.media_score}</p>
-          <p className="text-xs text-gray-500">Score Médio</p>
+        <div className="bg-surface-raised rounded-xl p-3 text-center border border-line shadow-sm">
+          <p className="text-2xl font-bold text-accent-ink">{report.metricas_globais.media_score}</p>
+          <p className="text-xs text-ink-muted">Score Médio</p>
         </div>
-        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
-          <p className="text-2xl font-bold text-green-600">{report.metricas_globais.media_qualidade}%</p>
-          <p className="text-xs text-gray-500">Qualidade Média</p>
+        <div className="bg-surface-raised rounded-xl p-3 text-center border border-line shadow-sm">
+          <p className="text-2xl font-bold text-success">{report.metricas_globais.media_qualidade}%</p>
+          <p className="text-xs text-ink-muted">Qualidade Média</p>
         </div>
-        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
-          <p className="text-2xl font-bold text-indigo-600">{report.metricas_globais.consultores_com_imoveis}</p>
-          <p className="text-xs text-gray-500">Com Imóveis</p>
+        <div className="bg-surface-raised rounded-xl p-3 text-center border border-line shadow-sm">
+          <p className="text-2xl font-bold text-ink">{report.metricas_globais.consultores_com_imoveis}</p>
+          <p className="text-xs text-ink-muted">Com Imóveis</p>
         </div>
-        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
-          <p className="text-2xl font-bold text-red-600">{report.alertas.sem_contacto_48h}</p>
-          <p className="text-xs text-gray-500">Sem 1o Contacto</p>
+        <div className="bg-surface-raised rounded-xl p-3 text-center border border-line shadow-sm">
+          <p className="text-2xl font-bold text-danger">{report.alertas.sem_contacto_48h}</p>
+          <p className="text-xs text-ink-muted">Sem 1o Contacto</p>
         </div>
-        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
+        <div className="bg-surface-raised rounded-xl p-3 text-center border border-line shadow-sm">
           <p className="text-2xl font-bold text-orange-600">{report.alertas.inativos_60d}</p>
-          <p className="text-xs text-gray-500">Inativos 60d+</p>
+          <p className="text-xs text-ink-muted">Inativos 60d+</p>
         </div>
       </div>
 
       {/* Distribuição por classe */}
-      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs p-4">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Distribuição por Classe</h3>
+      <div className="bg-surface-raised  rounded-xl border border-line  shadow-xs p-4">
+        <h3 className="text-sm font-semibold text-ink mb-3">Distribuição por Classe</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {['A', 'B', 'C', 'D'].map(cl => (
             <div key={cl} className={`rounded-xl p-4 text-center border ${classeColor[cl]}`}>
@@ -233,7 +229,7 @@ function RelatorioConsultores() {
           {['A', 'B', 'C', 'D'].map(cl => {
             const count = report.distribuicao[cl] || 0
             const pct = report.total_consultores > 0 ? (count / report.total_consultores * 100) : 0
-            const colors = { A: 'bg-green-500', B: 'bg-blue-500', C: 'bg-yellow-500', D: 'bg-gray-300' }
+            const colors = { A: 'bg-success', B: 'bg-blue-500', C: 'bg-warning', D: 'bg-ink/20' }
             return pct > 0 ? <div key={cl} className={colors[cl]} style={{ width: `${pct}%` }} title={`${cl}: ${count}`} /> : null
           })}
         </div>
@@ -241,21 +237,21 @@ function RelatorioConsultores() {
 
       {/* Top 5 */}
       {report.top5?.length > 0 && (
-        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Top 5 Consultores</h3>
+        <div className="bg-surface-raised  rounded-xl border border-line  shadow-xs p-4">
+          <h3 className="text-sm font-semibold text-ink mb-3">Top 5 Consultores</h3>
           <div className="space-y-2">
             {report.top5.map((c, i) => (
-              <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
+              <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-surface">
                 <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
                   style={{ backgroundColor: i === 0 ? '#C9A84C' : i === 1 ? '#9CA3AF' : i === 2 ? '#B87333' : '#E5E7EB', color: i > 2 ? '#6B7280' : '#fff' }}>
                   {i + 1}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800">{c.nome}</p>
+                  <p className="text-sm font-medium text-ink">{c.nome}</p>
                 </div>
-                <span className="text-sm font-mono font-bold" style={{ color: '#C9A84C' }}>{c.score}</span>
+                <span className="text-sm num font-bold text-accent-ink">{c.score}</span>
                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${classeColor[c.classe]}`}>{c.classe}</span>
-                <span className="text-xs text-gray-400">{c.imoveis} im. · {c.qualidade}% qual.</span>
+                <span className="text-xs text-ink-muted">{c.imoveis} im. · {c.qualidade}% qual.</span>
               </div>
             ))}
           </div>
@@ -267,13 +263,13 @@ function RelatorioConsultores() {
         const grupo = report.consultores_detalhados.filter(c => c.classe === cl)
         if (grupo.length === 0) return null
         return (
-          <div key={cl} className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs overflow-hidden">
+          <div key={cl} className="bg-surface-raised  rounded-xl border border-line  shadow-xs overflow-hidden">
             <div className={`px-4 py-2 ${classeColor[cl]} flex items-center justify-between`}>
               <span className="text-xs font-semibold uppercase">Classe {cl} — {classeLabel[cl]} ({grupo.length})</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
-                <thead><tr className="border-b border-gray-100 text-gray-400">
+                <thead><tr className="border-b border-line text-ink-muted">
                   <th className="text-left py-2 px-3">Nome</th>
                   <th className="text-left py-2 px-3">Agência</th>
                   <th className="text-right py-2 px-3">Score</th>
@@ -285,15 +281,15 @@ function RelatorioConsultores() {
                 </tr></thead>
                 <tbody>
                   {grupo.map(c => (
-                    <tr key={c.nome} className="border-b border-gray-50 hover:bg-gray-50">
-                      <td className="py-2 px-3 font-medium text-gray-800">{c.nome}</td>
-                      <td className="py-2 px-3 text-gray-500">{c.agencia || '—'}</td>
-                      <td className="py-2 px-3 text-right font-mono font-semibold" style={{ color: '#C9A84C' }}>{c.score}</td>
-                      <td className="py-2 px-3 text-right font-mono">{c.taxaQualidade}%</td>
-                      <td className="py-2 px-3 text-right font-mono">{c.volume}</td>
-                      <td className="py-2 px-3 text-right font-mono">{c.tempoResposta != null ? `${c.tempoResposta}h` : '—'}</td>
+                    <tr key={c.nome} className="border-b border-line hover:bg-surface">
+                      <td className="py-2 px-3 font-medium text-ink">{c.nome}</td>
+                      <td className="py-2 px-3 text-ink-muted">{c.agencia || '—'}</td>
+                      <td className="py-2 px-3 text-right num font-semibold text-accent-ink">{c.score}</td>
+                      <td className="py-2 px-3 text-right num">{c.taxaQualidade}%</td>
+                      <td className="py-2 px-3 text-right num">{c.volume}</td>
+                      <td className="py-2 px-3 text-right num">{c.tempoResposta != null ? `${c.tempoResposta}h` : '—'}</td>
                       <td className="py-3 px-3"><Badge text={c.estatuto} colorMap={CONS_ESTATUTO_COLOR} /></td>
-                      <td className="py-2 px-3 text-gray-500">{c.contacto || '—'}</td>
+                      <td className="py-2 px-3 text-ink-muted">{c.contacto || '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -316,10 +312,10 @@ function RelatorioInvestidores() {
     apiFetch('/api/crm/relatorio/investidores').then(r => r.json()).then(setReport).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <div className="text-center py-12 text-gray-400">A gerar relatório...</div>
-  if (!report) return <div className="text-center py-12 text-gray-400">Erro ao carregar relatório</div>
+  if (loading) return <div className="text-center py-12 text-ink-muted">A gerar relatório...</div>
+  if (!report) return <div className="text-center py-12 text-ink-muted">Erro ao carregar relatório</div>
 
-  const classeColor = { A: 'bg-green-100 text-green-700 border-green-200', B: 'bg-blue-100 text-blue-700 border-blue-200', C: 'bg-yellow-100 text-yellow-700 border-yellow-200', D: 'bg-gray-100 text-gray-600 border-gray-200', 'Sem classificação': 'bg-gray-50 text-gray-500 border-gray-200' }
+  const classeColor = { A: 'bg-success/15 text-success border-success/30', B: 'bg-surface-muted text-ink border-line', C: 'bg-warning/15 text-warning border-warning/30', D: 'bg-surface-muted text-ink-muted border-line', 'Sem classificação': 'bg-surface text-ink-muted border-line' }
   const classeLabel = { A: 'Parceiro', B: 'Qualificado', C: 'Em qualificação', D: 'Potencial', 'Sem classificação': 'Por classificar' }
   const m = report.metricas_globais
 
@@ -327,41 +323,41 @@ function RelatorioInvestidores() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-lg font-bold text-gray-800">Relatório Semanal de Investidores</h2>
-        <p className="text-xs text-gray-400">{report.semana} — Gerado: {new Date(report.gerado_em).toLocaleString('pt-PT')}</p>
+        <h2 className="text-lg font-bold text-ink">Relatório Semanal de Investidores</h2>
+        <p className="text-xs text-ink-muted">{report.semana} — Gerado: {new Date(report.gerado_em).toLocaleString('pt-PT')}</p>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
-          <p className="text-2xl font-bold text-gray-800">{report.total_investidores}</p>
-          <p className="text-xs text-gray-500">Total</p>
+        <div className="bg-surface-raised rounded-xl p-3 text-center border border-line shadow-sm">
+          <p className="text-2xl font-bold text-ink">{report.total_investidores}</p>
+          <p className="text-xs text-ink-muted">Total</p>
         </div>
-        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
-          <p className="text-2xl font-bold" style={{ color: '#C9A84C' }}>{EUR(m.capital_total)}</p>
-          <p className="text-xs text-gray-500">Capital Pool</p>
+        <div className="bg-surface-raised rounded-xl p-3 text-center border border-line shadow-sm">
+          <p className="text-2xl font-bold text-accent-ink">{EUR(m.capital_total)}</p>
+          <p className="text-xs text-ink-muted">Capital Pool</p>
         </div>
-        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
-          <p className="text-2xl font-bold text-green-600">{m.taxa_conversao}%</p>
-          <p className="text-xs text-gray-500">Taxa Conversão</p>
+        <div className="bg-surface-raised rounded-xl p-3 text-center border border-line shadow-sm">
+          <p className="text-2xl font-bold text-success">{m.taxa_conversao}%</p>
+          <p className="text-xs text-ink-muted">Taxa Conversão</p>
         </div>
-        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
-          <p className="text-2xl font-bold text-indigo-600">{m.com_reuniao}</p>
-          <p className="text-xs text-gray-500">Com Reunião</p>
+        <div className="bg-surface-raised rounded-xl p-3 text-center border border-line shadow-sm">
+          <p className="text-2xl font-bold text-ink">{m.com_reuniao}</p>
+          <p className="text-xs text-ink-muted">Com Reunião</p>
         </div>
-        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
-          <p className="text-2xl font-bold text-red-600">{report.alertas.sem_contacto_30d}</p>
-          <p className="text-xs text-gray-500">Sem Contacto 30d</p>
+        <div className="bg-surface-raised rounded-xl p-3 text-center border border-line shadow-sm">
+          <p className="text-2xl font-bold text-danger">{report.alertas.sem_contacto_30d}</p>
+          <p className="text-xs text-ink-muted">Sem Contacto 30d</p>
         </div>
-        <div className="bg-white rounded-xl p-3 text-center border border-gray-200 shadow-sm">
+        <div className="bg-surface-raised rounded-xl p-3 text-center border border-line shadow-sm">
           <p className="text-2xl font-bold text-orange-600">{m.em_parceria}</p>
-          <p className="text-xs text-gray-500">Em Parceria</p>
+          <p className="text-xs text-ink-muted">Em Parceria</p>
         </div>
       </div>
 
       {/* Distribuição por classificação */}
-      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs p-4">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Distribuição por Classificação</h3>
+      <div className="bg-surface-raised  rounded-xl border border-line  shadow-xs p-4">
+        <h3 className="text-sm font-semibold text-ink mb-3">Distribuição por Classificação</h3>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {['A', 'B', 'C', 'D', 'Sem classificação'].map(cl => (
             <div key={cl} className={`rounded-xl p-4 text-center border ${classeColor[cl]}`}>
@@ -375,27 +371,27 @@ function RelatorioInvestidores() {
           {['A', 'B', 'C', 'D', 'Sem classificação'].map(cl => {
             const count = report.distribuicao[cl] || 0
             const pct = report.total_investidores > 0 ? (count / report.total_investidores * 100) : 0
-            const colors = { A: 'bg-green-500', B: 'bg-blue-500', C: 'bg-yellow-500', D: 'bg-gray-300', 'Sem classificação': 'bg-gray-200' }
+            const colors = { A: 'bg-success', B: 'bg-blue-500', C: 'bg-warning', D: 'bg-ink/20', 'Sem classificação': 'bg-line' }
             return pct > 0 ? <div key={cl} className={colors[cl]} style={{ width: `${pct}%` }} title={`${cl}: ${count}`} /> : null
           })}
         </div>
       </div>
 
       {/* Pipeline por status */}
-      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs p-4">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Pipeline por Status</h3>
+      <div className="bg-surface-raised  rounded-xl border border-line  shadow-xs p-4">
+        <h3 className="text-sm font-semibold text-ink mb-3">Pipeline por Status</h3>
         <div className="space-y-2">
           {Object.entries(report.por_status).filter(([,c]) => c > 0).map(([status, count]) => {
             const pct = report.total_investidores > 0 ? Math.round(count / report.total_investidores * 100) : 0
             return (
               <div key={status} className="flex items-center gap-3">
-                <span className="text-xs text-gray-600 w-40 shrink-0 truncate">{status}</span>
-                <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
-                  <div className="h-full rounded-full flex items-center px-2" style={{ width: `${Math.max(pct, 8)}%`, backgroundColor: '#C9A84C' }}>
+                <span className="text-xs text-ink-muted w-40 shrink-0 truncate">{status}</span>
+                <div className="flex-1 bg-surface-muted rounded-full h-5 overflow-hidden">
+                  <div className="h-full rounded-full flex items-center px-2 bg-accent" style={{ width: `${Math.max(pct, 8)}%` }}>
                     <span className="text-[10px] font-bold text-white">{count}</span>
                   </div>
                 </div>
-                <span className="text-xs text-gray-400 w-10 text-right">{pct}%</span>
+                <span className="text-xs text-ink-muted w-10 text-right">{pct}%</span>
               </div>
             )
           })}
@@ -404,20 +400,20 @@ function RelatorioInvestidores() {
 
       {/* Top 5 por capital */}
       {report.top5?.length > 0 && (
-        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Top 5 Investidores (por capital)</h3>
+        <div className="bg-surface-raised  rounded-xl border border-line  shadow-xs p-4">
+          <h3 className="text-sm font-semibold text-ink mb-3">Top 5 Investidores (por capital)</h3>
           <div className="space-y-2">
             {report.top5.map((inv, i) => (
-              <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
+              <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-surface">
                 <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
                   style={{ backgroundColor: i === 0 ? '#C9A84C' : i === 1 ? '#9CA3AF' : i === 2 ? '#B87333' : '#E5E7EB', color: i > 2 ? '#6B7280' : '#fff' }}>
                   {i + 1}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800">{inv.nome}</p>
-                  <p className="text-xs text-gray-400">{inv.status}</p>
+                  <p className="text-sm font-medium text-ink">{inv.nome}</p>
+                  <p className="text-xs text-ink-muted">{inv.status}</p>
                 </div>
-                <span className="text-sm font-mono font-bold" style={{ color: '#C9A84C' }}>{EUR(inv.capital)}</span>
+                <span className="text-sm num font-bold text-accent-ink">{EUR(inv.capital)}</span>
                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${classeColor[inv.classificacao] || classeColor['Sem classificação']}`}>{inv.classificacao || '—'}</span>
               </div>
             ))}
@@ -426,19 +422,19 @@ function RelatorioInvestidores() {
       )}
 
       {/* Alertas */}
-      <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs p-4">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Alertas</h3>
+      <div className="bg-surface-raised  rounded-xl border border-line  shadow-xs p-4">
+        <h3 className="text-sm font-semibold text-ink mb-3">Alertas</h3>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           {[
-            { label: 'Sem contacto 30d', value: report.alertas.sem_contacto_30d, color: 'text-red-600' },
+            { label: 'Sem contacto 30d', value: report.alertas.sem_contacto_30d, color: 'text-danger' },
             { label: 'Sem reunião', value: report.alertas.sem_reuniao, color: 'text-orange-600' },
-            { label: 'Sem capital', value: report.alertas.sem_capital, color: 'text-yellow-600' },
-            { label: 'Sem classificação', value: report.alertas.sem_classificacao, color: 'text-gray-600' },
-            { label: 'NDA pendente', value: report.alertas.nda_pendente, color: 'text-indigo-600' },
+            { label: 'Sem capital', value: report.alertas.sem_capital, color: 'text-warning' },
+            { label: 'Sem classificação', value: report.alertas.sem_classificacao, color: 'text-ink-muted' },
+            { label: 'NDA pendente', value: report.alertas.nda_pendente, color: 'text-ink' },
           ].map(a => (
-            <div key={a.label} className="text-center p-2 rounded-lg bg-gray-50">
+            <div key={a.label} className="text-center p-2 rounded-lg bg-surface">
               <p className={`text-xl font-bold ${a.color}`}>{a.value}</p>
-              <p className="text-[10px] text-gray-500">{a.label}</p>
+              <p className="text-[10px] text-ink-muted">{a.label}</p>
             </div>
           ))}
         </div>
@@ -489,34 +485,33 @@ function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center backdrop-blur-sm p-4" onClick={onCancel}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-bold text-gray-800 mb-1">
+      <div className="bg-surface-raised rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+        <h3 className="text-lg font-bold text-ink mb-1">
           {isFollowUp ? 'Mover para Follow UP' : 'Mover para Não Interessa'}
         </h3>
-        <p className="text-xs text-gray-500 mb-4">
+        <p className="text-xs text-ink-muted mb-4">
           {item?.nome ? `Imóvel: ${item.nome}` : 'Indica o motivo da transição.'}
         </p>
 
         {isFollowUp && (
           <div className="mb-4">
-            <label className="text-xs font-medium text-gray-600 block mb-1">Data do follow-up * (cria a tarefa na agenda)</label>
+            <label className="text-xs font-medium text-ink-muted block mb-1">Data do follow-up * (cria a tarefa na agenda)</label>
             <input type="date" value={data || ''} onChange={e => setData(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+              className="w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
           </div>
         )}
 
         {!isFollowUp && (
           <div className="mb-3">
-            <label className="text-xs font-medium text-gray-600 block mb-2">Motivos padrão</label>
+            <label className="text-xs font-medium text-ink-muted block mb-2">Motivos padrão</label>
             <div className="flex flex-wrap gap-1.5">
               {MOTIVOS_NAO_INTERESSA_PADRAO.map(m => {
                 const on = selectedPresets.has(m)
                 return (
                   <button key={m} type="button" onClick={() => togglePreset(m)}
                     className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
-                      on ? 'border-transparent text-white' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                    }`}
-                    style={on ? { backgroundColor: '#C9A84C' } : undefined}>
+                      on ? 'border-accent bg-accent text-accent-foreground' : 'bg-surface-raised border-line text-ink-muted hover:bg-surface'
+                    }`}>
                     {on && <span className="mr-1">✓</span>}{m}
                   </button>
                 )
@@ -526,23 +521,22 @@ function MoveReasonModal({ moveModal, item, onConfirm, onCancel }) {
         )}
 
         <div className="mb-5">
-          <label className="text-xs font-medium text-gray-600 block mb-1">
+          <label className="text-xs font-medium text-ink-muted block mb-1">
             {isFollowUp ? 'Motivo do Follow Up *' : 'Outras notas (opcional)'}
           </label>
           <textarea value={notas} onChange={e => setNotas(e.target.value)} rows={isFollowUp ? 4 : 2}
             placeholder={isFollowUp ? 'Ex: Aguardar resposta do proprietário…' : 'Ex: detalhe específico, contexto adicional…'}
             autoFocus={isFollowUp}
-            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+            className="w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
         </div>
 
         <div className="flex justify-end gap-2">
           <button onClick={onCancel} disabled={saving}
-            className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+            className="px-4 py-2 text-sm font-medium rounded-lg border border-line text-ink-muted hover:bg-surface disabled:opacity-50">
             Cancelar
           </button>
           <button onClick={confirm} disabled={saving || !motivoFinal || (isFollowUp && !data)}
-            className="px-4 py-2 text-sm font-medium rounded-lg text-white disabled:opacity-50"
-            style={{ backgroundColor: '#C9A84C' }}>
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-accent text-accent-foreground hover:brightness-[1.04] disabled:opacity-50">
             {saving ? 'A guardar…' : 'Confirmar'}
           </button>
         </div>
@@ -701,12 +695,12 @@ export function CRM() {
       renderCard: (item) => {
         return (
           <div>
-            <p className="text-[13px] font-semibold text-gray-800 truncate">{item.nome}</p>
-            <p className="text-[11px] text-gray-500 mt-0.5">{item.zona ?? '—'} · {item.tipologia ?? '—'}</p>
-            {item.ask_price > 0 && <p className="text-[11px] font-mono text-indigo-600 mt-0.5">{EUR(item.ask_price)}</p>}
-            {item.roi > 0 && <p className="text-[11px] text-green-600">ROI: {item.roi}%</p>}
+            <p className="text-[13px] font-semibold text-ink truncate">{item.nome}</p>
+            <p className="text-[11px] text-ink-muted mt-0.5">{item.zona ?? '—'} · {item.tipologia ?? '—'}</p>
+            {item.ask_price > 0 && <p className="text-[11px] num text-ink mt-0.5">{EUR(item.ask_price)}</p>}
+            {item.roi > 0 && <p className="text-[11px] text-success">ROI: {item.roi}%</p>}
             {item.nome_consultor && (
-              <p className="text-[11px] text-blue-500 mt-0.5 cursor-pointer hover:text-blue-700 hover:underline transition-colors"
+              <p className="text-[11px] text-ink-muted mt-0.5 cursor-pointer hover:text-ink hover:underline transition-colors"
                 onClick={(e) => { e.stopPropagation(); navigateToConsultor(item.nome_consultor) }}>
                 {item.nome_consultor}
               </p>
@@ -761,45 +755,45 @@ export function CRM() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1 mb-0.5">
                   <ClassBadge cls={item.classificacao} />
-                  <p className="text-[13px] font-semibold text-gray-800 truncate">{item.nome}</p>
+                  <p className="text-[13px] font-semibold text-ink truncate">{item.nome}</p>
                 </div>
-                <p className="text-[11px] text-gray-500 truncate" title={areaAtuacao.join(', ')}>{areaLabel || '—'}</p>
+                <p className="text-[11px] text-ink-muted truncate" title={areaAtuacao.join(', ')}>{areaLabel || '—'}</p>
               </div>
             </div>
 
             <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
               {capCompact && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-mono inline-flex items-center gap-1">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-surface-muted text-ink num inline-flex items-center gap-1">
                   <Wallet className="w-2.5 h-2.5" /> {capCompact}
                 </span>
               )}
               {atrasado && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-red-50 text-red-700 font-medium inline-flex items-center gap-1">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-danger/10 text-danger font-medium inline-flex items-center gap-1">
                   <AlertTriangle className="w-2.5 h-2.5" /> atrasado
                 </span>
               )}
               {!atrasado && diasParado != null && diasParado >= 14 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-yellow-50 text-yellow-700 font-medium inline-flex items-center gap-1">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-warning/10 text-warning font-medium inline-flex items-center gap-1">
                   <Clock3 className="w-2.5 h-2.5" /> {diasParado}d
                 </span>
               )}
               {!!item.nda_assinado && (
-                <span className="text-[9px] px-1 py-0.5 rounded bg-green-50 text-green-700 font-semibold">NDA</span>
+                <span className="text-[9px] px-1 py-0.5 rounded bg-success/10 text-success font-semibold">NDA</span>
               )}
-              {item.duplicado_de && <span className="text-[9px] text-gray-300">duplo</span>}
+              {item.duplicado_de && <span className="text-[9px] text-ink-muted/70">duplo</span>}
             </div>
 
             {/* Hover: acções rápidas */}
             <div className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition flex gap-1">
               {phoneIntl && (
                 <a href={`tel:${phoneIntl}`} onClick={e => e.stopPropagation()}
-                  className="w-6 h-6 rounded-md bg-white border border-gray-200 shadow-sm hover:bg-gray-50 inline-flex items-center justify-center text-gray-600" title="Ligar">
+                  className="w-6 h-6 rounded-md bg-surface-raised border border-line shadow-sm hover:bg-surface inline-flex items-center justify-center text-ink-muted" title="Ligar">
                   <Phone className="w-3 h-3" />
                 </a>
               )}
               {phoneIntl && (
                 <a href={`https://wa.me/${phoneIntl.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
-                  className="w-6 h-6 rounded-md bg-green-50 border border-green-200 shadow-sm hover:bg-green-100 inline-flex items-center justify-center text-green-700" title="WhatsApp">
+                  className="w-6 h-6 rounded-md bg-success/10 border border-success/30 shadow-sm hover:bg-success/15 inline-flex items-center justify-center text-success" title="WhatsApp">
                   <MessageCircle className="w-3 h-3" />
                 </a>
               )}
@@ -813,20 +807,20 @@ export function CRM() {
       groupField: 'estatuto',
       renderCard: (item) => {
         const imobs = (() => { try { return JSON.parse(item.imobiliaria || '[]').join(', ') } catch { return '' } })()
-        const alertDot = item._alertStatus === 'red' ? 'bg-red-500' : item._alertStatus === 'orange' ? 'bg-orange-500' : item._alertStatus === 'green' ? 'bg-green-500' : null
+        const alertDot = item._alertStatus === 'red' ? 'bg-danger' : item._alertStatus === 'orange' ? 'bg-orange-500' : item._alertStatus === 'green' ? 'bg-success' : null
         return (
           <div>
             <div className="flex items-center gap-2">
               {alertDot && <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${alertDot}`} />}
               <ClassBadge cls={item.classificacao} />
-              <p className="text-[13px] font-semibold text-gray-800 truncate flex-1">{item.nome}</p>
+              <p className="text-[13px] font-semibold text-ink truncate flex-1">{item.nome}</p>
             </div>
-            {imobs && <p className="text-[11px] text-gray-500 mt-0.5">{imobs}</p>}
-            {item.contacto && <p className="text-[11px] text-gray-400 mt-0.5">{item.contacto}</p>}
+            {imobs && <p className="text-[11px] text-ink-muted mt-0.5">{imobs}</p>}
+            {item.contacto && <p className="text-[11px] text-ink-muted mt-0.5">{item.contacto}</p>}
             {(item._leadsReferencia ?? item.imoveis_enviados) > 0 && (
-              <p className="text-[11px] text-indigo-600 mt-0.5">{item._leadsReferencia ?? item.imoveis_enviados} leads por referência</p>
+              <p className="text-[11px] text-ink mt-0.5">{item._leadsReferencia ?? item.imoveis_enviados} leads por referência</p>
             )}
-            {item.score_prioridade > 0 && <p className="text-[11px] text-amber-600 mt-0.5">Score: {item.score_prioridade}</p>}
+            {item.score_prioridade > 0 && <p className="text-[11px] text-warning mt-0.5">Score: {item.score_prioridade}</p>}
           </div>
         )
       },
@@ -836,9 +830,9 @@ export function CRM() {
       groupField: 'estado',
       renderCard: (item) => (
         <div>
-          <p className="text-[13px] font-semibold text-gray-800 truncate">{item.nome}</p>
-          {item.tipo && <p className="text-[11px] text-gray-500 mt-0.5">{item.tipo}{item.empresa ? ` · ${item.empresa}` : ''}</p>}
-          {item.data_proximo_contacto && <p className="text-[11px] text-indigo-600 mt-0.5">Próximo contacto: {fmtDate(item.data_proximo_contacto)}</p>}
+          <p className="text-[13px] font-semibold text-ink truncate">{item.nome}</p>
+          {item.tipo && <p className="text-[11px] text-ink-muted mt-0.5">{item.tipo}{item.empresa ? ` · ${item.empresa}` : ''}</p>}
+          {item.data_proximo_contacto && <p className="text-[11px] text-ink mt-0.5">Próximo contacto: {fmtDate(item.data_proximo_contacto)}</p>}
         </div>
       ),
     },
@@ -847,10 +841,10 @@ export function CRM() {
       groupField: 'estado',
       renderCard: (item) => (
         <div>
-          <p className="text-[13px] font-semibold text-gray-800 truncate">{item.nome}</p>
-          {item.empresa && <p className="text-[11px] text-gray-500 mt-0.5">{item.empresa}</p>}
-          {item.score > 0 && <p className="text-[11px] font-mono text-indigo-600 mt-0.5">Score: {item.score}</p>}
-          {item.custo_medio_m2 > 0 && <p className="text-[11px] text-gray-400 mt-0.5">{EUR(item.custo_medio_m2)}/m²</p>}
+          <p className="text-[13px] font-semibold text-ink truncate">{item.nome}</p>
+          {item.empresa && <p className="text-[11px] text-ink-muted mt-0.5">{item.empresa}</p>}
+          {item.score > 0 && <p className="text-[11px] num text-ink mt-0.5">Score: {item.score}</p>}
+          {item.custo_medio_m2 > 0 && <p className="text-[11px] text-ink-muted mt-0.5">{EUR(item.custo_medio_m2)}/m²</p>}
         </div>
       ),
     },
@@ -1081,38 +1075,28 @@ export function CRM() {
           : null} />
       <div className="p-4 sm:p-6 flex flex-col gap-3 sm:gap-4">
 
-        {/* Pipelines — 5 cards centrados que actuam como tabs */}
-        <div className="flex justify-center">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 w-full max-w-6xl">
-            {[
-              { key: 'Imóveis',       icon: Building2, tone: 'indigo', statsKey: 'imoveis' },
-              { key: 'Investidores',  icon: HandCoins, tone: 'gold',   statsKey: 'investidores' },
-              { key: 'Consultores',   icon: UserCheck, tone: 'green',  statsKey: 'consultores' },
-              { key: 'Construtores',  icon: HardHat,   tone: 'amber',  statsKey: null },
-              { key: 'Parceiros',     icon: Handshake, tone: 'green',  statsKey: null },
-              { key: 'Oportunidades', icon: Radar,     tone: 'blue',   statsKey: null },
-            ].map(t => (
-              <KpiCard
-                key={t.key}
-                icon={t.icon}
-                label={t.key}
-                value={t.statsKey ? (stats?.[t.statsKey]?.total ?? '—') : '—'}
-                tone={t.tone}
-                size="md"
-                active={tab === t.key}
-                onClick={() => {
-                  setTab(t.key)
-                  setSearch('')
-                  setDetail(null, { replace: true })
-                  setEditing(null)
-                  if (t.key !== tab) setFilters({})
-                  const relatorioOnlyCertasTabs = view === 'relatorio' && t.key !== 'Consultores' && t.key !== 'Investidores'
-                  if (relatorioOnlyCertasTabs) setView('kanban')
-                }}
-              />
-            ))}
-          </div>
-        </div>
+        {/* Entidades do CRM: separadores com contagem */}
+        <Tabs
+          variant="underline"
+          value={tab}
+          items={[
+            { key: 'Imóveis',       icon: Building2, statsKey: 'imoveis' },
+            { key: 'Investidores',  icon: HandCoins, statsKey: 'investidores' },
+            { key: 'Consultores',   icon: UserCheck, statsKey: 'consultores' },
+            { key: 'Construtores',  icon: HardHat,   statsKey: null },
+            { key: 'Parceiros',     icon: Handshake, statsKey: null },
+            { key: 'Oportunidades', icon: Radar,     statsKey: null },
+          ].map(t => ({ key: t.key, label: t.key, icon: t.icon, count: t.statsKey ? stats?.[t.statsKey]?.total : undefined }))}
+          onChange={key => {
+            setTab(key)
+            setSearch('')
+            setDetail(null, { replace: true })
+            setEditing(null)
+            if (key !== tab) setFilters({})
+            const relatorioOnlyCertasTabs = view === 'relatorio' && key !== 'Consultores' && key !== 'Investidores'
+            if (relatorioOnlyCertasTabs) setView('kanban')
+          }}
+        />
 
         {/* KPIs integrados */}
         {tab !== 'Oportunidades' && <TabKPIs tab={tab} regiao={regiaoActiva} />}
@@ -1120,25 +1104,11 @@ export function CRM() {
         {/* Sub-tabs Investidores: Passivo / Ativo — destaque visual + barra de fases */}
         {tab === 'Investidores' && (
           <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              {[
-                { key: 'Passivo', label: 'Passivos', gradient: 'from-yellow-400 to-amber-500', hoverRing: 'hover:border-yellow-300', activeRing: 'ring-yellow-200' },
-                { key: 'Ativo',   label: 'Ativos',   gradient: 'from-green-500 to-emerald-600', hoverRing: 'hover:border-green-300', activeRing: 'ring-green-200' },
-              ].map(t => {
-                const active = invSubTab === t.key
-                return (
-                  <button key={t.key} type="button"
-                    onClick={() => { setInvSubTab(t.key); setDetail(null, { replace: true }) }}
-                    className={`px-7 py-3 rounded-2xl border-2 font-bold text-base uppercase tracking-wider transition-all ${
-                      active
-                        ? `bg-gradient-to-r ${t.gradient} text-white border-transparent shadow-lg ring-4 ${t.activeRing}`
-                        : `bg-white text-gray-500 border-gray-200 ${t.hoverRing} hover:text-gray-700`
-                    }`}>
-                    {t.label}
-                  </button>
-                )
-              })}
-            </div>
+            <Tabs
+              value={invSubTab}
+              onChange={key => { setInvSubTab(key); setDetail(null, { replace: true }) }}
+              items={[{ key: 'Passivo', label: 'Passivos' }, { key: 'Ativo', label: 'Ativos' }]}
+            />
 
             {/* KPIs do sub-tab seleccionado — A, B, Capital Angariado, Capital Investido */}
             <InvestidoresKPICards data={data} />
@@ -1156,29 +1126,29 @@ export function CRM() {
             <input
               type="text" placeholder={`Pesquisar ${tab.toLowerCase()}... (/ para focar)`}
               value={searchInput} onChange={e => handleSearch(e.target.value)}
-              className="w-full sm:flex-1 px-4 py-3 sm:py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              className="w-full sm:flex-1 h-10 sm:h-9 px-3.5 rounded-lg border border-line bg-surface-raised text-ui text-ink placeholder:text-ink-muted/70 hover:border-ink/30 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 transition-colors duration-fast"
             />
             <div className="flex gap-2 items-center">
               {hasKanban && (
-                <div className="flex bg-gray-100 rounded-lg p-0.5">
+                <div className="flex bg-surface-muted rounded-lg p-0.5">
                   <button onClick={() => setView('table')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'table' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'table' ? 'bg-surface-raised text-ink shadow-sm' : 'text-ink-muted'}`}>
                     Tabela
                   </button>
                   <button onClick={() => setView('kanban')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'kanban' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'kanban' ? 'bg-surface-raised text-ink shadow-sm' : 'text-ink-muted'}`}>
                     Kanban
                   </button>
                   {(tab === 'Consultores' || tab === 'Investidores') && (
                     <button onClick={() => setView('relatorio')}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'relatorio' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}>
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${view === 'relatorio' ? 'bg-surface-raised text-ink shadow-sm' : 'text-ink-muted'}`}>
                       Relatório
                     </button>
                   )}
                 </div>
               )}
               <Button onClick={() => setEditing({})} icon={Plus}>Novo</Button>
-              <button type="button" onClick={() => openDocument('/api/crm/backup', { download: true, filename: 'backup.json' }).catch(() => {})} className="hidden sm:block px-3 py-2 bg-gray-100 text-gray-600 text-xs font-medium rounded-xl hover:bg-gray-200 transition-colors">
+              <button type="button" onClick={() => openDocument('/api/crm/backup', { download: true, filename: 'backup.json' }).catch(() => {})} className="hidden sm:block px-3 py-2 bg-surface-muted text-ink-muted text-xs font-medium rounded-xl hover:bg-line transition-colors">
                 Backup
               </button>
             </div>
@@ -1203,7 +1173,7 @@ export function CRM() {
           {tab === 'Investidores' && detail ? (
             <div className="flex gap-4" style={{ minHeight: '70vh' }}>
               {/* Lista compacta à esquerda */}
-              <div className="w-72 shrink-0 bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs overflow-hidden flex flex-col">
+              <div className="w-72 shrink-0 bg-surface-raised  rounded-xl border border-line  shadow-xs overflow-hidden flex flex-col">
                 <div className="flex-1 overflow-y-auto">
                   {[...data].sort((a, b) => {
                     // Estados desconhecidos vão para o fim (não para o topo).
@@ -1217,31 +1187,31 @@ export function CRM() {
                     return (
                       <div key={inv.id}>
                         {statusChanged && (
-                          <div className="px-3 py-1 bg-gray-50 border-b border-gray-100">
-                            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{inv.status}</span>
+                          <div className="px-3 py-1 bg-surface border-b border-line">
+                            <span className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider">{inv.status}</span>
                           </div>
                         )}
                         <button onClick={() => setDetail(inv.id)}
-                          className={`w-full text-left px-3 py-2.5 border-b border-gray-50 transition-all ${
+                          className={`w-full text-left px-3 py-2.5 border-b border-line transition-[background-color,border-color,color,box-shadow,opacity,transform] ${
                             isActive
-                              ? `${invSubTab === 'Ativo' ? 'bg-green-50 border-l-3 border-l-green-500' : 'bg-yellow-50 border-l-3 border-l-yellow-400'}`
-                              : 'hover:bg-gray-50'
+                              ? `${invSubTab === 'Ativo' ? 'bg-success/10 border-l-3 border-l-green-500' : 'bg-warning/10 border-l-3 border-l-yellow-400'}`
+                              : 'hover:bg-surface'
                           }`}>
                           <div className="flex items-center gap-2">
                             <ClassBadge cls={inv.classificacao} />
-                            <span className={`text-sm truncate ${isActive ? 'font-bold text-gray-900' : 'text-gray-700'}`}>{inv.nome}</span>
+                            <span className={`text-sm truncate ${isActive ? 'font-bold text-ink' : 'text-ink'}`}>{inv.nome}</span>
                           </div>
                           <div className="flex items-center gap-2 mt-0.5">
-                            {inv.capital_max > 0 && <span className="text-[10px] font-mono text-indigo-600">{EUR(inv.capital_max)}</span>}
-                            {inv.telemovel && <span className="text-[10px] text-gray-400">{inv.telemovel}</span>}
+                            {inv.capital_max > 0 && <span className="text-[10px] num text-ink">{EUR(inv.capital_max)}</span>}
+                            {inv.telemovel && <span className="text-[10px] text-ink-muted">{inv.telemovel}</span>}
                           </div>
                         </button>
                       </div>
                     )
                   })}
-                  {data.length === 0 && <p className="text-xs text-gray-400 text-center py-6">Sem investidores</p>}
+                  {data.length === 0 && <p className="text-xs text-ink-muted text-center py-6">Sem investidores</p>}
                 </div>
-                <div className="px-3 py-2 border-t border-gray-100 bg-gray-50 text-[10px] text-gray-400 text-center">
+                <div className="px-3 py-2 border-t border-line bg-surface text-[10px] text-ink-muted text-center">
                   {data.length} investidor{data.length !== 1 ? 'es' : ''} {invSubTab === 'Ativo' ? 'ativos' : 'passivos'}
                 </div>
               </div>
@@ -1256,25 +1226,25 @@ export function CRM() {
                   return (
                     <div className="flex items-center justify-between mb-2">
                       <button onClick={() => prev && setDetail(prev.id)} disabled={!prev}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition">
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-muted text-ink-muted hover:bg-line disabled:opacity-30 disabled:cursor-not-allowed transition">
                         <ChevronLeft className="w-3.5 h-3.5" /> {prev ? prev.nome : 'Anterior'}
                       </button>
-                      <span className="text-[10px] text-gray-400">{currentIdx + 1} de {data.length}</span>
+                      <span className="text-[10px] text-ink-muted">{currentIdx + 1} de {data.length}</span>
                       <button onClick={() => next && setDetail(next.id)} disabled={!next}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition">
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-muted text-ink-muted hover:bg-line disabled:opacity-30 disabled:cursor-not-allowed transition">
                         {next ? next.nome : 'Seguinte'} <ChevronRight className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   )
                 })()}
-                <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#C9A84C', borderTopColor: 'transparent' }} /></div>}>
+                <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>}>
                   <DetailPanel type="Investidores" id={detail} onClose={() => { setDetail(null, { replace: true }); load() }} onSave={load}
                     onNavigate={(navType, navId) => { setDetail(null, { replace: true }); setTab(navType, { replace: true }); setTimeout(() => setDetail(navId), 150) }} />
                 </Suspense>
               </div>
             </div>
           ) : detail && ['Imóveis', 'Consultores', 'Parceiros'].includes(tab) ? (
-            <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#C9A84C', borderTopColor: 'transparent' }} /></div>}>
+            <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>}>
               <DetailPanel type={tab} id={detail} defaultEdit={detailDefaultEdit}
                 onClose={() => { setDetail(null, { replace: true }); setDetailDefaultEdit(false); load() }} onSave={load}
                 onNavigate={(navType, navId) => { setDetail(null, { replace: true }); setDetailDefaultEdit(false); setTab(navType, { replace: true }); setTimeout(() => setDetail(navId), 150) }} />
@@ -1292,16 +1262,7 @@ export function CRM() {
             {/* Kanban View */}
             {!loading && editing === null && view === 'kanban' && kanbanConfig && data.length === 0 && (
               loadError ? (
-                <EmptyState
-                  icon={AlertTriangle}
-                  title="Erro ao carregar"
-                  description="Não foi possível ligar ao servidor. Verifica a tua ligação e tenta novamente."
-                  action={
-                    <button onClick={load} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-neutral-800 text-white hover:bg-neutral-700 transition-colors">
-                      <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
-                    </button>
-                  }
-                />
+                <ErrorState compact error={listQuery.error} onRetry={load} />
               ) : (
                 <EmptyState
                   icon={{ 'Imóveis': Building2, 'Investidores': HandCoins, 'Consultores': UserCheck, 'Construtores': HardHat, 'Parceiros': Handshake, 'Oportunidades': Radar }[tab] || Building2}
@@ -1373,16 +1334,7 @@ export function CRM() {
             {/* Table View */}
             {!loading && editing === null && tab !== 'Oportunidades' && (view === 'table' || !hasKanban) && data.length === 0 && (
               loadError ? (
-                <EmptyState
-                  icon={AlertTriangle}
-                  title="Erro ao carregar"
-                  description="Não foi possível ligar ao servidor. Verifica a tua ligação e tenta novamente."
-                  action={
-                    <button onClick={load} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-neutral-800 text-white hover:bg-neutral-700 transition-colors">
-                      <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
-                    </button>
-                  }
-                />
+                <ErrorState compact error={listQuery.error} onRetry={load} />
               ) : (
                 <EmptyState
                   icon={{ 'Imóveis': Building2, 'Investidores': HandCoins, 'Consultores': UserCheck, 'Construtores': HardHat, 'Parceiros': Handshake, 'Oportunidades': Radar }[tab] || Building2}
@@ -1392,7 +1344,7 @@ export function CRM() {
               )
             )}
             {!loading && editing === null && (view === 'table' || !hasKanban) && data.length > 0 && (
-              <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs overflow-hidden">
+              <div className="bg-surface-raised  rounded-xl border border-line  shadow-xs overflow-hidden">
                 <div className="overflow-x-auto -webkit-overflow-scrolling-touch">
                   {tab === 'Imóveis' && <ImoveisTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} onConsultorClick={navigateToConsultor} />}
                   {tab === 'Investidores' && <InvestidoresTable data={data} onEdit={setEditing} onDelete={handleDelete} onView={setDetail} />}
@@ -1406,7 +1358,7 @@ export function CRM() {
                   columns={['nome','tipo','empresa','estado','contacto','zona_atuacao','data_proximo_contacto']}
                   labels={{ nome:'Nome', tipo:'Tipo', empresa:'Empresa', estado:'Estado', contacto:'Contacto', zona_atuacao:'Zona de atuação', data_proximo_contacto:'Próximo contacto' }} />}
                 </div>
-                <div className="px-4 py-2 bg-gray-50 text-xs text-gray-400 border-t">
+                <div className="px-4 py-2 bg-surface text-xs text-ink-muted border-t">
                   {total} registos {search && `(pesquisa: "${search}")`}
                 </div>
               </div>
@@ -1460,7 +1412,7 @@ function Th({ field, label, sortField, sortDir, onSort, align }) {
   const arrow = active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
   return (
     <th onClick={() => onSort(field)}
-      className={`${align === 'right' ? 'text-right' : 'text-left'} py-3 px-3 cursor-pointer select-none hover:text-indigo-600 active:text-indigo-800 transition-colors whitespace-nowrap ${active ? 'text-indigo-700' : ''}`}>
+      className={`${align === 'right' ? 'text-right' : 'text-left'} py-3 px-3 cursor-pointer select-none hover:text-ink active:text-ink transition-colors whitespace-nowrap ${active ? 'text-ink' : ''}`}>
       {label}{arrow}
     </th>
   )
@@ -1470,17 +1422,17 @@ function Th({ field, label, sortField, sortDir, onSort, align }) {
 
 function ActionButtons({ item, onEdit, onDelete, onView }) {
   return (
-    <div className="flex gap-1.5">
-      {onView && <button onClick={() => onView(item.id)} className="px-3 py-2 min-h-[36px] text-xs bg-gray-50 text-gray-600 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors">Ver</button>}
-      <button onClick={() => onEdit(item)} className="px-3 py-2 min-h-[36px] text-xs bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 active:bg-indigo-200 transition-colors">Abrir</button>
-      <button onClick={() => onDelete(item.id)} className="px-3 py-2 min-h-[36px] text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 active:bg-red-200 transition-colors">Apagar</button>
+    <div className="flex gap-0.5">
+      {onView && <button onClick={() => onView(item.id)} className="px-3 py-2 min-h-[36px] text-caption font-medium rounded-lg transition-colors duration-fast text-ink-muted hover:text-ink hover:bg-surface-muted">Ver</button>}
+      <button onClick={() => onEdit(item)} className="px-3 py-2 min-h-[36px] text-caption font-medium rounded-lg transition-colors duration-fast text-ink hover:bg-surface-muted">Abrir</button>
+      <button onClick={() => onDelete(item.id)} className="px-3 py-2 min-h-[36px] text-caption font-medium rounded-lg transition-colors duration-fast text-ink-muted hover:text-danger hover:bg-danger/10">Apagar</button>
     </div>
   )
 }
 
 function ClickableName({ name, onClick }) {
   return (
-    <button onClick={onClick} className="text-left font-medium text-gray-800 hover:text-indigo-600 hover:underline transition-colors">
+    <button onClick={onClick} className="text-left font-medium text-ink hover:text-ink hover:underline transition-colors">
       {name}
     </button>
   )
@@ -1491,9 +1443,9 @@ function ClickableName({ name, onClick }) {
 // `fields`: [{ label, value }] — value pode ser texto ou JSX (badges, links).
 function MobileCardList({ items, renderCard }) {
   return (
-    <div className="md:hidden divide-y divide-gray-100 dark:divide-neutral-800">
+    <div className="md:hidden divide-y divide-line ">
       {items.length === 0
-        ? <div className="py-8 text-center text-gray-400 text-sm">Sem registos</div>
+        ? <div className="py-8 text-center text-ink-muted text-sm">Sem registos</div>
         : items.map(renderCard)}
     </div>
   )
@@ -1504,7 +1456,7 @@ function EntityCard({ onClick, name, badge, fields = [], item, onEdit, onDelete,
     <div className="py-3 px-1">
       <div className="flex items-start justify-between gap-2">
         <button onClick={onClick}
-          className="text-left font-semibold text-sm text-gray-800 dark:text-neutral-100 hover:text-indigo-600 min-w-0 flex-1 truncate">
+          className="text-left font-semibold text-sm text-ink  hover:text-ink min-w-0 flex-1 truncate">
           {name}
         </button>
         {badge && <div className="shrink-0">{badge}</div>}
@@ -1512,8 +1464,8 @@ function EntityCard({ onClick, name, badge, fields = [], item, onEdit, onDelete,
       <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
         {fields.filter(f => f && f.value != null && f.value !== '—' && f.value !== '').map((f, i) => (
           <div key={i} className="flex flex-col min-w-0">
-            <span className="text-[9px] text-gray-400 uppercase tracking-wide">{f.label}</span>
-            <span className="text-xs text-gray-700 dark:text-neutral-200 truncate">{f.value}</span>
+            <span className="text-[9px] text-ink-muted uppercase tracking-wide">{f.label}</span>
+            <span className="text-xs text-ink  truncate">{f.value}</span>
           </div>
         ))}
       </div>
@@ -1543,7 +1495,7 @@ function ImoveisTable({ data, onEdit, onDelete, onView, onConsultorClick }) {
         ]} />
     )} />
     <table className="hidden md:table min-w-[800px] w-full text-xs">
-      <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
+      <thead><tr className="border-b border-line text-ink-muted uppercase tracking-wide">
         <Th field="nome" label="Imóvel" {...sp} />
         <Th field="estado" label="Estado" {...sp} />
         <Th field="zona" label="Zona" {...sp} />
@@ -1556,26 +1508,26 @@ function ImoveisTable({ data, onEdit, onDelete, onView, onConsultorClick }) {
       </tr></thead>
       <tbody>
         {sorted.map(r => (
-          <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => onView?.(r.id)}>
+          <tr key={r.id} className="border-b border-line hover:bg-surface cursor-pointer" onClick={() => onView?.(r.id)}>
             <td className="py-3 px-3"><ClickableName name={r.nome} onClick={() => onView?.(r.id)} /></td>
             <td className="py-3 px-3"><Badge text={r.estado} colorMap={IMOVEL_ESTADO_COLOR} /></td>
-            <td className="py-2 px-3 text-gray-500">{r.zona ?? '—'}</td>
+            <td className="py-2 px-3 text-ink-muted">{r.zona ?? '—'}</td>
             <td className="py-2 px-3" onClick={e => e.stopPropagation()}>
               {r.nome_consultor ? (
                 <button onClick={() => onConsultorClick?.(r.nome_consultor)}
-                  className="text-blue-600 hover:text-blue-800 hover:underline transition-colors text-left">
+                  className="text-ink hover:text-ink hover:underline transition-colors text-left">
                   {r.nome_consultor}
                 </button>
               ) : '—'}
             </td>
-            <td className="py-2 px-3 text-right font-mono">{r.ask_price > 0 ? EUR(r.ask_price) : '—'}</td>
-            <td className="py-2 px-3 text-right font-mono">{r.roi > 0 ? `${r.roi}%` : '—'}</td>
-            <td className="py-2 px-3 text-gray-500">{r.origem ?? '—'}</td>
-            <td className="py-2 px-3 text-gray-400">{fmtDate(r.data_adicionado)}</td>
+            <td className="py-2 px-3 text-right num">{r.ask_price > 0 ? EUR(r.ask_price) : '—'}</td>
+            <td className="py-2 px-3 text-right num">{r.roi > 0 ? `${r.roi}%` : '—'}</td>
+            <td className="py-2 px-3 text-ink-muted">{r.origem ?? '—'}</td>
+            <td className="py-2 px-3 text-ink-muted">{fmtDate(r.data_adicionado)}</td>
             <td className="py-3 px-3" onClick={e => e.stopPropagation()}><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
           </tr>
         ))}
-        {!sorted.length && <tr><td colSpan={9} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
+        {!sorted.length && <tr><td colSpan={9} className="py-8 text-center text-ink-muted">Sem registos</td></tr>}
       </tbody>
     </table>
     </>
@@ -1590,7 +1542,7 @@ function InvestidoresTable({ data, onEdit, onDelete, onView }) {
     <MobileCardList items={sorted} renderCard={r => {
       const tipos = parseTipoPrincipalArr(r.tipo_principal)
       const tipoLabel = tipos.length > 0 ? tipos.join(' + ') : 'Passivo'
-      const tipoStyle = tipos.includes('Ativo') ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+      const tipoStyle = tipos.includes('Ativo') ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning'
       return (
         <EntityCard key={r.id} name={r.nome} onClick={() => onView?.(r.id)}
           item={r} onEdit={onEdit} onDelete={onDelete} onView={onView}
@@ -1600,13 +1552,13 @@ function InvestidoresTable({ data, onEdit, onDelete, onView }) {
             { label: 'Classe', value: <ClassBadge cls={r.classificacao} /> },
             { label: 'Capital Max', value: r.capital_max > 0 ? EUR(r.capital_max) : null },
             { label: 'NDA', value: r.nda_assinado ? '✓' : null },
-            { label: 'Contacto', value: r.telemovel ? <a href={`tel:${r.telemovel}`} className="text-green-600">{r.telemovel}</a> : r.email ? <a href={`mailto:${r.email}`} className="text-blue-600">{r.email}</a> : null },
+            { label: 'Contacto', value: r.telemovel ? <a href={`tel:${r.telemovel}`} className="text-success">{r.telemovel}</a> : r.email ? <a href={`mailto:${r.email}`} className="text-ink">{r.email}</a> : null },
             { label: '1º Contacto', value: fmtDate(r.data_primeiro_contacto) },
           ]} />
       )
     }} />
     <table className="hidden md:table min-w-[900px] w-full text-xs">
-      <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
+      <thead><tr className="border-b border-line text-ink-muted uppercase tracking-wide">
         <Th field="nome" label="Nome" {...sp} />
         <Th field="tipo_principal" label="Tipo" {...sp} />
         <Th field="classificacao" label="Class." {...sp} />
@@ -1621,22 +1573,22 @@ function InvestidoresTable({ data, onEdit, onDelete, onView }) {
         {sorted.map(r => {
           const tipos = parseTipoPrincipalArr(r.tipo_principal)
           const tipoLabel = tipos.length > 0 ? tipos.join(' + ') : 'Passivo'
-          const tipoStyle = tipos.includes('Ativo') ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+          const tipoStyle = tipos.includes('Ativo') ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning'
           return (
-            <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => onView?.(r.id)}>
+            <tr key={r.id} className="border-b border-line hover:bg-surface cursor-pointer" onClick={() => onView?.(r.id)}>
               <td className="py-3 px-3"><ClickableName name={r.nome} onClick={() => onView?.(r.id)} /></td>
               <td className="py-2 px-3"><span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${tipoStyle}`}>{tipoLabel}</span></td>
               <td className="py-2 px-3 text-center"><ClassBadge cls={r.classificacao} /></td>
               <td className="py-3 px-3"><Badge text={r.status} colorMap={INV_STATUS_COLOR} /></td>
-              <td className="py-2 px-3 text-right font-mono">{r.capital_max > 0 ? EUR(r.capital_max) : '—'}</td>
+              <td className="py-2 px-3 text-right num">{r.capital_max > 0 ? EUR(r.capital_max) : '—'}</td>
               <td className="py-2 px-3 text-center">{r.nda_assinado ? '✓' : '—'}</td>
-              <td className="py-2 px-3 text-gray-500" onClick={e => e.stopPropagation()}>{r.telemovel ? <a href={`tel:${r.telemovel}`} className="text-green-600 hover:underline">{r.telemovel}</a> : r.email ? <a href={`mailto:${r.email}`} className="text-blue-600 hover:underline">{r.email}</a> : '—'}</td>
-              <td className="py-2 px-3 text-gray-400">{fmtDate(r.data_primeiro_contacto)}</td>
+              <td className="py-2 px-3 text-ink-muted" onClick={e => e.stopPropagation()}>{r.telemovel ? <a href={`tel:${r.telemovel}`} className="text-success hover:underline">{r.telemovel}</a> : r.email ? <a href={`mailto:${r.email}`} className="text-ink hover:underline">{r.email}</a> : '—'}</td>
+              <td className="py-2 px-3 text-ink-muted">{fmtDate(r.data_primeiro_contacto)}</td>
               <td className="py-3 px-3" onClick={e => e.stopPropagation()}><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
             </tr>
           )
         })}
-        {!sorted.length && <tr><td colSpan={9} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
+        {!sorted.length && <tr><td colSpan={9} className="py-8 text-center text-ink-muted">Sem registos</td></tr>}
       </tbody>
     </table>
     </>
@@ -1645,7 +1597,7 @@ function InvestidoresTable({ data, onEdit, onDelete, onView }) {
 
 function AlertDot({ status }) {
   if (!status) return null
-  const color = status === 'red' ? 'bg-red-500' : status === 'orange' ? 'bg-orange-500' : status === 'green' ? 'bg-green-500' : null
+  const color = status === 'red' ? 'bg-danger' : status === 'orange' ? 'bg-orange-500' : status === 'green' ? 'bg-success' : null
   const title = status === 'red' ? 'Sem 1o contacto (>48h)' : status === 'orange' ? 'Inativo (>15 dias)' : status === 'green' ? 'Check positivo recente' : ''
   if (!color) return null
   return <span className={`inline-block w-2.5 h-2.5 rounded-full ${color}`} title={title} />
@@ -1668,7 +1620,7 @@ function ConsultoresTable({ data, onEdit, onDelete, onView }) {
           badge={<Badge text={r.estado_avaliacao || 'Em avaliação'} colorMap={CONS_ESTADO_AVALIACAO_COLOR} />}
           fields={[
             { label: 'Agência', value: agencia },
-            { label: 'Score', value: r.score_prioridade > 0 ? <span className="font-mono font-semibold" style={{ color: '#C9A84C' }}>{r.score_prioridade}</span> : null },
+            { label: 'Score', value: r.score_prioridade > 0 ? <span className="num font-semibold text-accent-ink">{r.score_prioridade}</span> : null },
             { label: 'Imóveis', value: r._totalImoveis ?? r.imoveis_enviados ?? null },
             { label: 'Taxa Qualidade', value: r.taxa_qualidade > 0 ? `${r.taxa_qualidade}%` : null },
             { label: 'Tempo Resposta', value: tempoRespFmt(r.tempo_medio_resposta) },
@@ -1678,7 +1630,7 @@ function ConsultoresTable({ data, onEdit, onDelete, onView }) {
       )
     }} />
     <table className="hidden md:table min-w-[1100px] w-full text-xs">
-      <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
+      <thead><tr className="border-b border-line text-ink-muted uppercase tracking-wide">
         <th className="w-6 py-2 px-1"></th>
         <Th field="nome" label="Nome" {...sp} />
         <Th field="_agencia" label="Agência" {...sp} />
@@ -1698,22 +1650,22 @@ function ConsultoresTable({ data, onEdit, onDelete, onView }) {
             ? (r.tempo_medio_resposta < 1 ? `${Math.round(r.tempo_medio_resposta * 60)}min` : r.tempo_medio_resposta < 24 ? `${Math.round(r.tempo_medio_resposta)}h` : `${Math.round(r.tempo_medio_resposta / 24)}d`)
             : '—'
           return (
-            <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => onView?.(r.id)}>
+            <tr key={r.id} className="border-b border-line hover:bg-surface cursor-pointer" onClick={() => onView?.(r.id)}>
               <td className="py-2 px-1 text-center"><AlertDot status={r._alertStatus} /></td>
               <td className="py-3 px-3"><ClickableName name={r.nome} onClick={() => onView?.(r.id)} /></td>
-              <td className="py-2 px-3 text-gray-500">{agencia}</td>
-              <td className="py-2 px-3 text-right font-mono font-semibold" style={{ color: '#C9A84C' }}>{r.score_prioridade > 0 ? r.score_prioridade : '—'}</td>
-              <td className="py-2 px-3 text-right font-mono">{r._totalImoveis ?? r.imoveis_enviados ?? '—'}</td>
-              <td className="py-2 px-3 text-right font-mono">{r.taxa_qualidade > 0 ? `${r.taxa_qualidade}%` : '—'}</td>
-              <td className="py-2 px-3 text-right font-mono">{tempoResp}</td>
+              <td className="py-2 px-3 text-ink-muted">{agencia}</td>
+              <td className="py-2 px-3 text-right num font-semibold text-accent-ink">{r.score_prioridade > 0 ? r.score_prioridade : '—'}</td>
+              <td className="py-2 px-3 text-right num">{r._totalImoveis ?? r.imoveis_enviados ?? '—'}</td>
+              <td className="py-2 px-3 text-right num">{r.taxa_qualidade > 0 ? `${r.taxa_qualidade}%` : '—'}</td>
+              <td className="py-2 px-3 text-right num">{tempoResp}</td>
               <td className="py-3 px-3"><Badge text={r.estado_avaliacao || 'Em avaliação'} colorMap={CONS_ESTADO_AVALIACAO_COLOR} /></td>
-              <td className="py-2 px-3 text-gray-400">{fmtDate(r.data_proximo_follow_up)}</td>
-              <td className="py-2 px-3 text-right font-mono">{r._diasSemContacto != null ? `${r._diasSemContacto}d` : '—'}</td>
+              <td className="py-2 px-3 text-ink-muted">{fmtDate(r.data_proximo_follow_up)}</td>
+              <td className="py-2 px-3 text-right num">{r._diasSemContacto != null ? `${r._diasSemContacto}d` : '—'}</td>
               <td className="py-3 px-3" onClick={e => e.stopPropagation()}><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
             </tr>
           )
         })}
-        {!sorted.length && <tr><td colSpan={11} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
+        {!sorted.length && <tr><td colSpan={11} className="py-8 text-center text-ink-muted">Sem registos</td></tr>}
       </tbody>
     </table>
     </>
@@ -1732,14 +1684,14 @@ function NegociosTable({ data, onEdit, onDelete, onViewImovel }) {
         badge={<Badge text={r.fase} colorMap={NEG_FASE_COLOR} />}
         fields={[
           { label: 'Categoria', value: <Badge text={r.categoria} colorMap={NEG_CAT_COLOR} /> },
-          { label: 'Lucro Est.', value: <span className="text-indigo-600 font-mono">{EUR(r.lucro_estimado)}</span> },
-          { label: 'Faturação Real', value: r.lucro_real > 0 ? <span className="text-green-600 font-mono">{EUR(r.lucro_real)}</span> : null },
+          { label: 'Lucro Est.', value: <span className="text-ink num">{EUR(r.lucro_estimado)}</span> },
+          { label: 'Faturação Real', value: r.lucro_real > 0 ? <span className="text-success num">{EUR(r.lucro_real)}</span> : null },
           { label: 'Data', value: fmtDate(r.data) },
           { label: '', value: r.imovel_id ? <span className="text-brand-gold">→ ver imóvel</span> : null },
         ]} />
     )} />
     <table className="hidden md:table min-w-[700px] w-full text-xs">
-      <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
+      <thead><tr className="border-b border-line text-ink-muted uppercase tracking-wide">
         <Th field="movimento" label="Negócio" {...sp} />
         <Th field="categoria" label="Categoria" {...sp} />
         <Th field="fase" label="Fase" {...sp} />
@@ -1750,23 +1702,23 @@ function NegociosTable({ data, onEdit, onDelete, onViewImovel }) {
       </tr></thead>
       <tbody>
         {sorted.map(r => (
-          <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
+          <tr key={r.id} className="border-b border-line hover:bg-surface cursor-pointer"
             onClick={() => r.imovel_id && onViewImovel?.(r.imovel_id)}>
             <td className="py-3 px-3">
-              <span className={`font-medium ${r.imovel_id ? 'text-brand-gold hover:underline' : 'text-gray-800'}`}>
+              <span className={`font-medium ${r.imovel_id ? 'text-brand-gold hover:underline' : 'text-ink'}`}>
                 {r.movimento}
               </span>
-              {r.imovel_id && <span className="text-[10px] text-gray-300 ml-1.5">→ ver imóvel</span>}
+              {r.imovel_id && <span className="text-[10px] text-ink-muted/70 ml-1.5">→ ver imóvel</span>}
             </td>
             <td className="py-3 px-3"><Badge text={r.categoria} colorMap={NEG_CAT_COLOR} /></td>
             <td className="py-3 px-3"><Badge text={r.fase} colorMap={NEG_FASE_COLOR} /></td>
-            <td className="py-2 px-3 text-right font-mono text-indigo-600">{EUR(r.lucro_estimado)}</td>
-            <td className="py-2 px-3 text-right font-mono text-green-600">{r.lucro_real > 0 ? EUR(r.lucro_real) : '—'}</td>
-            <td className="py-2 px-3 text-gray-400">{fmtDate(r.data)}</td>
+            <td className="py-2 px-3 text-right num text-ink">{EUR(r.lucro_estimado)}</td>
+            <td className="py-2 px-3 text-right num text-success">{r.lucro_real > 0 ? EUR(r.lucro_real) : '—'}</td>
+            <td className="py-2 px-3 text-ink-muted">{fmtDate(r.data)}</td>
             <td className="py-2 px-3" onClick={e => e.stopPropagation()}><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} /></td>
           </tr>
         ))}
-        {!sorted.length && <tr><td colSpan={7} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
+        {!sorted.length && <tr><td colSpan={7} className="py-8 text-center text-ink-muted">Sem registos</td></tr>}
       </tbody>
     </table>
     </>
@@ -1786,22 +1738,22 @@ function GenericTable({ data, onEdit, onDelete, onView, columns, labels }) {
         fields={columns.slice(1).map(c => ({ label: labels[c] || c, value: r[c] }))} />
     )} />
     <table className="hidden md:table min-w-[700px] w-full text-xs">
-      <thead><tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wide">
+      <thead><tr className="border-b border-line text-ink-muted uppercase tracking-wide">
         {columns.map(c => <Th key={c} field={c} label={labels[c] || c} {...sp} />)}
         <th className="py-3 px-3"></th>
       </tr></thead>
       <tbody>
         {sorted.map(r => (
-          <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
+          <tr key={r.id} className="border-b border-line hover:bg-surface">
             {columns.map(c => (
-              <td key={c} className="py-2 px-3 text-gray-600">
+              <td key={c} className="py-2 px-3 text-ink-muted">
                 {c === columns[0] ? <ClickableName name={r[c]} onClick={() => abrir(r)} /> : (r[c] ?? '—')}
               </td>
             ))}
             <td className="py-3 px-3"><ActionButtons item={r} onEdit={onEdit} onDelete={onDelete} onView={onView} /></td>
           </tr>
         ))}
-        {!sorted.length && <tr><td colSpan={columns.length + 1} className="py-8 text-center text-gray-400">Sem registos</td></tr>}
+        {!sorted.length && <tr><td colSpan={columns.length + 1} className="py-8 text-center text-ink-muted">Sem registos</td></tr>}
       </tbody>
     </table>
     </>
@@ -1995,7 +1947,7 @@ function RelationOrNew({ value, options, display, createEndpoint, regiao, onChan
   const [newContacto, setNewContacto] = useState('')
   const [newImobiliaria, setNewImobiliaria] = useState('')
   const [creating, setCreating] = useState(false)
-  const inputClass = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+  const inputClass = "w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-accent/40"
 
   async function handleCreate() {
     if (!newName.trim()) return
@@ -2025,17 +1977,17 @@ function RelationOrNew({ value, options, display, createEndpoint, regiao, onChan
 
   if (mode === 'new') {
     return (
-      <div className="space-y-2 p-3 rounded-xl border border-indigo-200 bg-indigo-50/40">
+      <div className="space-y-2 p-3 rounded-xl border border-line bg-surface-muted/40">
         <input type="text" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome do novo consultor *" className={inputClass} autoFocus />
         <div className="grid grid-cols-2 gap-2">
           <input type="tel" value={newContacto} onChange={e => setNewContacto(e.target.value)} placeholder="Contacto (9XX XXX XXX)" className={inputClass} />
           <input type="text" value={newImobiliaria} onChange={e => setNewImobiliaria(e.target.value)} placeholder="Imobiliária" className={inputClass} />
         </div>
         <div className="flex gap-2">
-          <button onClick={handleCreate} disabled={creating || !newName.trim()} className="px-3 py-2 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 shrink-0">
+          <button onClick={handleCreate} disabled={creating || !newName.trim()} className="px-3 py-2 bg-success text-white text-xs font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 shrink-0">
             {creating ? '...' : 'Criar'}
           </button>
-          <button onClick={() => setMode('select')} className="px-3 py-2 bg-gray-100 text-gray-600 text-xs rounded-lg shrink-0">Cancelar</button>
+          <button onClick={() => setMode('select')} className="px-3 py-2 bg-surface-muted text-ink-muted text-xs rounded-lg shrink-0">Cancelar</button>
         </div>
       </div>
     )
@@ -2047,7 +1999,7 @@ function RelationOrNew({ value, options, display, createEndpoint, regiao, onChan
         <option value="">— Selecionar —</option>
         {options.map(r => <option key={r.id} value={r.nome}>{display(r)}</option>)}
       </select>
-      <button onClick={() => setMode('new')} className="px-3 py-2 bg-indigo-100 text-indigo-600 text-xs font-medium rounded-lg hover:bg-indigo-200 shrink-0">+ Novo</button>
+      <button onClick={() => setMode('new')} className="px-3 py-2 bg-surface-muted text-ink text-xs font-medium rounded-lg hover:bg-line shrink-0">+ Novo</button>
     </div>
   )
 }
@@ -2142,11 +2094,11 @@ function ChipsAutocomplete({ value, suggestions = [], onChange, placeholder }) {
   }, [])
   return (
     <div ref={wrapRef} className="relative">
-      <div className="flex flex-wrap gap-1.5 px-2 py-1.5 rounded-lg border border-gray-200 bg-white min-h-[38px] focus-within:ring-2 focus-within:ring-indigo-300">
+      <div className="flex flex-wrap gap-1.5 px-2 py-1.5 rounded-lg border border-line bg-surface-raised min-h-[38px] focus-within:ring-2 focus-within:ring-accent/40">
         {items.map((it, i) => (
-          <span key={`${it}-${i}`} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-yellow-50 border border-yellow-200 text-yellow-900">
+          <span key={`${it}-${i}`} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-warning/10 border border-warning/30 text-yellow-900">
             {it}
-            <button type="button" onClick={() => remove(i)} className="text-yellow-700 hover:text-red-600" aria-label={`Remover ${it}`}>×</button>
+            <button type="button" onClick={() => remove(i)} className="text-warning hover:text-danger" aria-label={`Remover ${it}`}>×</button>
           </span>
         ))}
         <input
@@ -2160,13 +2112,13 @@ function ChipsAutocomplete({ value, suggestions = [], onChange, placeholder }) {
         />
       </div>
       {open && filtered.length > 0 && (
-        <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-auto">
+        <div className="absolute z-30 left-0 right-0 mt-1 bg-surface-raised border border-line rounded-lg shadow-lg max-h-56 overflow-auto">
           {filtered.map((s, i) => (
             <button
               key={s + i}
               type="button"
               onMouseDown={(e) => { e.preventDefault(); add(s) }}
-              className="w-full text-left px-3 py-1.5 text-sm hover:bg-yellow-50 hover:text-yellow-900"
+              className="w-full text-left px-3 py-1.5 text-sm hover:bg-warning/10 hover:text-yellow-900"
             >
               {s}
             </button>
@@ -2229,7 +2181,7 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
     })
   }
 
-  const inputClass = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+  const inputClass = "w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-accent/40"
   const baseFields = quickMode ? fields.filter(f => f.quick) : fields
   const visibleFields = baseFields.filter(f => {
     // Tipologia (T1, T2…) só se aplica a Apartamento.
@@ -2240,17 +2192,17 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
   })
 
   return (
-    <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 p-6 shadow-xs">
+    <div className="bg-surface-raised  rounded-xl border border-line  p-6 shadow-xs">
       <div className="flex items-center justify-between mb-4 gap-3">
-        <h2 className="text-sm font-semibold text-gray-700">{isNew ? (canQuick ? 'Nova Ficha Rápida' : 'Novo Registo') : 'Editar Registo'}</h2>
+        <h2 className="text-sm font-semibold text-ink">{isNew ? (canQuick ? 'Nova Ficha Rápida' : 'Novo Registo') : 'Editar Registo'}</h2>
         {canQuick && (
-          <button type="button" onClick={() => setShowAll(s => !s)} className="text-xs text-indigo-600 hover:underline whitespace-nowrap">
+          <button type="button" onClick={() => setShowAll(s => !s)} className="text-xs text-ink hover:underline whitespace-nowrap">
             {quickMode ? 'Mostrar todos os campos' : 'Mostrar só ficha rápida'}
           </button>
         )}
       </div>
       {quickMode && (
-        <p className="text-xs text-gray-500 -mt-2 mb-4">
+        <p className="text-xs text-ink-muted -mt-2 mb-4">
           Só o essencial do anúncio. O resto (tipo de prédio, áreas, valores, pipeline) completa-se ao avançar de estado.
         </p>
       )}
@@ -2261,7 +2213,7 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
           const staleSelect = f.type === 'select' && currentVal && fieldOptions && !fieldOptions.includes(currentVal)
           return (
           <div key={f.key} className={f.type === 'textarea' ? 'md:col-span-2 xl:col-span-3' : ''}>
-            <label className="block text-xs text-gray-500 mb-1">{f.label}{f.required && ' *'}</label>
+            <label className="block text-xs text-ink-muted mb-1">{f.label}{f.required && ' *'}</label>
             {f.type === 'select' ? (
               <>
                 <select value={currentVal ?? ''} onChange={e => handleChange(f.key, e.target.value)} className={`${inputClass}${staleSelect ? ' border-amber-400 ring-1 ring-amber-200' : ''}`}>
@@ -2270,7 +2222,7 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
                   {fieldOptions.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
                 {staleSelect && (
-                  <p className="mt-1 text-[11px] text-amber-600">
+                  <p className="mt-1 text-[11px] text-warning">
                     "{currentVal}" não pertence ao pipeline atual — escolhe um novo estado para confirmar.
                   </p>
                 )}
@@ -2343,21 +2295,21 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
               <textarea value={form[f.key] ?? ''} onChange={e => handleChange(f.key, e.target.value)} rows={3} className={inputClass} />
             ) : f.type === 'checkbox' ? (
               <input type="checkbox" checked={!!form[f.key]} onChange={e => handleChange(f.key, e.target.checked ? 1 : 0)}
-                className="w-5 h-5 rounded border-gray-300 text-indigo-600" />
+                className="w-5 h-5 rounded border-line text-ink" />
             ) : f.type === 'url' ? (
               <div className="flex gap-2">
                 <input type="url" value={form[f.key] ?? ''} onChange={e => handleChange(f.key, e.target.value)} className={inputClass} placeholder="https://..." />
-                {form[f.key] && <a href={form[f.key]} target="_blank" rel="noopener noreferrer" className="px-3 py-2 bg-gray-100 rounded-lg text-xs text-indigo-600 hover:bg-gray-200 shrink-0">Abrir</a>}
+                {form[f.key] && <a href={form[f.key]} target="_blank" rel="noopener noreferrer" className="px-3 py-2 bg-surface-muted rounded-lg text-xs text-ink hover:bg-line shrink-0">Abrir</a>}
               </div>
             ) : f.type === 'tel' ? (
               <div className="flex gap-2">
                 <input type="tel" value={form[f.key] ?? ''} onChange={e => handleChange(f.key, e.target.value)} className={inputClass} />
-                {form[f.key] && <a href={`tel:${form[f.key]}`} className="px-3 py-2 bg-green-50 rounded-lg text-xs text-green-600 hover:bg-green-100 shrink-0">Ligar</a>}
+                {form[f.key] && <a href={`tel:${form[f.key]}`} className="px-3 py-2 bg-success/10 rounded-lg text-xs text-success hover:bg-success/15 shrink-0">Ligar</a>}
               </div>
             ) : f.type === 'email' ? (
               <div className="flex gap-2">
                 <input type="email" value={form[f.key] ?? ''} onChange={e => handleChange(f.key, e.target.value)} className={inputClass} />
-                {form[f.key] && <a href={`mailto:${form[f.key]}`} className="px-3 py-2 bg-blue-50 rounded-lg text-xs text-blue-600 hover:bg-blue-100 shrink-0">Email</a>}
+                {form[f.key] && <a href={`mailto:${form[f.key]}`} className="px-3 py-2 bg-surface-muted rounded-lg text-xs text-ink hover:bg-surface-muted shrink-0">Email</a>}
               </div>
             ) : (
               <input type={f.type} value={form[f.key] ?? ''} onChange={e => handleChange(f.key, f.type === 'number' ? +e.target.value : e.target.value)} className={inputClass} />
@@ -2366,20 +2318,20 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
         )})}
       </div>
       <div className="flex gap-3 mt-6">
-        <button
+        <Button
           onClick={async () => {
             if (saving) return
             setSaving(true)
             try { await onSave(form) } finally { setSaving(false) }
           }}
           disabled={saving}
-          className="px-6 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          loading={saving}
         >
-          {saving ? '...' : (isNew ? 'Criar' : 'Guardar')}
-        </button>
-        <button onClick={onCancel} className="px-6 py-2 bg-gray-100 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-200">
+          {isNew ? 'Criar' : 'Guardar'}
+        </Button>
+        <Button variant="secondary" onClick={onCancel}>
           Cancelar
-        </button>
+        </Button>
       </div>
     </div>
   )

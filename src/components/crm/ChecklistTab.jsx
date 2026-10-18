@@ -48,36 +48,36 @@ export function ChecklistTab({ imovel, onUpdate, onAbrirTab }) {
     if (a.agendar) return setJanela({ agendar: a.agendar })
   }
 
-  if (query.isLoading) return <div className="p-6 text-center text-gray-400">A carregar checklist...</div>
+  if (query.isLoading) return <div className="p-6 text-center text-ink-muted">A carregar checklist...</div>
   const grupos = query.data?.grupos || []
-  if (!grupos.length) return <div className="p-6 text-center text-gray-400">Sem itens para as fases deste imóvel.</div>
+  if (!grupos.length) return <div className="p-6 text-center text-ink-muted">Sem itens para as fases deste imóvel.</div>
 
   return (
     <div className="p-4 space-y-4">
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-        <span className="inline-flex items-center gap-1.5"><CheckCircle2 size={14} className="text-green-500" /> Verificado pelo sistema</span>
-        <span className="inline-flex items-center gap-1.5"><UserCheck size={14} style={{ color: '#C9A84C' }} /> Declarado por uma pessoa</span>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
+        <span className="inline-flex items-center gap-1.5"><CheckCircle2 size={14} className="text-success" /> Verificado pelo sistema</span>
+        <span className="inline-flex items-center gap-1.5"><UserCheck size={14} className="text-accent-ink" /> Declarado por uma pessoa</span>
         <span className="inline-flex items-center gap-1.5"><Circle size={14} className="text-amber-400" /> Em falta</span>
       </div>
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-ink-muted">
         Cada item marca-se sozinho quando o registo existe no imóvel. Só aparecem as fases por onde o imóvel passou. Nada aqui impede a mudança de fase.
       </p>
-      {erro && <p className="text-xs text-red-600">{erro}</p>}
+      {erro && <p className="text-xs text-danger">{erro}</p>}
 
       {grupos.map(g => {
         const aberto = expanded[g.fase] ?? (g.atual || g.feitos < g.total)
         return (
-          <div key={g.fase} className={`rounded-lg border ${g.atual ? 'border-amber-300 shadow-sm' : 'border-gray-200'}`}>
+          <div key={g.fase} className={`rounded-lg border ${g.atual ? 'border-warning/30 shadow-sm' : 'border-line'}`}>
             <button onClick={() => setExpanded(p => ({ ...p, [g.fase]: !aberto }))}
-              className={`w-full flex items-center justify-between px-4 py-3 text-left ${g.atual ? 'bg-gray-900 text-white rounded-t-lg' : 'bg-gray-50 text-gray-800 rounded-lg'}`}>
+              className={`w-full flex items-center justify-between px-4 py-3 text-left ${g.atual ? 'bg-ink text-surface rounded-t-lg' : 'bg-surface text-ink rounded-lg'}`}>
               <span className="flex items-center gap-2 min-w-0">
                 {aberto ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 <span className="text-sm font-semibold truncate">{g.fase}{g.atual ? ' (fase atual)' : ''}</span>
               </span>
-              <span className={`text-xs tabular-nums ${g.atual ? 'text-gray-300' : 'text-gray-500'}`}>{g.feitos}/{g.total}</span>
+              <span className={`text-xs tabular-nums ${g.atual ? 'text-ink-muted/70' : 'text-ink-muted'}`}>{g.feitos}/{g.total}</span>
             </button>
             {aberto && (
-              <ul className="divide-y divide-gray-100">
+              <ul className="divide-y divide-line">
                 {g.itens.map(item => {
                   const ok = item.estado === 'ok'
                   const manual = item.origem === 'manual'
@@ -85,13 +85,13 @@ export function ChecklistTab({ imovel, onUpdate, onAbrirTab }) {
                     <li key={item.key} className="px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
                       <span className="shrink-0">
                         {ok
-                          ? (manual ? <UserCheck size={18} style={{ color: '#C9A84C' }} /> : <CheckCircle2 size={18} className="text-green-500" />)
+                          ? (manual ? <UserCheck size={18} className="text-accent-ink" /> : <CheckCircle2 size={18} className="text-success" />)
                           : <Circle size={18} className="text-amber-400" />}
                       </span>
                       <span className="flex-1 min-w-[160px]">
-                        <span className="text-sm text-gray-800">{item.titulo}</span>
-                        {item.detalhe && <span className="text-sm text-gray-500"> · {item.detalhe}</span>}
-                        <span className="block text-[11px] text-gray-400">
+                        <span className="text-sm text-ink">{item.titulo}</span>
+                        {item.detalhe && <span className="text-sm text-ink-muted"> · {item.detalhe}</span>}
+                        <span className="block text-[11px] text-ink-muted">
                           {ok && manual && `Declarado${item.por ? ` por ${item.por}` : ''}${item.em ? ` em ${fmtData(item.em)}` : ''}`}
                           {ok && !manual && `Automático · ${item.onde}`}
                           {!ok && manual && 'Acontece fora do CRM: regista aqui'}
@@ -100,26 +100,26 @@ export function ChecklistTab({ imovel, onUpdate, onAbrirTab }) {
                       </span>
                       {!ok && !manual && item.abrir && (
                         <button type="button" onClick={() => abrir(item)}
-                          className="text-xs font-medium px-2 py-1 rounded-lg bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200">
+                          className="text-xs font-medium px-2 py-1 rounded-lg bg-warning/10 text-warning hover:bg-warning/15 border border-warning/30">
                           {item.abrir.janela ? 'Registar visita' : item.abrir.agendar ? 'Agendar' : `Abrir ${item.onde}`}
                         </button>
                       )}
                       {!ok && manual && item.manual === 'confirmar' && (
                         <button type="button" onClick={() => declarar(item, {})}
-                          className="text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">
+                          className="text-xs font-medium px-2 py-1 rounded-lg border border-line text-ink hover:bg-surface">
                           Confirmar
                         </button>
                       )}
                       {!ok && manual && item.manual === 'resposta' && (
                         <select value="" onChange={e => e.target.value && declarar(item, { valor: e.target.value })}
-                          className="text-xs px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-700">
+                          className="text-xs px-2 py-1 rounded-lg border border-line bg-surface-raised text-ink">
                           <option value="">Responder…</option>
                           {(item.opcoes || []).map(o => <option key={o} value={o}>{o}</option>)}
                         </select>
                       )}
                       {ok && manual && (
                         <button type="button" onClick={() => declarar(item, { desfazer: true })}
-                          className="text-[11px] text-gray-400 hover:text-gray-600 underline">
+                          className="text-[11px] text-ink-muted hover:text-ink-muted underline">
                           Desfazer
                         </button>
                       )}

@@ -79,7 +79,7 @@ export function GravacoesConsultor({ consultorId }) {
   if (lista.length === 0) return null
   return (
     <div>
-      <p className="text-xs text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+      <p className="text-xs text-ink-muted uppercase tracking-wide mb-2 flex items-center gap-1.5">
         <Mic className="w-3.5 h-3.5" /> Gravações de conversas ({lista.length})
       </p>
       <div className="space-y-2">

@@ -107,12 +107,12 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
     } catch {}
   }
 
-  const inputClass = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300'
+  const inputClass = 'w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-accent/40'
 
   return (
     <div className="space-y-4">
       {/* Sub-abas: Enviados / Recebidos */}
-      <div className="flex items-center gap-1 border-b border-gray-100">
+      <div className="flex items-center gap-1 border-b border-line">
         {SUBTABS.map(t => {
           const count = documentos.filter(d => (d.direcao || 'enviado') === t.key).length
           return (
@@ -121,8 +121,8 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
               onClick={() => trocarDirecao(t.key)}
               className={`px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${
                 direcao === t.key
-                  ? 'border-indigo-600 text-indigo-700'
-                  : 'border-transparent text-gray-400 hover:text-gray-600'
+                  ? 'border-accent text-ink'
+                  : 'border-transparent text-ink-muted hover:text-ink-muted'
               }`}
             >
               {t.label} ({count})
@@ -133,13 +133,13 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-700">
+        <h3 className="text-sm font-semibold text-ink">
           Documentos {direcao === 'enviado' ? 'enviados' : 'recebidos'} ({documentosFiltrados.length})
         </h3>
         {!readOnly && (
           <button
             onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-accent-foreground hover:brightness-[1.04] transition-colors"
           >
             <Plus className="w-3.5 h-3.5" /> Registar Documento
           </button>
@@ -148,31 +148,31 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
 
       {/* Form inline */}
       {!readOnly && showForm && (
-        <form onSubmit={handleSubmit} className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-200">
+        <form onSubmit={handleSubmit} className="bg-surface rounded-xl p-4 space-y-3 border border-line">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Tipo</label>
+              <label className="block text-xs font-medium text-ink-muted mb-1">Tipo</label>
               <select value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))} className={inputClass}>
                 {TIPO_OPTIONS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Nome / descricao</label>
+              <label className="block text-xs font-medium text-ink-muted mb-1">Nome / descricao</label>
               <input value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Ex: Proposta Rua do Clube" className={inputClass} required />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Notas (opcional)</label>
+            <label className="block text-xs font-medium text-ink-muted mb-1">Notas (opcional)</label>
             <input value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} placeholder="Observacoes..." className={inputClass} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Ficheiro (opcional — PDF, DOCX, XLSX...)</label>
+            <label className="block text-xs font-medium text-ink-muted mb-1">Ficheiro (opcional — PDF, DOCX, XLSX...)</label>
             <input type="file" onChange={e => setForm(f => ({ ...f, file: e.target.files?.[0] || null }))}
-              className="w-full text-sm text-gray-600 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:text-xs file:font-medium hover:file:bg-indigo-100" />
+              className="w-full text-sm text-ink-muted file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-surface-muted file:text-ink file:text-xs file:font-medium hover:file:bg-surface-muted" />
           </div>
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setShowForm(false)} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100">Cancelar</button>
-            <button type="submit" disabled={saving} className="px-4 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
+            <button type="button" onClick={() => setShowForm(false)} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-line text-ink-muted hover:bg-surface-muted">Cancelar</button>
+            <button type="submit" disabled={saving} className="px-4 py-1.5 text-xs font-medium rounded-lg bg-accent text-accent-foreground hover:brightness-[1.04] disabled:opacity-50">
               {saving ? 'A guardar...' : 'Guardar'}
             </button>
           </div>
@@ -181,24 +181,24 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
 
       {/* Lista */}
       {documentosFiltrados.length === 0 ? (
-        <div className="text-center py-8 text-gray-400 text-sm">
+        <div className="text-center py-8 text-ink-muted text-sm">
           Nenhum documento {direcao === 'enviado' ? 'enviado' : 'recebido'} registado.
         </div>
       ) : (
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-line">
           {documentosFiltrados.map(doc => (
             <div key={doc.id} className="flex items-center gap-3 py-3 group">
-              <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
-                <FileText className="w-4 h-4 text-indigo-500" />
+              <div className="w-8 h-8 rounded-lg bg-surface-muted flex items-center justify-center shrink-0">
+                <FileText className="w-4 h-4 text-ink-muted" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-800 truncate">{doc.nome}</p>
-                <div className="flex items-center gap-2 text-xs text-gray-400">
-                  <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{TIPO_LABELS[doc.tipo] || doc.tipo}</span>
+                <p className="text-sm font-medium text-ink truncate">{doc.nome}</p>
+                <div className="flex items-center gap-2 text-xs text-ink-muted">
+                  <span className="px-1.5 py-0.5 rounded bg-surface-muted text-ink-muted">{TIPO_LABELS[doc.tipo] || doc.tipo}</span>
                   {doc.imovel_nome && <span>/ {doc.imovel_nome}</span>}
                   <span>{fmtDate(doc.created_at)}</span>
                 </div>
-                {doc.notas && <p className="text-xs text-gray-400 mt-0.5 truncate">{doc.notas}</p>}
+                {doc.notas && <p className="text-xs text-ink-muted mt-0.5 truncate">{doc.notas}</p>}
               </div>
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 {doc.storage_path ? (
@@ -206,7 +206,7 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
                     <button
                       type="button"
                       onClick={() => openDocument(`/api/crm/investidores/${investidorId}/documentos/${doc.id}/ficheiro`).catch(() => {})}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600"
+                      className="p-1.5 rounded-lg hover:bg-surface-muted text-ink-muted hover:text-ink"
                       title="Abrir o ficheiro enviado"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -214,7 +214,7 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
                     <button
                       type="button"
                       onClick={() => openDocument(`/api/crm/investidores/${investidorId}/documentos/${doc.id}/ficheiro`, { download: true, filename: doc.nome }).catch(() => {})}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600"
+                      className="p-1.5 rounded-lg hover:bg-surface-muted text-ink-muted hover:text-ink"
                       title="Descarregar o ficheiro enviado"
                     >
                       <FileDown className="w-3.5 h-3.5" />
@@ -225,7 +225,7 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
                     <button
                       type="button"
                       onClick={() => openDocument(`/api/crm/imoveis/${doc.imovel_id}/relatorio-investidor`).catch(() => {})}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600"
+                      className="p-1.5 rounded-lg hover:bg-surface-muted text-ink-muted hover:text-ink"
                       title="Registo sem ficheiro anexado — abrir o dossier atual do imóvel"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -233,7 +233,7 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
                     <button
                       type="button"
                       onClick={() => openDocument(`/api/crm/imoveis/${doc.imovel_id}/relatorio-investidor`, { download: true }).catch(() => {})}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-indigo-600"
+                      className="p-1.5 rounded-lg hover:bg-surface-muted text-ink-muted hover:text-ink"
                       title="Registo sem ficheiro anexado — descarregar o dossier atual do imóvel"
                     >
                       <FileDown className="w-3.5 h-3.5" />
@@ -243,7 +243,7 @@ export function DocumentosInvestidorTab({ investidorId, documentos: initialDocs,
                 {!readOnly && (
                   <button
                     onClick={() => handleDelete(doc.id)}
-                    className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
+                    className="p-1.5 rounded-lg hover:bg-danger/10 text-ink-muted hover:text-danger"
                     title="Remover"
                   >
                     <Trash2 className="w-3.5 h-3.5" />

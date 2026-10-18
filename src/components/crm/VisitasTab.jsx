@@ -31,7 +31,7 @@ const fmtDateTime = d => {
   } catch { return d }
 }
 
-const inputClass = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300'
+const inputClass = 'w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300'
 
 export function VisitasTab({ imovelId, onUpdate }) {
   const [items, setItems] = useState([])
@@ -145,7 +145,7 @@ export function VisitasTab({ imovelId, onUpdate }) {
   return (
     <div className="p-4 sm:p-6">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-xs text-gray-400 uppercase tracking-wide flex items-center gap-1.5">
+        <p className="text-xs text-ink-muted uppercase tracking-wide flex items-center gap-1.5">
           <MapPin className="w-3.5 h-3.5" />
           Histórico de Visitas ({items.length})
         </p>
@@ -153,7 +153,7 @@ export function VisitasTab({ imovelId, onUpdate }) {
           <button
             type="button"
             onClick={() => setShowForm(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-yellow-500 text-white hover:bg-yellow-600 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-warning text-white hover:bg-warning transition-colors"
           >
             <Plus className="w-3.5 h-3.5" /> Marcar visita
           </button>
@@ -161,21 +161,21 @@ export function VisitasTab({ imovelId, onUpdate }) {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-200 mb-4">
+        <form onSubmit={handleSubmit} className="bg-surface rounded-xl p-4 space-y-3 border border-line mb-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Data e hora *</label>
+              <label className="block text-xs text-ink-muted mb-1">Data e hora *</label>
               <input type="datetime-local" required value={form.data_hora}
                 onChange={e => setForm(p => ({ ...p, data_hora: e.target.value }))} className={inputClass} />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Estado</label>
+              <label className="block text-xs text-ink-muted mb-1">Estado</label>
               <select value={form.estado} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))} className={inputClass}>
                 {ESTADOS.map(es => <option key={es.key} value={es.key}>{es.label}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Investidor (opcional)</label>
+              <label className="block text-xs text-ink-muted mb-1">Investidor (opcional)</label>
               <select value={form.investidor_id} onChange={e => setForm(p => ({ ...p, investidor_id: e.target.value }))} className={inputClass}>
                 <option value="">— sem investidor (visita interna) —</option>
                 {investidores.map(inv => <option key={inv.id} value={inv.id}>{inv.nome}</option>)}
@@ -183,7 +183,7 @@ export function VisitasTab({ imovelId, onUpdate }) {
             </div>
             {form.estado === 'realizada' && (
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Resultado</label>
+                <label className="block text-xs text-ink-muted mb-1">Resultado</label>
                 <select value={form.resultado} onChange={e => setForm(p => ({ ...p, resultado: e.target.value }))} className={inputClass}>
                   {RESULTADOS.map(r => <option key={r} value={r}>{r ? r[0].toUpperCase() + r.slice(1) : '— por avaliar —'}</option>)}
                 </select>
@@ -191,18 +191,18 @@ export function VisitasTab({ imovelId, onUpdate }) {
             )}
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Notas</label>
+            <label className="block text-xs text-ink-muted mb-1">Notas</label>
             <textarea value={form.notas} rows={3}
               onChange={e => setForm(p => ({ ...p, notas: e.target.value }))} className={inputClass}
               placeholder="O que se observou, feedback do investidor, próximos passos..." />
           </div>
           <div className="flex gap-2">
             <button type="submit" disabled={saving || !form.data_hora}
-              className="px-4 py-2 text-white text-xs font-medium rounded-lg bg-yellow-500 hover:bg-yellow-600 disabled:opacity-50">
+              className="px-4 py-2 text-white text-xs font-medium rounded-lg bg-warning hover:bg-warning disabled:opacity-50">
               {saving ? 'A gravar...' : (editingId ? 'Atualizar' : 'Registar')}
             </button>
             <button type="button" onClick={resetForm}
-              className="px-4 py-2 bg-gray-100 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-200">
+              className="px-4 py-2 bg-surface-muted text-ink-muted text-xs font-medium rounded-lg hover:bg-line">
               Cancelar
             </button>
           </div>
@@ -210,9 +210,9 @@ export function VisitasTab({ imovelId, onUpdate }) {
       )}
 
       {loading ? (
-        <div className="text-center py-6 text-gray-400 text-sm">A carregar...</div>
+        <div className="text-center py-6 text-ink-muted text-sm">A carregar...</div>
       ) : items.length === 0 ? (
-        <div className="text-center py-8 text-gray-400 text-sm bg-gray-50 rounded-xl border border-dashed border-gray-200">
+        <div className="text-center py-8 text-ink-muted text-sm bg-surface rounded-xl border border-dashed border-line">
           Ainda não há visitas registadas para este imóvel.
         </div>
       ) : (
@@ -221,12 +221,12 @@ export function VisitasTab({ imovelId, onUpdate }) {
             const meta = estadoMeta(it.estado)
             const Icon = meta.icon
             return (
-              <div key={it.id} className="rounded-lg border border-gray-200 px-3 py-2.5 bg-white hover:bg-gray-50 transition-colors">
+              <div key={it.id} className="rounded-lg border border-line px-3 py-2.5 bg-surface-raised hover:bg-surface transition-colors">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <button type="button" onClick={() => setFichaVisita(it)}
-                        className="text-sm font-semibold text-gray-900 hover:text-yellow-700 hover:underline"
+                        className="text-sm font-semibold text-ink hover:text-warning hover:underline"
                         title="Abrir ficha de visita">
                         {fmtDateTime(it.dataHora)}
                       </button>
@@ -236,45 +236,45 @@ export function VisitasTab({ imovelId, onUpdate }) {
                         {meta.label}
                       </span>
                       {fichaTemConteudo(it.ficha) && (
-                        <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-700">
+                        <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-warning/10 border border-warning/30 text-warning">
                           <ClipboardList className="w-3 h-3" /> Ficha preenchida
                         </span>
                       )}
                       {it.investidorNome && (
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-blue-50 border border-blue-100 text-blue-700">
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-surface-muted border border-line text-ink">
                           c/ {it.investidorNome}
                         </span>
                       )}
                       {it.resultado && (
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-gray-50 border border-gray-200 text-gray-600 capitalize">
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-surface border border-line text-ink-muted capitalize">
                           {it.resultado}
                         </span>
                       )}
                     </div>
                     {it.notas && (
-                      <p className="text-sm text-gray-600 mt-1.5 whitespace-pre-line">{it.notas}</p>
+                      <p className="text-sm text-ink-muted mt-1.5 whitespace-pre-line">{it.notas}</p>
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button onClick={() => setFichaVisita(it)}
-                      className="text-xs px-2 py-1 rounded-lg bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200"
+                      className="text-xs px-2 py-1 rounded-lg bg-warning/10 text-warning hover:bg-warning/15 border border-warning/30"
                       title="Ficha de visita">
                       <ClipboardList className="w-3.5 h-3.5 inline" /> Ficha
                     </button>
                     {it.estado === 'agendada' && (
                       <button onClick={() => handleEstadoChange(it, 'realizada')}
-                        className="text-xs px-2 py-1 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
+                        className="text-xs px-2 py-1 rounded-lg bg-success/10 text-success hover:bg-success/15 border border-success/30"
                         title="Marcar como realizada">
                         <CheckCircle2 className="w-3.5 h-3.5 inline" /> Realizada
                       </button>
                     )}
                     <button onClick={() => startEdit(it)}
-                      className="text-xs px-2 py-1 rounded-lg bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200"
+                      className="text-xs px-2 py-1 rounded-lg bg-surface text-ink-muted hover:bg-surface-muted border border-line"
                       title="Editar">
                       Editar
                     </button>
                     <button onClick={() => handleDelete(it.id)}
-                      className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                      className="text-ink-muted hover:text-danger transition-colors p-1"
                       title="Apagar">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

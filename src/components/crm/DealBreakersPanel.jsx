@@ -12,8 +12,8 @@ import { useRefreshOnMutation } from '../../hooks/useRefreshOnMutation.js'
 import { TransicaoFaseModal } from './TransicaoFaseModal.jsx'
 
 const ESTADO = {
-  ok:        { label: 'OK',       cls: 'bg-green-50 text-green-700' },
-  por_fazer: { label: 'Em falta', cls: 'bg-gray-100 text-gray-600' },
+  ok:        { label: 'OK',       cls: 'bg-success/10 text-success' },
+  por_fazer: { label: 'Em falta', cls: 'bg-surface-muted text-ink-muted' },
   problema:  { label: 'Problema', cls: 'bg-orange-50 text-orange-700' },
 }
 // Requisitos que se registam numa aba do imóvel, e não na janela.
@@ -46,18 +46,18 @@ export function DealBreakersPanel({ imovelId, imovel, onAbrirTab, onUpdate }) {
   }
 
   return (
-    <div className="border-b border-gray-200 dark:border-neutral-800">
+    <div className="border-b border-line ">
       <button type="button" onClick={() => setAberto(!expandido)}
-        className="w-full flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-neutral-800/50"
+        className="w-full flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-2.5 text-left hover:bg-surface "
         aria-expanded={expandido}>
         <span className="flex items-center gap-2 text-sm">
-          <span className={`w-2 h-2 rounded-full ${pendentes === 0 ? 'bg-green-500' : 'bg-orange-500'}`} />
-          <span className="font-semibold text-gray-800 dark:text-neutral-100">Requisitos da fase</span>
-          {d.titulo && <><span className="text-gray-400">·</span><span className="text-gray-600 dark:text-neutral-300">{d.titulo}</span></>}
+          <span className={`w-2 h-2 rounded-full ${pendentes === 0 ? 'bg-success' : 'bg-orange-500'}`} />
+          <span className="font-semibold text-ink ">Requisitos da fase</span>
+          {d.titulo && <><span className="text-ink-muted">·</span><span className="text-ink-muted ">{d.titulo}</span></>}
         </span>
         <span className="flex items-center gap-2 text-xs">
-          <span className={pendentes === 0 ? 'text-green-700' : 'text-orange-700 font-semibold'}>{resumo}</span>
-          {expandido ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          <span className={pendentes === 0 ? 'text-success' : 'text-orange-700 font-semibold'}>{resumo}</span>
+          {expandido ? <ChevronUp className="w-4 h-4 text-ink-muted" /> : <ChevronDown className="w-4 h-4 text-ink-muted" />}
         </span>
       </button>
       {expandido && (
@@ -65,11 +65,11 @@ export function DealBreakersPanel({ imovelId, imovel, onAbrirTab, onUpdate }) {
           {linhas.map((i, idx) => (
             <li key={`${i.id}-${idx}`} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
               <span className={`text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 ${ESTADO[i.estado].cls}`}>{ESTADO[i.estado].label}</span>
-              <span className="text-gray-800 dark:text-neutral-100">{i.titulo}</span>
-              {i.detalhe && <span className="text-xs text-gray-500 dark:text-neutral-400">— {i.detalhe}</span>}
+              <span className="text-ink ">{i.titulo}</span>
+              {i.detalhe && <span className="text-xs text-ink-muted ">— {i.detalhe}</span>}
               {i.estado !== 'ok' && (
                 <button type="button" onClick={() => abrir(i)}
-                  className="ml-auto text-xs font-medium px-2 py-0.5 rounded-lg bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200">
+                  className="ml-auto text-xs font-medium px-2 py-0.5 rounded-lg bg-warning/10 text-warning hover:bg-warning/15 border border-warning/30">
                   {ROTULO_ACAO[i.acao] || 'Abrir'}
                 </button>
               )}

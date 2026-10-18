@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react'
 import { apiFetch } from '../../lib/api.js'
 import { DECISOES, normalizeFicha } from '../../constants/fichaVisitaSchema.js'
 
-const inputClass = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300'
+const inputClass = 'w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300'
 const DECISOES_ESPERA = { PERITO: 'Parecer técnico', SEGUNDA_VISITA: 'Segunda visita', STAND_BY: 'Rever informação em falta' }
 const EFEITO_DECISAO = {
   GO: 'O imóvel pode entrar em «Estudo de VVR».',
@@ -37,7 +37,7 @@ const paraLocal = iso => {
 function Campo({ label, children }) {
   return (
     <div>
-      <label className="text-xs font-medium text-gray-600 block mb-1">{label}</label>
+      <label className="text-xs font-medium text-ink-muted block mb-1">{label}</label>
       {children}
     </div>
   )
@@ -160,11 +160,11 @@ export function TransicaoFaseModal({ imovel, destino, requisitos = [], mover = t
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center backdrop-blur-sm p-4" onClick={onCancel}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-bold text-gray-800 mb-1">
+      <div className="bg-surface-raised rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <h3 className="text-lg font-bold text-ink mb-1">
           {mover ? `Mover para ${destino}` : pedeVisita ? 'Registar visita' : 'Registar em falta'}
         </h3>
-        <p className="text-xs text-gray-500 mb-4">
+        <p className="text-xs text-ink-muted mb-4">
           {imovel?.nome ? `Imóvel: ${imovel.nome}. ` : ''}
           {mover ? 'Esta fase precisa do seguinte:' : 'Fica gravado no registo do imóvel.'}
         </p>
@@ -217,8 +217,8 @@ export function TransicaoFaseModal({ imovel, destino, requisitos = [], mover = t
                   <input type="date" className={inputClass} value={v.proximo} onChange={e => setV(p => ({ ...p, proximo: e.target.value }))} />
                 </Campo>
               )}
-              {v.decisao && <p className="text-xs text-gray-500">{EFEITO_DECISAO[v.decisao]}</p>}
-              <p className="text-[11px] text-gray-400">A Ficha de Visita completa continua disponível na aba Visitas.</p>
+              {v.decisao && <p className="text-xs text-ink-muted">{EFEITO_DECISAO[v.decisao]}</p>}
+              <p className="text-[11px] text-ink-muted">A Ficha de Visita completa continua disponível na aba Visitas.</p>
             </>
           )}
 
@@ -242,7 +242,7 @@ export function TransicaoFaseModal({ imovel, destino, requisitos = [], mover = t
           )}
 
           {pedeVvr && (
-            <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+            <div className="rounded-lg bg-warning/10 border border-warning/30 px-3 py-2 text-sm text-warning">
               Falta definir o VVR no estudo de mercado. Regista-se na aba Análise Financeira do imóvel.
               {onAbrirImovel && (
                 <button type="button" onClick={onAbrirImovel} className="block mt-1.5 text-xs font-semibold underline">Abrir o imóvel</button>
@@ -251,17 +251,16 @@ export function TransicaoFaseModal({ imovel, destino, requisitos = [], mover = t
           )}
         </div>
 
-        {erro && <p className="text-xs text-red-600 mb-3">{erro}</p>}
+        {erro && <p className="text-xs text-danger mb-3">{erro}</p>}
 
         <div className="flex justify-end gap-2">
           <button onClick={onCancel} disabled={saving}
-            className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+            className="px-4 py-2 text-sm font-medium rounded-lg border border-line text-ink-muted hover:bg-surface disabled:opacity-50">
             {soVvr ? 'Fechar' : 'Cancelar'}
           </button>
           {!soVvr && (
             <button onClick={confirmar} disabled={saving}
-              className="px-4 py-2 text-sm font-medium rounded-lg text-white disabled:opacity-50"
-              style={{ backgroundColor: '#C9A84C' }}>
+              className="px-4 py-2 text-sm font-medium rounded-lg bg-accent text-accent-foreground hover:brightness-[1.04] disabled:opacity-50">
               {saving ? 'A guardar…' : mover && !(pedeVisita && v.decisao && v.decisao !== 'GO') ? 'Guardar e mover' : 'Guardar'}
             </button>
           )}

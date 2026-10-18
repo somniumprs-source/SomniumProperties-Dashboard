@@ -38,7 +38,7 @@ export function TabKPIs({ tab, regiao }) {
     ],
     'Despesas': [
       { label: 'Total', value: kpis.total },
-      { label: 'Burn Rate', value: EUR(kpis.burn_rate), color: 'text-red-500' },
+      { label: 'Burn Rate', value: EUR(kpis.burn_rate), color: 'text-danger' },
       { label: 'Anual', value: EUR(kpis.total_anual) },
     ],
   }[tab] ?? []
@@ -46,9 +46,9 @@ export function TabKPIs({ tab, regiao }) {
   return (
     <div className="flex flex-wrap md:flex-nowrap md:overflow-x-auto gap-2 pb-1">
       {items.map((item, i) => (
-        <div key={i} className="bg-white rounded-xl border border-gray-200 px-3.5 py-2.5 min-w-fit flex-1 md:flex-none">
-          <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold truncate">{item.label}</p>
-          <p className={`text-base font-bold ${item.color ?? 'text-gray-900'}`}>{item.value}</p>
+        <div key={i} className="bg-surface-raised rounded-xl border border-line px-3.5 py-2.5 min-w-fit flex-1 md:flex-none">
+          <p className="text-overline uppercase text-ink-muted truncate">{item.label}</p>
+          <p className={`text-base font-semibold num ${item.color ?? 'text-ink'}`}>{item.value ?? '—'}</p>
         </div>
       ))}
     </div>

@@ -1,3 +1,4 @@
+import { dotClass } from '../../lib/statusTone.js'
 import { useState, useRef, useMemo, memo } from 'react'
 import { EUR } from '../../constants.js'
 
@@ -65,6 +66,9 @@ const COLUMN_COLORS = {
 
 const DEFAULT_COLORS = { bg: 'bg-gray-50', border: 'border-gray-200', header: 'bg-gray-100 text-gray-700' }
 
+// A cor da fase aparece só num ponto no cabeçalho; a coluna é neutra.
+const dotDe = (colors) => dotClass(colors.bg)
+
 const KanbanCard = memo(function KanbanCard({ item, dragging, onDragStart, onDragEnd, onCardClick, onDelete, renderCard }) {
   // view-transition-name único por item → o browser anima a transição entre colunas.
   const viewName = `kanban-card-${item.id}`
@@ -75,14 +79,15 @@ const KanbanCard = memo(function KanbanCard({ item, dragging, onDragStart, onDra
       onDragEnd={onDragEnd}
       onClick={() => onCardClick?.(item.id)}
       style={{ viewTransitionName: viewName }}
-      className={`bg-white dark:bg-neutral-900 rounded-md border border-gray-200 dark:border-neutral-800 p-2 shadow-xs cursor-pointer hover:shadow-md hover:border-indigo-300 transition-all group/card relative ${
+      className={`bg-surface-raised rounded-lg border border-line p-2.5 shadow-xs cursor-pointer hover:shadow-sm hover:border-ink/20 transition-[border-color,box-shadow,opacity,transform] duration-fast ease-entry group/card relative ${
         dragging ? 'opacity-50 cursor-grabbing scale-[0.98]' : ''
       }`}
     >
       {onDelete && (
         <button
           onClick={e => { e.stopPropagation(); onDelete(item.id, item.nome ?? item.movimento) }}
-          className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-red-100 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center text-xs opacity-0 group-hover/card:opacity-100 transition-all"
+          className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-danger/10 text-danger hover:bg-danger hover:text-white flex items-center justify-center text-xs opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100 transition-[opacity,background-color,color] duration-fast"
+          aria-label="Apagar"
           title="Apagar">
           ×
         </button>
@@ -169,17 +174,16 @@ function KanbanBoardImpl({ columns, items, groupField, renderCard, onMove, onCar
         return (
           <div
             key={col}
-            className={`flex-shrink-0 snap-center sm:snap-align-none w-[85vw] sm:w-64 rounded-xl border ${colors.border} ${colors.bg} flex flex-col ${isDragTarget ? 'ring-2 ring-indigo-400' : ''}`}
+            className={`flex-shrink-0 snap-center sm:snap-align-none w-[85vw] sm:w-64 rounded-xl border border-line bg-surface-muted/50 flex flex-col transition-shadow duration-fast ${isDragTarget ? 'ring-2 ring-accent/60' : ''}`}
             onDragOver={e => handleDragOver(e, col)}
             onDrop={e => handleDrop(e, col)}
             onDragLeave={() => setDragOver(null)}
           >
             {/* Header */}
-            <div className={`px-3 py-2 rounded-t-xl ${colors.header} flex items-center justify-between`}>
-              <span className="text-xs font-semibold uppercase tracking-wide truncate">{col}</span>
-              <span className="text-xs font-bold bg-white bg-opacity-50 rounded-full w-5 h-5 flex items-center justify-center">
-                {colItems.length}
-              </span>
+            <div className="px-3 py-2.5 flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full shrink-0 ${dotDe(colors)}`} aria-hidden="true" />
+              <span className="flex-1 text-caption font-semibold text-ink truncate" title={col}>{col}</span>
+              <span className="text-overline font-medium text-ink-muted num">{colItems.length}</span>
             </div>
 
             {/* Cards */}
@@ -197,7 +201,7 @@ function KanbanBoardImpl({ columns, items, groupField, renderCard, onMove, onCar
                 />
               ))}
               {colItems.length === 0 && (
-                <p className="text-xs text-gray-300 text-center py-6">Vazio</p>
+                <p className="text-caption text-ink-muted/70 text-center py-6">Vazio</p>
               )}
             </div>
           </div>

@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react'
 import { apiFetch } from '../../lib/api.js'
 import { CHAMADAS_IMOVEL, chamadaSugerida } from '../../constants/pipelineImoveis.js'
 
-const inputClass = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300'
+const inputClass = 'w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300'
 
 function emHoras(h) {
   const d = new Date(Date.now() + h * 3600000)
@@ -79,20 +79,20 @@ export function AgendarPassoModal({ imovel, tipo, destino, onAntes, onCancel, on
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center backdrop-blur-sm p-4" onClick={onCancel}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-bold text-gray-800 mb-1">{destino ? `Mover para ${destino}` : t.titulo}</h3>
-        <p className="text-xs text-gray-500 mb-4">{imovel?.nome ? `Imóvel: ${imovel.nome}. ` : ''}{t.ajuda}</p>
+      <div className="bg-surface-raised rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+        <h3 className="text-lg font-bold text-ink mb-1">{destino ? `Mover para ${destino}` : t.titulo}</h3>
+        <p className="text-xs text-ink-muted mb-4">{imovel?.nome ? `Imóvel: ${imovel.nome}. ` : ''}{t.ajuda}</p>
         {tipo === 'chamada' && (
           <div className="flex gap-1.5 mb-3">
             {Object.entries(CHAMADAS_IMOVEL).map(([k, c]) => (
               <button key={k} type="button" onClick={() => setTipoChamada(k)}
-                className={`px-3 py-1 text-xs font-medium rounded-full border ${tipoChamada === k ? 'border-yellow-400 bg-yellow-50 text-gray-800' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                className={`px-3 py-1 text-xs font-medium rounded-full border ${tipoChamada === k ? 'border-yellow-400 bg-warning/10 text-ink' : 'border-line text-ink-muted hover:bg-surface'}`}>
                 {c.nome}
               </button>
             ))}
           </div>
         )}
-        <label className="text-xs font-medium text-gray-600 block mb-1">
+        <label className="text-xs font-medium text-ink-muted block mb-1">
           {tipo === 'chamada' ? 'Data e hora da próxima tentativa' : visitaAgendada ? 'Data e hora da visita (remarcar)' : 'Data e hora da visita'}
         </label>
         <input type="datetime-local" className={inputClass} value={quando} onChange={e => setQuando(e.target.value)} />
@@ -100,20 +100,20 @@ export function AgendarPassoModal({ imovel, tipo, destino, onAntes, onCancel, on
           <div className="flex gap-1.5 mt-2">
             {[24, 72].map(h => (
               <button key={h} type="button" onClick={() => setQuando(emHoras(h))}
-                className="px-2.5 py-1 text-xs rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50">
+                className="px-2.5 py-1 text-xs rounded-full border border-line text-ink-muted hover:bg-surface">
                 Daqui a {h}h
               </button>
             ))}
           </div>
         )}
-        {erro && <p className="text-xs text-red-600 mt-3">{erro}</p>}
+        {erro && <p className="text-xs text-danger mt-3">{erro}</p>}
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onCancel} disabled={saving}
-            className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+            className="px-4 py-2 text-sm font-medium rounded-lg border border-line text-ink-muted hover:bg-surface disabled:opacity-50">
             Cancelar
           </button>
           <button onClick={confirmar} disabled={saving}
-            className="px-4 py-2 text-sm font-medium rounded-lg text-white disabled:opacity-50" style={{ backgroundColor: '#C9A84C' }}>
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-accent text-accent-foreground hover:brightness-[1.04] disabled:opacity-50">
             {saving ? 'A guardar…' : destino ? 'Agendar e mover' : 'Agendar'}
           </button>
         </div>

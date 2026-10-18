@@ -25,7 +25,7 @@ const ROTA = { consultor: 'consultores', investidor: 'investidores', parceiro: '
 // Espelho de TIPOS_CONTACTO em src/db/contactoPessoa.js.
 const TIPOS = { cold_call: 'Cold Call', discovery_call: 'Discovery Call', follow_up: 'Follow-up' }
 const CANAIS = ['Chamada', 'WhatsApp', 'Email', 'Reunião']
-const btn = 'text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50'
+const btn = 'text-xs font-medium px-2 py-1 rounded-lg border border-line text-ink-muted hover:bg-surface'
 const nomeAssunto = a => a.imovel_nome || a.texto || 'Imóvel'
 const MOSTRAR = 12 // registos visíveis antes de «Ver mais antigos»
 const PREFIXO = /^\[[^\]]+\]\s*/ // etiqueta automática, ex.: «[REACTIVAÇÃO EMAIL]»
@@ -99,32 +99,32 @@ function RegistoArvore({ h, lado, rota, pessoaId, onSaved }) {
 
   return (
     <li className="relative grid grid-cols-[36px_1fr] sm:grid-cols-[1fr_44px_1fr] gap-x-3 sm:gap-x-0 items-start">
-      <span className="col-start-1 row-start-1 row-span-2 sm:row-span-1 sm:col-start-2 justify-self-center z-10 w-9 h-9 rounded-full border-2 bg-white dark:bg-neutral-900 grid place-items-center"
+      <span className="col-start-1 row-start-1 row-span-2 sm:row-span-1 sm:col-start-2 justify-self-center z-10 w-9 h-9 rounded-full border-2 bg-surface-raised  grid place-items-center"
         style={{ borderColor: cor, color: cor }} title={canal}>
         <Icone className="w-4 h-4" />
       </span>
       <div className={`col-start-2 row-start-1 sm:row-start-1 pt-0.5 sm:pt-1.5 tabular-nums leading-tight ${dir ? 'sm:col-start-1 sm:text-right sm:pr-3' : 'sm:col-start-3 sm:pl-3'}`}>
         <span className="text-sm sm:text-base font-bold mr-1.5 sm:mr-0 sm:block" style={{ color: cor }}>{dia}</span>
-        <span className="text-[11px] text-gray-400">{resto}</span>
+        <span className="text-[11px] text-ink-muted">{resto}</span>
       </div>
       <div className={`col-start-2 row-start-2 sm:row-start-1 min-w-0 grid gap-1.5 pb-1 ${dir ? 'sm:col-start-3 sm:pl-3' : 'sm:col-start-1 sm:pr-3'}`}>
         <button type="button" onClick={() => setAberto(v => !v)} aria-expanded={aberto}
-          className={`w-full rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 hover:shadow-sm transition-shadow text-left ${dir ? '' : 'sm:text-right'}`}
+          className={`w-full rounded-lg border border-line  bg-surface-raised  px-3 py-2 hover:shadow-sm transition-shadow text-left ${dir ? '' : 'sm:text-right'}`}
           onMouseEnter={e => { e.currentTarget.style.borderColor = cor }} onMouseLeave={e => { e.currentTarget.style.borderColor = '' }}>
           <span className="block text-[10px] font-semibold uppercase tracking-wider" style={{ color: cor }}>{canal}</span>
-          <span className="block text-sm font-semibold text-gray-800 dark:text-neutral-100 break-words">{tituloDe(h)}</span>
+          <span className="block text-sm font-semibold text-ink  break-words">{tituloDe(h)}</span>
         </button>
         {aberto && (
-          <div className="rounded-lg bg-gray-50 dark:bg-neutral-800/60 px-3 py-2 grid gap-1.5 text-xs text-left">
+          <div className="rounded-lg bg-surface  px-3 py-2 grid gap-1.5 text-xs text-left">
             {(h.resultado || h.proxima_data || h.autor) && (
               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                {h.resultado && <span className={h.resultado === 'Feito' ? 'text-green-700' : 'text-orange-700'}>{h.resultado}</span>}
-                {h.proxima_data && <span className="text-gray-400">seguinte a {fmtDia(h.proxima_data)}</span>}
-                {h.autor && <span className="text-gray-400">{h.autor}</span>}
+                {h.resultado && <span className={h.resultado === 'Feito' ? 'text-success' : 'text-orange-700'}>{h.resultado}</span>}
+                {h.proxima_data && <span className="text-ink-muted">seguinte a {fmtDia(h.proxima_data)}</span>}
+                {h.autor && <span className="text-ink-muted">{h.autor}</span>}
               </div>
             )}
             {h.assuntos?.some(a => !a.imovel_id) && (
-              <p className="text-gray-500">Assuntos: {h.assuntos.filter(a => !a.imovel_id).map(nomeAssunto).join(', ')}</p>
+              <p className="text-ink-muted">Assuntos: {h.assuntos.filter(a => !a.imovel_id).map(nomeAssunto).join(', ')}</p>
             )}
             {editar ? (
               <div className="grid gap-1">
@@ -134,24 +134,24 @@ function RegistoArvore({ h, lado, rota, pessoaId, onSaved }) {
                     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); guardar() }
                   }}
                   placeholder="Nota" className={inputClass} />
-                {erro && <p className="text-red-600">{erro}</p>}
+                {erro && <p className="text-danger">{erro}</p>}
                 <div className="flex justify-end gap-1.5">
                   <button type="button" onClick={() => setEditar(false)} disabled={saving} className={btn}>Cancelar</button>
                   <button type="button" onClick={guardar} disabled={saving}
-                    className="text-xs font-semibold px-2 py-1 rounded-lg disabled:opacity-50" style={{ backgroundColor: '#1A1A1A', color: '#C9A84C' }}>
+                    className="text-xs font-semibold px-2 py-1 rounded-lg disabled:opacity-50 bg-ink text-surface hover:opacity-90">
                     {saving ? 'A guardar…' : 'Guardar nota'}
                   </button>
                 </div>
               </div>
             ) : h.notas ? (
               <div className="flex items-start justify-between gap-2">
-                <p className="text-gray-700 dark:text-neutral-200 whitespace-pre-line break-words min-w-0">{limpaNota(h.notas)}</p>
-                <button type="button" onClick={abrirEdicao} aria-label="Editar nota" title="Editar nota" className="shrink-0 text-gray-400 hover:text-yellow-700">
+                <p className="text-ink  whitespace-pre-line break-words min-w-0">{limpaNota(h.notas)}</p>
+                <button type="button" onClick={abrirEdicao} aria-label="Editar nota" title="Editar nota" className="shrink-0 text-ink-muted hover:text-warning">
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
               </div>
             ) : (
-              <button type="button" onClick={abrirEdicao} className="justify-self-start text-gray-400 hover:text-yellow-700">+ nota</button>
+              <button type="button" onClick={abrirEdicao} className="justify-self-start text-ink-muted hover:text-warning">+ nota</button>
             )}
           </div>
         )}
@@ -182,14 +182,14 @@ function NotaForm({ rota, pessoaId, onCancel, onDone }) {
     }
   }
   return (
-    <form onSubmit={guardar} className="mt-2 rounded-lg border border-yellow-200 bg-yellow-50/50 p-2.5 grid gap-2">
+    <form onSubmit={guardar} className="mt-2 rounded-lg border border-warning/30 bg-warning/10 p-2.5 grid gap-2">
       <textarea rows={3} value={texto} onChange={e => setTexto(e.target.value)} autoFocus placeholder="Escreve a nota" aria-label="Nova nota" className={inputClass}
         onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) guardar(e) }} />
-      {erro && <p className="text-xs text-red-600">{erro}</p>}
+      {erro && <p className="text-xs text-danger">{erro}</p>}
       <div className="flex justify-end gap-1.5">
         <button type="button" onClick={onCancel} disabled={saving} className={btn}>Cancelar</button>
         <button type="submit" disabled={saving}
-          className="px-3 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-50" style={{ backgroundColor: '#1A1A1A', color: '#C9A84C' }}>
+          className="px-3 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-50 bg-ink text-surface hover:opacity-90">
           {saving ? 'A guardar…' : 'Guardar nota'}
         </button>
       </div>
@@ -208,9 +208,9 @@ function AssuntosEditor({ itens, setItens, opcoes }) {
       {itens.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-1.5">
           {itens.map((a, i) => (
-            <span key={a.id || `${a.imovel_id || a.texto}-${i}`} className="inline-flex items-center gap-1 text-[11px] rounded-full border border-gray-200 bg-white px-2 py-0.5 text-gray-700">
+            <span key={a.id || `${a.imovel_id || a.texto}-${i}`} className="inline-flex items-center gap-1 text-[11px] rounded-full border border-line bg-surface-raised px-2 py-0.5 text-ink">
               {nomeAssunto(a)}
-              <button type="button" onClick={() => setItens(itens.filter((_, j) => j !== i))} aria-label={`Retirar ${nomeAssunto(a)}`} className="text-gray-400 hover:text-red-600">
+              <button type="button" onClick={() => setItens(itens.filter((_, j) => j !== i))} aria-label={`Retirar ${nomeAssunto(a)}`} className="text-ink-muted hover:text-danger">
                 <X className="w-3 h-3" />
               </button>
             </span>
@@ -238,10 +238,10 @@ const OPORTUNIDADE_VAZIA = { nome: '', link: '', preco: '', tipologia: '', tipo:
 function OportunidadesEditor({ itens, setItens }) {
   const set = (i, k, v) => setItens(itens.map((o, j) => (j === i ? { ...o, [k]: v } : o)))
   return (
-    <div className="rounded-lg border border-dashed border-yellow-300 bg-white/60 p-2 grid gap-1.5">
+    <div className="rounded-lg border border-dashed border-warning/30 bg-surface-raised/60 p-2 grid gap-1.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] font-semibold text-gray-700">Oportunidades enviadas nesta chamada</p>
-        <span className="text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 bg-blue-50 text-blue-700">entram em Pré-aprovação</span>
+        <p className="text-[11px] font-semibold text-ink">Oportunidades enviadas nesta chamada</p>
+        <span className="text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 bg-surface-muted text-ink">entram em Pré-aprovação</span>
       </div>
       {itens.map((o, i) => (
         <div key={i} className="grid grid-cols-2 sm:grid-cols-[1.4fr_1.2fr_6.5rem_5rem_7.5rem_auto] gap-1.5 items-center">
@@ -253,13 +253,13 @@ function OportunidadesEditor({ itens, setItens }) {
             <option value="Market">Anunciado</option>
             <option value="Off-Market">Off-market</option>
           </select>
-          <button type="button" onClick={() => setItens(itens.filter((_, j) => j !== i))} aria-label={`Retirar oportunidade ${i + 1}`} className="justify-self-start text-gray-400 hover:text-red-600">
+          <button type="button" onClick={() => setItens(itens.filter((_, j) => j !== i))} aria-label={`Retirar oportunidade ${i + 1}`} className="justify-self-start text-ink-muted hover:text-danger">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
       ))}
       <button type="button" onClick={() => setItens([...itens, { ...OPORTUNIDADE_VAZIA }])}
-        className="justify-self-start inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border border-gray-200 bg-white text-gray-600 hover:bg-gray-50">
+        className="justify-self-start inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border border-line bg-surface-raised text-ink-muted hover:bg-surface">
         <Plus className="w-3 h-3" /> {itens.length ? 'outra oportunidade' : 'registar oportunidade'}
       </button>
     </div>
@@ -356,8 +356,8 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
 
   const rotuloMin = rotulo.toLowerCase()
   return (
-    <form onSubmit={guardar} className="mt-2 rounded-lg border border-yellow-200 bg-yellow-50/50 p-2.5 grid gap-2">
-      <p className="text-xs text-gray-600">
+    <form onSubmit={guardar} className="mt-2 rounded-lg border border-warning/30 bg-warning/10 p-2.5 grid gap-2">
+      <p className="text-xs text-ink-muted">
         {modo === 'agendar' ? `Fica como tarefa na agenda. Só há um ${rotuloMin} por pessoa: os imóveis a tratar entram como assuntos.`
           : modo === 'sem_sucesso' ? `Fica registado como tentado hoje (${fmtDia(emDias(0))}) sem sucesso. Os assuntos seguem para a nova data.`
           : modo === 'novo' ? `Fica na linha do tempo.${proximo ? ` O ${rotuloMin} marcado mantém-se, a não ser que indiques outra data em baixo.` : ''}`
@@ -367,16 +367,16 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
       {feito && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <label className="text-[11px] text-gray-500">Quando
+            <label className="text-[11px] text-ink-muted">Quando
               <input type="datetime-local" value={quando} onChange={e => setQuando(e.target.value)} className={inputClass} />
             </label>
-            <label className="text-[11px] text-gray-500">Canal
+            <label className="text-[11px] text-ink-muted">Canal
               <select value={canal} onChange={e => setCanal(e.target.value)} className={inputClass}>
                 {CANAIS.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </label>
             {tipo === 'investidor' && (
-              <label className="text-[11px] text-gray-500">Finalidade
+              <label className="text-[11px] text-ink-muted">Finalidade
                 <select value={finalidade} onChange={e => setFinalidade(e.target.value)} className={inputClass}>
                   <option value="discovery">Discovery</option>
                   <option value="follow_up">Follow Up</option>
@@ -386,10 +386,10 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
           </div>
           {marcados.length > 0 && (
             <div>
-              <p className="text-[11px] text-gray-500 mb-1">Assuntos tratados</p>
+              <p className="text-[11px] text-ink-muted mb-1">Assuntos tratados</p>
               <div className="flex flex-wrap gap-x-3 gap-y-1">
                 {marcados.map(a => (
-                  <label key={a.id} className="inline-flex items-center gap-1.5 text-xs text-gray-700">
+                  <label key={a.id} className="inline-flex items-center gap-1.5 text-xs text-ink">
                     <input type="checkbox" checked={tratados.includes(a.id)}
                       onChange={e => setTratados(e.target.checked ? [...tratados, a.id] : tratados.filter(x => x !== a.id))} />
                     {nomeAssunto(a)}
@@ -399,7 +399,7 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
             </div>
           )}
           <div>
-            <p className="text-[11px] text-gray-500 mb-1">{modo === 'novo' ? 'Assuntos (imóveis falados)' : 'Outros assuntos que surgiram'}</p>
+            <p className="text-[11px] text-ink-muted mb-1">{modo === 'novo' ? 'Assuntos (imóveis falados)' : 'Outros assuntos que surgiram'}</p>
             <AssuntosEditor itens={novos} setItens={setNovos} opcoes={opcoes} />
           </div>
           {comExtras && <OportunidadesEditor itens={oportunidades} setItens={setOportunidades} />}
@@ -412,16 +412,16 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
             accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg,.opus,.flac,.mp4,.webm"
             onChange={e => setAudio(e.target.files?.[0] || null)} />
           {audio ? (
-            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-yellow-200 bg-yellow-50 text-xs text-yellow-800">
+            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-warning/30 bg-warning/10 text-xs text-warning">
               <Mic className="w-3.5 h-3.5 shrink-0" />
               <span className="truncate flex-1">{audio.name}</span>
-              <button type="button" onClick={() => setAudio(null)} className="text-yellow-700 hover:text-red-600 shrink-0" aria-label="Retirar gravação">
+              <button type="button" onClick={() => setAudio(null)} className="text-warning hover:text-danger shrink-0" aria-label="Retirar gravação">
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
           ) : (
             <label htmlFor={`audio-contacto-${pessoaId}`}
-              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border border-dashed border-gray-300 text-xs text-gray-500 cursor-pointer hover:border-yellow-300 hover:text-yellow-700">
+              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border border-dashed border-line text-xs text-ink-muted cursor-pointer hover:border-warning/30 hover:text-warning">
               <Upload className="w-3.5 h-3.5" /> Anexar gravação da conversa (opcional)
             </label>
           )}
@@ -434,7 +434,7 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
       )}
 
       <div>
-        <p className="text-[11px] text-gray-500 mb-1">
+        <p className="text-[11px] text-ink-muted mb-1">
           {modo === 'agendar' ? 'Data do contacto' : modo === 'sem_sucesso' ? 'Nova data' : modo === 'novo' && proximo ? 'Mudar o próximo contacto para (opcional)' : 'Próximo contacto (opcional)'}
         </p>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -442,17 +442,17 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
           <input type="time" value={hora} onChange={e => setHora(e.target.value)} className={`${inputClass} sm:w-28`} aria-label="Hora (opcional)" title="Hora (opcional)" />
           {[[1, 'Amanhã'], [3, '3 dias'], [7, '1 semana'], [14, '2 semanas']].map(([n, r]) => (
             <button key={n} type="button" onClick={() => setData(emDias(n))}
-              className={`px-2 py-0.5 text-[11px] rounded-full border ${data === emDias(n) ? 'border-yellow-400 bg-yellow-100 text-yellow-800' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+              className={`px-2 py-0.5 text-[11px] rounded-full border ${data === emDias(n) ? 'border-yellow-400 bg-warning/15 text-warning' : 'border-line bg-surface-raised text-ink-muted hover:bg-surface'}`}>
               {r}
             </button>
           ))}
         </div>
         {(!feito || data) && (
           <div className="flex flex-wrap items-center gap-1.5 mt-1.5" role="radiogroup" aria-label="Tipo de contacto">
-            <span className="text-[11px] text-gray-500">Tipo</span>
+            <span className="text-[11px] text-ink-muted">Tipo</span>
             {Object.entries(TIPOS).map(([k, r]) => (
               <button key={k} type="button" role="radio" aria-checked={tipoContacto === k} onClick={() => setTipoContacto(k)}
-                className={`px-2 py-0.5 text-[11px] rounded-full border ${tipoContacto === k ? 'border-yellow-400 bg-yellow-100 text-yellow-800' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+                className={`px-2 py-0.5 text-[11px] rounded-full border ${tipoContacto === k ? 'border-yellow-400 bg-warning/15 text-warning' : 'border-line bg-surface-raised text-ink-muted hover:bg-surface'}`}>
                 {r}
               </button>
             ))}
@@ -462,19 +462,19 @@ function ContactoForm({ tipo, pessoaId, pessoa, modo, proximo, rotulo, tipoSuger
 
       {modo === 'agendar' && (
         <div>
-          <p className="text-[11px] text-gray-500 mb-1">Assuntos a tratar</p>
+          <p className="text-[11px] text-ink-muted mb-1">Assuntos a tratar</p>
           <AssuntosEditor itens={assuntos} setItens={setAssuntos} opcoes={opcoes} />
         </div>
       )}
 
-      {erro && <p className="text-xs text-red-600">{erro}</p>}
+      {erro && <p className="text-xs text-danger">{erro}</p>}
       <div className="flex justify-end gap-1.5">
         <button type="button" onClick={onCancel} disabled={saving}
-          className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+          className="px-3 py-1.5 text-xs font-medium rounded-lg border border-line bg-surface-raised text-ink-muted hover:bg-surface disabled:opacity-50">
           Cancelar
         </button>
         <button type="submit" disabled={saving}
-          className="px-3 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-50" style={{ backgroundColor: '#1A1A1A', color: '#C9A84C' }}>
+          className="px-3 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-50 bg-ink text-surface hover:opacity-90">
           {saving ? 'A guardar…' : 'Guardar'}
         </button>
       </div>
@@ -528,12 +528,12 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
   }
 
   return (
-    <div className="border-b border-gray-200 dark:border-neutral-800 px-4 sm:px-6 py-2.5">
+    <div className="border-b border-line  px-4 sm:px-6 py-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm font-semibold text-gray-800 dark:text-neutral-100">Próximos passos</span>
+        <span className="text-sm font-semibold text-ink ">Próximos passos</span>
         <span className="flex flex-wrap gap-1.5">
           <button type="button" onClick={() => setModo(modo === 'novo' ? null : 'novo')}
-            className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg bg-yellow-600 text-white hover:bg-yellow-700">
+            className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg bg-warning text-white hover:bg-yellow-700">
             <Plus className="w-3 h-3" /> Novo contacto
           </button>
           <button type="button" onClick={() => setModo(modo === 'nota' ? null : 'nota')} className={`inline-flex items-center gap-1 ${btn}`}>
@@ -544,43 +544,43 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
       </div>
 
       {!proximo ? (
-        <p className="text-xs text-gray-400 mt-1.5">
+        <p className="text-xs text-ink-muted mt-1.5">
           Sem contacto marcado.
-          {nota && <span className="text-gray-600"> Próxima ação anotada antes: «{nota}». Ao agendar, entra como assunto.</span>}
+          {nota && <span className="text-ink-muted"> Próxima ação anotada antes: «{nota}». Ao agendar, entra como assunto.</span>}
         </p>
       ) : (
         <div className="mt-2 grid gap-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 bg-yellow-50 text-yellow-700">
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 bg-warning/10 text-warning">
               <Icon className="w-3 h-3" /> {etiqueta}
             </span>
-            <span className={`font-medium tabular-nums ${atrasado ? 'text-orange-700' : 'text-gray-800 dark:text-neutral-100'}`}>{fmtQuando(proximo.quando)}</span>
+            <span className={`font-medium tabular-nums ${atrasado ? 'text-orange-700' : 'text-ink '}`}>{fmtQuando(proximo.quando)}</span>
             {atrasado && <span className="text-xs text-orange-700">em atraso</span>}
-            {proximo.funcionario && <span className="text-xs text-gray-400">{proximo.funcionario}</span>}
+            {proximo.funcionario && <span className="text-xs text-ink-muted">{proximo.funcionario}</span>}
             <span className="ml-auto inline-flex flex-wrap gap-1.5">
               <button type="button" onClick={() => setModo('feito')}
-                className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200">
+                className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-lg bg-success/10 text-success hover:bg-success/15 border border-success/30">
                 <Check className="w-3 h-3" /> Feito
               </button>
               <button type="button" onClick={() => setModo('sem_sucesso')}
                 className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-lg bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200">
                 <X className="w-3 h-3" /> Sem sucesso
               </button>
-              <button type="button" onClick={() => setModo('agendar')} className="text-xs font-medium px-2 py-0.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+              <button type="button" onClick={() => setModo('agendar')} className="text-xs font-medium px-2 py-0.5 rounded-lg border border-line text-ink-muted hover:bg-surface">
                 Mudar data ou assuntos
               </button>
             </span>
           </div>
-          <div className="flex flex-wrap items-center gap-1 text-xs text-gray-500">
+          <div className="flex flex-wrap items-center gap-1 text-xs text-ink-muted">
             <span>Assuntos:</span>
-            {proximo.assuntos.length === 0 && <span className="text-gray-400">nenhum indicado</span>}
+            {proximo.assuntos.length === 0 && <span className="text-ink-muted">nenhum indicado</span>}
             {proximo.assuntos.map(a => a.imovel_id ? (
               <button key={a.id} type="button" onClick={() => onNavigate?.('Imóveis', a.imovel_id)}
-                className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[11px] text-gray-700 hover:border-yellow-300">
+                className="rounded-full border border-line bg-surface-raised px-2 py-0.5 text-[11px] text-ink hover:border-warning/30">
                 {a.imovel_nome}{a.imovel_estado ? ` · ${String(a.imovel_estado).replace(/^\d+-\s*/, '')}` : ''}
               </button>
             ) : (
-              <span key={a.id} className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[11px] text-gray-700">{a.texto}</span>
+              <span key={a.id} className="rounded-full border border-line bg-surface-raised px-2 py-0.5 text-[11px] text-ink">{a.texto}</span>
             ))}
           </div>
         </div>
@@ -596,11 +596,11 @@ export function ContactoPessoa({ tipo, pessoaId, imoveis, regiao, notaAntiga, on
       {historico.length > 0 && (
         <div className="mt-3">
           <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
-            <span className="text-[11px] uppercase tracking-wider text-gray-400">Histórico · {historico.length}</span>
-            <span className="text-[11px] text-gray-400">Clica num registo para ver o detalhe</span>
+            <span className="text-[11px] uppercase tracking-wider text-ink-muted">Histórico · {historico.length}</span>
+            <span className="text-[11px] text-ink-muted">Clica num registo para ver o detalhe</span>
           </div>
           {/* Linha cronológica em árvore: eixo ao centro (à esquerda no telemóvel), mais recente em cima. */}
-          <ol className="relative grid gap-2.5 py-1 before:absolute before:top-0 before:bottom-0 before:w-0.5 before:rounded before:bg-gray-200 dark:before:bg-neutral-700 before:left-[17px] sm:before:left-1/2 sm:before:-translate-x-1/2">
+          <ol className="relative grid gap-2.5 py-1 before:absolute before:top-0 before:bottom-0 before:w-0.5 before:rounded before:bg-line  before:left-[17px] sm:before:left-1/2 sm:before:-translate-x-1/2">
             {(verTodos ? historico : historico.slice(0, MOSTRAR)).map((h, i) => (
               <RegistoArvore key={h.id} h={h} lado={i % 2 === 0 ? 'dir' : 'esq'} rota={ROTA[tipo]} pessoaId={pessoaId} onSaved={() => query.refetch()} />
             ))}

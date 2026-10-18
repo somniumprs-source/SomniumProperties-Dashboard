@@ -12,7 +12,7 @@ export function Filters({ tab, filters, onChange, regiao }) {
     onChange({ ...filters, [key]: value || undefined })
   }
 
-  const selectClass = "px-2 py-1.5 rounded-lg border border-gray-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
+  const selectClass = "h-9 pl-3 pr-8 rounded-lg border border-line text-ui text-ink bg-surface-raised cursor-pointer hover:border-ink/30 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 transition-colors duration-fast"
 
   // Filtro de concelho — disponível em todas as tabs com entidades geo-referenciadas
   const concelhoFilter = concelhos.length > 0 && ['Imóveis','Negócios','Despesas','Consultores'].includes(tab) && (
@@ -103,7 +103,7 @@ export function Filters({ tab, filters, onChange, regiao }) {
         {concelhoFilter}
       </>}
       {Object.values(filters).some(v => v) && (
-        <button onClick={() => onChange({})} className="text-xs text-red-500 hover:text-red-700 underline">Limpar</button>
+        <button onClick={() => onChange({})} className="text-xs text-danger hover:text-danger underline">Limpar</button>
       )}
     </div>
   )

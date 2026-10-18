@@ -49,7 +49,7 @@ export function DadosEmpresaInvestidorTab({ investidorId, dadosEmpresa: initial,
   const [form, setForm] = useState(() => normalizeDadosEmpresa(initial))
   const [saving, setSaving] = useState(false)
 
-  const inputClass = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300'
+  const inputClass = 'w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-accent/40'
 
   function setCampo(key, value) {
     setForm(f => ({ ...f, [key]: value }))
@@ -85,14 +85,14 @@ export function DadosEmpresaInvestidorTab({ investidorId, dadosEmpresa: initial,
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
-        <Building2 className="w-4 h-4 text-indigo-500" />
-        <h3 className="text-sm font-semibold text-gray-700">Dados da Empresa</h3>
+        <Building2 className="w-4 h-4 text-ink-muted" />
+        <h3 className="text-sm font-semibold text-ink">Dados da Empresa</h3>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {EMPRESA_CAMPOS.map(c => (
           <div key={c.key}>
-            <label className="block text-xs font-medium text-gray-500 mb-1">{c.label}</label>
+            <label className="block text-xs font-medium text-ink-muted mb-1">{c.label}</label>
             <input
               value={form[c.key] || ''}
               onChange={e => setCampo(c.key, e.target.value)}
@@ -105,11 +105,11 @@ export function DadosEmpresaInvestidorTab({ investidorId, dadosEmpresa: initial,
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-gray-700">Representantes Legais / Sócios</h3>
+          <h3 className="text-sm font-semibold text-ink">Representantes Legais / Sócios</h3>
           {!readOnly && (
             <button
               onClick={addSocio}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-accent-foreground hover:brightness-[1.04] transition-colors"
             >
               <Plus className="w-3.5 h-3.5" /> Adicionar Sócio
             </button>
@@ -117,16 +117,16 @@ export function DadosEmpresaInvestidorTab({ investidorId, dadosEmpresa: initial,
         </div>
 
         {form.socios.length === 0 ? (
-          <div className="text-center py-6 text-gray-400 text-sm">Nenhum sócio registado.</div>
+          <div className="text-center py-6 text-ink-muted text-sm">Nenhum sócio registado.</div>
         ) : (
           form.socios.map((socio, idx) => (
-            <div key={idx} className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-200">
+            <div key={idx} className="bg-surface rounded-xl p-4 space-y-3 border border-line">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-500">Sócio {idx + 1}</span>
+                <span className="text-xs font-semibold text-ink-muted">Sócio {idx + 1}</span>
                 {!readOnly && (
                   <button
                     onClick={() => removeSocio(idx)}
-                    className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
+                    className="p-1.5 rounded-lg hover:bg-danger/10 text-ink-muted hover:text-danger"
                     title="Remover sócio"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -136,7 +136,7 @@ export function DadosEmpresaInvestidorTab({ investidorId, dadosEmpresa: initial,
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {SOCIO_CAMPOS.map(c => (
                   <div key={c.key}>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">{c.label}</label>
+                    <label className="block text-xs font-medium text-ink-muted mb-1">{c.label}</label>
                     <input
                       value={socio[c.key] || ''}
                       onChange={e => setSocio(idx, c.key, e.target.value)}
@@ -156,7 +156,7 @@ export function DadosEmpresaInvestidorTab({ investidorId, dadosEmpresa: initial,
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-4 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+            className="px-4 py-1.5 text-xs font-medium rounded-lg bg-accent text-accent-foreground hover:brightness-[1.04] disabled:opacity-50"
           >
             {saving ? 'A guardar...' : 'Guardar'}
           </button>

@@ -15,20 +15,19 @@ import {
   DC_CRITERIOS, bandaScorecard, CL_RESULTADOS, CL_RESULTADO_LABEL,
 } from '../../constants.js'
 
-export const inputClass = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300'
+export const inputClass = 'w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300'
 
 export function PillField({ label, value, onChange, options, labels }) {
   return (
     <div className="flex items-center justify-between gap-2 flex-wrap">
-      <span className="text-xs text-gray-600">{label}</span>
+      <span className="text-xs text-ink-muted">{label}</span>
       <div className="flex gap-1 flex-wrap justify-end">
         {options.map(o => {
           const active = value === o
           return (
             <button key={o} type="button"
               onClick={() => onChange(active ? '' : o)}
-              className={`px-2 py-1 rounded-md text-xs font-medium border transition-colors whitespace-nowrap ${active ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-yellow-300'}`}
-              style={active ? { backgroundColor: '#C9A84C' } : undefined}>
+              className={`px-2 py-1 rounded-md text-xs font-medium border transition-colors whitespace-nowrap ${active ? 'bg-accent text-accent-foreground border-accent' : 'bg-surface-raised text-ink-muted border-line hover:border-ink/30'}`}>
               {labels[o] || o}
             </button>
           )
@@ -41,9 +40,9 @@ export function PillField({ label, value, onChange, options, labels }) {
 export function NumberField({ label, value, onChange }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <label className="text-xs text-gray-500 shrink-0">{label}</label>
+      <label className="text-xs text-ink-muted shrink-0">{label}</label>
       <input type="number" step="any" value={value ?? ''} onChange={e => onChange(e.target.value)}
-        className="w-28 px-2 py-1 rounded-md border border-gray-200 text-sm text-right focus:outline-none focus:ring-2 focus:ring-yellow-300"
+        className="w-28 px-2 py-1 rounded-md border border-line text-sm text-right focus:outline-none focus:ring-2 focus:ring-yellow-300"
         onWheel={e => e.target.blur()} />
     </div>
   )
@@ -51,9 +50,9 @@ export function NumberField({ label, value, onChange }) {
 
 export function CheckboxField({ label, checked, onChange }) {
   return (
-    <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer py-1">
+    <label className="flex items-center gap-2 text-xs text-ink-muted cursor-pointer py-1">
       <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)}
-        className="rounded border-gray-300 text-yellow-500 focus:ring-yellow-300" />
+        className="rounded border-line text-warning focus:ring-yellow-300" />
       {label}
     </label>
   )
@@ -61,9 +60,9 @@ export function CheckboxField({ label, checked, onChange }) {
 
 function Bloco({ titulo, legenda, children }) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-2">
-      <p className={`text-xs font-semibold text-gray-700 ${legenda ? 'mb-0.5' : 'mb-1.5'}`}>{titulo}</p>
-      {legenda && <p className="text-[10px] text-gray-400 mb-1.5">{legenda}</p>}
+    <div className="bg-surface-raised rounded-lg border border-line p-2">
+      <p className={`text-xs font-semibold text-ink ${legenda ? 'mb-0.5' : 'mb-1.5'}`}>{titulo}</p>
+      {legenda && <p className="text-[10px] text-ink-muted mb-1.5">{legenda}</p>}
       {children}
     </div>
   )
@@ -97,15 +96,14 @@ export function RegistoManualFieldset({ registo, onChange }) {
         <div className="space-y-1">
           {DC_CRITERIOS.map(c => (
             <div key={c.key} className="flex items-center gap-2">
-              <span className="text-xs text-gray-600 w-28 shrink-0">{c.label}</span>
+              <span className="text-xs text-ink-muted w-28 shrink-0">{c.label}</span>
               <div className="flex gap-1 shrink-0">
                 {[0, 1, 2].map(n => {
                   const active = registo[c.key] === n
                   return (
                     <button key={n} type="button"
                       onClick={() => onChange(c.key, active ? null : n)}
-                      className={`w-6 h-6 rounded-md text-xs font-semibold border transition-colors ${active ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-yellow-300'}`}
-                      style={active ? { backgroundColor: '#C9A84C' } : undefined}>
+                      className={`w-6 h-6 rounded-md text-xs font-semibold border transition-colors ${active ? 'bg-accent text-accent-foreground border-accent' : 'bg-surface-raised text-ink-muted border-line hover:border-ink/30'}`}>
                       {n}
                     </button>
                   )
@@ -113,13 +111,13 @@ export function RegistoManualFieldset({ registo, onChange }) {
               </div>
               <input type="text" value={registo[c.notaKey] || ''} onChange={e => onChange(c.notaKey, e.target.value)}
                 placeholder="Justificação (opcional)"
-                className="flex-1 min-w-0 px-2 py-1 text-xs rounded-md border border-gray-200 focus:outline-none focus:ring-1 focus:ring-yellow-300" />
+                className="flex-1 min-w-0 px-2 py-1 text-xs rounded-md border border-line focus:outline-none focus:ring-1 focus:ring-yellow-300" />
             </div>
           ))}
-          <div className="flex items-center justify-between pt-1.5 mt-0.5 border-t border-gray-100">
-            <span className="text-xs font-semibold text-gray-700">Total</span>
+          <div className="flex items-center justify-between pt-1.5 mt-0.5 border-t border-line">
+            <span className="text-xs font-semibold text-ink">Total</span>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-gray-800">{total != null ? `${total}/12` : '— /12'}</span>
+              <span className="text-sm font-semibold text-ink">{total != null ? `${total}/12` : '— /12'}</span>
               {banda && <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${banda.cls}`}>{banda.label}</span>}
             </div>
           </div>
@@ -142,9 +140,9 @@ export function RegistoManualFieldset({ registo, onChange }) {
           </div>
           {registo.cl_resultado === 'vou_pensar_com_data' && (
             <div className="flex items-center justify-between gap-2">
-              <label className="text-xs text-gray-500 shrink-0">Deadline da resposta</label>
+              <label className="text-xs text-ink-muted shrink-0">Deadline da resposta</label>
               <input type="date" value={registo.cl_deadline || ''} onChange={e => onChange('cl_deadline', e.target.value)}
-                className="w-36 px-2 py-1 rounded-md border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                className="w-36 px-2 py-1 rounded-md border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
             </div>
           )}
           <CheckboxField label="Formalizado por escrito no mesmo dia" checked={registo.cl_formalizado_escrito_mesmo_dia === true}

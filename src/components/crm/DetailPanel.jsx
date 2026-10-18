@@ -6,7 +6,9 @@ import { useState, useEffect, useCallback, useMemo, useRef, memo, lazy, Suspense
 import { FileDown, ChevronDown, ChevronUp, Phone, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin, Eye, Trash2, ThumbsUp, TrendingDown, Shield, Building2, UserRound, FolderOpen, Calculator, Hammer, Scale, DoorOpen, FileBarChart, ListChecks, Building, CalendarCheck, Star, Gauge, History, Briefcase, ShieldCheck, Timer } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { BrandLoader } from '../ui/BrandLoader.jsx'
-import { TabTransition, useTabDirection, EASE_OUT } from '../ui/PageTransition.jsx'
+import { TabTransition, useTabDirection } from '../ui/PageTransition.jsx'
+import { tabIndicatorTransition } from '../../lib/motion.js'
+import { Button } from '../ui/Button.jsx'
 import { apiFetch, apiFetchJson, openDocument } from '../../lib/api.js'
 import { useToast } from '../ui/Toast.jsx'
 import { PartilharAcesso } from '../PartilharAcesso.jsx'
@@ -112,7 +114,7 @@ function useConsultoresLookup(regiao) {
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 
 const ACAO_LABEL = { INSERT: 'Criado', UPDATE: 'Atualizado', DELETE: 'Apagado' }
-const ACAO_COLOR = { INSERT: 'text-green-600', UPDATE: 'text-blue-600', DELETE: 'text-red-600' }
+const ACAO_COLOR = { INSERT: 'text-success', UPDATE: 'text-ink', DELETE: 'text-danger' }
 
 export { MOTIVOS_NAO_INTERESSA_PADRAO } from './detailPanelConstants.js'
 import { MOTIVOS_NAO_INTERESSA_PADRAO } from './detailPanelConstants.js'
@@ -150,8 +152,8 @@ function PontosRiscosTab({ imovel, endpoint, id, onUpdate, toast }) {
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-sm font-bold text-neutral-800">Pontos & Riscos do imóvel</h3>
-        <p className="text-xs text-neutral-400 mt-0.5">
+        <h3 className="text-sm font-bold text-ink">Pontos & Riscos do imóvel</h3>
+        <p className="text-xs text-ink-muted mt-0.5">
           Um por linha. Aparece no relatório enviado ao investidor. Auto-guarda ao sair do campo.
         </p>
       </div>
@@ -161,8 +163,8 @@ function PontosRiscosTab({ imovel, endpoint, id, onUpdate, toast }) {
             ? 'Uma linha por risco. Os Riscos e a Mitigação emparelham-se na mesma ordem para a tabela do PDF.'
             : null
           return (
-            <div key={c.key} className="rounded-xl border border-gray-200 p-4 bg-white">
-              <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 mb-2">
+            <div key={c.key} className="rounded-xl border border-line p-4 bg-surface-raised">
+              <label className="flex items-center gap-2 text-xs font-semibold text-ink mb-2">
                 <c.icon className="w-3.5 h-3.5 text-brand-gold shrink-0" />{c.label}
               </label>
               <textarea
@@ -171,9 +173,9 @@ function PontosRiscosTab({ imovel, endpoint, id, onUpdate, toast }) {
                 onBlur={() => saveCampo(c.key)}
                 rows={8}
                 placeholder={`Um ${c.label.toLowerCase()} por linha…`}
-                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                className="w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
               />
-              {hint && <p className="text-[11px] text-neutral-500 mt-1.5">{hint}</p>}
+              {hint && <p className="text-[11px] text-ink-muted mt-1.5">{hint}</p>}
             </div>
           )
         })}
@@ -301,59 +303,58 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
     <div className="space-y-5">
       {/* Imagem do estudo no topo */}
       {imagemUrl ? (
-        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-gray-100 bg-gradient-to-r from-yellow-50 to-white flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-700">🗺️ Estudo de Localização</span>
+        <div className="rounded-xl border border-line bg-surface-raised overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-line bg-gradient-to-r from-yellow-50 to-white flex items-center justify-between">
+            <span className="text-xs font-semibold text-ink">🗺️ Estudo de Localização</span>
             <div className="flex gap-1.5">
               <a href={imagemUrl} target="_blank" rel="noreferrer"
-                className="text-[11px] px-2.5 py-1 rounded-md bg-white border border-gray-200 text-gray-700 hover:bg-gray-50">
+                className="text-[11px] px-2.5 py-1 rounded-md bg-surface-raised border border-line text-ink hover:bg-surface">
                 Abrir em nova aba
               </a>
-              <label className={`text-[11px] px-2.5 py-1 rounded-md bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 cursor-pointer ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+              <label className={`text-[11px] px-2.5 py-1 rounded-md bg-surface-raised border border-line text-ink hover:bg-surface cursor-pointer ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
                 {uploading ? 'A carregar…' : 'Substituir'}
                 <input type="file" accept="image/*" className="hidden" disabled={uploading}
                   onChange={e => uploadManual(e.target.files?.[0])} />
               </label>
               <button type="button" onClick={removerImagem}
-                className="text-[11px] px-2.5 py-1 rounded-md bg-white border border-red-200 text-red-700 hover:bg-red-50">
+                className="text-[11px] px-2.5 py-1 rounded-md bg-surface-raised border border-danger/30 text-danger hover:bg-danger/10">
                 Remover
               </button>
             </div>
           </div>
-          <div className="p-3 bg-gray-50 flex justify-center">
-            <img src={imagemUrl} alt="Estudo de Localização" className="w-full max-w-3xl rounded-md border border-gray-200 bg-white" loading="lazy" decoding="async" />
+          <div className="p-3 bg-surface flex justify-center">
+            <img src={imagemUrl} alt="Estudo de Localização" className="w-full max-w-3xl rounded-md border border-line bg-surface-raised" loading="lazy" decoding="async" />
           </div>
         </div>
       ) : (
-        <div className="rounded-xl border-2 border-dashed border-gray-300 p-6 bg-white text-center">
-          <p className="text-sm text-gray-500">🗺️ Sem imagem de localização ainda. Preenche os destinos e clica em <strong>"🎨 Gerar imagem do estudo"</strong> em baixo.</p>
+        <div className="rounded-xl border-2 border-dashed border-line p-6 bg-surface-raised text-center">
+          <p className="text-sm text-ink-muted">🗺️ Sem imagem de localização ainda. Preenche os destinos e clica em <strong>"🎨 Gerar imagem do estudo"</strong> em baixo.</p>
         </div>
       )}
 
       <div>
-        <h3 className="text-sm font-bold text-neutral-800">Estudo de Localização</h3>
-        <p className="text-xs text-neutral-400 mt-0.5">
+        <h3 className="text-sm font-bold text-ink">Estudo de Localização</h3>
+        <p className="text-xs text-ink-muted mt-0.5">
           Distâncias e tempo do imóvel a vários pontos de interesse via Google Distance Matrix.
         </p>
       </div>
 
       {/* Origem + modo */}
-      <div className="rounded-xl border border-gray-200 p-4 bg-white space-y-3">
+      <div className="rounded-xl border border-line p-4 bg-surface-raised space-y-3">
         <div>
-          <label className="text-xs font-semibold text-gray-700 block mb-1">📍 Morada do imóvel (origem)</label>
+          <label className="text-xs font-semibold text-ink block mb-1">📍 Morada do imóvel (origem)</label>
           <input type="text" value={origem} onChange={e => setOrigem(e.target.value)}
             placeholder={imovel?.regiao === 'AMP' ? 'Ex: Rua de Santa Catarina 200, Porto' : 'Ex: Rua das Flores 12, Coimbra'}
-            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+            className="w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
         </div>
         <div>
-          <label className="text-xs font-semibold text-gray-700 block mb-1">Modo de transporte</label>
+          <label className="text-xs font-semibold text-ink block mb-1">Modo de transporte</label>
           <div className="flex flex-wrap gap-1.5">
             {MODES.map(m => (
               <button key={m.v} type="button" onClick={() => setMode(m.v)}
                 className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
-                  mode === m.v ? 'border-transparent text-white' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                }`}
-                style={mode === m.v ? { backgroundColor: '#C9A84C' } : undefined}>
+                  mode === m.v ? 'border-accent bg-accent text-accent-foreground' : 'bg-surface-raised border-line text-ink-muted hover:bg-surface'
+                }`}>
                 {m.l}
               </button>
             ))}
@@ -362,11 +363,11 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
       </div>
 
       {/* Destinos */}
-      <div className="rounded-xl border border-gray-200 p-4 bg-white">
+      <div className="rounded-xl border border-line p-4 bg-surface-raised">
         <div className="flex items-center justify-between mb-3">
-          <h4 className="text-xs font-semibold text-gray-700">Pontos de interesse</h4>
+          <h4 className="text-xs font-semibold text-ink">Pontos de interesse</h4>
           <button type="button" onClick={adicionar}
-            className="px-2.5 py-1 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+            className="px-2.5 py-1 text-xs rounded-lg border border-line text-ink-muted hover:bg-surface">
             + Adicionar
           </button>
         </div>
@@ -374,42 +375,41 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
           {destinos.map((d, i) => (
             <div key={i} className="flex gap-2 items-start">
               <input type="text" value={d.icone || ''} onChange={e => setDestino(i, { icone: e.target.value })}
-                className="w-12 text-center px-2 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                className="w-12 text-center px-2 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
               <input type="text" value={d.categoria || ''} onChange={e => setDestino(i, { categoria: e.target.value })}
                 placeholder="Categoria (ex: Hospital)"
-                className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                className="flex-1 px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
               <input type="text" value={d.endereco || ''} onChange={e => setDestino(i, { endereco: e.target.value })}
                 placeholder={imovel?.regiao === 'AMP' ? 'Morada do ponto (ex: Hospital São João, Porto)' : 'Morada do ponto (ex: Hospital Geral, Coimbra)'}
-                className="flex-[2] px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                className="flex-[2] px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
               <button type="button" onClick={() => remover(i)}
-                className="px-2 py-2 text-xs rounded-lg bg-red-50 text-red-600 hover:bg-red-100">×</button>
+                className="px-2 py-2 text-xs rounded-lg bg-danger/10 text-danger hover:bg-danger/15">×</button>
             </div>
           ))}
-          {destinos.length === 0 && <p className="text-xs text-gray-400 text-center py-3">Sem pontos de interesse — clica em "Adicionar"</p>}
+          {destinos.length === 0 && <p className="text-xs text-ink-muted text-center py-3">Sem pontos de interesse — clica em "Adicionar"</p>}
         </div>
         <div className="flex justify-end gap-2 mt-4">
           <button type="button" onClick={calcular} disabled={calculando || gerando}
-            className="px-4 py-2 text-sm font-semibold rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+            className="px-4 py-2 text-sm font-semibold rounded-lg border border-line bg-surface-raised text-ink hover:bg-surface disabled:opacity-50">
             {calculando ? 'A calcular…' : 'Calcular distâncias'}
           </button>
           <button type="button" onClick={gerarImagem} disabled={calculando || gerando}
-            className="px-4 py-2 text-sm font-semibold rounded-lg text-white disabled:opacity-50"
-            style={{ backgroundColor: '#C9A84C' }}>
+            className="px-4 py-2 text-sm font-semibold rounded-lg bg-accent text-accent-foreground hover:brightness-[1.04] disabled:opacity-50">
             {gerando ? 'A gerar imagem…' : '🎨 Gerar imagem do estudo'}
           </button>
         </div>
       </div>
 
       {/* Opções da imagem (destaque + highlights) */}
-      <details className="rounded-xl border border-gray-200 bg-white">
-        <summary className="px-4 py-3 text-xs font-semibold text-gray-700 cursor-pointer select-none">
+      <details className="rounded-xl border border-line bg-surface-raised">
+        <summary className="px-4 py-3 text-xs font-semibold text-ink cursor-pointer select-none">
           ✨ Opções da imagem (destaque + highlights)
         </summary>
         <div className="p-4 pt-0 space-y-4">
           <div>
-            <label className="text-xs font-semibold text-gray-700 block mb-1">★ Destacar ponto (gold)</label>
+            <label className="text-xs font-semibold text-ink block mb-1">★ Destacar ponto (gold)</label>
             <select value={destaque} onChange={e => setDestaque(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+              className="w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
               <option value="">— sem destaque —</option>
               {destinos.filter(d => d.categoria?.trim()).map((d, i) => (
                 <option key={i} value={d.categoria}>{d.icone} {d.categoria}</option>
@@ -417,25 +417,25 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
             </select>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="border border-yellow-200 rounded-lg p-3 space-y-2 bg-yellow-50/30">
-              <p className="text-[11px] font-bold text-yellow-800 uppercase tracking-wide">Highlight 1 (gold)</p>
+            <div className="border border-warning/30 rounded-lg p-3 space-y-2 bg-warning/10">
+              <p className="text-[11px] font-bold text-warning uppercase tracking-wide">Highlight 1 (gold)</p>
               <input type="text" value={hl1Titulo} onChange={e => setHl1Titulo(e.target.value)} placeholder="Título (ex: 🚌 SMTUC à porta)"
-                className="w-full px-3 py-1.5 rounded border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                className="w-full px-3 py-1.5 rounded border border-line text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300" />
               <input type="text" value={hl1Desc} onChange={e => setHl1Desc(e.target.value)} placeholder="Descrição"
-                className="w-full px-3 py-1.5 rounded border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                className="w-full px-3 py-1.5 rounded border border-line text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300" />
               <input type="text" value={hl1Badge} onChange={e => setHl1Badge(e.target.value)} placeholder="Badge curto (ex: 5)"
-                className="w-full px-3 py-1.5 rounded border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                className="w-full px-3 py-1.5 rounded border border-line text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300" />
               <input type="text" value={hl1Sub} onChange={e => setHl1Sub(e.target.value)} placeholder="Sub-texto"
-                className="w-full px-3 py-1.5 rounded border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                className="w-full px-3 py-1.5 rounded border border-line text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300" />
             </div>
-            <div className="border border-red-200 rounded-lg p-3 space-y-2 bg-red-50/30">
-              <p className="text-[11px] font-bold text-red-800 uppercase tracking-wide">Highlight 2 (red)</p>
+            <div className="border border-danger/30 rounded-lg p-3 space-y-2 bg-danger/10">
+              <p className="text-[11px] font-bold text-danger uppercase tracking-wide">Highlight 2 (red)</p>
               <input type="text" value={hl2Titulo} onChange={e => setHl2Titulo(e.target.value)} placeholder="Título (ex: 🛡️ GNR em frente)"
-                className="w-full px-3 py-1.5 rounded border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-red-300" />
+                className="w-full px-3 py-1.5 rounded border border-line text-xs focus:outline-none focus:ring-2 focus:ring-red-300" />
               <input type="text" value={hl2Desc} onChange={e => setHl2Desc(e.target.value)} placeholder="Descrição"
-                className="w-full px-3 py-1.5 rounded border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-red-300" />
+                className="w-full px-3 py-1.5 rounded border border-line text-xs focus:outline-none focus:ring-2 focus:ring-red-300" />
               <input type="text" value={hl2Sub} onChange={e => setHl2Sub(e.target.value)} placeholder="Sub-texto"
-                className="w-full px-3 py-1.5 rounded border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-red-300" />
+                className="w-full px-3 py-1.5 rounded border border-line text-xs focus:outline-none focus:ring-2 focus:ring-red-300" />
             </div>
           </div>
         </div>
@@ -443,16 +443,16 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
 
       {/* Resultados */}
       {resultado?.resultados?.length > 0 && (
-        <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
-          <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-700">Resultados — 🚗 Carro e 🚶 A pé</span>
-            <span className="text-[10px] text-gray-400">
+        <div className="rounded-xl border border-line overflow-hidden bg-surface-raised">
+          <div className="px-4 py-2.5 border-b border-line bg-surface flex items-center justify-between">
+            <span className="text-xs font-semibold text-ink">Resultados — 🚗 Carro e 🚶 A pé</span>
+            <span className="text-[10px] text-ink-muted">
               {resultado.atualizado_em ? new Date(resultado.atualizado_em).toLocaleString('pt-PT') : ''}
             </span>
           </div>
           <table className="w-full text-sm">
-            <thead className="text-[11px] text-gray-400 uppercase tracking-wide">
-              <tr className="border-b border-gray-100">
+            <thead className="text-[11px] text-ink-muted uppercase tracking-wide">
+              <tr className="border-b border-line">
                 <th className="text-left px-4 py-2">Ponto</th>
                 <th className="text-left px-4 py-2">Endereço</th>
                 <th className="text-right px-4 py-2">🚗 Carro</th>
@@ -469,11 +469,11 @@ function LocalizacaoTab({ imovel, onUpdate, toast }) {
                   return `${m.distancia_texto || '—'} · ${m.duracao_texto || '—'}`
                 }
                 return (
-                  <tr key={i} className="border-b border-gray-50">
+                  <tr key={i} className="border-b border-line">
                     <td className="px-4 py-2"><span className="mr-1">{r.icone || '📍'}</span>{r.categoria || '—'}</td>
-                    <td className="px-4 py-2 text-gray-500 truncate max-w-xs">{r.endereco}</td>
-                    <td className="px-4 py-2 text-right font-mono">{fmt(carro)}</td>
-                    <td className="px-4 py-2 text-right font-mono text-emerald-700">{fmt(pe)}</td>
+                    <td className="px-4 py-2 text-ink-muted truncate max-w-xs">{r.endereco}</td>
+                    <td className="px-4 py-2 text-right num">{fmt(carro)}</td>
+                    <td className="px-4 py-2 text-right num text-success">{fmt(pe)}</td>
                   </tr>
                 )
               })}
@@ -510,7 +510,7 @@ export function MotivoNaoInteressaChips({ value, onChange }) {
 
   return (
     <>
-      <label className="text-xs text-gray-400 block mb-1">Motivo Não Interessa</label>
+      <label className="text-xs text-ink-muted block mb-1">Motivo Não Interessa</label>
       <div className="flex flex-wrap gap-1.5 mb-2">
         {MOTIVOS_NAO_INTERESSA_PADRAO.map(m => {
           const on = selected.has(m)
@@ -518,10 +518,9 @@ export function MotivoNaoInteressaChips({ value, onChange }) {
             <button key={m} type="button" onClick={() => toggle(m)}
               className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
                 on
-                  ? 'border-transparent text-white'
-                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-              }`}
-              style={on ? { backgroundColor: '#C9A84C' } : undefined}>
+                  ? 'border-accent bg-accent text-accent-foreground'
+                  : 'bg-surface-raised border-line text-ink-muted hover:bg-surface'
+              }`}>
               {on && <span className="mr-1">✓</span>}{m}
             </button>
           )
@@ -532,7 +531,7 @@ export function MotivoNaoInteressaChips({ value, onChange }) {
         onChange={onNotasChange}
         rows={2}
         placeholder="Outras notas (opcional)…"
-        className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
+        className="w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
       />
     </>
   )
@@ -632,8 +631,8 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
     <div className="space-y-4">
       {/* Header */}
       <div>
-        <h3 className="text-sm font-bold text-neutral-800">Documentos do Imóvel</h3>
-        <p className="text-xs text-neutral-400 mt-0.5">Abre o documento da fase ou força regeneração</p>
+        <h3 className="text-sm font-bold text-ink">Documentos do Imóvel</h3>
+        <p className="text-xs text-ink-muted mt-0.5">Abre o documento da fase ou força regeneração</p>
       </div>
 
       {/* Sub-abas — fases da pipeline */}
@@ -643,44 +642,43 @@ function RelatoriosImovelTab({ imovelId, estado, driveFolderId }) {
           const isCurrent = faseActual?.key === f.key
           return (
             <button key={f.key} onClick={() => setSubTab(f.key)}
-              className={`px-3 py-2 text-xs font-medium rounded-lg whitespace-nowrap transition-all ${
-                isActive ? 'text-white shadow-sm' : isCurrent ? 'text-emerald-700 bg-emerald-50' : 'text-gray-500 hover:bg-gray-100'
+              className={`px-3 py-2 text-xs font-medium rounded-lg whitespace-nowrap transition-[background-color,border-color,color,box-shadow,opacity,transform] ${
+                isActive ? 'bg-ink text-surface shadow-sm' : isCurrent ? 'text-success bg-success/10' : 'text-ink-muted hover:bg-surface-muted'
               }`}
-              style={isActive ? { backgroundColor: '#1A1A1A' } : undefined}>
+>
               {f.label}
-              {isCurrent && !isActive && <span className="ml-1 w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />}
+              {isCurrent && !isActive && <span className="ml-1 w-1.5 h-1.5 rounded-full bg-success inline-block" />}
             </button>
           )
         })}
       </div>
 
       {/* Lista de documentos da fase seleccionada */}
-      <div className="rounded-xl border border-neutral-100 overflow-hidden divide-y divide-neutral-50">
+      <div className="rounded-xl border border-line overflow-hidden divide-y divide-line">
         {visibleDocs.map(d => (
-          <div key={d.tipo} className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-neutral-50/50 transition-colors group">
+          <div key={d.tipo} className="flex items-center gap-3 px-4 py-3 bg-surface-raised hover:bg-surface/50 transition-colors group">
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-neutral-700">{d.label}</p>
+              <p className="text-sm font-medium text-ink">{d.label}</p>
             </div>
             <button
               type="button"
               onClick={() => abrirDocumento(d.tipo, { refresh: true })}
               title="Forçar regeneração (ignora versão em cache)"
-              className="px-2 py-1.5 text-[11px] font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors shrink-0 opacity-50 group-hover:opacity-100">
+              className="px-2 py-1.5 text-[11px] font-medium rounded-lg bg-surface-muted text-ink-muted hover:bg-line transition-colors shrink-0 opacity-50 group-hover:opacity-100">
               Regerar
             </button>
             <button
               type="button"
               onClick={() => abrirDocumento(d.tipo)}
               title="Abrir o PDF numa nova aba"
-              className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors shrink-0 opacity-50 group-hover:opacity-100">
+              className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-surface-muted text-ink-muted hover:bg-line transition-colors shrink-0 opacity-50 group-hover:opacity-100">
               Abrir
             </button>
             <button
               type="button"
               onClick={() => abrirDocumento(d.tipo, { download: true })}
               title="Descarregar o PDF para enviar a investidores"
-              className="px-3 py-1.5 text-[11px] font-medium rounded-lg text-brand-gold hover:opacity-90 transition-colors shrink-0 opacity-70 group-hover:opacity-100"
-              style={{ backgroundColor: '#1A1A1A' }}>
+              className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-surface-muted text-ink border border-line hover:bg-line transition-colors shrink-0">
               PDF
             </button>
           </div>
@@ -924,65 +922,51 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
   ].filter(t => t.show)
 
   return (
-    <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-800 shadow-xs overflow-hidden">
+    <div className="bg-surface-raised  rounded-xl border border-line  shadow-xs overflow-hidden">
       {/* Header */}
-      <div className="px-4 sm:px-6 py-4 border-b border-gray-100 flex flex-wrap items-center gap-y-2 gap-x-3" style={{ backgroundColor: '#0d0d0d' }}>
-        <button onClick={attemptClose} disabled={saving}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ backgroundColor: '#1a1a1a', color: '#C9A84C', border: '1px solid #C9A84C33' }}
+      <div className="px-4 sm:px-6 py-4 border-b border-line flex flex-wrap items-center gap-y-2 gap-x-3">
+        <Button variant="secondary" size="sm" icon={ArrowLeft} onClick={attemptClose} disabled={saving} className="shrink-0"
           title={editing ? 'Guardar e voltar' : 'Voltar à lista (Esc)'}>
-          <ArrowLeft className="w-3.5 h-3.5" /> {editing ? 'Guardar e voltar' : 'Voltar'}
-        </button>
+          {editing ? 'Guardar e voltar' : 'Voltar'}
+        </Button>
         <div className="min-w-0 flex-1 order-first w-full sm:order-none sm:w-auto">
-          <p className="text-xs uppercase tracking-widest" style={{ color: '#C9A84C' }}>{type}</p>
-          <h2 className="text-lg font-bold text-white truncate">{data.nome ?? data.movimento}</h2>
+          <p className="text-overline uppercase text-ink-muted">{type}</p>
+          <h2 className="font-display text-xl font-medium text-ink truncate">{data.nome ?? data.movimento}</h2>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
-          <button onClick={copyLink}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
-            style={{ backgroundColor: '#1a1a1a', color: '#C9A84C', border: '1px solid #C9A84C33' }}
-            title="Copiar link partilhável">
-            {linkCopied ? <><Check className="w-3.5 h-3.5" /> Copiado</> : <><Link2 className="w-3.5 h-3.5" /> Link</>}
-          </button>
+          <Button variant="secondary" size="sm" icon={linkCopied ? Check : Link2} onClick={copyLink} title="Copiar link partilhável">
+            {linkCopied ? 'Copiado' : 'Link'}
+          </Button>
           {type === 'Imóveis' && (
             <PartilharAcesso entidade="imovel" entidadeId={data.id} nome={data.nome} />
           )}
           {editing ? (
             <>
-              <button onClick={saveEdit} disabled={saving}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
-                style={{ backgroundColor: '#22c55e', color: '#fff' }}>
-                <Save className="w-3.5 h-3.5" /> {saving ? 'A guardar...' : 'Guardar'}
-              </button>
-              <button onClick={cancelEdit}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
-                style={{ backgroundColor: '#333', color: '#999' }}>
-                <X className="w-3.5 h-3.5" /> Cancelar
-              </button>
+              <Button size="sm" icon={Save} onClick={saveEdit} loading={saving}>
+                {saving ? 'A guardar…' : 'Guardar'}
+              </Button>
+              <Button variant="ghost" size="sm" icon={X} onClick={cancelEdit}>Cancelar</Button>
             </>
           ) : (
-            <button onClick={startEdit}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
-              style={{ backgroundColor: '#1a1a1a', color: '#C9A84C', border: '1px solid #C9A84C33' }}>
-              <Pencil className="w-3.5 h-3.5" /> Editar
-            </button>
+            <Button variant="secondary" size="sm" icon={Pencil} onClick={startEdit}>Editar</Button>
           )}
           {(type === 'Investidores' || type === 'Parceiros') && !editing && (
-            <button onClick={handleDelete} disabled={deleting}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ backgroundColor: '#1a1a1a', color: '#f87171', border: '1px solid #f8717133' }}
+            <Button variant="secondary" size="sm" icon={Trash2} onClick={handleDelete} disabled={deleting} className="!text-danger"
               title={type === 'Parceiros' ? 'Apagar este parceiro' : 'Apagar este investidor'}>
-              <Trash2 className="w-3.5 h-3.5" /> {deleting ? 'A apagar...' : 'Apagar'}
-            </button>
+              {deleting ? 'A apagar…' : 'Apagar'}
+            </Button>
           )}
           {type === 'Imóveis' && !editing && (
-            <button onClick={() => openDocument(`/api/crm/imoveis/${id}/relatorio`).catch(e => console.error('[relatorio imovel]', e.message))}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer"
-              style={{ backgroundColor: '#1a1a1a', color: '#C9A84C', border: '1px solid #C9A84C33' }}>
-              <FileDown className="w-3.5 h-3.5" /> PDF
-            </button>
+            <Button variant="secondary" size="sm" icon={FileDown}
+              onClick={() => openDocument(`/api/crm/imoveis/${id}/relatorio`).catch(e => console.error('[relatorio imovel]', e.message))}>
+              PDF
+            </Button>
           )}
-          <button onClick={attemptClose} disabled={saving} className="text-gray-400 hover:text-white text-xl leading-none disabled:opacity-50 disabled:cursor-not-allowed" title={editing ? 'Guardar e fechar' : 'Fechar'}>&times;</button>
+          <button onClick={attemptClose} disabled={saving} aria-label={editing ? 'Guardar e fechar' : 'Fechar'}
+            className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-ink-muted hover:text-ink hover:bg-surface-muted transition-colors duration-fast disabled:opacity-50 disabled:cursor-not-allowed"
+            title={editing ? 'Guardar e fechar' : 'Fechar'}>
+            <X className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -1006,15 +990,13 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
 
       {/* Tabs */}
       {tabs.length > 1 && (
-        <div className="flex border-b border-gray-200 overflow-x-auto" style={{ backgroundColor: '#F5F4F0' }}>
+        <div className="flex border-b border-line overflow-x-auto bg-surface" role="tablist">
           {tabs.map(t => (
-            <button key={t.key} onClick={() => handleTabChange(t.key)}
-              className="relative px-4 sm:px-5 py-3 text-sm font-medium transition-colors duration-300 whitespace-nowrap"
-              style={{ color: activeTab === t.key ? '#1A1A1A' : '#9ca3af' }}>
+            <button key={t.key} onClick={() => handleTabChange(t.key)} role="tab" aria-selected={activeTab === t.key}
+              className={`relative px-4 sm:px-5 py-3 text-ui font-medium transition-colors duration-fast ease-entry whitespace-nowrap ${activeTab === t.key ? 'text-ink' : 'text-ink-muted hover:text-ink'}`}>
               {activeTab === t.key && (
-                <motion.span layoutId="ficha-tab" className="absolute inset-0 bg-white"
-                  transition={{ type: 'tween', duration: 0.44, ease: EASE_OUT }}>
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5" style={{ backgroundColor: '#C9A84C' }} />
+                <motion.span layoutId="ficha-tab" className="absolute inset-0 bg-surface-raised" transition={tabIndicatorTransition}>
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />
                 </motion.span>
               )}
               <span className="relative"><t.icon className="w-4 h-4 mr-1.5 inline-block align-[-3px]" />{t.label}</span>
@@ -1060,12 +1042,12 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
         <div className="p-4 sm:p-6">
           {data.negocios?.some(n => !n.deleted_at) ? (
             <div className="space-y-3">
-              <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300 flex items-center justify-between gap-3 flex-wrap">
+              <div className="rounded-xl border border-warning/30 bg-warning/10 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3 text-sm text-warning dark:text-amber-300 flex items-center justify-between gap-3 flex-wrap">
                 <span>Negócio fechado — já existe Projeto para este imóvel. A Análise Financeira edita-se agora no <strong>Departamento de Obras</strong>; aqui fica só como consulta.</span>
                 {(() => {
                   const negocioActivo = data.negocios.find(n => !n.deleted_at)
                   return negocioActivo ? (
-                    <a href={`/projectos/${negocioActivo.id}`} className="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg border border-amber-400 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors whitespace-nowrap">
+                    <a href={`/projectos/${negocioActivo.id}`} className="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg border border-amber-400 text-warning dark:text-amber-300 hover:bg-warning/15 dark:hover:bg-amber-900/40 transition-colors whitespace-nowrap">
                       Abrir no Departamento de Obras →
                     </a>
                   ) : null
@@ -1130,12 +1112,12 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
             {type === 'Imóveis' && <>
               {editing ? <>
                 {(/n[ãa]o interessa/i.test(form.estado || '')) && (
-                  <div className="col-span-2 md:col-span-3 -mt-1 mb-1 rounded-xl border border-red-200 bg-red-50/40 p-3">
+                  <div className="col-span-2 md:col-span-3 -mt-1 mb-1 rounded-xl border border-danger/30 bg-danger/10 p-3">
                     <MotivoNaoInteressaChips
                       value={form.motivo_nao_interessa || ''}
                       onChange={v => setField('motivo_nao_interessa', v)}
                     />
-                    <p className="text-[11px] text-red-500 mt-1">⚠ Seleciona pelo menos um motivo (ou escreve nas notas) antes de guardar.</p>
+                    <p className="text-[11px] text-danger mt-1">⚠ Seleciona pelo menos um motivo (ou escreve nas notas) antes de guardar.</p>
                   </div>
                 )}
                 <ImovelEditSections data={data} form={form} setField={setField} />
@@ -1166,44 +1148,44 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
                 {/* ── Dados da Calculadora de Rentabilidade ── */}
                 {analise && (
                   <div className="col-span-2 md:col-span-3 mt-2">
-                    <div className="rounded-xl border border-[#C9A84C33] p-4" style={{ backgroundColor: '#faf8f2' }}>
+                    <div className="rounded-xl border border-line bg-surface p-4">
                       <div className="flex items-center gap-2 mb-3">
                         <span className="text-sm">📊</span>
-                        <h4 className="text-sm font-bold text-neutral-800">Análise de Rentabilidade</h4>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Ativa</span>
+                        <h4 className="text-sm font-bold text-ink">Análise de Rentabilidade</h4>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success font-medium">Ativa</span>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                         {analise.vvr > 0 && <div>
-                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">VVR</p>
-                          <p className="text-sm font-bold text-neutral-800">{EUR(analise.vvr)}</p>
+                          <p className="text-[10px] uppercase text-ink-muted tracking-wide">VVR</p>
+                          <p className="text-sm font-bold text-ink">{EUR(analise.vvr)}</p>
                         </div>}
                         {analise.custo_obra > 0 && <div>
-                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">Custo Obra</p>
-                          <p className="text-sm font-bold text-neutral-800">{EUR(analise.custo_obra)}</p>
+                          <p className="text-[10px] uppercase text-ink-muted tracking-wide">Custo Obra</p>
+                          <p className="text-sm font-bold text-ink">{EUR(analise.custo_obra)}</p>
                         </div>}
                         {analise.capital_necessario > 0 && <div>
-                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">Capital Necessário</p>
-                          <p className="text-sm font-bold text-neutral-800">{EUR(analise.capital_necessario)}</p>
+                          <p className="text-[10px] uppercase text-ink-muted tracking-wide">Capital Necessário</p>
+                          <p className="text-sm font-bold text-ink">{EUR(analise.capital_necessario)}</p>
                         </div>}
                         {analise.lucro_liquido != null && <div>
-                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">Lucro Líquido</p>
-                          <p className={`text-sm font-bold ${analise.lucro_liquido >= 0 ? 'text-green-700' : 'text-red-600'}`}>{EUR(analise.lucro_liquido)}</p>
+                          <p className="text-[10px] uppercase text-ink-muted tracking-wide">Lucro Líquido</p>
+                          <p className={`text-sm font-bold ${analise.lucro_liquido >= 0 ? 'text-success' : 'text-danger'}`}>{EUR(analise.lucro_liquido)}</p>
                         </div>}
                         {analise.retorno_total != null && <div>
-                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">ROI Total</p>
-                          <p className={`text-sm font-bold ${analise.retorno_total >= 0 ? 'text-green-700' : 'text-red-600'}`}>{analise.retorno_total}%</p>
+                          <p className="text-[10px] uppercase text-ink-muted tracking-wide">ROI Total</p>
+                          <p className={`text-sm font-bold ${analise.retorno_total >= 0 ? 'text-success' : 'text-danger'}`}>{analise.retorno_total}%</p>
                         </div>}
                         {analise.retorno_anualizado != null && <div>
-                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">ROI Anualizado</p>
-                          <p className={`text-sm font-bold ${analise.retorno_anualizado >= 0 ? 'text-green-700' : 'text-red-600'}`}>{analise.retorno_anualizado}%</p>
+                          <p className="text-[10px] uppercase text-ink-muted tracking-wide">ROI Anualizado</p>
+                          <p className={`text-sm font-bold ${analise.retorno_anualizado >= 0 ? 'text-success' : 'text-danger'}`}>{analise.retorno_anualizado}%</p>
                         </div>}
                         {analise.payback_meses > 0 && <div>
-                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">Payback</p>
-                          <p className="text-sm font-bold text-neutral-800">{analise.payback_meses} meses</p>
+                          <p className="text-[10px] uppercase text-ink-muted tracking-wide">Payback</p>
+                          <p className="text-sm font-bold text-ink">{analise.payback_meses} meses</p>
                         </div>}
                         {analise.risco && <div>
-                          <p className="text-[10px] uppercase text-neutral-400 tracking-wide">Risco</p>
-                          <p className={`text-sm font-bold ${analise.risco === 'Baixo' ? 'text-green-700' : analise.risco === 'Médio' ? 'text-yellow-600' : 'text-red-600'}`}>{analise.risco}</p>
+                          <p className="text-[10px] uppercase text-ink-muted tracking-wide">Risco</p>
+                          <p className={`text-sm font-bold ${analise.risco === 'Baixo' ? 'text-success' : analise.risco === 'Médio' ? 'text-warning' : 'text-danger'}`}>{analise.risco}</p>
                         </div>}
                       </div>
                     </div>
@@ -1211,8 +1193,8 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
                 )}
                 {!analise && (
                   <div className="col-span-2 md:col-span-3 mt-2">
-                    <div className="rounded-xl border border-dashed border-neutral-200 p-4 text-center">
-                      <p className="text-xs text-neutral-400">Sem análise de rentabilidade — usa a tab "Análise Financeira" para calcular</p>
+                    <div className="rounded-xl border border-dashed border-line p-4 text-center">
+                      <p className="text-xs text-ink-muted">Sem análise de rentabilidade — usa a tab "Análise Financeira" para calcular</p>
                     </div>
                   </div>
                 )}
@@ -1277,7 +1259,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
                 <Field label="Contacto" value={data.contacto} />
                 <Field label="Email" value={data.email} />
                 <Field label="Link da equipa" value={data.link_perfil
-                  ? <a href={/^https?:\/\//i.test(data.link_perfil) ? data.link_perfil : `https://${data.link_perfil}`} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">{data.link_perfil}</a>
+                  ? <a href={/^https?:\/\//i.test(data.link_perfil) ? data.link_perfil : `https://${data.link_perfil}`} target="_blank" rel="noopener noreferrer" className="text-ink hover:underline">{data.link_perfil}</a>
                   : null} />
                 <Field label="Imobiliária" value={(() => { try { return JSON.parse(data.imobiliaria || '[]').join(', ') } catch { return '—' } })()} />
                 {/* Contado a partir dos imóveis que o consultor enviou por referência (não se escreve à mão). */}
@@ -1295,8 +1277,8 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
           {/* Consultores e parceiros: as notas vivem na linha do tempo dos Próximos passos. */}
           {!editing && data.notas && !['Consultores', 'Parceiros'].includes(type) && (
             <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Notas</p>
-              <p className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3 whitespace-pre-line">{data.notas}</p>
+              <p className="text-xs text-ink-muted uppercase tracking-wide mb-1">Notas</p>
+              <p className="text-sm text-ink bg-surface rounded-lg p-3 whitespace-pre-line">{data.notas}</p>
             </div>
           )}
 
@@ -1307,7 +1289,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
           {/* Relações — Negócios Associados (resumo) */}
           {data.negocios?.length > 0 && (
             <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Negócios Associados</p>
+              <p className="text-xs text-ink-muted uppercase tracking-wide mb-2">Negócios Associados</p>
               <div className="space-y-2">
                 {data.negocios.map(n => {
                   let pags = []
@@ -1315,12 +1297,12 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
                   const totalPags = pags.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
                   const recebido = pags.filter(p => p.recebido).reduce((s, p) => s + (parseFloat(p.valor) || 0), 0)
                   return (
-                    <div key={n.id} className="bg-indigo-50 rounded-lg px-3 py-2 border border-indigo-100">
+                    <div key={n.id} className="bg-surface-muted rounded-lg px-3 py-2 border border-line">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-indigo-800">{n.movimento}</span>
+                        <span className="text-sm font-medium text-ink">{n.movimento}</span>
                         <div className="flex gap-3 text-xs items-center">
-                          <span className="text-indigo-600">{n.categoria}</span>
-                          <span className="font-mono font-semibold">{EUR(n.lucro_estimado)}</span>
+                          <span className="text-ink">{n.categoria}</span>
+                          <span className="num font-semibold">{EUR(n.lucro_estimado)}</span>
                         </div>
                       </div>
                       {pags.length > 0 && (
@@ -1329,14 +1311,14 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
                             const atrasado = !p.recebido && p.data && new Date(p.data) < new Date()
                             return (
                               <div key={i} className={`flex items-center justify-between text-xs px-2 py-1 rounded ${
-                                p.recebido ? 'bg-green-50 text-green-700' : atrasado ? 'bg-red-50 text-red-700' : 'bg-white text-gray-600'
+                                p.recebido ? 'bg-success/10 text-success' : atrasado ? 'bg-danger/10 text-danger' : 'bg-surface-raised text-ink-muted'
                               }`}>
                                 <span>{p.recebido ? '✓' : atrasado ? '!' : '○'} {p.descricao || 'Pagamento'}</span>
-                                <span className="font-mono">{EUR(p.valor)} — {p.data || 'sem data'}</span>
+                                <span className="num">{EUR(p.valor)} — {p.data || 'sem data'}</span>
                               </div>
                             )
                           })}
-                          <p className="text-[10px] text-gray-400 mt-0.5">{EUR(recebido)} de {EUR(totalPags)} recebido — editar no Financeiro</p>
+                          <p className="text-[10px] text-ink-muted mt-0.5">{EUR(recebido)} de {EUR(totalPags)} recebido — editar no Financeiro</p>
                         </div>
                       )}
                     </div>
@@ -1348,14 +1330,14 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
 
           {data.consultores?.length > 0 && (
             <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Consultores</p>
+              <p className="text-xs text-ink-muted uppercase tracking-wide mb-2">Consultores</p>
               <div className="space-y-2">
                 {data.consultores.map(c => (
                   <div key={c.id}
                     onClick={() => onNavigate?.('Consultores', c.id)}
-                    className={`flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2 ${onNavigate ? 'cursor-pointer hover:bg-blue-100 transition-colors' : ''}`}>
-                    <span className="text-sm font-medium text-blue-800">{c.nome}</span>
-                    <span className="text-xs text-blue-600">{c.estatuto} · {c.contacto}</span>
+                    className={`flex items-center justify-between bg-surface-muted rounded-lg px-3 py-2 ${onNavigate ? 'cursor-pointer hover:bg-surface-muted transition-colors' : ''}`}>
+                    <span className="text-sm font-medium text-ink">{c.nome}</span>
+                    <span className="text-xs text-ink">{c.estatuto} · {c.contacto}</span>
                   </div>
                 ))}
               </div>
@@ -1364,16 +1346,16 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
 
           {data.imoveis?.length > 0 && (
             <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Imóveis</p>
+              <p className="text-xs text-ink-muted uppercase tracking-wide mb-2">Imóveis</p>
               <div className="space-y-2">
                 {data.imoveis.map(i => (
                   <div key={i.id}
                     onClick={() => onNavigate?.('Imóveis', i.id)}
-                    className={`flex items-center justify-between bg-green-50 rounded-lg px-3 py-2 ${onNavigate ? 'cursor-pointer hover:bg-green-100 transition-colors' : ''}`}>
-                    <span className="text-sm font-medium text-green-800">{i.nome}</span>
+                    className={`flex items-center justify-between bg-success/10 rounded-lg px-3 py-2 ${onNavigate ? 'cursor-pointer hover:bg-success/15 transition-colors' : ''}`}>
+                    <span className="text-sm font-medium text-success">{i.nome}</span>
                     <div className="flex gap-3 text-xs">
-                      <span className="text-green-600">{i.estado?.replace(/^\d+-/, '')}</span>
-                      <span className="font-mono">{EUR(i.ask_price)}</span>
+                      <span className="text-success">{i.estado?.replace(/^\d+-/, '')}</span>
+                      <span className="num">{EUR(i.ask_price)}</span>
                     </div>
                   </div>
                 ))}
@@ -1386,22 +1368,22 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
         <div className="space-y-6">
           {/* Tarefas */}
           <div>
-            <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Tarefas</p>
+            <p className="text-xs text-ink-muted uppercase tracking-wide mb-2">Tarefas</p>
             {data.tarefas?.length > 0 ? (
               <div className="space-y-1.5">
                 {data.tarefas.slice(0, 10).map(t => (
-                  <div key={t.id} className={`text-xs px-2 py-1.5 rounded ${t.status === 'Concluida' ? 'bg-green-50 text-green-700 line-through' : t.status === 'Atrasada' ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-700'}`}>
+                  <div key={t.id} className={`text-xs px-2 py-1.5 rounded ${t.status === 'Concluida' ? 'bg-success/10 text-success line-through' : t.status === 'Atrasada' ? 'bg-danger/10 text-danger' : 'bg-surface text-ink'}`}>
                     {t.tarefa}
                   </div>
                 ))}
               </div>
-            ) : <p className="text-xs text-gray-300">Sem tarefas</p>}
+            ) : <p className="text-xs text-ink-muted/70">Sem tarefas</p>}
           </div>
 
           {/* Mini-resumo reuniões na sidebar */}
           {reunioes.length > 0 && activeTab === 'detalhe' && (
             <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Relatórios de Reunião</p>
+              <p className="text-xs text-ink-muted uppercase tracking-wide mb-2">Relatórios de Reunião</p>
               <div className="space-y-1.5">
                 {reunioes.slice(0, 3).map(r => (
                   <div key={r.id} className="text-xs px-2 py-1.5 rounded bg-purple-50 text-purple-700 flex items-center gap-2">
@@ -1410,7 +1392,7 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
                     <span className="text-purple-400 shrink-0">{r.data?.slice(5, 10)}</span>
                   </div>
                 ))}
-                <button onClick={() => handleTabChange('relatorios')} className="text-xs font-medium px-2 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 w-full text-center">
+                <button onClick={() => handleTabChange('relatorios')} className="text-xs font-medium px-2 py-1 rounded bg-surface-muted text-ink-muted hover:bg-line w-full text-center">
                   Ver todos os relatórios →
                 </button>
               </div>
@@ -1421,17 +1403,17 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
               Próximos passos (o registo de alterações fica na Auditoria). */}
           {!['Consultores', 'Investidores', 'Parceiros'].includes(type) && (
           <div>
-            <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Timeline</p>
+            <p className="text-xs text-ink-muted uppercase tracking-wide mb-2">Timeline</p>
             {data.timeline?.length > 0 ? (
               <div className="space-y-2">
                 {data.timeline.slice(0, 15).map(t => (
                   <div key={t.id} className="flex gap-2 text-xs">
-                    <span className="text-gray-300 w-16 shrink-0">{t.created_at?.slice(5, 10)}</span>
-                    <span className={`font-medium ${ACAO_COLOR[t.acao] ?? 'text-gray-500'}`}>{ACAO_LABEL[t.acao] ?? t.acao}</span>
+                    <span className="text-ink-muted/70 w-16 shrink-0">{t.created_at?.slice(5, 10)}</span>
+                    <span className={`font-medium ${ACAO_COLOR[t.acao] ?? 'text-ink-muted'}`}>{ACAO_LABEL[t.acao] ?? t.acao}</span>
                   </div>
                 ))}
               </div>
-            ) : <p className="text-xs text-gray-300">Sem histórico</p>}
+            ) : <p className="text-xs text-ink-muted/70">Sem histórico</p>}
           </div>
           )}
         </div>
@@ -1521,12 +1503,12 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-semibold text-gray-700">Histórico de Reuniões</h3>
+        <h3 className="text-sm font-semibold text-ink">Histórico de Reuniões</h3>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-400">{reunioes.length} reunião(ões)</span>
+          <span className="text-xs text-ink-muted">{reunioes.length} reunião(ões)</span>
           {!adding && (
             <button onClick={() => setAdding(true)}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg text-white" style={{ backgroundColor: '#0d0d0d' }}>
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-ink text-surface hover:opacity-90">
               Adicionar reunião
             </button>
           )}
@@ -1534,37 +1516,37 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
       </div>
 
       {adding && (
-        <form onSubmit={adicionarReuniao} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+        <form onSubmit={adicionarReuniao} className="bg-surface-raised rounded-xl border border-line p-4 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-            <label className="sm:col-span-2 text-xs text-gray-500">Título
+            <label className="sm:col-span-2 text-xs text-ink-muted">Título
               <input type="text" required value={nova.titulo} onChange={e => setNova(n => ({ ...n, titulo: e.target.value }))}
                 placeholder={`Reunião com ${investidorNome || 'contacto'}`}
-                className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-800" />
+                className="mt-1 w-full px-3 py-2 text-sm border border-line rounded-lg text-ink" />
             </label>
-            <label className="text-xs text-gray-500">Data e hora
+            <label className="text-xs text-ink-muted">Data e hora
               <input type="datetime-local" required value={nova.data} onChange={e => setNova(n => ({ ...n, data: e.target.value }))}
-                className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-800" />
+                className="mt-1 w-full px-3 py-2 text-sm border border-line rounded-lg text-ink" />
             </label>
-            <label className="text-xs text-gray-500">Duração (min)
+            <label className="text-xs text-ink-muted">Duração (min)
               <input type="number" min="0" value={nova.duracao_min} onChange={e => setNova(n => ({ ...n, duracao_min: e.target.value }))}
-                className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-800" />
+                className="mt-1 w-full px-3 py-2 text-sm border border-line rounded-lg text-ink" />
             </label>
           </div>
-          <label className="block text-xs text-gray-500">Resumo (opcional)
+          <label className="block text-xs text-ink-muted">Resumo (opcional)
             <textarea rows={3} value={nova.resumo} onChange={e => setNova(n => ({ ...n, resumo: e.target.value }))}
-              className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-800" />
+              className="mt-1 w-full px-3 py-2 text-sm border border-line rounded-lg text-ink" />
           </label>
-          <label className="block text-xs text-gray-500">Relatório (PDF)
+          <label className="block text-xs text-ink-muted">Relatório (PDF)
             <input type="file" required accept="application/pdf,.pdf" onChange={e => setNova(n => ({ ...n, file: e.target.files?.[0] || null }))}
-              className="mt-1 block w-full text-sm text-gray-600" />
+              className="mt-1 block w-full text-sm text-ink-muted" />
           </label>
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => { setAdding(false); setNova(NOVA_REUNIAO_VAZIA) }} disabled={saving}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-gray-200 text-gray-600 hover:border-gray-300">
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-surface-raised border border-line text-ink-muted hover:border-line">
               Cancelar
             </button>
             <button type="submit" disabled={saving || !nova.file}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg text-white disabled:opacity-50" style={{ backgroundColor: '#0d0d0d' }}>
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-ink text-surface hover:opacity-90 disabled:opacity-50">
               {saving ? 'A guardar...' : 'Guardar reunião'}
             </button>
           </div>
@@ -1577,17 +1559,17 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
         const dataStr = r.data ? new Date(r.data).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 
         return (
-          <div key={r.id} className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
+          <div key={r.id} className="bg-surface rounded-xl border border-line overflow-hidden">
             {/* Header da reunião */}
             <button onClick={() => toggleExpand(r.id)}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-100 transition-colors">
+              className="w-full px-4 py-3 flex items-center justify-between hover:bg-surface-muted transition-colors">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: '#0d0d0d' }}>
-                  <Phone className="w-4 h-4" style={{ color: '#C9A84C' }} />
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-surface-muted">
+                  <Phone className="w-4 h-4 text-ink-muted" />
                 </div>
                 <div className="text-left min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">{r.titulo}</p>
-                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                  <p className="text-sm font-medium text-ink truncate">{r.titulo}</p>
+                  <div className="flex items-center gap-2 text-xs text-ink-muted">
                     <span>{dataStr}</span>
                     {r.duracao_min > 0 && <><span>·</span><span>{r.duracao_min} min</span></>}
                   </div>
@@ -1599,7 +1581,7 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
                   openDocument(`/api/crm/reunioes/${r.id}/relatorio`).catch(err => console.error('[reuniao pdf]', err.message))
                 }}
                   title="Abrir o PDF numa nova aba"
-                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-white border border-gray-200 text-gray-600 hover:border-gray-300">
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-surface-raised border border-line text-ink-muted hover:border-line">
                   <Eye className="w-3 h-3" /> Ver
                 </button>
                 <button onClick={(e) => {
@@ -1607,28 +1589,28 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
                   openDocument(`/api/crm/reunioes/${r.id}/relatorio`, { download: true }).catch(err => console.error('[reuniao pdf download]', err.message))
                 }}
                   title="Descarregar o PDF"
-                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-white border border-gray-200 text-gray-600 hover:border-gray-300">
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-surface-raised border border-line text-ink-muted hover:border-line">
                   <FileDown className="w-3 h-3" /> PDF
                 </button>
                 {r.relatorio_path && (
                   <button onClick={(e) => { e.stopPropagation(); apagarReuniao(r) }}
                     title="Apagar reunião e relatório"
-                    className="flex items-center px-2 py-1 rounded-lg bg-white border border-gray-200 text-gray-400 hover:text-red-600 hover:border-red-200">
+                    className="flex items-center px-2 py-1 rounded-lg bg-surface-raised border border-line text-ink-muted hover:text-danger hover:border-danger/30">
                     <Trash2 className="w-3 h-3" />
                   </button>
                 )}
-                {isOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                {isOpen ? <ChevronUp className="w-4 h-4 text-ink-muted" /> : <ChevronDown className="w-4 h-4 text-ink-muted" />}
               </div>
             </button>
 
             {/* Conteúdo expandido */}
             {isOpen && (
-              <div className="px-4 pb-4 space-y-4 border-t border-gray-200">
+              <div className="px-4 pb-4 space-y-4 border-t border-line">
                 {/* Resumo */}
                 {r.resumo && (
                   <div className="mt-3">
-                    <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Resumo</p>
-                    <p className="text-sm text-gray-700 bg-white rounded-lg p-3 border border-gray-100">{r.resumo}</p>
+                    <p className="text-xs text-ink-muted uppercase tracking-wide mb-1">Resumo</p>
+                    <p className="text-sm text-ink bg-surface-raised rounded-lg p-3 border border-line">{r.resumo}</p>
                   </div>
                 )}
 
@@ -1636,7 +1618,7 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
                 {r.keywords && (
                   <div className="flex flex-wrap gap-1.5">
                     {r.keywords.split(',').filter(Boolean).map((k, i) => (
-                      <span key={i} className="px-2 py-0.5 text-xs rounded-full bg-indigo-50 text-indigo-600">{k.trim()}</span>
+                      <span key={i} className="px-2 py-0.5 text-xs rounded-full bg-surface-muted text-ink">{k.trim()}</span>
                     ))}
                   </div>
                 )}
@@ -1644,8 +1626,8 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
                 {/* Análise AI */}
                 {analyzing === r.id && (
                   <div className="text-center py-4">
-                    <div className="animate-spin w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full mx-auto" />
-                    <p className="text-xs text-gray-400 mt-2">A analisar reunião...</p>
+                    <div className="animate-spin w-5 h-5 border-2 border-accent border-t-transparent rounded-full mx-auto" />
+                    <p className="text-xs text-ink-muted mt-2">A analisar reunião...</p>
                   </div>
                 )}
 
@@ -1654,7 +1636,7 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
                     {/* Dados extraídos */}
                     {ana.investidor_dados && (
                       <div>
-                        <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Dados Extraídos do Investidor</p>
+                        <p className="text-xs text-ink-muted uppercase tracking-wide mb-2">Dados Extraídos do Investidor</p>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                           {ana.investidor_dados.capital_max && <MiniField label="Capital Max" value={`€ ${ana.investidor_dados.capital_max.toLocaleString('pt-PT')}`} />}
                           {ana.investidor_dados.capital_min && <MiniField label="Capital Min" value={`€ ${ana.investidor_dados.capital_min.toLocaleString('pt-PT')}`} />}
@@ -1664,7 +1646,7 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
                           {ana.probabilidade_investimento != null && <MiniField label="Probabilidade" value={`${ana.probabilidade_investimento}%`} />}
                         </div>
                         {ana.autoFilled && ana.fieldsUpdated?.length > 0 && (
-                          <p className="text-xs text-green-600 mt-2">✓ Campos preenchidos automaticamente: {ana.fieldsUpdated.join(', ')}</p>
+                          <p className="text-xs text-success mt-2">✓ Campos preenchidos automaticamente: {ana.fieldsUpdated.join(', ')}</p>
                         )}
                       </div>
                     )}
@@ -1672,12 +1654,12 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
                     {/* Sugestões de melhoria */}
                     {ana.sugestoes_melhoria?.length > 0 && (
                       <div>
-                        <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Sugestões de Melhoria</p>
+                        <p className="text-xs text-ink-muted uppercase tracking-wide mb-2">Sugestões de Melhoria</p>
                         <div className="space-y-1.5">
                           {ana.sugestoes_melhoria.map((s, i) => (
                             <div key={i} className="flex gap-2 text-xs">
-                              <span className="text-yellow-500 shrink-0">💡</span>
-                              <span className="text-gray-600">{s}</span>
+                              <span className="text-warning shrink-0">💡</span>
+                              <span className="text-ink-muted">{s}</span>
                             </div>
                           ))}
                         </div>
@@ -1687,12 +1669,12 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
                     {/* Próximos passos */}
                     {ana.proximos_passos?.length > 0 && (
                       <div>
-                        <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Próximos Passos</p>
+                        <p className="text-xs text-ink-muted uppercase tracking-wide mb-2">Próximos Passos</p>
                         <div className="space-y-1">
                           {ana.proximos_passos.map((p, i) => (
                             <div key={i} className="flex gap-2 text-xs">
-                              <span className="text-indigo-500 shrink-0 font-bold">{i + 1}.</span>
-                              <span className="text-gray-600">{p}</span>
+                              <span className="text-ink-muted shrink-0 font-bold">{i + 1}.</span>
+                              <span className="text-ink-muted">{p}</span>
                             </div>
                           ))}
                         </div>
@@ -1704,22 +1686,22 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
                 {/* Transcrição */}
                 {transcricao[r.id] && (
                   <details className="group">
-                    <summary className="text-xs text-gray-400 uppercase tracking-wide cursor-pointer hover:text-gray-600 flex items-center gap-1">
+                    <summary className="text-xs text-ink-muted uppercase tracking-wide cursor-pointer hover:text-ink-muted flex items-center gap-1">
                       <FileText className="w-3 h-3" /> Transcrição Completa
                     </summary>
-                    <div className="mt-2 max-h-[400px] overflow-y-auto bg-white rounded-lg border border-gray-100 p-3 text-xs space-y-1">
+                    <div className="mt-2 max-h-[400px] overflow-y-auto bg-surface-raised rounded-lg border border-line p-3 text-xs space-y-1">
                       {transcricao[r.id].split('\n').filter(Boolean).map((line, i) => {
                         const match = line.match(/^\[(.+?)\]:\s*(.+)/)
                         if (match) {
                           const isSomnium = /somnium|alexandre|jo[aã]o/i.test(match[1])
                           return (
                             <div key={i}>
-                              <span className={`font-semibold ${isSomnium ? 'text-indigo-600' : 'text-yellow-700'}`}>{match[1]}: </span>
-                              <span className="text-gray-600">{match[2]}</span>
+                              <span className={`font-semibold ${isSomnium ? 'text-ink' : 'text-warning'}`}>{match[1]}: </span>
+                              <span className="text-ink-muted">{match[2]}</span>
                             </div>
                           )
                         }
-                        return <div key={i} className="text-gray-500">{line}</div>
+                        return <div key={i} className="text-ink-muted">{line}</div>
                       })}
                     </div>
                   </details>
@@ -1731,7 +1713,7 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
       })}
 
       {reunioes.length === 0 && (
-        <p className="text-center text-gray-400 text-sm py-8">Sem reuniões registadas para este contacto.</p>
+        <p className="text-center text-ink-muted text-sm py-8">Sem reuniões registadas para este contacto.</p>
       )}
     </div>
   )
@@ -1740,8 +1722,8 @@ function RelatoriosTab({ reunioes, investidorNome, entidadeTipo, entidadeId, onC
 function Field({ label, value }) {
   return (
     <div>
-      <p className="text-xs text-gray-400">{label}</p>
-      <p className="text-sm font-medium text-gray-800 truncate">{value || '—'}</p>
+      <p className="text-xs text-ink-muted">{label}</p>
+      <p className="text-sm font-medium text-ink truncate">{value || '—'}</p>
     </div>
   )
 }
@@ -1753,10 +1735,10 @@ function Field({ label, value }) {
 // o valor do campo que este EF representa resolve isso: só o campo realmente
 // alterado volta a renderizar.
 const EF = memo(function EF({ label, field, form, set, type = 'text', options }) {
-  const inputClass = "w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
+  const inputClass = "w-full px-2 py-1.5 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
   return (
     <div>
-      <p className="text-xs text-gray-400 mb-1">{label}</p>
+      <p className="text-xs text-ink-muted mb-1">{label}</p>
       {type === 'select' ? (
         <select value={form[field] ?? ''} onChange={e => set(field, e.target.value)} className={inputClass}>
           <option value="">—</option>
@@ -1801,22 +1783,22 @@ function Section({ icon, title, fields, form, defaultOpen = false, accent, child
     // estava a ser cortado pelo `overflow-hidden` desta caixa (lista da
     // imobiliária ocultada). Mantém overflow-hidden quando fechado para
     // preservar os rounded corners do botão de header.
-    <div className={`col-span-2 md:col-span-3 border border-gray-200 rounded-xl bg-white ${open ? '' : 'overflow-hidden'}`}>
+    <div className={`col-span-2 md:col-span-3 border border-line rounded-xl bg-surface-raised ${open ? '' : 'overflow-hidden'}`}>
       <button type="button" onClick={() => setOpen(o => !o)}
-        className={`w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 ${open ? 'rounded-t-xl' : 'rounded-xl'}`}>
+        className={`w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-ink hover:bg-surface ${open ? 'rounded-t-xl' : 'rounded-xl'}`}>
 
         <span className="flex items-center gap-2">
           {icon && <span>{icon}</span>}
           <span>{title}</span>
-          {accent && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-800 font-medium">{accent}</span>}
+          {accent && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-warning/15 text-warning font-medium">{accent}</span>}
         </span>
         <span className="flex items-center gap-3">
           {filled !== null && total > 0 && (
-            <span className={`text-[11px] font-medium ${complete ? 'text-green-600' : 'text-gray-400'}`}>
+            <span className={`text-[11px] font-medium ${complete ? 'text-success' : 'text-ink-muted'}`}>
               {filled}/{total}
             </span>
           )}
-          {open ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          {open ? <ChevronUp className="w-4 h-4 text-ink-muted" /> : <ChevronDown className="w-4 h-4 text-ink-muted" />}
         </span>
       </button>
       {open && (
@@ -1883,12 +1865,12 @@ function ChipsEditor({ label, jsonField, onChange, placeholder, suggestions = []
 
   return (
     <div ref={wrapRef} className="relative">
-      <p className="text-xs text-gray-400 mb-1">{label}</p>
-      <div className="flex flex-wrap gap-1.5 px-2 py-1.5 rounded-lg border border-gray-200 bg-white min-h-[38px] focus-within:ring-2 focus-within:ring-yellow-300">
+      <p className="text-xs text-ink-muted mb-1">{label}</p>
+      <div className="flex flex-wrap gap-1.5 px-2 py-1.5 rounded-lg border border-line bg-surface-raised min-h-[38px] focus-within:ring-2 focus-within:ring-yellow-300">
         {items.map((it, i) => (
-          <span key={`${it}-${i}`} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-yellow-50 border border-yellow-200 text-yellow-900">
+          <span key={`${it}-${i}`} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-warning/10 border border-warning/30 text-yellow-900">
             {it}
-            <button type="button" onClick={() => remove(i)} className="text-yellow-700 hover:text-red-600" aria-label={`Remover ${it}`}>×</button>
+            <button type="button" onClick={() => remove(i)} className="text-warning hover:text-danger" aria-label={`Remover ${it}`}>×</button>
           </span>
         ))}
         <input
@@ -1902,13 +1884,13 @@ function ChipsEditor({ label, jsonField, onChange, placeholder, suggestions = []
         />
       </div>
       {open && filtered.length > 0 && (
-        <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-auto">
+        <div className="absolute z-30 left-0 right-0 mt-1 bg-surface-raised border border-line rounded-lg shadow-lg max-h-56 overflow-auto">
           {filtered.map((s, i) => (
             <button
               key={s + i}
               type="button"
               onMouseDown={(e) => { e.preventDefault(); add(s) }}
-              className="w-full text-left px-3 py-1.5 text-sm hover:bg-yellow-50 hover:text-yellow-900"
+              className="w-full text-left px-3 py-1.5 text-sm hover:bg-warning/10 hover:text-yellow-900"
             >
               {s}
             </button>
@@ -1983,28 +1965,28 @@ function ConsultorInlineCreator({ initialNome, regiao, sugestoesImobiliarias = [
     }
   }
 
-  const input = "w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
+  const input = "w-full px-2 py-1.5 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
 
   return (
-    <div className="mt-2 p-3 rounded-xl border border-yellow-200 bg-yellow-50/40">
+    <div className="mt-2 p-3 rounded-xl border border-warning/30 bg-warning/10">
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs font-semibold text-yellow-800">
+        <p className="text-xs font-semibold text-warning">
           Criar consultor em <strong>{regiao}</strong>
         </p>
         <button type="button" onClick={onCancel}
-          className="text-[11px] text-gray-500 hover:text-gray-700">Cancelar</button>
+          className="text-[11px] text-ink-muted hover:text-ink">Cancelar</button>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <div>
-          <p className="text-[10px] text-gray-500 mb-0.5">Nome *</p>
+          <p className="text-[10px] text-ink-muted mb-0.5">Nome *</p>
           <input value={nome} onChange={e => setNome(e.target.value)} className={input} autoFocus />
         </div>
         <div>
-          <p className="text-[10px] text-gray-500 mb-0.5">Contacto</p>
+          <p className="text-[10px] text-ink-muted mb-0.5">Contacto</p>
           <input value={contacto} onChange={e => setContacto(e.target.value)} className={input} placeholder="9XX XXX XXX" />
         </div>
         <div>
-          <p className="text-[10px] text-gray-500 mb-0.5">Email</p>
+          <p className="text-[10px] text-ink-muted mb-0.5">Email</p>
           <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={input} placeholder="nome@exemplo.pt" />
         </div>
         <div>
@@ -2017,13 +1999,13 @@ function ConsultorInlineCreator({ initialNome, regiao, sugestoesImobiliarias = [
           />
         </div>
       </div>
-      {erro && <p className="mt-2 text-[11px] text-red-600">{erro}</p>}
+      {erro && <p className="mt-2 text-[11px] text-danger">{erro}</p>}
       <div className="mt-3 flex items-center gap-2">
         <button type="button" onClick={submit} disabled={saving || !nome.trim()}
-          className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-yellow-600 text-white hover:bg-yellow-700 disabled:opacity-50">
+          className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-warning text-white hover:bg-yellow-700 disabled:opacity-50">
           {saving ? 'A criar…' : 'Criar consultor'}
         </button>
-        <span className="text-[10px] text-gray-500">Os restantes campos preenchem-se depois na ficha do consultor.</span>
+        <span className="text-[10px] text-ink-muted">Os restantes campos preenchem-se depois na ficha do consultor.</span>
       </div>
     </div>
   )
@@ -2077,19 +2059,19 @@ function ImovelEditSections({ data, form, setField }) {
         const field = isFup ? 'motivo_follow_up' : 'motivo_nao_interessa'
         return (
           <div className="col-span-2 md:col-span-3">
-            <label className="text-xs font-medium text-amber-600 block mb-1">
+            <label className="text-xs font-medium text-warning block mb-1">
               {isFup ? 'Motivo Follow Up *' : 'Motivo Não Interessa *'}
             </label>
             <textarea value={form[field] || ''} onChange={e => setField(field, e.target.value)} rows={2}
               autoFocus
               placeholder={isFup ? 'Ex: Aguardar resposta do proprietário…' : 'Ex: preço acima do mercado, sem margem…'}
-              className="w-full px-3 py-2 rounded-lg border border-amber-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
-            <p className="text-[11px] text-amber-500 mt-1">⚠ Obrigatório para gravar este estado.</p>
+              className="w-full px-3 py-2 rounded-lg border border-warning/30 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
+            <p className="text-[11px] text-warning mt-1">⚠ Obrigatório para gravar este estado.</p>
             {isFup && entraEmFollowUp(form, data) && (
               <div className="mt-2">
-                <label className="text-xs font-medium text-amber-600 block mb-1">Data do follow-up * (cria a tarefa na agenda)</label>
+                <label className="text-xs font-medium text-warning block mb-1">Data do follow-up * (cria a tarefa na agenda)</label>
                 <input type="date" value={form._follow_up_data || ''} onChange={e => setField('_follow_up_data', e.target.value)}
-                  className="px-3 py-2 rounded-lg border border-amber-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
+                  className="px-3 py-2 rounded-lg border border-warning/30 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
               </div>
             )}
           </div>
@@ -2098,9 +2080,9 @@ function ImovelEditSections({ data, form, setField }) {
       <EF label="REF Interna" field="ref_interna" form={form} set={setField} />
       <EF label="Link" field="link" form={form} set={setField} />
       <div>
-        <p className="text-xs text-gray-400 mb-1">Tipo de Oportunidade</p>
+        <p className="text-xs text-ink-muted mb-1">Tipo de Oportunidade</p>
         <select value={form.tipo_oportunidade || ''} onChange={e => setField('tipo_oportunidade', e.target.value)}
-          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+          className="w-full px-2 py-1.5 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
           <option value="">—</option>
           {(lookups.tipo_oportunidade || ['Off-Market','Market','Portal']).map(o => <option key={o} value={o}>{o}</option>)}
         </select>
@@ -2119,7 +2101,7 @@ function ImovelEditSections({ data, form, setField }) {
           createLabel="Criar consultor"
         />
         {form.nome_consultor && !consultoresOptions.some(o => o.toLowerCase() === form.nome_consultor.toLowerCase()) && (
-          <p className="text-[10px] text-amber-600 mt-1">Nome livre (não corresponde a consultor da BD)</p>
+          <p className="text-[10px] text-warning mt-1">Nome livre (não corresponde a consultor da BD)</p>
         )}
       </div>
       {openCreatorFor && (
@@ -2138,9 +2120,9 @@ function ImovelEditSections({ data, form, setField }) {
     {/* 2. Localização */}
     <Section icon="📍" title="Localização" fields={sec.localizacao} form={form}>
       <div>
-        <p className="text-xs text-gray-400 mb-1">Região</p>
+        <p className="text-xs text-ink-muted mb-1">Região</p>
         <select value={form.regiao || 'Coimbra'} onChange={e => setField('regiao', e.target.value)}
-          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+          className="w-full px-2 py-1.5 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
           <option value="Coimbra">Coimbra</option>
           <option value="AMP">AMP (Porto + Gaia)</option>
         </select>
@@ -2158,12 +2140,12 @@ function ImovelEditSections({ data, form, setField }) {
       <EF label="Latitude" field="coordenadas_lat" form={form} set={setField} type="number" />
       <EF label="Longitude" field="coordenadas_lng" form={form} set={setField} type="number" />
       <div className="col-span-2 md:col-span-3 mt-1">
-        <label className="text-xs text-gray-400 block mb-1">Imagem de localização (print do Google Maps)</label>
+        <label className="text-xs text-ink-muted block mb-1">Imagem de localização (print do Google Maps)</label>
         {form.localizacao_imagem ? (
           <div className="flex items-start gap-3">
-            <img src={form.localizacao_imagem} alt="Localização" className="w-64 h-40 object-cover rounded-lg border border-gray-200" loading="lazy" decoding="async" />
+            <img src={form.localizacao_imagem} alt="Localização" className="w-64 h-40 object-cover rounded-lg border border-line" loading="lazy" decoding="async" />
             <div className="flex flex-col gap-2">
-              <label className="text-xs px-3 py-1.5 rounded-md bg-yellow-50 border border-yellow-200 text-yellow-800 hover:bg-yellow-100 cursor-pointer text-center">
+              <label className="text-xs px-3 py-1.5 rounded-md bg-warning/10 border border-warning/30 text-warning hover:bg-warning/15 cursor-pointer text-center">
                 Substituir
                 <input type="file" accept="image/*" className="hidden" onChange={async e => {
                   const file = e.target.files?.[0]
@@ -2185,12 +2167,12 @@ function ImovelEditSections({ data, form, setField }) {
                   if (!r.ok) throw new Error(await r.text())
                   setField('localizacao_imagem', null)
                 } catch (e) { alert('Erro ao remover: ' + e.message) }
-              }} className="text-xs px-3 py-1.5 rounded-md bg-red-50 border border-red-200 text-red-700 hover:bg-red-100">Remover</button>
+              }} className="text-xs px-3 py-1.5 rounded-md bg-danger/10 border border-danger/30 text-danger hover:bg-danger/15">Remover</button>
             </div>
           </div>
         ) : (
-          <label className="flex items-center justify-center gap-2 px-4 py-6 rounded-lg border-2 border-dashed border-gray-300 hover:border-yellow-400 hover:bg-yellow-50/50 cursor-pointer transition-colors">
-            <span className="text-sm text-gray-500">Clique para carregar print do Google Maps (JPG, PNG, WEBP)</span>
+          <label className="flex items-center justify-center gap-2 px-4 py-6 rounded-lg border-2 border-dashed border-line hover:border-yellow-400 hover:bg-warning/10 cursor-pointer transition-colors">
+            <span className="text-sm text-ink-muted">Clique para carregar print do Google Maps (JPG, PNG, WEBP)</span>
             <input type="file" accept="image/*" className="hidden" onChange={async e => {
               const file = e.target.files?.[0]
               if (!file) return
@@ -2214,14 +2196,14 @@ function ImovelEditSections({ data, form, setField }) {
         <EF label="Tipologia" field="tipologia" form={form} set={setField} />
       )}
       <div>
-        <p className="text-xs text-gray-400 mb-1">Tipo de Prédio</p>
+        <p className="text-xs text-ink-muted mb-1">Tipo de Prédio</p>
         <select value={form.predio_tipo || ''} onChange={e => {
             const v = e.target.value
             setField('predio_tipo', v)
             if (v === 'Moradia') { setField('numero_pisos_predio', null); setField('tem_elevador', null) }
             if (v !== 'Apartamento') { setField('tipologia', null) }
           }}
-          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+          className="w-full px-2 py-1.5 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
           <option value="">—</option>
           {(lookups.predio_tipo || []).map(o => <option key={o} value={o}>{o}</option>)}
         </select>
@@ -2230,9 +2212,9 @@ function ImovelEditSections({ data, form, setField }) {
       <EF label="ABP — Área Bruta Privativa (m²)" field="area_bruta" form={form} set={setField} type="number" />
       <EF label="ABD — Área Bruta Dependente (m²)" field="area_bruta_dependente" form={form} set={setField} type="number" />
       <div>
-        <p className="text-xs text-gray-400 mb-1">Andar</p>
+        <p className="text-xs text-ink-muted mb-1">Andar</p>
         <select value={form.andar || ''} onChange={e => setField('andar', e.target.value)}
-          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+          className="w-full px-2 py-1.5 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
           <option value="">—</option>
           {(lookups.andar || []).map(o => <option key={o} value={o}>{o}</option>)}
         </select>
@@ -2241,9 +2223,9 @@ function ImovelEditSections({ data, form, setField }) {
         <>
           <EF label="Nº Pisos do Prédio" field="numero_pisos_predio" form={form} set={setField} type="number" />
           <div>
-            <p className="text-xs text-gray-400 mb-1">Elevador</p>
+            <p className="text-xs text-ink-muted mb-1">Elevador</p>
             <select value={form.tem_elevador || ''} onChange={e => setField('tem_elevador', e.target.value)}
-              className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+              className="w-full px-2 py-1.5 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
               <option value="">—</option>
               {(lookups.tem_elevador || []).map(o => <option key={o} value={o}>{o}</option>)}
             </select>
@@ -2252,9 +2234,9 @@ function ImovelEditSections({ data, form, setField }) {
       )}
       <EF label="Ano de Construção" field="ano_construcao" form={form} set={setField} type="number" />
       <div>
-        <p className="text-xs text-gray-400 mb-1">CRU</p>
+        <p className="text-xs text-ink-muted mb-1">CRU</p>
         <select value={form.cru || ''} onChange={e => setField('cru', e.target.value)}
-          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+          className="w-full px-2 py-1.5 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
           <option value="">—</option>
           {(lookups.cru || []).map(o => <option key={o} value={o}>{o}</option>)}
         </select>
@@ -2285,30 +2267,30 @@ function ImovelEditSections({ data, form, setField }) {
       <EF label="Descrição Predial" field="descricao_predial" form={form} set={setField} />
       <EF label="Fração" field="fracao" form={form} set={setField} />
       <div>
-        <p className="text-xs text-gray-400 mb-1">Regime de Propriedade</p>
+        <p className="text-xs text-ink-muted mb-1">Regime de Propriedade</p>
         <select value={form.regime_propriedade || ''} onChange={e => setField('regime_propriedade', e.target.value)}
-          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+          className="w-full px-2 py-1.5 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
           <option value="">—</option>
           {(lookups.regime_propriedade || []).map(o => <option key={o} value={o}>{o}</option>)}
         </select>
       </div>
       <div>
-        <p className="text-xs text-gray-400 mb-1">Certificado Energético</p>
+        <p className="text-xs text-ink-muted mb-1">Certificado Energético</p>
         <select value={form.certificado_energetico || ''} onChange={e => setField('certificado_energetico', e.target.value)}
-          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+          className="w-full px-2 py-1.5 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
           <option value="">—</option>
           {(lookups.certificado_energetico || []).map(o => <option key={o} value={o}>{o}</option>)}
         </select>
       </div>
       <EF label="Nº CE" field="numero_ce" form={form} set={setField} />
       <div className="col-span-2 md:col-span-3">
-        <p className="text-xs text-gray-400 mb-1">Ónus / Encargos</p>
+        <p className="text-xs text-ink-muted mb-1">Ónus / Encargos</p>
         <div className="flex flex-wrap gap-2">
           {(lookups.onus_registados || []).map(o => {
             const active = onusList.includes(o)
             return (
               <button type="button" key={o} onClick={() => toggleOnus(o)}
-                className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${active ? 'bg-yellow-100 border-yellow-300 text-yellow-800' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${active ? 'bg-warning/15 border-warning/30 text-warning' : 'bg-surface-raised border-line text-ink-muted hover:bg-surface'}`}
               >{o}</button>
             )
           })}
@@ -2322,9 +2304,9 @@ function ImovelEditSections({ data, form, setField }) {
       <EF label="NIF" field="proprietario_nif" form={form} set={setField} />
       <EF label="Contacto" field="proprietario_contacto" form={form} set={setField} />
       <div>
-        <p className="text-xs text-gray-400 mb-1">Motivo Venda Declarado</p>
+        <p className="text-xs text-ink-muted mb-1">Motivo Venda Declarado</p>
         <select value={form.motivo_venda_declarado || ''} onChange={e => setField('motivo_venda_declarado', e.target.value)}
-          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+          className="w-full px-2 py-1.5 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
           <option value="">—</option>
           {(lookups.motivo_venda || []).map(o => <option key={o} value={o}>{o}</option>)}
         </select>
@@ -2344,9 +2326,9 @@ function ImovelEditSections({ data, form, setField }) {
       <EF label="Data Proposta Aceite" field="data_proposta_aceite" form={form} set={setField} type="date" />
       <EF label="Data Aceite Investidor" field="data_aceite_investidor" form={form} set={setField} type="date" />
       <div className="col-span-2 md:col-span-3">
-        <label className="text-xs text-gray-400 block mb-1">Notas</label>
+        <label className="text-xs text-ink-muted block mb-1">Notas</label>
         <textarea value={form.notas || ''} onChange={e => setField('notas', e.target.value)} rows={4}
-          className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+          className="w-full px-3 py-2 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
       </div>
     </Section>
   </>
@@ -2401,7 +2383,7 @@ function ImovelReadSections({ data, onNavigate }) {
             {consultorContacto && (
               <a href={`tel:${consultorContacto}`}
                  onClick={e => e.stopPropagation()}
-                 className="text-xs text-gray-500 hover:text-brand-gold hover:underline truncate">
+                 className="text-xs text-ink-muted hover:text-brand-gold hover:underline truncate">
                 {consultorContacto}
               </a>
             )}
@@ -2419,8 +2401,8 @@ function ImovelReadSections({ data, onNavigate }) {
       <Field label="Longitude" value={data.coordenadas_lng} />
       {data.localizacao_imagem && (
         <div className="col-span-2 md:col-span-3">
-          <p className="text-xs text-gray-400 mb-1">Imagem de localização</p>
-          <img src={data.localizacao_imagem} alt="Localização" className="w-full max-w-md rounded-lg border border-gray-200" loading="lazy" decoding="async" />
+          <p className="text-xs text-ink-muted mb-1">Imagem de localização</p>
+          <img src={data.localizacao_imagem} alt="Localização" className="w-full max-w-md rounded-lg border border-line" loading="lazy" decoding="async" />
         </div>
       )}
     </Section>
@@ -2467,8 +2449,8 @@ function ImovelReadSections({ data, onNavigate }) {
       <Field label="Certificado Energético" value={data.certificado_energetico} />
       <Field label="Nº CE" value={data.numero_ce} />
       <div className="col-span-2 md:col-span-3">
-        <p className="text-xs text-gray-400">Ónus / Encargos</p>
-        <p className="text-sm font-medium text-gray-800">{onusList.length > 0 ? onusList.join(', ') : '—'}</p>
+        <p className="text-xs text-ink-muted">Ónus / Encargos</p>
+        <p className="text-sm font-medium text-ink">{onusList.length > 0 ? onusList.join(', ') : '—'}</p>
       </div>
     </Section>
 
@@ -2528,13 +2510,13 @@ function MultiChips({ label, field, form, set, options }) {
   }
   return (
     <div className="col-span-2 md:col-span-3">
-      <p className="text-xs text-gray-400 mb-1.5">{label}</p>
+      <p className="text-xs text-ink-muted mb-1.5">{label}</p>
       <div className="flex flex-wrap gap-1.5">
         {options.map(o => {
           const active = selected.includes(o)
           return (
             <button key={o} type="button" onClick={() => toggle(o)}
-              className={`text-xs px-2.5 py-1 rounded-full border transition ${active ? 'bg-yellow-100 border-yellow-300 text-yellow-900' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+              className={`text-xs px-2.5 py-1 rounded-full border transition ${active ? 'bg-warning/15 border-warning/30 text-yellow-900' : 'bg-surface-raised border-line text-ink-muted hover:bg-surface'}`}>
               {o}
             </button>
           )
@@ -2548,19 +2530,19 @@ function Toggle({ label, field, form, set }) {
   const on = !!form[field]
   return (
     <div>
-      <p className="text-xs text-gray-400 mb-1">{label}</p>
+      <p className="text-xs text-ink-muted mb-1">{label}</p>
       <button type="button" onClick={() => set(field, on ? 0 : 1)}
-        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${on ? 'bg-green-500' : 'bg-gray-300'}`}>
-        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${on ? 'translate-x-6' : 'translate-x-1'}`} />
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${on ? 'bg-success' : 'bg-ink/20'}`}>
+        <span className={`inline-block h-4 w-4 transform rounded-full bg-surface-raised transition ${on ? 'translate-x-6' : 'translate-x-1'}`} />
       </button>
-      <span className="ml-2 text-xs text-gray-500">{on ? 'Sim' : 'Não'}</span>
+      <span className="ml-2 text-xs text-ink-muted">{on ? 'Sim' : 'Não'}</span>
     </div>
   )
 }
 
 function InvClassBadge({ cls }) {
-  if (!cls) return <span className="text-xs text-gray-300">—</span>
-  return <span className={`w-6 h-6 rounded-full inline-flex items-center justify-center text-xs font-bold text-white ${CLASS_COLOR[cls] ?? 'bg-gray-400'}`}>{cls}</span>
+  if (!cls) return <span className="text-xs text-ink-muted/70">—</span>
+  return <span className={`w-6 h-6 rounded-full inline-flex items-center justify-center text-xs font-bold text-white ${CLASS_COLOR[cls] ?? 'bg-ink/40'}`}>{cls}</span>
 }
 
 // Format compacto de € (€100k, €2.5M)
@@ -2586,7 +2568,7 @@ function InvestidorHero({ data }) {
   const isAtivo = tipos.includes('Ativo')
   const tipo = tipos.length > 0 ? tipos.join(' + ') : 'Passivo'
   const tipoBg = isAtivo ? 'from-green-500 to-emerald-600' : 'from-yellow-400 to-amber-500'
-  const statusColor = INV_STATUS_COLOR[data.status] || 'bg-gray-100 text-gray-600'
+  const statusColor = INV_STATUS_COLOR[data.status] || 'bg-surface-muted text-ink-muted'
   const iniciais = (data.nome || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase()).join('') || '?'
   const tel = (data.telemovel || '').replace(/\s+/g, '')
   const phoneIntl = tel.startsWith('+') ? tel : (tel.startsWith('00') ? '+' + tel.slice(2) : (tel.length === 9 ? '+351' + tel : tel))
@@ -2617,7 +2599,7 @@ function InvestidorHero({ data }) {
   ].filter(Boolean)))
 
   return (
-    <div className="col-span-2 md:col-span-3 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+    <div className="col-span-2 md:col-span-3 rounded-2xl border border-line bg-surface-raised shadow-sm overflow-hidden">
       {/* Topo */}
       <div className="p-4 sm:p-5">
         <div className="flex items-start gap-4">
@@ -2629,31 +2611,31 @@ function InvestidorHero({ data }) {
           {/* Info principal */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-xl font-bold text-gray-900 truncate">{data.nome}</h3>
+              <h3 className="text-xl font-bold text-ink truncate">{data.nome}</h3>
               {tipos.length > 0 ? tipos.map(t => (
                 <span key={t} className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${
-                  t === 'Ativo' ? 'text-green-700 bg-green-100 border-green-200' : 'text-yellow-700 bg-yellow-100 border-yellow-200'
+                  t === 'Ativo' ? 'text-success bg-success/15 border-success/30' : 'text-warning bg-warning/15 border-warning/30'
                 }`}>{t}</span>
               )) : (
-                <span className="text-[10px] px-2 py-0.5 rounded-full border font-semibold text-yellow-700 bg-yellow-100 border-yellow-200">Passivo</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full border font-semibold text-warning bg-warning/15 border-warning/30">Passivo</span>
               )}
               <InvClassBadge cls={data.classificacao} />
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusColor}`}>{data.status || '—'}</span>
               {!!data.nda_assinado && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium inline-flex items-center gap-1">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/15 text-success font-medium inline-flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" /> NDA
                 </span>
               )}
               {proximaPassada && !isTerminal && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold inline-flex items-center gap-1">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-danger/15 text-danger font-semibold inline-flex items-center gap-1">
                   <AlertTriangle className="w-3 h-3" /> Atrasado
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 flex-wrap">
+            <div className="flex items-center gap-3 mt-1 text-xs text-ink-muted flex-wrap">
               {data.telemovel && <span className="inline-flex items-center gap-1"><Phone className="w-3 h-3" /> {data.telemovel}</span>}
               {data.email && <span className="inline-flex items-center gap-1 truncate"><Mail className="w-3 h-3" /> {data.email}</span>}
-              {data.origem && <span className="text-gray-400">· {data.origem}</span>}
+              {data.origem && <span className="text-ink-muted">· {data.origem}</span>}
             </div>
           </div>
         </div>
@@ -2669,8 +2651,8 @@ function InvestidorHero({ data }) {
           <KpiTile icon={Hourglass} label="Na pipeline" value={diasPipeline != null ? `${diasPipeline}d` : '—'} tone="slate" />
           <KpiTile icon={TrendingUp} label="Score" value={score > 0 ? `${score}/100` : '—'} tone="green" extra={
             score > 0 ? (
-              <div className="mt-1 h-1 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-emerald-400 to-green-500 transition-all" style={{ width: `${Math.min(100, score)}%` }} />
+              <div className="mt-1 h-1 bg-surface-muted rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-emerald-400 to-green-500 transition-[background-color,border-color,color,box-shadow,opacity,transform]" style={{ width: `${Math.min(100, score)}%` }} />
               </div>
             ) : null
           } />
@@ -2678,18 +2660,18 @@ function InvestidorHero({ data }) {
 
         {/* Área de Atuação — destaque para investidores Ativos */}
         {isAtivo && (
-          <div className="mt-4 rounded-xl border border-green-100 bg-green-50/60 px-3 py-2">
-            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-green-700/80 font-semibold">
+          <div className="mt-4 rounded-xl border border-success/30 bg-success/10 px-3 py-2">
+            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-success font-semibold">
               <MapPin className="w-3 h-3" /> Área de Atuação
             </div>
             {areaAtuacao.length > 0 ? (
               <div className="flex flex-wrap gap-1.5 mt-1.5">
                 {areaAtuacao.map(s => (
-                  <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-white border border-green-200 text-green-800 font-medium">{s}</span>
+                  <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-surface-raised border border-success/30 text-success font-medium">{s}</span>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-gray-400 mt-1">Por definir</p>
+              <p className="text-xs text-ink-muted mt-1">Por definir</p>
             )}
           </div>
         )}
@@ -2697,17 +2679,17 @@ function InvestidorHero({ data }) {
         {/* Acções rápidas */}
         <div className="flex items-center gap-2 mt-4 flex-wrap">
           {phoneIntl && (
-            <a href={`tel:${phoneIntl}`} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1.5">
+            <a href={`tel:${phoneIntl}`} className="text-xs px-3 py-1.5 rounded-lg border border-line bg-surface-raised text-ink hover:bg-surface inline-flex items-center gap-1.5">
               <Phone className="w-3.5 h-3.5" /> Ligar
             </a>
           )}
           {phoneIntl && (
-            <a href={`https://wa.me/${phoneIntl.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-xs px-3 py-1.5 rounded-lg border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 inline-flex items-center gap-1.5">
+            <a href={`https://wa.me/${phoneIntl.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-xs px-3 py-1.5 rounded-lg border border-success/30 bg-success/10 text-success hover:bg-success/15 inline-flex items-center gap-1.5">
               <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
             </a>
           )}
           {data.email && (
-            <a href={`mailto:${data.email}`} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1.5">
+            <a href={`mailto:${data.email}`} className="text-xs px-3 py-1.5 rounded-lg border border-line bg-surface-raised text-ink hover:bg-surface inline-flex items-center gap-1.5">
               <Mail className="w-3.5 h-3.5" /> Email
             </a>
           )}
@@ -2717,21 +2699,21 @@ function InvestidorHero({ data }) {
       {/* Faixa de progresso da pipeline */}
       {pos && !isTerminal && (
         <div className="px-4 sm:px-5 pb-3">
-          <div className="flex items-center gap-2 text-[10px] text-gray-400 uppercase tracking-wide mb-1">
+          <div className="flex items-center gap-2 text-[10px] text-ink-muted uppercase tracking-wide mb-1">
             <span>Pipeline {tipo.toLowerCase()}</span>
-            <span className="ml-auto font-mono text-gray-500">{pos.idx}/{pos.total}</span>
+            <span className="ml-auto num text-ink-muted">{pos.idx}/{pos.total}</span>
           </div>
-          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full rounded-full transition-all" style={{ width: `${(pos.idx / pos.total) * 100}%`, backgroundColor: '#C9A84C' }} />
+          <div className="h-1.5 bg-surface-muted rounded-full overflow-hidden">
+            <div className="h-full rounded-full bg-accent transition-[width] duration-moderate ease-entry" style={{ width: `${(pos.idx / pos.total) * 100}%` }} />
           </div>
         </div>
       )}
       {isTerminal && (
-        <div className="px-4 sm:px-5 py-2 bg-gray-50 border-t border-gray-100 text-[11px] text-gray-500 flex items-center gap-2">
+        <div className="px-4 sm:px-5 py-2 bg-surface border-t border-line text-[11px] text-ink-muted flex items-center gap-2">
           <AlertTriangle className="w-3.5 h-3.5" />
           {data.status === 'Inactivo' ? 'Investidor marcado como inativo.' : 'Investidor não qualificado.'}
-          {data.motivo_inatividade && <span className="text-gray-400">· {data.motivo_inatividade}</span>}
-          {data.motivo_nao_aprovacao && <span className="text-gray-400">· {data.motivo_nao_aprovacao}</span>}
+          {data.motivo_inatividade && <span className="text-ink-muted">· {data.motivo_inatividade}</span>}
+          {data.motivo_nao_aprovacao && <span className="text-ink-muted">· {data.motivo_nao_aprovacao}</span>}
         </div>
       )}
     </div>
@@ -2741,13 +2723,13 @@ function InvestidorHero({ data }) {
 // Mini-card de KPI usado no Hero
 function KpiTile({ icon: Icon, label, value, tone, extra }) {
   const tones = {
-    indigo: 'bg-indigo-50 text-indigo-700 border-indigo-100',
-    amber:  'bg-amber-50 text-amber-700 border-amber-100',
-    slate:  'bg-slate-50 text-slate-700 border-slate-100',
-    green:  'bg-emerald-50 text-emerald-700 border-emerald-100',
+    indigo: 'bg-surface-muted text-ink border-line',
+    amber:  'bg-warning/10 text-warning border-warning/30',
+    slate:  'bg-surface text-ink border-line',
+    green:  'bg-success/10 text-success border-success/30',
   }
   return (
-    <div className={`rounded-xl border p-2.5 ${tones[tone] || 'bg-gray-50 border-gray-100 text-gray-700'}`}>
+    <div className={`rounded-xl border p-2.5 ${tones[tone] || 'bg-surface border-line text-ink'}`}>
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide opacity-70">
         <Icon className="w-3 h-3" /> {label}
       </div>
@@ -2762,9 +2744,9 @@ function MiniDate({ iso }) {
   const meses = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ']
   const [y, m, d] = (iso || '').slice(0, 10).split('-')
   return (
-    <div className="w-12 h-14 rounded-lg border border-gray-200 bg-white shadow-sm flex flex-col overflow-hidden shrink-0">
+    <div className="w-12 h-14 rounded-lg border border-line bg-surface-raised shadow-sm flex flex-col overflow-hidden shrink-0">
       <div className="bg-brand-dark text-brand-gold text-[9px] text-center font-semibold py-0.5 tracking-wider">{meses[parseInt(m, 10) - 1] || '—'}</div>
-      <div className="flex-1 flex items-center justify-center text-lg font-bold text-gray-800">{d || '?'}</div>
+      <div className="flex-1 flex items-center justify-center text-lg font-bold text-ink">{d || '?'}</div>
     </div>
   )
 }
@@ -2778,7 +2760,7 @@ function InvestidorTimeline({ data }) {
     { key: 'Próximo contacto', date: data.data_proxima_acao,     Icon: Target },
   ].filter(e => e.date).sort((a, b) => (a.date || '').localeCompare(b.date || ''))
   if (eventos.length === 0) {
-    return <p className="col-span-2 md:col-span-3 text-xs text-gray-400 italic">Sem eventos registados</p>
+    return <p className="col-span-2 md:col-span-3 text-xs text-ink-muted italic">Sem eventos registados</p>
   }
   return (
     <div className="col-span-2 md:col-span-3 relative pl-2">
@@ -2790,21 +2772,21 @@ function InvestidorTimeline({ data }) {
         const past = iso < today
         const prev = i > 0 ? eventos[i - 1].date.slice(0, 10) : null
         const gap = prev ? Math.floor((new Date(iso) - new Date(prev)) / 86400000) : null
-        const dotColor = future ? 'bg-yellow-500' : isToday ? 'bg-brand-gold' : 'bg-gray-300'
+        const dotColor = future ? 'bg-warning' : isToday ? 'bg-brand-gold' : 'bg-ink/20'
         const Icon = e.Icon
         return (
           <div key={i} className="relative flex items-start gap-3 py-2">
             <div className={`absolute left-2.5 top-3 w-3 h-3 rounded-full ${dotColor} border-2 border-white shadow-sm`} />
-            <div className={`ml-8 flex-1 rounded-lg border p-2.5 ${future ? 'bg-yellow-50/40 border-yellow-100' : isToday ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100'}`}>
+            <div className={`ml-8 flex-1 rounded-lg border p-2.5 ${future ? 'bg-warning/10 border-warning/30' : isToday ? 'bg-warning/10 border-warning/30' : 'bg-surface-raised border-line'}`}>
               <div className="flex items-center gap-2">
-                <Icon className={`w-3.5 h-3.5 ${future ? 'text-yellow-700' : 'text-gray-500'}`} />
-                <span className="text-sm font-medium text-gray-800">{e.key}</span>
-                <span className="ml-auto text-[11px] font-mono text-gray-500">{fmtDate(iso)}</span>
+                <Icon className={`w-3.5 h-3.5 ${future ? 'text-warning' : 'text-ink-muted'}`} />
+                <span className="text-sm font-medium text-ink">{e.key}</span>
+                <span className="ml-auto text-[11px] num text-ink-muted">{fmtDate(iso)}</span>
               </div>
-              <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-400">
+              <div className="flex items-center gap-2 mt-0.5 text-[10px] text-ink-muted">
                 <span>{fmtDateRelative(iso)}</span>
                 {gap != null && gap > 0 && <span>· {gap}d depois do anterior</span>}
-                {isToday && <span className="text-amber-700 font-semibold">· Hoje</span>}
+                {isToday && <span className="text-warning font-semibold">· Hoje</span>}
               </div>
             </div>
           </div>
@@ -2835,10 +2817,10 @@ function InvestidorEditSections({ data, form, setField }) {
       <MultiChips label="Tipo" field="tipo_principal" form={form} set={setField} options={['Ativo','Passivo']} />
       <EF label="Status" field="status" form={form} set={setField} type="select" options={invStatusFor(form.tipo_principal)} />
       <div>
-        <p className="text-xs text-gray-400">Classificação</p>
-        <div className="text-sm font-medium text-gray-800 flex items-center gap-2">
+        <p className="text-xs text-ink-muted">Classificação</p>
+        <div className="text-sm font-medium text-ink flex items-center gap-2">
           <InvClassBadge cls={data.classificacao} />
-          <span className="text-xs text-gray-400">— definida no separador Scorecard</span>
+          <span className="text-xs text-ink-muted">— definida no separador Scorecard</span>
         </div>
       </div>
       <EF label="Origem" field="origem" form={form} set={setField} type="select" options={ORIGENS_INVESTIDORES} />
@@ -2854,11 +2836,11 @@ function InvestidorEditSections({ data, form, setField }) {
       <EF label="ROI Anualizado Previsto" field="roi_anualizado_pretendido" form={form} set={setField} type="select" options={roiOpts} />
       <EF label="Origem Capital" field="origem_capital" form={form} set={setField} type="select" options={INV_ORIGEM_CAPITAL_OPTS} />
       <div>
-        <p className="text-xs text-gray-400 mb-1">Montante Investido (€)</p>
-        <p className="w-full px-2 py-1.5 rounded-lg border border-gray-100 bg-gray-50 text-sm text-gray-600">
+        <p className="text-xs text-ink-muted mb-1">Montante Investido (€)</p>
+        <p className="w-full px-2 py-1.5 rounded-lg border border-line bg-surface text-sm text-ink-muted">
           {form.montante_investido > 0 ? `€${Number(form.montante_investido).toLocaleString('pt-PT')}` : '—'}
         </p>
-        <p className="text-[10px] text-gray-400 mt-1 italic">Calculado a partir dos projetos associados a este investidor</p>
+        <p className="text-[10px] text-ink-muted mt-1 italic">Calculado a partir dos projetos associados a este investidor</p>
       </div>
       <MultiChips label="Estratégia" field="estrategia" form={form} set={setField} options={INV_ESTRATEGIA_OPTS} />
     </Section>
@@ -2897,8 +2879,8 @@ function InvestidorEditSections({ data, form, setField }) {
             if (v && !form.data_nao_reinveste) setField('data_nao_reinveste', new Date().toISOString().slice(0, 10))
             if (!v) setField('data_nao_reinveste', null)
           }}
-          className="w-4 h-4 rounded border-gray-300 text-yellow-600 focus:ring-yellow-400" />
-        <span className="text-sm text-gray-700">Declarou que <strong>não vai reinvestir</strong> connosco (conta para churn)</span>
+          className="w-4 h-4 rounded border-line text-warning focus:ring-yellow-400" />
+        <span className="text-sm text-ink">Declarou que <strong>não vai reinvestir</strong> connosco (conta para churn)</span>
       </label>
       {!!form.nao_reinveste && (
         <EF label="Data da declaração" field="data_nao_reinveste" form={form} set={setField} type="date" />
@@ -2937,10 +2919,10 @@ function InvestidorReadSections({ data }) {
       <Field label="REF Investidor" value={data.ref_investidor || '—'} />
       <Field label="Status" value={data.status} />
       <div>
-        <p className="text-xs text-gray-400">Classificação</p>
-        <div className="text-sm font-medium text-gray-800 flex items-center gap-2">
+        <p className="text-xs text-ink-muted">Classificação</p>
+        <div className="text-sm font-medium text-ink flex items-center gap-2">
           <InvClassBadge cls={data.classificacao} />
-          {data.pontuacao > 0 && <span className="text-xs text-gray-500">({data.pontuacao} pts)</span>}
+          {data.pontuacao > 0 && <span className="text-xs text-ink-muted">({data.pontuacao} pts)</span>}
         </div>
       </div>
       <Field label="Origem" value={data.origem} />
@@ -2957,41 +2939,41 @@ function InvestidorReadSections({ data }) {
       <Field label="Origem Capital" value={data.origem_capital} />
       <Field label="Montante Investido" value={data.montante_investido > 0 ? `€${Number(data.montante_investido).toLocaleString('pt-PT')}` : '—'} />
       <div className="col-span-2 md:col-span-3">
-        <p className="text-xs text-gray-400 mb-1">Estratégia</p>
+        <p className="text-xs text-ink-muted mb-1">Estratégia</p>
         {estrategia.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
-            {estrategia.map(s => <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700">{s}</span>)}
+            {estrategia.map(s => <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-surface-muted border border-line text-ink">{s}</span>)}
           </div>
-        ) : <p className="text-sm text-gray-400">—</p>}
+        ) : <p className="text-sm text-ink-muted">—</p>}
       </div>
     </Section>
 
     {/* 3. Preferências */}
     <Section icon="🏠" title="Preferências de Investimento" fields={sec.preferencias} form={data} defaultOpen>
       <div className="col-span-2 md:col-span-3">
-        <p className="text-xs text-gray-400 mb-1">Tipo de Imóvel</p>
+        <p className="text-xs text-ink-muted mb-1">Tipo de Imóvel</p>
         {tipoImovel.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
-            {tipoImovel.map(s => <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-yellow-50 border border-yellow-100 text-yellow-800">{s}</span>)}
+            {tipoImovel.map(s => <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-warning/10 border border-warning/30 text-warning">{s}</span>)}
           </div>
-        ) : <p className="text-sm text-gray-400">{data.tipo_imovel_preferido || '—'}</p>}
+        ) : <p className="text-sm text-ink-muted">{data.tipo_imovel_preferido || '—'}</p>}
       </div>
       <div className="col-span-2 md:col-span-3">
-        <p className="text-xs text-gray-400 mb-1">{labelLocalizacao}</p>
+        <p className="text-xs text-ink-muted mb-1">{labelLocalizacao}</p>
         {localizacao.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
-            {localizacao.map(s => <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-blue-50 border border-blue-100 text-blue-700">{s}</span>)}
+            {localizacao.map(s => <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-surface-muted border border-line text-ink">{s}</span>)}
           </div>
-        ) : <p className="text-sm text-gray-400">{data.localizacao_preferida || '—'}</p>}
+        ) : <p className="text-sm text-ink-muted">{data.localizacao_preferida || '—'}</p>}
       </div>
       {(isAtivo || regioes.length > 0) && (
         <div className="col-span-2 md:col-span-3">
-          <p className="text-xs text-gray-400 mb-1">{isAtivo ? 'Área de Atuação (Regiões)' : 'Regiões Preferidas'}</p>
+          <p className="text-xs text-ink-muted mb-1">{isAtivo ? 'Área de Atuação (Regiões)' : 'Regiões Preferidas'}</p>
           {regioes.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
-              {regioes.map(s => <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-sky-50 border border-sky-100 text-sky-700">{s}</span>)}
+              {regioes.map(s => <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-surface-muted border border-line text-ink">{s}</span>)}
             </div>
-          ) : <p className="text-sm text-gray-400">—</p>}
+          ) : <p className="text-sm text-ink-muted">—</p>}
         </div>
       )}
       <Field label="Experiência" value={data.experiencia_imobiliario} />
@@ -3151,10 +3133,10 @@ const SCRIPT_PERGUNTAS = {
 }
 
 const CLASSE_CORES = {
-  A: { bg: 'bg-green-100', text: 'text-green-800', border: 'border-green-300', bar: 'bg-green-500' },
-  B: { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300', bar: 'bg-blue-500' },
-  C: { bg: 'bg-yellow-100', text: 'text-yellow-800', border: 'border-yellow-300', bar: 'bg-yellow-500' },
-  D: { bg: 'bg-red-100', text: 'text-red-800', border: 'border-red-300', bar: 'bg-red-500' },
+  A: { bg: 'bg-success/15', text: 'text-success', border: 'border-success/30', bar: 'bg-success' },
+  B: { bg: 'bg-surface-muted', text: 'text-ink', border: 'border-line', bar: 'bg-blue-500' },
+  C: { bg: 'bg-warning/15', text: 'text-warning', border: 'border-warning/30', bar: 'bg-warning' },
+  D: { bg: 'bg-danger/15', text: 'text-danger', border: 'border-danger/30', bar: 'bg-danger' },
 }
 
 // Wrapper que une Scorecard (avaliação SOP 2) e Histórico de Classificação numa
@@ -3164,16 +3146,16 @@ function AvaliacaoTab({ data, onUpdate }) {
   const tipoInvestidor = (() => { try { const t = JSON.parse(data.tipo_investidor || '[]'); return t.includes('Ativo') ? 'Ativo' : 'Passivo' } catch { return 'Passivo' } })()
   return (
     <div>
-      <div className="flex border-b border-gray-200 px-4 sm:px-6 pt-3" style={{ backgroundColor: '#FAFAF7' }}>
+      <div className="flex border-b border-line px-4 sm:px-6 pt-3 bg-surface" role="tablist">
         {[
           { key: 'scorecard', label: 'Scorecard', icon: Gauge },
           { key: 'historico',  label: 'Histórico', icon: History },
         ].map(s => (
           <button key={s.key} onClick={() => setSub(s.key)}
-            className="relative px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap"
-            style={{ color: sub === s.key ? '#1A1A1A' : '#9ca3af' }}>
+            role="tab" aria-selected={sub === s.key}
+            className={`relative px-4 py-2 text-ui font-medium transition-colors duration-fast whitespace-nowrap ${sub === s.key ? 'text-ink' : 'text-ink-muted hover:text-ink'}`}>
             <s.icon className="w-4 h-4 mr-1.5 inline-block align-[-3px]" />{s.label}
-            {sub === s.key && <motion.span layoutId="avaliacao-sub" transition={{ type: 'tween', duration: 0.44, ease: EASE_OUT }} className="absolute bottom-0 left-0 right-0 h-0.5" style={{ backgroundColor: '#C9A84C' }} />}
+            {sub === s.key && <motion.span layoutId="avaliacao-sub" transition={tabIndicatorTransition} className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
           </button>
         ))}
       </div>
@@ -3238,24 +3220,24 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
     setSaving(false)
   }
 
-  if (loading) return <div className="text-center text-gray-400 py-8">A carregar...</div>
+  if (loading) return <div className="text-center text-ink-muted py-8">A carregar...</div>
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-bold text-gray-800">Scorecard Discovery Call</h3>
-          <p className="text-xs text-gray-400">Avaliação SOP 2 — 5 critérios ponderados por tipo de investidor</p>
+          <h3 className="text-sm font-bold text-ink">Scorecard Discovery Call</h3>
+          <p className="text-xs text-ink-muted">Avaliação SOP 2 — 5 critérios ponderados por tipo de investidor</p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => { setShowScript(!showScript); setScriptStep(0) }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${showScript ? 'bg-brand-dark text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${showScript ? 'bg-brand-dark text-white' : 'bg-surface-muted text-ink-muted hover:bg-line'}`}>
             {showScript ? 'Fechar Script' : 'Script da Call'}
           </button>
           {!creating && !showScript && (
             <button onClick={() => setCreating(true)}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ backgroundColor: '#C9A84C' }}>
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-accent text-accent-foreground hover:brightness-[1.04]">
               + Novo Scorecard
             </button>
           )}
@@ -3271,17 +3253,17 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
         const stepLabels = ['Introdução', ...criterioKeys.map(c => CRITERIOS_INFO[c].label), 'Fecho e Próximos Passos']
 
         return (
-          <div className="rounded-xl border-2 border-brand-gold overflow-hidden" style={{ backgroundColor: '#faf8f2' }}>
+          <div className="rounded-xl border border-line bg-surface overflow-hidden">
             {/* Script header + tipo selector */}
-            <div className="px-5 py-3 border-b border-[#C9A84C33] flex items-center justify-between" style={{ backgroundColor: '#0d0d0d' }}>
+            <div className="px-5 py-3 border-b border-line flex items-center justify-between bg-brand-dark">
               <div className="flex items-center gap-3">
                 <span className="text-white text-sm font-bold">Script Discovery Call</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold text-black font-medium">{investidorNome}</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold text-ink font-medium">{investidorNome}</span>
               </div>
               <div className="flex gap-1">
                 {['Passivo', 'Ativo'].map(t => (
                   <button key={t} onClick={() => setTipo(t)}
-                    className={`px-2 py-1 rounded text-[10px] font-medium transition ${tipo === t ? 'bg-brand-gold text-black' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}>
+                    className={`px-2 py-1 rounded text-[10px] font-medium transition ${tipo === t ? 'bg-brand-gold text-ink' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}>
                     {t}
                   </button>
                 ))}
@@ -3289,11 +3271,11 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
             </div>
 
             {/* Step navigation */}
-            <div className="px-5 py-2 border-b border-[#C9A84C22] flex gap-1 overflow-x-auto">
+            <div className="px-5 py-2 border-b border-line flex gap-1 overflow-x-auto">
               {stepLabels.map((label, i) => (
                 <button key={i} onClick={() => setScriptStep(i)}
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-medium whitespace-nowrap transition ${
-                    scriptStep === i ? 'bg-brand-dark text-white' : 'bg-white text-gray-500 hover:bg-gray-100'
+                    scriptStep === i ? 'bg-brand-dark text-white' : 'bg-surface-raised text-ink-muted hover:bg-surface-muted'
                   }`}>
                   {i > 0 && i < totalSteps - 1 ? `${i}. ` : ''}{label}
                 </button>
@@ -3304,11 +3286,11 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
             <div className="p-5">
               {scriptStep === 0 && (
                 <div className="space-y-3">
-                  <h4 className="text-sm font-bold text-gray-800">Introdução</h4>
-                  <div className="rounded-lg bg-white border border-gray-200 p-4">
-                    <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{script.intro.replace(/\[Nome\]/g, investidorNome.split(' ')[0])}</p>
+                  <h4 className="text-sm font-bold text-ink">Introdução</h4>
+                  <div className="rounded-lg bg-surface-raised border border-line p-4">
+                    <p className="text-sm text-ink whitespace-pre-line leading-relaxed">{script.intro.replace(/\[Nome\]/g, investidorNome.split(' ')[0])}</p>
                   </div>
-                  <p className="text-[10px] text-gray-400">Tom: profissional mas acessível. Objetivo: criar confiança e alinhar expectativas.</p>
+                  <p className="text-[10px] text-ink-muted">Tom: profissional mas acessível. Objetivo: criar confiança e alinhar expectativas.</p>
                 </div>
               )}
 
@@ -3319,29 +3301,29 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                   <div className="space-y-4">
                     <div className="flex items-center gap-2">
                       {(() => { const I = CRITERIOS_INFO[ck].icon; return <I className="w-5 h-5 text-brand-gold shrink-0" /> })()}
-                      <h4 className="text-sm font-bold text-gray-800">{bloco.label}</h4>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#C9A84C22] text-brand-gold font-medium">Critério {scriptStep}/5</span>
+                      <h4 className="text-sm font-bold text-ink">{bloco.label}</h4>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/15 text-accent-ink font-medium">Critério {scriptStep}/5</span>
                     </div>
 
                     {/* Contexto */}
-                    <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
-                      <p className="text-[10px] uppercase text-blue-500 font-semibold tracking-wide mb-1">Contexto (não ler em voz alta)</p>
-                      <p className="text-xs text-blue-800">{bloco.contexto}</p>
+                    <div className="rounded-lg bg-surface-muted border border-line p-3">
+                      <p className="text-[10px] uppercase text-ink-muted font-semibold tracking-wide mb-1">Contexto (não ler em voz alta)</p>
+                      <p className="text-xs text-ink">{bloco.contexto}</p>
                     </div>
 
                     {/* Perguntas */}
                     <div className="space-y-3">
-                      <p className="text-[10px] uppercase text-gray-400 font-semibold tracking-wide">Perguntas a fazer</p>
+                      <p className="text-[10px] uppercase text-ink-muted font-semibold tracking-wide">Perguntas a fazer</p>
                       {bloco.perguntas.map((p, i) => (
-                        <div key={i} className="rounded-lg bg-white border border-gray-200 hover:border-brand-gold transition overflow-hidden">
+                        <div key={i} className="rounded-lg bg-surface-raised border border-line hover:border-brand-gold transition overflow-hidden">
                           <div className="flex gap-3 items-start p-3 pb-2">
                             <span className="text-xs font-bold text-brand-gold shrink-0 mt-0.5">{i + 1}.</span>
-                            <p className="text-sm text-gray-800 leading-relaxed font-medium">"{p.pergunta.replace(/\[Nome\]/g, investidorNome.split(' ')[0])}"</p>
+                            <p className="text-sm text-ink leading-relaxed font-medium">"{p.pergunta.replace(/\[Nome\]/g, investidorNome.split(' ')[0])}"</p>
                           </div>
                           <div className="px-3 pb-3 pl-8">
-                            <div className="flex items-start gap-1.5 rounded bg-amber-50 px-2.5 py-1.5">
-                              <span className="text-[10px] text-amber-600 shrink-0 mt-px">EXTRAI:</span>
-                              <p className="text-[11px] text-amber-800 leading-snug">{p.extrai}</p>
+                            <div className="flex items-start gap-1.5 rounded bg-warning/10 px-2.5 py-1.5">
+                              <span className="text-[10px] text-warning shrink-0 mt-px">EXTRAI:</span>
+                              <p className="text-[11px] text-warning leading-snug">{p.extrai}</p>
                             </div>
                           </div>
                         </div>
@@ -3349,11 +3331,11 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                     </div>
 
                     {/* Red flags */}
-                    <div className="rounded-lg bg-red-50 border border-red-200 p-3">
-                      <p className="text-[10px] uppercase text-red-500 font-semibold tracking-wide mb-1.5">Red Flags (atenção a)</p>
+                    <div className="rounded-lg bg-danger/10 border border-danger/30 p-3">
+                      <p className="text-[10px] uppercase text-danger font-semibold tracking-wide mb-1.5">Red Flags (atenção a)</p>
                       <div className="space-y-1">
                         {bloco.red_flags.map((rf, i) => (
-                          <div key={i} className="flex items-center gap-2 text-xs text-red-700">
+                          <div key={i} className="flex items-center gap-2 text-xs text-danger">
                             <span className="text-red-400 shrink-0">!</span>
                             <span>{rf}</span>
                           </div>
@@ -3366,13 +3348,13 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
 
               {scriptStep === 6 && (
                 <div className="space-y-3">
-                  <h4 className="text-sm font-bold text-gray-800">Fecho e Próximos Passos</h4>
-                  <div className="rounded-lg bg-white border border-gray-200 p-4">
-                    <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{script.fecho.replace(/\[Nome\]/g, investidorNome.split(' ')[0])}</p>
+                  <h4 className="text-sm font-bold text-ink">Fecho e Próximos Passos</h4>
+                  <div className="rounded-lg bg-surface-raised border border-line p-4">
+                    <p className="text-sm text-ink whitespace-pre-line leading-relaxed">{script.fecho.replace(/\[Nome\]/g, investidorNome.split(' ')[0])}</p>
                   </div>
-                  <div className="rounded-lg bg-green-50 border border-green-200 p-3">
-                    <p className="text-[10px] uppercase text-green-600 font-semibold tracking-wide mb-1">Após a call</p>
-                    <div className="space-y-1 text-xs text-green-800">
+                  <div className="rounded-lg bg-success/10 border border-success/30 p-3">
+                    <p className="text-[10px] uppercase text-success font-semibold tracking-wide mb-1">Após a call</p>
+                    <div className="space-y-1 text-xs text-success">
                       <p>1. Preencher o Scorecard com base nas respostas (botão abaixo)</p>
                       <p>2. Enviar resumo por email ao investidor dentro de 24h</p>
                       <p>3. Atualizar status no CRM para "Follow Up" ou "Investidor Qualificado em Carteira"</p>
@@ -3384,20 +3366,20 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
             </div>
 
             {/* Script navigation */}
-            <div className="px-5 py-3 border-t border-[#C9A84C22] flex items-center justify-between">
+            <div className="px-5 py-3 border-t border-line flex items-center justify-between">
               <button onClick={() => setScriptStep(Math.max(0, scriptStep - 1))} disabled={scriptStep === 0}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed">
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-muted text-ink-muted hover:bg-line disabled:opacity-30 disabled:cursor-not-allowed">
                 Anterior
               </button>
-              <span className="text-[10px] text-gray-400">{scriptStep + 1} / {totalSteps}</span>
+              <span className="text-[10px] text-ink-muted">{scriptStep + 1} / {totalSteps}</span>
               {scriptStep < totalSteps - 1 ? (
                 <button onClick={() => setScriptStep(scriptStep + 1)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ backgroundColor: '#C9A84C' }}>
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-accent text-accent-foreground hover:brightness-[1.04]">
                   Seguinte
                 </button>
               ) : (
                 <button onClick={() => { setShowScript(false); setCreating(true) }}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ backgroundColor: '#0d0d0d' }}>
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-ink text-surface hover:opacity-90">
                   Preencher Scorecard
                 </button>
               )}
@@ -3408,21 +3390,21 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
 
       {/* Formulário de criação */}
       {creating && (
-        <div className="rounded-xl border border-[#C9A84C33] p-5 space-y-5" style={{ backgroundColor: '#faf8f2' }}>
+        <div className="rounded-xl border border-line bg-surface p-5 space-y-5">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-bold text-gray-800">Nova Avaliação — {investidorNome}</h4>
-            <button onClick={() => setCreating(false)} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+            <h4 className="text-sm font-bold text-ink">Nova Avaliação — {investidorNome}</h4>
+            <button onClick={() => setCreating(false)} className="text-ink-muted hover:text-ink-muted"><X className="w-4 h-4" /></button>
           </div>
 
           {/* Tipo investidor */}
           <div className="flex gap-2">
             {['Passivo', 'Ativo'].map(t => (
               <button key={t} onClick={() => setTipo(t)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tipo === t ? 'bg-brand-dark text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${tipo === t ? 'bg-brand-dark text-white' : 'bg-surface-muted text-ink-muted hover:bg-line'}`}>
                 {t}
               </button>
             ))}
-            <span className="text-[10px] text-gray-400 self-center ml-2">Pesos ajustados automaticamente</span>
+            <span className="text-[10px] text-ink-muted self-center ml-2">Pesos ajustados automaticamente</span>
           </div>
 
           {/* Critérios */}
@@ -3435,13 +3417,13 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
               const rubricaDesc = rubricaItems.find(r => r.min === score)?.desc || ''
 
               return (
-                <div key={c} className="rounded-lg border border-gray-200 bg-white p-4">
+                <div key={c} className="rounded-lg border border-line bg-surface-raised p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <info.icon className="w-4 h-4 text-brand-gold shrink-0" />
-                      <span className="text-sm font-semibold text-gray-800">{info.label}</span>
+                      <span className="text-sm font-semibold text-ink">{info.label}</span>
                     </div>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-muted text-ink-muted font-medium">
                       Peso: {Math.round(peso * 100)}%
                     </span>
                   </div>
@@ -3451,7 +3433,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                     {[1, 2, 3, 4, 5].map(v => (
                       <button key={v} onClick={() => setForm(f => ({ ...f, [`${c}_score`]: v }))}
                         className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${
-                          score === v ? 'bg-brand-dark text-white shadow-sm' : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                          score === v ? 'bg-brand-dark text-white shadow-sm' : 'bg-surface text-ink-muted hover:bg-surface-muted hover:text-ink-muted'
                         }`}>
                         {v}
                       </button>
@@ -3469,7 +3451,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                     onChange={e => setForm(f => ({ ...f, [`${c}_notas`]: e.target.value }))}
                     placeholder="Notas da entrevista..."
                     rows={2}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300 resize-none"
+                    className="w-full px-3 py-2 rounded-lg border border-line text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300 resize-none"
                   />
                 </div>
               )
@@ -3477,20 +3459,20 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
           </div>
 
           {/* Preview resultado */}
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <div className="rounded-lg border border-line bg-surface-raised p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] uppercase text-gray-400 tracking-wide">Resultado Previsto</p>
+                <p className="text-[10px] uppercase text-ink-muted tracking-wide">Resultado Previsto</p>
                 <div className="flex items-center gap-3 mt-1">
-                  <span className={`text-2xl font-black ${CLASSE_CORES[previewClasse]?.text || 'text-gray-800'}`}>
+                  <span className={`text-2xl font-black ${CLASSE_CORES[previewClasse]?.text || 'text-ink'}`}>
                     Classe {previewClasse}
                   </span>
-                  <span className="text-sm text-gray-500">{previewPonderado}/100 pts</span>
+                  <span className="text-sm text-ink-muted">{previewPonderado}/100 pts</span>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-[10px] text-gray-400">Total bruto: {previewTotal}/25</p>
-                <p className="text-[10px] text-gray-400">A ≥88 | B ≥72 | C ≥56 | D &lt;56</p>
+                <p className="text-[10px] text-ink-muted">Total bruto: {previewTotal}/25</p>
+                <p className="text-[10px] text-ink-muted">A ≥88 | B ≥72 | C ≥56 | D &lt;56</p>
               </div>
             </div>
 
@@ -3501,12 +3483,12 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                 const p = pesos[c]
                 return (
                   <div key={c} className="flex items-center gap-2">
-                    <span className="w-8 flex text-gray-400">{(() => { const I = CRITERIOS_INFO[c].icon; return <I className="w-3.5 h-3.5" /> })()}</span>
-                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${CLASSE_CORES[previewClasse]?.bar || 'bg-gray-400'}`}
+                    <span className="w-8 flex text-ink-muted">{(() => { const I = CRITERIOS_INFO[c].icon; return <I className="w-3.5 h-3.5" /> })()}</span>
+                    <div className="flex-1 h-2 bg-surface-muted rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-[background-color,border-color,color,box-shadow,opacity,transform] ${CLASSE_CORES[previewClasse]?.bar || 'bg-ink/40'}`}
                         style={{ width: `${(s / 5) * 100}%` }} />
                     </div>
-                    <span className="text-[10px] text-gray-400 w-12 text-right">{s}/5 ({Math.round(p * 100)}%)</span>
+                    <span className="text-[10px] text-ink-muted w-12 text-right">{s}/5 ({Math.round(p * 100)}%)</span>
                   </div>
                 )
               })}
@@ -3515,11 +3497,11 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
 
           {/* Actions */}
           <div className="flex gap-2 justify-end">
-            <button onClick={() => setCreating(false)} className="px-4 py-2 rounded-lg text-xs text-gray-600 bg-gray-100 hover:bg-gray-200">
+            <button onClick={() => setCreating(false)} className="px-4 py-2 rounded-lg text-xs text-ink-muted bg-surface-muted hover:bg-line">
               Cancelar
             </button>
             <button onClick={saveScorecard} disabled={saving}
-              className="px-4 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{ backgroundColor: '#C9A84C' }}>
+              className="px-4 py-2 rounded-lg text-xs font-medium bg-accent text-accent-foreground hover:brightness-[1.04] disabled:opacity-50">
               {saving ? 'A guardar...' : 'Guardar Scorecard'}
             </button>
           </div>
@@ -3532,26 +3514,26 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
           {scorecards.map((sc, idx) => {
             const cores = CLASSE_CORES[sc.classificacao] || CLASSE_CORES.D
             return (
-              <div key={sc.id} className={`rounded-xl border ${cores.border} p-4 ${idx === 0 ? cores.bg : 'bg-white'}`}>
+              <div key={sc.id} className={`rounded-xl border ${cores.border} p-4 ${idx === 0 ? cores.bg : 'bg-surface-raised'}`}>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <span className={`text-lg font-black ${cores.text}`}>Classe {sc.classificacao}</span>
-                    <span className="text-xs text-gray-500">{sc.pontuacao_ponderada}/100 pts</span>
+                    <span className="text-xs text-ink-muted">{sc.pontuacao_ponderada}/100 pts</span>
                     {idx === 0 && <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-dark text-white font-medium">Atual</span>}
                   </div>
                   <div className="text-right">
-                    <p className="text-xs text-gray-500">{new Date(sc.created_at).toLocaleDateString('pt-PT')}</p>
-                    <p className="text-[10px] text-gray-400">{sc.tipo_investidor} · {sc.fonte === 'transcricao_automatica' ? 'Via transcrição' : sc.fonte === 'manual' ? 'Manual' : sc.fonte}</p>
+                    <p className="text-xs text-ink-muted">{new Date(sc.created_at).toLocaleDateString('pt-PT')}</p>
+                    <p className="text-[10px] text-ink-muted">{sc.tipo_investidor} · {sc.fonte === 'transcricao_automatica' ? 'Via transcrição' : sc.fonte === 'manual' ? 'Manual' : sc.fonte}</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-5 gap-2">
                   {['c1', 'c2', 'c3', 'c4', 'c5'].map(c => (
                     <div key={c} className="text-center">
-                      <p className="flex justify-center text-gray-400">{(() => { const I = CRITERIOS_INFO[c].icon; return <I className="w-3.5 h-3.5" /> })()}</p>
-                      <p className="text-sm font-bold text-gray-800">{sc[`${c}_score`]}</p>
+                      <p className="flex justify-center text-ink-muted">{(() => { const I = CRITERIOS_INFO[c].icon; return <I className="w-3.5 h-3.5" /> })()}</p>
+                      <p className="text-sm font-bold text-ink">{sc[`${c}_score`]}</p>
                       {sc[`${c}_notas`] && (
-                        <p className="text-[9px] text-gray-400 mt-1 line-clamp-2">{sc[`${c}_notas`]}</p>
+                        <p className="text-[9px] text-ink-muted mt-1 line-clamp-2">{sc[`${c}_notas`]}</p>
                       )}
                     </div>
                   ))}
@@ -3561,10 +3543,10 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
           })}
         </div>
       ) : !creating && (
-        <div className="rounded-xl border border-dashed border-gray-200 p-8 text-center">
+        <div className="rounded-xl border border-dashed border-line p-8 text-center">
           <p className="text-2xl mb-2">🎯</p>
-          <p className="text-sm text-gray-500">Sem scorecards registados</p>
-          <p className="text-xs text-gray-400 mt-1">Cria um scorecard após a Discovery Call ou analisa uma transcrição de reunião</p>
+          <p className="text-sm text-ink-muted">Sem scorecards registados</p>
+          <p className="text-xs text-ink-muted mt-1">Cria um scorecard após a Discovery Call ou analisa uma transcrição de reunião</p>
         </div>
       )}
     </div>
@@ -3596,7 +3578,7 @@ function ClassificacaoTab({ investidorId, investidorNome, classificacaoActual, p
     setReclassificando(false)
   }
 
-  if (loading) return <div className="text-center text-gray-400 py-8">A carregar...</div>
+  if (loading) return <div className="text-center text-ink-muted py-8">A carregar...</div>
 
   const coresActual = CLASSE_CORES[classificacaoActual] || CLASSE_CORES.D
 
@@ -3606,14 +3588,14 @@ function ClassificacaoTab({ investidorId, investidorNome, classificacaoActual, p
       <div className={`rounded-xl border ${coresActual.border} ${coresActual.bg} p-5`}>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[10px] uppercase text-gray-500 tracking-wide">Classificação Atual</p>
+            <p className="text-[10px] uppercase text-ink-muted tracking-wide">Classificação Atual</p>
             <div className="flex items-center gap-3 mt-1">
               <span className={`text-3xl font-black ${coresActual.text}`}>
                 {classificacaoActual || '—'}
               </span>
               <div>
-                <p className="text-sm font-semibold text-gray-800">{pontuacaoActual || 0}/100 pts</p>
-                <p className="text-xs text-gray-500">
+                <p className="text-sm font-semibold text-ink">{pontuacaoActual || 0}/100 pts</p>
+                <p className="text-xs text-ink-muted">
                   {classificacaoActual === 'A' ? 'Prioritário — recebe oportunidades primeiro' :
                    classificacaoActual === 'B' ? 'Elegível — recebe oportunidades em 2.ª prioridade' :
                    classificacaoActual === 'C' ? 'Em observação — reavaliação periódica' :
@@ -3624,33 +3606,33 @@ function ClassificacaoTab({ investidorId, investidorNome, classificacaoActual, p
             </div>
           </div>
           <button onClick={triggerReclassificacao} disabled={reclassificando}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50">
+            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-muted text-ink-muted hover:bg-line disabled:opacity-50">
             {reclassificando ? 'A processar...' : 'Reavaliar agora'}
           </button>
         </div>
       </div>
 
       {/* Regras de follow-up */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4">
-        <h4 className="text-sm font-semibold text-gray-800 mb-3">Ciclo de Follow-Up e Reclassificação</h4>
+      <div className="rounded-xl border border-line bg-surface-raised p-4">
+        <h4 className="text-sm font-semibold text-ink mb-3">Ciclo de Follow-Up e Reclassificação</h4>
         <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-lg bg-green-50 p-3 border border-green-100 text-center">
-            <p className="text-lg font-bold text-green-700">30d</p>
-            <p className="text-[10px] text-green-600 font-medium">Follow-up quente</p>
-            <p className="text-[10px] text-gray-400">Sem penalização</p>
+          <div className="rounded-lg bg-success/10 p-3 border border-success/30 text-center">
+            <p className="text-lg font-bold text-success">30d</p>
+            <p className="text-[10px] text-success font-medium">Follow-up quente</p>
+            <p className="text-[10px] text-ink-muted">Sem penalização</p>
           </div>
-          <div className="rounded-lg bg-yellow-50 p-3 border border-yellow-100 text-center">
-            <p className="text-lg font-bold text-yellow-700">60d</p>
-            <p className="text-[10px] text-yellow-600 font-medium">Follow-up intermédio</p>
-            <p className="text-[10px] text-gray-400">-5 a -10 pts</p>
+          <div className="rounded-lg bg-warning/10 p-3 border border-warning/30 text-center">
+            <p className="text-lg font-bold text-warning">60d</p>
+            <p className="text-[10px] text-warning font-medium">Follow-up intermédio</p>
+            <p className="text-[10px] text-ink-muted">-5 a -10 pts</p>
           </div>
-          <div className="rounded-lg bg-red-50 p-3 border border-red-100 text-center">
-            <p className="text-lg font-bold text-red-700">90d</p>
-            <p className="text-[10px] text-red-600 font-medium">Follow-up frio</p>
-            <p className="text-[10px] text-gray-400">-15 a -25 pts</p>
+          <div className="rounded-lg bg-danger/10 p-3 border border-danger/30 text-center">
+            <p className="text-lg font-bold text-danger">90d</p>
+            <p className="text-[10px] text-danger font-medium">Follow-up frio</p>
+            <p className="text-[10px] text-ink-muted">-15 a -25 pts</p>
           </div>
         </div>
-        <p className="text-[10px] text-gray-400 mt-2">
+        <p className="text-[10px] text-ink-muted mt-2">
           Bónus: NDA assinado (+5), montante investido (+10), negócios ativos (+10).
           Classe C sem evolução em 180 dias → sugestão de arquivo.
         </p>
@@ -3658,10 +3640,10 @@ function ClassificacaoTab({ investidorId, investidorNome, classificacaoActual, p
 
       {/* Timeline de classificação */}
       <div>
-        <h4 className="text-sm font-semibold text-gray-800 mb-3">Histórico de Classificação</h4>
+        <h4 className="text-sm font-semibold text-ink mb-3">Histórico de Classificação</h4>
         {historico.length > 0 ? (
           <div className="relative">
-            <div className="absolute left-3 top-0 bottom-0 w-px bg-gray-200" />
+            <div className="absolute left-3 top-0 bottom-0 w-px bg-line" />
             <div className="space-y-4">
               {historico.map((h, idx) => {
                 const coresNova = CLASSE_CORES[h.classificacao_nova] || CLASSE_CORES.D
@@ -3669,31 +3651,31 @@ function ClassificacaoTab({ investidorId, investidorNome, classificacaoActual, p
                 const desceu = h.classificacao_anterior && h.classificacao_nova > h.classificacao_anterior
                 return (
                   <div key={h.id} className="relative pl-8">
-                    <div className={`absolute left-1.5 top-1.5 w-3 h-3 rounded-full border-2 ${coresNova.border} ${idx === 0 ? coresNova.bg : 'bg-white'}`} />
-                    <div className="rounded-lg border border-gray-200 bg-white p-3">
+                    <div className={`absolute left-1.5 top-1.5 w-3 h-3 rounded-full border-2 ${coresNova.border} ${idx === 0 ? coresNova.bg : 'bg-surface-raised'}`} />
+                    <div className="rounded-lg border border-line bg-surface-raised p-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           {h.classificacao_anterior ? (
                             <span className="text-xs">
-                              <span className="font-semibold text-gray-500">{h.classificacao_anterior}</span>
+                              <span className="font-semibold text-ink-muted">{h.classificacao_anterior}</span>
                               <span className="mx-1">{subiu ? '→' : desceu ? '→' : '→'}</span>
                               <span className={`font-bold ${coresNova.text}`}>{h.classificacao_nova}</span>
-                              {subiu && <span className="ml-1 text-green-500">▲</span>}
-                              {desceu && <span className="ml-1 text-red-500">▼</span>}
+                              {subiu && <span className="ml-1 text-success">▲</span>}
+                              {desceu && <span className="ml-1 text-danger">▼</span>}
                             </span>
                           ) : (
                             <span className={`text-xs font-bold ${coresNova.text}`}>
                               → {h.classificacao_nova} (primeira classificação)
                             </span>
                           )}
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-muted text-ink-muted">
                             {h.pontuacao_anterior ? `${h.pontuacao_anterior} → ` : ''}{h.pontuacao_nova} pts
                           </span>
                         </div>
-                        <span className="text-[10px] text-gray-400">{new Date(h.created_at).toLocaleDateString('pt-PT')}</span>
+                        <span className="text-[10px] text-ink-muted">{new Date(h.created_at).toLocaleDateString('pt-PT')}</span>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">{h.motivo}</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">
+                      <p className="text-xs text-ink-muted mt-1">{h.motivo}</p>
+                      <p className="text-[10px] text-ink-muted mt-0.5">
                         {h.tipo === 'manual' ? 'Scorecard manual' :
                          h.tipo === 'transcricao_automatica' ? 'Via transcrição automática' :
                          h.tipo === 'reclassificacao_periodica' ? 'Reclassificação periódica' : h.tipo}
@@ -3705,9 +3687,9 @@ function ClassificacaoTab({ investidorId, investidorNome, classificacaoActual, p
             </div>
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-gray-200 p-6 text-center">
-            <p className="text-sm text-gray-400">Sem histórico de classificação</p>
-            <p className="text-xs text-gray-300 mt-1">O histórico é criado automaticamente quando um scorecard é preenchido ou na reclassificação periódica</p>
+          <div className="rounded-xl border border-dashed border-line p-6 text-center">
+            <p className="text-sm text-ink-muted">Sem histórico de classificação</p>
+            <p className="text-xs text-ink-muted/70 mt-1">O histórico é criado automaticamente quando um scorecard é preenchido ou na reclassificação periódica</p>
           </div>
         )}
       </div>
@@ -3717,9 +3699,9 @@ function ClassificacaoTab({ investidorId, investidorNome, classificacaoActual, p
 
 function MiniField({ label, value, highlight }) {
   return (
-    <div className={`px-2 py-1.5 rounded-lg ${highlight ? 'bg-yellow-50 border border-yellow-200' : 'bg-white border border-gray-100'}`}>
-      <p className="text-[10px] text-gray-400 uppercase">{label}</p>
-      <p className={`text-xs font-semibold ${highlight ? 'text-yellow-700' : 'text-gray-800'}`}>{value}</p>
+    <div className={`px-2 py-1.5 rounded-lg ${highlight ? 'bg-warning/10 border border-warning/30' : 'bg-surface-raised border border-line'}`}>
+      <p className="text-[10px] text-ink-muted uppercase">{label}</p>
+      <p className={`text-xs font-semibold ${highlight ? 'text-warning' : 'text-ink'}`}>{value}</p>
     </div>
   )
 }

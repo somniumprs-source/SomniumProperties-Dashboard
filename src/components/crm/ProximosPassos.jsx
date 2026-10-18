@@ -81,8 +81,8 @@ function FollowUpForm({ imovelId, semSucesso, mover = null, consultor = null, so
   }
 
   return (
-    <form onSubmit={guardar} className="mt-2 rounded-lg border border-yellow-200 bg-yellow-50/50 p-2.5">
-      <p className="text-xs text-gray-600 mb-2">
+    <form onSubmit={guardar} className="mt-2 rounded-lg border border-warning/30 bg-warning/10 p-2.5">
+      <p className="text-xs text-ink-muted mb-2">
         {semSucesso
           ? `Fica registado como feito hoje (${fmtDia(emDias(0))}) sem sucesso e é criada a tarefa para a nova data.`
           : mover
@@ -94,13 +94,13 @@ function FollowUpForm({ imovelId, semSucesso, mover = null, consultor = null, so
               : 'Cria a tarefa de follow-up na agenda para esse dia. A hora é opcional.'}
       </p>
       {escolhe && (
-        <div className="mb-2 rounded-lg border border-yellow-300 bg-white p-2">
-          <p className="text-xs font-semibold text-gray-800">{consultor.nome} já tem contacto marcado para {fmtQuando(consultor.quando)}.</p>
+        <div className="mb-2 rounded-lg border border-warning/30 bg-surface-raised p-2">
+          <p className="text-xs font-semibold text-ink">{consultor.nome} já tem contacto marcado para {fmtQuando(consultor.quando)}.</p>
           <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-            <label className="inline-flex items-center gap-1.5 text-xs text-gray-700">
+            <label className="inline-flex items-center gap-1.5 text-xs text-ink">
               <input type="radio" name="juntar-contacto" checked={juntar === true} onChange={() => setJuntar(true)} /> Juntar a esse contacto
             </label>
-            <label className="inline-flex items-center gap-1.5 text-xs text-gray-700">
+            <label className="inline-flex items-center gap-1.5 text-xs text-ink">
               <input type="radio" name="juntar-contacto" checked={juntar === false} onChange={() => setJuntar(false)} /> Mudar o contacto para outra data
             </label>
           </div>
@@ -115,7 +115,7 @@ function FollowUpForm({ imovelId, semSucesso, mover = null, consultor = null, so
           <div className="flex gap-1 mt-1">
             {[[1, 'Amanhã'], [3, '3 dias'], [7, '1 semana']].map(([n, rotulo]) => (
               <button key={n} type="button" onClick={() => setData(emDias(n))}
-                className={`px-2 py-0.5 text-[11px] rounded-full border ${data === emDias(n) ? 'border-yellow-400 bg-yellow-100 text-yellow-800' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+                className={`px-2 py-0.5 text-[11px] rounded-full border ${data === emDias(n) ? 'border-yellow-400 bg-warning/15 text-warning' : 'border-line bg-surface-raised text-ink-muted hover:bg-surface'}`}>
                 {rotulo}
               </button>
             ))}
@@ -125,16 +125,16 @@ function FollowUpForm({ imovelId, semSucesso, mover = null, consultor = null, so
           placeholder={semSucesso ? 'Motivo (ex.: não atendeu)' : mover ? 'Motivo (o que tem de mudar)' : 'Motivo (opcional)'} className={inputClass} aria-label="Motivo" />}
         <div className="flex gap-1.5">
           <button type="submit" disabled={saving}
-            className="px-3 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-50" style={{ backgroundColor: '#1A1A1A', color: '#C9A84C' }}>
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-50 bg-ink text-surface hover:opacity-90">
             {saving ? 'A guardar…' : 'Guardar'}
           </button>
           <button type="button" onClick={onCancel} disabled={saving}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-line bg-surface-raised text-ink-muted hover:bg-surface disabled:opacity-50">
             Cancelar
           </button>
         </div>
       </div>
-      {erro && <p className="text-xs text-red-600 mt-1.5">{erro}</p>}
+      {erro && <p className="text-xs text-danger mt-1.5">{erro}</p>}
     </form>
   )
 }
@@ -188,25 +188,25 @@ export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate, onNavig
 
   const agora = Date.now()
   return (
-    <div className="border-b border-gray-200 dark:border-neutral-800 px-4 sm:px-6 py-2.5">
+    <div className="border-b border-line  px-4 sm:px-6 py-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm font-semibold text-gray-800 dark:text-neutral-100">Próximos passos</span>
+        <span className="text-sm font-semibold text-ink ">Próximos passos</span>
         <span className="flex flex-wrap gap-1.5">
           {/* Com consultor, a chamada é o contacto com ele (um só por pessoa), com o imóvel como assunto. */}
           {!cont.isFetched ? null : consultor
             ? !noContacto && (
               <button type="button" onClick={() => setFollowUp('contacto')}
-                className="text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Agendar contacto</button>
+                className="text-xs font-medium px-2 py-1 rounded-lg border border-line text-ink-muted hover:bg-surface">Agendar contacto</button>
             )
             : (
               <button type="button" onClick={() => setAgendar('chamada')}
-                className="text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Agendar chamada</button>
+                className="text-xs font-medium px-2 py-1 rounded-lg border border-line text-ink-muted hover:bg-surface">Agendar chamada</button>
             )}
           <button type="button" onClick={() => setAgendar('visita')}
-            className="text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Marcar visita</button>
+            className="text-xs font-medium px-2 py-1 rounded-lg border border-line text-ink-muted hover:bg-surface">Marcar visita</button>
           {faseFollowUp.aplica && (faseFollowUp.mover || !(temFollowUp || noContacto)) && (
             <button type="button" onClick={() => setFollowUp('agendar')}
-              className="text-xs font-medium px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+              className="text-xs font-medium px-2 py-1 rounded-lg border border-line text-ink-muted hover:bg-surface">
               {faseFollowUp.mover ? `Passar a ${faseFollowUp.mover}` : 'Agendar follow-up'}
             </button>
           )}
@@ -214,25 +214,25 @@ export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate, onNavig
       </div>
       {noContacto && (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm mt-2">
-          <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 bg-yellow-50 text-yellow-700">
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 bg-warning/10 text-warning">
             <RefreshCw className="w-3 h-3" /> {emFollowUp ? 'Follow-up' : 'Próximo contacto'}
           </span>
-          <span className="font-medium tabular-nums text-gray-800 dark:text-neutral-100">{fmtQuando(noContacto.quando)}</span>
-          <span className="text-xs text-gray-500">no contacto com {consultor?.nome}</span>
-          {motivoFollowUp && <span className="text-xs text-gray-500 truncate max-w-[16rem]" title={motivoFollowUp}>{motivoFollowUp}</span>}
+          <span className="font-medium tabular-nums text-ink ">{fmtQuando(noContacto.quando)}</span>
+          <span className="text-xs text-ink-muted">no contacto com {consultor?.nome}</span>
+          {motivoFollowUp && <span className="text-xs text-ink-muted truncate max-w-[16rem]" title={motivoFollowUp}>{motivoFollowUp}</span>}
           {onNavigate && consultor && (
             <button type="button" onClick={() => onNavigate('Consultores', consultor.id)}
-              className="ml-auto text-xs font-medium px-2 py-0.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+              className="ml-auto text-xs font-medium px-2 py-0.5 rounded-lg border border-line text-ink-muted hover:bg-surface">
               Abrir contacto
             </button>
           )}
         </div>
       )}
       {emFollowUp && motivoFollowUp && !noContacto && !temFollowUp && (
-        <p className="text-xs text-gray-500 mt-1.5">Motivo do follow-up: {motivoFollowUp}</p>
+        <p className="text-xs text-ink-muted mt-1.5">Motivo do follow-up: {motivoFollowUp}</p>
       )}
       {passos.length === 0 ? (
-        !noContacto && <p className="text-xs text-gray-400 mt-1.5">Sem próximo passo agendado.</p>
+        !noContacto && <p className="text-xs text-ink-muted mt-1.5">Sem próximo passo agendado.</p>
       ) : (
         <ul className="grid gap-1.5 mt-2">
           {passos.map(t => {
@@ -242,17 +242,17 @@ export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate, onNavig
             const eFollowUp = t.origem_campo === 'data_follow_up'
             return (
               <li key={t.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 bg-yellow-50 text-yellow-700">
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 bg-warning/10 text-warning">
                   <Icon className="w-3 h-3" /> {rotulo}
                 </span>
-                <span className={`font-medium tabular-nums ${atrasado ? 'text-orange-700' : 'text-gray-800 dark:text-neutral-100'}`}>{fmtQuando(quando)}</span>
+                <span className={`font-medium tabular-nums ${atrasado ? 'text-orange-700' : 'text-ink '}`}>{fmtQuando(quando)}</span>
                 {atrasado && <span className="text-xs text-orange-700">em atraso</span>}
-                {t.funcionario && <span className="text-xs text-gray-400">{t.funcionario}</span>}
-                {eFollowUp && motivoFollowUp && <span className="text-xs text-gray-500 truncate max-w-[16rem]" title={motivoFollowUp}>{motivoFollowUp}</span>}
+                {t.funcionario && <span className="text-xs text-ink-muted">{t.funcionario}</span>}
+                {eFollowUp && motivoFollowUp && <span className="text-xs text-ink-muted truncate max-w-[16rem]" title={motivoFollowUp}>{motivoFollowUp}</span>}
                 {rotuloConcluir ? (
                   <span className="ml-auto inline-flex gap-1.5">
                     <button type="button" onClick={() => concluir(t)}
-                      className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200">
+                      className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-lg bg-success/10 text-success hover:bg-success/15 border border-success/30">
                       <Check className="w-3 h-3" /> {rotuloConcluir}
                     </button>
                     {eFollowUp && (
@@ -264,7 +264,7 @@ export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate, onNavig
                   </span>
                 ) : (
                   <button type="button" onClick={() => onAbrirTab?.('visitas')}
-                    className="ml-auto text-xs font-medium px-2 py-0.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+                    className="ml-auto text-xs font-medium px-2 py-0.5 rounded-lg border border-line text-ink-muted hover:bg-surface">
                     Abrir Visitas
                   </button>
                 )}
@@ -283,7 +283,7 @@ export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate, onNavig
       {historico.length > 0 && (
         <div className="mt-2">
           <button type="button" onClick={() => setVerHistorico(v => !v)}
-            className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700">
+            className="inline-flex items-center gap-1 text-xs text-ink-muted hover:text-ink">
             {verHistorico ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             Contactos sobre este imóvel ({historico.length})
           </button>
@@ -291,13 +291,13 @@ export function ProximosPassos({ imovelId, imovel, onAbrirTab, onUpdate, onNavig
             <ul className="mt-1.5 grid gap-1">
               {historico.map(h => (
                 <li key={h.id} className="flex flex-wrap items-baseline gap-x-2 text-xs">
-                  <span className="font-medium tabular-nums text-gray-700">{fmtDia(h.quando)}</span>
+                  <span className="font-medium tabular-nums text-ink">{fmtDia(h.quando)}</span>
                   {h.resultado
-                    ? <span className={h.resultado === 'Feito' ? 'text-green-700' : 'text-orange-700'}>{h.resultado}</span>
-                    : <span className="text-gray-500">{h.canal || 'Registo'}</span>}
-                  {h.pessoa_nome && <span className="text-gray-700">{h.pessoa_nome}</span>}
-                  {h.notas && <span className="text-gray-600 min-w-0 break-words">{String(h.notas).replace(/^\[[^\]]+\]\s*/, '')}</span>}
-                  {h.proxima_data && <span className="text-gray-400">reagendado para {fmtDia(h.proxima_data)}</span>}
+                    ? <span className={h.resultado === 'Feito' ? 'text-success' : 'text-orange-700'}>{h.resultado}</span>
+                    : <span className="text-ink-muted">{h.canal || 'Registo'}</span>}
+                  {h.pessoa_nome && <span className="text-ink">{h.pessoa_nome}</span>}
+                  {h.notas && <span className="text-ink-muted min-w-0 break-words">{String(h.notas).replace(/^\[[^\]]+\]\s*/, '')}</span>}
+                  {h.proxima_data && <span className="text-ink-muted">reagendado para {fmtDia(h.proxima_data)}</span>}
                 </li>
               ))}
             </ul>
