@@ -48,7 +48,7 @@ function extractSopNumber(text) {
  * Importa metadados dos ficheiros de uma pasta do Drive para a tabela `sops`.
  * Não descarrega conteúdo — só guarda título e link.
  */
-export async function importFolderToSops({ folderId, departamento, overwrite = false, user = null }) {
+export async function importFolderToSops({ folderId, departamento, overwrite = false, user = null }: { folderId: string; departamento: string; overwrite?: boolean; user?: string | null }) {
   if (!isConfigured()) {
     throw new Error("Google Drive não está configurado. Definir GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN nos secrets da função.");
   }
@@ -134,7 +134,7 @@ export async function importFolderToSops({ folderId, departamento, overwrite = f
  *     departamento ficam fora deste passo, tal como já não são o alvo da
  *     sincronização actual.
  */
-export async function syncSopsFromDrive({ folders, user = null }) {
+export async function syncSopsFromDrive({ folders, user = null }: { folders: { folderId: string; departamento: string }[]; user?: string | null }) {
   if (!isConfigured()) {
     throw new Error("Google Drive não está configurado. Definir GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN nos secrets da função.");
   }

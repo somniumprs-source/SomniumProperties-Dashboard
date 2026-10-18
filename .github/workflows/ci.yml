@@ -47,12 +47,11 @@ jobs:
           echo "Todos os ficheiros backend fazem parse."
 
   deno:
-    name: Type-check Edge Functions (advisory)
+    name: Type-check Edge Functions
     runs-on: ubuntu-latest
-    # Advisory: nao bloqueia o merge. As Edge Functions (producao) usam Deno;
-    # este passo apanha erros de tipo no index.ts ANTES do deploy. Marcado como
-    # nao-bloqueante porque imports remotos (npm:/jsr:/https) podem variar.
-    continue-on-error: true
+    # As Edge Functions (producao) usam Deno; este passo apanha erros de tipo
+    # no index.ts ANTES do deploy. Bloqueante desde out. 2026, quando as funcoes
+    # abaixo ficaram sem erros: um erro novo falha o CI.
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
@@ -60,8 +59,10 @@ jobs:
           deno-version: v2.x
       - name: deno check das funcoes criticas
         run: |
+          falhou=0
           for fn in crm dashboard users sops calendar voice; do
             echo "::group::deno check $fn"
-            deno check "supabase/functions/$fn/index.ts" || echo "::warning::deno check falhou em $fn"
+            deno check "supabase/functions/$fn/index.ts" || { echo "::error::deno check falhou em $fn"; falhou=1; }
             echo "::endgroup::"
           done
+          exit $falhou

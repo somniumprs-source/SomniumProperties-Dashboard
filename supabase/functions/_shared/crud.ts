@@ -190,7 +190,7 @@ function createCRUD(table: string, { searchFields = ["nome"], defaultSort = "cre
       return rows[0] ?? null;
     },
 
-    async create(rawData: Record<string, any>, { regiaoActiva = null, role = null }: RegiaoOpt = {}) {
+    async create(rawData: Record<string, any>, { regiaoActiva = null, role = null }: RegiaoOpt = {}): Promise<Record<string, any>> {
       const data = cleanFormData(rawData);
       const validationError = validateRequired(table, data);
       if (validationError) throw new Error(validationError);

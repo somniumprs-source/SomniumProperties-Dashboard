@@ -13,7 +13,8 @@
  *     que já existiam, e os assuntos tratados passam para essa linha.
  *
  * Port 1:1 de src/db/contactoPessoa.js (manter em sync): recebe o pool como
- * primeiro argumento, tal como lá.
+ * primeiro argumento, tal como lá. Só difere no randomUUID e no tipo das
+ * opções de agendarContactoPessoa e anotarPessoa.
  */
 const randomUUID = () => crypto.randomUUID()
 
@@ -204,7 +205,10 @@ export async function lerContactoPessoa(pool, tipo, id) {
 // juntar (opcional): assuntos a acrescentar aos que já lá estão.
 // quando (opcional): instante ISO com hora marcada; sem ele é o dia inteiro.
 // tipoContacto (opcional): cold_call | discovery_call | follow_up.
-export async function agendarContactoPessoa(poolOuCx, tipo, id, { data, quando = null, assuntos, juntar, tipoContacto = null, user = null } = {}) {
+// Tipo das opções declarado só aqui (no .js não há tipos): sem ele o
+// TypeScript deduzia-as dos valores por defeito e rejeitava data e assuntos.
+type OpcoesAgendar = { data?: string; quando?: string | null; assuntos?: any[]; juntar?: any[]; tipoContacto?: string | null; user?: any }
+export async function agendarContactoPessoa(poolOuCx, tipo, id, { data, quando = null, assuntos, juntar, tipoContacto = null, user = null }: OpcoesAgendar = {}) {
   return emTransacao(poolOuCx, pool => agendarContactoPessoaTx(pool, tipo, id, { data, quando, assuntos, juntar, tipoContacto, user }))
 }
 
@@ -299,7 +303,7 @@ async function registarContactoPessoaTx(pool, tipo, id, {
 // ── Nota solta no histórico da pessoa ──────────────────────
 // Fica na mesma tabela dos contactos, com canal 'Nota' e sem resultado: aparece
 // na linha do tempo, mas não conta como contacto nas métricas nem no churn.
-export async function anotarPessoa(pool, tipo, id, { notas, quando = null, user = null } = {}) {
+export async function anotarPessoa(pool, tipo, id, { notas, quando = null, user = null }: { notas?: string; quando?: string | null; user?: any } = {}) {
   const p = await carregarPessoa(pool, tipo, id)
   if (!p) return null
   const texto = String(notas ?? '').trim()

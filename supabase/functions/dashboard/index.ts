@@ -1336,7 +1336,7 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
     const periodo = ["semana", "mes", "trimestre", "ano"].includes(pq) ? pq : "mes";
     const regiao = c.req.header("x-regiao") || undefined;
 
-    const [imoveisAll, investidoresRaw, consultores, negocios, despesas, ci, ii, pi] = await Promise.all([
+    const [imoveisRaw, investidoresRaw, consultores, negocios, despesas, ci, ii, pi] = await Promise.all([
       getImóveis({ regiao }).catch(() => [] as any[]),
       getInvestidores({ regiao }).catch(() => [] as any[]),
       getConsultores({ regiao }).catch(() => [] as any[]),
@@ -1346,6 +1346,8 @@ app.get("/comercial/dashboard", endpointCache(120000), async (c: any) => {
       pool.query(`SELECT finalidade, data_hora FROM investidor_interacoes WHERE canal IS DISTINCT FROM 'Nota'`).catch(() => ({ rows: [] as any[] })),
       pool.query(`SELECT negocio_id, capital FROM projeto_investidores WHERE capital > 0`).catch(() => ({ rows: [] as any[] })),
     ]);
+    // Tipo explícito: sem ele o deno check rejeitava cada filter/map sobre a lista.
+    const imoveisAll: any[] = imoveisRaw;
     const investidores = investidoresRaw.filter(isInvestidorPrincipal);
     const ciRows = ci.rows, iiRows = ii.rows, piRows = pi.rows;
 
