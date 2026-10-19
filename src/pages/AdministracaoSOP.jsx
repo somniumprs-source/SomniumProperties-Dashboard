@@ -95,7 +95,7 @@ export function AdministracaoSOP() {
       const partes = []
       if (data.importados) partes.push(`${data.importados} novo(s)`)
       if (data.actualizados) partes.push(`${data.actualizados} atualizado(s)`)
-      if (data.removidos) partes.push(`${data.removidos} removido(s) (já não existem no Drive)`)
+      if (data.em_falta?.length) partes.push(`${data.em_falta.length} sem ficheiro no Drive (mantido(s), a rever)`)
       toast(partes.length ? `Sincronização concluída: ${partes.join(', ')}.` : 'Sincronização concluída: sem alterações.', 'success')
     } catch (e) { toast(friendlyError(e.message), 'error') }
     setSyncing(false)
