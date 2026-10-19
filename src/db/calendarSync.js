@@ -229,7 +229,7 @@ export async function pullGCalToTarefas(gcal, calendarId, { days = 30 } = {}) {
       if (cancelled) {
         // Evento apagado no GCal: a tarefa que já estava concluída fica como
         // está (mantém as horas); a que nasceu de um registo do CRM (follow-up,
-        // visita…) fecha; a tarefa manual ainda por fazer é apagada também.
+        // visita…) fecha; a tarefa manual ainda por fazer é arquivada (nunca apagada).
         if (existing && !['Concluída', 'Concluida'].includes(existing.status)) {
           if (existing.origem_tipo) {
             await pool.query(
@@ -237,7 +237,13 @@ export async function pullGCalToTarefas(gcal, calendarId, { days = 30 } = {}) {
               ['Concluída', new Date().toISOString(), new Date().toISOString(), existing.id]
             )
           } else {
-            await pool.query('DELETE FROM tarefas WHERE id = $1', [existing.id])
+            // Contenção (20/10/2026): arquivar em vez de apagar — espelho de
+            // supabase/functions/calendar/calendarSync.ts.
+            const agora = new Date().toISOString()
+            await pool.query(
+              'UPDATE tarefas SET arquivada = TRUE, arquivada_em = $1, gcal_synced_at = $1, updated_at = $1 WHERE id = $2',
+              [agora, existing.id]
+            )
           }
           updated++
         }
@@ -334,7 +340,7 @@ export async function pushAllTarefas(gcal, calendarId, { sinceDate } = {}) {
 
   // 1. Tarefas com data mas sem gcal_event_id (criar)
   const { rows: unsynced } = await pool.query(
-    `SELECT * FROM tarefas WHERE gcal_event_id IS NULL AND inicio IS NOT NULL${dateCond}`,
+    `SELECT * FROM tarefas WHERE gcal_event_id IS NULL AND inicio IS NOT NULL AND COALESCE(arquivada, false) = false${dateCond}`,
     params
   )
   let created = 0
@@ -345,7 +351,7 @@ export async function pushAllTarefas(gcal, calendarId, { sinceDate } = {}) {
 
   // 2. Tarefas alteradas depois do último sync (atualizar evento existente)
   const { rows: stale } = await pool.query(
-    `SELECT * FROM tarefas WHERE gcal_event_id IS NOT NULL
+    `SELECT * FROM tarefas WHERE gcal_event_id IS NOT NULL AND COALESCE(arquivada, false) = false
      AND updated_at::timestamptz > COALESCE(gcal_synced_at, '1970-01-01')::timestamptz${dateCond}`,
     params
   )
