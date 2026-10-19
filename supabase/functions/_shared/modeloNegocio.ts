@@ -25,8 +25,14 @@ export async function validarModeloImovel(query, id, body) {
   return null
 }
 
-// beforeUpdate do projeto: a categoria vem do imóvel ligado.
+// beforeUpdate do projeto: a categoria vem do imóvel ligado; a fase antiga
+// (Fase de obras/venda/Vendido) é calculada das fases do projeto (0084) e
+// não se grava à mão quando o projeto tem fases.
 export async function validarCategoriaNegocio(query, id, body) {
+  if (body.fase !== undefined) {
+    const { rows } = await query('SELECT 1 FROM projeto_fases WHERE negocio_id = $1 LIMIT 1', [id])
+    if (rows.length) delete body.fase
+  }
   if (body.categoria === undefined) return null
   const { rows: [n] } = await query(
     'SELECT n.categoria, n.imovel_id, i.modelo_negocio FROM negocios n LEFT JOIN imoveis i ON i.id = n.imovel_id WHERE n.id = $1', [id])
