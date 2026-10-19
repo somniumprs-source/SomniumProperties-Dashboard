@@ -12,6 +12,7 @@ import { Tabs } from '../components/ui/Tabs.jsx'
 import { KpiCard } from '../components/ui/KpiCard.jsx'
 import { Card } from '../components/ui/Card.jsx'
 import { Activity } from 'lucide-react'
+import { tarefaAtrasada } from '../constants/regrasTarefas.js'
 
 const HRS = v => v == null ? '—' : `${Number(v).toFixed(1)}h`
 const MES_LABEL = { '01':'Jan','02':'Fev','03':'Mar','04':'Abr','05':'Mai','06':'Jun','07':'Jul','08':'Ago','09':'Set','10':'Out','11':'Nov','12':'Dez' }
@@ -126,7 +127,7 @@ export function Operacoes({ embutido = false }) {
         {(() => {
           const todayStr = new Date().toISOString().slice(0, 10)
           const tarefasAbertas = ativas.length
-          const tarefasAtrasadas = tarefas.filter(t => t.status === 'Atrasada').length
+          const tarefasAtrasadas = tarefas.filter(t => tarefaAtrasada(t)).length
           const tarefasHoje = tarefas.filter(t => t.inicio?.slice(0, 10) === todayStr).length
           const horasSemana = r?.horasSemana ?? 0
           return (

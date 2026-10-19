@@ -40,6 +40,7 @@ import { isWholesaling } from "../_shared/modelos.ts";
 import { avaliarEntrada, painelRequisitos, carregarDadosEntrada } from "../_shared/dealBreakers.ts";
 import { extrairDocumento, contextoImovel, paraAnalise, camposParaFicha, nomesPreenchidos } from "../_shared/extratorDocumentos.ts";
 import { donosDasRegioes } from "../_shared/responsavelRegiao.ts";
+import { tarefaAtrasada } from "../_shared/regrasTarefas.ts";
 import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase, pedeDocumento, documentoDoItem, documentosEmFalta, contextoDocumentos } from "../_shared/projetoTarefas.ts";
 import { baseLegal, mapaEstados, registar, retirar, retirados } from "../_shared/consentimentos.ts";
 import { ensureOportunidadesScraperTable } from "../_shared/oportunidadesScraper.ts";
@@ -1968,7 +1969,9 @@ app.get("/tarefas/count-atrasadas", async (c: any) => {
   try {
     const now = Date.now();
     if (now < _countAtrasadasCache.exp) return c.json({ atrasadas: _countAtrasadasCache.n });
-    const { rows } = await pool.query(`SELECT COUNT(*)::int AS n FROM tarefas WHERE status = 'Atrasada'`);
+    // «Atrasada» é calculada pelo prazo (auditoria D11)
+    const { rows: abertas } = await pool.query(`SELECT status, inicio, data_limite, arquivada FROM tarefas WHERE status <> 'Concluída' AND COALESCE(arquivada, false) = false`);
+    const rows = [{ n: abertas.filter((t: any) => tarefaAtrasada(t)).length }];
     const n = rows[0]?.n ?? 0;
     _countAtrasadasCache = { exp: now + 30_000, n };
     return c.json({ atrasadas: n });

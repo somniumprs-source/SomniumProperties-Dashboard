@@ -37,6 +37,7 @@ const TIPO_LABEL = {
   imt_caducidade:                'Isenção IMT a caducar',
   relatorio_reuniao_disponivel:  'Relatório de reunião',
   conservacao_dados:             'RGPD: conservação de dados',
+  tarefa_incompleta:             'Tarefa sem responsável ou prazo',
 }
 
 const HEALTH_COLOR = pct =>

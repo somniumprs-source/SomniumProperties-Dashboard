@@ -7,6 +7,7 @@ import { resolveOrProvisionUser } from "../_shared/userResolve.ts";
 import pool from "../_shared/pg.ts";
 import { alertasConservacao } from "../_shared/consentimentos.ts";
 import { juntarResponsavel } from "../_shared/responsavelRegiao.ts";
+import { normalizarEstadoTarefa, faltaNaTarefa, tarefaConcluida, tarefaAtrasada } from "../_shared/regrasTarefas.ts";
 import { auditMiddleware } from "../_shared/audit.ts";
 import {
   getNegócios as _getNegócios,
@@ -3185,8 +3186,12 @@ app.get("/tarefas", async (c: any) => {
 app.post("/tarefas", async (c: any) => {
   try {
     const body = await c.req.json().catch(() => ({}));
-    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, regiao, gcal_event_id } = body;
+    const { tarefa, categoria, inicio, fim, funcionario, tempo_horas, regiao, gcal_event_id } = body;
+    const status = normalizarEstadoTarefa(body.status);
     if (!tarefa) return c.json({ error: "tarefa é obrigatória" }, 400);
+    // Tarefa aberta tem responsável e prazo (auditoria D11)
+    const falta = faltaNaTarefa({ status: status || "A fazer", inicio, funcionario });
+    if (falta) return c.json({ error: falta }, 400);
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const horas = tempo_horas != null && tempo_horas !== ""
@@ -3212,7 +3217,14 @@ app.post("/tarefas", async (c: any) => {
 app.put("/tarefas/:id", async (c: any) => {
   try {
     const body = await c.req.json().catch(() => ({}));
-    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, regiao } = body;
+    const { tarefa, categoria, inicio, fim, funcionario, tempo_horas, regiao } = body;
+    const status = body.status === undefined ? undefined : normalizarEstadoTarefa(body.status);
+    // Tarefa aberta tem responsável e prazo (auditoria D11): vale o resultado final.
+    const { rows: [atual] } = await pool.query("SELECT * FROM tarefas WHERE id = $1", [c.req.param("id")]);
+    if (!atual) return c.json({ error: "Não encontrada" }, 404);
+    const final = { ...atual, ...Object.fromEntries(Object.entries({ status, inicio, funcionario }).filter(([, v]) => v !== undefined)) };
+    const falta = faltaNaTarefa(final);
+    if (falta) return c.json({ error: falta }, 400);
     const now = new Date().toISOString();
     const horas = tempo_horas != null && tempo_horas !== ""
       ? Number(tempo_horas)
@@ -3890,6 +3902,18 @@ app.get("/alertas", endpointCache(300000), async (c: any) => {
     // ── RGPD: dados a rever pelo prazo de conservação (auditoria D4) ──
     try { alerts.push(...await alertasConservacao(pool)); } catch (e: any) { console.warn("[alertas] conservação:", e.message); }
 
+    // Tarefas abertas sem responsável ou sem prazo (auditoria D11)
+    try {
+      const { rows: abertas } = await pool.query(`SELECT id, tarefa, status, inicio, data_limite, funcionario FROM tarefas WHERE status <> 'Concluída' AND COALESCE(arquivada, false) = false`);
+      for (const t of abertas) {
+        const falta = faltaNaTarefa(t);
+        if (!falta) continue;
+        const resp = String(t.funcionario || "").trim();
+        alerts.push({ tipo: "tarefa_incompleta", severidade: "aviso", entidade: t.tarefa, mensagem: falta.replace("Indica", "Falta indicar"),
+          id: t.id, ...(resp && !resp.includes(",") ? { responsavel: resp } : {}) });
+      }
+    } catch (e: any) { console.warn("[alertas] tarefas:", e.message); }
+
     // Responsável pela região de cada alerta (auditoria D10)
     try { alerts.splice(0, alerts.length, ...await juntarResponsavel(pool, alerts)); } catch (e: any) { console.warn("[alertas] responsável:", e.message); }
 
@@ -4300,11 +4324,12 @@ app.get("/time-tracking", async (c: any) => {
     const horasGestao = round2((porCategoria["Planeamento"]?.horas ?? 0) + (porCategoria["Processos e SOP"]?.horas ?? 0) + (porCategoria["Plataforma e IA"]?.horas ?? 0) + (porCategoria["Reunião de Equipa"]?.horas ?? 0));
 
     // Status das tarefas
+    // «Atrasada» é calculada pelo prazo (auditoria D11)
     const statusTarefas = { aFazer: 0, emAndamento: 0, concluida: 0, atrasada: 0 };
     for (const t of tarefas) {
-      if (t.status === "Concluída") statusTarefas.concluida++;
+      if (tarefaConcluida(t)) statusTarefas.concluida++;
+      else if (tarefaAtrasada(t)) statusTarefas.atrasada++;
       else if (t.status === "Em andamento") statusTarefas.emAndamento++;
-      else if (t.status === "Atrasada") statusTarefas.atrasada++;
       else statusTarefas.aFazer++;
     }
 

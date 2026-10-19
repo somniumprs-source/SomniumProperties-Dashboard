@@ -29,6 +29,7 @@ import { REGIOES } from '../constants.js'
 import { confirmar } from '../components/ui/ConfirmDialog.jsx'
 import { AnimatePresence } from 'framer-motion'
 import { useResponsaveisRegiao } from '../hooks/useResponsaveisRegiao.js'
+import { ESTADOS_TAREFA, tarefaAtrasada } from '../constants/regrasTarefas.js'
 
 const FUNCIONARIOS = ['João Abreu', 'Alexandre Mendes']
 const AMBOS = 'João Abreu, Alexandre Mendes'
@@ -46,7 +47,8 @@ const GRUPOS_CATEGORIAS = [
 ]
 const CATEGORIAS = GRUPOS_CATEGORIAS.flatMap(g => g.itens)
 const CATEGORIAS_COM_REGIAO = new Set(GRUPOS_CATEGORIAS.filter(g => g.regiao).flatMap(g => g.itens))
-const STATUS_OPTIONS = ['A fazer', 'Em andamento', 'Concluída', 'Atrasada']
+// «Atrasada» não se escolhe: é calculada pelo prazo (src/constants/regrasTarefas.js, D11).
+const STATUS_OPTIONS = ESTADOS_TAREFA
 const STATUS_COLOR = { 'A fazer': 'bg-surface-muted text-ink-muted', 'Em andamento': 'bg-surface-muted text-ink', 'Concluída': 'bg-success/15 text-success', 'Atrasada': 'bg-danger/15 text-danger' }
 const STATUS_DOT = { 'A fazer': 'bg-ink-muted/40', 'Em andamento': 'bg-ink-muted', 'Concluída': 'bg-success', 'Atrasada': 'bg-danger' }
 const concluida = t => t.status === 'Concluída' || t.status === 'Concluida'
@@ -599,7 +601,10 @@ function TarefasTab({ tarefas, guardar, eliminar, accao, abrir }) {
       {vista === 'board' && filtro !== 'arquivo' ? (
         <div className={`grid grid-cols-1 gap-4 ${colunas.length === 4 ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
           {colunas.map(status => {
-            const col = lista.filter(t => status === 'Concluída' ? concluida(t) : t.status === status)
+            // Atrasada = aberta com o prazo ultrapassado; sai das colunas do estado.
+            const col = lista.filter(t => status === 'Concluída' ? concluida(t)
+              : status === 'Atrasada' ? tarefaAtrasada(t)
+              : t.status === status && !tarefaAtrasada(t))
             return (
               <div key={status} className="flex flex-col">
                 <div className="flex items-center justify-between px-3 py-2 rounded-t-xl bg-surface-muted text-ink border border-b-0 border-line">
@@ -608,7 +613,7 @@ function TarefasTab({ tarefas, guardar, eliminar, accao, abrir }) {
                 </div>
                 <div onDragOver={e => { e.preventDefault(); if (sobre !== status) setSobre(status) }}
                   onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setSobre(null) }}
-                  onDrop={() => { const t = tarefas.find(x => x.id === arrastada); setArrastada(null); setSobre(null); if (t && t.status !== status) mudarEstado(t, status) }}
+                  onDrop={() => { const t = tarefas.find(x => x.id === arrastada); setArrastada(null); setSobre(null); if (t && status !== 'Atrasada' && t.status !== status) mudarEstado(t, status) }}
                   className={`flex flex-col gap-1.5 p-2 bg-surface  rounded-b-xl min-h-[200px] border border-t-0 transition-colors duration-fast ${sobre === status ? 'border-accent bg-accent/5 ring-1 ring-accent/30' : 'border-line'}`}>
                   {col.map(t => (
                     <div key={t.id} draggable onDragStart={e => { setArrastada(t.id); e.dataTransfer.effectAllowed = 'move' }} onDragEnd={() => { setArrastada(null); setSobre(null) }}

@@ -732,6 +732,7 @@ import { TTLCache } from './src/db/utils/ttlCache.js'
 import pool from './src/db/pg.js'
 import { alertasConservacao } from './src/db/consentimentos.js'
 import { juntarResponsavel } from './src/db/responsavelRegiao.js'
+import { normalizarEstadoTarefa, faltaNaTarefa, tarefaConcluida, tarefaAtrasada } from './src/constants/regrasTarefas.js'
 import http from 'node:http'
 const cache = new TTLCache(60000) // 60s default TTL
 app.post('/api/cache/clear', (_req, res) => { cache.clear(); res.json({ ok: true }) })
@@ -4271,8 +4272,12 @@ app.post('/api/tarefas', async (req, res) => {
   try {
     const pgPool = (await import('./src/db/pg.js')).default
     const { pushTarefaToGCal } = await import('./src/db/calendarSync.js')
-    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, regiao, gcal_event_id } = req.body
+    const { tarefa, categoria, inicio, fim, funcionario, tempo_horas, regiao, gcal_event_id } = req.body
+    const status = normalizarEstadoTarefa(req.body.status)
     if (!tarefa) return res.status(400).json({ error: 'tarefa é obrigatória' })
+    // Tarefa aberta tem responsável e prazo (auditoria D11)
+    const falta = faltaNaTarefa({ status: status || 'A fazer', inicio, funcionario })
+    if (falta) return res.status(400).json({ error: falta })
     const id = (await import('crypto')).randomUUID()
     const now = new Date().toISOString()
     const horas = (tempo_horas != null && tempo_horas !== '')
@@ -4301,7 +4306,14 @@ app.put('/api/tarefas/:id', async (req, res) => {
   try {
     const pgPool = (await import('./src/db/pg.js')).default
     const { updateGCalEvent, pushTarefaToGCal } = await import('./src/db/calendarSync.js')
-    const { tarefa, status, categoria, inicio, fim, funcionario, tempo_horas, regiao } = req.body
+    const { tarefa, categoria, inicio, fim, funcionario, tempo_horas, regiao } = req.body
+    const status = req.body.status === undefined ? undefined : normalizarEstadoTarefa(req.body.status)
+    // Tarefa aberta tem responsável e prazo (auditoria D11): vale o resultado final.
+    const { rows: [atual] } = await pgPool.query('SELECT * FROM tarefas WHERE id = $1', [req.params.id])
+    if (!atual) return res.status(404).json({ error: 'Não encontrada' })
+    const final = { ...atual, ...Object.fromEntries(Object.entries({ status, inicio, funcionario }).filter(([, v]) => v !== undefined)) }
+    const falta = faltaNaTarefa(final)
+    if (falta) return res.status(400).json({ error: falta })
     const now = new Date().toISOString()
     const horas = (tempo_horas != null && tempo_horas !== '')
       ? Number(tempo_horas)
@@ -5015,11 +5027,12 @@ app.get('/api/time-tracking', async (req, res) => {
     const horasGestao = round2((porCategoria['Planeamento']?.horas ?? 0) + (porCategoria['Processos e SOP']?.horas ?? 0) + (porCategoria['Plataforma e IA']?.horas ?? 0) + (porCategoria['Reunião de Equipa']?.horas ?? 0))
 
     // Status das tarefas
+    // «Atrasada» é calculada pelo prazo (auditoria D11)
     const statusTarefas = { aFazer: 0, emAndamento: 0, concluida: 0, atrasada: 0 }
     for (const t of tarefas) {
-      if (t.status === 'Concluída') statusTarefas.concluida++
+      if (tarefaConcluida(t)) statusTarefas.concluida++
+      else if (tarefaAtrasada(t)) statusTarefas.atrasada++
       else if (t.status === 'Em andamento') statusTarefas.emAndamento++
-      else if (t.status === 'Atrasada') statusTarefas.atrasada++
       else statusTarefas.aFazer++
     }
 
@@ -5349,6 +5362,18 @@ app.get('/api/alertas', endpointCache(300000), async (req, res) => {
 
     // ── RGPD: dados a rever pelo prazo de conservação (auditoria D4) ──
     try { alerts.push(...await alertasConservacao(pool)) } catch (e) { console.warn('[alertas] conservação:', e.message) }
+
+    // Tarefas abertas sem responsável ou sem prazo (auditoria D11)
+    try {
+      const { rows: abertas } = await pool.query(`SELECT id, tarefa, status, inicio, data_limite, funcionario FROM tarefas WHERE status <> 'Concluída' AND COALESCE(arquivada, false) = false`)
+      for (const t of abertas) {
+        const falta = faltaNaTarefa(t)
+        if (!falta) continue
+        const resp = String(t.funcionario || '').trim()
+        alerts.push({ tipo: 'tarefa_incompleta', severidade: 'aviso', entidade: t.tarefa, mensagem: falta.replace('Indica', 'Falta indicar'),
+          id: t.id, ...(resp && !resp.includes(',') ? { responsavel: resp } : {}) })
+      }
+    } catch (e) { console.warn('[alertas] tarefas:', e.message) }
 
     // Responsável pela região de cada alerta (auditoria D10)
     try { alerts.splice(0, alerts.length, ...await juntarResponsavel(pool, alerts)) } catch (e) { console.warn('[alertas] responsável:', e.message) }

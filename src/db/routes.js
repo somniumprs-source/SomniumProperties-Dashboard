@@ -46,6 +46,7 @@ import { avaliarEntrada, painelRequisitos, carregarDadosEntrada } from './dealBr
 import { carregarChecklist, gravarManual } from './checklistImovel.js'
 import { extrairDocumento, contextoImovel, paraAnalise, camposParaFicha, nomesPreenchidos } from './extratorDocumentos.js'
 import { donosDasRegioes } from './responsavelRegiao.js'
+import { tarefaAtrasada } from '../constants/regrasTarefas.js'
 import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase, pedeDocumento, documentoDoItem, documentosEmFalta, contextoDocumentos } from './projetoTarefas.js'
 import { baseLegal, mapaEstados, registar, retirar, retirados } from './consentimentos.js'
 import { getAuditUser } from './audit.js'
@@ -1579,7 +1580,9 @@ router.get('/tarefas/count-atrasadas', async (_req, res) => {
   try {
     const now = Date.now()
     if (now < _countAtrasadasCache.exp) return res.json({ atrasadas: _countAtrasadasCache.n })
-    const { rows } = await pool.query(`SELECT COUNT(*)::int AS n FROM tarefas WHERE status = 'Atrasada'`)
+    // «Atrasada» é calculada pelo prazo (auditoria D11)
+    const { rows: abertas } = await pool.query(`SELECT status, inicio, data_limite, arquivada FROM tarefas WHERE status <> 'Concluída' AND COALESCE(arquivada, false) = false`)
+    const rows = [{ n: abertas.filter(t => tarefaAtrasada(t)).length }]
     const n = rows[0]?.n ?? 0
     _countAtrasadasCache = { exp: now + 30_000, n }
     res.json({ atrasadas: n })
