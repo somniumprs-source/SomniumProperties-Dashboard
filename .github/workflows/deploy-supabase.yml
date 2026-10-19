@@ -26,8 +26,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Precisamos do commit anterior para fazer o diff das funcoes alteradas.
-          fetch-depth: 2
+          # Historico completo: o diff e feito contra o estado antes do push
+          # (github.event.before), que pode estar varios commits atras.
+          fetch-depth: 0
       - uses: supabase/setup-cli@v1
         with:
           # Fixado: a v2.102.0 (29-05-2026) passou a rejeitar bundles grandes
@@ -67,7 +68,11 @@ jobs:
             exit 0
           fi
 
-          MUDADOS=$(git diff --name-only HEAD^ HEAD -- supabase/functions/ supabase/config.toml || true)
+          # Comparar com o estado antes do push, nao so com HEAD^: um push com
+          # varios commits deixava por publicar as funcoes alteradas nos primeiros.
+          BASE="${{ github.event.before }}"
+          if [ -z "$BASE" ] || echo "$BASE" | grep -qE '^0+$' || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then BASE="HEAD^"; fi
+          MUDADOS=$(git diff --name-only "$BASE" HEAD -- supabase/functions/ supabase/config.toml || true)
 
           if echo "$MUDADOS" | grep -qE "supabase/functions/_shared/|supabase/config\.toml"; then
             echo "Motivo: _shared/ ou config.toml mudaram (afectam todas) -> publicar tudo."
