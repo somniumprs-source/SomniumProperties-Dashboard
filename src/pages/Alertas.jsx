@@ -55,6 +55,8 @@ export function Alertas() {
   const [backups, setBackups]     = useState([])
   const [auditLog, setAuditLog]   = useState([])
   const [backupLoading, setBackupLoading] = useState(false)
+  // Filtro por responsável: dono da região do imóvel, consultor ou projeto (D10).
+  const [resp, setResp] = useState('todos')
 
   async function load() {
     setLoading(true); setError(null)
@@ -186,8 +188,22 @@ export function Alertas() {
         {/* Alertas */}
         <Card padding="md">
           <Card.Header title={`Alertas Ativos (${alertas?.alertas?.length ?? 0})`} subtitle="Eventos por severidade" icon={Bell} />
+          {(() => {
+            const nomes = [...new Set((alertas?.alertas ?? []).map(a => a.responsavel).filter(Boolean))].sort()
+            if (!nomes.length) return null
+            const chip = on => `px-3 py-1 text-xs font-medium rounded-lg border transition-colors duration-fast ${on ? 'border-ink/30 bg-surface-muted text-ink' : 'border-line text-ink-muted hover:bg-surface-muted'}`
+            return (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {['todos', ...nomes, 'sem'].map(n => (
+                  <button key={n} type="button" onClick={() => setResp(n)} className={chip(resp === n)}>
+                    {n === 'todos' ? 'Todos' : n === 'sem' ? 'Sem região (investidores, geral)' : n.split(' ')[0]}
+                  </button>
+                ))}
+              </div>
+            )
+          })()}
           <div className="space-y-2 max-h-[500px] overflow-y-auto">
-            {(alertas?.alertas ?? []).map((a, i) => (
+            {(alertas?.alertas ?? []).filter(a => resp === 'todos' || (resp === 'sem' ? !a.responsavel : a.responsavel === resp)).map((a, i) => (
               <div key={i} className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 rounded-lg border ${SEV_STYLE[a.severidade] ?? ''}`}>
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <span className={`w-2 h-2 rounded-full shrink-0 ${SEV_DOT[a.severidade] ?? ''}`} />
@@ -201,6 +217,7 @@ export function Alertas() {
                 <div className="flex items-center gap-2 pl-4 sm:pl-0">
                   <p className="text-xs">{a.mensagem}</p>
                   {a.status && <span className="text-xs opacity-60 shrink-0">{a.status}</span>}
+                  {a.responsavel && <span className="text-xs opacity-60 shrink-0" title={`Responsável da região ${a.regiao}`}>· {a.responsavel.split(' ')[0]}</span>}
                 </div>
               </div>
             ))}

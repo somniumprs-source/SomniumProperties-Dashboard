@@ -808,6 +808,7 @@ const getObras        = async () => []
 import { TTLCache } from './src/db/utils/ttlCache.js'
 import pool from './src/db/pg.js'
 import { alertasConservacao } from './src/db/consentimentos.js'
+import { juntarResponsavel } from './src/db/responsavelRegiao.js'
 import http from 'node:http'
 const cache = new TTLCache(60000) // 60s default TTL
 app.post('/api/cache/clear', (_req, res) => { cache.clear(); res.json({ ok: true }) })
@@ -5425,6 +5426,9 @@ app.get('/api/alertas', endpointCache(300000), async (req, res) => {
 
     // ── RGPD: dados a rever pelo prazo de conservação (auditoria D4) ──
     try { alerts.push(...await alertasConservacao(pool)) } catch (e) { console.warn('[alertas] conservação:', e.message) }
+
+    // Responsável pela região de cada alerta (auditoria D10)
+    try { alerts.splice(0, alerts.length, ...await juntarResponsavel(pool, alerts)) } catch (e) { console.warn('[alertas] responsável:', e.message) }
 
     // Sort by severity
     const SEV_ORDER = { critico: 0, aviso: 1, info: 2 }

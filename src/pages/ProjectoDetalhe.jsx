@@ -30,6 +30,7 @@ import { DocumentosOrcamentosTab } from '../components/obra/DocumentosOrcamentos
 import { AnaliseTab } from '../components/analise/AnaliseTab.jsx'
 import { QuadroEstimadoVsReal, QuadroConsultoria, RubricaSelect, RUBRICA_EXTRA, MOTIVOS_EXTRA, rubricaDe, labelRubrica } from '../components/projeto/EstimadoVsReal.jsx'
 import { confirmar } from '../components/ui/ConfirmDialog.jsx'
+import { useResponsaveisRegiao } from '../hooks/useResponsaveisRegiao.js'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const GOLD = '#C9A84C'
@@ -373,7 +374,7 @@ export function ProjectoDetalhe() {
                   </>
                 : <p className="text-sm text-ink-muted py-8 text-center">Sem imóvel associado a este projeto.</p>
             )}
-            {tab === 'fases' && <TabFases fases={fasesFiltradas} onChange={load} readOnly={isReadOnly} negocioId={id} imovelId={imovel?.id} fotosImovel={imovel?.fotos} />}
+            {tab === 'fases' && <TabFases fases={fasesFiltradas} onChange={load} readOnly={isReadOnly} negocioId={id} imovelId={imovel?.id} fotosImovel={imovel?.fotos} regiao={negocio.regiao || imovel?.regiao} />}
             {tab === 'obras' && (
               <TabObras
                 imovel={imovel} negocio={negocio} negocioId={id}
@@ -580,18 +581,20 @@ function TabObras({ imovel, negocio, negocioId, fases, fotos, fracaoSel, isWhole
 // ════════════════════════════════════════════════════════════════
 // TAB: FASES & TAREFAS
 // ════════════════════════════════════════════════════════════════
-function TabFases({ fases, onChange, readOnly, negocioId, imovelId, fotosImovel }) {
+function TabFases({ fases, onChange, readOnly, negocioId, imovelId, fotosImovel, regiao }) {
   if (fases.length === 0) {
     return <p className="text-center text-sm text-ink-muted py-8">Sem fases criadas. Inicializa-as no topo da página.</p>
   }
   return (
     <div className="space-y-3">
-      {fases.map(f => <FaseAccordion key={f.id} fase={f} onChange={onChange} readOnly={readOnly} negocioId={negocioId} imovelId={imovelId} fotosImovel={fotosImovel} />)}
+      {fases.map(f => <FaseAccordion key={f.id} fase={f} onChange={onChange} readOnly={readOnly} negocioId={negocioId} imovelId={imovelId} fotosImovel={fotosImovel} regiao={regiao} />)}
     </div>
   )
 }
 
-function FaseAccordion({ fase, onChange, readOnly, negocioId, imovelId, fotosImovel }) {
+function FaseAccordion({ fase, onChange, readOnly, negocioId, imovelId, fotosImovel, regiao }) {
+  // Sem responsável escrito, a fase é do dono da região do projeto (D10).
+  const donoRegiao = useResponsaveisRegiao()[regiao] || null
   const toast = useToast()
   const [open, setOpen] = useState(fase.estado === 'em_curso')
   const [novaDespesa, setNovaDespesa] = useState({ movimento: '', valor: '', data: '', categoria: 'Material' })
@@ -738,7 +741,7 @@ function FaseAccordion({ fase, onChange, readOnly, negocioId, imovelId, fotosImo
               <label className="text-[10px] text-ink-muted uppercase tracking-wide block mb-1">Responsável</label>
               <input type="text" defaultValue={fase.responsavel || ''}
                 onBlur={e => e.target.value !== (fase.responsavel || '') && setCampo('responsavel', e.target.value)}
-                className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-line bg-surface-raised" placeholder="Ex: João Abreu" />
+                className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-line bg-surface-raised" placeholder={donoRegiao ? `${donoRegiao} (região ${regiao})` : 'Ex: João Abreu'} />
             </div>
             <div>
               <label className="text-[10px] text-ink-muted uppercase tracking-wide block mb-1">Início previsto</label>

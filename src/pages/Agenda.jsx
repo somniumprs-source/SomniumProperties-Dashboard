@@ -28,6 +28,7 @@ import { useUrlState } from '../hooks/useUrlState.js'
 import { REGIOES } from '../constants.js'
 import { confirmar } from '../components/ui/ConfirmDialog.jsx'
 import { AnimatePresence } from 'framer-motion'
+import { useResponsaveisRegiao } from '../hooks/useResponsaveisRegiao.js'
 
 const FUNCIONARIOS = ['João Abreu', 'Alexandre Mendes']
 const AMBOS = 'João Abreu, Alexandre Mendes'
@@ -541,6 +542,7 @@ function TarefasTab({ tarefas, guardar, eliminar, accao, abrir }) {
   const [filtro, setFiltro] = useState('semana')
   const [func, setFunc] = useState('todos')
   const [reg, setReg] = useState('todas')
+  const donos = useResponsaveisRegiao()  // dono de cada região (D10)
   const [vista, setVista] = useState('board')
   const [sel, setSel] = useState(new Set())
   const [arrastada, setArrastada] = useState(null)
@@ -582,7 +584,7 @@ function TarefasTab({ tarefas, guardar, eliminar, accao, abrir }) {
       </div>
       <div className="flex gap-2 flex-wrap">
         {['todas', ...REGIOES].map(r => (
-          <button key={r} onClick={() => { setReg(r); setSel(new Set()) }} className={chip(reg === r)}>{r === 'todas' ? 'Todas as regiões' : r}</button>
+          <button key={r} onClick={() => { setReg(r); setSel(new Set()) }} className={chip(reg === r)}>{r === 'todas' ? 'Todas as regiões' : donos[r] ? `${r} · ${donos[r].split(' ')[0]}` : r}</button>
         ))}
       </div>
       <div className="flex items-center gap-3 px-4 py-2 bg-surface rounded-lg border border-line">

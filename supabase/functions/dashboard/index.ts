@@ -6,6 +6,7 @@ import { RECORD_RESTRICTED_ROLES } from "../_shared/roles.ts";
 import { resolveOrProvisionUser } from "../_shared/userResolve.ts";
 import pool from "../_shared/pg.ts";
 import { alertasConservacao } from "../_shared/consentimentos.ts";
+import { juntarResponsavel } from "../_shared/responsavelRegiao.ts";
 import { auditMiddleware } from "../_shared/audit.ts";
 import {
   getNegócios as _getNegócios,
@@ -3888,6 +3889,9 @@ app.get("/alertas", endpointCache(300000), async (c: any) => {
 
     // ── RGPD: dados a rever pelo prazo de conservação (auditoria D4) ──
     try { alerts.push(...await alertasConservacao(pool)); } catch (e: any) { console.warn("[alertas] conservação:", e.message); }
+
+    // Responsável pela região de cada alerta (auditoria D10)
+    try { alerts.splice(0, alerts.length, ...await juntarResponsavel(pool, alerts)); } catch (e: any) { console.warn("[alertas] responsável:", e.message); }
 
     // Sort by severity
     const SEV_ORDER: Record<string, number> = { critico: 0, aviso: 1, info: 2 };

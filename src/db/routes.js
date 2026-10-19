@@ -45,6 +45,7 @@ import { FASES_FIX_FLIP, FASES_POR_CATEGORIA, getTemplateFases, getFaseConfigGlo
 import { avaliarEntrada, painelRequisitos, carregarDadosEntrada } from './dealBreakers.js'
 import { carregarChecklist, gravarManual } from './checklistImovel.js'
 import { extrairDocumento, contextoImovel, paraAnalise, camposParaFicha, nomesPreenchidos } from './extratorDocumentos.js'
+import { donosDasRegioes } from './responsavelRegiao.js'
 import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase, pedeDocumento, documentoDoItem, documentosEmFalta, contextoDocumentos } from './projetoTarefas.js'
 import { baseLegal, mapaEstados, registar, retirar, retirados } from './consentimentos.js'
 import { getAuditUser } from './audit.js'
@@ -630,6 +631,11 @@ router.get('/lookups/:categoria', async (req, res) => {
     const r = await pool.query('SELECT valor, ordem FROM lookups WHERE categoria = $1 AND ativo = true ORDER BY ordem, valor', [req.params.categoria])
     res.json(r.rows.map(x => x.valor))
   } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// Dono de cada região (auditoria D10): { Coimbra: 'João Abreu', AMP: 'Alexandre Mendes' }
+router.get('/responsaveis-regiao', async (_req, res) => {
+  try { res.json(await donosDasRegioes(pool)) } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 router.get('/lookups', async (_req, res) => {

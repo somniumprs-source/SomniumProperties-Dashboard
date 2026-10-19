@@ -39,6 +39,7 @@ import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { isWholesaling } from "../_shared/modelos.ts";
 import { avaliarEntrada, painelRequisitos, carregarDadosEntrada } from "../_shared/dealBreakers.ts";
 import { extrairDocumento, contextoImovel, paraAnalise, camposParaFicha, nomesPreenchidos } from "../_shared/extratorDocumentos.ts";
+import { donosDasRegioes } from "../_shared/responsavelRegiao.ts";
 import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase, pedeDocumento, documentoDoItem, documentosEmFalta, contextoDocumentos } from "../_shared/projetoTarefas.ts";
 import { baseLegal, mapaEstados, registar, retirar, retirados } from "../_shared/consentimentos.ts";
 import { ensureOportunidadesScraperTable } from "../_shared/oportunidadesScraper.ts";
@@ -1101,6 +1102,11 @@ app.get("/lookups/:categoria", async (c: any) => {
     const r = await pool.query("SELECT valor, ordem FROM lookups WHERE categoria = $1 AND ativo = true ORDER BY ordem, valor", [c.req.param("categoria")]);
     return c.json(r.rows.map((x: any) => x.valor));
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
+});
+
+// Dono de cada região (auditoria D10): { Coimbra: 'João Abreu', AMP: 'Alexandre Mendes' }
+app.get("/responsaveis-regiao", async (c: any) => {
+  try { return c.json(await donosDasRegioes(pool)); } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
 app.get("/lookups", async (c: any) => {
