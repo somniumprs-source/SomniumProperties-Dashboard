@@ -8,6 +8,8 @@
  *     ...body...
  *     <Modal.Footer>...</Modal.Footer>
  *   </Modal>
+ * `bare` entrega o corpo sem margem interna; `top` ancora a janela no terço
+ * superior (paleta de comandos); `label` dá nome acessível quando não há título.
  */
 import { useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
@@ -26,7 +28,7 @@ const SIZE = {
 // Janelas abertas, da mais antiga para a mais recente: só a de cima reage ao teclado.
 const pilha = []
 
-export function Modal({ open, onClose, title, subtitle, size = 'md', children, footer, className = '' }) {
+export function Modal({ open, onClose, title, subtitle, size = 'md', children, footer, className = '', bare = false, top = false, label }) {
   const titleId = useId()
   const dialogRef = useRef(null)
   const onCloseRef = useRef(onClose)
@@ -77,10 +79,10 @@ export function Modal({ open, onClose, title, subtitle, size = 'md', children, f
     <AnimatePresence propagate>
       {open && (
         <motion.div key="modal" variants={overlayVariants} initial="initial" animate="animate" exit="exit"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 dark:bg-black/60 backdrop-blur-[2px]"
+          className={`fixed inset-0 z-50 flex justify-center p-4 bg-ink/40 dark:bg-black/60 backdrop-blur-[2px] ${top ? 'items-start pt-[12vh]' : 'items-center'}`}
           onClick={onClose}>
           <motion.div variants={dialogVariants} ref={dialogRef} tabIndex={-1}
-            role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined}
+            role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined} aria-label={title ? undefined : label}
             className={`bg-surface-raised text-ink border border-line rounded-2xl shadow-xl w-full outline-none max-h-[calc(100dvh-2rem)] overflow-y-auto ${SIZE[size] || SIZE.md} ${className}`}
             onClick={e => e.stopPropagation()}>
             {(title || subtitle) && (
@@ -94,7 +96,7 @@ export function Modal({ open, onClose, title, subtitle, size = 'md', children, f
                 </button>
               </div>
             )}
-            <div className="p-5">{children}</div>
+            {bare ? children : <div className="p-5">{children}</div>}
             {footer && <div className="px-5 py-4 bg-surface-muted/60 border-t border-line rounded-b-2xl">{footer}</div>}
           </motion.div>
         </motion.div>

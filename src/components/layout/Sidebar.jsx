@@ -1,13 +1,14 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
-import { Bell, Menu, X, LogOut, UserCheck, ChevronDown } from 'lucide-react'
+import { Bell, Menu, X, LogOut, UserCheck, ChevronDown, Search } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { apiFetch, apiFetchJson } from '../../lib/api.js'
 import { prefetchRoute } from '../../lib/prefetch.js'
 import { tabIndicatorTransition, dialogVariants, overlayVariants } from '../../lib/motion.js'
 import { VoiceButton } from '../ui/VoiceButton.jsx'
 import { navVisivel } from './navConfig.js'
+import { EVENTO_ABRIR, ATALHO } from './CommandPalette.jsx'
 import { lerPerfilAtivo, definirPerfilAtivo, EVENTO_PERFIL_MUDOU } from '../../lib/perfilAtivo.js'
 
 // Barra lateral sempre escura (identidade Somnium), nos dois temas.
@@ -86,6 +87,15 @@ export function Sidebar() {
       >
         <div className="border-b border-white/5">
           <img src="/logo-transparent.png" alt="Somnium Properties" className="mx-auto py-4 px-4" style={{ maxWidth: '78%', height: 'auto' }} />
+        </div>
+
+        <div className="px-3 pt-3">
+          <button type="button" onClick={() => { setOpen(false); window.dispatchEvent(new Event(EVENTO_ABRIR)) }}
+            className="w-full flex items-center gap-2 px-3 h-8 rounded-lg border border-white/10 bg-white/[0.03] text-caption text-neutral-400 hover:text-white hover:bg-white/5 transition-colors duration-fast ease-entry">
+            <Search className="w-3.5 h-3.5 shrink-0" />
+            <span className="flex-1 text-left">Pesquisar…</span>
+            <kbd className="font-mono text-[11px] text-neutral-500">{ATALHO}</kbd>
+          </button>
         </div>
 
         <LayoutGroup id="sidebar">

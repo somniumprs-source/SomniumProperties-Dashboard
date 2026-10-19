@@ -3825,10 +3825,10 @@ app.get("/search", async (c: any) => {
     if (!q || q.length < 2) return c.json({ results: [] });
     const term = `%${q}%`;
     const [imoveis, investidores, consultores, negocios] = await Promise.all([
-      pool.query("SELECT id, nome, zona, estado, 'imovel' as tipo FROM imoveis WHERE nome ILIKE $1 OR zona ILIKE $1 OR notas ILIKE $1 LIMIT 10", [term]),
+      pool.query("SELECT id, nome, zona, estado, 'imovel' as tipo FROM imoveis WHERE nome ILIKE $1 OR zona ILIKE $1 OR notas ILIKE $1 ORDER BY (nome ILIKE $1) DESC, nome LIMIT 10", [term]),
       pool.query("SELECT id, nome, email, status, 'investidor' as tipo FROM investidores WHERE nome ILIKE $1 OR email ILIKE $1 OR telemovel ILIKE $1 LIMIT 10", [term]),
       pool.query("SELECT id, nome, email, estatuto, 'consultor' as tipo FROM consultores WHERE nome ILIKE $1 OR email ILIKE $1 OR contacto ILIKE $1 LIMIT 10", [term]),
-      pool.query("SELECT id, movimento, categoria, fase, 'negocio' as tipo FROM negocios WHERE movimento ILIKE $1 OR categoria ILIKE $1 LIMIT 10", [term]),
+      pool.query("SELECT id, movimento, categoria, fase, 'negocio' as tipo FROM negocios WHERE deleted_at IS NULL AND (movimento ILIKE $1 OR categoria ILIKE $1) ORDER BY (movimento ILIKE $1) DESC, movimento LIMIT 10", [term]),
     ]);
     return c.json({
       results: [

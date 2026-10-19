@@ -2,6 +2,7 @@ import { Sidebar } from './Sidebar.jsx'
 import { PageTransition } from '../ui/PageTransition.jsx'
 import { ScrollToTop } from '../ui/ScrollToTop.jsx'
 import { PerfilObrigatorio } from './PerfilObrigatorio.jsx'
+import { CommandPalette } from './CommandPalette.jsx'
 
 export function Layout() {
   return (
@@ -12,6 +13,7 @@ export function Layout() {
         <PageTransition />
       </main>
       <PerfilObrigatorio />
+      <CommandPalette />
     </div>
   )
 }
