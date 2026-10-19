@@ -113,6 +113,11 @@ router.post('/imoveis/:imovelId/analises', async (req, res) => {
       meses: body.meses ?? 6,
       ...body,
     }
+    // IMI do concelho do imóvel (Compliance), em vez do 0,30% fixo da tabela.
+    if (body.taxa_imi == null && imovel.concelho) {
+      const { rows: [compl] } = await pool.query('SELECT imi_perc FROM compliance_regional WHERE concelho = $1', [imovel.concelho])
+      if (compl?.imi_perc != null) inputs.taxa_imi = Number(compl.imi_perc)
+    }
     inputs = applyCompraOverride(inputs, imovel)
 
     // Calcular

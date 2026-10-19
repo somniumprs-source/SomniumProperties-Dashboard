@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { EUR } from '../../constants.js'
 import { isWholesaling } from '../../lib/modelos.js'
+import { apiFetch } from '../../lib/api.js'
 
 const GOLD = '#C9A84C'
 const BLACK = '#1A1A1A'
@@ -39,6 +40,19 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
   useEffect(() => {
     if (analise) setForm(analise)
   }, [analise?.id, analise?.versao])
+
+  // Referência fiscal do concelho do imóvel (IMI e ARU), mantida na tabela de Compliance.
+  const [concelhoRef, setConcelhoRef] = useState(null)
+  useEffect(() => {
+    setConcelhoRef(null)
+    if (!imovel?.concelho) return
+    let vivo = true
+    apiFetch(`/api/crm/regiao/compliance?concelho=${encodeURIComponent(imovel.concelho)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (vivo) setConcelhoRef(d?.data?.[0] || null) })
+      .catch(() => {})
+    return () => { vivo = false }
+  }, [imovel?.concelho])
 
   const handleChange = useCallback((field, value) => {
     setForm(prev => {
@@ -154,6 +168,14 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
               <Toggle label="Zona ARU (IVA 6%)" field="aru" value={form.aru} onChange={handleChange} />
               <Toggle label="Ampliação (IVA 23%)" field="ampliacao" value={form.ampliacao} onChange={handleChange} />
             </div>
+            {concelhoRef && (
+              <p className="mt-2 text-xs text-ink-muted">
+                {concelhoRef.zona_aru
+                  ? <>{concelhoRef.concelho} tem zonas ARU: confirmar se o imóvel fica dentro antes de ativar o IVA a 6%.</>
+                  : <>{concelhoRef.concelho} não tem ARU registada.</>}
+                {concelhoRef.notas_legais && <span className="block mt-0.5">{concelhoRef.notas_legais}</span>}
+              </p>
+            )}
             {(form.pmo_perc > 0) && (
               <div className="mt-3 pl-3 border-l-2" style={{ borderColor: GOLD + '60' }}>
                 <div className="text-xs text-ink-muted mb-2">Desagregação do PMO (opcional — mostra detalhe no relatório):</div>
@@ -186,7 +208,17 @@ export function CalculadoraForm({ analise, imovel, onUpdate }) {
           <Input label="Utilidades / mês" field="utilidades_mensal" value={form.utilidades_mensal} onChange={handleChange} placeholder="0" />
           <Input label="N.º Tranches obra" field="n_tranches" value={form.n_tranches} onChange={handleChange} step="1" placeholder="1" />
           <Input label="Custo / Tranche" field="custo_tranche" value={form.custo_tranche} onChange={handleChange} placeholder="0" />
-          <Input label="Taxa IMI %" field="taxa_imi" value={form.taxa_imi} onChange={handleChange} step="0.05" placeholder="0.30 a 0.45 (Coimbra 0.30 · Porto/Gaia 0.40)" />
+          <div>
+            <Input label="Taxa IMI %" field="taxa_imi" value={form.taxa_imi} onChange={handleChange} step="0.05" placeholder="0.30 a 0.45" />
+            {concelhoRef?.imi_perc != null && (
+              Number(form.taxa_imi) === Number(concelhoRef.imi_perc)
+                ? <p className="text-[10px] text-ink-muted mt-1">Taxa de {concelhoRef.concelho}</p>
+                : <button type="button" onClick={() => handleChange('taxa_imi', Number(concelhoRef.imi_perc))}
+                    className="text-[10px] text-accent-ink hover:underline mt-1">
+                    Usar a taxa de {concelhoRef.concelho}: {String(concelhoRef.imi_perc).replace('.', ',')}%
+                  </button>
+            )}
+          </div>
           <Input label="Ligação Serviços" field="ligacao_servicos" value={form.ligacao_servicos} onChange={handleChange} placeholder="0" />
           <Input label="Excedente Capital" field="excedente_capital" value={form.excedente_capital} onChange={handleChange} placeholder="0" />
         </div>

@@ -21,7 +21,7 @@ import { Button } from '../components/ui/Button.jsx'
 import { Modal } from '../components/ui/Modal.jsx'
 import { MultiSelect } from '../components/ui/MultiSelect.jsx'
 import { Combobox } from '../components/ui/Combobox.jsx'
-import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, etapaImovel, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR, PARC_TIPOS, PARC_ESTADOS } from '../constants.js'
+import { EUR, cleanLabel, fmtDate, fmtDateRelative, IMOVEL_ESTADO_COLOR, etapaImovel, INV_STATUS, INV_STATUS_COLOR, INV_STATUS_PASSIVO, INV_STATUS_ATIVO, invStatusFor, CONS_ESTATUTO_COLOR, CONS_ESTADO_AVALIACAO_COLOR, NEG_CAT_COLOR, NEG_FASE_COLOR, DESP_TIMING_COLOR, CLASS_COLOR, PARC_TIPOS, PARC_ESTADOS, CONCELHOS_POR_REGIAO, concelhosDe } from '../constants.js'
 import { apiFetch, apiFetchJson, openDocument } from '../lib/api.js'
 import { useUrlState, useUrlFilters } from '../hooks/useUrlState.js'
 import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
@@ -2023,7 +2023,7 @@ function RelationOrNew({ value, options, display, createEndpoint, regiao, onChan
 
 // Zonas de Atuação por região — multi-select com opções fixas em ordem alfabética.
 const ZONAS_ATUACAO_POR_REGIAO = {
-  AMP: ['Espinho', 'Gondomar', 'Porto', 'Santa Maria da Feira', 'Vila Nova de Gaia'],
+  AMP: CONCELHOS_POR_REGIAO.AMP,
   Coimbra: FREGUESIAS,
 }
 
@@ -2256,9 +2256,7 @@ function FormPanel({ tab, item, regiao, onSave, onCancel }) {
             ) : f.type === 'multiselect_concelhos' ? (
               <MultiSelect
                 value={form[f.key]}
-                options={(form.regiao || regiao) === 'AMP'
-                  ? ['Espinho', 'Gondomar', 'Porto', 'Santa Maria da Feira', 'Vila Nova de Gaia']
-                  : ['Cantanhede', 'Coimbra', 'Condeixa-a-Nova', 'Lousã', 'Mealhada', 'Miranda do Corvo', 'Montemor-o-Velho', 'Penacova']}
+                options={concelhosDe((form.regiao || regiao) === 'AMP' ? 'AMP' : 'Coimbra')}
                 onChange={v => handleChange(f.key, v)}
                 placeholder={`Selecionar ${f.label.toLowerCase()}...`}
               />

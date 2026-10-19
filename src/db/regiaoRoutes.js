@@ -10,8 +10,15 @@ const router = Router()
 
 const REGIOES = ['Coimbra', 'AMP']
 const CONCELHOS_POR_REGIAO = {
-  Coimbra: ['Coimbra', 'Condeixa-a-Nova', 'Mealhada', 'Cantanhede', 'Montemor-o-Velho', 'Penacova', 'Miranda do Corvo', 'Lousã'],
-  AMP: ['Porto', 'Vila Nova de Gaia'],
+  Coimbra: ['Cantanhede', 'Coimbra', 'Condeixa-a-Nova', 'Lousã', 'Mealhada', 'Miranda do Corvo', 'Montemor-o-Velho', 'Penacova'],
+  AMP: ['Espinho', 'Gondomar', 'Matosinhos', 'Porto', 'Santa Maria da Feira', 'Vila Nova de Gaia'],
+}
+
+// Regiões que o investidor pode escolher na ficha (inclui as NUTS largas)
+// e a região da Somnium a que correspondem, para o matching.
+const REGIAO_EQUIVALENTES = {
+  Coimbra: ['Coimbra', 'Centro'],
+  AMP: ['AMP', 'Porto', 'Norte'],
 }
 
 // ── Catálogo de regiões e concelhos ──────────────────────────
@@ -188,7 +195,7 @@ router.get('/regiao/match/imovel/:id', async (req, res) => {
       // Região (25 pts)
       let regs = []
       try { regs = JSON.parse(inv.regioes_preferidas || '[]') } catch {}
-      if (regs.includes(regiao)) {
+      if (regs.some(r => (REGIAO_EQUIVALENTES[regiao] || [regiao]).includes(r))) {
         score += 25
         reasons.push(`Região ${regiao} preferida`)
       }
@@ -247,7 +254,8 @@ router.get('/regiao/compliance', async (req, res) => {
     const concelho = req.query.concelho
     let q = `SELECT * FROM compliance_regional WHERE 1=1`
     const params = []
-    if (regiao) { params.push(regiao); q += ` AND regiao = $${params.length}` }
+    // O concelho é único na tabela: pedido por concelho ignora a região ativa.
+    if (regiao && !concelho) { params.push(regiao); q += ` AND regiao = $${params.length}` }
     if (concelho) { params.push(concelho); q += ` AND concelho = $${params.length}` }
     q += ` ORDER BY concelho`
     const { rows } = await pool.query(q, params)
