@@ -180,7 +180,7 @@ export function Dashboard() {
   return (
     <>
       <Header
-        title="Dashboard Central"
+        title="Dashboard"
         subtitle={updatedAt ? `Última atualização: ${updatedAt}` : 'A carregar dados...'}
         onRefresh={refreshManual}
         loading={loading}

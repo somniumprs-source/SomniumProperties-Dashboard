@@ -8,7 +8,7 @@ import { Header } from '../components/layout/Header.jsx'
 export function Marketing() {
   return (
     <div className="flex-1 flex flex-col bg-surface min-h-screen">
-      <Header title="Marketing e Marca Pessoal" subtitle="Conteúdo, presença digital e marca pessoal da equipa Somnium Properties" />
+      <Header title="Departamento de Marketing" subtitle="Conteúdo, presença digital e marca pessoal da equipa Somnium Properties" />
 
       <main className="flex-1 px-4 sm:px-7 py-5 sm:py-7 max-w-7xl w-full mx-auto">
         <div className="flex flex-col items-center justify-center text-center py-20 rounded-2xl border border-dashed border-line bg-surface-raised">

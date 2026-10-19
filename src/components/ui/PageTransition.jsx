@@ -13,7 +13,7 @@ const SECCOES_COM_ABAS = ['/administracao']
 // Nome mostrado no carregamento, pela secção do endereço.
 const NOMES = {
   '': 'Dashboard', crm: 'Departamento Comercial', projectos: 'Departamento de Obras',
-  financeiro: 'Departamento Financeiro', marketing: 'Marketing e Marca Pessoal',
+  financeiro: 'Departamento Financeiro', marketing: 'Departamento de Marketing',
   administracao: 'Administração', alertas: 'Alertas', admin: 'Administração', metricas: 'Métricas',
 }
 export function nomeDaSeccao(pathname) {

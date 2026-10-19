@@ -196,7 +196,7 @@ export function Financeiro() {
 
   return (
     <>
-      <Header title="Financeiro" subtitle="Atualização em tempo real" onRefresh={load} loading={loading} />
+      <Header title="Departamento Financeiro" subtitle="Atualização em tempo real" onRefresh={load} loading={loading} />
 
       {/* Tabs */}
       <div className="px-4 sm:px-6 pt-3 bg-surface-raised sticky top-0 z-10">

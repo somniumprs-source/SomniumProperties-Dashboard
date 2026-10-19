@@ -9,9 +9,9 @@ import { Tabs } from '../components/ui/Tabs.jsx'
 const TABS = [
   { key: 'agenda',     label: 'Agenda',             icon: CalendarClock },
   { key: 'operacoes',  label: 'Operações',          icon: Timer },
-  { key: 'sop',        label: 'SOP',                icon: BookOpen },
+  { key: 'sop',        label: 'SOPs',                icon: BookOpen },
   { key: 'relatorios', label: 'Relatórios',           icon: FileBarChart },
-  { key: 'regiao',     label: 'Multi-região',        icon: Map },
+  { key: 'regiao',     label: 'Regiões',        icon: Map },
   { key: 'chamadas',   label: 'Avaliação de calls', icon: Headphones },
 ]
 

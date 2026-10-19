@@ -27,7 +27,7 @@ export function AdministracaoMultiRegiao() {
   if (!regiaoAtiva) {
     return (
       <>
-        <RegiaoModal gate={gate} contexto="Esta área de Multi-Região" />
+        <RegiaoModal gate={gate} contexto="Esta área de Regiões" />
         <div className="text-center py-12 text-sm text-ink-muted">
           Escolha uma região para ver os dados.
         </div>
@@ -39,7 +39,7 @@ export function AdministracaoMultiRegiao() {
   const concelhosCount = concelhosDe(regiaoAtiva).length
   return (
     <div className="space-y-6">
-      <RegiaoModal gate={gate} contexto="Esta área de Multi-Região" />
+      <RegiaoModal gate={gate} contexto="Esta área de Regiões" />
 
       {/* Hero banner — identidade Somnium */}
       <div className="rounded-xl border border-line bg-surface-raised p-5 sm:p-6 shadow-xs">
@@ -49,7 +49,7 @@ export function AdministracaoMultiRegiao() {
               <Globe2 className="w-4 h-4 text-ink-muted" />
             </div>
             <div>
-              <h2 className="text-overline uppercase text-ink-muted">Multi-Região</h2>
+              <h2 className="text-overline uppercase text-ink-muted">Regiões</h2>
               <p className="text-ui font-semibold text-ink">Coimbra · AMP · Configurações regionais</p>
             </div>
           </div>

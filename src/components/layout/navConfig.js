@@ -20,10 +20,10 @@ export const NAV_SECOES = [
   {
     label: 'Departamentos',
     items: [
-      { to: '/crm',        label: 'Comercial',  Icon: Handshake, badgeKey: 'crm', area: 'crm' },
-      { to: '/projectos',  label: 'Obras',      Icon: Construction, area: 'projectos' },
-      { to: '/financeiro', label: 'Financeiro', Icon: Wallet, area: 'financeiro' },
-      { to: '/marketing',  label: 'Marketing',  Icon: Megaphone, area: 'marketing' },
+      { to: '/crm',        label: 'Departamento Comercial',  Icon: Handshake, badgeKey: 'crm', area: 'crm' },
+      { to: '/projectos',  label: 'Departamento de Obras',      Icon: Construction, area: 'projectos' },
+      { to: '/financeiro', label: 'Departamento Financeiro', Icon: Wallet, area: 'financeiro' },
+      { to: '/marketing',  label: 'Departamento de Marketing',  Icon: Megaphone, area: 'marketing' },
     ],
   },
   {

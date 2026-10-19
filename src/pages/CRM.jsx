@@ -1072,13 +1072,13 @@ export function CRM() {
 
   // Breadcrumbs
   const breadcrumbs = []
-  breadcrumbs.push({ label: 'CRM', to: '/crm' })
+  breadcrumbs.push({ label: 'Departamento Comercial', to: '/crm' })
   if (tab) breadcrumbs.push({ label: tab, onClick: () => setDetail(null, { replace: true }) })
   if (detail && detailName) breadcrumbs.push({ label: detailName })
 
   return (
     <>
-      <Header title="CRM" subtitle="Gestão de dados — Base de dados local" onRefresh={load} loading={loading} breadcrumbs={breadcrumbs}
+      <Header title="Departamento Comercial" subtitle="Imóveis, consultores, investidores e parceiros" onRefresh={load} loading={loading} breadcrumbs={breadcrumbs}
         regiao={regionalKey ? <RegiaoToggle value={regiaoActiva} onChange={setRegiaoActiva} />
           : tab === 'Investidores' && invSubTab === 'Ativo' ? <RegiaoToggle value={invArea || null} onChange={r => { setInvArea(r || ''); setDetail(null, { replace: true }) }} />
           : null} />
