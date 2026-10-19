@@ -5,18 +5,17 @@ import pool from "./pg.ts";
 // sync-fireflies, sync-forms). Sem isto, se INTERNAL_API_KEY não estiver
 // definida em produção, ficam invocáveis sem limite por quem souber o URL,
 // multiplicando pedidos às APIs externas (Google Calendar, Fireflies,
-// Google Forms) a cada chamada. Reaproveita a tabela `audit_log` já existente
-// em vez de criar uma tabela nova só para isto.
+// Google Forms) a cada chamada.
+// Uma linha por cron em cron_execucoes (migração 0081); antes escrevia uma
+// linha no audit_log a cada execução, o que enchia o histórico de ruído (D13).
+// O UPDATE condicional é atómico: duas chamadas ao mesmo tempo não correm ambas.
 export async function throttled(fnName: string, minIntervalMs: number): Promise<boolean> {
   const { rows } = await pool.query(
-    `SELECT created_at FROM audit_log WHERE tabela = 'cron' AND registo_id = $1 ORDER BY created_at DESC LIMIT 1`,
-    [fnName],
+    `INSERT INTO cron_execucoes (nome, ultima_execucao) VALUES ($1, NOW())
+     ON CONFLICT (nome) DO UPDATE SET ultima_execucao = NOW()
+       WHERE cron_execucoes.ultima_execucao < NOW() - ($2::int * INTERVAL '1 millisecond')
+     RETURNING nome`,
+    [fnName, minIntervalMs],
   );
-  const last = rows[0]?.created_at ? new Date(rows[0].created_at).getTime() : 0;
-  if (Date.now() - last < minIntervalMs) return false;
-  await pool.query(
-    `INSERT INTO audit_log (tabela, registo_id, acao) VALUES ('cron', $1, 'RUN')`,
-    [fnName],
-  );
-  return true;
+  return rows.length > 0;
 }

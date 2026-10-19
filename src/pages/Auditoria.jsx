@@ -46,7 +46,9 @@ export default function Auditoria() {
   const [expanded, setExpanded] = useState(new Set())
   const [utilizadores, setUtilizadores] = useState([])
 
+  // origem: as alterações feitas por pessoas por defeito; as automáticas à parte (D13).
   const [filtros, setFiltros] = useState({
+    origem: 'pessoas',
     entidade: '',
     user_email: '',
     from: '',
@@ -60,6 +62,7 @@ export default function Auditoria() {
     setError(null)
     try {
       const qs = new URLSearchParams()
+      if (filtros.origem) qs.set('origem', filtros.origem)
       if (filtros.entidade) qs.set('entidade', filtros.entidade)
       if (filtros.user_email) qs.set('user_email', filtros.user_email)
       if (filtros.from) qs.set('from', filtros.from)
@@ -105,7 +108,16 @@ export default function Auditoria() {
     <Header title="Auditoria" subtitle="Histórico de alterações em imóveis, investidores e negócios" onRefresh={load} loading={loading} />
     <div className="p-4 sm:p-6 max-w-7xl mx-auto min-w-0 w-full">
 
-      <form onSubmit={aplicarFiltros} className="bg-surface-raised border border-line rounded-2xl p-4 mb-4 grid grid-cols-1 md:grid-cols-5 gap-3">
+      <form onSubmit={aplicarFiltros} className="bg-surface-raised border border-line rounded-2xl p-4 mb-4 grid grid-cols-1 md:grid-cols-6 gap-3">
+        <div>
+          <label className="text-overline uppercase text-ink-muted font-semibold">Origem</label>
+          <select value={filtros.origem} onChange={e => setFiltros(f => ({ ...f, origem: e.target.value }))}
+            className="mt-1 w-full text-sm border border-line rounded-lg px-3 py-2 bg-surface-raised text-ink transition-colors duration-fast focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none">
+            <option value="pessoas">Pessoas</option>
+            <option value="sistema">Sistema (automáticas)</option>
+            <option value="">Tudo</option>
+          </select>
+        </div>
         <div>
           <label className="text-overline uppercase text-ink-muted font-semibold">Entidade</label>
           <select value={filtros.entidade} onChange={e => setFiltros(f => ({ ...f, entidade: e.target.value }))}
@@ -138,7 +150,7 @@ export default function Auditoria() {
             className="flex-1 bg-accent text-accent-foreground font-semibold text-sm rounded-lg px-3 py-2 hover:bg-accent/90 transition-colors duration-fast disabled:opacity-50 flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50">
             <Search className="w-4 h-4" /> Filtrar
           </button>
-          <button type="button" onClick={() => { setFiltros({ entidade: '', user_email: '', from: '', to: '' }); setOffset(0); setTimeout(load, 0) }}
+          <button type="button" onClick={() => { setFiltros({ origem: 'pessoas', entidade: '', user_email: '', from: '', to: '' }); setOffset(0); setTimeout(load, 0) }}
             className="p-2 text-ink-muted hover:text-ink hover:bg-surface-muted rounded-lg transition-colors duration-fast" title="Limpar filtros" aria-label="Limpar filtros">
             <RefreshCcw className="w-4 h-4" />
           </button>

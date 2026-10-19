@@ -7351,6 +7351,10 @@ app.get("/auditoria", async (c) => {
     if (entidade) { params.push(entidade); where.push(`a.entidade = $${params.length}`); }
     if (entidadeId) { params.push(entidadeId); where.push(`a.entidade_id = $${params.length}`); }
     if (userEmail) { params.push(`%${userEmail}%`); where.push(`(a.user_email ILIKE $${params.length} OR a.user_nome ILIKE $${params.length})`); }
+    // Origem (auditoria D13): pessoas ou sistema (automáticos e registos antigos sem autor).
+    const origem = c.req.query("origem");
+    if (origem === "pessoas") where.push(`COALESCE(a.user_nome, '') <> 'Sistema' AND (a.user_nome IS NOT NULL OR a.user_email IS NOT NULL)`);
+    if (origem === "sistema") where.push(`(a.user_nome = 'Sistema' OR (a.user_nome IS NULL AND a.user_email IS NULL))`);
     if (from) { params.push(from); where.push(`a.created_at >= $${params.length}`); }
     if (to) { params.push(to); where.push(`a.created_at <= $${params.length}`); }
     const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
