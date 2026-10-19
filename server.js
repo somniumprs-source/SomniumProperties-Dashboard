@@ -1863,7 +1863,10 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
       return [new Date(Y + off, 0, 1), new Date(Y + off, 11, 31, 23,59,59,999)]
     }
     const [start, end] = range(periodo, 0)
-    const [prevStart, prevEnd] = range(periodo, -1)
+    const [prevStart, prevFim] = range(periodo, -1)
+    // Comparação justa: o período atual ainda vai a meio, por isso o anterior
+    // conta só o mesmo número de dias (ex.: 1–19 set. contra 1–19 out.).
+    const prevEnd = new Date(Math.min(prevFim.getTime(), prevStart.getTime() + (now.getTime() - start.getTime())))
     const diasPeriodo = Math.max(1, (end - start) / 86400000)
     const mesesPeriodo = diasPeriodo / 30.44
     const fatorAnual = 365 / diasPeriodo
@@ -2029,6 +2032,13 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
     const discoveryPrev  = iiRows.filter(r => r.finalidade === 'discovery' && inP(r.data_hora, prevStart, prevEnd)).length
     const followUpPrev   = iiRows.filter(r => r.finalidade === 'follow_up' && inP(r.data_hora, prevStart, prevEnd)).length
     const invNovos = investidores.filter(i => inP(i.dataPrimeiroContacto, start, end)).length
+    // Variação vs período anterior das restantes métricas de fluxo (contagens no período).
+    const prevDe = {
+      novosInvestidores: investidores.filter(i => inP(i.dataPrimeiroContacto, prevStart, prevEnd)).length,
+      chamadasConsultor: ciRows.filter(r => isChamada(r.canal) && inP(r.data_hora, prevStart, prevEnd)).length,
+      chamadasSomnium:   ciRows.filter(r => isChamada(r.canal) && r.direcao === 'Enviado' && inP(r.data_hora, prevStart, prevEnd)).length,
+      novosConsultores:  consultores.filter(c => inP(c.dataInicio, prevStart, prevEnd)).length,
+    }
 
     res.json({
       periodo,
@@ -2054,6 +2064,12 @@ app.get('/api/comercial/dashboard', endpointCache(120000), async (req, res) => {
         followUpCalls:  { valor: followUpCalls, delta: pctDelta(followUpCalls, followUpPrev) },
         novosInvestidores: invNovos,
         chamadasConsultor: consChamadas, chamadasSomnium: consChamadasSomnium, novosConsultores: consNovos,
+        deltas: {
+          novosInvestidores: pctDelta(invNovos, prevDe.novosInvestidores),
+          chamadasConsultor: pctDelta(consChamadas, prevDe.chamadasConsultor),
+          chamadasSomnium:   pctDelta(consChamadasSomnium, prevDe.chamadasSomnium),
+          novosConsultores:  pctDelta(consNovos, prevDe.novosConsultores),
+        },
       },
       consultores: {
         taxaConversao: taxaConvConsultor, parceirosInativos, ativacao: ativacaoConsultor, tempoResposta: tempoRespostaConsultor,

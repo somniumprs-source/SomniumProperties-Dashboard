@@ -1,3 +1,4 @@
+import { ArrowUpRight, ArrowDownRight, ArrowRight } from 'lucide-react'
 import { CountUp } from './CountUp.jsx'
 
 /**
@@ -12,6 +13,9 @@ import { CountUp } from './CountUp.jsx'
  *           ('indigo' aceite por compatibilidade, desenha como gray)
  *  - size:  'sm' | 'md' | 'lg' (default md)
  *  - onClick: torna o card clicável com hover
+ *  - delta: variação em % face ao período anterior (null = sem base de comparação)
+ *  - melhor: 'subir' | 'descer' | null — sentido em que a métrica é boa notícia;
+ *           a cor da variação segue isto, não o sinal (null = sem cor)
  */
 
 // Valor sempre em tinta; a cor do tom fica só no ícone (semântica discreta).
@@ -32,7 +36,7 @@ const SIZE_CONF = {
   lg: { card: 'p-5', value: 'font-display text-display font-medium', icon: 'w-11 h-11', iconSize: 'w-5 h-5' },
 }
 
-export function KpiCard({ icon: Icon, label, value, sub, tone = 'gray', size = 'md', onClick, active = false, className = '' }) {
+export function KpiCard({ icon: Icon, label, value, sub, tone = 'gray', size = 'md', onClick, active = false, className = '', delta, melhor = 'subir' }) {
   const t = TONE[tone] || TONE.gray
   const s = SIZE_CONF[size] || SIZE_CONF.md
   const interactive = !!onClick
@@ -58,8 +62,28 @@ export function KpiCard({ icon: Icon, label, value, sub, tone = 'gray', size = '
       <div className="min-w-0 flex-1">
         {label && <p className="text-overline uppercase font-medium truncate text-ink-muted">{label}</p>}
         <p className={`${s.value} num leading-tight truncate text-ink`}>{value == null ? '—' : <CountUp value={value} />}</p>
+        {delta != null && <Variacao delta={delta} melhor={melhor} />}
         {sub && <p className="text-caption truncate mt-0.5 text-ink-muted">{sub}</p>}
       </div>
     </div>
+  )
+}
+
+// Variação face ao período anterior: seta + % a verde quando é boa notícia,
+// a vermelho quando é má (segundo `melhor`), cinzento quando não mexe.
+function Variacao({ delta, melhor }) {
+  const sentido = delta > 0 ? 1 : delta < 0 ? -1 : 0
+  const bom = melhor === 'subir' ? sentido > 0 : melhor === 'descer' ? sentido < 0 : null
+  const cor = sentido === 0 || bom === null ? 'text-ink-muted' : bom ? 'text-success' : 'text-danger'
+  const Seta = sentido > 0 ? ArrowUpRight : sentido < 0 ? ArrowDownRight : ArrowRight
+  const pct = new Intl.NumberFormat('pt-PT', { maximumFractionDigits: 1 }).format(Math.abs(delta))
+  return (
+    <p className="text-caption truncate mt-0.5 text-ink-muted" title="Comparado com o mesmo número de dias do período anterior">
+      <span className={`inline-flex items-center font-medium num ${cor}`}>
+        <Seta className="w-3 h-3 mr-0.5" aria-hidden="true" />
+        <span className="sr-only">{sentido > 0 ? 'subiu ' : sentido < 0 ? 'desceu ' : 'igual, '}</span>{pct}%
+      </span>
+      {' '}vs anterior
+    </p>
   )
 }

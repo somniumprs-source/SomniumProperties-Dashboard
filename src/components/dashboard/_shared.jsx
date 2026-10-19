@@ -5,11 +5,10 @@ export const fmtNum = (n) => (n == null ? '—' : new Intl.NumberFormat('pt-PT')
 export const fmtPct = (n) => (n == null ? '—' : `${n}%`)
 export const fmtX = (n) => (n == null ? '—' : `${n}×`)
 
-// Card de métrica de fluxo: valor + comparação ▲▼ vs período anterior.
-export function MetricCard({ label, metric, format = fmtNum, tone = 'gold' }) {
-  const delta = metric?.delta
-  const sub = delta == null ? null : `${delta > 0 ? '▲' : delta < 0 ? '▼' : '■'} ${Math.abs(delta)}% vs anterior`
-  return <KpiCard label={label} value={format(metric?.valor)} sub={sub} tone={tone} size="md" />
+// Card de métrica de fluxo: valor + variação vs período anterior.
+// `metric` = { valor, delta }; `melhor` diz se subir é boa ou má notícia.
+export function MetricCard({ label, metric, format = fmtNum, tone = 'gold', melhor = 'subir', sub }) {
+  return <KpiCard label={label} value={format(metric?.valor)} delta={metric?.delta} melhor={melhor} sub={sub} tone={tone} size="md" />
 }
 
 export function Pillar({ icon: Icon, title, hint, children }) {
@@ -46,7 +45,7 @@ export function RankList({ rows, valueFmt }) {
           <span className="w-5 text-xs font-bold text-ink-muted">{i + 1}.</span>
           <span className="flex-1 truncate text-ink ">{r.nome || r.origem}</span>
           {r.imoveis != null && <span className="text-xs text-ink-muted">{r.imoveis} imóveis</span>}
-          <span className="font-semibold text-ink  w-24 text-right">{valueFmt(r.lucroGerado ?? r.lucro)}</span>
+          <span className="font-semibold text-ink num w-24 text-right">{valueFmt(r.lucroGerado ?? r.lucro)}</span>
         </div>
       ))}
     </div>

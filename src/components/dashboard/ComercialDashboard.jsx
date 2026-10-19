@@ -50,7 +50,7 @@ export function ComercialDashboard({ data: d }) {
                 <div className="flex-1 bg-surface-muted  rounded-full h-2.5">
                   <div className="h-2.5 rounded-full bg-accent" style={{ width: `${Math.min(100, v || 0)}%` }} />
                 </div>
-                <span className="text-xs font-semibold text-ink  w-12 text-right">{fmtPct(v)}</span>
+                <span className="text-xs font-semibold text-ink num w-12 text-right">{fmtPct(v)}</span>
               </div>
             ))}
           </div>
@@ -68,7 +68,7 @@ export function ComercialDashboard({ data: d }) {
                   <div className="flex-1 bg-surface-muted  rounded-full h-2.5">
                     <div className="h-2.5 rounded-full bg-ink-muted/60" style={{ width: `${Math.round(o.total / max * 100)}%` }} />
                   </div>
-                  <span className="text-xs font-semibold text-ink  w-6 text-right">{o.total}</span>
+                  <span className="text-xs font-semibold text-ink num w-6 text-right">{o.total}</span>
                 </div>
               )
             })}
@@ -95,15 +95,15 @@ export function ComercialDashboard({ data: d }) {
       <Group label="Investidores">
         <MetricCard label="Discovery Calls" metric={at?.discoveryCalls} tone="amber" />
         <MetricCard label="Follow Up Calls" metric={at?.followUpCalls} tone="indigo" />
-        <KpiCard label="Novos investidores" value={fmtNum(at?.novosInvestidores)} tone="gold" size="md" />
+        <MetricCard label="Novos investidores" metric={{ valor: at?.novosInvestidores, delta: at?.deltas?.novosInvestidores }} />
         <KpiCard label="Conversão investidor" value={fmtPct(ca?.taxaConvInvestidor)} tone="indigo" size="md" />
         <KpiCard label="Reinvestimento" value={fmtPct(ca?.reinvestimento)} sub="Reinvestment rate" tone="green" size="md" />
         <KpiCard label="Saída de investidores" value={fmtPct(ca?.saidaInvestidores)} sub="Churn" tone={ca?.saidaInvestidores > 0 ? 'red' : 'green'} size="md" />
       </Group>
       <Group label="Consultores">
-        <KpiCard label="Chamadas" value={fmtNum(at?.chamadasConsultor)} tone="gold" size="md" />
-        <KpiCard label="Chamadas Somnium" value={fmtNum(at?.chamadasSomnium)} tone="gold" size="md" />
-        <KpiCard label="Novos consultores" value={fmtNum(at?.novosConsultores)} tone="gold" size="md" />
+        <MetricCard label="Chamadas" metric={{ valor: at?.chamadasConsultor, delta: at?.deltas?.chamadasConsultor }} />
+        <MetricCard label="Chamadas Somnium" metric={{ valor: at?.chamadasSomnium, delta: at?.deltas?.chamadasSomnium }} />
+        <MetricCard label="Novos consultores" metric={{ valor: at?.novosConsultores, delta: at?.deltas?.novosConsultores }} />
         <KpiCard label="Taxa de conversão" value={fmtPct(co?.taxaConversao)} tone="indigo" size="md" />
         <KpiCard label="Ativação" value={fmtPct(co?.ativacao)} sub="Activation rate" tone="green" size="md" />
         <KpiCard label="Parceiros inativos" value={fmtPct(co?.parceirosInativos)} sub="Churn · 60d s/ imóvel" tone={co?.parceirosInativos > 0 ? 'red' : 'green'} size="md" />
