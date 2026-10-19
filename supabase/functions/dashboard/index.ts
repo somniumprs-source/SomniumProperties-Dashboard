@@ -6,7 +6,8 @@ import { RECORD_RESTRICTED_ROLES } from "../_shared/roles.ts";
 import { resolveOrProvisionUser } from "../_shared/userResolve.ts";
 import pool from "../_shared/pg.ts";
 import { alertasConservacao } from "../_shared/consentimentos.ts";
-import { juntarResponsavel } from "../_shared/responsavelRegiao.ts";
+import { juntarResponsavel, donosDasRegioes } from "../_shared/responsavelRegiao.ts";
+import { alertasDeDespesas } from "../_shared/regrasDespesas.ts";
 import { normalizarEstadoTarefa, faltaNaTarefa, tarefaConcluida, tarefaAtrasada } from "../_shared/regrasTarefas.ts";
 import { auditMiddleware } from "../_shared/audit.ts";
 import {
@@ -3913,6 +3914,15 @@ app.get("/alertas", endpointCache(300000), async (c: any) => {
           id: t.id, ...(resp && !resp.includes(",") ? { responsavel: resp } : {}) });
       }
     } catch (e: any) { console.warn("[alertas] tarefas:", e.message); }
+
+    // Despesas sem fatura/comprovativo e fecho do mês anterior (auditoria D3)
+    try {
+      const [{ rows: desp }, donos] = await Promise.all([
+        pool.query(`SELECT id, movimento, data, timing, custo_mensal, custo_anual, documentos, enviada_contabilidade_em, regiao FROM despesas WHERE timing IN ('Único', 'Registado')`),
+        donosDasRegioes(pool),
+      ]);
+      alerts.push(...alertasDeDespesas(desp, donos));
+    } catch (e: any) { console.warn("[alertas] despesas:", e.message); }
 
     // Responsável pela região de cada alerta (auditoria D10)
     try { alerts.splice(0, alerts.length, ...await juntarResponsavel(pool, alerts)); } catch (e: any) { console.warn("[alertas] responsável:", e.message); }

@@ -17,6 +17,8 @@ import { friendlyError } from '../lib/friendlyError.js'
 import { useUrlState } from '../hooks/useUrlState.js'
 import { REGIOES } from '../constants.js'
 import { confirmar } from '../components/ui/ConfirmDialog.jsx'
+import { estadoDocumental, ROTULO_ESTADO_DOCUMENTAL } from '../constants/regrasDespesas.js'
+import { avisarLeitura } from '../lib/leituraDespesa.js'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const EUR2 = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0)
@@ -411,6 +413,7 @@ export function Financeiro() {
                       <th className="text-left py-2 px-3">Despesa</th>
                       <th className="text-left py-2 px-3">Categoria</th>
                       <th className="text-left py-2 px-3">Tipo</th>
+                      <th className="text-left py-2 px-3">Documento</th>
                       <th className="text-right py-2 px-3">Valor</th>
                       <th className="py-2 px-3"></th>
                     </tr>
@@ -446,6 +449,7 @@ export function Financeiro() {
                             {d.timing}
                           </span>
                         </td>
+                        <td className="py-2 px-3"><EstadoDocumental d={crmDespesas.find(x => x.id === d.id) || d} /></td>
                         <td className="py-2 px-3 text-right num text-danger font-semibold">{EUR(d.custoMensal || d.custoAnual)}</td>
                         <td className="py-2 px-3" onClick={e => e.stopPropagation()}>
                           <button onClick={() => deleteDespesa(d.id)} className="px-1.5 py-0.5 text-xs bg-danger/10 text-danger rounded hover:bg-danger/15">x</button>
@@ -453,7 +457,7 @@ export function Financeiro() {
                       </tr>
                     ))}
                     {!(despesas?.todas ?? []).length && (
-                      <tr><td colSpan={6} className="py-8 text-center text-ink-muted text-xs">Sem despesas registadas</td></tr>
+                      <tr><td colSpan={7} className="py-8 text-center text-ink-muted text-xs">Sem despesas registadas</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -728,6 +732,7 @@ function ContabilidadeTab() {
   // Valor conta uma vez por despesa (uma despesa pode ter vários anexos).
   const total = Object.values(Object.fromEntries(faturas.map(f => [`${f.fonte}:${f.registo_id}`, Number(f.valor) || 0]))).reduce((a, b) => a + b, 0)
   const porEnviar = faturas.filter(f => !f.enviada_em).length
+  const porDocumentar = dados?.porDocumentar ?? []
 
   async function exportar() {
     setExportando(true); setAviso(null)
@@ -811,6 +816,23 @@ function ContabilidadeTab() {
 
       {erro && <ErrorState compact title="Não foi possível carregar as faturas" error={erro} onRetry={carregar} />}
       {aviso && <div className="p-4 bg-warning/10 border border-warning/30 text-warning rounded-xl text-sm">{aviso}</div>}
+
+      {porDocumentar.length > 0 && (
+        <div className="p-4 bg-warning/10 border border-warning/30 rounded-xl text-sm">
+          <p className="font-semibold text-warning mb-2">
+            {porDocumentar.length} despesa(s) sem fatura nem comprovativo neste período — não entram no ZIP
+          </p>
+          <ul className="space-y-1 text-ink">
+            {porDocumentar.map(d => (
+              <li key={d.id} className="flex justify-between gap-3">
+                <span className="truncate">{d.data} · {d.descricao}{d.projeto ? ` · ${d.projeto}` : ''}</span>
+                <span className="num shrink-0">{EUR2(d.valor)}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-ink-muted">Anexa o documento em Despesas (ou na aba Faturas do projeto).</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <KPICard label="Faturas no período" value={String(faturas.length)} meta="—" status="green" trend="neutral" unit="" />
@@ -1235,6 +1257,26 @@ function EmptyState() {
   return <p className="text-xs text-ink-muted text-center py-10">Sem dados suficientes</p>
 }
 
+// ── Estado documental (auditoria D3) ─────────────────────────
+const ESTADO_DOC_CLS = { por_documentar: 'bg-warning/15 text-warning', documentada: 'bg-surface-muted text-ink', enviada: 'bg-success/15 text-success' }
+function EstadoDocumental({ d }) {
+  const e = estadoDocumental(d)
+  if (!e) return <span className="text-xs text-ink-muted">—</span>
+  return <span className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${ESTADO_DOC_CLS[e]}`}>{ROTULO_ESTADO_DOCUMENTAL[e]}</span>
+}
+
+// Resumo do que o leitor tirou do anexo; avisos críticos a vermelho.
+function LeituraResumo({ l }) {
+  const critico = (l.avisos || []).some(a => /^\s*CR[IÍ]TICO/i.test(a))
+  const partes = [l.numero && `N.º ${l.numero}`, l.fornecedor_nif && `NIF ${l.fornecedor_nif}`, l.total != null && EUR(l.total)].filter(Boolean)
+  return (
+    <span className={`text-[11px] shrink-0 ${critico ? 'text-danger' : l.avisos?.length ? 'text-warning' : 'text-ink-muted'}`}
+      title={[...(l.avisos || []), l.cliente && `Cliente: ${l.cliente}${l.cliente_nif ? ` (NIF ${l.cliente_nif})` : ''}`].filter(Boolean).join('\n')}>
+      {critico ? 'Não serve à contabilidade · ' : ''}{partes.join(' · ')}
+    </span>
+  )
+}
+
 // ── Despesa Form ─────────────────────────────────────────────
 const DESP_CATEGORIAS = ['Salários', 'Operação', 'Marketing', 'Ferramentas', 'Legal', 'Contabilidade', 'Escritório', 'Formação', 'Viatura', 'Seguros', 'Telecomunicações', 'Subscrição Skool', 'Material Somnium', 'Outro']
 const DESP_TIMING = ['Mensalmente', 'Anual', 'Único']
@@ -1282,6 +1324,9 @@ function DespesaForm({ item, onSave, onCancel, onReload }) {
       const d = await r.json()
       if (d.error) throw new Error(d.error)
       setDocs(d.documentos)
+      // A leitura pode ter preenchido fornecedor/data/valor (auditoria D3).
+      avisarLeitura(toast, d)
+      if (d.preenchidos?.length) onReload?.()
     } catch (err) { toast(friendlyError(err.message || 'Não foi possível enviar o ficheiro.'), 'error') }
     finally { setUploading(false); if (fileRef.current) fileRef.current.value = '' }
   }
@@ -1402,6 +1447,7 @@ function DespesaForm({ item, onSave, onCancel, onReload }) {
                 <div key={doc.id} className="flex items-center gap-3 px-3 py-2 bg-surface rounded-lg border border-line">
                   {doc.type?.startsWith('image') ? <Image className="w-4 h-4 text-ink-muted shrink-0" /> : <FileText className="w-4 h-4 text-danger shrink-0" />}
                   <a href={doc.path} target="_blank" rel="noreferrer" className="flex-1 text-sm text-ink hover:text-ink hover:underline truncate">{doc.name}</a>
+                  {doc.leitura && <LeituraResumo l={doc.leitura} />}
                   <span className="text-xs text-ink-muted shrink-0">{(doc.size / 1024).toFixed(0)} KB</span>
                   <button onClick={() => handleDeleteDoc(doc.id)} className="text-ink-muted/70 hover:text-danger transition-colors shrink-0">
                     <Trash2 className="w-3.5 h-3.5" />

@@ -38,7 +38,8 @@ import { removeFromStorage, supabase, uploadPublic, uploadPrivate } from "../_sh
 import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { isWholesaling } from "../_shared/modelos.ts";
 import { avaliarEntrada, painelRequisitos, carregarDadosEntrada } from "../_shared/dealBreakers.ts";
-import { extrairDocumento, contextoImovel, paraAnalise, camposParaFicha, nomesPreenchidos } from "../_shared/extratorDocumentos.ts";
+import { extrairDocumento, contextoImovel, paraAnalise, camposParaFicha, nomesPreenchidos, contextoDespesa, leituraDaFatura, camposDaDespesa, nomesDaDespesa, avisoDeValor } from "../_shared/extratorDocumentos.ts";
+import { documentosDe, temDocumento } from "../_shared/regrasDespesas.ts";
 import { donosDasRegioes } from "../_shared/responsavelRegiao.ts";
 import { tarefaAtrasada } from "../_shared/regrasTarefas.ts";
 import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase, pedeDocumento, documentoDoItem, documentosEmFalta, contextoDocumentos } from "../_shared/projetoTarefas.ts";
@@ -3348,6 +3349,39 @@ app.get("/imoveis/:id/drive-files", async (c: any) => {
   }
 });
 
+// Leitura do anexo de uma despesa com o extrator (auditoria D3): guarda o
+// resumo no anexo (documentos[].leitura) e preenche os campos vazios da
+// despesa. Sem chave da IA, formato não suportado ou erro: o anexo fica, sem
+// leitura. Devolve { despesa, leitura, preenchidos } ou null.
+async function lerAnexoDespesa(despesaId: string, docId: string, bytes: Uint8Array, nome: string, mime: string) {
+  const key = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!key || !bytes?.length || bytes.length > 15 * 1024 * 1024) return null;
+  const meta = resolveDocMedia((nome.match(/\.[a-z0-9]+$/i)?.[0] || "").toLowerCase(), mime);
+  if (!meta) return null;
+  try {
+    let bin = "";
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    const fileBlock = { type: meta.kind === "document" ? "document" : "image", source: { type: "base64", media_type: meta.media, data: btoa(bin) } };
+    const ex = await extrairDocumento(new Anthropic({ apiKey: key }), fileBlock, contextoDespesa());
+    if (!ex) return null;
+    const leitura = leituraDaFatura(ex);
+    // Relê a despesa: pode ter mudado enquanto a IA lia.
+    const d = await Despesas.getById(despesaId);
+    if (!d) return null;
+    const aviso = avisoDeValor(leitura, d);
+    if (aviso) leitura.avisos.push(aviso);
+    const docs = documentosDe(d).map((x: any) => (x.id === docId ? { ...x, leitura } : x));
+    const campos = camposDaDespesa(leitura, d);
+    const sets = ["documentos = $1", ...Object.keys(campos).map((k, i) => `${k} = $${i + 2}`), "updated_at = NOW()"];
+    const { rows } = await pool.query(`UPDATE despesas SET ${sets.join(", ")} WHERE id = $${Object.keys(campos).length + 2} RETURNING *`,
+      [JSON.stringify(docs), ...Object.values(campos), despesaId]);
+    return { despesa: rows[0], leitura, preenchidos: nomesDaDespesa(campos) };
+  } catch (e) {
+    console.warn("[despesas] leitura do anexo:", (e as Error).message);
+    return null;
+  }
+}
+
 // ── Upload de documentos para despesas (multer/Storage) — port de routes.js 1523-1542 ──
 // Multipart (multer single 'file') → Hono formData + uploadPublic (bucket "despesas").
 app.post("/despesas/:id/upload", async (c: any) => {
@@ -3381,7 +3415,8 @@ app.post("/despesas/:id/upload", async (c: any) => {
       uploaded_at: new Date().toISOString(),
     });
     await Despesas.update(id, { documentos: JSON.stringify(docs) });
-    return c.json({ ok: true, documentos: docs });
+    const lido = await lerAnexoDespesa(id, docs[docs.length - 1].id, bytes, file.name, file.type);
+    return c.json({ ok: true, documentos: lido ? documentosDe(lido.despesa) : docs, leitura: lido?.leitura || null, preenchidos: lido?.preenchidos || [] });
   } catch (e) { return c.json({ error: (e as Error).message }, 500); }
 });
 
@@ -6186,11 +6221,13 @@ app.put("/projetos/despesas/:despesaId", async (c: any) => {
       rubrica_analise: rubrica_analise !== undefined ? (rubrica_analise || null) : despesa.rubrica_analise,
       motivo_extra: motivo_extra !== undefined ? (motivo_extra || null) : despesa.motivo_extra,
       justificacao: justificacao !== undefined ? (justificacao?.trim() || null) : despesa.justificacao,
-      tipo_documento: tipo_documento !== undefined ? tipo_documento : (despesa.tipo_documento || "fatura"),
+      tipo_documento: tipo_documento !== undefined ? tipo_documento : (despesa.tipo_documento ?? null),
       data_pagamento: data_pagamento !== undefined
         ? (data_pagamento || null)
         : (novoPago && !despesa.data_pagamento ? new Date().toISOString().slice(0, 10) : (novoPago ? despesa.data_pagamento : null)),
     };
+    // Só se marca como pago com a fatura ou o comprovativo anexado (auditoria D3).
+    if (novoPago && !despesa.pago && !temDocumento(despesa)) return c.json({ error: "Anexa a fatura ou o comprovativo antes de marcar como pago." }, 400);
     if (campos.rubrica_analise !== "extra") campos.motivo_extra = null;
     if (rubrica_analise !== undefined && !campos.rubrica_analise && !despesa.fase_id) return c.json({ error: "Rubrica da Análise Financeira obrigatória" }, 400);
     const erroRubrica = validarRubricaDespesa(campos.rubrica_analise, campos.justificacao);
@@ -6251,7 +6288,8 @@ app.post("/projetos/despesas/:despesaId/comprovativo", async (c: any) => {
         await uploadComprovativoToFolder(despesaId, bytes, file.name, file.type || "application/octet-stream");
       } catch (e) { console.error("[drive] espelho comprovativo:", (e as Error).message); }
     }
-    return c.json(rows[0]);
+    const lido = await lerAnexoDespesa(despesaId, docs[docs.length - 1].id, bytes, file.name, file.type);
+    return c.json({ ...(lido?.despesa || rows[0]), leitura: lido?.leitura || null, preenchidos: lido?.preenchidos || [] });
   } catch (e) { console.error("[comprovativo]", (e as Error).message); return c.json({ error: (e as Error).message }, 500); }
 });
 

@@ -38,6 +38,8 @@ const TIPO_LABEL = {
   relatorio_reuniao_disponivel:  'Relatório de reunião',
   conservacao_dados:             'RGPD: conservação de dados',
   tarefa_incompleta:             'Tarefa sem responsável ou prazo',
+  despesa_por_documentar:        'Despesa sem documento',
+  fecho_contabilidade:           'Fecho do mês (contabilidade)',
 }
 
 const HEALTH_COLOR = pct =>

@@ -31,6 +31,8 @@ import { AnaliseTab } from '../components/analise/AnaliseTab.jsx'
 import { QuadroEstimadoVsReal, QuadroConsultoria, RubricaSelect, RUBRICA_EXTRA, MOTIVOS_EXTRA, rubricaDe, labelRubrica } from '../components/projeto/EstimadoVsReal.jsx'
 import { confirmar } from '../components/ui/ConfirmDialog.jsx'
 import { useResponsaveisRegiao } from '../hooks/useResponsaveisRegiao.js'
+import { temDocumento } from '../constants/regrasDespesas.js'
+import { avisarLeitura } from '../lib/leituraDespesa.js'
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 const GOLD = '#C9A84C'
@@ -1178,7 +1180,9 @@ const TIPOS_DOCUMENTO = [
   { key: 'fatura', label: 'Fatura', cls: 'bg-surface-muted text-ink-muted' },
   { key: 'comprovativo_pagamento', label: 'Comprovativo de pagamento', cls: 'bg-surface-muted text-ink' },
 ]
-const tipoDocumentoDe = f => TIPOS_DOCUMENTO.find(t => t.key === f.tipo_documento) || TIPOS_DOCUMENTO[0]
+// Sem anexo não há documento: o registo fica «Sem documento» até se anexar (auditoria D3).
+const SEM_DOCUMENTO = { key: null, label: 'Sem documento', cls: 'bg-warning/10 text-warning' }
+const tipoDocumentoDe = f => (!temDocumento(f) ? SEM_DOCUMENTO : TIPOS_DOCUMENTO.find(t => t.key === f.tipo_documento) || TIPOS_DOCUMENTO[0])
 
 const FATURA_FORM_VAZIO = { tipo_documento: 'fatura', fornecedor: '', movimento: '', valor: '', data: '', categoria: '', pago: false, file: null, rubrica_analise: '', motivo_extra: '', justificacao: '' }
 
@@ -1207,6 +1211,10 @@ function TabFaturas({ negocioId, analise, readOnly, consultoria = false }) {
   async function adicionar(e) {
     e.preventDefault()
     if (!form.fornecedor.trim() || !form.valor) return
+    if (!form.file) {
+      toast?.('Anexa a fatura ou o comprovativo: sem documento o custo não conta para a contabilidade.', 'error', 4000)
+      return
+    }
     if (!form.rubrica_analise) {
       toast?.('Escolhe a rubrica da Análise Financeira desta fatura.', 'error', 3500)
       return
@@ -1241,7 +1249,10 @@ function TabFaturas({ negocioId, analise, readOnly, consultoria = false }) {
       if (form.file) {
         const fd = new FormData()
         fd.append('comprovativo', form.file)
-        await apiFetch(`/api/crm/projetos/despesas/${despesa.id}/comprovativo`, { method: 'POST', body: fd })
+        const up = await apiFetch(`/api/crm/projetos/despesas/${despesa.id}/comprovativo`, { method: 'POST', body: fd })
+        const lido = await up.json().catch(() => ({}))
+        if (!up.ok) toast?.(`O registo ficou sem documento: ${lido.error || up.status}`, 'error', 5000)
+        else avisarLeitura(toast, lido)
       }
       setForm(FATURA_FORM_VAZIO)
       setShowForm(false)
@@ -1426,7 +1437,7 @@ function TabFaturas({ negocioId, analise, readOnly, consultoria = false }) {
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-muted mb-1">Ficheiro (PDF, JPG, PNG) — opcional</label>
+            <label className="block text-xs font-medium text-ink-muted mb-1">Ficheiro (PDF, JPG, PNG) *</label>
             <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic" onChange={e => setForm(f => ({ ...f, file: e.target.files?.[0] || null }))}
               className="w-full text-sm text-ink-muted file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-surface-muted file:text-ink file:text-xs file:font-medium hover:file:bg-line" />
           </div>

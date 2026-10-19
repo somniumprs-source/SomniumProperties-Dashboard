@@ -1771,7 +1771,7 @@ export async function initSchema() {
       -- (transferência incluída; compra, IMT, IS não têm fatura) — ver migration
       -- 0062_despesas_tipo_documento.sql.
       DO $$ BEGIN
-        ALTER TABLE despesas ADD COLUMN IF NOT EXISTS tipo_documento TEXT DEFAULT 'fatura';
+        ALTER TABLE despesas ADD COLUMN IF NOT EXISTS tipo_documento TEXT; -- sem valor por defeito (0083, auditoria D3)
       EXCEPTION WHEN OTHERS THEN NULL;
       END $$;
     `)

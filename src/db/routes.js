@@ -44,7 +44,8 @@ import { runEstudoLocalizacao } from '../lib/estudoLocalizacao.js'
 import { FASES_FIX_FLIP, FASES_POR_CATEGORIA, getTemplateFases, getFaseConfigGlobal } from './fasesFixFlip.js'
 import { avaliarEntrada, painelRequisitos, carregarDadosEntrada } from './dealBreakers.js'
 import { carregarChecklist, gravarManual } from './checklistImovel.js'
-import { extrairDocumento, contextoImovel, paraAnalise, camposParaFicha, nomesPreenchidos } from './extratorDocumentos.js'
+import { extrairDocumento, contextoImovel, paraAnalise, camposParaFicha, nomesPreenchidos, contextoDespesa, leituraDaFatura, camposDaDespesa, nomesDaDespesa, avisoDeValor } from './extratorDocumentos.js'
+import { documentosDe, temDocumento } from '../constants/regrasDespesas.js'
 import { donosDasRegioes } from './responsavelRegiao.js'
 import { tarefaAtrasada } from '../constants/regrasTarefas.js'
 import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase, pedeDocumento, documentoDoItem, documentosEmFalta, contextoDocumentos } from './projetoTarefas.js'
@@ -2833,6 +2834,38 @@ router.get('/imoveis/:id/drive-files', async (req, res) => {
   }
 })
 
+// Leitura do anexo de uma despesa com o extrator (auditoria D3): guarda o
+// resumo no anexo (documentos[].leitura) e preenche os campos vazios da
+// despesa. Sem chave da IA, formato não suportado ou erro: o anexo fica, sem
+// leitura. Devolve { despesa, leitura, preenchidos } ou null.
+async function lerAnexoDespesa(despesaId, docId, buffer, nome, mime) {
+  if (!process.env.ANTHROPIC_API_KEY || !buffer?.length || buffer.length > 15 * 1024 * 1024) return null
+  const meta = resolveDocMedia(path.extname(nome || '').toLowerCase(), mime)
+  if (!meta) return null
+  try {
+    const base64 = Buffer.from(buffer).toString('base64')
+    const fileBlock = { type: meta.kind === 'document' ? 'document' : 'image', source: { type: 'base64', media_type: meta.media, data: base64 } }
+    const Anthropic = (await import('@anthropic-ai/sdk')).default
+    const ex = await extrairDocumento(new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }), fileBlock, contextoDespesa())
+    if (!ex) return null
+    const leitura = leituraDaFatura(ex)
+    // Relê a despesa: pode ter mudado enquanto a IA lia.
+    const d = await Despesas.getById(despesaId)
+    if (!d) return null
+    const aviso = avisoDeValor(leitura, d)
+    if (aviso) leitura.avisos.push(aviso)
+    const docs = documentosDe(d).map(x => (x.id === docId ? { ...x, leitura } : x))
+    const campos = camposDaDespesa(leitura, d)
+    const sets = ['documentos = $1', ...Object.keys(campos).map((k, i) => `${k} = $${i + 2}`), 'updated_at = NOW()']
+    const { rows } = await pool.query(`UPDATE despesas SET ${sets.join(', ')} WHERE id = $${Object.keys(campos).length + 2} RETURNING *`,
+      [JSON.stringify(docs), ...Object.values(campos), despesaId])
+    return { despesa: rows[0], leitura, preenchidos: nomesDaDespesa(campos) }
+  } catch (e) {
+    console.warn('[despesas] leitura do anexo:', e.message)
+    return null
+  }
+}
+
 // ── Upload de documentos para despesas ───────────────────────
 router.post('/despesas/:id/upload', uploadRateLimit, upload.single('file'), async (req, res) => {
   try {
@@ -2851,7 +2884,8 @@ router.post('/despesas/:id/upload', uploadRateLimit, upload.single('file'), asyn
       uploaded_at: new Date().toISOString(),
     })
     await Despesas.update(id, { documentos: JSON.stringify(docs) })
-    res.json({ ok: true, documentos: docs })
+    const lido = await lerAnexoDespesa(id, docs[docs.length - 1].id, await readFile(req.file.path).catch(() => null), req.file.originalname, req.file.mimetype)
+    res.json({ ok: true, documentos: lido ? documentosDe(lido.despesa) : docs, leitura: lido?.leitura || null, preenchidos: lido?.preenchidos || [] })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -5785,11 +5819,13 @@ router.put('/projetos/despesas/:despesaId', async (req, res) => {
       rubrica_analise: rubrica_analise !== undefined ? (rubrica_analise || null) : despesa.rubrica_analise,
       motivo_extra: motivo_extra !== undefined ? (motivo_extra || null) : despesa.motivo_extra,
       justificacao: justificacao !== undefined ? (justificacao?.trim() || null) : despesa.justificacao,
-      tipo_documento: tipo_documento !== undefined ? tipo_documento : (despesa.tipo_documento || 'fatura'),
+      tipo_documento: tipo_documento !== undefined ? tipo_documento : (despesa.tipo_documento ?? null),
       data_pagamento: data_pagamento !== undefined
         ? (data_pagamento || null)
         : (novoPago && !despesa.data_pagamento ? new Date().toISOString().slice(0, 10) : (novoPago ? despesa.data_pagamento : null)),
     }
+    // Só se marca como pago com a fatura ou o comprovativo anexado (auditoria D3).
+    if (novoPago && !despesa.pago && !temDocumento(despesa)) return res.status(400).json({ error: 'Anexa a fatura ou o comprovativo antes de marcar como pago.' })
     if (campos.rubrica_analise !== 'extra') campos.motivo_extra = null
     if (rubrica_analise !== undefined && !campos.rubrica_analise && !despesa.fase_id) return res.status(400).json({ error: 'Rubrica da Análise Financeira obrigatória' })
     const erroRubrica = validarRubricaDespesa(campos.rubrica_analise, campos.justificacao)
@@ -5854,7 +5890,8 @@ router.post('/projetos/despesas/:despesaId/comprovativo', uploadRateLimit, uploa
         await uploadComprovativoToFolder(despesaId, fileBuffer, req.file.originalname, req.file.mimetype)
       } catch (e) { console.error('[drive] espelho comprovativo:', e.message) }
     }
-    res.json(rows[0])
+    const lido = await lerAnexoDespesa(despesaId, docs[docs.length - 1].id, await readFile(req.file.path).catch(() => null), req.file.originalname, req.file.mimetype)
+    res.json({ ...(lido?.despesa || rows[0]), leitura: lido?.leitura || null, preenchidos: lido?.preenchidos || [] })
   } catch (e) { console.error('[comprovativo]', e.message); res.status(500).json({ error: e.message }) }
 })
 

@@ -118,7 +118,30 @@ export async function listarFaturas({ de, ate, pendentes = false }) {
   }
 
   faturas.sort((a, b) => a.data.localeCompare(b.data) || String(a.descricao).localeCompare(String(b.descricao)))
-  return { faturas }
+
+  // Lançamentos do período sem fatura nem comprovativo (auditoria D3): não
+  // entram no ZIP, mas aparecem para não se perderem.
+  const { rows: semDoc } = await pool.query(
+    `SELECT d.id, d.movimento, d.data, d.custo_mensal, d.custo_anual, d.timing, d.created_at,
+            n.movimento AS negocio_nome, i.nome AS imovel_nome
+       FROM despesas d
+       LEFT JOIN negocios n ON d.negocio_id = n.id
+       LEFT JOIN imoveis i ON n.imovel_id = i.id
+      WHERE d.timing IN ('Único', 'Registado')
+        AND (d.documentos IS NULL OR d.documentos IN ('', '[]'))
+        AND GREATEST(COALESCE(d.custo_mensal, 0), COALESCE(d.custo_anual, 0)) > 0
+        AND COALESCE(NULLIF(LEFT(d.data::text, 10), ''), LEFT(d.created_at::text, 10)) BETWEEN $1 AND $2
+      ORDER BY d.data NULLS LAST, d.movimento`,
+    [de, ate],
+  )
+  const porDocumentar = semDoc.map(d => ({
+    id: d.id,
+    data: d.data ? String(d.data).slice(0, 10) : String(d.created_at).slice(0, 10),
+    descricao: d.movimento,
+    projeto: d.imovel_nome || d.negocio_nome || null,
+    valor: valorDespesa(d),
+  }))
+  return { faturas, porDocumentar }
 }
 
 /**

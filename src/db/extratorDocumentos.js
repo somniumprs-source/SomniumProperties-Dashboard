@@ -6,6 +6,9 @@
 // gravar (camposParaFicha): só campos vazios e só a partir do documento certo.
 // paraAnalise() converte a extração no registo que o separador Documentos já
 // mostra (estado, campos, alertas, cruzamento de dados entre documentos).
+// Despesas (auditoria D3): contextoDespesa + camposDaDespesa + leituraDaFatura.
+
+import { faturaParaSomnium, valorDespesa } from '../constants/regrasDespesas.js'
 
 export const MODELO_EXTRATOR = 'claude-sonnet-5-5'
 
@@ -191,7 +194,7 @@ export function paraAnalise(ex) {
   const flags = alertas.map(a => {
     const critico = /^\s*CR[IÍ]TICO\s*:/i.test(a)
     const texto = a.replace(/^\s*CR[IÍ]TICO\s*:\s*/i, '').trim()
-    return { severity: critico ? 'critical' : 'warning', titulo: texto, descricao: '' }
+    return { severity: critico ? 'critical' : 'warning', titulo: texto.length > 80 ? `${texto.slice(0, 77)}…` : texto, descricao: texto }
   })
   if (ex?.confianca === 'baixa') flags.push({ severity: 'warning', titulo: 'Leitura com confiança baixa', descricao: ex?.observacoes || 'Confirmar os dados no documento.' })
   const valido = flags.some(f => f.severity === 'critical') ? false : flags.length ? 'warning' : true
@@ -279,3 +282,75 @@ const NOMES_CAMPOS = {
   certificado_energetico: 'classe energética', numero_ce: 'n.º do CE',
 }
 export const nomesPreenchidos = campos => Object.keys(campos).map(k => NOMES_CAMPOS[k] || k)
+
+// ── Faturas e comprovativos das despesas (auditoria D3) ──────────
+export function contextoDespesa() {
+  return `Contexto: documento anexado a uma despesa da Somnium Properties (fatura, fatura-recibo, recibo ou comprovativo de pagamento).
+
+Em "campos_plataforma" usa exatamente estas chaves (null quando não constam do documento):
+{
+  "tipo": "fatura | fatura_recibo | recibo | comprovativo_pagamento | outro",
+  "taxa_iva": "number (%) quando há uma só taxa"
+}
+
+Nos "alertas", começa por "CRÍTICO:" o que impede o documento de servir à contabilidade:
+- Fatura sem NIF do cliente, ou passada a outra entidade que não a Somnium Properties (CRÍTICO).
+- Documento que não é fatura nem comprovativo (orçamento, proposta, nota de encomenda) (CRÍTICO).
+- Totais incoerentes (sem IVA + IVA ≠ total) ou data ilegível.`
+}
+
+const tipoDaLeitura = ex => {
+  const t = `${ex?.campos_plataforma?.tipo || ''} ${ex?.tipo_documento || ''}`.toLowerCase()
+  if (/comprovativo/.test(t)) return 'comprovativo_pagamento'
+  if (/fatura/.test(t)) return 'fatura'
+  if (/recibo/.test(t)) return 'comprovativo_pagamento'
+  return null
+}
+
+// Resumo da leitura guardado no anexo (documentos[].leitura) e devolvido ao ecrã.
+export function leituraDaFatura(ex) {
+  const doc = ex?.documento || {}
+  const paraSomnium = faturaParaSomnium(ex)
+  const avisos = (Array.isArray(ex?.alertas) ? ex.alertas : []).filter(tem).map(String)
+  if (paraSomnium === false) avisos.unshift('CRÍTICO: o cliente da fatura não é a Somnium Properties — não serve para deduzir o custo nem o IVA.')
+  if (ex?.confianca === 'baixa') avisos.push('Leitura com confiança baixa: confirmar os dados no documento.')
+  return {
+    tipo: tipoDaLeitura(ex),
+    fornecedor: ex?.fornecedor?.nome || null,
+    fornecedor_nif: ex?.fornecedor?.nif || null,
+    cliente: ex?.cliente?.nome || null,
+    cliente_nif: ex?.cliente?.nif || null,
+    numero: doc.numero || null,
+    data: doc.data_emissao || null,
+    sem_iva: num(doc.valor_total_sem_iva),
+    iva: num(doc.valor_iva),
+    total: num(doc.valor_total_com_iva),
+    para_somnium: paraSomnium,
+    confianca: ex?.confianca || null,
+    avisos: [...new Set(avisos)],
+    lido_em: new Date().toISOString(),
+  }
+}
+
+// Campos da despesa a preencher a partir da leitura: só os vazios.
+export function camposDaDespesa(leitura, despesa = {}) {
+  const out = {}
+  if (leitura?.fornecedor && !tem(despesa.fornecedor)) out.fornecedor = leitura.fornecedor
+  if (leitura?.data && !tem(despesa.data)) out.data = leitura.data
+  if (leitura?.total > 0 && !(valorDespesa(despesa) > 0) && ['Único', 'Registado', undefined, null, ''].includes(despesa.timing)) {
+    out.custo_mensal = leitura.total
+  }
+  if (leitura?.tipo && !tem(despesa.tipo_documento)) out.tipo_documento = leitura.tipo
+  return out
+}
+
+const NOMES_DESPESA = { fornecedor: 'fornecedor', data: 'data', custo_mensal: 'valor', tipo_documento: 'tipo de documento' }
+export const nomesDaDespesa = campos => Object.keys(campos).map(k => NOMES_DESPESA[k] || k)
+
+// O total lido não bate com o valor registado na despesa.
+export function avisoDeValor(leitura, despesa = {}) {
+  const v = valorDespesa(despesa)
+  if (!(leitura?.total > 0) || !(v > 0) || Math.abs(leitura.total - v) <= 0.01) return null
+  const eur = x => `${Number(x).toFixed(2).replace('.', ',')} €`
+  return `O total do documento (${eur(leitura.total)}) é diferente do valor registado (${eur(v)}).`
+}

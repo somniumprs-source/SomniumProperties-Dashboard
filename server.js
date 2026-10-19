@@ -731,7 +731,8 @@ const getObras        = async () => []
 import { TTLCache } from './src/db/utils/ttlCache.js'
 import pool from './src/db/pg.js'
 import { alertasConservacao } from './src/db/consentimentos.js'
-import { juntarResponsavel } from './src/db/responsavelRegiao.js'
+import { juntarResponsavel, donosDasRegioes } from './src/db/responsavelRegiao.js'
+import { alertasDeDespesas } from './src/constants/regrasDespesas.js'
 import { normalizarEstadoTarefa, faltaNaTarefa, tarefaConcluida, tarefaAtrasada } from './src/constants/regrasTarefas.js'
 import http from 'node:http'
 const cache = new TTLCache(60000) // 60s default TTL
@@ -5374,6 +5375,15 @@ app.get('/api/alertas', endpointCache(300000), async (req, res) => {
           id: t.id, ...(resp && !resp.includes(',') ? { responsavel: resp } : {}) })
       }
     } catch (e) { console.warn('[alertas] tarefas:', e.message) }
+
+    // Despesas sem fatura/comprovativo e fecho do mês anterior (auditoria D3)
+    try {
+      const [{ rows: desp }, donos] = await Promise.all([
+        pool.query(`SELECT id, movimento, data, timing, custo_mensal, custo_anual, documentos, enviada_contabilidade_em, regiao FROM despesas WHERE timing IN ('Único', 'Registado')`),
+        donosDasRegioes(pool),
+      ])
+      alerts.push(...alertasDeDespesas(desp, donos))
+    } catch (e) { console.warn('[alertas] despesas:', e.message) }
 
     // Responsável pela região de cada alerta (auditoria D10)
     try { alerts.splice(0, alerts.length, ...await juntarResponsavel(pool, alerts)) } catch (e) { console.warn('[alertas] responsável:', e.message) }
