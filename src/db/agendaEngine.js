@@ -290,8 +290,8 @@ export async function agendarPassoImovel(pool, { imovelId, campo, prefixo, categ
 }
 
 // Fecha o passo em aberto. feito=true conclui a tarefa; feito=false (passo
-// cancelado) apaga-a se ainda não chegou ao Google Calendar, senão conclui-a
-// com o título marcado, para o evento não ficar órfão.
+// cancelado) conclui-a com o título marcado «Cancelada:». Nunca apaga
+// (contenção, 20/10/2026): o arquivo automático trata das concluídas.
 export async function fecharPassoImovel(pool, { imovelId, campo, feito = true }) {
   const { rows } = await pool.query(
     `SELECT id, tarefa, gcal_event_id FROM tarefas
@@ -299,14 +299,10 @@ export async function fecharPassoImovel(pool, { imovelId, campo, feito = true })
     [imovelId, campo]
   )
   for (const t of rows) {
-    if (!feito && !t.gcal_event_id) {
-      await pool.query('DELETE FROM tarefas WHERE id = $1', [t.id])
-    } else {
-      await pool.query(
-        `UPDATE tarefas SET status = 'Concluída', tarefa = $1, updated_at = NOW() WHERE id = $2`,
-        [feito ? t.tarefa : `Cancelada: ${t.tarefa}`, t.id]
-      )
-    }
+    await pool.query(
+      `UPDATE tarefas SET status = 'Concluída', tarefa = $1, updated_at = NOW() WHERE id = $2`,
+      [feito ? t.tarefa : `Cancelada: ${t.tarefa}`, t.id]
+    )
   }
   return rows.length
 }
