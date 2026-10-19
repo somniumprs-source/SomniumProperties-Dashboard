@@ -5733,7 +5733,7 @@ app.put("/projetos/tarefas/:tarefaId/checklist", async (c: any) => {
       ...(naFinal ? { na: naFinal } : {}),
     } };
     if (ch.estado[k].feito && !ch.estado[k].na && ctx && !documentoDoItem(item, k, ch.estado, ctx)) {
-      return c.json({ error: "Carrega o documento antes de assinalar este item" }, 400);
+      return c.json({ error: item.imovel ? "Preenche primeiro na ficha do imóvel o nome e o NIF do proprietário" : "Carrega o documento antes de assinalar este item" }, 400);
     }
     const { rows } = await pool.query("UPDATE projeto_tarefas SET checklist = $1 WHERE id = $2 RETURNING *", [JSON.stringify(ch), c.req.param("tarefaId")]);
     await recalcularFase(pool, t.fase_id);

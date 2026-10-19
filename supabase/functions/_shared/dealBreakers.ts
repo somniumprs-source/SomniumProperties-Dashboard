@@ -6,6 +6,10 @@
 // Fases de espera e de agendamento (auditoria D8): entrar nelas exige o próximo
 // passo marcado, para nenhum imóvel ficar parado sem data nem motivo. Continuam
 // a poder ser saltadas: só se valida a fase de destino.
+// Origem do imóvel (auditoria D7): a morada para marcar a visita; para fechar
+// o negócio, a identificação legal e os documentos (certidão, caderneta e, se
+// existirem, licença e certificado). O proprietário só se pede na Aquisição
+// do projeto (fasesFixFlip.js).
 // Espelho de src/db/dealBreakers.js (manter em sync).
 import { normalizeFicha, CHECKLIST_SECTIONS } from './fichaVisitaSchema.ts'
 import { MODELOS_FECHO, limpaEstado, indiceFase, tipoFase, eSaida } from './pipelineImoveis.ts'
@@ -31,7 +35,8 @@ const isoData = v => (v instanceof Date ? (isNaN(v) ? '' : v.toISOString()) : St
 export async function carregarDadosEntrada(query, id) {
   const { rows: [imovel] } = await query(
     `SELECT estado, ask_price, valor_venda_remodelado, valor_proposta, data_proposta, data_proposta_aceite,
-            data_chamada, data_follow_up, motivo_follow_up FROM imoveis WHERE id = $1`, [id])
+            data_chamada, data_follow_up, motivo_follow_up, morada, artigo_matricial, descricao_predial,
+            licenca_utilizacao, certificado_energetico, fotos FROM imoveis WHERE id = $1`, [id])
   if (!imovel) return null
   const [{ rows: visitas }, { rows: contactos }] = await Promise.all([
     query('SELECT data_hora, created_at, estado, investidor_id, ficha FROM visitas WHERE imovel_id = $1', [id]),
@@ -65,6 +70,15 @@ export function fichaMaisRecente(visitas) {
   }
   return null
 }
+
+const lista = v => {
+  if (Array.isArray(v)) return v
+  if (typeof v === 'string') { try { const a = JSON.parse(v); return Array.isArray(a) ? a : [] } catch { return [] } }
+  return []
+}
+const temSlot = (im, slot) => lista(im.fotos).some(f => f?.slot === slot)
+// Estados do CE sem documento; as classes (A+ a F) pedem o certificado.
+const CE_SEM_DOCUMENTO = ['Isento', 'Em obtenção', 'Não tem']
 
 // acao: o que a interface abre para resolver o requisito.
 const item = (id, titulo, estado, detalhe, acao, onde) => ({ id, titulo, estado, detalhe: detalhe || null, acao, onde })
@@ -101,6 +115,35 @@ export function requisitosVisita(visitas) {
   return out
 }
 
+// Identificação legal e documentos para fechar o negócio. acao 'legal' =
+// campos da ficha (a janela pede-os); 'documentacao' = carregar no separador
+// Documentos (a análise da certidão e da caderneta preenche a ficha).
+export function requisitosDocumentacao(im = {}) {
+  const onde = 'Documentos'
+  const doc = (id, titulo, slot) => {
+    const ok = temSlot(im, slot)
+    return item(id, titulo, ok ? 'ok' : 'por_fazer', ok ? null : 'Falta carregar no separador Documentos', 'documentacao', onde)
+  }
+  const out = [
+    doc('doc_certidao', 'Certidão permanente', 'certidao_permanente'),
+    doc('doc_caderneta', 'Caderneta predial', 'caderneta_predial'),
+  ]
+  const falta = [!temTexto(im.artigo_matricial) && 'o artigo matricial', !temTexto(im.descricao_predial) && 'a descrição predial'].filter(Boolean)
+  out.push(item('legal_identificacao', 'Artigo matricial e descrição predial', falta.length ? 'por_fazer' : 'ok',
+    falta.length ? `Falta ${falta.join(' e ')}` : null, 'legal', 'Situação legal'))
+
+  const lu = String(im.licenca_utilizacao || '').trim()
+  if (!lu) out.push(item('legal_lu', 'Licença de utilização', 'por_fazer', 'Falta escolher a situação da licença', 'legal', 'Situação legal'))
+  else if (lu === 'Tem' && !temSlot(im, 'licenca_utilizacao')) out.push(item('legal_lu', 'Licença de utilização', 'por_fazer', 'Tem licença: falta carregar o documento', 'documentacao', onde))
+  else out.push(item('legal_lu', 'Licença de utilização', 'ok', null, 'legal', 'Situação legal'))
+
+  const ce = String(im.certificado_energetico || '').trim()
+  if (!ce) out.push(item('legal_ce', 'Certificado energético', 'por_fazer', 'Falta escolher a classe ou a situação do certificado', 'legal', 'Situação legal'))
+  else if (!CE_SEM_DOCUMENTO.includes(ce) && !temSlot(im, 'certificado_energetico')) out.push(item('legal_ce', 'Certificado energético', 'por_fazer', `Classe ${ce}: falta carregar o certificado`, 'documentacao', onde))
+  else out.push(item('legal_ce', 'Certificado energético', 'ok', null, 'legal', 'Situação legal'))
+  return out
+}
+
 // Requisitos para entrar numa fase. dados = { imovel, visitas }.
 export function requisitosDeEntrada(estado, dados = {}) {
   const fase = limpaEstado(estado)
@@ -124,7 +167,11 @@ export function requisitosDeEntrada(estado, dados = {}) {
   }
   if (fase === 'Visita Marcada') {
     const ok = (dados.visitas || []).some(v => v.estado !== 'cancelada' && !v.investidor_id && v.data_hora)
-    return [item('visita_agendada', 'Visita marcada com data e hora', ok ? 'ok' : 'por_fazer', ok ? null : 'Falta marcar a visita', 'visita_agendada', 'Visitas')]
+    const morada = temTexto(im.morada)
+    return [
+      item('morada', 'Rua do imóvel', morada ? 'ok' : 'por_fazer', morada ? null : 'Falta a rua: sem ela não se sabe onde ir', 'morada', 'Ficha do imóvel'),
+      item('visita_agendada', 'Visita marcada com data e hora', ok ? 'ok' : 'por_fazer', ok ? null : 'Falta marcar a visita', 'visita_agendada', 'Visitas'),
+    ]
   }
   if (fase === 'Estudo de VVR') {
     const preco = n(im.ask_price) > 0
@@ -147,7 +194,10 @@ export function requisitosDeEntrada(estado, dados = {}) {
   }
   if (MODELOS_FECHO.includes(fase)) {
     const ok = temTexto(im.data_proposta_aceite)
-    return [item('aceite', 'Proposta aceite', ok ? 'ok' : 'por_fazer', ok ? null : 'Falta a data de aceitação da proposta', 'aceite', 'Ficha do imóvel')]
+    return [
+      item('aceite', 'Proposta aceite', ok ? 'ok' : 'por_fazer', ok ? null : 'Falta a data de aceitação da proposta', 'aceite', 'Ficha do imóvel'),
+      ...requisitosDocumentacao(im),
+    ]
   }
   return []
 }
@@ -195,6 +245,10 @@ export function painelRequisitos(dados, estadoAtual) {
   // Imóvel que entrou numa fase de espera ou de agendamento antes do travão (D8).
   if ([...FASES_ESPERA, ...FASES_AGENDAMENTO].includes(atual)) {
     avisos.push(...requisitosDeEntrada(atual, dados).filter(i => i.estado !== 'ok'))
+  }
+  // Negócio fechado antes do travão da documentação (D7).
+  if (MODELOS_FECHO.includes(atual)) {
+    avisos.push(...requisitosDocumentacao(dados.imovel || {}).filter(i => i.estado !== 'ok'))
   }
   const jaPassouEstudo = (tipo === 'principal' && idx >= indiceFase('Estudo de VVR')) || MODELOS_FECHO.includes(atual)
   if (jaPassouEstudo && !fichaMaisRecente(dados.visitas)) {

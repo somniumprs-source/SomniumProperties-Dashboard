@@ -8,6 +8,9 @@
  * porta única /follow-up (que também muda a fase); a visita e a chamada
  * agendam-se antes de a fase mudar; a data da primeira chamada segue com a
  * mudança de fase.
+ * Origem do imóvel (auditoria D7): a rua e a situação legal (artigo, descrição,
+ * licença, certificado) pedem-se aqui; os documentos carregam-se no separador
+ * Documentos. Com documentos em falta, grava o que se escreveu sem mudar a fase.
  *
  * mover=true  → o pai repete a mudança de fase com os campos (onConfirm).
  * mover=false → só regista o que falta, sem mudar de fase (painel do imóvel).
@@ -64,12 +67,31 @@ export function TransicaoFaseModal({ open = true, imovel, destino, requisitos = 
   const pedeProposta = acoes.has('proposta')
   const pedeAceite = acoes.has('aceite')
   const pedeVvr = acoes.has('vvr')
-  const soVvr = pedeVvr && acoes.size === 1
+  // Só há coisas a fazer noutro separador (VVR, documentos): a janela só informa.
+  const soInformativo = [...acoes].every(a => a === 'vvr' || a === 'documentacao')
   const reqFollowUp = requisitos.find(r => r.acao === 'follow_up')
   const faseFollowUp = reqFollowUp?.fase || destino
   const pedeChamadaReg = acoes.has('chamada_registada')
   const pedeVisitaAg = acoes.has('visita_agendada')
   const pedeChamadaAg = acoes.has('chamada_agendada')
+  const pedeMorada = acoes.has('morada')
+  const pedeLegal = acoes.has('legal')
+  const docsEmFalta = requisitos.filter(r => r.acao === 'documentacao')
+  const legalEmFalta = new Set(requisitos.filter(r => r.acao === 'legal').map(r => r.id))
+  const [legal, setLegal] = useState({
+    morada: imovel?.morada || '',
+    artigo_matricial: imovel?.artigo_matricial || '',
+    descricao_predial: imovel?.descricao_predial || '',
+    licenca_utilizacao: imovel?.licenca_utilizacao || '',
+    licenca_utilizacao_detalhe: imovel?.licenca_utilizacao_detalhe || '',
+    certificado_energetico: imovel?.certificado_energetico || '',
+  })
+  const [lookups, setLookups] = useState({})
+  useEffect(() => {
+    if (!pedeLegal) return
+    apiFetch('/api/crm/lookups').then(r => r.ok ? r.json() : {}).then(setLookups).catch(() => {})
+  }, [pedeLegal])
+  const setL = (k, val) => setLegal(p => ({ ...p, [k]: val }))
   const [fu, setFu] = useState(() => {
     const d = String(imovel?.data_follow_up || '').slice(0, 10)
     return { motivo: imovel?.motivo_follow_up || '', data: d >= hoje() ? d : hoje() }
@@ -148,6 +170,10 @@ export function TransicaoFaseModal({ open = true, imovel, destino, requisitos = 
     if (pedeChamadaReg && !agenda.chamada) return setErro('Indica a data da primeira chamada.')
     if (pedeVisitaAg && !agenda.visita) return setErro('Indica a data e a hora da visita.')
     if (pedeChamadaAg && !agenda.proxima) return setErro('Indica a data e a hora da próxima tentativa.')
+    if (pedeMorada && !legal.morada.trim()) return setErro('Indica a rua do imóvel.')
+    if (legalEmFalta.has('legal_identificacao') && (!legal.artigo_matricial.trim() || !legal.descricao_predial.trim())) return setErro('Indica o artigo matricial e a descrição predial.')
+    if (legalEmFalta.has('legal_lu') && !legal.licenca_utilizacao) return setErro('Escolhe a situação da licença de utilização.')
+    if (legalEmFalta.has('legal_ce') && !legal.certificado_energetico) return setErro('Escolhe a classe ou a situação do certificado energético.')
     if (pedeVisita) {
       if (!v.data || !v.decisao || v.area === '' || v.obra === '') return setErro('Preenche a data, a decisão, a área medida e o custo de obra (pode ser 0).')
       if (v.decisao === 'NO_GO' && !v.motivo.trim()) return setErro('Indica o motivo do NO GO.')
@@ -199,6 +225,18 @@ export function TransicaoFaseModal({ open = true, imovel, destino, requisitos = 
       if (pedeProposta) extra.data_proposta = campos.data_proposta
       if (pedeAceite) extra.data_proposta_aceite = campos.data_proposta_aceite
       if (pedeChamadaReg) extra.data_chamada = agenda.chamada
+      if (pedeMorada) extra.morada = legal.morada.trim()
+      if (pedeLegal) {
+        for (const k of ['artigo_matricial', 'descricao_predial', 'licenca_utilizacao', 'licenca_utilizacao_detalhe', 'certificado_energetico']) {
+          const val = String(legal[k] || '').trim()
+          if (val !== String(imovel?.[k] || '').trim()) extra[k] = val || null
+        }
+      }
+      // Documentos por carregar: a fase não muda; grava-se o que se escreveu.
+      if (docsEmFalta.length) {
+        if (Object.keys(extra).length) await put(extra)
+        return onResolvido?.(`Guardado. Falta carregar no separador Documentos: ${docsEmFalta.map(r => r.titulo.toLowerCase()).join(', ')}.`)
+      }
       if (mover) return await onConfirm?.(extra)
       if (Object.keys(extra).length) await put(extra)
       onResolvido?.(pedeVisita ? 'Visita registada.' : pedeVisitaAg ? 'Visita marcada.' : pedeChamadaAg ? 'Chamada agendada.' : 'Guardado.')
@@ -216,9 +254,9 @@ export function TransicaoFaseModal({ open = true, imovel, destino, requisitos = 
       footer={
         <Modal.Footer>
           <Button variant="secondary" onClick={onCancel} disabled={saving}>
-            {soVvr ? 'Fechar' : 'Cancelar'}
+            {soInformativo ? 'Fechar' : 'Cancelar'}
           </Button>
-          {!soVvr && (
+          {!soInformativo && (
             <Button variant="primary" onClick={confirmar} loading={saving}>
               {saving ? 'A guardar…' : mover && !(pedeVisita && v.decisao && v.decisao !== 'GO') ? 'Guardar e mover' : 'Guardar'}
             </Button>
@@ -236,6 +274,57 @@ export function TransicaoFaseModal({ open = true, imovel, destino, requisitos = 
                 <input type="date" min={hoje()} className={inputClass} value={fu.data} onChange={e => setFu(p => ({ ...p, data: e.target.value }))} />
               </Campo>
             </>
+          )}
+
+          {pedeMorada && (
+            <Campo label="Rua do imóvel (com o número, se houver)">
+              <input type="text" className={inputClass} value={legal.morada} onChange={e => setL('morada', e.target.value)} />
+            </Campo>
+          )}
+
+          {pedeLegal && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {legalEmFalta.has('legal_identificacao') && (
+                <>
+                  <Campo label="Artigo matricial">
+                    <input type="text" className={inputClass} value={legal.artigo_matricial} onChange={e => setL('artigo_matricial', e.target.value)} />
+                  </Campo>
+                  <Campo label="Descrição predial (n.º na conservatória)">
+                    <input type="text" className={inputClass} value={legal.descricao_predial} onChange={e => setL('descricao_predial', e.target.value)} />
+                  </Campo>
+                </>
+              )}
+              {legalEmFalta.has('legal_lu') && (
+                <Campo label="Licença de utilização">
+                  <select className={inputClass} value={legal.licenca_utilizacao} onChange={e => setL('licenca_utilizacao', e.target.value)}>
+                    <option value="">Escolher…</option>
+                    {(lookups.licenca_utilizacao || []).map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </Campo>
+              )}
+              {legalEmFalta.has('legal_lu') && legal.licenca_utilizacao === 'Tem' && (
+                <Campo label="Licença: número e data">
+                  <input type="text" className={inputClass} value={legal.licenca_utilizacao_detalhe} onChange={e => setL('licenca_utilizacao_detalhe', e.target.value)} />
+                </Campo>
+              )}
+              {legalEmFalta.has('legal_ce') && (
+                <Campo label="Certificado energético">
+                  <select className={inputClass} value={legal.certificado_energetico} onChange={e => setL('certificado_energetico', e.target.value)}>
+                    <option value="">Escolher…</option>
+                    {(lookups.certificado_energetico || []).map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </Campo>
+              )}
+            </div>
+          )}
+
+          {docsEmFalta.length > 0 && (
+            <div className="rounded-lg bg-warning/10 border border-warning/30 px-3 py-2 text-sm text-warning">
+              Falta carregar no separador Documentos: {docsEmFalta.map(r => r.titulo.toLowerCase()).join(', ')}. Ao analisar a certidão e a caderneta, a ficha fica preenchida com o artigo, a descrição e o proprietário.
+              {onAbrirImovel && (
+                <button type="button" onClick={onAbrirImovel} className="block mt-1.5 text-xs font-semibold underline">Abrir o imóvel</button>
+              )}
+            </div>
           )}
 
           {pedeChamadaReg && (

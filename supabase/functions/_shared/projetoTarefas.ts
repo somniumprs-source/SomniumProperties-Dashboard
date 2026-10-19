@@ -13,6 +13,8 @@
 // docInvestidor = documento na ficha do investidor, com este tipo; serve para
 //                 os projetos seguintes, exceto com porProjeto (só vale o deste
 //                 imóvel: origem dos fundos, declaração de risco, comprovativos).
+// imovel        = campos da ficha do imóvel que têm de estar preenchidos (ex.:
+//                 nome e NIF do vendedor, pedidos só na Aquisição; auditoria D7).
 
 export function normalizarTarefa(t) {
   if (typeof t === 'string') return { descricao: t, opcional: false, checklist: null }
@@ -20,6 +22,7 @@ export function normalizarTarefa(t) {
     k: i.k, t: i.t, slot: i.slot || null, obrigatoria: i.obrigatoria !== false,
     ...(i.doc ? { doc: i.doc } : {}),
     ...(i.docInvestidor ? { docInvestidor: i.docInvestidor, porProjeto: !!i.porProjeto } : {}),
+    ...(i.imovel ? { imovel: i.imovel } : {}),
   }))
   return {
     descricao: t.t,
@@ -51,7 +54,7 @@ export function checklistCompleta(checklist, investidorIds = []) {
 
 // ── Prova documental ──────────────────────────────────────────
 
-export const pedeDocumento = i => !!(i?.slot || i?.doc || i?.docInvestidor)
+export const pedeDocumento = i => !!(i?.slot || i?.doc || i?.docInvestidor || i?.imovel?.length)
 
 const lista = v => {
   if (Array.isArray(v)) return v
@@ -60,8 +63,12 @@ const lista = v => {
 }
 
 // Documento que prova um item (ou null). chave = 'k' ou 'investidorId:k'.
-// ctx = { imovelId, fotos (documentos do imóvel), docsProjeto, docsInvestidor }.
+// ctx = { imovelId, fotos (documentos do imóvel), dadosImovel, docsProjeto, docsInvestidor }.
 export function documentoDoItem(item, chave, estado, ctx) {
+  if (item.imovel?.length) {
+    const d = ctx.dadosImovel || {}
+    return item.imovel.every(c => String(d[c] ?? '').trim() !== '') ? { nome: 'Ficha do imóvel' } : null
+  }
   if (item.slot) {
     return lista(ctx.fotos).filter(f => f?.slot === item.slot)
       .sort((a, b) => String(b.uploaded_at || '').localeCompare(String(a.uploaded_at || '')))[0] || null
@@ -94,14 +101,15 @@ export function documentosEmFalta(checklist, investidorIds, ctx) {
 // Documentos do imóvel, do projeto e dos investidores de uma fase.
 export async function contextoDocumentos(pool, faseId) {
   const { rows: [f] } = await pool.query(
-    `SELECT f.negocio_id, n.imovel_id, i.fotos FROM projeto_fases f
+    `SELECT f.negocio_id, n.imovel_id, i.fotos, i.proprietario_nome, i.proprietario_nif FROM projeto_fases f
      JOIN negocios n ON n.id = f.negocio_id LEFT JOIN imoveis i ON i.id = n.imovel_id WHERE f.id = $1`, [faseId])
-  if (!f) return { imovelId: null, fotos: [], docsProjeto: [], docsInvestidor: [] }
+  if (!f) return { imovelId: null, fotos: [], dadosImovel: {}, docsProjeto: [], docsInvestidor: [] }
   const { rows: docsProjeto } = await pool.query('SELECT id, nome, url, tipo FROM projeto_documentos WHERE negocio_id = $1', [f.negocio_id])
   const { rows: docsInvestidor } = await pool.query(
     `SELECT d.id, d.investidor_id, d.imovel_id, d.tipo, d.nome, d.storage_path, d.created_at FROM documentos_investidor d
      JOIN projeto_investidores pi ON pi.investidor_id = d.investidor_id WHERE pi.negocio_id = $1`, [f.negocio_id])
-  return { negocioId: f.negocio_id, imovelId: f.imovel_id, fotos: f.fotos, docsProjeto, docsInvestidor }
+  const dadosImovel = { proprietario_nome: f.proprietario_nome, proprietario_nif: f.proprietario_nif }
+  return { negocioId: f.negocio_id, imovelId: f.imovel_id, fotos: f.fotos, dadosImovel, docsProjeto, docsInvestidor }
 }
 
 // Progresso de uma tarefa entre 0 e 1: concluída = 1; com checklist conta em parte.

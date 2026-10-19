@@ -18,10 +18,10 @@ const ESTADO = {
   problema:  { label: 'Problema', cls: 'bg-orange-50 text-orange-700' },
 }
 // Requisitos que se registam numa aba do imóvel, e não na janela.
-const TAB_DA_ACAO = { vvr: 'analise' }
+const TAB_DA_ACAO = { vvr: 'analise', documentacao: 'ficheiros' }
 const ROTULO_ACAO = {
   visita: 'Registar visita', preco: 'Indicar preço', proposta: 'Registar proposta', aceite: 'Registar aceitação', vvr: 'Abrir Análise',
-  follow_up: 'Indicar motivo e data', chamada_registada: 'Registar chamada', visita_agendada: 'Marcar visita', chamada_agendada: 'Agendar chamada',
+  follow_up: 'Indicar motivo e data', morada: 'Indicar a rua', legal: 'Preencher', documentacao: 'Abrir Documentos', chamada_registada: 'Registar chamada', visita_agendada: 'Marcar visita', chamada_agendada: 'Agendar chamada',
 }
 
 export function DealBreakersPanel({ imovelId, imovel, onAbrirTab, onUpdate }) {

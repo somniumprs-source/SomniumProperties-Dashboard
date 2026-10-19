@@ -48,8 +48,8 @@ const ITENS = [
   // ── Pré-aprovação ──
   { fase: 'Pré-aprovação', key: 'pre_dados', titulo: 'Nome, link e origem do anúncio', onde: 'Ficha do imóvel', abrir: { tab: 'detalhe' },
     calc: d => campo(tem(d.imovel.nome) && tem(d.imovel.link) && tem(d.imovel.origem)) },
-  { fase: 'Pré-aprovação', key: 'pre_caract', titulo: 'Preço, tipologia, zona e área', onde: 'Ficha do imóvel', abrir: { tab: 'detalhe' },
-    calc: d => campo(n(d.imovel.ask_price) > 0 && tem(d.imovel.tipologia) && tem(d.imovel.zona) && n(d.imovel.area_bruta) > 0) },
+  { fase: 'Pré-aprovação', key: 'pre_caract', titulo: 'Preço, tipologia, concelho e área', onde: 'Ficha do imóvel', abrir: { tab: 'detalhe' },
+    calc: d => campo(n(d.imovel.ask_price) > 0 && tem(d.imovel.tipologia) && tem(d.imovel.concelho) && n(d.imovel.area_bruta) > 0) },
   { fase: 'Pré-aprovação', key: 'pre_duplicado', titulo: 'Sem duplicados no pipeline', onde: 'Verificação automática pelo link',
     calc: d => ({ ok: d.duplicados === 0, detalhe: d.duplicados > 0 ? `${d.duplicados} imóvel(is) com o mesmo link` : null }) },
 

@@ -1995,8 +1995,8 @@ function ImovelEditSections({ data, form, setField }) {
 
   const sec = {
     identificacao: ['nome','estado','ref_interna','link','tipo_oportunidade','tipo_operacao','origem','nome_consultor'],
-    localizacao:   ['distrito','concelho','freguesia','zona','coordenadas_lat','coordenadas_lng','localizacao_imagem'],
-    fisica:        ['tipologia','predio_tipo','area_util','area_bruta','area_bruta_dependente','andar','numero_pisos_predio','tem_elevador','ano_construcao','cru','licenca_utilizacao'],
+    localizacao:   ['distrito','concelho','freguesia','morada','coordenadas_lat','coordenadas_lng','localizacao_imagem'],
+    fisica:        ['tipologia','predio_tipo','area_util','area_bruta','area_bruta_dependente','andar','numero_pisos_predio','tem_elevador','ano_construcao','cru','licenca_utilizacao','licenca_utilizacao_detalhe'],
     valores:       ['ask_price','valor_proposta','fee_cedencia','valor_venda_remodelado','custo_estimado_obra','vpt','imi_anual','condominio_mensal_anunciado'],
     legal:         ['artigo_matricial','descricao_predial','fracao','regime_propriedade','certificado_energetico','numero_ce','onus_registados'],
     pipeline:      ['proprietario_nome','proprietario_nif','proprietario_contacto','motivo_venda_declarado','data_anuncio','modelo_negocio','data_adicionado','data_chamada','data_visita','data_estudo_mercado','data_proposta','data_proposta_aceite','data_aceite_investidor','notas'],
@@ -2094,7 +2094,7 @@ function ImovelEditSections({ data, form, setField }) {
       <div>
         <Combobox label="Freguesia" value={form.freguesia} onChange={v => setField('freguesia', v)} options={freguesias} placeholder="Pesquisar freguesia…" />
       </div>
-      <EF label="Zona / Bairro" field="zona" form={form} set={setField} />
+      <EF label="Rua" field="morada" form={form} set={setField} />
       <EF label="Latitude" field="coordenadas_lat" form={form} set={setField} type="number" />
       <EF label="Longitude" field="coordenadas_lng" form={form} set={setField} type="number" />
       <div className="col-span-2 md:col-span-3 mt-1">
@@ -2199,7 +2199,15 @@ function ImovelEditSections({ data, form, setField }) {
           {(lookups.cru || []).map(o => <option key={o} value={o}>{o}</option>)}
         </select>
       </div>
-      <EF label="Licença de Utilização" field="licenca_utilizacao" form={form} set={setField} />
+      <div>
+        <p className="text-xs text-ink-muted mb-1">Licença de Utilização</p>
+        <select value={form.licenca_utilizacao || ''} onChange={e => setField('licenca_utilizacao', e.target.value)}
+          className="w-full px-2 py-1.5 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300">
+          <option value="">—</option>
+          {(lookups.licenca_utilizacao || []).map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      </div>
+      {form.licenca_utilizacao === 'Tem' && <EF label="Licença: número e data" field="licenca_utilizacao_detalhe" form={form} set={setField} />}
     </Section>
 
     {/* 4. Valores */}
@@ -2315,8 +2323,8 @@ function ImovelReadSections({ data, onNavigate }) {
 
   const sec = {
     identificacao: ['nome','estado','ref_interna','link','tipo_oportunidade','tipo_operacao','origem','nome_consultor'],
-    localizacao:   ['distrito','concelho','freguesia','zona','coordenadas_lat','coordenadas_lng','localizacao_imagem'],
-    fisica:        ['tipologia','predio_tipo','area_util','area_bruta','area_bruta_dependente','andar','numero_pisos_predio','tem_elevador','ano_construcao','cru','licenca_utilizacao'],
+    localizacao:   ['distrito','concelho','freguesia','morada','coordenadas_lat','coordenadas_lng','localizacao_imagem'],
+    fisica:        ['tipologia','predio_tipo','area_util','area_bruta','area_bruta_dependente','andar','numero_pisos_predio','tem_elevador','ano_construcao','cru','licenca_utilizacao','licenca_utilizacao_detalhe'],
     valores:       ['ask_price','valor_proposta','fee_cedencia','valor_venda_remodelado','custo_estimado_obra','vpt','imi_anual','condominio_mensal_anunciado'],
     legal:         ['artigo_matricial','descricao_predial','fracao','regime_propriedade','certificado_energetico','numero_ce','onus_registados'],
     pipeline:      ['proprietario_nome','proprietario_nif','proprietario_contacto','motivo_venda_declarado','data_anuncio','modelo_negocio','data_adicionado','data_chamada','data_visita','data_estudo_mercado','data_proposta','data_proposta_aceite','data_aceite_investidor','notas'],
@@ -2354,7 +2362,7 @@ function ImovelReadSections({ data, onNavigate }) {
       <Field label="Distrito" value={data.distrito} />
       <Field label="Concelho" value={data.concelho} />
       <Field label="Freguesia" value={data.freguesia} />
-      <Field label="Zona / Bairro" value={data.zona} />
+      <Field label="Rua" value={data.morada} />
       <Field label="Latitude" value={data.coordenadas_lat} />
       <Field label="Longitude" value={data.coordenadas_lng} />
       {data.localizacao_imagem && (
@@ -2380,7 +2388,7 @@ function ImovelReadSections({ data, onNavigate }) {
       )}
       <Field label="Ano Construção" value={data.ano_construcao} />
       <Field label="CRU" value={data.cru} />
-      <Field label="Licença Utilização" value={data.licenca_utilizacao} />
+      <Field label="Licença Utilização" value={[data.licenca_utilizacao, data.licenca_utilizacao_detalhe].filter(Boolean).join(' · ') || null} />
     </Section>
 
     <Section icon={Euro} title="Valores" fields={sec.valores} form={data} defaultOpen>

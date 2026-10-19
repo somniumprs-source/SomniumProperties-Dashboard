@@ -53,7 +53,7 @@ const SEMPRE_ADICIONAR = new Set([
 ])
 
 const concluida = t => Number(t.concluida) === 1 || t.concluida === true
-const PROPS_DOC = ['slot', 'doc', 'docInvestidor', 'porProjeto']
+const PROPS_DOC = ['slot', 'doc', 'docInvestidor', 'porProjeto', 'imovel']
 
 // Copia do modelo, item a item (mesma chave), o documento que cada item pede.
 function alinharDocumentos(atual, modelo) {
@@ -62,7 +62,7 @@ function alinharDocumentos(atual, modelo) {
   let mudou = false
   const itens = atual.itens.map(i => {
     const m = porK[i.k]
-    if (!m || PROPS_DOC.every(p => (i[p] || null) === (m[p] || null))) return i
+    if (!m || PROPS_DOC.every(p => JSON.stringify(i[p] || null) === JSON.stringify(m[p] || null))) return i
     mudou = true
     const novo = { ...i }
     for (const p of PROPS_DOC) { if (m[p]) novo[p] = m[p]; else delete novo[p] }

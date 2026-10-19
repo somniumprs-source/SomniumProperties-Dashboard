@@ -230,6 +230,8 @@ export const FASES_CAEP = [
     tarefas: [
       'Marcação da escritura e confirmação do local e hora',
       { t: 'Confirmação da documentação do imóvel no dia da escritura', checklist: [
+        // O proprietário só se pede aqui, na Aquisição (auditoria D7).
+        { k: 'vendedor', t: 'Vendedor identificado: nome e NIF na ficha do imóvel', imovel: ['proprietario_nome', 'proprietario_nif'] },
         { k: 'caderneta', t: 'Caderneta Predial Urbana', slot: 'caderneta_predial' },
         { k: 'certidao', t: 'Certidão Permanente do Registo Predial', slot: 'certidao_permanente' },
         { k: 'ce', t: 'Certificado Energético', slot: 'certificado_energetico' },
@@ -489,7 +491,10 @@ export const FASES_WHOLESALLING = [
       'Redigir CPCV',
       'Validar cláusulas (prazo, sinal, cessão)',
       'Pagamento de sinal',
-      'Assinatura CPCV com vendedor',
+      { t: 'Assinatura CPCV com vendedor', checklist: [
+        // No Wholesaling a aquisição é o CPCV de Compra (auditoria D7).
+        { k: 'vendedor', t: 'Vendedor identificado: nome e NIF na ficha do imóvel', imovel: ['proprietario_nome', 'proprietario_nif'] },
+      ] },
     ],
   },
   {

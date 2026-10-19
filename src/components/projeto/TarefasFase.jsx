@@ -4,7 +4,9 @@
  * são precisas, e bloqueio de conclusão enquanto a checklist estiver incompleta.
  * Itens que pedem documento só se assinalam com ele carregado (a prova do que
  * foi feito) e deixam carregá-lo a partir daqui: espaço (slot) → documentos do
- * imóvel; doc → documentos do projeto; docInvestidor → ficha do investidor.
+ * imóvel; doc → documentos do projeto; docInvestidor → ficha do investidor;
+ * imovel → campos da ficha do imóvel (ex.: nome e NIF do vendedor), que se
+ * preenchem aqui mesmo.
  * A percentagem da fase é calculada no servidor (src/db/projetoTarefas.js).
  */
 import { useState } from 'react'
@@ -35,7 +37,41 @@ function docsPorSlot(fotos) {
 
 const fmtData = iso => (iso ? new Date(iso).toLocaleDateString('pt-PT') : '')
 
-const pedeDocumento = i => !!(i?.slot || i?.doc || i?.docInvestidor)
+const pedeDocumento = i => !!(i?.slot || i?.doc || i?.docInvestidor || i?.imovel?.length)
+const ROTULO_CAMPO_IMOVEL = { proprietario_nome: 'Nome', proprietario_nif: 'NIF' }
+const temCampos = (item, dados) => !!item.imovel?.length && item.imovel.every(c => String(dados?.[c] ?? '').trim() !== '')
+
+// Campos da ficha do imóvel pedidos por um item: mostra-os ou deixa preenchê-los.
+function CamposImovel({ item, dados, onGravar }) {
+  const [aberto, setAberto] = useState(false)
+  const [valores, setValores] = useState({})
+  if (temCampos(item, dados) && !aberto) {
+    return <span className="text-[11px] text-ink-muted">{item.imovel.map(c => `${ROTULO_CAMPO_IMOVEL[c] || c}: ${dados[c]}`).join(' · ')}</span>
+  }
+  if (!onGravar) return <span className="text-[11px] text-ink-muted">falta na ficha do imóvel</span>
+  if (!aberto) {
+    return (
+      <button type="button" className="text-[11px] text-brand-gold hover:underline"
+        onClick={() => { setValores(Object.fromEntries(item.imovel.map(c => [c, dados?.[c] || '']))); setAberto(true) }}>
+        Preencher na ficha do imóvel
+      </button>
+    )
+  }
+  const completo = item.imovel.every(c => String(valores[c] || '').trim())
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      {item.imovel.map(c => (
+        <input key={c} type="text" value={valores[c] || ''} placeholder={ROTULO_CAMPO_IMOVEL[c] || c}
+          onChange={e => setValores(v => ({ ...v, [c]: e.target.value }))}
+          className="w-40 max-w-full px-2 py-0.5 text-[11px] rounded border border-line bg-surface-raised" />
+      ))}
+      <button type="button" disabled={!completo}
+        onClick={async () => { if (await onGravar(Object.fromEntries(item.imovel.map(c => [c, valores[c].trim()])))) setAberto(false) }}
+        className="text-[11px] text-brand-gold disabled:text-ink-muted">Guardar</button>
+      <button type="button" onClick={() => setAberto(false)} className="text-[11px] text-ink-muted">Cancelar</button>
+    </span>
+  )
+}
 
 // Documento do investidor que prova o item (o mais recente do tipo; com
 // porProjeto, só o deste imóvel). Espelho de documentoDoItem (projetoTarefas.js).
@@ -78,6 +114,31 @@ export function TarefasFase({ fase, negocioId, imovelId, fotosImovel, readOnly, 
     },
   })
   const docsInv = docsInvQuery.data ?? {}
+
+  // Ficha do imóvel, quando algum item pede campos dela (ex.: vendedor).
+  const precisaDadosImovel = tarefas.some(t => lerChecklist(t.checklist)?.itens.some(i => i.imovel?.length))
+  const imovelQuery = useQuery({
+    queryKey: ['projeto-dados-imovel', imovelId],
+    enabled: precisaDadosImovel && !!imovelId,
+    queryFn: async () => {
+      const r = await apiFetch(`/api/crm/imoveis/${imovelId}`).catch(() => null)
+      return r?.ok ? r.json() : null
+    },
+  })
+
+  async function gravarDadosImovel(campos) {
+    const r = await apiFetch(`/api/crm/imoveis/${imovelId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(campos),
+    }).catch(() => null)
+    if (!r?.ok) {
+      const err = await r?.json().catch(() => ({}))
+      toast?.(err?.error || 'Erro ao guardar na ficha do imóvel', 'error', 4000)
+      return false
+    }
+    toast?.('Guardado na ficha do imóvel', 'success', 3000)
+    await imovelQuery.refetch()
+    return true
+  }
 
   async function pedido(url, method, body, erro) {
     const r = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })
@@ -159,6 +220,7 @@ export function TarefasFase({ fase, negocioId, imovelId, fotosImovel, readOnly, 
         {ativas.map(t => (
           <TarefaItem key={t.id} t={t} readOnly={readOnly} docs={docs} investidores={investidores} pedido={pedido}
             docsInv={docsInv} imovelId={imovelId}
+            dadosImovel={imovelQuery.data} onGravarImovel={imovelId && !readOnly ? gravarDadosImovel : null}
             onCarregar={imovelId ? carregarDocumento : null}
             onCarregarProjeto={negocioId ? carregarDocProjeto : null}
             onCarregarInvestidor={carregarDocInvestidor} />
@@ -196,7 +258,7 @@ export function TarefasFase({ fase, negocioId, imovelId, fotosImovel, readOnly, 
   )
 }
 
-function TarefaItem({ t, readOnly, docs, investidores, pedido, docsInv, imovelId, onCarregar, onCarregarProjeto, onCarregarInvestidor }) {
+function TarefaItem({ t, readOnly, docs, investidores, pedido, docsInv, imovelId, dadosImovel, onGravarImovel, onCarregar, onCarregarProjeto, onCarregarInvestidor }) {
   const ch = lerChecklist(t.checklist)
   const [aberta, setAberta] = useState(false)
   const [naAberto, setNaAberto] = useState(null)  // chave do item a marcar «Não aplicável»
@@ -268,7 +330,7 @@ function TarefaItem({ t, readOnly, docs, investidores, pedido, docsInv, imovelId
                   const doc = i.slot ? docs[i.slot] : null
                   const docProjeto = i.doc ? est.doc || null : null
                   const docInv = i.docInvestidor && g.id ? docDoInvestidor(docsInv[g.id], i, imovelId) : null
-                  const prova = doc || docProjeto || docInv
+                  const prova = doc || docProjeto || docInv || (temCampos(i, dadosImovel) ? { nome: 'Ficha do imóvel' } : null)
                   const semProva = pedeDocumento(i) && !prova
                   const podeCarregar = !readOnly && ((i.slot && onCarregar) || (i.doc && onCarregarProjeto) || (i.docInvestidor && g.id))
                   const carregar = fs => {
@@ -279,13 +341,16 @@ function TarefaItem({ t, readOnly, docs, investidores, pedido, docsInv, imovelId
                   return (
                     <li key={k} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                       <input type="checkbox" id={`ck-${t.id}-${k}`} checked={!!est.feito} disabled={readOnly || (semProva && !est.feito)}
-                        title={semProva && !est.feito ? 'Carrega o documento para assinalar' : undefined}
+                        title={semProva && !est.feito ? (i.imovel ? 'Preenche primeiro na ficha do imóvel' : 'Carrega o documento para assinalar') : undefined}
                         onChange={e => pedido(`/api/crm/projetos/tarefas/${t.id}/checklist`, 'PUT', { chave: k, feito: e.target.checked }, 'Erro ao guardar')}
                         className="accent-brand-gold w-3.5 h-3.5" />
                       <label htmlFor={`ck-${t.id}-${k}`} className={`${est.feito ? 'text-ink-muted' : 'text-ink '}`}>
                         {i.t}{!i.obrigatoria && <span className="text-ink-muted"> (se aplicável)</span>}
                       </label>
-                      {pedeDocumento(i) && (doc
+                      {i.imovel?.length > 0 && (est.na
+                        ? <span className="text-[11px] text-ink-muted">Não aplicável: {est.na}</span>
+                        : <CamposImovel item={i} dados={dadosImovel} onGravar={onGravarImovel} />)}
+                      {pedeDocumento(i) && !i.imovel?.length && (doc
                         ? <a href={doc.path} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-brand-gold hover:underline"><FileText className="w-3 h-3" />{doc.name}</a>
                         : docProjeto
                           ? <a href={docProjeto.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-brand-gold hover:underline"><FileText className="w-3 h-3" />{docProjeto.nome}</a>

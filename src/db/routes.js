@@ -5177,7 +5177,7 @@ router.put('/projetos/tarefas/:tarefaId/checklist', async (req, res) => {
       ...(naFinal ? { na: naFinal } : {}),
     } }
     if (ch.estado[k].feito && !ch.estado[k].na && ctx && !documentoDoItem(item, k, ch.estado, ctx)) {
-      return res.status(400).json({ error: 'Carrega o documento antes de assinalar este item' })
+      return res.status(400).json({ error: item.imovel ? 'Preenche primeiro na ficha do imóvel o nome e o NIF do proprietário' : 'Carrega o documento antes de assinalar este item' })
     }
     const { rows } = await pool.query('UPDATE projeto_tarefas SET checklist = $1 WHERE id = $2 RETURNING *', [JSON.stringify(ch), req.params.tarefaId])
     await recalcularFase(pool, t.fase_id)
