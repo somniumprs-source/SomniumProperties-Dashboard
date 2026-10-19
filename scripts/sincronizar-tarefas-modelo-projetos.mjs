@@ -47,6 +47,10 @@ const APAGAR = {
 const ITENS_RETIRADOS = {
   'Verificação final da documentação do imóvel': ['imi'],  // comprovativo de IMI deixou de ser pedido (out 2026)
 }
+// projeto (negocio_id) → tarefas do modelo que não se acrescentam (decisão do João)
+const NAO_ADICIONAR = {
+  '50f119fa-d363-4ebd-aa8d-48f662d10205': ['Plano Estratégico de Venda (Anexo V do CAEP)'],  // T2 Sub-Cave Lages: PEV feito antes da tarefa existir (out 2026)
+}
 const SEMPRE_ADICIONAR = new Set([
   'Dossiê de Investidor e comunicação de boas-vindas',
   'Calendário de obrigações declarativas enviado à contabilista',
@@ -125,6 +129,7 @@ try {
         let t = tarefas.find(x => x.descricao === n.descricao)
         if (!t) {
           if (fechada && !SEMPRE_ADICIONAR.has(n.descricao)) continue
+          if (NAO_ADICIONAR[neg.id]?.includes(n.descricao)) continue
           log(`➕ «${n.descricao}»${n.checklist ? ` (checklist com ${n.checklist.itens.length} itens)` : ''}`)
           t = { id: randomUUID(), descricao: n.descricao, nova: true, checklist: n.checklist, opcional: n.opcional, ativa: !n.opcional }
           resumo.inserir++; mexeu = true
