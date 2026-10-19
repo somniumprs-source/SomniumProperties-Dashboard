@@ -28,7 +28,6 @@ import { lerContactoPessoa, agendarContactoPessoa, registarContactoPessoa, edita
 import { getVisitasEnriquecidas, syncDataVisitaDerivada, getFichaVisitaParaImovel } from './queries.js'
 import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
-import { syncForms, isConfigured as formsConfigured } from './formsSync.js'
 import { createImovelFolder, moveImovelFolder, uploadDocToFolder, uploadUserFileToFolder, uploadComprovativoToFolder, isConfigured as driveConfigured, downloadDriveFile, createInvestidorFolder, uploadDocumentoInvestidor, moverParaElementosApagados, ensureInvestidorFolderShared } from './driveSync.js'
 import { generateDoc, getDocsForEstado, docEmbedeLocalizacao } from './pdfImovelDocs.js'
 import { onImovelCreated, listDocumentos, persistDocumento, streamPdfToResAndPersist } from './documentLifecycle.js'
@@ -3079,15 +3078,6 @@ router.post('/fireflies/sync', async (req, res) => {
       result.analyzed = novas.length
     }
 
-    res.json(result)
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
-
-// ── Google Forms → CRM ───────────────────────────────────────
-router.post('/forms/sync', async (req, res) => {
-  try {
-    if (!formsConfigured()) return res.status(503).json({ error: 'Google Forms não configurado' })
-    const result = await syncForms()
     res.json(result)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })

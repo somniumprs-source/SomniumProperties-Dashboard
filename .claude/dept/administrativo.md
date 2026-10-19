@@ -32,7 +32,6 @@
 ## Integracoes
 
 - **Google Calendar**: sync bidireccional de tarefas. Ficheiro: src/db/calendarSync.js
-- **Google Forms**: sync automatico de investidores a cada 15 min. Ficheiro: src/db/formsSync.js
 - **Notion**: sync bidireccional (PostgreSQL e fonte de verdade). Ficheiro: src/db/sync.js
 - **Gmail**: triagem e classificacao de emails (via MCP)
 - **Cron jobs**: relatorio diario, relatorio semanal, follow-up automatico

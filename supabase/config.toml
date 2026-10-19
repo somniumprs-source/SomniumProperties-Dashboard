@@ -59,9 +59,6 @@ verify_jwt = false
 [functions.cron-sync-fireflies]
 verify_jwt = false
 
-[functions.cron-sync-forms]
-verify_jwt = false
-
 [functions.cron-despesas]
 verify_jwt = false
 

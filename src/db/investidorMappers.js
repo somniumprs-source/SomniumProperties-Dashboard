@@ -1,7 +1,8 @@
 /**
- * Mapeadores que convertem texto livre vindo de fontes externas (Google Forms,
- * imports legacy) nos valores canónicos esperados pelos selects da Ficha do
- * Investidor. Partilhados entre formsSync.js e o script de migration.
+ * Mapeadores que convertem texto livre vindo de fontes externas (imports
+ * legacy) nos valores canónicos esperados pelos selects da Ficha do
+ * Investidor. Usados pelo script de migration (o sync do Google Forms foi
+ * removido a 19/10/2026: os investidores entram pela landing page).
  */
 
 const ROI = ['<10%', '10–15%', '15–20%', '20–25%', '>25%']

@@ -22,7 +22,7 @@ npm run build        # Build producao
 npm run dev:safe     # Dev seguro: sem crons/syncs, BD so de leitura, so em 127.0.0.1
 ```
 
-Modo seguro (`src/db/devSafety.js`): o Express de dev liga-se a BD de producao. `DISABLE_BACKGROUND_JOBS=true` nao arranca crons, auto-syncs (GCal, Fireflies, Forms), `initSchema`, recalculo de lucro_real, despesas recorrentes nem backups; `DEV_DB_READ_ONLY=true` recusa qualquer escrita na BD (erro `DEV_READ_ONLY`); `HOST=127.0.0.1` nao expoe a rede local. A autenticacao mantem-se. Confirmar no arranque: linhas `[dev-safe] não iniciado: ...` e nenhuma `[gcal-sync]`, `[fireflies]`, `[forms]`, `[despesas]` ou `[backup]`. Sem as variaveis, o comportamento e o de sempre.
+Modo seguro (`src/db/devSafety.js`): o Express de dev liga-se a BD de producao. `DISABLE_BACKGROUND_JOBS=true` nao arranca crons, auto-syncs (GCal, Fireflies), `initSchema`, recalculo de lucro_real, despesas recorrentes nem backups; `DEV_DB_READ_ONLY=true` recusa qualquer escrita na BD (erro `DEV_READ_ONLY`); `HOST=127.0.0.1` nao expoe a rede local. A autenticacao mantem-se. Confirmar no arranque: linhas `[dev-safe] não iniciado: ...` e nenhuma `[gcal-sync]`, `[fireflies]`, `[despesas]` ou `[backup]`. Sem as variaveis, o comportamento e o de sempre.
 
 ## Mapa de Navegacao
 

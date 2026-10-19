@@ -31,7 +31,6 @@ import { generateImovelPDF } from "../_shared/pdfReport.ts";
 import { generateMeetingPDF } from "../_shared/pdfMeetingReport.ts";
 import { analyzeReuniao, autoFillConsultor, autoFillInvestidor } from "../_shared/meetingAnalysis.ts";
 import { isConfigured as firefliesConfigured, syncFireflies } from "../_shared/firefliesSync.ts";
-import { isConfigured as formsConfigured, syncForms } from "../_shared/formsSync.ts";
 import { runEstudoLocalizacao } from "../_shared/estudoLocalizacao.ts";
 import { streamToBuffer } from "../_shared/pdfkitGuard.ts";
 import { removeFromStorage, supabase, uploadPublic, uploadPrivate } from "../_shared/storage.ts";
@@ -3635,17 +3634,6 @@ app.post("/fireflies/sync", async (c: any) => {
       result.analyzed = novas.length;
     }
 
-    return c.json(result);
-  } catch (e) {
-    return c.json({ error: (e as Error).message }, 500);
-  }
-});
-
-// ── Google Forms sync — port de routes.js 1687-1693 ──
-app.post("/forms/sync", async (c: any) => {
-  try {
-    if (!formsConfigured()) return c.json({ error: "Google Forms não configurado" }, 503);
-    const result = await syncForms();
     return c.json(result);
   } catch (e) {
     return c.json({ error: (e as Error).message }, 500);
