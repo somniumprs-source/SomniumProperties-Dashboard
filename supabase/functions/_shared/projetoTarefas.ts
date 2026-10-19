@@ -151,3 +151,17 @@ export async function inserirTarefasDoModelo(pool, faseId, tarefas, novoId) {
     )
   }
 }
+
+// Wholesaling (auditoria D6): com todas as tranches do fee recebidas, a tarefa
+// «Confirmar recebimento do fee» conclui sozinha — a prova são as tranches
+// confirmadas. A fase segue a regra normal (média das tarefas).
+export async function concluirRecebimentoFee(pool, negocioId) {
+  const { rows } = await pool.query(
+    `UPDATE projeto_tarefas t SET concluida = 1, concluida_em = NOW()
+       FROM projeto_fases f
+      WHERE t.fase_id = f.id AND f.negocio_id = $1 AND f.fase_key = 'fee_recebido'
+        AND t.descricao = 'Confirmar recebimento do fee' AND COALESCE(t.concluida, 0) = 0
+      RETURNING f.id`, [negocioId])
+  for (const r of rows) await recalcularFase(pool, r.id)
+  return rows.length
+}

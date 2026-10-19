@@ -46,9 +46,10 @@ import { avaliarEntrada, painelRequisitos, carregarDadosEntrada } from './dealBr
 import { carregarChecklist, gravarManual } from './checklistImovel.js'
 import { extrairDocumento, contextoImovel, paraAnalise, camposParaFicha, nomesPreenchidos, contextoDespesa, leituraDaFatura, camposDaDespesa, nomesDaDespesa, avisoDeValor } from './extratorDocumentos.js'
 import { documentosDe, temDocumento } from '../constants/regrasDespesas.js'
+import { validarModeloImovel, validarCategoriaNegocio } from './modeloNegocio.js'
 import { donosDasRegioes } from './responsavelRegiao.js'
 import { tarefaAtrasada } from '../constants/regrasTarefas.js'
-import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase, pedeDocumento, documentoDoItem, documentosEmFalta, contextoDocumentos } from './projetoTarefas.js'
+import { inserirTarefasDoModelo, concluirRecebimentoFee, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase, pedeDocumento, documentoDoItem, documentosEmFalta, contextoDocumentos } from './projetoTarefas.js'
 import { baseLegal, mapaEstados, registar, retirar, retirados } from './consentimentos.js'
 import { getAuditUser } from './audit.js'
 import { resolveAppUser, RECORD_RESTRICTED_ROLES } from './userRoutes.js'
@@ -470,6 +471,9 @@ const HOOKS_IMOVEIS = {
   // vêm no próprio pedido contam, para a janela de registo poder gravar e
   // mover no mesmo passo.
   beforeUpdate: async (id, body) => {
+    // Modelo de negócio num só sítio (auditoria D6)
+    const erroModelo = await validarModeloImovel((sql, p) => pool.query(sql, p), id, body)
+    if (erroModelo) return erroModelo
     if (!body.estado) return null
     const dados = await carregarDadosEntrada((sql, p) => pool.query(sql, p), id)
     if (!dados) return null
@@ -1459,6 +1463,8 @@ router.delete('/negocios/:id', async (req, res) => {
 })
 
 crudRoutes('/negocios', Negocios, {
+  // A categoria do projeto vem do imóvel (auditoria D6)
+  beforeUpdate: (id, body) => validarCategoriaNegocio((sql, p) => pool.query(sql, p), id, body),
   onCreate: async (item) => {
     if (FASES_POR_CATEGORIA[item.categoria]) {
       await criarFasesProjecto(item.id, item.categoria).catch(e => console.error('[fases] auto-criar:', e.message))
@@ -1562,6 +1568,7 @@ router.put('/negocios/:id/confirmar-pagamento', async (req, res) => {
     const setClauses = Object.keys(updates).map((k, i) => `${k} = $${i + 2}`).join(', ')
     const values = Object.values(updates)
     await pool.query(`UPDATE negocios SET ${setClauses}, updated_at = NOW() WHERE id = $1`, [req.params.id, ...values])
+    if (todasRecebidas && neg.categoria === 'Wholesaling') await concluirRecebimentoFee(pool, neg.id)
 
     res.json({ ok: true, todasRecebidas, pagamentos: pags })
   } catch (e) {

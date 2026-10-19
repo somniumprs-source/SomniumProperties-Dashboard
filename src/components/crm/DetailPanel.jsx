@@ -1876,7 +1876,6 @@ function useFreguesiasLookup(form) {
 const ESTADOS_PIPELINE = ESTADOS_IMOVEIS
 const ORIGEM_OPTS = ['Pesquisa em portais/sites','Referência por consultores','Idealista','Imovirtual','Supercasa','Consultor','Referência','Outro']
 const MODELO_NEGOCIO_OPTS = ['Wholesaling','Fix and Flip','CAEP','Mediação Imobiliária','Consultoria/Assessoria']
-const TIPO_OPERACAO_OPTS = ['Fix and Flip','Arrendamento']
 
 // Mini-form embutido para criar consultor sem sair da ficha do imóvel.
 // Triggado quando o utilizador escreve um nome novo no Combobox de consultor
@@ -1994,7 +1993,7 @@ function ImovelEditSections({ data, form, setField }) {
   }
 
   const sec = {
-    identificacao: ['nome','estado','ref_interna','link','tipo_oportunidade','tipo_operacao','origem','nome_consultor'],
+    identificacao: ['nome','estado','ref_interna','link','tipo_oportunidade','origem','nome_consultor'],
     localizacao:   ['distrito','concelho','freguesia','morada','coordenadas_lat','coordenadas_lng','localizacao_imagem'],
     fisica:        ['tipologia','predio_tipo','area_util','area_bruta','area_bruta_dependente','andar','numero_pisos_predio','tem_elevador','ano_construcao','cru','licenca_utilizacao','licenca_utilizacao_detalhe'],
     valores:       ['ask_price','valor_proposta','fee_cedencia','valor_venda_remodelado','custo_estimado_obra','vpt','imi_anual','condominio_mensal_anunciado'],
@@ -2045,7 +2044,6 @@ function ImovelEditSections({ data, form, setField }) {
           {(lookups.tipo_oportunidade || ['Off-Market','Market','Portal']).map(o => <option key={o} value={o}>{o}</option>)}
         </select>
       </div>
-      <EF label="Tipo de Operação (Estratégia de Saída)" field="tipo_operacao" form={form} set={setField} type="select" options={TIPO_OPERACAO_OPTS} />
       <EF label="Origem (Canal)" field="origem" form={form} set={setField} type="select" options={ORIGEM_OPTS} />
       <div className="col-span-2 md:col-span-1">
         <Combobox
@@ -2322,7 +2320,7 @@ function ImovelReadSections({ data, onNavigate }) {
   )?.contacto || null
 
   const sec = {
-    identificacao: ['nome','estado','ref_interna','link','tipo_oportunidade','tipo_operacao','origem','nome_consultor'],
+    identificacao: ['nome','estado','ref_interna','link','tipo_oportunidade','origem','nome_consultor'],
     localizacao:   ['distrito','concelho','freguesia','morada','coordenadas_lat','coordenadas_lng','localizacao_imagem'],
     fisica:        ['tipologia','predio_tipo','area_util','area_bruta','area_bruta_dependente','andar','numero_pisos_predio','tem_elevador','ano_construcao','cru','licenca_utilizacao','licenca_utilizacao_detalhe'],
     valores:       ['ask_price','valor_proposta','fee_cedencia','valor_venda_remodelado','custo_estimado_obra','vpt','imi_anual','condominio_mensal_anunciado'],
@@ -2337,7 +2335,6 @@ function ImovelReadSections({ data, onNavigate }) {
       <Field label="REF Interna" value={data.ref_interna} />
       <Field label="Link" value={data.link ? <a href={data.link} target="_blank" rel="noopener noreferrer" className="text-brand-gold hover:underline truncate block">{data.link === 'OFF MARKET' ? 'OFF MARKET' : 'Ver anúncio'}</a> : '—'} />
       <Field label="Tipo de Oportunidade" value={data.tipo_oportunidade} />
-      <Field label="Tipo de Operação (Estratégia de Saída)" value={data.tipo_operacao} />
       <Field label="Origem (Canal)" value={data.origem} />
       <Field label="Consultor" value={
         data.nome_consultor ? (

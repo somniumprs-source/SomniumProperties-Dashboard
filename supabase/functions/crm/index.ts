@@ -40,9 +40,10 @@ import { isWholesaling } from "../_shared/modelos.ts";
 import { avaliarEntrada, painelRequisitos, carregarDadosEntrada } from "../_shared/dealBreakers.ts";
 import { extrairDocumento, contextoImovel, paraAnalise, camposParaFicha, nomesPreenchidos, contextoDespesa, leituraDaFatura, camposDaDespesa, nomesDaDespesa, avisoDeValor } from "../_shared/extratorDocumentos.ts";
 import { documentosDe, temDocumento } from "../_shared/regrasDespesas.ts";
+import { validarModeloImovel, validarCategoriaNegocio } from "../_shared/modeloNegocio.ts";
 import { donosDasRegioes } from "../_shared/responsavelRegiao.ts";
 import { tarefaAtrasada } from "../_shared/regrasTarefas.ts";
-import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase, pedeDocumento, documentoDoItem, documentosEmFalta, contextoDocumentos } from "../_shared/projetoTarefas.ts";
+import { inserirTarefasDoModelo, concluirRecebimentoFee, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase, pedeDocumento, documentoDoItem, documentosEmFalta, contextoDocumentos } from "../_shared/projetoTarefas.ts";
 import { baseLegal, mapaEstados, registar, retirar, retirados } from "../_shared/consentimentos.ts";
 import { ensureOportunidadesScraperTable } from "../_shared/oportunidadesScraper.ts";
 
@@ -934,6 +935,9 @@ const HOOKS_IMOVEIS = {
   // vêm no próprio pedido contam, para a janela de registo poder gravar e
   // mover no mesmo passo.
   beforeUpdate: async (id: string, body: any) => {
+    // Modelo de negócio num só sítio (auditoria D6)
+    const erroModelo = await validarModeloImovel((sql: string, p: unknown[]) => pool.query(sql, p), id, body);
+    if (erroModelo) return erroModelo;
     if (!body.estado) return null;
     const dados = await carregarDadosEntrada((sql: string, p: unknown[]) => pool.query(sql, p), id);
     if (!dados) return null;
@@ -1840,6 +1844,8 @@ app.delete("/negocios/:id", async (c: any) => {
 
 // Hooks dos negócios ligados — auto-criar fases conforme template (port de routes.js 904-916).
 crudRoutes("/negocios", Negocios, {
+  // A categoria do projeto vem do imóvel (auditoria D6)
+  beforeUpdate: (id: string, body: any) => validarCategoriaNegocio((sql: string, p: unknown[]) => pool.query(sql, p), id, body),
   onCreate: async (item: any) => {
     if ((FASES_POR_CATEGORIA as any)[item.categoria]) {
       await criarFasesProjecto(item.id, item.categoria).catch((e) => console.error("[fases] auto-criar:", e.message));
@@ -1947,6 +1953,7 @@ app.put("/negocios/:id/confirmar-pagamento", async (c: any) => {
     const setClauses = Object.keys(updates).map((k, i) => `${k} = $${i + 2}`).join(", ");
     const values = Object.values(updates);
     await pool.query(`UPDATE negocios SET ${setClauses}, updated_at = NOW() WHERE id = $1`, [c.req.param("id"), ...values]);
+    if (todasRecebidas && neg.categoria === "Wholesaling") await concluirRecebimentoFee(pool, neg.id);
 
     return c.json({ ok: true, todasRecebidas, pagamentos: pags });
   } catch (e) {

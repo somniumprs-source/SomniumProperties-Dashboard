@@ -860,7 +860,9 @@ export function ProjectoForm({ item, onSave, onCancel }) {
           placeholder="Ex: M3 Eiras"
           wrapperClassName="sm:col-span-2 xl:col-span-1"
         />
-        <Select label="Categoria" value={f.categoria} onChange={e => set('categoria', e.target.value)}>
+        {/* Com imóvel ligado, o modelo vem do imóvel e não se edita aqui (auditoria D6). */}
+        <Select label="Categoria" value={f.categoria} onChange={e => set('categoria', e.target.value)}
+          disabled={!isNew && !!f.imovel_id} title={!isNew && f.imovel_id ? 'Vem do «Modelo de Negócio» do imóvel' : undefined}>
           {CATEGORIAS.map(o => <option key={o} value={o}>{o}</option>)}
         </Select>
         <Input
