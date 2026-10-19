@@ -3918,7 +3918,7 @@ app.get("/alertas", endpointCache(300000), async (c: any) => {
     // Despesas sem fatura/comprovativo e fecho do mês anterior (auditoria D3)
     try {
       const [{ rows: desp }, donos] = await Promise.all([
-        pool.query(`SELECT id, movimento, data, timing, custo_mensal, custo_anual, documentos, enviada_contabilidade_em, regiao FROM despesas WHERE timing IN ('Único', 'Registado')`),
+        pool.query(`SELECT id, movimento, data, timing, custo_mensal, custo_anual, documentos, enviada_contabilidade_em, regiao, created_at FROM despesas WHERE timing IN ('Único', 'Registado')`),
         donosDasRegioes(pool),
       ]);
       alerts.push(...alertasDeDespesas(desp, donos));

@@ -39,7 +39,7 @@ import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { isWholesaling } from "../_shared/modelos.ts";
 import { avaliarEntrada, painelRequisitos, carregarDadosEntrada } from "../_shared/dealBreakers.ts";
 import { extrairDocumento, contextoImovel, paraAnalise, camposParaFicha, nomesPreenchidos, contextoDespesa, leituraDaFatura, camposDaDespesa, nomesDaDespesa, avisoDeValor } from "../_shared/extratorDocumentos.ts";
-import { documentosDe, temDocumento } from "../_shared/regrasDespesas.ts";
+import { documentosDe, temDocumento, anteriorARegra } from "../_shared/regrasDespesas.ts";
 import { validarModeloImovel, validarCategoriaNegocio } from "../_shared/modeloNegocio.ts";
 import { donosDasRegioes } from "../_shared/responsavelRegiao.ts";
 import { tarefaAtrasada } from "../_shared/regrasTarefas.ts";
@@ -6234,7 +6234,7 @@ app.put("/projetos/despesas/:despesaId", async (c: any) => {
         : (novoPago && !despesa.data_pagamento ? new Date().toISOString().slice(0, 10) : (novoPago ? despesa.data_pagamento : null)),
     };
     // Só se marca como pago com a fatura ou o comprovativo anexado (auditoria D3).
-    if (novoPago && !despesa.pago && !temDocumento(despesa)) return c.json({ error: "Anexa a fatura ou o comprovativo antes de marcar como pago." }, 400);
+    if (novoPago && !despesa.pago && !temDocumento(despesa) && !anteriorARegra(despesa)) return c.json({ error: "Anexa a fatura ou o comprovativo antes de marcar como pago." }, 400);
     if (campos.rubrica_analise !== "extra") campos.motivo_extra = null;
     if (rubrica_analise !== undefined && !campos.rubrica_analise && !despesa.fase_id) return c.json({ error: "Rubrica da Análise Financeira obrigatória" }, 400);
     const erroRubrica = validarRubricaDespesa(campos.rubrica_analise, campos.justificacao);

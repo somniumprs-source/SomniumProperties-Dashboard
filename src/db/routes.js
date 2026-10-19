@@ -45,7 +45,7 @@ import { FASES_FIX_FLIP, FASES_POR_CATEGORIA, getTemplateFases, getFaseConfigGlo
 import { avaliarEntrada, painelRequisitos, carregarDadosEntrada } from './dealBreakers.js'
 import { carregarChecklist, gravarManual } from './checklistImovel.js'
 import { extrairDocumento, contextoImovel, paraAnalise, camposParaFicha, nomesPreenchidos, contextoDespesa, leituraDaFatura, camposDaDespesa, nomesDaDespesa, avisoDeValor } from './extratorDocumentos.js'
-import { documentosDe, temDocumento } from '../constants/regrasDespesas.js'
+import { documentosDe, temDocumento, anteriorARegra } from '../constants/regrasDespesas.js'
 import { validarModeloImovel, validarCategoriaNegocio } from './modeloNegocio.js'
 import { donosDasRegioes } from './responsavelRegiao.js'
 import { tarefaAtrasada } from '../constants/regrasTarefas.js'
@@ -5832,7 +5832,7 @@ router.put('/projetos/despesas/:despesaId', async (req, res) => {
         : (novoPago && !despesa.data_pagamento ? new Date().toISOString().slice(0, 10) : (novoPago ? despesa.data_pagamento : null)),
     }
     // Só se marca como pago com a fatura ou o comprovativo anexado (auditoria D3).
-    if (novoPago && !despesa.pago && !temDocumento(despesa)) return res.status(400).json({ error: 'Anexa a fatura ou o comprovativo antes de marcar como pago.' })
+    if (novoPago && !despesa.pago && !temDocumento(despesa) && !anteriorARegra(despesa)) return res.status(400).json({ error: 'Anexa a fatura ou o comprovativo antes de marcar como pago.' })
     if (campos.rubrica_analise !== 'extra') campos.motivo_extra = null
     if (rubrica_analise !== undefined && !campos.rubrica_analise && !despesa.fase_id) return res.status(400).json({ error: 'Rubrica da Análise Financeira obrigatória' })
     const erroRubrica = validarRubricaDespesa(campos.rubrica_analise, campos.justificacao)

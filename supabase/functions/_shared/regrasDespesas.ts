@@ -9,6 +9,8 @@
 // • O tipo de documento só existe quando há documento (sem valor por defeito).
 // • Fecho do mês: a partir do dia 1, o mês anterior tem de ficar todo
 //   documentado e enviado à contabilidade.
+// • A regra vale para as despesas registadas a partir de 19/10/2026; as
+//   anteriores ficam de fora (decisão do João).
 
 // NIF da Somnium Properties. Enquanto estiver vazio, a fatura confere-se pelo
 // nome do cliente; com ele, também pelo NIF.
@@ -16,7 +18,15 @@ export const NIF_SOMNIUM = ''
 
 export const TIPOS_DOCUMENTO_DESPESA = ['fatura', 'comprovativo_pagamento']
 
+export const REGRA_DOCUMENTO_DESDE = '2026-10-19T00:00:00+01:00'
+
 export const lancamento = d => ['Único', 'Registado'].includes(d?.timing)
+
+// Registada antes da regra existir: não conta para nada disto.
+export const anteriorARegra = d => {
+  const c = d?.created_at ?? d?.createdAt
+  return !!c && new Date(c) < new Date(REGRA_DOCUMENTO_DESDE)
+}
 
 export const valorDespesa = d => {
   const mensal = Number(d?.custo_mensal ?? d?.custoMensal) || 0
@@ -35,7 +45,7 @@ export const temDocumento = d => documentosDe(d).length > 0
 // null (não precisa: modelo de subscrição ou valor 0) | 'por_documentar' |
 // 'documentada' | 'enviada'
 export function estadoDocumental(d) {
-  if (!lancamento(d) || !(valorDespesa(d) > 0)) return null
+  if (!lancamento(d) || !(valorDespesa(d) > 0) || anteriorARegra(d)) return null
   if (!temDocumento(d)) return 'por_documentar'
   return (d.enviada_contabilidade_em ?? d.enviadaContabilidadeEm) ? 'enviada' : 'documentada'
 }

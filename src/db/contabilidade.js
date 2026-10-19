@@ -17,6 +17,7 @@ import { readFile } from 'fs/promises'
 import { zipSync } from 'fflate'
 import ExcelJS from 'exceljs'
 import pool from './pg.js'
+import { REGRA_DOCUMENTO_DESDE } from '../constants/regrasDespesas.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public')
@@ -131,8 +132,9 @@ export async function listarFaturas({ de, ate, pendentes = false }) {
         AND (d.documentos IS NULL OR d.documentos IN ('', '[]'))
         AND GREATEST(COALESCE(d.custo_mensal, 0), COALESCE(d.custo_anual, 0)) > 0
         AND COALESCE(NULLIF(LEFT(d.data::text, 10), ''), LEFT(d.created_at::text, 10)) BETWEEN $1 AND $2
+        AND d.created_at >= $3::timestamptz
       ORDER BY d.data NULLS LAST, d.movimento`,
-    [de, ate],
+    [de, ate, REGRA_DOCUMENTO_DESDE],
   )
   const porDocumentar = semDoc.map(d => ({
     id: d.id,
