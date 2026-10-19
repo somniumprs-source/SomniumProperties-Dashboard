@@ -42,7 +42,7 @@ export function NumberField({ label, value, onChange }) {
     <div className="flex items-center justify-between gap-2">
       <label className="text-xs text-ink-muted shrink-0">{label}</label>
       <input type="number" step="any" value={value ?? ''} onChange={e => onChange(e.target.value)}
-        className="w-28 px-2 py-1 rounded-md border border-line text-sm text-right focus:outline-none focus:ring-2 focus:ring-yellow-300"
+        className="w-28 px-2 py-1 rounded-md border border-line text-sm text-right num focus:outline-none focus:ring-2 focus:ring-yellow-300"
         onWheel={e => e.target.blur()} />
     </div>
   )

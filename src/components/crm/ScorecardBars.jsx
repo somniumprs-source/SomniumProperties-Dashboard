@@ -31,7 +31,7 @@ export function ScorecardBars({ g }) {
                 <div className="flex-1 h-1.5 rounded-full bg-surface-muted overflow-hidden">
                   <div className="h-full rounded-full bg-accent transition-[width] duration-moderate ease-entry" style={{ width: `${((v ?? 0) / 2) * 100}%` }} />
                 </div>
-                <span className="text-xs text-ink-muted w-8 text-right shrink-0">{v != null ? `${v}/2` : '—'}</span>
+                <span className="text-xs text-ink-muted w-8 text-right num shrink-0">{v != null ? `${v}/2` : '—'}</span>
               </div>
               {nota && <p className="text-[11px] text-ink-muted pl-1">{nota}</p>}
             </div>

@@ -170,7 +170,7 @@ function ProgressMeta({ label, value, meta, format = 'eur' }) {
         <div className={`h-3 rounded-full transition-[background-color,border-color,color,box-shadow,opacity,transform] ${pct >= 100 ? 'bg-success' : pct >= 50 ? 'bg-yellow-400' : 'bg-red-400'}`}
           style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-[10px] text-ink-muted text-right">{pct}% da meta</span>
+      <span className="text-[10px] text-ink-muted text-right num">{pct}% da meta</span>
     </div>
   )
 }

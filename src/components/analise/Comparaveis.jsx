@@ -691,10 +691,10 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
                           )
                         })}
                       </div>
-                      <div className="col-span-1 text-right">
+                      <div className="col-span-1 text-right num">
                         <p className="num text-ink-muted">{euroM2 > 0 ? euroM2 : '—'}</p>
                       </div>
-                      <div className="col-span-1 text-right">
+                      <div className="col-span-1 text-right num">
                         <p className={`num font-semibold ${ajusteTotal > 0 ? 'text-success' : ajusteTotal < 0 ? 'text-danger' : 'text-ink-muted'}`}>
                           {euroM2Ajust > 0 ? euroM2Ajust : '—'}
                         </p>
@@ -722,7 +722,7 @@ export function Comparaveis({ analise, imovel, onUpdate, flush, guardarAgora, la
                           <Trash2 size={12} /> Eliminar
                         </button>
                       </div>
-                      <div className="col-span-2 text-right">
+                      <div className="col-span-2 text-right num">
                         {ajusteTotal !== 0 && (
                           <span className={`text-[10px] num ${ajusteTotal > 0 ? 'text-success' : 'text-danger'}`}>
                             {ajusteTotal > 0 ? '+' : ''}{ajusteTotal.toFixed(1)}%

@@ -394,7 +394,7 @@ function RelatorioInvestidores() {
                     <span className="text-[10px] font-bold text-white">{count}</span>
                   </div>
                 </div>
-                <span className="text-xs text-ink-muted w-10 text-right">{pct}%</span>
+                <span className="text-xs text-ink-muted w-10 text-right num">{pct}%</span>
               </div>
             )
           })}

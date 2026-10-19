@@ -335,7 +335,7 @@ export function ProjectoDetalhe() {
                   </p>
                 </div>
               )}
-              <div className="text-right">
+              <div className="text-right num">
                 <p className="text-overline uppercase text-ink-muted">Execução</p>
                 <p className="font-display text-2xl text-ink num leading-tight">{pct}%</p>
               </div>
@@ -2446,7 +2446,7 @@ function TabInvestidores({ negocio, readOnly }) {
                 <p className="text-sm font-medium text-ink truncate">{l.investidor_nome}</p>
                 {l.investidor_email && <p className="text-[10px] text-ink-muted truncate">{l.investidor_email}</p>}
               </div>
-              <div className="flex gap-3 items-center text-right">
+              <div className="flex gap-3 items-center text-right num">
                 <div>
                   <p className="text-[9px] uppercase tracking-wider text-ink-muted">Capital</p>
                   {readOnly ? (
@@ -2462,7 +2462,7 @@ function TabInvestidores({ negocio, readOnly }) {
                     <p className="text-sm num text-ink-muted">{Number(l.percentagem).toFixed(1)}%</p>
                   ) : (
                     <input type="number" step="0.1" defaultValue={l.percentagem || 0} onBlur={e => editar(l.id, 'percentagem', parseFloat(e.target.value) || 0)}
-                      className="w-14 text-right text-sm px-2 py-0.5 rounded border border-line" />
+                      className="w-14 text-right num text-sm px-2 py-0.5 rounded border border-line" />
                   )}
                 </div>
                 <div>

@@ -43,7 +43,7 @@ export function MatchingInvestidoresTab({ imovelId, imovelNome }) {
             Região do imóvel: <strong>{data.regiao}</strong>.
           </p>
         </div>
-        <div className="text-right">
+        <div className="text-right num">
           <p className="text-xs text-ink-muted">Encontrados</p>
           <p className="text-2xl font-semibold">{data.total}</p>
         </div>

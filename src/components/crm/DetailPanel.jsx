@@ -3433,7 +3433,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                   <span className="text-sm text-ink-muted">{previewPonderado}/100 pts</span>
                 </div>
               </div>
-              <div className="text-right">
+              <div className="text-right num">
                 <p className="text-[10px] text-ink-muted">Total bruto: {previewTotal}/25</p>
                 <p className="text-[10px] text-ink-muted">A ≥88 | B ≥72 | C ≥56 | D &lt;56</p>
               </div>
@@ -3451,7 +3451,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                       <div className={`h-full rounded-full transition-[background-color,border-color,color,box-shadow,opacity,transform] ${CLASSE_CORES[previewClasse]?.bar || 'bg-ink/40'}`}
                         style={{ width: `${(s / 5) * 100}%` }} />
                     </div>
-                    <span className="text-[10px] text-ink-muted w-12 text-right">{s}/5 ({Math.round(p * 100)}%)</span>
+                    <span className="text-[10px] text-ink-muted w-12 text-right num">{s}/5 ({Math.round(p * 100)}%)</span>
                   </div>
                 )
               })}
@@ -3484,7 +3484,7 @@ function ScorecardTab({ investidorId, investidorNome, tipoInvestidor, onUpdate }
                     <span className="text-xs text-ink-muted">{sc.pontuacao_ponderada}/100 pts</span>
                     {idx === 0 && <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-dark text-white font-medium">Atual</span>}
                   </div>
-                  <div className="text-right">
+                  <div className="text-right num">
                     <p className="text-xs text-ink-muted">{new Date(sc.created_at).toLocaleDateString('pt-PT')}</p>
                     <p className="text-[10px] text-ink-muted">{sc.tipo_investidor} · {sc.fonte === 'transcricao_automatica' ? 'Via transcrição' : sc.fonte === 'manual' ? 'Manual' : sc.fonte}</p>
                   </div>

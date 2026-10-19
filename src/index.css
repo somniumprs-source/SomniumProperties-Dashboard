@@ -52,7 +52,7 @@
     outline-offset: 2px;
   }
   /* Números alinhados em tabelas */
-  td, th { font-variant-numeric: tabular-nums; }
+  td, th, input[type="number"] { font-variant-numeric: tabular-nums; }
 
   /* Movimento reduzido: anula animações e transições CSS (o framer-motion
      respeita a mesma preferência via MotionConfig em App.jsx). */

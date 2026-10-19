@@ -280,7 +280,7 @@ export function Financeiro() {
                         <p className="text-sm font-medium text-ink">{t.negocio}</p>
                         <p className="text-xs text-ink-muted">{t.descricao || 'Pagamento'} — {t.dias} dias de atraso</p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right num">
                         <p className="text-sm num font-semibold text-danger">{EUR(t.valor)}</p>
                         <p className="text-xs text-ink-muted">{t.data}</p>
                       </div>
@@ -1025,7 +1025,7 @@ function TesourariaPagamentos({ pendentes, confirmarPagamento }) {
                   <span className="text-xs text-ink-muted">{received.length}/{pags.length} tranches</span>
                 </div>
               </div>
-              <div className="text-right shrink-0">
+              <div className="text-right num shrink-0">
                 <p className="text-sm num font-semibold text-ink">{EUR(recVal)} <span className="text-ink-muted font-normal">/ {EUR(totalVal)}</span></p>
                 {nextPending?.data && <p className="text-[10px] text-ink-muted mt-0.5">Próx: {nextPending.data}</p>}
               </div>
