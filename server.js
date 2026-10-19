@@ -200,6 +200,30 @@ try {
     if (u && RECORD_RESTRICTED_ROLES.has(u.role)) return res.status(403).json({ error: 'Sem acesso a esta área' })
     next()
   })
+  // Parceiro: só os imóveis partilhados com ele (espelho da lista fechada em
+  // supabase/functions/crm/index.ts e de _shared/externos.ts). Passam
+  // /api/crm/imoveis, /lookups, /notificacoes, análises/visitas de um imóvel
+  // partilhado e o próprio perfil (/api/users/me|whoami); o resto dá 403.
+  app.use('/api', async (req, res, next) => {
+    const u = await resolveAppUser(req)
+    if (!u || u.role !== 'parceiro') return next()
+    const [area, seg, id] = req.path.split('/').filter(Boolean)
+    const partilhado = async (imovelId) => !!imovelId && (await pool.query(
+      "SELECT 1 FROM acessos WHERE user_id = $1 AND entidade = 'imovel' AND entidade_id = $2", [u.id, imovelId])).rowCount > 0
+    let ok = false
+    if (area === 'users') ok = seg === 'me' || seg === 'whoami'
+    else if (area === 'crm') {
+      if (['imoveis', 'lookups', 'notificacoes'].includes(seg)) ok = true
+      else if (seg === 'analises' && id) ok = await partilhado((await pool.query('SELECT imovel_id FROM analises WHERE id = $1', [id])).rows[0]?.imovel_id)
+      else if (seg === 'visitas') {
+        const imovelId = id ? (await pool.query('SELECT imovel_id FROM visitas WHERE id = $1', [id])).rows[0]?.imovel_id
+          : req.method === 'GET' ? req.query.imovel_id : req.body?.imovel_id
+        ok = await partilhado(imovelId)
+      }
+    }
+    if (!ok) return res.status(403).json({ error: 'Sem acesso' })
+    next()
+  })
 
   // Router CRM — montado DEPOIS dos guards para que estes corram primeiro
   const { default: crmRoutes } = await import('./src/db/routes.js')

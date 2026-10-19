@@ -4,6 +4,7 @@
 // Fase 2, ainda não portado aqui.
 import { createApp } from "../_shared/hono.ts";
 import { requireAuth } from "../_shared/auth.ts";
+import { bloquearExternos } from "../_shared/externos.ts";
 import pool from "../_shared/pg.ts";
 import { auditMiddleware } from "../_shared/audit.ts";
 import {
@@ -23,6 +24,9 @@ app.use("*", async (c: any, next: any) => {
   if (c.req.path.endsWith("/_health")) return await next();
   return await requireAuth(c, next);
 });
+
+// Só equipa interna: parceiros e investidores recebem 403 (ver _shared/externos.ts).
+app.use("*", bloquearExternos);
 
 // Autor de cada pedido para o histórico; sessão partilhada sem perfil → escritas recusadas.
 app.use("*", auditMiddleware((c: any) => c.get("user")?.email || null));

@@ -11,6 +11,7 @@
 // googleapis COMPILA em Deno (deno check exit 0) — Google API NAO foi stubbada.
 import { createApp } from "../_shared/hono.ts";
 import { requireAuth, requireInternalKey } from "../_shared/auth.ts";
+import { bloquearExternos } from "../_shared/externos.ts";
 import pool from "../_shared/pg.ts";
 import { auditMiddleware } from "../_shared/audit.ts";
 import { OAuth2Client } from "google-auth-library";
@@ -28,6 +29,9 @@ app.use("*", async (c: any, next: any) => {
   if (c.req.header("x-api-key") && requireInternalKey(c)) return await next();
   return await requireAuth(c, next);
 });
+
+// Só equipa interna: parceiros e investidores recebem 403 (ver _shared/externos.ts).
+app.use("*", bloquearExternos);
 
 // Autor de cada pedido para o histórico; sessão partilhada sem perfil → escritas recusadas.
 app.use("*", auditMiddleware((c: any) => c.get("user")?.email || null));

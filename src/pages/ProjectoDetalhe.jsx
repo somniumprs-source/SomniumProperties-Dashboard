@@ -21,7 +21,6 @@ import { StatusBadge } from '../components/dashboard/StatusBadge.jsx'
 import { Input, Select, Textarea } from '../components/ui/Input.jsx'
 import { Avatar } from '../components/ui/Avatar.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
-import { PartilharAcesso } from '../components/PartilharAcesso.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
 import { AiResumoCard, GanttFases, TabHistorico } from '../components/projeto/cards.jsx'
 import { useRefreshOnMutation } from '../hooks/useRefreshOnMutation.js'
@@ -267,7 +266,6 @@ export function ProjectoDetalhe() {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-line bg-surface-raised text-xs font-medium text-ink-muted hover:bg-surface">
               <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
             </button>
-            {!isReadOnly && <PartilharAcesso entidade="negocio" entidadeId={id} nome={negocio.movimento} />}
             {!isReadOnly && (
               <Button size="sm" variant="ghost" icon={Pencil} onClick={() => setEditing(true)}>Editar</Button>
             )}

@@ -16,7 +16,7 @@ const ROLES = [
   { id: 'comercial',  label: 'Comercial',  desc: 'CRM, projetos, métricas' },
   { id: 'financeiro', label: 'Financeiro', desc: 'Financeiro, métricas' },
   { id: 'operacoes',  label: 'Operações',  desc: 'Operações, alertas, métricas' },
-  { id: 'parceiro',   label: 'Parceiro',   desc: 'Externo — só vê imóveis/projetos partilhados' },
+  { id: 'parceiro',   label: 'Parceiro',   desc: 'Externo — só vê os imóveis partilhados' },
   { id: 'investidor', label: 'Investidor', desc: 'Externo — só vê projetos onde foi adicionado' },
 ]
 
@@ -258,7 +258,7 @@ export function Utilizadores() {
                   <td colSpan={5} className="p-0">
                     <div className="px-4 py-3">
                       <p className="text-overline uppercase text-ink-muted mb-1">Acessos atribuídos</p>
-                      <p className="text-caption text-ink-muted mb-2">Para conceder acesso, vai ao detalhe do imóvel ou projeto e clica "Partilhar".</p>
+                      <p className="text-caption text-ink-muted mb-2">Para conceder acesso, vai à ficha do imóvel e clica "Partilhar".</p>
                     </div>
                     <AcessosDoUser userId={u.id} />
                   </td>

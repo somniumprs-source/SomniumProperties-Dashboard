@@ -5,6 +5,7 @@
 // um utilizador Supabase autenticado para passar pelo requireAuth abaixo.
 import { createApp } from "../_shared/hono.ts";
 import { requireAuth } from "../_shared/auth.ts";
+import { bloquearExternos } from "../_shared/externos.ts";
 import { processVoiceCommand } from "../_shared/voiceProcess.ts";
 
 const app = createApp("/voice");
@@ -15,6 +16,9 @@ app.use("*", async (c: any, next: any) => {
   if (c.req.path.endsWith("/_health")) return await next();
   return await requireAuth(c, next);
 });
+
+// Só equipa interna: parceiros e investidores recebem 403 (ver _shared/externos.ts).
+app.use("*", bloquearExternos);
 
 // ── POST /voice/process ──
 app.post("/process", async (c: any) => {

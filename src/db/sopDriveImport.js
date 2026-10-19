@@ -122,11 +122,9 @@ export async function importFolderToSops({ folderId, departamento, overwrite = f
  *     /api/sops/:id), o Drive não tem essa informação. Só uma linha nova
  *     (inserida agora pela primeira vez) recebe o departamento da pasta
  *     sincronizada.
- *  3. No fim, remove da BD qualquer linha dos departamentos sincronizados que
- *     não correspondeu a nenhum ficheiro desta sincronização (documentos
- *     obsoletos ou removidos do Drive) — linhas reclassificadas para outro
- *     departamento ficam fora deste passo, tal como já não são o alvo da
- *     sincronização actual.
+ *  3. No fim, remove da BD só os SOPs cujo ficheiro foi apagado ou posto no
+ *     lixo no Drive (confirmado por files.get). Um SOP que vive noutra pasta
+ *     não sincronizada fica intacto.
  */
 export async function syncSopsFromDrive({ folders, user = null }) {
   if (!isConfigured()) {
@@ -140,7 +138,6 @@ export async function syncSopsFromDrive({ folders, user = null }) {
   const drive = getDrive()
   if (!drive) throw new Error('Não foi possível instanciar o cliente Drive.')
 
-  const departamentos = [...new Set(folders.map(f => f.departamento))]
   const { rows: existingRows } = await pool.query(
     `SELECT id, titulo, drive_file_id FROM sops ORDER BY created_at ASC, id ASC`
   )
@@ -211,12 +208,26 @@ export async function syncSopsFromDrive({ folders, user = null }) {
     } while (pageToken)
   }
 
-  if (touchedIds.size) {
-    const { rows: removed } = await pool.query(
-      `DELETE FROM sops WHERE departamento = ANY($1) AND id != ALL($2::int[]) RETURNING id`,
-      [departamentos, Array.from(touchedIds)]
-    )
-    stats.removidos = removed.length
+  // Remoção: só sai da biblioteca um SOP cujo ficheiro foi apagado ou posto
+  // no lixo no Drive. Antes apagava-se todo o SOP do mesmo departamento que
+  // não estivesse nas pastas sincronizadas — com uma só pasta (3 ficheiros)
+  // isso levava 9 dos 11 SOPs comerciais, que vivem noutras pastas.
+  for (const row of existingRows) {
+    if (!row.drive_file_id || touchedIds.has(row.id)) continue
+    let existe = true
+    try {
+      const meta = await drive.files.get({ fileId: row.drive_file_id, fields: 'id,trashed', supportsAllDrives: true })
+      existe = !meta.data.trashed
+    } catch (e) {
+      // Só um 404 confirma que o ficheiro já não existe; outro erro (rede,
+      // permissões) não chega para apagar.
+      if (e?.code === 404 || e?.status === 404) existe = false
+      else stats.erros.push({ ficheiro: row.titulo, erro: e?.message })
+    }
+    if (!existe) {
+      await pool.query('DELETE FROM sops WHERE id = $1', [row.id])
+      stats.removidos++
+    }
   }
 
   return stats

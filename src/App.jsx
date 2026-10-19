@@ -47,7 +47,7 @@ function PageFallback() {
 }
 
 function AppRoutes() {
-  const { isAuthenticated, loading, isInvestidor } = useAuth()
+  const { isAuthenticated, loading, isInvestidor, role } = useAuth()
 
   if (loading) {
     return (
@@ -101,6 +101,23 @@ function AppRoutes() {
   }
 
   if (!isAuthenticated) return <Login />
+
+  // Parceiro externo: só o CRM (imóveis partilhados). Qualquer outro URL volta
+  // para lá; o servidor recusa o resto na mesma (ver crm/index.ts).
+  if (role === 'parceiro') {
+    return (
+      <ChunkErrorBoundary>
+        <Suspense fallback={<PageFallback />}>
+          <Routes>
+            <Route element={<Layout />}>
+              <Route path="/crm" element={<ErrorBoundary><CRM /></ErrorBoundary>} />
+              <Route path="*" element={<Navigate to="/crm" replace />} />
+            </Route>
+          </Routes>
+        </Suspense>
+      </ChunkErrorBoundary>
+    )
+  }
 
   return (
     <ChunkErrorBoundary>

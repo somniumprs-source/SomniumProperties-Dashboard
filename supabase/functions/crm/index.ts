@@ -592,6 +592,46 @@ app.use("*", async (c, next) => {
   await next();
 });
 
+// ── Parceiro: só os imóveis partilhados com ele (decisão do João, out 2026) ──
+// Lista fechada em vez de bloqueios avulsos: antes um parceiro lia gravações
+// de chamadas, transcrições de reuniões, visitas e estatísticas globais só
+// porque nenhuma rota as tinha protegido. Agora só passa:
+//  - /imoveis/...  (o restrictByAccessGeneric confirma o imóvel e filtra a lista)
+//  - /analises/:id/... e /visitas/... de um imóvel partilhado
+//  - /lookups (valores das listas da ficha) e /notificacoes (só as dele)
+// Tudo o resto (projetos, negócios, investidores, consultores, gravações,
+// reuniões, relatórios, …) devolve 403. Investidores mantêm o regime anterior.
+async function imovelPartilhado(userId: string, imovelId: string | null): Promise<boolean> {
+  if (!imovelId) return false;
+  const r = await pool.query(
+    "SELECT 1 FROM acessos WHERE user_id = $1 AND entidade = 'imovel' AND entidade_id = $2",
+    [userId, imovelId],
+  );
+  return r.rowCount > 0;
+}
+app.use("*", async (c: any, next: any) => {
+  const u = await resolveCrmUser(c).catch(() => null);
+  if (!u || u.role !== "parceiro") return await next();
+  const path = new URL(c.req.url).pathname;
+  const i = path.indexOf("/crm/");
+  const [seg, id] = (i >= 0 ? path.slice(i + 5) : path).split("/").filter(Boolean);
+  let ok = false;
+  if (seg === "imoveis" || seg === "lookups" || seg === "notificacoes") {
+    ok = true;
+  } else if (seg === "analises" && id) {
+    const imovelId = (await pool.query("SELECT imovel_id FROM analises WHERE id = $1", [id])).rows[0]?.imovel_id || null;
+    ok = await imovelPartilhado(u.id, imovelId);
+  } else if (seg === "visitas") {
+    let imovelId: string | null = null;
+    if (id) imovelId = (await pool.query("SELECT imovel_id FROM visitas WHERE id = $1", [id])).rows[0]?.imovel_id || null;
+    else if (c.req.method === "GET") imovelId = c.req.query("imovel_id") || null;
+    else if (c.req.method === "POST") imovelId = (await c.req.json().catch(() => ({})))?.imovel_id || null;
+    ok = await imovelPartilhado(u.id, imovelId);
+  }
+  if (!ok) return c.json({ error: "Sem acesso" }, 403);
+  await next();
+});
+
 // ── Só consulta para roles externos (espelho de server.js) ──────────
 // Por agora só a equipa interna altera dados: parceiros e investidores veem
 // o que lhes foi partilhado mas não criam, editam nem apagam nada.

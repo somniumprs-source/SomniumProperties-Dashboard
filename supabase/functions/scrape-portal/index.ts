@@ -3,6 +3,7 @@
 // de fetch simples corre sem browser; o fallback usa BROWSERLESS_URL/TOKEN.
 import { createApp } from "../_shared/hono.ts";
 import { requireAuth } from "../_shared/auth.ts";
+import { bloquearExternos } from "../_shared/externos.ts";
 import { detectPortalLink, downloadPortalPhotos, fetchPortalData } from "../_shared/portalFetch.ts";
 
 const app = createApp("/scrape-portal");
@@ -13,6 +14,9 @@ app.use("*", async (c: any, next: any) => {
   if (c.req.path.endsWith("/_health")) return await next();
   return await requireAuth(c, next);
 });
+
+// Só equipa interna: parceiros e investidores recebem 403 (ver _shared/externos.ts).
+app.use("*", bloquearExternos);
 
 // Deteccao de link de portal num texto.
 app.post("/detect", async (c) => {

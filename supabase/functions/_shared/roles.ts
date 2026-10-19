@@ -18,9 +18,9 @@ export const ROLE_AREAS: Record<string, string[]> = {
   comercial: ["dashboard", "crm", "projectos", "metricas"],
   financeiro: ["dashboard", "financeiro", "metricas"],
   operacoes: ["dashboard", "operacoes", "alertas", "metricas"],
-  // Parceiro externo: vê CRM (só tab Imóveis) e Projectos, filtrado pela
-  // tabela `acessos` (só os registos partilhados com ele).
-  parceiro: ["crm", "projectos"],
+  // Parceiro externo: só CRM, tab Imóveis, e só os imóveis partilhados com
+  // ele (tabela `acessos`). Sem Projetos desde out 2026 (decisão do João).
+  parceiro: ["crm"],
   // Investidor: só Projectos (os projetos onde foi adicionado via `acessos`).
   investidor: ["projectos"],
 };
@@ -35,7 +35,7 @@ export const ROLE_MODULES: Record<string, string[]> = {
   comercial: ["crm.imoveis", "crm.investidores", "crm.consultores", "crm.empreiteiros", "crm.parceiros", "crm.negocios"],
   financeiro: ["crm.negocios", "crm.despesas"],
   operacoes: [],
-  parceiro: ["crm.imoveis", "crm.negocios"],
+  parceiro: ["crm.imoveis"],
   investidor: ["crm.negocios"],
 };
 

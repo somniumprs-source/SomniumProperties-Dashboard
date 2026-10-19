@@ -491,6 +491,8 @@ router.post('/:id/acessos', async (req, res) => {
     if (!entidade_id) return res.status(400).json({ error: 'entidade_id obrigatório' })
     const u = await getUserById(req.params.id)
     if (!u) return res.status(404).json({ error: 'Utilizador não encontrado' })
+    // Parceiros só recebem imóveis (out 2026); projetos/negócios ficam para investidores.
+    if (u.role === 'parceiro' && entidade !== 'imovel') return res.status(400).json({ error: 'A parceiros só se partilham imóveis' })
     const id = `acc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const r = await pool.query(
       `INSERT INTO acessos (id, user_id, entidade, entidade_id, granted_by)
