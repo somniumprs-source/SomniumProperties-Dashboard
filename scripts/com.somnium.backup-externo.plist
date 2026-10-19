@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.somnium.backup-externo</string>
+
+    <!-- Backup diário externo ao Supabase (scripts/backup-externo.mjs).
+         Instalar: cp scripts/com.somnium.backup-externo.plist ~/Library/LaunchAgents/
+                   launchctl load ~/Library/LaunchAgents/com.somnium.backup-externo.plist
+         Remover:  launchctl unload ~/Library/LaunchAgents/com.somnium.backup-externo.plist -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/node</string>
+        <string>/Users/joaoabreu/SomniumProperties-Dashboard/scripts/backup-externo.mjs</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/joaoabreu/SomniumProperties-Dashboard</string>
+
+    <!-- 03:00 todos os dias; com o Mac a dormir, corre ao acordar. -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>3</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/joaoabreu/Backups/Somnium/backup-externo.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/joaoabreu/Backups/Somnium/backup-externo.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/opt/postgresql@17/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>
