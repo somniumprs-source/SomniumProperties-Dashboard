@@ -12,11 +12,16 @@ export function ResultadoAnalise({ analise }) {
       <div className="flex items-center gap-2">
         <span className={`text-caption font-semibold px-2 py-0.5 rounded-full ${TOM[badge.tom].pill}`}>{badge.txt}</span>
         {analise.tipo_documento && <span className="text-caption text-ink-muted">{analise.tipo_documento}</span>}
+        {analise.confianca && <span className="text-caption text-ink-muted">· leitura com confiança {analise.confianca === 'media' ? 'média' : analise.confianca}</span>}
       </div>
+
+      {analise.preenchidos?.length > 0 && (
+        <p className={`text-xs ${TOM.sucesso.text}`}>Preenchido na ficha do imóvel: {analise.preenchidos.join(', ')}.</p>
+      )}
 
       {analise.campos?.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {analise.campos.slice(0, 6).map((c, i) => (
+          {analise.campos.slice(0, 8).map((c, i) => (
             <div key={i} className="rounded-lg bg-surface px-2.5 py-1.5">
               <p className="text-overline uppercase text-ink-muted truncate">{c.label}</p>
               <p className="text-xs font-medium text-ink truncate">{c.valor}</p>

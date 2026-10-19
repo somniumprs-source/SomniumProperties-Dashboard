@@ -1,6 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { apiFetch } from '../../../lib/api.js'
 import { detectarInconsistencias, estadoFromValido } from './documentacao.config.js'
+
+// Documentos lidos logo ao carregar: a leitura preenche os campos vazios da
+// ficha do imóvel (src/db/extratorDocumentos.js).
+const SLOTS_LEITURA_AUTO = ['certidao_permanente', 'caderneta_predial', 'licenca_utilizacao', 'certificado_energetico']
 
 /**
  * Lógica de estado do módulo de documentação (importação livre):
@@ -68,6 +72,7 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
   // abortavam sem feedback). Erros são expostos em vez de engolidos.
   // O segundo argumento opcional { slot } liga o ficheiro a um item da checklist
   // canónica de documentação (ver checklist.config.js).
+  const analisarRef = useRef(null)
   const upload = useCallback(async (files, opts = {}) => {
     if (!files?.length) return
     setUploading(true)
@@ -88,6 +93,12 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
         ])
       }
       await load()
+      if (SLOTS_LEITURA_AUTO.includes(opts.slot) && Array.isArray(data.fotos)) {
+        // Os acabados de carregar: os mais recentes do slot (o nome pode mudar no servidor).
+        const novos = data.fotos.filter(x => x?.slot === opts.slot)
+          .sort((a, b) => String(b.uploaded_at || '').localeCompare(String(a.uploaded_at || ''))).slice(0, files.length)
+        for (const f of novos) await analisarRef.current?.({ ...f, source: 'local' })
+      }
     } catch (e) {
       const msg = e.name === 'AbortError' ? 'Upload demorou demasiado e foi cancelado. Tenta ficheiros mais pequenos.' : (e.message || 'Erro no upload')
       setUploadErro(msg)
@@ -118,6 +129,8 @@ export function useDocumentacao(imovelId, tipoImovelProp) {
       setAnalyzing(prev => { const n = new Set(prev); n.delete(doc.id); return n })
     }
   }, [imovelId, tipoImovelProp])
+
+  analisarRef.current = analisar
 
   const analisarTodos = useCallback(async () => {
     const analisados = new Set(analises.map(a => a.fotoId).filter(Boolean))

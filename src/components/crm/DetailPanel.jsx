@@ -775,9 +775,10 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
     if (onSave) onSave()
   }
 
-  // Recarregar dados quando sai da tab analise (para reflectir alterações da calculadora)
+  // Recarregar dados quando sai da tab analise (alterações da calculadora) ou
+  // dos documentos (a leitura de documentos preenche campos da ficha).
   useEffect(() => {
-    if (prevTab.current === 'analise' && activeTab !== 'analise') {
+    if (['analise', 'ficheiros'].includes(prevTab.current) && activeTab !== prevTab.current) {
       loadData()
     }
     prevTab.current = activeTab

@@ -38,6 +38,7 @@ import { removeFromStorage, supabase, uploadPublic, uploadPrivate } from "../_sh
 import { scrapePhotosFromLink } from "../_shared/linkScraper.ts";
 import { isWholesaling } from "../_shared/modelos.ts";
 import { avaliarEntrada, painelRequisitos, carregarDadosEntrada } from "../_shared/dealBreakers.ts";
+import { extrairDocumento, contextoImovel, paraAnalise, camposParaFicha, nomesPreenchidos } from "../_shared/extratorDocumentos.ts";
 import { inserirTarefasDoModelo, recalcularFase, lerChecklist, checklistCompleta, investidoresDaFase, pedeDocumento, documentoDoItem, documentosEmFalta, contextoDocumentos } from "../_shared/projetoTarefas.ts";
 import { baseLegal, mapaEstados, registar, retirar, retirados } from "../_shared/consentimentos.ts";
 import { ensureOportunidadesScraperTable } from "../_shared/oportunidadesScraper.ts";
@@ -3091,66 +3092,6 @@ function resolveDocMedia(ext: string, ...contentTypes: (string | null)[]) {
   return null;
 }
 // A IA pode devolver valido como string; normaliza para true|false|'warning'.
-function normalizarValido(v: any): boolean | "warning" {
-  if (v === true || v === "true") return true;
-  if (v === "warning") return "warning";
-  return false;
-}
-
-function buildDocPrompt(tipoImovel: string): string {
-  const tipo = (tipoImovel || "").toLowerCase().includes("morad") ? "MORADIA" : ((tipoImovel || "").trim() ? "APARTAMENTO" : "NÃO ESPECIFICADO");
-  return `És um especialista jurídico e imobiliário português ao serviço da Somnium Properties.
-
-Contexto: documento associado a um imóvel (tipo: ${tipo}).
-
-Identifica que documento é (qualquer tipo, não apenas documentos de escritura) e analisa-o com lente jurídica/imobiliária portuguesa. Devolve APENAS um JSON válido, sem markdown, sem texto extra:
-
-{
-  "tipo_documento": "Nome do tipo de documento que identificaste (ex: Certidão Permanente, Caderneta Predial, Contrato, Fatura, Planta, etc.)",
-  "valido": true | false | "warning",
-  "campos": [
-    { "label": "Campo extraído", "valor": "Valor" }
-  ],
-  "dados_chave": {
-    "morada": "...",
-    "freguesia": "...",
-    "concelho": "...",
-    "artigo_matricial": "...",
-    "fracao": "...",
-    "area": "...",
-    "vpt": "...",
-    "titular": "...",
-    "data_documento": "...",
-    "validade": "..."
-  },
-  "flags": [
-    {
-      "severity": "critical | warning | info",
-      "titulo": "Título da flag",
-      "descricao": "Descrição detalhada"
-    }
-  ],
-  "resumo": "Resumo em 2-3 frases sobre o documento.",
-  "pontos_verificar": ["Ponto 1", "Ponto 2"]
-}
-
-Instruções para dados_chave:
-- Inclui APENAS as chaves cujo valor consegues extrair do documento; omite as restantes.
-- Usa os valores tal como aparecem no documento (estes campos servem para cruzar dados entre documentos).
-- area em m2; vpt em euros.
-
-Regras de validação (aplica as que forem relevantes ao documento):
-- Certidão Permanente: flag crítica se tiver ónus, penhoras ou hipotecas
-- Caderneta Predial: verificar VPT, área, tipologia; flag se área inconsistente
-- Licença de Utilização: obrigatória para imóveis após 07/08/1951; flag crítica se ausente ou uso não-habitacional
-- Ficha Técnica: obrigatória para obras após 30/03/2004; verificar assinatura técnica
-- Certificado Energético: verificar validade (10 anos); flag se classe abaixo de D
-- Guia de Impostos: verificar se IMT e IS foram pagos e valores corretos
-- Declaração de Condomínio: flag crítica se existirem dívidas em atraso
-- Para outros documentos: assinala datas vencidas, valores em falta, assinaturas ausentes ou qualquer pormenor relevante
-- Se não conseguires ler o documento, indica nas flags`;
-}
-
 // Resolve os bytes + extensão do documento, vindo do form (File) ou de um path/url.
 // Versao Hono: aceita File do form OU body.path (url http -> fetch; paths de
 // disco sao ignorados, ja nao existem em Edge Functions).
@@ -3245,31 +3186,16 @@ app.post("/imoveis/:id/documentos/analise", async (c: any) => {
     const client = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") });
     const tipoImovel = bodyTipoImovel || imovel.predio_tipo || imovel.tipologia || "";
 
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 1500,
-      messages: [{ role: "user", content: [fileBlock, { type: "text", text: buildDocPrompt(tipoImovel) }] as any }],
-    });
-
-    const respText = (response.content?.[0] as any)?.text || "{}";
-    let parsed: any;
-    try {
-      const jsonMatch = respText.match(/\{[\s\S]*\}/);
-      parsed = JSON.parse(jsonMatch?.[0] || respText);
-    } catch {
-      return c.json({ error: "A IA devolveu uma resposta ilegível. Tenta novamente." }, 502);
-    }
-
+    // Agente «extrator-documentos» (_shared/extratorDocumentos.ts): a IA só lê;
+    // a plataforma preenche os campos vazios da ficha a partir do documento certo.
+    const extracao = await extrairDocumento(client, fileBlock, contextoImovel(tipoImovel));
+    if (!extracao) return c.json({ error: "A IA devolveu uma resposta ilegível. Tenta novamente." }, 502);
+    const preenchidos = camposParaFicha(extracao, imovel);
     const entry = {
       fotoId: bodyFotoId || null,
       nome_ficheiro: doc.name,
-      tipo_documento: parsed.tipo_documento || "Documento",
-      valido: normalizarValido(parsed.valido),
-      campos: Array.isArray(parsed.campos) ? parsed.campos.slice(0, 6) : [],
-      dados_chave: (parsed.dados_chave && typeof parsed.dados_chave === "object") ? parsed.dados_chave : {},
-      flags: Array.isArray(parsed.flags) ? parsed.flags : [],
-      resumo: parsed.resumo || "",
-      pontos_verificar: Array.isArray(parsed.pontos_verificar) ? parsed.pontos_verificar : [],
+      ...paraAnalise(extracao),
+      preenchidos: nomesPreenchidos(preenchidos),
       analyzed_at: new Date().toISOString(),
     };
 
@@ -3277,9 +3203,9 @@ app.post("/imoveis/:id/documentos/analise", async (c: any) => {
     await ensureColumn("imoveis", "documentacao_analise JSONB DEFAULT '[]'");
     const atual = Array.isArray(imovel.documentacao_analise) ? imovel.documentacao_analise : [];
     const next = [...atual.filter((a: any) => !(entry.fotoId && a.fotoId === entry.fotoId)), entry];
-    await Imoveis.update(id, { documentacao_analise: JSON.stringify(next) }, { regiaoActiva: c.get("regiaoActiva") });
+    await Imoveis.update(id, { documentacao_analise: JSON.stringify(next), ...preenchidos }, { regiaoActiva: c.get("regiaoActiva") });
 
-    return c.json({ ok: true, analise: entry, documentacao_analise: next });
+    return c.json({ ok: true, analise: entry, documentacao_analise: next, preenchidos });
   } catch (e) {
     console.error(`[documentos/analise imovel=${id}] FALHOU:`, (e as Error).message);
     return c.json({ error: (e as Error).message || "Falha na análise do documento." }, 500);
