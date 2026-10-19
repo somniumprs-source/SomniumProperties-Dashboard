@@ -1,6 +1,7 @@
 /**
  * Painel de detalhe para Imóveis, Investidores, Consultores.
- * Mostra: campos editáveis + relações + timeline + tarefas + reuniões.
+ * Mostra: campos editáveis + relações. Tarefas, histórico e reuniões têm sítio próprio
+ * (Tarefas, Auditoria, aba Reuniões): a ficha não os repete.
  */
 import { useState, useEffect, useCallback, useMemo, useRef, memo, lazy, Suspense } from 'react'
 import { FileDown, ChevronDown, ChevronUp, Phone, FileText, Pencil, Save, X, ArrowLeft, Link2, Check, PhoneCall, Mail, MessageCircle, Calendar, CheckCircle2, TrendingUp, Wallet, Target, Hourglass, AlertTriangle, Users, MapPin, Eye, Trash2, ThumbsUp, TrendingDown, Shield, Building2, UserRound, FolderOpen, Calculator, Hammer, Scale, DoorOpen, FileBarChart, ListChecks, Building, CalendarCheck, Star, Gauge, History, Briefcase, ShieldCheck, Timer } from 'lucide-react'
@@ -115,8 +116,6 @@ function useConsultoresLookup(regiao) {
 
 const EUR = v => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v ?? 0)
 
-const ACAO_LABEL = { INSERT: 'Criado', UPDATE: 'Atualizado', DELETE: 'Apagado' }
-const ACAO_COLOR = { INSERT: 'text-success', UPDATE: 'text-ink', DELETE: 'text-danger' }
 
 export { MOTIVOS_NAO_INTERESSA_PADRAO } from './detailPanelConstants.js'
 import { MOTIVOS_NAO_INTERESSA_PADRAO } from './detailPanelConstants.js'
@@ -1111,9 +1110,9 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
       /* Detalhe tab */
       <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
 
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
+        <div>
         {/* Main info */}
-        <div className="xl:col-span-2 space-y-6">
+        <div className="space-y-6">
           {/* Key fields */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {type === 'Imóveis' && <>
@@ -1369,64 +1368,11 @@ export function DetailPanel({ type, id, onClose, onSave, onNavigate, defaultEdit
               </div>
             </div>
           )}
-        </div>
 
-        {/* Sidebar: Tarefas + Timeline */}
-        <div className="space-y-6">
-          {/* Proteção de dados (RGPD) */}
+          {/* Proteção de dados (RGPD): fecha a ficha, compacta */}
           {type === 'Investidores' && <BaseLegalRGPD entidade="investidor" id={data.id} />}
           {type === 'Consultores' && <BaseLegalRGPD entidade="consultor" id={data.id} />}
           {type === 'Imóveis' && data.proprietario_nome && <BaseLegalRGPD entidade="proprietario" id={data.id} titulo="Proteção de dados do proprietário" />}
-          {/* Tarefas */}
-          <div>
-            <p className="text-xs text-ink-muted uppercase tracking-wide mb-2">Tarefas</p>
-            {data.tarefas?.length > 0 ? (
-              <div className="space-y-1.5">
-                {data.tarefas.slice(0, 10).map(t => (
-                  <div key={t.id} className={`text-xs px-2 py-1.5 rounded ${t.status === 'Concluida' ? 'bg-success/10 text-success line-through' : t.status === 'Atrasada' ? 'bg-danger/10 text-danger' : 'bg-surface text-ink'}`}>
-                    {t.tarefa}
-                  </div>
-                ))}
-              </div>
-            ) : <p className="text-xs text-ink-muted/70">Sem tarefas</p>}
-          </div>
-
-          {/* Mini-resumo reuniões na sidebar */}
-          {reunioes.length > 0 && activeTab === 'detalhe' && (
-            <div>
-              <p className="text-xs text-ink-muted uppercase tracking-wide mb-2">Relatórios de Reunião</p>
-              <div className="space-y-1.5">
-                {reunioes.slice(0, 3).map(r => (
-                  <div key={r.id} className="text-xs px-2 py-1.5 rounded bg-purple-50 text-purple-700 flex items-center gap-2">
-                    <FileText className="w-3 h-3 shrink-0" />
-                    <span className="truncate">{r.titulo?.replace(/\s+e\s+alexandre\s+mendes/i, '')}</span>
-                    <span className="text-purple-400 shrink-0">{r.data?.slice(5, 10)}</span>
-                  </div>
-                ))}
-                <button onClick={() => handleTabChange('relatorios')} className="text-xs font-medium px-2 py-1 rounded bg-surface-muted text-ink-muted hover:bg-line w-full text-center">
-                  Ver todos os relatórios →
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Timeline de alterações: nas pessoas o histórico é a linha do tempo dos
-              Próximos passos (o registo de alterações fica na Auditoria). */}
-          {!['Consultores', 'Investidores', 'Parceiros'].includes(type) && (
-          <div>
-            <p className="text-xs text-ink-muted uppercase tracking-wide mb-2">Timeline</p>
-            {data.timeline?.length > 0 ? (
-              <div className="space-y-2">
-                {data.timeline.slice(0, 15).map(t => (
-                  <div key={t.id} className="flex gap-2 text-xs">
-                    <span className="text-ink-muted/70 w-16 shrink-0">{t.created_at?.slice(5, 10)}</span>
-                    <span className={`font-medium ${ACAO_COLOR[t.acao] ?? 'text-ink-muted'}`}>{ACAO_LABEL[t.acao] ?? t.acao}</span>
-                  </div>
-                ))}
-              </div>
-            ) : <p className="text-xs text-ink-muted/70">Sem histórico</p>}
-          </div>
-          )}
         </div>
       </div>
       </div>
