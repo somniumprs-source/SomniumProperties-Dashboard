@@ -59,7 +59,7 @@ async function ensureBucket() {
     const { data: buckets } = await supabase.storage.listBuckets()
     const exists = (buckets || []).some(b => b.name === BUCKET)
     if (!exists) {
-      await supabase.storage.createBucket(BUCKET, { public: true })
+      await supabase.storage.createBucket(BUCKET, { public: false })
       console.log(`[docs] bucket "${BUCKET}" criado`)
     }
     bucketEnsured = true
@@ -113,6 +113,17 @@ function storagePathFromUrl(url) {
   if (!url) return null
   const m = url.match(/\/storage\/v1\/object\/public\/Documentos\/(.+)$/)
   return m ? m[1] : null
+}
+
+// Bucket privado desde 20/10/2026: os documentos (fichas, propostas, dossiês
+// de investidor) deixam de ser legíveis por quem tenha o URL. `pdf_path`
+// continua a guardar o URL «público» como identificador; para abrir, gera-se
+// um link assinado temporário. null se não for possível (cai para regenerar).
+export async function urlAssinadaDocumento(url, segundos = 3600) {
+  const p = storagePathFromUrl(url)
+  if (!p || !supabase) return null
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(p, segundos)
+  return error ? null : data?.signedUrl || null
 }
 
 async function removeFromStorage(url) {
@@ -262,5 +273,6 @@ export async function listDocumentos(imovelId) {
       ORDER BY tipo, frozen, version DESC`,
     [imovelId]
   )
-  return r.rows
+  // pdf_url: link assinado para abrir (o bucket é privado)
+  return Promise.all(r.rows.map(async (d) => ({ ...d, pdf_url: await urlAssinadaDocumento(d.pdf_path) })))
 }

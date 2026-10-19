@@ -30,7 +30,7 @@ import { generateImovelPDF } from './pdfReport.js'
 import { syncFireflies, fetchTranscript, isConfigured as firefliesConfigured } from './firefliesSync.js'
 import { createImovelFolder, moveImovelFolder, uploadDocToFolder, uploadUserFileToFolder, uploadComprovativoToFolder, isConfigured as driveConfigured, downloadDriveFile, createInvestidorFolder, uploadDocumentoInvestidor, moverParaElementosApagados, ensureInvestidorFolderShared } from './driveSync.js'
 import { generateDoc, getDocsForEstado, docEmbedeLocalizacao } from './pdfImovelDocs.js'
-import { onImovelCreated, listDocumentos, persistDocumento, streamPdfToResAndPersist } from './documentLifecycle.js'
+import { onImovelCreated, listDocumentos, persistDocumento, streamPdfToResAndPersist, urlAssinadaDocumento } from './documentLifecycle.js'
 import { ensureOportunidadesScraperTable } from './oportunidadesScraper.js'
 import { analyzeReuniao, autoFillInvestidor } from './meetingAnalysis.js'
 import { generateMeetingPDF } from './pdfMeetingReport.js'
@@ -729,7 +729,9 @@ router.get('/imoveis/:id/documento/:tipo', async (req, res) => {
           const upAnalise = analise?.updated_at ? new Date(analise.updated_at).getTime() : 0
           // Frozen = snapshot imutável (intencional). Vivo = só se ainda fresco.
           const fresco = doc.frozen || genMs >= Math.max(upImovel, upAnalise)
-          if (fresco) return res.redirect(302, doc.pdf_path)
+          // Bucket privado: abre por link assinado; sem ele, regenera.
+          const assinada = fresco ? await urlAssinadaDocumento(doc.pdf_path) : null
+          if (assinada) return res.redirect(302, assinada)
           // senão: dados mudaram desde a geração → cai para regeneração
         }
       } catch (e) { /* cai para geracao */ }

@@ -26,7 +26,7 @@ import { getVisitasEnriquecidas, syncDataVisitaDerivada, getFichaVisitaParaImove
 import {
   generateDoc, getDocsForEstado, docEmbedeLocalizacao, generateCompiledReport,
 } from "../_shared/pdfImovelDocs.ts";
-import { onImovelCreated, persistDocumento, listDocumentos } from "../_shared/documentLifecycle.ts";
+import { onImovelCreated, persistDocumento, listDocumentos, urlAssinadaDocumento } from "../_shared/documentLifecycle.ts";
 import { generateImovelPDF } from "../_shared/pdfReport.ts";
 import { generateMeetingPDF } from "../_shared/pdfMeetingReport.ts";
 import { analyzeReuniao, autoFillConsultor, autoFillInvestidor } from "../_shared/meetingAnalysis.ts";
@@ -1205,7 +1205,9 @@ app.get("/imoveis/:id/documento/:tipo", async (c: any) => {
           const upAnalise = analise?.updated_at ? new Date(analise.updated_at).getTime() : 0;
           // Frozen = snapshot imutavel (intencional). Vivo = so se ainda fresco.
           const fresco = doc.frozen || genMs >= Math.max(upImovel, upAnalise);
-          if (fresco) return c.redirect(doc.pdf_path, 302);
+          // Bucket privado: abre por link assinado; sem ele, regenera.
+          const assinada = fresco ? await urlAssinadaDocumento(doc.pdf_path) : null;
+          if (assinada) return c.redirect(assinada, 302);
           // senao: dados mudaram desde a geracao → cai para regeneracao
         }
       } catch { /* cai para geracao */ }
