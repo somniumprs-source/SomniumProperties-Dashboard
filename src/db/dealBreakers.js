@@ -31,13 +31,15 @@ const isoData = v => (v instanceof Date ? (isNaN(v) ? '' : v.toISOString()) : St
 // Dados que os requisitos leem. query(sql, params) → { rows }.
 //   contactos: próxima chamada ou follow-up por fazer, do próprio imóvel ou no
 //   contacto com o consultor em que o imóvel é assunto.
+//   finalizado: Wholesaling com o CPCV de Cedência concluído — da parte da
+//   Somnium o processo acabou; não se pedem documentos nem a visita.
 export async function carregarDadosEntrada(query, id) {
   const { rows: [imovel] } = await query(
     `SELECT estado, ask_price, valor_venda_remodelado, valor_proposta, data_proposta, data_proposta_aceite,
             data_chamada, data_follow_up, motivo_follow_up, morada, artigo_matricial, descricao_predial,
             licenca_utilizacao, certificado_energetico, fotos FROM imoveis WHERE id = $1`, [id])
   if (!imovel) return null
-  const [{ rows: visitas }, { rows: contactos }] = await Promise.all([
+  const [{ rows: visitas }, { rows: contactos }, { rows: fin }] = await Promise.all([
     query('SELECT data_hora, created_at, estado, investidor_id, ficha FROM visitas WHERE imovel_id = $1', [id]),
     query(`SELECT t.inicio, t.data_limite FROM tarefas t
             WHERE t.origem_tipo = 'imovel' AND t.origem_id = $1 AND t.origem_campo IN ('proxima_chamada', 'data_follow_up')
@@ -46,8 +48,11 @@ export async function carregarDadosEntrada(query, id) {
            SELECT t.inicio, t.data_limite FROM contacto_assuntos a JOIN tarefas t ON t.id = a.origem_id
             WHERE a.origem = 'tarefa' AND a.imovel_id = $1 AND t.origem_campo = 'proximo_contacto'
               AND t.status <> 'Concluída' AND COALESCE(t.arquivada, false) = false`, [id]),
+    query(`SELECT 1 FROM negocios n JOIN projeto_fases pf ON pf.negocio_id = n.id
+            WHERE n.imovel_id = $1 AND n.deleted_at IS NULL AND n.categoria = 'Wholesaling'
+              AND pf.fase_key = 'cpcv_cedencia' AND pf.estado = 'concluida' LIMIT 1`, [id]),
   ])
-  return { imovel, visitas, contactos }
+  return { imovel, visitas, contactos, finalizado: fin.length > 0 }
 }
 
 function temConteudo(f) {
@@ -246,11 +251,11 @@ export function painelRequisitos(dados, estadoAtual) {
     avisos.push(...requisitosDeEntrada(atual, dados).filter(i => i.estado !== 'ok'))
   }
   // Negócio fechado antes do travão da documentação (D7).
-  if (MODELOS_FECHO.includes(atual)) {
+  if (MODELOS_FECHO.includes(atual) && !dados.finalizado) {
     avisos.push(...requisitosDocumentacao(dados.imovel || {}).filter(i => i.estado !== 'ok'))
   }
   const jaPassouEstudo = (tipo === 'principal' && idx >= indiceFase('Estudo de VVR')) || MODELOS_FECHO.includes(atual)
-  if (jaPassouEstudo && !fichaMaisRecente(dados.visitas)) {
+  if (jaPassouEstudo && !dados.finalizado && !fichaMaisRecente(dados.visitas)) {
     avisos.push(item('visita', 'Visita por registar', 'por_fazer', 'O imóvel já passou o estudo sem visita registada', 'visita', 'Visitas'))
   }
 
