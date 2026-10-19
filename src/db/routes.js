@@ -2627,7 +2627,9 @@ router.post('/imoveis/:id/documentos/analise', uploadRateLimit, uploadImovel.sin
     // a plataforma preenche os campos vazios da ficha a partir do documento certo.
     const extracao = await extrairDocumento(client, fileBlock, contextoImovel(tipoImovel))
     if (!extracao) return res.status(502).json({ error: 'A IA devolveu uma resposta ilegível. Tenta novamente.' })
-    const preenchidos = camposParaFicha(extracao, imovel)
+    // Volta a ler a ficha: outra análise pode ter gravado enquanto a IA lia.
+    const fresco = (await Imoveis.getById(req.params.id)) || imovel
+    const preenchidos = camposParaFicha(extracao, fresco)
     const entry = {
       fotoId: req.body?.fotoId || null,
       nome_ficheiro: doc.name,
@@ -2637,7 +2639,7 @@ router.post('/imoveis/:id/documentos/analise', uploadRateLimit, uploadImovel.sin
     }
 
     // Upsert por fotoId (uma análise por ficheiro carregado).
-    const atual = Array.isArray(imovel.documentacao_analise) ? imovel.documentacao_analise : []
+    const atual = Array.isArray(fresco.documentacao_analise) ? fresco.documentacao_analise : []
     const next = [...atual.filter(a => !(entry.fotoId && a.fotoId === entry.fotoId)), entry]
     await Imoveis.update(req.params.id, { documentacao_analise: JSON.stringify(next), ...preenchidos }, { regiaoActiva: req.regiaoActiva })
 

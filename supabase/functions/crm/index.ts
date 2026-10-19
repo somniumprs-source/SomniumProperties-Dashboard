@@ -3190,7 +3190,9 @@ app.post("/imoveis/:id/documentos/analise", async (c: any) => {
     // a plataforma preenche os campos vazios da ficha a partir do documento certo.
     const extracao = await extrairDocumento(client, fileBlock, contextoImovel(tipoImovel));
     if (!extracao) return c.json({ error: "A IA devolveu uma resposta ilegível. Tenta novamente." }, 502);
-    const preenchidos = camposParaFicha(extracao, imovel);
+    // Volta a ler a ficha: outra análise pode ter gravado enquanto a IA lia.
+    const fresco = (await Imoveis.getById(id)) || imovel;
+    const preenchidos = camposParaFicha(extracao, fresco);
     const entry = {
       fotoId: bodyFotoId || null,
       nome_ficheiro: doc.name,
@@ -3201,7 +3203,7 @@ app.post("/imoveis/:id/documentos/analise", async (c: any) => {
 
     // Upsert por fotoId (uma análise por ficheiro carregado).
     await ensureColumn("imoveis", "documentacao_analise JSONB DEFAULT '[]'");
-    const atual = Array.isArray(imovel.documentacao_analise) ? imovel.documentacao_analise : [];
+    const atual = Array.isArray(fresco.documentacao_analise) ? fresco.documentacao_analise : [];
     const next = [...atual.filter((a: any) => !(entry.fotoId && a.fotoId === entry.fotoId)), entry];
     await Imoveis.update(id, { documentacao_analise: JSON.stringify(next), ...preenchidos }, { regiaoActiva: c.get("regiaoActiva") });
 
