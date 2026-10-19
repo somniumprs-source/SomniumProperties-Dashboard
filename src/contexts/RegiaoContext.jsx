@@ -87,8 +87,6 @@ export function getRegiaoActivaFromStorage() {
       if (['imoveis', 'consultores', 'construtores', 'negocios'].includes(slug)) {
         key = `${STORAGE_PREFIX}.crm-${slug}`
       }
-    } else if (path.startsWith('/administracao/regiao')) {
-      key = `${STORAGE_PREFIX}.administracao-regiao`
     }
   } catch {}
   if (!key) return null

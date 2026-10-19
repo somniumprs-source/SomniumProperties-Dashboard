@@ -36,7 +36,6 @@ const Auditoria   = lazy(() => import('./pages/Auditoria.jsx'))
 const RelatoriosAdmin = lazy(() => import('./pages/RelatoriosAdmin.jsx').then(m => ({ default: m.RelatoriosAdmin })))
 const Administracao = lazy(() => import('./pages/Administracao.jsx').then(m => ({ default: m.Administracao })))
 const AdministracaoSOP = lazy(() => import('./pages/AdministracaoSOP.jsx').then(m => ({ default: m.AdministracaoSOP })))
-const AdministracaoMultiRegiao = lazy(() => import('./pages/AdministracaoMultiRegiao.jsx').then(m => ({ default: m.AdministracaoMultiRegiao })))
 const AdministracaoChamadas = lazy(() => import('./pages/AdministracaoChamadas.jsx').then(m => ({ default: m.AdministracaoChamadas })))
 const Marketing = lazy(() => import('./pages/Marketing.jsx').then(m => ({ default: m.Marketing })))
 const Agenda = lazy(() => import('./pages/Agenda.jsx').then(m => ({ default: m.Agenda })))
@@ -125,8 +124,8 @@ function AppRoutes() {
               <Route path="agenda" element={<Agenda embutido />} />
               <Route path="relatorios" element={<RelatoriosAdmin />} />
               <Route path="sop" element={<AdministracaoSOP />} />
-              <Route path="regiao" element={<AdministracaoMultiRegiao />} />
               <Route path="chamadas" element={<AdministracaoChamadas />} />
+              <Route path="regiao" element={<Navigate to="/administracao/sop" replace />} />
             </Route>
             <Route path="/admin/utilizadores" element={<ErrorBoundary><Utilizadores /></ErrorBoundary>} />
             <Route path="/admin/auditoria" element={<ErrorBoundary><Auditoria /></ErrorBoundary>} />

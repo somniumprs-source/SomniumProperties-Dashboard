@@ -1,4 +1,4 @@
-import { LayoutDashboard, Bell, BookOpen, Map, Megaphone, CalendarClock, Timer, FileBarChart, Headphones, Handshake, Construction, Wallet, UserCog, ShieldCheck } from 'lucide-react'
+import { LayoutDashboard, Bell, BookOpen, Megaphone, CalendarClock, Timer, FileBarChart, Headphones, Handshake, Construction, Wallet, UserCog, ShieldCheck } from 'lucide-react'
 
 // Menu por secções. As rotas e as áreas de permissão são as de sempre;
 // só mudam o agrupamento e os nomes visíveis.
@@ -13,7 +13,6 @@ export const NAV_SECOES = [
       { to: '/administracao/operacoes',  label: 'Operações',           Icon: Timer, badgeKey: 'tarefas', area: 'operacoes' },
       { to: '/administracao/relatorios', label: 'Relatórios',          Icon: FileBarChart, area: 'administracao' },
       { to: '/administracao/sop',        label: 'SOPs',                Icon: BookOpen, area: 'administracao' },
-      { to: '/administracao/regiao',     label: 'Regiões',             Icon: Map, area: 'administracao' },
       { to: '/administracao/chamadas',   label: 'Avaliação de calls',  Icon: Headphones, area: 'administracao' },
     ],
   },

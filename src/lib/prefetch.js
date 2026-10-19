@@ -17,7 +17,6 @@ const loaders = {
   '/administracao':      () => import('../pages/Administracao.jsx'),
   '/administracao/sop':  () => import('../pages/AdministracaoSOP.jsx'),
   '/administracao/relatorios': () => import('../pages/RelatoriosAdmin.jsx'),
-  '/administracao/regiao':     () => import('../pages/AdministracaoMultiRegiao.jsx'),
   '/admin/utilizadores': () => import('../pages/Utilizadores.jsx'),
 }
 

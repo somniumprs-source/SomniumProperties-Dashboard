@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { BookOpen, Map, CalendarClock, Timer, FileBarChart, Headphones } from 'lucide-react'
+import { BookOpen, CalendarClock, Timer, FileBarChart, Headphones } from 'lucide-react'
 import { Suspense } from 'react'
 import { Header } from '../components/layout/Header.jsx'
 import { BrandLoader } from '../components/ui/BrandLoader.jsx'
@@ -11,7 +11,6 @@ const TABS = [
   { key: 'operacoes',  label: 'Operações',          icon: Timer },
   { key: 'sop',        label: 'SOPs',                icon: BookOpen },
   { key: 'relatorios', label: 'Relatórios',           icon: FileBarChart },
-  { key: 'regiao',     label: 'Regiões',        icon: Map },
   { key: 'chamadas',   label: 'Avaliação de calls', icon: Headphones },
 ]
 
@@ -20,7 +19,6 @@ const SUBTITLES = {
   operacoes:  'Horas, custo, atividades e eficiência',
   sop:        'Procedimentos operacionais por departamento',
   relatorios: 'Sínteses semanais de reuniões e estudos estratégicos da Somnium Properties',
-  regiao:     'Mercado de referência, compliance, hot zones e benchmarking por região',
   chamadas:   'KPIs de cold, discovery e close call e pivot para parceria (SOP 2)',
 }
 
