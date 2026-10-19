@@ -30,12 +30,19 @@ function formatValor(v) {
   return s.length > 80 ? s.slice(0, 80) + '…' : s
 }
 
+// Onde abre a ficha de cada entidade (mesmos endereços do CRM e dos Projetos).
+const ENTIDADE_DESTINO = {
+  imoveis:      id => `/crm?tab=${encodeURIComponent('Imóveis')}&detail=${id}`,
+  investidores: id => `/crm?tab=Investidores&detail=${id}`,
+  negocios:     id => `/projectos/${id}`,
+}
+
 function entidadeLink(row) {
   const nome = row.entidade_nome || row.entidade_id
-  if (row.entidade === 'imoveis') return <Link to={`/crm?aba=imoveis&id=${row.entidade_id}`} className="text-ink font-medium underline decoration-line underline-offset-2 hover:decoration-ink">{nome}</Link>
-  if (row.entidade === 'investidores') return <Link to={`/crm?aba=investidores&id=${row.entidade_id}`} className="text-ink font-medium underline decoration-line underline-offset-2 hover:decoration-ink">{nome}</Link>
-  if (row.entidade === 'negocios') return <Link to={`/financeiro?id=${row.entidade_id}`} className="text-ink font-medium underline decoration-line underline-offset-2 hover:decoration-ink">{nome}</Link>
-  return nome
+  const destino = ENTIDADE_DESTINO[row.entidade]
+  // Registo eliminado: a ficha já não existe, fica só o nome.
+  if (!destino || row.operacao === 'DELETE') return nome
+  return <Link to={destino(row.entidade_id)} className="text-ink font-medium underline decoration-line underline-offset-2 hover:decoration-ink">{nome}</Link>
 }
 
 export default function Auditoria() {
